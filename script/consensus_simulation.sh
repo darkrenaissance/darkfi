@@ -38,8 +38,8 @@ do
   LOG_TARGETS="!sled,!net" ./darkfid2 \
     -v \
     --consensus \
-    --consensus-seed 127.0.0.1:6000 \
-    --sync-seed 127.0.0.1:6020 \
+    --consensus-p2p-seed 127.0.0.1:6000 \
+    --sync-p2p-seed 127.0.0.1:6020 \
     --consensus-p2p-accept 127.0.0.1:600$i \
     --consensus-p2p-external 127.0.0.1:600$i \
     --database ./tmp/node$i/blockchain \
@@ -69,8 +69,8 @@ bound=$(($nodes-1))
 LOG_TARGETS="!sled,!net" ./darkfid2 \
     -v \
     --consensus \
-    --consensus-seed 127.0.0.1:6000 \
-    --sync-seed 127.0.0.1:6020 \
+    --consensus-p2p-seed 127.0.0.1:6000 \
+    --sync-p2p-seed 127.0.0.1:6020 \
     --consensus-p2p-accept 127.0.0.1:600$bound \
     --consensus-p2p-external 127.0.0.1:600$bound \
     --database ./tmp/node$bound/blockchain \

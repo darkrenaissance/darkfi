@@ -35,4 +35,7 @@ lazy_static! {
 
     /// Genesis hash for the testnet chain
     pub static ref TESTNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_testnet");
+
+    /// Block version number
+    pub static ref BLOCK_VERSION: u8 = 1;
 }

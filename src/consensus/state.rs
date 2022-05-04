@@ -764,7 +764,12 @@ impl ValidatorState {
         }
 
         let previous_epoch = epoch - 1;
-        let previous_from_last_epoch = last_epoch - 1;
+        // This check ensures that when restarting the network, previous
+        // from last epoch is not u64::MAX
+        let previous_from_last_epoch = match last_epoch {
+            0 => 0,
+            _ => last_epoch - 1,
+        };
 
         debug!(
             "refresh_participants(): Node {:?} checking epochs: previous - {:?}, last - {:?}, previous from last - {:?}",
