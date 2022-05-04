@@ -13,12 +13,13 @@ use darkfi::{
         metadata::{Metadata, OuroborosMetadata, StreamletMetadata},
         participant::Participant,
         state::{ConsensusState, ValidatorState},
-        tx::Tx,
         util::Timestamp,
         vote::Vote,
         TESTNET_GENESIS_HASH_BYTES,
     },
+    crypto::token_list::DrkTokenList,
     node::Client,
+    tx::Transaction,
     util::expand_path,
     wallet::walletdb::init_wallet,
     Result,
@@ -115,7 +116,7 @@ struct ProposalInfo {
     _address: String,
     _st: blake3::Hash,
     _sl: u64,
-    _txs: Vec<Tx>,
+    _txs: Vec<Transaction>,
     _metadata: MetadataInfo,
     _sm: StreamletMetadataInfo,
 }
@@ -192,11 +193,8 @@ impl BlockInfoChain {
         let result = blockstore.get_all();
         match result {
             Ok(iter) => {
-                for item in iter.iter() {
-                    match item {
-                        Some((hash, block)) => _blocks.push(BlockInfo::new(hash.clone(), &block)),
-                        None => (),
-                    };
+                for (hash, block) in iter.iter() {
+                    _blocks.push(BlockInfo::new(hash.clone(), &block));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
@@ -228,13 +226,8 @@ impl BlockOrderStoreInfo {
         let result = orderstore.get_all();
         match result {
             Ok(iter) => {
-                for item in iter.iter() {
-                    match item {
-                        Some((slot, hash)) => {
-                            _order.push(OrderInfo::new(slot.clone(), hash.clone()))
-                        }
-                        None => (),
-                    };
+                for (slot, hash) in iter.iter() {
+                    _order.push(OrderInfo::new(slot.clone(), hash.clone()));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
@@ -246,11 +239,11 @@ impl BlockOrderStoreInfo {
 #[derive(Debug)]
 struct TxInfo {
     _hash: blake3::Hash,
-    _payload: Tx,
+    _payload: Transaction,
 }
 
 impl TxInfo {
-    pub fn new(_hash: blake3::Hash, tx: &Tx) -> TxInfo {
+    pub fn new(_hash: blake3::Hash, tx: &Transaction) -> TxInfo {
         let _payload = tx.clone();
         TxInfo { _hash, _payload }
     }
@@ -267,11 +260,8 @@ impl TxStoreInfo {
         let result = txstore.get_all();
         match result {
             Ok(iter) => {
-                for item in iter.iter() {
-                    match item {
-                        Some((hash, tx)) => _transactions.push(TxInfo::new(hash.clone(), &tx)),
-                        None => (),
-                    };
+                for (hash, tx) in iter.iter() {
+                    _transactions.push(TxInfo::new(hash.clone(), &tx));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
@@ -304,13 +294,8 @@ impl MetadataStoreInfo {
         let result = metadatastore.get_all();
         match result {
             Ok(iter) => {
-                for item in iter.iter() {
-                    match item {
-                        Some((hash, m)) => {
-                            _metadata.push(HashedMetadataInfo::new(hash.clone(), &m))
-                        }
-                        None => (),
-                    };
+                for (hash, m) in iter.iter() {
+                    _metadata.push(HashedMetadataInfo::new(hash.clone(), &m));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
@@ -364,7 +349,13 @@ async fn main() -> Result<()> {
         let path = format!("../../../tmp/node{:?}/wallet.db", i);
         let wallet = init_wallet(&path, &pass).await?;
         let address = wallet.get_default_address().await?;
-        let client = Arc::new(Client::new(wallet).await?);
+        let tokenlist = Arc::new(DrkTokenList::new(&[
+            ("drk", include_bytes!("../../../../contrib/token/darkfi_token_list.min.json")),
+            ("btc", include_bytes!("../../../../contrib/token/bitcoin_token_list.min.json")),
+            ("eth", include_bytes!("../../../../contrib/token/erc20_token_list.min.json")),
+            ("sol", include_bytes!("../../../../contrib/token/solana_token_list.min.json")),
+        ])?);
+        let client = Arc::new(Client::new(wallet, tokenlist).await?);
 
         // Initialize or load sled database
         let path = format!("../../../tmp/node{:?}/blockchain/testnet", i);

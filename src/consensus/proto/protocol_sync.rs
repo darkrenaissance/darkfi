@@ -88,6 +88,13 @@ impl ProtocolSync {
     }
 
     async fn handle_receive_block(self: Arc<Self>) -> Result<()> {
+        // Consensus-mode enabled nodes have already performed these steps,
+        // during proposal finalization.
+        if self.consensus_mode {
+            debug!("handle_receive_block(): node runs in consensus mode, skipping...");
+            return Ok(())
+        }
+        
         debug!("handle_receive_block() [START]");
         loop {
             let info = match self.block_sub.receive().await {
@@ -107,70 +114,66 @@ impl ProtocolSync {
             debug!("handle_receive_block(): Pending lock released");
 
             // Node stores finalized block, if it doesn't exist (checking by slot),
-            // and removes its transactions from the unconfirmed_txs vector.
-            // Consensus-mode enabled nodes have already performed these steps,
-            // during proposal finalization.
+            // and removes its transactions from the unconfirmed_txs vector.            
             // Extra validations can be added here.
-            if !self.consensus_mode {
-                *self.pending.lock().await = true;
-                let info_copy = (*info).clone();
+            *self.pending.lock().await = true;
+            let info_copy = (*info).clone();
 
-                let has_block = match self.state.read().await.blockchain.has_block(&info_copy) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("handle_receive_block(): failed checking for has_block(): {}", e);
-                        *self.pending.lock().await = false;
-                        continue
-                    }
+            let has_block = match self.state.read().await.blockchain.has_block(&info_copy) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("handle_receive_block(): failed checking for has_block(): {}", e);
+                    *self.pending.lock().await = false;
+                    continue
+                }
+            };
+
+            if !has_block {
+                debug!("handle_receive_block(): Starting state transition validation");
+                let canon_state_clone =
+                    self.state.read().await.state_machine.lock().await.clone();
+                let mem_state = MemoryState::new(canon_state_clone);
+                let state_updates =
+                    match ValidatorState::validate_state_transitions(mem_state, &info.txs) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            warn!("handle_receive_block(): State transition fail: {}", e);
+                            *self.pending.lock().await = false;
+                            continue
+                        }
+                    };
+                debug!("handle_receive_block(): All state transitions passed");
+
+                debug!("handle_receive_block(): Updating canon state machine");
+                if let Err(e) =
+                    self.state.write().await.update_canon_state(state_updates, None).await
+                {
+                    error!("handle_receive_block(): Canon statemachine update fail: {}", e);
+                    *self.pending.lock().await = false;
+                    continue
                 };
 
-                if !has_block {
-                    debug!("handle_receive_block(): Starting state transition validation");
-                    let canon_state_clone =
-                        self.state.read().await.state_machine.lock().await.clone();
-                    let mem_state = MemoryState::new(canon_state_clone);
-                    let state_updates =
-                        match ValidatorState::validate_state_transitions(mem_state, &info.txs) {
-                            Ok(v) => v,
-                            Err(e) => {
-                                warn!("handle_receive_block(): State transition fail: {}", e);
-                                *self.pending.lock().await = false;
-                                continue
-                            }
-                        };
-                    debug!("handle_receive_block(): All state transitions passed");
+                debug!("handle_receive_block(): Appending block to ledger");
+                if let Err(e) = self.state.write().await.blockchain.add(&[info_copy.clone()]) {
+                    error!("handle_receive_block(): blockchain.add() fail: {}", e);
+                    *self.pending.lock().await = false;
+                    continue
+                };
 
-                    debug!("handle_receive_block(): Updating canon state machine");
-                    if let Err(e) =
-                        self.state.write().await.update_canon_state(state_updates, None).await
-                    {
-                        error!("handle_receive_block(): Canon statemachine update fail: {}", e);
-                        *self.pending.lock().await = false;
-                        continue
-                    };
+                if let Err(e) = self.state.write().await.remove_txs(info_copy.txs.clone()) {
+                    error!("handle_receive_block(): remove_txs() fail: {}", e);
+                    *self.pending.lock().await = false;
+                    continue
+                };
 
-                    debug!("handle_receive_block(): Appending block to ledger");
-                    if let Err(e) = self.state.write().await.blockchain.add(&[info_copy.clone()]) {
-                        error!("handle_receive_block(): blockchain.add() fail: {}", e);
-                        *self.pending.lock().await = false;
-                        continue
-                    };
-
-                    if let Err(e) = self.state.write().await.remove_txs(info_copy.txs.clone()) {
-                        error!("handle_receive_block(): remove_txs() fail: {}", e);
-                        *self.pending.lock().await = false;
-                        continue
-                    };
-
-                    if let Err(e) = self.p2p.broadcast(info_copy).await {
-                        error!("handle_receive_block(): p2p broadcast fail: {}", e);
-                        *self.pending.lock().await = false;
-                        continue
-                    };
-                }
-
-                *self.pending.lock().await = false;
+                if let Err(e) = self.p2p.broadcast(info_copy).await {
+                    error!("handle_receive_block(): p2p broadcast fail: {}", e);
+                    *self.pending.lock().await = false;
+                    continue
+                };
             }
+
+            *self.pending.lock().await = false;
         }
     }
 }
