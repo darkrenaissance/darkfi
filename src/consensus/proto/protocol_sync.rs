@@ -94,7 +94,7 @@ impl ProtocolSync {
             debug!("handle_receive_block(): node runs in consensus mode, skipping...");
             return Ok(())
         }
-        
+
         debug!("handle_receive_block() [START]");
         loop {
             let info = match self.block_sub.receive().await {
@@ -114,7 +114,7 @@ impl ProtocolSync {
             debug!("handle_receive_block(): Pending lock released");
 
             // Node stores finalized block, if it doesn't exist (checking by slot),
-            // and removes its transactions from the unconfirmed_txs vector.            
+            // and removes its transactions from the unconfirmed_txs vector.
             // Extra validations can be added here.
             *self.pending.lock().await = true;
             let info_copy = (*info).clone();
@@ -130,8 +130,7 @@ impl ProtocolSync {
 
             if !has_block {
                 debug!("handle_receive_block(): Starting state transition validation");
-                let canon_state_clone =
-                    self.state.read().await.state_machine.lock().await.clone();
+                let canon_state_clone = self.state.read().await.state_machine.lock().await.clone();
                 let mem_state = MemoryState::new(canon_state_clone);
                 let state_updates =
                     match ValidatorState::validate_state_transitions(mem_state, &info.txs) {

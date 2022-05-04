@@ -21,8 +21,8 @@ use darkfi::{
         },
         state::ValidatorStatePtr,
         task::{block_sync_task, proposal_task},
-        util::Timestamp,
-        ValidatorState, MAINNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_HASH_BYTES,
+        ValidatorState, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
+        TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
     },
     crypto::{address::Address, keypair::PublicKey, token_list::DrkTokenList},
     net,
@@ -134,10 +134,6 @@ struct Args {
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
-
-    #[structopt(short)]
-    /// Genesis time
-    genesis_time: i64,
 }
 
 pub struct Darkfid {
@@ -220,11 +216,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     let sled_db = sled::open(&db_path)?;
 
     // Initialize validator state
-    // TODO: genesis_ts should be some hardcoded constant
-    let genesis_ts = Timestamp(args.genesis_time);
-    let genesis_data = match args.chain.as_str() {
-        "mainnet" => *MAINNET_GENESIS_HASH_BYTES,
-        "testnet" => *TESTNET_GENESIS_HASH_BYTES,
+    let (genesis_ts, genesis_data) = match args.chain.as_str() {
+        "mainnet" => (*MAINNET_GENESIS_TIMESTAMP, *MAINNET_GENESIS_HASH_BYTES),
+        "testnet" => (*TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES),
         x => {
             error!("Unsupported chain `{}`", x);
             return Err(Error::UnsupportedChain)
