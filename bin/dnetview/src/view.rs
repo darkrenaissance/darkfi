@@ -95,17 +95,22 @@ impl View {
         // remove any duplicates
         id_list.dedup();
 
-        // get the id at the current index
-        match self.active_ids.state.selected() {
-            Some(i) => match id_list.get(i) {
-                Some(i) => {
-                    self.render_info(f, slice.clone(), i.to_string())?;
-                    Ok(())
-                }
-                None => Err(DnetViewError::NoIdAtIndex),
-            },
-            // nothing is selected right now
-            None => Ok(()),
+        if id_list.is_empty() {
+            // we have not received any data
+            Ok(())
+        } else {
+            // get the id at the current index
+            match self.active_ids.state.selected() {
+                Some(i) => match id_list.get(i) {
+                    Some(i) => {
+                        self.render_info(f, slice.clone(), i.to_string())?;
+                        Ok(())
+                    }
+                    None => return Err(DnetViewError::NoIdAtIndex),
+                },
+                // nothing is selected right now
+                None => Ok(()),
+            }
         }
     }
 
@@ -150,7 +155,10 @@ impl View {
                                 );
                                 info.push(msg);
                             }
-                            _ => return Err(DnetViewError::UnexpectedData),
+                            "Null" => {
+                                // Empty msg log. Do nothing
+                            }
+                            data => return Err(DnetViewError::UnexpectedData(data.to_string())),
                         }
 
                         let lines = vec![Spans::from(info)];
@@ -206,7 +214,7 @@ impl View {
                                         Spans::from(Span::styled(format!("R: {}", v), style));
                                     spans.push(msg_log);
                                 }
-                                _ => return Err(DnetViewError::UnexpectedData),
+                                data => return Err(DnetViewError::UnexpectedData(data.to_string())),
                             }
                         }
                     }

@@ -10,7 +10,7 @@ pub enum DnetViewError {
     #[error("Failed to find ID at current index")]
     NoIdAtIndex,
     #[error("Found unexpected data in View")]
-    UnexpectedData,
+    UnexpectedData(String),
     #[error("Message log does not contain ID")]
     CannotFindId,
     #[error("ID does not return a selectable object")]
