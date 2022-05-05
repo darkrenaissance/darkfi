@@ -271,8 +271,7 @@ impl WalletDb {
             let value_bytes: Vec<u8> = row.get("value");
             let value = u64::from_le_bytes(value_bytes.try_into().unwrap());
             let token_id = deserialize(row.get("drk_address"))?;
-            // TODO: BUG BUG BUG!!! FIXME
-            let token_blind = deserialize(row.get("valcom_blind"))?;
+            let token_blind = deserialize(row.get("token_blind"))?;
             let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind };
 
             let secret = deserialize(row.get("secret"))?;
@@ -298,6 +297,7 @@ impl WalletDb {
         let serial = serialize(&own_coin.note.serial);
         let coin_blind = serialize(&own_coin.note.coin_blind);
         let value_blind = serialize(&own_coin.note.value_blind);
+        let token_blind = serialize(&own_coin.note.token_blind);
         let value = own_coin.note.value.to_le_bytes();
         let drk_address = serialize(&own_coin.note.token_id);
         let secret = serialize(&own_coin.secret);
@@ -317,16 +317,17 @@ impl WalletDb {
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
             "INSERT OR REPLACE INTO coins
-            (coin, serial, coin_blind, valcom_blind, value,
+            (coin, serial, coin_blind, valcom_blind, token_blind, value,
              network, drk_address, net_address,
              secret, is_spent, nullifier, leaf_position)
             VALUES
-             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);",
+             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);",
         )
         .bind(coin)
         .bind(serial)
         .bind(coin_blind)
         .bind(value_blind)
+        .bind(token_blind)
         .bind(value.to_vec())
         .bind(serialize(network))
         .bind(drk_address) // token_id
