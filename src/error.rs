@@ -96,6 +96,9 @@ pub enum Error {
     #[error("Unsupported network transport: {0}")]
     UnsupportedTransport(String),
 
+    #[error("Unsupported network transport upgrade: {0}")]
+    UnsupportedTransportUpgrade(String),
+
     #[error("Connection failed")]
     ConnectFailed,
 

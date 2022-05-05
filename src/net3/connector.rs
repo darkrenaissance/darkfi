@@ -58,8 +58,7 @@ impl Connector {
                         let stream = transport.upgrade_dialer(stream?)?.await;
                         Channel::new(Box::new(stream?), connect_url).await
                     }
-                    // TODO hanle unsupported upgrade
-                    Some(_) => todo!(),
+                    Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
                 };
 
                 Ok(channel)

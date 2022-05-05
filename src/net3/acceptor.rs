@@ -61,8 +61,7 @@ impl Acceptor {
                         let tls_listener = transport.upgrade_listener(listener)?.await?;
                         self.accept(Box::new(tls_listener), executor);
                     }
-                    // TODO hanle unsupported upgrade
-                    Some(_) => todo!(),
+                    Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
                 }
             }
             TransportName::Tor(_upgrade) => todo!(),
