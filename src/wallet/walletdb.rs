@@ -153,7 +153,7 @@ impl WalletDb {
         debug!("Returning default keypair");
         let mut conn = self.conn.acquire().await?;
 
-        let is_default: u32 = 1;
+        let is_default = 1;
 
         let row = sqlx::query("SELECT * FROM keys WHERE is_default = ?1;")
             .bind(is_default)
@@ -267,9 +267,7 @@ impl WalletDb {
             let serial = deserialize(row.get("serial"))?;
             let coin_blind = deserialize(row.get("coin_blind"))?;
             let value_blind = deserialize(row.get("valcom_blind"))?;
-            // TODO: FIXME:
-            let value_bytes: Vec<u8> = row.get("value");
-            let value = u64::from_le_bytes(value_bytes.try_into().unwrap());
+            let value = deserialize(row.get("value"))?;
             let token_id = deserialize(row.get("drk_address"))?;
             let token_blind = deserialize(row.get("token_blind"))?;
             let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind };
@@ -298,14 +296,15 @@ impl WalletDb {
         let coin_blind = serialize(&own_coin.note.coin_blind);
         let value_blind = serialize(&own_coin.note.value_blind);
         let token_blind = serialize(&own_coin.note.token_blind);
-        let value = own_coin.note.value.to_le_bytes();
+        let value = serialize(&own_coin.note.value);
         let drk_address = serialize(&own_coin.note.token_id);
         let secret = serialize(&own_coin.secret);
         let nullifier = serialize(&own_coin.nullifier);
         let leaf_position = serialize(&own_coin.leaf_position);
-        let is_spent: u32 = 0;
+        let is_spent: u8 = 0;
 
         let token_id_enc = bs58::encode(&own_coin.note.token_id.to_repr()).into_string();
+
         let (network, net_address) =
             if let Some((network, token_info)) = tokenlist.by_addr.get(&token_id_enc) {
                 (network, token_info.net_address.clone())
@@ -313,6 +312,8 @@ impl WalletDb {
                 warn!("Could not find network and token info in parsed token list");
                 (&NetworkName::DarkFi, "unknown".to_string())
             };
+
+        let network = serialize(network);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
@@ -328,8 +329,8 @@ impl WalletDb {
         .bind(coin_blind)
         .bind(value_blind)
         .bind(token_blind)
-        .bind(value.to_vec())
-        .bind(serialize(network))
+        .bind(value)
+        .bind(network)
         .bind(drk_address) // token_id
         .bind(net_address)
         .bind(secret)
@@ -351,7 +352,7 @@ impl WalletDb {
 
     pub async fn confirm_spend_coin(&self, coin: &Coin) -> Result<()> {
         debug!("Confirm spend coin");
-        let is_spent: u32 = 1;
+        let is_spent = 1;
         let coin = serialize(coin);
 
         let mut conn = self.conn.acquire().await?;
@@ -379,9 +380,7 @@ impl WalletDb {
 
         let mut list = vec![];
         for row in rows {
-            // TODO: FIXME:
-            let value_bytes: Vec<u8> = row.get("value");
-            let value = u64::from_le_bytes(value_bytes.try_into().unwrap());
+            let value = deserialize(row.get("value"))?;
             let token_id = deserialize(row.get("drk_address"))?;
             let nullifier = deserialize(row.get("nullifier"))?;
             list.push(Balance { token_id, value, nullifier });
@@ -412,7 +411,7 @@ impl WalletDb {
     pub async fn token_id_exists(&self, token_id: DrkTokenId) -> Result<bool> {
         debug!("Checking if token ID exists");
 
-        let is_spent: u32 = 0;
+        let is_spent = 0;
         let id = serialize(&token_id);
 
         let mut conn = self.conn.acquire().await?;
