@@ -91,7 +91,7 @@ connect to in the p2p network.
 	Tau cli
 
 	USAGE:
-		tau [FLAGS] [OPTIONS] [filters]... [SUBCOMMAND]
+		tau [FLAGS] [OPTIONS] [ARGS] [SUBCOMMAND]
 
 	FLAGS:
 		-h, --help       Prints help information
@@ -103,18 +103,16 @@ connect to in the p2p network.
 			--rpc <rpc-listen>    JSON-RPC listen URL [default: 127.0.0.1:11055]
 
 	ARGS:
+		<id>            Get task by ID
 		<filters>...    Search criteria (zero or more)
 
 	SUBCOMMANDS:
-		add            Add a new task
-		get            Get task by ID
-		get-comment    Get task's comments
-		get-state      Get task state
-		help           Prints this message or the help of the given subcommand(s)
-		list           List open tasks
-		set-comment    Set comment for a task
-		set-state      Set task state
-		update         Update/Edit an existing task by ID
+		add        Add a new task
+		comment    Set or Get comment for a task
+		help       Prints this message or the help of the given subcommand(s)
+		list       List all tasks
+		state      Set or Get task state
+		update     Update/Edit an existing task by ID
 
 ```shell
 % tau help [SUBCOMMAND]
@@ -158,7 +156,7 @@ Output:
 % tau all   		 # lists all tasks
 % tau open 			 # lists currently open tasks
 % tau pause 		 # lists currently paused tasks
-% tau month 		 # lists tasks created at this month
+% tau 0522 		 	 # lists tasks created at May 2022
 % tau project:value  # lists all tasks that have "value" in their Project
 % tau assign:value   # lists all tasks that have "value" in their Assign
 % tau "rank>number"  # lists all tasks that have rank greater than "number"
@@ -167,7 +165,7 @@ Output:
 
 Combined filters:
 ```shell
-% tau project:project1 assign:person2 month open
+% tau project:project1 assign:person2 0522 open
 ```
 Output:
 ```text
@@ -194,7 +192,7 @@ Output:
 ### Get/Set task state
 
 ```shell
-% tau get-state 1 
+% tau state 1 
 ```
 Output:
 ```text
@@ -202,8 +200,8 @@ Task with id 1 is: "open"
 ```
 
 ```shell
-% tau set-state 1 pause
-% tau get-state 1 
+% tau state 1 pause
+% tau state 1 
 ```
 Output:
 ```text
@@ -211,16 +209,16 @@ Task with id 1 is: "pause"
 ```
 
 ```shell
-% tau set-state 2 stop # this will deactivate the task (task is done)
+% tau state 2 stop # this will deactivate the task (task is done)
 ```
 
 
 ### Get/Set comment
 
 ```shell
-% tau set-comment 1 person1 "some awesome comment"
-% tau set-comment 1 person2 "other awesome comment"
-% tau get-comment 1
+% tau comment 1 person1 "some awesome comment"
+% tau comment 1 person2 "other awesome comment"
+% tau comment 1
 ```
 Output:
 ```text
@@ -233,7 +231,7 @@ person2: other awesome comment
 ### Get a task
 
 ```shell
-% tau get 1
+% tau 1
 ```
 Output:
 ```text
