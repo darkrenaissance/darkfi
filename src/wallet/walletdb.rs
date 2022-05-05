@@ -271,7 +271,9 @@ impl WalletDb {
             let value_bytes: Vec<u8> = row.get("value");
             let value = u64::from_le_bytes(value_bytes.try_into().unwrap());
             let token_id = deserialize(row.get("drk_address"))?;
-            let note = Note { serial, value, token_id, coin_blind, value_blind };
+            // TODO: BUG BUG BUG!!! FIXME
+            let token_blind = deserialize(row.get("valcom_blind"))?;
+            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind };
 
             let secret = deserialize(row.get("secret"))?;
             let nullifier = deserialize(row.get("nullifier"))?;
@@ -453,6 +455,7 @@ mod tests {
             token_id: *t,
             coin_blind: DrkCoinBlind::random(&mut OsRng),
             value_blind: DrkValueBlind::random(&mut OsRng),
+            token_blind: DrkValueBlind::random(&mut OsRng),
         };
 
         let coin = Coin(pallas::Base::random(&mut OsRng));
