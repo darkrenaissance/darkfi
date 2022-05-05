@@ -147,6 +147,7 @@ impl TransactionBuilder {
                 token_id: output.token_id,
                 coin_blind,
                 value_blind,
+                token_blind,
             };
 
             let encrypted_note = note.encrypt(&output.public)?;

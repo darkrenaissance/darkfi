@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS coins(
 	serial BLOB NOT NULL,
 	coin_blind BLOB NOT NULL,
 	valcom_blind BLOB NOT NULL,
+	token_blind BLOB NOT NULL,
 	value BLOB NOT NULL,
 	network BLOB NOT NULL,
 	drk_address BLOB NOT NULL,

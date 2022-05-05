@@ -5,14 +5,14 @@ use crate::{
     crypto::{
         diffie_hellman::{kdf_sapling, sapling_ka_agree},
         keypair::{PublicKey, SecretKey},
-        types::*,
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
     },
     util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
 
 /// Plaintext size is serial + value + token_id + coin_blind + value_blind
-pub const NOTE_PLAINTEXT_SIZE: usize = 32 + 8 + 32 + 32 + 32;
+pub const NOTE_PLAINTEXT_SIZE: usize = 32 + 8 + 32 + 32 + 32 + 32;
 pub const AEAD_TAG_SIZE: usize = 16;
 pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
@@ -23,6 +23,7 @@ pub struct Note {
     pub token_id: DrkTokenId,
     pub coin_blind: DrkCoinBlind,
     pub value_blind: DrkValueBlind,
+    pub token_blind: DrkValueBlind,
 }
 
 impl Note {
@@ -84,6 +85,7 @@ mod tests {
             token_id: DrkTokenId::random(&mut OsRng),
             coin_blind: DrkCoinBlind::random(&mut OsRng),
             value_blind: DrkValueBlind::random(&mut OsRng),
+            token_blind: DrkValueBlind::random(&mut OsRng),
         };
 
         let keypair = Keypair::random(&mut OsRng);
@@ -92,5 +94,6 @@ mod tests {
         let note2 = encrypted_note.decrypt(&keypair.secret).unwrap();
         assert_eq!(note.value, note2.value);
         assert_eq!(note.token_id, note2.token_id);
+        assert_eq!(note.token_blind, note2.token_blind);
     }
 }
