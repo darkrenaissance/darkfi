@@ -8,9 +8,8 @@ use std::{
 };
 
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
-use clap::Subcommand;
 use log::error;
-use prettytable::{cell, format, row, Cell, Row, Table};
+use prettytable::{cell, format, row, table, Cell, Row, Table};
 use rand::distributions::{Alphanumeric, DistString};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -22,27 +21,21 @@ use structopt_toml::StructOptToml;
 pub const CONFIG_FILE: &str = "taud_config.toml";
 pub const CONFIG_FILE_CONTENTS: &str = include_str!("../../taud_config.toml");
 
-#[derive(Subcommand, Deserialize, Debug, StructOpt)]
+#[derive(StructOpt, Deserialize, Debug)]
 pub enum CliTauSubCommands {
     /// Add a new task
     Add {
         /// Specify task title
-        #[clap(short, long)]
         title: Option<String>,
         /// Specify task description
-        #[clap(long)]
         desc: Option<String>,
         /// Assign task to user
-        #[clap(short, long)]
         assign: Option<String>,
         /// Task project (can be hierarchical: crypto.zk)
-        #[clap(short, long)]
         project: Option<String>,
         /// Due date in DDMM format: "2202" for 22 Feb
-        #[clap(short, long)]
         due: Option<String>,
         /// Project rank single precision decimal real value: 4.8761
-        #[clap(short, long)]
         rank: Option<f32>,
     },
     /// Update/Edit an existing task by ID
@@ -54,39 +47,24 @@ pub enum CliTauSubCommands {
         /// New value
         value: String,
     },
-    /// Set task state
-    SetState {
+    /// Set or Get task state
+    State {
         /// Task ID
         id: u64,
         /// Set task state
-        state: String,
+        state: Option<String>,
     },
-    /// Get task state
-    GetState {
-        /// Task ID
-        id: u64,
-    },
-    /// Set comment for a task
-    SetComment {
+    /// Set or Get comment for a task
+    Comment {
         /// Task ID
         id: u64,
         /// Comment author
-        author: String,
+        author: Option<String>,
         /// Comment content
-        content: String,
+        content: Option<String>,
     },
-    /// Get task's comments
-    GetComment {
-        /// Task ID
-        id: u64,
-    },
-    /// List open tasks
+    /// List all tasks
     List {},
-    /// Get task by ID
-    Get {
-        /// Task ID
-        id: u64,
-    },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -120,8 +98,10 @@ pub struct CliTau {
     pub config: Option<String>,
     #[structopt(subcommand)]
     pub command: Option<CliTauSubCommands>,
-    #[structopt(multiple = true)]
+    /// Get task by ID
+    pub id: Option<String>,
     /// Search criteria (zero or more)
+    #[structopt(multiple = true)]
     pub filters: Vec<String>,
 }
 
@@ -207,6 +187,32 @@ pub fn desc_in_editor() -> Result<Option<String>> {
     Ok(Some(description))
 }
 
+pub fn show_task(task: Value, taskinfo: TaskInfo, current_state: String) -> Result<()> {
+    let mut table = table!([Bd => "ref_id", &taskinfo.ref_id],
+                                            ["id", &taskinfo.id.to_string()],
+                                            [Bd =>"title", &taskinfo.title],
+                                            ["desc", &taskinfo.desc],
+                                            [Bd =>"assign", get_from_task(task.clone(), "assign")?],
+                                            ["project", get_from_task(task.clone(), "project")?],
+                                            [Bd =>"due", timestamp_to_date(task["due"].clone(),"date")],
+                                            ["rank", &taskinfo.rank.to_string()],
+                                            [Bd =>"created_at", timestamp_to_date(task["created_at"].clone(), "datetime")],
+                                            ["current_state", &current_state],
+                                            [Bd => "comments", get_comments(task.clone())?]);
+
+    table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+    table.set_titles(row!["Name", "Value"]);
+
+    table.printstd();
+
+    let mut event_table = table!(["events", get_events(task)?]);
+    event_table.set_format(*format::consts::FORMAT_NO_COLSEP);
+
+    event_table.printstd();
+
+    Ok(())
+}
+
 pub fn get_comments(rep: Value) -> Result<String> {
     let task: Value = serde_json::from_value(rep)?;
 
@@ -274,12 +280,18 @@ pub fn get_from_task(task: Value, value: &str) -> Result<String> {
 
 // Helper function to check task's state
 fn check_task_state(task: &Value, state: &str) -> bool {
-    let mut default_events = serde_json::Map::new();
-    default_events.insert("action".into(), "open".into());
-    let default_events: Vec<Value> = vec![Value::from(default_events)];
+    let events = match task["events"].as_array() {
+        Some(t) => t.to_owned(),
+        None => {
+            error!("Value is not an array!");
+            vec![]
+        }
+    };
 
-    let last_event = task["events"].as_array().unwrap_or(&default_events).last().unwrap();
-    let last_state = last_event["action"].as_str().unwrap();
+    let last_state = match events.last() {
+        Some(s) => s["action"].as_str().unwrap(),
+        None => "open",
+    };
     state == last_state
 }
 
@@ -288,15 +300,24 @@ fn apply_filter(tasks: Vec<Value>, filter: String) -> Result<Vec<Value>> {
         "open" => tasks.into_iter().filter(|task| check_task_state(task, "open")).collect(),
         "pause" => tasks.into_iter().filter(|task| check_task_state(task, "pause")).collect(),
         "stop" => tasks.into_iter().filter(|task| check_task_state(task, "stop")).collect(),
-        "month" => tasks
-            .into_iter()
-            .filter(|task| {
-                let date = task["created_at"].as_i64().unwrap();
-                let task_month = NaiveDateTime::from_timestamp(date, 0).month();
-                let this_month = Local::today().month();
-                task_month == this_month
-            })
-            .collect(),
+
+        _ if filter.len() == 4 && filter.parse::<u32>().is_ok() => {
+            let (month, year) =
+                (filter[..2].parse::<u32>().unwrap(), filter[2..].parse::<i32>().unwrap());
+
+            let year = year + 2000;
+
+            tasks
+                .into_iter()
+                .filter(|task| {
+                    let date = task["created_at"].as_i64().unwrap();
+                    let task_date = NaiveDateTime::from_timestamp(date, 0).date();
+                    let filter_date = NaiveDate::from_ymd(year, month, 1);
+                    task_date.month() == filter_date.month() &&
+                        task_date.year() == filter_date.year()
+                })
+                .collect()
+        }
 
         _ if filter.contains("assign:") | filter.contains("project:") => {
             let kv: Vec<&str> = filter.split(':').collect();
