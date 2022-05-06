@@ -31,7 +31,4 @@ pub struct Args {
     /// Generate a new secret key
     #[structopt(long)]
     pub key_gen: bool,
-    /// Load a secret key
-    #[structopt(long)]
-    pub key: Option<String>,
 }

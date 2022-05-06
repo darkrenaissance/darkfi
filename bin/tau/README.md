@@ -39,15 +39,8 @@ Also note that for the first time ever running seed node you must run it with
 ```
 This will generate a new secret key in `/home/${USER}/.config/tau/secret_key` that 
 you can share with nodes you want them to get and decrypt your tasks, otherwise if you
-have already generated or got a copy from a peer place it either in the same directory
-`/home/${USER}/.config/tau/secret_key`, or in the config file.
-	
-	in config file:
-
-		## Secret key
-		key="SECRET_KEY_GOES_HERE"
-
-DO NOT use `--key` in terminal to pass the secret key.
+have already generated or got a copy from a peer place it in the same directory
+`/home/${USER}/.config/tau/secret_key`.
 
 ### Inbound Node
 
@@ -153,7 +146,7 @@ Output:
 ### List tasks with filters
 
 ```shell
-% tau all   		 # lists all tasks
+% tau  		   		 # lists all tasks
 % tau open 			 # lists currently open tasks
 % tau pause 		 # lists currently paused tasks
 % tau 0522 		 	 # lists tasks created at May 2022

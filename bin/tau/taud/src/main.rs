@@ -98,12 +98,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         let sk_string = hex::encode(secret.as_bytes());
         save::<String>(&datastore_path.join("secret_key"), &sk_string)?;
         secret
-    } else if settings.key.is_some() {
-        let sk_str = settings.key.unwrap();
-        save::<String>(&datastore_path.join("secret_key"), &sk_str)?;
-        let sk_bytes = hex::decode(sk_str)?;
-        let sk_bytes: [u8; KEY_SIZE] = sk_bytes.as_slice().try_into()?;
-        SecretKey::try_from(sk_bytes)?
     } else {
         let loaded_key = match load::<String>(&datastore_path.join("secret_key")) {
             Ok(key) => key,
