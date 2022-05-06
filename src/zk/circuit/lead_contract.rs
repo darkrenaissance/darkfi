@@ -111,6 +111,8 @@ const LEAD_THRESHOLD_OFFSET: usize = 11;
 pub struct LeadContract {
     // witness
     pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
+    pub coin_pk_x: Option<pallas::Base>,
+    pub coin_pk_y: Option<pallas::Base>,
     pub root_sk: Option<pallas::Scalar>, // coins merkle tree secret key of coin1
     pub path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the secret key root_sk
     pub coin_timestamp: Option<pallas::Base>,
@@ -266,6 +268,7 @@ impl Circuit<pallas::Base> for LeadContract {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
+
         SinsemillaChip::load(config.sinsemilla_config_1.clone(), &mut layouter)?;
         let ecc_chip = config.ecc_chip();
         let ar_chip = config.arith_chip();
@@ -281,24 +284,14 @@ impl Circuit<pallas::Base> for LeadContract {
 
         // coin_timestamp tau
 
+
         let coin_timestamp = self.load_private(
             layouter.namespace(|| "load coin time stamp"),
             config.advices[0],
             self.coin_timestamp,
         )?;
 
-        // root of coin
-
-        /*
-        let root_sk = self.load_private(
-            layouter.namespace(|| "load root coin"),
-            config.advices[0],
-            self.root_sk,
-        )?;
-        */
-        // coin nonce
-
-        let coin_nonce = self.load_private(
+        let coin_nonce : AssignedCell<Fp,Fp> = self.load_private(
             layouter.namespace(|| "load coin nonce"),
             config.advices[0],
             self.coin_nonce,
@@ -309,104 +302,40 @@ impl Circuit<pallas::Base> for LeadContract {
             config.advices[0],
             self.value,
         )?;
-
-        /*
-        let coin_opening_1 = self.load_private(
-            layouter.namespace(|| "load opening 1"),
+        let coin_pk_x : AssignedCell<Fp,Fp> = self.load_private(
+            layouter.namespace(|| "load coin time stamp"),
             config.advices[0],
-            self.coin_opening_1,
+            self.coin_pk_x,
         )?;
-        let coin_opening_2 = self.load_private(
-            layouter.namespace(|| "load opening 2"),
-            config.advices[0],
-            self.coin_opening_2,
-        )?;
-         */
 
-        //let cm_c1_point : pallas::Point = pallas::Point::from(1);
-        //let cm_c1 : AssignedCell<pallas::Point, pallas::Point> = cm_c1_point;
+
+        let coin_pk_y : AssignedCell<Fp,Fp> = self.load_private(
+            layouter.namespace(|| "load coin time stamp"),
+            config.advices[0],
+            self.coin_pk_y,
+        )?;
 
         let cm_c1_x =
             self.load_private(layouter.namespace(|| ""), config.advices[0], self.cm_c1_x)?;
+
         let cm_c1_y =
             self.load_private(layouter.namespace(|| ""), config.advices[0], self.cm_c1_y)?;
 
         let cm_c2_x =
             self.load_private(layouter.namespace(|| ""), config.advices[0], self.cm_c2_x)?;
+
         let cm_c2_y =
             self.load_private(layouter.namespace(|| ""), config.advices[0], self.cm_c2_y)?;
 
-        /*
-        let cm_pos = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.cm_pos
-        )?;
-
-        let sn_c1 = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.sn_c1,
-        )?;
-        */
-
-        /*
-        let eta = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.eta,
-        )?;
-         */
-
-        let slot = self.load_private(layouter.namespace(|| ""), config.advices[0], self.slot)?;
-
-        /*
-        let rho = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.rho,
-        )?;
-
-        let h = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.h,
-        )?;
-
-        let ptr = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.ptr,
-        )?;
-         */
-
-        /*
-        let mau_rho = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.mau_rho,
-        )?;
-
-        let mau_y = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.mau_y,
-        )?;
-        */
-
-        /*
-        let root = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.root,
-        )?;
-         */
+        let slot =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.slot)?;
 
         let one = self.load_private(
             layouter.namespace(|| "one"),
             config.advices[0],
             Some(pallas::Base::one()),
         )?;
+
         //TODO read the second coin commitment as constant(public input)
         // in this case
         //
@@ -441,6 +370,7 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_NONCE2_Y_OFFSET,
         )?;
 
+
         // ================
         // coin public key constraints derived from the coin timestamp
         // ================
@@ -459,6 +389,7 @@ impl Circuit<pallas::Base> for LeadContract {
             coin_pk_commit_r.mul(layouter.namespace(|| "coin_pk commit R"), self.root_sk)?
         };
         let coin_pk_commit = com.add(layouter.namespace(|| "coin timestamp commit"), &blind)?;
+
         // constrain coin's pub key x value
 
         layouter.constrain_instance(
@@ -481,6 +412,7 @@ impl Circuit<pallas::Base> for LeadContract {
         // constrain coin c1 serial number
         // =============
         // m*G_1
+
         let (com, _) = {
             let sn_commit_v = ValueCommitV;
             let sn_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), sn_commit_v);
@@ -510,6 +442,7 @@ impl Circuit<pallas::Base> for LeadContract {
             config.primary,
             LEAD_COIN_SERIAL_NUMBER_Y_OFFSET,
         )?;
+
         // ==========================
         // commitment of coins c1,c2
         // ==========================
@@ -526,15 +459,17 @@ impl Circuit<pallas::Base> for LeadContract {
         //TODO does both coins have the same value?!! doesn't make sense
         //but only single value is in witness.
 
-        let coin_hash = {
+        /*
+        let coin_hash  = {
             let poseidon_message = [
-                coin_pk_commit.inner().x(),
-                coin_pk_commit.inner().y(),
-                coin_value.clone(),
-                coin_nonce.clone(),
+                //coin_pk_commit.inner().x(),
+                //coin_pk_commit.inner().y(),
+                //coin_value.clone(),
+                //coin_nonce.clone(),
+                coin_pk_x.clone(),
             ];
 
-            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<4>, 3, 2>::init(
+            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<1>, 3, 2>::init(
                 config.poseidon_chip(),
                 layouter.namespace(|| "Poseidon init"),
             )?;
@@ -545,11 +480,34 @@ impl Circuit<pallas::Base> for LeadContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
+         */
+        let coin_val = {
+            //TODO (research) this panic probably due to arith_chip overflowing
+
+            let coin_val_pt = ar_chip.mul(layouter.namespace(|| ""),
+                                       coin_pk_y.clone(),
+                                       coin_pk_x.clone(),
+            )?;
+
+            let coin_val0 = ar_chip.mul(layouter.namespace(|| ""),
+                        coin_nonce.clone(),
+                        coin_value.clone()
+            )?;
+            ar_chip.mul(layouter.namespace(||""),
+                        coin_val_pt.clone(),
+                        coin_val0.clone())?
+        };
+
         let (com, _) = {
+
             let coin_commit_v = ValueCommitV;
             let coin_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), coin_commit_v);
-            coin_commit_v.mul(layouter.namespace(|| "coin commit v"), (coin_hash, one.clone()))?
+            coin_commit_v.mul(layouter.namespace(|| "coin commit v"),
+                              (coin_val.clone(), one.clone())
+            )?
+
         };
+
         // r*G_2
         let (blind, _) = {
             let coin_commit_r = OrchardFixedBasesFull::ValueCommitR;
@@ -557,30 +515,35 @@ impl Circuit<pallas::Base> for LeadContract {
             coin_commit_r
                 .mul(layouter.namespace(|| "coin serial number commit R"), self.coin_opening_1)?
         };
+
         let coin_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
 
         let coin_commit_x: AssignedCell<Fp, Fp> = coin_commit.inner().x();
         let coin_commit_y: AssignedCell<Fp, Fp> = coin_commit.inner().y();
 
+        //TODO subtract cm from given cm to sum to zero
         let cm1_zero_out_x =
             ar_chip.sub(layouter.namespace(|| "sub to zero"), coin_commit_x.clone(), cm_c1_x)?;
         let cm1_zero_out_y =
             ar_chip.sub(layouter.namespace(|| "sub to zero"), coin_commit_y.clone(), cm_c1_y)?;
 
         // constrain coin's pub key x value
+
+
         layouter.constrain_instance(
-            cm1_zero_out_x.cell(),
+            coin_commit_x.cell(),
             config.primary,
             LEAD_COIN_COMMIT_X_OFFSET,
         )?;
         // constrain coin's pub key y value
         layouter.constrain_instance(
-            cm1_zero_out_y.cell(),
+            coin_commit_y.cell(),
             config.primary,
             LEAD_COIN_COMMIT_Y_OFFSET,
         )?;
 
         //
+        /*
         let coin2_hash = {
             let poseidon_message = [
                 coin_pk_commit.inner().x(),
@@ -601,6 +564,12 @@ impl Circuit<pallas::Base> for LeadContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
+         */
+        let coin2_hash0 = ar_chip.mul(layouter.namespace(||""), coin_pk_commit.inner().x(), coin_pk_commit.inner().y())?;
+        let coin2_hash1 = ar_chip.mul(layouter.namespace(||""), coin2_nonce.inner().x(), coin2_nonce.inner().y())?;
+        let coin2_hash2 = ar_chip.mul(layouter.namespace(||""), coin2_hash0.clone(), coin2_hash1.clone())?;
+        let coin2_hash = ar_chip.mul(layouter.namespace(||""), coin_value.clone(), coin2_hash2)?;
+
         let (com, _) = {
             let coin_commit_v = ValueCommitV;
             let coin_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), coin_commit_v);
@@ -616,22 +585,24 @@ impl Circuit<pallas::Base> for LeadContract {
         let coin2_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let coin2_commit_x: AssignedCell<Fp, Fp> = coin2_commit.inner().x();
         let coin2_commit_y: AssignedCell<Fp, Fp> = coin2_commit.inner().y();
+        /*
         let cm2_zero_out_x =
             ar_chip.sub(layouter.namespace(|| "sub to zero"), coin2_commit_x, cm_c2_x)?;
         let cm2_zero_out_y =
             ar_chip.sub(layouter.namespace(|| "sub to zero"), coin2_commit_y, cm_c2_y)?;
-
+        */
         layouter.constrain_instance(
-            cm2_zero_out_x.cell(),
+            coin2_commit_x.cell(),
             config.primary,
             LEAD_COIN_COMMIT2_X_OFFSET,
         )?;
         // constrain coin's pub key y value
         layouter.constrain_instance(
-            cm2_zero_out_y.cell(),
+            coin2_commit_y.cell(),
             config.primary,
-            LEAD_COIN_COMMIT2_X_OFFSET,
+            LEAD_COIN_COMMIT2_Y_OFFSET,
         )?;
+
 
         // ===========================
         let path: Option<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
@@ -661,7 +632,7 @@ impl Circuit<pallas::Base> for LeadContract {
         };
         let computed_final_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin_commit_hash)?;
-
+        /*
         layouter.constrain_instance(
             computed_final_root.cell(),
             config.primary,
@@ -754,6 +725,7 @@ impl Circuit<pallas::Base> for LeadContract {
         )?; //note assuming x,y coordinates are true random each?
         eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
         layouter.constrain_instance(is_gt.0.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?;
+        */
         Ok(())
     }
 }
