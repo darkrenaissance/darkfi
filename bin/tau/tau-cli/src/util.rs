@@ -329,7 +329,7 @@ fn apply_filter(tasks: &mut Vec<Value>, filter: String) {
                 filter.split('<').collect()
             };
             let key = kv[0];
-            let value = kv[1].parse::<f32>().unwrap();
+            let value = kv[1].parse::<f32>().unwrap_or(0.0);
 
             tasks.retain(|task| {
                 let rank = task[key].as_f64().unwrap_or(0.0) as f32;
