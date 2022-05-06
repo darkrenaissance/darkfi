@@ -20,7 +20,11 @@ class TransactionBuilder:
         clear_input.signature_secret = signature_secret
         self.clear_inputs.append(clear_input)
 
-    def add_input(self, input):
+    def add_input(self, all_coins, secret, note):
+        input = ClassNamespace()
+        input.all_coins = all_coins
+        input.secret = secret
+        input.note = note
         self.inputs.append(input)
 
     def add_output(self, value, token_id, public):
@@ -54,8 +58,21 @@ class TransactionBuilder:
             tx.clear_inputs.append(tx_clear_input)
 
         input_blinds = []
+        signature_secrets = []
         for input in self.inputs:
+            # FIXME: BUG - see corresponding builder.rs file
+            input_blinds.append(input.note.value_blind)
+
+            signature_secret = self.ec.random_scalar()
+            signature_secrets.append(signature_secret)
+
             tx_input = ClassNamespace()
+            tx_input.__name__ = "TransactionInput"
+            tx_input.burn_proof = BurnProof(
+                input.note.value, input.note.token_id, input.note.value_blind,
+                token_blind, input.note.serial, input.note.coin_blind,
+                input.secret, input.all_coins, signature_secret, self.ec)
+            tx_input.revealed = tx_input.burn_proof.get_revealed()
             tx.inputs.append(tx_input)
 
         assert self.outputs
@@ -97,12 +114,70 @@ class TransactionBuilder:
             secret = info.signature_secret
             signature = sign(unsigned_tx_data, secret, self.ec)
             input.signature = signature
-        for (input, info) in zip(tx.inputs, self.inputs):
-            secret = info.signature_secret
-            signature = sign(unsigned_tx_data, secret, self.ec)
+        for (input, signature_secret) in zip(tx.inputs, signature_secrets):
+            signature = sign(unsigned_tx_data, signature_secret, self.ec)
             input.signature = signature
 
         return tx
+
+class BurnProof:
+
+    def __init__(self, value, token_id, value_blind, token_blind, serial,
+                 coin_blind, secret, all_coins, signature_secret, ec):
+        self.value = value
+        self.token_id = token_id
+        self.value_blind = value_blind
+        self.token_blind = token_blind
+        self.serial = serial
+        self.coin_blind = coin_blind
+        self.secret = secret
+        self.all_coins = all_coins
+        self.signature_secret = signature_secret
+
+        self.ec = ec
+
+    def get_revealed(self):
+        revealed = ClassNamespace()
+        revealed.nullifier = ff_hash(self.secret, self.serial)
+
+        revealed.value_commit = pedersen_encrypt(
+            self.value, self.value_blind, self.ec
+        )
+        revealed.token_commit = pedersen_encrypt(
+            self.token_id, self.token_blind, self.ec
+        )
+
+        revealed.all_coins = self.all_coins
+
+        revealed.signature_public = self.ec.multiply(self.signature_secret,
+                                                     self.ec.G)
+
+        return revealed
+
+    def verify(self, public):
+        revealed = self.get_revealed()
+
+        public_key = self.ec.multiply(self.secret, self.ec.G)
+        coin = ff_hash(
+            self.ec.p,
+            public_key[0],
+            public_key[1],
+            self.value,
+            self.token_id,
+            self.serial,
+            self.coin_blind
+        )
+        # Merkle root check
+        if coin not in self.all_coins:
+            return False
+
+        return all([
+            revealed.nullifier == public.nullifier,
+            revealed.value_commit == public.value_commit,
+            revealed.token_commit == public.token_commit,
+            revealed.all_coins == public.all_coins,
+            revealed.signature_public == public.signature_public
+        ])
 
 class MintProof:
 
@@ -287,6 +362,37 @@ def main(argv):
     is_verify, reason = tx.verify()
     if not is_verify:
         print(f"tx verify failed: {reason}", file=sys.stderr)
+        return -1
+
+    assert len(tx.outputs) > 0
+    note = tx.outputs[0].enc_note
+    coin = ff_hash(
+        ec.p,
+        public[0],
+        public[1],
+        note.value,
+        note.token_id,
+        note.serial,
+        note.coin_blind
+    )
+    assert coin == tx.outputs[0].mint_proof.get_revealed().coin
+    all_coins = [coin]
+
+    builder = TransactionBuilder(ec)
+    builder.add_input(all_coins, secret, note)
+
+    secret2 = ec.random_scalar()
+    public2 = ec.multiply(secret, ec.G)
+
+    builder.add_output(1000, token_id, public2)
+    # Change
+    builder.add_output(note.value - 1000, token_id, public)
+
+    tx = builder.build()
+
+    is_verify, reason = tx.verify()
+    if not is_verify:
+        print(f"tx2 verify failed: {reason}", file=sys.stderr)
         return -1
 
     return 0

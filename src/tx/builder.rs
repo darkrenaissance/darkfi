@@ -89,6 +89,8 @@ impl TransactionBuilder {
         let mut input_blinds = vec![];
         let mut signature_secrets = vec![];
         for input in self.inputs {
+            // FIXME: BUG - looks like we are reusing the value_blind from the output
+            // This must be a completely new random value or the value_commit will be the same.
             input_blinds.push(input.note.value_blind);
 
             let signature_secret = SecretKey::random(&mut OsRng);
