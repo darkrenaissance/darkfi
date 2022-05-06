@@ -1,3 +1,4 @@
+import hashlib
 import random
 
 def ff_inv(a, p):
@@ -101,4 +102,49 @@ def pallas_curve():
     m = 26322809409216846271933211244226061368157231119725763192402071651286829040466
     assert ec.multiply(m, G) == (15862887453366837597569434439063150886012590021428640083047997467990450633825, 25887284719793568129480941070850220101898092026705204234126448799557008384178, 1)
     return ec
+
+def pedersen_encrypt(x, y, ec):
+    vcv = ec.multiply(x, ec.G)
+    vcr = ec.multiply(y, ec.H)
+    return ec.add(vcv, vcr)
+
+def ff_hash(p, *args):
+    hasher = hashlib.sha256()
+    for arg in args:
+        match arg:
+            case int() as arg:
+                hasher.update(arg.to_bytes(32, byteorder="little"))
+            case bytes() as arg:
+                hasher.update(arg)
+            case _:
+                raise Exception(f"unknown hash arg '{arg}' type: {type(arg)}")
+    value = int.from_bytes(hasher.digest(), byteorder="little")
+    return value % p
+
+def hash_point(point, message=None):
+    hasher = hashlib.sha256()
+    for x_i in point:
+        hasher.update(x_i.to_bytes(32, byteorder="little"))
+    # Optional message
+    if message is not None:
+        hasher.update(message)
+    value = int.from_bytes(hasher.digest(), byteorder="little")
+    return value
+
+def sign(message, secret, ec):
+    ephem_secret = ec.random_scalar()
+    ephem_public = ec.multiply(ephem_secret, ec.G)
+    challenge = hash_point(ephem_public, message) % ec.order
+    response = (ephem_secret + challenge * secret) % ec.order
+    return ephem_public, response
+
+def verify(message, signature, public, ec):
+    ephem_public, response = signature
+    challenge = hash_point(ephem_public, message) % ec.order
+    # sG
+    lhs = ec.multiply(response, ec.G)
+    # R + cP
+    rhs_cP = ec.multiply(challenge, public)
+    rhs = ec.add(ephem_public, rhs_cP)
+    return lhs == rhs
 
