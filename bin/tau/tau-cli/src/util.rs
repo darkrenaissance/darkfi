@@ -341,7 +341,7 @@ fn apply_filter(tasks: &mut Vec<Value>, filter: String) {
             })
         }
 
-        _ => tasks.retain(|_| true),
+        _ => {}
     };
 }
 
