@@ -295,11 +295,10 @@ fn check_task_state(task: &Value, state: &str) -> bool {
     state == last_state
 }
 
-fn apply_filter(tasks: Vec<Value>, filter: String) -> Result<Vec<Value>> {
-    let filtered_tasks: Vec<Value> = match filter.as_str() {
-        "open" => tasks.into_iter().filter(|task| check_task_state(task, "open")).collect(),
-        "pause" => tasks.into_iter().filter(|task| check_task_state(task, "pause")).collect(),
-        "stop" => tasks.into_iter().filter(|task| check_task_state(task, "stop")).collect(),
+fn apply_filter(tasks: &mut Vec<Value>, filter: String) {
+    match filter.as_str() {
+        "open" => tasks.retain(|task| check_task_state(task, "open")),
+        "pause" => tasks.retain(|task| check_task_state(task, "pause")),
 
         _ if filter.len() == 4 && filter.parse::<u32>().is_ok() => {
             let (month, year) =
@@ -307,16 +306,12 @@ fn apply_filter(tasks: Vec<Value>, filter: String) -> Result<Vec<Value>> {
 
             let year = year + 2000;
 
-            tasks
-                .into_iter()
-                .filter(|task| {
-                    let date = task["created_at"].as_i64().unwrap();
-                    let task_date = NaiveDateTime::from_timestamp(date, 0).date();
-                    let filter_date = NaiveDate::from_ymd(year, month, 1);
-                    task_date.month() == filter_date.month() &&
-                        task_date.year() == filter_date.year()
-                })
-                .collect()
+            tasks.retain(|task| {
+                let date = task["created_at"].as_i64().unwrap();
+                let task_date = NaiveDateTime::from_timestamp(date, 0).date();
+                let filter_date = NaiveDate::from_ymd(year, month, 1);
+                task_date.month() == filter_date.month() && task_date.year() == filter_date.year()
+            })
         }
 
         _ if filter.contains("assign:") | filter.contains("project:") => {
@@ -324,10 +319,7 @@ fn apply_filter(tasks: Vec<Value>, filter: String) -> Result<Vec<Value>> {
             let key = kv[0];
             let value = Value::from(kv[1]);
 
-            tasks
-                .into_iter()
-                .filter(|task| task[key].as_array().unwrap_or(&vec![]).contains(&value))
-                .collect()
+            tasks.retain(|task| task[key].as_array().unwrap_or(&vec![]).contains(&value))
         }
 
         _ if filter.contains("rank>") | filter.contains("rank<") => {
@@ -337,25 +329,20 @@ fn apply_filter(tasks: Vec<Value>, filter: String) -> Result<Vec<Value>> {
                 filter.split('<').collect()
             };
             let key = kv[0];
-            let value = kv[1].parse::<f32>()?;
+            let value = kv[1].parse::<f32>().unwrap();
 
-            tasks
-                .into_iter()
-                .filter(|task| {
-                    let rank = task[key].as_f64().unwrap_or(0.0) as f32;
-                    if filter.contains('>') {
-                        rank > value
-                    } else {
-                        rank < value
-                    }
-                })
-                .collect()
+            tasks.retain(|task| {
+                let rank = task[key].as_f64().unwrap_or(0.0) as f32;
+                if filter.contains('>') {
+                    rank > value
+                } else {
+                    rank < value
+                }
+            })
         }
 
-        _ => tasks,
+        _ => tasks.retain(|_| true),
     };
-
-    Ok(filtered_tasks)
 }
 
 pub fn list_tasks(rep: Value, filters: Vec<String>) -> Result<()> {
@@ -366,8 +353,7 @@ pub fn list_tasks(rep: Value, filters: Vec<String>) -> Result<()> {
     let mut tasks: Vec<Value> = serde_json::from_value(rep)?;
 
     for filter in filters {
-        // TODO need to use iterator or reference instead of copy
-        tasks = apply_filter(tasks, filter)?;
+        apply_filter(&mut tasks, filter);
     }
 
     tasks.sort_by(|a, b| b["rank"].as_f64().partial_cmp(&a["rank"].as_f64()).unwrap());
