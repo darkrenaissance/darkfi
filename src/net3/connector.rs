@@ -1,12 +1,14 @@
 use async_std::{future::timeout, sync::Arc};
-use std::time::Duration;
+use std::{env, time::Duration};
 
 use log::error;
 use url::Url;
 
 use crate::{Error, Result};
 
-use super::{Channel, ChannelPtr, SettingsPtr, TcpTransport, Transport, TransportName};
+use super::{
+    Channel, ChannelPtr, SettingsPtr, TcpTransport, TorTransport, Transport, TransportName,
+};
 
 /// Create outbound socket connections.
 pub struct Connector {
@@ -41,14 +43,14 @@ impl Connector {
                 let stream = transport.dial(connect_url.clone());
 
                 if let Err(err) = stream {
-                    error!("Setup failed: {}", err);
+                    error!("TCP Setup failed: {}", err);
                     return Err(Error::ConnectFailed)
                 }
 
                 let stream = stream?.await;
 
                 if let Err(err) = stream {
-                    error!("Connection failed: {}", err);
+                    error!("TCP Connection failed: {}", err);
                     return Err(Error::ConnectFailed)
                 }
 
@@ -63,7 +65,39 @@ impl Connector {
 
                 Ok(channel)
             }
-            TransportName::Tor(_upgrade) => todo!(),
+            TransportName::Tor(upgrade) => {
+                let socks5_url = Url::parse(
+                    &env::var("DARKFI_TOR_SOCKS5_URL")
+                        .unwrap_or("socks5://127.0.0.1:9050".to_string()),
+                )?;
+
+                let transport = TorTransport::new(socks5_url, None)?;
+
+                let stream = transport.clone().dial(connect_url.clone());
+
+                if let Err(err) = stream {
+                    error!("TOR Setup failed: {}", err);
+                    return Err(Error::ConnectFailed)
+                }
+
+                let stream = stream?.await;
+
+                if let Err(err) = stream {
+                    error!("TOR Connection failed: {}", err);
+                    return Err(Error::ConnectFailed)
+                }
+
+                let channel = match upgrade {
+                    None => Channel::new(Box::new(stream?), connect_url.clone()).await,
+                    Some(u) if u == "tls" => {
+                        let stream = transport.upgrade_dialer(stream?)?.await;
+                        Channel::new(Box::new(stream?), connect_url).await
+                    }
+                    Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
+                };
+
+                Ok(channel)
+            }
         }
     }
 }

@@ -25,7 +25,7 @@ struct Args {
     /// Verbosity level
     #[clap(short, parse(from_occurrences))]
     verbose: u8,
-    /// node number:  
+    /// node number:
     /// 0-2 is for seed nodes
     /// 3-20 is for inbound connections nodes
     /// 21- is for outbound connections nodes
@@ -37,9 +37,15 @@ struct Args {
     /// communicate using tls protocol by default is tcp
     #[clap(long)]
     tls: bool,
+    /// communicate using tor protocol
+    #[clap(long)]
+    tor: bool,
     /// communicate using tls protocol by default is tcp
     #[clap(long, default_value = "127.0.0.1:11055")]
     rpc: SocketAddr,
+    /// open manual connection
+    #[clap(long)]
+    connect: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,7 +63,12 @@ struct MockP2p {
 }
 
 impl MockP2p {
-    async fn new(node_number: u8, _broadcast: bool, scheme: &str) -> Result<(net::P2pPtr, Self)> {
+    async fn new(
+        node_number: u8,
+        _broadcast: bool,
+        scheme: &str,
+        connect: Option<String>,
+    ) -> Result<(net::P2pPtr, Self)> {
         let seed_addrs: Vec<Url> = vec![
             Url::parse(&format!("{}://127.0.0.1:11001", scheme))?,
             Url::parse(&format!("{}://127.0.0.1:11002", scheme))?,
@@ -69,49 +80,62 @@ impl MockP2p {
 
         let mut broadcast = _broadcast;
 
-        let p2p = match node_number {
-            0..=2 => {
-                address = Some(seed_addrs[node_number as usize].clone());
+        let p2p = if connect.is_none() {
+            match node_number {
+                0..=2 => {
+                    address = Some(seed_addrs[node_number as usize].clone());
 
-                let net_settings = net::Settings { inbound: address.clone(), ..Default::default() };
-                let p2p = net::P2p::new(net_settings).await;
+                    let net_settings =
+                        net::Settings { inbound: address.clone(), ..Default::default() };
+                    let p2p = net::P2p::new(net_settings).await;
 
-                broadcast = false;
-                state = State::Seed;
+                    broadcast = false;
+                    state = State::Seed;
 
-                p2p
+                    p2p
+                }
+                3..=20 => {
+                    let random_port: u32 = rand::thread_rng().gen_range(11007..49151);
+                    address = Some(format!("{}://127.0.0.1:{}", scheme, random_port).parse()?);
+
+                    let net_settings = net::Settings {
+                        inbound: address.clone(),
+                        external_addr: address.clone(),
+                        seeds: seed_addrs,
+                        ..Default::default()
+                    };
+
+                    let p2p = net::P2p::new(net_settings).await;
+
+                    state = State::Inbound;
+
+                    p2p
+                }
+                _ => {
+                    address = None;
+
+                    let net_settings = net::Settings {
+                        outbound_connections: 3,
+                        seeds: seed_addrs,
+                        ..Default::default()
+                    };
+
+                    let p2p = net::P2p::new(net_settings).await;
+                    state = State::Outbound;
+
+                    p2p
+                }
             }
-            3..=20 => {
-                let random_port: u32 = rand::thread_rng().gen_range(11007..49151);
-                address = Some(format!("{}://127.0.0.1:{}", scheme, random_port).parse()?);
+        } else {
+            address = None;
 
-                let net_settings = net::Settings {
-                    inbound: address.clone(),
-                    external_addr: address.clone(),
-                    seeds: seed_addrs,
-                    ..Default::default()
-                };
+            let net_settings =
+                net::Settings { peers: vec![Url::parse(&connect.unwrap())?], ..Default::default() };
 
-                let p2p = net::P2p::new(net_settings).await;
+            let p2p = net::P2p::new(net_settings).await;
+            state = State::Outbound;
 
-                state = State::Inbound;
-
-                p2p
-            }
-            _ => {
-                address = None;
-
-                let net_settings = net::Settings {
-                    outbound_connections: 3,
-                    seeds: seed_addrs,
-                    ..Default::default()
-                };
-
-                let p2p = net::P2p::new(net_settings).await;
-                state = State::Outbound;
-
-                p2p
-            }
+            p2p
         };
 
         println!("start {:?} node #{} address {:?}", state, node_number, address);
@@ -212,9 +236,13 @@ impl MockP2p {
 }
 
 async fn start(executor: Arc<Executor<'_>>, args: Args) -> Result<()> {
-    let scheme = if args.tls { "tls" } else { "tcp" };
+    let mut scheme = (if args.tor { "tor" } else { "tcp" }).to_string();
 
-    let (p2p, mock_p2p) = MockP2p::new(args.node, args.broadcast, scheme).await?;
+    if args.tls {
+        scheme = format!("{}+tls", scheme);
+    }
+
+    let (p2p, mock_p2p) = MockP2p::new(args.node, args.broadcast, &scheme, args.connect).await?;
     mock_p2p.run(p2p.clone(), args.rpc.clone(), executor).await
 }
 

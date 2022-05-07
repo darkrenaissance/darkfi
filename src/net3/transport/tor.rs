@@ -1,3 +1,7 @@
+use async_std::{
+    net::{TcpListener, TcpStream},
+    sync::Arc,
+};
 use std::{
     io,
     io::{BufRead, BufReader, Write},
@@ -6,10 +10,6 @@ use std::{
     time::Duration,
 };
 
-use async_std::{
-    net::{TcpListener, TcpStream},
-    sync::Arc,
-};
 use fast_socks5::client::{Config, Socks5Stream};
 use futures::prelude::*;
 use futures_rustls::{TlsAcceptor, TlsStream};
@@ -17,8 +17,9 @@ use regex::Regex;
 use socket2::{Domain, Socket, Type};
 use url::Url;
 
-use super::{TlsUpgrade, Transport};
 use crate::{Error, Result};
+
+use super::{TlsUpgrade, Transport, TransportStream};
 
 /// Implements communication through the tor proxy service.
 ///
@@ -162,12 +163,13 @@ impl TorTransport {
     ///
     /// * `url` - url that the hidden service maps to.
     pub fn create_ehs(&self, url: Url) -> Result<Url> {
-        self.tor_controller
-            .as_ref()
-            .ok_or_else(|| {
-                Error::TorError("No controller configured for this transport".to_string())
-            })?
-            .create_ehs(url)
+        let tor_controller = self.tor_controller.as_ref();
+
+        if tor_controller.is_none() {
+            return Err(Error::TorError("No controller configured for this transport".to_string()))
+        };
+
+        tor_controller.unwrap().create_ehs(url)
     }
 
     pub async fn do_dial(self, url: Url) -> Result<Socks5Stream<TcpStream>> {
@@ -211,6 +213,8 @@ impl TorTransport {
         Ok(TcpListener::from(std::net::TcpListener::from(socket)))
     }
 }
+
+impl<T: TransportStream> TransportStream for Socks5Stream<T> {}
 
 impl Transport for TorTransport {
     type Acceptor = TcpListener;

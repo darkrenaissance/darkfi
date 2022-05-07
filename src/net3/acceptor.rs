@@ -1,6 +1,7 @@
 use async_std::sync::Arc;
+use std::{env, fs};
 
-use log::error;
+use log::{error, info};
 use smol::Executor;
 use url::Url;
 
@@ -9,7 +10,9 @@ use crate::{
     Error, Result,
 };
 
-use super::{Channel, ChannelPtr, TcpTransport, Transport, TransportListener, TransportName};
+use super::{
+    Channel, ChannelPtr, TcpTransport, TorTransport, Transport, TransportListener, TransportName,
+};
 
 /// Atomic pointer to Acceptor class.
 pub type AcceptorPtr = Arc<Acceptor>;
@@ -40,14 +43,14 @@ impl Acceptor {
                 let listener = transport.listen_on(accept_url.clone());
 
                 if let Err(err) = listener {
-                    error!("Setup failed: {}", err);
+                    error!("TCP Setup failed: {}", err);
                     return Err(Error::BindFailed(accept_url.clone().to_string()))
                 }
 
                 let listener = listener?.await;
 
                 if let Err(err) = listener {
-                    error!("Bind listener failed: {}", err);
+                    error!("TCP Bind listener failed: {}", err);
                     return Err(Error::BindFailed(accept_url.to_string()))
                 }
 
@@ -64,7 +67,65 @@ impl Acceptor {
                     Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
                 }
             }
-            TransportName::Tor(_upgrade) => todo!(),
+            TransportName::Tor(upgrade) => {
+                let socks5_url = Url::parse(
+                    &env::var("DARKFI_TOR_SOCKS5_URL")
+                        .unwrap_or("socks5://127.0.0.1:9050".to_string()),
+                )?;
+
+                let torc_url = Url::parse(
+                    &env::var("DARKFI_TOR_CONTROL_URL")
+                        .unwrap_or("tcp://127.0.0.1:9051".to_string()),
+                )?;
+
+                let auth_cookie = env::var("DARKFI_TOR_COOKIE");
+
+                if auth_cookie.is_err() {
+                    return Err(Error::TorError(
+                    "Please set the env var DARKFI_TOR_COOKIE to the configured tor cookie file. \
+                    For example: \
+                    \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'".to_string(),
+                ))
+                }
+
+                let auth_cookie = auth_cookie.unwrap();
+
+                let auth_cookie = hex::encode(&fs::read(auth_cookie).unwrap());
+
+                let transport = TorTransport::new(socks5_url, Some((torc_url, auth_cookie)))?;
+
+                // generate EHS pointing to local address
+                let hurl = transport.create_ehs(accept_url.clone())?;
+
+                info!("EHS TOR: {}", hurl.to_string());
+
+                let listener = transport.clone().listen_on(accept_url.clone());
+
+                if let Err(err) = listener {
+                    error!("TOR Setup failed: {}", err);
+                    return Err(Error::BindFailed(accept_url.clone().to_string()))
+                }
+
+                let listener = listener?.await;
+
+                if let Err(err) = listener {
+                    error!("TOR Bind listener failed: {}", err);
+                    return Err(Error::BindFailed(accept_url.to_string()))
+                }
+
+                let listener = listener?;
+
+                match upgrade {
+                    None => {
+                        self.accept(Box::new(listener), executor);
+                    }
+                    Some(u) if u == "tls" => {
+                        let tls_listener = transport.upgrade_listener(listener)?.await?;
+                        self.accept(Box::new(tls_listener), executor);
+                    }
+                    Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
+                }
+            }
         }
         Ok(())
     }
