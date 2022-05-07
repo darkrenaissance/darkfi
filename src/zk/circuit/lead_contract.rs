@@ -643,14 +643,15 @@ impl Circuit<pallas::Base> for LeadContract {
 
         let y_commit_exp = ar_chip.mul(layouter.namespace(||""),
                                        coin_nonce.clone(),
-                                       root_sk.clone(
+                                       //root_sk.clone(),
+                                       one.clone(),
         )?;
 
         let (com, _) = {
             let y_commit_v = ValueCommitV;
             let y_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), y_commit_v);
             y_commit_v.mul(layouter.namespace(|| "coin commit v"),
-                           (y_commit_exp.clone(), one.clone())
+                           (y_commit_exp.clone(), one.clone()),
             )?
         };
 
@@ -658,7 +659,9 @@ impl Circuit<pallas::Base> for LeadContract {
         let (blind, _) = {
             let y_commit_r = OrchardFixedBasesFull::ValueCommitR;
             let y_commit_r = FixedPoint::from_inner(ecc_chip.clone(), y_commit_r);
-            y_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), self.mau_y)?
+            y_commit_r.mul(layouter.namespace(|| "coin serial number commit R"),
+                           self.mau_y
+            )?
         };
         let mut y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
 
@@ -676,8 +679,8 @@ impl Circuit<pallas::Base> for LeadContract {
 
         let y_commit_bytes : [u8;32] = y_commit.inner().point().unwrap().to_bytes();
         let mut y_commit_base_bytes : [u8;32] = [0;32];
-        for i in 0..24 {
-            y_commit_base_bytes[i] = y_commit_bytes[i];
+        for i in 0..23 {
+            y_commit_base_bytes[i] = y_commit_base_bytes[i];
         }
         let y_commit_base_temp = pallas::Base::from_repr(y_commit_base_bytes).unwrap();
 
@@ -696,7 +699,7 @@ impl Circuit<pallas::Base> for LeadContract {
             let rho_commit_v = ValueCommitV;
             let rho_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), rho_commit_v);
             rho_commit_v.mul(layouter.namespace(|| "coin commit v"),
-                             (y_commit_prod.clone(), one.clone()),
+                             (y_commit_base.clone(), one.clone()),
             )?
         };
         // r*G_2
@@ -719,7 +722,7 @@ impl Circuit<pallas::Base> for LeadContract {
         let target  = ar_chip.mul(layouter.namespace(|| "calculate target"), scalar, coin_value)?;
 
         eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
-        eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_prod.clone())?;
+        eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
 
         //TODO (research) maybe pick up the first bit of the y_commit_base
         let (helper, is_gt) = greater_than_chip.greater_than(
