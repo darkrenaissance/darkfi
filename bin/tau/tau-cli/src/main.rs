@@ -68,8 +68,8 @@ async fn start(mut options: CliTau) -> Result<()> {
             let rank = rank.unwrap_or(0.0);
 
             add(rpc_addr,
-                            json!([{"title": title, "desc": desc, "assign": assign, "project": project, "due": due, "rank": rank}]),
-                            ).await?;
+                json!([{"title": title, "desc": desc, "assign": assign, "project": project, "due": due, "rank": rank}]),
+                ).await?;
         }
 
         Some(CliTauSubCommands::Update { id, key, value }) => {
@@ -111,18 +111,16 @@ async fn start(mut options: CliTau) -> Result<()> {
             }
         },
 
-        Some(CliTauSubCommands::Comment { id, author, content }) => match (author, content) {
-            (Some(author), Some(content)) => {
-                set_comment(rpc_addr, id, author.trim(), content.trim()).await?;
+        Some(CliTauSubCommands::Comment { id, content }) => match content {
+            Some(content) => {
+                set_comment(rpc_addr, id, content.trim()).await?;
             }
-            (None, None) => {
+            None => {
                 let rep = get_by_id(rpc_addr, id).await?;
                 let comments = get_comments(rep)?;
 
                 println!("Comments on Task with id {}:\n{}", id, comments);
             }
-            (None, Some(_)) => error!("Please provide the author name"),
-            (Some(_), None) => error!("Please provide some content"),
         },
 
         Some(CliTauSubCommands::List {}) | None => {

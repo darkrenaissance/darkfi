@@ -1,5 +1,5 @@
 use async_std::sync::{Arc, Mutex};
-use std::fs::create_dir_all;
+use std::{env, fs::create_dir_all};
 
 use async_executor::Executor;
 use crypto_box::{aead::Aead, Box, SecretKey, KEY_SIZE};
@@ -86,6 +86,14 @@ async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let datastore_path = expand_path(&settings.datastore)?;
 
+    let nickname =
+        if settings.nickname.is_some() { settings.nickname } else { env::var("USER").ok() };
+
+    if nickname.is_none() {
+        error!("Provide a nickname in config file");
+        return Ok(())
+    }
+
     // mkdir datastore_path if not exists
     create_dir_all(datastore_path.join("month"))?;
     create_dir_all(datastore_path.join("task"))?;
@@ -99,14 +107,17 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         save::<String>(&datastore_path.join("secret_key"), &sk_string)?;
         secret
     } else {
-        let loaded_key = match load::<String>(&datastore_path.join("secret_key")) {
-            Ok(key) => key,
-            Err(_) => {
-                error!("Could not load secret key from file, please run \"taud --help\" for more information");
-                return Ok(())
-            }
-        };
-        let sk_bytes = hex::decode(loaded_key)?;
+        let loaded_key = load::<String>(&datastore_path.join("secret_key"));
+
+        if loaded_key.is_err() {
+            error!(
+                "Could not load secret key from file, \
+                 please run \"taud --help\" for more information"
+            );
+            return Ok(())
+        }
+
+        let sk_bytes = hex::decode(loaded_key.unwrap())?;
         let sk_bytes: [u8; KEY_SIZE] = sk_bytes.as_slice().try_into()?;
         SecretKey::try_from(sk_bytes)?
     };
@@ -124,7 +135,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let (rpc_snd, rpc_rcv) = async_channel::unbounded::<Option<TaskInfo>>();
 
-    let rpc_interface = Arc::new(JsonRpcInterface::new(rpc_snd, datastore_path.clone()));
+    let rpc_interface =
+        Arc::new(JsonRpcInterface::new(rpc_snd, datastore_path.clone(), nickname.unwrap()));
 
     let executor_cloned = executor.clone();
     let rpc_listener_task =

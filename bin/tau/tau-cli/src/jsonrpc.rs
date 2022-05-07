@@ -84,10 +84,10 @@ pub async fn get_state(url: &str, id: u64) -> Result<Value> {
 }
 
 // Set comment for a task and returns `true` upon success.
-// --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_author, comment_content], "id": 1}
+// --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_content], "id": 1}
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-pub async fn set_comment(url: &str, id: u64, author: &str, content: &str) -> Result<Value> {
-    let req = jsonrpc::request(json!("set_comment"), json!([id, author, content]));
+pub async fn set_comment(url: &str, id: u64, content: &str) -> Result<Value> {
+    let req = jsonrpc::request(json!("set_comment"), json!([id, content]));
     request(req, url.to_string()).await
 }
 

@@ -154,7 +154,8 @@ mod tests {
         // load and save TaskInfo
         ///////////////////////
 
-        let mut task = TaskInfo::new("test_title", "test_desc", None, 0.0, &dataset_path)?;
+        let mut task =
+            TaskInfo::new("test_title", "test_desc", "NICKNAME", None, 0.0, &dataset_path)?;
 
         task.save(&dataset_path)?;
 
@@ -194,7 +195,8 @@ mod tests {
         // activate task
         ///////////////////////
 
-        let task = TaskInfo::new("test_title_3", "test_desc", None, 0.0, &dataset_path)?;
+        let task =
+            TaskInfo::new("test_title_3", "test_desc", "NICKNAME", None, 0.0, &dataset_path)?;
 
         task.save(&dataset_path)?;
 

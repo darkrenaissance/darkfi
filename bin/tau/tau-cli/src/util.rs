@@ -58,8 +58,6 @@ pub enum CliTauSubCommands {
     Comment {
         /// Task ID
         id: u64,
-        /// Comment author
-        author: Option<String>,
         /// Comment content
         content: Option<String>,
     },
@@ -73,6 +71,7 @@ pub struct TaskInfo {
     pub id: u32,
     pub title: String,
     pub desc: String,
+    pub owner: String,
     pub assign: Vec<String>,
     pub project: Vec<String>,
     pub due: Option<i64>,
@@ -190,6 +189,7 @@ pub fn desc_in_editor() -> Result<Option<String>> {
 pub fn show_task(task: Value, taskinfo: TaskInfo, current_state: String) -> Result<()> {
     let mut table = table!([Bd => "ref_id", &taskinfo.ref_id],
                                             ["id", &taskinfo.id.to_string()],
+                                            [Bd =>"owner", &taskinfo.owner],
                                             [Bd =>"title", &taskinfo.title],
                                             ["desc", &taskinfo.desc],
                                             [Bd =>"assign", get_from_task(task.clone(), "assign")?],

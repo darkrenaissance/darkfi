@@ -53,6 +53,7 @@ pub struct TaskInfo {
     id: u32,
     title: String,
     desc: String,
+    owner: String,
     assign: TaskAssigns,
     project: TaskProjects,
     due: Option<Timestamp>,
@@ -66,6 +67,7 @@ impl TaskInfo {
     pub fn new(
         title: &str,
         desc: &str,
+        owner: &str,
         due: Option<Timestamp>,
         rank: f32,
         dataset_path: &Path,
@@ -91,6 +93,7 @@ impl TaskInfo {
             id,
             title: title.into(),
             desc: desc.into(),
+            owner: owner.into(),
             assign: TaskAssigns(vec![]),
             project: TaskProjects(vec![]),
             due,

@@ -24,10 +24,11 @@ use crate::{
 pub struct JsonRpcInterface {
     dataset_path: PathBuf,
     notify_queue_sender: async_channel::Sender<Option<TaskInfo>>,
+    nickname: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BaseTaskInfo {
+struct BaseTaskInfo {
     title: String,
     desc: String,
     assign: Vec<String>,
@@ -70,8 +71,9 @@ impl JsonRpcInterface {
     pub fn new(
         notify_queue_sender: async_channel::Sender<Option<TaskInfo>>,
         dataset_path: PathBuf,
+        nickname: String,
     ) -> Self {
-        Self { notify_queue_sender, dataset_path }
+        Self { notify_queue_sender, dataset_path, nickname }
     }
 
     // RPCAPI:
@@ -94,8 +96,14 @@ impl JsonRpcInterface {
         let args = params.as_array().unwrap();
 
         let task: BaseTaskInfo = serde_json::from_value(args[0].clone())?;
-        let mut new_task: TaskInfo =
-            TaskInfo::new(&task.title, &task.desc, task.due, task.rank, &self.dataset_path)?;
+        let mut new_task: TaskInfo = TaskInfo::new(
+            &task.title,
+            &task.desc,
+            &self.nickname,
+            task.due,
+            task.rank,
+            &self.dataset_path,
+        )?;
         new_task.set_project(&task.project);
         new_task.set_assign(&task.assign);
 
@@ -174,21 +182,20 @@ impl JsonRpcInterface {
 
     // RPCAPI:
     // Set comment for a task and returns `true` upon success.
-    // --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_author, comment_content], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_content], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn set_comment(&self, params: Value) -> TaudResult<Value> {
         debug!(target: "tau", "JsonRpc::set_comment() params {}", params);
         let args = params.as_array().unwrap();
 
-        if args.len() != 3 {
+        if args.len() != 2 {
             return Err(TaudError::InvalidData("len of params should be 3".into()))
         }
 
-        let comment_author: String = serde_json::from_value(args[1].clone())?;
-        let comment_content: String = serde_json::from_value(args[2].clone())?;
+        let comment_content: String = serde_json::from_value(args[1].clone())?;
 
         let mut task: TaskInfo = self.load_task_by_id(&args[0])?;
-        task.set_comment(Comment::new(&comment_content, &comment_author));
+        task.set_comment(Comment::new(&comment_content, &self.nickname));
 
         self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
         Ok(json!(true))

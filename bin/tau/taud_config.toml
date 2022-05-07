@@ -4,6 +4,9 @@
 ## Sets Datastore Path
 #datastore="~/.config/tau"
 
+## Current display name    
+#nickname="NICKNAME"
+
 ## Raft net settings
 [net]
 ## P2P accept address
