@@ -105,24 +105,13 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             return Err(Error::ParseFailed("unable to parse pathbuf to str"))
         };
 
-        let db_path_str = db_path.to_str().unwrap();
+        let datastore = DataStore::new(db_path.to_str().unwrap())?;
 
-        let mut current_term = 0;
-        let mut voted_for = None;
-        let mut logs = Logs(vec![]);
-        let mut commit_length = 0;
-
-        let datastore = if db_path.exists() {
-            let datastore = DataStore::new(db_path_str)?;
-            current_term = datastore.current_term.get_last()?.unwrap_or(0);
-            voted_for = datastore.voted_for.get_last()?.flatten();
-            // TODO using sled instead of memory
-            logs = Logs(datastore.logs.get_all()?);
-            commit_length = datastore.commits.get_all()?.len() as u64;
-            datastore
-        } else {
-            DataStore::new(db_path_str)?
-        };
+        // load from sled datastore
+        let current_term = datastore.current_term.get_last()?.unwrap_or(0);
+        let voted_for = datastore.voted_for.get_last()?.flatten();
+        let logs = Logs(datastore.logs.get_all()?);
+        let commit_length = datastore.commits.get_all()?.len() as u64;
 
         // broadcasting channels
         let broadcast_msg = async_channel::unbounded::<T>();
@@ -689,12 +678,12 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.broadcast_commits.0.send(commit.clone()).await?;
         self.datastore.commits.insert(&commit)
     }
-    fn push_log(&mut self, i: &Log) -> Result<()> {
-        self.logs.push(i);
-        self.datastore.logs.insert(i)
+    fn push_log(&mut self, log: &Log) -> Result<()> {
+        self.logs.push(log);
+        self.datastore.logs.insert(log)
     }
-    fn push_logs(&mut self, i: &Logs) -> Result<()> {
-        self.logs = i.clone();
-        self.datastore.logs.wipe_insert_all(&i.to_vec())
+    fn push_logs(&mut self, logs: &Logs) -> Result<()> {
+        self.logs = logs.clone();
+        self.datastore.logs.wipe_insert_all(&logs.to_vec())
     }
 }
