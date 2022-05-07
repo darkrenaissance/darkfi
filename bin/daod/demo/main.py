@@ -3,6 +3,53 @@ from classnamespace import ClassNamespace
 from crypto import pallas_curve, ff_hash
 from tx import TransactionBuilder
 
+class State:
+
+    def __init__(self):
+        self.all_coins = set()
+        self.nullifiers = set()
+
+    def is_valid_merkle(self, all_coins):
+        return all_coins.issubset(self.all_coins)
+
+    def nullifier_exists(self, nullifier):
+        return nullifier in self.nullifiers
+
+    def apply(self, update):
+        self.nullifiers = self.nullifiers.union(update.nullifiers)
+
+        for coin, enc_note in zip(update.coins, update.enc_notes):
+            self.all_coins.add(coin)
+
+            # Try to decrypt notes here
+            print(f"Received {enc_note.value} DRK")
+
+def state_transition(state, tx):
+    for input in tx.clear_inputs:
+        pk = input.signature_public
+        # Check pk is correct
+
+    for input in tx.inputs:
+        if not state.is_valid_merkle(input.revealed.all_coins):
+            print(f"invalid merkle root", file=sys.stderr)
+            return None
+
+        nullifier = input.revealed.nullifier
+        if state.nullifier_exists(nullifier):
+            print(f"duplicate nullifier found", file=sys.stderr)
+            return None
+
+    is_verify, reason = tx.verify()
+    if not is_verify:
+        print(f"tx verify failed: {reason}", file=sys.stderr)
+        return None
+
+    update = ClassNamespace()
+    update.nullifiers = [input.revealed.nullifier for input in tx.inputs]
+    update.coins = [output.revealed.coin for output in tx.outputs]
+    update.enc_notes = [output.enc_note for output in tx.outputs]
+    return update
+
 def main(argv):
     ec = pallas_curve()
 
@@ -19,10 +66,10 @@ def main(argv):
     builder.add_output(initial_supply, token_id, public)
     tx = builder.build()
 
-    is_verify, reason = tx.verify()
-    if not is_verify:
-        print(f"tx verify failed: {reason}", file=sys.stderr)
+    state = State()
+    if (update := state_transition(state, tx)) is None:
         return -1
+    state.apply(update)
 
     assert len(tx.outputs) > 0
     note = tx.outputs[0].enc_note
@@ -36,7 +83,7 @@ def main(argv):
         note.coin_blind
     )
     assert coin == tx.outputs[0].mint_proof.get_revealed().coin
-    all_coins = [coin]
+    all_coins = set([coin])
 
     builder = TransactionBuilder(ec)
     builder.add_input(all_coins, secret, note)
@@ -50,10 +97,9 @@ def main(argv):
 
     tx = builder.build()
 
-    is_verify, reason = tx.verify()
-    if not is_verify:
-        print(f"tx2 verify failed: {reason}", file=sys.stderr)
+    if (update := state_transition(state, tx)) is None:
         return -1
+    state.apply(update)
 
     return 0
 

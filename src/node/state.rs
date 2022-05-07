@@ -56,6 +56,7 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
     debug!(target: "state_transition", "Iterate clear_inputs");
     for (i, input) in tx.clear_inputs.iter().enumerate() {
         let pk = &input.signature_public;
+        // TODO: this depends on the token ID
         if !state.is_valid_cashier_public_key(pk) && !state.is_valid_faucet_public_key(pk) {
             error!(target: "state_transition", "Invalid pubkey for clear input: {:?}", pk);
             return Err(VerifyFailed::InvalidCashierOrFaucetKey(i))
@@ -166,6 +167,11 @@ impl State {
                     let nullifier = Nullifier::new(*secret, note.serial);
                     let own_coin =
                         OwnCoin { coin, note, secret: *secret, nullifier, leaf_position };
+
+                    // FIXME: BUG check values inside the note are correct
+                    // We need to hash them all and check them against the coin
+                    // for them to be accepted.
+                    // Don't trust - verify.
 
                     wallet.put_own_coin(own_coin, tokenlist.clone()).await?;
 
