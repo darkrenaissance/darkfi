@@ -46,7 +46,7 @@ pub struct Coin {
     pk_x: Option<pallas::Base>,
     pk_y: Option<pallas::Base>,
     root_cm: Option<pallas::Scalar>,
-    root_sk: Option<pallas::Scalar>,
+    root_sk: Option<pallas::Base>,
     path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
     path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
     opening1: Option<pallas::Base>,
@@ -175,7 +175,7 @@ fn main() {
             pk_x: Some(c_pk_pt_x),
             pk_y: Some(c_pk_pt_y),
             root_cm: Some(mod_r_p(c_root_cm.inner())),
-            root_sk: Some(mod_r_p(c_root_sk.inner())),
+            root_sk: Some(c_root_sk.inner()),
             path: Some(c_cm_path.as_slice().try_into().unwrap()),
             path_sk: Some(c_path_sk),
             opening1: Some(c_cm1_blind),
@@ -207,7 +207,7 @@ fn main() {
 
     let po_path = coin.path.unwrap();
 
-    let po_cmp = pallas::Base::from(0);
+    let po_cmp = pallas::Base::from(1);
     let zero = pallas::Base::from(0);
     // ===============
     let path_sk = path_sks[coin_idx];
@@ -223,10 +223,6 @@ fn main() {
         coin_opening_1: Some(mod_r_p(coin.opening1.unwrap())),
         value: coin.value,
         coin_opening_2: Some(mod_r_p(coin.opening2.unwrap())),
-        cm_c1_x: Some(*po_cm.x()),
-        cm_c1_y: Some(*po_cm.y()),
-        cm_c2_x: Some(*po_cm2.x()),
-        cm_c2_y: Some(*po_cm2.y()),
         cm_pos: Some(u32::try_from(coin_idx).unwrap()),
         //sn_c1: Some(coin.sn.unwrap()),
         slot: Some(coin.sl.unwrap()),
@@ -252,7 +248,7 @@ fn main() {
         *po_cm2.y(),
 
         //po_path[31].inner(), //TODO (res) how the path is structured assumed root is last node in the path.
-        //po_cmp,
+        po_cmp,
 
     ];
 
