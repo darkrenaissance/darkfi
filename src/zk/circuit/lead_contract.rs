@@ -665,18 +665,7 @@ impl Circuit<pallas::Base> for LeadContract {
         };
         let mut y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
 
-        let y_commit_prod = ar_chip.mul(
-            layouter.namespace(||""),
-            //y_commit.inner().x(),
-            one.clone(),
-            //y_commit.inner().y(),
-            one.clone(),
-        )?;
         // ============================
-        //let y_commit_base  : AssignedCell<Fp,Fp> = pallas::Base::from_repr(y_commit.inner().to_bytes()).unwrap();
-        //let y_commit_x  : AssignedCell<Fp,Fp> = y_commit.inner().x();
-        //let y_commit_x_base   = y_commit.inner().x().value().unwrap();
-
         let y_commit_bytes : [u8;32] = y_commit.inner().point().unwrap().to_bytes();
         let mut y_commit_base_bytes : [u8;32] = [0;32];
         for i in 0..23 {
@@ -694,8 +683,6 @@ impl Circuit<pallas::Base> for LeadContract {
         // constraint rho
         // ============================
         let (com, _) = {
-            //TODO fix
-
             let rho_commit_v = ValueCommitV;
             let rho_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), rho_commit_v);
             rho_commit_v.mul(layouter.namespace(|| "coin commit v"),
@@ -709,17 +696,20 @@ impl Circuit<pallas::Base> for LeadContract {
             rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), self.mau_rho)?
         };
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-
         //TODO in case of the v_max lead statement you need to provide a proof
         // that the coin value never get past it.
-
         let scalar = self.load_private(
             layouter.namespace(|| "load scalar "),
             config.advices[0],
             Some(pallas::Base::from(1024)),
         )?;
-        // let c = pallas::Scalar::from(3); // leadership coefficient assumed to be 1 in this case
-        let target  = ar_chip.mul(layouter.namespace(|| "calculate target"), scalar, coin_value)?;
+        //leadership coefficient
+        let c = self.load_private(layouter.namespace(||""),
+                                  config.advices[0],
+                                  Some(pallas::Base::one()),
+        )?;
+        let ord = ar_chip.mul(layouter.namespace(||""), scalar, c)?;
+        let target  = ar_chip.mul(layouter.namespace(|| "calculate target"), ord, coin_value)?;
 
         eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
         eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
