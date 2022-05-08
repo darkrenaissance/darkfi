@@ -33,7 +33,6 @@ mod util;
 use crate::{
     error::TaudResult,
     jsonrpc::JsonRpcInterface,
-    month_tasks::MonthTasks,
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     task_info::TaskInfo,
     util::{load, save},
@@ -152,20 +151,10 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let raft_sender = raft.get_broadcast();
     let commits = raft.get_commits();
-    let initial_sync_raft_sender = raft_sender.clone();
 
     let datastore_path_cloned = datastore_path.clone();
     let recv_update: smol::Task<TaudResult<()>> = executor.spawn(async move {
         info!(target: "tau", "Start initial sync");
-        info!(target: "tau", "Upload local tasks");
-        let tasks = MonthTasks::load_current_open_tasks(&datastore_path)?;
-
-        for task in tasks {
-            debug!(target: "tau", "send local task {:?}", task);
-            let encrypted_task = encrypt_task(&task, &secret_key, &mut rng)?;
-            initial_sync_raft_sender.send(encrypted_task).await.map_err(Error::from)?;
-        }
-
         loop {
             select! {
                 task = rpc_rcv.recv().fuse() => {
