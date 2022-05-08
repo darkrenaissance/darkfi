@@ -436,18 +436,7 @@ impl Circuit<pallas::Base> for LeadContract {
         // ==========================
         // commitment of coins c1,c2
         // ==========================
-        //TODO should the reward be added to new minted coin?
-        // read the commitment
-        // concatenate message
-        // subtract those cm and commit output, constraint the output, that should equal 1.
-        //
-        //TODO this proof need to be for the two coins commitment,
-        // but cm1 doesn't exist in public inputs, or witnesses,
-        // does it make sense to calculate cm1, and proof decomm(cm1, coin2, r2)=true?
-        // that doesn't make any sense!
-        // this is the proof for the second commitment only
-        //TODO does both coins have the same value?!! doesn't make sense
-        //but only single value is in witness.
+        //TODO (res) should the reward be added to new minted coin?
 
         /*
         let coin_hash  = {
@@ -472,7 +461,6 @@ impl Circuit<pallas::Base> for LeadContract {
         };
          */
         let coin_val = {
-            //TODO (research) this panic probably due to arith_chip overflowing
 
             let coin_val_pt = ar_chip.mul(layouter.namespace(|| ""),
                                        coin_pk_y.clone(),
@@ -606,7 +594,6 @@ impl Circuit<pallas::Base> for LeadContract {
         let computed_final_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin_commit_prod.clone())?;
 
-        //TODO (fix)
 
         layouter.constrain_instance(
             computed_final_root.cell(),
@@ -673,7 +660,7 @@ impl Circuit<pallas::Base> for LeadContract {
             )?
         };
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        //TODO in case of the v_max lead statement you need to provide a proof
+
         // that the coin value never get past it.
         let scalar = self.load_private(
             layouter.namespace(|| "load scalar "),

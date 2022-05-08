@@ -112,21 +112,11 @@ fn main() {
         let c_pk_pt = c_pk.to_affine().coordinates().unwrap();
         let c_pk_pt_x : pallas::Base = *c_pk_pt.x();
         let c_pk_pt_y : pallas::Base = *c_pk_pt.y();
-        /*
-        let c_cm_message = [
-            c_pk_pt_x,clone(),
-            c_pk_pt_y.clone(),
-            c_v.clone(),
-            c_seed.clone()
-        ];
-        let c_cm_v poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(c_cm_message);
-         */
+
         let c_cm_v = c_v.clone() * c_seed.clone() * c_pk_pt_x * c_pk_pt_y;
         let c_cm1_blind = pallas::Base::from(1); //tmp val
         let c_cm2_blind = pallas::Base::from(1); //tmp val
         let c_cm: pallas::Point = pedersen_commitment_scalar(mod_r_p(c_cm_v), mod_r_p(c_cm1_blind));
-        //TODO this return run time error! assertion error, it's out of range most likely
-        //let c_cm_base_bytes : [u8; 32] = c_cm.to_bytes();
 
 
         let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
