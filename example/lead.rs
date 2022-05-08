@@ -29,8 +29,10 @@ use darkfi::{
 
 use incrementalmerkletree::Hashable;
 
-use pasta_curves::{arithmetic::CurveAffine, group::Curve};
-use pasta_curves::group::{ff::PrimeField, GroupEncoding};
+use pasta_curves::{
+    arithmetic::CurveAffine,
+    group::{ff::PrimeField, Curve, GroupEncoding},
+};
 //use halo2_proofs::arithmetic::CurveAffine;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -72,7 +74,7 @@ fn main() {
         tree.append(&node.clone());
         let leaf_position = tree.witness();
         //let (leaf_pos, path) = tree.authentication_path(leaf_position.unwrap()).unwrap();
-        let  path = tree.authentication_path(leaf_position.unwrap()).unwrap();
+        let path = tree.authentication_path(leaf_position.unwrap()).unwrap();
         root_sks.push(tree.root().clone());
         path_sks.push(path.as_slice().try_into().unwrap());
     }
@@ -110,18 +112,16 @@ fn main() {
         let c_seed = pallas::Base::from(seeds[i]);
         let c_sn = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));
         let c_pk_pt = c_pk.to_affine().coordinates().unwrap();
-        let c_pk_pt_x : pallas::Base = *c_pk_pt.x();
-        let c_pk_pt_y : pallas::Base = *c_pk_pt.y();
+        let c_pk_pt_x: pallas::Base = *c_pk_pt.x();
+        let c_pk_pt_y: pallas::Base = *c_pk_pt.y();
 
         let c_cm_v = c_v.clone() * c_seed.clone() * c_pk_pt_x * c_pk_pt_y;
         let c_cm1_blind = pallas::Base::from(1); //tmp val
         let c_cm2_blind = pallas::Base::from(1); //tmp val
         let c_cm: pallas::Point = pedersen_commitment_scalar(mod_r_p(c_cm_v), mod_r_p(c_cm1_blind));
 
-
         let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
-        let c_cm_base : pallas::Base = c_cm_coordinates.x() *
-            c_cm_coordinates.y();
+        let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
         let c_cm_node = MerkleNode(c_cm_base);
         tree_cm.append(&c_cm_node.clone());
         let leaf_position = tree_cm.witness();
@@ -129,27 +129,24 @@ fn main() {
         let c_root_cm = tree_cm.root();
         // lead coin commitment
         let c_seed2 = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));
-                let c_seed2_pt = c_seed2.to_affine().coordinates().unwrap();
+        let c_seed2_pt = c_seed2.to_affine().coordinates().unwrap();
         /*
-        let lead_coin_msg = [c_pk_pt_y.clone(),
-        c_pk_pt_x.clone(),
-        c_v,
-         *c_seed2_pt.x(),
-         *c_seed2_pt.y()
-    ];
-        let lead_coin_msg_hash =
-        poseidon::Hash::<_, P128Pow5T3, ConstantLength<5>, 3, 2>::init().hash(lead_coin_msg);
-         */
-        let lead_coin_msg = c_pk_pt_y.clone() *
-            c_pk_pt_x.clone() *
-            c_v *
-            *c_seed2_pt.x() *
-            *c_seed2_pt.y();
+            let lead_coin_msg = [c_pk_pt_y.clone(),
+            c_pk_pt_x.clone(),
+            c_v,
+             *c_seed2_pt.x(),
+             *c_seed2_pt.y()
+        ];
+            let lead_coin_msg_hash =
+            poseidon::Hash::<_, P128Pow5T3, ConstantLength<5>, 3, 2>::init().hash(lead_coin_msg);
+             */
+        let lead_coin_msg =
+            c_pk_pt_y.clone() * c_pk_pt_x.clone() * c_v * *c_seed2_pt.x() * *c_seed2_pt.y();
         let c_cm2 = pedersen_commitment_scalar(mod_r_p(lead_coin_msg), mod_r_p(c_cm2_blind));
         let c_root_sk = root_sks[i];
 
-        let c_root_sk_bytes : [u8;32] = c_root_sk.inner().to_repr();
-        let mut c_root_sk_base_bytes : [u8;32] = [0;32];
+        let c_root_sk_bytes: [u8; 32] = c_root_sk.inner().to_repr();
+        let mut c_root_sk_base_bytes: [u8; 32] = [0; 32];
         for i in 0..23 {
             c_root_sk_base_bytes[i] = c_root_sk_bytes[i];
         }
@@ -201,7 +198,6 @@ fn main() {
     let po_pk = coin.pk.unwrap().to_affine().coordinates().unwrap();
     let po_sn = coin.sn.unwrap().to_affine().coordinates().unwrap();
 
-
     let po_cmp = pallas::Base::from(0);
     let zero = pallas::Base::from(0);
     // ===============
@@ -209,8 +205,8 @@ fn main() {
     let cm_pos = u32::try_from(coin_idx).unwrap();
     let contract = LeadContract {
         path: coin.path,
-        coin_pk_x : coin.pk_x,
-        coin_pk_y : coin.pk_y,
+        coin_pk_x: coin.pk_x,
+        coin_pk_y: coin.pk_y,
         root_sk: coin.root_sk,
         path_sk: Some(path_sk),
         coin_timestamp: coin.tau, //
@@ -227,10 +223,9 @@ fn main() {
     };
 
     let cm_root = {
-        let pos : u32 = cm_pos;
+        let pos: u32 = cm_pos;
         let c_cm_coordinates = coin.cm.unwrap().to_affine().coordinates().unwrap();
-        let c_cm_base : pallas::Base = c_cm_coordinates.x() *
-            c_cm_coordinates.y();
+        let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
         let mut current = MerkleNode(c_cm_base);
         for (level, sibling) in coin.path.unwrap().iter().enumerate() {
             let level = level as u8;
@@ -246,22 +241,16 @@ fn main() {
     let mut public_inputs: Vec<pallas::Base> = vec![
         *po_nonce.x(),
         *po_nonce.y(),
-
         *po_pk.x(),
         *po_pk.y(),
-
         *po_sn.x(),
         *po_sn.y(),
-
         *po_cm.x(),
         *po_cm.y(),
-
         *po_cm2.x(),
         *po_cm2.y(),
-
         cm_root.0,
         po_cmp,
-
     ];
 
     let prover = MockProver::run(k, &contract, vec![public_inputs]).unwrap();

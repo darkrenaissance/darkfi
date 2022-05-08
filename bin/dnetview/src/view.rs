@@ -185,7 +185,7 @@ impl View {
         selected: String,
     ) -> DnetViewResult<()> {
         let style = Style::default();
-        let mut spans = Vec::new();
+        let mut lines = Vec::new();
 
         if self.selectables.is_empty() {
             // we have not received any selectable data
@@ -195,33 +195,25 @@ impl View {
 
             match info {
                 Some(SelectableObject::Node(_node)) => {
-                    let name_span = Spans::from("Node Info");
-                    spans.push(name_span);
+                    //let name_span = Spans::from("Node Info");
+                    //spans.push(name_span);
                 }
                 Some(SelectableObject::Session(_session)) => {
-                    let name_span = Spans::from("Session Info");
-                    spans.push(name_span);
+                    //let name_span = Spans::from("Session Info");
+                    //spans.push(name_span);
                 }
                 Some(SelectableObject::Connect(connect)) => {
                     let log = self.msg_log.get(&connect.id);
                     match log {
                         Some(values) => {
                             for (k, v) in values {
-                                match k.as_str() {
-                                    "send" => {
-                                        let msg_log =
-                                            Spans::from(Span::styled(format!("S: {}", v), style));
-                                        spans.push(msg_log);
-                                    }
-                                    "recv" => {
-                                        let msg_log =
-                                            Spans::from(Span::styled(format!("R: {}", v), style));
-                                        spans.push(msg_log);
-                                    }
+                                lines.push(Spans::from(match k.as_str() {
+                                    "send" => Span::styled(format!("S: {}", v), style),
+                                    "recv" => Span::styled(format!("R: {}", v), style),
                                     data => {
                                         return Err(DnetViewError::UnexpectedData(data.to_string()))
                                     }
-                                }
+                                }));
                             }
                         }
                         None => return Err(DnetViewError::CannotFindId),
@@ -231,7 +223,7 @@ impl View {
             }
         }
 
-        let graph = Paragraph::new(spans)
+        let graph = Paragraph::new(lines)
             .block(Block::default().borders(Borders::ALL))
             .style(Style::default());
 
