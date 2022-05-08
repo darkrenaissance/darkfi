@@ -75,14 +75,6 @@ pub async fn set_state(url: &str, id: u64, state: &str) -> Result<Value> {
     request(req, url.to_string()).await
 }
 
-// Get task's state.
-// --> {"jsonrpc": "2.0", "method": "get_state", "params": [task_id], "id": 1}
-// <-- {"jsonrpc": "2.0", "result": "state", "id": 1}
-pub async fn get_state(url: &str, id: u64) -> Result<Value> {
-    let req = jsonrpc::request(json!("get_state"), json!([id]));
-    request(req, url.to_string()).await
-}
-
 // Set comment for a task and returns `true` upon success.
 // --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_content], "id": 1}
 // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
@@ -92,9 +84,9 @@ pub async fn set_comment(url: &str, id: u64, content: &str) -> Result<Value> {
 }
 
 // Get task by id.
-// --> {"jsonrpc": "2.0", "method": "get_by_id", "params": [task_id], "id": 1}
+// --> {"jsonrpc": "2.0", "method": "get_task_by_id", "params": [task_id], "id": 1}
 // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
-pub async fn get_by_id(url: &str, id: u64) -> Result<Value> {
-    let req = jsonrpc::request(json!("get_by_id"), json!([id]));
+pub async fn get_task_by_id(url: &str, id: u64) -> Result<Value> {
+    let req = jsonrpc::request(json!("get_task_by_id"), json!([id]));
     request(req, url.to_string()).await
 }

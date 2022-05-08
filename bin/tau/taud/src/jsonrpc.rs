@@ -34,7 +34,7 @@ struct BaseTaskInfo {
     assign: Vec<String>,
     project: Vec<String>,
     due: Option<Timestamp>,
-    rank: f32,
+    rank: Option<f32>,
 }
 
 #[async_trait]
@@ -54,10 +54,9 @@ impl RequestHandler for JsonRpcInterface {
             Some("add") => self.add(req.params).await,
             Some("list") => self.list(req.params).await,
             Some("update") => self.update(req.params).await,
-            Some("get_state") => self.get_state(req.params).await,
             Some("set_state") => self.set_state(req.params).await,
             Some("set_comment") => self.set_comment(req.params).await,
-            Some("get_by_id") => self.get_by_id(req.params).await,
+            Some("get_task_by_id") => self.get_task_by_id(req.params).await,
             Some(_) | None => {
                 return JsonResult::Err(jsonerr(ErrorCode::MethodNotFound, None, req.id))
             }
@@ -101,7 +100,7 @@ impl JsonRpcInterface {
             &task.desc,
             &self.nickname,
             task.due,
-            task.rank,
+            task.rank.unwrap_or(0.0),
             &self.dataset_path,
         )?;
         new_task.set_project(&task.project);
@@ -139,23 +138,6 @@ impl JsonRpcInterface {
         self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
 
         Ok(json!(true))
-    }
-
-    // RPCAPI:
-    // Get task's state.
-    // --> {"jsonrpc": "2.0", "method": "get_state", "params": [task_id], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "state", "id": 1}
-    async fn get_state(&self, params: Value) -> TaudResult<Value> {
-        debug!(target: "tau", "JsonRpc::get_state() params {}", params);
-        let args = params.as_array().unwrap();
-
-        if args.len() != 1 {
-            return Err(TaudError::InvalidData("len of params should be 1".into()))
-        }
-
-        let task: TaskInfo = self.load_task_by_id(&args[0])?;
-
-        Ok(json!(task.get_state()))
     }
 
     // RPCAPI:
@@ -203,10 +185,10 @@ impl JsonRpcInterface {
 
     // RPCAPI:
     // Get a task by id.
-    // --> {"jsonrpc": "2.0", "method": "get_by_id", "params": [task_id], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "get_task_by_id", "params": [task_id], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
-    async fn get_by_id(&self, params: Value) -> TaudResult<Value> {
-        debug!(target: "tau", "JsonRpc::get_by_id() params {}", params);
+    async fn get_task_by_id(&self, params: Value) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::get_task_by_id() params {}", params);
         let args = params.as_array().unwrap();
 
         if args.len() != 1 {
@@ -227,51 +209,72 @@ impl JsonRpcInterface {
         task.ok_or(TaudError::InvalidId)
     }
 
-    fn check_params_for_update(&self, task_id: &Value, data: &Value) -> TaudResult<TaskInfo> {
+    fn check_params_for_update(&self, task_id: &Value, fields: &Value) -> TaudResult<TaskInfo> {
         let mut task: TaskInfo = self.load_task_by_id(task_id)?;
 
-        if !data.is_object() {
+        if !fields.is_array() {
             return Err(TaudError::InvalidData("Invalid task's data".into()))
         }
 
-        let data = data.as_object().unwrap();
+        let fields = fields.as_array().unwrap();
 
-        if data.contains_key("title") {
-            let title = data.get("title").unwrap().clone();
-            let title: String = serde_json::from_value(title)?;
-            task.set_title(&title);
+        for field in fields {
+            if !field.is_object() {
+                return Err(TaudError::InvalidData("Invalid task's fields".into()))
+            }
+
+            let field = field.as_object().unwrap();
+
+            if field.contains_key("title") {
+                let title = field.get("title").unwrap().clone();
+                let title: String = serde_json::from_value(title)?;
+                if !title.is_empty() {
+                    task.set_title(&title);
+                }
+            }
+
+            if field.contains_key("desc") {
+                let description = field.get("description");
+                if let Some(description) = description {
+                    let description: String = serde_json::from_value(description.clone())?;
+                    task.set_desc(&description);
+                }
+            }
+
+            if field.contains_key("rank") {
+                let rank_opt = field.get("rank");
+                if let Some(rank) = rank_opt {
+                    let rank: Option<f32> = serde_json::from_value(rank.clone())?;
+                    if rank.is_some() {
+                        task.set_rank(rank.unwrap());
+                    }
+                }
+            }
+
+            if field.contains_key("due") {
+                let due = field.get("due").unwrap().clone();
+                let due: Option<Option<Timestamp>> = serde_json::from_value(due)?;
+                if let Some(d) = due {
+                    task.set_due(d);
+                }
+            }
+
+            if field.contains_key("assign") {
+                let assign = field.get("assign").unwrap().clone();
+                let assign: Vec<String> = serde_json::from_value(assign)?;
+                if !assign.is_empty() {
+                    task.set_assign(&assign);
+                }
+            }
+
+            if field.contains_key("project") {
+                let project = field.get("project").unwrap().clone();
+                let project: Vec<String> = serde_json::from_value(project)?;
+                if !project.is_empty() {
+                    task.set_project(&project);
+                }
+            }
         }
-
-        if data.contains_key("description") {
-            let description = data.get("description").unwrap().clone();
-            let description: String = serde_json::from_value(description)?;
-            task.set_desc(&description);
-        }
-
-        if data.contains_key("rank") {
-            let rank = data.get("rank").unwrap().clone();
-            let rank: f32 = serde_json::from_value(rank)?;
-            task.set_rank(rank);
-        }
-
-        if data.contains_key("due") {
-            let due = data.get("due").unwrap().clone();
-            let due = serde_json::from_value(due)?;
-            task.set_due(Some(due));
-        }
-
-        if data.contains_key("assign") {
-            let assign = data.get("assign").unwrap().clone();
-            let assign: Vec<String> = serde_json::from_value(assign)?;
-            task.set_assign(&assign);
-        }
-
-        if data.contains_key("project") {
-            let project = data.get("project").unwrap().clone();
-            let project: Vec<String> = serde_json::from_value(project)?;
-            task.set_project(&project);
-        }
-
         Ok(task)
     }
 }

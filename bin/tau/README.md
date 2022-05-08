@@ -32,16 +32,6 @@ seed node shouldn't be advertised in the list of connectable nodes. The seed
 node does not participate as a normal node in the p2p network. It simply allows
 new nodes to discover other nodes in the network during the bootstrapping phase.
 
-Also note that for the first time ever running seed node you must run it with 
-`--key-gen`:
-```shell
-% taud --key-gen
-```
-This will generate a new secret key in `/home/${USER}/.config/tau/secret_key` that 
-you can share with nodes you want them to get and decrypt your tasks, otherwise if you
-have already generated or got a copy from a peer place it in the same directory
-`/home/${USER}/.config/tau/secret_key`.
-
 ### Inbound Node
 
 This is a node accepting inbound connections on the network but which is not
@@ -74,175 +64,81 @@ connect to in the p2p network.
 		## Seed nodes to connect to 
 		seeds=["127.0.0.1:11001"]
 
+
+Also note that for the first time ever running seed node you must run it with 
+`--key-gen`:
+```shell
+% taud --key-gen
+```
+This will generate a new secret key in `/home/${USER}/.config/tau/secret_key` that 
+you can share with nodes you want them to get and decrypt your tasks, otherwise if you
+have already generated or got a copy from a peer place it in the same directory
+`/home/${USER}/.config/tau/secret_key`.
+
+
 ## Usage (CLI)
 
 ```shell
 % tau --help 
 ```
-
 	tau 0.3.0
 	Tau cli
-
+	
 	USAGE:
-		tau [FLAGS] [OPTIONS] [ARGS] [SUBCOMMAND]
-
+	    tau [FLAGS] [OPTIONS] [ARGS] [SUBCOMMAND]
+	
 	FLAGS:
-		-h, --help       Prints help information
-		-V, --version    Prints version information
-		-v               Increase verbosity
-
+	    -h, --help       Prints help information
+	    -V, --version    Prints version information
+	    -v               Increase verbosity
+	
 	OPTIONS:
-		-c, --config <config>     Sets a custom config file
-			--rpc <rpc-listen>    JSON-RPC listen URL [default: 127.0.0.1:11055]
-
+	    -c, --config <config>     Sets a custom config file
+	        --rpc <rpc-listen>    JSON-RPC listen URL [default: 127.0.0.1:11055]
+	
 	ARGS:
-		<id>            Get task by ID
-		<filters>...    Search criteria (zero or more)
-
+	    <id>            Get task by ID
+	    <filters>...    Search criteria (zero or more)
+	
 	SUBCOMMANDS:
-		add        Add a new task
-		comment    Set or Get comment for a task
-		help       Prints this message or the help of the given subcommand(s)
-		list       List all tasks
-		state      Set or Get task state
-		update     Update/Edit an existing task by ID
+	    add        Add a new task
+	    comment    Set or Get comment for a task
+	    help       Prints this message or the help of the given subcommand(s)
+	    list       List all tasks
+	    state      Set or Get task state
+	    update     Update/Edit an existing task by ID
 
 ```shell
 % tau help [SUBCOMMAND]
 ```
 
-### Add new tasks
+### Example  
 
 ```shell
-% tau add title1 description person1,person2 project1,project2 0405 4.74
-% tau add title2 "some description" person1 project1 0805 18
-% # this will prompt terminal for title
-% tau add
-Title: new title
-% # then your system's default editor will open up and you could write some description
-% # you should have/add environment variable EDITOR pointing to your favorite text editor
-```
-for more information:
-```shell
-% tau add --help
-```
-
-
-### List existing tasks
-
-```shell
-% tau list # or just tau
-```
-Output:
-```text
- ID | Title     | Project           | Assigned        | Due             | Rank 
-----+-----------+-------------------+-----------------+-----------------+------
- 2  | title2    | project1          | person1         | Sunday 8 May    | 18 
- 1  | title1    | project1,project2 | person1,person2 | Wednesday 4 May | 4.74 
- 3  | new title |                   |                 |                 | 0 
+$ # add new task  
+$ tau add "new title"   
+$ tau add "new title" project:blockchain desc:"new description" rank:3 assign:dark
+$
+$ # lists tasks
+$ tau  		   		 
+$ tau open 			 # open tasks
+$ tau pause 		 # paused tasks
+$ tau 0522 		 	 # created at May 2022
+$ tau project:blockchain assign:dark
+$ tau rank:gt:n  # lists all tasks that have rank greater than n
+$ tau rank:ls:n  # lists all tasks that have rank lesser than n
+$
+$ # update task 
+$ tau update 3 project:network  rank:20
+$
+$ # state 
+$ tau state 3  # get state
+$ tau state 3 pause  # set the state to pause 
+$
+$ # comments 
+$ tau comments 1  # list comments
+$ tau comments 3 "new comment"  # add new comment 
 ```
 
 
-### List tasks with filters
 
-```shell
-% tau  		   		 # lists all tasks
-% tau open 			 # lists currently open tasks
-% tau pause 		 # lists currently paused tasks
-% tau 0522 		 	 # lists tasks created at May 2022
-% tau project:value  # lists all tasks that have "value" in their Project
-% tau assign:value   # lists all tasks that have "value" in their Assign
-% tau "rank>number"  # lists all tasks that have rank greater than "number"
-% tau "rank<number"  # lists all tasks that have rank lesser than "number"
-```
-
-Combined filters:
-```shell
-% tau project:project1 assign:person2 0522 open
-```
-Output:
-```text
- ID | Title  | Project  | Assigned        | Due             | Rank 
-----+--------+----------+-----------------+-----------------+------
- 1  | title1 | project1 | person1,person2 | Wednesday 4 May | 4.74 
-```
-
-
-### Update an existing task
-
-```shell
-% tau update 3 project project3 
-% tau "rank<4" # qoutes are for escaping special characters
-```
-Output:
-```text
- ID | Title     | Project  | Assigned | Due | Rank 
-----+-----------+----------+----------+-----+------
- 3  | new title | project3 |          |     | 0 
-```
-
-
-### Get/Set task state
-
-```shell
-% tau state 1 
-```
-Output:
-```text
-Task with id 1 is: "open"
-```
-
-```shell
-% tau state 1 pause
-% tau state 1 
-```
-Output:
-```text
-Task with id 1 is: "pause"
-```
-
-```shell
-% tau state 2 stop # this will deactivate the task (task is done)
-```
-
-
-### Get/Set comment
-
-```shell
-% tau comment 1 person1 "some awesome comment"
-% tau comment 1 person2 "other awesome comment"
-% tau comment 1
-```
-Output:
-```text
-Comments on Task with id 1:
-person1: some awesome comment
-person2: other awesome comment
-```
-
-
-### Get a task
-
-```shell
-% tau 1
-```
-Output:
-```text
- Name          | Value 
----------------+--------------------------------
- ref_id        | cGw1AI7cBSdJWIqPMU8d355wRrB0qy 
- id            | 1 
- title         | title1 
- desc          | description 
- assign        | person1,person2 
- project       | project1 
- due           | Wednesday 4 May 
- rank          | 4.74 
- created_at    | 21:28 Monday 2 May 
- current_state | pause 
- comments      | person1: some awesome comment 
-               | person2: other awesome comment 
-------------------------------------------------------
- events  State changed to pause at 21:34 Monday 2 May 
-------------------------------------------------------
-```
