@@ -27,6 +27,8 @@ use darkfi::{
     zk::circuit::lead_contract::LeadContract,
 };
 
+use incrementalmerkletree::Hashable;
+
 use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use pasta_curves::group::{ff::PrimeField, GroupEncoding};
 //use halo2_proofs::arithmetic::CurveAffine;
@@ -82,8 +84,8 @@ fn main() {
     //
     let yu64: u64 = rng.gen();
     let rhou64: u64 = rng.gen();
-    let mau_y: pallas::Scalar = pallas::Scalar::from(yu64);
-    let mau_rho: pallas::Scalar = pallas::Scalar::from(rhou64);
+    let mau_y: pallas::Base = pallas::Base::from(yu64);
+    let mau_rho: pallas::Base = pallas::Base::from(rhou64);
 
     //
     let mut coins: Vec<Coin> = vec![];
@@ -126,14 +128,10 @@ fn main() {
         //TODO this return run time error! assertion error, it's out of range most likely
         //let c_cm_base_bytes : [u8; 32] = c_cm.to_bytes();
 
-        /*
-        let c_cm_base_bytes : [u8; 32] = c_cm.to_affine()
-            .coordinates()
-            .unwrap()
-            .x().to_repr();
-        let c_cm_base : pallas::Base = pallas::Base::from_repr(c_cm_base_bytes).unwrap();
-         */
-        let c_cm_base = pallas::Base::from(1);
+
+        let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
+        let c_cm_base : pallas::Base = c_cm_coordinates.x() *
+            c_cm_coordinates.y();
         let c_cm_node = MerkleNode(c_cm_base);
         tree_cm.append(&c_cm_node.clone());
         let leaf_position = tree_cm.witness();
@@ -141,16 +139,16 @@ fn main() {
         let c_root_cm = tree_cm.root();
         // lead coin commitment
         let c_seed2 = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));
-        let c_seed2_pt = c_seed2.to_affine().coordinates().unwrap();
+                let c_seed2_pt = c_seed2.to_affine().coordinates().unwrap();
         /*
         let lead_coin_msg = [c_pk_pt_y.clone(),
-                             c_pk_pt_x.clone(),
-                             c_v,
-                             *c_seed2_pt.x(),
-                             *c_seed2_pt.y()
-        ];
+        c_pk_pt_x.clone(),
+        c_v,
+         *c_seed2_pt.x(),
+         *c_seed2_pt.y()
+    ];
         let lead_coin_msg_hash =
-            poseidon::Hash::<_, P128Pow5T3, ConstantLength<5>, 3, 2>::init().hash(lead_coin_msg);
+        poseidon::Hash::<_, P128Pow5T3, ConstantLength<5>, 3, 2>::init().hash(lead_coin_msg);
          */
         let lead_coin_msg = c_pk_pt_y.clone() *
             c_pk_pt_x.clone() *
@@ -159,6 +157,14 @@ fn main() {
             *c_seed2_pt.y();
         let c_cm2 = pedersen_commitment_scalar(mod_r_p(lead_coin_msg), mod_r_p(c_cm2_blind));
         let c_root_sk = root_sks[i];
+
+        let c_root_sk_bytes : [u8;32] = c_root_sk.inner().to_repr();
+        let mut c_root_sk_base_bytes : [u8;32] = [0;32];
+        for i in 0..23 {
+            c_root_sk_base_bytes[i] = c_root_sk_bytes[i];
+        }
+        let c_root_sk_base = pallas::Base::from_repr(c_root_sk_base_bytes);
+
         let c_path_sk = path_sks[i];
 
         let coin = Coin {
@@ -205,13 +211,12 @@ fn main() {
     let po_pk = coin.pk.unwrap().to_affine().coordinates().unwrap();
     let po_sn = coin.sn.unwrap().to_affine().coordinates().unwrap();
 
-    let po_path = coin.path.unwrap();
 
-    let po_cmp = pallas::Base::from(1);
+    let po_cmp = pallas::Base::from(0);
     let zero = pallas::Base::from(0);
     // ===============
     let path_sk = path_sks[coin_idx];
-
+    let cm_pos = u32::try_from(coin_idx).unwrap();
     let contract = LeadContract {
         path: coin.path,
         coin_pk_x : coin.pk_x,
@@ -223,12 +228,29 @@ fn main() {
         coin_opening_1: Some(mod_r_p(coin.opening1.unwrap())),
         value: coin.value,
         coin_opening_2: Some(mod_r_p(coin.opening2.unwrap())),
-        cm_pos: Some(u32::try_from(coin_idx).unwrap()),
+        cm_pos: Some(cm_pos),
         //sn_c1: Some(coin.sn.unwrap()),
         slot: Some(coin.sl.unwrap()),
         mau_rho: Some(mau_rho.clone()),
         mau_y: Some(mau_y.clone()),
         root_cm: Some(coin.root_cm.unwrap()),
+    };
+
+    let cm_root = {
+        let pos : u32 = cm_pos;
+        let c_cm_coordinates = coin.cm.unwrap().to_affine().coordinates().unwrap();
+        let c_cm_base : pallas::Base = c_cm_coordinates.x() *
+            c_cm_coordinates.y();
+        let mut current = MerkleNode(c_cm_base);
+        for (level, sibling) in coin.path.unwrap().iter().enumerate() {
+            let level = level as u8;
+            current = if pos & (1 << level) == 0 {
+                MerkleNode::combine(level.into(), &current, sibling)
+            } else {
+                MerkleNode::combine(level.into(), sibling, &current)
+            };
+        }
+        current
     };
 
     let mut public_inputs: Vec<pallas::Base> = vec![
@@ -247,7 +269,7 @@ fn main() {
         *po_cm2.x(),
         *po_cm2.y(),
 
-        //po_path[31].inner(), //TODO (res) how the path is structured assumed root is last node in the path.
+        cm_root.0,
         po_cmp,
 
     ];
