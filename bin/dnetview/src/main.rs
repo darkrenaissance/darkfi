@@ -165,7 +165,7 @@ async fn parse_data(
     client: &DnetView,
     model: Arc<Model>,
 ) -> DnetViewResult<()> {
-    let _ext_addr = reply.get("external_addr");
+    let addr = &reply.get("external_addr");
     let inbound = &reply["session_inbound"];
     let manual = &reply["session_manual"];
     let outbound = &reply["session_outbound"];
@@ -174,7 +174,9 @@ async fn parse_data(
 
     let node_name = &client.name;
     let node_id = make_node_id(node_name)?;
+    //let external_addr = ext_addr.unwrap().as_str().unwrap();
 
+    let ext_addr = parse_external_addr(addr).await?;
     let in_session = parse_inbound(inbound, &node_id).await?;
     let out_session = parse_outbound(outbound, &node_id).await?;
     let man_session = parse_manual(manual, &node_id).await?;
@@ -183,7 +185,7 @@ async fn parse_data(
     sessions.push(out_session.clone());
     sessions.push(man_session.clone());
 
-    let node = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone());
+    let node = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone(), ext_addr);
 
     update_node(model.clone(), node.clone(), node_id.clone()).await;
     update_selectable_and_ids(model.clone(), sessions.clone(), node.clone()).await?;
@@ -245,6 +247,16 @@ async fn update_selectable_and_ids(
         }
     }
     Ok(())
+}
+
+async fn parse_external_addr(addr: &Option<&Value>) -> DnetViewResult<String> {
+    match addr {
+        Some(addr) => match addr.as_str() {
+            Some(addr) => return Ok(addr.to_string()),
+            None => return Ok("null".to_string()),
+        },
+        None => Err(DnetViewError::NoExternalAddr),
+    }
 }
 
 async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<SessionInfo> {

@@ -9,12 +9,14 @@ pub enum DnetViewError {
     ValueIsNotObject,
     #[error("Failed to find ID at current index")]
     NoIdAtIndex,
-    #[error("Found unexpected data in View")]
-    UnexpectedData(String),
     #[error("Message log does not contain ID")]
     CannotFindId,
     #[error("ID does not return a selectable object")]
     NotSelectableObject,
+    #[error("JSON data does not contain an external addr")]
+    NoExternalAddr,
+    #[error("Found unexpected data in View")]
+    UnexpectedData(String),
     #[error("InternalError")]
     Darkfi(#[from] darkfi::error::Error),
     #[error("Json serialization error: `{0}`")]

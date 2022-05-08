@@ -40,11 +40,17 @@ pub struct NodeInfo {
     pub id: String,
     pub name: String,
     pub children: Vec<SessionInfo>,
+    pub external_addr: String,
 }
 
 impl NodeInfo {
-    pub fn new(id: String, name: String, children: Vec<SessionInfo>) -> NodeInfo {
-        NodeInfo { id, name, children }
+    pub fn new(
+        id: String,
+        name: String,
+        children: Vec<SessionInfo>,
+        external_addr: String,
+    ) -> NodeInfo {
+        NodeInfo { id, name, children, external_addr }
     }
 }
 

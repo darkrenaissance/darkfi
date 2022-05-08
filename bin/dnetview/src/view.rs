@@ -194,9 +194,10 @@ impl View {
             let info = self.selectables.get(&selected);
 
             match info {
-                Some(SelectableObject::Node(_node)) => {
-                    //let name_span = Spans::from("Node Info");
-                    //spans.push(name_span);
+                Some(SelectableObject::Node(node)) => {
+                    let node_info =
+                        Span::styled(format!("External addr: {}", node.external_addr), style);
+                    lines.push(Spans::from(node_info));
                 }
                 Some(SelectableObject::Session(_session)) => {
                     //let name_span = Spans::from("Session Info");
