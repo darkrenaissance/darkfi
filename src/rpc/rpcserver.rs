@@ -38,7 +38,7 @@ async fn serve(
 ) -> Result<()> {
     debug!(target: "RPC SERVER", "Accepted connection");
 
-    let mut buf = [0; 2048];
+    let mut buf = [0; 8192];
 
     match tls {
         None => loop {

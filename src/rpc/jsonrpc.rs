@@ -218,7 +218,7 @@ async fn get_reply<T: AsyncRead + AsyncWrite + Unpin>(
     // If we don't get a reply after 30 seconds, we'll fail.
     let read_timeout = Duration::from_secs(30);
 
-    let mut buf = [0; 2048];
+    let mut buf = [0; 8192];
 
     stream.write_all(data_str.as_bytes()).await?;
 
