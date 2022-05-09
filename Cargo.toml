@@ -156,6 +156,7 @@ websockets = [
 ]
 
 util = [
+	"bs58",
 	"hex",
 	"bincode",
 	"serde",

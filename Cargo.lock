@@ -2261,7 +2261,9 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
+ "bs58",
  "clap 3.1.12",
+ "crypto_box",
  "ctrlc-async",
  "darkfi",
  "easy-parallel",
@@ -2276,6 +2278,7 @@ dependencies = [
  "smol",
  "structopt",
  "structopt-toml",
+ "toml",
  "url",
 ]
 

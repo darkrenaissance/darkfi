@@ -1,15 +1,16 @@
-use async_std::{
-    net::{TcpListener, TcpStream},
-    sync::{Arc, Mutex},
-};
-
 use std::net::SocketAddr;
 
 use async_channel::{Receiver, Sender};
 use async_executor::Executor;
+use async_std::{
+    net::{TcpListener, TcpStream},
+    sync::{Arc, Mutex},
+};
 use easy_parallel::Parallel;
 use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
+use fxhash::FxHashMap;
 use log::{debug, error, info, warn};
+use rand::rngs::OsRng;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::future;
 use structopt_toml::StructOptToml;
@@ -26,16 +27,18 @@ use darkfi::{
     Error, Result,
 };
 
+pub mod crypto;
 pub mod privmsg;
 pub mod rpc;
 pub mod server;
 pub mod settings;
 
 use crate::{
+    crypto::try_decrypt_message,
     privmsg::Privmsg,
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
-    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
+    settings::{parse_configured_channels, Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
 pub type SeenMsgIds = Arc<Mutex<Vec<u32>>>;
@@ -43,7 +46,7 @@ pub type SeenMsgIds = Arc<Mutex<Vec<u32>>>;
 fn build_irc_msg(msg: &Privmsg) -> String {
     debug!("ABOUT TO SEND: {:?}", msg);
     let irc_msg =
-        format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n", msg.nickname, msg.channel, msg.message,);
+        format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n", msg.nickname, msg.channel, msg.message);
     irc_msg
 }
 
@@ -86,18 +89,26 @@ async fn process(
     peer_addr: SocketAddr,
     raft_sender: Sender<Privmsg>,
     seen_msg_id: SeenMsgIds,
+    autojoin_chans: Vec<String>,
+    configured_chans: FxHashMap<String, ChannelInfo>,
 ) -> Result<()> {
     let (reader, writer) = stream.split();
 
     let mut reader = BufReader::new(reader);
-    let mut conn = IrcServerConnection::new(writer, seen_msg_id.clone(), raft_sender);
+    let mut conn = IrcServerConnection::new(
+        writer,
+        seen_msg_id.clone(),
+        raft_sender,
+        autojoin_chans,
+        configured_chans,
+    );
 
     loop {
         let mut line = String::new();
         futures::select! {
             privmsg = raft_receiver.recv().fuse() => {
                 info!("Receive msg from raft");
-                let msg = privmsg?;
+                let mut msg = privmsg?;
 
                 let mut smi = seen_msg_id.lock().await;
                 if smi.contains(&msg.id) {
@@ -105,6 +116,16 @@ async fn process(
                 }
                 smi.push(msg.id);
                 drop(smi);
+
+                // Try to potentially decrypt the incoming message.
+                if conn.configured_chans.contains_key(&msg.channel) {
+                    let chan_info = conn.configured_chans.get(&msg.channel).unwrap();
+                    if let Some(salt_box) = &chan_info.salt_box {
+                        if let Some(decrypted_msg) = try_decrypt_message(salt_box, &msg.message) {
+                            msg.message = decrypted_msg;
+                        }
+                    }
+                }
 
                 let irc_msg = build_irc_msg(&msg);
                 conn.reply(&irc_msg).await?;
@@ -127,7 +148,18 @@ async fn process(
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
+    if settings.gen_secret {
+        let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
+        let encoded = bs58::encode(secret_key.as_bytes());
+        println!("{}", encoded.into_string());
+        return Ok(())
+    }
+
     let seen_msg_id: SeenMsgIds = Arc::new(Mutex::new(vec![]));
+
+    // Pick up channel settings from the TOML configuration
+    let cfg_path = get_config_path(settings.config, CONFIG_FILE)?;
+    let configured_chans = parse_configured_channels(&cfg_path)?;
 
     //
     //Raft
@@ -201,6 +233,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                     peer_addr,
                     raft_sender.clone(),
                     seen_msg_id.clone(),
+                    settings.autojoin.clone(),
+                    configured_chans.clone(),
                 ))
                 .detach();
         }

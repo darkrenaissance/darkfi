@@ -21,6 +21,7 @@ async-executor = "1.4.1"
 easy-parallel = "3.2.0"
 
 # Crypto
+crypto_box = "0.7.2"
 rand = "0.8.5"
 
 # Misc
@@ -36,3 +37,5 @@ serde_json = "1.0.79"
 serde = {version = "1.0.136", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.0"
+bs58 = "0.4.0"
+toml = "0.5.9"

@@ -1,12 +1,13 @@
 use async_std::net::TcpStream;
 
 use futures::{io::WriteHalf, AsyncWriteExt};
+use fxhash::FxHashMap;
 use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
 
 use darkfi::{Error, Result};
 
-use crate::{privmsg::Privmsg, SeenMsgIds};
+use crate::{crypto::encrypt_message, privmsg::Privmsg, ChannelInfo, SeenMsgIds};
 
 pub struct IrcServerConnection {
     write_stream: WriteHalf<TcpStream>,
@@ -14,9 +15,10 @@ pub struct IrcServerConnection {
     is_user_init: bool,
     is_registered: bool,
     nickname: String,
-    _channels: Vec<String>,
     seen_msg_id: SeenMsgIds,
     p2p_sender: async_channel::Sender<Privmsg>,
+    auto_channels: Vec<String>,
+    pub configured_chans: FxHashMap<String, ChannelInfo>,
 }
 
 impl IrcServerConnection {
@@ -24,6 +26,8 @@ impl IrcServerConnection {
         write_stream: WriteHalf<TcpStream>,
         seen_msg_id: SeenMsgIds,
         p2p_sender: async_channel::Sender<Privmsg>,
+        auto_channels: Vec<String>,
+        configured_chans: FxHashMap<String, ChannelInfo>,
     ) -> Self {
         Self {
             write_stream,
@@ -31,9 +35,10 @@ impl IrcServerConnection {
             is_user_init: false,
             is_registered: false,
             nickname: "".to_string(),
-            _channels: vec![],
             seen_msg_id,
             p2p_sender,
+            auto_channels,
+            configured_chans,
         }
     }
 
@@ -60,7 +65,7 @@ impl IrcServerConnection {
                 self.reply(&nick_reply).await?;
             }
             "JOIN" => {
-                // Ignore since channels are all autojoin
+                // TODO:
                 // let channel = tokens.next().ok_or(Error::MalformedPacket)?;
                 // self.channels.push(channel.to_string());
 
@@ -87,6 +92,19 @@ impl IrcServerConnection {
 
                 let message = &line[substr_idx + 1..];
                 info!("Message {}: {}", channel, message);
+
+                let message = if self.configured_chans.contains_key(channel) {
+                    let channel_info = self.configured_chans.get(channel).unwrap();
+                    if let Some(salt_box) = &channel_info.salt_box {
+                        let encrypted = encrypt_message(salt_box, message);
+                        info!("Encrypted message {}: {}", channel, encrypted);
+                        encrypted
+                    } else {
+                        message.to_string()
+                    }
+                } else {
+                    message.to_string()
+                };
 
                 let random_id = OsRng.next_u32();
 
@@ -128,9 +146,19 @@ impl IrcServerConnection {
                 };
             }
 
-            autojoin!("#dev", "Development of DarkFi");
-            autojoin!("#markets", "Markets, trading, DeFi, algo, biz, finance, and economics");
-            autojoin!("#memes", "Memetic engineering");
+            for chan in self.auto_channels.clone() {
+                let topic = if self.configured_chans.contains_key(&chan) {
+                    let c = self.configured_chans.get(&chan).unwrap();
+                    if let Some(topic) = &c.topic {
+                        topic
+                    } else {
+                        ""
+                    }
+                } else {
+                    ""
+                };
+                autojoin!(chan, topic);
+            }
         }
 
         Ok(())

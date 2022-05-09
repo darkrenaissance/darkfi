@@ -7,6 +7,8 @@
 ## Sets Datastore Path
 #datastore="~/.config/ircd"
 
+autojoin = ["#dev"]
+
 ## Raft net settings
 [net]
 ## P2P accept address
@@ -31,3 +33,5 @@
 #channel_handshake_seconds=4
 #channel_heartbeat_seconds=10
 
+[channel."#dev"]
+secret = "f00b4r"

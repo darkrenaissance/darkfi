@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use log::debug;
 use serde_json::{json, Value};
