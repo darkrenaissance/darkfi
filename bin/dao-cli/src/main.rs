@@ -36,7 +36,7 @@ impl Client {
 
     async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
         let reply: JsonResult =
-            match jsonrpc::send_request(&Url::parse(&self.url)?, json!(r), None).await {
+            match jsonrpc::send_request(&Url::parse(&self.url)?, json!(r)).await {
                 Ok(v) => v,
                 Err(e) => return Err(e),
             };

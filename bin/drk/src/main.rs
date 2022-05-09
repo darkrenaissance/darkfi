@@ -103,7 +103,7 @@ impl Drk {
         let ep =
             if endpoint.is_some() { endpoint.unwrap().clone() } else { self.rpc_endpoint.clone() };
 
-        let reply = match jsonrpc::send_request(&ep, json!(r), None).await {
+        let reply = match jsonrpc::send_request(&ep, json!(r)).await {
             Ok(v) => v,
             Err(e) => return Err(e),
         };

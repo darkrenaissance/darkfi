@@ -134,7 +134,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let datastore_path = expand_path(&settings.datastore)?;
     let net_settings = settings.net;
     let datastore_raft = datastore_path.join("ircd.db");
-    let mut raft = Raft::<Privmsg>::new(net_settings.inbound, datastore_raft)?;
+    let mut raft = Raft::<Privmsg>::new(net_settings.inbound.clone(), datastore_raft)?;
     let raft_sender = raft.get_broadcast();
     let raft_receiver = raft.get_commits();
 

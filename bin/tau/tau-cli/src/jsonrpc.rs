@@ -8,7 +8,7 @@ use darkfi::{
 };
 
 pub async fn request(r: jsonrpc::JsonRequest, url: String) -> Result<Value> {
-    let reply: JsonResult = match jsonrpc::send_request(&Url::parse(&url)?, json!(r), None).await {
+    let reply: JsonResult = match jsonrpc::send_request(&Url::parse(&url)?, json!(r)).await {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
