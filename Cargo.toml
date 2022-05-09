@@ -223,22 +223,6 @@ net = [
 	"system",
 ]
 
-net3 = [
-	"fxhash",
-	"socket2",
-	"futures-rustls",
-	"fast-socks5",
-	"ed25519-compact",
-	"rcgen",
-	"regex",
-	"rustls-pemfile",
-	"structopt",
-	"structopt-toml",
-
-	"util",
-	"system",
-]
-
 crypto = [
 	"bitvec",
 	"blake3",

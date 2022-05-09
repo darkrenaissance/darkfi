@@ -1,8 +1,9 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use serde::Deserialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
+use url::Url;
 
 /// Atomic pointer to network settings.
 pub type SettingsPtr = Arc<Settings>;
@@ -10,16 +11,16 @@ pub type SettingsPtr = Arc<Settings>;
 /// Defines the network settings.
 #[derive(Clone, Debug)]
 pub struct Settings {
-    pub inbound: Option<SocketAddr>,
+    pub inbound: Option<Url>,
     pub outbound_connections: u32,
     pub manual_attempt_limit: u32,
     pub seed_query_timeout_seconds: u32,
     pub connect_timeout_seconds: u32,
     pub channel_handshake_seconds: u32,
     pub channel_heartbeat_seconds: u32,
-    pub external_addr: Option<SocketAddr>,
-    pub peers: Vec<SocketAddr>,
-    pub seeds: Vec<SocketAddr>,
+    pub external_addr: Option<Url>,
+    pub peers: Vec<Url>,
+    pub seeds: Vec<Url>,
 }
 
 impl Default for Settings {
@@ -45,7 +46,7 @@ impl Default for Settings {
 pub struct SettingsOpt {
     /// P2P accept address
     #[structopt(long = "accept")]
-    pub inbound: Option<SocketAddr>,
+    pub inbound: Option<Url>,
 
     /// Connection slots
     #[structopt(long = "slots")]
@@ -53,17 +54,17 @@ pub struct SettingsOpt {
 
     /// P2P external address
     #[structopt(long)]
-    pub external_addr: Option<SocketAddr>,
+    pub external_addr: Option<Url>,
 
     /// Peer nodes to connect to
     #[serde(default)]
     #[structopt(long)]
-    pub peers: Vec<SocketAddr>,
+    pub peers: Vec<Url>,
 
     /// Seed nodes to connect to
     #[serde(default)]
     #[structopt(long)]
-    pub seeds: Vec<SocketAddr>,
+    pub seeds: Vec<Url>,
 
     #[structopt(skip)]
     pub manual_attempt_limit: Option<u32>,

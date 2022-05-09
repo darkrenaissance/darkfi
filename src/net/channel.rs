@@ -1,4 +1,6 @@
-use async_std::sync::Mutex;
+use async_std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use futures::{
     io::{ReadHalf, WriteHalf},
     AsyncReadExt,
@@ -6,14 +8,8 @@ use futures::{
 use log::{debug, error, info};
 use rand::Rng;
 use serde_json::json;
-use smol::{Async, Executor};
-use std::{
-    net::{SocketAddr, TcpStream},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use smol::Executor;
+use url::Url;
 
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
@@ -23,6 +19,7 @@ use crate::{
 use super::{
     message,
     message_subscriber::{MessageSubscription, MessageSubsystem},
+    TransportStream,
 };
 
 /// Atomic pointer to async channel.
@@ -60,9 +57,9 @@ impl ChannelInfo {
 
 /// Async channel for communication between nodes.
 pub struct Channel {
-    reader: Mutex<ReadHalf<Async<TcpStream>>>,
-    writer: Mutex<WriteHalf<Async<TcpStream>>>,
-    address: SocketAddr,
+    reader: Mutex<ReadHalf<Box<dyn TransportStream>>>,
+    writer: Mutex<WriteHalf<Box<dyn TransportStream>>>,
+    address: Url,
     message_subsystem: MessageSubsystem,
     stop_subscriber: SubscriberPtr<Error>,
     receive_task: StoppableTaskPtr,
@@ -74,7 +71,7 @@ impl Channel {
     /// Sets up a new channel. Creates a reader and writer TCP stream and
     /// summons the message subscriber subsystem. Performs a network
     /// handshake on the subsystem dispatchers.
-    pub async fn new(stream: Async<TcpStream>, address: SocketAddr) -> Arc<Self> {
+    pub async fn new(stream: Box<dyn TransportStream>, address: Url) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
@@ -130,15 +127,15 @@ impl Channel {
     /// Creates a subscription to a stopped signal.
     pub async fn subscribe_stop(&self) -> Subscription<Error> {
         debug!(target: "net",
-            "Channel::subscribe_stop() [START, address={}]",
-            self.address()
+         "Channel::subscribe_stop() [START, address={}]",
+         self.address()
         );
         // TODO: this should check the stopped status
         // Call to receive should return ChannelStopped on newly created sub
         let sub = self.stop_subscriber.clone().subscribe().await;
         debug!(target: "net",
-            "Channel::subscribe_stop() [END, address={}]",
-            self.address()
+         "Channel::subscribe_stop() [END, address={}]",
+         self.address()
         );
         sub
     }
@@ -148,9 +145,9 @@ impl Channel {
     /// packet. Returns an error if something goes wrong.
     pub async fn send<M: message::Message>(&self, message: M) -> Result<()> {
         debug!(target: "net",
-            "Channel::send() [START, command={:?}, address={}]",
-            M::name(),
-            self.address()
+         "Channel::send() [START, command={:?}, address={}]",
+         M::name(),
+         self.address()
         );
         if self.stopped.load(Ordering::Relaxed) {
             return Err(Error::ChannelStopped)
@@ -167,9 +164,9 @@ impl Channel {
         };
 
         debug!(target: "net",
-            "Channel::send() [END, command={:?}, address={}]",
-            M::name(),
-            self.address()
+         "Channel::send() [END, command={:?}, address={}]",
+         M::name(),
+         self.address()
         );
         {
             let info = &mut *self.info.lock().await;
@@ -201,22 +198,22 @@ impl Channel {
     /// Subscribe to a messages on the message subsystem.
     pub async fn subscribe_msg<M: message::Message>(&self) -> Result<MessageSubscription<M>> {
         debug!(target: "net",
-            "Channel::subscribe_msg() [START, command={:?}, address={}]",
-            M::name(),
-            self.address()
+         "Channel::subscribe_msg() [START, command={:?}, address={}]",
+         M::name(),
+         self.address()
         );
         let sub = self.message_subsystem.subscribe::<M>().await;
         debug!(target: "net",
-            "Channel::subscribe_msg() [END, command={:?}, address={}]",
-            M::name(),
-            self.address()
+         "Channel::subscribe_msg() [END, command={:?}, address={}]",
+         M::name(),
+         self.address()
         );
         sub
     }
 
     /// Return the local socket address.
-    pub fn address(&self) -> SocketAddr {
-        self.address
+    pub fn address(&self) -> Url {
+        self.address.clone()
     }
 
     /// End of file error. Triggered when unexpected end of file occurs.
@@ -246,8 +243,8 @@ impl Channel {
     /// failure.
     async fn main_receive_loop(self: Arc<Self>) -> Result<()> {
         debug!(target: "net",
-            "Channel::receive_loop() [START, address={}]",
-            self.address()
+         "Channel::receive_loop() [START, address={}]",
+         self.address()
         );
 
         let reader = &mut *self.reader.lock().await;
@@ -262,8 +259,8 @@ impl Channel {
                         error!("Read error on channel: {}", err);
                     }
                     debug!(target: "net",
-                        "Channel::receive_loop() stopping channel {:?}",
-                        self.address()
+                     "Channel::receive_loop() stopping channel {:?}",
+                     self.address()
                     );
                     self.stop().await;
                     return Err(Error::ChannelStopped)

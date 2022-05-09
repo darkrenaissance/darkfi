@@ -1,14 +1,59 @@
+use async_std::net::{TcpListener, TcpStream};
 use std::{io, net::SocketAddr, pin::Pin};
 
-use async_std::net::{TcpListener, TcpStream};
+use async_trait::async_trait;
 use futures::prelude::*;
-use log::debug;
+use futures_rustls::{TlsAcceptor, TlsStream};
+use log::{debug, error};
 use socket2::{Domain, Socket, Type};
 use url::Url;
 
-use super::{Transport, TransportError};
+use super::{socket_addr_to_url, TlsUpgrade, Transport, TransportListener, TransportStream};
+use crate::{Error, Result};
 
-#[derive(Clone)]
+impl TransportStream for TcpStream {}
+impl<T: TransportStream> TransportStream for TlsStream<T> {}
+
+#[async_trait]
+impl TransportListener for TcpListener {
+    async fn next(&self) -> Result<(Box<dyn TransportStream>, Url)> {
+        let (stream, peer_addr) = match self.accept().await {
+            Ok((s, a)) => (s, a),
+            Err(err) => {
+                error!("Error listening for connections: {}", err);
+                return Err(Error::AcceptConnectionFailed(self.local_addr()?.to_string()))
+            }
+        };
+        let url = socket_addr_to_url(peer_addr, "tcp")?;
+        Ok((Box::new(stream), url))
+    }
+}
+
+#[async_trait]
+impl TransportListener for (TlsAcceptor, TcpListener) {
+    async fn next(&self) -> Result<(Box<dyn TransportStream>, Url)> {
+        let (stream, peer_addr) = match self.1.accept().await {
+            Ok((s, a)) => (s, a),
+            Err(err) => {
+                error!("Error listening for connections: {}", err);
+                return Err(Error::AcceptConnectionFailed(self.1.local_addr()?.to_string()))
+            }
+        };
+
+        let stream = self.0.accept(stream).await;
+
+        if let Err(err) = stream {
+            error!("Error wraping the connection with tls: {}", err);
+            return Err(Error::AcceptTlsConnectionFailed(self.1.local_addr()?.to_string()))
+        }
+
+        let url = socket_addr_to_url(peer_addr, "tcp+tls")?;
+
+        Ok((Box::new(TlsStream::Server(stream?)), url))
+    }
+}
+
+#[derive(Copy, Clone)]
 pub struct TcpTransport {
     /// TTL to set for opened sockets, or `None` for default
     ttl: Option<u32>,
@@ -20,29 +65,42 @@ impl Transport for TcpTransport {
     type Acceptor = TcpListener;
     type Connector = TcpStream;
 
-    type Error = io::Error;
+    type Listener = Pin<Box<dyn Future<Output = Result<Self::Acceptor>> + Send>>;
+    type Dial = Pin<Box<dyn Future<Output = Result<Self::Connector>> + Send>>;
 
-    type Listener = Pin<Box<dyn Future<Output = Result<Self::Acceptor, Self::Error>> + Send>>;
-    type Dial = Pin<Box<dyn Future<Output = Result<Self::Connector, Self::Error>> + Send>>;
+    type TlsListener = Pin<Box<dyn Future<Output = Result<(TlsAcceptor, Self::Acceptor)>> + Send>>;
+    type TlsDialer = Pin<Box<dyn Future<Output = Result<TlsStream<Self::Connector>>> + Send>>;
 
-    fn listen_on(self, url: Url) -> Result<Self::Listener, TransportError<Self::Error>> {
-        if url.scheme() != "tcp" {
-            return Err(TransportError::AddrNotSupported(url))
+    fn listen_on(self, url: Url) -> Result<Self::Listener> {
+        match url.scheme() {
+            "tcp" | "tcp+tls" | "tls" => {}
+            x => return Err(Error::UnsupportedTransport(x.to_string())),
         }
 
         let socket_addr = url.socket_addrs(|| None)?[0];
-        debug!(target: "tcptransport", "listening on {}", socket_addr);
+        debug!("{} transport: listening on {}", url.scheme(), socket_addr);
         Ok(Box::pin(self.do_listen(socket_addr)))
     }
 
-    fn dial(self, url: Url) -> Result<Self::Dial, TransportError<Self::Error>> {
-        if url.scheme() != "tcp" {
-            return Err(TransportError::AddrNotSupported(url))
+    fn upgrade_listener(self, acceptor: Self::Acceptor) -> Result<Self::TlsListener> {
+        let tlsupgrade = TlsUpgrade::new();
+        Ok(Box::pin(tlsupgrade.upgrade_listener_tls(acceptor)))
+    }
+
+    fn dial(self, url: Url) -> Result<Self::Dial> {
+        match url.scheme() {
+            "tcp" | "tcp+tls" | "tls" => {}
+            x => return Err(Error::UnsupportedTransport(x.to_string())),
         }
 
         let socket_addr = url.socket_addrs(|| None)?[0];
-        debug!(target: "tcptransport", "dialing {}", socket_addr);
+        debug!("{} transport: dialing {}", url.scheme(), socket_addr);
         Ok(Box::pin(self.do_dial(socket_addr)))
+    }
+
+    fn upgrade_dialer(self, connector: Self::Connector) -> Result<Self::TlsDialer> {
+        let tlsupgrade = TlsUpgrade::new();
+        Ok(Box::pin(tlsupgrade.upgrade_dialer_tls(connector)))
     }
 }
 
@@ -66,7 +124,7 @@ impl TcpTransport {
         Ok(socket)
     }
 
-    async fn do_listen(self, socket_addr: SocketAddr) -> Result<TcpListener, io::Error> {
+    async fn do_listen(self, socket_addr: SocketAddr) -> Result<TcpListener> {
         let socket = self.create_socket(socket_addr)?;
         socket.bind(&socket_addr.into())?;
         socket.listen(self.backlog)?;
@@ -74,7 +132,7 @@ impl TcpTransport {
         Ok(TcpListener::from(std::net::TcpListener::from(socket)))
     }
 
-    async fn do_dial(self, socket_addr: SocketAddr) -> Result<TcpStream, io::Error> {
+    async fn do_dial(self, socket_addr: SocketAddr) -> Result<TcpStream> {
         let socket = self.create_socket(socket_addr)?;
         socket.set_nonblocking(true)?;
 
@@ -82,7 +140,7 @@ impl TcpTransport {
             Ok(()) => {}
             Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-            Err(err) => return Err(err),
+            Err(err) => return Err(err.into()),
         };
 
         let stream = TcpStream::from(std::net::TcpStream::from(socket));

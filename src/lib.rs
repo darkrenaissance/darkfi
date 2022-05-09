@@ -16,9 +16,6 @@ pub mod zk;
 #[cfg(feature = "net")]
 pub mod net;
 
-#[cfg(feature = "net3")]
-pub mod net3;
-
 #[cfg(feature = "node")]
 pub mod node;
 

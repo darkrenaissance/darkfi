@@ -1,10 +1,11 @@
-use async_std::sync::Mutex;
-use std::{fmt, net::SocketAddr, sync::Arc};
+use async_std::sync::{Arc, Mutex};
+use std::fmt;
 
 use async_executor::Executor;
 use fxhash::{FxHashMap, FxHashSet};
 use log::debug;
 use serde_json::json;
+use url::Url;
 
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
@@ -19,9 +20,9 @@ use super::{
 };
 
 /// List of channels that are awaiting connection.
-pub type PendingChannels = Mutex<FxHashSet<SocketAddr>>;
+pub type PendingChannels = Mutex<FxHashSet<Url>>;
 /// List of connected channels.
-pub type ConnectedChannels = Mutex<fxhash::FxHashMap<SocketAddr, Arc<Channel>>>;
+pub type ConnectedChannels = Mutex<fxhash::FxHashMap<Url, Arc<Channel>>>;
 /// Atomic pointer to p2p interface.
 pub type P2pPtr = Arc<P2p>;
 
@@ -105,6 +106,7 @@ impl P2p {
         let external_addr = self
             .settings
             .external_addr
+            .as_ref()
             .map(|addr| serde_json::Value::from(addr.to_string()))
             .unwrap_or(serde_json::Value::Null);
 
@@ -157,7 +159,7 @@ impl P2p {
         }
 
         let inbound = self.session_inbound().await;
-        inbound.clone().start(executor.clone())?;
+        inbound.clone().start(executor.clone()).await?;
 
         let outbound = self.session_outbound().await;
         outbound.clone().start(executor.clone()).await?;
@@ -195,17 +197,17 @@ impl P2p {
     }
 
     /// Check whether a channel is stored in the list of connected channels.
-    pub async fn exists(&self, addr: &SocketAddr) -> bool {
+    pub async fn exists(&self, addr: &Url) -> bool {
         self.channels.lock().await.contains_key(addr)
     }
 
     /// Add a channel to the list of pending channels.
-    pub async fn add_pending(&self, addr: SocketAddr) -> bool {
+    pub async fn add_pending(&self, addr: Url) -> bool {
         self.pending.lock().await.insert(addr)
     }
 
     /// Remove a channel from the list of pending channels.
-    pub async fn remove_pending(&self, addr: &SocketAddr) {
+    pub async fn remove_pending(&self, addr: &Url) {
         self.pending.lock().await.remove(addr);
     }
 

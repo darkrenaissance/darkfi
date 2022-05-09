@@ -1,7 +1,8 @@
-use std::{io, net::SocketAddr};
+use std::io;
 
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use log::debug;
+use log::{debug, error};
+use url::Url;
 
 use crate::{
     util::serial::{Decodable, Encodable, VarInt},
@@ -31,7 +32,7 @@ pub struct GetAddrsMessage {}
 /// Sends address information to inbound connection. Response to GetAddrs
 /// message.
 pub struct AddrsMessage {
-    pub addrs: Vec<SocketAddr>,
+    pub addrs: Vec<Url>,
 }
 
 /// Requests version information of outbound connection.
@@ -163,12 +164,17 @@ pub struct Packet {
 }
 
 /// Reads and decodes an inbound payload.
-pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet> {
+pub async fn read_packet<R: AsyncRead + Unpin + Sized>(stream: &mut R) -> Result<Packet> {
     // Packets have a 4 byte header of magic digits
     // This is used for network debugging
     let mut magic = [0u8; 4];
     debug!(target: "net", "reading magic...");
-    stream.read_exact(&mut magic).await?;
+
+    if let Err(err) = stream.read_exact(&mut magic).await {
+        error!("Failed to read the magic: {}", err);
+        return Err(Error::ConnectFailed)
+    }
+
     debug!(target: "net", "read magic {:?}", magic);
     if magic != MAGIC_BYTES {
         return Err(Error::MalformedPacket)
@@ -196,7 +202,10 @@ pub async fn read_packet<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Packet>
 }
 
 /// Sends an outbound packet by writing data to TCP stream.
-pub async fn send_packet<W: AsyncWrite + Unpin>(stream: &mut W, packet: Packet) -> Result<()> {
+pub async fn send_packet<W: AsyncWrite + Unpin + Sized>(
+    stream: &mut W,
+    packet: Packet,
+) -> Result<()> {
     debug!(target: "net", "sending magic...");
     stream.write_all(&MAGIC_BYTES).await?;
     debug!(target: "net", "sent magic...");

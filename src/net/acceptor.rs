@@ -1,17 +1,18 @@
-use std::{
-    net::{SocketAddr, TcpListener},
-    sync::Arc,
-};
+use async_std::sync::Arc;
+use std::{env, fs};
 
-use log::*;
-use smol::{Async, Executor};
+use log::{error, info};
+use smol::Executor;
+use url::Url;
 
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     Error, Result,
 };
 
-use super::{Channel, ChannelPtr};
+use super::{
+    Channel, ChannelPtr, TcpTransport, TorTransport, Transport, TransportListener, TransportName,
+};
 
 /// Atomic pointer to Acceptor class.
 pub type AcceptorPtr = Arc<Acceptor>;
@@ -30,16 +31,102 @@ impl Acceptor {
     /// Start accepting inbound socket connections. Creates a listener to start
     /// listening on a local socket address. Then runs an accept loop in a new
     /// thread, erroring if a connection problem occurs.
-    pub fn start(
+    pub async fn start(
         self: Arc<Self>,
-        accept_addr: SocketAddr,
+        accept_url: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let listener = Self::setup(accept_addr)?;
+        let transport_name = TransportName::try_from(accept_url.clone())?;
+        match transport_name {
+            TransportName::Tcp(upgrade) => {
+                let transport = TcpTransport::new(None, 1024);
+                let listener = transport.listen_on(accept_url.clone());
 
-        // Start detached task and return instantly
-        self.accept(listener, executor);
+                if let Err(err) = listener {
+                    error!("TCP Setup failed: {}", err);
+                    return Err(Error::BindFailed(accept_url.clone().to_string()))
+                }
 
+                let listener = listener?.await;
+
+                if let Err(err) = listener {
+                    error!("TCP Bind listener failed: {}", err);
+                    return Err(Error::BindFailed(accept_url.to_string()))
+                }
+
+                let listener = listener?;
+
+                match upgrade {
+                    None => {
+                        self.accept(Box::new(listener), executor);
+                    }
+                    Some(u) if u == "tls" => {
+                        let tls_listener = transport.upgrade_listener(listener)?.await?;
+                        self.accept(Box::new(tls_listener), executor);
+                    }
+                    Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
+                }
+            }
+            TransportName::Tor(upgrade) => {
+                let socks5_url = Url::parse(
+                    &env::var("DARKFI_TOR_SOCKS5_URL")
+                        .unwrap_or("socks5://127.0.0.1:9050".to_string()),
+                )?;
+
+                let torc_url = Url::parse(
+                    &env::var("DARKFI_TOR_CONTROL_URL")
+                        .unwrap_or("tcp://127.0.0.1:9051".to_string()),
+                )?;
+
+                let auth_cookie = env::var("DARKFI_TOR_COOKIE");
+
+                if auth_cookie.is_err() {
+                    return Err(Error::TorError(
+                    "Please set the env var DARKFI_TOR_COOKIE to the configured tor cookie file. \
+                    For example: \
+                    \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'".to_string(),
+                ))
+                }
+
+                let auth_cookie = auth_cookie.unwrap();
+
+                let auth_cookie = hex::encode(&fs::read(auth_cookie).unwrap());
+
+                let transport = TorTransport::new(socks5_url, Some((torc_url, auth_cookie)))?;
+
+                // generate EHS pointing to local address
+                let hurl = transport.create_ehs(accept_url.clone())?;
+
+                info!("EHS TOR: {}", hurl.to_string());
+
+                let listener = transport.clone().listen_on(accept_url.clone());
+
+                if let Err(err) = listener {
+                    error!("TOR Setup failed: {}", err);
+                    return Err(Error::BindFailed(accept_url.clone().to_string()))
+                }
+
+                let listener = listener?.await;
+
+                if let Err(err) = listener {
+                    error!("TOR Bind listener failed: {}", err);
+                    return Err(Error::BindFailed(accept_url.to_string()))
+                }
+
+                let listener = listener?;
+
+                match upgrade {
+                    None => {
+                        self.accept(Box::new(listener), executor);
+                    }
+                    Some(u) if u == "tls" => {
+                        let tls_listener = transport.upgrade_listener(listener)?.await?;
+                        self.accept(Box::new(tls_listener), executor);
+                    }
+                    Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
+                }
+            }
+        }
         Ok(())
     }
 
@@ -54,30 +141,9 @@ impl Acceptor {
         self.channel_subscriber.clone().subscribe().await
     }
 
-    /// Start listening on a local socket address.
-    fn setup(accept_addr: SocketAddr) -> Result<Async<TcpListener>> {
-        let listener = match Async::<TcpListener>::bind(accept_addr) {
-            Ok(listener) => listener,
-            Err(err) => {
-                error!("Bind listener failed: {}", err);
-                return Err(Error::OperationFailed)
-            }
-        };
-        let local_addr = match listener.get_ref().local_addr() {
-            Ok(addr) => addr,
-            Err(err) => {
-                error!("Failed to get local address: {}", err);
-                return Err(Error::OperationFailed)
-            }
-        };
-        info!("Listening on {}", local_addr);
-
-        Ok(listener)
-    }
-
     /// Run the accept loop in a new thread and error if a connection problem
     /// occurs.
-    fn accept(self: Arc<Self>, listener: Async<TcpListener>, executor: Arc<Executor<'_>>) {
+    fn accept(self: Arc<Self>, listener: Box<dyn TransportListener>, executor: Arc<Executor<'_>>) {
         self.task.clone().start(
             self.clone().run_accept_loop(listener),
             |result| self.handle_stop(result),
@@ -87,11 +153,12 @@ impl Acceptor {
     }
 
     /// Run the accept loop.
-    async fn run_accept_loop(self: Arc<Self>, listener: Async<TcpListener>) -> Result<()> {
-        loop {
-            let channel = self.tick_accept(&listener).await?;
+    async fn run_accept_loop(self: Arc<Self>, listener: Box<dyn TransportListener>) -> Result<()> {
+        while let Ok((stream, peer_addr)) = listener.next().await {
+            let channel = Channel::new(stream, peer_addr).await;
             self.channel_subscriber.notify(Ok(channel)).await;
         }
+        Ok(())
     }
 
     /// Handles network errors. Panics if error passes silently, otherwise
@@ -105,21 +172,5 @@ impl Acceptor {
                 self.channel_subscriber.notify(result).await;
             }
         }
-    }
-
-    /// Single attempt to accept an incoming connection. Stops after one
-    /// attempt.
-    async fn tick_accept(&self, listener: &Async<TcpListener>) -> Result<ChannelPtr> {
-        let (stream, peer_addr) = match listener.accept().await {
-            Ok((s, a)) => (s, a),
-            Err(err) => {
-                error!("Error listening for connections: {}", err);
-                return Err(Error::ServiceStopped)
-            }
-        };
-        info!("Accepted client: {}", peer_addr);
-
-        let channel = Channel::new(stream, peer_addr).await;
-        Ok(channel)
     }
 }
