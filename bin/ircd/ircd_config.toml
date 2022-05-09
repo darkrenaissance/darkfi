@@ -1,5 +1,5 @@
 ## JSON-RPC listen URL
-#rpc_listen="127.0.0.1:11055"
+#rpc_listen="tcp://127.0.0.1:11055"
 
 ## IRC listen URL
 #irc_listen="127.0.0.1:11066"
@@ -10,19 +10,19 @@
 ## Raft net settings
 [net]
 ## P2P accept address
-#inbound="127.0.0.1:11002" 
+#inbound="tls://127.0.0.1:11002" 
 
 ## Connection slots
 #outbound_connections=5
 
 ## P2P external address
-#external_addr="127.0.0.1:11002"
+#external_addr="tls://127.0.0.1:11002"
 
 ## Peers to connect to
-#peers=["127.0.0.1:11003"]
+#peers=["tls://127.0.0.1:11003"]
 
 ## Seed nodes to connect to 
-#seeds=["127.0.0.1:11001"]
+#seeds=["tls://127.0.0.1:11001"]
 
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0
