@@ -19,12 +19,12 @@ name = "darkfi"
 [workspace]
 members = [
 	"bin/zkas",
-	#"bin/cashierd",
-	#"bin/darkfid",
+#"bin/cashierd",
+#"bin/darkfid",
 	"bin/darkfid2",
 	"bin/drk",
 	"bin/faucetd",
-	#"bin/gatewayd",
+#"bin/gatewayd",
 	"bin/ircd",
 	"bin/dnetview",
 	"bin/daod",
@@ -233,6 +233,7 @@ net3 = [
 	"regex",
 	"rustls-pemfile",
 	"structopt",
+	"structopt-toml",
 
 	"util",
 	"system",
