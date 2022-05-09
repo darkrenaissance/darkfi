@@ -22,10 +22,10 @@
 #rpc_listen = "tcp://127.0.0.1:8340"
 
 # P2P accept address for the syncing protocol
-#sync_p2p_accept = "0.0.0.0:8342"
+#sync_p2p_accept = "tls://0.0.0.0:8342"
 
 # P2P external address for the syncing protocol
-#sync_p2p_external = "0.0.0.0:8342"
+#sync_p2p_external = "tls://0.0.0.0:8342"
 
 # Connection slots for the syncing protocol
 #sync_slots = 8
