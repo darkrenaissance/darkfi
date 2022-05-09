@@ -2,12 +2,13 @@ use async_std::{
     sync::{Arc, Mutex},
     task,
 };
-use std::{cmp::min, collections::HashMap, net::SocketAddr, path::PathBuf, time::Duration};
+use std::{cmp::min, collections::HashMap, path::PathBuf, time::Duration};
 
 use async_executor::Executor;
 use futures::{select, FutureExt};
 use log::{debug, error, info, warn};
 use rand::{rngs::OsRng, Rng, RngCore};
+use url::Url;
 
 use crate::{
     net,
@@ -28,7 +29,7 @@ const TIMEOUT: u64 = 300;
 const TIMEOUT_NODES: u64 = 300;
 
 async fn load_node_ids_loop(
-    nodes: Arc<Mutex<HashMap<NodeId, SocketAddr>>>,
+    nodes: Arc<Mutex<HashMap<NodeId, Url>>>,
     p2p: net::P2pPtr,
     role: Role,
 ) -> Result<()> {
@@ -42,7 +43,7 @@ async fn load_node_ids_loop(
         let nodes_ip = hosts.load_all().await.clone();
         let mut nodes = nodes.lock().await;
         for ip in nodes_ip.iter() {
-            nodes.insert(NodeId::from(*ip), *ip);
+            nodes.insert(NodeId::from(ip.clone()), ip.clone());
         }
         drop(nodes);
     }
@@ -86,7 +87,7 @@ pub struct Raft<T> {
     sent_length: MapLength,
     acked_length: MapLength,
 
-    nodes: Arc<Mutex<HashMap<NodeId, SocketAddr>>>,
+    nodes: Arc<Mutex<HashMap<NodeId, Url>>>,
 
     last_term: u64,
 
@@ -99,7 +100,7 @@ pub struct Raft<T> {
 }
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
-    pub fn new(addr: Option<SocketAddr>, db_path: PathBuf) -> Result<Self> {
+    pub fn new(addr: Option<Url>, db_path: PathBuf) -> Result<Self> {
         if db_path.to_str().is_none() {
             error!(target: "raft", "datastore path is incorrect");
             return Err(Error::ParseFailed("unable to parse pathbuf to str"))
@@ -590,7 +591,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
     }
 
-    fn acks(&self, nodes: HashMap<NodeId, SocketAddr>, length: u64) -> HashMap<NodeId, SocketAddr> {
+    fn acks(&self, nodes: HashMap<NodeId, Url>, length: u64) -> HashMap<NodeId, Url> {
         nodes
             .into_iter()
             .filter(|n| {

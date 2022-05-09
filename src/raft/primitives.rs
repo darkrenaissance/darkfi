@@ -1,4 +1,6 @@
-use std::{collections::HashMap, io, net::SocketAddr};
+use std::{collections::HashMap, io};
+
+use url::Url;
 
 use crate::{
     impl_vec,
@@ -82,8 +84,8 @@ pub struct Log {
 #[derive(Clone, Debug, Eq, PartialEq, Hash, SerialDecodable, SerialEncodable)]
 pub struct NodeId(pub Vec<u8>);
 
-impl From<SocketAddr> for NodeId {
-    fn from(addr: SocketAddr) -> Self {
+impl From<Url> for NodeId {
+    fn from(addr: Url) -> Self {
         let ser = serialize(&addr);
         let hash = blake3::hash(&ser).as_bytes().to_vec();
         Self(hash)
