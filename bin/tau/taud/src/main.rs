@@ -147,7 +147,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //Raft
     //
     let datastore_raft = datastore_path.join("tau.db");
-    let mut raft = Raft::<EncryptedTask>::new(net_settings.inbound, datastore_raft)?;
+    let mut raft = Raft::<EncryptedTask>::new(net_settings.inbound.clone(), datastore_raft)?;
 
     let raft_sender = raft.get_broadcast();
     let commits = raft.get_commits();

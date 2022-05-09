@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, str::FromStr};
+use std::str::FromStr;
 
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
@@ -86,11 +86,11 @@ struct Args {
 
     #[structopt(long)]
     /// P2P accept address for the consensus protocol
-    consensus_p2p_accept: Option<SocketAddr>,
+    consensus_p2p_accept: Option<Url>,
 
     #[structopt(long)]
     /// P2P external address for the consensus protocol
-    consensus_p2p_external: Option<SocketAddr>,
+    consensus_p2p_external: Option<Url>,
 
     #[structopt(long, default_value = "8")]
     /// Connection slots for the consensus protocol
@@ -98,19 +98,19 @@ struct Args {
 
     #[structopt(long)]
     /// Connect to peer for the consensus protocol (repeatable flag)
-    consensus_p2p_peer: Vec<SocketAddr>,
+    consensus_p2p_peer: Vec<Url>,
 
     #[structopt(long)]
     /// Connect to seed for the consensus protocol (repeatable flag)
-    consensus_p2p_seed: Vec<SocketAddr>,
+    consensus_p2p_seed: Vec<Url>,
 
     #[structopt(long)]
     /// P2P accept address for the syncing protocol
-    sync_p2p_accept: Option<SocketAddr>,
+    sync_p2p_accept: Option<Url>,
 
     #[structopt(long)]
     /// P2P external address for the syncing protocol
-    sync_p2p_external: Option<SocketAddr>,
+    sync_p2p_external: Option<Url>,
 
     #[structopt(long, default_value = "8")]
     /// Connection slots for the syncing protocol
@@ -118,11 +118,11 @@ struct Args {
 
     #[structopt(long)]
     /// Connect to peer for the syncing protocol (repeatable flag)
-    sync_p2p_peer: Vec<SocketAddr>,
+    sync_p2p_peer: Vec<Url>,
 
     #[structopt(long)]
     /// Connect to seed for the syncing protocol (repeatable flag)
-    sync_p2p_seed: Vec<SocketAddr>,
+    sync_p2p_seed: Vec<Url>,
 
     #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
