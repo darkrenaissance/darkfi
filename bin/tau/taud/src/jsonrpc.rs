@@ -39,7 +39,7 @@ struct BaseTaskInfo {
 
 #[async_trait]
 impl RequestHandler for JsonRpcInterface {
-    async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
+    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
             return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, None, req.id))
         }

@@ -1,36 +1,24 @@
-use async_executor::Executor;
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use darkfi::{
-    rpc::{
-        jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
-        rpcserver::{listen_and_serve, RequestHandler, RpcServerConfig},
-    },
-    util::expand_path,
-    Result,
-};
-use easy_parallel::Parallel;
 use log::debug;
 use serde_json::{json, Value};
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
+use url::Url;
+
+use darkfi::{
+    rpc::{
+        jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
+        rpcserver::{listen_and_serve, RequestHandler},
+    },
+    Result,
 };
 
-async fn start(executor: Arc<Executor<'_>>) -> Result<()> {
-    let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 7777);
-    let server_config = RpcServerConfig {
-        socket_addr: rpc_addr,
-        use_tls: false,
-        // this is all random filler that is meaningless bc tls is disabled
-        // TODO: cleanup
-        identity_path: expand_path("../..")?,
-        identity_pass: "test".to_string(),
-    };
-
+async fn start() -> Result<()> {
+    let rpc_addr = Url::parse("tcp://127.0.0.1:7777")?;
     let rpc_interface = Arc::new(JsonRpcInterface {});
 
-    listen_and_serve(server_config, rpc_interface, executor).await?;
+    listen_and_serve(rpc_addr, rpc_interface).await?;
     Ok(())
 }
 
@@ -38,7 +26,7 @@ struct JsonRpcInterface {}
 
 #[async_trait]
 impl RequestHandler for JsonRpcInterface {
-    async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
+    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
             return JsonResult::Err(jsonerr(InvalidParams, None, req.id))
         }
@@ -62,10 +50,6 @@ impl JsonRpcInterface {
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    //let args = CliDao::parse();
-
-    //let matches = CliDao::command().get_matches();
-
     TermLogger::init(
         LevelFilter::Debug,
         simplelog::Config::default(),
@@ -73,24 +57,6 @@ async fn main() -> Result<()> {
         ColorChoice::Auto,
     )?;
 
-    //let rpc_addr = "tcp:://127.0.0.1:7777";
-    //let client = Arc::new(Client::new(rpc_addr.to_string()));
-
-    let nthreads = num_cpus::get();
-    let (signal, shutdown) = async_channel::unbounded::<()>();
-    let ex = Arc::new(Executor::new());
-    //let ex2 = ex.clone();
-    let ex3 = ex.clone();
-    let (_, result) = Parallel::new()
-        .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        .finish(|| {
-            smol::future::block_on(async move {
-                start(ex3.clone()).await?;
-                //client.run_client(client.clone(), ex2.clone()).await?;
-                drop(signal);
-                Ok::<(), darkfi::Error>(())
-            })
-        });
-
-    result
+    start().await?;
+    Ok(())
 }

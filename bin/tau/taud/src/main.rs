@@ -9,11 +9,12 @@ use log::{debug, error, info, warn};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::future;
 use structopt_toml::StructOptToml;
+use url::Url;
 
 use darkfi::{
     async_daemonize, net,
     raft::{NetMsg, ProtocolRaft, Raft},
-    rpc::rpcserver::{listen_and_serve, RpcServerConfig},
+    rpc::rpcserver::listen_and_serve,
     util::{
         cli::{log_config, spawn_config},
         expand_path,
@@ -124,13 +125,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // RPC
     //
-    let server_config = RpcServerConfig {
-        socket_addr: settings.rpc_listen,
-        use_tls: false,
-        // this is all random filler that is meaningless bc tls is disabled
-        identity_path: Default::default(),
-        identity_pass: Default::default(),
-    };
 
     let (rpc_snd, rpc_rcv) = async_channel::unbounded::<Option<TaskInfo>>();
 
@@ -138,8 +132,9 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         Arc::new(JsonRpcInterface::new(rpc_snd, datastore_path.clone(), nickname.unwrap()));
 
     let executor_cloned = executor.clone();
+    let rpc_listener_url = Url::parse(&settings.rpc_listen)?;
     let rpc_listener_task =
-        executor_cloned.spawn(listen_and_serve(server_config, rpc_interface, executor.clone()));
+        executor_cloned.spawn(listen_and_serve(rpc_listener_url, rpc_interface));
 
     let net_settings = settings.net;
 

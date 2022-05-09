@@ -1177,6 +1177,7 @@ dependencies = [
  "serde_json",
  "simplelog",
  "smol",
+ "url",
 ]
 
 [[package]]
@@ -4003,6 +4004,7 @@ dependencies = [
  "structopt",
  "structopt-toml",
  "thiserror",
+ "url",
 ]
 
 [[package]]

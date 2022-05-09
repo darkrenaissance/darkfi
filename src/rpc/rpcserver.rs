@@ -1,164 +1,180 @@
-use std::{
-    net::{SocketAddr, TcpListener, TcpStream},
-    path::PathBuf,
+use async_std::{
+    io::{ReadExt, WriteExt},
     sync::Arc,
 };
+use std::{env, fs};
 
-use async_executor::Executor;
-use async_native_tls::{Identity, TlsAcceptor};
 use async_trait::async_trait;
 use log::{debug, error, info};
-use smol::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    Async,
-};
+use url::Url;
 
+use super::jsonrpc::{JsonRequest, JsonResult};
 use crate::{
-    rpc::jsonrpc::{JsonRequest, JsonResult},
-    Result,
+    net::transport::{
+        TcpTransport, TorTransport, Transport, TransportListener, TransportName, TransportStream,
+    },
+    Error, Result,
 };
-
-pub struct RpcServerConfig {
-    pub socket_addr: SocketAddr,
-    pub use_tls: bool,
-    pub identity_path: PathBuf,
-    pub identity_pass: String,
-}
 
 #[async_trait]
 pub trait RequestHandler: Sync + Send {
-    async fn handle_request(&self, req: JsonRequest, executor: Arc<Executor<'_>>) -> JsonResult;
+    async fn handle_request(&self, req: JsonRequest) -> JsonResult;
 }
 
-async fn serve(
-    mut stream: Async<TcpStream>,
-    tls: Option<TlsAcceptor>,
+async fn run_accept_loop(
+    listener: Box<dyn TransportListener>,
     rh: Arc<impl RequestHandler + 'static>,
-    executor: Arc<Executor<'_>>,
 ) -> Result<()> {
-    debug!(target: "RPC SERVER", "Accepted connection");
-
-    let mut buf = [0; 8192];
-
-    match tls {
-        None => loop {
-            let n = match stream.read(&mut buf).await {
-                Ok(n) if n == 0 => {
-                    debug!(target: "RPC SERVER", "Closed connection");
-                    return Ok(())
-                }
-                Ok(n) => n,
-                Err(e) => {
-                    debug!(target: "RPC SERVER", "Failed to read from socket: {:#?}", e);
-                    debug!(target: "RPC SERVER", "Closed connection");
-                    return Ok(())
-                }
-            };
-
-            let r: JsonRequest = match serde_json::from_slice(&buf[0..n]) {
-                Ok(r) => r,
-                Err(e) => {
-                    debug!(target: "RPC SERVER", "Received invalid JSON: {:#?}", e);
-                    debug!(target: "RPC SERVER", "Closed connection");
-                    return Ok(())
-                }
-            };
-
-            let reply = rh.handle_request(r, executor.clone()).await;
-            let j = serde_json::to_string(&reply)?;
-            debug!(target: "RPC", "<-- {}", j);
-
-            if let Err(e) = stream.write_all(j.as_bytes()).await {
-                debug!(target: "RPC SERVER", "Failed to write to socket: {:#?}", e);
-                debug!(target: "RPC SERVER", "Closed connection");
-                return Ok(())
-            }
-        },
-        Some(tls) => match tls.accept(stream).await {
-            Ok(mut stream) => loop {
-                let n = match stream.read(&mut buf).await {
-                    Ok(n) if n == 0 => {
-                        debug!(target: "RPC SERVER", "Closed connection");
-                        return Ok(())
-                    }
-                    Ok(n) => n,
-                    Err(e) => {
-                        debug!(target: "RPC SERVER", "Failed to read from socket: {:#?}", e);
-                        debug!(target: "RPC SERVER", "Closed connection");
-                        return Ok(())
-                    }
-                };
-
-                let r: JsonRequest = match serde_json::from_slice(&buf[0..n]) {
-                    Ok(r) => r,
-                    Err(e) => {
-                        debug!(target: "RPC SERVER", "Received invalid JSON: {:#?}", e);
-                        debug!(target: "RPC SERVER", "Closed connection");
-                        return Ok(())
-                    }
-                };
-
-                let reply = rh.handle_request(r, executor.clone()).await;
-                let j = serde_json::to_string(&reply)?;
-                debug!(target: "RPC", "<-- {}", j);
-
-                if let Err(e) = stream.write_all(j.as_bytes()).await {
-                    debug!(target: "RPC SERVER", "Failed to write to socket: {:#?}", e);
-                    return Ok(())
-                }
-            },
-            Err(e) => {
-                debug!(target: "RPC SERVER", "Failed to establish TLS connection: {:#}", e);
-                Ok(())
-            }
-        },
+    // TODO can we spawn new task here ?
+    while let Ok((stream, peer_addr)) = listener.next().await {
+        info!(target: "JSON-RPC SERVER", "RPC Accepted connection {}", peer_addr);
+        accept(stream, rh.clone()).await?;
     }
+    Ok(())
 }
 
-async fn listen(
-    listener: Async<TcpListener>,
-    tls: Option<TlsAcceptor>,
+async fn accept(
+    mut stream: Box<dyn TransportStream>,
     rh: Arc<impl RequestHandler + 'static>,
-    executor: Arc<Executor<'_>>,
 ) -> Result<()> {
-    match &tls {
-        None => {
-            info!(target: "RPC SERVER", "Listening on tcp://{}", listener.get_ref().local_addr()?)
-        }
-        Some(_) => {
-            info!(target: "RPC SERVER", "Listening on tls://{}", listener.get_ref().local_addr()?)
-        }
-    }
+    let mut buf = vec![0; 8192];
 
-    let ex = executor.clone();
     loop {
-        let (stream, _) = listener.accept().await?;
-        let tls = tls.clone();
-        let rh_c = rh.clone();
-
-        let ex2 = ex.clone();
-        ex.spawn(async move {
-            if let Err(err) = serve(stream, tls, rh_c, ex2.clone()).await {
-                error!(target: "RPC SERVER", "Connection error: {:#?}", err);
+        let n = match stream.read(&mut buf).await {
+            Ok(n) if n == 0 => {
+                info!(target: "JSON-RPC SERVER", "Closed connection");
+                break
             }
-        })
-        .detach();
+            Ok(n) => n,
+            Err(e) => {
+                error!(target: "JSON-RPC SERVER", "Failed reading from socket: {}", e);
+                info!(target: "JSON-RPC SERVER", "Closed connection");
+                break
+            }
+        };
+
+        let r: JsonRequest = match serde_json::from_slice(&buf[0..n]) {
+            Ok(r) => {
+                debug!(target: "JSON-RPC SERVER", "--> {}", String::from_utf8_lossy(&buf));
+                r
+            }
+            Err(e) => {
+                error!(target: "JSON-RPC SERVER", "Received invalid JSON: {:?}", e);
+                info!(target: "JSON-RPC SERVER", "Closed connection");
+                break
+            }
+        };
+
+        let reply = rh.handle_request(r).await;
+        let j = serde_json::to_string(&reply)?;
+        debug!(target: "JSON-RPC SERVER", "<-- {}", j);
+
+        if let Err(e) = stream.write_all(j.as_bytes()).await {
+            error!(target: "JSON-RPC SERVER", "Failed writing to socket: {}", e);
+            info!(target: "JSON-RPC SERVER", "Closed connection");
+            break
+        }
     }
+
+    Ok(())
 }
 
 pub async fn listen_and_serve(
-    cfg: RpcServerConfig,
+    accept_url: Url,
     rh: Arc<impl RequestHandler + 'static>,
-    executor: Arc<Executor<'_>>,
 ) -> Result<()> {
-    let tls: Option<TlsAcceptor> = if cfg.use_tls {
-        let ident_bytes = std::fs::read(cfg.identity_path)?;
-        let identity = Identity::from_pkcs12(&ident_bytes, &cfg.identity_pass)?;
-        Some(TlsAcceptor::from(native_tls::TlsAcceptor::new(identity)?))
-    } else {
-        None
-    };
+    debug!(target: "JSON-RPC SERVER", "Trying to start listener on {}", accept_url);
 
-    let listener = listen(Async::<TcpListener>::bind(cfg.socket_addr)?, tls, rh, executor);
-    listener.await
+    let transport_name = TransportName::try_from(accept_url.clone())?;
+    match transport_name {
+        TransportName::Tcp(upgrade) => {
+            let transport = TcpTransport::new(None, 1024);
+            let listener = transport.listen_on(accept_url.clone());
+
+            if let Err(err) = listener {
+                error!("TCP Setup failed: {}", err);
+                return Err(Error::BindFailed(accept_url.clone().to_string()))
+            }
+
+            let listener = listener?.await;
+
+            if let Err(err) = listener {
+                error!("TCP Bind listener failed: {}", err);
+                return Err(Error::BindFailed(accept_url.to_string()))
+            }
+
+            let listener = listener?;
+
+            match upgrade {
+                None => {
+                    run_accept_loop(Box::new(listener), rh).await?;
+                }
+                Some(u) if u == "tls" => {
+                    let tls_listener = transport.upgrade_listener(listener)?.await?;
+                    run_accept_loop(Box::new(tls_listener), rh).await?;
+                }
+                Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
+            }
+        }
+        TransportName::Tor(upgrade) => {
+            let socks5_url = Url::parse(
+                &env::var("DARKFI_TOR_SOCKS5_URL").unwrap_or("socks5://127.0.0.1:9050".to_string()),
+            )?;
+
+            let torc_url = Url::parse(
+                &env::var("DARKFI_TOR_CONTROL_URL").unwrap_or("tcp://127.0.0.1:9051".to_string()),
+            )?;
+
+            let auth_cookie = env::var("DARKFI_TOR_COOKIE");
+
+            if auth_cookie.is_err() {
+                return Err(Error::TorError(
+                    "Please set the env var DARKFI_TOR_COOKIE to the configured tor cookie file. \
+                    For example: \
+                    \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'"
+                        .to_string(),
+                ))
+            }
+
+            let auth_cookie = auth_cookie.unwrap();
+
+            let auth_cookie = hex::encode(&fs::read(auth_cookie).unwrap());
+
+            let transport = TorTransport::new(socks5_url, Some((torc_url, auth_cookie)))?;
+
+            // generate EHS pointing to local address
+            let hurl = transport.create_ehs(accept_url.clone())?;
+
+            info!("EHS TOR: {}", hurl.to_string());
+
+            let listener = transport.clone().listen_on(accept_url.clone());
+
+            if let Err(err) = listener {
+                error!("TOR Setup failed: {}", err);
+                return Err(Error::BindFailed(accept_url.clone().to_string()))
+            }
+
+            let listener = listener?.await;
+
+            if let Err(err) = listener {
+                error!("TOR Bind listener failed: {}", err);
+                return Err(Error::BindFailed(accept_url.to_string()))
+            }
+
+            let listener = listener?;
+
+            match upgrade {
+                None => {
+                    run_accept_loop(Box::new(listener), rh).await?;
+                }
+                Some(u) if u == "tls" => {
+                    let tls_listener = transport.upgrade_listener(listener)?.await?;
+                    run_accept_loop(Box::new(tls_listener), rh).await?;
+                }
+                Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
+            }
+        }
+    }
+
+    Ok(())
 }
