@@ -59,7 +59,7 @@ connect to in the p2p network.
 	in config file:
 
 		## Connection slots
-		outbound_connections=5
+		outbound_connections=8
 
 		## Seed nodes to connect to 
 		seeds=["127.0.0.1:11001"]
@@ -139,6 +139,3 @@ $ # comments
 $ tau comments 1  # list comments
 $ tau comments 3 "new comment"  # add new comment 
 ```
-
-
-

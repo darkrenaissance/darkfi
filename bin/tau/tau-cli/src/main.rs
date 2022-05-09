@@ -19,9 +19,9 @@ mod util;
 mod view;
 
 use cli::CliTauSubCommands;
-use primitives::TaskInfo;
+use primitives::{TaskEvent, TaskInfo};
 use util::{desc_in_editor, CONFIG_FILE, CONFIG_FILE_CONTENTS};
-use view::{comments_as_string, events_as_string, print_list_of_task, print_task_info};
+use view::{comments_as_string, print_list_of_task, print_task_info};
 
 async fn start(mut options: cli::CliTau) -> Result<()> {
     let rpc_addr = &format!("tcp://{}", &options.rpc_listen.clone());
@@ -71,7 +71,9 @@ async fn start(mut options: cli::CliTau) -> Result<()> {
             None => {
                 let task = jsonrpc::get_task_by_id(rpc_addr, id).await?;
                 let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
-                let state = events_as_string(taskinfo.events);
+                let default_event =
+                    TaskEvent { action: "open".to_string(), timestamp: primitives::Timestamp(0) };
+                let state = &taskinfo.events.last().unwrap_or(&default_event).action;
                 println!("Task {}: {}", id, state);
             }
         },

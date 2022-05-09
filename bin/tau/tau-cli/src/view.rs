@@ -112,13 +112,17 @@ pub fn comments_as_string(comments: Vec<Comment>) -> String {
         comments_str.push_str(&comment.to_string());
         comments_str.push('\n');
     }
+    comments_str.pop();
     comments_str
 }
 
 pub fn events_as_string(events: Vec<TaskEvent>) -> String {
     let mut events_str = String::new();
     for event in events {
-        events_str.push_str(&event.to_string());
+        events_str.push_str("State changed to ");
+        events_str.push_str(&event.action.to_string());
+        events_str.push_str(" at ");
+        events_str.push_str(&timestamp_to_date(event.timestamp.0, "datetime"));
         events_str.push('\n');
     }
     events_str
