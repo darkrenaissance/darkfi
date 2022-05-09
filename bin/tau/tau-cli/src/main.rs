@@ -89,8 +89,18 @@ async fn start(mut options: cli::CliTau) -> Result<()> {
         },
 
         Some(CliTauSubCommands::List {}) | None => {
-            let tasks = jsonrpc::list(rpc_addr, json!([])).await?;
-            let mut tasks: Vec<TaskInfo> = serde_json::from_value(tasks)?;
+            let task_ids = jsonrpc::get_ids(rpc_addr, json!([])).await?;
+            let mut tasks: Vec<TaskInfo> = vec![];
+            if let Some(ids) = task_ids.as_array() {
+                for id in ids {
+                    let id = if id.is_u64() { id.as_u64().unwrap() } else { continue };
+                    let task = jsonrpc::get_task_by_id(&rpc_addr, id).await?;
+                    let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
+                    tasks.push(taskinfo);
+                }
+            }
+
+            // let mut tasks: Vec<TaskInfo> = serde_json::from_value(tasks)?;
             print_list_of_task(&mut tasks, options.filters)?;
         }
     }

@@ -52,10 +52,10 @@ pub async fn add(url: &str, params: Value) -> Result<Value> {
 }
 
 // List tasks
-// --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
-// <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
-pub async fn list(url: &str, params: Value) -> Result<Value> {
-    let req = jsonrpc::request(json!("list"), json!(params));
+// --> {"jsonrpc": "2.0", "method": "get_ids", "params": [], "id": 1}
+// <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
+pub async fn get_ids(url: &str, params: Value) -> Result<Value> {
+    let req = jsonrpc::request(json!("get_ids"), json!(params));
     request(req, url.to_string()).await
 }
 

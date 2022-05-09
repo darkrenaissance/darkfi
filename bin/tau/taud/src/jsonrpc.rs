@@ -52,7 +52,7 @@ impl RequestHandler for JsonRpcInterface {
 
         let rep = match req.method.as_str() {
             Some("add") => self.add(req.params).await,
-            Some("list") => self.list(req.params).await,
+            Some("get_ids") => self.get_ids(req.params).await,
             Some("update") => self.update(req.params).await,
             Some("set_state") => self.set_state(req.params).await,
             Some("set_comment") => self.set_comment(req.params).await,
@@ -113,12 +113,13 @@ impl JsonRpcInterface {
 
     // RPCAPI:
     // List tasks
-    // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": [task, ...], "id": 1}
-    async fn list(&self, params: Value) -> TaudResult<Value> {
-        debug!(target: "tau", "JsonRpc::list() params {}", params);
-        let tks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
-        Ok(json!(tks))
+    // --> {"jsonrpc": "2.0", "method": "get_ids", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
+    async fn get_ids(&self, params: Value) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::get_ids() params {}", params);
+        let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
+        let task_ids: Vec<u32> = tasks.iter().map(|task| task.get_id()).collect();
+        Ok(json!(task_ids))
     }
 
     // RPCAPI:
