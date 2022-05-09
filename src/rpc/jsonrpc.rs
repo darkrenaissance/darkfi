@@ -159,7 +159,7 @@ pub fn notification(m: Value, p: Value) -> JsonNotification {
     JsonNotification { jsonrpc: json!("2.0"), method: m, params: p }
 }
 
-pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Result<JsonResult> {
+pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
     let data_str = serde_json::to_string(&data)?;
 
     let transport_name = TransportName::try_from(uri.clone())?;
@@ -170,14 +170,14 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
             let stream = transport.dial(uri.clone());
 
             if let Err(err) = stream {
-                error!("TCP Setup failed: {}", err);
+                error!("RPC TCP Setup failed: {}", err);
                 return Err(Error::ConnectFailed)
             }
 
             let stream = stream?.await;
 
             if let Err(err) = stream {
-                error!("TCP Connection failed: {}", err);
+                error!("RPC TCP Connection failed: {}", err);
                 return Err(Error::ConnectFailed)
             }
 
@@ -205,14 +205,14 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
             let stream = transport.clone().dial(uri.clone());
 
             if let Err(err) = stream {
-                error!("TOR Setup failed: {}", err);
+                error!("RPC TOR Setup failed: {}", err);
                 return Err(Error::ConnectFailed)
             }
 
             let stream = stream?.await;
 
             if let Err(err) = stream {
-                error!("TOR Connection failed: {}", err);
+                error!("RPC TOR Connection failed: {}", err);
                 return Err(Error::ConnectFailed)
             }
             match upgrade {
@@ -224,8 +224,6 @@ pub async fn send_request(uri: &Url, data: Value, socks_url: Option<Url>) -> Res
                 Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
             }
         }
-
-        _ => unimplemented!(),
     }
 }
 
