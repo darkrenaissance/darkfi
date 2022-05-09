@@ -108,16 +108,21 @@ def pedersen_encrypt(x, y, ec):
     vcr = ec.multiply(y, ec.H)
     return ec.add(vcv, vcr)
 
-def ff_hash(p, *args):
-    hasher = hashlib.sha256()
+def _add_to_hasher(hasher, args):
     for arg in args:
         match arg:
             case int() as arg:
                 hasher.update(arg.to_bytes(32, byteorder="little"))
             case bytes() as arg:
                 hasher.update(arg)
+            case list() as arg:
+                _add_to_hasher(hasher, arg)
             case _:
                 raise Exception(f"unknown hash arg '{arg}' type: {type(arg)}")
+
+def ff_hash(p, *args):
+    hasher = hashlib.sha256()
+    _add_to_hasher(hasher, args)
     value = int.from_bytes(hasher.digest(), byteorder="little")
     return value % p
 
