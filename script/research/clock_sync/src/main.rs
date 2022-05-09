@@ -55,15 +55,15 @@ async fn check_clock() -> ClockResult<()> {
     debug!("System clock check started...");
     let mut r = 0;
     while r < RETRIES {
-        let check = clock_check().await;
-        match check {
-            Ok(()) => break,
-            Err(e) => error!("Error during clock check: {}", e),
-        }
-        r += 1;
+        if let Err(e) = clock_check().await {
+            error!("Error during clock check: {}", e);
+            r += 1;
+            continue
+        };
+        break        
     }
 
-    debug!("System clock check finished. Retries: {}", r);
+    debug!("System clock check finished. Retries: {}", r);    
     match r {
         RETRIES => Err(ClockError::InvalidClock),
         _ => Ok(()),
@@ -102,7 +102,7 @@ async fn clock_check() -> ClockResult<()> {
     debug!("ntp_time: {}", ntp_time);
     debug!("system_time: {}", system_time);
 
-    // We verify that system time is equal to worldtimeapi or ntp
+    // We verify that system time is equal to worldtimeapi and ntp
     let check = (system_time == worldtimeapi_time) && (system_time == ntp_time);
     match check {
         true => Ok(()),
