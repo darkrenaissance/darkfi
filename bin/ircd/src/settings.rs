@@ -89,7 +89,9 @@ pub fn parse_configured_channels(config_file: &PathBuf) -> Result<FxHashMap<Stri
                 let mut channel_info = ChannelInfo::new()?;
 
                 if chan.1.as_table().unwrap().contains_key("topic") {
-                    channel_info.topic = Some(chan.1["topic"].as_str().unwrap().to_string());
+                    let topic = chan.1["topic"].as_str().unwrap().to_string();
+                    info!("Found topic for channel {}: {}", chan.0, topic);
+                    channel_info.topic = Some(topic);
                 }
 
                 if chan.1.as_table().unwrap().contains_key("secret") {
@@ -100,6 +102,7 @@ pub fn parse_configured_channels(config_file: &PathBuf) -> Result<FxHashMap<Stri
                     let public = secret.public_key();
                     let msg_box = crypto_box::Box::new(&public, &secret);
                     channel_info.salt_box = Some(msg_box);
+                    info!("Instantiated NaCl box for channel {}", chan.0);
                 }
 
                 ret.insert(chan.0.to_string(), channel_info);

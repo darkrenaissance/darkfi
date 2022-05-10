@@ -9,6 +9,10 @@ pub fn try_decrypt_message(salt_box: &crypto_box::Box, ciphertext: &str) -> Opti
         Err(_) => return None,
     };
 
+    if bytes.len() < 25 {
+        return None
+    }
+
     // Try extracting the nonce
     let nonce = match bytes[0..24].try_into() {
         Ok(v) => v,
@@ -16,9 +20,6 @@ pub fn try_decrypt_message(salt_box: &crypto_box::Box, ciphertext: &str) -> Opti
     };
 
     // Take the remaining ciphertext
-    if bytes.len() < 25 {
-        return None
-    }
     let message = &bytes[24..];
 
     // Try decrypting the message

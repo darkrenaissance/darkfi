@@ -107,8 +107,8 @@ async fn process(
         let mut line = String::new();
         futures::select! {
             privmsg = raft_receiver.recv().fuse() => {
-                info!("Receive msg from raft");
                 let mut msg = privmsg?;
+                info!("Received msg from Raft: {:?}", msg);
 
                 let mut smi = seen_msg_id.lock().await;
                 if smi.contains(&msg.id) {
@@ -123,6 +123,7 @@ async fn process(
                     if let Some(salt_box) = &chan_info.salt_box {
                         if let Some(decrypted_msg) = try_decrypt_message(salt_box, &msg.message) {
                             msg.message = decrypted_msg;
+                            info!("Decrypted received message: {:?}", msg);
                         }
                     }
                 }
@@ -135,7 +136,7 @@ async fn process(
                     warn!("Read line error. Closing stream for {}: {}", peer_addr, e);
                     return Ok(())
                 }
-                info!("Receive msg from IRC server");
+                info!("Received msg from ircd: {:?}", line);
                 let irc_msg = match clean_input(line, &peer_addr) {
                     Ok(m) => m,
                     Err(e) => return Err(e)

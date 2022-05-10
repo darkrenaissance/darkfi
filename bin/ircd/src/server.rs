@@ -83,7 +83,6 @@ impl IrcServerConnection {
                 for chan in channels.split(',') {
                     let part_reply = format!(":{}!anon@dark.fi PART {}\r\n", self.nickname, chan);
                     self.reply(&part_reply).await?;
-                    //self.configured_chans.remove(chan);
                 }
             }
             "TOPIC" => {
@@ -130,13 +129,13 @@ impl IrcServerConnection {
                 }
 
                 let message = &line[substr_idx + 1..];
-                info!("Message {}: {}", channel, message);
+                info!("(Plain) PRIVMSG {} :{}", channel, message);
 
                 let message = if self.configured_chans.contains_key(channel) {
                     let channel_info = self.configured_chans.get(channel).unwrap();
                     if let Some(salt_box) = &channel_info.salt_box {
                         let encrypted = encrypt_message(salt_box, message);
-                        info!("Encrypted message {}: {}", channel, encrypted);
+                        info!("(Encrypted) PRIVMSG {} :{}", channel, encrypted);
                         encrypted
                     } else {
                         message.to_string()
@@ -151,13 +150,14 @@ impl IrcServerConnection {
                     id: random_id,
                     nickname: self.nickname.clone(),
                     channel: channel.to_string(),
-                    message: message.to_string(),
+                    message,
                 };
 
                 let mut smi = self.seen_msg_id.lock().await;
                 smi.push(random_id);
                 drop(smi);
 
+                debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
                 self.p2p_sender.send(protocol_msg).await?;
             }
             "QUIT" => {
@@ -202,21 +202,21 @@ impl IrcServerConnection {
             }
 
             for chan in self.auto_channels.clone() {
-                let topic = if self.configured_chans.contains_key(&chan) {
-                    let c = self.configured_chans.get(&chan).unwrap().clone();
-                    if let Some(topic) = c.topic {
+                if self.configured_chans.contains_key(&chan) {
+                    let chan_info = self.configured_chans.get_mut(&chan).unwrap();
+                    let topic = if let Some(topic) = chan_info.topic.clone() {
                         topic
                     } else {
-                        "".to_string()
-                    }
+                        "n/a".to_string()
+                    };
+                    chan_info.topic = Some(topic.to_string());
+                    autojoin!(chan, topic);
                 } else {
-                    "".to_string()
-                };
-
-                let mut ci = ChannelInfo::new()?;
-                ci.topic = Some(topic.to_string());
-                self.configured_chans.insert(chan.clone(), ci);
-                autojoin!(chan, topic.clone());
+                    let mut chan_info = ChannelInfo::new()?;
+                    chan_info.topic = Some("n/a".to_string());
+                    self.configured_chans.insert(chan.clone(), chan_info);
+                    autojoin!(chan, "n/a");
+                }
             }
         }
 
