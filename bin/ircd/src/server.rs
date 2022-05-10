@@ -9,6 +9,9 @@ use darkfi::{Error, Result};
 
 use crate::{crypto::encrypt_message, privmsg::Privmsg, ChannelInfo, SeenMsgIds};
 
+const RPL_NOTOPIC: u32 = 331;
+const RPL_TOPIC: u32 = 332;
+
 pub struct IrcServerConnection {
     write_stream: WriteHalf<TcpStream>,
     is_nick_init: bool,
@@ -34,7 +37,7 @@ impl IrcServerConnection {
             is_nick_init: false,
             is_user_init: false,
             is_registered: false,
-            nickname: "".to_string(),
+            nickname: "anon".to_string(),
             seen_msg_id,
             p2p_sender,
             auto_channels,
@@ -48,6 +51,7 @@ impl IrcServerConnection {
         // that for now to keep the protocol simple and focused.
         let command = tokens.next().ok_or(Error::MalformedPacket)?;
 
+        info!("Received line: {}", line);
         info!("Received command: {}", command);
 
         match command {
@@ -65,14 +69,47 @@ impl IrcServerConnection {
                 self.reply(&nick_reply).await?;
             }
             "JOIN" => {
-                // TODO:
-                // let channel = tokens.next().ok_or(Error::MalformedPacket)?;
-                // self.channels.push(channel.to_string());
+                let channels = tokens.next().ok_or(Error::MalformedPacket)?;
+                for chan in channels.split(',') {
+                    let join_reply = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, chan);
+                    self.reply(&join_reply).await?;
+                    self.configured_chans.insert(chan.to_string(), ChannelInfo::new()?);
+                }
+            }
+            "PART" => {
+                let channels = tokens.next().ok_or(Error::MalformedPacket)?;
+                for chan in channels.split(',') {
+                    let part_reply = format!(":{}!anon@dark.fi PART {}\r\n", self.nickname, chan);
+                    self.reply(&part_reply).await?;
+                    self.configured_chans.remove(chan);
+                }
+            }
+            "TOPIC" => {
+                let channel = tokens.next().ok_or(Error::MalformedPacket)?;
+                if let Some(substr_idx) = line.find(':') {
+                    // Client is setting the topic
+                    if substr_idx >= line.len() {
+                        return Err(Error::MalformedPacket)
+                    }
 
-                // let join_reply = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, channel);
-                // self.reply(&join_reply).await?;
+                    let topic = &line[substr_idx + 1..];
+                    let chan_info = self.configured_chans.get_mut(channel).unwrap();
+                    chan_info.topic = Some(topic.to_string());
 
-                // self.write_stream.write_all(b":f00!f00@127.0.01 PRIVMSG #dev :y0\r\n").await?;
+                    let topic_reply =
+                        format!(":{}!anon@dark.fi TOPIC {} :{}\r\n", self.nickname, channel, topic);
+                    self.reply(&topic_reply).await?;
+                } else {
+                    // Client is asking or the topic
+                    let chan_info = self.configured_chans.get(channel).unwrap();
+                    let topic_reply = if let Some(topic) = &chan_info.topic {
+                        format!("{} {} {} :{}\r\n", RPL_TOPIC, self.nickname, channel, topic)
+                    } else {
+                        const TOPIC: &str = "No topic is set";
+                        format!("{} {} {} :{}\r\n", RPL_NOTOPIC, self.nickname, channel, TOPIC)
+                    };
+                    self.reply(&topic_reply).await?;
+                }
             }
             "PING" => {
                 let line_clone = line.clone();
@@ -148,16 +185,20 @@ impl IrcServerConnection {
 
             for chan in self.auto_channels.clone() {
                 let topic = if self.configured_chans.contains_key(&chan) {
-                    let c = self.configured_chans.get(&chan).unwrap();
-                    if let Some(topic) = &c.topic {
+                    let c = self.configured_chans.get(&chan).unwrap().clone();
+                    if let Some(topic) = c.topic {
                         topic
                     } else {
-                        ""
+                        "".to_string()
                     }
                 } else {
-                    ""
+                    "".to_string()
                 };
-                autojoin!(chan, topic);
+
+                let mut ci = ChannelInfo::new()?;
+                ci.topic = Some(topic.to_string());
+                self.configured_chans.insert(chan.clone(), ci);
+                autojoin!(chan, topic.clone());
             }
         }
 

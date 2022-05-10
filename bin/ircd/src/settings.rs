@@ -82,32 +82,29 @@ pub fn parse_configured_channels(config_file: &PathBuf) -> Result<FxHashMap<Stri
     let toml_contents = std::fs::read_to_string(config_file)?;
     let mut ret = FxHashMap::default();
 
-    match toml::from_str(&toml_contents)? {
-        Value::Table(map) => {
-            if map.contains_key("channel") && map["channel"].is_table() {
-                for chan in map["channel"].as_table().unwrap() {
-                    info!("Found configuration for channel {}", chan.0);
-                    let mut channel_info = ChannelInfo::new()?;
+    if let Value::Table(map) = toml::from_str(&toml_contents)? {
+        if map.contains_key("channel") && map["channel"].is_table() {
+            for chan in map["channel"].as_table().unwrap() {
+                info!("Found configuration for channel {}", chan.0);
+                let mut channel_info = ChannelInfo::new()?;
 
-                    if chan.1.as_table().unwrap().contains_key("topic") {
-                        channel_info.topic = Some(chan.1["topic"].as_str().unwrap().to_string());
-                    }
-
-                    if chan.1.as_table().unwrap().contains_key("secret") {
-                        // Build the NaCl box
-                        let s = chan.1["secret"].as_str().unwrap();
-                        let bytes: [u8; 32] = bs58::decode(s).into_vec()?.try_into().unwrap();
-                        let secret = crypto_box::SecretKey::from(bytes);
-                        let public = secret.public_key();
-                        let msg_box = crypto_box::Box::new(&public, &secret);
-                        channel_info.salt_box = Some(msg_box);
-                    }
-
-                    ret.insert(chan.0.to_string(), channel_info);
+                if chan.1.as_table().unwrap().contains_key("topic") {
+                    channel_info.topic = Some(chan.1["topic"].as_str().unwrap().to_string());
                 }
+
+                if chan.1.as_table().unwrap().contains_key("secret") {
+                    // Build the NaCl box
+                    let s = chan.1["secret"].as_str().unwrap();
+                    let bytes: [u8; 32] = bs58::decode(s).into_vec()?.try_into().unwrap();
+                    let secret = crypto_box::SecretKey::from(bytes);
+                    let public = secret.public_key();
+                    let msg_box = crypto_box::Box::new(&public, &secret);
+                    channel_info.salt_box = Some(msg_box);
+                }
+
+                ret.insert(chan.0.to_string(), channel_info);
             }
         }
-        _ => {}
     };
 
     Ok(ret)
