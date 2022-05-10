@@ -1,5 +1,6 @@
-use async_std::net::TcpStream;
+use std::str::FromStr;
 
+use async_std::net::TcpStream;
 use futures::{io::WriteHalf, AsyncWriteExt};
 use fxhash::FxHashMap;
 use log::{debug, info, warn};
@@ -51,10 +52,9 @@ impl IrcServerConnection {
         // that for now to keep the protocol simple and focused.
         let command = tokens.next().ok_or(Error::MalformedPacket)?;
 
-        info!("Received line: {}", line);
-        info!("Received command: {}", command);
+        info!("Received command: {}", command.to_uppercase());
 
-        match command {
+        match command.to_uppercase().as_str() {
             "USER" => {
                 // We can stuff any extra things like public keys in here.
                 // Ignore it for now.
@@ -161,6 +161,22 @@ impl IrcServerConnection {
             "QUIT" => {
                 // Close the connection
                 return Err(Error::ServiceStopped)
+            }
+            // Below, we implement custom server commands that do not conform
+            // to the IRC specification. These are specific to our implementation.
+            "MSGHIST" => {
+                // Fetch the message history for a certain channel with optional
+                // max limit.
+                // MSGHIST #channel num_msgs
+                let channel = tokens.next().ok_or(Error::MalformedPacket)?;
+                let num_msgs = if let Some(n) = tokens.next() { i64::from_str(n)? } else { -1 };
+                info!("Fetching last {} messages for {}", num_msgs, channel);
+
+                if num_msgs < 0 {
+                    // Fetch all messages for the channel
+                } else {
+                    // Fetch newest num_msgs for the channel
+                }
             }
             _ => {
                 warn!("Unimplemented `{}` command", command);
