@@ -186,10 +186,12 @@ def main(argv):
 
     builder = TransactionBuilder(ec)
     builder.add_clear_input(initial_supply, token_id, signature_secret)
+    # Address of deployed contract in our example is 0xdao_ruleset
     spend_hook = b"0xdao_ruleset"
     # This can be a simple hash of the items passed into the ZK proof
     # up to corresponding linked ZK proof to interpret however they need.
-    user_data = b""
+    # In out case, it's the bulla for the DAO
+    user_data = dao_tx.revealed.bulla
     builder.add_output(initial_supply, token_id, public, spend_hook, user_data)
     tx = builder.build()
 
@@ -247,8 +249,12 @@ def main(argv):
     assert coin == tx.outputs[0].mint_proof.get_revealed().coin
     all_coins = set([coin])
 
+    # Used to export user_data from this coin so it can be accessed
+    # by 0xdao_ruleset
+    user_data_blind = ec.random_base()
+
     builder = TransactionBuilder(ec)
-    builder.add_input(all_coins, secret, note)
+    builder.add_input(all_coins, secret, note, user_data_blind)
 
     secret2 = ec.random_scalar()
     public2 = ec.multiply(secret, ec.G)
@@ -264,9 +270,25 @@ def main(argv):
         return -1
     state.apply(update)
 
+    assert len(tx.inputs) == 1
     # At least one input has this field value which means the 0xdao_ruleset
     # is invoked.
-    assert tx.inputs[0].revealed.spend_hook == b"0xdao_ruleset"
+    input = tx.inputs[0]
+    assert input.revealed.spend_hook == b"0xdao_ruleset"
+    assert input.revealed.enc_user_data == ff_hash(ec.p, user_data,
+                                                   user_data_blind)
+    bulla = ff_hash(
+        ec.p,
+        proposal_auth_public[0],
+        proposal_auth_public[1],
+        threshold,
+        quorum
+    )
+    assert user_data == bulla
+
+    # Now enforce DAO rules:
+    # 1. valid signed proposal
+    # 2. positive number of votes
 
     return 0
 

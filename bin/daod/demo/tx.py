@@ -17,11 +17,12 @@ class TransactionBuilder:
         clear_input.signature_secret = signature_secret
         self.clear_inputs.append(clear_input)
 
-    def add_input(self, all_coins, secret, note):
+    def add_input(self, all_coins, secret, note, user_data_blind):
         input = ClassNamespace()
         input.all_coins = all_coins
         input.secret = secret
         input.note = note
+        input.user_data_blind = user_data_blind
         self.inputs.append(input)
 
     def add_output(self, value, token_id, public, spend_hook, user_data):
@@ -71,7 +72,8 @@ class TransactionBuilder:
                 input.note.value, input.note.token_id, input.note.value_blind,
                 token_blind, input.note.serial, input.note.coin_blind,
                 input.secret, input.note.spend_hook, input.note.user_data,
-                input.all_coins, signature_secret, self.ec)
+                input.user_data_blind, input.all_coins, signature_secret,
+                self.ec)
             tx_input.revealed = tx_input.burn_proof.get_revealed()
             tx.inputs.append(tx_input)
 
@@ -201,8 +203,8 @@ class Transaction:
 class BurnProof:
 
     def __init__(self, value, token_id, value_blind, token_blind, serial,
-                 coin_blind, secret, spend_hook, user_data, all_coins,
-                 signature_secret, ec):
+                 coin_blind, secret, spend_hook, user_data, user_data_blind,
+                 all_coins, signature_secret, ec):
         self.value = value
         self.token_id = token_id
         self.value_blind = value_blind
@@ -212,6 +214,7 @@ class BurnProof:
         self.secret = secret
         self.spend_hook = spend_hook
         self.user_data = user_data
+        self.user_data_blind = user_data_blind
         self.all_coins = all_coins
         self.signature_secret = signature_secret
 
@@ -235,6 +238,13 @@ class BurnProof:
 
         # This is fully public, no merkle tree or anything
         revealed.spend_hook = self.spend_hook
+
+        # Re-export user_data field for access by other contracts
+        revealed.enc_user_data = ff_hash(
+            self.ec.p,
+            self.user_data,
+            self.user_data_blind
+        )
 
         return revealed
 
