@@ -98,6 +98,7 @@ impl Connector {
 
                 Ok(channel)
             }
+            _ => unimplemented!(),
         }
     }
 }

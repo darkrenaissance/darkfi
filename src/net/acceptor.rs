@@ -67,6 +67,7 @@ impl Acceptor {
                     Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
                 }
             }
+
             TransportName::Tor(upgrade) => {
                 let socks5_url = Url::parse(
                     &env::var("DARKFI_TOR_SOCKS5_URL")
@@ -126,6 +127,7 @@ impl Acceptor {
                     Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
                 }
             }
+            _ => unimplemented!(),
         }
         Ok(())
     }

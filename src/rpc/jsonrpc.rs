@@ -190,11 +190,6 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
                 Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
             }
         }
-        // TODO
-        // "unix" => {
-        //     let mut stream = Async::<UnixStream>::connect(uri.path()).await?;
-        //     get_reply(&mut stream, data_str).await
-        // }
         TransportName::Tor(upgrade) => {
             let socks5_url = Url::parse(
                 &env::var("DARKFI_TOR_SOCKS5_URL").unwrap_or("socks5://127.0.0.1:9050".to_string()),
@@ -224,6 +219,8 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
                 Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
             }
         }
+
+        _ => unimplemented!(),
     }
 }
 

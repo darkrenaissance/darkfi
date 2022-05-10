@@ -174,6 +174,8 @@ pub async fn listen_and_serve(
                 Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
             }
         }
+
+        _ => unimplemented!(),
     }
 
     Ok(())

@@ -36,6 +36,8 @@ pub trait TransportListener: Send + Sync + Unpin {
 pub enum TransportName {
     Tcp(Option<String>),
     Tor(Option<String>),
+    Nym(Option<String>),
+    Unix,
 }
 
 impl TryFrom<Url> for TransportName {
@@ -46,7 +48,10 @@ impl TryFrom<Url> for TransportName {
             "tcp" => Self::Tcp(None),
             "tcp+tls" | "tls" => Self::Tcp(Some("tls".into())),
             "tor" => Self::Tor(None),
-            "tor+tls" => Self::Tcp(Some("tls".into())),
+            "tor+tls" => Self::Tor(Some("tls".into())),
+            "nym" => Self::Nym(None),
+            "nym+tls" => Self::Nym(Some("tls".into())),
+            "unix" => Self::Unix,
             n => return Err(crate::Error::UnsupportedTransport(n.into())),
         };
         Ok(transport_name)
