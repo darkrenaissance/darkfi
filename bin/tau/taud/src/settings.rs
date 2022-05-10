@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use serde::Deserialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;

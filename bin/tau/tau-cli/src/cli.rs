@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -17,8 +15,8 @@ pub struct CliTau {
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
     /// JSON-RPC listen URL
-    #[structopt(long = "rpc", default_value = "127.0.0.1:11055")]
-    pub rpc_listen: SocketAddr,
+    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:11055")]
+    pub rpc_listen: String,
     /// Sets a custom config file
     #[structopt(short, long)]
     pub config: Option<String>,

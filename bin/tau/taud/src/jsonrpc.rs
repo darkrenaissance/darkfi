@@ -1,6 +1,5 @@
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
-use async_executor::Executor;
 use async_trait::async_trait;
 use log::debug;
 use serde::{Deserialize, Serialize};

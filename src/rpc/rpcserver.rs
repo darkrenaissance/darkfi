@@ -25,7 +25,6 @@ async fn run_accept_loop(
     listener: Box<dyn TransportListener>,
     rh: Arc<impl RequestHandler + 'static>,
 ) -> Result<()> {
-    // TODO can we spawn new task here ?
     while let Ok((stream, peer_addr)) = listener.next().await {
         info!(target: "JSON-RPC SERVER", "RPC Accepted connection {}", peer_addr);
         accept(stream, rh.clone()).await?;
@@ -107,9 +106,11 @@ pub async fn listen_and_serve(
 
             match upgrade {
                 None => {
+                    info!("RPC TCP listening to: {}", accept_url);
                     run_accept_loop(Box::new(listener), rh).await?;
                 }
                 Some(u) if u == "tls" => {
+                    info!("RPC TCP+TLS listening to: {}", accept_url);
                     let tls_listener = transport.upgrade_listener(listener)?.await?;
                     run_accept_loop(Box::new(tls_listener), rh).await?;
                 }
@@ -166,8 +167,10 @@ pub async fn listen_and_serve(
             match upgrade {
                 None => {
                     run_accept_loop(Box::new(listener), rh).await?;
+                    info!("RPC TOR listening to: {}", accept_url);
                 }
                 Some(u) if u == "tls" => {
+                    info!("RPC TOR+TLS listening to: {}", accept_url);
                     let tls_listener = transport.upgrade_listener(listener)?.await?;
                     run_accept_loop(Box::new(tls_listener), rh).await?;
                 }
