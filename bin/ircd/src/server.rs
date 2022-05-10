@@ -73,7 +73,9 @@ impl IrcServerConnection {
                 for chan in channels.split(',') {
                     let join_reply = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, chan);
                     self.reply(&join_reply).await?;
-                    self.configured_chans.insert(chan.to_string(), ChannelInfo::new()?);
+                    if !self.configured_chans.contains_key(chan) {
+                        self.configured_chans.insert(chan.to_string(), ChannelInfo::new()?);
+                    }
                 }
             }
             "PART" => {
@@ -81,7 +83,7 @@ impl IrcServerConnection {
                 for chan in channels.split(',') {
                     let part_reply = format!(":{}!anon@dark.fi PART {}\r\n", self.nickname, chan);
                     self.reply(&part_reply).await?;
-                    self.configured_chans.remove(chan);
+                    //self.configured_chans.remove(chan);
                 }
             }
             "TOPIC" => {
