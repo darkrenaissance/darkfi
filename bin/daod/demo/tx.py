@@ -24,13 +24,13 @@ class TransactionBuilder:
         input.note = note
         self.inputs.append(input)
 
-    def add_output(self, value, token_id, public, depends, attrs):
+    def add_output(self, value, token_id, public, depends, user_data):
         output = ClassNamespace()
         output.value = value
         output.token_id = token_id
         output.public = public
         output.depends = depends
-        output.attrs = attrs
+        output.user_data = user_data
         self.outputs.append(output)
 
     def compute_remainder_blind(self, clear_inputs, input_blinds,
@@ -70,7 +70,7 @@ class TransactionBuilder:
             tx_input.burn_proof = BurnProof(
                 input.note.value, input.note.token_id, input.note.value_blind,
                 token_blind, input.note.serial, input.note.coin_blind,
-                input.secret, input.note.depends, input.note.attrs,
+                input.secret, input.note.depends, input.note.user_data,
                 input.all_coins, signature_secret, self.ec)
             tx_input.revealed = tx_input.burn_proof.get_revealed()
             tx.inputs.append(tx_input)
@@ -93,7 +93,7 @@ class TransactionBuilder:
             note.value_blind = value_blind
             note.token_blind = token_blind
             note.depends = output.depends
-            note.attrs = output.attrs
+            note.user_data = output.user_data
 
             tx_output = ClassNamespace()
             tx_output.__name__ = "TransactionOutput"
@@ -101,7 +101,7 @@ class TransactionBuilder:
             tx_output.mint_proof = MintProof(
                 note.value, note.token_id, note.value_blind,
                 note.token_blind, note.serial, note.coin_blind,
-                output.public, output.depends, output.attrs, self.ec)
+                output.public, output.depends, output.user_data, self.ec)
             tx_output.revealed = tx_output.mint_proof.get_revealed()
             assert tx_output.mint_proof.verify(tx_output.revealed)
 
@@ -201,7 +201,7 @@ class Transaction:
 class BurnProof:
 
     def __init__(self, value, token_id, value_blind, token_blind, serial,
-                 coin_blind, secret, depends, attrs, all_coins,
+                 coin_blind, secret, depends, user_data, all_coins,
                  signature_secret, ec):
         self.value = value
         self.token_id = token_id
@@ -211,7 +211,7 @@ class BurnProof:
         self.coin_blind = coin_blind
         self.secret = secret
         self.depends = depends
-        self.attrs = attrs
+        self.user_data = user_data
         self.all_coins = all_coins
         self.signature_secret = signature_secret
 
@@ -233,6 +233,9 @@ class BurnProof:
         revealed.signature_public = self.ec.multiply(self.signature_secret,
                                                      self.ec.G)
 
+        # This is fully public, no merkle tree or anything
+        revealed.depends = self.depends
+
         return revealed
 
     def verify(self, public):
@@ -248,7 +251,7 @@ class BurnProof:
             self.serial,
             self.coin_blind,
             self.depends,
-            self.attrs,
+            self.user_data,
         )
         # Merkle root check
         if coin not in self.all_coins:
@@ -265,7 +268,7 @@ class BurnProof:
 class MintProof:
 
     def __init__(self, value, token_id, value_blind, token_blind, serial,
-                 coin_blind, public, depends, attrs, ec):
+                 coin_blind, public, depends, user_data, ec):
         self.value = value
         self.token_id = token_id
         self.value_blind = value_blind
@@ -274,7 +277,7 @@ class MintProof:
         self.coin_blind = coin_blind
         self.public = public
         self.depends = depends
-        self.attrs = attrs
+        self.user_data = user_data
 
         self.ec = ec
 
@@ -289,7 +292,7 @@ class MintProof:
             self.serial,
             self.coin_blind,
             self.depends,
-            self.attrs
+            self.user_data
         )
 
         revealed.value_commit = pedersen_encrypt(

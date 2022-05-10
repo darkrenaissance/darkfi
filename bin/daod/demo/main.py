@@ -187,8 +187,8 @@ def main(argv):
     builder = TransactionBuilder(ec)
     builder.add_clear_input(initial_supply, token_id, signature_secret)
     depends = [b"0xdao_ruleset"]
-    attrs = []
-    builder.add_output(initial_supply, token_id, public, depends, attrs)
+    user_data = []
+    builder.add_output(initial_supply, token_id, public, depends, user_data)
     tx = builder.build()
 
     state = State()
@@ -214,6 +214,18 @@ def main(argv):
     # --> penalized if fail
     # apply update to state
 
+    # Every votes produces a semi-homomorphic encryption of their vote.
+    # Which is either yes or no
+    # We copy the state tree for the governance token so coins can be used
+    # to vote on other proposals at the same time.
+    # With their vote, they produce a ZK proof + nullifier
+    # The votes are unblinded by MPC to a selected party at the end of the
+    # voting period.
+    # (that's if we want votes to be hidden during voting)
+
+    votes_yes = 10
+    votes_no = 5
+
     # payment state transition in coin specifies dependency
     # the tx exists and ruleset is applied
 
@@ -228,7 +240,7 @@ def main(argv):
         note.serial,
         note.coin_blind,
         depends,
-        attrs
+        user_data
     )
     assert coin == tx.outputs[0].mint_proof.get_revealed().coin
     all_coins = set([coin])
@@ -239,9 +251,9 @@ def main(argv):
     secret2 = ec.random_scalar()
     public2 = ec.multiply(secret, ec.G)
 
-    builder.add_output(1000, token_id, public2, depends=[b"0x0000"], attrs=[])
+    builder.add_output(1000, token_id, public2, depends=[b"0x0000"], user_data=[])
     # Change
-    builder.add_output(note.value - 1000, token_id, public, depends, attrs)
+    builder.add_output(note.value - 1000, token_id, public, depends, user_data)
 
     tx = builder.build()
 
