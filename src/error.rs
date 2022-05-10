@@ -292,7 +292,7 @@ pub enum Error {
     #[cfg(feature = "regex")]
     #[error(transparent)]
     RegexError(#[from] regex::Error),
-    
+
     #[cfg(feature = "util")]
     #[error("System clock is not correct!")]
     InvalidClock,
