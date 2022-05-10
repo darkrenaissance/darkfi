@@ -149,6 +149,10 @@ pub enum Error {
     #[error("async_native_tls error: {0}")]
     AsyncNativeTlsError(String),
 
+    #[cfg(feature = "util")]
+    #[error("NTP error: {0}")]
+    NtpError(String),
+
     // =============
     // Crypto errors
     // =============
@@ -288,6 +292,10 @@ pub enum Error {
     #[cfg(feature = "regex")]
     #[error(transparent)]
     RegexError(#[from] regex::Error),
+    
+    #[cfg(feature = "util")]
+    #[error("System clock is not correct!")]
+    InvalidClock,
 
     // ==============================================
     // Wrappers for other error types in this library
@@ -499,5 +507,12 @@ impl From<wasmer::RuntimeError> for Error {
 impl From<wasmer::InstantiationError> for Error {
     fn from(err: wasmer::InstantiationError) -> Self {
         Self::WasmerInstantiationError(err.to_string())
+    }
+}
+
+#[cfg(feature = "util")]
+impl From<ntp::errors::Error> for Error {
+    fn from(err: ntp::errors::Error) -> Self {
+        Self::NtpError(err.to_string())
     }
 }

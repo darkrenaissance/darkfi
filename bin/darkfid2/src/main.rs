@@ -40,6 +40,7 @@ use darkfi::{
         cli::{log_config, spawn_config},
         expand_path,
         path::get_config_path,
+        time::check_clock,
     },
     wallet::walletdb::init_wallet,
     Error, Result,
@@ -199,6 +200,12 @@ impl Darkfid {
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+    // We verify that the system clock is valid before initializing
+    if let Err(_) = check_clock().await {
+        error!("System clock is invalid, terminating...");
+        return Err(Error::InvalidClock)
+    };
+
     // We use this handler to block this function after detaching all
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
