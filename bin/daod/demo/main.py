@@ -186,9 +186,11 @@ def main(argv):
 
     builder = TransactionBuilder(ec)
     builder.add_clear_input(initial_supply, token_id, signature_secret)
-    depends = [b"0xdao_ruleset"]
-    user_data = []
-    builder.add_output(initial_supply, token_id, public, depends, user_data)
+    spend_hook = b"0xdao_ruleset"
+    # This can be a simple hash of the items passed into the ZK proof
+    # up to corresponding linked ZK proof to interpret however they need.
+    user_data = b""
+    builder.add_output(initial_supply, token_id, public, spend_hook, user_data)
     tx = builder.build()
 
     state = State()
@@ -196,10 +198,10 @@ def main(argv):
         return -1
     state.apply(update)
 
-    # Now the depends field specifies the function DaoExec
+    # Now the spend_hook field specifies the function DaoExec
     # so the tx above must also be combined with a DaoExec tx
     for input in tx.inputs:
-        assert input.revealed.depends == [b"0xdao_ruleset"]
+        assert input.revealed.spend_hook == [b"0xdao_ruleset"]
     builder = DaoExecBuilder()
     dao_tx = builder.build()
     if (update := dao_exec_state_transition(dao_state, dao_tx)) is None:
@@ -239,7 +241,7 @@ def main(argv):
         note.token_id,
         note.serial,
         note.coin_blind,
-        depends,
+        spend_hook,
         user_data
     )
     assert coin == tx.outputs[0].mint_proof.get_revealed().coin
@@ -251,15 +253,20 @@ def main(argv):
     secret2 = ec.random_scalar()
     public2 = ec.multiply(secret, ec.G)
 
-    builder.add_output(1000, token_id, public2, depends=[b"0x0000"], user_data=[])
+    builder.add_output(1000, token_id, public2, spend_hook=[b"0x0000"],
+                       user_data=[])
     # Change
-    builder.add_output(note.value - 1000, token_id, public, depends, user_data)
+    builder.add_output(note.value - 1000, token_id, public, spend_hook, user_data)
 
     tx = builder.build()
 
     if (update := state_transition(state, tx)) is None:
         return -1
     state.apply(update)
+
+    # At least one input has this field value which means the 0xdao_ruleset
+    # is invoked.
+    assert tx.inputs[0].revealed.spend_hook == b"0xdao_ruleset"
 
     return 0
 
