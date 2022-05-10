@@ -7,6 +7,7 @@
 ## Sets Datastore Path
 #datastore="~/.config/ircd"
 
+## List of channels to autojoin for new client connections
 autojoin = ["#dev"]
 
 ## Raft net settings
@@ -33,5 +34,9 @@ autojoin = ["#dev"]
 #channel_handshake_seconds=4
 #channel_heartbeat_seconds=10
 
-[channel."#dev"]
-secret = "f00b4r"
+## Per-channel settings
+#[channel."#dev"]
+## Create with `ircd --gen-secret`
+#secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+## Topic to set for the channel
+#topic = "DarkFi Development HQ"
