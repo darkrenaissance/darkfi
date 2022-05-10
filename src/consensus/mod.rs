@@ -19,8 +19,7 @@ pub mod state;
 pub use state::{ValidatorState, ValidatorStatePtr};
 
 /// Utility functions and types
-pub mod util;
-pub use util::Timestamp;
+use crate::util::time::Timestamp;
 
 /// P2P net protocols
 pub mod proto;

@@ -1,6 +1,9 @@
 use crate::{
-    consensus::{Block, StreamletMetadata, Timestamp},
-    util::serial::{deserialize, serialize},
+    consensus::{Block, StreamletMetadata},
+    util::{
+        serial::{deserialize, serialize},
+        time::Timestamp,
+    },
     Error, Result,
 };
 

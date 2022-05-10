@@ -2,12 +2,15 @@ use std::io;
 
 use log::debug;
 
-use super::{Metadata, StreamletMetadata, Timestamp, BLOCK_VERSION};
+use super::{Metadata, StreamletMetadata, BLOCK_VERSION};
 use crate::{
     crypto::{address::Address, keypair::PublicKey, schnorr::Signature},
     impl_vec, net,
     tx::Transaction,
-    util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::{
+        serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+        time::Timestamp,
+    },
     Result,
 };
 

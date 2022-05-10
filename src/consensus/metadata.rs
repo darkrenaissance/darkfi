@@ -1,5 +1,8 @@
-use super::{Participant, Timestamp, Vote};
-use crate::util::serial::{SerialDecodable, SerialEncodable};
+use super::{Participant, Vote};
+use crate::util::{
+    serial::{SerialDecodable, SerialEncodable},
+    time::Timestamp,
+};
 
 /// This struct represents additional [`Block`] information used by
 /// the consensus protocol

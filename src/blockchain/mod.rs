@@ -3,9 +3,12 @@ use std::io;
 use log::debug;
 
 use crate::{
-    consensus::{Block, BlockInfo, Timestamp},
+    consensus::{Block, BlockInfo},
     impl_vec,
-    util::serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
+    util::{
+        serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
+        time::Timestamp,
+    },
     Result,
 };
 

@@ -12,8 +12,7 @@ use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, Metadata, Participant, ProposalChain, StreamletMetadata,
-    Timestamp, Vote,
+    Block, BlockInfo, BlockProposal, Metadata, Participant, ProposalChain, StreamletMetadata, Vote,
 };
 use crate::{
     blockchain::Blockchain,
@@ -28,7 +27,10 @@ use crate::{
         Client, MemoryState, State,
     },
     tx::Transaction,
-    util::serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
+    util::{
+        serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
+        time::Timestamp,
+    },
     Result,
 };
 
