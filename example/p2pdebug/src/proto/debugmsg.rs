@@ -8,7 +8,7 @@ use fxhash::FxHashSet;
 use log::debug;
 
 use darkfi::{
-    net3 as net,
+    net,
     util::serial::{SerialDecodable, SerialEncodable},
     Result,
 };

@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use async_executor::Executor;
 use clap::Parser;
@@ -7,12 +7,7 @@ use rand::{rngs::OsRng, Rng, RngCore};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
-use darkfi::{
-    cli_desc, net3 as net,
-    rpc::rpcserver::{listen_and_serve, RpcServerConfig},
-    util::{cli::log_config, sleep},
-    Result,
-};
+use darkfi::{cli_desc, net, rpc::rpcserver::listen_and_serve, util::cli::log_config, Result};
 
 pub(crate) mod proto;
 pub(crate) mod rpc;
@@ -41,8 +36,8 @@ struct Args {
     #[clap(long)]
     tor: bool,
     /// communicate using tls protocol by default is tcp
-    #[clap(long, default_value = "127.0.0.1:11055")]
-    rpc: SocketAddr,
+    #[clap(long, default_value = "tcp://127.0.0.1:11055")]
+    rpc: String,
     /// open manual connection
     #[clap(long)]
     connect: Option<String>,
@@ -146,7 +141,7 @@ impl MockP2p {
     async fn run(
         &self,
         p2p: net::P2pPtr,
-        rpc_addr: SocketAddr,
+        rpc_addr: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let state = self.state.clone();
@@ -168,20 +163,24 @@ impl MockP2p {
             })
             .await;
 
-        let address_cloned = address.clone();
         if self.broadcast {
             println!("start broadcast {:?} node #{} address {:?}", state, node_number, address);
             let sleep_time = 10;
             let p2p_clone = p2p.clone();
             let executor_clone = executor.clone();
+            let address_cloned = address.clone();
+            let state = state.clone();
             executor_clone
                 .spawn(async move {
                     loop {
-                        sleep(sleep_time).await;
+                        darkfi::util::sleep(sleep_time).await;
 
                         println!(
                             "broadcast sleep for {} {:?} node #{} address {:?}",
-                            sleep_time, state, node_number, address
+                            sleep_time,
+                            state,
+                            node_number,
+                            address_cloned.clone()
                         );
 
                         let random_id = OsRng.next_u32();
@@ -190,7 +189,7 @@ impl MockP2p {
 
                         println!(
                             "send {:?} {:?} node #{} address {:?}",
-                            msg, state, node_number, address
+                            msg, state, node_number, address_cloned
                         );
 
                         p2p_clone.broadcast(msg).await.unwrap();
@@ -199,8 +198,8 @@ impl MockP2p {
                 .detach();
         }
 
-        let state = self.state.clone();
         let seen_debugmsg_ids_clone = seen_debugmsg_ids.clone();
+        let address_cloned = address.clone();
         executor
             .spawn(async move {
                 loop {
@@ -215,20 +214,10 @@ impl MockP2p {
             .detach();
 
         // RPC
-        let rpc_config = RpcServerConfig {
-            socket_addr: rpc_addr,
-            use_tls: false,
-            identity_path: Default::default(),
-            identity_pass: Default::default(),
-        };
 
-        let executor_cloned = executor.clone();
-        let rpc_interface = Arc::new(rpc::JsonRpcInterface { addr: rpc_addr, p2p: p2p.clone() });
-        executor
-            .spawn(async move {
-                listen_and_serve(rpc_config, rpc_interface, executor_cloned.clone()).await
-            })
-            .detach();
+        let rpc_interface =
+            Arc::new(rpc::JsonRpcInterface { addr: rpc_addr.clone(), p2p: p2p.clone() });
+        executor.spawn(async move { listen_and_serve(rpc_addr, rpc_interface).await }).detach();
 
         p2p.clone().start(executor.clone()).await?;
         p2p.run(executor).await
@@ -242,8 +231,9 @@ async fn start(executor: Arc<Executor<'_>>, args: Args) -> Result<()> {
         scheme = format!("{}+tls", scheme);
     }
 
+    let rpc_addr = Url::parse(&args.rpc)?;
     let (p2p, mock_p2p) = MockP2p::new(args.node, args.broadcast, &scheme, args.connect).await?;
-    mock_p2p.run(p2p.clone(), args.rpc.clone(), executor).await
+    mock_p2p.run(p2p.clone(), rpc_addr, executor).await
 }
 
 fn main() -> Result<()> {

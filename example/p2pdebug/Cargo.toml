@@ -9,7 +9,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-darkfi = {path = "../../", features = ["net3", "rpc"]}
+darkfi = {path = "../../", features = ["net", "rpc"]}
 # Async
 smol = "1.2.5"
 futures = "0.3.21"

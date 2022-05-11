@@ -1,12 +1,10 @@
-use std::{net::SocketAddr, sync::Arc};
-
-use async_executor::Executor;
 use async_trait::async_trait;
 use log::debug;
 use serde_json::{json, Value};
+use url::Url;
 
 use darkfi::{
-    net3 as net,
+    net,
     rpc::{
         jsonrpc,
         jsonrpc::{ErrorCode, JsonRequest, JsonResult},
@@ -15,13 +13,13 @@ use darkfi::{
 };
 
 pub struct JsonRpcInterface {
-    pub addr: SocketAddr,
+    pub addr: Url,
     pub p2p: net::P2pPtr,
 }
 
 #[async_trait]
 impl RequestHandler for JsonRpcInterface {
-    async fn handle_request(&self, req: JsonRequest, _executor: Arc<Executor<'_>>) -> JsonResult {
+    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
             return jsonrpc::error(ErrorCode::InvalidRequest, None, req.id).into()
         }
