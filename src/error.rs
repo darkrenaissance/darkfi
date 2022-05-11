@@ -297,6 +297,9 @@ pub enum Error {
     #[error("System clock is not correct!")]
     InvalidClock,
 
+    #[error("Unsupported OS")]
+    UnsupportedOS,
+
     // ==============================================
     // Wrappers for other error types in this library
     // ==============================================

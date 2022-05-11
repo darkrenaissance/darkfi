@@ -17,6 +17,9 @@ pub use tcp::TcpTransport;
 mod tor;
 pub use tor::TorTransport;
 
+mod unix;
+pub use unix::UnixTransport;
+
 /// A helper function to convert SocketAddr to Url and add scheme
 pub(crate) fn socket_addr_to_url(addr: SocketAddr, scheme: &str) -> Result<Url> {
     let url = Url::parse(&format!("{}://{}", scheme, addr))?;

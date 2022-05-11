@@ -43,15 +43,15 @@ impl Acceptor {
                 let listener = transport.listen_on(accept_url.clone());
 
                 if let Err(err) = listener {
-                    error!("TCP Setup failed: {}", err);
-                    return Err(Error::BindFailed(accept_url.clone().to_string()))
+                    error!("Setup for {} failed: {}", accept_url, err);
+                    return Err(Error::BindFailed(accept_url.as_str().into()))
                 }
 
                 let listener = listener?.await;
 
                 if let Err(err) = listener {
-                    error!("TCP Bind listener failed: {}", err);
-                    return Err(Error::BindFailed(accept_url.to_string()))
+                    error!("Bind listener to {} failed: {}", accept_url, err);
+                    return Err(Error::BindFailed(accept_url.as_str().into()))
                 }
 
                 let listener = listener?;
@@ -103,15 +103,15 @@ impl Acceptor {
                 let listener = transport.clone().listen_on(accept_url.clone());
 
                 if let Err(err) = listener {
-                    error!("TOR Setup failed: {}", err);
-                    return Err(Error::BindFailed(accept_url.clone().to_string()))
+                    error!("Setup for {} failed: {}", accept_url, err);
+                    return Err(Error::BindFailed(accept_url.as_str().into()))
                 }
 
                 let listener = listener?.await;
 
                 if let Err(err) = listener {
-                    error!("TOR Bind listener failed: {}", err);
-                    return Err(Error::BindFailed(accept_url.to_string()))
+                    error!("Bind listener to {} failed: {}", accept_url, err);
+                    return Err(Error::BindFailed(accept_url.as_str().into()))
                 }
 
                 let listener = listener?;

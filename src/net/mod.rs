@@ -100,4 +100,5 @@ pub use session::{SESSION_ALL, SESSION_INBOUND, SESSION_MANUAL, SESSION_OUTBOUND
 pub use settings::{Settings, SettingsPtr};
 pub use transport::{
     TcpTransport, TorTransport, Transport, TransportListener, TransportName, TransportStream,
+    UnixTransport,
 };

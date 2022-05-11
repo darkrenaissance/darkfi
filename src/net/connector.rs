@@ -43,14 +43,14 @@ impl Connector {
                 let stream = transport.dial(connect_url.clone());
 
                 if let Err(err) = stream {
-                    error!("TCP Setup failed: {}", err);
+                    error!("Setup for {} failed: {}", connect_url, err);
                     return Err(Error::ConnectFailed)
                 }
 
                 let stream = stream?.await;
 
                 if let Err(err) = stream {
-                    error!("TCP Connection failed: {}", err);
+                    error!("Connection to {}  failed: {}", connect_url, err);
                     return Err(Error::ConnectFailed)
                 }
 
@@ -76,14 +76,14 @@ impl Connector {
                 let stream = transport.clone().dial(connect_url.clone());
 
                 if let Err(err) = stream {
-                    error!("TOR Setup failed: {}", err);
+                    error!("Setup for {} failed: {}", connect_url, err);
                     return Err(Error::ConnectFailed)
                 }
 
                 let stream = stream?.await;
 
                 if let Err(err) = stream {
-                    error!("TOR Connection failed: {}", err);
+                    error!("Connection to {}  failed: {}", connect_url, err);
                     return Err(Error::ConnectFailed)
                 }
 
