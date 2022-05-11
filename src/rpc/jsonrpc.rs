@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use url::Url;
 
 use crate::{
-    net::{TcpTransport, TorTransport, Transport, TransportName, TransportStream},
+    net::{TcpTransport, TorTransport, Transport, TransportName, TransportStream, UnixTransport},
     Error, Result,
 };
 
@@ -170,14 +170,14 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
             let stream = transport.dial(uri.clone());
 
             if let Err(err) = stream {
-                error!("RPC TCP Setup failed: {}", err);
+                error!("RPC Setup for {} failed: {}", uri, err);
                 return Err(Error::ConnectFailed)
             }
 
             let stream = stream?.await;
 
             if let Err(err) = stream {
-                error!("RPC TCP Connection failed: {}", err);
+                error!("RPC Connection to {}  failed: {}", uri, err);
                 return Err(Error::ConnectFailed)
             }
 
@@ -200,16 +200,17 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
             let stream = transport.clone().dial(uri.clone());
 
             if let Err(err) = stream {
-                error!("RPC TOR Setup failed: {}", err);
+                error!("RPC Setup for {} failed: {}", uri, err);
                 return Err(Error::ConnectFailed)
             }
 
             let stream = stream?.await;
 
             if let Err(err) = stream {
-                error!("RPC TOR Connection failed: {}", err);
+                error!("RPC Connection to {} failed: {}", uri, err);
                 return Err(Error::ConnectFailed)
             }
+
             match upgrade {
                 None => get_reply(&mut stream?, data_str).await,
                 Some(u) if u == "tls" => {
@@ -219,7 +220,18 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
                 Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
             }
         }
+        TransportName::Unix => {
+            let transport = UnixTransport::new();
 
+            let stream = transport.dial(uri.clone()).await;
+
+            if let Err(err) = stream {
+                error!("RPC Connection to {}  failed: {}", uri, err);
+                return Err(Error::ConnectFailed)
+            }
+
+            get_reply(&mut stream?, data_str).await
+        }
         _ => unimplemented!(),
     }
 }

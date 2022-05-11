@@ -12,6 +12,7 @@ use super::jsonrpc::{JsonRequest, JsonResult};
 use crate::{
     net::transport::{
         TcpTransport, TorTransport, Transport, TransportListener, TransportName, TransportStream,
+        UnixTransport,
     },
     Error, Result,
 };
@@ -91,26 +92,26 @@ pub async fn listen_and_serve(
             let listener = transport.listen_on(accept_url.clone());
 
             if let Err(err) = listener {
-                error!("TCP Setup failed: {}", err);
-                return Err(Error::BindFailed(accept_url.clone().to_string()))
+                error!("RPC Setup for {} failed: {}", accept_url, err);
+                return Err(Error::BindFailed(accept_url.as_str().into()))
             }
 
             let listener = listener?.await;
 
             if let Err(err) = listener {
-                error!("TCP Bind listener failed: {}", err);
-                return Err(Error::BindFailed(accept_url.to_string()))
+                error!("RPC Bind listener to {} failed: {}", accept_url, err);
+                return Err(Error::BindFailed(accept_url.as_str().into()))
             }
 
             let listener = listener?;
 
             match upgrade {
                 None => {
-                    info!("RPC TCP listening to: {}", accept_url);
+                    info!("RPC listening to: {}", accept_url);
                     run_accept_loop(Box::new(listener), rh).await?;
                 }
                 Some(u) if u == "tls" => {
-                    info!("RPC TCP+TLS listening to: {}", accept_url);
+                    info!("RPC listening to: {}", accept_url);
                     let tls_listener = transport.upgrade_listener(listener)?.await?;
                     run_accept_loop(Box::new(tls_listener), rh).await?;
                 }
@@ -151,15 +152,15 @@ pub async fn listen_and_serve(
             let listener = transport.clone().listen_on(accept_url.clone());
 
             if let Err(err) = listener {
-                error!("TOR Setup failed: {}", err);
-                return Err(Error::BindFailed(accept_url.clone().to_string()))
+                error!("RPC Setup for {} failed: {}", accept_url, err);
+                return Err(Error::BindFailed(accept_url.as_str().into()))
             }
 
             let listener = listener?.await;
 
             if let Err(err) = listener {
-                error!("TOR Bind listener failed: {}", err);
-                return Err(Error::BindFailed(accept_url.to_string()))
+                error!("RPC Bind listener to {} failed: {}", accept_url, err);
+                return Err(Error::BindFailed(accept_url.as_str().into()))
             }
 
             let listener = listener?;
@@ -167,10 +168,10 @@ pub async fn listen_and_serve(
             match upgrade {
                 None => {
                     run_accept_loop(Box::new(listener), rh).await?;
-                    info!("RPC TOR listening to: {}", accept_url);
+                    info!("RPC listening to: {}", accept_url);
                 }
                 Some(u) if u == "tls" => {
-                    info!("RPC TOR+TLS listening to: {}", accept_url);
+                    info!("RPC listening to: {}", accept_url);
                     let tls_listener = transport.upgrade_listener(listener)?.await?;
                     run_accept_loop(Box::new(tls_listener), rh).await?;
                 }
@@ -178,6 +179,18 @@ pub async fn listen_and_serve(
             }
         }
 
+        TransportName::Unix => {
+            let transport = UnixTransport::new();
+
+            let listener = transport.listen(accept_url.clone()).await;
+
+            if let Err(err) = listener {
+                error!("RPC Bind listener to {} failed: {}", accept_url, err);
+                return Err(Error::BindFailed(accept_url.as_str().into()))
+            }
+
+            run_accept_loop(Box::new(listener?), rh).await?;
+        }
         _ => unimplemented!(),
     }
 
