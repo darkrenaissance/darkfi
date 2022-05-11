@@ -20,7 +20,7 @@ use log::debug;
 #[derive(Debug)]
 pub struct View {
     pub nodes: NodeInfoView,
-    pub msg_log: FxHashMap<String, Vec<(String, String)>>,
+    pub msg_log: FxHashMap<String, Vec<(u64, String, String)>>,
     pub active_ids: IdListView,
     pub selectables: FxHashMap<String, SelectableObject>,
 }
@@ -28,7 +28,7 @@ pub struct View {
 impl View {
     pub fn new(
         nodes: NodeInfoView,
-        msg_log: FxHashMap<String, Vec<(String, String)>>,
+        msg_log: FxHashMap<String, Vec<(u64, String, String)>>,
         active_ids: IdListView,
         selectables: FxHashMap<String, SelectableObject>,
     ) -> View {
@@ -38,7 +38,7 @@ impl View {
     pub fn update(
         &mut self,
         nodes: FxHashMap<String, NodeInfo>,
-        msg_log: FxHashMap<String, Vec<(String, String)>>,
+        msg_log: FxHashMap<String, Vec<(u64, String, String)>>,
         selectables: FxHashMap<String, SelectableObject>,
     ) {
         self.update_nodes(nodes);
@@ -73,7 +73,7 @@ impl View {
         }
     }
 
-    fn update_msg_log(&mut self, msg_log: FxHashMap<String, Vec<(String, String)>>) {
+    fn update_msg_log(&mut self, msg_log: FxHashMap<String, Vec<(u64, String, String)>>) {
         for (id, msg) in msg_log {
             self.msg_log.insert(id, msg);
         }
@@ -207,7 +207,7 @@ impl View {
                     let log = self.msg_log.get(&connect.id);
                     match log {
                         Some(values) => {
-                            for (k, v) in values {
+                            for (t, k, v) in values {
                                 lines.push(Spans::from(match k.as_str() {
                                     "send" => Span::styled(format!("S: {}", v), style),
                                     "recv" => Span::styled(format!("R: {}", v), style),
