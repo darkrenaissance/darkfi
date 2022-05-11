@@ -1,5 +1,4 @@
 use async_std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures::{
     io::{ReadHalf, WriteHalf},
@@ -64,7 +63,7 @@ pub struct Channel {
     message_subsystem: MessageSubsystem,
     stop_subscriber: SubscriberPtr<Error>,
     receive_task: StoppableTaskPtr,
-    stopped: AtomicBool,
+    stopped: Mutex<bool>,
     info: Mutex<ChannelInfo>,
 }
 
@@ -87,7 +86,7 @@ impl Channel {
             message_subsystem,
             stop_subscriber: Subscriber::new(),
             receive_task: StoppableTask::new(),
-            stopped: AtomicBool::new(false),
+            stopped: Mutex::new(false),
             info: Mutex::new(ChannelInfo::new()),
         })
     }
@@ -116,13 +115,15 @@ impl Channel {
     /// the channel has been closed.
     pub async fn stop(&self) {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
-        assert!(!self.stopped.load(Ordering::Relaxed));
-        // Changes memory ordering to relaxed. We don't need strict thread locking here.
-        self.stopped.store(false, Ordering::Relaxed);
-        self.stop_subscriber.notify(Error::ChannelStopped).await;
-        self.receive_task.stop().await;
-        self.message_subsystem.trigger_error(Error::ChannelStopped).await;
-        debug!(target: "net", "Channel::stop() [END, address={}]", self.address());
+        let mut stopped = self.stopped.lock().await;
+        if !*stopped {
+            *stopped = true;
+            self.stop_subscriber.notify(Error::ChannelStopped).await;
+            self.receive_task.stop().await;
+            self.message_subsystem.trigger_error(Error::ChannelStopped).await;
+            debug!(target: "net", "Channel::stop() [END, address={}]", self.address());
+        }
+        drop(stopped);
     }
 
     /// Creates a subscription to a stopped signal.
@@ -150,8 +151,13 @@ impl Channel {
          M::name(),
          self.address()
         );
-        if self.stopped.load(Ordering::Relaxed) {
-            return Err(Error::ChannelStopped)
+
+        // TODO can we use RwLock here instead of Mutex
+        {
+            let stopped = *self.stopped.lock().await;
+            if stopped {
+                return Err(Error::ChannelStopped)
+            }
         }
 
         // Catch failure and stop channel, return a net error
