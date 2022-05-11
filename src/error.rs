@@ -300,6 +300,9 @@ pub enum Error {
     #[error("Unsupported OS")]
     UnsupportedOS,
 
+    #[error("System clock went backwards")]
+    BackwardsTime(std::time::SystemTimeError),
+
     // ==============================================
     // Wrappers for other error types in this library
     // ==============================================
@@ -394,6 +397,12 @@ impl From<async_std::future::TimeoutError> for Error {
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         Self::Io(err.kind())
+    }
+}
+
+impl From<std::time::SystemTimeError> for Error {
+    fn from(err: std::time::SystemTimeError) -> Self {
+        Self::BackwardsTime(err)
     }
 }
 

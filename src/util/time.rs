@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use async_std::{
     io::{ReadExt, WriteExt},
     net::TcpStream,
@@ -157,4 +159,8 @@ pub fn timestamp_to_date(timestamp: i64, dt: &str) -> String {
         }
         _ => "".to_string(),
     }
+}
+
+pub fn unix_timestamp() -> Result<u64> {
+    Ok(SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs())
 }
