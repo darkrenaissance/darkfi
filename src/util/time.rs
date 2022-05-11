@@ -14,7 +14,15 @@ use crate::{
 
 /// Wrapper struct to represent [`chrono`] UTC timestamps.
 #[derive(
-    Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, PartialOrd,
+    Clone,
+    Copy,
+    Debug,
+    Serialize,
+    Deserialize,
+    SerialEncodable,
+    SerialDecodable,
+    PartialEq,
+    PartialOrd,
 )]
 pub struct Timestamp(pub i64);
 
