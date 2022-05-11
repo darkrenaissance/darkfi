@@ -24,7 +24,7 @@ use util::{desc_in_editor, CONFIG_FILE, CONFIG_FILE_CONTENTS};
 use view::{comments_as_string, print_list_of_task, print_task_info};
 
 async fn start(mut options: cli::CliTau) -> Result<()> {
-    let rpc_addr = &format!("tcp://{}", &options.rpc_listen.clone());
+    let rpc_addr = &options.rpc_listen.clone();
 
     let states: Vec<String> = vec!["stop".into(), "open".into(), "pause".into()];
 
