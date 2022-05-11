@@ -114,31 +114,29 @@ have already generated or got a copy from a peer place it in the same directory
 
 ### Example  
 
-```shell
-$ # add new task  
-$ tau add "new title"   
-$ tau add "new title" project:blockchain desc:"new description" rank:3 assign:dark
-$
-$ # lists tasks
-$ tau  		   		 
-$ tau open 			 # open tasks
-$ tau pause 		 # paused tasks
-$ tau 0522 		 	 # created at May 2022
-$ tau project:blockchain assign:dark
-$ tau rank:gt:n  # lists all tasks that have rank greater than n
-$ tau rank:ls:n  # lists all tasks that have rank lesser than n
-$
-$ # update task 
-$ tau update 3 project:network  rank:20
-$
-$ # state 
-$ tau state 3  # get state
-$ tau state 3 pause  # set the state to pause 
-$
-$ # comments 
-$ tau comments 1  # list comments
-$ tau comments 3 "new comment"  # add new comment 
-```
+	$ # add new task  
+	$ tau add "new title"   
+	$ tau add "new title" project:blockchain desc:"new description" rank:3 assign:dark
+	$
+	$ # lists tasks
+	$ tau  		   		 
+	$ tau open 			 # open tasks
+	$ tau pause 		 # paused tasks
+	$ tau 0522 		 	 # created at May 2022
+	$ tau project:blockchain assign:dark
+	$ tau rank:gt:n  # lists all tasks that have rank greater than n
+	$ tau rank:ls:n  # lists all tasks that have rank lesser than n
+	$
+	$ # update task 
+	$ tau update 3 project:network  rank:20
+	$
+	$ # state 
+	$ tau state 3  # get state
+	$ tau state 3 pause  # set the state to pause 
+	$
+	$ # comments 
+	$ tau comments 1  # list comments
+	$ tau comments 3 "new comment"  # add new comment 
 
 
 
