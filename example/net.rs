@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use async_executor::Executor;
 use clap::Parser;
@@ -49,14 +49,14 @@ impl ProgramOptions {
             None
         };
 
-        let mut seed_addrs: Vec<SocketAddr> = vec![];
+        let mut seed_addrs: Vec<url::Url> = vec![];
         if let Some(seeds) = programcli.seeds {
             for seed in seeds {
                 seed_addrs.push(seed.parse()?);
             }
         }
 
-        let mut manual_connects: Vec<SocketAddr> = vec![];
+        let mut manual_connects: Vec<url::Url> = vec![];
         if let Some(connections) = programcli.connect {
             for connect in connections {
                 manual_connects.push(connect.parse()?);
@@ -71,7 +71,7 @@ impl ProgramOptions {
 
         Ok(ProgramOptions {
             network_settings: net::Settings {
-                inbound: accept_addr,
+                inbound: accept_addr.clone(),
                 outbound_connections: connection_slots,
                 external_addr: accept_addr,
                 peers: manual_connects,

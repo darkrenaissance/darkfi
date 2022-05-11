@@ -8,7 +8,7 @@ use async_std::{
 };
 use url::Url;
 
-use darkfi::net3::transport::{TcpTransport, TorTransport, Transport};
+use darkfi::net::transport::{TcpTransport, TorTransport, Transport};
 
 #[async_std::test]
 async fn tcp_transport() {
