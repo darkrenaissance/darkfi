@@ -4,6 +4,7 @@ use async_std::{
 };
 use chrono::{NaiveDateTime, Utc};
 use log::debug;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
@@ -12,7 +13,9 @@ use crate::{
 };
 
 /// Wrapper struct to represent [`chrono`] UTC timestamps.
-#[derive(Debug, Copy, Clone, PartialEq, SerialDecodable, SerialEncodable)]
+#[derive(
+    Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, PartialOrd,
+)]
 pub struct Timestamp(pub i64);
 
 impl Timestamp {
@@ -32,6 +35,13 @@ impl Timestamp {
     /// Increment a 'Timestamp'.
     pub fn add(&mut self, inc: i64) {
         self.0 += inc;
+    }
+}
+
+impl std::fmt::Display for Timestamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let date = timestamp_to_date(self.0, "datetime");
+        write!(f, "{}", date)
     }
 }
 
@@ -122,5 +132,21 @@ async fn clock_check() -> Result<()> {
     match check {
         true => Ok(()),
         false => Err(Error::InvalidClock),
+    }
+}
+
+pub fn timestamp_to_date(timestamp: i64, dt: &str) -> String {
+    if timestamp <= 0 {
+        return "".to_string()
+    }
+
+    match dt {
+        "date" => {
+            NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
+        }
+        "datetime" => {
+            NaiveDateTime::from_timestamp(timestamp, 0).format("%H:%M %A %-d %B").to_string()
+        }
+        _ => "".to_string(),
     }
 }

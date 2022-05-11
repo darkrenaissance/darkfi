@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::util::timestamp_to_date;
+use darkfi::util::Timestamp;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TaskInfo {
@@ -49,15 +49,5 @@ pub struct Comment {
 impl std::fmt::Display for Comment {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{} author: {}, content: {} ", self.timestamp, self.author, self.content)
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Timestamp(pub i64);
-
-impl std::fmt::Display for Timestamp {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let date = timestamp_to_date(self.0, "datetime");
-        write!(f, "{}", date)
     }
 }

@@ -11,6 +11,7 @@ use darkfi::{
         jsonrpc::{error as jsonerr, ErrorCode, JsonRequest, JsonResult},
         rpcserver::RequestHandler,
     },
+    util::Timestamp,
     Error,
 };
 
@@ -18,7 +19,6 @@ use crate::{
     error::{to_json_result, TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
-    util::Timestamp,
 };
 
 pub struct JsonRpcInterface {

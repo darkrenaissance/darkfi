@@ -6,12 +6,16 @@ use std::{
 use log::debug;
 use serde::{Deserialize, Serialize};
 
+use darkfi::util::{
+    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    Timestamp,
+};
+
 use crate::{
     error::{TaudError, TaudResult},
     month_tasks::MonthTasks,
-    util::{find_free_id, get_current_time, load, random_ref_id, save, Timestamp},
+    util::{find_free_id, load, random_ref_id, save},
 };
-use darkfi::util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt};
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 struct TaskEvent {
@@ -21,7 +25,7 @@ struct TaskEvent {
 
 impl TaskEvent {
     fn new(action: String) -> Self {
-        Self { action, timestamp: get_current_time() }
+        Self { action, timestamp: Timestamp::current_time() }
     }
 }
 
@@ -34,7 +38,11 @@ pub struct Comment {
 
 impl Comment {
     pub fn new(content: &str, author: &str) -> Self {
-        Self { content: content.into(), author: author.into(), timestamp: get_current_time() }
+        Self {
+            content: content.into(),
+            author: author.into(),
+            timestamp: Timestamp::current_time(),
+        }
     }
 }
 
@@ -75,7 +83,7 @@ impl TaskInfo {
         // generate ref_id
         let ref_id = random_ref_id();
 
-        let created_at: Timestamp = get_current_time();
+        let created_at = Timestamp::current_time();
 
         let task_ids: Vec<u32> =
             MonthTasks::load_current_open_tasks(dataset_path)?.into_iter().map(|t| t.id).collect();
@@ -83,7 +91,7 @@ impl TaskInfo {
         let id: u32 = find_free_id(&task_ids);
 
         if let Some(d) = &due {
-            if *d < get_current_time() {
+            if *d < Timestamp::current_time() {
                 return Err(TaudError::InvalidDueTime)
             }
         }

@@ -5,7 +5,7 @@ use std::{
     process::Command,
 };
 
-use chrono::{Datelike, Local, NaiveDate, NaiveDateTime};
+use chrono::{Datelike, Local, NaiveDate};
 use log::error;
 use rand::distributions::{Alphanumeric, DistString};
 
@@ -76,20 +76,4 @@ pub fn desc_in_editor() -> Result<Option<String>> {
     description.pop();
 
     Ok(Some(description))
-}
-
-pub fn timestamp_to_date(timestamp: i64, dt: &str) -> String {
-    if timestamp <= 0 {
-        return "".to_string()
-    }
-
-    match dt {
-        "date" => {
-            NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
-        }
-        "datetime" => {
-            NaiveDateTime::from_timestamp(timestamp, 0).format("%H:%M %A %-d %B").to_string()
-        }
-        _ => "".to_string(),
-    }
 }

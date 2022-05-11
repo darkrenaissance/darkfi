@@ -1,20 +1,12 @@
 use std::{fs::File, io::BufReader, path::Path};
 
-use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 
-use darkfi::{
-    util::serial::{SerialDecodable, SerialEncodable},
-    Result,
-};
+use darkfi::Result;
 
 pub fn random_ref_id() -> String {
     thread_rng().sample_iter(&Alphanumeric).take(30).map(char::from).collect()
-}
-
-pub fn get_current_time() -> Timestamp {
-    Timestamp(Utc::now().timestamp())
 }
 
 pub fn find_free_id(task_ids: &[u32]) -> u32 {
@@ -39,11 +31,6 @@ pub fn save<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     serde_json::to_writer_pretty(file, value)?;
     Ok(())
 }
-
-#[derive(
-    Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, PartialOrd,
-)]
-pub struct Timestamp(pub i64);
 
 #[cfg(test)]
 mod tests {

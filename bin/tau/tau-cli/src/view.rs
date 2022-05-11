@@ -1,11 +1,10 @@
 use prettytable::{cell, format, row, table, Cell, Row, Table};
 
-use darkfi::Result;
+use darkfi::{util::time::timestamp_to_date, Result};
 
 use super::{
     filter::apply_filter,
     primitives::{Comment, TaskEvent, TaskInfo},
-    util::timestamp_to_date,
 };
 
 pub fn print_list_of_task(tasks: &mut Vec<TaskInfo>, filters: Vec<String>) -> Result<()> {
@@ -122,7 +121,7 @@ pub fn events_as_string(events: Vec<TaskEvent>) -> String {
         events_str.push_str("State changed to ");
         events_str.push_str(&event.action.to_string());
         events_str.push_str(" at ");
-        events_str.push_str(&timestamp_to_date(event.timestamp.0, "datetime"));
+        events_str.push_str(&event.timestamp.to_string());
         events_str.push('\n');
     }
     events_str

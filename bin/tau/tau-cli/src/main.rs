@@ -71,8 +71,7 @@ async fn start(mut options: cli::CliTau) -> Result<()> {
             None => {
                 let task = jsonrpc::get_task_by_id(rpc_addr, id).await?;
                 let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
-                let default_event =
-                    TaskEvent { action: "open".to_string(), timestamp: primitives::Timestamp(0) };
+                let default_event = TaskEvent::default();
                 let state = &taskinfo.events.last().unwrap_or(&default_event).action;
                 println!("Task {}: {}", id, state);
             }

@@ -7,10 +7,12 @@ use chrono::{TimeZone, Utc};
 use log::debug;
 use serde::{Deserialize, Serialize};
 
+use darkfi::util::Timestamp;
+
 use crate::{
     error::{TaudError, TaudResult},
     task_info::TaskInfo,
-    util::{get_current_time, load, save, Timestamp},
+    util::{load, save},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -21,7 +23,7 @@ pub struct MonthTasks {
 
 impl MonthTasks {
     pub fn new(task_tks: &[String]) -> Self {
-        Self { created_at: get_current_time(), task_tks: task_tks.to_owned() }
+        Self { created_at: Timestamp::current_time(), task_tks: task_tks.to_owned() }
     }
 
     pub fn add(&mut self, ref_id: &str) {
@@ -180,7 +182,7 @@ mod tests {
 
         mt.save(&dataset_path)?;
 
-        let mt_load = MonthTasks::load_or_create(Some(&get_current_time()), &dataset_path)?;
+        let mt_load = MonthTasks::load_or_create(Some(&Timestamp::current_time()), &dataset_path)?;
 
         assert_eq!(mt, mt_load);
 
@@ -188,7 +190,7 @@ mod tests {
 
         mt.save(&dataset_path)?;
 
-        let mt_load = MonthTasks::load_or_create(Some(&get_current_time()), &dataset_path)?;
+        let mt_load = MonthTasks::load_or_create(Some(&Timestamp::current_time()), &dataset_path)?;
 
         assert_eq!(mt, mt_load);
 
@@ -200,7 +202,7 @@ mod tests {
 
         task.save(&dataset_path)?;
 
-        let mt_load = MonthTasks::load_or_create(Some(&get_current_time()), &dataset_path)?;
+        let mt_load = MonthTasks::load_or_create(Some(&Timestamp::current_time()), &dataset_path)?;
 
         assert!(mt_load.task_tks.contains(&task.ref_id));
 
