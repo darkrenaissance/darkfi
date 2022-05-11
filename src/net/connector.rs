@@ -68,7 +68,7 @@ impl Connector {
             TransportName::Tor(upgrade) => {
                 let socks5_url = Url::parse(
                     &env::var("DARKFI_TOR_SOCKS5_URL")
-                        .unwrap_or("socks5://127.0.0.1:9050".to_string()),
+                        .unwrap_or_else(|_| "socks5://127.0.0.1:9050".to_string()),
                 )?;
 
                 let transport = TorTransport::new(socks5_url, None)?;

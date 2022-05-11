@@ -187,12 +187,13 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
                     let mut stream = transport.upgrade_dialer(stream?)?.await?;
                     get_reply(&mut stream, data_str).await
                 }
-                Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
+                Some(u) => Err(Error::UnsupportedTransportUpgrade(u)),
             }
         }
         TransportName::Tor(upgrade) => {
             let socks5_url = Url::parse(
-                &env::var("DARKFI_TOR_SOCKS5_URL").unwrap_or("socks5://127.0.0.1:9050".to_string()),
+                &env::var("DARKFI_TOR_SOCKS5_URL")
+                    .unwrap_or_else(|_| "socks5://127.0.0.1:9050".to_string()),
             )?;
 
             let transport = TorTransport::new(socks5_url, None)?;
@@ -217,7 +218,7 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
                     let mut stream = transport.upgrade_dialer(stream?)?.await?;
                     get_reply(&mut stream, data_str).await
                 }
-                Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
+                Some(u) => Err(Error::UnsupportedTransportUpgrade(u)),
             }
         }
         TransportName::Unix => {

@@ -78,19 +78,19 @@ pub struct SettingsOpt {
     pub channel_heartbeat_seconds: Option<u32>,
 }
 
-impl Into<Settings> for SettingsOpt {
-    fn into(self) -> Settings {
-        Settings {
-            inbound: self.inbound,
-            outbound_connections: self.outbound_connections.unwrap_or(0),
-            manual_attempt_limit: self.manual_attempt_limit.unwrap_or(0),
-            seed_query_timeout_seconds: self.seed_query_timeout_seconds.unwrap_or(8),
-            connect_timeout_seconds: self.connect_timeout_seconds.unwrap_or(10),
-            channel_handshake_seconds: self.channel_handshake_seconds.unwrap_or(4),
-            channel_heartbeat_seconds: self.channel_heartbeat_seconds.unwrap_or(10),
-            external_addr: self.external_addr,
-            peers: self.peers,
-            seeds: self.seeds,
+impl From<SettingsOpt> for Settings {
+    fn from(settings_opt: SettingsOpt) -> Self {
+        Self {
+            inbound: settings_opt.inbound,
+            outbound_connections: settings_opt.outbound_connections.unwrap_or(0),
+            manual_attempt_limit: settings_opt.manual_attempt_limit.unwrap_or(0),
+            seed_query_timeout_seconds: settings_opt.seed_query_timeout_seconds.unwrap_or(8),
+            connect_timeout_seconds: settings_opt.connect_timeout_seconds.unwrap_or(10),
+            channel_handshake_seconds: settings_opt.channel_handshake_seconds.unwrap_or(4),
+            channel_heartbeat_seconds: settings_opt.channel_heartbeat_seconds.unwrap_or(10),
+            external_addr: settings_opt.external_addr,
+            peers: settings_opt.peers,
+            seeds: settings_opt.seeds,
         }
     }
 }

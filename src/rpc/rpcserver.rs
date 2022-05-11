@@ -120,11 +120,13 @@ pub async fn listen_and_serve(
         }
         TransportName::Tor(upgrade) => {
             let socks5_url = Url::parse(
-                &env::var("DARKFI_TOR_SOCKS5_URL").unwrap_or("socks5://127.0.0.1:9050".to_string()),
+                &env::var("DARKFI_TOR_SOCKS5_URL")
+                    .unwrap_or_else(|_| "socks5://127.0.0.1:9050".to_string()),
             )?;
 
             let torc_url = Url::parse(
-                &env::var("DARKFI_TOR_CONTROL_URL").unwrap_or("tcp://127.0.0.1:9051".to_string()),
+                &env::var("DARKFI_TOR_CONTROL_URL")
+                    .unwrap_or_else(|_| "tcp://127.0.0.1:9051".to_string()),
             )?;
 
             let auth_cookie = env::var("DARKFI_TOR_COOKIE");
