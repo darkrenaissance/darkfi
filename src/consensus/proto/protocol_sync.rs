@@ -96,6 +96,7 @@ impl ProtocolSync {
         }
 
         debug!("handle_receive_block() [START]");
+        let exclude_list = vec![self.channel.address().clone()];
         loop {
             let info = match self.block_sub.receive().await {
                 Ok(v) => v,
@@ -165,7 +166,7 @@ impl ProtocolSync {
                     continue
                 };
 
-                if let Err(e) = self.p2p.broadcast(info_copy).await {
+                if let Err(e) = self.p2p.broadcast_with_exclude(info_copy, &exclude_list).await {
                     error!("handle_receive_block(): p2p broadcast fail: {}", e);
                     *self.pending.lock().await = false;
                     continue

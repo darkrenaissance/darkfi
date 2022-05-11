@@ -1,7 +1,9 @@
-use async_executor::Executor;
 use async_std::sync::Arc;
+
+use async_executor::Executor;
 use async_trait::async_trait;
 use log::{debug, error};
+use url::Url;
 
 use crate::{
     consensus::{ValidatorStatePtr, Vote},
@@ -18,6 +20,7 @@ pub struct ProtocolVote {
     state: ValidatorStatePtr,
     sync_p2p: P2pPtr,
     consensus_p2p: P2pPtr,
+    channel_address: Url,
 }
 
 impl ProtocolVote {
@@ -32,6 +35,7 @@ impl ProtocolVote {
         msg_subsystem.add_dispatch::<Vote>().await;
 
         let vote_sub = channel.subscribe_msg::<Vote>().await?;
+        let channel_address = channel.address();
 
         Ok(Arc::new(Self {
             vote_sub,
@@ -39,11 +43,13 @@ impl ProtocolVote {
             state,
             sync_p2p,
             consensus_p2p,
+            channel_address,
         }))
     }
 
     async fn handle_receive_vote(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolVote::handle_receive_vote() [START]");
+        let exclude_list = vec![self.channel_address.clone()];
         loop {
             let vote = match self.vote_sub.receive().await {
                 Ok(v) => v,
@@ -67,7 +73,9 @@ impl ProtocolVote {
                 };
 
             if voted {
-                if let Err(e) = self.consensus_p2p.broadcast(vote_copy).await {
+                if let Err(e) =
+                    self.consensus_p2p.broadcast_with_exclude(vote_copy, &exclude_list).await
+                {
                     error!("handle_receive_vote(): consensus p2p broadcast fail: {}", e);
                     continue
                 };

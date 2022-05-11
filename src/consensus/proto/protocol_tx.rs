@@ -1,7 +1,9 @@
-use async_executor::Executor;
 use async_std::sync::Arc;
+
+use async_executor::Executor;
 use async_trait::async_trait;
 use log::{debug, error, warn};
+use url::Url;
 
 use crate::{
     consensus::{ValidatorState, ValidatorStatePtr},
@@ -21,6 +23,7 @@ pub struct ProtocolTx {
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
     p2p: P2pPtr,
+    channel_address: Url,
 }
 
 impl net::Message for Transaction {
@@ -40,17 +43,20 @@ impl ProtocolTx {
         msg_subsystem.add_dispatch::<Transaction>().await;
 
         let tx_sub = channel.subscribe_msg::<Transaction>().await?;
+        let channel_address = channel.address();
 
         Ok(Arc::new(Self {
             tx_sub,
             jobsman: ProtocolJobsManager::new("TxProtocol", channel),
             state,
             p2p,
+            channel_address,
         }))
     }
 
     async fn handle_receive_tx(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolTx::handle_receive_tx() [START]");
+        let exclude_list = vec![self.channel_address.clone()];
         loop {
             let tx = match self.tx_sub.receive().await {
                 Ok(v) => v,
@@ -90,7 +96,7 @@ impl ProtocolTx {
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.
             if self.state.write().await.append_tx(tx_copy.clone()) {
-                if let Err(e) = self.p2p.broadcast(tx_copy).await {
+                if let Err(e) = self.p2p.broadcast_with_exclude(tx_copy, &exclude_list).await {
                     error!("handle_receive_tx(): p2p broadcast fail: {}", e);
                     continue
                 };

@@ -1,7 +1,9 @@
-use async_executor::Executor;
 use async_std::sync::Arc;
+
+use async_executor::Executor;
 use async_trait::async_trait;
 use log::{debug, error, warn};
+use url::Url;
 
 use crate::{
     consensus::{BlockProposal, ValidatorState, ValidatorStatePtr},
@@ -18,6 +20,7 @@ pub struct ProtocolProposal {
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
     p2p: P2pPtr,
+    channel_address: Url,
 }
 
 impl ProtocolProposal {
@@ -32,16 +35,21 @@ impl ProtocolProposal {
 
         let proposal_sub = channel.subscribe_msg::<BlockProposal>().await?;
 
+        let channel_address = channel.address();
+
         Ok(Arc::new(Self {
             proposal_sub,
             jobsman: ProtocolJobsManager::new("ProposalProtocol", channel),
             state,
             p2p,
+            channel_address,
         }))
     }
 
     async fn handle_receive_proposal(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolProposal::handle_receive_proposal() [START]");
+
+        let exclude_list = vec![self.channel_address.clone()];
         loop {
             let proposal = match self.proposal_sub.receive().await {
                 Ok(v) => v,
@@ -87,7 +95,7 @@ impl ProtocolProposal {
             }
 
             // Broadcast block to rest of nodes
-            if let Err(e) = self.p2p.broadcast(proposal_copy).await {
+            if let Err(e) = self.p2p.broadcast_with_exclude(proposal_copy, &exclude_list).await {
                 error!("handle_receive_proposal(): proposal broadcast fail: {}", e);
             };
 
