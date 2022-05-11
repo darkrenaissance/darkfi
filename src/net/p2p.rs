@@ -185,6 +185,22 @@ impl P2p {
         Ok(())
     }
 
+    /// Broadcasts a message across all channels.
+    /// exclude channels provided in exclude_list
+    pub async fn broadcast_with_exclude<M: Message + Clone>(
+        &self,
+        message: M,
+        exclude_list: &[Url],
+    ) -> Result<()> {
+        for channel in self.channels.lock().await.values() {
+            if exclude_list.contains(&channel.address()) {
+                continue
+            }
+            channel.send(message.clone()).await?;
+        }
+        Ok(())
+    }
+
     /// Add channel address to the list of connected channels.
     pub async fn store(&self, channel: ChannelPtr) {
         self.channels.lock().await.insert(channel.address(), channel.clone());
