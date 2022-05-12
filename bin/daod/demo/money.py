@@ -1,7 +1,8 @@
 from classnamespace import ClassNamespace
 from crypto import ff_hash, pedersen_encrypt, sign, verify
 
-class TransactionBuilder:
+# Tx representing send_payment() contract call
+class SendPaymentTxBuilder:
 
     def __init__(self, ec):
         self.clear_inputs = []
@@ -43,7 +44,7 @@ class TransactionBuilder:
         return total % self.ec.order
 
     def build(self):
-        tx = Transaction(self.ec)
+        tx = SendPaymentTx(self.ec)
         token_blind = self.ec.random_scalar()
 
         for input in self.clear_inputs:
@@ -124,7 +125,8 @@ class TransactionBuilder:
 
         return tx
 
-class Transaction:
+# Transaction representing Money::send_payment() function call
+class SendPaymentTx:
 
     def __init__(self, ec):
         self.clear_inputs = []

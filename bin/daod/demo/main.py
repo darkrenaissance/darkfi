@@ -1,9 +1,9 @@
 import sys
 from classnamespace import ClassNamespace
-from crypto import pallas_curve, ff_hash
-from tx import TransactionBuilder
 
-class State:
+import crypto, money
+
+class MoneyState:
 
     def __init__(self):
         self.all_coins = set()
@@ -24,7 +24,7 @@ class State:
             # Try to decrypt notes here
             print(f"Received {enc_note.value} DRK")
 
-def state_transition(state, tx):
+def money_state_transition(state, tx):
     for input in tx.clear_inputs:
         pk = input.signature_public
         # Check pk is correct
@@ -96,7 +96,7 @@ class DaoMintProof:
     def get_revealed(self):
         revealed = ClassNamespace()
 
-        revealed.bulla = ff_hash(
+        revealed.bulla = crypto.ff_hash(
             self.ec.p,
             self.proposal_auth_public_key[0],
             self.proposal_auth_public_key[1],
@@ -159,56 +159,69 @@ def dao_exec_state_transition(state, tx):
     return update
 
 def main(argv):
-    ec = pallas_curve()
+    ec = crypto.pallas_curve()
 
-    secret = ec.random_scalar()
-    public = ec.multiply(secret, ec.G)
+    money_state = MoneyState()
+    dao_state = DaoState()
 
-    initial_supply = 21000
-    token_id = 110
+    # Money parameters
+    money_initial_supply = 21000
+    money_token_id = 110
 
-    signature_secret = ec.random_scalar()
-
-    # Setup the DAO
+    # DAO parameters
     proposal_auth_secret = ec.random_scalar()
     proposal_auth_public = ec.multiply(proposal_auth_secret, ec.G)
     threshold = 110
     quorum = 110
+
+    ################################################
+    # Create the DAO bulla
+    ################################################
+    # Setup the DAO
+    dao_shared_secret = ec.random_scalar()
+    dao_public_key = ec.multiply(dao_shared_secret, ec.G)
+
     builder = DaoBuilder(proposal_auth_public, threshold, quorum, ec)
-    dao_tx = builder.build()
+    tx = builder.build()
 
     # Each deployment of a contract has a unique state
     # associated with it.
-    dao_state = DaoState()
-    if (update := dao_state_transition(dao_state, dao_tx)) is None:
+    if (update := dao_state_transition(dao_state, tx)) is None:
         return -1
     dao_state.apply(update)
 
-    builder = TransactionBuilder(ec)
-    builder.add_clear_input(initial_supply, token_id, signature_secret)
+    dao_bulla = tx.revealed.bulla
+
+    ################################################
+    # Mint the initial supply of treasury token
+    # and send it all to the DAO directly
+    ################################################
+
+    # Only used for this tx. Discarded after
+    signature_secret = ec.random_scalar()
+
+    builder = money.SendPaymentTxBuilder(ec)
+    builder.add_clear_input(money_initial_supply, money_token_id,
+                            signature_secret)
     # Address of deployed contract in our example is 0xdao_ruleset
     spend_hook = b"0xdao_ruleset"
     # This can be a simple hash of the items passed into the ZK proof
     # up to corresponding linked ZK proof to interpret however they need.
     # In out case, it's the bulla for the DAO
-    user_data = dao_tx.revealed.bulla
-    builder.add_output(initial_supply, token_id, public, spend_hook, user_data)
+    user_data = dao_bulla
+    builder.add_output(money_initial_supply, money_token_id, dao_public_key,
+                       spend_hook, user_data)
     tx = builder.build()
 
-    state = State()
-    if (update := state_transition(state, tx)) is None:
+    # This state_transition function is the ruleset for anon payments
+    if (update := money_state_transition(money_state, tx)) is None:
         return -1
-    state.apply(update)
+    money_state.apply(update)
 
-    # Now the spend_hook field specifies the function DaoExec
-    # so the tx above must also be combined with a DaoExec tx
-    for input in tx.inputs:
-        assert input.revealed.spend_hook == [b"0xdao_ruleset"]
-    builder = DaoExecBuilder()
-    dao_tx = builder.build()
-    if (update := dao_exec_state_transition(dao_state, dao_tx)) is None:
-        return -1
-    dao_state.apply_exec(update)
+    ################################################
+    # The treasury token is minted
+    # Mint the initial supply of governance token
+    ################################################
 
     # State
     # functions that can be called on state with params
@@ -235,10 +248,10 @@ def main(argv):
 
     assert len(tx.outputs) > 0
     note = tx.outputs[0].enc_note
-    coin = ff_hash(
+    coin = crypto.ff_hash(
         ec.p,
-        public[0],
-        public[1],
+        dao_public_key[0],
+        dao_public_key[1],
         note.value,
         note.token_id,
         note.serial,
@@ -249,46 +262,73 @@ def main(argv):
     assert coin == tx.outputs[0].mint_proof.get_revealed().coin
     all_coins = set([coin])
 
+    ################################################
+    # Now the coin is minted, and all supply was sent to the DAO
+    # In order to make a valid vote, first the proposer must
+    # meet a criteria for a minimum number of gov tokens
+    ################################################
+
     # Used to export user_data from this coin so it can be accessed
     # by 0xdao_ruleset
     user_data_blind = ec.random_base()
 
-    builder = TransactionBuilder(ec)
-    builder.add_input(all_coins, secret, note, user_data_blind)
+    builder = money.SendPaymentTxBuilder(ec)
+    builder.add_input(all_coins, dao_shared_secret, note, user_data_blind)
 
-    secret2 = ec.random_scalar()
-    public2 = ec.multiply(secret, ec.G)
+    user_secret = ec.random_scalar()
+    user_public = ec.multiply(user_secret, ec.G)
 
-    builder.add_output(1000, token_id, public2, spend_hook=[b"0x0000"],
-                       user_data=[])
+    builder.add_output(1000, money_token_id, user_public,
+                       spend_hook=[b"0x0000"], user_data=[])
     # Change
-    builder.add_output(note.value - 1000, token_id, public, spend_hook, user_data)
+    builder.add_output(note.value - 1000, money_token_id, dao_public_key,
+                       spend_hook, user_data)
 
     tx = builder.build()
 
-    if (update := state_transition(state, tx)) is None:
+    if (update := money_state_transition(money_state, tx)) is None:
         return -1
-    state.apply(update)
+    money_state.apply(update)
 
+    # Now the spend_hook field specifies the function DaoExec
+    # so the tx above must also be combined with a DaoExec tx
     assert len(tx.inputs) == 1
     # At least one input has this field value which means the 0xdao_ruleset
     # is invoked.
     input = tx.inputs[0]
     assert input.revealed.spend_hook == b"0xdao_ruleset"
-    assert input.revealed.enc_user_data == ff_hash(ec.p, user_data,
-                                                   user_data_blind)
-    bulla = ff_hash(
+    assert (input.revealed.enc_user_data ==
+        crypto.ff_hash(
+            ec.p,
+            user_data,
+            user_data_blind
+        ))
+    # Verifier cannot see DAO bulla
+    # They see the enc_user_data which is also in the DAO exec contract
+    assert user_data == crypto.ff_hash(
         ec.p,
         proposal_auth_public[0],
         proposal_auth_public[1],
         threshold,
         quorum
-    )
-    assert user_data == bulla
+    ) # DAO bulla
+
+    # proposer proof
 
     # Now enforce DAO rules:
-    # 1. valid signed proposal
-    # 2. positive number of votes
+    # 1. proposals must be submitted by minimum amount
+    #       - need protection so can't collude? must be a single signer??
+    # 2. number of votes > quorum
+    #       - just positive votes or all votes?
+    # 3. outcome > approval_ratio
+    # 3. structure of outputs
+    #   output 0: value and address
+    #   output 1: change address
+    builder = DaoExecBuilder()
+    tx = builder.build()
+    if (update := dao_exec_state_transition(dao_state, tx)) is None:
+        return -1
+    dao_state.apply_exec(update)
 
     return 0
 
