@@ -9,6 +9,7 @@ use structopt_toml::StructOptToml;
 use url::Url;
 
 use darkfi::{
+    rpc::rpcclient::RpcClient,
     util::{
         cli::{log_config, spawn_config},
         path::get_config_path,
@@ -24,13 +25,14 @@ mod util;
 mod view;
 
 use cli::CliTauSubCommands;
-use jsonrpc::JsonRpcClient;
+use jsonrpc::Rpc;
 use primitives::{TaskEvent, TaskInfo};
 use util::{desc_in_editor, CONFIG_FILE, CONFIG_FILE_CONTENTS};
 use view::{comments_as_string, print_list_of_task, print_task_info};
 
 async fn start(mut options: cli::CliTau, executor: Arc<Executor<'_>>) -> Result<()> {
-    let rpc_client = JsonRpcClient::new(Url::parse(&options.rpc_listen)?, executor).await?;
+    let rpc_client =
+        Rpc { client: RpcClient::new(Url::parse(&options.rpc_listen)?, executor).await? };
 
     let states: Vec<String> = vec!["stop".into(), "open".into(), "pause".into()];
 
