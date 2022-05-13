@@ -3,7 +3,7 @@ use std::{collections::hash_map::Entry, fs::File, io, io::Read, path::PathBuf};
 
 use easy_parallel::Parallel;
 use fxhash::{FxHashMap, FxHashSet};
-use log::{debug, info};
+use log::info;
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
@@ -16,8 +16,8 @@ use tui::{
 use url::Url;
 
 use darkfi::{
-    error::{Error, Result},
-    rpc::{jsonrpc, jsonrpc::JsonResult},
+    error::Result,
+    rpc::{jsonrpc, rpcclient::RpcClient},
     util::{
         async_util,
         cli::{log_config, spawn_config, Config},
@@ -35,51 +35,28 @@ use dnetview::{
 };
 
 struct DnetView {
-    url: Url,
     name: String,
+    rpc_client: RpcClient,
 }
 
 impl DnetView {
-    fn new(url: Url, name: String) -> Self {
-        Self { url, name }
-    }
-
-    async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
-        let reply: JsonResult = match jsonrpc::send_request(&self.url, json!(r)).await {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
-
-        match reply {
-            JsonResult::Resp(r) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
-                Ok(r.result)
-            }
-
-            JsonResult::Err(e) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&e)?);
-                Err(Error::JsonRpcError(e.error.message.to_string()))
-            }
-
-            JsonResult::Notif(n) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&n)?);
-                Err(Error::JsonRpcError("Unexpected reply".to_string()))
-            }
-        }
+    async fn new(url: Url, name: String, executor: Arc<Executor<'_>>) -> Result<Self> {
+        let rpc_client = RpcClient::new(url, executor).await?;
+        Ok(Self { name, rpc_client })
     }
 
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
     async fn _ping(&self) -> Result<Value> {
         let req = jsonrpc::request(json!("ping"), json!([]));
-        Ok(self.request(req).await?)
+        Ok(self.rpc_client.request(req).await?)
     }
 
     //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
     async fn get_info(&self) -> Result<Value> {
         let req = jsonrpc::request(json!("get_info"), json!([]));
-        Ok(self.request(req).await?)
+        Ok(self.rpc_client.request(req).await?)
     }
 }
 
@@ -141,7 +118,8 @@ async fn poll_and_update_model(
     model: Arc<Model>,
 ) -> DnetViewResult<()> {
     for node in &config.nodes {
-        let client = DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone());
+        let client =
+            DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone(), ex.clone()).await?;
         ex.spawn(poll(client, model.clone())).detach();
     }
     Ok(())
