@@ -1,7 +1,7 @@
 use async_std::sync::Arc;
 
 use async_executor::Executor;
-use log::debug;
+use log::{debug, error};
 use serde_json::{json, Value};
 use url::Url;
 
@@ -27,17 +27,26 @@ impl RpcClient {
 
         self.sender.send(value).await?;
 
-        let reply: JsonResult = self.receiver.recv().await?;
+        let reply = self.receiver.recv().await;
 
-        match reply {
+        // if the connection is closed the receiver will get an error
+        // for waiting closed channel
+        if reply.is_err() {
+            error!("Unable to connect to the RPC server");
+            return Err(Error::OperationFailed)
+        }
+
+        match reply? {
             JsonResult::Resp(r) => {
                 // check if the ids match
                 let resp_id = r.id.as_u64();
+
                 if resp_id.is_none() {
                     let error = jsonrpc::error(ErrorCode::InvalidId, None, r.id);
                     self.stop_signal.send(()).await?;
                     return Err(Error::JsonRpcError(error.error.message.to_string()))
                 }
+
                 if resp_id.unwrap() != req_id {
                     let error = jsonrpc::error(
                         ErrorCode::InvalidId,
