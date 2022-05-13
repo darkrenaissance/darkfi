@@ -1,20 +1,16 @@
 use std::{process::exit, str::FromStr, time::Instant};
 
 use clap::{Parser, Subcommand};
-use log::{debug, error};
-use serde_json::{json, Value};
+use log::error;
+use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
 use darkfi::{
     cli_desc,
     crypto::address::Address,
-    rpc::{
-        jsonrpc,
-        jsonrpc::{JsonRequest, JsonResult},
-    },
+    rpc::{jsonrpc, rpcclient::RpcClient},
     util::{cli::log_config, NetworkName},
-    Error::JsonRpcError,
     Result,
 };
 
@@ -93,44 +89,19 @@ enum DrkSubcommand {
 }
 
 struct Drk {
-    pub rpc_endpoint: Url,
+    pub rpc_client: RpcClient,
 }
 
 impl Drk {
-    async fn request(&self, r: JsonRequest, endpoint: Option<Url>) -> Result<Value> {
-        debug!(target: "rpc", "--> {}", serde_json::to_string(&r)?);
-
-        let ep =
-            if endpoint.is_some() { endpoint.unwrap().clone() } else { self.rpc_endpoint.clone() };
-
-        let reply = match jsonrpc::send_request(&ep, json!(r)).await {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
-
-        match reply {
-            JsonResult::Resp(r) => {
-                debug!(target: "rpc", "<-- {}", serde_json::to_string(&r)?);
-                Ok(r.result)
-            }
-
-            JsonResult::Err(e) => {
-                debug!(target: "rpc", "<-- {}", serde_json::to_string(&e)?);
-                Err(JsonRpcError(e.error.message.to_string()))
-            }
-
-            JsonResult::Notif(n) => {
-                debug!(target: "rpc", "<-- {}", serde_json::to_string(&n)?);
-                Err(JsonRpcError("Unexpected reply".to_string()))
-            }
-        }
+    async fn close_connection(&self) -> Result<()> {
+        self.rpc_client.close().await
     }
 
     async fn ping(&self) -> Result<()> {
         let start = Instant::now();
 
         let req = jsonrpc::request(json!("ping"), json!([]));
-        let rep = match self.request(req, None).await {
+        let rep = match self.rpc_client.request(req).await {
             Ok(v) => v,
             Err(e) => {
                 error!("Got an error: {}", e);
@@ -149,7 +120,7 @@ impl Drk {
             address.unwrap()
         } else {
             let req = jsonrpc::request(json!("wallet.get_key"), json!([0_i64]));
-            let rep = match self.request(req, None).await {
+            let rep = match self.rpc_client.request(req).await {
                 Ok(v) => v,
                 Err(e) => {
                     error!("Error while fetching default key from wallet: {}", e);
@@ -162,7 +133,8 @@ impl Drk {
 
         println!("Requesting airdrop for {}", addr);
         let req = jsonrpc::request(json!("airdrop"), json!([json!(addr.to_string()), amount]));
-        let rep = match self.request(req, Some(endpoint)).await {
+        let rpc_client = RpcClient::new(endpoint).await?;
+        let rep = match rpc_client.request(req).await {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed requesting airdrop: {}", e);
@@ -170,13 +142,15 @@ impl Drk {
             }
         };
 
+        rpc_client.close().await?;
+
         println!("Success! Transaction ID: {}", rep);
         Ok(())
     }
 
     async fn wallet_keygen(&self) -> Result<()> {
         let req = jsonrpc::request(json!("wallet.keygen"), json!([]));
-        let rep = match self.request(req, None).await {
+        let rep = match self.rpc_client.request(req).await {
             Ok(v) => v,
             Err(e) => {
                 error!("Error while generating new key in wallet: {}", e);
@@ -190,7 +164,7 @@ impl Drk {
 
     async fn wallet_balance(&self) -> Result<()> {
         let req = jsonrpc::request(json!("wallet.get_balances"), json!([]));
-        let rep = match self.request(req, None).await {
+        let rep = match self.rpc_client.request(req).await {
             Ok(v) => v,
             Err(e) => {
                 error!("Error fetching balances from wallet: {}", e);
@@ -205,7 +179,7 @@ impl Drk {
 
     async fn wallet_address(&self) -> Result<()> {
         let req = jsonrpc::request(json!("wallet.get_key"), json!([0_i64]));
-        let rep = match self.request(req, None).await {
+        let rep = match self.rpc_client.request(req).await {
             Ok(v) => v,
             Err(e) => {
                 error!("Error fetching default keypair from wallet: {}", e);
@@ -219,7 +193,7 @@ impl Drk {
 
     async fn wallet_all_addresses(&self) -> Result<()> {
         let req = jsonrpc::request(json!("wallet.get_key"), json!([-1]));
-        let rep = match self.request(req, None).await {
+        let rep = match self.rpc_client.request(req).await {
             Ok(v) => v,
             Err(e) => {
                 error!("Error fetching keypairs from wallet: {}", e);
@@ -244,7 +218,7 @@ impl Drk {
             json!("tx.transfer"),
             json!([network.to_string(), token_id, recipient.to_string(), amount]),
         );
-        let rep = match self.request(req, None).await {
+        let rep = match self.rpc_client.request(req).await {
             Ok(v) => v,
             Err(e) => {
                 error!("Error building and sending transaction: {}", e);
@@ -264,7 +238,8 @@ async fn main() -> Result<()> {
     let (lvl, conf) = log_config(args.verbose.into())?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let drk = Drk { rpc_endpoint: args.endpoint };
+    let rpc_client = RpcClient::new(args.endpoint).await?;
+    let drk = Drk { rpc_client };
 
     match args.command {
         DrkSubcommand::Ping => drk.ping().await,
@@ -297,5 +272,7 @@ async fn main() -> Result<()> {
         DrkSubcommand::Transfer { recipient, amount, network, token_id } => {
             drk.tx_transfer(network, token_id, recipient, amount).await
         }
-    }
+    }?;
+
+    drk.close_connection().await
 }
