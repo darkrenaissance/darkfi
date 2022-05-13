@@ -1,7 +1,12 @@
+use async_std::sync::Arc;
+
+use async_executor::Executor;
 use log::error;
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use smol::future;
 use structopt_toml::StructOptToml;
+use url::Url;
 
 use darkfi::{
     util::{
@@ -19,18 +24,19 @@ mod util;
 mod view;
 
 use cli::CliTauSubCommands;
+use jsonrpc::JsonRpcClient;
 use primitives::{TaskEvent, TaskInfo};
 use util::{desc_in_editor, CONFIG_FILE, CONFIG_FILE_CONTENTS};
 use view::{comments_as_string, print_list_of_task, print_task_info};
 
-async fn start(mut options: cli::CliTau) -> Result<()> {
-    let rpc_addr = &options.rpc_listen.clone();
+async fn start(mut options: cli::CliTau, executor: Arc<Executor<'_>>) -> Result<()> {
+    let rpc_client = JsonRpcClient::new(Url::parse(&options.rpc_listen)?, executor).await?;
 
     let states: Vec<String> = vec!["stop".into(), "open".into(), "pause".into()];
 
     match options.id {
         Some(id) if id.len() < 4 && id.parse::<u64>().is_ok() => {
-            let task = jsonrpc::get_task_by_id(rpc_addr, id.parse::<u64>().unwrap()).await?;
+            let task = rpc_client.get_task_by_id(id.parse::<u64>().unwrap()).await?;
             let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
             print_task_info(taskinfo)?;
             return Ok(())
@@ -51,25 +57,25 @@ async fn start(mut options: cli::CliTau) -> Result<()> {
                 task.desc = desc_in_editor()?;
             };
 
-            jsonrpc::add(rpc_addr, json!([task])).await?;
+            rpc_client.add(json!([task])).await?;
         }
 
         Some(CliTauSubCommands::Update { id, values }) => {
             let task = cli::task_from_cli_values(values)?;
-            jsonrpc::update(rpc_addr, id, json!([task])).await?;
+            rpc_client.update(id, json!([task])).await?;
         }
 
         Some(CliTauSubCommands::State { id, state }) => match state {
             Some(state) => {
                 let state = state.trim().to_lowercase();
                 if states.contains(&state) {
-                    jsonrpc::set_state(rpc_addr, id, &state).await?;
+                    rpc_client.set_state(id, &state).await?;
                 } else {
                     error!("Task state could only be one of three states: open, pause or stop");
                 }
             }
             None => {
-                let task = jsonrpc::get_task_by_id(rpc_addr, id).await?;
+                let task = rpc_client.get_task_by_id(id).await?;
                 let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
                 let default_event = TaskEvent::default();
                 let state = &taskinfo.events.last().unwrap_or(&default_event).action;
@@ -79,10 +85,10 @@ async fn start(mut options: cli::CliTau) -> Result<()> {
 
         Some(CliTauSubCommands::Comment { id, content }) => match content {
             Some(content) => {
-                jsonrpc::set_comment(rpc_addr, id, content.trim()).await?;
+                rpc_client.set_comment(id, content.trim()).await?;
             }
             None => {
-                let task = jsonrpc::get_task_by_id(rpc_addr, id).await?;
+                let task = rpc_client.get_task_by_id(id).await?;
                 let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
                 let comments = comments_as_string(taskinfo.comments);
                 println!("Comments {}:\n{}", id, comments);
@@ -90,12 +96,12 @@ async fn start(mut options: cli::CliTau) -> Result<()> {
         },
 
         Some(CliTauSubCommands::List {}) | None => {
-            let task_ids = jsonrpc::get_ids(rpc_addr, json!([])).await?;
+            let task_ids = rpc_client.get_ids(json!([])).await?;
             let mut tasks: Vec<TaskInfo> = vec![];
             if let Some(ids) = task_ids.as_array() {
                 for id in ids {
                     let id = if id.is_u64() { id.as_u64().unwrap() } else { continue };
-                    let task = jsonrpc::get_task_by_id(&rpc_addr, id).await?;
+                    let task = rpc_client.get_task_by_id(id).await?;
                     let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
                     tasks.push(taskinfo);
                 }
@@ -109,8 +115,7 @@ async fn start(mut options: cli::CliTau) -> Result<()> {
     Ok(())
 }
 
-#[async_std::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let args = cli::CliTau::from_args_with_toml("").unwrap();
     let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
     spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
@@ -119,5 +124,12 @@ async fn main() -> Result<()> {
     let (lvl, conf) = log_config(args.verbose.into())?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    start(args).await
+    let executor = Arc::new(Executor::new());
+
+    let task = executor.spawn(start(args, executor.clone()));
+
+    // Run the executor until the task completes.
+    future::block_on(executor.run(task))?;
+
+    Ok(())
 }
