@@ -85,38 +85,43 @@ pub async fn listen_and_serve(
 ) -> Result<()> {
     debug!(target: "JSON-RPC SERVER", "Trying to start listener on {}", accept_url);
 
-    let transport_name = TransportName::try_from(accept_url.clone())?;
-    match transport_name {
-        TransportName::Tcp(upgrade) => {
-            let transport = TcpTransport::new(None, 1024);
-            let listener = transport.listen_on(accept_url.clone());
-
-            if let Err(err) = listener {
-                error!("RPC Setup for {} failed: {}", accept_url, err);
+    macro_rules! accept {
+        ($listener:expr, $transport:expr, $upgrade:expr) => {{
+            if let Err(err) = $listener {
+                error!("Setup for {} failed: {}", accept_url, err);
                 return Err(Error::BindFailed(accept_url.as_str().into()))
             }
 
-            let listener = listener?.await;
+            let listener = $listener?.await;
 
             if let Err(err) = listener {
-                error!("RPC Bind listener to {} failed: {}", accept_url, err);
+                error!("Bind listener to {} failed: {}", accept_url, err);
                 return Err(Error::BindFailed(accept_url.as_str().into()))
             }
 
             let listener = listener?;
 
-            match upgrade {
+            match $upgrade {
                 None => {
                     info!("RPC listening to: {}", accept_url);
                     run_accept_loop(Box::new(listener), rh).await?;
                 }
                 Some(u) if u == "tls" => {
                     info!("RPC listening to: {}", accept_url);
-                    let tls_listener = transport.upgrade_listener(listener)?.await?;
+                    let tls_listener = $transport.upgrade_listener(listener)?.await?;
                     run_accept_loop(Box::new(tls_listener), rh).await?;
                 }
                 Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
             }
+        }};
+    }
+
+    let transport_name = TransportName::try_from(accept_url.clone())?;
+    match transport_name {
+        TransportName::Tcp(upgrade) => {
+            let transport = TcpTransport::new(None, 1024);
+            let listener = transport.listen_on(accept_url.clone());
+            accept!(listener, transport, upgrade);
         }
         TransportName::Tor(upgrade) => {
             let socks5_url = Url::parse(
@@ -153,32 +158,7 @@ pub async fn listen_and_serve(
 
             let listener = transport.clone().listen_on(accept_url.clone());
 
-            if let Err(err) = listener {
-                error!("RPC Setup for {} failed: {}", accept_url, err);
-                return Err(Error::BindFailed(accept_url.as_str().into()))
-            }
-
-            let listener = listener?.await;
-
-            if let Err(err) = listener {
-                error!("RPC Bind listener to {} failed: {}", accept_url, err);
-                return Err(Error::BindFailed(accept_url.as_str().into()))
-            }
-
-            let listener = listener?;
-
-            match upgrade {
-                None => {
-                    run_accept_loop(Box::new(listener), rh).await?;
-                    info!("RPC listening to: {}", accept_url);
-                }
-                Some(u) if u == "tls" => {
-                    info!("RPC listening to: {}", accept_url);
-                    let tls_listener = transport.upgrade_listener(listener)?.await?;
-                    run_accept_loop(Box::new(tls_listener), rh).await?;
-                }
-                Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
-            }
+            accept!(listener, transport, upgrade);
         }
 
         TransportName::Unix => {
