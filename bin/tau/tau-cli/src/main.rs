@@ -1,10 +1,6 @@
-use async_std::sync::Arc;
-
-use async_executor::Executor;
 use log::error;
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
-use smol::future;
 use structopt_toml::StructOptToml;
 use url::Url;
 
@@ -30,9 +26,8 @@ use primitives::{TaskEvent, TaskInfo};
 use util::{desc_in_editor, CONFIG_FILE, CONFIG_FILE_CONTENTS};
 use view::{comments_as_string, print_list_of_task, print_task_info};
 
-async fn start(mut options: cli::CliTau, executor: Arc<Executor<'_>>) -> Result<()> {
-    let rpc_client =
-        Rpc { client: RpcClient::new(Url::parse(&options.rpc_listen)?, executor).await? };
+async fn start(mut options: cli::CliTau) -> Result<()> {
+    let rpc_client = Rpc { client: RpcClient::new(Url::parse(&options.rpc_listen)?).await? };
 
     let states: Vec<String> = vec!["stop".into(), "open".into(), "pause".into()];
 
@@ -117,7 +112,8 @@ async fn start(mut options: cli::CliTau, executor: Arc<Executor<'_>>) -> Result<
     Ok(())
 }
 
-fn main() -> Result<()> {
+#[async_std::main]
+async fn main() -> Result<()> {
     let args = cli::CliTau::from_args_with_toml("").unwrap();
     let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
     spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
@@ -126,12 +122,5 @@ fn main() -> Result<()> {
     let (lvl, conf) = log_config(args.verbose.into())?;
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let executor = Arc::new(Executor::new());
-
-    let task = executor.spawn(start(args, executor.clone()));
-
-    // Run the executor until the task completes.
-    future::block_on(executor.run(task))?;
-
-    Ok(())
+    start(args).await
 }

@@ -40,8 +40,8 @@ struct DnetView {
 }
 
 impl DnetView {
-    async fn new(url: Url, name: String, executor: Arc<Executor<'_>>) -> Result<Self> {
-        let rpc_client = RpcClient::new(url, executor).await?;
+    async fn new(url: Url, name: String) -> Result<Self> {
+        let rpc_client = RpcClient::new(url).await?;
         Ok(Self { name, rpc_client })
     }
 
@@ -118,8 +118,7 @@ async fn poll_and_update_model(
     model: Arc<Model>,
 ) -> DnetViewResult<()> {
     for node in &config.nodes {
-        let client =
-            DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone(), ex.clone()).await?;
+        let client = DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone()).await?;
         ex.spawn(poll(client, model.clone())).detach();
     }
     Ok(())

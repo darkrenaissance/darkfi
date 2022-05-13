@@ -1,7 +1,5 @@
-use async_std::sync::Arc;
 use std::{env, str, time::Duration};
 
-use async_executor::Executor;
 use async_std::io::timeout;
 use futures::{select, AsyncReadExt, AsyncWriteExt, FutureExt};
 use log::error;
@@ -198,7 +196,6 @@ async fn reqrep_loop<T: TransportStream>(
 
 pub async fn open_channels(
     uri: &Url,
-    executor: Arc<Executor<'_>>,
 ) -> Result<(
     async_channel::Sender<Value>,
     async_channel::Receiver<JsonResult>,
@@ -228,14 +225,12 @@ pub async fn open_channels(
 
             match $upgrade {
                 None => {
-                    executor
-                        .spawn(reqrep_loop(stream, result_sender, data_receiver, stop_receiver))
+                    smol::spawn(reqrep_loop(stream, result_sender, data_receiver, stop_receiver))
                         .detach();
                 }
                 Some(u) if u == "tls" => {
                     let stream = $transport.upgrade_dialer(stream)?.await?;
-                    executor
-                        .spawn(reqrep_loop(stream, result_sender, data_receiver, stop_receiver))
+                    smol::spawn(reqrep_loop(stream, result_sender, data_receiver, stop_receiver))
                         .detach();
                 }
                 Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
@@ -272,9 +267,7 @@ pub async fn open_channels(
                 return Err(Error::ConnectFailed)
             }
 
-            executor
-                .spawn(reqrep_loop(stream?, result_sender, data_receiver, stop_receiver))
-                .detach();
+            smol::spawn(reqrep_loop(stream?, result_sender, data_receiver, stop_receiver)).detach();
         }
         _ => unimplemented!(),
     }

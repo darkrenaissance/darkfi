@@ -1,6 +1,3 @@
-use async_std::sync::Arc;
-
-use async_executor::Executor;
 use log::{debug, error};
 use serde_json::{json, Value};
 use url::Url;
@@ -16,8 +13,8 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
-    pub async fn new(url: Url, executor: Arc<Executor<'_>>) -> Result<Self> {
-        let (sender, receiver, stop_signal) = jsonrpc::open_channels(&url, executor).await?;
+    pub async fn new(url: Url) -> Result<Self> {
+        let (sender, receiver, stop_signal) = jsonrpc::open_channels(&url).await?;
         Ok(Self { sender, receiver, stop_signal })
     }
 

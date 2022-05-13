@@ -1,9 +1,5 @@
-use async_std::sync::Arc;
-
-use async_executor::Executor;
 use clap::{IntoApp, Parser, Subcommand};
 use serde_json::{json, Value};
-use smol::future;
 use url::Url;
 
 use darkfi::{
@@ -41,9 +37,9 @@ impl Rpc {
     }
 }
 
-async fn start(options: CliDao, executor: Arc<Executor<'_>>) -> Result<()> {
+async fn start(options: CliDao) -> Result<()> {
     let rpc_addr = "tcp://127.0.0.1:7777";
-    let client = Rpc { client: RpcClient::new(Url::parse(rpc_addr)?, executor).await? };
+    let client = Rpc { client: RpcClient::new(Url::parse(rpc_addr)?).await? };
     match options.command {
         Some(CliDaoSubCommands::Hello {}) => {
             let reply = client.say_hello().await?;
@@ -75,11 +71,5 @@ async fn main() -> Result<()> {
 
     //let config = Config::<DrkConfig>::load(config_path)?;
 
-    let executor = Arc::new(Executor::new());
-
-    let task = executor.spawn(start(args, executor.clone()));
-
-    // Run the executor until the task completes.
-    future::block_on(executor.run(task))?;
-    Ok(())
+    start(args).await
 }
