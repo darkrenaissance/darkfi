@@ -18,6 +18,11 @@ impl RpcClient {
         Ok(Self { sender, receiver, stop_signal })
     }
 
+    pub async fn close(&self) -> Result<()> {
+        self.stop_signal.send(()).await?;
+        Ok(())
+    }
+
     pub async fn request(&self, value: JsonRequest) -> Result<Value> {
         let req_id = value.id.clone().as_u64().unwrap_or(0);
         let value = json!(value);
