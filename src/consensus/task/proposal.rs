@@ -38,7 +38,7 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         return
     };
 
-    // Node signals the network that iw till start participating
+    // Node signals the network that it will start participating
     let address = state.read().await.address;
     let cur_epoch = state.read().await.current_epoch();
     let participant = Participant::new(address, cur_epoch);

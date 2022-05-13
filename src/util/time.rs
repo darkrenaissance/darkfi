@@ -56,7 +56,7 @@ impl std::fmt::Display for Timestamp {
 }
 
 // Clock sync parameters
-const RETRIES: u8 = 5;
+const RETRIES: u8 = 10;
 const WORLDTIMEAPI_ADDRESS: &str = "worldtimeapi.org";
 const WORLDTIMEAPI_ADDRESS_WITH_PORT: &str = "worldtimeapi.org:443";
 const WORLDTIMEAPI_PAYLOAD: &[u8; 88] = b"GET /api/timezone/Etc/UTC HTTP/1.1\r\nHost: worldtimeapi.org\r\nAccept: application/json\r\n\r\n";
