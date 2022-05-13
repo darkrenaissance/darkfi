@@ -73,16 +73,16 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
     let due = timestamp_to_date(taskinfo.due.unwrap_or(0), "date");
     let created_at = timestamp_to_date(taskinfo.created_at, "datetime");
     let mut table = table!([Bd => "ref_id", &taskinfo.ref_id],
-                           ["id", &taskinfo.id.to_string()],
-                           [Bd =>"owner", &taskinfo.owner],
-                           [Bd =>"title", &taskinfo.title],
-                           ["desc", &taskinfo.desc.to_string()],
-                           [Bd =>"assign", taskinfo.assign.join(", ")],
-                           ["project", taskinfo.project.join(", ")],
-                           [Bd =>"due", due],
-                           ["rank", &taskinfo.rank.to_string()],
-                           [Bd =>"created_at", created_at],
-                           ["current_state", current_state]);
+                            ["id", &taskinfo.id.to_string()],
+                            [Bd =>"owner", &taskinfo.owner],
+                            ["title", &taskinfo.title],
+                            [Bd =>"desc", &taskinfo.desc.to_string()],
+                            ["assign", taskinfo.assign.join(", ")],
+                            [Bd =>"project", taskinfo.project.join(", ")],
+                            ["due", due],
+                            [Bd =>"rank", &taskinfo.rank.to_string()],
+                            ["created_at", created_at],
+                            [Bd =>"current_state", current_state]);
 
     table.set_format(
         format::FormatBuilder::new()

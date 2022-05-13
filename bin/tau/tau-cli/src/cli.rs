@@ -88,13 +88,13 @@ pub fn task_from_cli_values(values: Vec<String>) -> Result<CliBaseTask> {
         }
 
         if field[0].starts_with("project") {
-            project.push(field[1].into());
+            project = field[1].split(',').map(|s| s.into()).collect();
         }
         if field[0].starts_with("desc") {
             desc = Some(field[1].into());
         }
         if field[0].starts_with("assign") {
-            assign.push(field[1].into());
+            assign = field[1].split(',').map(|s| s.into()).collect();
         }
         if field[0].starts_with("due") {
             due = due_as_timestamp(&field[1])
