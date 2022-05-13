@@ -1,11 +1,14 @@
+use async_std::sync::Arc;
+
+use async_executor::Executor;
 use clap::{IntoApp, Parser, Subcommand};
-use log::debug;
 use serde_json::{json, Value};
+use smol::future;
 use url::Url;
 
 use darkfi::{
-    rpc::{jsonrpc, jsonrpc::JsonResult},
-    Error, Result,
+    rpc::{jsonrpc, rpcclient::RpcClient},
+    Result,
 };
 
 #[derive(Subcommand)]
@@ -25,51 +28,22 @@ pub struct CliDao {
     #[clap(subcommand)]
     pub command: Option<CliDaoSubCommands>,
 }
-pub struct Client {
-    url: String,
+pub struct Rpc {
+    client: RpcClient,
 }
 
-impl Client {
-    pub fn new(url: String) -> Self {
-        Self { url }
-    }
-
-    async fn request(&self, r: jsonrpc::JsonRequest) -> Result<Value> {
-        let reply: JsonResult = match jsonrpc::send_request(&Url::parse(&self.url)?, json!(r)).await
-        {
-            Ok(v) => v,
-            Err(e) => return Err(e),
-        };
-
-        match reply {
-            JsonResult::Resp(r) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&r)?);
-                Ok(r.result)
-            }
-
-            JsonResult::Err(e) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&e)?);
-                Err(Error::JsonRpcError(e.error.message.to_string()))
-            }
-
-            JsonResult::Notif(n) => {
-                debug!(target: "RPC", "<-- {}", serde_json::to_string(&n)?);
-                Err(Error::JsonRpcError("Unexpected reply".to_string()))
-            }
-        }
-    }
-
+impl Rpc {
     // --> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "hello world", "id": 42}
     async fn say_hello(&self) -> Result<Value> {
         let req = jsonrpc::request(json!("say_hello"), json!([]));
-        Ok(self.request(req).await?)
+        Ok(self.client.request(req).await?)
     }
 }
 
-async fn start(options: CliDao) -> Result<()> {
+async fn start(options: CliDao, executor: Arc<Executor<'_>>) -> Result<()> {
     let rpc_addr = "tcp://127.0.0.1:7777";
-    let client = Client::new(rpc_addr.to_string());
+    let client = Rpc { client: RpcClient::new(Url::parse(rpc_addr)?, executor).await? };
     match options.command {
         Some(CliDaoSubCommands::Hello {}) => {
             let reply = client.say_hello().await?;
@@ -101,5 +75,11 @@ async fn main() -> Result<()> {
 
     //let config = Config::<DrkConfig>::load(config_path)?;
 
-    start(args).await
+    let executor = Arc::new(Executor::new());
+
+    let task = executor.spawn(start(args, executor.clone()));
+
+    // Run the executor until the task completes.
+    future::block_on(executor.run(task))?;
+    Ok(())
 }
