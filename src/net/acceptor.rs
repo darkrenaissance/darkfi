@@ -37,17 +37,15 @@ impl Acceptor {
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let transport_name = TransportName::try_from(accept_url.clone())?;
-        match transport_name {
-            TransportName::Tcp(upgrade) => {
-                let transport = TcpTransport::new(None, 1024);
-                let listener = transport.listen_on(accept_url.clone());
 
-                if let Err(err) = listener {
+        macro_rules! accept {
+            ($listener:expr, $transport:expr, $upgrade:expr) => {{
+                if let Err(err) = $listener {
                     error!("Setup for {} failed: {}", accept_url, err);
                     return Err(Error::BindFailed(accept_url.as_str().into()))
                 }
 
-                let listener = listener?.await;
+                let listener = $listener?.await;
 
                 if let Err(err) = listener {
                     error!("Bind listener to {} failed: {}", accept_url, err);
@@ -56,18 +54,25 @@ impl Acceptor {
 
                 let listener = listener?;
 
-                match upgrade {
+                match $upgrade {
                     None => {
                         self.accept(Box::new(listener), executor);
                     }
                     Some(u) if u == "tls" => {
-                        let tls_listener = transport.upgrade_listener(listener)?.await?;
+                        let tls_listener = $transport.upgrade_listener(listener)?.await?;
                         self.accept(Box::new(tls_listener), executor);
                     }
                     Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
                 }
-            }
+            }};
+        }
 
+        match transport_name {
+            TransportName::Tcp(upgrade) => {
+                let transport = TcpTransport::new(None, 1024);
+                let listener = transport.listen_on(accept_url.clone());
+                accept!(listener, transport, upgrade);
+            }
             TransportName::Tor(upgrade) => {
                 let socks5_url = Url::parse(
                     &env::var("DARKFI_TOR_SOCKS5_URL")
@@ -102,30 +107,7 @@ impl Acceptor {
 
                 let listener = transport.clone().listen_on(accept_url.clone());
 
-                if let Err(err) = listener {
-                    error!("Setup for {} failed: {}", accept_url, err);
-                    return Err(Error::BindFailed(accept_url.as_str().into()))
-                }
-
-                let listener = listener?.await;
-
-                if let Err(err) = listener {
-                    error!("Bind listener to {} failed: {}", accept_url, err);
-                    return Err(Error::BindFailed(accept_url.as_str().into()))
-                }
-
-                let listener = listener?;
-
-                match upgrade {
-                    None => {
-                        self.accept(Box::new(listener), executor);
-                    }
-                    Some(u) if u == "tls" => {
-                        let tls_listener = transport.upgrade_listener(listener)?.await?;
-                        self.accept(Box::new(tls_listener), executor);
-                    }
-                    Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
-                }
+                accept!(listener, transport, upgrade);
             }
             _ => unimplemented!(),
         }

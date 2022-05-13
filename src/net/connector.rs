@@ -37,33 +37,38 @@ impl Connector {
         connect_url: Url,
         transport_name: TransportName,
     ) -> Result<Arc<Channel>> {
-        match transport_name {
-            TransportName::Tcp(upgrade) => {
-                let transport = TcpTransport::new(None, 1024);
-                let stream = transport.dial(connect_url.clone());
-
-                if let Err(err) = stream {
+        macro_rules! connect {
+            ($stream:expr, $transport:expr, $upgrade:expr) => {{
+                if let Err(err) = $stream {
                     error!("Setup for {} failed: {}", connect_url, err);
                     return Err(Error::ConnectFailed)
                 }
 
-                let stream = stream?.await;
+                let stream = $stream?.await;
 
                 if let Err(err) = stream {
                     error!("Connection to {}  failed: {}", connect_url, err);
                     return Err(Error::ConnectFailed)
                 }
 
-                let channel = match upgrade {
+                let channel = match $upgrade {
                     None => Channel::new(Box::new(stream?), connect_url.clone()).await,
                     Some(u) if u == "tls" => {
-                        let stream = transport.upgrade_dialer(stream?)?.await;
+                        let stream = $transport.upgrade_dialer(stream?)?.await;
                         Channel::new(Box::new(stream?), connect_url).await
                     }
                     Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
                 };
 
                 Ok(channel)
+            }};
+        }
+
+        match transport_name {
+            TransportName::Tcp(upgrade) => {
+                let transport = TcpTransport::new(None, 1024);
+                let stream = transport.dial(connect_url.clone());
+                connect!(stream, transport, upgrade)
             }
             TransportName::Tor(upgrade) => {
                 let socks5_url = Url::parse(
@@ -75,28 +80,7 @@ impl Connector {
 
                 let stream = transport.clone().dial(connect_url.clone());
 
-                if let Err(err) = stream {
-                    error!("Setup for {} failed: {}", connect_url, err);
-                    return Err(Error::ConnectFailed)
-                }
-
-                let stream = stream?.await;
-
-                if let Err(err) = stream {
-                    error!("Connection to {}  failed: {}", connect_url, err);
-                    return Err(Error::ConnectFailed)
-                }
-
-                let channel = match upgrade {
-                    None => Channel::new(Box::new(stream?), connect_url.clone()).await,
-                    Some(u) if u == "tls" => {
-                        let stream = transport.upgrade_dialer(stream?)?.await;
-                        Channel::new(Box::new(stream?), connect_url).await
-                    }
-                    Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
-                };
-
-                Ok(channel)
+                connect!(stream, transport, upgrade)
             }
             _ => unimplemented!(),
         }
