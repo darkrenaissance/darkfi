@@ -49,18 +49,18 @@ def money_state_transition(state, tx):
 
 class DaoBuilder:
 
-    def __init__(self, proposal_auth_public_key, threshold, quorum, ec):
-        self.proposal_auth_public_key = proposal_auth_public_key
-        self.threshold = threshold
+    def __init__(self, proposer_limit, quorum, approval_ratio, ec):
+        self.proposer_limit = proposer_limit
         self.quorum = quorum
+        self.approval_ratio = approval_ratio
 
         self.ec = ec
 
     def build(self):
         mint_proof = DaoMintProof(
-            self.proposal_auth_public_key,
-            self.threshold,
+            self.proposer_limit,
             self.quorum,
+            self.approval_ratio,
             self.ec
         )
         revealed = mint_proof.get_revealed()
@@ -84,10 +84,10 @@ class Dao:
 
 class DaoMintProof:
 
-    def __init__(self, proposal_auth_public_key, threshold, quorum, ec):
-        self.proposal_auth_public_key = proposal_auth_public_key
-        self.threshold = threshold
+    def __init__(self, proposer_limit, quorum, approval_ratio, ec):
+        self.proposer_limit = proposer_limit
         self.quorum = quorum
+        self.approval_ratio = approval_ratio
         self.ec = ec
 
     def get_revealed(self):
@@ -95,10 +95,9 @@ class DaoMintProof:
 
         revealed.bulla = crypto.ff_hash(
             self.ec.p,
-            self.proposal_auth_public_key[0],
-            self.proposal_auth_public_key[1],
-            self.threshold,
-            self.quorum
+            self.proposer_limit,
+            self.quorum,
+            self.approval_ratio
         )
 
         return revealed
@@ -171,10 +170,9 @@ def main(argv):
     gov_token_id = 4
 
     # DAO parameters
-    proposal_auth_secret = ec.random_scalar()
-    proposal_auth_public = ec.multiply(proposal_auth_secret, ec.G)
-    threshold = 110
-    quorum = 110
+    dao_proposer_limit = 110
+    dao_quorum = 110
+    dao_approval_ratio = 2
 
     ################################################
     # Create the DAO bulla
@@ -183,7 +181,12 @@ def main(argv):
     dao_shared_secret = ec.random_scalar()
     dao_public_key = ec.multiply(dao_shared_secret, ec.G)
 
-    builder = DaoBuilder(proposal_auth_public, threshold, quorum, ec)
+    builder = DaoBuilder(
+        dao_proposer_limit,
+        dao_quorum,
+        dao_approval_ratio,
+        ec
+    )
     tx = builder.build()
 
     # Each deployment of a contract has a unique state
@@ -287,6 +290,9 @@ def main(argv):
     # meet a criteria for a minimum number of gov tokens
     ################################################
 
+    # There is a struct that corresponds to the configuration of this
+    # particular vote.
+
     # State
     # functions that can be called on state with params
     # functions return an update
@@ -351,10 +357,9 @@ def main(argv):
     # They see the enc_user_data which is also in the DAO exec contract
     assert user_data == crypto.ff_hash(
         ec.p,
-        proposal_auth_public[0],
-        proposal_auth_public[1],
-        threshold,
-        quorum
+        dao_proposer_limit,
+        dao_quorum,
+        dao_approval_ratio
     ) # DAO bulla
 
     # proposer proof
