@@ -21,9 +21,6 @@ class MoneyState:
         for coin, enc_note in zip(update.coins, update.enc_notes):
             self.all_coins.add(coin)
 
-            # Try to decrypt notes here
-            print(f"Received {enc_note.value} DRK")
-
 def money_state_transition(state, tx):
     for input in tx.clear_inputs:
         pk = input.signature_public
@@ -162,11 +159,16 @@ def main(argv):
     ec = crypto.pallas_curve()
 
     money_state = MoneyState()
+    gov_state = MoneyState()
     dao_state = DaoState()
 
     # Money parameters
     money_initial_supply = 21000
     money_token_id = 110
+
+    # Governance token parameters
+    gov_initial_supply = 10000
+    gov_token_id = 4
 
     # DAO parameters
     proposal_auth_secret = ec.random_scalar()
@@ -218,9 +220,71 @@ def main(argv):
         return -1
     money_state.apply(update)
 
+    # payment state transition in coin specifies dependency
+    # the tx exists and ruleset is applied
+
+    assert len(tx.outputs) > 0
+    note = tx.outputs[0].enc_note
+    coin = crypto.ff_hash(
+        ec.p,
+        dao_public_key[0],
+        dao_public_key[1],
+        note.value,
+        note.token_id,
+        note.serial,
+        note.coin_blind,
+        spend_hook,
+        user_data
+    )
+    assert coin == tx.outputs[0].mint_proof.get_revealed().coin
+
+    for coin, enc_note in zip(update.coins, update.enc_notes):
+        # Try decrypt note here
+        print(f"Received {enc_note.value} DRK")
+
     ################################################
-    # The treasury token is minted
-    # Mint the initial supply of governance token
+    # Mint the governance token
+    # Send it to two hodlers
+    ################################################
+
+    # Hodler 1
+    gov_secret_1 = ec.random_scalar()
+    gov_public_1 = ec.multiply(gov_secret_1, ec.G)
+    # Hodler 2
+    gov_secret_2 = ec.random_scalar()
+    gov_public_2 = ec.multiply(gov_secret_2, ec.G)
+
+    # Only used for this tx. Discarded after
+    signature_secret = ec.random_scalar()
+
+    builder = money.SendPaymentTxBuilder(ec)
+    builder.add_clear_input(gov_initial_supply, gov_token_id,
+                            signature_secret)
+    assert 2 * 5000 == gov_initial_supply
+    builder.add_output(5000, gov_token_id, gov_public_1,
+                       b"0x0000", b"0x0000")
+    builder.add_output(5000, gov_token_id, gov_public_1,
+                       b"0x0000", b"0x0000")
+    tx = builder.build()
+
+    # This state_transition function is the ruleset for anon payments
+    if (update := money_state_transition(gov_state, tx)) is None:
+        return -1
+    gov_state.apply(update)
+
+    # Decrypt output notes
+    assert len(tx.outputs) == 2
+    gov_user_1_note = tx.outputs[0].enc_note
+    gov_user_2_note = tx.outputs[1].enc_note
+
+    for coin, enc_note in zip(update.coins, update.enc_notes):
+        # Try decrypt note here
+        print(f"Received {enc_note.value} GOV")
+
+    ################################################
+    # Propose the vote
+    # In order to make a valid vote, first the proposer must
+    # meet a criteria for a minimum number of gov tokens
     ################################################
 
     # State
@@ -243,29 +307,8 @@ def main(argv):
     votes_yes = 10
     votes_no = 5
 
-    # payment state transition in coin specifies dependency
-    # the tx exists and ruleset is applied
-
-    assert len(tx.outputs) > 0
-    note = tx.outputs[0].enc_note
-    coin = crypto.ff_hash(
-        ec.p,
-        dao_public_key[0],
-        dao_public_key[1],
-        note.value,
-        note.token_id,
-        note.serial,
-        note.coin_blind,
-        spend_hook,
-        user_data
-    )
-    assert coin == tx.outputs[0].mint_proof.get_revealed().coin
-    all_coins = set([coin])
-
     ################################################
-    # Now the coin is minted, and all supply was sent to the DAO
-    # In order to make a valid vote, first the proposer must
-    # meet a criteria for a minimum number of gov tokens
+    # Execute the vote
     ################################################
 
     # Used to export user_data from this coin so it can be accessed
@@ -273,13 +316,14 @@ def main(argv):
     user_data_blind = ec.random_base()
 
     builder = money.SendPaymentTxBuilder(ec)
-    builder.add_input(all_coins, dao_shared_secret, note, user_data_blind)
+    witness = money_state.all_coins
+    builder.add_input(witness, dao_shared_secret, note, user_data_blind)
 
     user_secret = ec.random_scalar()
     user_public = ec.multiply(user_secret, ec.G)
 
     builder.add_output(1000, money_token_id, user_public,
-                       spend_hook=[b"0x0000"], user_data=[])
+                       spend_hook=b"0x0000", user_data=b"0x0000")
     # Change
     builder.add_output(note.value - 1000, money_token_id, dao_public_key,
                        spend_hook, user_data)
@@ -318,8 +362,10 @@ def main(argv):
     # Now enforce DAO rules:
     # 1. proposals must be submitted by minimum amount
     #       - need protection so can't collude? must be a single signer??
-    # 2. number of votes > quorum
+    #         - stellar: doesn't have to be robust for this MVP
+    # 2. number of votes >= quorum
     #       - just positive votes or all votes?
+    #         - stellar: no that's all votes
     # 3. outcome > approval_ratio
     # 3. structure of outputs
     #   output 0: value and address
