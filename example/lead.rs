@@ -57,19 +57,60 @@ pub struct Coin {
     opening2: Option<pallas::Base>,
 }
 
+fn create_coins_sks(len : usize) ->
+    (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>)
+{
+    /*
+    at the onset of an epoch, the first slot's coin's secret key
+    is sampled at random, and the reset of the secret keys are derived,
+    for sk (secret key) at time i+1 is derived from secret key at time i.
+     */
+    let mut rng = thread_rng();
+    let sk: u64 = rng.gen();
+    let mut tree = BridgeTree::<MerkleNode, 32>::new(len);
+    let mut root_sks: Vec<MerkleNode> = vec![];
+    let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
+    for i in 0..len {
+        //TODO (research) why the conversion between point and base is panicing?
+        // is the endianess different?
+        let base = pedersen_commitment_scalar(pallas::Scalar::one(), pallas::Scalar::from(sk));
+        let coord = base.to_affine().coordinates().unwrap();
+        let coord_prod =  coord.x() * coord.y();
+        let node = MerkleNode(coord_prod);
+        tree.append(&node.clone());
+        let leaf_position = tree.witness();
+        //let (leaf_pos, path) = tree.authentication_path(leaf_position.unwrap()).unwrap();
+        let path = tree.authentication_path(leaf_position.unwrap()).unwrap();
+        root_sks.push(tree.root().clone());
+        path_sks.push(path.as_slice().try_into().unwrap());
+    }
+    (root_sks, path_sks)
+}
+
+/*
+fn create_coins(...)
+{
+
+}
+
+fn build_commit_tree(cms : Vec<Coin>)
+{
+    //
+}
+
+*/
 fn main() {
     let k = 13;
     //
     const LEN: usize = 10;
     let mut rng = thread_rng();
-    let mut sks: Vec<u64> = vec![];
     let mut root_sks: Vec<MerkleNode> = vec![];
     let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
-    let mut tree = BridgeTree::<MerkleNode, 32>::new(LEN);
+    (root_sks, path_sks) = create_coins_sks(LEN);
+    /*
+
     for i in 0..LEN {
-        let tmp: u64 = rng.gen();
-        let mut sk: u64 = tmp;
-        sks.push(sk.clone());
+        let sk: u64 = rng.gen();
         let node = MerkleNode(pallas::Base::from(sk));
         tree.append(&node.clone());
         let leaf_position = tree.witness();
@@ -78,6 +119,7 @@ fn main() {
         root_sks.push(tree.root().clone());
         path_sks.push(path.as_slice().try_into().unwrap());
     }
+    */
     let mut seeds: Vec<u64> = vec![];
     for i in 0..LEN {
         let rho: u64 = rng.gen();
@@ -100,7 +142,7 @@ fn main() {
         let c_v = pallas::Base::from(u64::try_from(i * 2).unwrap());
         //random sampling of the same size of prf,
         //pseudo random sampling that is the size of pederson commitment
-        let c_sk: u64 = sks[i];
+
         let iu64: u64 = u64::try_from(i).unwrap();
         let c_sl = pallas::Base::from(iu64);
 
@@ -163,7 +205,6 @@ fn main() {
             nonce: Some(c_seed),
             nonce_cm: Some(c_seed2),
             sn: Some(c_sn),
-            //sk: Some(c_sk),
             pk: Some(c_pk),
             pk_x: Some(c_pk_pt_x),
             pk_y: Some(c_pk_pt_y),
