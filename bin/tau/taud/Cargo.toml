@@ -3,9 +3,7 @@ name = "taud"
 version = "0.3.0"
 edition = "2021"
 
-
 [dependencies]
-
 darkfi = { path = "../../../", features = ["rpc", "raft", "net"]}
 
 # Async
@@ -18,9 +16,7 @@ easy-parallel = "3.2.0"
 futures = "0.3.21"
 
 # Misc
-clap = {version = "3.1.12", features = ["derive"]}
 log = "0.4.16"
-num_cpus = "1.13.1"
 simplelog = "0.12.0"
 rand = "0.8.5"
 chrono = "0.4.19"
