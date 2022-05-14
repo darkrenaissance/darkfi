@@ -40,6 +40,7 @@ pub struct Coin {
     value: Option<pallas::Base>, //stake
     cm: Option<pallas::Point>,
     cm2: Option<pallas::Point>,
+    idx: u32,
     sl: Option<pallas::Base>, //slot id
     tau: Option<pallas::Base>,
     nonce: Option<pallas::Base>,
@@ -87,66 +88,32 @@ fn create_coins_sks(len : usize) ->
     (root_sks, path_sks)
 }
 
-/*
-fn create_coins(...)
+
+fn create_coins(root_sks : Vec<MerkleNode>,
+                path_sks : Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
+                values : Vec<u64>,
+                len : usize) -> Vec<Coin>
 {
-
-}
-
-fn build_commit_tree(cms : Vec<Coin>)
-{
-    //
-}
-
-*/
-fn main() {
-    let k = 13;
-    //
-    const LEN: usize = 10;
     let mut rng = thread_rng();
-    let mut root_sks: Vec<MerkleNode> = vec![];
-    let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
-    (root_sks, path_sks) = create_coins_sks(LEN);
-    /*
-
-    for i in 0..LEN {
-        let sk: u64 = rng.gen();
-        let node = MerkleNode(pallas::Base::from(sk));
-        tree.append(&node.clone());
-        let leaf_position = tree.witness();
-        //let (leaf_pos, path) = tree.authentication_path(leaf_position.unwrap()).unwrap();
-        let path = tree.authentication_path(leaf_position.unwrap()).unwrap();
-        root_sks.push(tree.root().clone());
-        path_sks.push(path.as_slice().try_into().unwrap());
-    }
-    */
     let mut seeds: Vec<u64> = vec![];
-    for i in 0..LEN {
+    for i in 0..len {
         let rho: u64 = rng.gen();
         seeds.push(rho.clone());
     }
-    //
-    let yu64: u64 = rng.gen();
-    let rhou64: u64 = rng.gen();
-    let mau_y: pallas::Base = pallas::Base::from(yu64);
-    let mau_rho: pallas::Base = pallas::Base::from(rhou64);
 
-    //
+    let mut tree_cm = BridgeTree::<MerkleNode, 32>::new(len);
     let mut coins: Vec<Coin> = vec![];
-
-    //
-    let mut tree_cm = BridgeTree::<MerkleNode, 32>::new(LEN);
-    let zerou64: u64 = 0;
-
-    for i in 0..LEN {
-        let c_v = pallas::Base::from(u64::try_from(i * 2).unwrap());
+    for i in 0..len {
+        let c_v = pallas::Base::from(values[i]);
         //random sampling of the same size of prf,
         //pseudo random sampling that is the size of pederson commitment
 
-        let iu64: u64 = u64::try_from(i).unwrap();
-        let c_sl = pallas::Base::from(iu64);
+        // coin slot number
+        let c_sl = pallas::Base::from(u64::try_from(i).unwrap());
 
+        //
         let c_tau = pallas::Base::from(u64::try_from(i).unwrap()); // let's assume it's sl for simplicity
+        //
         let c_root_sk: MerkleNode = root_sks[i];
 
         let c_pk = pedersen_commitment_scalar(mod_r_p(c_tau), mod_r_p(c_root_sk.inner()));
@@ -200,6 +167,7 @@ fn main() {
             value: Some(c_v),
             cm: Some(c_cm),
             cm2: Some(c_cm2),
+            idx: u32::try_from(i).unwrap(),
             sl: Some(c_sl),
             tau: Some(c_tau),
             nonce: Some(c_seed),
@@ -217,15 +185,11 @@ fn main() {
         };
         coins.push(coin);
     }
+    coins
+}
 
-    // ================
-    // public inputs
-    // ================
-    let coin_idx = 0;
-    let coin = coins[coin_idx];
-
-    let po_nonce = coin.nonce_cm.unwrap().to_affine().coordinates().unwrap();
-
+fn create_lead_coin_public_inputs(coin: Coin) -> Vec<pallas::Base>
+{
     let po_nonce = coin.nonce_cm.unwrap().to_affine().coordinates().unwrap();
 
     let po_tau = pedersen_commitment_scalar(mod_r_p(coin.tau.unwrap()), coin.root_cm.unwrap())
@@ -242,27 +206,8 @@ fn main() {
     let po_cmp = pallas::Base::from(0);
     let zero = pallas::Base::from(0);
     // ===============
-    let path_sk = path_sks[coin_idx];
-    let cm_pos = u32::try_from(coin_idx).unwrap();
-    let contract = LeadContract {
-        path: coin.path,
-        coin_pk_x: coin.pk_x,
-        coin_pk_y: coin.pk_y,
-        root_sk: coin.root_sk,
-        path_sk: Some(path_sk),
-        coin_timestamp: coin.tau, //
-        coin_nonce: coin.nonce,
-        coin_opening_1: Some(mod_r_p(coin.opening1.unwrap())),
-        value: coin.value,
-        coin_opening_2: Some(mod_r_p(coin.opening2.unwrap())),
-        cm_pos: Some(cm_pos),
-        //sn_c1: Some(coin.sn.unwrap()),
-        slot: Some(coin.sl.unwrap()),
-        mau_rho: Some(mau_rho.clone()),
-        mau_y: Some(mau_y.clone()),
-        root_cm: Some(coin.root_cm.unwrap()),
-    };
 
+    let cm_pos = coin.idx;
     let cm_root = {
         let pos: u32 = cm_pos;
         let c_cm_coordinates = coin.cm.unwrap().to_affine().coordinates().unwrap();
@@ -278,7 +223,6 @@ fn main() {
         }
         current
     };
-
     let mut public_inputs: Vec<pallas::Base> = vec![
         *po_nonce.x(),
         *po_nonce.y(),
@@ -293,6 +237,52 @@ fn main() {
         cm_root.0,
         po_cmp,
     ];
+    public_inputs
+}
+
+fn main() {
+    let k = 13;
+    //
+    const LEN: usize = 10;
+    let mut rng = thread_rng();
+    let mut root_sks: Vec<MerkleNode> = vec![];
+    let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
+    let mut values : Vec<u64> = vec![];
+    for i in 0..LEN {
+        values.push(u64::try_from(i*2).unwrap());
+    }
+    (root_sks, path_sks) = create_coins_sks(LEN);
+    let mut coins: Vec<Coin> = create_coins(root_sks.clone(),
+                                            path_sks.clone(),
+                                            values,
+                                            LEN);
+    //
+    let yu64: u64 = rng.gen();
+    let rhou64: u64 = rng.gen();
+    let mau_y: pallas::Base = pallas::Base::from(yu64);
+    let mau_rho: pallas::Base = pallas::Base::from(rhou64);
+    let coin_idx = 0;
+    let coin = coins[coin_idx];
+    let contract = LeadContract {
+        path: coin.path,
+        coin_pk_x: coin.pk_x,
+        coin_pk_y: coin.pk_y,
+        root_sk: coin.root_sk,
+        path_sk: coin.path_sk,
+        coin_timestamp: coin.tau, //
+        coin_nonce: coin.nonce,
+        coin_opening_1: Some(mod_r_p(coin.opening1.unwrap())),
+        value: coin.value,
+        coin_opening_2: Some(mod_r_p(coin.opening2.unwrap())),
+        cm_pos: Some(coin.idx),
+        //sn_c1: Some(coin.sn.unwrap()),
+        slot: Some(coin.sl.unwrap()),
+        mau_rho: Some(mau_rho.clone()),
+        mau_y: Some(mau_y.clone()),
+        root_cm: Some(coin.root_cm.unwrap()),
+    };
+    // calculate public inputs
+    let public_inputs = create_lead_coin_public_inputs(coin.clone());
 
     let prover = MockProver::run(k, &contract, vec![public_inputs]).unwrap();
     //
