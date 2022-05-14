@@ -290,8 +290,27 @@ def main(argv):
     # meet a criteria for a minimum number of gov tokens
     ################################################
 
+    user_secret = ec.random_scalar()
+    user_public = ec.multiply(user_secret, ec.G)
+
     # There is a struct that corresponds to the configuration of this
     # particular vote.
+    # For MVP, just use a single-option list of [destination, amount]
+    # Send user 1000 DRK
+    proposal = ClassNamespace()
+    proposal.dest = user_public
+    proposal.amount = 1000
+    proposal.blind = ec.random_base()
+
+    # For vote to become valid, the proposer must prove
+    # that they own more than proposer_limit number of gov tokens.
+    enc_proposal = crypto.ff_hash(
+        ec.p,
+        proposal.dest[0],
+        proposal.dest[1],
+        proposal.amount,
+        proposal.blind
+    )
 
     # State
     # functions that can be called on state with params
@@ -324,9 +343,6 @@ def main(argv):
     builder = money.SendPaymentTxBuilder(ec)
     witness = money_state.all_coins
     builder.add_input(witness, dao_shared_secret, note, user_data_blind)
-
-    user_secret = ec.random_scalar()
-    user_public = ec.multiply(user_secret, ec.G)
 
     builder.add_output(1000, money_token_id, user_public,
                        spend_hook=b"0x0000", user_data=b"0x0000")
