@@ -61,8 +61,8 @@ class SendPaymentTxBuilder:
         input_blinds = []
         signature_secrets = []
         for input in self.inputs:
-            # FIXME: BUG - see corresponding builder.rs file
-            input_blinds.append(input.note.value_blind)
+            value_blind = self.ec.random_scalar()
+            input_blinds.append(value_blind)
 
             signature_secret = self.ec.random_scalar()
             signature_secrets.append(signature_secret)
@@ -70,7 +70,7 @@ class SendPaymentTxBuilder:
             tx_input = ClassNamespace()
             tx_input.__name__ = "TransactionInput"
             tx_input.burn_proof = BurnProof(
-                input.note.value, input.note.token_id, input.note.value_blind,
+                input.note.value, input.note.token_id, value_blind,
                 token_blind, input.note.serial, input.note.coin_blind,
                 input.secret, input.note.spend_hook, input.note.user_data,
                 input.user_data_blind, input.all_coins, signature_secret,
@@ -233,6 +233,7 @@ class BurnProof:
             self.token_id, self.token_blind, self.ec
         )
 
+        # is_valid_merkle_root()
         revealed.all_coins = self.all_coins
 
         revealed.signature_public = self.ec.multiply(self.signature_secret,
