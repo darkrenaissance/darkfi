@@ -11,16 +11,18 @@ use tui::{
     Frame,
 };
 
+use darkfi::util::Timestamp;
+
 use crate::{
     error::{DnetViewError, DnetViewResult},
     model::{NodeInfo, SelectableObject},
 };
-use log::debug;
+//use log::debug;
 
 #[derive(Debug)]
 pub struct View {
     pub nodes: NodeInfoView,
-    pub msg_log: FxHashMap<String, Vec<(u64, String, String)>>,
+    pub msg_log: FxHashMap<String, Vec<(Timestamp, String, String)>>,
     pub active_ids: IdListView,
     pub selectables: FxHashMap<String, SelectableObject>,
 }
@@ -28,7 +30,7 @@ pub struct View {
 impl View {
     pub fn new(
         nodes: NodeInfoView,
-        msg_log: FxHashMap<String, Vec<(u64, String, String)>>,
+        msg_log: FxHashMap<String, Vec<(Timestamp, String, String)>>,
         active_ids: IdListView,
         selectables: FxHashMap<String, SelectableObject>,
     ) -> View {
@@ -38,7 +40,7 @@ impl View {
     pub fn update(
         &mut self,
         nodes: FxHashMap<String, NodeInfo>,
-        msg_log: FxHashMap<String, Vec<(u64, String, String)>>,
+        msg_log: FxHashMap<String, Vec<(Timestamp, String, String)>>,
         selectables: FxHashMap<String, SelectableObject>,
     ) {
         self.update_nodes(nodes);
@@ -73,7 +75,7 @@ impl View {
         }
     }
 
-    fn update_msg_log(&mut self, msg_log: FxHashMap<String, Vec<(u64, String, String)>>) {
+    fn update_msg_log(&mut self, msg_log: FxHashMap<String, Vec<(Timestamp, String, String)>>) {
         for (id, msg) in msg_log {
             self.msg_log.insert(id, msg);
         }
@@ -209,8 +211,12 @@ impl View {
                         Some(values) => {
                             for (t, k, v) in values {
                                 lines.push(Spans::from(match k.as_str() {
-                                    "send" => Span::styled(format!("S: {}", v), style),
-                                    "recv" => Span::styled(format!("R: {}", v), style),
+                                    "send" => {
+                                        Span::styled(format!("{}             S: {}", t, v), style)
+                                    }
+                                    "recv" => {
+                                        Span::styled(format!("{}             R: {}", t, v), style)
+                                    }
                                     data => {
                                         return Err(DnetViewError::UnexpectedData(data.to_string()))
                                     }

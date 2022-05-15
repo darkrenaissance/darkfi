@@ -1,16 +1,16 @@
 use async_std::sync::Mutex;
-
+use darkfi::util::Timestamp;
 use fxhash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Session {
     Inbound,
     Outbound,
     Manual,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum SelectableObject {
     Node(NodeInfo),
     Session(SessionInfo),
@@ -20,7 +20,7 @@ pub enum SelectableObject {
 pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
     pub nodes: Mutex<FxHashMap<String, NodeInfo>>,
-    pub msg_log: Mutex<FxHashMap<String, Vec<(u64, String, String)>>>,
+    pub msg_log: Mutex<FxHashMap<String, Vec<(Timestamp, String, String)>>>,
     pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
 }
 
@@ -28,14 +28,14 @@ impl Model {
     pub fn new(
         ids: Mutex<FxHashSet<String>>,
         nodes: Mutex<FxHashMap<String, NodeInfo>>,
-        msg_log: Mutex<FxHashMap<String, Vec<(u64, String, String)>>>,
+        msg_log: Mutex<FxHashMap<String, Vec<(Timestamp, String, String)>>>,
         selectables: Mutex<FxHashMap<String, SelectableObject>>,
     ) -> Model {
         Model { ids, nodes, msg_log, selectables }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct NodeInfo {
     pub id: String,
     pub name: String,
@@ -54,7 +54,7 @@ impl NodeInfo {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
     pub id: String,
     pub name: String,
@@ -75,13 +75,13 @@ impl SessionInfo {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ConnectInfo {
     pub id: String,
     pub addr: String,
     pub state: String,
     pub parent: String,
-    pub msg_log: Vec<(u64, String, String)>,
+    pub msg_log: Vec<(Timestamp, String, String)>,
     pub is_empty: bool,
     pub last_msg: String,
     pub last_status: String,
@@ -93,7 +93,7 @@ impl ConnectInfo {
         addr: String,
         state: String,
         parent: String,
-        msg_log: Vec<(u64, String, String)>,
+        msg_log: Vec<(Timestamp, String, String)>,
         is_empty: bool,
         last_msg: String,
         last_status: String,
