@@ -49,8 +49,9 @@ def money_state_transition(state, tx):
 
 class ProposerTxBuilder:
 
-    def __init__(self, all_dao_bullas, ec):
+    def __init__(self, proposal, all_dao_bullas, ec):
         self.inputs = []
+        self.proposal = proposal
         self.all_dao_bullas = all_dao_bullas
 
         self.ec = ec
@@ -73,7 +74,6 @@ class ProposerTxBuilder:
     def build(self):
         tx = ProposerTx(self.ec)
         token_blind = self.ec.random_scalar()
-        proposer_limit_blind = self.ec.random_base()
         enc_bulla_blind = self.ec.random_base()
 
         total_value = sum(input.note.value for input in self.inputs)
@@ -84,11 +84,28 @@ class ProposerTxBuilder:
         tx.dao.__name__ = "ProposerTxDao"
         # We export proposer_limit as an encrypted value from the DAO
         tx.dao.proof = ProposerTxDaoProof(
-            total_value, total_value_blinds,
-            self.dao_proposer_limit, self.dao_quorum, self.dao_approval_ratio,
-            self.gov_token_id, self.dao_bulla_blind,
-            token_blind, proposer_limit_blind, enc_bulla_blind,
-            self.all_dao_bullas, self.ec
+            # Value commit
+            total_value,
+            total_value_blinds,
+            # DAO params
+            self.dao_proposer_limit,
+            self.dao_quorum,
+            self.dao_approval_ratio,
+            self.gov_token_id,
+            self.dao_bulla_blind,
+            # Token commit
+            token_blind,
+            # Used by other DAO members to verify the bulla
+            # used in this proof is for the actual DAO
+            enc_bulla_blind,
+            # Proposal
+            self.proposal.dest,
+            self.proposal.amount,
+            self.proposal.blind,
+            self.proposal.serial,
+            # Merkle witness
+            self.all_dao_bullas,
+            self.ec
         )
         tx.dao.revealed = tx.dao.proof.get_revealed()
 
@@ -96,6 +113,7 @@ class ProposerTxBuilder:
         # bulla they are voting on, so we encrypt the blind to them
         tx.note = ClassNamespace()
         tx.note.enc_bulla_blind = enc_bulla_blind
+        tx.note.proposal = self.proposal
 
         signature_secrets = []
         for input, value_blind in zip(self.inputs, input_value_blinds):
@@ -243,7 +261,9 @@ class ProposerTxDaoProof:
     def __init__(self, total_value, total_value_blinds,
                  proposer_limit, quorum, approval_ratio,
                  gov_token_id, dao_bulla_blind,
-                 token_blind, proposer_limit_blind, enc_bulla_blind,
+                 token_blind, enc_bulla_blind,
+                 proposal_dest, proposal_amount, proposal_blind,
+                 proposal_serial,
                  all_dao_bullas, ec):
         self.total_value = total_value
         self.total_value_blinds = total_value_blinds
@@ -253,8 +273,11 @@ class ProposerTxDaoProof:
         self.gov_token_id = gov_token_id
         self.dao_bulla_blind = dao_bulla_blind
         self.token_blind = token_blind
-        self.proposer_limit_blind = proposer_limit_blind
         self.enc_bulla_blind = enc_bulla_blind
+        self.proposal_dest = proposal_dest
+        self.proposal_amount = proposal_amount
+        self.proposal_blind = proposal_blind
+        self.proposal_serial = proposal_serial
         self.all_dao_bullas = all_dao_bullas
         self.ec = ec
 
@@ -278,6 +301,16 @@ class ProposerTxDaoProof:
             self.dao_bulla_blind
         )
         revealed.enc_bulla = crypto.ff_hash(self.ec.p, bulla, self.enc_bulla_blind)
+        # encrypted proposal
+        revealed.proposal_bulla = crypto.ff_hash(
+            self.ec.p,
+            self.proposal_dest[0],
+            self.proposal_dest[1],
+            self.proposal_amount,
+            self.proposal_blind,
+            self.proposal_serial,
+            bulla
+        )
         # The merkle root
         revealed.all_dao_bullas = self.all_dao_bullas
         return revealed
@@ -307,18 +340,9 @@ class ProposerTxDaoProof:
             revealed.value_commit == public.value_commit,
             revealed.token_commit == public.token_commit,
             revealed.enc_bulla == public.enc_bulla,
+            revealed.proposal_bulla == public.proposal_bulla,
             revealed.all_dao_bullas == public.all_dao_bullas
         ])
-
-# contract interface functions
-def proposer_state_transition(state, tx):
-    is_verify, reason = tx.verify()
-    if not is_verify:
-        print(f"dao tx verify failed: {reason}", file=sys.stderr)
-        return None
-
-    update = ClassNamespace()
-    return update
 
 class DaoBuilder:
 
@@ -393,13 +417,17 @@ class DaoMintProof:
 class DaoState:
 
     def __init__(self):
-        self.bullas = set()
+        self.dao_bullas = set()
+        self.proposals = set()
+
+    def is_valid_merkle(self, all_dao_bullas):
+        return all_dao_bullas.issubset(self.dao_bullas)
+
+    def apply_proposal_tx(self, update):
+        self.proposals.add(update.proposal)
 
     def apply(self, update):
-        self.bullas.add(update.bulla)
-
-    def apply_exec(self, update):
-        pass
+        self.dao_bullas.add(update.bulla)
 
 # contract interface functions
 def dao_state_transition(state, tx):
@@ -435,6 +463,26 @@ class DaoExecProof:
 
 def dao_exec_state_transition(state, tx):
     update = ClassNamespace()
+    return update
+
+# contract interface functions
+def proposal_state_transition(dao_state, gov_state, tx):
+    is_verify, reason = tx.verify()
+    if not is_verify:
+        print(f"dao tx verify failed: {reason}", file=sys.stderr)
+        return None
+
+    if not dao_state.is_valid_merkle(tx.dao.revealed.all_dao_bullas):
+        print(f"invalid merkle root dao", file=sys.stderr)
+        return None
+
+    for input in tx.inputs:
+        if not gov_state.is_valid_merkle(input.revealed.all_coins):
+            print(f"invalid merkle root", file=sys.stderr)
+            return None
+
+    update = ClassNamespace()
+    update.proposal = tx.dao.revealed.proposal_bulla
     return update
 
 def main(argv):
@@ -588,18 +636,13 @@ def main(argv):
     proposal.dest = user_public
     proposal.amount = 1000
     proposal.blind = ec.random_base()
+    # Used to produce the nullifier when the vote is executed
+    proposal.serial = ec.random_base()
 
     # For vote to become valid, the proposer must prove
     # that they own more than proposer_limit number of gov tokens.
-    enc_proposal = crypto.ff_hash(
-        ec.p,
-        proposal.dest[0],
-        proposal.dest[1],
-        proposal.amount,
-        proposal.blind
-    )
 
-    builder = ProposerTxBuilder(dao_state.bullas, ec)
+    builder = ProposerTxBuilder(proposal, dao_state.dao_bullas, ec)
     witness = gov_state.all_coins
     builder.add_input(witness, gov_secret_1, gov_user_1_note)
     builder.set_dao(
@@ -612,8 +655,10 @@ def main(argv):
     tx = builder.build()
 
     # No state changes actually happen so ignore the update
-    if (_ := proposer_state_transition(gov_state, tx)) is None:
+    # We just verify the tx is correct basically.
+    if (update := proposal_state_transition(dao_state, gov_state, tx)) is None:
         return -1
+    dao_state.apply_proposal_tx(update)
 
     # State
     # functions that can be called on state with params
@@ -701,7 +746,7 @@ def main(argv):
     tx = builder.build()
     if (update := dao_exec_state_transition(dao_state, tx)) is None:
         return -1
-    dao_state.apply_exec(update)
+    #dao_state.apply_exec(update)
 
     return 0
 
