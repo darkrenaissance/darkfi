@@ -136,6 +136,7 @@ class SendPaymentTx:
         self.ec = ec
 
     def partial_encode(self):
+        # There is no cake
         return b"hello"
 
     def verify(self):

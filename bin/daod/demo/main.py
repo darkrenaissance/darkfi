@@ -112,8 +112,10 @@ class ProposerTxBuilder:
             tx_input.revealed = tx_input.proof.get_revealed()
             tx.inputs.append(tx_input)
 
-        # TODO: sign tx
-        # TODO: continue adding logic to tx.verify
+        unsigned_tx_data = tx.partial_encode()
+        for (input, signature_secret) in zip(tx.inputs, signature_secrets):
+            signature = crypto.sign(unsigned_tx_data, signature_secret, self.ec)
+            input.signature = signature
 
         return tx
 
@@ -126,9 +128,26 @@ class ProposerTx:
 
         self.ec = ec
 
+    def partial_encode(self):
+        # There is no cake
+        return b"hello"
+
     def verify(self):
         if not self._check_value_commits():
             return False, "value commits do not match"
+
+        if not self._check_proofs():
+            return False, "proofs failed to verify"
+
+        if not self._verify_token_commitments():
+            return False, "token ID mismatch"
+
+        unsigned_tx_data = self.partial_encode()
+        for input in self.inputs:
+            public = input.revealed.signature_public
+            if not crypto.verify(unsigned_tx_data, input.signature,
+                                 public, self.ec):
+                return False
 
         return True, None
 
@@ -140,6 +159,21 @@ class ProposerTx:
             valcom_total = self.ec.add(valcom_total, value_commit)
 
         return valcom_total == self.dao.revealed.value_commit
+
+    def _check_proofs(self):
+        for input in self.inputs:
+            if not input.proof.verify(input.revealed):
+                return False
+        if not self.dao.proof.verify(self.dao.revealed):
+            return False
+        return True
+
+    def _verify_token_commitments(self):
+        token_commit_value = self.dao.revealed.token_commit
+        for input in self.inputs:
+            if input.revealed.token_commit != token_commit_value:
+                return False
+        return True
 
 class ProposerTxInputProof:
 
@@ -182,7 +216,7 @@ class ProposerTxInputProof:
         revealed = self.get_revealed()
 
         public_key = self.ec.multiply(self.secret, self.ec.G)
-        coin = ff_hash(
+        coin = crypto.ff_hash(
             self.ec.p,
             public_key[0],
             public_key[1],
@@ -266,7 +300,7 @@ class ProposerTxDaoProof:
         #
         #   total_value >= proposer_limit
         #
-        if not total_value >= self.proposer_limit:
+        if not self.total_value >= self.proposer_limit:
             return False
 
         return all([
