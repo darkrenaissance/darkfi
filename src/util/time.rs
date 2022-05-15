@@ -155,7 +155,7 @@ pub fn timestamp_to_date(timestamp: i64, dt: &str) -> String {
             NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
         }
         "datetime" => {
-            NaiveDateTime::from_timestamp(timestamp, 0).format("%H:%M %A %-d %B").to_string()
+            NaiveDateTime::from_timestamp(timestamp, 0).format("%H:%M:%S %A %-d %B").to_string()
         }
         _ => "".to_string(),
     }
