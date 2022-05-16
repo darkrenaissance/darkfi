@@ -63,6 +63,9 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         }
     }
 
+    // Nullifiers in the transaction
+    let mut nullifiers = Vec::with_capacity(tx.inputs.len());
+
     debug!(target: "state_transition", "Iterate inputs");
     for (i, input) in tx.inputs.iter().enumerate() {
         let merkle = &input.revealed.merkle_root;
@@ -78,11 +81,15 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
         // The nullifiers should not already exist.
         // It is the double-spend protection.
         let nullifier = &input.revealed.nullifier;
-        if state.nullifier_exists(nullifier) {
+        if state.nullifier_exists(nullifier) ||
+            (1..nullifiers.len()).any(|i| nullifiers[i..].contains(&nullifiers[i - 1]))
+        {
             error!(target: "state_transition", "Duplicate nullifier found (input {})", i);
             debug!(target: "state_transition", "nullifier: {:?}", nullifier);
             return Err(VerifyFailed::NullifierExists(i))
         }
+
+        nullifiers.push(input.revealed.nullifier);
     }
 
     debug!(target: "state_transition", "Verifying zk proofs");
@@ -92,12 +99,6 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
             error!(target: "state_transition", "Failed verifying zk proofs: {}", e);
             return Err(VerifyFailed::ProofVerifyFailed(e.to_string()))
         }
-    }
-
-    // Gather all the nullifiers
-    let mut nullifiers = Vec::with_capacity(tx.inputs.len());
-    for input in tx.inputs {
-        nullifiers.push(input.revealed.nullifier);
     }
 
     // Newly created coins for this transaction
