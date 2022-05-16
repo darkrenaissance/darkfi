@@ -5,6 +5,8 @@ use halo2_gadgets::primitives::{
     poseidon::{ConstantLength, P128Pow5T3},
 };
 
+use serde::{Serialize, Deserialize};
+
 use halo2_proofs::dev::MockProver;
 
 use rand::{thread_rng, Rng};
@@ -17,8 +19,11 @@ use darkfi::{
             NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
             MERKLE_DEPTH_ORCHARD,
         },
+        leadcoin::{LeadCoin},
         keypair::{Keypair, PublicKey, SecretKey},
+        lead_proof::{create_lead_proof,verify_lead_proof},
         merkle_node::MerkleNode,
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
         nullifier::Nullifier,
         proof::{Proof, ProvingKey, VerifyingKey},
         types::*,
@@ -33,30 +38,8 @@ use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::PrimeField, Curve, GroupEncoding},
 };
-//use halo2_proofs::arithmetic::CurveAffine;
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Coin {
-    value: Option<pallas::Base>, //stake
-    cm: Option<pallas::Point>,
-    cm2: Option<pallas::Point>,
-    idx: u32,
-    sl: Option<pallas::Base>, //slot id
-    tau: Option<pallas::Base>,
-    nonce: Option<pallas::Base>,
-    nonce_cm: Option<pallas::Point>,
-    sn: Option<pallas::Point>, // coin's serial number
-    //sk : Option<SecretKey>,
-    pk: Option<pallas::Point>,
-    pk_x: Option<pallas::Base>,
-    pk_y: Option<pallas::Base>,
-    root_cm: Option<pallas::Scalar>,
-    root_sk: Option<pallas::Base>,
-    path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
-    path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
-    opening1: Option<pallas::Base>,
-    opening2: Option<pallas::Base>,
-}
+use halo2_proofs::arithmetic::Field;
 
 fn create_coins_sks(len : usize) ->
     (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>)
@@ -76,13 +59,18 @@ fn create_coins_sks(len : usize) ->
         // is the endianess different?
         let base = pedersen_commitment_scalar(pallas::Scalar::one(), pallas::Scalar::from(sk));
         let coord = base.to_affine().coordinates().unwrap();
-        let coord_prod =  coord.x() * coord.y();
-        let node = MerkleNode(coord_prod);
+        //let sk =  coord.x() * coord.y();
+        //let sk =  *coord.y();
+        let sk : [u8; 32] = pallas::Base::random(rng.clone()).to_repr();
+        let node = MerkleNode::from_bytes(&sk).unwrap();
+        //let serialized = serde_json::to_string(&node).unwrap();
+        //println!("serialized: {}", serialized);
         tree.append(&node.clone());
         let leaf_position = tree.witness();
         //let (leaf_pos, path) = tree.authentication_path(leaf_position.unwrap()).unwrap();
         let path = tree.authentication_path(leaf_position.unwrap()).unwrap();
-        root_sks.push(tree.root().clone());
+        //note root sk is at tree.root()
+        root_sks.push(node);
         path_sks.push(path.as_slice().try_into().unwrap());
     }
     (root_sks, path_sks)
@@ -92,7 +80,9 @@ fn create_coins_sks(len : usize) ->
 fn create_coins(root_sks : Vec<MerkleNode>,
                 path_sks : Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
                 values : Vec<u64>,
-                len : usize) -> Vec<Coin>
+                cm1_blind: pallas::Base,
+                cm2_blind: pallas::Base,
+                len : usize) -> Vec<LeadCoin>
 {
     let mut rng = thread_rng();
     let mut seeds: Vec<u64> = vec![];
@@ -102,7 +92,7 @@ fn create_coins(root_sks : Vec<MerkleNode>,
     }
 
     let mut tree_cm = BridgeTree::<MerkleNode, 32>::new(len);
-    let mut coins: Vec<Coin> = vec![];
+    let mut coins: Vec<LeadCoin> = vec![];
     for i in 0..len {
         let c_v = pallas::Base::from(values[i]);
         //random sampling of the same size of prf,
@@ -125,8 +115,8 @@ fn create_coins(root_sks : Vec<MerkleNode>,
         let c_pk_pt_y: pallas::Base = *c_pk_pt.y();
 
         let c_cm_v = c_v.clone() * c_seed.clone() * c_pk_pt_x * c_pk_pt_y;
-        let c_cm1_blind = pallas::Base::from(1); //tmp val
-        let c_cm2_blind = pallas::Base::from(1); //tmp val
+        let c_cm1_blind = cm1_blind; //TODO (fix) should be read from DrkValueBlind
+        let c_cm2_blind = cm2_blind; //TODO (fix) should be read from DrkValueBlind
         let c_cm: pallas::Point = pedersen_commitment_scalar(mod_r_p(c_cm_v), mod_r_p(c_cm1_blind));
 
         let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
@@ -163,7 +153,7 @@ fn create_coins(root_sks : Vec<MerkleNode>,
 
         let c_path_sk = path_sks[i];
 
-        let coin = Coin {
+        let coin = LeadCoin {
             value: Some(c_v),
             cm: Some(c_cm),
             cm2: Some(c_cm2),
@@ -188,60 +178,10 @@ fn create_coins(root_sks : Vec<MerkleNode>,
     coins
 }
 
-fn create_lead_coin_public_inputs(coin: Coin) -> Vec<pallas::Base>
-{
-    let po_nonce = coin.nonce_cm.unwrap().to_affine().coordinates().unwrap();
-
-    let po_tau = pedersen_commitment_scalar(mod_r_p(coin.tau.unwrap()), coin.root_cm.unwrap())
-        .to_affine()
-        .coordinates()
-        .unwrap();
-
-    let po_cm = coin.cm.unwrap().to_affine().coordinates().unwrap();
-    let po_cm2 = coin.cm2.unwrap().to_affine().coordinates().unwrap();
-
-    let po_pk = coin.pk.unwrap().to_affine().coordinates().unwrap();
-    let po_sn = coin.sn.unwrap().to_affine().coordinates().unwrap();
-
-    let po_cmp = pallas::Base::from(0);
-    let zero = pallas::Base::from(0);
-    // ===============
-
-    let cm_pos = coin.idx;
-    let cm_root = {
-        let pos: u32 = cm_pos;
-        let c_cm_coordinates = coin.cm.unwrap().to_affine().coordinates().unwrap();
-        let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
-        let mut current = MerkleNode(c_cm_base);
-        for (level, sibling) in coin.path.unwrap().iter().enumerate() {
-            let level = level as u8;
-            current = if pos & (1 << level) == 0 {
-                MerkleNode::combine(level.into(), &current, sibling)
-            } else {
-                MerkleNode::combine(level.into(), sibling, &current)
-            };
-        }
-        current
-    };
-    let mut public_inputs: Vec<pallas::Base> = vec![
-        *po_nonce.x(),
-        *po_nonce.y(),
-        *po_pk.x(),
-        *po_pk.y(),
-        *po_sn.x(),
-        *po_sn.y(),
-        *po_cm.x(),
-        *po_cm.y(),
-        *po_cm2.x(),
-        *po_cm2.y(),
-        cm_root.0,
-        po_cmp,
-    ];
-    public_inputs
-}
-
 fn main() {
-    let k = 13;
+    let k : u32 = 13;
+    //let lead_pk = ProvingKey::build(k, &LeadContract::default());
+    //let lead_vk = VerifyingKey::build(k, &LeadContract::default());
     //
     const LEN: usize = 10;
     let mut rng = thread_rng();
@@ -251,18 +191,26 @@ fn main() {
     for i in 0..LEN {
         values.push(u64::try_from(i*2).unwrap());
     }
+    let cm1_val : u64 = rng.gen();
+    let cm1_blind : pallas::Base = pallas::Base::from(cm1_val);
+    let cm2_val : u64 = rng.gen();
+    let cm2_blind : pallas::Base = pallas::Base::from(cm2_val);
     (root_sks, path_sks) = create_coins_sks(LEN);
-    let mut coins: Vec<Coin> = create_coins(root_sks.clone(),
+    let mut coins: Vec<LeadCoin> = create_coins(root_sks.clone(),
                                             path_sks.clone(),
                                             values,
+                                            cm1_blind,
+                                            cm2_blind,
                                             LEN);
     //
+    let coin_idx = 0;
+    let coin = coins[coin_idx];
+
     let yu64: u64 = rng.gen();
     let rhou64: u64 = rng.gen();
     let mau_y: pallas::Base = pallas::Base::from(yu64);
     let mau_rho: pallas::Base = pallas::Base::from(rhou64);
-    let coin_idx = 0;
-    let coin = coins[coin_idx];
+
     let contract = LeadContract {
         path: coin.path,
         coin_pk_x: coin.pk_x,
@@ -281,11 +229,18 @@ fn main() {
         mau_y: Some(mau_y.clone()),
         root_cm: Some(coin.root_cm.unwrap()),
     };
+
+
+
+    //let proof = create_lead_proof(lead_pk.clone(), coin.clone()).unwrap();
+    //verify_lead_proof(&lead_vk, &proof, coin);
+
     // calculate public inputs
-    let public_inputs = create_lead_coin_public_inputs(coin.clone());
+    let public_inputs = coin.public_inputs();
 
     let prover = MockProver::run(k, &contract, vec![public_inputs]).unwrap();
     //
     assert_eq!(prover.verify(), Ok(()));
     //
+
 }

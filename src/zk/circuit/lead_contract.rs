@@ -113,7 +113,7 @@ const LEAD_THRESHOLD_OFFSET: usize = 11;
 pub fn concat_u8(lhs: &[u8], rhs: &[u8]) -> Vec<u8> {
     [lhs, rhs].concat()
 }
-#[derive(Debug, Default)]
+#[derive(Default, Debug)]
 pub struct LeadContract {
     // witness
     pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
@@ -597,6 +597,10 @@ impl Circuit<pallas::Base> for LeadContract {
             config.primary,
             LEAD_COIN_COMMIT_PATH_OFFSET,
         )?;
+
+        let node = MerkleNode::from_bytes(&self.root_sk.unwrap().to_repr()).unwrap();
+        let serialized = serde_json::to_string(&node).unwrap();
+        println!("serialized: {}", serialized);
 
         //TODO (research) this multiplication panics!
         let y_commit_exp = ar_chip.mul(

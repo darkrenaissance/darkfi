@@ -21,6 +21,10 @@ pub use burn_proof::BurnRevealedValues;
 pub use mint_proof::MintRevealedValues;
 pub use proof::Proof;
 
+pub mod leadcoin;
+
+pub mod lead_proof;
+
 use keypair::SecretKey;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
