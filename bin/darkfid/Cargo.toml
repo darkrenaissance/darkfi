@@ -1,5 +1,5 @@
 [package]
-name = "darkfid2"
+name = "darkfid"
 version = "0.3.0"
 homepage = "https://dark.fi"
 description = "DarkFi node daemon"

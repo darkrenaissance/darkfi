@@ -129,7 +129,7 @@ struct Args {
     cashier_pub: Vec<String>,
 
     #[structopt(long)]
-    /// Whitelisted fauced address (repeatable flag)
+    /// Whitelisted faucet address (repeatable flag)
     faucet_pub: Vec<String>,
 
     #[structopt(short, parse(from_occurrences))]

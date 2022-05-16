@@ -18,17 +18,17 @@
 # Path to the blockchain database directory
 #database = "~/.config/darkfi/darkfid_blockchain"
 
-# JSON-RPC listen url
+# JSON-RPC listen URL
 #rpc_listen = "tcp://127.0.0.1:8340"
 
 # Participate in the consensus protocol
 #consensus = false
 
 # P2P accept address for the consensus protocol
-#consensus_p2p_accept = "tls://0.0.0.0:8341"
+#consensus_p2p_accept = "tls://127.0.0.1:8341"
 
 # P2P external address for the consensus protocol
-#consensus_p2p_external = "tls://0.0.0.0:8341"
+#consensus_p2p_external = "tls://127.0.0.1:8341"
 
 # Connection slots for the consensus protocol
 #consensus_slots = 8
@@ -40,10 +40,10 @@
 #consensus_p2p_peer = []
 
 # P2P accept address for the syncing protocol
-#sync_p2p_accept = "tls://0.0.0.0:8342"
+#sync_p2p_accept = "tls://127.0.0.1:8342"
 
 # P2P external address for the syncing protocol
-#sync_p2p_external = "tls://0.0.0.0:8342"
+#sync_p2p_external = "tls://127.0.0.1:8342"
 
 # Connection slots for the syncing protocol
 #sync_slots = 8
@@ -53,3 +53,9 @@
 
 # Peers to connect to for the syncing protocol
 #sync_p2p_peer = []
+
+# Whitelisted cashier addresses
+#cashier_pub = []
+
+# Whitelisted faucet addresses
+#faucet_pub = []
