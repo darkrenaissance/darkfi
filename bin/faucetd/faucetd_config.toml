@@ -22,10 +22,10 @@
 #rpc_listen = "tcp://127.0.0.1:8340"
 
 # P2P accept address for the syncing protocol
-#sync_p2p_accept = "tls://0.0.0.0:8342"
+#sync_p2p_accept = "tls://127.0.0.1:8342"
 
 # P2P external address for the syncing protocol
-#sync_p2p_external = "tls://0.0.0.0:8342"
+#sync_p2p_external = "tls://127.0.0.1:8342"
 
 # Connection slots for the syncing protocol
 #sync_slots = 8
@@ -35,3 +35,9 @@
 
 # Peers to connect to for the syncing protocol
 #sync_peer = []
+
+# Airdrop timeout limit in seconds
+#airdrop_timeout = 600
+
+# Airdrop amount limit
+#airdrop_limit = "10"
