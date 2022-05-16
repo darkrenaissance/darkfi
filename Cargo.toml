@@ -62,7 +62,7 @@ ntp = {version = "0.5.0", optional = true}
 # TLS cert utilities
 ed25519-compact = {version = "1.0.11", features = ["pem"], optional = true}
 rcgen = {version = "0.9.2", features = ["pem"], optional = true}
-rustls-pemfile = {version = "0.3.0", optional = true}
+rustls-pemfile = {version = "1.0.0", optional = true}
 
 # Encoding
 hex = {version = "0.4.3", optional = true}

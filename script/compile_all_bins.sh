@@ -1,17 +1,12 @@
 #!/bin/sh
 set -e
 
-# foo|bar|baz
-skip_bins='cashierd'
+toplevel="$(git rev-parse --show-toplevel)"
+dirs="$(grep '"bin/' "$toplevel/Cargo.toml" | grep -v '#' | tr -d '", \t')"
 
-find_packages() {
-	find bin -type f -name Cargo.toml | while read line; do
-		if echo "$line" | grep -Eq "$skip_bins"; then
-			continue
-		fi
+bins=""
+for i in $dirs; do
+	bins="$bins $(grep '^name = ' "$i/Cargo.toml" | cut -d' ' -f3 | tr -d '"')"
+done
 
-		echo "$(basename "$(dirname "$line")")"
-	done
-}
-
-make BINS="$(find_packages | xargs)"
+make BINS="$bins"

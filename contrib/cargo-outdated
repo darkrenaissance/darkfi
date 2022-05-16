@@ -165,7 +165,7 @@ def main():
                 ])
 
             if args.update and ret:
-                print(f"Update {dep} from {ret[0]} to {ret[1]}? (y/N)")
+                print(f"Update {dep} from {ret[0]} to {ret[1]}? (y/N): ", end="")
                 choice = input()
                 if choice and (choice == "y" or choice == "Y"):
                     if "dependencies" in ps and dep in ps["dependencies"]:
