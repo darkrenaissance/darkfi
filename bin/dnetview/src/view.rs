@@ -201,9 +201,14 @@ impl View {
                         Span::styled(format!("External addr: {}", node.external_addr), style);
                     lines.push(Spans::from(node_info));
                 }
-                Some(SelectableObject::Session(_session)) => {
-                    //let name_span = Spans::from("Session Info");
-                    //spans.push(name_span);
+                Some(SelectableObject::Session(session)) => {
+                    if session.accept_addr.is_some() {
+                        let session_info = Span::styled(
+                            format!("Accept addr: {}", session.accept_addr.as_ref().unwrap()),
+                            style,
+                        );
+                        lines.push(Spans::from(session_info));
+                    }
                 }
                 Some(SelectableObject::Connect(connect)) => {
                     let log = self.msg_log.get(&connect.id);

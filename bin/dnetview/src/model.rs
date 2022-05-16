@@ -56,11 +56,13 @@ impl NodeInfo {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
+    // TODO: make all values optional to handle empty sessions
     pub id: String,
     pub name: String,
     pub parent: String,
     pub is_empty: bool,
     pub children: Vec<ConnectInfo>,
+    pub accept_addr: Option<String>,
 }
 
 impl SessionInfo {
@@ -70,13 +72,15 @@ impl SessionInfo {
         is_empty: bool,
         parent: String,
         children: Vec<ConnectInfo>,
+        accept_addr: Option<String>,
     ) -> SessionInfo {
-        SessionInfo { id, name, is_empty, parent, children }
+        SessionInfo { id, name, is_empty, parent, children, accept_addr }
     }
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ConnectInfo {
+    // TODO: make all values optional to handle empty connections
     pub id: String,
     pub addr: String,
     pub state: String,

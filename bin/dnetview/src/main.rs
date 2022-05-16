@@ -34,6 +34,8 @@ use dnetview::{
     view::{IdListView, NodeInfoView, View},
 };
 
+use log::debug;
+
 struct DnetView {
     name: String,
     rpc_client: RpcClient,
@@ -244,6 +246,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
     let mut connects: Vec<ConnectInfo> = Vec::new();
     let connections = &inbound["connected"];
     let mut connect_count = 0;
+    let mut accept_vec = Vec::new();
 
     match connections.as_object() {
         Some(connect) => {
@@ -276,11 +279,23 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                     for k in connect.keys() {
                         let node = connect.get(k);
                         let addr = k.to_string();
-                        let id = node.unwrap().get("random_id").unwrap().as_u64().unwrap();
+                        let info = node.unwrap().as_array();
+                        // get the accept address
+                        let accept_addr = info.unwrap().get(0);
+                        let acc_addr = accept_addr
+                            .unwrap()
+                            .get("accept_addr")
+                            .unwrap()
+                            .as_str()
+                            .unwrap()
+                            .to_string();
+                        accept_vec.push(acc_addr);
+                        let info2 = info.unwrap().get(1);
+                        let id = info2.unwrap().get("random_id").unwrap().as_u64().unwrap();
                         let id = make_connect_id(&id)?;
                         let state = "state".to_string();
                         let parent = parent.clone();
-                        let msg_values = node.unwrap().get("log").unwrap().as_array().unwrap();
+                        let msg_values = info2.unwrap().get("log").unwrap().as_array().unwrap();
                         let mut msg_log: Vec<(Timestamp, String, String)> = Vec::new();
                         for msg in msg_values {
                             let msg: (Timestamp, String, String) =
@@ -289,9 +304,14 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                         }
                         let is_empty = false;
                         let last_msg =
-                            node.unwrap().get("last_msg").unwrap().as_str().unwrap().to_string();
-                        let last_status =
-                            node.unwrap().get("last_status").unwrap().as_str().unwrap().to_string();
+                            info2.unwrap().get("last_msg").unwrap().as_str().unwrap().to_string();
+                        let last_status = info2
+                            .unwrap()
+                            .get("last_status")
+                            .unwrap()
+                            .as_str()
+                            .unwrap()
+                            .to_string();
                         let connect_info = ConnectInfo::new(
                             id,
                             addr,
@@ -308,8 +328,18 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
             }
             let is_empty = is_empty_session(&connects);
 
-            let session_info = SessionInfo::new(id, name, is_empty, parent, connects);
-            Ok(session_info)
+            // TODO: clean this up
+            if accept_vec.is_empty() {
+                let accept_addr = None;
+                let session_info =
+                    SessionInfo::new(id, name, is_empty, parent, connects, accept_addr);
+                Ok(session_info)
+            } else {
+                let accept_addr = Some(accept_vec[0].clone());
+                let session_info =
+                    SessionInfo::new(id, name, is_empty, parent, connects, accept_addr);
+                Ok(session_info)
+            }
         }
         None => Err(DnetViewError::ValueIsNotObject),
     }
@@ -336,7 +366,9 @@ async fn parse_manual(_manual: &Value, node_id: &String) -> DnetViewResult<Sessi
     connects.push(connect_info.clone());
     let parent = connect_id.clone();
     let is_empty = is_empty_session(&connects);
-    let session_info = SessionInfo::new(session_id, name, is_empty, parent, connects.clone());
+    let accept_addr = None;
+    let session_info =
+        SessionInfo::new(session_id, name, is_empty, parent, connects.clone(), accept_addr);
 
     Ok(session_info)
 }
@@ -415,7 +447,8 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
 
             let is_empty = is_empty_session(&connects);
 
-            let session_info = SessionInfo::new(id, name, is_empty, parent, connects);
+            let accept_addr = None;
+            let session_info = SessionInfo::new(id, name, is_empty, parent, connects, accept_addr);
             Ok(session_info)
         }
         None => Err(DnetViewError::ValueIsNotObject),
