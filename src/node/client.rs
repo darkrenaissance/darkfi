@@ -95,7 +95,8 @@ impl Client {
                 }
 
                 let leaf_position = own_coin.leaf_position;
-                let merkle_path = state_m.tree.authentication_path(leaf_position).unwrap();
+                let root = state_m.tree.root(0).unwrap();
+                let merkle_path = state_m.tree.authentication_path(leaf_position, &root).unwrap();
                 inputs_value += own_coin.note.value;
 
                 let input = TransactionBuilderInputInfo {

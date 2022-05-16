@@ -98,7 +98,7 @@ impl FixedPoints<pallas::Affine> for OrchardFixedBases {
 }
 
 impl FixedPoint<pallas::Affine> for OrchardFixedBasesFull {
-    type ScalarKind = FullScalar;
+    type FixedScalarKind = FullScalar;
 
     fn generator(&self) -> pallas::Affine {
         match self {
@@ -129,7 +129,7 @@ impl FixedPoint<pallas::Affine> for OrchardFixedBasesFull {
 }
 
 impl FixedPoint<pallas::Affine> for NullifierK {
-    type ScalarKind = BaseFieldElem;
+    type FixedScalarKind = BaseFieldElem;
 
     fn generator(&self) -> pallas::Affine {
         nullifier_k::generator()
@@ -145,7 +145,7 @@ impl FixedPoint<pallas::Affine> for NullifierK {
 }
 
 impl FixedPoint<pallas::Affine> for ValueCommitV {
-    type ScalarKind = ShortScalar;
+    type FixedScalarKind = ShortScalar;
 
     fn generator(&self) -> pallas::Affine {
         value_commit_v::generator()

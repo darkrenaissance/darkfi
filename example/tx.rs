@@ -1,5 +1,5 @@
 // Example transaction flow
-use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -90,7 +90,7 @@ impl MemoryState {
             self.tree.append(&node);
 
             // Keep track of all Merkle roots that have existed
-            self.merkle_roots.push(self.tree.root());
+            self.merkle_roots.push(self.tree.root(0).unwrap());
 
             // If it's our own coin, witness it and append to the vector.
             if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
@@ -174,7 +174,8 @@ fn main() -> Result<()> {
     let owncoin = &state.own_coins[0];
     let note = owncoin.note;
     let leaf_position = owncoin.leaf_position;
-    let merkle_path = state.tree.authentication_path(leaf_position).unwrap();
+    let root = state.tree.root(0).unwrap();
+    let merkle_path = state.tree.authentication_path(leaf_position, &root).unwrap();
 
     let builder = TransactionBuilder {
         clear_inputs: vec![],

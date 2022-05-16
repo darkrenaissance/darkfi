@@ -1,5 +1,5 @@
 use async_std::sync::Arc;
-use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error};
 
@@ -158,8 +158,8 @@ impl State {
 
             // Keep track of all Merkle roots that have existed
             debug!("Existing merkle roots: {:#?}", self.merkle_roots.get_all()?);
-            debug!("New merkle root: {:#?}", self.tree.root());
-            self.merkle_roots.insert(&[self.tree.root()])?;
+            debug!("New merkle root: {:#?}", self.tree.root(0).unwrap());
+            self.merkle_roots.insert(&[self.tree.root(0).unwrap()])?;
 
             for secret in secret_keys.iter() {
                 if let Some(note) = State::try_decrypt_note(enc_note, *secret) {

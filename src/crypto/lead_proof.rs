@@ -1,9 +1,6 @@
 use std::time::Instant;
 
-use halo2_gadgets::primitives::{
-    poseidon,
-    poseidon::{ConstantLength, P128Pow5T3},
-};
+use halo2_gadgets::poseidon::primitives as poseidon;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
@@ -36,6 +33,7 @@ pub fn create_lead_proof(pk: ProvingKey, coin: LeadCoin) -> Result<Proof> {
         coin_pk_x: coin.pk_x,
         coin_pk_y: coin.pk_y,
         root_sk: coin.root_sk,
+        sf_root_sk: Some(mod_r_p(coin.root_sk.unwrap())),
         path_sk: coin.path_sk,
         coin_timestamp: coin.tau, //
         coin_nonce: coin.nonce,
@@ -45,8 +43,8 @@ pub fn create_lead_proof(pk: ProvingKey, coin: LeadCoin) -> Result<Proof> {
         cm_pos: Some(coin.idx),
         //sn_c1: Some(coin.sn.unwrap()),
         slot: Some(coin.sl.unwrap()),
-        mau_rho: Some(mau_rho.clone()),
-        mau_y: Some(mau_y.clone()),
+        mau_rho: Some(mod_r_p(mau_rho.clone())),
+        mau_y: Some(mod_r_p(mau_y.clone())),
         root_cm: Some(coin.root_cm.unwrap()),
     };
 

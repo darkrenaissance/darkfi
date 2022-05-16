@@ -1,17 +1,14 @@
-use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
-
-use halo2_gadgets::primitives::{
-    poseidon,
-    poseidon::{ConstantLength, P128Pow5T3},
+use halo2_proofs::{arithmetic::Field, dev::MockProver};
+use incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree};
+use pasta_curves::{
+    arithmetic::CurveAffine,
+    group::{ff::PrimeField, Curve, GroupEncoding},
+    pallas, Fp,
 };
 
-use serde::{Deserialize, Serialize};
-
-use halo2_proofs::dev::MockProver;
-
+use halo2_proofs::{arithmetic::Field, dev::MockProver};
 use rand::{thread_rng, Rng};
-
-use pasta_curves::{pallas, Fp};
+use serde::{Deserialize, Serialize};
 
 use darkfi::{
     crypto::{
@@ -30,15 +27,6 @@ use darkfi::{
     },
     zk::circuit::lead_contract::LeadContract,
 };
-
-use incrementalmerkletree::Hashable;
-
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::PrimeField, Curve, GroupEncoding},
-};
-
-use halo2_proofs::arithmetic::Field;
 
 fn create_coins_sks(len: usize) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>) {
     /*
@@ -64,11 +52,12 @@ fn create_coins_sks(len: usize) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEP
         //println!("serialized: {}", serialized);
         tree.append(&node.clone());
         let leaf_position = tree.witness();
+        let root = tree.root(0).unwrap();
         //let (leaf_pos, path) = tree.authentication_path(leaf_position.unwrap()).unwrap();
-        let path = tree.authentication_path(leaf_position.unwrap()).unwrap();
+        let path = tree.authentication_path(leaf_position.unwrap(), &root).unwrap();
         //note root sk is at tree.root()
         //root_sks.push(node);
-        root_sks.push(tree.root());
+        root_sks.push(root);
         path_sks.push(path.as_slice().try_into().unwrap());
     }
     (root_sks, path_sks)
@@ -122,8 +111,8 @@ fn create_coins(
         let c_cm_node = MerkleNode(c_cm_base);
         tree_cm.append(&c_cm_node.clone());
         let leaf_position = tree_cm.witness();
-        let c_cm_path = tree_cm.authentication_path(leaf_position.unwrap()).unwrap();
-        let c_root_cm = tree_cm.root();
+        let c_root_cm = tree_cm.root(0).unwrap();
+        let c_cm_path = tree_cm.authentication_path(leaf_position.unwrap(), &c_root_cm).unwrap();
         // lead coin commitment
         let c_seed2 = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));
         let c_seed2_pt = c_seed2.to_affine().coordinates().unwrap();
@@ -210,6 +199,7 @@ fn main() {
         coin_pk_x: coin.pk_x,
         coin_pk_y: coin.pk_y,
         root_sk: coin.root_sk,
+        sf_root_sk: Some(mod_r_p(coin.root_sk.unwrap())),
         path_sk: coin.path_sk,
         coin_timestamp: coin.tau, //
         coin_nonce: coin.nonce,
@@ -219,8 +209,8 @@ fn main() {
         cm_pos: Some(coin.idx),
         //sn_c1: Some(coin.sn.unwrap()),
         slot: Some(coin.sl.unwrap()),
-        mau_rho: Some(mau_rho.clone()),
-        mau_y: Some(mau_y.clone()),
+        mau_rho: Some(mod_r_p(mau_rho.clone())),
+        mau_y: Some(mod_r_p(mau_y.clone())),
         root_cm: Some(coin.root_cm.unwrap()),
     };
 

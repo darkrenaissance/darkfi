@@ -1,6 +1,6 @@
 use std::{io, iter};
 
-use halo2_gadgets::primitives::sinsemilla::HashDomain;
+use halo2_gadgets::sinsemilla::primitives::HashDomain;
 use incrementalmerkletree::{Altitude, Hashable};
 use lazy_static::lazy_static;
 use pasta_curves::{
@@ -18,8 +18,8 @@ use crate::{
     crypto::{
         coin::Coin,
         constants::{
-            sinsemilla::{i2lebsp_k, MERKLE_CRH_PERSONALIZATION},
-            L_ORCHARD_MERKLE, MERKLE_DEPTH_ORCHARD,
+            sinsemilla::{i2lebsp_k, L_ORCHARD_MERKLE, MERKLE_CRH_PERSONALIZATION},
+            MERKLE_DEPTH_ORCHARD,
         },
     },
     util::serial::{Decodable, Encodable},
@@ -106,8 +106,8 @@ impl Hashable for MerkleNode {
                 .hash(
                     iter::empty()
                         .chain(i2lebsp_k(altitude.into()).iter().copied())
-                        .chain(left.0.to_le_bits().iter().by_val().take(L_ORCHARD_MERKLE))
-                        .chain(right.0.to_le_bits().iter().by_val().take(L_ORCHARD_MERKLE)),
+                        .chain(left.0.to_le_bits().iter().by_vals().take(L_ORCHARD_MERKLE))
+                        .chain(right.0.to_le_bits().iter().by_vals().take(L_ORCHARD_MERKLE)),
                 )
                 .unwrap_or(pallas::Base::zero()),
         )

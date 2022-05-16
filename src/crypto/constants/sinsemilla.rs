@@ -19,7 +19,6 @@ pub const INV_TWO_POW_K: [u8; 32] = [
 /// of Pallas.
 pub const C: usize = 253;
 
-#[allow(dead_code)]
 /// $\ell^\mathsf{Orchard}_\mathsf{Merkle}$
 pub(crate) const L_ORCHARD_MERKLE: usize = 255;
 
@@ -135,7 +134,7 @@ mod tests {
         sinsemilla::MERKLE_CRH_PERSONALIZATION,
     };
     use group::{ff::PrimeField, Curve};
-    use halo2_gadgets::primitives::sinsemilla::{CommitDomain, HashDomain};
+    use halo2_gadgets::sinsemilla::primitives::{CommitDomain, HashDomain};
     use halo2_proofs::{arithmetic::CurveAffine, pasta::pallas};
     use rand::{self, rngs::OsRng, Rng};
 
@@ -160,18 +159,18 @@ mod tests {
     #[test]
     fn i2lebsp_k_round_trip() {
         {
-            let bitstring = (0..K).map(|_| rand::random()).collect::<Vec<_>>();
-            assert_eq!(i2lebsp_k(lebs2ip_k(&bitstring) as usize).to_vec(), bitstring);
+            let bitstring = [0; K].map(|_| rand::random());
+            assert_eq!(i2lebsp_k(lebs2ip_k(&bitstring) as usize), bitstring);
         }
 
         {
             let bitstring = [false; K];
-            assert_eq!(i2lebsp_k(lebs2ip_k(&bitstring) as usize).to_vec(), bitstring);
+            assert_eq!(i2lebsp_k(lebs2ip_k(&bitstring) as usize), bitstring);
         }
 
         {
             let bitstring = [true; K];
-            assert_eq!(i2lebsp_k(lebs2ip_k(&bitstring) as usize).to_vec(), bitstring);
+            assert_eq!(i2lebsp_k(lebs2ip_k(&bitstring) as usize), bitstring);
         }
     }
 

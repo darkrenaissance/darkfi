@@ -13,11 +13,8 @@ use darkfi::{
     zkas::decoder::ZkBinary,
     Result,
 };
-use halo2_gadgets::primitives::{
-    poseidon,
-    poseidon::{ConstantLength, P128Pow5T3},
-};
-use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use halo2_gadgets::poseidon::primitives as poseidon;
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::Field, Curve},
@@ -51,7 +48,8 @@ fn burn_proof() -> Result<()> {
         let messages =
             [*coords.x(), *coords.y(), pallas::Base::from(value), token_id, serial, coin_blind];
 
-        poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(messages)
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
+            .hash(messages)
     };
 
     // Fill the merkle tree with some random coins that we want to witness,
@@ -69,7 +67,8 @@ fn burn_proof() -> Result<()> {
     tree.append(&MerkleNode(coin3));
     tree.witness();
 
-    let merkle_path = tree.authentication_path(leaf_pos).unwrap();
+    let root = tree.root(0).unwrap();
+    let merkle_path = tree.authentication_path(leaf_pos, &root).unwrap();
     let leaf_pos: u64 = leaf_pos.into();
 
     let prover_witnesses = vec![
@@ -88,7 +87,8 @@ fn burn_proof() -> Result<()> {
     // Create the public inputs
     let nullifier = [secret.0, serial];
     let nullifier =
-        poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(nullifier);
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+            .hash(nullifier);
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
@@ -99,7 +99,7 @@ fn burn_proof() -> Result<()> {
     let sig_pubkey = PublicKey::from_secret(sig_secret);
     let sig_coords = sig_pubkey.0.to_affine().coordinates().unwrap();
 
-    let merkle_root = tree.root();
+    let merkle_root = tree.root(0).unwrap();
 
     let public_inputs = vec![
         nullifier,

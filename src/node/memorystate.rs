@@ -1,4 +1,4 @@
-use incrementalmerkletree::{bridgetree::BridgeTree, Frontier};
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 
 use super::state::{ProgramState, State, StateUpdate};
@@ -64,7 +64,7 @@ impl MemoryState {
         for coin in update.coins {
             let node = MerkleNode(coin.0);
             self.tree.append(&node);
-            self.merkle_roots.push(self.tree.root());
+            self.merkle_roots.push(self.tree.root(0).unwrap());
         }
 
         debug!(target: "state_apply", "(in-memory) Finished apply() successfully.");

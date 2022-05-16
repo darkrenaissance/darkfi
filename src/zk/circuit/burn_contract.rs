@@ -1,10 +1,12 @@
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointBaseField, FixedPointShort,
+        FixedPoint, FixedPointBaseField, FixedPointShort, ScalarFixed, ScalarFixedShort,
     },
-    poseidon::{Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig},
-    primitives::poseidon::{ConstantLength, P128Pow5T3},
+    poseidon::{
+        primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
+        Pow5Config as PoseidonConfig,
+    },
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
         merkle::{
@@ -175,7 +177,7 @@ impl Circuit<pallas::Base> for BurnContract {
             EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
 
         // Configuration for the Poseidon hash
-        let poseidon_config = PoseidonChip::configure::<P128Pow5T3>(
+        let poseidon_config = PoseidonChip::configure::<poseidon::P128Pow5T3>(
             meta,
             advices[6..9].try_into().unwrap(),
             advices[5],
@@ -259,9 +261,15 @@ impl Circuit<pallas::Base> for BurnContract {
         let hash = {
             let poseidon_message = [secret_key.clone(), serial.clone()];
 
-            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<2>, 3, 2>::init(
-                config.poseidon_chip(),
-                layouter.namespace(|| "Poseidon init"),
+            let poseidon_hasher = PoseidonHash::<
+                _,
+                _,
+                poseidon::P128Pow5T3,
+                poseidon::ConstantLength<2>,
+                3,
+                2,
+            >::init(
+                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
             let poseidon_output =
@@ -305,9 +313,15 @@ impl Circuit<pallas::Base> for BurnContract {
         let coin = {
             let poseidon_message = [pub_x, pub_y, value, token, serial, coin_blind];
 
-            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<6>, 3, 2>::init(
-                config.poseidon_chip(),
-                layouter.namespace(|| "Poseidon init"),
+            let poseidon_hasher = PoseidonHash::<
+                _,
+                _,
+                poseidon::P128Pow5T3,
+                poseidon::ConstantLength<6>,
+                3,
+                2,
+            >::init(
+                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
             let poseidon_output =
@@ -325,8 +339,7 @@ impl Circuit<pallas::Base> for BurnContract {
             self.merkle_path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
         let merkle_inputs = MerklePath::construct(
-            config.merkle_chip_1(),
-            config.merkle_chip_2(),
+            [config.merkle_chip_1(), config.merkle_chip_2()],
             OrchardHashDomains::MerkleCrh,
             self.leaf_pos,
             path,
@@ -359,13 +372,21 @@ impl Circuit<pallas::Base> for BurnContract {
         let (commitment, _) = {
             let value_commit_v = ValueCommitV;
             let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), value_commit_v);
-            value_commit_v
-                .mul(layouter.namespace(|| "[value] ValueCommitV"), (value, one.clone()))?
+            let value = ScalarFixedShort::new(
+                ecc_chip.clone(),
+                layouter.namespace(|| "value"),
+                (value, one.clone()),
+            )?;
+            value_commit_v.mul(layouter.namespace(|| "[value] ValueCommitV"), value)?
         };
 
         // r_V * G_2
         let (blind, _rcv) = {
-            let rcv = self.value_blind;
+            let rcv = ScalarFixed::new(
+                ecc_chip.clone(),
+                layouter.namespace(|| "value_blind"),
+                self.value_blind,
+            )?;
             let value_commit_r = OrchardFixedBasesFull::ValueCommitR;
             let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), value_commit_r);
             value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
@@ -395,12 +416,21 @@ impl Circuit<pallas::Base> for BurnContract {
         let (commitment, _) = {
             let token_commit_v = ValueCommitV;
             let token_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), token_commit_v);
-            token_commit_v.mul(layouter.namespace(|| "[token] ValueCommitV"), (token, one))?
+            let token = ScalarFixedShort::new(
+                ecc_chip.clone(),
+                layouter.namespace(|| "token"),
+                (token, one),
+            )?;
+            token_commit_v.mul(layouter.namespace(|| "[token] ValueCommitV"), token)?
         };
 
         // r_A * G_2
         let (blind, _rca) = {
-            let rca = self.token_blind;
+            let rca = ScalarFixed::new(
+                ecc_chip.clone(),
+                layouter.namespace(|| "token_blind"),
+                self.token_blind,
+            )?;
             let token_commit_r = OrchardFixedBasesFull::ValueCommitR;
             let token_commit_r = FixedPoint::from_inner(ecc_chip.clone(), token_commit_r);
             token_commit_r.mul(layouter.namespace(|| "[token_blind] ValueCommitR"), rca)?

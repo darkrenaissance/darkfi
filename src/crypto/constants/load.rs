@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use crate::constants::{self, compute_lagrange_coeffs, H, NUM_WINDOWS, NUM_WINDOWS_SHORT};
 use group::ff::PrimeField;
 use pasta_curves::pallas;

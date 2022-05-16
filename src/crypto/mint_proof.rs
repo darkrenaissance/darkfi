@@ -1,9 +1,6 @@
 use std::time::Instant;
 
-use halo2_gadgets::primitives::{
-    poseidon,
-    poseidon::{ConstantLength, P128Pow5T3},
-};
+use halo2_gadgets::poseidon::primitives as poseidon;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
@@ -45,7 +42,9 @@ impl MintRevealedValues {
         let messages =
             [*coords.x(), *coords.y(), DrkValue::from(value), token_id, serial, coin_blind];
 
-        let coin = poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(messages);
+        let coin =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
+                .hash(messages);
 
         MintRevealedValues { value_commit, token_commit, coin: Coin(coin) }
     }

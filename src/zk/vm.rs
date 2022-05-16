@@ -1,10 +1,12 @@
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointBaseField, FixedPointShort, Point,
+        FixedPoint, FixedPointBaseField, FixedPointShort, Point, ScalarFixed, ScalarFixedShort,
     },
-    poseidon::{Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig},
-    primitives::poseidon::{ConstantLength, P128Pow5T3},
+    poseidon::{
+        primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
+        Pow5Config as PoseidonConfig,
+    },
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
         merkle::{
@@ -191,7 +193,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
 
         // Configuration for the Poseidon hash
-        let poseidon_config = PoseidonChip::configure::<P128Pow5T3>(
+        let poseidon_config = PoseidonChip::configure::<poseidon::P128Pow5T3>(
             meta,
             advices[6..9].try_into().unwrap(),
             advices[5],
@@ -398,7 +400,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
                         stack[args[1]].clone().into();
 
-                    let rhs: Option<pallas::Scalar> = stack[args[0]].clone().into();
+                    let rhs = ScalarFixed::new(
+                        ecc_chip.clone(),
+                        layouter.namespace(|| "EcMul: ScalarFixed::new()"),
+                        stack[args[0]].clone().into(),
+                    )?;
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
 
@@ -428,10 +434,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
                         stack[args[1]].clone().into();
 
-                    let rhs: AssignedCell<Fp, Fp> = stack[args[0]].clone().into();
+                    let rhs = ScalarFixedShort::new(
+                        ecc_chip.clone(),
+                        layouter.namespace(|| "EcMulShort: ScalarFixedShort::new()"),
+                        (stack[args[0]].clone().into(), one.clone()),
+                    )?;
 
-                    let (ret, _) =
-                        lhs.mul(layouter.namespace(|| "EcMulShort()"), (rhs, one.clone()))?;
+                    let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulShort()"), rhs)?;
                     debug!("Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
@@ -475,11 +484,17 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     macro_rules! poseidon_hash {
                         ($len:expr, $hasher:ident, $output:ident, $cell:ident) => {
-                            let $hasher =
-                                PoseidonHash::<_, _, P128Pow5T3, ConstantLength<$len>, 3, 2>::init(
-                                    config.poseidon_chip(),
-                                    layouter.namespace(|| "PoseidonHash init"),
-                                )?;
+                            let $hasher = PoseidonHash::<
+                                _,
+                                _,
+                                poseidon::P128Pow5T3,
+                                poseidon::ConstantLength<$len>,
+                                3,
+                                2,
+                            >::init(
+                                config.poseidon_chip(),
+                                layouter.namespace(|| "PoseidonHash init"),
+                            )?;
 
                             let $output = $hasher.hash(
                                 layouter.namespace(|| "PoseidonHash hash"),
@@ -516,8 +531,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let leaf = stack[args[2]].clone().into();
 
                     let merkle_inputs = MerklePath::construct(
-                        config.merkle_chip_1(),
-                        config.merkle_chip_2(),
+                        [config.merkle_chip_1(), config.merkle_chip_2()],
                         OrchardHashDomains::MerkleCrh,
                         leaf_pos,
                         merkle_path,

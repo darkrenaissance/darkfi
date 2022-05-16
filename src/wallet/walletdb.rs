@@ -441,7 +441,7 @@ mod tests {
         types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
     };
     use group::ff::Field;
-    use incrementalmerkletree::{Frontier, Tree};
+    use incrementalmerkletree::Tree;
     use pasta_curves::pallas;
     use rand::rngs::OsRng;
 
@@ -511,7 +511,7 @@ mod tests {
         tree1.witness();
 
         // We'll check this merkle root corresponds to the one we'll retrieve.
-        let root1 = tree1.root();
+        let root1 = tree1.root(0).unwrap();
 
         // put_tree()
         wallet.put_tree(&tree1).await?;
@@ -557,13 +557,13 @@ mod tests {
 
         // get_tree()
         let tree2 = wallet.get_tree().await?;
-        let root2 = tree2.root();
+        let root2 = tree2.root(0).unwrap();
         assert_eq!(root1, root2);
 
         // Let's try it once more to test sql replacing.
         wallet.put_tree(&tree2).await?;
         let tree3 = wallet.get_tree().await?;
-        let root3 = tree3.root();
+        let root3 = tree3.root(0).unwrap();
         assert_eq!(root2, root3);
 
         Ok(())

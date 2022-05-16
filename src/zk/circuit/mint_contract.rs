@@ -1,10 +1,12 @@
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointShort,
+        FixedPoint, FixedPointShort, ScalarFixed, ScalarFixedShort,
     },
-    poseidon::{Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig},
-    primitives::poseidon::{ConstantLength, P128Pow5T3},
+    poseidon::{
+        primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
+        Pow5Config as PoseidonConfig,
+    },
     utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
 };
 use halo2_proofs::{
@@ -121,7 +123,7 @@ impl Circuit<pallas::Base> for MintContract {
             EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
 
         // Configuration for the Poseidon hash
-        let poseidon_config = PoseidonChip::configure::<P128Pow5T3>(
+        let poseidon_config = PoseidonChip::configure::<poseidon::P128Pow5T3>(
             meta,
             advices[6..9].try_into().unwrap(),
             advices[5],
@@ -175,9 +177,15 @@ impl Circuit<pallas::Base> for MintContract {
         let coin = {
             let poseidon_message = [pub_x, pub_y, value.clone(), token.clone(), serial, coin_blind];
 
-            let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<6>, 3, 2>::init(
-                config.poseidon_chip(),
-                layouter.namespace(|| "Poseidon init"),
+            let poseidon_hasher = PoseidonHash::<
+                _,
+                _,
+                poseidon::P128Pow5T3,
+                poseidon::ConstantLength<6>,
+                3,
+                2,
+            >::init(
+                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
             let poseidon_output =
@@ -205,13 +213,21 @@ impl Circuit<pallas::Base> for MintContract {
         let (commitment, _) = {
             let value_commit_v = ValueCommitV;
             let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), value_commit_v);
-            value_commit_v
-                .mul(layouter.namespace(|| "[value] ValueCommitV"), (value, one.clone()))?
+            let value = ScalarFixedShort::new(
+                ecc_chip.clone(),
+                layouter.namespace(|| "value"),
+                (value, one.clone()),
+            )?;
+            value_commit_v.mul(layouter.namespace(|| "[value] ValueCommitV"), value)?
         };
 
         // r_V * G_2
         let (blind, _rcv) = {
-            let rcv = self.value_blind;
+            let rcv = ScalarFixed::new(
+                ecc_chip.clone(),
+                layouter.namespace(|| "value_blind"),
+                self.value_blind,
+            )?;
             let value_commit_r = OrchardFixedBasesFull::ValueCommitR;
             let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), value_commit_r);
             value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
@@ -239,12 +255,21 @@ impl Circuit<pallas::Base> for MintContract {
         let (commitment, _) = {
             let token_commit_v = ValueCommitV;
             let token_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), token_commit_v);
-            token_commit_v.mul(layouter.namespace(|| "[token] ValueCommitV"), (token, one))?
+            let token = ScalarFixedShort::new(
+                ecc_chip.clone(),
+                layouter.namespace(|| "token"),
+                (token, one),
+            )?;
+            token_commit_v.mul(layouter.namespace(|| "[token] ValueCommitV"), token)?
         };
 
         // r_A * G_2
         let (blind, _rca) = {
-            let rca = self.token_blind;
+            let rca = ScalarFixed::new(
+                ecc_chip.clone(),
+                layouter.namespace(|| "token_blind"),
+                self.token_blind,
+            )?;
             let token_commit_r = OrchardFixedBasesFull::ValueCommitR;
             let token_commit_r = FixedPoint::from_inner(ecc_chip, token_commit_r);
             token_commit_r.mul(layouter.namespace(|| "[token_blind] ValueCommitR"), rca)?

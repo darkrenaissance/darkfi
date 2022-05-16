@@ -1,9 +1,6 @@
 use std::io;
 
-use halo2_gadgets::primitives::{
-    poseidon,
-    poseidon::{ConstantLength, P128Pow5T3},
-};
+use halo2_gadgets::poseidon::primitives as poseidon;
 use pasta_curves::{group::ff::PrimeField, pallas};
 
 use crate::{
@@ -19,7 +16,8 @@ impl Nullifier {
     pub fn new(secret: SecretKey, serial: pallas::Base) -> Self {
         let nullifier = [secret.0, serial];
         let nullifier =
-            poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(nullifier);
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+                .hash(nullifier);
         Nullifier(nullifier)
     }
 

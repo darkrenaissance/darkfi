@@ -1,10 +1,6 @@
 use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
 
-use halo2_gadgets::primitives::{
-    poseidon,
-    poseidon::{ConstantLength, P128Pow5T3},
-};
-
+use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::dev::MockProver;
 
 use rand::{thread_rng, Rng};

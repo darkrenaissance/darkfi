@@ -2935,7 +2935,7 @@ mod tests {
     use group::Curve;
     use halo2_gadgets::{
         ecc::chip::constants::{test_lagrange_coeffs, test_zs_and_us},
-        primitives::sinsemilla::CommitDomain,
+        sinsemilla::primitives::CommitDomain,
     };
     use pasta_curves::{arithmetic::CurveAffine, pallas};
 

@@ -1,9 +1,6 @@
 use std::time::Instant;
 
-use halo2_gadgets::primitives::{
-    poseidon,
-    poseidon::{ConstantLength, P128Pow5T3},
-};
+use halo2_gadgets::poseidon::primitives as poseidon;
 use incrementalmerkletree::Hashable;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve};
@@ -50,7 +47,8 @@ impl BurnRevealedValues {
     ) -> Self {
         let nullifier = [secret.0, serial];
         let nullifier =
-            poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(nullifier);
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+                .hash(nullifier);
 
         let public_key = PublicKey::from_secret(secret);
         let coords = public_key.0.to_affine().coordinates().unwrap();
@@ -58,7 +56,9 @@ impl BurnRevealedValues {
         let messages =
             [*coords.x(), *coords.y(), DrkValue::from(value), token_id, serial, coin_blind];
 
-        let coin = poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(messages);
+        let coin =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
+                .hash(messages);
 
         let merkle_root = {
             let position: u64 = leaf_position.into();

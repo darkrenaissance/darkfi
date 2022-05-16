@@ -2,9 +2,8 @@
 
 use darkfi::{
     crypto::{
-        keypair::PublicKey,
         proof::{ProvingKey, VerifyingKey},
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::{pedersen_commitment_scalar, pedersen_commitment_u64},
         Proof,
     },
     zk::{
@@ -13,10 +12,6 @@ use darkfi::{
     },
     zkas::decoder::ZkBinary,
     Result,
-};
-use halo2_gadgets::primitives::{
-    poseidon,
-    poseidon::{ConstantLength, P128Pow5T3},
 };
 use pasta_curves::{
     arithmetic::CurveAffine,

@@ -6,7 +6,7 @@ all:
 	echo "# darkfid JSON-RPC API" > $(DARKFID_JSONRPC)
 	for i in blockchain tx wallet misc; do \
 		echo "## $$i methods" >> $(DARKFID_JSONRPC);\
-		./build_jsonrpc.py ../bin/darkfid2/src/rpc_$$i.rs >> $(DARKFID_JSONRPC);\
+		./build_jsonrpc.py ../bin/darkfid/src/rpc_$$i.rs >> $(DARKFID_JSONRPC);\
 	done
 
 	echo "# cashierd JSON-RPC API" > src/clients/cashierd_jsonrpc.md

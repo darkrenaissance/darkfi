@@ -12,10 +12,7 @@ use darkfi::{
     zkas::decoder::ZkBinary,
     Result,
 };
-use halo2_gadgets::primitives::{
-    poseidon,
-    poseidon::{ConstantLength, P128Pow5T3},
-};
+use halo2_gadgets::poseidon::primitives as poseidon;
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::Field, Curve},
@@ -56,7 +53,8 @@ fn mint_proof() -> Result<()> {
 
     // Create the public inputs
     let msgs = [*coords.x(), *coords.y(), pallas::Base::from(value), token_id, serial, coin_blind];
-    let coin = poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(msgs);
+    let coin = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
+        .hash(msgs);
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
