@@ -6,7 +6,6 @@ use pasta_curves::{
     pallas, Fp,
 };
 
-use halo2_proofs::{arithmetic::Field, dev::MockProver};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
