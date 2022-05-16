@@ -25,16 +25,16 @@ blake3 = "1.3.1"
 sled = "0.34.7"
 
 # Structopt dependencies for arguments parsing
-serde = "1.0.136"
-serde_derive = "1.0.136"
-serde_json = "1.0.79"
+serde = "1.0.137"
+serde_derive = "1.0.137"
+serde_json = "1.0.81"
 structopt = "0.3.26"
 structopt-toml = "0.5.0"
 toml = "0.5.9"
 
 # Misc
 chrono = "0.4.19"
-log = "0.4.16"
+log = "0.4.17"
 num_cpus = "1.13.1"
 simplelog = "0.12.0"
 

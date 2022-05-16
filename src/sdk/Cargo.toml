@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 borsh = "0.9.3"
-thiserror = "1.0.30"
+thiserror = "1.0.31"
 wee_alloc = "0.4.5"
