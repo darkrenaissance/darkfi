@@ -65,7 +65,8 @@ impl LeadCoin {
     {
         let po_nonce = self.nonce_cm.unwrap().to_affine().coordinates().unwrap();
 
-        let po_tau = pedersen_commitment_scalar(mod_r_p(self.tau.unwrap()), self.root_cm.unwrap())
+        let po_tau = pedersen_commitment_scalar(mod_r_p(self.tau.unwrap()),
+                                                self.root_cm.unwrap())
             .to_affine()
             .coordinates()
             .unwrap();
