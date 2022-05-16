@@ -5,7 +5,7 @@ use halo2_gadgets::primitives::{
     poseidon::{ConstantLength, P128Pow5T3},
 };
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use halo2_proofs::dev::MockProver;
 
@@ -19,14 +19,13 @@ use darkfi::{
             NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
             MERKLE_DEPTH_ORCHARD,
         },
-        leadcoin::{LeadCoin},
         keypair::{Keypair, PublicKey, SecretKey},
-        lead_proof::{create_lead_proof,verify_lead_proof},
+        lead_proof::{create_lead_proof, verify_lead_proof},
+        leadcoin::LeadCoin,
         merkle_node::MerkleNode,
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
         nullifier::Nullifier,
         proof::{Proof, ProvingKey, VerifyingKey},
-        types::*,
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit, *},
         util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
     },
     zk::circuit::lead_contract::LeadContract,
@@ -41,9 +40,7 @@ use pasta_curves::{
 
 use halo2_proofs::arithmetic::Field;
 
-fn create_coins_sks(len : usize) ->
-    (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>)
-{
+fn create_coins_sks(len: usize) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>) {
     /*
     at the onset of an epoch, the first slot's coin's secret key
     is sampled at random, and the reset of the secret keys are derived,
@@ -61,7 +58,7 @@ fn create_coins_sks(len : usize) ->
         let coord = base.to_affine().coordinates().unwrap();
         //let sk =  coord.x() * coord.y();
         //let sk =  *coord.y();
-        let sk : [u8; 32] = pallas::Base::random(rng.clone()).to_repr();
+        let sk: [u8; 32] = pallas::Base::random(rng.clone()).to_repr();
         let node = MerkleNode::from_bytes(&sk).unwrap();
         //let serialized = serde_json::to_string(&node).unwrap();
         //println!("serialized: {}", serialized);
@@ -77,14 +74,14 @@ fn create_coins_sks(len : usize) ->
     (root_sks, path_sks)
 }
 
-
-fn create_coins(root_sks : Vec<MerkleNode>,
-                path_sks : Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
-                values : Vec<u64>,
-                cm1_blind: pallas::Base,
-                cm2_blind: pallas::Base,
-                len : usize) -> Vec<LeadCoin>
-{
+fn create_coins(
+    root_sks: Vec<MerkleNode>,
+    path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
+    values: Vec<u64>,
+    cm1_blind: pallas::Base,
+    cm2_blind: pallas::Base,
+    len: usize,
+) -> Vec<LeadCoin> {
     let mut rng = thread_rng();
     let mut seeds: Vec<u64> = vec![];
     for i in 0..len {
@@ -104,7 +101,7 @@ fn create_coins(root_sks : Vec<MerkleNode>,
 
         //
         let c_tau = pallas::Base::from(u64::try_from(i).unwrap()); // let's assume it's sl for simplicity
-        //
+                                                                   //
         let c_root_sk: MerkleNode = root_sks[i];
 
         let c_pk = pedersen_commitment_scalar(mod_r_p(c_tau), mod_r_p(c_root_sk.inner()));
@@ -180,7 +177,7 @@ fn create_coins(root_sks : Vec<MerkleNode>,
 }
 
 fn main() {
-    let k : u32 = 13;
+    let k: u32 = 13;
     //let lead_pk = ProvingKey::build(k, &LeadContract::default());
     //let lead_vk = VerifyingKey::build(k, &LeadContract::default());
     //
@@ -188,21 +185,17 @@ fn main() {
     let mut rng = thread_rng();
     let mut root_sks: Vec<MerkleNode> = vec![];
     let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
-    let mut values : Vec<u64> = vec![];
+    let mut values: Vec<u64> = vec![];
     for i in 0..LEN {
-        values.push(u64::try_from(i*2).unwrap());
+        values.push(u64::try_from(i * 2).unwrap());
     }
-    let cm1_val : u64 = rng.gen();
-    let cm1_blind : pallas::Base = pallas::Base::from(cm1_val);
-    let cm2_val : u64 = rng.gen();
-    let cm2_blind : pallas::Base = pallas::Base::from(cm2_val);
+    let cm1_val: u64 = rng.gen();
+    let cm1_blind: pallas::Base = pallas::Base::from(cm1_val);
+    let cm2_val: u64 = rng.gen();
+    let cm2_blind: pallas::Base = pallas::Base::from(cm2_val);
     (root_sks, path_sks) = create_coins_sks(LEN);
-    let mut coins: Vec<LeadCoin> = create_coins(root_sks.clone(),
-                                            path_sks.clone(),
-                                            values,
-                                            cm1_blind,
-                                            cm2_blind,
-                                            LEN);
+    let mut coins: Vec<LeadCoin> =
+        create_coins(root_sks.clone(), path_sks.clone(), values, cm1_blind, cm2_blind, LEN);
     //
     let coin_idx = 0;
     let coin = coins[coin_idx];
@@ -231,8 +224,6 @@ fn main() {
         root_cm: Some(coin.root_cm.unwrap()),
     };
 
-
-
     //let proof = create_lead_proof(lead_pk.clone(), coin.clone()).unwrap();
     //verify_lead_proof(&lead_vk, &proof, coin);
 
@@ -243,5 +234,4 @@ fn main() {
     //
     assert_eq!(prover.verify(), Ok(()));
     //
-
 }

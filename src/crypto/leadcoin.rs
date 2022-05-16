@@ -19,10 +19,9 @@ use crate::{
         },
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
         nullifier::Nullifier,
         proof::{Proof, ProvingKey, VerifyingKey},
-        types::*,
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit, *},
         util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
     },
     zk::circuit::lead_contract::LeadContract,
@@ -34,7 +33,6 @@ use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::PrimeField, Curve, GroupEncoding},
 };
-
 
 //use halo2_proofs::arithmetic::CurveAffine;
 #[derive(Debug, Default, Clone, Copy)]
@@ -61,12 +59,10 @@ pub struct LeadCoin {
 }
 
 impl LeadCoin {
-    pub fn public_inputs(&self) -> Vec<pallas::Base>
-    {
+    pub fn public_inputs(&self) -> Vec<pallas::Base> {
         let po_nonce = self.nonce_cm.unwrap().to_affine().coordinates().unwrap();
 
-        let po_tau = pedersen_commitment_scalar(mod_r_p(self.tau.unwrap()),
-                                                self.root_cm.unwrap())
+        let po_tau = pedersen_commitment_scalar(mod_r_p(self.tau.unwrap()), self.root_cm.unwrap())
             .to_affine()
             .coordinates()
             .unwrap();
@@ -112,6 +108,5 @@ impl LeadCoin {
             po_cmp,
         ];
         public_inputs
-
     }
 }
