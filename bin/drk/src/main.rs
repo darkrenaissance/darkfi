@@ -128,7 +128,7 @@ impl Drk {
         println!("Requesting airdrop for {}", addr);
         let req = jsonrpc::request(json!("airdrop"), json!([json!(addr.to_string()), amount]));
         let rpc_client = RpcClient::new(endpoint).await?;
-        let rep = self.rpc_client.request(req).await.or_else(|e| {
+        let rep = rpc_client.request(req).await.or_else(|e| {
             error!("Failed requesting airdrop: {}", e);
             return Err(e)
         })?;
