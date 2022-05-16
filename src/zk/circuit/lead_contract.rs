@@ -599,8 +599,8 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
         let node = MerkleNode::from_bytes(&self.root_sk.unwrap().to_repr()).unwrap();
-        let serialized = serde_json::to_string(&node).unwrap();
-        println!("serialized: {}", serialized);
+        //let serialized = serde_json::to_string(&node).unwrap();
+        //println!("root_sk: {}", serialized);
 
         //TODO (research) this multiplication panics!
         let y_commit_exp = ar_chip.mul(

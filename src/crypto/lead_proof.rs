@@ -59,7 +59,7 @@ pub fn create_lead_proof(
     let public_inputs = coin.public_inputs();
     let proof = Proof::create(&pk, &[contract], &public_inputs, &mut OsRng)?;
     debug!("Prove lead: [{:?}]", start.elapsed());
-    Ok((proof))
+    Ok(proof)
 }
 
 pub fn verify_lead_proof(

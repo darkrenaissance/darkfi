@@ -70,7 +70,8 @@ fn create_coins_sks(len : usize) ->
         //let (leaf_pos, path) = tree.authentication_path(leaf_position.unwrap()).unwrap();
         let path = tree.authentication_path(leaf_position.unwrap()).unwrap();
         //note root sk is at tree.root()
-        root_sks.push(node);
+        //root_sks.push(node);
+        root_sks.push(tree.root());
         path_sks.push(path.as_slice().try_into().unwrap());
     }
     (root_sks, path_sks)
