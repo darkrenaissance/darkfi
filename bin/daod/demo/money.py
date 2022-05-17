@@ -225,7 +225,7 @@ class BurnProof:
 
     def get_revealed(self):
         revealed = ClassNamespace()
-        revealed.nullifier = ff_hash(self.secret, self.serial)
+        revealed.nullifier = ff_hash(self.ec.p, self.secret, self.serial)
 
         revealed.value_commit = pedersen_encrypt(
             self.value, self.value_blind, self.ec
@@ -276,7 +276,8 @@ class BurnProof:
             revealed.value_commit == public.value_commit,
             revealed.token_commit == public.token_commit,
             revealed.all_coins == public.all_coins,
-            revealed.signature_public == public.signature_public
+            revealed.signature_public == public.signature_public,
+            revealed.enc_user_data == public.enc_user_data
         ])
 
 class MintProof:

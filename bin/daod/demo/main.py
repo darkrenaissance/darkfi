@@ -344,6 +344,262 @@ class ProposerTxDaoProof:
             revealed.all_dao_bullas == public.all_dao_bullas
         ])
 
+class VoteTxBuilder:
+
+    def __init__(self, ec):
+        self.inputs = []
+        self.vote_option = None
+
+        self.ec = ec
+
+    def add_input(self, all_coins, secret, note):
+        input = ClassNamespace()
+        input.all_coins = all_coins
+        input.secret = secret
+        input.note = note
+        self.inputs.append(input)
+
+    def set_vote_option(self, vote_option):
+        assert vote_option == 1 or vote_option == -1
+        vote_option = vote_option % self.ec.p
+        self.vote_option = vote_option
+
+    def build(self):
+        tx = VoteTx(self.ec)
+        token_blind = self.ec.random_scalar()
+
+        assert self.vote_option is not None
+        vote_option_blind = self.ec.random_base()
+
+        total_value, total_blind = 0, 0
+        signature_secrets = []
+        for input in self.inputs:
+            value_blind = self.ec.random_scalar()
+            total_blind = (total_blind + value_blind) % self.ec.order
+            total_value = (total_value + input.note.value) % self.ec.order
+
+            signature_secret = self.ec.random_scalar()
+            signature_secrets.append(signature_secret)
+
+            tx_input = ClassNamespace()
+            tx_input.__name__ = "TransactionInput"
+            tx_input.burn_proof = VoteBurnProof(
+                input.note.value, input.note.token_id, value_blind,
+                token_blind, input.note.serial, input.note.coin_blind,
+                input.secret, input.note.spend_hook, input.note.user_data,
+                self.vote_option, vote_option_blind,
+                input.all_coins, signature_secret,
+                self.ec)
+            tx_input.revealed = tx_input.burn_proof.get_revealed()
+            tx.inputs.append(tx_input)
+
+        assert len(self.inputs) > 0
+        token_id = self.inputs[0].note.token_id
+
+        # This whole tx is like just burning tokens
+        # except we produce an output commitment to the total value in
+        tx.vote = ClassNamespace()
+        tx.vote.__name__ = "Vote"
+        tx.vote.proof = VoteProof(total_value, token_id,
+                                  total_blind, token_blind,
+                                  self.vote_option, vote_option_blind,
+                                  self.ec)
+        tx.vote.revealed = tx.vote.proof.get_revealed()
+
+        # We can use Shamir's Secret Sharing to unlock this at the end
+        # of the voting, or even with a time delay to avoid timing attacks
+        tx.note = ClassNamespace()
+        tx.note.__name__ = "EncryptedNoteForDaoMembers"
+        tx.note.value = total_value
+        tx.note.token_id = token_id
+        tx.note.vote_option = self.vote_option
+        tx.note.value_blind = total_blind
+        tx.note.token_blind = token_blind
+        tx.note.vote_option_blind = vote_option_blind
+
+        assert tx.vote.revealed.token_commit == crypto.pedersen_encrypt(
+            token_id, token_blind, self.ec)
+
+        unsigned_tx_data = tx.partial_encode()
+        for (input, signature_secret) in zip(tx.inputs, signature_secrets):
+            signature = crypto.sign(unsigned_tx_data, signature_secret, self.ec)
+            input.signature = signature
+
+        return tx
+
+class VoteBurnProof:
+
+    def __init__(self, value, token_id, value_blind, token_blind, serial,
+                 coin_blind, secret, spend_hook, user_data,
+                 vote_option, vote_option_blind,
+                 all_coins, signature_secret, ec):
+        self.value = value
+        self.token_id = token_id
+        self.value_blind = value_blind
+        self.token_blind = token_blind
+        self.serial = serial
+        self.coin_blind = coin_blind
+        self.secret = secret
+        self.spend_hook = spend_hook
+        self.user_data = user_data
+        self.vote_option = vote_option
+        self.vote_option_blind = vote_option_blind
+        self.all_coins = all_coins
+        self.signature_secret = signature_secret
+
+        self.ec = ec
+
+    def get_revealed(self):
+        revealed = ClassNamespace()
+        revealed.nullifier = crypto.ff_hash(self.ec.p, self.secret, self.serial)
+
+        v = crypto.pedersen_encrypt(
+            self.value, self.value_blind, self.ec
+        )
+        # Multiply the point by vote_option
+        revealed.value_commit = (
+            v[0], (self.vote_option * v[1]) % self.ec.p, v[2])
+
+        revealed.token_commit = crypto.pedersen_encrypt(
+            self.token_id, self.token_blind, self.ec
+        )
+
+        # is_valid_merkle_root()
+        revealed.all_coins = self.all_coins
+
+        revealed.signature_public = self.ec.multiply(self.signature_secret,
+                                                     self.ec.G)
+
+        revealed.vote_option_commit = crypto.ff_hash(
+            self.ec.p, self.vote_option, self.vote_option_blind
+        )
+
+        return revealed
+
+    def verify(self, public):
+        revealed = self.get_revealed()
+
+        public_key = self.ec.multiply(self.secret, self.ec.G)
+        coin = crypto.ff_hash(
+            self.ec.p,
+            public_key[0],
+            public_key[1],
+            self.value,
+            self.token_id,
+            self.serial,
+            self.coin_blind,
+            self.spend_hook,
+            self.user_data,
+        )
+        # Merkle root check
+        if coin not in self.all_coins:
+            return False
+
+        return all([
+            revealed.nullifier == public.nullifier,
+            revealed.value_commit == public.value_commit,
+            revealed.token_commit == public.token_commit,
+            revealed.all_coins == public.all_coins,
+            revealed.signature_public == public.signature_public,
+            revealed.vote_option_commit == public.vote_option_commit
+        ])
+
+class VoteProof:
+
+    def __init__(self, value, token_id, value_blind, token_blind,
+                 vote_option, vote_option_blind, ec):
+        self.value = value
+        self.token_id = token_id
+        self.value_blind = value_blind
+        self.token_blind = token_blind
+        self.vote_option = vote_option
+        self.vote_option_blind = vote_option_blind
+        self.ec = ec
+
+    def get_revealed(self):
+        revealed = ClassNamespace()
+        v = crypto.pedersen_encrypt(
+            self.value, self.value_blind, self.ec
+        )
+        # Multiply the point by vote_option
+        revealed.value_commit = (
+            v[0], (self.vote_option * v[1]) % self.ec.p, v[2])
+        revealed.token_commit = crypto.pedersen_encrypt(
+            self.token_id, self.token_blind, self.ec
+        )
+        revealed.vote_option_commit = crypto.ff_hash(
+            self.ec.p, self.vote_option, self.vote_option_blind
+        )
+        return revealed
+
+    def verify(self, public):
+        revealed = self.get_revealed()
+        # vote option should be -1 or 1
+        if ((self.vote_option - 1) * (self.vote_option + 1)) % self.ec.p != 0:
+            return False
+        return all([
+            revealed.value_commit == public.value_commit,
+            revealed.token_commit == public.token_commit,
+            revealed.vote_option_commit == public.vote_option_commit
+        ])
+
+class VoteTx:
+
+    def __init__(self, ec):
+        self.inputs = []
+        self.vote = None
+
+        self.ec = ec
+
+    def partial_encode(self):
+        # There is no cake
+        return b"hello"
+
+    def verify(self):
+        if not self._check_value_commits():
+            return False, "value commits do not match"
+
+        if not self._check_vote_options():
+            return False, "value options do not match"
+
+        if not self._check_proofs():
+            return False, "proofs failed to verify"
+
+        if not self._verify_token_commitments():
+            return False, "token ID mismatch"
+
+        return True, None
+
+    def _check_vote_options(self):
+        vote_commit = self.vote.revealed.vote_option_commit
+        for input in self.inputs:
+            if input.revealed.vote_option_commit != vote_commit:
+                return False
+        return True
+
+    def _check_value_commits(self):
+        valcom_total = (0, 1, 0)
+        for input in self.inputs:
+            value_commit = input.revealed.value_commit
+            valcom_total = self.ec.add(valcom_total, value_commit)
+
+        return valcom_total == self.vote.revealed.value_commit
+
+    def _check_proofs(self):
+        for input in self.inputs:
+            if not input.burn_proof.verify(input.revealed):
+                return False
+        if not self.vote.proof.verify(self.vote.revealed):
+            return False
+        return True
+
+    def _verify_token_commitments(self):
+        token_commit_value = self.vote.revealed.token_commit
+        for input in self.inputs:
+            if input.revealed.token_commit != token_commit_value:
+                return False
+        return True
+
 class DaoBuilder:
 
     def __init__(self, proposer_limit, quorum, approval_ratio,
@@ -485,6 +741,44 @@ def proposal_state_transition(dao_state, gov_state, tx):
     update.proposal = tx.dao.revealed.proposal_bulla
     return update
 
+class VoteState:
+
+    def __init__(self):
+        self.votes = set()
+        self.nullifiers = set()
+
+    def nullifier_exists(self, nullifier):
+        return nullifier in self.nullifiers
+
+    def apply(self, update):
+        self.nullifiers = self.nullifiers.union(update.nullifiers)
+        self.votes.add(update.vote)
+
+def vote_state_transition(vote_state, gov_state, tx):
+    for input in tx.inputs:
+        if not gov_state.is_valid_merkle(input.revealed.all_coins):
+            print(f"invalid merkle root", file=sys.stderr)
+            return None
+
+        nullifier = input.revealed.nullifier
+        if gov_state.nullifier_exists(nullifier):
+            print(f"duplicate nullifier found", file=sys.stderr)
+            return None
+
+        if vote_state.nullifier_exists(nullifier):
+            print(f"duplicate nullifier found (already voted)", file=sys.stderr)
+            return None
+
+    is_verify, reason = tx.verify()
+    if not is_verify:
+        print(f"dao tx verify failed: {reason}", file=sys.stderr)
+        return None
+
+    update = ClassNamespace()
+    update.nullifiers = [input.revealed.nullifier for input in tx.inputs]
+    update.vote = tx.vote.revealed.value_commit
+    return update
+
 def main(argv):
     ec = crypto.pallas_curve()
 
@@ -562,15 +856,15 @@ def main(argv):
     # the tx exists and ruleset is applied
 
     assert len(tx.outputs) > 0
-    note = tx.outputs[0].enc_note
+    coin_note = tx.outputs[0].enc_note
     coin = crypto.ff_hash(
         ec.p,
         dao_public_key[0],
         dao_public_key[1],
-        note.value,
-        note.token_id,
-        note.serial,
-        note.coin_blind,
+        coin_note.value,
+        coin_note.token_id,
+        coin_note.serial,
+        coin_note.coin_blind,
         spend_hook,
         user_data
     )
@@ -591,6 +885,9 @@ def main(argv):
     # Hodler 2
     gov_secret_2 = ec.random_scalar()
     gov_public_2 = ec.multiply(gov_secret_2, ec.G)
+    # Hodler 3: the tiebreaker
+    gov_secret_3 = ec.random_scalar()
+    gov_public_3 = ec.multiply(gov_secret_3, ec.G)
 
     # Only used for this tx. Discarded after
     signature_secret = ec.random_scalar()
@@ -599,9 +896,11 @@ def main(argv):
     builder.add_clear_input(gov_initial_supply, gov_token_id,
                             signature_secret)
     assert 2 * 5000 == gov_initial_supply
-    builder.add_output(5000, gov_token_id, gov_public_1,
+    builder.add_output(4000, gov_token_id, gov_public_1,
                        b"0x0000", b"0x0000")
-    builder.add_output(5000, gov_token_id, gov_public_1,
+    builder.add_output(4000, gov_token_id, gov_public_2,
+                       b"0x0000", b"0x0000")
+    builder.add_output(2000, gov_token_id, gov_public_3,
                        b"0x0000", b"0x0000")
     tx = builder.build()
 
@@ -611,9 +910,10 @@ def main(argv):
     gov_state.apply(update)
 
     # Decrypt output notes
-    assert len(tx.outputs) == 2
+    assert len(tx.outputs) == 3
     gov_user_1_note = tx.outputs[0].enc_note
     gov_user_2_note = tx.outputs[1].enc_note
+    gov_user_3_note = tx.outputs[2].enc_note
 
     for coin, enc_note in zip(update.coins, update.enc_notes):
         # Try decrypt note here
@@ -660,6 +960,52 @@ def main(argv):
         return -1
     dao_state.apply_proposal_tx(update)
 
+    ################################################
+    # Proposal is accepted!
+    ################################################
+
+    # Lets the voting begin
+    # Voters have access to the proposal and dao data
+    vote_state = VoteState()
+
+    # TODO: what happens if voters don't unblind their vote
+
+    # User 1: YES
+    builder = VoteTxBuilder(ec)
+    builder.add_input(witness, gov_secret_1, gov_user_1_note)
+    builder.set_vote_option(1)
+    tx1 = builder.build()
+
+    if (update := vote_state_transition(vote_state, gov_state, tx1)) is None:
+        return -1
+    vote_state.apply(update)
+
+    note_vote_1 = tx1.note
+
+    # User 2: NO
+    builder = VoteTxBuilder(ec)
+    builder.add_input(witness, gov_secret_2, gov_user_2_note)
+    builder.set_vote_option(-1)
+    tx2 = builder.build()
+
+    if (update := vote_state_transition(vote_state, gov_state, tx2)) is None:
+        return -1
+    vote_state.apply(update)
+
+    note_vote_2 = tx2.note
+
+    # User 3: YES
+    builder = VoteTxBuilder(ec)
+    builder.add_input(witness, gov_secret_3, gov_user_3_note)
+    builder.set_vote_option(1)
+    tx3 = builder.build()
+
+    if (update := vote_state_transition(vote_state, gov_state, tx3)) is None:
+        return -1
+    vote_state.apply(update)
+
+    note_vote_3 = tx3.note
+
     # State
     # functions that can be called on state with params
     # functions return an update
@@ -677,8 +1023,41 @@ def main(argv):
     # voting period.
     # (that's if we want votes to be hidden during voting)
 
-    votes_yes = 10
-    votes_no = 5
+    win_votes = 0
+    total_votes = 0
+    for i, (note, tx) in enumerate(
+        zip([note_vote_1, note_vote_2, note_vote_3], [tx1, tx2, tx3])):
+
+        assert note.token_id == gov_token_id
+        token_commit = crypto.pedersen_encrypt(
+            gov_token_id, note.token_blind, ec)
+        assert tx.vote.revealed.token_commit == token_commit
+
+        vote_option_commit = crypto.ff_hash(
+            ec.p, note.vote_option, note.vote_option_blind)
+        assert tx.vote.revealed.vote_option_commit == vote_option_commit
+
+        v = crypto.pedersen_encrypt(
+            note.value, note.value_blind, ec)
+        value_commit = (v[0], (note.vote_option * v[1]) % ec.p, v[2])
+        assert tx.vote.revealed.value_commit == value_commit
+
+        vote_option = note.vote_option
+        if vote_option > 2**64:
+            vote_option = -(ec.p - vote_option)
+        assert vote_option == 1 or vote_option == -1
+
+        if vote_option == 1:
+            win_votes += note.value
+        total_votes += note.value
+
+        if vote_option == 1:
+            vote_result = "yes"
+        else:
+            vote_result = "no"
+        print(f"Voter {i} voted {vote_result}")
+
+    print(f"Outcome = {win_votes} / {total_votes}")
 
     ################################################
     # Execute the vote
@@ -690,12 +1069,12 @@ def main(argv):
 
     builder = money.SendPaymentTxBuilder(ec)
     witness = money_state.all_coins
-    builder.add_input(witness, dao_shared_secret, note, user_data_blind)
+    builder.add_input(witness, dao_shared_secret, coin_note, user_data_blind)
 
     builder.add_output(1000, money_token_id, user_public,
                        spend_hook=b"0x0000", user_data=b"0x0000")
     # Change
-    builder.add_output(note.value - 1000, money_token_id, dao_public_key,
+    builder.add_output(coin_note.value - 1000, money_token_id, dao_public_key,
                        spend_hook, user_data)
 
     tx = builder.build()
