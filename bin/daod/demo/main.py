@@ -665,6 +665,9 @@ class DaoState:
     def is_valid_merkle(self, all_dao_bullas):
         return all_dao_bullas.issubset(self.dao_bullas)
 
+    def is_valid_merkle_proposals(self, all_proposal_bullas):
+        return all_proposal_bullas.issubset(self.proposals)
+
     def apply_proposal_tx(self, update):
         self.proposals.add(update.proposal)
 
@@ -692,26 +695,118 @@ class DaoExecBuilder:
     def __init__(self,
         proposal,
         all_proposals,
-        dao
+        dao,
+        win_votes,
+        total_votes,
+        total_value_blinds,
+        total_vote_blinds,
+        ec
     ):
-        pass
+        self.proposal = proposal
+        self.all_proposals = all_proposals
+        self.dao = dao
+        self.win_votes = win_votes
+        self.total_votes = total_votes
+        self.total_value_blinds = total_value_blinds
+        self.total_vote_blinds = total_vote_blinds
+
+        self.ec = ec
 
     def build(self):
-        tx = DaoExec()
+        tx = DaoExecTx()
+        tx.proof = DaoExecProof(
+            self.proposal,
+            self.all_proposals,
+            self.dao,
+            self.win_votes,
+            self.total_votes,
+            self.total_value_blinds,
+            self.total_vote_blinds,
+            self.ec
+        )
+        tx.revealed = tx.proof.get_revealed()
         return tx
 
-class DaoExec:
+class DaoExecTx:
 
-    def __init__(self):
-        pass
+    def verify(self):
+        if not self._check_proofs():
+            return False, "proofs failed to verify"
+
+        return True, None
+
+    def _check_proofs(self):
+        if not self.proof.verify(self.revealed):
+            return False
+        return True
 
 class DaoExecProof:
 
-    def __init__(self):
-        pass
+    def __init__(self,
+        proposal,
+        all_proposals,
+        dao,
+        win_votes,
+        total_votes,
+        total_value_blinds,
+        total_vote_blinds,
+        ec
+    ):
+        self.proposal = proposal
+        self.all_proposals = all_proposals
+        self.dao = dao
+        self.win_votes = win_votes
+        self.total_votes = total_votes
+        self.total_value_blinds = total_value_blinds
+        self.total_vote_blinds = total_vote_blinds
+
+        self.ec = ec
+
+    def get_revealed(self):
+        revealed = ClassNamespace()
+        # Corresponds to proposals merkle root
+        revealed.all_proposals = self.all_proposals
+        return revealed
+
+    def verify(self, public):
+        revealed = self.get_revealed()
+
+        dao_bulla = crypto.ff_hash(
+            self.ec.p,
+            self.dao.proposer_limit,
+            self.dao.quorum,
+            self.dao.approval_ratio,
+            self.dao.gov_token_id,
+            self.dao.bulla_blind
+        )
+        proposal_bulla = crypto.ff_hash(
+            self.ec.p,
+            self.proposal.dest[0],
+            self.proposal.dest[1],
+            self.proposal.amount,
+            self.proposal.serial,
+            self.proposal.token_id,
+            self.proposal.blind,
+            dao_bulla
+        )
+        # This being true also implies the DAO is valid
+        assert proposal_bulla in self.all_proposals
+
+        return all([
+        ])
 
 def dao_exec_state_transition(state, tx):
+    is_verify, reason = tx.verify()
+    if not is_verify:
+        print(f"dao exec tx verify failed: {reason}", file=sys.stderr)
+        return None
+
+    if not state.is_valid_merkle_proposals(tx.revealed.all_proposals):
+        print(f"invalid merkle root proposals", file=sys.stderr)
+        return None
+
     update = ClassNamespace()
+    # update.proposal_nullifier = ...
     return update
 
 # contract interface functions
@@ -1078,12 +1173,10 @@ def main(argv):
 
     print(f"Outcome = {win_votes} / {total_votes}")
 
-    total_value_commit2 = crypto.pedersen_encrypt(
+    assert total_value_commit == crypto.pedersen_encrypt(
         total_votes, total_value_blinds, ec)
-    assert total_value_commit == total_value_commit2
-    total_vote_commit2 = crypto.pedersen_encrypt(
+    assert total_vote_commit == crypto.pedersen_encrypt(
         win_votes, total_vote_blinds, ec)
-    assert total_vote_commit == total_vote_commit2
 
     ################################################
     # Execute the vote
@@ -1167,6 +1260,11 @@ def main(argv):
         proposal,
         dao_state.proposals,
         dao,
+        win_votes,
+        total_votes,
+        total_value_blinds,
+        total_vote_blinds,
+        ec
     )
     tx = builder.build()
     if (update := dao_exec_state_transition(dao_state, tx)) is None:
