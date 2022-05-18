@@ -55,6 +55,31 @@ impl std::fmt::Display for Timestamp {
     }
 }
 
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Serialize,
+    Deserialize,
+    SerialEncodable,
+    SerialDecodable,
+    PartialEq,
+    PartialOrd,
+)]
+pub struct NanoTimestamp(pub i64);
+
+impl NanoTimestamp {
+    pub fn current_time() -> Self {
+        Self(Utc::now().timestamp_nanos())
+    }
+}
+impl std::fmt::Display for NanoTimestamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let date = timestamp_to_date(self.0, "nanos");
+        write!(f, "{}", date)
+    }
+}
+
 // Clock sync parameters
 const RETRIES: u8 = 10;
 const WORLDTIMEAPI_ADDRESS: &str = "worldtimeapi.org";
@@ -156,6 +181,12 @@ pub fn timestamp_to_date(timestamp: i64, dt: &str) -> String {
         }
         "datetime" => {
             NaiveDateTime::from_timestamp(timestamp, 0).format("%H:%M:%S %A %-d %B").to_string()
+        }
+        "nanos" => {
+            const A_BILLION: i64 = 1_000_000_000;
+            NaiveDateTime::from_timestamp(timestamp / A_BILLION, (timestamp % A_BILLION) as u32)
+                .format("%H:%M:%S.%f")
+                .to_string()
         }
         _ => "".to_string(),
     }

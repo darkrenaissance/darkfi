@@ -21,7 +21,7 @@ use darkfi::{
     util::{
         async_util,
         cli::{log_config, spawn_config, Config},
-        join_config_path, Timestamp,
+        join_config_path, NanoTimestamp,
     },
 };
 
@@ -296,9 +296,9 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                         let state = "state".to_string();
                         let parent = parent.clone();
                         let msg_values = info2.unwrap().get("log").unwrap().as_array().unwrap();
-                        let mut msg_log: Vec<(Timestamp, String, String)> = Vec::new();
+                        let mut msg_log: Vec<(NanoTimestamp, String, String)> = Vec::new();
                         for msg in msg_values {
-                            let msg: (Timestamp, String, String) =
+                            let msg: (NanoTimestamp, String, String) =
                                 serde_json::from_value(msg.clone())?;
                             msg_log.push(msg);
                         }
@@ -421,9 +421,9 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                         let state = state.as_str().unwrap().to_string();
                         let parent = parent.clone();
                         let msg_values = channel["log"].as_array().unwrap();
-                        let mut msg_log: Vec<(Timestamp, String, String)> = Vec::new();
+                        let mut msg_log: Vec<(NanoTimestamp, String, String)> = Vec::new();
                         for msg in msg_values {
-                            let msg: (Timestamp, String, String) =
+                            let msg: (NanoTimestamp, String, String) =
                                 serde_json::from_value(msg.clone())?;
                             msg_log.push(msg);
                         }

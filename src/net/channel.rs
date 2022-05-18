@@ -12,7 +12,7 @@ use url::Url;
 
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
-    util::Timestamp,
+    util::NanoTimestamp,
     Error, Result,
 };
 
@@ -30,7 +30,7 @@ struct ChannelInfo {
     last_msg: String,
     last_status: String,
     // Message log which is cleared on querying get_info
-    log: Mutex<Vec<(Timestamp, String, String)>>,
+    log: Mutex<Vec<(NanoTimestamp, String, String)>>,
 }
 
 impl ChannelInfo {
@@ -192,7 +192,7 @@ impl Channel {
         let mut payload = Vec::new();
         message.encode(&mut payload)?;
         let packet = message::Packet { command: String::from(M::name()), payload };
-        let time = Timestamp::current_time();
+        let time = NanoTimestamp::current_time();
         //let time = time::unix_timestamp()?;
 
         {
@@ -279,7 +279,7 @@ impl Channel {
                 let info = &mut *self.info.lock().await;
                 info.last_msg = packet.command.clone();
                 info.last_status = "recv".to_string();
-                let time = Timestamp::current_time();
+                let time = NanoTimestamp::current_time();
                 //let time = time::unix_timestamp()?;
                 info.log.lock().await.push((time, "recv".to_string(), packet.command.clone()));
             }
