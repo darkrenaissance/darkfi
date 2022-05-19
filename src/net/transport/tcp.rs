@@ -134,7 +134,6 @@ impl TcpTransport {
 
     async fn do_dial(self, socket_addr: SocketAddr) -> Result<TcpStream> {
         let socket = self.create_socket(socket_addr)?;
-        socket.set_nonblocking(true)?;
 
         match socket.connect(&socket_addr.into()) {
             Ok(()) => {}
@@ -143,6 +142,7 @@ impl TcpTransport {
             Err(err) => return Err(err.into()),
         };
 
+        socket.set_nonblocking(true)?;
         let stream = TcpStream::from(std::net::TcpStream::from(socket));
         Ok(stream)
     }
