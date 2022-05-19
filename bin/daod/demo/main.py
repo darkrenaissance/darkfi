@@ -63,13 +63,8 @@ class ProposerTxBuilder:
         input.note = note
         self.inputs.append(input)
 
-    def set_dao(self, proposer_limit, quorum, approval_ratio,
-                gov_token_id, dao_bulla_blind):
-        self.dao_proposer_limit = proposer_limit
-        self.dao_quorum = quorum
-        self.dao_approval_ratio = approval_ratio
-        self.gov_token_id = gov_token_id
-        self.dao_bulla_blind = dao_bulla_blind
+    def set_dao(self, dao):
+        self.dao = dao
 
     def build(self):
         tx = ProposerTx(self.ec)
@@ -88,11 +83,12 @@ class ProposerTxBuilder:
             total_value,
             total_value_blinds,
             # DAO params
-            self.dao_proposer_limit,
-            self.dao_quorum,
-            self.dao_approval_ratio,
-            self.gov_token_id,
-            self.dao_bulla_blind,
+            self.dao.proposer_limit,
+            self.dao.quorum,
+            self.dao.approval_ratio,
+            self.dao.gov_token_id,
+            self.dao.public_key,
+            self.dao.bulla_blind,
             # Token commit
             token_blind,
             # Used by other DAO members to verify the bulla
@@ -261,7 +257,7 @@ class ProposerTxDaoProof:
 
     def __init__(self, total_value, total_value_blinds,
                  proposer_limit, quorum, approval_ratio,
-                 gov_token_id, dao_bulla_blind,
+                 gov_token_id, dao_public_key, dao_bulla_blind,
                  token_blind, enc_bulla_blind,
                  proposal_dest, proposal_amount, proposal_serial,
                  proposal_token_id, proposal_blind,
@@ -272,6 +268,7 @@ class ProposerTxDaoProof:
         self.quorum = quorum
         self.approval_ratio = approval_ratio
         self.gov_token_id = gov_token_id
+        self.dao_public_key = dao_public_key
         self.dao_bulla_blind = dao_bulla_blind
         self.token_blind = token_blind
         self.enc_bulla_blind = enc_bulla_blind
@@ -300,6 +297,8 @@ class ProposerTxDaoProof:
             self.quorum,
             self.approval_ratio,
             self.gov_token_id,
+            self.dao_public_key[0],
+            self.dao_public_key[1],
             self.dao_bulla_blind
         )
         revealed.enc_bulla = crypto.ff_hash(self.ec.p, bulla, self.enc_bulla_blind)
@@ -327,11 +326,15 @@ class ProposerTxDaoProof:
             self.quorum,
             self.approval_ratio,
             self.gov_token_id,
+            self.dao_public_key[0],
+            self.dao_public_key[1],
             self.dao_bulla_blind
         )
         # Merkle root check
         if bulla not in self.all_dao_bullas:
             return False
+
+        assert self.proposal_amount > 0
 
         #
         #   total_value >= proposer_limit
@@ -587,11 +590,12 @@ class VoteTx:
 class DaoBuilder:
 
     def __init__(self, proposer_limit, quorum, approval_ratio,
-                 gov_token_id, dao_bulla_blind, ec):
+                 gov_token_id, dao_public_key, dao_bulla_blind, ec):
         self.proposer_limit = proposer_limit
         self.quorum = quorum
         self.approval_ratio = approval_ratio
         self.gov_token_id = gov_token_id
+        self.dao_public_key = dao_public_key
         self.dao_bulla_blind = dao_bulla_blind
 
         self.ec = ec
@@ -602,6 +606,7 @@ class DaoBuilder:
             self.quorum,
             self.approval_ratio,
             self.gov_token_id,
+            self.dao_public_key,
             self.dao_bulla_blind,
             self.ec
         )
@@ -627,11 +632,12 @@ class Dao:
 class DaoMintProof:
 
     def __init__(self, proposer_limit, quorum, approval_ratio,
-                 gov_token_id, dao_bulla_blind, ec):
+                 gov_token_id, dao_public_key, dao_bulla_blind, ec):
         self.proposer_limit = proposer_limit
         self.quorum = quorum
         self.approval_ratio = approval_ratio
         self.gov_token_id = gov_token_id
+        self.dao_public_key = dao_public_key
         self.dao_bulla_blind = dao_bulla_blind
         self.ec = ec
 
@@ -644,6 +650,8 @@ class DaoMintProof:
             self.quorum,
             self.approval_ratio,
             self.gov_token_id,
+            self.dao_public_key[0],
+            self.dao_public_key[1],
             self.dao_bulla_blind
         )
 
@@ -668,11 +676,14 @@ class DaoState:
     def is_valid_merkle_proposals(self, all_proposal_bullas):
         return all_proposal_bullas.issubset(self.proposals)
 
+    def proposal_nullifier_exists(self, nullifier):
+        return nullifier in self.proposal_nullifiers
+
     def apply_proposal_tx(self, update):
         self.proposals.add(update.proposal)
 
     def apply_exec_tx(self, update):
-        pass
+        self.proposal_nullifiers.add(update.proposal_nullifier)
 
     def apply(self, update):
         self.dao_bullas.add(update.bulla)
@@ -700,6 +711,12 @@ class DaoExecBuilder:
         total_votes,
         total_value_blinds,
         total_vote_blinds,
+        pay_tx_serial_0,
+        pay_tx_serial_1,
+        pay_tx_coin_blind_0,
+        pay_tx_coin_blind_1,
+        pay_tx_input_value,
+        pay_tx_input_blinds,
         ec
     ):
         self.proposal = proposal
@@ -709,6 +726,12 @@ class DaoExecBuilder:
         self.total_votes = total_votes
         self.total_value_blinds = total_value_blinds
         self.total_vote_blinds = total_vote_blinds
+        self.pay_tx_serial_0 = pay_tx_serial_0
+        self.pay_tx_serial_1 = pay_tx_serial_1
+        self.pay_tx_coin_blind_0 = pay_tx_coin_blind_0
+        self.pay_tx_coin_blind_1 = pay_tx_coin_blind_1
+        self.pay_tx_input_value = pay_tx_input_value
+        self.pay_tx_input_blinds = pay_tx_input_blinds
 
         self.ec = ec
 
@@ -722,6 +745,12 @@ class DaoExecBuilder:
             self.total_votes,
             self.total_value_blinds,
             self.total_vote_blinds,
+            self.pay_tx_serial_0,
+            self.pay_tx_serial_1,
+            self.pay_tx_coin_blind_0,
+            self.pay_tx_coin_blind_1,
+            self.pay_tx_input_value,
+            self.pay_tx_input_blinds,
             self.ec
         )
         tx.revealed = tx.proof.get_revealed()
@@ -750,6 +779,12 @@ class DaoExecProof:
         total_votes,
         total_value_blinds,
         total_vote_blinds,
+        pay_tx_serial_0,
+        pay_tx_serial_1,
+        pay_tx_coin_blind_0,
+        pay_tx_coin_blind_1,
+        pay_tx_input_value,
+        pay_tx_input_blinds,
         ec
     ):
         self.proposal = proposal
@@ -759,6 +794,12 @@ class DaoExecProof:
         self.total_votes = total_votes
         self.total_value_blinds = total_value_blinds
         self.total_vote_blinds = total_vote_blinds
+        self.pay_tx_serial_0 = pay_tx_serial_0
+        self.pay_tx_serial_1 = pay_tx_serial_1
+        self.pay_tx_coin_blind_0 = pay_tx_coin_blind_0
+        self.pay_tx_coin_blind_1 = pay_tx_coin_blind_1
+        self.pay_tx_input_value = pay_tx_input_value
+        self.pay_tx_input_blinds = pay_tx_input_blinds
 
         self.ec = ec
 
@@ -766,10 +807,6 @@ class DaoExecProof:
         revealed = ClassNamespace()
         # Corresponds to proposals merkle root
         revealed.all_proposals = self.all_proposals
-        return revealed
-
-    def verify(self, public):
-        revealed = self.get_revealed()
 
         dao_bulla = crypto.ff_hash(
             self.ec.p,
@@ -777,6 +814,76 @@ class DaoExecProof:
             self.dao.quorum,
             self.dao.approval_ratio,
             self.dao.gov_token_id,
+            self.dao.public_key[0],
+            self.dao.public_key[1],
+            self.dao.bulla_blind
+        )
+        proposal_bulla = crypto.ff_hash(
+            self.ec.p,
+            self.proposal.dest[0],
+            self.proposal.dest[1],
+            self.proposal.amount,
+            self.proposal.serial,
+            self.proposal.token_id,
+            self.proposal.blind,
+            dao_bulla
+        )
+        revealed.proposal_nullifier = crypto.ff_hash(
+            self.ec.p, self.proposal.serial)
+
+        revealed.coin_0 = crypto.ff_hash(
+            self.ec.p,
+            self.proposal.dest[0],
+            self.proposal.dest[1],
+            self.proposal.amount,
+            self.proposal.token_id,
+            self.pay_tx_serial_0,
+            self.pay_tx_coin_blind_0,
+            b"0x0000",
+            b"0x0000"
+        )
+
+        change_amount = self.pay_tx_input_value - self.proposal.amount
+        assert change_amount > 0
+
+        # Need the same DAO public key
+        # Need the input amount for pay_tx for treasury
+        # Need user_data blind
+        revealed.coin_1 = crypto.ff_hash(
+            self.ec.p,
+            self.dao.public_key[0],
+            self.dao.public_key[1],
+            change_amount,
+            self.proposal.token_id,
+            self.pay_tx_serial_1,
+            self.pay_tx_coin_blind_1,
+            b"0xdao_ruleset",
+            dao_bulla
+        )
+
+        # Money that went into the pay tx
+        revealed.inputs_value_commit = crypto.pedersen_encrypt(
+            self.pay_tx_input_value, self.pay_tx_input_blinds, self.ec)
+
+        revealed.total_value_commit = crypto.pedersen_encrypt(
+            self.total_votes, self.total_value_blinds, self.ec)
+        revealed.total_vote_commit = crypto.pedersen_encrypt(
+            self.win_votes, self.total_vote_blinds, self.ec)
+
+        return revealed
+
+    def verify(self, public):
+        revealed = self.get_revealed()
+
+        # Check proposal exists
+        dao_bulla = crypto.ff_hash(
+            self.ec.p,
+            self.dao.proposer_limit,
+            self.dao.quorum,
+            self.dao.approval_ratio,
+            self.dao.gov_token_id,
+            self.dao.public_key[0],
+            self.dao.public_key[1],
             self.dao.bulla_blind
         )
         proposal_bulla = crypto.ff_hash(
@@ -792,10 +899,21 @@ class DaoExecProof:
         # This being true also implies the DAO is valid
         assert proposal_bulla in self.all_proposals
 
+        assert self.total_votes >= self.dao.quorum
+
+        assert self.win_votes >= self.dao.approval_ratio
+
         return all([
+            revealed.all_proposals == public.all_proposals,
+            revealed.proposal_nullifier == public.proposal_nullifier,
+            revealed.coin_0 == public.coin_0,
+            revealed.coin_1 == public.coin_1,
+            revealed.inputs_value_commit == public.inputs_value_commit,
+            revealed.total_value_commit == public.total_value_commit,
+            revealed.total_vote_commit == public.total_vote_commit,
         ])
 
-def dao_exec_state_transition(state, tx):
+def dao_exec_state_transition(state, tx, pay_tx, ec):
     is_verify, reason = tx.verify()
     if not is_verify:
         print(f"dao exec tx verify failed: {reason}", file=sys.stderr)
@@ -805,8 +923,33 @@ def dao_exec_state_transition(state, tx):
         print(f"invalid merkle root proposals", file=sys.stderr)
         return None
 
+    nullifier = tx.revealed.proposal_nullifier
+    if state.proposal_nullifier_exists(nullifier):
+        print(f"duplicate nullifier found", file=sys.stderr)
+        return None
+
+    # Check the structure of the payment tx is correct
+    if len(pay_tx.outputs) != 2:
+        print(f"only 2 outputs allowed", file=sys.stderr)
+        return None
+    if tx.revealed.coin_0 != pay_tx.outputs[0].revealed.coin:
+        print(f"coin0 incorrectly formed", file=sys.stderr)
+        return None
+
+    inputs_value_commit = (0, 1, 0)
+    for input in pay_tx.inputs:
+        value_commit = input.revealed.value_commit
+        inputs_value_commit = ec.add(inputs_value_commit, value_commit)
+    if inputs_value_commit != tx.revealed.inputs_value_commit:
+        print(f"value commitment for inputs doesn't match", file=sys.stderr)
+        return None
+
+    if tx.revealed.coin_1 != pay_tx.outputs[1].revealed.coin:
+        print(f"coin1 incorrectly formed", file=sys.stderr)
+        return None
+
     update = ClassNamespace()
-    # update.proposal_nullifier = ...
+    update.proposal_nullifier = tx.revealed.proposal_nullifier
     return update
 
 # contract interface functions
@@ -901,6 +1044,7 @@ def main(argv):
         dao_quorum,
         dao_approval_ratio,
         gov_token_id,
+        dao_public_key,
         dao_bulla_blind,
         ec
     )
@@ -939,6 +1083,10 @@ def main(argv):
     if (update := money_state_transition(money_state, tx)) is None:
         return -1
     money_state.apply(update)
+
+    # NOTE: maybe we want to add additional zk proof here that the tx
+    #       sending money to the DAO was constructed correctly.
+    #       For example that the user_data is set correctly
 
     # payment state transition in coin specifies dependency
     # the tx exists and ruleset is applied
@@ -1046,16 +1194,18 @@ def main(argv):
     # For vote to become valid, the proposer must prove
     # that they own more than proposer_limit number of gov tokens.
 
+    dao = ClassNamespace()
+    dao.proposer_limit = dao_proposer_limit
+    dao.quorum = dao_quorum
+    dao.approval_ratio = dao_approval_ratio
+    dao.gov_token_id = gov_token_id
+    dao.public_key = dao_public_key
+    dao.bulla_blind = dao_bulla_blind
+
     builder = ProposerTxBuilder(proposal, dao_state.dao_bullas, ec)
     witness = gov_state.all_coins
     builder.add_input(witness, gov_secret_1, gov_user_1_note)
-    builder.set_dao(
-        dao_proposer_limit,
-        dao_quorum,
-        dao_approval_ratio,
-        gov_token_id,
-        dao_bulla_blind
-    )
+    builder.set_dao(dao)
     tx = builder.build()
 
     # No state changes actually happen so ignore the update
@@ -1223,8 +1373,12 @@ def main(argv):
         dao_quorum,
         dao_approval_ratio,
         gov_token_id,
+        dao_public_key[0],
+        dao_public_key[1],
         dao_bulla_blind
     ) # DAO bulla
+
+    pay_tx = tx
 
     # execution proof
     # 1. total votes >= quorum
@@ -1249,12 +1403,13 @@ def main(argv):
     #     - verifier: check sum of vote_commits is correct
     # - win_votes / total_votes >= approval_ratio
 
-    dao = ClassNamespace()
-    dao.proposer_limit = dao_proposer_limit
-    dao.quorum = dao_quorum
-    dao.approval_ratio = dao_approval_ratio
-    dao.gov_token_id = gov_token_id
-    dao.bulla_blind = dao_bulla_blind
+    assert len(pay_tx.outputs) == 2
+    pay_tx_serial_0 = pay_tx.outputs[0].enc_note.serial
+    pay_tx_serial_1 = pay_tx.outputs[1].enc_note.serial
+    pay_tx_coin_blind_0 = pay_tx.outputs[0].enc_note.coin_blind
+    pay_tx_coin_blind_1 = pay_tx.outputs[1].enc_note.coin_blind
+    pay_tx_input_value = coin_note.value
+    pay_tx_input_blinds = sum(builder.input_blinds) % ec.order
 
     builder = DaoExecBuilder(
         proposal,
@@ -1264,12 +1419,22 @@ def main(argv):
         total_votes,
         total_value_blinds,
         total_vote_blinds,
+        pay_tx_serial_0,
+        pay_tx_serial_1,
+        pay_tx_coin_blind_0,
+        pay_tx_coin_blind_1,
+        pay_tx_input_value,
+        pay_tx_input_blinds,
         ec
     )
     tx = builder.build()
-    if (update := dao_exec_state_transition(dao_state, tx)) is None:
+    if (update := dao_exec_state_transition(dao_state, tx, pay_tx, ec)) is None:
         return -1
     dao_state.apply_exec_tx(update)
+
+    # These checks are also run by the verifier
+    assert tx.revealed.total_value_commit == total_value_commit
+    assert tx.revealed.total_vote_commit == total_vote_commit
 
     return 0
 

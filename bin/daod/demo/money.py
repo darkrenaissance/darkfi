@@ -8,6 +8,8 @@ class SendPaymentTxBuilder:
         self.clear_inputs = []
         self.inputs = []
         self.outputs = []
+        self.input_blinds = []
+        self.output_blinds = []
 
         self.ec = ec
 
@@ -58,11 +60,11 @@ class SendPaymentTxBuilder:
                 input.signature_secret, self.ec.G)
             tx.clear_inputs.append(tx_clear_input)
 
-        input_blinds = []
+        self.input_blinds = []
         signature_secrets = []
         for input in self.inputs:
             value_blind = self.ec.random_scalar()
-            input_blinds.append(value_blind)
+            self.input_blinds.append(value_blind)
 
             signature_secret = self.ec.random_scalar()
             signature_secrets.append(signature_secret)
@@ -79,14 +81,14 @@ class SendPaymentTxBuilder:
             tx.inputs.append(tx_input)
 
         assert self.outputs
-        output_blinds = []
+        self.output_blinds = []
         for i, output in enumerate(self.outputs):
             if i == len(self.outputs) - 1:
                 value_blind = self.compute_remainder_blind(
-                    tx.clear_inputs, input_blinds, output_blinds)
+                    tx.clear_inputs, self.input_blinds, self.output_blinds)
             else:
                 value_blind = self.ec.random_scalar()
-            output_blinds.append(value_blind)
+            self.output_blinds.append(value_blind)
 
             note = ClassNamespace()
             note.serial = self.ec.random_base()
