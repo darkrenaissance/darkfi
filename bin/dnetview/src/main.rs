@@ -43,8 +43,10 @@ struct DnetView {
 
 impl DnetView {
     async fn new(url: Url, name: String) -> Result<Self> {
-        let rpc_client = RpcClient::new(url).await?;
-        Ok(Self { name, rpc_client })
+        match RpcClient::new(url).await {
+            Ok(rpc_client) => return Ok(Self { name, rpc_client }),
+            Err(e) => return Err(Error::OperationFailed),
+        }
     }
 
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
@@ -123,8 +125,11 @@ async fn poll_and_update_model(
     model: Arc<Model>,
 ) -> DnetViewResult<()> {
     for node in &config.nodes {
-        let client = DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone()).await?;
-        ex.spawn(poll(client, model.clone())).detach();
+        info!("Attempting to poll {}, RPC URL: {}", node.name, node.rpc_url);
+        match DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone()).await {
+            Ok(client) => return Ok(ex.spawn(poll(client, model.clone())).detach()),
+            Err(e) => return Err(DnetViewError::Darkfi(e)),
+        }
     }
     Ok(())
 }
@@ -140,8 +145,8 @@ async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
                 }
             }
             Err(e) => {
-                parse_offline(&client, model.clone()).await?;
                 error!("{:?}", e);
+                parse_offline(&client, model.clone()).await?;
             }
         }
         async_util::sleep(2).await;
