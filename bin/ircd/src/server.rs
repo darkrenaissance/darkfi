@@ -86,8 +86,10 @@ impl IrcServerConnection {
                 for chan in channels.split(',') {
                     let part_reply = format!(":{}!anon@dark.fi PART {}\r\n", self.nickname, chan);
                     self.reply(&part_reply).await?;
-                    let chan_info = self.configured_chans.get_mut(chan).unwrap();
-                    chan_info.joined = false;
+                    if self.configured_chans.contains_key(chan) {
+                        let chan_info = self.configured_chans.get_mut(chan).unwrap();
+                        chan_info.joined = false;
+                    }
                 }
             }
             "TOPIC" => {
