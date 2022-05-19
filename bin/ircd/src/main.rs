@@ -120,6 +120,9 @@ async fn process(
                 // Try to potentially decrypt the incoming message.
                 if conn.configured_chans.contains_key(&msg.channel) {
                     let chan_info = conn.configured_chans.get(&msg.channel).unwrap();
+                    if !chan_info.joined {
+                        continue
+                    }
                     if let Some(salt_box) = &chan_info.salt_box {
                         if let Some(decrypted_msg) = try_decrypt_message(salt_box, &msg.message) {
                             msg.message = decrypted_msg;

@@ -83,6 +83,8 @@ impl IrcServerConnection {
                 for chan in channels.split(',') {
                     let part_reply = format!(":{}!anon@dark.fi PART {}\r\n", self.nickname, chan);
                     self.reply(&part_reply).await?;
+                    let chan_info = self.configured_chans.get_mut(chan).unwrap();
+                    chan_info.joined = false;
                 }
             }
             "TOPIC" => {
@@ -131,34 +133,34 @@ impl IrcServerConnection {
                 let message = &line[substr_idx + 1..];
                 info!("(Plain) PRIVMSG {} :{}", channel, message);
 
-                let message = if self.configured_chans.contains_key(channel) {
+                if self.configured_chans.contains_key(channel) {
                     let channel_info = self.configured_chans.get(channel).unwrap();
-                    if let Some(salt_box) = &channel_info.salt_box {
-                        let encrypted = encrypt_message(salt_box, message);
-                        info!("(Encrypted) PRIVMSG {} :{}", channel, encrypted);
-                        encrypted
-                    } else {
-                        message.to_string()
+                    if channel_info.joined {
+                        let message = if let Some(salt_box) = &channel_info.salt_box {
+                            let encrypted = encrypt_message(salt_box, message);
+                            info!("(Encrypted) PRIVMSG {} :{}", channel, encrypted);
+                            encrypted
+                        } else {
+                            message.to_string()
+                        };
+
+                        let random_id = OsRng.next_u32();
+
+                        let protocol_msg = Privmsg {
+                            id: random_id,
+                            nickname: self.nickname.clone(),
+                            channel: channel.to_string(),
+                            message,
+                        };
+
+                        let mut smi = self.seen_msg_id.lock().await;
+                        smi.push(random_id);
+                        drop(smi);
+
+                        debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
+                        self.p2p_sender.send(protocol_msg).await?;
                     }
-                } else {
-                    message.to_string()
-                };
-
-                let random_id = OsRng.next_u32();
-
-                let protocol_msg = Privmsg {
-                    id: random_id,
-                    nickname: self.nickname.clone(),
-                    channel: channel.to_string(),
-                    message,
-                };
-
-                let mut smi = self.seen_msg_id.lock().await;
-                smi.push(random_id);
-                drop(smi);
-
-                debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
-                self.p2p_sender.send(protocol_msg).await?;
+                }
             }
             "QUIT" => {
                 // Close the connection

@@ -68,11 +68,13 @@ pub struct ChannelInfo {
     pub topic: Option<String>,
     /// Optional NaCl box for the channel, used for {en,de}cryption.
     pub salt_box: Option<crypto_box::Box>,
+    ///
+    pub joined: bool,
 }
 
 impl ChannelInfo {
     pub fn new() -> Result<Self> {
-        Ok(Self { topic: None, salt_box: None })
+        Ok(Self { topic: None, salt_box: None, joined: true })
     }
 }
 
