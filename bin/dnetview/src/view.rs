@@ -5,7 +5,7 @@ use tui::widgets::ListState;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::Style,
+    style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
@@ -64,11 +64,13 @@ impl View {
     fn update_active_ids(&mut self) {
         for info in self.nodes.infos.values() {
             self.active_ids.ids.insert(info.id.to_string());
-            for child in &info.children {
-                if !child.is_empty == true {
-                    self.active_ids.ids.insert(child.id.to_string());
-                    for child in &child.children {
+            if info.children.is_some() {
+                for child in info.children.as_ref().unwrap() {
+                    if !child.is_empty == true {
                         self.active_ids.ids.insert(child.id.to_string());
+                        for child in &child.children {
+                            self.active_ids.ids.insert(child.id.to_string());
+                        }
                     }
                 }
             }
@@ -126,48 +128,67 @@ impl View {
         let mut ids: Vec<String> = Vec::new();
 
         for info in self.nodes.infos.values() {
-            let name_span = Span::raw(&info.name);
-            let lines = vec![Spans::from(name_span)];
-            let names = ListItem::new(lines);
-            nodes.push(names);
-            ids.push(info.id.clone());
-            for session in &info.children {
-                if !session.is_empty == true {
-                    let name = Span::styled(format!("    {}", session.name), style);
-                    let lines = vec![Spans::from(name)];
+            match &info.children {
+                Some(children) => {
+                    let name_span = Span::raw(&info.name);
+                    let lines = vec![Spans::from(name_span)];
                     let names = ListItem::new(lines);
                     nodes.push(names);
-                    ids.push(session.id.clone());
-                    for connection in &session.children {
-                        let mut info = Vec::new();
-                        let name = Span::styled(format!("        {}", connection.addr), style);
-                        info.push(name);
-                        match connection.last_status.as_str() {
-                            "recv" => {
-                                let msg = Span::styled(
-                                    format!("                    [R: {}]", connection.last_msg),
-                                    style,
-                                );
-                                info.push(msg);
+                    ids.push(info.id.clone());
+                    for session in children {
+                        if !session.is_empty == true {
+                            let name = Span::styled(format!("    {}", session.name), style);
+                            let lines = vec![Spans::from(name)];
+                            let names = ListItem::new(lines);
+                            nodes.push(names);
+                            ids.push(session.id.clone());
+                            for connection in &session.children {
+                                let mut info = Vec::new();
+                                let name =
+                                    Span::styled(format!("        {}", connection.addr), style);
+                                info.push(name);
+                                match connection.last_status.as_str() {
+                                    "recv" => {
+                                        let msg = Span::styled(
+                                            format!(
+                                                "                    [R: {}]",
+                                                connection.last_msg
+                                            ),
+                                            style,
+                                        );
+                                        info.push(msg);
+                                    }
+                                    "sent" => {
+                                        let msg = Span::styled(
+                                            format!(
+                                                "                    [S: {}]",
+                                                connection.last_msg
+                                            ),
+                                            style,
+                                        );
+                                        info.push(msg);
+                                    }
+                                    "Null" => {
+                                        // Empty msg log. Do nothing
+                                    }
+                                    data => {
+                                        return Err(DnetViewError::UnexpectedData(data.to_string()))
+                                    }
+                                }
                             }
-                            "sent" => {
-                                let msg = Span::styled(
-                                    format!("                    [S: {}]", connection.last_msg),
-                                    style,
-                                );
-                                info.push(msg);
-                            }
-                            "Null" => {
-                                // Empty msg log. Do nothing
-                            }
-                            data => return Err(DnetViewError::UnexpectedData(data.to_string())),
                         }
-
-                        let lines = vec![Spans::from(info)];
-                        let names = ListItem::new(lines);
-                        nodes.push(names);
-                        ids.push(connection.id.clone());
                     }
+                }
+                None => {
+                    let style = Style::default().fg(Color::Blue).add_modifier(Modifier::ITALIC);
+                    let mut name = String::new();
+                    name.push_str(&info.name);
+                    name.push_str("(Offline)");
+                    let name_span = Span::styled(name, style);
+                    let lines = vec![Spans::from(name_span)];
+                    let names = ListItem::new(lines);
+                    nodes.push(names);
+                    ids.push(info.id.clone());
                 }
             }
         }
@@ -197,9 +218,13 @@ impl View {
 
             match info {
                 Some(SelectableObject::Node(node)) => {
-                    let node_info =
-                        Span::styled(format!("External addr: {}", node.external_addr), style);
-                    lines.push(Spans::from(node_info));
+                    if node.external_addr.is_some() {
+                        let node_info = Span::styled(
+                            format!("External addr: {}", node.external_addr.as_ref().unwrap()),
+                            style,
+                        );
+                        lines.push(Spans::from(node_info));
+                    }
                 }
                 Some(SelectableObject::Session(session)) => {
                     if session.accept_addr.is_some() {

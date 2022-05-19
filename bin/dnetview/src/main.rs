@@ -16,7 +16,7 @@ use tui::{
 use url::Url;
 
 use darkfi::{
-    error::Result,
+    error::{Error, Result},
     rpc::{jsonrpc, rpcclient::RpcClient},
     util::{
         async_util,
@@ -34,7 +34,7 @@ use dnetview::{
     view::{IdListView, NodeInfoView, View},
 };
 
-use log::debug;
+use log::{debug, error};
 
 struct DnetView {
     name: String,
@@ -58,7 +58,10 @@ impl DnetView {
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
     async fn get_info(&self) -> Result<Value> {
         let req = jsonrpc::request(json!("get_info"), json!([]));
-        Ok(self.rpc_client.request(req).await?)
+        match self.rpc_client.request(req).await {
+            Ok(req) => return Ok(req),
+            Err(_e) => return Err(Error::OperationFailed),
+        }
     }
 }
 
@@ -128,15 +131,31 @@ async fn poll_and_update_model(
 
 async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
     loop {
-        let reply = client.get_info().await?;
-
-        if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-            parse_data(reply.as_object().unwrap(), &client, model.clone()).await?;
-        } else {
-            return Err(DnetViewError::EmptyRpcReply)
+        match client.get_info().await {
+            Ok(reply) => {
+                if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+                    parse_data(reply.as_object().unwrap(), &client, model.clone()).await?;
+                } else {
+                    return Err(DnetViewError::EmptyRpcReply)
+                }
+            }
+            Err(e) => {
+                parse_offline(&client, model.clone()).await?;
+                error!("{:?}", e);
+            }
         }
         async_util::sleep(2).await;
     }
+}
+
+async fn parse_offline(client: &DnetView, model: Arc<Model>) -> DnetViewResult<()> {
+    let node_name = &client.name;
+    let node_id = make_node_id(node_name)?;
+    let node = NodeInfo::new(node_id.clone(), node_name.to_string(), None, None);
+
+    update_node(model.clone(), node.clone(), node_id.clone()).await;
+    update_selectable_and_ids(model.clone(), None, node.clone()).await?;
+    Ok(())
 }
 
 async fn parse_data(
@@ -164,10 +183,11 @@ async fn parse_data(
     sessions.push(out_session.clone());
     sessions.push(man_session.clone());
 
-    let node = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone(), ext_addr);
+    let node =
+        NodeInfo::new(node_id.clone(), node_name.to_string(), Some(sessions.clone()), ext_addr);
 
     update_node(model.clone(), node.clone(), node_id.clone()).await;
-    update_selectable_and_ids(model.clone(), sessions.clone(), node.clone()).await?;
+    update_selectable_and_ids(model.clone(), Some(sessions.clone()), node.clone()).await?;
     update_msgs(model.clone(), sessions.clone()).await?;
 
     //debug!("IDS: {:?}", model.ids.lock().await);
@@ -209,30 +229,32 @@ async fn update_node(model: Arc<Model>, node: NodeInfo, id: String) {
 
 async fn update_selectable_and_ids(
     model: Arc<Model>,
-    sessions: Vec<SessionInfo>,
+    sessions: Option<Vec<SessionInfo>>,
     node: NodeInfo,
 ) -> DnetViewResult<()> {
     let node_obj = SelectableObject::Node(node.clone());
     model.selectables.lock().await.insert(node.id.clone(), node_obj);
     update_ids(model.clone(), node.id.clone()).await;
-    for session in sessions.clone() {
-        let session_obj = SelectableObject::Session(session.clone());
-        model.selectables.lock().await.insert(session.clone().id, session_obj);
-        update_ids(model.clone(), session.clone().id).await;
-        for connect in session.children {
-            let connect_obj = SelectableObject::Connect(connect.clone());
-            model.selectables.lock().await.insert(connect.clone().id, connect_obj);
-            update_ids(model.clone(), connect.clone().id).await;
+    if sessions.is_some() {
+        for session in sessions.unwrap().clone() {
+            let session_obj = SelectableObject::Session(session.clone());
+            model.selectables.lock().await.insert(session.clone().id, session_obj);
+            update_ids(model.clone(), session.clone().id).await;
+            for connect in session.children {
+                let connect_obj = SelectableObject::Connect(connect.clone());
+                model.selectables.lock().await.insert(connect.clone().id, connect_obj);
+                update_ids(model.clone(), connect.clone().id).await;
+            }
         }
     }
     Ok(())
 }
 
-async fn parse_external_addr(addr: &Option<&Value>) -> DnetViewResult<String> {
+async fn parse_external_addr(addr: &Option<&Value>) -> DnetViewResult<Option<String>> {
     match addr {
         Some(addr) => match addr.as_str() {
-            Some(addr) => return Ok(addr.to_string()),
-            None => return Ok("null".to_string()),
+            Some(addr) => return Ok(Some(addr.to_string())),
+            None => return Ok(None),
         },
         None => Err(DnetViewError::NoExternalAddr),
     }
