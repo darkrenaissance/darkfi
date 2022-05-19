@@ -88,10 +88,10 @@ impl Acceptor {
 
                 if auth_cookie.is_err() {
                     return Err(Error::TorError(
-                    "Please set the env var DARKFI_TOR_COOKIE to the configured tor cookie file. \
+                            "Please set the env var DARKFI_TOR_COOKIE to the configured tor cookie file. \
                     For example: \
                     \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'".to_string(),
-                ))
+                    ))
                 }
 
                 let auth_cookie = auth_cookie.unwrap();
@@ -138,11 +138,11 @@ impl Acceptor {
 
     /// Run the accept loop.
     async fn run_accept_loop(self: Arc<Self>, listener: Box<dyn TransportListener>) -> Result<()> {
-        while let Ok((stream, peer_addr)) = listener.next().await {
+        loop {
+            let (stream, peer_addr) = listener.next().await?;
             let channel = Channel::new(stream, peer_addr).await;
             self.channel_subscriber.notify(Ok(channel)).await;
         }
-        Ok(())
     }
 
     /// Handles network errors. Panics if error passes silently, otherwise
