@@ -75,6 +75,9 @@ impl IrcServerConnection {
                     self.reply(&join_reply).await?;
                     if !self.configured_chans.contains_key(chan) {
                         self.configured_chans.insert(chan.to_string(), ChannelInfo::new()?);
+                    } else {
+                        let chan_info = self.configured_chans.get_mut(chan).unwrap();
+                        chan_info.joined = true;
                     }
                 }
             }
