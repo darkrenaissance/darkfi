@@ -334,6 +334,7 @@ class ProposerTxDaoProof:
         if bulla not in self.all_dao_bullas:
             return False
 
+        # This should not be able to be bigger than 2^64
         assert self.proposal_amount > 0
 
         #
@@ -685,6 +686,7 @@ class DaoState:
     def apply_exec_tx(self, update):
         self.proposal_nullifiers.add(update.proposal_nullifier)
 
+    # Apply DAO mint tx update
     def apply(self, update):
         self.dao_bullas.add(update.bulla)
 
@@ -1070,6 +1072,8 @@ def main(argv):
     builder.add_clear_input(money_initial_supply, money_token_id,
                             signature_secret)
     # Address of deployed contract in our example is 0xdao_ruleset
+    # This field is public, you can see it's being sent to a DAO
+    # but nothing else is visible.
     spend_hook = b"0xdao_ruleset"
     # This can be a simple hash of the items passed into the ZK proof
     # up to corresponding linked ZK proof to interpret however they need.
@@ -1131,7 +1135,7 @@ def main(argv):
     builder = money.SendPaymentTxBuilder(ec)
     builder.add_clear_input(gov_initial_supply, gov_token_id,
                             signature_secret)
-    assert 2 * 5000 == gov_initial_supply
+    assert 2 * 4000 + 2000 == gov_initial_supply
     builder.add_output(4000, gov_token_id, gov_public_1,
                        b"0x0000", b"0x0000")
     builder.add_output(4000, gov_token_id, gov_public_2,
@@ -1221,8 +1225,13 @@ def main(argv):
     # Lets the voting begin
     # Voters have access to the proposal and dao data
     vote_state = VoteState()
+    # We don't need to copy nullifier set because it is checked from gov_state
+    # in vote_state_transition() anyway
 
     # TODO: what happens if voters don't unblind their vote
+    # Answer:
+    #   1. there is a time limit
+    #   2. both the MPC or users can unblind
 
     # User 1: YES
     builder = VoteTxBuilder(ec)
