@@ -241,7 +241,7 @@ pub async fn open_channels(
     match transport_name {
         TransportName::Tcp(upgrade) => {
             let transport = TcpTransport::new(None, 1024);
-            let stream = transport.dial(uri.clone());
+            let stream = transport.dial(uri.clone(), None);
 
             reqrep!(stream, transport, upgrade);
         }
@@ -253,7 +253,7 @@ pub async fn open_channels(
 
             let transport = TorTransport::new(socks5_url, None)?;
 
-            let stream = transport.clone().dial(uri.clone());
+            let stream = transport.clone().dial(uri.clone(), None);
 
             reqrep!(stream, transport, upgrade);
         }
@@ -310,7 +310,7 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
     match transport_name {
         TransportName::Tcp(upgrade) => {
             let transport = TcpTransport::new(None, 1024);
-            let stream = transport.dial(uri.clone());
+            let stream = transport.dial(uri.clone(), None);
 
             reply!(stream, transport, upgrade)
         }
@@ -322,7 +322,7 @@ pub async fn send_request(uri: &Url, data: Value) -> Result<JsonResult> {
 
             let transport = TorTransport::new(socks5_url, None)?;
 
-            let stream = transport.clone().dial(uri.clone());
+            let stream = transport.clone().dial(uri.clone(), None);
 
             reply!(stream, transport, upgrade)
         }

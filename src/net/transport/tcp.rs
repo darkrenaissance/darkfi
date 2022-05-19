@@ -1,5 +1,5 @@
 use async_std::net::{TcpListener, TcpStream};
-use std::{io, net::SocketAddr, pin::Pin};
+use std::{io, net::SocketAddr, pin::Pin, time::Duration};
 
 use async_trait::async_trait;
 use futures::prelude::*;
@@ -87,7 +87,7 @@ impl Transport for TcpTransport {
         Ok(Box::pin(tlsupgrade.upgrade_listener_tls(acceptor)))
     }
 
-    fn dial(self, url: Url) -> Result<Self::Dial> {
+    fn dial(self, url: Url, timeout: Option<Duration>) -> Result<Self::Dial> {
         match url.scheme() {
             "tcp" | "tcp+tls" | "tls" => {}
             x => return Err(Error::UnsupportedTransport(x.to_string())),
@@ -95,7 +95,7 @@ impl Transport for TcpTransport {
 
         let socket_addr = url.socket_addrs(|| None)?[0];
         debug!("{} transport: dialing {}", url.scheme(), socket_addr);
-        Ok(Box::pin(self.do_dial(socket_addr)))
+        Ok(Box::pin(self.do_dial(socket_addr, timeout)))
     }
 
     fn upgrade_dialer(self, connector: Self::Connector) -> Result<Self::TlsDialer> {
@@ -132,10 +132,20 @@ impl TcpTransport {
         Ok(TcpListener::from(std::net::TcpListener::from(socket)))
     }
 
-    async fn do_dial(self, socket_addr: SocketAddr) -> Result<TcpStream> {
+    async fn do_dial(
+        self,
+        socket_addr: SocketAddr,
+        timeout: Option<Duration>,
+    ) -> Result<TcpStream> {
         let socket = self.create_socket(socket_addr)?;
 
-        match socket.connect(&socket_addr.into()) {
+        let connection = if timeout.is_some() {
+            socket.connect_timeout(&socket_addr.into(), timeout.unwrap())
+        } else {
+            socket.connect(&socket_addr.into())
+        };
+
+        match connection {
             Ok(()) => {}
             Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}

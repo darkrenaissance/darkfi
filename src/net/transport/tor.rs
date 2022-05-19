@@ -239,7 +239,7 @@ impl Transport for TorTransport {
         Ok(Box::pin(tlsupgrade.upgrade_listener_tls(acceptor)))
     }
 
-    fn dial(self, url: Url) -> Result<Self::Dial> {
+    fn dial(self, url: Url, _timeout: Option<Duration>) -> Result<Self::Dial> {
         match url.scheme() {
             "tor" | "tor+tls" => {}
             x => return Err(Error::UnsupportedTransport(x.to_string())),

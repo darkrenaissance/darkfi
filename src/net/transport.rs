@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use async_trait::async_trait;
 // TODO remove *
@@ -82,7 +82,7 @@ pub trait Transport {
     where
         Self: Sized;
 
-    fn dial(self, url: Url) -> Result<Self::Dial>
+    fn dial(self, url: Url, timeout: Option<Duration>) -> Result<Self::Dial>
     where
         Self: Sized;
 

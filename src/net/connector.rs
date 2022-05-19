@@ -1,4 +1,4 @@
-use async_std::{future::timeout, sync::Arc};
+use async_std::sync::Arc;
 use std::{env, time::Duration};
 
 use log::error;
@@ -24,18 +24,19 @@ impl Connector {
     /// Establish an outbound connection.
     pub async fn connect(&self, connect_url: Url) -> Result<ChannelPtr> {
         let transport_name = TransportName::try_from(connect_url.clone())?;
-        let result =
-            timeout(Duration::from_secs(self.settings.connect_timeout_seconds.into()), async {
-                self.connect_channel(connect_url, transport_name).await
-            })
-            .await?;
-        result
+        self.connect_channel(
+            connect_url,
+            transport_name,
+            Duration::from_secs(self.settings.connect_timeout_seconds.into()),
+        )
+        .await
     }
 
     async fn connect_channel(
         &self,
         connect_url: Url,
         transport_name: TransportName,
+        timeout: Duration,
     ) -> Result<Arc<Channel>> {
         macro_rules! connect {
             ($stream:expr, $transport:expr, $upgrade:expr) => {{
@@ -67,7 +68,7 @@ impl Connector {
         match transport_name {
             TransportName::Tcp(upgrade) => {
                 let transport = TcpTransport::new(None, 1024);
-                let stream = transport.dial(connect_url.clone());
+                let stream = transport.dial(connect_url.clone(), Some(timeout));
                 connect!(stream, transport, upgrade)
             }
             TransportName::Tor(upgrade) => {
@@ -78,7 +79,7 @@ impl Connector {
 
                 let transport = TorTransport::new(socks5_url, None)?;
 
-                let stream = transport.clone().dial(connect_url.clone());
+                let stream = transport.clone().dial(connect_url.clone(), None);
 
                 connect!(stream, transport, upgrade)
             }
