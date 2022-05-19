@@ -901,7 +901,7 @@ class DaoExecProof:
 
         assert self.total_votes >= self.dao.quorum
 
-        assert self.win_votes >= self.dao.approval_ratio
+        assert self.win_votes / self.total_votes >= self.dao.approval_ratio
 
         return all([
             revealed.all_proposals == public.all_proposals,
