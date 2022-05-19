@@ -125,8 +125,8 @@ async fn poll_and_update_model(
     for node in &config.nodes {
         info!("Attempting to poll {}, RPC URL: {}", node.name, node.rpc_url);
         match DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone()).await {
-            Ok(client) => return Ok(ex.spawn(poll(client, model.clone())).detach()),
-            Err(e) => return Err(DnetViewError::Darkfi(e)),
+            Ok(client) => ex.spawn(poll(client, model.clone())).detach(),
+            Err(e) => error!("{}", e),
         }
     }
     Ok(())
