@@ -27,7 +27,14 @@ impl RpcClient {
         let req_id = value.id.clone().as_u64().unwrap_or(0);
         let value = json!(value);
 
-        self.sender.send(value).await?;
+        // TODO proper error handling for closed channels
+        // if the connection is closed the sender will get an error
+        // for sending to closed channel
+        let result = self.sender.send(value).await;
+        if result.is_err() {
+            error!("Unable to connect to the RPC server");
+            return Err(Error::OperationFailed)
+        }
 
         let reply = self.receiver.recv().await;
 
