@@ -43,10 +43,8 @@ struct DnetView {
 
 impl DnetView {
     async fn new(url: Url, name: String) -> Result<Self> {
-        match RpcClient::new(url).await {
-            Ok(rpc_client) => return Ok(Self { name, rpc_client }),
-            Err(e) => return Err(Error::OperationFailed),
-        }
+        let rpc_client = RpcClient::new(url).await?;
+        Ok(Self { name, rpc_client })
     }
 
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
@@ -58,11 +56,11 @@ impl DnetView {
 
     //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
-    async fn get_info(&self) -> Result<Value> {
+    async fn get_info(&self) -> DnetViewResult<Value> {
         let req = jsonrpc::request(json!("get_info"), json!([]));
         match self.rpc_client.request(req).await {
             Ok(req) => return Ok(req),
-            Err(_e) => return Err(Error::OperationFailed),
+            Err(e) => return Err(DnetViewError::Darkfi(e)),
         }
     }
 }

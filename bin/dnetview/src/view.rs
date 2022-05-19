@@ -17,7 +17,7 @@ use crate::{
     error::{DnetViewError, DnetViewResult},
     model::{NodeInfo, SelectableObject},
 };
-//use log::debug;
+use log::debug;
 
 #[derive(Debug)]
 pub struct View {
@@ -99,6 +99,8 @@ impl View {
         // remove any duplicates
         id_list.dedup();
 
+        //debug!("ID LIST {:?}", id_list);
+        //debug!("ACTIVE ID LIST {:?}", self.active_ids.ids);
         if id_list.is_empty() {
             // we have not received any data
             Ok(())
