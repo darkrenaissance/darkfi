@@ -16,7 +16,7 @@ use tui::{
 use url::Url;
 
 use darkfi::{
-    error::{Error, Result},
+    error::Result,
     rpc::{jsonrpc, rpcclient::RpcClient},
     util::{
         async_util,
@@ -152,12 +152,37 @@ async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
 }
 
 async fn parse_offline(client: &DnetView, model: Arc<Model>) -> DnetViewResult<()> {
+    let name = "Offline".to_string();
+    let session_type = Session::Offline;
     let node_name = &client.name;
     let node_id = make_node_id(node_name)?;
-    let node = NodeInfo::new(node_id.clone(), node_name.to_string(), None, None);
+    let session_id = make_session_id(&node_id, &session_type)?;
+    let mut connects: Vec<ConnectInfo> = Vec::new();
+    let mut sessions: Vec<SessionInfo> = Vec::new();
+
+    // initialize with empty values
+    let id = make_empty_id(&node_id, &session_type, 0)?;
+    //debug!("Make EMPTY ID: {}", id);
+    let addr = "Null".to_string();
+    let state = "Null".to_string();
+    let parent = node_id.clone();
+    let msg_log = Vec::new();
+    let is_empty = true;
+    let last_msg = "Null".to_string();
+    let last_status = "Null".to_string();
+    let connect_info =
+        ConnectInfo::new(id, addr, state, parent.clone(), msg_log, is_empty, last_msg, last_status);
+    connects.push(connect_info.clone());
+
+    let accept_addr = None;
+    let session_info =
+        SessionInfo::new(session_id, name, is_empty, parent.clone(), connects, accept_addr);
+    sessions.push(session_info);
+
+    let node = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone(), None, true);
 
     update_node(model.clone(), node.clone(), node_id.clone()).await;
-    update_selectable_and_ids(model.clone(), None, node.clone()).await?;
+    update_selectable_and_ids(model.clone(), sessions, node.clone()).await?;
     Ok(())
 }
 
@@ -180,21 +205,21 @@ async fn parse_data(
     let ext_addr = parse_external_addr(addr).await?;
     let in_session = parse_inbound(inbound, &node_id).await?;
     let out_session = parse_outbound(outbound, &node_id).await?;
-    let man_session = parse_manual(manual, &node_id).await?;
+    //let man_session = parse_manual(manual, &node_id).await?;
 
     sessions.push(in_session.clone());
     sessions.push(out_session.clone());
-    sessions.push(man_session.clone());
+    //sessions.push(man_session.clone());
 
     let node =
-        NodeInfo::new(node_id.clone(), node_name.to_string(), Some(sessions.clone()), ext_addr);
+        NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone(), ext_addr, false);
 
     update_node(model.clone(), node.clone(), node_id.clone()).await;
-    update_selectable_and_ids(model.clone(), Some(sessions.clone()), node.clone()).await?;
+    update_selectable_and_ids(model.clone(), sessions.clone(), node.clone()).await?;
     update_msgs(model.clone(), sessions.clone()).await?;
 
     //debug!("IDS: {:?}", model.ids.lock().await);
-    //debug!("INFOS: {:?}", model.infos.lock().await);
+    //debug!("INFOS: {:?}", model.nodes.lock().await);
 
     Ok(())
 }
@@ -232,22 +257,20 @@ async fn update_node(model: Arc<Model>, node: NodeInfo, id: String) {
 
 async fn update_selectable_and_ids(
     model: Arc<Model>,
-    sessions: Option<Vec<SessionInfo>>,
+    sessions: Vec<SessionInfo>,
     node: NodeInfo,
 ) -> DnetViewResult<()> {
     let node_obj = SelectableObject::Node(node.clone());
     model.selectables.lock().await.insert(node.id.clone(), node_obj);
     update_ids(model.clone(), node.id.clone()).await;
-    if sessions.is_some() {
-        for session in sessions.unwrap().clone() {
-            let session_obj = SelectableObject::Session(session.clone());
-            model.selectables.lock().await.insert(session.clone().id, session_obj);
-            update_ids(model.clone(), session.clone().id).await;
-            for connect in session.children {
-                let connect_obj = SelectableObject::Connect(connect.clone());
-                model.selectables.lock().await.insert(connect.clone().id, connect_obj);
-                update_ids(model.clone(), connect.clone().id).await;
-            }
+    for session in sessions {
+        let session_obj = SelectableObject::Session(session.clone());
+        model.selectables.lock().await.insert(session.clone().id, session_obj);
+        update_ids(model.clone(), session.clone().id).await;
+        for connect in session.children {
+            let connect_obj = SelectableObject::Connect(connect.clone());
+            model.selectables.lock().await.insert(connect.clone().id, connect_obj);
+            update_ids(model.clone(), connect.clone().id).await;
         }
     }
     Ok(())
@@ -280,6 +303,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                     connect_count += 1;
                     // channel is empty. initialize with empty values
                     let id = make_empty_id(&node_id, &session_type, connect_count)?;
+                    //debug!("Make INBOUND EMPTY ID: {}", id);
                     let addr = "Null".to_string();
                     let state = "Null".to_string();
                     let parent = parent.clone();
@@ -318,6 +342,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                         let info2 = info.unwrap().get(1);
                         let id = info2.unwrap().get("random_id").unwrap().as_u64().unwrap();
                         let id = make_connect_id(&id)?;
+                        //debug!("Made INBOUND connect ID: {}", id);
                         let state = "state".to_string();
                         let parent = parent.clone();
                         let msg_values = info2.unwrap().get("log").unwrap().as_array().unwrap();
@@ -378,8 +403,10 @@ async fn parse_manual(_manual: &Value, node_id: &String) -> DnetViewResult<Sessi
     let parent = node_id.to_string();
 
     let session_id = make_session_id(&parent, &session_type)?;
-    let id: u64 = 0;
-    let connect_id = make_connect_id(&id)?;
+    //let id: u64 = 0;
+    let connect_id = make_empty_id(&node_id, &session_type, 0)?;
+    //let connect_id = make_connect_id(&id)?;
+    //debug!("Made MANUAL connect ID: {}", id);
     let addr = "Null".to_string();
     let state = "Null".to_string();
     let msg_log = Vec::new();
@@ -415,6 +442,7 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                     true => {
                         // channel is empty. initialize with empty values
                         let id = make_empty_id(&node_id, &session_type, slot_count)?;
+                        //debug!("Make OUTBOUND EMPTY ID: {}", id);
                         let addr = "Null".to_string();
                         let state = &slot["state"];
                         let state = state.as_str().unwrap().to_string();
@@ -440,6 +468,7 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                         let channel = &slot["channel"];
                         let id = channel["random_id"].as_u64().unwrap();
                         let id = make_connect_id(&id)?;
+                        //debug!("Made OUTBOUND connect id {}", id);
                         let addr = &slot["addr"];
                         let addr = addr.as_str().unwrap().to_string();
                         let state = &slot["state"];

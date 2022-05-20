@@ -8,6 +8,7 @@ pub enum Session {
     Inbound,
     Outbound,
     Manual,
+    Offline,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -39,18 +40,20 @@ impl Model {
 pub struct NodeInfo {
     pub id: String,
     pub name: String,
-    pub children: Option<Vec<SessionInfo>>,
+    pub children: Vec<SessionInfo>,
     pub external_addr: Option<String>,
+    pub is_offline: bool,
 }
 
 impl NodeInfo {
     pub fn new(
         id: String,
         name: String,
-        children: Option<Vec<SessionInfo>>,
+        children: Vec<SessionInfo>,
         external_addr: Option<String>,
+        is_offline: bool,
     ) -> NodeInfo {
-        NodeInfo { id, name, children, external_addr }
+        NodeInfo { id, name, children, external_addr, is_offline }
     }
 }
 

@@ -62,14 +62,63 @@ impl View {
     }
 
     fn update_active_ids(&mut self) {
+        // this removes the empty ids from the offline node
+        // but doesn't remove the actual ids that were previously there
+        // we need to know what those ideas are in order to remove them
+        // need to keep track of ids somewhere in memory so we can remove them
         for info in self.nodes.infos.values() {
             self.active_ids.ids.insert(info.id.to_string());
-            if info.children.is_some() {
-                for child in info.children.as_ref().unwrap() {
-                    if !child.is_empty == true {
-                        self.active_ids.ids.insert(child.id.to_string());
-                        for child in &child.children {
-                            self.active_ids.ids.insert(child.id.to_string());
+            //debug!("INFO {:?}", info);
+            match info.is_offline {
+                true => {
+                    // get the corresponding selectable object
+
+                    // get the selectable that corresponds to node id
+                    let offline = self.selectables.get(&info.id.to_string());
+                    match offline {
+                        //debug!("NODE {} is offline", info.id.to_string());
+                        Some(SelectableObject::Node(node)) => {
+                            //self.active_ids.ids.remove(&node.id);
+                            for session in &node.children {
+                                debug!("REMOVED {}", session.id.to_string());
+                                self.active_ids.ids.remove(&session.id);
+                                for connect in &session.children {
+                                    debug!("REMOVED {}", connect.id.to_string());
+                                    self.active_ids.ids.remove(&connect.id);
+                                    //
+                                }
+                            }
+                        }
+                        Some(e) => {}
+                        //Some(SelectableObject::Session(session)) => {
+                        //    self.active_ids.ids.remove(&session.id);
+                        //}
+                        //Some(SelectableObject::Connect(connect)) => {
+                        //    self.active_ids.ids.remove(&connect.id);
+                        //}
+                        None => {}
+                    }
+
+                    //self.active_ids.ids.get(&info.id.to_string());
+                    //debug!("OFFLINE INFO {:?}", info);
+                    //debug!("NODE {} is offline", info.id.to_string());
+                    //for session in &info.children {
+                    //    debug!("FOUND SESSION ID {}", session.id.to_string());
+                    //    for connect in &session.children {
+                    //        debug!("FOUND CONNECT ID {}", connect.id.to_string());
+                    //        //self.active_ids.ids.remove(&connect.id.to_string());
+                    //    }
+                    //    //self.active_ids.ids.remove(&session.id.to_string());
+                    //}
+                }
+                false => {
+                    //debug!("ONLINE INFO {:?}", info);
+                    for session in &info.children {
+                        if !session.is_empty == true {
+                            self.active_ids.ids.insert(session.id.to_string());
+                            for connect in &session.children {
+                                self.active_ids.ids.insert(connect.id.to_string());
+                            }
                         }
                     }
                 }
@@ -96,11 +145,11 @@ impl View {
 
         let mut id_list = self.render_id_list(f, slice.clone())?;
 
-        // remove any duplicates
         id_list.dedup();
-
-        //debug!("ID LIST {:?}", id_list);
-        //debug!("ACTIVE ID LIST {:?}", self.active_ids.ids);
+        debug!("ACTIVE ID LIST {:?}", self.active_ids.ids);
+        debug!("ID LIST {:?}", id_list);
+        debug!("ID LIST LEN {:?}", id_list.len());
+        debug!("ACTIVE ID LIST LEN {:?}", self.active_ids.ids.len());
         if id_list.is_empty() {
             // we have not received any data
             Ok(())
@@ -127,22 +176,39 @@ impl View {
     ) -> DnetViewResult<Vec<String>> {
         let style = Style::default();
         let mut nodes = Vec::new();
+        let mut node_ids: Vec<String> = Vec::new();
+        let mut session_ids: Vec<String> = Vec::new();
+        let mut connect_ids: Vec<String> = Vec::new();
         let mut ids: Vec<String> = Vec::new();
 
         for info in self.nodes.infos.values() {
-            match &info.children {
-                Some(children) => {
+            match info.is_offline {
+                true => {
+                    let style = Style::default().fg(Color::Blue).add_modifier(Modifier::ITALIC);
+                    let mut name = String::new();
+                    name.push_str(&info.name);
+                    name.push_str("(Offline)");
+                    let name_span = Span::styled(name, style);
+                    let lines = vec![Spans::from(name_span)];
+                    let names = ListItem::new(lines);
+                    nodes.push(names);
+                    ids.push(info.id.clone());
+                    node_ids.push(info.id.clone());
+                }
+                false => {
                     let name_span = Span::raw(&info.name);
                     let lines = vec![Spans::from(name_span)];
                     let names = ListItem::new(lines);
                     nodes.push(names);
                     ids.push(info.id.clone());
-                    for session in children {
+                    node_ids.push(info.id.clone());
+                    for session in &info.children {
                         if !session.is_empty == true {
                             let name = Span::styled(format!("    {}", session.name), style);
                             let lines = vec![Spans::from(name)];
                             let names = ListItem::new(lines);
                             nodes.push(names);
+                            session_ids.push(session.id.clone());
                             ids.push(session.id.clone());
                             for connection in &session.children {
                                 let mut info = Vec::new();
@@ -177,24 +243,21 @@ impl View {
                                         return Err(DnetViewError::UnexpectedData(data.to_string()))
                                     }
                                 }
+
+                                let lines = vec![Spans::from(info)];
+                                let names = ListItem::new(lines);
+                                nodes.push(names);
+                                connect_ids.push(connection.id.clone());
+                                ids.push(connection.id.clone());
                             }
                         }
                     }
                 }
-                None => {
-                    let style = Style::default().fg(Color::Blue).add_modifier(Modifier::ITALIC);
-                    let mut name = String::new();
-                    name.push_str(&info.name);
-                    name.push_str("(Offline)");
-                    let name_span = Span::styled(name, style);
-                    let lines = vec![Spans::from(name_span)];
-                    let names = ListItem::new(lines);
-                    nodes.push(names);
-                    ids.push(info.id.clone());
-                }
             }
         }
-
+        //debug!("NODES: {:?}", node_ids);
+        //debug!("SESSIONS: {:?}", session_ids);
+        //debug!("CONNECTs : {:?}", connect_ids);
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
