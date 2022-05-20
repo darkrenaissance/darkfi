@@ -1,7 +1,7 @@
 use std::io;
 
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use log::{debug, error};
+use log::debug;
 use url::Url;
 
 use crate::{
@@ -170,10 +170,7 @@ pub async fn read_packet<R: AsyncRead + Unpin + Sized>(stream: &mut R) -> Result
     let mut magic = [0u8; 4];
     debug!(target: "net", "reading magic...");
 
-    if let Err(err) = stream.read_exact(&mut magic).await {
-        error!("Failed to read the magic: {}", err);
-        return Err(Error::ConnectFailed)
-    }
+    stream.read_exact(&mut magic).await?;
 
     debug!(target: "net", "read magic {:?}", magic);
     if magic != MAGIC_BYTES {

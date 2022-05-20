@@ -128,9 +128,10 @@ impl Acceptor {
     /// Run the accept loop in a new thread and error if a connection problem
     /// occurs.
     fn accept(self: Arc<Self>, listener: Box<dyn TransportListener>, executor: Arc<Executor<'_>>) {
+        let self2 = self.clone();
         self.task.clone().start(
             self.clone().run_accept_loop(listener),
-            |result| self.handle_stop(result),
+            |result| self2.handle_stop(result),
             Error::ServiceStopped,
             executor,
         );

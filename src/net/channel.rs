@@ -102,7 +102,6 @@ impl Channel {
         let self2 = self.clone();
         self.receive_task.clone().start(
             self.clone().main_receive_loop(),
-            // Ignore stop handler
             |result| self2.handle_stop(result),
             Error::ServiceStopped,
             executor,
@@ -263,7 +262,7 @@ impl Channel {
                 Ok(packet) => packet,
                 Err(err) => {
                     if Self::is_eof_error(err.clone()) {
-                        info!("Channel {:?} disconnected", self.address());
+                        info!("Inbound connection {} disconnected", self.address());
                     } else {
                         error!("Read error on channel: {}", err);
                     }
