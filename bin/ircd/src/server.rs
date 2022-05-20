@@ -71,6 +71,10 @@ impl IrcServerConnection {
             "JOIN" => {
                 let channels = tokens.next().ok_or(Error::MalformedPacket)?;
                 for chan in channels.split(',') {
+                    if !chan.starts_with('#') {
+                        warn!("{} is not a valid name for channel", chan);
+                        continue
+                    }
                     let join_reply = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, chan);
                     self.reply(&join_reply).await?;
                     if !self.configured_chans.contains_key(chan) {
