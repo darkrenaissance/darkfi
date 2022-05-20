@@ -28,7 +28,7 @@ async fn tcp_transport() {
 
     let payload = b"ohai tcp";
 
-    let mut client = tcp.dial(url).unwrap().await.unwrap();
+    let mut client = tcp.dial(url, None).unwrap().await.unwrap();
     client.write_all(payload).await.unwrap();
     let mut buf = vec![0_u8; 8];
     client.read_exact(&mut buf).await.unwrap();
@@ -56,7 +56,7 @@ async fn tcp_tls_transport() {
 
     let payload = b"ohai tls";
 
-    let client = tcp.dial(url).unwrap().await.unwrap();
+    let client = tcp.dial(url, None).unwrap().await.unwrap();
     let mut client = tcp.upgrade_dialer(client).unwrap().await.unwrap();
     client.write_all(payload).await.unwrap();
     let mut buf = vec![0_u8; 8];
@@ -93,7 +93,7 @@ For example: \'export DARKFI_TOR_PUBLIC_ADDRESS=\"tor://abcdefghij234567.onion\"
 
     let payload = b"ohai tor";
     let url = Url::parse(&onion).unwrap();
-    let mut client = tor.dial(url).unwrap().await.unwrap();
+    let mut client = tor.dial(url, None).unwrap().await.unwrap();
     client.write_all(payload).await.unwrap();
     let mut buf = vec![0_u8; 8];
     client.read_exact(&mut buf).await.unwrap();
@@ -129,7 +129,7 @@ For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
 
     let payload = b"ohai tor";
 
-    let mut client = tor.dial(hurl).unwrap().await.unwrap();
+    let mut client = tor.dial(hurl, None).unwrap().await.unwrap();
     client.write_all(payload).await.unwrap();
     let mut buf = vec![0_u8; 8];
     client.read_exact(&mut buf).await.unwrap();
@@ -161,5 +161,5 @@ For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
 
     let tor_client = TorTransport::new(socks_url, None).unwrap();
     // Try to reach the host
-    let _client = tor_client.dial(hurl).unwrap().await.unwrap();
+    let _client = tor_client.dial(hurl, None).unwrap().await.unwrap();
 }
