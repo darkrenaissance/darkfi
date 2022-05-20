@@ -36,6 +36,8 @@ use crate::{
 
 /// `2 * DELTA` represents epoch time
 pub const DELTA: u64 = 20;
+/// Quarantine duration, in slots
+pub const QUARANTINE_DURATION: u64 = 5;
 
 /// This struct represents the information required by the consensus algorithm
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -545,6 +547,9 @@ impl ValidatorState {
                     None => participant.voted = Some(vote.sl),
                 }
 
+                // Invalidating quarantine
+                participant.quarantined = None;
+
                 self.consensus.participants.insert(participant.address, participant);
             }
             None => {
@@ -733,10 +738,12 @@ impl ValidatorState {
     /// or on the epoch the last proposal was generated, either voted
     /// or joined the previous of that epoch. That ensures we cover
     /// the case of a node joining while the chosen epoch leader is inactive.
+    /// Inactive nodes are marked as quarantined, so they can be removed if
+    /// they are in quarantine more than the predifined quarantine period.
     pub fn refresh_participants(&mut self) -> Result<()> {
         // Node checks if it should refresh its participants list
-        let epoch = self.current_epoch();
-        if epoch <= self.consensus.refreshed {
+        let current = self.current_epoch();
+        if current <= self.consensus.refreshed {
             debug!("refresh_participants(): Participants have been refreshed this epoch.");
             return Ok(())
         }
@@ -761,11 +768,11 @@ impl ValidatorState {
         // as a node might receive the proposal of current epoch before
         // starting refreshing participants, so the last_epoch will be
         // the current one.
-        if last_epoch >= epoch {
-            last_epoch = epoch - 1;
+        if last_epoch >= current {
+            last_epoch = current - 1;
         }
 
-        let previous_epoch = epoch - 1;
+        let previous_epoch = current - 1;
         // This check ensures that when restarting the network, previous
         // from last epoch is not u64::MAX
         let previous_from_last_epoch = match last_epoch {
@@ -778,12 +785,13 @@ impl ValidatorState {
             self.address.to_string(), previous_epoch, last_epoch, previous_from_last_epoch
         );
 
-        for (index, participant) in self.consensus.participants.clone().iter() {
-            match participant.voted {
+        let leader = self.epoch_leader();
+        for (index, participant) in self.consensus.participants.iter_mut() {
+            match participant.quarantined {
                 Some(epoch) => {
-                    if epoch < last_epoch {
+                    if (current - epoch) > QUARANTINE_DURATION {
                         warn!(
-                            "refresh_participants(): Inactive participant: {:?} (joined {:?}, voted {:?})",
+                            "refresh_participants(): Removing participant: {:?} (joined {:?}, voted {:?})",
                             participant.address.to_string(),
                             participant.joined,
                             participant.voted
@@ -792,17 +800,44 @@ impl ValidatorState {
                     }
                 }
                 None => {
-                    if (previous_epoch == last_epoch && participant.joined < previous_epoch) ||
-                        (previous_epoch != last_epoch &&
-                            participant.joined < previous_from_last_epoch)
-                    {
-                        warn!(
-                            "refresh_participants(): Inactive participant: {:?} (joined {:?}, voted {:?})",
+                    // Epoch leader is always quarantined, to cover the case they become inactive the epoch before
+                    // becoming the leader. This can be used for slashing in the future.
+                    if participant.address == leader {
+                        debug!(
+                            "refresh_participants(): Quaranteening leader: {:?} (joined {:?}, voted {:?})",
                             participant.address.to_string(),
                             participant.joined,
                             participant.voted
                         );
-                        inactive.push(*index);
+                        participant.quarantined = Some(current);
+                        continue
+                    }
+                    match participant.voted {
+                        Some(epoch) => {
+                            if epoch < last_epoch {
+                                warn!(
+                                    "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
+                                    participant.address.to_string(),
+                                    participant.joined,
+                                    participant.voted
+                                );
+                                participant.quarantined = Some(current);
+                            }
+                        }
+                        None => {
+                            if (previous_epoch == last_epoch && participant.joined < previous_epoch) ||
+                                (previous_epoch != last_epoch &&
+                                    participant.joined < previous_from_last_epoch)
+                            {
+                                warn!(
+                                    "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
+                                    participant.address.to_string(),
+                                    participant.joined,
+                                    participant.voted
+                                );
+                                participant.quarantined = Some(current);
+                            }
+                        }
                     }
                 }
             }
@@ -818,7 +853,7 @@ impl ValidatorState {
             self.consensus.participants.insert(participant.address, participant);
         }
 
-        self.consensus.refreshed = epoch;
+        self.consensus.refreshed = current;
 
         Ok(())
     }

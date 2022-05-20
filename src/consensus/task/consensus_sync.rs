@@ -14,7 +14,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     info!("Starting consensus state sync...");
     let channels_map = p2p.channels().lock().await;
     let values = channels_map.values();
-    // Using len here beacuse is_empty() uses unstable library feature
+    // Using len here because is_empty() uses unstable library feature
     // called 'exact_size_is_empty'.
     if values.len() != 0 {
         // Node iterates the channel peers to ask for their consensus state

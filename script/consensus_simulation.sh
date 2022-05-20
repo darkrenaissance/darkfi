@@ -11,7 +11,7 @@ cd ..
 pids=()
 
 # Starting node 0 (seed) in background
-LOG_TARGETS="!sled,!net" ./darkfid2 \
+LOG_TARGETS="!sled,!net" ./darkfid \
     -v \
     --consensus \
     --consensus-p2p-accept tcp://127.0.0.1:6000 \
@@ -31,7 +31,7 @@ sleep 20
 bound=$(($nodes-2))
 for i in $(eval echo "{1..$bound}")
 do
-  LOG_TARGETS="!sled,!net" ./darkfid2 \
+  LOG_TARGETS="!sled,!net" ./darkfid \
       -v \
     --consensus \
     --consensus-p2p-seed tcp://127.0.0.1:6000 \
@@ -61,7 +61,7 @@ function ctrl_c() {
 
 bound=$(($nodes-1))
 # Starting last node
-LOG_TARGETS="!sled,!net" ./darkfid2 \
+LOG_TARGETS="!sled,!net" ./darkfid \
     -v \
     --consensus \
     --consensus-p2p-seed tcp://127.0.0.1:6000 \

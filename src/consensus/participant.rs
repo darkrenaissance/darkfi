@@ -8,7 +8,7 @@ use crate::{
 };
 
 /// This struct represents a tuple of the form:
-/// (`node_address`, `epoch_joined`, `last_epoch_voted`)
+/// (`node_address`, `epoch_joined`, `last_epoch_voted`, `epoch_quarantined`)
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Participant {
     /// Node wallet address
@@ -17,11 +17,13 @@ pub struct Participant {
     pub joined: u64,
     /// Last epoch node voted
     pub voted: Option<u64>,
+    /// Slot participant was quarantined by the node
+    pub quarantined: Option<u64>,
 }
 
 impl Participant {
     pub fn new(address: Address, joined: u64) -> Self {
-        Self { address, joined, voted: None }
+        Self { address, joined, voted: None, quarantined: None }
     }
 }
 
