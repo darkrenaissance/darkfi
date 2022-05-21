@@ -62,64 +62,14 @@ impl View {
     }
 
     fn update_active_ids(&mut self) {
-        // this removes the empty ids from the offline node
-        // but doesn't remove the actual ids that were previously there
-        // we need to know what those ideas are in order to remove them
-        // need to keep track of ids somewhere in memory so we can remove them
+        self.active_ids.ids.clear();
         for info in self.nodes.infos.values() {
             self.active_ids.ids.insert(info.id.to_string());
-            //debug!("INFO {:?}", info);
-            match info.is_offline {
-                true => {
-                    // get the corresponding selectable object
-
-                    // get the selectable that corresponds to node id
-                    let offline = self.selectables.get(&info.id.to_string());
-                    match offline {
-                        //debug!("NODE {} is offline", info.id.to_string());
-                        Some(SelectableObject::Node(node)) => {
-                            //self.active_ids.ids.remove(&node.id);
-                            for session in &node.children {
-                                debug!("REMOVED {}", session.id.to_string());
-                                self.active_ids.ids.remove(&session.id);
-                                for connect in &session.children {
-                                    debug!("REMOVED {}", connect.id.to_string());
-                                    self.active_ids.ids.remove(&connect.id);
-                                    //
-                                }
-                            }
-                        }
-                        Some(e) => {}
-                        //Some(SelectableObject::Session(session)) => {
-                        //    self.active_ids.ids.remove(&session.id);
-                        //}
-                        //Some(SelectableObject::Connect(connect)) => {
-                        //    self.active_ids.ids.remove(&connect.id);
-                        //}
-                        None => {}
-                    }
-
-                    //self.active_ids.ids.get(&info.id.to_string());
-                    //debug!("OFFLINE INFO {:?}", info);
-                    //debug!("NODE {} is offline", info.id.to_string());
-                    //for session in &info.children {
-                    //    debug!("FOUND SESSION ID {}", session.id.to_string());
-                    //    for connect in &session.children {
-                    //        debug!("FOUND CONNECT ID {}", connect.id.to_string());
-                    //        //self.active_ids.ids.remove(&connect.id.to_string());
-                    //    }
-                    //    //self.active_ids.ids.remove(&session.id.to_string());
-                    //}
-                }
-                false => {
-                    //debug!("ONLINE INFO {:?}", info);
-                    for session in &info.children {
-                        if !session.is_empty == true {
-                            self.active_ids.ids.insert(session.id.to_string());
-                            for connect in &session.children {
-                                self.active_ids.ids.insert(connect.id.to_string());
-                            }
-                        }
+            for session in &info.children {
+                if !session.is_empty == true {
+                    self.active_ids.ids.insert(session.id.to_string());
+                    for connect in &session.children {
+                        self.active_ids.ids.insert(connect.id.to_string());
                     }
                 }
             }
@@ -255,9 +205,6 @@ impl View {
                 }
             }
         }
-        //debug!("NODES: {:?}", node_ids);
-        //debug!("SESSIONS: {:?}", session_ids);
-        //debug!("CONNECTs : {:?}", connect_ids);
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 

@@ -34,7 +34,7 @@ use dnetview::{
     view::{IdListView, NodeInfoView, View},
 };
 
-use log::{debug, error};
+use log::error;
 
 struct DnetView {
     name: String,
@@ -162,7 +162,6 @@ async fn parse_offline(client: &DnetView, model: Arc<Model>) -> DnetViewResult<(
 
     // initialize with empty values
     let id = make_empty_id(&node_id, &session_type, 0)?;
-    //debug!("Make EMPTY ID: {}", id);
     let addr = "Null".to_string();
     let state = "Null".to_string();
     let parent = node_id.clone();
@@ -193,7 +192,7 @@ async fn parse_data(
 ) -> DnetViewResult<()> {
     let addr = &reply.get("external_addr");
     let inbound = &reply["session_inbound"];
-    let manual = &reply["session_manual"];
+    let _manual = &reply["session_manual"];
     let outbound = &reply["session_outbound"];
 
     let mut sessions: Vec<SessionInfo> = Vec::new();
@@ -243,7 +242,6 @@ async fn update_msgs(model: Arc<Model>, sessions: Vec<SessionInfo>) -> DnetViewR
             }
         }
     }
-    //debug!("MSGS: {:?}", model.msg_log.lock().await);
     Ok(())
 }
 
@@ -303,7 +301,6 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                     connect_count += 1;
                     // channel is empty. initialize with empty values
                     let id = make_empty_id(&node_id, &session_type, connect_count)?;
-                    //debug!("Make INBOUND EMPTY ID: {}", id);
                     let addr = "Null".to_string();
                     let state = "Null".to_string();
                     let parent = parent.clone();
@@ -342,7 +339,6 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                         let info2 = info.unwrap().get(1);
                         let id = info2.unwrap().get("random_id").unwrap().as_u64().unwrap();
                         let id = make_connect_id(&id)?;
-                        //debug!("Made INBOUND connect ID: {}", id);
                         let state = "state".to_string();
                         let parent = parent.clone();
                         let msg_values = info2.unwrap().get("log").unwrap().as_array().unwrap();
@@ -406,7 +402,6 @@ async fn parse_manual(_manual: &Value, node_id: &String) -> DnetViewResult<Sessi
     //let id: u64 = 0;
     let connect_id = make_empty_id(&node_id, &session_type, 0)?;
     //let connect_id = make_connect_id(&id)?;
-    //debug!("Made MANUAL connect ID: {}", id);
     let addr = "Null".to_string();
     let state = "Null".to_string();
     let msg_log = Vec::new();
@@ -442,7 +437,6 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                     true => {
                         // channel is empty. initialize with empty values
                         let id = make_empty_id(&node_id, &session_type, slot_count)?;
-                        //debug!("Make OUTBOUND EMPTY ID: {}", id);
                         let addr = "Null".to_string();
                         let state = &slot["state"];
                         let state = state.as_str().unwrap().to_string();
@@ -468,7 +462,6 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                         let channel = &slot["channel"];
                         let id = channel["random_id"].as_u64().unwrap();
                         let id = make_connect_id(&id)?;
-                        //debug!("Made OUTBOUND connect id {}", id);
                         let addr = &slot["addr"];
                         let addr = addr.as_str().unwrap().to_string();
                         let state = &slot["state"];
