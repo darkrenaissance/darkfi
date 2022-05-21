@@ -17,7 +17,6 @@ use crate::{
     error::{DnetViewError, DnetViewResult},
     model::{NodeInfo, SelectableObject},
 };
-use log::debug;
 
 #[derive(Debug)]
 pub struct View {
@@ -96,10 +95,6 @@ impl View {
         let mut id_list = self.render_id_list(f, slice.clone())?;
 
         id_list.dedup();
-        debug!("ACTIVE ID LIST {:?}", self.active_ids.ids);
-        debug!("ID LIST {:?}", id_list);
-        debug!("ID LIST LEN {:?}", id_list.len());
-        debug!("ACTIVE ID LIST LEN {:?}", self.active_ids.ids.len());
         if id_list.is_empty() {
             // we have not received any data
             Ok(())
