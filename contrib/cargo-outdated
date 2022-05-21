@@ -23,6 +23,9 @@ PICKLE_CACHE = join(getenv("HOME"), ".cache", "cargo-outdated.pickle")
 # Set of packages that are ignored by this tool
 IGNORES = {"drk-sdk", "darkfi", "darkfi-derive", "darkfi-derive-internal"}
 
+# Yanked releases from crates.io to ignore
+YANKED = {"socket2": ["0.4.5"]}
+
 # Cached paths for metadata to not have to search through the crates index
 METADATA_PATHS = {}
 
@@ -99,7 +102,13 @@ def check_dep(name, data):
         raise ValueError(f"Invalid dependency: {name}")
 
     if semver.compare(local_version, metadata["vers"], loose=True) < 0:
-        return (local_version, metadata["vers"])
+        name = metadata["name"]
+        vers = metadata["vers"]
+
+        if name in YANKED and vers in YANKED[name]:
+            return None
+
+        return (local_version, vers)
 
     return None
 
@@ -165,7 +174,8 @@ def main():
                 ])
 
             if args.update and ret:
-                print(f"Update {dep} from {ret[0]} to {ret[1]}? (y/N): ", end="")
+                print(f"Update {dep} from {ret[0]} to {ret[1]}? (y/N): ",
+                      end="")
                 choice = input()
                 if choice and (choice == "y" or choice == "Y"):
                     if "dependencies" in ps and dep in ps["dependencies"]:
