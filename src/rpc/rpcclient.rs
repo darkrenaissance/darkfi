@@ -10,12 +10,13 @@ pub struct RpcClient {
     sender: async_channel::Sender<Value>,
     receiver: async_channel::Receiver<JsonResult>,
     stop_signal: async_channel::Sender<()>,
+    url: Url,
 }
 
 impl RpcClient {
     pub async fn new(url: Url) -> Result<Self> {
         let (sender, receiver, stop_signal) = jsonrpc::open_channels(&url).await?;
-        Ok(Self { sender, receiver, stop_signal })
+        Ok(Self { sender, receiver, stop_signal, url })
     }
 
     pub async fn close(&self) -> Result<()> {
@@ -27,12 +28,11 @@ impl RpcClient {
         let req_id = value.id.clone().as_u64().unwrap_or(0);
         let value = json!(value);
 
-        // TODO proper error handling for closed channels
         // if the connection is closed the sender will get an error
         // for sending to closed channel
         let result = self.sender.send(value).await;
         if result.is_err() {
-            error!("Unable to connect to the RPC server");
+            error!("Unable to send to the RPC server: {}", self.url);
             return Err(Error::OperationFailed)
         }
 
@@ -41,7 +41,7 @@ impl RpcClient {
         // if the connection is closed the receiver will get an error
         // for waiting closed channel
         if reply.is_err() {
-            error!("Unable to connect to the RPC server");
+            error!("Unable to receive from the RPC server: {}", self.url);
             return Err(Error::OperationFailed)
         }
 
