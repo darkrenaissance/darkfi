@@ -27,6 +27,8 @@ use darkfi::{
     zk::circuit::lead_contract::LeadContract,
 };
 
+const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
+
 fn create_coins_sks(len: usize) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>) {
     /*
     at the onset of an epoch, the first slot's coin's secret key
@@ -35,7 +37,7 @@ fn create_coins_sks(len: usize) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEP
      */
     let mut rng = thread_rng();
     let sk: u64 = rng.gen();
-    let mut tree = BridgeTree::<MerkleNode, 32>::new(len);
+    let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(len);
     let mut root_sks: Vec<MerkleNode> = vec![];
     let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
     for i in 0..len {
@@ -77,7 +79,7 @@ fn create_coins(
         seeds.push(rho.clone());
     }
 
-    let mut tree_cm = BridgeTree::<MerkleNode, 32>::new(len);
+    let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(len);
     let mut coins: Vec<LeadCoin> = vec![];
     for i in 0..len {
         let c_v = pallas::Base::from(values[i]);

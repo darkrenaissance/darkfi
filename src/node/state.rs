@@ -7,6 +7,7 @@ use crate::{
     blockchain::{nfstore::NullifierStore, rootstore::RootStore},
     crypto::{
         coin::Coin,
+        constants::MERKLE_DEPTH_ORCHARD,
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
@@ -20,6 +21,8 @@ use crate::{
     zk::circuit::{BurnContract, MintContract},
     Result, VerifyFailed, VerifyResult,
 };
+
+const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 /// Trait implementing the state functions used by the state transition.
 pub trait ProgramState {
@@ -117,7 +120,7 @@ pub fn state_transition<S: ProgramState>(state: &S, tx: Transaction) -> VerifyRe
 #[derive(Clone)]
 pub struct State {
     /// The entire Merkle tree state
-    pub tree: BridgeTree<MerkleNode, 32>,
+    pub tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     /// List of all previous and the current merkle roots.
     /// This is the hashed value of all the children.
     pub merkle_roots: RootStore,

@@ -3,8 +3,11 @@ use log::debug;
 
 use super::state::{ProgramState, State, StateUpdate};
 use crate::crypto::{
-    keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier, proof::VerifyingKey,
+    constants::MERKLE_DEPTH_ORCHARD, keypair::PublicKey, merkle_node::MerkleNode,
+    nullifier::Nullifier, proof::VerifyingKey,
 };
+
+const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 /// In-memory state extension for state transition validations
 #[derive(Clone)]
@@ -12,7 +15,7 @@ pub struct MemoryState {
     /// Canonical state
     pub canon: State,
     /// The entire Merkle tree state (copied from `canon`)
-    pub tree: BridgeTree<MerkleNode, 32>,
+    pub tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     /// List of all previous and the current merkle roots.
     pub merkle_roots: Vec<MerkleNode>,
     /// Nullifiers prevent double-spending

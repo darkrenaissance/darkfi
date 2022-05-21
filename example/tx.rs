@@ -4,6 +4,7 @@ use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
+        constants::MERKLE_DEPTH_ORCHARD,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
@@ -22,10 +23,12 @@ use darkfi::{
     Result,
 };
 
+const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
+
 /// The state machine, held in memory.
 struct MemoryState {
     /// The entire Merkle tree state
-    tree: BridgeTree<MerkleNode, 32>,
+    tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     /// List of all previous and the current Merkle roots.
     /// This is the hashed value of all the children.
     merkle_roots: Vec<MerkleNode>,
@@ -131,7 +134,7 @@ fn main() -> Result<()> {
     let burn_vk = VerifyingKey::build(K, &BurnContract::default());
 
     let mut state = MemoryState {
-        tree: BridgeTree::<MerkleNode, 32>::new(100),
+        tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
         merkle_roots: vec![],
         nullifiers: vec![],
         own_coins: vec![],

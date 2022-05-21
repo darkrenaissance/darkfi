@@ -76,8 +76,12 @@ pub enum Error {
     TomlDeserializeError(#[from] toml::de::Error),
 
     #[cfg(feature = "bincode")]
-    #[error("bincode error: {0}")]
-    BincodeError(String),
+    #[error("bincode decode error: {0}")]
+    BincodeDecodeError(String),
+
+    #[cfg(feature = "bincode")]
+    #[error("bincode encode error: {0}")]
+    BincodeEncodeError(String),
 
     #[cfg(feature = "bs58")]
     #[error(transparent)]
@@ -467,16 +471,16 @@ impl From<tungstenite::Error> for Error {
 }
 
 #[cfg(feature = "bincode")]
-impl From<bincode::ErrorKind> for Error {
-    fn from(err: bincode::ErrorKind) -> Self {
-        Self::BincodeError(err.to_string())
+impl From<bincode::error::DecodeError> for Error {
+    fn from(err: bincode::error::DecodeError) -> Self {
+        Self::BincodeDecodeError(err.to_string())
     }
 }
 
 #[cfg(feature = "bincode")]
-impl From<Box<bincode::ErrorKind>> for Error {
-    fn from(err: Box<bincode::ErrorKind>) -> Self {
-        Self::BincodeError(err.to_string())
+impl From<bincode::error::EncodeError> for Error {
+    fn from(err: bincode::error::EncodeError) -> Self {
+        Self::BincodeEncodeError(err.to_string())
     }
 }
 

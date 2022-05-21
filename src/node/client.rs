@@ -8,6 +8,7 @@ use crate::{
     crypto::{
         address::Address,
         coin::Coin,
+        constants::MERKLE_DEPTH_ORCHARD,
         keypair::{Keypair, PublicKey},
         merkle_node::MerkleNode,
         proof::ProvingKey,
@@ -27,6 +28,8 @@ use crate::{
     zk::circuit::{BurnContract, MintContract},
     ClientFailed, ClientResult, Result,
 };
+
+const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 /// The Client structure, used for transaction operations.
 /// This includes, receiving, broadcasting, and building.
@@ -217,7 +220,7 @@ impl Client {
         self.wallet.get_balances().await
     }
 
-    pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, 32>> {
+    pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
         self.wallet.get_tree().await
     }
 

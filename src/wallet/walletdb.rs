@@ -14,6 +14,7 @@ use crate::{
     crypto::{
         address::Address,
         coin::Coin,
+        constants::MERKLE_DEPTH_ORCHARD,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::Note,
@@ -30,6 +31,8 @@ use crate::{
     Error::{WalletEmptyPassword, WalletTreeExists},
     Result,
 };
+
+const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 pub type WalletPtr = Arc<WalletDb>;
 
@@ -205,7 +208,7 @@ impl WalletDb {
         Ok(keypairs)
     }
 
-    pub async fn tree_gen(&self) -> Result<BridgeTree<MerkleNode, 32>> {
+    pub async fn tree_gen(&self) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
         debug!("Attempting to generate merkle tree");
         let mut conn = self.conn.acquire().await?;
 
@@ -215,27 +218,28 @@ impl WalletDb {
                 Err(WalletTreeExists)
             }
             Err(_) => {
-                let tree = BridgeTree::<MerkleNode, 32>::new(100);
+                let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
                 self.put_tree(&tree).await?;
                 Ok(tree)
             }
         }
     }
 
-    pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, 32>> {
+    pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
         debug!("Getting merkle tree");
         let mut conn = self.conn.acquire().await?;
 
         let row = sqlx::query("SELECT * FROM tree").fetch_one(&mut conn).await?;
-        let tree: BridgeTree<MerkleNode, 32> = bincode::deserialize(row.get("tree"))?;
+        let (tree, _read): (BridgeTree<MerkleNode, MERKLE_DEPTH>, usize) =
+            bincode::serde::decode_from_slice(row.get("tree"), bincode::config::legacy())?;
         Ok(tree)
     }
 
-    pub async fn put_tree(&self, tree: &BridgeTree<MerkleNode, 32>) -> Result<()> {
+    pub async fn put_tree(&self, tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>) -> Result<()> {
         debug!("put_tree(): Attempting to write merkle tree");
         let mut conn = self.conn.acquire().await?;
 
-        let tree_bytes = bincode::serialize(tree)?;
+        let tree_bytes = bincode::serde::encode_to_vec(tree, bincode::config::legacy())?;
 
         debug!("put_tree(): Deleting old row");
         sqlx::query("DELETE FROM tree;").execute(&mut conn).await?;

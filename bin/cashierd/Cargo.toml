@@ -34,10 +34,10 @@ serde = {version = "1.0.137", features = ["derive"]}
 serde_json = "1.0.81"
 
 # Bitcoin bridge dependencies
-bdk = {version = "0.17.0", optional = true}
+bdk = {version = "0.18.0", optional = true}
 anyhow = {version = "1.0.57", optional = true}
-bitcoin = {version = "0.27.1", optional = true}
-secp256k1 = {version = "0.20.1", default-features = false, features = ["rand-std"], optional = true}
+bitcoin = {version = "0.28.1", optional = true}
+secp256k1 = {version = "0.22.1", default-features = false, features = ["rand-std"], optional = true}
 
 # Ethereum bridge dependencies
 hex = {version = "0.4.3", optional = true}
@@ -49,10 +49,10 @@ num-bigint = {version = "0.4.3", features = ["rand", "serde"], optional = true}
 # Solana bridge dependencies
 native-tls = {version = "0.2.10", optional = true}
 async-native-tls = {version = "0.4.0", optional = true}
-solana-client = {version = "1.10.9", optional = true}
-solana-sdk = {version = "1.10.9", optional = true}
-spl-associated-token-account = {version = "1.0.3", features = ["no-entrypoint"], optional = true}
-spl-token = {version = "3.2.0", features = ["no-entrypoint"], optional = true}
+solana-client = {version = "1.10.17", optional = true}
+solana-sdk = {version = "1.10.17", optional = true}
+spl-associated-token-account = {version = "1.0.5", features = ["no-entrypoint"], optional = true}
+spl-token = {version = "3.4.0-alpha", features = ["no-entrypoint"], optional = true}
 tungstenite = {version = "0.17.2", optional = true}
 
 [features]
