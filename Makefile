@@ -7,7 +7,7 @@ PREFIX = /usr/local
 CARGO = cargo
 
 # Flags passed to cargo/rustc
-RUSTFLAGS = -C target-cpu=native
+#RUSTFLAGS = -C target-cpu=native
 
 # Binaries to be built
 BINS = zkas drk darkfid
