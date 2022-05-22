@@ -36,6 +36,8 @@ struct BaseTaskInfo {
     rank: Option<f32>,
 }
 
+// TODO: Make more like RPC in darkfid, this implies the method categories,
+// and function signatures, and safety checks.
 #[async_trait]
 impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
@@ -145,6 +147,8 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "set_state", "params": [task_id, state], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn set_state(&self, params: Value) -> TaudResult<Value> {
+        // TODO: BUG: Validate that the state string is correct and not something arbitrary
+
         debug!(target: "tau", "JsonRpc::set_state() params {}", params);
         let args = params.as_array().unwrap();
 
