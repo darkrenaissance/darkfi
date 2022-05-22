@@ -216,69 +216,62 @@ impl JsonRpcInterface {
     fn check_params_for_update(&self, task_id: &Value, fields: &Value) -> TaudResult<TaskInfo> {
         let mut task: TaskInfo = self.load_task_by_id(task_id)?;
 
-        if !fields.is_array() {
+        if !fields.is_object() {
             return Err(TaudError::InvalidData("Invalid task's data".into()))
         }
 
-        let fields = fields.as_array().unwrap();
+        let fields = fields.as_object().unwrap();
 
-        for field in fields {
-            if !field.is_object() {
-                return Err(TaudError::InvalidData("Invalid task's fields".into()))
+        if fields.contains_key("title") {
+            let title = fields.get("title").unwrap().clone();
+            let title: String = serde_json::from_value(title)?;
+            if !title.is_empty() {
+                task.set_title(&title);
             }
+        }
 
-            let field = field.as_object().unwrap();
-
-            if field.contains_key("title") {
-                let title = field.get("title").unwrap().clone();
-                let title: String = serde_json::from_value(title)?;
-                if !title.is_empty() {
-                    task.set_title(&title);
-                }
+        if fields.contains_key("desc") {
+            let description = fields.get("description");
+            if let Some(description) = description {
+                let description: String = serde_json::from_value(description.clone())?;
+                task.set_desc(&description);
             }
+        }
 
-            if field.contains_key("desc") {
-                let description = field.get("description");
-                if let Some(description) = description {
-                    let description: String = serde_json::from_value(description.clone())?;
-                    task.set_desc(&description);
-                }
-            }
-
-            if field.contains_key("rank") {
-                let rank_opt = field.get("rank");
-                if let Some(rank) = rank_opt {
-                    let rank: Option<f32> = serde_json::from_value(rank.clone())?;
-                    if let Some(r) = rank {
-                        task.set_rank(r);
-                    }
-                }
-            }
-
-            if field.contains_key("due") {
-                let due = field.get("due").unwrap().clone();
-                let due: Option<Option<Timestamp>> = serde_json::from_value(due)?;
-                if let Some(d) = due {
-                    task.set_due(d);
-                }
-            }
-
-            if field.contains_key("assign") {
-                let assign = field.get("assign").unwrap().clone();
-                let assign: Vec<String> = serde_json::from_value(assign)?;
-                if !assign.is_empty() {
-                    task.set_assign(&assign);
-                }
-            }
-
-            if field.contains_key("project") {
-                let project = field.get("project").unwrap().clone();
-                let project: Vec<String> = serde_json::from_value(project)?;
-                if !project.is_empty() {
-                    task.set_project(&project);
+        if fields.contains_key("rank") {
+            let rank_opt = fields.get("rank");
+            if let Some(rank) = rank_opt {
+                let rank: Option<f32> = serde_json::from_value(rank.clone())?;
+                if let Some(r) = rank {
+                    task.set_rank(r);
                 }
             }
         }
+
+        if fields.contains_key("due") {
+            let due = fields.get("due").unwrap().clone();
+            let due: Option<Option<Timestamp>> = serde_json::from_value(due)?;
+            if let Some(d) = due {
+                task.set_due(d);
+            }
+        }
+
+        if fields.contains_key("assign") {
+            let assign = fields.get("assign").unwrap().clone();
+            let assign: Vec<String> = serde_json::from_value(assign)?;
+            if !assign.is_empty() {
+                task.set_assign(&assign);
+            }
+        }
+
+        if fields.contains_key("project") {
+            let project = fields.get("project").unwrap().clone();
+            let project: Vec<String> = serde_json::from_value(project)?;
+            if !project.is_empty() {
+                task.set_project(&project);
+            }
+        }
+
         Ok(task)
     }
 }
