@@ -96,7 +96,7 @@ impl ProtocolSync {
         }
 
         debug!("handle_receive_block() [START]");
-        let exclude_list = vec![self.channel.address().clone()];
+        let exclude_list = vec![self.channel.address()];
         loop {
             let info = match self.block_sub.receive().await {
                 Ok(v) => v,

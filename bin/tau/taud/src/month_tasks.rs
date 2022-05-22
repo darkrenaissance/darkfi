@@ -53,7 +53,7 @@ impl MonthTasks {
 
     pub fn set_date(&mut self, date: &Timestamp) {
         debug!(target: "tau", "MonthTasks::set_date()");
-        self.created_at = date.clone();
+        self.created_at = *date;
     }
 
     fn get_path(date: &Timestamp, dataset_path: &Path) -> PathBuf {

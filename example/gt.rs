@@ -10,7 +10,7 @@ use halo2_proofs::{
     plonk,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
-use pasta_curves::{pallas, vesta, Fp, Fq};
+use pasta_curves::{pallas, Fp};
 
 const WORD_BITS: u32 = 24;
 
@@ -117,7 +117,7 @@ fn main() {
     let c = pallas::Base::from(0);
     let circuit = ZkCircuit { y: Some(y), v: Some(v), f: Some(f) };
 
-    let mut public_inputs: Vec<pallas::Base> = vec![c];
+    let public_inputs: Vec<pallas::Base> = vec![c];
 
     let prover = MockProver::run(k, &circuit, vec![public_inputs]).unwrap();
     assert_eq!(prover.verify(), Ok(()));

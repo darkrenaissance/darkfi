@@ -30,7 +30,7 @@ impl TransportListener for UnixListener {
 
 impl TransportStream for UnixStream {}
 
-#[derive(Copy, Clone)]
+#[derive(Default, Copy, Clone)]
 pub struct UnixTransport {}
 
 impl UnixTransport {

@@ -1,19 +1,15 @@
 use std::time::Instant;
 
-use halo2_gadgets::poseidon::primitives as poseidon;
 use log::debug;
-use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
 use crate::{
     crypto::{
-        keypair::PublicKey,
         leadcoin::LeadCoin,
         proof::{Proof, ProvingKey, VerifyingKey},
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::mod_r_p,
     },
-    util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::lead_contract::LeadContract,
     Result,
 };
@@ -43,8 +39,8 @@ pub fn create_lead_proof(pk: ProvingKey, coin: LeadCoin) -> Result<Proof> {
         cm_pos: Some(coin.idx),
         //sn_c1: Some(coin.sn.unwrap()),
         slot: Some(coin.sl.unwrap()),
-        mau_rho: Some(mod_r_p(mau_rho.clone())),
-        mau_y: Some(mod_r_p(mau_y.clone())),
+        mau_rho: Some(mod_r_p(mau_rho)),
+        mau_y: Some(mod_r_p(mau_y)),
         root_cm: Some(coin.root_cm.unwrap()),
     };
 

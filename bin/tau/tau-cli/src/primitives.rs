@@ -91,7 +91,7 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
         }
 
         if field[0] == "due" {
-            due = due_as_timestamp(&field[1])
+            due = due_as_timestamp(field[1])
         }
 
         if field[0] == "rank" {

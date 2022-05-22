@@ -96,7 +96,7 @@ impl Blockchain {
         // TODO: Check if we have all transactions
 
         // Check provided info produces the same hash
-        return Ok(blockhash == block.blockhash())
+        Ok(blockhash == block.blockhash())
     }
 
     /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them are not found.

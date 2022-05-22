@@ -1,28 +1,19 @@
 use halo2_proofs::{arithmetic::Field, dev::MockProver};
-use incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree};
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{ff::PrimeField, Curve, GroupEncoding},
-    pallas, Fp,
+    group::{ff::PrimeField, Curve},
+    pallas,
 };
 
 use rand::{thread_rng, Rng};
-use serde::{Deserialize, Serialize};
 
 use darkfi::{
     crypto::{
-        constants::{
-            NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
-            MERKLE_DEPTH_ORCHARD,
-        },
-        keypair::{Keypair, PublicKey, SecretKey},
-        lead_proof::{create_lead_proof, verify_lead_proof},
+        constants::MERKLE_DEPTH_ORCHARD,
         leadcoin::LeadCoin,
         merkle_node::MerkleNode,
-        nullifier::Nullifier,
-        proof::{Proof, ProvingKey, VerifyingKey},
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit, *},
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::{mod_r_p, pedersen_commitment_scalar},
     },
     zk::circuit::lead_contract::LeadContract,
 };
@@ -40,11 +31,11 @@ fn create_coins_sks(len: usize) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEP
     let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(len);
     let mut root_sks: Vec<MerkleNode> = vec![];
     let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
-    for i in 0..len {
+    for _i in 0..len {
         //TODO (research) why the conversion between point and base is panicing?
         // is the endianess different?
         let base = pedersen_commitment_scalar(pallas::Scalar::one(), pallas::Scalar::from(sk));
-        let coord = base.to_affine().coordinates().unwrap();
+        let _coord = base.to_affine().coordinates().unwrap();
         //let sk =  coord.x() * coord.y();
         //let sk =  *coord.y();
         let sk: [u8; 32] = pallas::Base::random(rng.clone()).to_repr();
@@ -74,9 +65,9 @@ fn create_coins(
 ) -> Vec<LeadCoin> {
     let mut rng = thread_rng();
     let mut seeds: Vec<u64> = vec![];
-    for i in 0..len {
+    for _i in 0..len {
         let rho: u64 = rng.gen();
-        seeds.push(rho.clone());
+        seeds.push(rho);
     }
 
     let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(len);
@@ -102,7 +93,7 @@ fn create_coins(
         let c_pk_pt_x: pallas::Base = *c_pk_pt.x();
         let c_pk_pt_y: pallas::Base = *c_pk_pt.y();
 
-        let c_cm_v = c_v.clone() * c_seed.clone() * c_pk_pt_x * c_pk_pt_y;
+        let c_cm_v = c_v * c_seed * c_pk_pt_x * c_pk_pt_y;
         let c_cm1_blind = cm1_blind; //TODO (fix) should be read from DrkValueBlind
         let c_cm2_blind = cm2_blind; //TODO (fix) should be read from DrkValueBlind
         let c_cm: pallas::Point = pedersen_commitment_scalar(mod_r_p(c_cm_v), mod_r_p(c_cm1_blind));
@@ -127,17 +118,14 @@ fn create_coins(
             let lead_coin_msg_hash =
             poseidon::Hash::<_, P128Pow5T3, ConstantLength<5>, 3, 2>::init().hash(lead_coin_msg);
              */
-        let lead_coin_msg =
-            c_pk_pt_y.clone() * c_pk_pt_x.clone() * c_v * *c_seed2_pt.x() * *c_seed2_pt.y();
+        let lead_coin_msg = c_pk_pt_y * c_pk_pt_x * c_v * *c_seed2_pt.x() * *c_seed2_pt.y();
         let c_cm2 = pedersen_commitment_scalar(mod_r_p(lead_coin_msg), mod_r_p(c_cm2_blind));
         let c_root_sk = root_sks[i];
 
         let c_root_sk_bytes: [u8; 32] = c_root_sk.inner().to_repr();
         let mut c_root_sk_base_bytes: [u8; 32] = [0; 32];
-        for i in 0..23 {
-            c_root_sk_base_bytes[i] = c_root_sk_bytes[i];
-        }
-        let c_root_sk_base = pallas::Base::from_repr(c_root_sk_base_bytes);
+        c_root_sk_base_bytes[..23].copy_from_slice(&c_root_sk_bytes[..23]);
+        let _c_root_sk_base = pallas::Base::from_repr(c_root_sk_base_bytes);
 
         let c_path_sk = path_sks[i];
 
@@ -173,8 +161,8 @@ fn main() {
     //
     const LEN: usize = 10;
     let mut rng = thread_rng();
-    let mut root_sks: Vec<MerkleNode> = vec![];
-    let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
+    let mut _root_sks: Vec<MerkleNode> = vec![];
+    let mut _path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
     let mut values: Vec<u64> = vec![];
     for i in 0..LEN {
         values.push(u64::try_from(i * 2).unwrap());
@@ -183,10 +171,9 @@ fn main() {
     let cm1_blind: pallas::Base = pallas::Base::from(cm1_val);
     let cm2_val: u64 = rng.gen();
     let cm2_blind: pallas::Base = pallas::Base::from(cm2_val);
-    (root_sks, path_sks) = create_coins_sks(LEN);
-    let mut coins: Vec<LeadCoin> =
-        create_coins(root_sks.clone(), path_sks.clone(), values, cm1_blind, cm2_blind, LEN);
-    //
+    (_root_sks, _path_sks) = create_coins_sks(LEN);
+    let coins: Vec<LeadCoin> =
+        create_coins(_root_sks, _path_sks, values, cm1_blind, cm2_blind, LEN);
     let coin_idx = 0;
     let coin = coins[coin_idx];
 
@@ -210,8 +197,8 @@ fn main() {
         cm_pos: Some(coin.idx),
         //sn_c1: Some(coin.sn.unwrap()),
         slot: Some(coin.sl.unwrap()),
-        mau_rho: Some(mod_r_p(mau_rho.clone())),
-        mau_y: Some(mod_r_p(mau_y.clone())),
+        mau_rho: Some(mod_r_p(mau_rho)),
+        mau_y: Some(mod_r_p(mau_y)),
         root_cm: Some(coin.root_cm.unwrap()),
     };
 

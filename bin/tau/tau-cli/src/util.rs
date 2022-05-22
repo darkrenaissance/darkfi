@@ -52,7 +52,7 @@ pub fn desc_in_editor() -> Result<Option<String>> {
     let mut lines = vec![];
     for i in content.lines() {
         if !i.starts_with('#') {
-            lines.push(format!("{}", i))
+            lines.push(i.to_string())
         }
     }
     Ok(Some(lines.join("\n")))

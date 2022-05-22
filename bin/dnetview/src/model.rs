@@ -95,6 +95,7 @@ pub struct ConnectInfo {
 }
 
 impl ConnectInfo {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: String,
         addr: String,

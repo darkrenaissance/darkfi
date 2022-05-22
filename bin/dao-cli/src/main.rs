@@ -33,7 +33,7 @@ impl Rpc {
     // <-- {"jsonrpc": "2.0", "result": "hello world", "id": 42}
     async fn say_hello(&self) -> Result<Value> {
         let req = jsonrpc::request(json!("say_hello"), json!([]));
-        Ok(self.client.request(req).await?)
+        self.client.request(req).await
     }
 }
 

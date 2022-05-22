@@ -51,7 +51,7 @@ impl DnetView {
     // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
     async fn _ping(&self) -> Result<Value> {
         let req = jsonrpc::request(json!("ping"), json!([]));
-        Ok(self.rpc_client.request(req).await?)
+        self.rpc_client.request(req).await
     }
 
     //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
@@ -59,8 +59,8 @@ impl DnetView {
     async fn get_info(&self) -> DnetViewResult<Value> {
         let req = jsonrpc::request(json!("get_info"), json!([]));
         match self.rpc_client.request(req).await {
-            Ok(req) => return Ok(req),
-            Err(e) => return Err(DnetViewError::Darkfi(e)),
+            Ok(req) => Ok(req),
+            Err(e) => Err(DnetViewError::Darkfi(e)),
         }
     }
 }
@@ -277,8 +277,8 @@ async fn update_selectable_and_ids(
 async fn parse_external_addr(addr: &Option<&Value>) -> DnetViewResult<Option<String>> {
     match addr {
         Some(addr) => match addr.as_str() {
-            Some(addr) => return Ok(Some(addr.to_string())),
-            None => return Ok(None),
+            Some(addr) => Ok(Some(addr.to_string())),
+            None => Ok(None),
         },
         None => Err(DnetViewError::NoExternalAddr),
     }
@@ -300,7 +300,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                 true => {
                     connect_count += 1;
                     // channel is empty. initialize with empty values
-                    let id = make_empty_id(&node_id, &session_type, connect_count)?;
+                    let id = make_empty_id(node_id, &session_type, connect_count)?;
                     let addr = "Null".to_string();
                     let state = "Null".to_string();
                     let parent = parent.clone();
@@ -318,7 +318,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                         last_msg,
                         last_status,
                     );
-                    connects.push(connect_info.clone());
+                    connects.push(connect_info);
                 }
                 false => {
                     // channel is not empty. initialize with whole values
@@ -400,7 +400,7 @@ async fn parse_manual(_manual: &Value, node_id: &String) -> DnetViewResult<Sessi
 
     let session_id = make_session_id(&parent, &session_type)?;
     //let id: u64 = 0;
-    let connect_id = make_empty_id(&node_id, &session_type, 0)?;
+    let connect_id = make_empty_id(node_id, &session_type, 0)?;
     //let connect_id = make_connect_id(&id)?;
     let addr = "Null".to_string();
     let state = "Null".to_string();
@@ -410,8 +410,8 @@ async fn parse_manual(_manual: &Value, node_id: &String) -> DnetViewResult<Sessi
     let status = "Null".to_string();
     let connect_info =
         ConnectInfo::new(connect_id.clone(), addr, state, parent, msg_log, is_empty, msg, status);
-    connects.push(connect_info.clone());
-    let parent = connect_id.clone();
+    connects.push(connect_info);
+    let parent = connect_id;
     let is_empty = is_empty_session(&connects);
     let accept_addr = None;
     let session_info =
@@ -436,7 +436,7 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                 match slot["channel"].is_null() {
                     true => {
                         // channel is empty. initialize with empty values
-                        let id = make_empty_id(&node_id, &session_type, slot_count)?;
+                        let id = make_empty_id(node_id, &session_type, slot_count)?;
                         let addr = "Null".to_string();
                         let state = &slot["state"];
                         let state = state.as_str().unwrap().to_string();

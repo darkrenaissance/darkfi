@@ -65,7 +65,7 @@ impl View {
         for info in self.nodes.infos.values() {
             self.active_ids.ids.insert(info.id.to_string());
             for session in &info.children {
-                if !session.is_empty == true {
+                if !session.is_empty {
                     self.active_ids.ids.insert(session.id.to_string());
                     for connect in &session.children {
                         self.active_ids.ids.insert(connect.id.to_string());
@@ -103,10 +103,10 @@ impl View {
             match self.active_ids.state.selected() {
                 Some(i) => match id_list.get(i) {
                     Some(i) => {
-                        self.render_info(f, slice.clone(), i.to_string())?;
+                        self.render_info(f, slice, i.to_string())?;
                         Ok(())
                     }
-                    None => return Err(DnetViewError::NoIdAtIndex),
+                    None => Err(DnetViewError::NoIdAtIndex),
                 },
                 // nothing is selected right now
                 None => Ok(()),
@@ -148,7 +148,7 @@ impl View {
                     ids.push(info.id.clone());
                     node_ids.push(info.id.clone());
                     for session in &info.children {
-                        if !session.is_empty == true {
+                        if !session.is_empty {
                             let name = Span::styled(format!("    {}", session.name), style);
                             let lines = vec![Spans::from(name)];
                             let names = ListItem::new(lines);

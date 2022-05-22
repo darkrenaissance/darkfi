@@ -51,7 +51,7 @@ pub struct LeadConfig {
     merkle_config_2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     sinsemilla_config_1:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    sinsemilla_config_2:
+    _sinsemilla_config_2:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     greaterthan_config: GreaterThanConfig,
     evenbits_config: EvenBitsConfig,
@@ -249,7 +249,7 @@ impl Circuit<pallas::Base> for LeadContract {
             merkle_config_1,
             merkle_config_2,
             sinsemilla_config_1,
-            sinsemilla_config_2,
+            _sinsemilla_config_2: sinsemilla_config_2,
             greaterthan_config,
             evenbits_config,
             arith_config,
@@ -264,7 +264,7 @@ impl Circuit<pallas::Base> for LeadContract {
         SinsemillaChip::load(config.sinsemilla_config_1.clone(), &mut layouter)?;
         let ecc_chip = config.ecc_chip();
         let ar_chip = config.arith_chip();
-        let ps_chip = config.poseidon_chip();
+        let _ps_chip = config.poseidon_chip();
         let eb_chip = config.evenbits_chip();
         let greater_than_chip = config.greaterthan_chip();
 
@@ -311,9 +311,9 @@ impl Circuit<pallas::Base> for LeadContract {
             self.coin_pk_y,
         )?;
 
-        let slot = self.load_private(layouter.namespace(|| ""), config.advices[0], self.slot)?;
+        let _slot = self.load_private(layouter.namespace(|| ""), config.advices[0], self.slot)?;
 
-        let root_sk =
+        let _root_sk =
             self.load_private(layouter.namespace(|| ""), config.advices[0], self.root_sk)?;
 
         // ===============
@@ -472,12 +472,11 @@ impl Circuit<pallas::Base> for LeadContract {
         };
          */
         let coin_val = {
-            let coin_val_pt =
-                ar_chip.mul(layouter.namespace(|| ""), coin_pk_y.clone(), coin_pk_x.clone())?;
+            let coin_val_pt = ar_chip.mul(layouter.namespace(|| ""), coin_pk_y, coin_pk_x)?;
 
             let coin_val0 =
                 ar_chip.mul(layouter.namespace(|| ""), coin_nonce.clone(), coin_value.clone())?;
-            ar_chip.mul(layouter.namespace(|| ""), coin_val_pt.clone(), coin_val0.clone())?
+            ar_chip.mul(layouter.namespace(|| ""), coin_val_pt, coin_val0)?
         };
 
         let (com, _) = {
@@ -486,7 +485,7 @@ impl Circuit<pallas::Base> for LeadContract {
             let coin_val = ScalarFixedShort::new(
                 ecc_chip.clone(),
                 layouter.namespace(|| "coin_val*1"),
-                (coin_val.clone(), one.clone()),
+                (coin_val, one.clone()),
             )?;
             coin_commit_v.mul(layouter.namespace(|| "coin commit v"), coin_val)?
         };
@@ -554,8 +553,7 @@ impl Circuit<pallas::Base> for LeadContract {
             coin2_nonce.inner().x(),
             coin2_nonce.inner().y(),
         )?;
-        let coin2_hash2 =
-            ar_chip.mul(layouter.namespace(|| ""), coin2_hash0.clone(), coin2_hash1.clone())?;
+        let coin2_hash2 = ar_chip.mul(layouter.namespace(|| ""), coin2_hash0, coin2_hash1)?;
         let coin2_hash = ar_chip.mul(layouter.namespace(|| ""), coin_value.clone(), coin2_hash2)?;
 
         let (com, _) = {
@@ -619,7 +617,7 @@ impl Circuit<pallas::Base> for LeadContract {
         };
 
         let computed_final_root = merkle_inputs
-            .calculate_root(layouter.namespace(|| "calculate root"), coin_commit_prod.clone())?;
+            .calculate_root(layouter.namespace(|| "calculate root"), coin_commit_prod)?;
 
         layouter.constrain_instance(
             computed_final_root.cell(),
@@ -627,14 +625,14 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_PATH_OFFSET,
         )?;
 
-        let node = MerkleNode::from_bytes(&self.root_sk.unwrap().to_repr()).unwrap();
+        let _node = MerkleNode::from_bytes(&self.root_sk.unwrap().to_repr()).unwrap();
         //let serialized = serde_json::to_string(&node).unwrap();
         //println!("root_sk: {}", serialized);
 
         //TODO (research) this multiplication panics!
         let y_commit_exp = ar_chip.mul(
             layouter.namespace(|| ""),
-            coin_nonce.clone(),
+            coin_nonce,
             //root_sk.clone(), //(fix)
             one.clone(),
         )?;
@@ -661,14 +659,15 @@ impl Circuit<pallas::Base> for LeadContract {
             )?;
             y_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_y)?
         };
-        let mut y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
+        let y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
 
         // ============================
-        let y_commit_bytes: [u8; 32] = y_commit.inner().point().unwrap().to_bytes();
-        let mut y_commit_base_bytes: [u8; 32] = [0; 32];
-        for i in 0..23 {
-            y_commit_base_bytes[i] = y_commit_base_bytes[i];
-        }
+        let _y_commit_bytes: [u8; 32] = y_commit.inner().point().unwrap().to_bytes();
+        let y_commit_base_bytes: [u8; 32] = [0; 32];
+        // FIXME: why is it assigning to itself?
+        // for i in 0..23 {
+        // y_commit_base_bytes[i] = y_commit_base_bytes[i];
+        // }
         let y_commit_base_temp = pallas::Base::from_repr(y_commit_base_bytes).unwrap();
 
         let y_commit_base = self.load_private(
@@ -686,7 +685,7 @@ impl Circuit<pallas::Base> for LeadContract {
             let y_commit_base = ScalarFixedShort::new(
                 ecc_chip.clone(),
                 layouter.namespace(|| "y_commit_base*1"),
-                (y_commit_base.clone(), one.clone()),
+                (y_commit_base.clone(), one),
             )?;
             rho_commit_v.mul(layouter.namespace(|| "coin commit v"), y_commit_base)?
         };
@@ -694,14 +693,11 @@ impl Circuit<pallas::Base> for LeadContract {
         let (blind, _) = {
             let rho_commit_r = OrchardFixedBasesFull::ValueCommitR;
             let rho_commit_r = FixedPoint::from_inner(ecc_chip.clone(), rho_commit_r);
-            let mau_rho = ScalarFixed::new(
-                ecc_chip.clone(),
-                layouter.namespace(|| "mau_rho scalar"),
-                self.mau_rho,
-            )?;
+            let mau_rho =
+                ScalarFixed::new(ecc_chip, layouter.namespace(|| "mau_rho scalar"), self.mau_rho)?;
             rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_rho)?
         };
-        let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
+        let _rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
 
         // that the coin value never get past it.
         let scalar = self.load_private(

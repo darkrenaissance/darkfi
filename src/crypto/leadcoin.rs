@@ -1,34 +1,14 @@
-use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use pasta_curves::pallas;
 
-use halo2_gadgets::poseidon::primitives as poseidon;
-use halo2_proofs::dev::MockProver;
-
-use rand::{thread_rng, Rng};
-
-use pasta_curves::{pallas, Fp};
-
-use crate::{
-    crypto::{
-        constants::{
-            NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
-            MERKLE_DEPTH_ORCHARD,
-        },
-        keypair::{Keypair, PublicKey, SecretKey},
-        merkle_node::MerkleNode,
-        nullifier::Nullifier,
-        proof::{Proof, ProvingKey, VerifyingKey},
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit, *},
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
-    },
-    zk::circuit::lead_contract::LeadContract,
+use crate::crypto::{
+    constants::MERKLE_DEPTH_ORCHARD,
+    merkle_node::MerkleNode,
+    util::{mod_r_p, pedersen_commitment_scalar},
 };
 
 use incrementalmerkletree::Hashable;
 
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::PrimeField, Curve, GroupEncoding},
-};
+use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 
 //use halo2_proofs::arithmetic::CurveAffine;
 #[derive(Debug, Default, Clone, Copy)]
@@ -58,7 +38,7 @@ impl LeadCoin {
     pub fn public_inputs(&self) -> Vec<pallas::Base> {
         let po_nonce = self.nonce_cm.unwrap().to_affine().coordinates().unwrap();
 
-        let po_tau = pedersen_commitment_scalar(mod_r_p(self.tau.unwrap()), self.root_cm.unwrap())
+        let _po_tau = pedersen_commitment_scalar(mod_r_p(self.tau.unwrap()), self.root_cm.unwrap())
             .to_affine()
             .coordinates()
             .unwrap();
@@ -70,7 +50,7 @@ impl LeadCoin {
         let po_sn = self.sn.unwrap().to_affine().coordinates().unwrap();
 
         let po_cmp = pallas::Base::from(0);
-        let zero = pallas::Base::from(0);
+        let _zero = pallas::Base::from(0);
         // ===============
 
         let cm_pos = self.idx;
@@ -89,7 +69,7 @@ impl LeadCoin {
             }
             current
         };
-        let mut public_inputs: Vec<pallas::Base> = vec![
+        let public_inputs: Vec<pallas::Base> = vec![
             *po_nonce.x(),
             *po_nonce.y(),
             *po_pk.x(),

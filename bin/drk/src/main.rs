@@ -1,7 +1,7 @@
 use std::{process::exit, str::FromStr, time::Instant};
 
 use clap::{Parser, Subcommand};
-use log::error;
+
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -99,13 +99,8 @@ impl Drk {
 
     async fn ping(&self) -> Result<()> {
         let start = Instant::now();
-
         let req = jsonrpc::request(json!("ping"), json!([]));
-        let rep = self.rpc_client.request(req).await.or_else(|e| {
-            error!("Got an error: {}", e);
-            return Err(e)
-        })?;
-
+        let rep = self.rpc_client.request(req).await?;
         let latency = Instant::now() - start;
         println!("Got reply: {}", rep);
         println!("Latency: {:?}", latency);
@@ -117,21 +112,14 @@ impl Drk {
             address.unwrap()
         } else {
             let req = jsonrpc::request(json!("wallet.get_key"), json!([0_i64]));
-            let rep = self.rpc_client.request(req).await.or_else(|e| {
-                error!("Error while fetching default key from wallet: {}", e);
-                return Err(e)
-            })?;
-
+            let rep = self.rpc_client.request(req).await?;
             Address::from_str(rep.as_array().unwrap()[0].as_str().unwrap())?
         };
 
         println!("Requesting airdrop for {}", addr);
         let req = jsonrpc::request(json!("airdrop"), json!([json!(addr.to_string()), amount]));
         let rpc_client = RpcClient::new(endpoint).await?;
-        let rep = rpc_client.request(req).await.or_else(|e| {
-            error!("Failed requesting airdrop: {}", e);
-            return Err(e)
-        })?;
+        let rep = rpc_client.request(req).await?;
         rpc_client.close().await?;
 
         println!("Success! Transaction ID: {}", rep);
@@ -140,22 +128,14 @@ impl Drk {
 
     async fn wallet_keygen(&self) -> Result<()> {
         let req = jsonrpc::request(json!("wallet.keygen"), json!([]));
-        let rep = self.rpc_client.request(req).await.or_else(|e| {
-            error!("Error while generating new key in wallet: {}", e);
-            return Err(e)
-        })?;
-
+        let rep = self.rpc_client.request(req).await?;
         println!("New address: {}", rep);
         Ok(())
     }
 
     async fn wallet_balance(&self) -> Result<()> {
         let req = jsonrpc::request(json!("wallet.get_balances"), json!([]));
-        let rep = self.rpc_client.request(req).await.or_else(|e| {
-            error!("Error fetching balances from wallet: {}", e);
-            return Err(e)
-        })?;
-
+        let rep = self.rpc_client.request(req).await?;
         // TODO: Better representation
         println!("Balances:\n{:#?}", rep);
         Ok(())
@@ -163,22 +143,14 @@ impl Drk {
 
     async fn wallet_address(&self) -> Result<()> {
         let req = jsonrpc::request(json!("wallet.get_key"), json!([0_i64]));
-        let rep = self.rpc_client.request(req).await.or_else(|e| {
-            error!("Error fetching default keypair from wallet: {}", e);
-            return Err(e)
-        })?;
-
+        let rep = self.rpc_client.request(req).await?;
         println!("Default wallet address: {}", rep);
         Ok(())
     }
 
     async fn wallet_all_addresses(&self) -> Result<()> {
         let req = jsonrpc::request(json!("wallet.get_key"), json!([-1]));
-        let rep = self.rpc_client.request(req).await.or_else(|e| {
-            error!("Error fetching keypairs from wallet: {}", e);
-            return Err(e)
-        })?;
-
+        let rep = self.rpc_client.request(req).await?;
         println!("Wallet addresses:\n{:#?}", rep);
         Ok(())
     }
@@ -197,10 +169,7 @@ impl Drk {
             json!([network.to_string(), token_id, recipient.to_string(), amount]),
         );
 
-        let rep = self.rpc_client.request(req).await.or_else(|e| {
-            error!("Error building and sending transaction: {}", e);
-            return Err(e)
-        })?;
+        let rep = self.rpc_client.request(req).await?;
 
         println!("Success! Transaction ID: {}", rep);
         Ok(())

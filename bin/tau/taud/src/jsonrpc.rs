@@ -249,8 +249,8 @@ impl JsonRpcInterface {
                 let rank_opt = field.get("rank");
                 if let Some(rank) = rank_opt {
                     let rank: Option<f32> = serde_json::from_value(rank.clone())?;
-                    if rank.is_some() {
-                        task.set_rank(rank.unwrap());
+                    if let Some(r) = rank {
+                        task.set_rank(r);
                     }
                 }
             }

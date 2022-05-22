@@ -15,7 +15,7 @@ async fn tcp_transport() {
     let tcp = TcpTransport::new(None, 1024);
     let url = Url::parse("tcp://127.0.0.1:5432").unwrap();
 
-    let listener = tcp.clone().listen_on(url.clone()).unwrap().await.unwrap();
+    let listener = tcp.listen_on(url.clone()).unwrap().await.unwrap();
 
     let _ = task::spawn(async move {
         let mut incoming = listener.incoming();
@@ -41,7 +41,7 @@ async fn tcp_tls_transport() {
     let tcp = TcpTransport::new(None, 1024);
     let url = Url::parse("tcp+tls://127.0.0.1:5433").unwrap();
 
-    let listener = tcp.clone().listen_on(url.clone()).unwrap().await.unwrap();
+    let listener = tcp.listen_on(url.clone()).unwrap().await.unwrap();
     let (acceptor, listener) = tcp.upgrade_listener(listener).unwrap().await.unwrap();
 
     let _ = task::spawn(async move {
