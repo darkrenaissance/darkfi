@@ -35,6 +35,9 @@ struct Args {
     /// communicate using tor protocol
     #[clap(long)]
     tor: bool,
+    /// peers url to connect to manually
+    #[clap(long)]
+    peers: Vec<Url>,
     /// communicate using tls protocol by default is tcp
     #[clap(long, default_value = "tcp://127.0.0.1:11055")]
     rpc: String,
@@ -63,6 +66,7 @@ impl MockP2p {
         _broadcast: bool,
         scheme: &str,
         connect: Option<String>,
+        peers: Vec<Url>,
     ) -> Result<(net::P2pPtr, Self)> {
         let seed_addrs: Vec<Url> = vec![
             Url::parse(&format!("{}://127.0.0.1:11001", scheme))?,
@@ -81,7 +85,7 @@ impl MockP2p {
                     address = Some(seed_addrs[node_number as usize].clone());
 
                     let net_settings =
-                        net::Settings { inbound: address.clone(), ..Default::default() };
+                        net::Settings { inbound: address.clone(), peers, ..Default::default() };
                     let p2p = net::P2p::new(net_settings).await;
 
                     broadcast = false;
@@ -97,6 +101,7 @@ impl MockP2p {
                         inbound: address.clone(),
                         external_addr: address.clone(),
                         seeds: seed_addrs,
+                        peers,
                         ..Default::default()
                     };
 
@@ -112,6 +117,7 @@ impl MockP2p {
                     let net_settings = net::Settings {
                         outbound_connections: 3,
                         seeds: seed_addrs,
+                        peers,
                         ..Default::default()
                     };
 
@@ -232,7 +238,8 @@ async fn start(executor: Arc<Executor<'_>>, args: Args) -> Result<()> {
     }
 
     let rpc_addr = Url::parse(&args.rpc)?;
-    let (p2p, mock_p2p) = MockP2p::new(args.node, args.broadcast, &scheme, args.connect).await?;
+    let (p2p, mock_p2p) =
+        MockP2p::new(args.node, args.broadcast, &scheme, args.connect, args.peers).await?;
     mock_p2p.run(p2p.clone(), rpc_addr, executor).await
 }
 
