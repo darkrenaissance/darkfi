@@ -9,7 +9,7 @@ use url::Url;
 use darkfi::{
     rpc::{
         jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode::*, JsonRequest, JsonResult},
-        rpcserver::{listen_and_serve, RequestHandler},
+        server::{listen_and_serve, RequestHandler},
     },
     Result,
 };

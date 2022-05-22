@@ -1,4 +1,4 @@
 pub mod jsonrpc;
 pub mod rpcclient;
-pub mod rpcserver;
+pub mod server;
 pub mod websockets;

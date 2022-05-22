@@ -156,6 +156,31 @@ impl TorTransport {
         }
     }
 
+    /// Query the environment for Tor variables, or fallback to defaults
+    pub fn get_env() -> Result<(Url, Url, String)> {
+        let socks5_url = Url::parse(
+            &std::env::var("DARKFI_TOR_SOCKS5_URL")
+                .unwrap_or_else(|_| "socks5://127.0.0.1:9050".to_string()),
+        )?;
+
+        let torc_url = Url::parse(
+            &std::env::var("DARKFI_TOR_CONTROL_URL")
+                .unwrap_or_else(|_| "tcp://127.0.0.1:9051".to_string()),
+        )?;
+
+        let auth_cookie = std::env::var("DARKFI_TOR_COOKIE");
+        if auth_cookie.is_err() {
+            return Err(Error::TorError(
+                "Please set the env var DARKFI_TOR_COOKIE to the configured Tor cookie file.\n\
+                For example:\n\
+                \'export DARKFI_TOR_COOKIE\"/var/lib/tor/control_auth_cookie\"\'"
+                    .to_string(),
+            ))
+        }
+
+        Ok((socks5_url, torc_url, auth_cookie.unwrap()))
+    }
+
     /// Creates an ephemeral hidden service pointing to local address, returns onion address
     /// when successful.
     ///

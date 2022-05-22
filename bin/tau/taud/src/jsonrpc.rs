@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use darkfi::{
     rpc::{
         jsonrpc::{error as jsonerr, ErrorCode, JsonRequest, JsonResult},
-        rpcserver::RequestHandler,
+        server::RequestHandler,
     },
     util::Timestamp,
     Error,

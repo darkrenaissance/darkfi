@@ -19,7 +19,7 @@ use url::Url;
 use darkfi::{
     async_daemonize, net,
     raft::{NetMsg, ProtocolRaft, Raft},
-    rpc::rpcserver::listen_and_serve,
+    rpc::server::listen_and_serve,
     util::{
         cli::{log_config, spawn_config},
         path::{expand_path, get_config_path},

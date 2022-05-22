@@ -34,7 +34,7 @@ use darkfi::{
             ErrorCode::{InvalidParams, MethodNotFound},
             JsonRequest, JsonResult,
         },
-        rpcserver::{listen_and_serve, RequestHandler},
+        server::{listen_and_serve, RequestHandler},
     },
     util::{
         cli::{log_config, spawn_config},

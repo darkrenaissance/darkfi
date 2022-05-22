@@ -8,7 +8,7 @@ use darkfi::{
     rpc::{
         jsonrpc,
         jsonrpc::{ErrorCode, JsonRequest, JsonResult},
-        rpcserver::RequestHandler,
+        server::RequestHandler,
     },
 };
 
