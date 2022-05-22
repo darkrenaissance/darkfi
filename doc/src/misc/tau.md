@@ -59,7 +59,7 @@ connect to in the p2p network.
 	in config file:
 
 		## Connection slots
-		outbound_connections=5
+		outbound_connections=8
 
 		## Seed nodes to connect to 
 		seeds=["127.0.0.1:11001"]
@@ -82,31 +82,25 @@ have already generated or got a copy from a peer place it in the same directory
 % tau --help 
 ```
 	tau 0.3.0
-	Tau cli
+	Command-line client for taud
 	
 	USAGE:
-	    tau [FLAGS] [OPTIONS] [ARGS] [SUBCOMMAND]
-	
-	FLAGS:
-	    -h, --help       Prints help information
-	    -V, --version    Prints version information
-	    -v               Increase verbosity
-	
+		tau [OPTIONS] <SUBCOMMAND>
+
 	OPTIONS:
-	    -c, --config <config>     Sets a custom config file
-	        --rpc <rpc-listen>    JSON-RPC listen URL [default: 127.0.0.1:11055]
-	
-	ARGS:
-	    <id>            Get task by ID
-	    <filters>...    Search criteria (zero or more)
-	
+		-e, --endpoint <ENDPOINT>    taud JSON-RPC endpoint [default: tcp://127.0.0.1:11055]
+		-h, --help                   Print help information
+		-v                           Increase verbosity (-vvv supported)
+		-V, --version                Print version information
+
 	SUBCOMMANDS:
-	    add        Add a new task
-	    comment    Set or Get comment for a task
-	    help       Prints this message or the help of the given subcommand(s)
-	    list       List all tasks
-	    state      Set or Get task state
-	    update     Update/Edit an existing task by ID
+		add        Add a new task                                                    
+		comment    Set or Get comment for a task
+		help       Print this message or the help of the given subcommand(s)
+		info       Get task info by ID
+		list       List all tasks
+		state      Set or Get task state
+		update     Update/Edit an existing task by ID
 
 ```shell
 % tau help [SUBCOMMAND]
@@ -114,29 +108,28 @@ have already generated or got a copy from a peer place it in the same directory
 
 ### Example  
 
-	$ # add new task  
-	$ tau add "new title"   
-	$ tau add "new title" project:blockchain desc:"new description" rank:3 assign:dark
-	$
-	$ # lists tasks
-	$ tau  		   		 
-	$ tau open 			 # open tasks
-	$ tau pause 		 # paused tasks
-	$ tau 0522 		 	 # created at May 2022
-	$ tau project:blockchain assign:dark
-	$ tau rank:gt:n  # lists all tasks that have rank greater than n
-	$ tau rank:ls:n  # lists all tasks that have rank lesser than n
-	$
-	$ # update task 
-	$ tau update 3 project:network  rank:20
-	$
-	$ # state 
-	$ tau state 3  # get state
-	$ tau state 3 pause  # set the state to pause 
-	$
-	$ # comments 
-	$ tau comments 1  # list comments
-	$ tau comments 3 "new comment"  # add new comment 
-
-
-
+```shell
+$ # add new task  
+$ tau add "new title"   
+$ tau add "new title" project:blockchain desc:"new description" rank:3 assign:dark
+$
+$ # lists tasks
+$ tau list 		   		 
+$ tau list open 			 # open tasks
+$ tau list pause 		 # paused tasks
+$ tau list 0522 		 	 # created at May 2022
+$ tau list project:blockchain assign:dark
+$ tau list rank:gt:n  # lists all tasks that have rank greater than n
+$ tau list rank:ls:n  # lists all tasks that have rank lesser than n
+$
+$ # update task 
+$ tau update 3 project:network  rank:20
+$
+$ # state 
+$ tau state 3  # get state
+$ tau state 3 pause  # set the state to pause 
+$
+$ # comments 
+$ tau comments 1  # list comments
+$ tau comments 3 "new comment"  # add new comment 
+```
