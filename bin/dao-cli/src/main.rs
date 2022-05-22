@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use url::Url;
 
 use darkfi::{
-    rpc::{jsonrpc, rpcclient::RpcClient},
+    rpc::{client::RpcClient, jsonrpc::JsonRequest},
     Result,
 };
 
@@ -32,7 +32,7 @@ impl Rpc {
     // --> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "hello world", "id": 42}
     async fn say_hello(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("say_hello"), json!([]));
+        let req = JsonRequest::new("say_hello", json!([]));
         self.client.request(req).await
     }
 }

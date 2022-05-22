@@ -131,7 +131,7 @@ pub async fn listen_and_serve(
             accept!(listener, transport, upgrade);
         }
         TransportName::Tor(upgrade) => {
-            let (socks5_url, torc_url, auth_cookie) = TorTransport::get_env()?;
+            let (socks5_url, torc_url, auth_cookie) = TorTransport::get_listener_env()?;
             let auth_cookie = hex::encode(&std::fs::read(auth_cookie).unwrap());
             let transport = TorTransport::new(socks5_url, Some((torc_url, auth_cookie)))?;
 

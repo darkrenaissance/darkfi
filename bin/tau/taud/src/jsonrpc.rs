@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 
 use darkfi::{
     rpc::{
-        jsonrpc::{error as jsonerr, ErrorCode, JsonRequest, JsonResult},
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         server::RequestHandler,
     },
     util::Timestamp,
@@ -42,14 +42,12 @@ struct BaseTaskInfo {
 impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
-            return JsonResult::Err(jsonerr(ErrorCode::InvalidParams, None, req.id))
+            return JsonError::new(ErrorCode::InvalidParams, None, req.id).into()
         }
 
         if self.notify_queue_sender.send(None).await.is_err() {
-            return JsonResult::Err(jsonerr(ErrorCode::InternalError, None, req.id))
+            return JsonError::new(ErrorCode::InternalError, None, req.id).into()
         }
-
-        debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         let rep = match req.method.as_str() {
             Some("add") => self.add(req.params).await,
@@ -58,9 +56,7 @@ impl RequestHandler for JsonRpcInterface {
             Some("set_state") => self.set_state(req.params).await,
             Some("set_comment") => self.set_comment(req.params).await,
             Some("get_task_by_id") => self.get_task_by_id(req.params).await,
-            Some(_) | None => {
-                return JsonResult::Err(jsonerr(ErrorCode::MethodNotFound, None, req.id))
-            }
+            Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         };
 
         to_json_result(rep, req.id)

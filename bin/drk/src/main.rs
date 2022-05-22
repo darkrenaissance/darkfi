@@ -9,7 +9,7 @@ use url::Url;
 use darkfi::{
     cli_desc,
     crypto::address::Address,
-    rpc::{jsonrpc, rpcclient::RpcClient},
+    rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{cli::log_config, NetworkName},
     Result,
 };
@@ -99,7 +99,7 @@ impl Drk {
 
     async fn ping(&self) -> Result<()> {
         let start = Instant::now();
-        let req = jsonrpc::request(json!("ping"), json!([]));
+        let req = JsonRequest::new("ping", json!([]));
         let rep = self.rpc_client.request(req).await?;
         let latency = Instant::now() - start;
         println!("Got reply: {}", rep);
@@ -111,13 +111,13 @@ impl Drk {
         let addr = if address.is_some() {
             address.unwrap()
         } else {
-            let req = jsonrpc::request(json!("wallet.get_key"), json!([0_i64]));
+            let req = JsonRequest::new("wallet.get_key", json!([0_i64]));
             let rep = self.rpc_client.request(req).await?;
             Address::from_str(rep.as_array().unwrap()[0].as_str().unwrap())?
         };
 
         println!("Requesting airdrop for {}", addr);
-        let req = jsonrpc::request(json!("airdrop"), json!([json!(addr.to_string()), amount]));
+        let req = JsonRequest::new("airdrop", json!([json!(addr.to_string()), amount]));
         let rpc_client = RpcClient::new(endpoint).await?;
         let rep = rpc_client.request(req).await?;
         rpc_client.close().await?;
@@ -127,14 +127,14 @@ impl Drk {
     }
 
     async fn wallet_keygen(&self) -> Result<()> {
-        let req = jsonrpc::request(json!("wallet.keygen"), json!([]));
+        let req = JsonRequest::new("wallet.keygen", json!([]));
         let rep = self.rpc_client.request(req).await?;
         println!("New address: {}", rep);
         Ok(())
     }
 
     async fn wallet_balance(&self) -> Result<()> {
-        let req = jsonrpc::request(json!("wallet.get_balances"), json!([]));
+        let req = JsonRequest::new("wallet.get_balances", json!([]));
         let rep = self.rpc_client.request(req).await?;
         // TODO: Better representation
         println!("Balances:\n{:#?}", rep);
@@ -142,14 +142,14 @@ impl Drk {
     }
 
     async fn wallet_address(&self) -> Result<()> {
-        let req = jsonrpc::request(json!("wallet.get_key"), json!([0_i64]));
+        let req = JsonRequest::new("wallet.get_key", json!([0_i64]));
         let rep = self.rpc_client.request(req).await?;
         println!("Default wallet address: {}", rep);
         Ok(())
     }
 
     async fn wallet_all_addresses(&self) -> Result<()> {
-        let req = jsonrpc::request(json!("wallet.get_key"), json!([-1]));
+        let req = JsonRequest::new("wallet.get_key", json!([-1]));
         let rep = self.rpc_client.request(req).await?;
         println!("Wallet addresses:\n{:#?}", rep);
         Ok(())
@@ -164,8 +164,8 @@ impl Drk {
     ) -> Result<()> {
         println!("Attempting to transfer {} tokens to {}", amount, recipient);
 
-        let req = jsonrpc::request(
-            json!("tx.transfer"),
+        let req = JsonRequest::new(
+            "tx.transfer",
             json!([network.to_string(), token_id, recipient.to_string(), amount]),
         );
 

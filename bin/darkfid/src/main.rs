@@ -29,10 +29,9 @@ use darkfi::{
     net::P2pPtr,
     node::Client,
     rpc::{
-        jsonrpc,
         jsonrpc::{
             ErrorCode::{InvalidParams, MethodNotFound},
-            JsonRequest, JsonResult,
+            JsonError, JsonRequest, JsonResult,
         },
         server::{listen_and_serve, RequestHandler},
     },
@@ -155,7 +154,7 @@ mod rpc_wallet;
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if !req.params.is_array() {
-            return jsonrpc::error(InvalidParams, None, req.id).into()
+            return JsonError::new(InvalidParams, None, req.id).into()
         }
 
         let params = req.params.as_array().unwrap();
@@ -173,7 +172,7 @@ impl RequestHandler for Darkfid {
                 return self.set_default_address(req.id, params).await
             }
             Some("wallet.get_balances") => return self.get_balances(req.id, params).await,
-            Some(_) | None => return jsonrpc::error(MethodNotFound, None, req.id).into(),
+            Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
 }

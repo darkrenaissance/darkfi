@@ -28,10 +28,9 @@ use darkfi::{
     net::P2pPtr,
     node::Client,
     rpc::{
-        jsonrpc,
         jsonrpc::{
             ErrorCode::{InternalError, InvalidParams, MethodNotFound},
-            JsonRequest, JsonResult,
+            JsonError, JsonRequest, JsonResponse, JsonResult,
         },
         server::{listen_and_serve, RequestHandler},
     },
@@ -135,14 +134,14 @@ pub struct Faucetd {
 impl RequestHandler for Faucetd {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if !req.params.is_array() {
-            return jsonrpc::error(InvalidParams, None, req.id).into()
+            return JsonError::new(InvalidParams, None, req.id).into()
         }
 
         let params = req.params.as_array().unwrap();
 
         match req.method.as_str() {
             Some("airdrop") => return self.airdrop(req.id, params).await,
-            Some(_) | None => return jsonrpc::error(MethodNotFound, None, req.id).into(),
+            Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
 }
@@ -174,12 +173,12 @@ impl Faucetd {
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
     async fn airdrop(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 2 || !params[0].is_string() || !params[1].is_f64() {
-            return jsonrpc::error(InvalidParams, None, id).into()
+            return JsonError::new(InvalidParams, None, id).into()
         }
 
         if !(*self.synced.lock().await) {
             error!("airdrop(): Blockchain is not yet synced");
-            return jsonrpc::error(InternalError, None, id).into()
+            return JsonError::new(InternalError, None, id).into()
         }
 
         let address = match Address::from_str(params[0].as_str().unwrap()) {
@@ -230,7 +229,7 @@ impl Faucetd {
             Ok(v) => v,
             Err(e) => {
                 error!("airdrop(): Failed converting biguint to u64: {}", e);
-                return jsonrpc::error(InternalError, None, id).into()
+                return JsonError::new(InternalError, None, id).into()
             }
         };
 
@@ -248,7 +247,7 @@ impl Faucetd {
             Ok(v) => v,
             Err(e) => {
                 error!("airdrop(): Failed building transaction: {}", e);
-                return jsonrpc::error(InternalError, None, id).into()
+                return JsonError::new(InternalError, None, id).into()
             }
         };
 
@@ -257,7 +256,7 @@ impl Faucetd {
             Ok(()) => {}
             Err(e) => {
                 error!("airdrop(): Failed broadcasting transaction: {}", e);
-                return jsonrpc::error(InternalError, None, id).into()
+                return JsonError::new(InternalError, None, id).into()
             }
         }
 
@@ -267,7 +266,7 @@ impl Faucetd {
         drop(map);
 
         let tx_hash = blake3::hash(&serialize(&tx)).to_hex().as_str().to_string();
-        jsonrpc::response(json!(tx_hash), id).into()
+        JsonResponse::new(json!(tx_hash), id).into()
     }
 }
 

@@ -1,9 +1,6 @@
 use serde_json::Value;
 
-use darkfi::rpc::{
-    jsonrpc,
-    jsonrpc::{ErrorCode::ServerError, JsonResult},
-};
+use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
 
 pub enum RpcError {
     AmountExceedsLimit = -32107,
@@ -23,5 +20,5 @@ fn to_tuple(e: RpcError) -> (i64, String) {
 
 pub fn server_error(e: RpcError, id: Value) -> JsonResult {
     let (code, msg) = to_tuple(e);
-    jsonrpc::error(ServerError(code), Some(msg), id).into()
+    JsonError::new(ServerError(code), Some(msg), id).into()
 }

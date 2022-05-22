@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use darkfi::{rpc::jsonrpc, Result};
+use darkfi::{rpc::jsonrpc::JsonRequest, Result};
 
 use crate::{
     primitives::{BaseTask, TaskInfo},
@@ -14,7 +14,7 @@ impl Tau {
 
     /// Add a new task.
     pub async fn add(&self, task: BaseTask) -> Result<()> {
-        let req = jsonrpc::request(json!("add"), json!([task]));
+        let req = JsonRequest::new("add", json!([task]));
         let rep = self.rpc_client.request(req).await?;
 
         println!("Got reply: {:?}", rep);
@@ -23,7 +23,7 @@ impl Tau {
 
     /// Get all task ids.
     pub async fn get_ids(&self) -> Result<Vec<u64>> {
-        let req = jsonrpc::request(json!("get_ids"), json!([]));
+        let req = JsonRequest::new("get_ids", json!([]));
         let rep = self.rpc_client.request(req).await?;
 
         let mut ret = vec![];
@@ -36,7 +36,7 @@ impl Tau {
 
     /// Update existing task given it's ID and some params.
     pub async fn update(&self, id: u64, task: BaseTask) -> Result<()> {
-        let req = jsonrpc::request(json!("update"), json!([id, task]));
+        let req = JsonRequest::new("update", json!([id, task]));
         let rep = self.rpc_client.request(req).await?;
 
         println!("Got reply: {:?}", rep);
@@ -45,7 +45,7 @@ impl Tau {
 
     /// Set the state for a task.
     pub async fn set_state(&self, id: u64, state: &str) -> Result<()> {
-        let req = jsonrpc::request(json!("set_state"), json!([id, state]));
+        let req = JsonRequest::new("set_state", json!([id, state]));
         let rep = self.rpc_client.request(req).await?;
 
         println!("Got reply: {:?}", rep);
@@ -54,7 +54,7 @@ impl Tau {
 
     /// Set a comment for a task.
     pub async fn set_comment(&self, id: u64, content: &str) -> Result<()> {
-        let req = jsonrpc::request(json!("set_comment"), json!([id, content]));
+        let req = JsonRequest::new("set_comment", json!([id, content]));
         let rep = self.rpc_client.request(req).await?;
 
         println!("Got reply: {:?}", rep);
@@ -63,7 +63,7 @@ impl Tau {
 
     /// Get task data by its ID.
     pub async fn get_task_by_id(&self, id: u64) -> Result<TaskInfo> {
-        let req = jsonrpc::request(json!("get_task_by_id"), json!([id]));
+        let req = JsonRequest::new("get_task_by_id", json!([id]));
         let rep = self.rpc_client.request(req).await?;
 
         Ok(serde_json::from_value(rep)?)

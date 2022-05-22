@@ -5,12 +5,9 @@ use serde_json::{json, Value};
 
 use darkfi::{
     crypto::{address::Address, keypair::PublicKey, token_id::generate_id},
-    rpc::{
-        jsonrpc,
-        jsonrpc::{
-            ErrorCode::{InternalError, InvalidAddressParam, InvalidAmountParam, InvalidParams},
-            JsonResult,
-        },
+    rpc::jsonrpc::{
+        ErrorCode::{InternalError, InvalidParams},
+        JsonError, JsonResponse, JsonResult,
     },
     util::{decode_base10, serial::serialize, NetworkName},
 };
@@ -31,7 +28,7 @@ impl Darkfid {
             !params[2].is_string() ||
             !params[3].is_f64()
         {
-            return jsonrpc::error(InvalidParams, None, id).into()
+            return JsonError::new(InvalidParams, None, id).into()
         }
 
         let network = params[0].as_str().unwrap();
@@ -48,7 +45,7 @@ impl Darkfid {
             Ok(v) => v,
             Err(e) => {
                 error!("transfer(): Failed parsing address from string: {}", e);
-                return jsonrpc::error(InvalidAddressParam, None, id).into()
+                return server_error(RpcError::InvalidAddressParam, id)
             }
         };
 
@@ -65,14 +62,14 @@ impl Darkfid {
             Ok(v) => v,
             Err(e) => {
                 error!("transfer(): Failed parsing amount from string: {}", e);
-                return jsonrpc::error(InvalidAmountParam, None, id).into()
+                return server_error(RpcError::InvalidAmountParam, id)
             }
         };
         let amount: u64 = match amount.try_into() {
             Ok(v) => v,
             Err(e) => {
                 error!("transfer(): Failed converting biguint to u64: {}", e);
-                return jsonrpc::error(InternalError, None, id).into()
+                return JsonError::new(InternalError, None, id).into()
             }
         };
 
@@ -92,7 +89,7 @@ impl Darkfid {
                     Ok(v) => v,
                     Err(e) => {
                         error!("transfer(): Failed generate_id(): {}", e);
-                        return jsonrpc::error(InternalError, None, id).into()
+                        return JsonError::new(InternalError, None, id).into()
                     }
                 }
             };
@@ -128,6 +125,6 @@ impl Darkfid {
         }
 
         let tx_hash = blake3::hash(&serialize(&tx)).to_hex().as_str().to_string();
-        jsonrpc::response(json!(tx_hash), id).into()
+        JsonResponse::new(json!(tx_hash), id).into()
     }
 }

@@ -3,12 +3,9 @@ use serde_json::{json, Value};
 
 use darkfi::{
     crypto::merkle_node::MerkleNode,
-    rpc::{
-        jsonrpc,
-        jsonrpc::{
-            ErrorCode::{InternalError, InvalidParams},
-            JsonResult,
-        },
+    rpc::jsonrpc::{
+        ErrorCode::{InternalError, InvalidParams},
+        JsonError, JsonResponse, JsonResult,
     },
 };
 
@@ -23,7 +20,7 @@ impl Darkfid {
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
     pub async fn get_slot(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_u64() {
-            return jsonrpc::error(InvalidParams, None, id).into()
+            return JsonError::new(InvalidParams, None, id).into()
         }
 
         let blocks = match self
@@ -36,7 +33,7 @@ impl Darkfid {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed fetching block by slot: {}", e);
-                return jsonrpc::error(InternalError, None, id).into()
+                return JsonError::new(InternalError, None, id).into()
             }
         };
 
@@ -46,7 +43,7 @@ impl Darkfid {
 
         // TODO: Return block as JSON
         debug!("{:#?}", blocks[0]);
-        jsonrpc::response(json!(true), id).into()
+        JsonResponse::new(json!(true), id).into()
     }
 
     // RPCAPI:
@@ -59,10 +56,10 @@ impl Darkfid {
                 Ok(v) => v,
                 Err(e) => {
                     error!("Failed getting merkle roots from rootstore: {}", e);
-                    return jsonrpc::error(InternalError, None, id).into()
+                    return JsonError::new(InternalError, None, id).into()
                 }
             };
 
-        jsonrpc::response(json!(roots), id).into()
+        JsonResponse::new(json!(roots), id).into()
     }
 }

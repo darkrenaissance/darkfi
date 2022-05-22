@@ -17,7 +17,7 @@ use url::Url;
 
 use darkfi::{
     error::Result,
-    rpc::{jsonrpc, rpcclient::RpcClient},
+    rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
         async_util,
         cli::{log_config, spawn_config, Config},
@@ -50,14 +50,14 @@ impl DnetView {
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
     async fn _ping(&self) -> Result<Value> {
-        let req = jsonrpc::request(json!("ping"), json!([]));
+        let req = JsonRequest::new("ping", json!([]));
         self.rpc_client.request(req).await
     }
 
     //--> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
     async fn get_info(&self) -> DnetViewResult<Value> {
-        let req = jsonrpc::request(json!("get_info"), json!([]));
+        let req = JsonRequest::new("get_info", json!([]));
         match self.rpc_client.request(req).await {
             Ok(req) => Ok(req),
             Err(e) => Err(DnetViewError::Darkfi(e)),

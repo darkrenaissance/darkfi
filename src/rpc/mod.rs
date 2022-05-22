@@ -1,4 +1,11 @@
+/// JSON-RPC primitives
 pub mod jsonrpc;
-pub mod rpcclient;
+
+/// Client-side JSON-RPC implementation
+pub mod client;
+
+/// Server-side JSON-RPC implementation
 pub mod server;
+
+/// Websockets client
 pub mod websockets;

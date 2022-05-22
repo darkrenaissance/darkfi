@@ -5,7 +5,7 @@ use log::error;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
-use darkfi::{cli_desc, rpc::rpcclient::RpcClient, util::cli::log_config, Error, Result};
+use darkfi::{cli_desc, rpc::client::RpcClient, util::cli::log_config, Error, Result};
 
 mod filter;
 mod primitives;

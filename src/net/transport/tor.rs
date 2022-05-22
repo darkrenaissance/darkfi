@@ -156,8 +156,8 @@ impl TorTransport {
         }
     }
 
-    /// Query the environment for Tor variables, or fallback to defaults
-    pub fn get_env() -> Result<(Url, Url, String)> {
+    /// Query the environment for listener Tor variables, or fallback to defaults
+    pub fn get_listener_env() -> Result<(Url, Url, String)> {
         let socks5_url = Url::parse(
             &std::env::var("DARKFI_TOR_SOCKS5_URL")
                 .unwrap_or_else(|_| "socks5://127.0.0.1:9050".to_string()),
@@ -179,6 +179,14 @@ impl TorTransport {
         }
 
         Ok((socks5_url, torc_url, auth_cookie.unwrap()))
+    }
+
+    /// Query the environment for the dialer Tor variables, or fallback to defaults
+    pub fn get_dialer_env() -> Result<Url> {
+        Ok(Url::parse(
+            &std::env::var("DARKFI_TOR_SOCKS5_URL")
+                .unwrap_or_else(|_| "socks5://127.0.0.1:9050".to_string()),
+        )?)
     }
 
     /// Creates an ephemeral hidden service pointing to local address, returns onion address

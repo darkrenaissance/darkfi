@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use darkfi::rpc::jsonrpc::{error as jsonerr, response as jsonresp, ErrorCode, JsonResult};
+use darkfi::rpc::jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TaudError {
@@ -26,23 +26,19 @@ impl From<serde_json::Error> for TaudError {
 
 pub fn to_json_result(res: TaudResult<Value>, id: Value) -> JsonResult {
     match res {
-        Ok(v) => JsonResult::Resp(jsonresp(v, id)),
+        Ok(v) => JsonResponse::new(v, id).into(),
         Err(err) => match err {
-            TaudError::InvalidId => JsonResult::Err(jsonerr(
-                ErrorCode::InvalidParams,
-                Some("invalid task's id".into()),
-                id,
-            )),
-            TaudError::InvalidData(e) | TaudError::SerdeJsonError(e) => {
-                JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id))
+            TaudError::InvalidId => {
+                JsonError::new(ErrorCode::InvalidParams, Some("invalid task id".into()), id).into()
             }
-            TaudError::InvalidDueTime => JsonResult::Err(jsonerr(
-                ErrorCode::InvalidParams,
-                Some("invalid due time".into()),
-                id,
-            )),
+            TaudError::InvalidData(e) | TaudError::SerdeJsonError(e) => {
+                JsonError::new(ErrorCode::InvalidParams, Some(e), id).into()
+            }
+            TaudError::InvalidDueTime => {
+                JsonError::new(ErrorCode::InvalidParams, Some("invalid due time".into()), id).into()
+            }
             TaudError::Darkfi(e) => {
-                JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id))
+                JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
             }
         },
     }
