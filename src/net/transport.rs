@@ -63,7 +63,8 @@ impl TryFrom<Url> for TransportName {
 
 /// The `Transport` trait serves as a base for implementing transport protocols.
 /// Base transports can optionally be upgraded with TLS in order to support encryption.
-/// The implementation of our TLS authentication can be found in the [`upgrade_tls`] module.
+/// The implementation of our TLS authentication can be found in the
+/// [`upgrade_tls`](TlsUpgrade) module.
 pub trait Transport {
     type Acceptor;
     type Connector;

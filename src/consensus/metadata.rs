@@ -4,7 +4,7 @@ use crate::util::{
     time::Timestamp,
 };
 
-/// This struct represents additional [`Block`] information used by
+/// This struct represents additional [`Block`](super::Block) information used by
 /// the consensus protocol
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Metadata {
@@ -20,7 +20,7 @@ impl Metadata {
     }
 }
 
-/// This struct represents [`Block`] information used by the Ouroboros
+/// This struct represents [`Block`](super::Block) information used by the Ouroboros
 /// Praos consensus protocol.
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct OuroborosMetadata {
@@ -38,7 +38,7 @@ impl OuroborosMetadata {
     }
 }
 
-/// This struct represents [`Block`] information used by the Streamlet
+/// This struct represents [`Block`](super::Block) information used by the Streamlet
 /// consensus protocol.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct StreamletMetadata {

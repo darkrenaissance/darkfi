@@ -72,7 +72,7 @@ async fn accept(
     Ok(())
 }
 
-/// Wrapper function around [`accept`] to take the incoming connection and
+/// Wrapper function around [`accept()`] to take the incoming connection and
 /// pass it forward.
 async fn run_accept_loop(
     listener: Box<dyn TransportListener>,

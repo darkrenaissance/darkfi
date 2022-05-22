@@ -39,6 +39,10 @@ fix: token_lists
 clippy: token_lists
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --all
 
+rustdoc: token_lists
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --workspace --all-features \
+		--no-deps --document-private-items
+
 # zkas source files which we want to compile for tests
 VM_SRC = proof/arithmetic.zk proof/mint.zk proof/burn.zk example/simple.zk
 VM_BIN = $(VM_SRC:=.bin)
@@ -65,4 +69,4 @@ uninstall:
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
 
-.PHONY: all check fix clippy test test-tx clean install uninstall
+.PHONY: all check fix clippy rustdoc test test-tx clean install uninstall

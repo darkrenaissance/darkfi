@@ -92,7 +92,7 @@ impl Runtime {
         Ok(Self { instance, env })
     }
 
-    /// Run the hardcoded [ENTRYPOINT] function with the given payload as input.
+    /// Run the hardcoded `ENTRYPOINT` function with the given payload as input.
     pub fn run(&mut self, payload: &[u8]) -> Result<()> {
         // Get module linear memory
         let memory = self.memory()?;
