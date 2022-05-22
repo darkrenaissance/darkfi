@@ -1,40 +1,44 @@
-use prettytable::{cell, format, row, table, Cell, Row, Table};
+use prettytable::{
+    cell,
+    format::{consts::FORMAT_NO_COLSEP, FormatBuilder, LinePosition, LineSeparator},
+    row, table, Cell, Row, Table,
+};
 
 use darkfi::{util::time::timestamp_to_date, Result};
 
-use super::{
+use crate::{
     filter::apply_filter,
-    primitives::{Comment, TaskEvent, TaskInfo},
+    primitives::{Comment, TaskInfo},
+    TaskEvent,
 };
 
-pub fn print_list_of_task(tasks: &mut Vec<TaskInfo>, filters: Vec<String>) -> Result<()> {
-    let mut table = Table::new();
+pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()> {
+    let mut tasks = tasks;
 
+    let mut table = Table::new();
     table.set_format(
-        format::FormatBuilder::new()
+        FormatBuilder::new()
             .padding(1, 1)
-            .separators(
-                &[format::LinePosition::Title],
-                format::LineSeparator::new('─', ' ', ' ', ' '),
-            )
+            .separators(&[LinePosition::Title], LineSeparator::new('-', ' ', ' ', ' '))
             .build(),
     );
-
     table.set_titles(row!["ID", "Title", "Project", "Assigned", "Due", "Rank"]);
 
     for filter in filters {
-        apply_filter(tasks, filter);
+        apply_filter(&mut tasks, &filter);
     }
 
     tasks.sort_by(|a, b| b.rank.partial_cmp(&a.rank).unwrap());
 
     let mut min_rank = 0.0;
     let mut max_rank = 0.0;
-    if tasks.first().is_some() {
-        max_rank = tasks.first().unwrap().rank;
+
+    if let Some(first) = tasks.first() {
+        max_rank = first.rank;
     }
-    if tasks.last().is_some() {
-        min_rank = tasks.last().unwrap().rank;
+
+    if let Some(last) = tasks.last() {
+        min_rank = last.rank;
     }
 
     for task in tasks {
@@ -63,8 +67,8 @@ pub fn print_list_of_task(tasks: &mut Vec<TaskInfo>, filters: Vec<String>) -> Re
             },
         ]));
     }
-    table.printstd();
 
+    table.printstd();
     Ok(())
 }
 
@@ -72,34 +76,32 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
     let current_state = &taskinfo.events.last().unwrap_or(&TaskEvent::default()).action.clone();
     let due = timestamp_to_date(taskinfo.due.unwrap_or(0), "date");
     let created_at = timestamp_to_date(taskinfo.created_at, "datetime");
-    let mut table = table!([Bd => "ref_id", &taskinfo.ref_id],
-                            ["id", &taskinfo.id.to_string()],
-                            [Bd =>"owner", &taskinfo.owner],
-                            ["title", &taskinfo.title],
-                            [Bd =>"desc", &taskinfo.desc.to_string()],
-                            ["assign", taskinfo.assign.join(", ")],
-                            [Bd =>"project", taskinfo.project.join(", ")],
-                            ["due", due],
-                            [Bd =>"rank", &taskinfo.rank.to_string()],
-                            ["created_at", created_at],
-                            [Bd =>"current_state", current_state]);
+
+    let mut table = table!(
+        [Bd => "ref_id", &taskinfo.ref_id],
+        ["id", &taskinfo.id.to_string()],
+        [Bd => "owner", &taskinfo.owner],
+        ["title", &taskinfo.title],
+        [Bd => "desc", &taskinfo.desc.to_string()],
+        ["assign", taskinfo.assign.join(", ")],
+        [Bd => "project", taskinfo.project.join(", ")],
+        ["due", due],
+        [Bd => "rank", &taskinfo.rank.to_string()],
+        ["created_at", created_at],
+        [Bd => "current_state", current_state]);
 
     table.set_format(
-        format::FormatBuilder::new()
+        FormatBuilder::new()
             .padding(1, 1)
-            .separators(
-                &[format::LinePosition::Title],
-                format::LineSeparator::new('─', ' ', ' ', ' '),
-            )
+            .separators(&[LinePosition::Title], LineSeparator::new('-', ' ', ' ', ' '))
             .build(),
     );
-    table.set_titles(row!["Name", "Value"]);
 
+    table.set_titles(row!["Name", "Value"]);
     table.printstd();
 
     let mut event_table = table!(["events", &events_as_string(taskinfo.events)]);
-    event_table.set_format(*format::consts::FORMAT_NO_COLSEP);
-
+    event_table.set_format(*FORMAT_NO_COLSEP);
     event_table.printstd();
 
     Ok(())
@@ -108,8 +110,7 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
 pub fn comments_as_string(comments: Vec<Comment>) -> String {
     let mut comments_str = String::new();
     for comment in comments {
-        comments_str.push_str(&comment.to_string());
-        comments_str.push('\n');
+        comments_str.push_str(&format!("{}\n", comment));
     }
     comments_str.pop();
     comments_str
@@ -118,11 +119,7 @@ pub fn comments_as_string(comments: Vec<Comment>) -> String {
 pub fn events_as_string(events: Vec<TaskEvent>) -> String {
     let mut events_str = String::new();
     for event in events {
-        events_str.push_str("State changed to ");
-        events_str.push_str(&event.action.to_string());
-        events_str.push_str(" at ");
-        events_str.push_str(&event.timestamp.to_string());
-        events_str.push('\n');
+        events_str.push_str(&format!("State changed to {} at {}\n", event.action, event.timestamp));
     }
     events_str
 }

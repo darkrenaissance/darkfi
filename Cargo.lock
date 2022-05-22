@@ -3974,22 +3974,15 @@ checksum = "d7fa7e55043acb85fca6b3c01485a2eeb6b69c5d21002e273c79e465f43b7ac1"
 name = "tau"
 version = "0.3.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-std",
- "async-trait",
  "chrono",
+ "clap 3.1.18",
  "darkfi",
- "futures",
  "log 0.4.17",
  "prettytable-rs",
- "rand",
  "serde",
  "serde_json",
  "simplelog",
- "smol",
- "structopt",
- "structopt-toml",
  "url",
 ]
 

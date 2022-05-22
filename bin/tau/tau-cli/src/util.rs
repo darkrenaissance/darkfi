@@ -1,79 +1,59 @@
-use std::{
-    env::{temp_dir, var},
-    fs::{self, File},
-    io::Read,
-    process::Command,
-};
+use std::{env, fs, process::Command};
 
 use chrono::{Datelike, Local, NaiveDate};
 use log::error;
-use rand::distributions::{Alphanumeric, DistString};
 
-use darkfi::{Error, Result};
+use darkfi::{util::Timestamp, Result};
 
-pub const CONFIG_FILE: &str = "taud_config.toml";
-pub const CONFIG_FILE_CONTENTS: &str = include_str!("../../taud_config.toml");
-
+/// Parse due date (e.g. "1503" for 15 March) as i64 timestamp.
 pub fn due_as_timestamp(due: &str) -> Option<i64> {
-    if due.len() == 4 {
-        let (day, month) = (due[..2].parse::<u32>().unwrap(), due[2..].parse::<u32>().unwrap());
+    if due.len() != 4 {
+        error!("Due date must be of length 4 (e.g. \"1503\" for 15 March)");
+        return None
+    }
+    let (day, month) = (due[..2].parse::<u32>().unwrap(), due[2..].parse::<u32>().unwrap());
 
-        let mut year = Local::today().year();
+    let mut year = Local::today().year();
 
-        if month < Local::today().month() {
-            year += 1;
-        }
-
-        if month == Local::today().month() && day < Local::today().day() {
-            year += 1;
-        }
-
-        let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
-
-        return Some(dt.timestamp())
+    if month < Local::today().month() {
+        year += 1;
     }
 
-    if due.len() > 4 {
-        error!("due date must be of length 4 (e.g \"1503\" for 15 March)");
+    if month == Local::today().month() && day < Local::today().day() {
+        year += 1;
     }
 
-    None
+    let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
+    Some(dt.timestamp())
 }
 
+/// Start up the preferred editor to edit a task's description.
 pub fn desc_in_editor() -> Result<Option<String>> {
-    // Create a temporary file with some comments inside
-    let mut file_path = temp_dir();
-    let file_name = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
+    // Create a temporary file with some comments inside.
+    let mut file_path = env::temp_dir();
+    let file_name = format!("tau-{}", Timestamp::current_time().0);
     file_path.push(file_name);
-    fs::write(
-        &file_path,
-        "\n# Write task description above this line\n# These lines will be removed\n",
-    )?;
 
-    // Calling env var {EDITOR} on temp file
-    let editor = match var("EDITOR") {
-        Ok(t) => t,
-        Err(e) => {
-            error!("EDITOR {}", e);
-            return Err(Error::OperationFailed)
-        }
+    fs::write(&file_path, "# Write your task description here.\n")?;
+    fs::write(&file_path, "# Lines starting with \"#\" will be removed\n")?;
+
+    // Try $EDITOR, and if not, fallback to xdg-open.
+    let editor_argv0 = match env::var("EDITOR") {
+        Ok(v) => v,
+        Err(_) => "xdg-open".into(),
     };
-    Command::new(editor).arg(&file_path).status()?;
 
-    // Whatever has been written in temp file, will be read here
-    let mut lines = String::new();
-    File::open(&file_path)?.read_to_string(&mut lines)?;
-    fs::remove_file(file_path)?;
+    Command::new(editor_argv0).arg(&file_path).status()?;
 
-    // Store only non-comment lines
-    let mut description = String::new();
-    for line in lines.split('\n') {
-        if !line.starts_with('#') {
-            description.push_str(line);
-            description.push('\n');
+    // Whatever has been written in the temp file will be read here.
+    let content = fs::read_to_string(&file_path)?;
+    fs::remove_file(&file_path)?;
+
+    let mut lines = vec![];
+    for i in content.lines() {
+        if !i.starts_with('#') {
+            lines.push(format!("{}", i))
         }
     }
-    description.pop();
-
-    Ok(Some(description))
+    Ok(Some(lines.join("\n")))
 }

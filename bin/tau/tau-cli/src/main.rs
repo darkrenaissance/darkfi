@@ -1,126 +1,163 @@
+use std::process::exit;
+
+use clap::{Parser, Subcommand};
 use log::error;
-use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
-use structopt_toml::StructOptToml;
 use url::Url;
 
-use darkfi::{
-    rpc::rpcclient::RpcClient,
-    util::{
-        cli::{log_config, spawn_config},
-        path::get_config_path,
-    },
-    Result,
-};
+use darkfi::{cli_desc, rpc::rpcclient::RpcClient, util::cli::log_config, Error, Result};
 
-mod cli;
 mod filter;
-mod jsonrpc;
 mod primitives;
+mod rpc;
 mod util;
 mod view;
 
-use cli::CliTauSubCommands;
-use jsonrpc::Rpc;
-use primitives::{TaskEvent, TaskInfo};
-use util::{desc_in_editor, CONFIG_FILE, CONFIG_FILE_CONTENTS};
-use view::{comments_as_string, print_list_of_task, print_task_info};
+use primitives::{task_from_cli, TaskEvent};
+use util::{desc_in_editor, due_as_timestamp};
+use view::{comments_as_string, print_task_info, print_task_list};
 
-async fn start(mut options: cli::CliTau) -> Result<()> {
-    let rpc_client = Rpc { client: RpcClient::new(Url::parse(&options.rpc_listen)?).await? };
+#[derive(Parser)]
+#[clap(name = "tau", about = cli_desc!(), version)]
+#[clap(arg_required_else_help(true))]
+struct Args {
+    #[clap(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    verbose: u8,
 
-    let states: Vec<String> = vec!["stop".into(), "open".into(), "pause".into()];
+    #[clap(short, long, default_value = "tcp://127.0.0.1:11055")]
+    /// taud JSON-RPC endpoint
+    endpoint: Url,
 
-    match options.id {
-        Some(id) if id.len() < 4 && id.parse::<u64>().is_ok() => {
-            let task = rpc_client.get_task_by_id(id.parse::<u64>().unwrap()).await?;
-            let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
-            print_task_info(taskinfo)?;
-            return Ok(())
-        }
-        Some(id) => options.filters.push(id),
-        None => {}
-    }
+    #[clap(subcommand)]
+    command: TauSubcommand,
+}
 
-    match options.command {
-        Some(CliTauSubCommands::Add { values }) => {
-            let mut task = cli::task_from_cli_values(values)?;
+#[derive(Subcommand)]
+enum TauSubcommand {
+    /// Add a new task
+    Add { values: Vec<String> },
+
+    /// Update/Edit an existing task by ID
+    Update {
+        /// Task ID
+        id: u64,
+        /// Values (ex: project:blockchain)
+        values: Vec<String>,
+    },
+
+    /// Set or Get task state
+    State {
+        /// Task ID
+        id: u64,
+        /// Set task state
+        state: Option<String>,
+    },
+
+    /// Set or Get comment for a task
+    Comment {
+        /// Task ID
+        id: u64,
+        /// Comment content
+        content: Option<String>,
+    },
+
+    /// List all tasks
+    List {
+        /// Search criteria (zero or more)
+        filters: Vec<String>,
+    },
+
+    /// Get task info by ID
+    Info { id: u64 },
+}
+
+pub struct Tau {
+    pub rpc_client: RpcClient,
+}
+
+#[async_std::main]
+async fn main() -> Result<()> {
+    let args = Args::parse();
+
+    let (lvl, conf) = log_config(args.verbose.into())?;
+    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+
+    let rpc_client = RpcClient::new(args.endpoint).await?;
+    let tau = Tau { rpc_client };
+
+    // Allowed states for a task
+    let states = ["stop", "open", "pause"];
+
+    // Parse subcommands
+    match args.command {
+        TauSubcommand::Add { values } => {
+            let mut task = task_from_cli(values)?;
             if task.title.is_empty() {
-                error!("Provide a title for the task");
-                return Ok(())
+                error!("Please provide a title for the task.");
+                exit(1);
             };
 
             if task.desc.is_none() {
                 task.desc = desc_in_editor()?;
             };
 
-            rpc_client.add(json!([task])).await?;
+            return tau.add(task).await
         }
 
-        Some(CliTauSubCommands::Update { id, values }) => {
-            let task = cli::task_from_cli_values(values)?;
-            rpc_client.update(id, json!([task])).await?;
+        TauSubcommand::Update { id, values } => {
+            let task = task_from_cli(values)?;
+            tau.update(id, task).await
         }
 
-        Some(CliTauSubCommands::State { id, state }) => match state {
+        TauSubcommand::State { id, state } => match state {
             Some(state) => {
                 let state = state.trim().to_lowercase();
-                if states.contains(&state) {
-                    rpc_client.set_state(id, &state).await?;
+                if states.contains(&state.as_str()) {
+                    tau.set_state(id, &state).await
                 } else {
-                    error!("Task state could only be one of three states: open, pause or stop");
+                    error!(
+                        "Task state can only be one of the following {}: {:?}",
+                        states.len(),
+                        states
+                    );
+                    return Err(Error::OperationFailed)
                 }
             }
             None => {
-                let task = rpc_client.get_task_by_id(id).await?;
-                let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
-                let default_event = TaskEvent::default();
-                let state = &taskinfo.events.last().unwrap_or(&default_event).action;
+                let task = tau.get_task_by_id(id).await?;
+                let state = &task.events.last().unwrap_or(&TaskEvent::default()).action.clone();
                 println!("Task {}: {}", id, state);
+                Ok(())
             }
         },
 
-        Some(CliTauSubCommands::Comment { id, content }) => match content {
-            Some(content) => {
-                rpc_client.set_comment(id, content.trim()).await?;
-            }
+        TauSubcommand::Comment { id, content } => match content {
+            Some(content) => tau.set_comment(id, content.trim()).await,
             None => {
-                let task = rpc_client.get_task_by_id(id).await?;
-                let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
-                let comments = comments_as_string(taskinfo.comments);
+                let task = tau.get_task_by_id(id).await?;
+                let comments = comments_as_string(task.comments);
                 println!("Comments {}:\n{}", id, comments);
+                Ok(())
             }
         },
 
-        Some(CliTauSubCommands::List {}) | None => {
-            let task_ids = rpc_client.get_ids(json!([])).await?;
-            let mut tasks: Vec<TaskInfo> = vec![];
-            if let Some(ids) = task_ids.as_array() {
-                for id in ids {
-                    let id = if id.is_u64() { id.as_u64().unwrap() } else { continue };
-                    let task = rpc_client.get_task_by_id(id).await?;
-                    let taskinfo: TaskInfo = serde_json::from_value(task.clone())?;
-                    tasks.push(taskinfo);
-                }
+        TauSubcommand::List { filters } => {
+            let task_ids = tau.get_ids().await?;
+            let mut tasks = vec![];
+            for id in task_ids {
+                tasks.push(tau.get_task_by_id(id).await?);
             }
-
-            // let mut tasks: Vec<TaskInfo> = serde_json::from_value(tasks)?;
-            print_list_of_task(&mut tasks, options.filters)?;
+            print_task_list(tasks, filters)?;
+            Ok(())
         }
-    }
 
-    Ok(())
-}
+        TauSubcommand::Info { id } => {
+            let task = tau.get_task_by_id(id).await?;
+            print_task_info(task)?;
+            Ok(())
+        }
+    }?;
 
-#[async_std::main]
-async fn main() -> Result<()> {
-    let args = cli::CliTau::from_args_with_toml("").unwrap();
-    let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
-    spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
-    let args = cli::CliTau::from_args_with_toml(&std::fs::read_to_string(cfg_path)?).unwrap();
-
-    let (lvl, conf) = log_config(args.verbose.into())?;
-    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
-
-    start(args).await
+    tau.close_connection().await
 }
