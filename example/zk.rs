@@ -3,7 +3,7 @@
 use darkfi::{
     crypto::{
         proof::{ProvingKey, VerifyingKey},
-        util::{pedersen_commitment_u64},
+        util::pedersen_commitment_u64,
         Proof,
     },
     zk::{

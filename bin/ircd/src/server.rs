@@ -1,5 +1,3 @@
-
-
 use async_std::net::TcpStream;
 use futures::{io::WriteHalf, AsyncWriteExt};
 use fxhash::FxHashMap;
