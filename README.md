@@ -37,6 +37,15 @@ to install the required dependencies:
     libexpat1-dev
 ```
 
+Alternatively users can use the automated script in
+`contrib/mac_setup.sh` by running. This script will install brew
+if it does not already exists on the system and then automatically
+install the dependencies
+
+```shell
+% bash contrib/mac_setup.sh
+```
+
 To build the necessary binaries, we can just clone the repo, and use the 
 provided Makefile to build the project. This will download the trusted 
 setup params, and compile the source code.
