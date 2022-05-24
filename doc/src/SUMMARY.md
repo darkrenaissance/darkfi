@@ -19,3 +19,4 @@
   - [vanityaddr](misc/vanityaddr.md)
   - [ircd](misc/ircd.md)
   - [tau](misc/tau.md)
+  - [dnetview](misc/dnetview.md)
