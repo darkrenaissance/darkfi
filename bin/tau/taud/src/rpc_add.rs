@@ -4,7 +4,11 @@ use serde_json::{json, Value};
 
 use darkfi::{util::Timestamp, Error};
 
-use crate::{error::TaudResult, task_info::TaskInfo, JsonRpcInterface};
+use crate::{
+    error::{TaudError, TaudResult},
+    task_info::TaskInfo,
+    JsonRpcInterface,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct BaseTaskInfo {
@@ -34,6 +38,11 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     pub async fn add(&self, params: Value) -> TaudResult<Value> {
         debug!(target: "tau", "JsonRpc::add() params {}", params);
+
+        if !params.is_array() {
+            return Err(TaudError::InvalidData("params is not an array".into()))
+        }
+
         let args = params.as_array().unwrap();
 
         let task: BaseTaskInfo = serde_json::from_value(args[0].clone())?;

@@ -26,6 +26,11 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
     pub async fn get_task_by_id(&self, params: Value) -> TaudResult<Value> {
         debug!(target: "tau", "JsonRpc::get_task_by_id() params {}", params);
+
+        if !params.is_array() {
+            return Err(TaudError::InvalidData("params is not an array".into()))
+        }
+
         let args = params.as_array().unwrap();
 
         if args.len() != 1 {
