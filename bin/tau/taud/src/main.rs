@@ -1,11 +1,14 @@
 use async_std::sync::{Arc, Mutex};
-use std::{env, fs::create_dir_all};
+use std::{env, fs::create_dir_all, path::PathBuf};
 
 use async_executor::Executor;
-use crypto_box::{aead::Aead, Box, SecretKey, KEY_SIZE};
+use async_trait::async_trait;
+use crypto::EncryptedTask;
+use crypto_box::{SecretKey, KEY_SIZE};
 use easy_parallel::Parallel;
 use futures::{select, FutureExt};
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
+use serde_json::Value;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::future;
 use structopt_toml::StructOptToml;
@@ -14,72 +17,85 @@ use url::Url;
 use darkfi::{
     async_daemonize, net,
     raft::{NetMsg, ProtocolRaft, Raft},
-    rpc::server::listen_and_serve,
+    rpc::{
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
+        server::{listen_and_serve, RequestHandler},
+    },
     util::{
         cli::{log_config, spawn_config},
         expand_path,
         path::get_config_path,
-        serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
     },
     Error, Result,
 };
 
+mod crypto;
 mod error;
-mod jsonrpc;
 mod month_tasks;
+mod rpc_add;
+mod rpc_get;
+mod rpc_update;
 mod settings;
 mod task_info;
 mod util;
 
 use crate::{
-    error::TaudResult,
-    jsonrpc::JsonRpcInterface,
+    crypto::{decrypt_task, encrypt_task},
+    error::{to_json_result, TaudError, TaudResult},
+    month_tasks::MonthTasks,
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     task_info::TaskInfo,
     util::{load, save},
 };
 
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct EncryptedTask {
-    nonce: Vec<u8>,
-    payload: Vec<u8>,
+pub struct JsonRpcInterface {
+    dataset_path: PathBuf,
+    notify_queue_sender: async_channel::Sender<Option<TaskInfo>>,
+    nickname: String,
 }
 
-fn encrypt_task(
-    task: &TaskInfo,
-    secret_key: &SecretKey,
-    rng: &mut crypto_box::rand_core::OsRng,
-) -> Result<EncryptedTask> {
-    debug!("start encrypting task");
-    let public_key = secret_key.public_key();
-    let msg_box = Box::new(&public_key, secret_key);
-
-    let nonce = crypto_box::generate_nonce(rng);
-    let payload = &serialize(task)[..];
-    let payload = match msg_box.encrypt(&nonce, payload) {
-        Ok(p) => p,
-        Err(e) => {
-            error!("Unable to encrypt task: {}", e);
-            return Err(Error::OperationFailed)
+#[async_trait]
+impl RequestHandler for JsonRpcInterface {
+    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
+        if !req.params.is_array() {
+            return JsonError::new(ErrorCode::InvalidParams, None, req.id).into()
         }
-    };
 
-    let nonce = nonce.to_vec();
-    Ok(EncryptedTask { nonce, payload })
+        if self.notify_queue_sender.send(None).await.is_err() {
+            return JsonError::new(ErrorCode::InternalError, None, req.id).into()
+        }
+
+        let rep = match req.method.as_str() {
+            Some("add") => self.add(req.params).await,
+            Some("update") => self.update(req.params).await,
+            Some("get_ids") => self.get_ids(req.params).await,
+            Some("set_state") => self.set_state(req.params).await,
+            Some("set_comment") => self.set_comment(req.params).await,
+            Some("get_task_by_id") => self.get_task_by_id(req.params).await,
+            Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+        };
+
+        to_json_result(rep, req.id)
+    }
 }
 
-fn decrypt_task(encrypt_task: &EncryptedTask, secret_key: &SecretKey) -> Option<TaskInfo> {
-    debug!("start decrypting task");
-    let public_key = secret_key.public_key();
-    let msg_box = Box::new(&public_key, secret_key);
+impl JsonRpcInterface {
+    pub fn new(
+        notify_queue_sender: async_channel::Sender<Option<TaskInfo>>,
+        dataset_path: PathBuf,
+        nickname: String,
+    ) -> Self {
+        Self { notify_queue_sender, dataset_path, nickname }
+    }
 
-    let nonce = encrypt_task.nonce.as_slice();
-    let decrypted_task = match msg_box.decrypt(nonce.into(), &encrypt_task.payload[..]) {
-        Ok(m) => m,
-        Err(_) => return None,
-    };
+    pub fn load_task_by_id(&self, task_id: &Value) -> TaudResult<TaskInfo> {
+        let task_id: u64 = serde_json::from_value(task_id.clone())?;
 
-    deserialize(&decrypted_task).ok()
+        let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
+        let task = tasks.into_iter().find(|t| (t.get_id() as u64) == task_id);
+
+        task.ok_or(TaudError::InvalidId)
+    }
 }
 
 async_daemonize!(realmain);
@@ -139,7 +155,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let net_settings = settings.net;
 
     //
-    //Raft
+    // Raft
     //
     let datastore_raft = datastore_path.join("tau.db");
     let mut raft = Raft::<EncryptedTask>::new(net_settings.inbound.clone(), datastore_raft)?;
@@ -156,7 +172,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                     let task = task.map_err(Error::from)?;
                     if let Some(tk) = task {
                         info!(target: "tau", "save the received task {:?}", tk);
-                        let encrypted_task = encrypt_task(&tk, &secret_key,&mut rng)?;
+                        let encrypted_task = encrypt_task(&tk, &secret_key)?;
                         tk.save(&datastore_path_cloned)?;
                         raft_sender.send(encrypted_task).await.map_err(Error::from)?;
                     }
