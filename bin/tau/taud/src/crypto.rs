@@ -44,7 +44,7 @@ pub fn decrypt_task(encrypted_task: &EncryptedTask, secret_key: &SecretKey) -> O
     let public_key = secret_key.public_key();
     let msg_box = Box::new(&public_key, secret_key);
 
-    // Extract the nonce and use it to decrypt the payload
+    // Extract the nonce nad use it to decrypt the payload
     let nonce = encrypted_task.nonce.as_slice();
     let decrypted_task = match msg_box.decrypt(nonce.into(), &encrypted_task.payload[..]) {
         Ok(m) => m,
