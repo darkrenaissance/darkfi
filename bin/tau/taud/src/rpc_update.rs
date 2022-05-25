@@ -16,11 +16,6 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     pub async fn update(&self, params: Value) -> TaudResult<Value> {
         debug!(target: "tau", "JsonRpc::update() params {}", params);
-
-        if !params.is_array() {
-            return Err(TaudError::InvalidData("params is not an array".into()))
-        }
-
         let args = params.as_array().unwrap();
 
         if args.len() != 2 {
@@ -42,11 +37,6 @@ impl JsonRpcInterface {
         // TODO: BUG: Validate that the state string is correct and not something arbitrary
 
         debug!(target: "tau", "JsonRpc::set_state() params {}", params);
-
-        if !params.is_array() {
-            return Err(TaudError::InvalidData("params is not an array".into()))
-        }
-
         let args = params.as_array().unwrap();
 
         if args.len() != 2 {
@@ -69,11 +59,6 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     pub async fn set_comment(&self, params: Value) -> TaudResult<Value> {
         debug!(target: "tau", "JsonRpc::set_comment() params {}", params);
-
-        if !params.is_array() {
-            return Err(TaudError::InvalidData("params is not an array".into()))
-        }
-
         let args = params.as_array().unwrap();
 
         if args.len() != 2 {
