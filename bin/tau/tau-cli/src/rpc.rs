@@ -1,3 +1,4 @@
+use log::debug;
 use serde_json::json;
 
 use darkfi::{rpc::jsonrpc::JsonRequest, Result};
@@ -17,7 +18,7 @@ impl Tau {
         let req = JsonRequest::new("add", json!([task]));
         let rep = self.rpc_client.request(req).await?;
 
-        println!("Got reply: {:?}", rep);
+        debug!("Got reply: {:?}", rep);
         Ok(())
     }
 
@@ -39,7 +40,7 @@ impl Tau {
         let req = JsonRequest::new("update", json!([id, task]));
         let rep = self.rpc_client.request(req).await?;
 
-        println!("Got reply: {:?}", rep);
+        debug!("Got reply: {:?}", rep);
         Ok(())
     }
 
@@ -48,7 +49,7 @@ impl Tau {
         let req = JsonRequest::new("set_state", json!([id, state]));
         let rep = self.rpc_client.request(req).await?;
 
-        println!("Got reply: {:?}", rep);
+        debug!("Got reply: {:?}", rep);
         Ok(())
     }
 
@@ -57,7 +58,7 @@ impl Tau {
         let req = JsonRequest::new("set_comment", json!([id, content]));
         let rep = self.rpc_client.request(req).await?;
 
-        println!("Got reply: {:?}", rep);
+        debug!("Got reply: {:?}", rep);
         Ok(())
     }
 
