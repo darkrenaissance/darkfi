@@ -41,21 +41,23 @@ struct BaseTaskInfo {
 #[async_trait]
 impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if req.params.as_array().is_none() {
+        if !req.params.is_array() {
             return JsonError::new(ErrorCode::InvalidParams, None, req.id).into()
         }
+
+        let params = req.params.as_array().unwrap();
 
         if self.notify_queue_sender.send(None).await.is_err() {
             return JsonError::new(ErrorCode::InternalError, None, req.id).into()
         }
 
         let rep = match req.method.as_str() {
-            Some("add") => self.add(req.params).await,
-            Some("get_ids") => self.get_ids(req.params).await,
-            Some("update") => self.update(req.params).await,
-            Some("set_state") => self.set_state(req.params).await,
-            Some("set_comment") => self.set_comment(req.params).await,
-            Some("get_task_by_id") => self.get_task_by_id(req.params).await,
+            Some("add") => self.add(params).await,
+            Some("get_ids") => self.get_ids(params).await,
+            Some("update") => self.update(params).await,
+            Some("set_state") => self.set_state(params).await,
+            Some("set_comment") => self.set_comment(params).await,
+            Some("get_task_by_id") => self.get_task_by_id(params).await,
             Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         };
 
@@ -87,11 +89,10 @@ impl JsonRpcInterface {
     //      "id": 1
     //      }
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    async fn add(&self, params: Value) -> TaudResult<Value> {
-        debug!(target: "tau", "JsonRpc::add() params {}", params);
-        let args = params.as_array().unwrap();
+    async fn add(&self, params: &[Value]) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::add() params {:?}", params);
 
-        let task: BaseTaskInfo = serde_json::from_value(args[0].clone())?;
+        let task: BaseTaskInfo = serde_json::from_value(params[0].clone())?;
         let mut new_task: TaskInfo = TaskInfo::new(
             &task.title,
             &task.desc,
@@ -112,8 +113,8 @@ impl JsonRpcInterface {
     // List tasks
     // --> {"jsonrpc": "2.0", "method": "get_ids", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
-    async fn get_ids(&self, params: Value) -> TaudResult<Value> {
-        debug!(target: "tau", "JsonRpc::get_ids() params {}", params);
+    async fn get_ids(&self, params: &[Value]) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::get_ids() params {:?}", params);
         let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
         let task_ids: Vec<u32> = tasks.iter().map(|task| task.get_id()).collect();
         Ok(json!(task_ids))
@@ -123,15 +124,14 @@ impl JsonRpcInterface {
     // Update task and returns `true` upon success.
     // --> {"jsonrpc": "2.0", "method": "update", "params": [task_id, {"title": "new title"} ], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    async fn update(&self, params: Value) -> TaudResult<Value> {
-        debug!(target: "tau", "JsonRpc::update() params {}", params);
-        let args = params.as_array().unwrap();
+    async fn update(&self, params: &[Value]) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::update() params {:?}", params);
 
-        if args.len() != 2 {
+        if params.len() != 2 {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
-        let task = self.check_params_for_update(&args[0], &args[1])?;
+        let task = self.check_params_for_update(&params[0], &params[1])?;
 
         self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
 
@@ -142,20 +142,23 @@ impl JsonRpcInterface {
     // Set state for a task and returns `true` upon success.
     // --> {"jsonrpc": "2.0", "method": "set_state", "params": [task_id, state], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    async fn set_state(&self, params: Value) -> TaudResult<Value> {
-        // TODO: BUG: Validate that the state string is correct and not something arbitrary
+    async fn set_state(&self, params: &[Value]) -> TaudResult<Value> {
+        // Allowed states for a task
+        let states = ["stop", "open", "pause"];
 
-        debug!(target: "tau", "JsonRpc::set_state() params {}", params);
-        let args = params.as_array().unwrap();
+        debug!(target: "tau", "JsonRpc::set_state() params {:?}", params);
 
-        if args.len() != 2 {
+        if params.len() != 2 {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
-        let state: String = serde_json::from_value(args[1].clone())?;
+        let state: String = serde_json::from_value(params[1].clone())?;
 
-        let mut task: TaskInfo = self.load_task_by_id(&args[0])?;
-        task.set_state(&state);
+        let mut task: TaskInfo = self.load_task_by_id(&params[0])?;
+
+        if states.contains(&state.as_str()) {
+            task.set_state(&state);
+        }
 
         self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
 
@@ -166,17 +169,16 @@ impl JsonRpcInterface {
     // Set comment for a task and returns `true` upon success.
     // --> {"jsonrpc": "2.0", "method": "set_comment", "params": [task_id, comment_content], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    async fn set_comment(&self, params: Value) -> TaudResult<Value> {
-        debug!(target: "tau", "JsonRpc::set_comment() params {}", params);
-        let args = params.as_array().unwrap();
+    async fn set_comment(&self, params: &[Value]) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::set_comment() params {:?}", params);
 
-        if args.len() != 2 {
+        if params.len() != 2 {
             return Err(TaudError::InvalidData("len of params should be 3".into()))
         }
 
-        let comment_content: String = serde_json::from_value(args[1].clone())?;
+        let comment_content: String = serde_json::from_value(params[1].clone())?;
 
-        let mut task: TaskInfo = self.load_task_by_id(&args[0])?;
+        let mut task: TaskInfo = self.load_task_by_id(&params[0])?;
         task.set_comment(Comment::new(&comment_content, &self.nickname));
 
         self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
@@ -187,15 +189,14 @@ impl JsonRpcInterface {
     // Get a task by id.
     // --> {"jsonrpc": "2.0", "method": "get_task_by_id", "params": [task_id], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
-    async fn get_task_by_id(&self, params: Value) -> TaudResult<Value> {
-        debug!(target: "tau", "JsonRpc::get_task_by_id() params {}", params);
-        let args = params.as_array().unwrap();
+    async fn get_task_by_id(&self, params: &[Value]) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::get_task_by_id() params {:?}", params);
 
-        if args.len() != 1 {
+        if params.len() != 1 {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
         }
 
-        let task: TaskInfo = self.load_task_by_id(&args[0])?;
+        let task: TaskInfo = self.load_task_by_id(&params[0])?;
 
         Ok(json!(task))
     }
