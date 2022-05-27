@@ -1116,7 +1116,7 @@ def main(argv):
 
     ################################################
     # Mint the governance token
-    # Send it to two hodlers
+    # Send it to three hodlers
     ################################################
 
     # Hodler 1
@@ -1220,6 +1220,7 @@ def main(argv):
 
     ################################################
     # Proposal is accepted!
+    # Start the voting
     ################################################
 
     # Lets the voting begin
@@ -1232,6 +1233,10 @@ def main(argv):
     # Answer:
     #   1. there is a time limit
     #   2. both the MPC or users can unblind
+
+    # TODO: bug if I vote then send money, then we can double vote
+    # TODO: all timestamps missing
+    #       - timelock (future voting starts in 2 days)
 
     # User 1: YES
     builder = VoteTxBuilder(ec)
