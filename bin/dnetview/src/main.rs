@@ -3,11 +3,10 @@ use std::{collections::hash_map::Entry, fs::File, io, io::Read, path::PathBuf};
 
 use easy_parallel::Parallel;
 use fxhash::{FxHashMap, FxHashSet};
-use log::info;
+use log::{error, info};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
-
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 use tui::{
     backend::{Backend, TermionBackend},
@@ -33,8 +32,6 @@ use dnetview::{
     util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
     view::{IdListView, NodeInfoView, View},
 };
-
-use log::error;
 
 struct DnetView {
     name: String,
@@ -392,7 +389,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
 }
 
 // TODO: placeholder for now
-async fn parse_manual(_manual: &Value, node_id: &String) -> DnetViewResult<SessionInfo> {
+async fn _parse_manual(_manual: &Value, node_id: &String) -> DnetViewResult<SessionInfo> {
     let name = "Manual".to_string();
     let session_type = Session::Manual;
     let mut connects: Vec<ConnectInfo> = Vec::new();

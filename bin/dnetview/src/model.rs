@@ -1,7 +1,12 @@
 use async_std::sync::Mutex;
-use darkfi::util::NanoTimestamp;
+
 use fxhash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
+
+use darkfi::util::NanoTimestamp;
+
+type MsgLogMutex = Mutex<FxHashMap<String, Vec<(NanoTimestamp, String, String)>>>;
+
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Session {
@@ -21,7 +26,7 @@ pub enum SelectableObject {
 pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
     pub nodes: Mutex<FxHashMap<String, NodeInfo>>,
-    pub msg_log: Mutex<FxHashMap<String, Vec<(NanoTimestamp, String, String)>>>,
+    pub msg_log: MsgLogMutex,
     pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
 }
 
@@ -29,7 +34,7 @@ impl Model {
     pub fn new(
         ids: Mutex<FxHashSet<String>>,
         nodes: Mutex<FxHashMap<String, NodeInfo>>,
-        msg_log: Mutex<FxHashMap<String, Vec<(NanoTimestamp, String, String)>>>,
+        msg_log: MsgLogMutex,
         selectables: Mutex<FxHashMap<String, SelectableObject>>,
     ) -> Model {
         Model { ids, nodes, msg_log, selectables }

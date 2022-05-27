@@ -13,27 +13,15 @@ pub fn make_node_id(node_name: &String) -> Result<String> {
 pub fn make_session_id(node_id: &str, session: &Session) -> Result<String> {
     let mut num = 0_u64;
 
-    match session {
-        Session::Inbound => {
-            for i in ['i', 'n'] {
-                num += i as u64;
-            }
-        }
-        Session::Outbound => {
-            for i in ['o', 'u', 't'] {
-                num += i as u64;
-            }
-        }
-        Session::Manual => {
-            for i in ['m', 'a', 'n'] {
-                num += i as u64;
-            }
-        }
-        Session::Offline => {
-            for i in ['o', 'f', 'f'] {
-                num += i as u64
-            }
-        }
+    let session_chars = match session {
+        Session::Inbound => vec!['i', 'n'],
+        Session::Outbound => vec!['o', 'u', 't'],
+        Session::Manual => vec!['m', 'a', 'n'],
+        Session::Offline => vec!['o', 'f', 'f'],
+    };
+
+    for i in session_chars {
+        num += i as u64
     }
 
     for i in node_id.chars() {
@@ -62,27 +50,15 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
 
     let mut num = 0_u64;
 
-    match session {
-        Session::Inbound => {
-            for i in ['i', 'n'] {
-                num += i as u64;
-            }
-        }
-        Session::Outbound => {
-            for i in ['o', 'u', 't'] {
-                num += i as u64;
-            }
-        }
-        Session::Manual => {
-            for i in ['m', 'a', 'n'] {
-                num += i as u64;
-            }
-        }
-        Session::Offline => {
-            for i in ['o', 'f', 'f'] {
-                num += i as u64
-            }
-        }
+    let session_chars = match session {
+        Session::Inbound => vec!['i', 'n'],
+        Session::Outbound => vec!['o', 'u', 't'],
+        Session::Manual => vec!['m', 'a', 'n'],
+        Session::Offline => vec!['o', 'f', 'f'],
+    };
+
+    for i in session_chars {
+        num += i as u64
     }
 
     for i in node_id.chars() {
