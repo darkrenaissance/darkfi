@@ -7,7 +7,6 @@ use darkfi::util::NanoTimestamp;
 
 type MsgLogMutex = Mutex<FxHashMap<String, Vec<(NanoTimestamp, String, String)>>>;
 
-
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Session {
     Inbound,
