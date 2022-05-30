@@ -13,6 +13,25 @@ It uses the darkfi p2p engine to synchronize chats between hosts.
 % make install BINS=ircd PREFIX=/home/XX/.local
 ```
 
+## Usage (Darkfi Network)
+
+After ircd get installed, run:
+
+```shell
+% ircd 
+```
+
+Make sure **[weechat](https://github.com/weechat/weechat)** is installed, then run:
+
+```shell
+% weechat
+```
+
+Inside weechat run the following commands to connect to ircd:
+	/server add dark localhost/11066
+	/connect dark
+
+
 ## Usage (Local Deployment)
 
 ### Seed Node

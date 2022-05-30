@@ -16,7 +16,7 @@ autojoin = ["#dev"]
 #inbound="tls://127.0.0.1:11002" 
 
 ## Connection slots
-#outbound_connections=5
+outbound_connections=5
 
 ## P2P external address
 #external_addr="tls://127.0.0.1:11002"
@@ -25,7 +25,7 @@ autojoin = ["#dev"]
 #peers=["tls://127.0.0.1:11003"]
 
 ## Seed nodes to connect to 
-#seeds=["tls://127.0.0.1:11001"]
+seeds=["tls://irc0.dark.fi:11001", "tls://irc1.dark.fi:11001"]
 
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0
