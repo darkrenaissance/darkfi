@@ -17,23 +17,94 @@ between hosts.
 % sudo make install BINS=ircd
 ```
 
-## Usage (Darkfi Network)
+## Usage (DarkFi Network)
 
-After ircd get installed, run:
+Upon installing `ircd` as described above, the preconfigured defaults
+will allow you to connect to the network and start chatting with the
+rest of the DarkFi community.
+
+First, try to start `ircd` from your command-line so it can spawn its
+configuration file in place. The preconfigured defaults will autojoin
+you to the `#dev` channel, where the community is most active and
+talks about DarkFi development.
 
 ```shell
-% ircd 
+% ircd
 ```
 
-Make sure **[weechat](https://github.com/weechat/weechat)** is installed, then run:
+After running it for the first time, `ircd` will create a configuration
+file you can review and potentially edit. It might be useful if you
+want to add other channels you want to autojoin (like `#philosophy`
+and `#memes`), or if you want to set a shared secret for some channel
+in order for it to be encrypted between its participants.
+
+When done, you can run `ircd` for the second time in order for it to
+connect to the network and start participating in the P2P protocol:
 
 ```shell
-% weechat
+% ircd
 ```
 
-Inside weechat run the following commands to connect to ircd:
-	/server add dark localhost/11066
-	/connect dark
+## Clients
+
+### Weechat
+
+In this section, we'll briefly cover how to use the [Weechat IRC
+client](https://github.com/weechat/weechat) to connect and chat with
+`ircd`.
+
+Normally, you should be able to install weechat using your
+distribution's package manager. If not, have a look at the weechat
+[git repository](https://github.com/weechat/weechat) for instructions
+on how to install it on your computer.
+
+Once installed, we can configure a new server which will represent our
+`ircd` instance. First, start weechat, and in its window - run the
+following commands (there is an assumption that `irc_listen` in the
+`ircd` config file is set to `127.0.0.1:11066`):
+
+```
+/server add darkfi localhost/11066 -autoconnect
+/save
+/quit
+```
+
+This will set up the server, save the settings, and exit weechat.
+We can now proceed with installing the `mallumo` weechat script, which
+is used for E2E encryption in private messages on this IRC network.
+
+#### E2E encryption with mallumo
+
+`mallumo` is a Python plugin for Weechat that can be used to
+enable end-to-end encryption for private messages between you and
+other users of the DarkFi IRC network. The verbose installation
+and configuration instructions can be found in the [mallumo git
+repository](https://github.com/darkrenaissance/mallumo).
+
+Briefly, make sure you install python3 and
+[`pynacl`](https://github.com/pyca/pynacl/) (can usually be done with
+your distribution's package manager or `pip`).
+
+Then find where weechat has put its configuration files. It is usually
+`~/.weechat` or `~/.local/share/weechat` (here we will assume the
+latter). Go to the directory, clone the repo, and make a couple of
+symlinks:
+
+```shell
+% cd ~/.local/share/weechat
+% mkdir -p src
+% git clone https://github.com/darkrenaissance/mallumo src/mallumo
+% cd python
+% ln -s $(realpath ../src/mallumo/mallumo) mallumo
+% ln -s $(realpath ../src/mallumo/mallumo/__init__.py) autoload/mallumo.py
+```
+
+Refer to https://github.com/darkrenaissance/mallumo and its README for
+usage instructions.
+
+After this has been set up, the next time you start `ircd` and then
+`weechat`, you will be connected to the DarkFi IRC network and be
+able to chat with other participants.
 
 
 ## Usage (Local Deployment)
