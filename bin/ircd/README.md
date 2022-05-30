@@ -28,6 +28,7 @@ Make sure **[weechat](https://github.com/weechat/weechat)** is installed, then r
 ```
 
 Inside weechat run the following commands to connect to ircd:
+
 	/server add dark localhost/11066
 	/connect dark
 
