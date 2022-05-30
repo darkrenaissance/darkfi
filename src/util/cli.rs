@@ -2,12 +2,11 @@ use std::{
     env, fs,
     io::Write,
     marker::PhantomData,
-    net::SocketAddr,
     path::{Path, PathBuf},
     str,
 };
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use simplelog::ConfigBuilder;
 
 use crate::{Error, Result};
@@ -80,36 +79,6 @@ pub fn log_config(verbosity_level: u64) -> Result<(simplelog::LevelFilter, simpl
     Ok((log_level, log_config))
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct UrlConfig {
-    pub url: String,
-    pub username: Option<String>,
-    pub password: Option<String>,
-}
-
-impl TryFrom<UrlConfig> for url::Url {
-    type Error = Error;
-
-    fn try_from(urlc: UrlConfig) -> Result<Self> {
-        let mut url = url::Url::parse(&urlc.url)?;
-
-        url.set_password(urlc.password.as_deref())?;
-
-        if urlc.username.is_some() {
-            url.set_username(&urlc.username.unwrap())?;
-        }
-
-        Ok(url)
-    }
-}
-
-impl TryFrom<UrlConfig> for SocketAddr {
-    type Error = Error;
-    fn try_from(urlc: UrlConfig) -> std::result::Result<Self, Self::Error> {
-        let url: SocketAddr = urlc.url.parse()?;
-        Ok(url)
-    }
-}
 pub const ANSI_LOGO: &str = include_str!("../../contrib/darkfi.ansi");
 
 #[macro_export]
