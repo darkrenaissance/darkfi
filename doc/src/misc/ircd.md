@@ -13,6 +13,25 @@ It uses the darkfi p2p engine to synchronize chats between hosts.
 % make install BINS=ircd PREFIX=/home/XX/.local
 ```
 
+## Usage (Darkfi Network)
+
+After ircd get installed, run:
+
+```shell
+% ircd 
+```
+
+Make sure **[weechat](https://github.com/weechat/weechat)** is installed, then run:
+
+```shell
+% weechat
+```
+
+Inside weechat run the following commands to connect to ircd:
+	/server add dark localhost/11066
+	/connect dark
+
+
 ## Usage (Local Deployment)
 
 ### Seed Node
@@ -22,10 +41,14 @@ connect to when they first connect to the network. The `seed_session` simply
 connects to a seed node and runs `protocol_seed`, which requests a list of
 addresses from the seed node and disconnects straight after receiving them.
 
-	in config file:
+The first time you run the program, a config file will be created in
+.config/darkfi. You must specify an inbound accept address in your config
+file to configure a seed node:
 
-		## P2P accept address
-		inbound="127.0.0.1:11001" 
+```toml
+## P2P accept address
+inbound="127.0.0.1:11001" 
+```
 
 Note that the above config doesn't specify an external address since the
 seed node shouldn't be advertised in the list of connectable nodes. The seed
@@ -39,30 +62,33 @@ making any outbound connections.
 
 The external address is important and must be correct.
 
-	in config file:
+To run an inbound node, your config file must contain the following info:
 		
-		## P2P accept address
-		inbound="127.0.0.1:11002" 
-		
-		## P2P external address
-		external_addr="127.0.0.1:11002"
+```toml
+## P2P accept address
+inbound="127.0.0.1:11002" 
 
-		## Seed nodes to connect to 
-		seeds=["127.0.0.1:11001"]
+## P2P external address
+external_addr="127.0.0.1:11002"
 
+## Seed nodes to connect to 
+seeds=["127.0.0.1:11001"]
+```
 ### Outbound Node
 
 This is a node which has 8 outbound connection slots and no inbound connections.
 This means the node has 8 slots which will actively search for unique nodes to
 connect to in the p2p network.
 
-	in config file:
+In your config file:
 
-		## Connection slots
-		outbound_connections=5
+```toml
+## Connection slots
+outbound_connections=5
 
-		## Seed nodes to connect to 
-		seeds=["127.0.0.1:11001"]
+## Seed nodes to connect to 
+seeds=["127.0.0.1:11001"]
+```
 
 ### Attaching the IRC Frontend
 
