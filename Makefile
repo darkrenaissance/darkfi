@@ -59,7 +59,16 @@ test-tx:
 clean:
 	rm -f $(BINS)
 
-install: all
+install:
+	@for i in $(BINS); \
+	do \
+		if test ! -f $$i; \
+		then \
+			echo "The '$$i' binary was not built."; \
+			echo "You should run 'make BINS=$$i' as a normal user before installing."; \
+			exit 1; \
+		fi; \
+	done;
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
 	cp -f $(BINS) $(DESTDIR)$(PREFIX)/bin
 
