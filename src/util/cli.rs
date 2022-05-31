@@ -174,11 +174,7 @@ macro_rules! async_daemonize {
                     simplelog::TerminalMode::Mixed,
                     simplelog::ColorChoice::Auto,
                 ),
-                simplelog::WriteLogger::new(
-                    simplelog::LevelFilter::Debug,
-                    simplelog::Config::default(),
-                    env_log_file_path,
-                ),
+                simplelog::WriteLogger::new(log_level, log_config, env_log_file_path),
             ])?;
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
