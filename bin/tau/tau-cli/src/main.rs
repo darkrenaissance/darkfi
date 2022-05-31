@@ -5,7 +5,11 @@ use log::error;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
-use darkfi::{rpc::client::RpcClient, util::cli::log_config, Error, Result};
+use darkfi::{
+    rpc::client::RpcClient,
+    util::cli::{get_log_config, get_log_level},
+    Error, Result,
+};
 
 mod filter;
 mod primitives;
@@ -76,8 +80,9 @@ pub struct Tau {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let (lvl, conf) = log_config(args.verbose.into())?;
-    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+    let log_level = get_log_level(args.verbose.into());
+    let log_config = get_log_config();
+    TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let rpc_client = RpcClient::new(args.endpoint).await?;
     let tau = Tau { rpc_client };

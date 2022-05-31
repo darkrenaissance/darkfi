@@ -19,7 +19,7 @@ use darkfi::{
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
         async_util,
-        cli::{log_config, spawn_config, Config},
+        cli::{get_log_config, get_log_level, spawn_config, Config},
         join_config_path, NanoTimestamp,
     },
 };
@@ -68,11 +68,12 @@ async fn main() -> DnetViewResult<()> {
 
     let verbosity_level = options.app.occurrences_of("verbose");
 
-    let (lvl, cfg) = log_config(verbosity_level)?;
+    let log_level = get_log_level(verbosity_level);
+    let log_config = get_log_config();
 
     let file = File::create(&*options.log_path).unwrap();
-    WriteLogger::init(lvl, cfg, file)?;
-    info!("Log level: {}", lvl);
+    WriteLogger::init(log_level, log_config, file)?;
+    info!("Log level: {}", log_level);
 
     let config_path = join_config_path(&PathBuf::from("dnetview_config.toml"))?;
 

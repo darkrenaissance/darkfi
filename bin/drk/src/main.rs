@@ -10,7 +10,10 @@ use darkfi::{
     cli_desc,
     crypto::address::Address,
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
-    util::{cli::log_config, NetworkName},
+    util::{
+        cli::{get_log_config, get_log_level},
+        NetworkName,
+    },
     Result,
 };
 
@@ -180,8 +183,9 @@ impl Drk {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let (lvl, conf) = log_config(args.verbose.into())?;
-    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+    let log_level = get_log_level(args.verbose.into());
+    let log_config = get_log_config();
+    TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let rpc_client = RpcClient::new(args.endpoint).await?;
     let drk = Drk { rpc_client };

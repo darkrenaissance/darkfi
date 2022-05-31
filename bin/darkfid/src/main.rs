@@ -3,11 +3,9 @@ use std::str::FromStr;
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use easy_parallel::Parallel;
 use futures_lite::future;
 use log::{debug, error, info};
 use serde_derive::Deserialize;
-use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use url::Url;
@@ -36,7 +34,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     util::{
-        cli::{log_config, spawn_config},
+        cli::{get_log_config, get_log_level, spawn_config},
         expand_path,
         path::get_config_path,
         time::check_clock,

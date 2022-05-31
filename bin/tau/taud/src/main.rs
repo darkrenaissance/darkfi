@@ -3,10 +3,8 @@ use std::{env, fs::create_dir_all};
 
 use async_executor::Executor;
 use crypto_box::{aead::Aead, Box, SecretKey, KEY_SIZE};
-use easy_parallel::Parallel;
 use futures::{select, FutureExt};
 use log::{debug, error, info, warn};
-use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use smol::future;
 use structopt_toml::StructOptToml;
 use url::Url;
@@ -16,7 +14,7 @@ use darkfi::{
     raft::{NetMsg, ProtocolRaft, Raft},
     rpc::server::listen_and_serve,
     util::{
-        cli::{log_config, spawn_config},
+        cli::{get_log_config, get_log_level, spawn_config},
         expand_path,
         path::get_config_path,
         serial::{deserialize, serialize, SerialDecodable, SerialEncodable},

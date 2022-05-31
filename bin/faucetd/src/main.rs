@@ -4,13 +4,11 @@ use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
-use easy_parallel::Parallel;
 use futures_lite::future;
 use log::{debug, error, info};
 use num_bigint::BigUint;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
-use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use url::Url;
@@ -35,7 +33,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     util::{
-        cli::{log_config, spawn_config},
+        cli::{get_log_config, get_log_level, spawn_config},
         decode_base10, expand_path,
         path::get_config_path,
         serial::serialize,

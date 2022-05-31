@@ -51,14 +51,16 @@ pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub fn log_config(verbosity_level: u64) -> Result<(simplelog::LevelFilter, simplelog::Config)> {
-    let log_level = match verbosity_level {
+pub fn get_log_level(verbosity_level: u64) -> simplelog::LevelFilter {
+    match verbosity_level {
         0 => simplelog::LevelFilter::Info,
         1 => simplelog::LevelFilter::Debug,
         _ => simplelog::LevelFilter::Trace,
-    };
+    }
+}
 
-    let log_config = match env::var("LOG_TARGETS") {
+pub fn get_log_config() -> simplelog::Config {
+    match env::var("LOG_TARGETS") {
         Ok(x) => {
             let targets: Vec<String> = x.split(',').map(|x| x.to_string()).collect();
             let mut cfgbuilder = ConfigBuilder::new();
@@ -74,9 +76,7 @@ pub fn log_config(verbosity_level: u64) -> Result<(simplelog::LevelFilter, simpl
             cfgbuilder.build()
         }
         Err(_) => simplelog::Config::default(),
-    };
-
-    Ok((log_level, log_config))
+    }
 }
 
 pub const ANSI_LOGO: &str = include_str!("../../contrib/darkfi.ansi");
@@ -115,17 +115,14 @@ macro_rules! cli_desc {
 ///
 /// Example usage:
 /// ```text
-/// use async_executor::Executor;
 /// use async_std::sync::Arc;
-/// use easy_parallel::Parallel;
 /// use futures_lite::future;
-/// use simplelog::{ColorChoice, TermLogger, TerminalMode};
 /// use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 ///
 /// use darkfi::{
 ///     async_daemonize, cli_desc,
 ///     util::{
-///         cli::{log_config, spawn_config},
+///         cli::{get_log_config, get_log_level, spawn_config},
 ///         path::get_config_path,
 ///     },
 ///     Result,
@@ -162,13 +159,32 @@ macro_rules! async_daemonize {
             spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
             let args = Args::from_args_with_toml(&std::fs::read_to_string(cfg_path)?).unwrap();
 
-            let (lvl, conf) = log_config(args.verbose.into())?;
-            TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+            let log_level = get_log_level(args.verbose.into());
+            let log_config = get_log_config();
+
+            let env_log_file_path = match std::env::var("DARKFI_LOG") {
+                Ok(p) => std::fs::File::create(p).unwrap(),
+                Err(_) => std::fs::File::create("/tmp/darkfi.log").unwrap(),
+            };
+
+            simplelog::CombinedLogger::init(vec![
+                simplelog::TermLogger::new(
+                    log_level,
+                    log_config.clone(),
+                    simplelog::TerminalMode::Mixed,
+                    simplelog::ColorChoice::Auto,
+                ),
+                simplelog::WriteLogger::new(
+                    simplelog::LevelFilter::Debug,
+                    simplelog::Config::default(),
+                    env_log_file_path,
+                ),
+            ])?;
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
-            let ex = Arc::new(Executor::new());
+            let ex = Arc::new(async_executor::Executor::new());
             let (signal, shutdown) = async_channel::unbounded::<()>();
-            let (_, result) = Parallel::new()
+            let (_, result) = easy_parallel::Parallel::new()
                 // Run four executor threads
                 .each(0..4, |_| future::block_on(ex.run(shutdown.recv())))
                 // Run the main future on the current thread.
