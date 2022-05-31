@@ -4,7 +4,11 @@ use async_executor::Executor;
 use clap::Parser;
 use simplelog::*;
 
-use darkfi::{net, util::cli::log_config, Result};
+use darkfi::{
+    net,
+    util::cli::{get_log_config, get_log_level},
+    Result,
+};
 
 async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
     let p2p = net::P2p::new(options.network_settings).await;
@@ -85,7 +89,9 @@ impl ProgramOptions {
 fn main() -> Result<()> {
     let options = ProgramOptions::load()?;
 
-    let (lvl, conf) = log_config(1)?;
+    let lvl = get_log_level(1);
+    let conf = get_log_config();
+
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let ex = Arc::new(Executor::new());
