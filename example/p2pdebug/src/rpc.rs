@@ -6,9 +6,8 @@ use url::Url;
 use darkfi::{
     net,
     rpc::{
-        jsonrpc,
-        jsonrpc::{ErrorCode, JsonRequest, JsonResult},
-        rpcserver::RequestHandler,
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
+        server::RequestHandler,
     },
 };
 
@@ -21,7 +20,7 @@ pub struct JsonRpcInterface {
 impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
-            return jsonrpc::error(ErrorCode::InvalidRequest, None, req.id).into()
+            return JsonError::new(ErrorCode::InvalidRequest, None, req.id).into()
         }
 
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
@@ -29,7 +28,7 @@ impl RequestHandler for JsonRpcInterface {
         match req.method.as_str() {
             Some("ping") => self.pong(req.id, req.params).await,
             Some("get_info") => self.get_info(req.id, req.params).await,
-            Some(_) | None => jsonrpc::error(ErrorCode::MethodNotFound, None, req.id).into(),
+            Some(_) | None => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 }
@@ -40,7 +39,7 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
     async fn pong(&self, id: Value, _params: Value) -> JsonResult {
-        jsonrpc::response(json!("pong"), id).into()
+        JsonResponse::new(json!("pong"), id).into()
     }
 
     // RPCAPI:
@@ -49,6 +48,6 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
     async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
         let resp = self.p2p.get_info().await;
-        jsonrpc::response(resp, id).into()
+        JsonResponse::new(resp, id).into()
     }
 }

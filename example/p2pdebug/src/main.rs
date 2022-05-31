@@ -7,7 +7,12 @@ use rand::{rngs::OsRng, Rng, RngCore};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
-use darkfi::{cli_desc, net, rpc::rpcserver::listen_and_serve, util::cli::log_config, Result};
+use darkfi::{
+    cli_desc, net,
+    rpc::server::listen_and_serve,
+    util::cli::{get_log_config, get_log_level},
+    Result,
+};
 
 pub(crate) mod proto;
 pub(crate) mod rpc;
@@ -246,8 +251,9 @@ async fn start(executor: Arc<Executor<'_>>, args: Args) -> Result<()> {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let (lvl, conf) = log_config(args.verbose.into())?;
-    TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
+    let log_level = get_log_level(args.verbose.into());
+    let log_config = get_log_config();
+    TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let ex = Arc::new(Executor::new());
     let ex_clone = ex.clone();
