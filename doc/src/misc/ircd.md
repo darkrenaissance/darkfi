@@ -95,12 +95,13 @@ symlinks:
 % mkdir -p src
 % git clone https://github.com/darkrenaissance/mallumo src/mallumo
 % cd python
-% ln -s $(realpath ../src/mallumo/mallumo) mallumo
-% ln -s $(realpath ../src/mallumo/mallumo/__init__.py) autoload/mallumo.py
+% ln -s `realpath ../src/mallumo/mallumo` mallumo
+% ln -s `realpath ../src/mallumo/mallumo/__init__.py` autoload/mallumo.py
 ```
 
-Refer to https://github.com/darkrenaissance/mallumo and its README for
-usage instructions.
+Refer to
+[darkrenaissance/mallumo](https://github.com/darkrenaissance/mallumo)
+and its README for usage instructions.
 
 After this has been set up, the next time you start `ircd` and then
 `weechat`, you will be connected to the DarkFi IRC network and be
