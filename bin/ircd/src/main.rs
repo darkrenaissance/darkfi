@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::atomic::Ordering};
 
 use async_channel::{Receiver, Sender};
 use async_executor::Executor;
@@ -118,7 +118,7 @@ async fn process(
                 // Try to potentially decrypt the incoming message.
                 if conn.configured_chans.contains_key(&msg.channel) {
                     let chan_info = conn.configured_chans.get(&msg.channel).unwrap();
-                    if !chan_info.joined {
+                    if !chan_info.joined.load(Ordering::Relaxed) {
                         continue
                     }
                     if let Some(salt_box) = &chan_info.salt_box {

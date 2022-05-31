@@ -1,4 +1,8 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::{
+    net::SocketAddr,
+    path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use fxhash::FxHashMap;
 use log::info;
@@ -68,13 +72,13 @@ pub struct ChannelInfo {
     pub topic: Option<String>,
     /// Optional NaCl box for the channel, used for {en,de}cryption.
     pub salt_box: Option<crypto_box::Box>,
-    ///
-    pub joined: bool,
+    /// Flag indicates whether the user has joined the channel or not
+    pub joined: Arc<AtomicBool>,
 }
 
 impl ChannelInfo {
     pub fn new() -> Result<Self> {
-        Ok(Self { topic: None, salt_box: None, joined: true })
+        Ok(Self { topic: None, salt_box: None, joined: Arc::new(AtomicBool::new(true)) })
     }
 }
 

@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use async_std::net::TcpStream;
 use futures::{io::WriteHalf, AsyncWriteExt};
 use fxhash::FxHashMap;
@@ -79,7 +81,7 @@ impl IrcServerConnection {
                         self.configured_chans.insert(chan.to_string(), ChannelInfo::new()?);
                     } else {
                         let chan_info = self.configured_chans.get_mut(chan).unwrap();
-                        chan_info.joined = true;
+                        chan_info.joined.store(true, Ordering::Relaxed);
                     }
                 }
             }
@@ -90,7 +92,7 @@ impl IrcServerConnection {
                     self.reply(&part_reply).await?;
                     if self.configured_chans.contains_key(chan) {
                         let chan_info = self.configured_chans.get_mut(chan).unwrap();
-                        chan_info.joined = false;
+                        chan_info.joined.store(false, Ordering::Relaxed);
                     }
                 }
             }
@@ -124,7 +126,7 @@ impl IrcServerConnection {
             "PING" => {
                 let line_clone = line.clone();
                 let split_line: Vec<&str> = line_clone.split_whitespace().collect();
-                if split_line.len() > 1 && split_line[0] == "PING" {
+                if split_line.len() > 1 {
                     let pong = format!("PONG {}\r\n", split_line[1]);
                     self.reply(&pong).await?;
                 }
@@ -142,7 +144,7 @@ impl IrcServerConnection {
 
                 if self.configured_chans.contains_key(channel) {
                     let channel_info = self.configured_chans.get(channel).unwrap();
-                    if channel_info.joined {
+                    if channel_info.joined.load(Ordering::Relaxed) {
                         let message = if let Some(salt_box) = &channel_info.salt_box {
                             let encrypted = encrypt_message(salt_box, message);
                             info!("(Encrypted) PRIVMSG {} :{}", channel, encrypted);
