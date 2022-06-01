@@ -10,7 +10,7 @@ multiple users can collaborate by working on the same tasks, and all users will 
 % git clone https://github.com/darkrenaissance/darkfi 
 % cd darkfi
 % make BINS="taud tau"
-% make install "BINS=taud tau" PREFIX=/home/${USER}/.local
+% sudo make install "BINS=taud tau"
 ```
 
 ## Usage (Local Deployment)
@@ -98,7 +98,6 @@ have already generated or got a copy from a peer place it in the same directory
 		comment    Set or Get comment for a task
 		help       Print this message or the help of the given subcommand(s)
 		info       Get task info by ID
-		list       List all tasks
 		state      Set or Get task state
 		update     Update/Edit an existing task by ID
 
@@ -114,13 +113,13 @@ have already generated or got a copy from a peer place it in the same directory
 % tau add "new title" project:blockchain desc:"new description" rank:3 assign:dark
 % 
 % # lists tasks
-% tau list 		   		 
-% tau list open		# open tasks
-% tau list pause	# paused tasks
-% tau list 0522		# created at May 2022
-% tau list project:blockchain assign:dark
-% tau list rank:gt:n	# lists all tasks that have rank greater than n
-% tau list rank:ls:n	# lists all tasks that have rank lesser than n
+% tau 		   		 
+% tau open		# open tasks
+% tau pause	# paused tasks
+% tau 0522		# created at May 2022
+% tau project:blockchain assign:dark
+% tau rank:gt:n	# lists all tasks that have rank greater than n
+% tau rank:ls:n	# lists all tasks that have rank lesser than n
 % 
 % # update task 
 % tau update 3 project:network  rank:20
