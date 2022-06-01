@@ -1237,6 +1237,9 @@ def main(argv):
     # TODO: bug if I vote then send money, then we can double vote
     # TODO: all timestamps missing
     #       - timelock (future voting starts in 2 days)
+    # Fix: use nullifiers from money gov state only from
+    # beginning of gov period
+    # Cannot use nullifiers from before voting period
 
     # User 1: YES
     builder = VoteTxBuilder(ec)
