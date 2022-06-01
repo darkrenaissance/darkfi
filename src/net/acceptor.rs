@@ -140,9 +140,15 @@ impl Acceptor {
     /// Run the accept loop.
     async fn run_accept_loop(self: Arc<Self>, listener: Box<dyn TransportListener>) -> Result<()> {
         loop {
-            let (stream, peer_addr) = listener.next().await?;
-            let channel = Channel::new(stream, peer_addr).await;
-            self.channel_subscriber.notify(Ok(channel)).await;
+            match listener.next().await {
+                Ok((stream, url)) => {
+                    let channel = Channel::new(stream, url).await;
+                    self.channel_subscriber.notify(Ok(channel)).await;
+                }
+                Err(e) => {
+                    error!("Error listening for new connection: {}", e);
+                }
+            }
         }
     }
 

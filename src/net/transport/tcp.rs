@@ -42,12 +42,12 @@ impl TransportListener for (TlsAcceptor, TcpListener) {
 
         let stream = self.0.accept(stream).await;
 
+        let url = socket_addr_to_url(peer_addr, "tcp+tls")?;
+
         if let Err(err) = stream {
-            error!("Error wraping the connection with tls: {}", err);
+            error!("Error wraping the connection {} with tls: {}", url, err);
             return Err(Error::AcceptTlsConnectionFailed(self.1.local_addr()?.to_string()))
         }
-
-        let url = socket_addr_to_url(peer_addr, "tcp+tls")?;
 
         Ok((Box::new(TlsStream::Server(stream?)), url))
     }
