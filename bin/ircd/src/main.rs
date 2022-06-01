@@ -71,7 +71,7 @@ async fn broadcast_msg(
     peer_addr: SocketAddr,
     conn: &mut IrcServerConnection,
 ) -> Result<()> {
-    info!("Send msg to IRC server '{}' from {}", irc_msg, peer_addr);
+    info!("Send msg to IRC client '{}' from {}", irc_msg, peer_addr);
 
     if let Err(e) = conn.update(irc_msg).await {
         warn!("Connection error: {} for {}", e, peer_addr);
@@ -137,7 +137,7 @@ async fn process(
                     warn!("Read line error. Closing stream for {}: {}", peer_addr, e);
                     return Ok(())
                 }
-                info!("Received msg from ircd: {:?}", line);
+                info!("Received msg from IRC client: {:?}", line);
                 let irc_msg = match clean_input(line, &peer_addr) {
                     Ok(m) => m,
                     Err(e) => return Err(e)

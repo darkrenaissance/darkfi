@@ -52,7 +52,7 @@ impl IrcServerConnection {
         // that for now to keep the protocol simple and focused.
         let command = tokens.next().ok_or(Error::MalformedPacket)?;
 
-        info!("Received command: {}", command.to_uppercase());
+        info!("IRC server received command: {}", command.to_uppercase());
 
         match command.to_uppercase().as_str() {
             "USER" => {
