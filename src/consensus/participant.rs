@@ -8,14 +8,14 @@ use crate::{
 };
 
 /// This struct represents a tuple of the form:
-/// (`node_address`, `epoch_joined`, `last_epoch_voted`, `epoch_quarantined`)
+/// (`node_address`, `slot_joined`, `last_slot_voted`, `slot_quarantined`)
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Participant {
     /// Node wallet address
     pub address: Address,
-    /// Epoch node joined the network
+    /// Slot node joined the network
     pub joined: u64,
-    /// Last epoch node voted
+    /// Last slot node voted
     pub voted: Option<u64>,
     /// Slot participant was quarantined by the node
     pub quarantined: Option<u64>,

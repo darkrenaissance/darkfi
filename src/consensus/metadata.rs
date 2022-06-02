@@ -42,7 +42,7 @@ impl OuroborosMetadata {
 /// consensus protocol.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct StreamletMetadata {
-    /// Epoch votes
+    /// Slot votes
     pub votes: Vec<Vote>,
     /// Block notarization flag
     pub notarized: bool,

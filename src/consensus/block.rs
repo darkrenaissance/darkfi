@@ -219,7 +219,7 @@ impl ProposalChain {
     }
 
     /// A proposal is considered valid when its parent hash is equal to the
-    /// hash of the previous proposal and their epochs are incremental,
+    /// hash of the previous proposal and their slots are incremental,
     /// excluding the genesis block proposal.
     /// Additional validity rules can be applied.
     pub fn check_proposal(&self, proposal: &BlockProposal, previous: &BlockProposal) -> bool {

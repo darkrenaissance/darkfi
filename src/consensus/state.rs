@@ -34,7 +34,7 @@ use crate::{
     Result,
 };
 
-/// `2 * DELTA` represents epoch time
+/// `2 * DELTA` represents slot time
 pub const DELTA: u64 = 20;
 /// Quarantine duration, in slots
 pub const QUARANTINE_DURATION: u64 = 5;
@@ -53,7 +53,7 @@ pub struct ConsensusState {
     pub orphan_votes: Vec<Vote>,
     /// Validators currently participating in the consensus
     pub participants: BTreeMap<Address, Participant>,
-    /// Validators to be added on the next epoch as participants
+    /// Validators to be added on the next slot as participants
     pub pending_participants: Vec<Participant>,
     /// Last slot participants where refreshed
     pub refreshed: u64,
@@ -123,12 +123,11 @@ pub struct ValidatorState {
     pub client: Arc<Client>,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Transaction>,
-    /// Participating start epoch
+    /// Participating start slot
     pub participating: Option<u64>,
 }
 
 impl ValidatorState {
-    // TODO: Clock sync
     pub async fn new(
         db: &sled::Db, // <-- TODO: Avoid this with some wrapping, sled should only be in blockchain
         genesis_ts: Timestamp,
@@ -188,79 +187,79 @@ impl ValidatorState {
         true
     }
 
-    /// Calculates current epoch, based on elapsed time from the genesis block.
-    /// Epoch duration is configured using the `DELTA` value.
-    pub fn current_epoch(&self) -> u64 {
+    /// Calculates current slot, based on elapsed time from the genesis block.
+    /// Slot duration is configured using the `DELTA` value.
+    pub fn current_slot(&self) -> u64 {
         self.consensus.genesis_ts.elapsed() / (2 * DELTA)
     }
 
-    /// Finds the last epoch a proposal or block was generated.
-    pub fn last_epoch(&self) -> Result<u64> {
-        let mut epoch = 0;
+    /// Finds the last slot a proposal or block was generated.
+    pub fn last_slot(&self) -> Result<u64> {
+        let mut slot = 0;
         for chain in &self.consensus.proposals {
             for proposal in &chain.proposals {
-                if proposal.block.sl > epoch {
-                    epoch = proposal.block.sl;
+                if proposal.block.sl > slot {
+                    slot = proposal.block.sl;
                 }
             }
         }
 
         // We return here in case proposals exist,
         // so we don't query the sled database.
-        if epoch > 0 {
-            return Ok(epoch)
+        if slot > 0 {
+            return Ok(slot)
         }
 
         let (last_sl, _) = self.blockchain.last()?;
         Ok(last_sl)
     }
 
-    /// Calculates seconds until next epoch starting time.
-    /// Epochs durationis configured using the delta value.
-    pub fn next_epoch_start(&self) -> Duration {
+    /// Calculates seconds until next slot starting time.
+    /// Slots durationis configured using the delta value.
+    pub fn next_slot_start(&self) -> Duration {
         let start_time = NaiveDateTime::from_timestamp(self.consensus.genesis_ts.0, 0);
-        let current_epoch = self.current_epoch() + 1;
-        let next_epoch_start = (current_epoch * (2 * DELTA)) + (start_time.timestamp() as u64);
-        let next_epoch_start = NaiveDateTime::from_timestamp(next_epoch_start as i64, 0);
+        let current_slot = self.current_slot() + 1;
+        let next_slot_start = (current_slot * (2 * DELTA)) + (start_time.timestamp() as u64);
+        let next_slot_start = NaiveDateTime::from_timestamp(next_slot_start as i64, 0);
         let current_time = NaiveDateTime::from_timestamp(Utc::now().timestamp(), 0);
-        let diff = next_epoch_start - current_time;
+        let diff = next_slot_start - current_time;
 
         Duration::new(diff.num_seconds().try_into().unwrap(), 0)
     }
 
-    /// Set participating epoch to next.
+    /// Set participating slot to next.
     pub fn set_participating(&mut self) -> Result<()> {
-        self.participating = Some(self.current_epoch() + 1);
+        self.participating = Some(self.current_slot() + 1);
         Ok(())
     }
 
-    /// Find epoch leader, using a simple hash method.
+    /// Find slot leader, using a simple hash method.
     /// Leader calculation is based on how many nodes are participating
     /// in the network.
-    pub fn epoch_leader(&mut self) -> Address {
-        let epoch = self.current_epoch();
-        // DefaultHasher is used to hash the epoch number
+    pub fn slot_leader(&mut self) -> Address {
+        let slot = self.current_slot();
+        // DefaultHasher is used to hash the slot number
         // because it produces a number string which then can be modulated by the len.
         // blake3 produces alphanumeric
         let mut hasher = DefaultHasher::new();
-        epoch.hash(&mut hasher);
+        slot.hash(&mut hasher);
         let pos = hasher.finish() % (self.consensus.participants.len() as u64);
         // Since BTreeMap orders by key in asceding order, each node will have
         // the same key in calculated position.
         self.consensus.participants.iter().nth(pos as usize).unwrap().1.address
     }
 
-    /// Check if we're the current epoch leader
-    pub fn is_epoch_leader(&mut self) -> bool {
+    /// Check if we're the current slot leader
+    pub fn is_slot_leader(&mut self) -> bool {
         let address = self.address;
-        address == self.epoch_leader()
+        address == self.slot_leader()
     }
 
-    /// Generate a block proposal for the current epoch, containing all
+    /// Generate a block proposal for the current slot, containing all
     /// unconfirmed transactions. Proposal extends the longest notarized fork
     /// chain the node is holding.
     pub fn propose(&self) -> Result<Option<BlockProposal>> {
-        let epoch = self.current_epoch();
+        let slot = self.current_slot();
         let (prev_hash, index) = self.longest_notarized_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
 
@@ -272,7 +271,7 @@ impl ValidatorState {
         );
 
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
-        let prop = BlockProposal::to_proposal_hash(prev_hash, epoch, &unproposed_txs, &metadata);
+        let prop = BlockProposal::to_proposal_hash(prev_hash, slot, &unproposed_txs, &metadata);
         let signed_proposal = self.secret.sign(&prop.as_bytes()[..]);
 
         Ok(Some(BlockProposal::new(
@@ -280,7 +279,7 @@ impl ValidatorState {
             signed_proposal,
             self.address,
             prev_hash,
-            epoch,
+            slot,
             unproposed_txs,
             metadata,
             sm,
@@ -337,13 +336,13 @@ impl ValidatorState {
         Ok((hash, index))
     }
 
-    /// Receive the proposed block, verify its sender (epoch leader),
+    /// Receive the proposed block, verify its sender (slot leader),
     /// and proceed with voting on it.
     pub fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
         // Node hasn't started participating
         match self.participating {
             Some(start) => {
-                if self.current_epoch() < start {
+                if self.current_slot() < start {
                     return Ok(None)
                 }
             }
@@ -353,10 +352,10 @@ impl ValidatorState {
         // Node refreshes participants records
         self.refresh_participants()?;
 
-        let leader = self.epoch_leader();
+        let leader = self.slot_leader();
         if leader != proposal.address {
             warn!(
-                "Received proposal not from epoch leader ({}), but from ({})",
+                "Received proposal not from slot leader ({}), but from ({})",
                 leader,
                 proposal.address.to_string()
             );
@@ -500,11 +499,11 @@ impl ValidatorState {
     /// Finally, we check if the notarization of the proposal can finalize
     /// parent proposals in its chain.
     pub async fn receive_vote(&mut self, vote: &Vote) -> Result<(bool, Option<Vec<BlockInfo>>)> {
-        let current_epoch = self.current_epoch();
+        let current_slot = self.current_slot();
         // Node hasn't started participating
         match self.participating {
             Some(start) => {
-                if current_epoch < start {
+                if current_slot < start {
                     return Ok((false, None))
                 }
             }
@@ -532,8 +531,8 @@ impl ValidatorState {
         match self.consensus.participants.get(&vote.address) {
             Some(participant) => {
                 let mut participant = participant.clone();
-                if current_epoch <= participant.joined {
-                    warn!("consensus: Voter ({}) joined after current epoch.", va);
+                if current_slot <= participant.joined {
+                    warn!("consensus: Voter ({}) joined after current slot.", va);
                     return Ok((false, None))
                 }
 
@@ -734,17 +733,17 @@ impl ValidatorState {
     }
 
     /// Refresh the participants map, to retain only the active ones.
-    /// Active nodes are considered those that joined previous epoch
-    /// or on the epoch the last proposal was generated, either voted
-    /// or joined the previous of that epoch. That ensures we cover
-    /// the case of a node joining while the chosen epoch leader is inactive.
+    /// Active nodes are considered those that joined previous slot
+    /// or on the slot the last proposal was generated, either voted
+    /// or joined the previous of that slot. That ensures we cover
+    /// the case of a node joining while the chosen slot leader is inactive.
     /// Inactive nodes are marked as quarantined, so they can be removed if
     /// they are in quarantine more than the predifined quarantine period.
     pub fn refresh_participants(&mut self) -> Result<()> {
         // Node checks if it should refresh its participants list
-        let current = self.current_epoch();
+        let current = self.current_slot();
         if current <= self.consensus.refreshed {
-            debug!("refresh_participants(): Participants have been refreshed this epoch.");
+            debug!("refresh_participants(): Participants have been refreshed this slot.");
             return Ok(())
         }
 
@@ -762,34 +761,34 @@ impl ValidatorState {
         self.consensus.pending_participants = vec![];
 
         let mut inactive = Vec::new();
-        let mut last_epoch = self.last_epoch()?;
+        let mut last_slot = self.last_slot()?;
 
-        // This check ensures that we don't chech the current epoch,
-        // as a node might receive the proposal of current epoch before
-        // starting refreshing participants, so the last_epoch will be
+        // This check ensures that we don't chech the current slot,
+        // as a node might receive the proposal of current slot before
+        // starting refreshing participants, so the last_slot will be
         // the current one.
-        if last_epoch >= current {
-            last_epoch = current - 1;
+        if last_slot >= current {
+            last_slot = current - 1;
         }
 
-        let previous_epoch = current - 1;
+        let previous_slot = current - 1;
         // This check ensures that when restarting the network, previous
-        // from last epoch is not u64::MAX
-        let previous_from_last_epoch = match last_epoch {
+        // from last slot is not u64::MAX
+        let previous_from_last_slot = match last_slot {
             0 => 0,
-            _ => last_epoch - 1,
+            _ => last_slot - 1,
         };
 
         debug!(
-            "refresh_participants(): Node {:?} checking epochs: previous - {:?}, last - {:?}, previous from last - {:?}",
-            self.address.to_string(), previous_epoch, last_epoch, previous_from_last_epoch
+            "refresh_participants(): Node {:?} checking slots: previous - {:?}, last - {:?}, previous from last - {:?}",
+            self.address.to_string(), previous_slot, last_slot, previous_from_last_slot
         );
 
-        let leader = self.epoch_leader();
+        let leader = self.slot_leader();
         for (index, participant) in self.consensus.participants.iter_mut() {
             match participant.quarantined {
-                Some(epoch) => {
-                    if (current - epoch) > QUARANTINE_DURATION {
+                Some(slot) => {
+                    if (current - slot) > QUARANTINE_DURATION {
                         warn!(
                             "refresh_participants(): Removing participant: {:?} (joined {:?}, voted {:?})",
                             participant.address.to_string(),
@@ -800,7 +799,7 @@ impl ValidatorState {
                     }
                 }
                 None => {
-                    // Epoch leader is always quarantined, to cover the case they become inactive the epoch before
+                    // Slot leader is always quarantined, to cover the case they become inactive the slot before
                     // becoming the leader. This can be used for slashing in the future.
                     if participant.address == leader {
                         debug!(
@@ -813,8 +812,8 @@ impl ValidatorState {
                         continue
                     }
                     match participant.voted {
-                        Some(epoch) => {
-                            if epoch < last_epoch {
+                        Some(slot) => {
+                            if slot < last_slot {
                                 warn!(
                                     "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
                                     participant.address.to_string(),
@@ -825,9 +824,9 @@ impl ValidatorState {
                             }
                         }
                         None => {
-                            if (previous_epoch == last_epoch && participant.joined < previous_epoch) ||
-                                (previous_epoch != last_epoch &&
-                                    participant.joined < previous_from_last_epoch)
+                            if (previous_slot == last_slot && participant.joined < previous_slot) ||
+                                (previous_slot != last_slot &&
+                                    participant.joined < previous_from_last_slot)
                             {
                                 warn!(
                                     "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
@@ -849,7 +848,7 @@ impl ValidatorState {
 
         if self.consensus.participants.is_empty() {
             // If no nodes are active, node becomes a single node network.
-            let participant = Participant::new(self.address, self.current_epoch());
+            let participant = Participant::new(self.address, self.current_slot());
             self.consensus.participants.insert(participant.address, participant);
         }
 

@@ -11,24 +11,24 @@ use crate::{
 
 /// async task used for participating in the consensus protocol
 pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: ValidatorStatePtr) {
-    // Node waits just before the current or next epoch end, so it can
+    // Node waits just before the current or next slot end, so it can
     // start syncing latest state.
-    let mut seconds_until_next_epoch = state.read().await.next_epoch_start();
+    let mut seconds_until_next_slot = state.read().await.next_slot_start();
     let one_sec = Duration::new(1, 0);
 
     loop {
-        if seconds_until_next_epoch > one_sec {
-            seconds_until_next_epoch -= one_sec;
+        if seconds_until_next_slot > one_sec {
+            seconds_until_next_slot -= one_sec;
             break
         }
 
-        info!("consensus: Waiting for next epoch ({:?} sec)", seconds_until_next_epoch);
-        sleep(seconds_until_next_epoch.as_secs()).await;
-        seconds_until_next_epoch = state.read().await.next_epoch_start();
+        info!("consensus: Waiting for next slot ({:?} sec)", seconds_until_next_slot);
+        sleep(seconds_until_next_slot.as_secs()).await;
+        seconds_until_next_slot = state.read().await.next_slot_start();
     }
 
-    info!("consensus: Waiting for next epoch ({:?} sec)", seconds_until_next_epoch);
-    sleep(seconds_until_next_epoch.as_secs()).await;
+    info!("consensus: Waiting for next slot ({:?} sec)", seconds_until_next_slot);
+    sleep(seconds_until_next_slot.as_secs()).await;
 
     // Node syncs its consensus state
     if let Err(e) = consensus_sync_task(consensus_p2p.clone(), state.clone()).await {
@@ -40,8 +40,8 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
 
     // Node signals the network that it will start participating
     let address = state.read().await.address;
-    let cur_epoch = state.read().await.current_epoch();
-    let participant = Participant::new(address, cur_epoch);
+    let cur_slot = state.read().await.current_slot();
+    let participant = Participant::new(address, cur_slot);
     state.write().await.append_participant(participant.clone());
 
     match consensus_p2p.broadcast(participant).await {
@@ -49,16 +49,16 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         Err(e) => error!("Failed broadcasting consensus participation: {}", e),
     }
 
-    // Node modifies its participating epoch to next.
+    // Node modifies its participating slot to next.
     match state.write().await.set_participating() {
-        Ok(()) => info!("consensus: Node will start participating in the next epoch"),
-        Err(e) => error!("Failed to set participation epoch: {}", e),
+        Ok(()) => info!("consensus: Node will start participating in the next slot"),
+        Err(e) => error!("Failed to set participation slot: {}", e),
     }
 
     loop {
-        let seconds_next_epoch = state.read().await.next_epoch_start().as_secs();
-        info!("consensus: Waiting for next epoch ({} sec)", seconds_next_epoch);
-        sleep(seconds_next_epoch).await;
+        let seconds_next_slot = state.read().await.next_slot_start().as_secs();
+        info!("consensus: Waiting for next slot ({} sec)", seconds_next_slot);
+        sleep(seconds_next_slot).await;
 
         // Node refreshes participants records
         match state.write().await.refresh_participants() {
@@ -66,9 +66,9 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
             Err(e) => error!("Failed refreshing consensus participants: {}", e),
         }
 
-        // Node checks if it's the epoch leader to generate a new proposal
-        // for that epoch.
-        let result = if state.write().await.is_epoch_leader() {
+        // Node checks if it's the slot leader to generate a new proposal
+        // for that slot.
+        let result = if state.write().await.is_slot_leader() {
             state.read().await.propose()
         } else {
             Ok(None)
@@ -77,7 +77,7 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         let proposal = match result {
             Ok(prop) => {
                 if prop.is_none() {
-                    info!("consensus: Node is not the epoch lead");
+                    info!("consensus: Node is not the slot lead");
                     continue
                 }
                 prop.unwrap()
@@ -88,7 +88,7 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
             }
         };
 
-        info!("consensus: Node is the epoch leader: Proposed block: {:?}", proposal);
+        info!("consensus: Node is the slot leader: Proposed block: {:?}", proposal);
         let vote = state.write().await.receive_proposal(&proposal);
         let vote = match vote {
             Ok(v) => {
