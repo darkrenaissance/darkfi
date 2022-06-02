@@ -59,3 +59,6 @@
 
 # Whitelisted faucet addresses
 #faucet_pub = []
+
+# Verify system clock is correct
+#clock_sync = true

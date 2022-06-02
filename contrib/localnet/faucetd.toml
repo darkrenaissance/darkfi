@@ -35,3 +35,6 @@ sync_p2p_seed = ["tls://127.0.0.1:8342"]
 
 # Peers to connect to for the syncing protocol
 #sync_p2p_peer = []
+
+# Verify system clock is correct
+#clock_sync = true

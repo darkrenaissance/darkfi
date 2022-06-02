@@ -41,3 +41,6 @@
 
 # Airdrop amount limit
 #airdrop_limit = "10"
+
+# Verify system clock is correct
+#clock_sync = true

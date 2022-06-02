@@ -20,7 +20,8 @@ LOG_TARGETS="!sled,!net" ./darkfid \
     --rpc-listen tcp://127.0.0.1:6010 \
     --sync-p2p-accept tcp://127.0.0.1:6020 \
     --sync-p2p-external tcp://127.0.0.1:6020 \
-    --wallet-path ./tmp/node0/wallet.db &
+    --wallet-path ./tmp/node0/wallet.db \
+    --clock-sync &
     
 pids[${#pids[@]}]=$!
 
@@ -42,7 +43,8 @@ do
     --rpc-listen tcp://127.0.0.1:601$i \
     --sync-p2p-accept tcp://127.0.0.1:602$i \
     --sync-p2p-external tcp://127.0.0.1:602$i \
-    --wallet-path ./tmp/node$i/wallet.db &
+    --wallet-path ./tmp/node$i/wallet.db \
+    --clock-sync &
   pids[${#pids[@]}]=$!
   # waiting for node to setup
   sleep 20
@@ -72,4 +74,5 @@ LOG_TARGETS="!sled,!net" ./darkfid \
     --rpc-listen tcp://127.0.0.1:601$bound \
     --sync-p2p-accept tcp://127.0.0.1:602$bound \
     --sync-p2p-external tcp://127.0.0.1:602$bound \
-    --wallet-path ./tmp/node$bound/wallet.db
+    --wallet-path ./tmp/node$bound/wallet.db \
+    --clock-sync

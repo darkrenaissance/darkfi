@@ -129,6 +129,10 @@ struct Args {
     /// Whitelisted faucet address (repeatable flag)
     faucet_pub: Vec<String>,
 
+    #[structopt(long)]
+    /// Verify system clock is correct
+    clock_sync: bool,
+
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
@@ -197,11 +201,13 @@ impl Darkfid {
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
-    // We verify that the system clock is valid before initializing
-    if (check_clock().await).is_err() {
-        error!("System clock is invalid, terminating...");
-        return Err(Error::InvalidClock)
-    };
+    if args.clock_sync {
+        // We verify that the system clock is valid before initializing
+        if (check_clock().await).is_err() {
+            error!("System clock is invalid, terminating...");
+            return Err(Error::InvalidClock)
+        };
+    }
 
     // We use this handler to block this function after detaching all
     // tasks, and to catch a shutdown signal, where we can clean up and
