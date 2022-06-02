@@ -70,10 +70,10 @@ Also note that for the first time ever running seed node you must run it with
 ```shell
 % taud --key-gen
 ```
-This will generate a new secret key in `/home/${USER}/.config/tau/secret_key` that 
+This will generate a new secret key in `/home/\${USER}/.config/tau/secret_key` that 
 you can share with nodes you want them to get and decrypt your tasks, otherwise if you
 have already generated or got a copy from a peer place it in the same directory
-`/home/${USER}/.config/tau/secret_key`.
+`/home/\${USER}/.config/tau/secret_key`.
 
 
 ## Usage (CLI)
@@ -114,21 +114,21 @@ have already generated or got a copy from a peer place it in the same directory
 % 
 % # lists tasks
 % tau 		   		 
-% tau open		# open tasks
+% tau open	# open tasks
 % tau pause	# paused tasks
-% tau 0522		# created at May 2022
+% tau 0522	# created at May 2022
 % tau project:blockchain assign:dark
 % tau rank:gt:n	# lists all tasks that have rank greater than n
 % tau rank:ls:n	# lists all tasks that have rank lesser than n
 % 
 % # update task 
-% tau update 3 project:network  rank:20
+% tau update 3 project:network rank:20
 % 
 % # state 
 % tau state 3		# get state
 % tau state 3 pause	# set the state to pause 
 % 
 % # comments 
-% tau comments 1		# list comments
-% tau comments 3 "new comment"	# add new comment 
+% tau comment 1			# list comments
+% tau comment 3 "new comment"	# add new comment 
 ```
