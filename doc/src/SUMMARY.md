@@ -5,7 +5,7 @@
 - [Development](development.md)
 - [Overview](overview/overview.md)
   - [Anonymous Assets](overview/anonymous_assets.md)
-- [Tutorial](tutorial/demo.md)
+- [Tutorial](tutorial/tutorial.md)
   - [ZK explainer](tutorial/zk_explainer.md)
 - [Architecture](architecture/architecture.md)
   - [Blockchain](architecture/blockchain.md)
