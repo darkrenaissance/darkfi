@@ -1,7 +1,7 @@
 # DarkFi User Tutorial
 
 Welcome to the dark renaissance. This tutorial will teach you how to
-install darkfi on your system, and how to use the testnet to send and
+install darkfi on your system, and how to use the demo to send and
 receive anonymous tokens.
 
 ## Download
@@ -32,7 +32,7 @@ by default). The configurations are installed as TOML files in
 `HOME/.config/darkfi` directory.
 
 Feel free to review the installed config files, but you don't need to
-change anything to run the testnet. The defaults will work fine.
+change anything to run the demo. The defaults will work fine.
 
 ```
 % sudo make install
@@ -53,7 +53,7 @@ After the installation, you should have `drk` and `darkfid` binaries in
 `/usr/local`. Also, the params and configuration files should be in
 `~/.config/darkfi`.
 
-We're now ready to use the testnet.
+We're now ready to use the demo.
 
 Open two terminal windows. In one terminal, start `darkfid`:
 
