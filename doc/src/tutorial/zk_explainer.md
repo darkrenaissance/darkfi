@@ -1,8 +1,3 @@
----
-title: ZK Explainer
-author: Amir Taaki
----
-
 We start with this algorithm as an example:
 
 ```python
