@@ -68,4 +68,4 @@ This proves that $B = 0 G_1 + b G_2 = b G_2$ where *b* is a secret blinding fact
 
 **Diagram**
 
-![](../../specs/diagram-dkzk.png)   
+![](diagram-dkzk.png)   
