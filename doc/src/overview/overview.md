@@ -2,8 +2,6 @@
 
 DarkFi is a layer one proof-of-stake blockchain that supports anonymous applications. It is currently under heavy development. This overview will outline a few key terms that help explain DarkFi.
 
-![](network.png)
-
 **Cashier:** The Cashier is the entry-point to the DarkFi network. Its role is to exchange cryptocurrency assets for anonymous wrapped tokens that are pegged to the underlying currency. This is fully redeemable at cash-out. For example, if you deposit 1 ETH, you will receive 1 wETH on entry to the DarkFi network. If you gain a further 0.5 ETH on a successful trade, you will exit with 1.5 ETH, minus network fees.
 
 Much like on a traditional OTC trading website, anyone can be a cashier. Cashier's have one public key, however a Cashier can also be a multisig through an aggregated public key.
