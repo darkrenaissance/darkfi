@@ -31,13 +31,12 @@ use crate::crypto::{
 };
 
 use crate::zk::{
-    arith_chip::{ArithmeticChip, ArithmeticChipConfig},
+    arith_chip::{ArithChip, ArithConfig, ArithInstruction},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
     greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
 };
 
 use pasta_curves::group::{ff::PrimeField, GroupEncoding};
-//use halo2_proofs::arithmetic::CurveAffine;
 
 const WORD_BITS: u32 = 24;
 
@@ -55,7 +54,7 @@ pub struct LeadConfig {
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     greaterthan_config: GreaterThanConfig,
     evenbits_config: EvenBitsConfig,
-    arith_config: ArithmeticChipConfig,
+    arith_config: ArithConfig,
 }
 
 impl LeadConfig {
@@ -87,8 +86,8 @@ impl LeadConfig {
         EvenBitsChip::construct(self.evenbits_config.clone())
     }
 
-    fn arith_chip(&self) -> ArithmeticChip {
-        ArithmeticChip::construct(self.arith_config.clone())
+    fn arith_chip(&self) -> ArithChip {
+        ArithChip::construct(self.arith_config.clone())
     }
 }
 
@@ -239,7 +238,7 @@ impl Circuit<pallas::Base> for LeadContract {
             primary,
         );
         let evenbits_config = EvenBitsChip::<pallas::Base, WORD_BITS>::configure(meta);
-        let arith_config = ArithmeticChip::configure(meta);
+        let arith_config = ArithChip::configure(meta, advices[7], advices[8], advices[6]);
 
         LeadConfig {
             primary,
@@ -472,11 +471,10 @@ impl Circuit<pallas::Base> for LeadContract {
         };
          */
         let coin_val = {
-            let coin_val_pt = ar_chip.mul(layouter.namespace(|| ""), coin_pk_y, coin_pk_x)?;
+            let coin_val_pt = ar_chip.mul(layouter.namespace(|| ""), &coin_pk_y, &coin_pk_x)?;
 
-            let coin_val0 =
-                ar_chip.mul(layouter.namespace(|| ""), coin_nonce.clone(), coin_value.clone())?;
-            ar_chip.mul(layouter.namespace(|| ""), coin_val_pt, coin_val0)?
+            let coin_val0 = ar_chip.mul(layouter.namespace(|| ""), &coin_nonce, &coin_value)?;
+            ar_chip.mul(layouter.namespace(|| ""), &coin_val_pt, &coin_val0)?
         };
 
         let (com, _) = {
@@ -545,16 +543,16 @@ impl Circuit<pallas::Base> for LeadContract {
          */
         let coin2_hash0 = ar_chip.mul(
             layouter.namespace(|| ""),
-            coin_pk_commit.inner().x(),
-            coin_pk_commit.inner().y(),
+            &coin_pk_commit.inner().x(),
+            &coin_pk_commit.inner().y(),
         )?;
         let coin2_hash1 = ar_chip.mul(
             layouter.namespace(|| ""),
-            coin2_nonce.inner().x(),
-            coin2_nonce.inner().y(),
+            &coin2_nonce.inner().x(),
+            &coin2_nonce.inner().y(),
         )?;
-        let coin2_hash2 = ar_chip.mul(layouter.namespace(|| ""), coin2_hash0, coin2_hash1)?;
-        let coin2_hash = ar_chip.mul(layouter.namespace(|| ""), coin_value.clone(), coin2_hash2)?;
+        let coin2_hash2 = ar_chip.mul(layouter.namespace(|| ""), &coin2_hash0, &coin2_hash1)?;
+        let coin2_hash = ar_chip.mul(layouter.namespace(|| ""), &coin_value, &coin2_hash2)?;
 
         let (com, _) = {
             let coin_commit_v = ValueCommitV;
@@ -610,8 +608,8 @@ impl Circuit<pallas::Base> for LeadContract {
 
             let res: AssignedCell<Fp, Fp> = ar_chip.mul(
                 layouter.namespace(|| ""),
-                coin_commit_coordinates.x(),
-                coin_commit_coordinates.y(),
+                &coin_commit_coordinates.x(),
+                &coin_commit_coordinates.y(),
             )?;
             res
         };
@@ -632,9 +630,9 @@ impl Circuit<pallas::Base> for LeadContract {
         //TODO (research) this multiplication panics!
         let y_commit_exp = ar_chip.mul(
             layouter.namespace(|| ""),
-            coin_nonce,
+            &coin_nonce,
             //root_sk.clone(), //(fix)
-            one.clone(),
+            &one,
         )?;
 
         let (com, _) = {
@@ -711,8 +709,8 @@ impl Circuit<pallas::Base> for LeadContract {
             config.advices[0],
             Some(pallas::Base::one()), // note! this parameter to be tuned.
         )?;
-        let ord = ar_chip.mul(layouter.namespace(|| ""), scalar, c)?;
-        let target = ar_chip.mul(layouter.namespace(|| "calculate target"), ord, coin_value)?;
+        let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
+        let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value)?;
 
         eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
         eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;

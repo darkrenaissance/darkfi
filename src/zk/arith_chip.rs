@@ -1,27 +1,51 @@
 use halo2_proofs::{
+    arithmetic::FieldExt,
     circuit::{AssignedCell, Chip, Layouter},
-    plonk::{Advice, Column, ConstraintSystem, Error, Selector},
+    plonk,
+    plonk::{Advice, Column, ConstraintSystem, Constraints, Selector},
     poly::Rotation,
 };
 use pasta_curves::pallas;
 
-type Variable = AssignedCell<pallas::Base, pallas::Base>;
+pub trait ArithInstruction<F: FieldExt>: Chip<F> {
+    fn add(
+        &self,
+        layouter: impl Layouter<F>,
+        a: &AssignedCell<F, F>,
+        b: &AssignedCell<F, F>,
+    ) -> Result<AssignedCell<F, F>, plonk::Error>;
+
+    fn sub(
+        &self,
+        layouter: impl Layouter<F>,
+        a: &AssignedCell<F, F>,
+        b: &AssignedCell<F, F>,
+    ) -> Result<AssignedCell<F, F>, plonk::Error>;
+
+    fn mul(
+        &self,
+        layouter: impl Layouter<F>,
+        a: &AssignedCell<F, F>,
+        b: &AssignedCell<F, F>,
+    ) -> Result<AssignedCell<F, F>, plonk::Error>;
+}
 
 #[derive(Clone, Debug)]
-pub struct ArithmeticChipConfig {
-    a_col: Column<Advice>,
-    b_col: Column<Advice>,
-    s_add: Selector,
-    s_mul: Selector,
-    s_sub: Selector,
+pub struct ArithConfig {
+    a: Column<Advice>,
+    b: Column<Advice>,
+    c: Column<Advice>,
+    q_add: Selector,
+    q_sub: Selector,
+    q_mul: Selector,
 }
 
-pub struct ArithmeticChip {
-    config: ArithmeticChipConfig,
+pub struct ArithChip {
+    config: ArithConfig,
 }
 
-impl Chip<pallas::Base> for ArithmeticChip {
-    type Config = ArithmeticChipConfig;
+impl Chip<pallas::Base> for ArithChip {
+    type Config = ArithConfig;
     type Loaded = ();
 
     fn config(&self) -> &Self::Config {
@@ -33,187 +57,125 @@ impl Chip<pallas::Base> for ArithmeticChip {
     }
 }
 
-impl ArithmeticChip {
-    pub fn construct(config: ArithmeticChipConfig) -> Self {
+impl ArithChip {
+    pub fn configure(
+        meta: &mut ConstraintSystem<pallas::Base>,
+        a: Column<Advice>,
+        b: Column<Advice>,
+        c: Column<Advice>,
+    ) -> ArithConfig {
+        let q_add = meta.selector();
+        let q_sub = meta.selector();
+        let q_mul = meta.selector();
+
+        meta.create_gate("Field element addition: c = a + b", |meta| {
+            let q_add = meta.query_selector(q_add);
+            let a = meta.query_advice(a, Rotation::cur());
+            let b = meta.query_advice(b, Rotation::cur());
+            let c = meta.query_advice(c, Rotation::cur());
+
+            Constraints::with_selector(q_add, Some(a + b - c))
+        });
+
+        meta.create_gate("Field element substitution: c = a - b", |meta| {
+            let q_sub = meta.query_selector(q_sub);
+            let a = meta.query_advice(a, Rotation::cur());
+            let b = meta.query_advice(b, Rotation::cur());
+            let c = meta.query_advice(c, Rotation::cur());
+
+            Constraints::with_selector(q_sub, Some(a - b - c))
+        });
+
+        meta.create_gate("Field element multiplication: c = a * b", |meta| {
+            let q_mul = meta.query_selector(q_mul);
+            let a = meta.query_advice(a, Rotation::cur());
+            let b = meta.query_advice(b, Rotation::cur());
+            let c = meta.query_advice(c, Rotation::cur());
+
+            Constraints::with_selector(q_mul, Some(a * b - c))
+        });
+
+        ArithConfig { a, b, c, q_add, q_sub, q_mul }
+    }
+
+    pub fn construct(config: ArithConfig) -> Self {
         Self { config }
     }
+}
 
-    pub fn configure(cs: &mut ConstraintSystem<pallas::Base>) -> ArithmeticChipConfig {
-        let a_col = cs.advice_column();
-        let b_col = cs.advice_column();
-
-        cs.enable_equality(a_col);
-        cs.enable_equality(b_col);
-
-        let s_add = cs.selector();
-        let s_mul = cs.selector();
-        let s_sub = cs.selector();
-
-        cs.create_gate("add", |cs| {
-            let lhs = cs.query_advice(a_col, Rotation::cur());
-            let rhs = cs.query_advice(b_col, Rotation::cur());
-            let out = cs.query_advice(a_col, Rotation::next());
-            let s_add = cs.query_selector(s_add);
-
-            vec![s_add * (lhs + rhs - out)]
-        });
-
-        cs.create_gate("mul", |cs| {
-            let lhs = cs.query_advice(a_col, Rotation::cur());
-            let rhs = cs.query_advice(b_col, Rotation::cur());
-            let out = cs.query_advice(a_col, Rotation::next());
-            let s_mul = cs.query_selector(s_mul);
-
-            vec![s_mul * (lhs * rhs - out)]
-        });
-
-        cs.create_gate("sub", |cs| {
-            let lhs = cs.query_advice(a_col, Rotation::cur());
-            let rhs = cs.query_advice(b_col, Rotation::cur());
-            let out = cs.query_advice(a_col, Rotation::next());
-            let s_sub = cs.query_selector(s_sub);
-
-            vec![s_sub * (lhs - rhs - out)]
-        });
-
-        ArithmeticChipConfig { a_col, b_col, s_add, s_mul, s_sub }
-    }
-
-    pub fn add(
+impl ArithInstruction<pallas::Base> for ArithChip {
+    fn add(
         &self,
         mut layouter: impl Layouter<pallas::Base>,
-        a: Variable,
-        b: Variable,
-    ) -> Result<Variable, Error> {
-        let mut out = None;
+        a: &AssignedCell<pallas::Base, pallas::Base>,
+        b: &AssignedCell<pallas::Base, pallas::Base>,
+    ) -> Result<AssignedCell<pallas::Base, pallas::Base>, plonk::Error> {
         layouter.assign_region(
-            || "mul",
+            || "c = a + b",
             |mut region| {
-                self.config.s_add.enable(&mut region, 0)?;
+                self.config.q_add.enable(&mut region, 0)?;
 
-                let lhs = region.assign_advice(
-                    || "lhs",
-                    self.config.a_col,
+                a.copy_advice(|| "copy a", &mut region, self.config.a, 0)?;
+                b.copy_advice(|| "copy b", &mut region, self.config.b, 0)?;
+
+                let scalar_val = a.value().zip(b.value()).map(|(a, b)| a + b);
+                region.assign_advice(
+                    || "c",
+                    self.config.c,
                     0,
-                    || Ok(*a.value().ok_or(Error::Synthesis)?),
-                )?;
-
-                let rhs = region.assign_advice(
-                    || "rhs",
-                    self.config.b_col,
-                    0,
-                    || Ok(*b.value().ok_or(Error::Synthesis)?),
-                )?;
-
-                region.constrain_equal(a.cell(), lhs.cell())?;
-                region.constrain_equal(b.cell(), rhs.cell())?;
-
-                let value = a.value().and_then(|a| b.value().map(|b| a + b));
-
-                let cell = region.assign_advice(
-                    || "lhs + rhs",
-                    self.config.a_col,
-                    1,
-                    || value.ok_or(Error::Synthesis),
-                )?;
-
-                out = Some(cell);
-                Ok(())
+                    || scalar_val.ok_or(plonk::Error::Synthesis),
+                )
             },
-        )?;
-
-        Ok(out.unwrap())
+        )
     }
 
-    pub fn mul(
+    fn sub(
         &self,
         mut layouter: impl Layouter<pallas::Base>,
-        a: Variable,
-        b: Variable,
-    ) -> Result<Variable, Error> {
-        let mut out = None;
-
+        a: &AssignedCell<pallas::Base, pallas::Base>,
+        b: &AssignedCell<pallas::Base, pallas::Base>,
+    ) -> Result<AssignedCell<pallas::Base, pallas::Base>, plonk::Error> {
         layouter.assign_region(
-            || "mul",
+            || "c = a - b",
             |mut region| {
-                self.config.s_mul.enable(&mut region, 0)?;
+                self.config.q_sub.enable(&mut region, 0)?;
 
-                let lhs = region.assign_advice(
-                    || "lhs",
-                    self.config.a_col,
+                a.copy_advice(|| "copy a", &mut region, self.config.a, 0)?;
+                b.copy_advice(|| "copy b", &mut region, self.config.b, 0)?;
+
+                let scalar_val = a.value().zip(b.value()).map(|(a, b)| a - b);
+                region.assign_advice(
+                    || "c",
+                    self.config.c,
                     0,
-                    || Ok(*a.value().ok_or(Error::Synthesis)?),
-                )?;
-
-                let rhs = region.assign_advice(
-                    || "rhs",
-                    self.config.b_col,
-                    0,
-                    || Ok(*b.value().ok_or(Error::Synthesis)?),
-                )?;
-
-                region.constrain_equal(a.cell(), lhs.cell())?;
-                region.constrain_equal(b.cell(), rhs.cell())?;
-
-                let value = a.value().and_then(|a| b.value().map(|b| a * b));
-                let cell = region.assign_advice(
-                    || "lhs * rhs",
-                    self.config.a_col,
-                    1,
-                    || value.ok_or(Error::Synthesis),
-                )?;
-
-                out = Some(cell);
-                Ok(())
+                    || scalar_val.ok_or(plonk::Error::Synthesis),
+                )
             },
-        )?;
-
-        Ok(out.unwrap())
+        )
     }
 
-    pub fn sub(
+    fn mul(
         &self,
         mut layouter: impl Layouter<pallas::Base>,
-        a: Variable,
-        b: Variable,
-    ) -> Result<Variable, Error> {
-        let mut out = None;
-
+        a: &AssignedCell<pallas::Base, pallas::Base>,
+        b: &AssignedCell<pallas::Base, pallas::Base>,
+    ) -> Result<AssignedCell<pallas::Base, pallas::Base>, plonk::Error> {
         layouter.assign_region(
-            || "sub",
+            || "c = a * b",
             |mut region| {
-                self.config.s_sub.enable(&mut region, 0)?;
+                self.config.q_mul.enable(&mut region, 0)?;
 
-                let lhs = region.assign_advice(
-                    || "lhs",
-                    self.config.a_col,
+                a.copy_advice(|| "copy a", &mut region, self.config.a, 0)?;
+                b.copy_advice(|| "copy b", &mut region, self.config.b, 0)?;
+
+                let scalar_val = a.value().zip(b.value()).map(|(a, b)| a * b);
+                region.assign_advice(
+                    || "c",
+                    self.config.c,
                     0,
-                    || Ok(*a.value().ok_or(Error::Synthesis)?),
-                )?;
-
-                let rhs = region.assign_advice(
-                    || "rhs",
-                    self.config.b_col,
-                    0,
-                    || Ok(*b.value().ok_or(Error::Synthesis)?),
-                )?;
-
-                region.constrain_equal(a.cell(), lhs.cell())?;
-                region.constrain_equal(b.cell(), rhs.cell())?;
-
-                let value = a.value().and_then(|a| b.value().map(|b| a - b));
-                let cell = region.assign_advice(
-                    || "lhs * rhs",
-                    self.config.a_col,
-                    1,
-                    || value.ok_or(Error::Synthesis),
-                )?;
-
-                out = Some(cell);
-                Ok(())
+                    || scalar_val.ok_or(plonk::Error::Synthesis),
+                )
             },
-        )?;
-
-        Ok(out.unwrap())
+        )
     }
 }

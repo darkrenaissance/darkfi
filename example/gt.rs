@@ -1,5 +1,5 @@
 use darkfi::zk::{
-    arith_chip::{ArithmeticChip, ArithmeticChipConfig},
+    arith_chip::{ArithChip, ArithConfig, ArithInstruction},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
     greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
 };
@@ -20,7 +20,7 @@ struct ZkConfig {
     advices: [Column<Advice>; 3],
     evenbits_config: EvenBitsConfig,
     greaterthan_config: GreaterThanConfig,
-    arith_config: ArithmeticChipConfig,
+    arith_config: ArithConfig,
 }
 
 impl ZkConfig {
@@ -32,8 +32,8 @@ impl ZkConfig {
         GreaterThanChip::construct(self.greaterthan_config.clone())
     }
 
-    fn arith_chip(&self) -> ArithmeticChip {
-        ArithmeticChip::construct(self.arith_config.clone())
+    fn arith_chip(&self) -> ArithChip {
+        ArithChip::construct(self.arith_config.clone())
     }
 }
 
@@ -72,7 +72,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             [advices[1], advices[2]],
             primary,
         );
-        let arith_config = ArithmeticChip::configure(meta);
+        let arith_config = ArithChip::configure(meta, advices[1], advices[2], advices[0]);
 
         ZkConfig { primary, advices, evenbits_config, greaterthan_config, arith_config }
     }
@@ -93,7 +93,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let v = self.load_private(layouter.namespace(|| "Witness v"), config.advices[0], self.v)?;
         let f = self.load_private(layouter.namespace(|| "Witness t"), config.advices[0], self.f)?;
 
-        let t = ar_chip.mul(layouter.namespace(|| "target value"), v, f)?;
+        let t = ar_chip.mul(layouter.namespace(|| "target value"), &v, &f)?;
 
         eb_chip.decompose(layouter.namespace(|| "y range check"), y.clone())?;
         eb_chip.decompose(layouter.namespace(|| "t range check"), t.clone())?;

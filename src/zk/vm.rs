@@ -25,7 +25,7 @@ use log::debug;
 use pasta_curves::{group::Curve, pallas, Fp};
 
 use super::{
-    arith_chip::{ArithmeticChip, ArithmeticChipConfig},
+    arith_chip::{ArithChip, ArithConfig, ArithInstruction},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
     greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
 };
@@ -50,7 +50,7 @@ pub struct VmConfig {
     sinsemilla_cfg1: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     _sinsemilla_cfg2: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
-    arith_config: ArithmeticChipConfig,
+    arith_config: ArithConfig,
     evenbits_config: EvenBitsConfig,
     greaterthan_config: GreaterThanConfig,
 }
@@ -90,8 +90,8 @@ impl VmConfig {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
 
-    fn arithmetic_chip(&self) -> ArithmeticChip {
-        ArithmeticChip::construct(self.arith_config.clone())
+    fn arithmetic_chip(&self) -> ArithChip {
+        ArithChip::construct(self.arith_config.clone())
     }
 
     fn evenbits_chip(&self) -> EvenBitsChip<pallas::Base, 24> {
@@ -202,7 +202,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         );
 
         // Configuration for the Arithmetic chip
-        let arith_config = ArithmeticChip::configure(meta);
+        let arith_config = ArithChip::configure(meta, advices[7], advices[8], advices[6]);
 
         // Configuration for the EvenBits chip
         let evenbits_config = EvenBitsChip::<pallas::Base, 24>::configure(meta);
@@ -548,8 +548,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Executing `BaseAdd{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = stack[args[0]].clone().into();
-                    let rhs = stack[args[1]].clone().into();
+                    let lhs = &stack[args[0]].clone().into();
+                    let rhs = &stack[args[1]].clone().into();
 
                     let sum = arith_chip.add(layouter.namespace(|| "BaseAdd()"), lhs, rhs)?;
 
@@ -561,8 +561,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Executing `BaseMul{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = stack[args[0]].clone().into();
-                    let rhs = stack[args[1]].clone().into();
+                    let lhs = &stack[args[0]].clone().into();
+                    let rhs = &stack[args[1]].clone().into();
 
                     let product = arith_chip.mul(layouter.namespace(|| "BaseMul()"), lhs, rhs)?;
 
@@ -574,8 +574,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = stack[args[0]].clone().into();
-                    let rhs = stack[args[1]].clone().into();
+                    let lhs = &stack[args[0]].clone().into();
+                    let rhs = &stack[args[1]].clone().into();
 
                     let difference =
                         arith_chip.sub(layouter.namespace(|| "BaseSub()"), lhs, rhs)?;
