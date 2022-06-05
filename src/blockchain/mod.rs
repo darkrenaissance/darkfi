@@ -69,7 +69,7 @@ impl Blockchain {
             let tx_hashes = self.transactions.insert(&block.txs)?;
 
             // Store block
-            let _block = Block::new(block.st, block.sl, tx_hashes, block.metadata.clone());
+            let _block = Block::new(block.st, block.e, block.sl, tx_hashes, block.metadata.clone());
             let blockhash = self.blocks.insert(&[_block])?;
             ret.push(blockhash[0]);
 
@@ -113,7 +113,7 @@ impl Blockchain {
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(block.st, block.sl, txs, block.metadata.clone(), sm);
+            let info = BlockInfo::new(block.st, block.e, block.sl, txs, block.metadata.clone(), sm);
             ret.push(info);
         }
 

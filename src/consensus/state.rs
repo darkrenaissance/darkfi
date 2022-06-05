@@ -36,6 +36,8 @@ use crate::{
 
 /// `2 * DELTA` represents slot time
 pub const DELTA: u64 = 20;
+/// Slots in an epoch
+pub const EPOCH_SLOTS: u64 = 10;
 /// Quarantine duration, in slots
 pub const QUARANTINE_DURATION: u64 = 5;
 
@@ -187,6 +189,12 @@ impl ValidatorState {
         true
     }
 
+    /// Calculates the epoch of the provided slot.
+    /// Epoch duration is configured using the `EPOCH_SLOTS` value.
+    pub fn slot_epoch(&self, slot: u64) -> u64 {
+        slot / EPOCH_SLOTS
+    }
+
     /// Calculates current slot, based on elapsed time from the genesis block.
     /// Slot duration is configured using the `DELTA` value.
     pub fn current_slot(&self) -> u64 {
@@ -271,7 +279,13 @@ impl ValidatorState {
         );
 
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
-        let prop = BlockProposal::to_proposal_hash(prev_hash, slot, &unproposed_txs, &metadata);
+        let prop = BlockProposal::to_proposal_hash(
+            prev_hash,
+            self.slot_epoch(slot),
+            slot,
+            &unproposed_txs,
+            &metadata,
+        );
         let signed_proposal = self.secret.sign(&prop.as_bytes()[..]);
 
         Ok(Some(BlockProposal::new(
@@ -279,6 +293,7 @@ impl ValidatorState {
             signed_proposal,
             self.address,
             prev_hash,
+            self.slot_epoch(slot),
             slot,
             unproposed_txs,
             metadata,
@@ -365,6 +380,7 @@ impl ValidatorState {
         if !proposal.public_key.verify(
             BlockProposal::to_proposal_hash(
                 proposal.block.st,
+                proposal.block.e,
                 proposal.block.sl,
                 &proposal.block.txs,
                 &proposal.block.metadata,
