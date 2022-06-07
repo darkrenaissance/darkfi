@@ -117,12 +117,13 @@ impl Channel {
         let mut stopped = self.stopped.lock().await;
         if !*stopped {
             *stopped = true;
+            drop(stopped);
+
             self.stop_subscriber.notify(Error::ChannelStopped).await;
             self.receive_task.stop().await;
             self.message_subsystem.trigger_error(Error::ChannelStopped).await;
             debug!(target: "net", "Channel::stop() [END, address={}]", self.address());
         }
-        drop(stopped);
     }
 
     /// Creates a subscription to a stopped signal.
