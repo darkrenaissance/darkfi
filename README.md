@@ -9,7 +9,7 @@
 ## Build
 
 This project requires the Rust compiler to be installed. 
-Please visit https://rustup.rs/ for instructions.
+Please visit [Rustup](https://rustup.rs/) for instructions.
 
 The following dependencies are also required:
 
