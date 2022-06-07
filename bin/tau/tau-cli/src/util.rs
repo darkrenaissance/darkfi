@@ -1,4 +1,9 @@
-use std::{env, fs, process::Command};
+use std::{
+    env,
+    fs::{self, File},
+    io::Write,
+    process::Command,
+};
 
 use chrono::{Datelike, Local, NaiveDate};
 use log::error;
@@ -33,9 +38,10 @@ pub fn desc_in_editor() -> Result<Option<String>> {
     let mut file_path = env::temp_dir();
     let file_name = format!("tau-{}", Timestamp::current_time().0);
     file_path.push(file_name);
+    let mut file = File::create(&file_path)?;
 
-    fs::write(&file_path, "# Write your task description here.\n")?;
-    fs::write(&file_path, "# Lines starting with \"#\" will be removed\n")?;
+    writeln!(file, "\n# Write your task description here.")?;
+    writeln!(file, "# Lines starting with \"#\" will be removed")?;
 
     // Try $EDITOR, and if not, fallback to xdg-open.
     let editor_argv0 = match env::var("EDITOR") {
