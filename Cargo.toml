@@ -134,6 +134,7 @@ sled = {version = "0.34.7", optional = true}
 clap = {version = "3.1.18", features = ["derive"]}
 halo2_proofs = {version = "0.1.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
 halo2_gadgets = {version = "0.1.0", features = ["dev-graph", "test-dependencies"]}
+plotters = "0.3.1"
 
 [features]
 async-runtime = [

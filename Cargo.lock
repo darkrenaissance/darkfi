@@ -1223,6 +1223,7 @@ dependencies = [
  "ntp",
  "num-bigint",
  "pasta_curves",
+ "plotters",
  "rand",
  "rcgen",
  "regex",
