@@ -1,3 +1,5 @@
+# Zero-knowledge explainer
+
 We start with this algorithm as an example:
 
 ```python
@@ -12,7 +14,7 @@ ZK code consists of lines of constraints. It has no concept of branching conditi
 
 So our first task is to flatten (convert) the above code to a linear equation that can be evaluated in ZK.
 
-Consider an interesting fact. For any value $x$, then $(1 - w) = 0$ if and only if $x = 1$.
+Consider an interesting fact. For any value $\mathbb{x}$, then $(1 - w) = 0$ if and only if $x = 1$.
 
 In our code above $w$ is a binary value. It's value is either $1$ or $0$. We make use of this fact by the following:
 
