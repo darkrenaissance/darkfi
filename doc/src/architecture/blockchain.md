@@ -1,5 +1,19 @@
 # Dynamic Proof of Stake
 
+## Overview
+
+DarkFi's proof-of-stake blockchain is based on Streamlet, a simplified
+proof-of-stake consensus. The current implementation is highly primitive,
+for example there is currently no concept of a consensus token. The
+blockchain is at the devnet phase, meaning it is running on a local
+testnet among the DarkFi community.
+
+In the future, DarkFi plans to upgrade its consensus to a modified verion
+of Ouroboros. To accomodate this transition it has designed its data
+structures to be easy to upgrade.
+
+Below is a specification of how DarkFi's blockchain achieves consensus.
+
 ## Blockchain
 
 Blockchain $\mathbb{C}$ is a series of epochs: it's a tree of chains,
