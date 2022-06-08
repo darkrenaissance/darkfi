@@ -3,7 +3,6 @@
 [DarkFi](README.md)
 - [Ideology](IDEOLOGY.md)
 - [Development](development.md)
-- [Tutorial](tutorial.md)
 - [Architecture](architecture/architecture.md)
   - [Overview](architecture/overview.md)
   - [Blockchain](architecture/blockchain.md)
