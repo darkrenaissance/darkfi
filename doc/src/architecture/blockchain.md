@@ -7,10 +7,11 @@ system based on voting between the participating parties. The blockchain
 is currently in the devnet phase and has no concept of a consensus token.
 
 Darkfi is actively working to upgrade its consensus to Ouroboros
-Crupsinous, a privacy focused proof-of-stake algorithm. To accomodate
+Crypsinous, a privacy focused proof-of-stake algorithm. To accomodate
 this transition it has designed its data structures to be easy to upgrade.
 
-Below is a specification of how DarkFi's blockchain achieves consensus.
+Below is a specification of how DarkFi's current blockchain achieves
+consensus.
 
 ## Blockchain
 
