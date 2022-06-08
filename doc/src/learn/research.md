@@ -11,5 +11,5 @@ and math primitives, including but not limited to:
 * [Poseidon hash](../../../script/research/poseidon)
 * [Bulletproofs](../../../script/research/bltprf)
 * [RSA accumulators](../../script/research/rsa_accum.sage)
-* [Finite fields] (../../script/research/finite_fields)
+* [Finite fields](../../script/research/finite_fields)
 * [Pasta curves](../../script/research/pasta)
