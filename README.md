@@ -84,7 +84,7 @@ This will add the options auto completion of `drk` and `darkfid`.
 
 After the installation, you should have `drk` and `darkfid` binaries in
 `/usr/local`. Trying to run them once should place the configuration
-files in their respective path. Now we're ready to use the testnet.
+files in their respective path. Now we're ready to use the demo.
 
 In one terminal, start `darkfid`, which is the daemon that will
 communicate with the DarkFi network:
