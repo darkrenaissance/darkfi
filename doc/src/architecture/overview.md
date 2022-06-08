@@ -20,7 +20,7 @@ local testnet ran by the DarkFi community. Currently, the blockchain has
 no consensus token. DarkFi is working to upgrade to a privacy-enhanced
 proof-of-stake algorithm called OuroborusCrypsinous.
 
-**Wallets:** A wallet is a portal to the DarkFi network. It provides
+**Wallet:** A wallet is a portal to the DarkFi network. It provides
 the user with the ability to send and receive anonymous _darkened_
 tokens. Each wallet is a full node and stores a copy of the
 blockchain. All contract execution is done locally on the DarkFi wallet.
@@ -31,15 +31,21 @@ where these nodes interact with each other over specific protocols (see
 which is also home to tools such as our P2P [irc](../misc/ircd.md)
 and P2P task manager [tau](../misc/tau.md).
 
-**zkas:** zkas is the compiler used to compile zk smart contracts in
-its respective assembly-like language. The "assembly" part was chosen as
-it's the bare primitives needed for zk proofs, so later on the language
-can be expanded with higher-level syntax. Its underlying zero-knowledge
-proof system is Halo2.
-
-**ZK contracts:** Anonymous applications on DarkFi run on proofs
-that enforce an order of operations. We call these zero-knowledge
+**ZK smart contracts:** Anonymous applications on DarkFi run on proofs
+that enforce an order of operations. We call these zero-knowledge smart
 contracts. Anonymous transactions on DarkFi is possible due to the
 interplay of two contracts, mint and burn (see the [sapling payment
 scheme](../zkas/examples/sapling.md)). Using the same method, we can
 define advanced applications.
+
+**zkas:** zkas is the compiler used to compile zk smart contracts in
+its respective assembly-like language. The "assembly" part was chosen as
+it's the bare primitives needed for zk proofs, so later on the language
+can be expanded with higher-level syntax. Zkas enables developers to
+compile and inspect contracts.
+
+**zkVM:** DarkFi's zkVM executes the binaries produced by zkas. The
+zkVM aims to be a general-purpose zkSNARK virtual machine that empowers
+developers to quickly prototype and debug zk contracts. It uses a
+trustless zero-knowledge proof system called Halo2 with no trusted setup.
+
