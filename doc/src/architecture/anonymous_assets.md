@@ -88,4 +88,6 @@ And that $B$ is a valid point on the curve $G_2$.
 This proves that $B = 0 G_1 + b G_2 = b G_2$ where $b$ is a secret
 blinding factor for the amounts.
 
-![Diagram](~/diagram-dkzk.png)
+# Diagram
+
+![](diagram-dkzk.png)
