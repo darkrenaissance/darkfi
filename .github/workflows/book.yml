@@ -33,7 +33,7 @@ jobs:
                 pip install ghp-import
                 cargo install mdbook
                 export PATH="$HOME/.cargo/bin:$PATH"
-                cargo install --git "https://github.com/heliaxdev/mdbook-katex"
+                cargo install --git "https://github.com/lzanini/mdbook-katex"
                 sudo apt -y install make
 
             - name: Compile and publish the book
