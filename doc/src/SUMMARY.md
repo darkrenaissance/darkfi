@@ -22,5 +22,5 @@
   - [tau](misc/tau.md)
   - [dnetview](misc/dnetview.md)
 - [Learn](learn/learn.md)
-  - [Research](tutorial/research.md)
-  - [ZK explainer](tutorial/zk_explainer.md)
+  - [Research](learn/research.md)
+  - [ZK explainer](learn/zk_explainer.md)
