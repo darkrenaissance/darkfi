@@ -2,7 +2,7 @@
 
 ![Build Status](https://img.shields.io/github/workflow/status/darkrenaissance/darkfi/CI%20Checks?style=flat-square)
 [![Web - dark.fi](https://img.shields.io/badge/Web-dark.fi-white?logo=firefox&logoColor=white&style=flat-square)](https://dark.fi)
-[![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-informational?logo=minutemailer&logoColor=white&style=flat-square)](https://lists.dyne.org/lurker/message/20211021.123016.3dccaf0c.en.html)
+[![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-informational?logo=minutemailer&logoColor=white&style=flat-square)](https://dark.fi/manifesto.html)
 [![Book - mdbook](https://img.shields.io/badge/Book-mdbook-orange?logo=gitbook&logoColor=white&style=flat-square)](https://darkrenaissance.github.io/darkfi)
 
 
@@ -40,7 +40,7 @@ to install the required dependencies:
 Alternatively users can use the automated script in
 `contrib/mac_setup.sh` by running. This script will install brew
 if it does not already exists on the system and then automatically
-install the dependencies
+install the dependencies:
 
 ```shell
 % bash contrib/mac_setup.sh
@@ -80,49 +80,7 @@ This will add the options auto completion of `drk` and `darkfid`.
 % echo source $(pwd)/contrib/auto-complete >> ~/.bashrc
 ```
 
-## Usage
-
-After the installation, you should have `drk` and `darkfid` binaries in
-`/usr/local`. Trying to run them once should place the configuration
-files in their respective path. Now we're ready to use the demo.
-
-In one terminal, start `darkfid`, which is the daemon that will
-communicate with the DarkFi network:
-
-```shell
-% darkfid -v
-```
-
-And in the other terminal, we can use the CLI interface to `darkfid`
-called `drk`:
-
-```
-% drk -h
-drk 0.2.0
-darkfi <dev@dark.fi>
-Anonymous. Uncensored. Sovereign.
-
-USAGE:
-    drk [OPTIONS] <SUBCOMMAND>
-
-OPTIONS:
-    -c, --config <CONFIG>    Sets a custom config file
-    -h, --help               Print help information
-    -v                       Increase verbosity
-    -V, --version            Print version information
-
-SUBCOMMANDS:
-    deposit     Deposit clear tokens for Dark tokens
-    features    Show what features the cashier supports
-    hello       Say hello to the RPC
-    help        Print this message or the help of the given subcommand(s)
-    id          Get hexidecimal ID for token symbol
-    transfer    Transfer Dark tokens to address
-    wallet      Wallet operations
-    withdraw    Withdraw Dark tokens for clear tokens
-```
-
-### Examples
+### Examples and usage
 
 See the [DarkFi book](https://darkrenaissance.github.io/darkfi)
 

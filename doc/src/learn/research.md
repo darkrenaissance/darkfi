@@ -1,7 +1,8 @@
 # Research
 
-DarkFi maintains a public resource of zero-knowledge and math research at
-[script/research](../../../script/research).
+DarkFi maintains a public resource of zero-knowledge and math research
+in the [script/research](../../../script/research) directory of
+the repo.
 
 It features simple sage implementations of zero-knowledge algorithms
 and math primitives, including but not limited to:
@@ -12,4 +13,3 @@ and math primitives, including but not limited to:
 * [Bulletproofs](../../../script/research/bltprf)
 * [RSA accumulators](../../script/research/rsa_accum.sage)
 * [Finite fields](../../script/research/finite_fields)
-* [Pasta curves](../../script/research/pasta)
