@@ -115,7 +115,7 @@ command-line. For sollet.io, switch the network to testnet and click
 
 Now that we have testnet coins we can deposit into darkfi.
 
-We'll do this by sending testnet coins to the darki cashier, which will
+We'll do this by sending testnet coins to the darkfi cashier, which will
 issue darkened versions of the deposited coin. This process of darkening
 involves the cashier minting new anonymous tokens that are 1:1 redeemable
 for deposits. For example, if you deposit 1 BTC, you will receive 1 dBTC,

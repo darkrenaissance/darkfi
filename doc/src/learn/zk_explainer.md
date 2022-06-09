@@ -34,7 +34,7 @@ We now can convert this expression to a constraint system.
 ZK statements take the form of:
 $$(c_{l,1} \cdot v_{l,1} + c_{a,2} \cdot v_{l,2} + \dots) \times (c_{b,1} \cdot v_{r,1} + c_{b,2} \cdot v_{r,2} + \dots) = (c_{o,1} \cdot v_{o,1} + c_{o,2} v_{o,2} + \dots)$$
 
-More succintly as:
+More succinctly as:
 $$\sum_{i = 1}^n c_{l,i} \cdot v_{l,i} \times \sum_{i = 1}^n c_{r,i} v_{r, i} = \sum_{i = 1}^n c_{o, i} v_{o, i}$$
 
 These statements are converted into polynomials of the form:
@@ -105,7 +105,7 @@ When we wish to add a constant value, we use the variable called
 bellman at index 0). Therefore we end up adding our constant $c$ to
 the `LinearCombination` as `(c, ~one)`.
 
-Any other non-constant value, we wish to add to our constaint system
+Any other non-constant value, we wish to add to our constraint system
 *must* be allocated as a variable. Then the variable is added to the
 `LinearCombination`. So in our example, we will allocate
 $w, a, b, m, v$, getting back `Variable` objects which we then add to

@@ -9,7 +9,7 @@ dnetview displays:
 3. each associated connection and recent messages.
 
 dnetview is based on the design-pattern Model, View, Controller. We
-create a logical seperation between the underlying data structure or
+create a logical separation between the underlying data structure or
 Model; the ui rendering aspect which is the View; and the Controller or
 game engine that makes everything run.
 

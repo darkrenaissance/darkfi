@@ -7,7 +7,7 @@ system based on voting between the participating parties. The blockchain
 is currently in the devnet phase and has no concept of a consensus token.
 
 Darkfi is actively working to upgrade its consensus to Ouroboros
-Crypsinous, a privacy focused proof-of-stake algorithm. To accomodate
+Crypsinous, a privacy focused proof-of-stake algorithm. To accommodate
 this transition it has designed its data structures to be easy to upgrade.
 
 Below is a specification of how DarkFi's current blockchain achieves
@@ -119,7 +119,7 @@ v_n$$ let's assume the stakes are divided to stakes of value
 $\sigma_i=1$ for $\Sigma>1 \in \mathbb{Z}$, $\sum_{i}{\sigma_i}=V$
 $$V>(\frac{1}{v_{max}+c})^{n-1}$$ note that $(\frac{1}{v_{max}+c})^{n-1}
 < 1, V>1$, thus competing with single coin of the sum of stakes held by
-the stakeholder is favourable.
+the stakeholder is favorable.
 
 #### Scalar linear aggregation dependent leader selection
 
@@ -191,7 +191,7 @@ For an epoch j, the nonce $\eta_j$ is calculated by hash function H, as:
 
 $$\eta_j = H(\eta_{j-1}||j||v)$$
 
-v is the concatentation of the value $\rho$ in all blocks from the
+v is the concatenation of the value $\rho$ in all blocks from the
 beginning of epoch $e_{i-1}$ to the slot with timestamp up to $(j-2)R +
 \frac{16k}{1+\epsilon}$, note that k is a persistence security parameter,
 R is the epoch length in terms of slots.

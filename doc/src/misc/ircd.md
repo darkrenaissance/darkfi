@@ -1,6 +1,6 @@
 # P2P IRC
 
-In DarkFi, we organise our communication using resilient and
+In DarkFi, we organize our communication using resilient and
 censorship-resistant infrastructure. For chatting, `ircd` is a
 peer-to-peer implementation of an IRC server in which any user can
 participate anonymously using any IRC frontend and by running the
@@ -157,14 +157,13 @@ seeds=["127.0.0.1:11001"]
 
 This is a node which has 8 outbound connection slots and no inbound
 connections.  This means the node has 8 slots which will actively
-search for unique nodes to c
-onnect to in the p2p network.
+search for unique nodes to connect to in the p2p network.
 
 In your config file:
 
 ```toml
 ## Connection slots
-outbound_connections=5
+outbound_connections=8
 
 ## Seed nodes to connect to 
 seeds=["127.0.0.1:11001"]
@@ -197,5 +196,4 @@ And send messages to yourself.
 
 See the script `script/run_node.sh` for an example of how to deploy
 a full node which does seed session synchronization, and accepts both
-inbound and outbound c
-onnections.
+inbound and outbound connections.
