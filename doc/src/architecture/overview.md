@@ -4,11 +4,13 @@ DarkFi is a layer one proof-of-stake blockchain that supports anonymous
 applications. It is currently under development. This overview will
 outline a few key terms that help explain DarkFi.
 
-**Cashier:** The Cashier is the entry-point to the DarkFi network. Its
-role is to exchange cryptocurrency assets for anonymous _darkened_ tokens
-that are pegged to the underlying currency. Currently, the role of the
-Cashier is trusted and centralized. As a next step, DarkFi plans to
-implement trust-minimized bridges and eventually fully trustless bridges.
+**Cashier:** The Cashier is the entry and exit point to the DarkFi
+network from other blockchains such as Ethereum, Bitcoin and Solana. It is
+essentially the bridge. Its role is to exchange cryptocurrency assets for
+anonymous _darkened_ tokens that are pegged to the underlying currency,
+and visa versa. Currently, the role of the Cashier is trusted and
+centralized. As a next step, DarkFi plans to implement trust-minimized
+bridges and eventually fully trustless bridges.
 
 **Blockchain:** Once new anonymous tokens (e.g. dETH) have been issued,
 the Cashier posts that data on the blockchain. This data is encrypted
@@ -18,7 +20,7 @@ The DarkFi blockchain is currently using a very simple consensus protocol
 called Streamlet. The blockchain is currently in devnet phase. This is a
 local testnet ran by the DarkFi community. Currently, the blockchain has
 no consensus token. DarkFi is working to upgrade to a privacy-enhanced
-proof-of-stake algorithm called OuroborusCrypsinous.
+proof-of-stake algorithm called Ouroborus Crypsinous.
 
 **Wallet:** A wallet is a portal to the DarkFi network. It provides
 the user with the ability to send and receive anonymous _darkened_
@@ -47,5 +49,5 @@ compile and inspect contracts.
 **zkVM:** DarkFi's zkVM executes the binaries produced by zkas. The
 zkVM aims to be a general-purpose zkSNARK virtual machine that empowers
 developers to quickly prototype and debug zk contracts. It uses a
-trustless zero-knowledge proof system called Halo2 with no trusted setup.
+trustless zero-knowledge proof system called Halo 2 with no trusted setup.
 

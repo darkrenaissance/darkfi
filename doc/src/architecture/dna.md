@@ -1,10 +1,10 @@
 DarkFi Node Architecture (DNA)
 ==============================
 
-The DarkFi ecosystem runs as a network of P2P nodes, where these
-nodes interact with each other over specific protocols. Below in
-this document, we'll explain how each of the programs fit together
-and when combined create a functioning network that becomes DarkFi.
+The DarkFi ecosystem runs as a network of P2P nodes, where these nodes
+interact with each other over specific programs (or layers). In this
+section, we'll explain how each of the layers fit together and when
+combined create a functioning network that becomes DarkFi.
 
 The layers are organized as a bottom-up pyramid, much like the
 DarkFi logo:
