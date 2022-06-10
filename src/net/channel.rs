@@ -127,6 +127,7 @@ impl Channel {
     }
 
     /// Creates a subscription to a stopped signal.
+    /// If the channel is stopped then this will return a ChannelStopped error.
     pub async fn subscribe_stop(&self) -> Result<Subscription<Error>> {
         debug!(target: "net",
          "Channel::subscribe_stop() [START, address={}]",
