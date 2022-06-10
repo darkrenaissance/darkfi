@@ -2,7 +2,7 @@
 #rpc_listen="tcp://127.0.0.1:11055"
 
 ## Sets Datastore Path
-#datastore="~/.config/tau"
+#datastore="~/.config/darkfi/tau"
 
 ## Current display name    
 #nickname="NICKNAME"

@@ -20,7 +20,7 @@ pub struct Args {
     #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:11055")]
     pub rpc_listen: Url,
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.config/tau")]
+    #[structopt(long, default_value = "~/.config/darkfi/tau")]
     pub datastore: String,
     #[structopt(flatten)]
     pub net: SettingsOpt,

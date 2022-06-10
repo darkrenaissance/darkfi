@@ -34,7 +34,7 @@ pub struct Args {
     pub irc_listen: Url,
 
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.config/ircd")]
+    #[structopt(long, default_value = "~/.config/darkfi/ircd")]
     pub datastore: String,
 
     /// Generate a new NaCl secret and exit
