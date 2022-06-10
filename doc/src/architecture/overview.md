@@ -50,4 +50,3 @@ compile and inspect contracts.
 zkVM aims to be a general-purpose zkSNARK virtual machine that empowers
 developers to quickly prototype and debug zk contracts. It uses a
 trustless zero-knowledge proof system called Halo 2 with no trusted setup.
-

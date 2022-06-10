@@ -5,6 +5,7 @@
 - [Development](development.md)
 - [Architecture](architecture/architecture.md)
   - [Overview](architecture/overview.md)
+  - [Layers](architecture/layers.md)
   - [Anonymous Assets](architecture/anonymous_assets.md)
   - [Blockchain](architecture/blockchain.md)
   - [DNA](architecture/dna.md)
