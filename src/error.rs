@@ -525,10 +525,3 @@ impl From<wasmer::InstantiationError> for Error {
         Self::WasmerInstantiationError(err.to_string())
     }
 }
-
-#[cfg(feature = "util")]
-impl From<ntp::errors::Error> for Error {
-    fn from(err: ntp::errors::Error) -> Self {
-        Self::NtpError(err.to_string())
-    }
-}
