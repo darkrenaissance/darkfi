@@ -128,7 +128,10 @@ impl InboundSession {
             .insert(key.clone(), InboundInfo { channel: channel.clone() });
 
         let stop_sub = channel.subscribe_stop().await;
-        stop_sub.receive().await;
+
+        if stop_sub.is_ok() {
+            stop_sub.unwrap().receive().await;
+        }
 
         self.connect_infos.lock().await.remove(&key);
     }

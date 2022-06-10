@@ -153,6 +153,10 @@ impl OutboundSession {
 
                     let stop_sub = channel.subscribe_stop().await;
 
+                    if stop_sub.is_err() {
+                        continue
+                    }
+
                     self.clone().register_channel(channel.clone(), executor.clone()).await?;
 
                     // Channel is now connected but not yet setup
@@ -166,7 +170,7 @@ impl OutboundSession {
                     }
 
                     // Wait for channel to close
-                    stop_sub.receive().await;
+                    stop_sub.unwrap().receive().await;
                 }
                 Err(err) => {
                     info!(target: "net", "Unable to connect to outbound [{}]: {}", &addr, err);

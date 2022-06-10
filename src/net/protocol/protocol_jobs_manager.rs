@@ -46,9 +46,10 @@ impl ProtocolJobsManager {
     async fn handle_stop(self: Arc<Self>) {
         let stop_sub = self.channel.clone().subscribe_stop().await;
 
-        // Wait for the stop signal
-        // Not interested in the exact error
-        let _ = stop_sub.receive().await;
+        if stop_sub.is_ok() {
+            // Wait for the stop signal
+            stop_sub.unwrap().receive().await;
+        }
 
         self.close_all_tasks().await
     }

@@ -114,9 +114,9 @@ impl Channel {
     /// the channel has been closed.
     pub async fn stop(&self) {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
-        let mut stopped = self.stopped.lock().await;
-        if !*stopped {
-            *stopped = true;
+        let mut stopped = *self.stopped.lock().await;
+        if !stopped {
+            stopped = true;
             drop(stopped);
 
             self.stop_subscriber.notify(Error::ChannelStopped).await;
@@ -127,19 +127,26 @@ impl Channel {
     }
 
     /// Creates a subscription to a stopped signal.
-    pub async fn subscribe_stop(&self) -> Subscription<Error> {
+    pub async fn subscribe_stop(&self) -> Result<Subscription<Error>> {
         debug!(target: "net",
          "Channel::subscribe_stop() [START, address={}]",
          self.address()
         );
-        // TODO: this should check the stopped status
-        // Call to receive should return ChannelStopped on newly created sub
+
+        {
+            let stopped = *self.stopped.lock().await;
+            if stopped {
+                return Err(Error::ChannelStopped)
+            }
+        }
+
         let sub = self.stop_subscriber.clone().subscribe().await;
         debug!(target: "net",
          "Channel::subscribe_stop() [END, address={}]",
          self.address()
         );
-        sub
+
+        Ok(sub)
     }
 
     /// Sends a message across a channel. Calls function 'send_message' that
@@ -152,7 +159,6 @@ impl Channel {
          self.address()
         );
 
-        // TODO can we use RwLock here instead of Mutex
         {
             let stopped = *self.stopped.lock().await;
             if stopped {

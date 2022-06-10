@@ -52,8 +52,12 @@ async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
     debug!(target: "net", "remove_sub_on_stop() [START]");
     // Subscribe to stop events
     let stop_sub = channel.clone().subscribe_stop().await;
-    // Wait for a stop event
-    let _ = stop_sub.receive().await;
+
+    if stop_sub.is_ok() {
+        // Wait for a stop event
+        stop_sub.unwrap().receive().await;
+    }
+
     debug!(target: "net",
         "remove_sub_on_stop(): received stop event. Removing channel {}",
         channel.address()
