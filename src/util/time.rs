@@ -1,7 +1,7 @@
 use std::{
     mem,
     net::UdpSocket,
-    time::{Duration, SystemTime},
+    time::{Duration, UNIX_EPOCH},
 };
 
 use async_std::{
@@ -54,7 +54,7 @@ impl Timestamp {
 
 impl std::fmt::Display for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let date = timestamp_to_date(self.0, "datetime");
+        let date = timestamp_to_date(self.0, DateFormat::DateTime);
         write!(f, "{}", date)
     }
 }
@@ -79,7 +79,7 @@ impl NanoTimestamp {
 }
 impl std::fmt::Display for NanoTimestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let date = timestamp_to_date(self.0, "nanos");
+        let date = timestamp_to_date(self.0, DateFormat::Nanos);
         write!(f, "{}", date)
     }
 }
@@ -190,28 +190,35 @@ async fn clock_check() -> Result<()> {
     }
 }
 
-pub fn timestamp_to_date(timestamp: i64, dt: &str) -> String {
+pub enum DateFormat {
+    Default,
+    Date,
+    DateTime,
+    Nanos,
+}
+
+pub fn timestamp_to_date(timestamp: i64, format: DateFormat) -> String {
     if timestamp <= 0 {
         return "".to_string()
     }
 
-    match dt {
-        "date" => {
+    match format {
+        DateFormat::Date => {
             NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
         }
-        "datetime" => {
+        DateFormat::DateTime => {
             NaiveDateTime::from_timestamp(timestamp, 0).format("%H:%M:%S %A %-d %B").to_string()
         }
-        "nanos" => {
+        DateFormat::Nanos => {
             const A_BILLION: i64 = 1_000_000_000;
             NaiveDateTime::from_timestamp(timestamp / A_BILLION, (timestamp % A_BILLION) as u32)
                 .format("%H:%M:%S.%f")
                 .to_string()
         }
-        _ => "".to_string(),
+        DateFormat::Default => "".to_string(),
     }
 }
 
 pub fn unix_timestamp() -> Result<u64> {
-    Ok(SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs())
+    Ok(UNIX_EPOCH.elapsed()?.as_secs())
 }

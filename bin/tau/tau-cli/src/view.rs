@@ -4,7 +4,10 @@ use prettytable::{
     row, table, Cell, Row, Table,
 };
 
-use darkfi::{util::time::timestamp_to_date, Result};
+use darkfi::{
+    util::time::{timestamp_to_date, DateFormat},
+    Result,
+};
 
 use crate::{
     filter::apply_filter,
@@ -57,7 +60,8 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
             Cell::new(&task.title).style_spec(gen_style),
             Cell::new(&task.project.join(", ")).style_spec(gen_style),
             Cell::new(&task.assign.join(", ")).style_spec(gen_style),
-            Cell::new(&timestamp_to_date(task.due.unwrap_or(0), "date")).style_spec(gen_style),
+            Cell::new(&timestamp_to_date(task.due.unwrap_or(0), DateFormat::Date))
+                .style_spec(gen_style),
             if task.rank == max_rank {
                 Cell::new(&rank).style_spec(max_style)
             } else if task.rank == min_rank {
@@ -74,8 +78,8 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
 
 pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
     let current_state = &taskinfo.events.last().unwrap_or(&TaskEvent::default()).action.clone();
-    let due = timestamp_to_date(taskinfo.due.unwrap_or(0), "date");
-    let created_at = timestamp_to_date(taskinfo.created_at, "datetime");
+    let due = timestamp_to_date(taskinfo.due.unwrap_or(0), DateFormat::Date);
+    let created_at = timestamp_to_date(taskinfo.created_at, DateFormat::DateTime);
 
     let mut table = table!(
         [Bd => "ref_id", &taskinfo.ref_id],
