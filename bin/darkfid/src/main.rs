@@ -201,7 +201,7 @@ impl Darkfid {
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
-    if args.clock_sync {
+    if args.consensus && args.clock_sync {
         // We verify that the system clock is valid before initializing
         if (check_clock().await).is_err() {
             error!("System clock is invalid, terminating...");
