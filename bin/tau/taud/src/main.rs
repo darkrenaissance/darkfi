@@ -7,7 +7,6 @@ use futures::{select, FutureExt};
 use log::{debug, error, info, warn};
 use smol::future;
 use structopt_toml::StructOptToml;
-use url::Url;
 
 use darkfi::{
     async_daemonize, net,
@@ -130,9 +129,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         Arc::new(JsonRpcInterface::new(rpc_snd, datastore_path.clone(), nickname.unwrap()));
 
     let executor_cloned = executor.clone();
-    let rpc_listener_url = Url::parse(&settings.rpc_listen)?;
     let rpc_listener_task =
-        executor_cloned.spawn(listen_and_serve(rpc_listener_url, rpc_interface));
+        executor_cloned.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface));
 
     let net_settings = settings.net;
 

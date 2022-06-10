@@ -27,7 +27,7 @@ pub struct Args {
 
     /// JSON-RPC listen URL
     #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:11055")]
-    pub rpc_listen: String,
+    pub rpc_listen: Url,
 
     /// IRC listen URL
     #[structopt(long = "irc", default_value = "tcp://127.0.0.1:11066")]

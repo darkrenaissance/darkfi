@@ -12,7 +12,6 @@ use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 use smol::future;
 use structopt_toml::StructOptToml;
-use url::Url;
 
 use darkfi::{
     async_daemonize, net,
@@ -202,7 +201,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // RPC interface
     //
-    let rpc_listen_addr = Url::parse(&settings.rpc_listen)?;
+    let rpc_listen_addr = settings.rpc_listen.clone();
     let rpc_interface =
         Arc::new(JsonRpcInterface { addr: rpc_listen_addr.clone(), p2p: p2p.clone() });
     let rpc_task =

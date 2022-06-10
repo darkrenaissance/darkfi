@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
+use url::Url;
 
 use darkfi::net::settings::SettingsOpt;
 
@@ -17,7 +18,7 @@ pub struct Args {
     pub config: Option<String>,
     /// JSON-RPC listen URL
     #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:11055")]
-    pub rpc_listen: String,
+    pub rpc_listen: Url,
     /// Sets Datastore Path
     #[structopt(long, default_value = "~/.config/tau")]
     pub datastore: String,
