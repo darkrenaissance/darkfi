@@ -1,5 +1,4 @@
 use std::{
-    net::SocketAddr,
     path::PathBuf,
     sync::{atomic::AtomicBool, Arc},
 };
@@ -10,6 +9,7 @@ use serde::Deserialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use toml::Value;
+use url::Url;
 
 use darkfi::{net::settings::SettingsOpt, Result};
 
@@ -30,8 +30,8 @@ pub struct Args {
     pub rpc_listen: String,
 
     /// IRC listen URL
-    #[structopt(long = "irc", default_value = "127.0.0.1:11066")]
-    pub irc_listen: SocketAddr,
+    #[structopt(long = "irc", default_value = "tcp://127.0.0.1:11066")]
+    pub irc_listen: Url,
 
     /// Sets Datastore Path
     #[structopt(long, default_value = "~/.config/ircd")]

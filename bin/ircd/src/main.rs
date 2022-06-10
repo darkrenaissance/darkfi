@@ -211,7 +211,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // IRC instance
     //
-    let listener = TcpListener::bind(settings.irc_listen).await?;
+    let irc_listen_addr = settings.irc_listen.socket_addrs(|| None)?[0];
+    let listener = TcpListener::bind(irc_listen_addr).await?;
     let local_addr = listener.local_addr()?;
     info!("IRC listening on {}", local_addr);
     let executor_cloned = executor.clone();
