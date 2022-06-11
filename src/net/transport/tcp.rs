@@ -121,6 +121,13 @@ impl TcpTransport {
             socket.set_ttl(ttl)?;
         }
 
+        // TODO: Perhaps make these configurable
+        socket.set_nodelay(true)?;
+        let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(20));
+        socket.set_tcp_keepalive(&keepalive)?;
+        // TODO: Make sure to disallow running multiple instances of a program using this.
+        socket.set_reuse_port(true)?;
+
         Ok(socket)
     }
 
