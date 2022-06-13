@@ -36,8 +36,14 @@
 # Seed nodes to connect to for the consensus protocol
 #consensus_p2p_seed = []
 
+# Seed nodes JSON-RPC listen URL for clock synchronization
+#consensus_seed_rpc = []
+
 # Peers to connect to for the consensus protocol
 #consensus_p2p_peer = []
+
+# Peers JSON-RPC listen URL for clock synchronization
+#consensus_peer_rpc = []
 
 # P2P accept address for the syncing protocol
 #sync_p2p_accept = "tls://127.0.0.1:8342"

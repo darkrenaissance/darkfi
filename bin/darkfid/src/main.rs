@@ -98,8 +98,16 @@ struct Args {
     consensus_p2p_peer: Vec<Url>,
 
     #[structopt(long)]
+    /// Peers JSON-RPC listen URL for clock synchronization (repeatable flag)
+    consensus_peer_rpc: Vec<Url>,
+
+    #[structopt(long)]
     /// Connect to seed for the consensus protocol (repeatable flag)
     consensus_p2p_seed: Vec<Url>,
+
+    #[structopt(long)]
+    /// Seed nodes JSON-RPC listen URL for clock synchronization (repeatable flag)
+    consensus_seed_rpc: Vec<Url>,
 
     #[structopt(long)]
     /// P2P accept address for the syncing protocol
@@ -163,6 +171,7 @@ impl RequestHandler for Darkfid {
 
         match req.method.as_str() {
             Some("ping") => return self.pong(req.id, params).await,
+            Some("clock") => return self.clock(req.id, params).await,
             Some("blockchain.get_slot") => return self.get_slot(req.id, params).await,
             Some("blockchain.merkle_roots") => return self.merkle_roots(req.id, params).await,
             Some("tx.transfer") => return self.transfer(req.id, params).await,
@@ -202,8 +211,20 @@ impl Darkfid {
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     if args.consensus && args.clock_sync {
+        // We verify that if peer/seed nodes are configured, their rpc config also exists
+        if ((!args.consensus_p2p_peer.is_empty() && args.consensus_peer_rpc.is_empty()) ||
+            (args.consensus_p2p_peer.is_empty() && !args.consensus_peer_rpc.is_empty())) ||
+            ((!args.consensus_p2p_seed.is_empty() && args.consensus_seed_rpc.is_empty()) ||
+                (args.consensus_p2p_seed.is_empty() && !args.consensus_seed_rpc.is_empty()))
+        {
+            error!(
+                "Consensus peer/seed nodes misconfigured: both p2p and rpc urls must be present"
+            );
+            return Err(Error::ConfigInvalid)
+        }
         // We verify that the system clock is valid before initializing
-        if (check_clock().await).is_err() {
+        let peers = [&args.consensus_peer_rpc[..], &args.consensus_seed_rpc[..]].concat();
+        if (check_clock(peers).await).is_err() {
             error!("System clock is invalid, terminating...");
             return Err(Error::InvalidClock)
         };

@@ -173,6 +173,7 @@ util = [
     "async-runtime",
 	"darkfi-derive",
 	"darkfi-derive-internal",
+	"rpc",
 ]
 
 rpc = [
@@ -183,7 +184,6 @@ rpc = [
 	"async-net",
 	"async-runtime",
 	"websockets",
-	"util",
 	"net",
 ]
 
