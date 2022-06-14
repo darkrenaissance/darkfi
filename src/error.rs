@@ -153,10 +153,6 @@ pub enum Error {
     #[error("async_native_tls error: {0}")]
     AsyncNativeTlsError(String),
 
-    #[cfg(feature = "util")]
-    #[error("NTP error: {0}")]
-    NtpError(String),
-
     // =============
     // Crypto errors
     // =============
@@ -289,6 +285,9 @@ pub enum Error {
 
     #[error("No config file detected")]
     ConfigNotFound,
+
+    #[error("Invalid config file detected")]
+    ConfigInvalid,
 
     #[error("Failed decoding bincode: {0}")]
     ZkasDecoderError(&'static str),

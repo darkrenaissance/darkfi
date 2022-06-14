@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use futures::prelude::*;
 use futures_rustls::{TlsAcceptor, TlsStream};
 use log::{debug, error};
-use socket2::{Domain, Socket, Type};
+use socket2::{Domain, Socket, TcpKeepalive, Type};
 use url::Url;
 
 use super::{socket_addr_to_url, TlsUpgrade, Transport, TransportListener, TransportStream};

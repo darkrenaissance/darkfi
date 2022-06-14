@@ -4,16 +4,15 @@ use std::{
     time::{Duration, UNIX_EPOCH},
 };
 
-use async_std::{
-    io::{ReadExt, WriteExt},
-    net::TcpStream,
-};
 use chrono::{NaiveDateTime, Utc};
 use log::debug;
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::json;
+use url::Url;
 
 use crate::{
+    rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::serial::{SerialDecodable, SerialEncodable},
     Error, Result,
 };
@@ -86,33 +85,30 @@ impl std::fmt::Display for NanoTimestamp {
 
 // Clock sync parameters
 const RETRIES: u8 = 10;
-const WORLDTIMEAPI_ADDRESS: &str = "worldtimeapi.org";
-const WORLDTIMEAPI_ADDRESS_WITH_PORT: &str = "worldtimeapi.org:443";
-const WORLDTIMEAPI_PAYLOAD: &[u8; 88] = b"GET /api/timezone/Etc/UTC HTTP/1.1\r\nHost: worldtimeapi.org\r\nAccept: application/json\r\n\r\n";
 const NTP_ADDRESS: &str = "pool.ntp.org:123";
 const EPOCH: i64 = 2208988800; //1900
 
-// Raw https request execution for worldtimeapi
-async fn worldtimeapi_request() -> Result<Timestamp> {
-    // Create connection
-    let stream = TcpStream::connect(WORLDTIMEAPI_ADDRESS_WITH_PORT).await?;
-    let mut stream = async_native_tls::connect(WORLDTIMEAPI_ADDRESS, stream).await?;
-    stream.write_all(WORLDTIMEAPI_PAYLOAD).await?;
+// JsonRPC request to a network peer(randomly selected),
+// to retrieve their current system clock.
+async fn peer_request(peers: &Vec<Url>) -> Result<Option<Timestamp>> {
+    // Select peer, None if vector is empty
+    let peer = peers.choose(&mut rand::thread_rng());
+    match peer {
+        None => Ok(None),
+        Some(p) => {
+            // Create rpc client
+            let rpc_client = RpcClient::new(p.clone()).await?;
 
-    // Execute request
-    let mut res = vec![0_u8; 1024];
-    stream.read(&mut res).await?;
+            // Execute request
+            let req = JsonRequest::new("clock", json!([]));
+            let rep = rpc_client.oneshot_request(req).await?;
 
-    // Parse response
-    let reply = String::from_utf8(res)?;
-    let lines = reply.split('\n');
-    // JSON data exist in last row of response
-    let last = lines.last().unwrap().trim_matches(char::from(0));
-    debug!("worldtimeapi json response: {:#?}", last);
-    let reply: Value = serde_json::from_str(last)?;
-    let timestamp = Timestamp(reply["unixtime"].as_i64().unwrap());
+            // Parse response
+            let timestamp: Timestamp = serde_json::from_value(rep)?;
 
-    Ok(timestamp)
+            Ok(Some(timestamp))
+        }
+    }
 }
 
 // Raw ntp request execution
@@ -140,12 +136,11 @@ async fn ntp_request() -> Result<Timestamp> {
 // Retry loop is used to in case discrepancies are found.
 // If all retries fail, system clock is considered invalid.
 // TODO: 1. Add proxy functionality in order not to leak connections
-//       2. Improve requests and/or add extra protocols
-pub async fn check_clock() -> Result<()> {
+pub async fn check_clock(peers: Vec<Url>) -> Result<()> {
     debug!("System clock check started...");
     let mut r = 0;
     while r < RETRIES {
-        if let Err(e) = clock_check().await {
+        if let Err(e) = clock_check(&peers).await {
             debug!("Error during clock check: {:#?}", e);
             r += 1;
             continue
@@ -160,30 +155,44 @@ pub async fn check_clock() -> Result<()> {
     }
 }
 
-async fn clock_check() -> Result<()> {
+async fn clock_check(peers: &Vec<Url>) -> Result<()> {
     // Start elapsed time counter to cover for all requests and processing time
     let requests_start = Timestamp::current_time();
-    // Poll worldtimeapi.org for current UTC timestamp
-    let mut worldtimeapi_time = worldtimeapi_request().await?;
+    // Poll one of peers for their current UTC timestamp
+    let peer_time = peer_request(peers).await?;
 
     // Start elapsed time counter to cover for ntp request and processing time
     let ntp_request_start = Timestamp::current_time();
     // Poll ntp.org for current timestamp
     let mut ntp_time = ntp_request().await?;
 
-    // Add elapsed time to respone times
-    ntp_time.add(ntp_request_start.elapsed() as i64);
-    worldtimeapi_time.add(requests_start.elapsed() as i64);
+    // Stop elapsed time counters
+    let ntp_elapsed_time = ntp_request_start.elapsed() as i64;
+    let requests_elapsed_time = requests_start.elapsed() as i64;
 
     // Current system time
     let system_time = Timestamp::current_time();
 
-    debug!("worldtimeapi_time: {:#?}", worldtimeapi_time);
+    // Add elapsed time to respone times
+    ntp_time.add(ntp_elapsed_time);
+    let peer_time = match peer_time {
+        None => None,
+        Some(p) => {
+            let mut t = p;
+            t.add(requests_elapsed_time);
+            Some(t)
+        }
+    };
+
+    debug!("peer_time: {:#?}", peer_time);
     debug!("ntp_time: {:#?}", ntp_time);
     debug!("system_time: {:#?}", system_time);
 
-    // We verify that system time is equal to worldtimeapi and ntp
-    let check = (system_time == worldtimeapi_time) && (system_time == ntp_time);
+    // We verify that system time is equal to peer(if exists) and ntp times
+    let check = match peer_time {
+        Some(p) => (system_time == p) && (system_time == ntp_time),
+        None => system_time == ntp_time,
+    };
     match check {
         true => Ok(()),
         false => Err(Error::InvalidClock),

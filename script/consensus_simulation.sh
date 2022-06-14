@@ -35,6 +35,7 @@ do
     -v \
     --consensus \
     --consensus-p2p-seed tcp://127.0.0.1:6000 \
+    --consensus-seed-rpc tcp://127.0.0.1:6010 \
     --sync-p2p-seed tcp://127.0.0.1:6020 \
     --consensus-p2p-accept tcp://127.0.0.1:600$i \
     --consensus-p2p-external tcp://127.0.0.1:600$i \
@@ -65,6 +66,7 @@ LOG_TARGETS="!sled,!net" ./darkfid \
     -v \
     --consensus \
     --consensus-p2p-seed tcp://127.0.0.1:6000 \
+    --consensus-seed-rpc tcp://127.0.0.1:6010 \
     --sync-p2p-seed tcp://127.0.0.1:6020 \
     --consensus-p2p-accept tcp://127.0.0.1:600$bound \
     --consensus-p2p-external tcp://127.0.0.1:600$bound \
