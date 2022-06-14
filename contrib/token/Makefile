@@ -17,7 +17,7 @@ SOL   = https://github.com/solana-labs/token-list/raw/main/src/tokens/solana.tok
 all: $(LISTS_MIN)
 
 .json.min.json:
-	jq -r -c < $< > $@
+	jq -r -c '.' < $< > $@
 
 darkfi_token_list.json:
 	git checkout -- $@
