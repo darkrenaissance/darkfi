@@ -11,7 +11,7 @@ ARG RUST_VER
 ARG ALPINE_VER
 
 RUN echo "=======================================================" \
-    &&echo "===>>>>> The following error will occur during the test::\n" \
+    &&echo "===>>>>> The following error will occur during the test::" \
     && echo "process didn't exit successfully: /opt/darkfi/target/release/deps/darkfi-7ff55152bc1bdc59 (signal: 11, SIGSEGV: invalid memory reference)" \
     && echo "rust ${RUST_VER} / alpine ${ALPINE_VER}" \
     && rustc -V && cargo -V \
