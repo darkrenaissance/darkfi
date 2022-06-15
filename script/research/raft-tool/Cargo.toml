@@ -1,0 +1,15 @@
+[package]
+name = "raft-tool"
+version = "0.3.0"
+edition = "2021"
+
+[dependencies.darkfi]
+path = "../../../"
+features = ["raft"]
+
+[dependencies]
+
+async-std = "1.11.0"
+sled = "0.34.7"
+
+[workspace]
