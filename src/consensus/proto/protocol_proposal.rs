@@ -2,7 +2,7 @@ use async_std::sync::Arc;
 
 use async_executor::Executor;
 use async_trait::async_trait;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use url::Url;
 
 use crate::{
@@ -59,18 +59,25 @@ impl ProtocolProposal {
                 }
             };
 
-            debug!("ProtocolProposal::handle_receive_proposal() recv: {:?}", proposal);
+            info!("ProtocolProposal::handle_receive_proposal() recv: {:?}", proposal);
 
             let proposal_copy = (*proposal).clone();
 
-            debug!("handle_receive_proposal(): Starting state transition validation");
+            debug!(
+                "ProtocolProposal::handle_receive_proposal(): Starting state transition validation"
+            );
             let canon_state_clone = self.state.read().await.state_machine.lock().await.clone();
             let mem_state = MemoryState::new(canon_state_clone);
 
             match ValidatorState::validate_state_transitions(mem_state, &proposal_copy.block.txs) {
-                Ok(_) => debug!("handle_receive_proposal(): State transition valid"),
+                Ok(_) => {
+                    debug!("ProtocolProposal::handle_receive_proposal(): State transition valid")
+                }
                 Err(e) => {
-                    warn!("handle_receive_proposal(): State transition fail: {}", e);
+                    warn!(
+                        "ProtocolProposal::handle_receive_proposal(): State transition fail: {}",
+                        e
+                    );
                     continue
                 }
             }
@@ -78,7 +85,7 @@ impl ProtocolProposal {
             let vote = match self.state.write().await.receive_proposal(&proposal_copy) {
                 Ok(v) => {
                     if v.is_none() {
-                        debug!("handle_receive_proposal(): Node didn't vote for proposed block.");
+                        debug!("ProtocolProposal::handle_receive_proposal(): Node didn't vote for proposed block.");
                         continue
                     }
                     v.unwrap()
@@ -90,18 +97,21 @@ impl ProtocolProposal {
             };
 
             if let Err(e) = self.state.write().await.receive_vote(&vote).await {
-                error!("handle_receive_proposal(): receive_vote error: {}", e);
+                error!("ProtocolProposal::handle_receive_proposal(): receive_vote error: {}", e);
                 continue
             }
 
             // Broadcast block to rest of nodes
             if let Err(e) = self.p2p.broadcast_with_exclude(proposal_copy, &exclude_list).await {
-                error!("handle_receive_proposal(): proposal broadcast fail: {}", e);
+                error!(
+                    "ProtocolProposal::handle_receive_proposal(): proposal broadcast fail: {}",
+                    e
+                );
             };
 
             // Broadcast vote
             if let Err(e) = self.p2p.broadcast(vote).await {
-                error!("handle_receive_proposal(): vote broadcast fail: {}", e);
+                error!("ProtocolProposal::handle_receive_proposal(): vote broadcast fail: {}", e);
             }
         }
     }

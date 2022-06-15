@@ -1,7 +1,7 @@
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 
 use crate::{
     consensus::{
@@ -57,7 +57,7 @@ impl ProtocolSync {
     }
 
     async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
-        debug!("handle_receive_request() [START]");
+        debug!("ProtocolSync::handle_receive_request() [START]");
         loop {
             let order = match self.request_sub.receive().await {
                 Ok(v) => v,
@@ -67,7 +67,7 @@ impl ProtocolSync {
                 }
             };
 
-            debug!("handle_receive_request() received {:?}", order);
+            debug!("ProtocolSync::handle_receive_request() received {:?}", order);
 
             // Extra validations can be added here
             let key = order.sl;
@@ -78,7 +78,7 @@ impl ProtocolSync {
                     continue
                 }
             };
-            debug!("handle_receive_request(): Found {} blocks", blocks.len());
+            debug!("ProtocolSync::handle_receive_request(): Found {} blocks", blocks.len());
 
             let response = BlockResponse { blocks };
             if let Err(e) = self.channel.send(response).await {
@@ -91,11 +91,13 @@ impl ProtocolSync {
         // Consensus-mode enabled nodes have already performed these steps,
         // during proposal finalization.
         if self.consensus_mode {
-            debug!("handle_receive_block(): node runs in consensus mode, skipping...");
+            debug!(
+                "ProtocolSync::handle_receive_block(): node runs in consensus mode, skipping..."
+            );
             return Ok(())
         }
 
-        debug!("handle_receive_block() [START]");
+        debug!("ProtocolSync::handle_receive_block() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
             let info = match self.block_sub.receive().await {
@@ -106,13 +108,13 @@ impl ProtocolSync {
                 }
             };
 
-            debug!("handle_receive_block() received block");
+            info!("ProtocolSync::handle_receive_block() Received block {}", info.blockhash());
 
             // We block here if there's a pending validation, otherwise we might
             // apply the same block twice.
-            debug!("handle_receive_block(): Waiting for pending block to apply");
+            debug!("ProtocolSync::handle_receive_block(): Waiting for pending block to apply");
             while *self.pending.lock().await {}
-            debug!("handle_receive_block(): Pending lock released");
+            debug!("ProtocolSync::handle_receive_block(): Pending lock released");
 
             // Node stores finalized block, if it doesn't exist (checking by slot),
             // and removes its transactions from the unconfirmed_txs vector.
@@ -123,51 +125,62 @@ impl ProtocolSync {
             let has_block = match self.state.read().await.blockchain.has_block(&info_copy) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("handle_receive_block(): failed checking for has_block(): {}", e);
+                    error!(
+                        "ProtocolSync::handle_receive_block(): failed checking for has_block(): {}",
+                        e
+                    );
                     *self.pending.lock().await = false;
                     continue
                 }
             };
 
             if !has_block {
-                debug!("handle_receive_block(): Starting state transition validation");
+                debug!(
+                    "ProtocolSync::handle_receive_block(): Starting state transition validation"
+                );
                 let canon_state_clone = self.state.read().await.state_machine.lock().await.clone();
                 let mem_state = MemoryState::new(canon_state_clone);
                 let state_updates =
                     match ValidatorState::validate_state_transitions(mem_state, &info.txs) {
                         Ok(v) => v,
                         Err(e) => {
-                            warn!("handle_receive_block(): State transition fail: {}", e);
+                            warn!(
+                                "ProtocolSync::handle_receive_block(): State transition fail: {}",
+                                e
+                            );
                             *self.pending.lock().await = false;
                             continue
                         }
                     };
-                debug!("handle_receive_block(): All state transitions passed");
+                debug!("ProtocolSync::handle_receive_block(): All state transitions passed");
 
-                debug!("handle_receive_block(): Updating canon state machine");
+                debug!("ProtocolSync::handle_receive_block(): Updating canon state machine");
                 if let Err(e) =
                     self.state.write().await.update_canon_state(state_updates, None).await
                 {
-                    error!("handle_receive_block(): Canon statemachine update fail: {}", e);
+                    error!(
+                        "ProtocolSync::handle_receive_block(): Canon statemachine update fail: {}",
+                        e
+                    );
                     *self.pending.lock().await = false;
                     continue
                 };
 
-                debug!("handle_receive_block(): Appending block to ledger");
+                debug!("ProtocolSync::handle_receive_block(): Appending block to ledger");
                 if let Err(e) = self.state.write().await.blockchain.add(&[info_copy.clone()]) {
-                    error!("handle_receive_block(): blockchain.add() fail: {}", e);
+                    error!("ProtocolSync::handle_receive_block(): blockchain.add() fail: {}", e);
                     *self.pending.lock().await = false;
                     continue
                 };
 
                 if let Err(e) = self.state.write().await.remove_txs(info_copy.txs.clone()) {
-                    error!("handle_receive_block(): remove_txs() fail: {}", e);
+                    error!("ProtocolSync::handle_receive_block(): remove_txs() fail: {}", e);
                     *self.pending.lock().await = false;
                     continue
                 };
 
                 if let Err(e) = self.p2p.broadcast_with_exclude(info_copy, &exclude_list).await {
-                    error!("handle_receive_block(): p2p broadcast fail: {}", e);
+                    error!("ProtocolSync::handle_receive_block(): p2p broadcast fail: {}", e);
                     *self.pending.lock().await = false;
                     continue
                 };

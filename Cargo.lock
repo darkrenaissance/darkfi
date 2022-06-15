@@ -1678,6 +1678,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "blake3",
+ "bs58",
  "chrono",
  "ctrlc-async",
  "darkfi",
