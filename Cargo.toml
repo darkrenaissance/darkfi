@@ -24,6 +24,7 @@ members = [
 	"bin/drk",
 	"bin/faucetd",
 	"bin/ircd",
+	"bin/irc-raft",
 	"bin/dnetview",
 	"bin/daod",
 	"bin/dao-cli",

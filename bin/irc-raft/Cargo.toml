@@ -1,0 +1,41 @@
+[package]
+name = "irc-raft"
+version = "0.3.0"
+homepage = "https://dark.fi"
+description = "P2P IRC daemon With Raft Consensus"
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[dependencies]
+darkfi = {path = "../../", features = ["net", "rpc", "raft"]}
+# Async
+smol = "1.2.5"
+futures = "0.3.21"
+futures-rustls = "0.22.1"
+async-std = "1.11.0"
+async-trait = "0.1.53"
+async-channel = "1.6.1"
+async-executor = "1.4.1"
+easy-parallel = "3.2.0"
+
+# Crypto
+crypto_box = "0.7.2"
+rand = "0.8.5"
+
+# Misc
+clap = {version = "3.1.18", features = ["derive"]}
+log = "0.4.17"
+simplelog = "0.12.0"
+fxhash = "0.2.1"
+ctrlc-async = {version= "3.2.2", default-features = false, features = ["async-std", "termination"]}
+url = "2.2.2"
+
+# Encoding and parsing
+serde_json = "1.0.81"
+serde = {version = "1.0.137", features = ["derive"]}
+structopt = "0.3.26"
+structopt-toml = "0.5.0"
+bs58 = "0.4.0"
+toml = "0.5.9"
