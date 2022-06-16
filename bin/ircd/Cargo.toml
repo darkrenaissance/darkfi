@@ -9,7 +9,7 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-darkfi = {path = "../../", features = ["net", "rpc", "raft"]}
+darkfi = {path = "../../", features = ["net", "rpc"]}
 # Async
 smol = "1.2.5"
 futures = "0.3.21"

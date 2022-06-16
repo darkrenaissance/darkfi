@@ -6,9 +6,13 @@ use fxhash::FxHashMap;
 use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
 
-use darkfi::{Error, Result};
+use darkfi::{net::P2pPtr, Error, Result};
 
-use crate::{crypto::encrypt_message, privmsg::Privmsg, ChannelInfo, SeenMsgIds};
+use crate::{
+    crypto::encrypt_message,
+    privmsg::{Privmsg, SeenMsgIds},
+    ChannelInfo,
+};
 
 const RPL_NOTOPIC: u32 = 331;
 const RPL_TOPIC: u32 = 332;
@@ -19,8 +23,8 @@ pub struct IrcServerConnection {
     is_user_init: bool,
     is_registered: bool,
     nickname: String,
-    seen_msg_id: SeenMsgIds,
-    p2p_sender: async_channel::Sender<Privmsg>,
+    seen_msg_ids: SeenMsgIds,
+    p2p: P2pPtr,
     auto_channels: Vec<String>,
     pub configured_chans: FxHashMap<String, ChannelInfo>,
 }
@@ -28,8 +32,8 @@ pub struct IrcServerConnection {
 impl IrcServerConnection {
     pub fn new(
         write_stream: WriteHalf<TcpStream>,
-        seen_msg_id: SeenMsgIds,
-        p2p_sender: async_channel::Sender<Privmsg>,
+        seen_msg_ids: SeenMsgIds,
+        p2p: P2pPtr,
         auto_channels: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
     ) -> Self {
@@ -39,8 +43,8 @@ impl IrcServerConnection {
             is_user_init: false,
             is_registered: false,
             nickname: "anon".to_string(),
-            seen_msg_id,
-            p2p_sender,
+            seen_msg_ids,
+            p2p,
             auto_channels,
             configured_chans,
         }
@@ -153,7 +157,7 @@ impl IrcServerConnection {
                             message.to_string()
                         };
 
-                        let random_id = OsRng.next_u32();
+                        let random_id = OsRng.next_u64();
 
                         let protocol_msg = Privmsg {
                             id: random_id,
@@ -162,12 +166,12 @@ impl IrcServerConnection {
                             message,
                         };
 
-                        let mut smi = self.seen_msg_id.lock().await;
+                        let mut smi = self.seen_msg_ids.lock().await;
                         smi.push(random_id);
                         drop(smi);
 
                         debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
-                        self.p2p_sender.send(protocol_msg).await?;
+                        self.p2p.broadcast(protocol_msg).await?;
                     }
                 }
             }
