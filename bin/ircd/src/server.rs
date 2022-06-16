@@ -18,35 +18,39 @@ const RPL_NOTOPIC: u32 = 331;
 const RPL_TOPIC: u32 = 332;
 
 pub struct IrcServerConnection {
+    // server stream
     write_stream: WriteHalf<TcpStream>,
+    // msg ids
+    seen_msg_ids: SeenMsgIds,
+    // user & channels
     is_nick_init: bool,
     is_user_init: bool,
     is_registered: bool,
     nickname: String,
-    seen_msg_ids: SeenMsgIds,
-    p2p: P2pPtr,
     auto_channels: Vec<String>,
     pub configured_chans: FxHashMap<String, ChannelInfo>,
+    // p2p
+    p2p: P2pPtr,
 }
 
 impl IrcServerConnection {
     pub fn new(
         write_stream: WriteHalf<TcpStream>,
         seen_msg_ids: SeenMsgIds,
-        p2p: P2pPtr,
         auto_channels: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
+        p2p: P2pPtr,
     ) -> Self {
         Self {
             write_stream,
+            seen_msg_ids,
             is_nick_init: false,
             is_user_init: false,
             is_registered: false,
             nickname: "anon".to_string(),
-            seen_msg_ids,
-            p2p,
             auto_channels,
             configured_chans,
+            p2p,
         }
     }
 

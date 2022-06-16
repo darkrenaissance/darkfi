@@ -81,13 +81,17 @@ async fn broadcast_msg(
 }
 
 async fn process(
-    p2p_receiver: Receiver<Privmsg>,
+    // server
     stream: TcpStream,
     peer_addr: SocketAddr,
-    p2p: net::P2pPtr,
+    // msg ids
     seen_msg_ids: SeenMsgIds,
+    // channels
     autojoin_chans: Vec<String>,
     configured_chans: FxHashMap<String, ChannelInfo>,
+    // p2p
+    p2p: net::P2pPtr,
+    p2p_receiver: Receiver<Privmsg>,
 ) -> Result<()> {
     let (reader, writer) = stream.split();
 
@@ -95,9 +99,9 @@ async fn process(
     let mut conn = IrcServerConnection::new(
         writer,
         seen_msg_ids.clone(),
-        p2p.clone(),
         autojoin_chans,
         configured_chans,
+        p2p.clone(),
     );
 
     loop {
@@ -211,13 +215,13 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
                 executor_cloned
                     .spawn(process(
-                        p2p_recv_channel.clone(),
                         stream,
                         peer_addr,
-                        p2p.clone(),
                         seen_msg_ids.clone(),
                         settings.autojoin.clone(),
                         configured_chans.clone(),
+                        p2p.clone(),
+                        p2p_recv_channel.clone(),
                     ))
                     .detach();
             }
