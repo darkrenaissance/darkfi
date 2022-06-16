@@ -36,6 +36,12 @@ impl SeedSession {
 
         if settings.seeds.is_empty() {
             warn!("Skipping seed sync process since no seeds are configured.");
+            // Store external address in hosts explicitly
+            match &settings.external_addr {
+                Some(addr) => self.p2p().hosts().store(vec![addr.clone()]).await,
+                None => (),
+            }
+
             return Ok(())
         }
 
