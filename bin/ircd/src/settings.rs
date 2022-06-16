@@ -33,10 +33,6 @@ pub struct Args {
     #[structopt(long = "irc", default_value = "tcp://127.0.0.1:11066")]
     pub irc_listen: Url,
 
-    /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.config/darkfi/ircd")]
-    pub datastore: String,
-
     /// Generate a new NaCl secret and exit
     #[structopt(long)]
     pub gen_secret: bool,
