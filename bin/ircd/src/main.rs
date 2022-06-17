@@ -11,6 +11,7 @@ use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
 use fxhash::FxHashMap;
 use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
+use ringbuffer::RingBufferWrite;
 use smol::future;
 use structopt_toml::StructOptToml;
 
@@ -33,12 +34,14 @@ pub mod settings;
 
 use crate::{
     crypto::try_decrypt_message,
-    privmsg::{Privmsg, SeenMsgIds},
+    privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
     protocol_privmsg::ProtocolPrivmsg,
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
     settings::{parse_configured_channels, Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
+
+const SIZE_OF_MSGS_BUFFER: usize = 4096;
 
 fn build_irc_msg(msg: &Privmsg) -> String {
     debug!("ABOUT TO SEND: {:?}", msg);
@@ -65,27 +68,13 @@ fn clean_input(mut line: String, peer_addr: &SocketAddr) -> Result<String> {
     Ok(line)
 }
 
-async fn broadcast_msg(
-    irc_msg: String,
-    peer_addr: SocketAddr,
-    conn: &mut IrcServerConnection,
-) -> Result<()> {
-    info!("Send msg to IRC client '{}' from {}", irc_msg, peer_addr);
-
-    if let Err(e) = conn.update(irc_msg).await {
-        warn!("Connection error: {} for {}", e, peer_addr);
-        return Err(Error::ChannelStopped)
-    }
-
-    Ok(())
-}
-
 async fn process(
     // server
     stream: TcpStream,
     peer_addr: SocketAddr,
-    // msg ids
+    // msgs
     seen_msg_ids: SeenMsgIds,
+    privmsgs_buffer: PrivmsgsBuffer,
     // channels
     autojoin_chans: Vec<String>,
     configured_chans: FxHashMap<String, ChannelInfo>,
@@ -99,6 +88,7 @@ async fn process(
     let mut conn = IrcServerConnection::new(
         writer,
         seen_msg_ids.clone(),
+        privmsgs_buffer.clone(),
         autojoin_chans,
         configured_chans,
         p2p.clone(),
@@ -109,7 +99,7 @@ async fn process(
         futures::select! {
             privmsg = p2p_receiver.recv().fuse() => {
                 let mut msg = privmsg?;
-                info!("Received msg from Raft: {:?}", msg);
+                info!("Received msg from P2p network: {:?}", msg);
 
                 // Try to potentially decrypt the incoming message.
                 if conn.configured_chans.contains_key(&msg.channel) {
@@ -125,6 +115,11 @@ async fn process(
                     }
                 }
 
+                // add the msg to buffer
+                {
+                    (*privmsgs_buffer.lock().await).push(msg.clone());
+                }
+
                 let irc_msg = build_irc_msg(&msg);
                 conn.reply(&irc_msg).await?;
             }
@@ -138,7 +133,13 @@ async fn process(
                     Ok(m) => m,
                     Err(e) => return Err(e)
                 };
-                broadcast_msg(irc_msg, peer_addr,&mut conn).await?;
+
+                info!("Send msg to IRC client '{}' from {}", irc_msg, peer_addr);
+
+                if let Err(e) = conn.update(irc_msg).await {
+                    warn!("Connection error: {} for {}", e, peer_addr);
+                    return Err(Error::ChannelStopped)
+                }
             }
         };
     }
@@ -146,6 +147,10 @@ async fn process(
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
+    let seen_msg_ids = Arc::new(Mutex::new(vec![]));
+    let privmsgs_buffer: PrivmsgsBuffer =
+        Arc::new(Mutex::new(ringbuffer::AllocRingBuffer::with_capacity(SIZE_OF_MSGS_BUFFER)));
+
     if settings.gen_secret {
         let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
         let encoded = bs58::encode(secret_key.as_bytes());
@@ -168,7 +173,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let registry = p2p.protocol_registry();
 
-    let seen_msg_ids = Arc::new(Mutex::new(vec![]));
     let seen_msg_ids_cloned = seen_msg_ids.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
@@ -218,6 +222,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                         stream,
                         peer_addr,
                         seen_msg_ids.clone(),
+                        privmsgs_buffer.clone(),
                         settings.autojoin.clone(),
                         configured_chans.clone(),
                         p2p.clone(),

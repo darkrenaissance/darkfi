@@ -5,12 +5,13 @@ use futures::{io::WriteHalf, AsyncWriteExt};
 use fxhash::FxHashMap;
 use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
+use ringbuffer::RingBufferWrite;
 
 use darkfi::{net::P2pPtr, Error, Result};
 
 use crate::{
     crypto::encrypt_message,
-    privmsg::{Privmsg, SeenMsgIds},
+    privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
     ChannelInfo,
 };
 
@@ -22,6 +23,7 @@ pub struct IrcServerConnection {
     write_stream: WriteHalf<TcpStream>,
     // msg ids
     seen_msg_ids: SeenMsgIds,
+    privmsgs_buffer: PrivmsgsBuffer,
     // user & channels
     is_nick_init: bool,
     is_user_init: bool,
@@ -37,6 +39,7 @@ impl IrcServerConnection {
     pub fn new(
         write_stream: WriteHalf<TcpStream>,
         seen_msg_ids: SeenMsgIds,
+        privmsgs_buffer: PrivmsgsBuffer,
         auto_channels: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
         p2p: P2pPtr,
@@ -44,6 +47,7 @@ impl IrcServerConnection {
         Self {
             write_stream,
             seen_msg_ids,
+            privmsgs_buffer,
             is_nick_init: false,
             is_user_init: false,
             is_registered: false,
@@ -170,9 +174,10 @@ impl IrcServerConnection {
                             message,
                         };
 
-                        let mut smi = self.seen_msg_ids.lock().await;
-                        smi.push(random_id);
-                        drop(smi);
+                        {
+                            (*self.seen_msg_ids.lock().await).push(random_id);
+                            (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
+                        }
 
                         debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
                         self.p2p.broadcast(protocol_msg).await?;
