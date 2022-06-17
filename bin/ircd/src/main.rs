@@ -43,13 +43,6 @@ use crate::{
 
 const SIZE_OF_MSGS_BUFFER: usize = 4096;
 
-fn build_irc_msg(msg: &Privmsg) -> String {
-    debug!("ABOUT TO SEND: {:?}", msg);
-    let irc_msg =
-        format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n", msg.nickname, msg.channel, msg.message);
-    irc_msg
-}
-
 fn clean_input(mut line: String, peer_addr: &SocketAddr) -> Result<String> {
     if line.is_empty() {
         warn!("Received empty line from {}. ", peer_addr);
@@ -61,6 +54,7 @@ fn clean_input(mut line: String, peer_addr: &SocketAddr) -> Result<String> {
         warn!("Closing connection.");
         return Err(Error::ChannelStopped)
     }
+
     // Remove CRLF
     line.pop();
     line.pop();
@@ -142,8 +136,7 @@ impl Ircd {
                             (*privmsgs_buffer.lock().await).push(msg.clone());
                         }
 
-                        let irc_msg = build_irc_msg(&msg);
-                        conn.reply(&irc_msg).await?;
+                        conn.reply(&msg.to_irc_msg()).await?;
                     }
                     err = reader.read_line(&mut line).fuse() => {
                         if let Err(e) = err {

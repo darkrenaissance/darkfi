@@ -17,3 +17,13 @@ pub struct Privmsg {
     pub channel: String,
     pub message: String,
 }
+
+impl Privmsg {
+    pub fn to_irc_msg(&self) -> String {
+        let irc_msg = format!(
+            ":{}!anon@dark.fi PRIVMSG {} :{}\r\n",
+            self.nickname, self.channel, self.message
+        );
+        irc_msg
+    }
+}
