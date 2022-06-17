@@ -179,6 +179,17 @@ then the only family of functions $\phi : \mathbb{R} \rightarrow
 \mathbb{R}$ satisfying this is the exponential function
 $$\phi(\alpha)=c^{\alpha} \mid c  \in \mathbb{R}$$
 
+#### no solution for the lead statement parameters, and constants $S,f, \alpha$ defined over group of integers.
+
+
+assume there is a solution for the lead statement parameters and constants $S, f, \alpha$ defined over group of integers.
+for the statement $y<T$, $$T=ord(G)\phi_{max}\phi(\alpha)=S\phi(\alpha)$$
+$$S=ord(G)\phi_{max}\phi(\alpha)$$
+such that S $in Z$
+$\phi_{max}=\phi(\alpha_{max})$ where $\alpha_{max}$ is the maximum stake value being $2^{64}$, following from the previous proof that the family of function haveing independent aggregation property is the exponential function $f^\alpha$, and $f \in Z | f>1$, the smallest value satisfying f is $f=2$, then $$\phi_{max} = 2^{2^{64}}$$
+note that since $ord(G)<<\phi_{max}$ thus $S<<1$, contradiction.
+
+
 
 ## Leaky non-resettable beacon
 
