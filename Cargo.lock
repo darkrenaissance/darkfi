@@ -69,6 +69,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 
 [[package]]
+name = "array-init"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6945cc5422176fc5e602e590c2878d2c2acd9a4fe20a4baa7c28022521698ec6"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2233,6 +2239,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "irc-raft"
+version = "0.3.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "async-trait",
+ "bs58",
+ "clap 3.1.18",
+ "crypto_box",
+ "ctrlc-async",
+ "darkfi",
+ "easy-parallel",
+ "futures",
+ "futures-rustls",
+ "fxhash",
+ "log",
+ "rand",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "toml",
+ "url",
+]
+
+[[package]]
 name = "ircd"
 version = "0.3.0"
 dependencies = [
@@ -2251,6 +2286,7 @@ dependencies = [
  "fxhash",
  "log",
  "rand",
+ "ringbuffer",
  "serde",
  "serde_json",
  "simplelog",
@@ -3282,6 +3318,15 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
+]
+
+[[package]]
+name = "ringbuffer"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b30a00730a27595dcf899dce512aa031dd650f86aafcb132fd8dd9f409b369d0"
+dependencies = [
+ "array-init",
 ]
 
 [[package]]

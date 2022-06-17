@@ -1,4 +1,4 @@
-use chrono::{Datelike, NaiveDate, NaiveDateTime};
+use chrono::{Datelike, NaiveDateTime, Utc};
 use serde_json::Value;
 
 use crate::{primitives::TaskInfo, TaskEvent};
@@ -18,12 +18,11 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
             let (month, year) =
                 (filter[..2].parse::<u32>().unwrap(), filter[2..].parse::<i32>().unwrap());
 
-            let year = year + 2000;
+            let year = year + (Utc::today().year() / 100) * 100;
             tasks.retain(|task| {
                 let date = task.created_at;
                 let task_date = NaiveDateTime::from_timestamp(date, 0).date();
-                let filter_date = NaiveDate::from_ymd(year, month, 1);
-                task_date.month() == filter_date.month() && task_date.year() == filter_date.year()
+                task_date.month() == month && task_date.year() == year
             })
         }
 

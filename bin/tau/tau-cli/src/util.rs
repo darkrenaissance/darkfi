@@ -12,8 +12,8 @@ use darkfi::{util::Timestamp, Result};
 
 /// Parse due date (e.g. "1503" for 15 March) as i64 timestamp.
 pub fn due_as_timestamp(due: &str) -> Option<i64> {
-    if due.len() != 4 {
-        error!("Due date must be of length 4 (e.g. \"1503\" for 15 March)");
+    if due.len() != 4 || !due.parse::<u32>().is_ok() {
+        error!("Due date must be digits of length 4 (e.g. \"1503\" for 15 March)");
         return None
     }
     let (day, month) = (due[..2].parse::<u32>().unwrap(), due[2..].parse::<u32>().unwrap());

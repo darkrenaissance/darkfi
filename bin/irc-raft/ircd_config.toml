@@ -4,10 +4,13 @@
 ## IRC listen URL
 #irc_listen="tcp://127.0.0.1:11066"
 
+## Sets Datastore Path
+#datastore="~/.config/darkfi/ircd"
+
 ## List of channels to autojoin for new client connections
 autojoin = ["#dev"]
 
-## P2P net settings
+## Raft net settings
 [net]
 ## P2P accept address
 #inbound="tls://127.0.0.1:11002" 
