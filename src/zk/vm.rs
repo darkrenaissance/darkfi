@@ -24,8 +24,8 @@ use halo2_proofs::{
 use log::debug;
 use pasta_curves::{group::Curve, pallas, Fp};
 
-use super::{
-    arith_chip::{ArithChip, ArithConfig, ArithInstruction},
+use super::gadget::{
+    arithmetic::{ArithChip, ArithConfig, ArithInstruction},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
     greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
 };

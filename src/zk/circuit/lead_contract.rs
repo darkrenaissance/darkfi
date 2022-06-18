@@ -30,8 +30,8 @@ use crate::crypto::{
     merkle_node::MerkleNode,
 };
 
-use crate::zk::{
-    arith_chip::{ArithChip, ArithConfig, ArithInstruction},
+use crate::zk::gadget::{
+    arithmetic::{ArithChip, ArithConfig, ArithInstruction},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
     greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
 };

@@ -1,4 +1,4 @@
-use darkfi::zk::{
+use darkfi::zk::gadget::{
     arith_chip::{ArithChip, ArithConfig, ArithInstruction},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
     greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
