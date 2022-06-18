@@ -2,7 +2,7 @@ use async_std::{
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
 };
-use std::{net::SocketAddr, sync::atomic::Ordering};
+use std::net::SocketAddr;
 
 use async_channel::Receiver;
 use async_executor::Executor;
@@ -30,6 +30,7 @@ pub mod protocol_privmsg;
 pub mod rpc;
 pub mod server;
 pub mod settings;
+pub mod util;
 
 use crate::{
     crypto::try_decrypt_message,
@@ -38,28 +39,10 @@ use crate::{
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
     settings::{parse_configured_channels, Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
+    util::clean_input,
 };
 
 const SIZE_OF_MSGS_BUFFER: usize = 4096;
-
-fn clean_input(mut line: String, peer_addr: &SocketAddr) -> Result<String> {
-    if line.is_empty() {
-        warn!("Received empty line from {}. ", peer_addr);
-        warn!("Closing connection.");
-        return Err(Error::ChannelStopped)
-    }
-
-    if &line[(line.len() - 2)..] != "\r\n" {
-        warn!("Closing connection.");
-        return Err(Error::ChannelStopped)
-    }
-
-    // Remove CRLF
-    line.pop();
-    line.pop();
-
-    Ok(line)
-}
 
 struct Ircd {
     // msgs
@@ -105,52 +88,63 @@ impl Ircd {
 
         let p2p_receiver = self.p2p_receiver.clone();
 
-        executor.spawn(async move {
-            loop {
-                let mut line = String::new();
-                futures::select! {
-                    privmsg = p2p_receiver.recv().fuse() => {
-                        let mut msg = privmsg?;
-                        info!("Received msg from P2p network: {:?}", msg);
+        executor
+            .spawn(async move {
+                loop {
+                    let mut line = String::new();
+                    futures::select! {
+                        privmsg = p2p_receiver.recv().fuse() => {
+                            let mut msg = privmsg?;
+                            info!("Received msg from P2p network: {:?}", msg);
 
-                        // Try to potentially decrypt the incoming message.
-                        if conn.configured_chans.contains_key(&msg.channel) {
-                            let chan_info = conn.configured_chans.get(&msg.channel).unwrap();
-                            if !chan_info.joined {
-                                continue
-                            }
-                            if let Some(salt_box) = &chan_info.salt_box {
-                                if let Some(decrypted_msg) = try_decrypt_message(salt_box, &msg.message) {
-                                    msg.message = decrypted_msg;
-                                    info!("Decrypted received message: {:?}", msg);
+                            // Try to potentially decrypt the incoming message.
+                            if conn.configured_chans.contains_key(&msg.channel) {
+                                let chan_info = conn.configured_chans.get(&msg.channel).unwrap();
+                                if !chan_info.joined {
+                                    continue
                                 }
+
+                                let salt_box = chan_info.salt_box.clone();
+                                if salt_box.is_none() {
+                                    continue
+                                }
+
+                                let decrypted_msg =
+                                    try_decrypt_message(&salt_box.unwrap(), &msg.message);
+
+                                if decrypted_msg.is_none() {
+                                    continue
+                                }
+
+                                msg.message = decrypted_msg.unwrap();
+                                info!("Decrypted received message: {:?}", msg);
+                            }
+
+                            conn.reply(&msg.to_irc_msg()).await?;
+                        }
+                        err = reader.read_line(&mut line).fuse() => {
+                            if let Err(e) = err {
+                                warn!("Read line error. Closing stream for {}: {}", peer_addr, e);
+                                return Ok(())
+                            }
+
+                            info!("Received msg from IRC client: {:?}", line);
+                            let irc_msg = match clean_input(line, &peer_addr) {
+                                Ok(m) => m,
+                                Err(e) => return Err(e)
+                            };
+
+                            info!("Send msg to IRC client '{}' from {}", irc_msg, peer_addr);
+
+                            if let Err(e) = conn.update(irc_msg).await {
+                                warn!("Connection error: {} for {}", e, peer_addr);
+                                return Err(Error::ChannelStopped)
                             }
                         }
-
-                        conn.reply(&msg.to_irc_msg()).await?;
-                    }
-                    err = reader.read_line(&mut line).fuse() => {
-                        if let Err(e) = err {
-                            warn!("Read line error. Closing stream for {}: {}", peer_addr, e);
-                            return Ok(())
-                        }
-
-                        info!("Received msg from IRC client: {:?}", line);
-                        let irc_msg = match clean_input(line, &peer_addr) {
-                            Ok(m) => m,
-                            Err(e) => return Err(e)
-                        };
-
-                        info!("Send msg to IRC client '{}' from {}", irc_msg, peer_addr);
-
-                        if let Err(e) = conn.update(irc_msg).await {
-                            warn!("Connection error: {} for {}", e, peer_addr);
-                            return Err(Error::ChannelStopped)
-                        }
-                    }
-                };
-            }
-        }).detach();
+                    };
+                }
+            })
+            .detach();
 
         Ok(())
     }
