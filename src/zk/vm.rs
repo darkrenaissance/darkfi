@@ -14,7 +14,7 @@ use halo2_gadgets::{
             MerklePath,
         },
     },
-    utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
+    utilities::lookup_range_check::LookupRangeCheckConfig,
 };
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
@@ -29,6 +29,7 @@ use super::gadget::{
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
 };
 
+use super::assign_free_advice;
 pub use super::vm_stack::{StackVar, Witness};
 use crate::{
     crypto::constants::{
@@ -114,10 +115,6 @@ impl ZkCircuit {
         let constants = circuit_code.constants.iter().map(|x| x.1.clone()).collect();
         Self { constants, witnesses, opcodes: circuit_code.opcodes }
     }
-}
-
-impl UtilitiesInstructions<pallas::Base> for ZkCircuit {
-    type Var = AssignedCell<Fp, Fp>;
 }
 
 impl Circuit<pallas::Base> for ZkCircuit {
@@ -285,7 +282,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         //let gt_chip = config.greaterthan_chip();
 
         // This constant one is used for short multiplication
-        let one = self.load_private(
+        let one = assign_free_advice(
             layouter.namespace(|| "Load constant one"),
             config.advices[0],
             Value::known(pallas::Base::one()),
@@ -337,7 +334,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                 Witness::Base(w) => {
                     debug!("Witnessing Base into circuit");
-                    let base = self.load_private(
+                    let base = assign_free_advice(
                         layouter.namespace(|| "Witness Base"),
                         config.advices[0],
                         *w,

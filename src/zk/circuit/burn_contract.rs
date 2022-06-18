@@ -14,7 +14,7 @@ use halo2_gadgets::{
             MerklePath,
         },
     },
-    utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
+    utilities::lookup_range_check::LookupRangeCheckConfig,
 };
 use halo2_proofs::{
     circuit::{floor_planner, AssignedCell, Layouter, Value},
@@ -108,10 +108,6 @@ pub struct BurnContract {
     pub leaf_pos: Value<u32>,
     pub merkle_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
     pub sig_secret: Value<pallas::Base>,
-}
-
-impl UtilitiesInstructions<pallas::Base> for BurnContract {
-    type Var = AssignedCell<Fp, Fp>;
 }
 
 impl Circuit<pallas::Base> for BurnContract {

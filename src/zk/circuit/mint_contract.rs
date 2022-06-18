@@ -7,7 +7,7 @@ use halo2_gadgets::{
         primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
         Pow5Config as PoseidonConfig,
     },
-    utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
+    utilities::lookup_range_check::LookupRangeCheckConfig,
 };
 use halo2_proofs::{
     circuit::{floor_planner, AssignedCell, Layouter, Value},
@@ -64,10 +64,6 @@ pub struct MintContract {
     pub value_blind: Value<pallas::Scalar>,
     /// Random blinding factor for the token ID
     pub token_blind: Value<pallas::Scalar>,
-}
-
-impl UtilitiesInstructions<pallas::Base> for MintContract {
-    type Var = AssignedCell<pallas::Base, pallas::Base>;
 }
 
 impl Circuit<pallas::Base> for MintContract {
