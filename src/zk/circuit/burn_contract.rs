@@ -17,7 +17,7 @@ use halo2_gadgets::{
     utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
 };
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner},
+    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn},
 };
 use pasta_curves::{pallas, Fp};
@@ -94,17 +94,16 @@ const BURN_SIGKEYY_OFFSET: usize = 7;
 
 #[derive(Default, Debug)]
 pub struct BurnContract {
-    pub secret_key: Option<pallas::Base>,
-    pub serial: Option<pallas::Base>,
-    pub value: Option<pallas::Base>,
-    pub token: Option<pallas::Base>,
-    pub coin_blind: Option<pallas::Base>,
-    pub value_blind: Option<pallas::Scalar>,
-    pub token_blind: Option<pallas::Scalar>,
-    pub leaf_pos: Option<u32>,
-    pub merkle_path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
-    //pub sig_secret: Option<pallas::Scalar>,
-    pub sig_secret: Option<pallas::Base>,
+    pub secret_key: Value<pallas::Base>,
+    pub serial: Value<pallas::Base>,
+    pub value: Value<pallas::Base>,
+    pub token: Value<pallas::Base>,
+    pub coin_blind: Value<pallas::Base>,
+    pub value_blind: Value<pallas::Scalar>,
+    pub token_blind: Value<pallas::Scalar>,
+    pub leaf_pos: Value<u32>,
+    pub merkle_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
+    pub sig_secret: Value<pallas::Base>,
 }
 
 impl UtilitiesInstructions<pallas::Base> for BurnContract {
@@ -335,7 +334,7 @@ impl Circuit<pallas::Base> for BurnContract {
         // Merkle root
         // ===========
 
-        let path: Option<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
+        let path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
             self.merkle_path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
         let merkle_inputs = MerklePath::construct(
@@ -362,7 +361,7 @@ impl Circuit<pallas::Base> for BurnContract {
         let one = self.load_private(
             layouter.namespace(|| "load constant one"),
             config.advices[0],
-            Some(pallas::Base::one()),
+            Value::known(pallas::Base::one()),
         )?;
 
         let value =

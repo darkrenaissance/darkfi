@@ -2,7 +2,7 @@ use std::{marker::PhantomData, ops::Deref};
 
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Chip, Layouter, Region},
+    circuit::{AssignedCell, Chip, Layouter, Region, Value},
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector, TableColumn},
     poly::Rotation,
 };
@@ -21,18 +21,11 @@ impl EvenBitsConfig {
     pub fn load_private<F: FieldExt>(
         &self,
         mut layouter: impl Layouter<F>,
-        value: Option<F>,
+        value: Value<F>,
     ) -> Result<AssignedCell<F, F>, Error> {
         layouter.assign_region(
             || "load private",
-            |mut region| {
-                region.assign_advice(
-                    || "private input",
-                    self.advice[0],
-                    0,
-                    || value.ok_or(Error::Synthesis),
-                )
-            },
+            |mut region| region.assign_advice(|| "private input", self.advice[0], 0, || value),
         )
     }
 }
@@ -112,7 +105,7 @@ impl<F: FieldExt, const WORD_BITS: u32> EvenBitsChip<F, WORD_BITS> {
                         || format!("even_bits row {}", i),
                         self.config.even_bits,
                         i,
-                        || Ok(F::from(even_bits_at(i) as u64)),
+                        || Value::known(F::from(even_bits_at(i) as u64)),
                     )?;
                 }
                 Ok(())
@@ -192,21 +185,11 @@ impl<F: FieldExt, const WORD_BITS: u32> EvenBitsLookup<F> for EvenBitsChip<F, WO
 
                 let o_eo = c.value().cloned().map(decompose);
                 let e_cell = region
-                    .assign_advice(
-                        || "even bits",
-                        config.advice[0],
-                        0,
-                        || o_eo.map(|eo| *eo.0).ok_or(Error::Synthesis),
-                    )
+                    .assign_advice(|| "even bits", config.advice[0], 0, || o_eo.map(|eo| *eo.0))
                     .map(EvenBits)?;
 
                 let o_cell = region
-                    .assign_advice(
-                        || "odd bits",
-                        config.advice[1],
-                        0,
-                        || o_eo.map(|eo| *eo.1).ok_or(Error::Synthesis),
-                    )
+                    .assign_advice(|| "odd bits", config.advice[1], 0, || o_eo.map(|eo| *eo.1))
                     .map(OddBits)?;
 
                 c.copy_advice(|| "out", &mut region, config.advice[0], 1)?;

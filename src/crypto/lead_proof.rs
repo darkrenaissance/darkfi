@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use halo2_proofs::circuit::Value;
 use log::debug;
 use pasta_curves::pallas;
 use rand::rngs::OsRng;
@@ -25,23 +26,23 @@ pub fn create_lead_proof(pk: ProvingKey, coin: LeadCoin) -> Result<Proof> {
     let mau_y: pallas::Base = pallas::Base::from(yu64);
     let mau_rho: pallas::Base = pallas::Base::from(rhou64);
     let contract = LeadContract {
-        path: coin.path,
-        coin_pk_x: coin.pk_x,
-        coin_pk_y: coin.pk_y,
-        root_sk: coin.root_sk,
-        sf_root_sk: Some(mod_r_p(coin.root_sk.unwrap())),
-        path_sk: coin.path_sk,
-        coin_timestamp: coin.tau, //
-        coin_nonce: coin.nonce,
-        coin_opening_1: Some(mod_r_p(coin.opening1.unwrap())),
-        value: coin.value,
-        coin_opening_2: Some(mod_r_p(coin.opening2.unwrap())),
-        cm_pos: Some(coin.idx),
-        //sn_c1: Some(coin.sn.unwrap()),
-        slot: Some(coin.sl.unwrap()),
-        mau_rho: Some(mod_r_p(mau_rho)),
-        mau_y: Some(mod_r_p(mau_y)),
-        root_cm: Some(coin.root_cm.unwrap()),
+        path: Value::known(coin.path.unwrap()),
+        coin_pk_x: Value::known(coin.pk_x.unwrap()),
+        coin_pk_y: Value::known(coin.pk_y.unwrap()),
+        root_sk: Value::known(coin.root_sk.unwrap()),
+        sf_root_sk: Value::known(mod_r_p(coin.root_sk.unwrap())),
+        path_sk: Value::known(coin.path_sk.unwrap()),
+        coin_timestamp: Value::known(coin.tau.unwrap()),
+        coin_nonce: Value::known(coin.nonce.unwrap()),
+        coin_opening_1: Value::known(mod_r_p(coin.opening1.unwrap())),
+        value: Value::known(coin.value.unwrap()),
+        coin_opening_2: Value::known(mod_r_p(coin.opening2.unwrap())),
+        cm_pos: Value::known(coin.idx),
+        //sn_c1: Value::known(coin.sn.unwrap()),
+        slot: Value::known(coin.sl.unwrap()),
+        mau_rho: Value::known(mod_r_p(mau_rho)),
+        mau_y: Value::known(mod_r_p(mau_y)),
+        root_cm: Value::known(coin.root_cm.unwrap()),
     };
 
     let start = Instant::now();

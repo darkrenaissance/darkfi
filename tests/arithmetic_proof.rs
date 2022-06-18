@@ -10,6 +10,7 @@ use darkfi::{
     zkas::decoder::ZkBinary,
     Result,
 };
+use halo2_proofs::circuit::Value;
 use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
@@ -34,7 +35,7 @@ fn arithmetic_proof() -> Result<()> {
     let y_0 = pallas::Base::from(0); // Here we will compare a > b, which is false (0)
     let y_1 = pallas::Base::from(1); // Here we will compare b > a, which is true (1)
 
-    let prover_witnesses = vec![Witness::Base(Some(a)), Witness::Base(Some(b))];
+    let prover_witnesses = vec![Witness::Base(Value::known(a)), Witness::Base(Value::known(b))];
 
     // Create the public inputs
     let sum = a + b;

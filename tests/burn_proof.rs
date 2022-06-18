@@ -14,6 +14,7 @@ use darkfi::{
     Result,
 };
 use halo2_gadgets::poseidon::primitives as poseidon;
+use halo2_proofs::circuit::Value;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{
     arithmetic::CurveAffine,
@@ -72,16 +73,16 @@ fn burn_proof() -> Result<()> {
     let leaf_pos: u64 = leaf_pos.into();
 
     let prover_witnesses = vec![
-        Witness::Base(Some(secret.0)),
-        Witness::Base(Some(serial)),
-        Witness::Base(Some(pallas::Base::from(value))),
-        Witness::Base(Some(token_id)),
-        Witness::Base(Some(coin_blind)),
-        Witness::Scalar(Some(value_blind)),
-        Witness::Scalar(Some(token_blind)),
-        Witness::Uint32(Some(leaf_pos.try_into().unwrap())),
-        Witness::MerklePath(Some(merkle_path.try_into().unwrap())),
-        Witness::Base(Some(sig_secret.0)),
+        Witness::Base(Value::known(secret.0)),
+        Witness::Base(Value::known(serial)),
+        Witness::Base(Value::known(pallas::Base::from(value))),
+        Witness::Base(Value::known(token_id)),
+        Witness::Base(Value::known(coin_blind)),
+        Witness::Scalar(Value::known(value_blind)),
+        Witness::Scalar(Value::known(token_blind)),
+        Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
+        Witness::MerklePath(Value::known(merkle_path.try_into().unwrap())),
+        Witness::Base(Value::known(sig_secret.0)),
     ];
 
     // Create the public inputs

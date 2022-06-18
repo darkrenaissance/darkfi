@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Chip, Layouter, Region},
+    circuit::{AssignedCell, Chip, Layouter, Region, Value},
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Instance, Selector},
     poly::Rotation,
 };
@@ -174,21 +174,19 @@ impl<const WORD_BITS: u32> GreaterThanInstruction<pallas::Base>
                         config.advice[0],
                         1,
                         || {
-                            let is_greater = a.0.value().unwrap().get_lower_128() >
-                                b.0.value().unwrap().get_lower_128();
-                            a.0.value()
-                                .and_then(|a| {
-                                    b.0.value().map(|b| {
-                                        let x = *a - *b;
+                            let is_greater = a.0.value().inner().unwrap().get_lower_128() >
+                                b.0.value().get_lower_128();
+                            a.0.value().and_then(|a| {
+                                b.0.value().map(|b| {
+                                    let x = *a - *b;
 
-                                        (if is_greater {
-                                            pallas::Base::from(2_u64.pow(WORD_BITS))
-                                        } else {
-                                            pallas::Base::zero()
-                                        }) - x
-                                    })
+                                    (if is_greater {
+                                        pallas::Base::from(2_u64.pow(WORD_BITS))
+                                    } else {
+                                        pallas::Base::zero()
+                                    }) - x
                                 })
-                                .ok_or(Error::Synthesis)
+                            })
                         },
                     )
                     .map(Word)?;
@@ -199,9 +197,13 @@ impl<const WORD_BITS: u32> GreaterThanInstruction<pallas::Base>
                         config.advice[1],
                         1,
                         || {
-                            let is_greater = a.0.value().unwrap().get_lower_128() >
-                                b.0.value().unwrap().get_lower_128();
-                            Ok(if is_greater { pallas::Base::one() } else { pallas::Base::zero() })
+                            let is_greater = a.0.value().inner().unwrap().get_lower_128() >
+                                b.0.value().get_lower_128();
+                            Value::known(if is_greater {
+                                pallas::Base::one()
+                            } else {
+                                pallas::Base::zero()
+                            })
                         },
                     )
                     .map(Word)?;

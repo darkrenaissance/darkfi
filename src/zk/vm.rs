@@ -17,7 +17,7 @@ use halo2_gadgets::{
     utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
 };
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner},
+    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
     plonk,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
@@ -27,7 +27,6 @@ use pasta_curves::{group::Curve, pallas, Fp};
 use super::gadget::{
     arithmetic::{ArithChip, ArithConfig, ArithInstruction},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
-    greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
 };
 
 pub use super::vm_stack::{StackVar, Witness};
@@ -52,7 +51,7 @@ pub struct VmConfig {
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
     arith_config: ArithConfig,
     evenbits_config: EvenBitsConfig,
-    greaterthan_config: GreaterThanConfig,
+    //greaterthan_config: GreaterThanConfig,
 }
 
 impl VmConfig {
@@ -98,9 +97,9 @@ impl VmConfig {
         EvenBitsChip::construct(self.evenbits_config.clone())
     }
 
-    fn greaterthan_chip(&self) -> GreaterThanChip<pallas::Base, 24> {
-        GreaterThanChip::construct(self.greaterthan_config.clone())
-    }
+    //fn greaterthan_chip(&self) -> GreaterThanChip<pallas::Base, 24> {
+    //  GreaterThanChip::construct(self.greaterthan_config.clone())
+    //    }
 }
 
 #[derive(Clone, Default)]
@@ -208,8 +207,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let evenbits_config = EvenBitsChip::<pallas::Base, 24>::configure(meta);
 
         // Configuration for the GreaterThan chip
-        let greaterthan_config =
-            GreaterThanChip::<pallas::Base, 24>::configure(meta, [advices[8], advices[9]], primary);
+        //let greaterthan_config =
+        //            GreaterThanChip::<pallas::Base, 24>::configure(meta, [advices[8], advices[9]], primary);
 
         // Configuration for a Sinsemilla hash instantiation and a
         // Merkle hash instantiation using this Sinsemilla instance.
@@ -252,7 +251,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             poseidon_config,
             arith_config,
             evenbits_config,
-            greaterthan_config,
+            //greaterthan_config,
         }
     }
 
@@ -283,13 +282,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
         eb_chip.alloc_table(&mut layouter.namespace(|| "alloc table"))?;
 
         // Construct the GreaterThan chip.
-        let gt_chip = config.greaterthan_chip();
+        //let gt_chip = config.greaterthan_chip();
 
         // This constant one is used for short multiplication
         let one = self.load_private(
             layouter.namespace(|| "Load constant one"),
             config.advices[0],
-            Some(pallas::Base::one()),
+            Value::known(pallas::Base::one()),
         )?;
 
         // Lookup and push the constants onto the stack
@@ -355,7 +354,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                 Witness::MerklePath(w) => {
                     debug!("Witnessing MerklePath into circuit");
-                    let path: Option<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
+                    let path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
                         w.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
                     debug!("Pushing MerklePath to stack index {}", stack.len());
@@ -584,6 +583,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     stack.push(StackVar::Base(difference));
                 }
 
+                /*
                 Opcode::GreaterThan => {
                     debug!("Executing `GreaterThan{:?}` opcode", opcode.1);
                     let args = &opcode.1;
@@ -605,7 +605,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Pushing comparison result to stack index {}", stack.len());
                     stack.push(StackVar::Base(greater_than.0));
                 }
-
+                */
                 Opcode::ConstrainInstance => {
                     debug!("Executing `ConstrainInstance{:?}` opcode", opcode.1);
                     let args = &opcode.1;

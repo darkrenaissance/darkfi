@@ -13,6 +13,7 @@ use darkfi::{
     Result,
 };
 use halo2_gadgets::poseidon::primitives as poseidon;
+use halo2_proofs::circuit::Value;
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::Field, Curve},
@@ -41,14 +42,14 @@ fn mint_proof() -> Result<()> {
     let coords = public_key.0.to_affine().coordinates().unwrap();
 
     let prover_witnesses = vec![
-        Witness::Base(Some(*coords.x())),
-        Witness::Base(Some(*coords.y())),
-        Witness::Base(Some(pallas::Base::from(value))),
-        Witness::Base(Some(token_id)),
-        Witness::Base(Some(serial)),
-        Witness::Base(Some(coin_blind)),
-        Witness::Scalar(Some(value_blind)),
-        Witness::Scalar(Some(token_blind)),
+        Witness::Base(Value::known(*coords.x())),
+        Witness::Base(Value::known(*coords.y())),
+        Witness::Base(Value::known(pallas::Base::from(value))),
+        Witness::Base(Value::known(token_id)),
+        Witness::Base(Value::known(serial)),
+        Witness::Base(Value::known(coin_blind)),
+        Witness::Scalar(Value::known(value_blind)),
+        Witness::Scalar(Value::known(token_blind)),
     ];
 
     // Create the public inputs

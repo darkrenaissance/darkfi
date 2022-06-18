@@ -13,9 +13,8 @@ use halo2_gadgets::{
     },
     utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
 };
-
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner},
+    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn},
 };
 
@@ -33,7 +32,6 @@ use crate::crypto::{
 use crate::zk::gadget::{
     arithmetic::{ArithChip, ArithConfig, ArithInstruction},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
-    greater_than::{GreaterThanChip, GreaterThanConfig, GreaterThanInstruction},
 };
 
 use pasta_curves::group::{ff::PrimeField, GroupEncoding};
@@ -52,7 +50,7 @@ pub struct LeadConfig {
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     _sinsemilla_config_2:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    greaterthan_config: GreaterThanConfig,
+    //greaterthan_config: GreaterThanConfig,
     evenbits_config: EvenBitsConfig,
     arith_config: ArithConfig,
 }
@@ -78,9 +76,9 @@ impl LeadConfig {
         MerkleChip::construct(self.merkle_config_2.clone())
     }
 
-    fn greaterthan_chip(&self) -> GreaterThanChip<pallas::Base, WORD_BITS> {
-        GreaterThanChip::construct(self.greaterthan_config.clone())
-    }
+    // fn greaterthan_chip(&self) -> GreaterThanChip<pallas::Base, WORD_BITS> {
+    // GreaterThanChip::construct(self.greaterthan_config.clone())
+    // }
 
     fn evenbits_chip(&self) -> EvenBitsChip<pallas::Base, WORD_BITS> {
         EvenBitsChip::construct(self.evenbits_config.clone())
@@ -110,25 +108,25 @@ pub fn concat_u8(lhs: &[u8], rhs: &[u8]) -> Vec<u8> {
 #[derive(Default, Debug)]
 pub struct LeadContract {
     // witness
-    pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
-    pub coin_pk_x: Option<pallas::Base>,
-    pub coin_pk_y: Option<pallas::Base>,
-    pub root_sk: Option<pallas::Base>, // coins merkle tree secret key of coin1
-    pub sf_root_sk: Option<pallas::Scalar>, // root_sk as pallas::Scalar
-    pub path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the secret key root_sk
-    pub coin_timestamp: Option<pallas::Base>,
-    pub coin_nonce: Option<pallas::Base>,
-    pub coin_opening_1: Option<pallas::Scalar>,
-    pub value: Option<pallas::Base>,
-    pub coin_opening_2: Option<pallas::Scalar>,
+    pub path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
+    pub coin_pk_x: Value<pallas::Base>,
+    pub coin_pk_y: Value<pallas::Base>,
+    pub root_sk: Value<pallas::Base>, // coins merkle tree secret key of coin1
+    pub sf_root_sk: Value<pallas::Scalar>, // root_sk as pallas::Scalar
+    pub path_sk: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the secret key root_sk
+    pub coin_timestamp: Value<pallas::Base>,
+    pub coin_nonce: Value<pallas::Base>,
+    pub coin_opening_1: Value<pallas::Scalar>,
+    pub value: Value<pallas::Base>,
+    pub coin_opening_2: Value<pallas::Scalar>,
     // public advices
-    pub cm_pos: Option<u32>,
+    pub cm_pos: Value<u32>,
     //
     //pub sn_c1 : Option<pallas::Base>,
-    pub slot: Option<pallas::Base>,
-    pub mau_rho: Option<pallas::Scalar>,
-    pub mau_y: Option<pallas::Scalar>,
-    pub root_cm: Option<pallas::Scalar>,
+    pub slot: Value<pallas::Base>,
+    pub mau_rho: Value<pallas::Scalar>,
+    pub mau_y: Value<pallas::Scalar>,
+    pub root_cm: Value<pallas::Scalar>,
     //pub eta : Option<u32>,
     //pub rho : Option<u32>,
     //pub h : Option<u32>, // hash of this data
@@ -232,11 +230,11 @@ impl Circuit<pallas::Base> for LeadContract {
             (sinsemilla_config_2, merkle_config_2)
         };
 
-        let greaterthan_config = GreaterThanChip::<pallas::Base, WORD_BITS>::configure(
-            meta,
-            advices[10..12].try_into().unwrap(),
-            primary,
-        );
+        // let greaterthan_config = GreaterThanChip::<pallas::Base, WORD_BITS>::configure(
+        // meta,
+        // advices[10..12].try_into().unwrap(),
+        // primary,
+        // );
         let evenbits_config = EvenBitsChip::<pallas::Base, WORD_BITS>::configure(meta);
         let arith_config = ArithChip::configure(meta, advices[7], advices[8], advices[6]);
 
@@ -249,7 +247,7 @@ impl Circuit<pallas::Base> for LeadContract {
             merkle_config_2,
             sinsemilla_config_1,
             _sinsemilla_config_2: sinsemilla_config_2,
-            greaterthan_config,
+            //greaterthan_config,
             evenbits_config,
             arith_config,
         }
@@ -265,7 +263,7 @@ impl Circuit<pallas::Base> for LeadContract {
         let ar_chip = config.arith_chip();
         let _ps_chip = config.poseidon_chip();
         let eb_chip = config.evenbits_chip();
-        let greater_than_chip = config.greaterthan_chip();
+        //let greater_than_chip = config.greaterthan_chip();
 
         eb_chip.alloc_table(&mut layouter.namespace(|| "alloc table"))?;
 
@@ -276,7 +274,7 @@ impl Circuit<pallas::Base> for LeadContract {
         let one = self.load_private(
             layouter.namespace(|| "one"),
             config.advices[0],
-            Some(pallas::Base::one()),
+            Value::known(pallas::Base::one()),
         )?;
 
         // coin_timestamp tau
@@ -671,7 +669,7 @@ impl Circuit<pallas::Base> for LeadContract {
         let y_commit_base = self.load_private(
             layouter.namespace(|| "load coin y commit as pallas::base"),
             config.advices[0],
-            Some(y_commit_base_temp),
+            Value::known(y_commit_base_temp),
         )?;
 
         // ============================
@@ -701,13 +699,13 @@ impl Circuit<pallas::Base> for LeadContract {
         let scalar = self.load_private(
             layouter.namespace(|| "load scalar "),
             config.advices[0],
-            Some(pallas::Base::from(1024)),
+            Value::known(pallas::Base::from(1024)),
         )?;
         //leadership coefficient
         let c = self.load_private(
             layouter.namespace(|| ""),
             config.advices[0],
-            Some(pallas::Base::one()), // note! this parameter to be tuned.
+            Value::known(pallas::Base::one()), // note! this parameter to be tuned.
         )?;
         let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
         let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value)?;
@@ -715,14 +713,14 @@ impl Circuit<pallas::Base> for LeadContract {
         eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
         eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
 
-        let (helper, is_gt) = greater_than_chip.greater_than(
-            layouter.namespace(|| "t>y"),
-            target.into(),
-            y_commit_base.into(),
-        )?;
-        eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
+        //let (helper, is_gt) = greater_than_chip.greater_than(
+        //  layouter.namespace(|| "t>y"),
+        //target.into(),
+        //            y_commit_base.into(),
+        //      )?;
+        //eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
 
-        layouter.constrain_instance(is_gt.0.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?;
+        //layouter.constrain_instance(is_gt.0.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?;
 
         Ok(())
     }
