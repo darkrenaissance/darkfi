@@ -3,8 +3,7 @@ use async_std::sync::Arc;
 use async_executor::Executor;
 use async_trait::async_trait;
 use log::debug;
-use ringbuffer::RingBufferWrite;
-use url::Url;
+use ringbuffer::{RingBufferExt, RingBufferWrite};
 
 use darkfi::{net, Result};
 
@@ -17,7 +16,7 @@ pub struct ProtocolPrivmsg {
     p2p: net::P2pPtr,
     msg_ids: SeenMsgIds,
     msgs: PrivmsgsBuffer,
-    channel_address: Url,
+    channel: net::ChannelPtr,
 }
 
 impl ProtocolPrivmsg {
@@ -33,22 +32,30 @@ impl ProtocolPrivmsg {
 
         let msg_sub =
             channel.subscribe_msg::<Privmsg>().await.expect("Missing Privmsg dispatcher!");
-        let channel_address = channel.address();
 
         Arc::new(Self {
             notify_queue_sender,
             msg_sub,
-            jobsman: net::ProtocolJobsManager::new("ProtocolPrivmsg", channel),
+            jobsman: net::ProtocolJobsManager::new("ProtocolPrivmsg", channel.clone()),
             p2p,
             msg_ids,
             msgs,
-            channel_address,
+            channel,
         })
     }
 
     async fn handle_receive_msg(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_msg() [START]");
-        let exclude_list = vec![self.channel_address.clone()];
+        let exclude_list = vec![self.channel.address().clone()];
+
+        // once a channel get started
+        let msgs_buffer = self.msgs.lock().await;
+        let msgs = msgs_buffer.to_vec();
+        drop(msgs_buffer);
+        for m in msgs {
+            self.channel.send(m.clone()).await?;
+        }
+
         loop {
             let msg = self.msg_sub.receive().await?;
 
