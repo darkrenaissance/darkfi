@@ -394,6 +394,8 @@ mod tests {
         proof.verify(&verifying_key, &public_inputs)?;
         println!("Proof verified [{:?}]", now.elapsed());
 
+        println!("Proof size [{} kB]", proof.as_ref().len() as f64 / 1024.0);
+
         Ok(())
     }
 }
