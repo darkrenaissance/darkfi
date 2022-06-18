@@ -105,19 +105,19 @@ impl Ircd {
                                 }
 
                                 let salt_box = chan_info.salt_box.clone();
-                                if salt_box.is_none() {
-                                    continue
+
+                                if salt_box.is_some() {
+                                    let decrypted_msg =
+                                        try_decrypt_message(&salt_box.unwrap(), &msg.message);
+
+                                    if decrypted_msg.is_none() {
+                                        continue
+                                    }
+
+                                    msg.message = decrypted_msg.unwrap();
+                                    info!("Decrypted received message: {:?}", msg);
                                 }
 
-                                let decrypted_msg =
-                                    try_decrypt_message(&salt_box.unwrap(), &msg.message);
-
-                                if decrypted_msg.is_none() {
-                                    continue
-                                }
-
-                                msg.message = decrypted_msg.unwrap();
-                                info!("Decrypted received message: {:?}", msg);
                             }
 
                             conn.reply(&msg.to_irc_msg()).await?;
