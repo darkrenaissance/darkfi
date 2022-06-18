@@ -487,7 +487,9 @@ mod tests {
     use crate::{
         crypto::{
             keypair::{PublicKey, SecretKey},
+            proof::{ProvingKey, VerifyingKey},
             util::{mod_r_p, pedersen_commitment_scalar},
+            Proof,
         },
         Result,
     };
@@ -500,6 +502,7 @@ mod tests {
     use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
     use pasta_curves::arithmetic::CurveAffine;
     use rand::rngs::OsRng;
+    use std::time::Instant;
 
     #[test]
     fn burn_circuit_assert() -> Result<()> {
@@ -578,8 +581,26 @@ mod tests {
         let root = root.titled("Burn Circuit Layout", ("sans-serif", 60)).unwrap();
         CircuitLayout::default().render(11, &circuit, &root).unwrap();
 
-        let prover = MockProver::run(11, &circuit, vec![public_inputs])?;
+        let prover = MockProver::run(11, &circuit, vec![public_inputs.clone()])?;
         prover.assert_satisfied();
+
+        let now = Instant::now();
+        let proving_key = ProvingKey::build(11, &circuit);
+        println!("ProvingKey built [{:?}]", now.elapsed());
+        let now = Instant::now();
+        let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
+        println!("Proof created [{:?}]", now.elapsed());
+
+        let circuit = BurnContract::default();
+        let now = Instant::now();
+        let verifying_key = VerifyingKey::build(11, &circuit);
+        println!("VerifyingKey built [{:?}]", now.elapsed());
+        let now = Instant::now();
+        proof.verify(&verifying_key, &public_inputs)?;
+        println!("Proof verified [{:?}]", now.elapsed());
+
+        println!("Proof size [{} kB]", proof.as_ref().len() as f64 / 1024.0);
+
         Ok(())
     }
 }
