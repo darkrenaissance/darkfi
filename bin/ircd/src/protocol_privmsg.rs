@@ -1,20 +1,22 @@
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 
 use async_executor::Executor;
 use async_trait::async_trait;
 use log::debug;
+use ringbuffer::RingBufferWrite;
 use url::Url;
 
 use darkfi::{net, Result};
 
-use crate::Privmsg;
+use crate::privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds};
 
 pub struct ProtocolPrivmsg {
     jobsman: net::ProtocolJobsManagerPtr,
     notify_queue_sender: async_channel::Sender<Privmsg>,
     msg_sub: net::MessageSubscription<Privmsg>,
     p2p: net::P2pPtr,
-    msg_ids: Arc<Mutex<Vec<u64>>>,
+    msg_ids: SeenMsgIds,
+    msgs: PrivmsgsBuffer,
     channel_address: Url,
 }
 
@@ -23,7 +25,8 @@ impl ProtocolPrivmsg {
         channel: net::ChannelPtr,
         notify_queue_sender: async_channel::Sender<Privmsg>,
         p2p: net::P2pPtr,
-        msg_ids: Arc<Mutex<Vec<u64>>>,
+        msg_ids: SeenMsgIds,
+        msgs: PrivmsgsBuffer,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Privmsg>().await;
@@ -38,6 +41,7 @@ impl ProtocolPrivmsg {
             jobsman: net::ProtocolJobsManager::new("ProtocolPrivmsg", channel),
             p2p,
             msg_ids,
+            msgs,
             channel_address,
         })
     }
@@ -54,6 +58,9 @@ impl ProtocolPrivmsg {
 
             self.msg_ids.lock().await.push(msg.id);
             let msg = (*msg).clone();
+
+            // add the msg to the buffer
+            self.msgs.lock().await.push(msg.clone());
 
             self.notify_queue_sender.send(msg.clone()).await?;
 
