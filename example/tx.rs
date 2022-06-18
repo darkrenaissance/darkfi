@@ -129,9 +129,8 @@ fn main() -> Result<()> {
 
     let keypair = Keypair::random(&mut OsRng);
 
-    const K: u32 = 11;
-    let mint_vk = VerifyingKey::build(K, &MintContract::default());
-    let burn_vk = VerifyingKey::build(K, &BurnContract::default());
+    let mint_vk = VerifyingKey::build(8, &MintContract::default());
+    let burn_vk = VerifyingKey::build(11, &BurnContract::default());
 
     let mut state = MemoryState {
         tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
@@ -162,8 +161,8 @@ fn main() -> Result<()> {
         }],
     };
 
-    let mint_pk = ProvingKey::build(K, &MintContract::default());
-    let burn_pk = ProvingKey::build(K, &BurnContract::default());
+    let mint_pk = ProvingKey::build(8, &MintContract::default());
+    let burn_pk = ProvingKey::build(11, &BurnContract::default());
     let tx = builder.build(&mint_pk, &burn_pk)?;
 
     tx.verify(&state.mint_vk, &state.burn_vk)?;
