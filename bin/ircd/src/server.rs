@@ -1,5 +1,3 @@
-use std::sync::atomic::Ordering;
-
 use async_std::net::TcpStream;
 use futures::{io::WriteHalf, AsyncWriteExt};
 use fxhash::FxHashMap;
@@ -93,7 +91,7 @@ impl IrcServerConnection {
                         self.configured_chans.insert(chan.to_string(), ChannelInfo::new()?);
                     } else {
                         let chan_info = self.configured_chans.get_mut(chan).unwrap();
-                        chan_info.joined.store(true, Ordering::Relaxed);
+                        chan_info.joined = true;
                     }
                 }
             }
@@ -104,7 +102,7 @@ impl IrcServerConnection {
                     self.reply(&part_reply).await?;
                     if self.configured_chans.contains_key(chan) {
                         let chan_info = self.configured_chans.get_mut(chan).unwrap();
-                        chan_info.joined.store(false, Ordering::Relaxed);
+                        chan_info.joined = false;
                     }
                 }
             }
@@ -156,7 +154,7 @@ impl IrcServerConnection {
 
                 if self.configured_chans.contains_key(channel) {
                     let channel_info = self.configured_chans.get(channel).unwrap();
-                    if channel_info.joined.load(Ordering::Relaxed) {
+                    if channel_info.joined {
                         let message = if let Some(salt_box) = &channel_info.salt_box {
                             let encrypted = encrypt_message(salt_box, message);
                             info!("(Encrypted) PRIVMSG {} :{}", channel, encrypted);

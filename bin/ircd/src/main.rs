@@ -9,7 +9,7 @@ use async_executor::Executor;
 
 use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
 use fxhash::FxHashMap;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use rand::rngs::OsRng;
 use smol::future;
 use structopt_toml::StructOptToml;
@@ -116,7 +116,7 @@ impl Ircd {
                         // Try to potentially decrypt the incoming message.
                         if conn.configured_chans.contains_key(&msg.channel) {
                             let chan_info = conn.configured_chans.get(&msg.channel).unwrap();
-                            if !chan_info.joined.load(Ordering::Relaxed) {
+                            if !chan_info.joined {
                                 continue
                             }
                             if let Some(salt_box) = &chan_info.salt_box {
