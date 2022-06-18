@@ -100,10 +100,7 @@ impl Circuit<pallas::Base> for MintContract {
             meta.enable_equality(*advice);
         }
 
-        // Poseidon requires four advice columns, while ECC incomplete addition
-        // requires six. We can reduce the proof size by sharing fixed columns
-        // between the ECC and Poseidon chips.
-        let lagrange_coeffs = [
+        let ecc_lagrange_coeffs = [
             meta.fixed_column(),
             meta.fixed_column(),
             meta.fixed_column(),
@@ -113,25 +110,39 @@ impl Circuit<pallas::Base> for MintContract {
             meta.fixed_column(),
             meta.fixed_column(),
         ];
-        let rc_a = lagrange_coeffs[2..5].try_into().unwrap();
-        let rc_b = lagrange_coeffs[5..8].try_into().unwrap();
+
+        let poseidon_lagrange_coeffs = [
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+        ];
+
+        let rc_a = poseidon_lagrange_coeffs[0..3].try_into().unwrap();
+        let rc_b = poseidon_lagrange_coeffs[3..6].try_into().unwrap();
 
         // Also use the first Lagrange coefficient column for loading global constants.
-        meta.enable_constant(lagrange_coeffs[0]);
+        meta.enable_constant(ecc_lagrange_coeffs[0]);
 
         // Use one of the right-most advice columns for all of our range checks.
         let range_check = LookupRangeCheckConfig::configure(meta, advices[9], table_idx);
 
         // Configuration for curve point operations.
         // This uses 10 advice columns and spans the whole circuit.
-        let ecc_config =
-            EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
+        let ecc_config = EccChip::<OrchardFixedBases>::configure(
+            meta,
+            advices,
+            ecc_lagrange_coeffs,
+            range_check,
+        );
 
         // Configuration for the Poseidon hash
         let poseidon_config = PoseidonChip::configure::<poseidon::P128Pow5T3>(
             meta,
-            advices[6..9].try_into().unwrap(),
-            advices[5],
+            advices[7..10].try_into().unwrap(),
+            advices[6],
             rc_a,
             rc_b,
         );
@@ -148,31 +159,31 @@ impl Circuit<pallas::Base> for MintContract {
 
         let pub_x = assign_free_advice(
             layouter.namespace(|| "load pubkey x"),
-            config.advices[0],
+            config.advices[6],
             self.pub_x,
         )?;
 
         let pub_y = assign_free_advice(
             layouter.namespace(|| "load pubkey y"),
-            config.advices[0],
+            config.advices[6],
             self.pub_y,
         )?;
 
         let value =
-            assign_free_advice(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
+            assign_free_advice(layouter.namespace(|| "load value"), config.advices[6], self.value)?;
 
         let token =
-            assign_free_advice(layouter.namespace(|| "load token"), config.advices[0], self.token)?;
+            assign_free_advice(layouter.namespace(|| "load token"), config.advices[6], self.token)?;
 
         let serial = assign_free_advice(
             layouter.namespace(|| "load serial"),
-            config.advices[0],
+            config.advices[6],
             self.serial,
         )?;
 
         let coin_blind = assign_free_advice(
             layouter.namespace(|| "load coin_blind"),
-            config.advices[0],
+            config.advices[6],
             self.coin_blind,
         )?;
 
@@ -210,7 +221,7 @@ impl Circuit<pallas::Base> for MintContract {
         // This constant one is used for short multiplication
         let one = assign_free_advice(
             layouter.namespace(|| "load constant one"),
-            config.advices[0],
+            config.advices[6],
             Value::known(pallas::Base::one()),
         )?;
 
@@ -306,7 +317,9 @@ mod tests {
     use crate::{
         crypto::{
             keypair::PublicKey,
+            proof::{ProvingKey, VerifyingKey},
             util::{mod_r_p, pedersen_commitment_scalar},
+            Proof,
         },
         Result,
     };
@@ -321,6 +334,7 @@ mod tests {
     };
     use pasta_curves::arithmetic::CurveAffine;
     use rand::rngs::OsRng;
+    use std::time::Instant;
 
     #[test]
     fn mint_circuit_assert() -> Result<()> {
@@ -360,10 +374,26 @@ mod tests {
         let root = BitMapBackend::new("mint_circuit_layout.png", (3840, 2160)).into_drawing_area();
         root.fill(&WHITE).unwrap();
         let root = root.titled("Mint Circuit Layout", ("sans-serif", 60)).unwrap();
-        CircuitLayout::default().render(9, &circuit, &root).unwrap();
+        CircuitLayout::default().render(8, &circuit, &root).unwrap();
 
-        let prover = MockProver::run(9, &circuit, vec![public_inputs])?;
+        let prover = MockProver::run(8, &circuit, vec![public_inputs.clone()])?;
         prover.assert_satisfied();
+
+        let now = Instant::now();
+        let proving_key = ProvingKey::build(8, &circuit);
+        println!("ProvingKey built [{:?}]", now.elapsed());
+        let now = Instant::now();
+        let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
+        println!("Proof created [{:?}]", now.elapsed());
+
+        let circuit = MintContract::default();
+        let now = Instant::now();
+        let verifying_key = VerifyingKey::build(8, &circuit);
+        println!("VerifyingKey built [{:?}]", now.elapsed());
+        let now = Instant::now();
+        proof.verify(&verifying_key, &public_inputs)?;
+        println!("Proof verified [{:?}]", now.elapsed());
+
         Ok(())
     }
 }
