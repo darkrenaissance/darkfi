@@ -16,7 +16,10 @@ use halo2_proofs::{
 };
 use pasta_curves::{pallas, Fp};
 
-use crate::crypto::constants::{OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV};
+use crate::{
+    crypto::constants::{OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV},
+    zk::assign_free_advice,
+};
 
 #[derive(Clone, Debug)]
 pub struct MintConfig {
@@ -104,8 +107,6 @@ impl Circuit<pallas::Base> for MintContract {
         // Poseidon requires four advice columns, while ECC incomplete addition
         // requires six. We can reduce the proof size by sharing fixed columns
         // between the ECC and Poseidon chips.
-        // TODO: For multiple invocations they could/should be configured in
-        // parallel rather than sharing perhaps?
         let lagrange_coeffs = [
             meta.fixed_column(),
             meta.fixed_column(),
