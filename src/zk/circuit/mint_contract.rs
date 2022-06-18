@@ -327,7 +327,7 @@ mod tests {
     use rand::rngs::OsRng;
 
     #[test]
-    fn circuit_assert() -> Result<()> {
+    fn mint_circuit_assert() -> Result<()> {
         let value = pallas::Base::from(42);
         let token_id = pallas::Base::from(22);
         let value_blind = pallas::Scalar::random(&mut OsRng);
