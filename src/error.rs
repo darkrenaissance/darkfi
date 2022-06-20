@@ -118,8 +118,8 @@ pub enum Error {
     #[error("Channel timed out")]
     ChannelTimeout,
 
-    #[error("Service stopped")]
-    ServiceStopped,
+    #[error("Network service stopped")]
+    NetworkServiceStopped,
 
     #[error("Create listener bound to {0} failed")]
     BindFailed(String),
@@ -130,8 +130,8 @@ pub enum Error {
     #[error("Accept a new tls connection from the listener {0} failed")]
     AcceptTlsConnectionFailed(String),
 
-    #[error("Operation failed")]
-    OperationFailed,
+    #[error("Network operation failed")]
+    NetworkOperationFailed,
 
     #[error("Malformed packet")]
     MalformedPacket,
@@ -152,6 +152,9 @@ pub enum Error {
     #[cfg(feature = "async-native-tls")]
     #[error("async_native_tls error: {0}")]
     AsyncNativeTlsError(String),
+
+    #[error("Tor error: {0}")]
+    TorError(String),
 
     // =============
     // Crypto errors
@@ -198,12 +201,6 @@ pub enum Error {
 
     #[error("JSON-RPC error: {0}")]
     JsonRpcError(String),
-
-    #[error("Cashier error: {0}")]
-    CashierError(String),
-
-    #[error("Tor error: {0}")]
-    TorError(String),
 
     // ===============
     // Database errors

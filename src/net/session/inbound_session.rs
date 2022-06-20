@@ -66,7 +66,7 @@ impl InboundSession {
             self.clone().channel_sub_loop(executor.clone()),
             // Ignore stop handler
             |_| async {},
-            Error::ServiceStopped,
+            Error::NetworkServiceStopped,
             executor,
         );
 

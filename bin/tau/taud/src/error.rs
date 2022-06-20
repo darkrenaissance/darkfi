@@ -14,6 +14,8 @@ pub enum TaudError {
     Darkfi(#[from] darkfi::error::Error),
     #[error("Json serialization error: `{0}`")]
     SerdeJsonError(String),
+    #[error("Encryption error: `{0}`")]
+    EncryptionError(String),
 }
 
 pub type TaudResult<T> = std::result::Result<T, TaudError>;
@@ -21,6 +23,12 @@ pub type TaudResult<T> = std::result::Result<T, TaudError>;
 impl From<serde_json::Error> for TaudError {
     fn from(err: serde_json::Error) -> TaudError {
         TaudError::SerdeJsonError(err.to_string())
+    }
+}
+
+impl From<crypto_box::aead::Error> for TaudError {
+    fn from(err: crypto_box::aead::Error) -> TaudError {
+        TaudError::EncryptionError(err.to_string())
     }
 }
 
@@ -36,6 +44,9 @@ pub fn to_json_result(res: TaudResult<Value>, id: Value) -> JsonResult {
             }
             TaudError::InvalidDueTime => {
                 JsonError::new(ErrorCode::InvalidParams, Some("invalid due time".into()), id).into()
+            }
+            TaudError::EncryptionError(e) => {
+                JsonError::new(ErrorCode::InternalError, Some(e), id).into()
             }
             TaudError::Darkfi(e) => {
                 JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()

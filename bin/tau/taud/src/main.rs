@@ -46,37 +46,30 @@ fn encrypt_task(
     task: &TaskInfo,
     secret_key: &SecretKey,
     rng: &mut crypto_box::rand_core::OsRng,
-) -> Result<EncryptedTask> {
+) -> TaudResult<EncryptedTask> {
     debug!("start encrypting task");
     let public_key = secret_key.public_key();
     let msg_box = Box::new(&public_key, secret_key);
 
     let nonce = crypto_box::generate_nonce(rng);
     let payload = &serialize(task)[..];
-    let payload = match msg_box.encrypt(&nonce, payload) {
-        Ok(p) => p,
-        Err(e) => {
-            error!("Unable to encrypt task: {}", e);
-            return Err(Error::OperationFailed)
-        }
-    };
+    let payload = msg_box.encrypt(&nonce, payload)?;
 
     let nonce = nonce.to_vec();
     Ok(EncryptedTask { nonce, payload })
 }
 
-fn decrypt_task(encrypt_task: &EncryptedTask, secret_key: &SecretKey) -> Option<TaskInfo> {
+fn decrypt_task(encrypt_task: &EncryptedTask, secret_key: &SecretKey) -> TaudResult<TaskInfo> {
     debug!("start decrypting task");
     let public_key = secret_key.public_key();
     let msg_box = Box::new(&public_key, secret_key);
 
     let nonce = encrypt_task.nonce.as_slice();
-    let decrypted_task = match msg_box.decrypt(nonce.into(), &encrypt_task.payload[..]) {
-        Ok(m) => m,
-        Err(_) => return None,
-    };
+    let decrypted_task = msg_box.decrypt(nonce.into(), &encrypt_task.payload[..])?;
 
-    deserialize(&decrypted_task).ok()
+    let task = deserialize(&decrypted_task)?;
+
+    Ok(task)
 }
 
 async_daemonize!(realmain);
@@ -161,7 +154,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                     let recv = task.map_err(Error::from)?;
                     let task = decrypt_task(&recv, &secret_key);
 
-                    if task.is_none() {
+                    if let Err(e) = task {
+                        warn!("unable to decrypt the task: {}", e);
                         continue
                     }
 

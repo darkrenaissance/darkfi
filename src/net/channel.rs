@@ -103,7 +103,7 @@ impl Channel {
         self.receive_task.clone().start(
             self.clone().main_receive_loop(),
             |result| self2.handle_stop(result),
-            Error::ServiceStopped,
+            Error::NetworkServiceStopped,
             executor,
         );
         debug!(target: "net", "Channel::start() [END, address={}]", self.address());

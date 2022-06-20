@@ -70,13 +70,13 @@ impl SeedSession {
 
         if result.is_err() {
             error!("Querying seeds timed out");
-            return Err(Error::OperationFailed)
+            return Err(Error::NetworkOperationFailed)
         }
 
         // Seed process complete
         if self.p2p().hosts().is_empty().await {
             error!("Hosts pool still empty after seeding");
-            return Err(Error::OperationFailed)
+            return Err(Error::NetworkOperationFailed)
         }
 
         debug!(target: "net", "SeedSession::start() [END]");

@@ -105,7 +105,7 @@ impl OutboundSession {
                 self.clone().channel_connect_loop(i, executor.clone()),
                 // Ignore stop handler
                 |_| async {},
-                Error::ServiceStopped,
+                Error::NetworkServiceStopped,
                 executor.clone(),
             );
 
@@ -221,7 +221,7 @@ impl OutboundSession {
         }
 
         error!(target: "net", "Hosts address pool is empty. Closing connect slot #{}", slot_number);
-        Err(Error::ServiceStopped)
+        Err(Error::NetworkServiceStopped)
     }
 
     /// Checks whether an address is our own inbound address to avoid connecting

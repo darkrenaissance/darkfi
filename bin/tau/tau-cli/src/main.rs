@@ -8,7 +8,7 @@ use url::Url;
 use darkfi::{
     rpc::client::RpcClient,
     util::cli::{get_log_config, get_log_level},
-    Error, Result,
+    Result,
 };
 
 mod filter;
@@ -123,7 +123,7 @@ async fn main() -> Result<()> {
                             states.len(),
                             states
                         );
-                        return Err(Error::OperationFailed)
+                        Ok(())
                     }
                 }
                 None => {

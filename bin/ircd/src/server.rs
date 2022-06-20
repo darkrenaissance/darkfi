@@ -184,7 +184,7 @@ impl IrcServerConnection {
             }
             "QUIT" => {
                 // Close the connection
-                return Err(Error::ServiceStopped)
+                return Err(Error::NetworkServiceStopped)
             }
             _ => {
                 warn!("Unimplemented `{}` command", command);

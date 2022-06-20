@@ -132,7 +132,7 @@ impl Acceptor {
         self.task.clone().start(
             self.clone().run_accept_loop(listener),
             |result| self2.handle_stop(result),
-            Error::ServiceStopped,
+            Error::NetworkServiceStopped,
             executor,
         );
     }
