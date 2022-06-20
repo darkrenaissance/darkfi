@@ -15,6 +15,7 @@ use crate::{
 
 const RPL_NOTOPIC: u32 = 331;
 const RPL_TOPIC: u32 = 332;
+const RPL_NAMEREPLY: u32 = 353;
 
 pub struct IrcServerConnection {
     // server stream
@@ -69,6 +70,33 @@ impl IrcServerConnection {
                 // We can stuff any extra things like public keys in here.
                 // Ignore it for now.
                 self.is_user_init = true;
+            }
+            "NAMES" => {
+                let channels = tokens.next().ok_or(Error::MalformedPacket)?;
+                for chan in channels.split(',') {
+                    if !chan.starts_with('#') {
+                        warn!("{} is not a valid name for channel", chan);
+                        continue
+                    }
+
+                    if self.configured_chans.contains_key(chan) {
+                        let chan_info = self.configured_chans.get(chan).unwrap();
+
+                        if chan_info.names.is_empty() {
+                            continue
+                        }
+
+                        let names_reply = format!(
+                            ":{}!anon@dark.fi {} = {} : {}\r\n",
+                            self.nickname,
+                            RPL_NAMEREPLY,
+                            chan,
+                            chan_info.names.join(" ")
+                        );
+
+                        self.reply(&names_reply).await?;
+                    }
+                }
             }
             "NICK" => {
                 let nickname = tokens.next().ok_or(Error::MalformedPacket)?;

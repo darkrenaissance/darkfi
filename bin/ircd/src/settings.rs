@@ -67,11 +67,13 @@ pub struct ChannelInfo {
     pub salt_box: Option<crypto_box::Box>,
     /// Flag indicates whether the user has joined the channel or not
     pub joined: bool,
+    /// All nicknames which are visible on the channel
+    pub names: Vec<String>,
 }
 
 impl ChannelInfo {
     pub fn new() -> Result<Self> {
-        Ok(Self { topic: None, salt_box: None, joined: true })
+        Ok(Self { topic: None, salt_box: None, joined: true, names: vec![] })
     }
 }
 

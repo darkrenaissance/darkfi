@@ -99,7 +99,7 @@ impl Ircd {
 
                             // Try to potentially decrypt the incoming message.
                             if conn.configured_chans.contains_key(&msg.channel) {
-                                let chan_info = conn.configured_chans.get(&msg.channel).unwrap();
+                                let chan_info = conn.configured_chans.get_mut(&msg.channel).unwrap();
                                 if !chan_info.joined {
                                     continue
                                 }
@@ -116,8 +116,13 @@ impl Ircd {
 
                                     msg.message = decrypted_msg.unwrap();
                                     info!("Decrypted received message: {:?}", msg);
+
                                 }
 
+                                // add the nickname to the channel's names
+                                if !chan_info.names.contains(&msg.nickname) {
+                                    chan_info.names.push(msg.nickname.clone());
+                                }
                             }
 
                             conn.reply(&msg.to_irc_msg()).await?;
@@ -144,7 +149,7 @@ impl Ircd {
                     };
                 }
             })
-            .detach();
+        .detach();
 
         Ok(())
     }
