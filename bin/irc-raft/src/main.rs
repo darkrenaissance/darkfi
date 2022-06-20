@@ -222,7 +222,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                 Ok((s, a)) => (s, a),
                 Err(e) => {
                     error!("Failed listening for connections: {}", e);
-                    return Err(Error::ServiceStopped)
+                    return Err(Error::NetworkServiceStopped)
                 }
             };
 
