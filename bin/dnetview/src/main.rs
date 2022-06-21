@@ -33,6 +33,8 @@ use dnetview::{
     view::{IdListView, NodeInfoView, View},
 };
 
+use log::debug;
+
 struct DnetView {
     name: String,
     rpc_client: RpcClient,
@@ -167,8 +169,16 @@ async fn parse_offline(client: &DnetView, model: Arc<Model>) -> DnetViewResult<(
     let is_empty = true;
     let last_msg = "Null".to_string();
     let last_status = "Null".to_string();
-    let connect_info =
-        ConnectInfo::new(id, addr, state, parent.clone(), msg_log, is_empty, last_msg, last_status);
+    let connect_info = ConnectInfo::new(
+        id,
+        addr,
+        state.clone(),
+        parent.clone(),
+        msg_log,
+        is_empty,
+        last_msg,
+        last_status,
+    );
     connects.push(connect_info.clone());
 
     let accept_addr = None;
@@ -176,7 +186,14 @@ async fn parse_offline(client: &DnetView, model: Arc<Model>) -> DnetViewResult<(
         SessionInfo::new(session_id, name, is_empty, parent.clone(), connects, accept_addr);
     sessions.push(session_info);
 
-    let node = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone(), None, true);
+    let node = NodeInfo::new(
+        node_id.clone(),
+        node_name.to_string(),
+        state.clone(),
+        sessions.clone(),
+        None,
+        true,
+    );
 
     update_node(model.clone(), node.clone(), node_id.clone()).await;
     update_selectable_and_ids(model.clone(), sessions, node.clone()).await?;
@@ -192,6 +209,7 @@ async fn parse_data(
     let inbound = &reply["session_inbound"];
     let _manual = &reply["session_manual"];
     let outbound = &reply["session_outbound"];
+    let state = &reply["state"];
 
     let mut sessions: Vec<SessionInfo> = Vec::new();
 
@@ -208,8 +226,14 @@ async fn parse_data(
     sessions.push(out_session.clone());
     //sessions.push(man_session.clone());
 
-    let node =
-        NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone(), ext_addr, false);
+    let node = NodeInfo::new(
+        node_id.clone(),
+        node_name.to_string(),
+        state.as_str().unwrap().to_string(),
+        sessions.clone(),
+        ext_addr,
+        false,
+    );
 
     update_node(model.clone(), node.clone(), node_id.clone()).await;
     update_selectable_and_ids(model.clone(), sessions.clone(), node.clone()).await?;

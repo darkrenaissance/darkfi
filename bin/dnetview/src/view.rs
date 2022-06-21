@@ -228,16 +228,22 @@ impl View {
             let info = self.selectables.get(&selected);
 
             match info {
-                Some(SelectableObject::Node(node)) => match &node.external_addr {
-                    Some(addr) => {
-                        let node_info = Span::styled(format!("External addr: {}", addr), style);
-                        lines.push(Spans::from(node_info));
+                Some(SelectableObject::Node(node)) => {
+                    match &node.external_addr {
+                        Some(addr) => {
+                            let node_info = Span::styled(format!("External addr: {}", addr), style);
+                            lines.push(Spans::from(node_info));
+                        }
+                        None => {
+                            let node_info = Span::styled(format!("External addr: Null"), style);
+                            lines.push(Spans::from(node_info));
+                        }
                     }
-                    None => {
-                        let node_info = Span::styled(format!("External addr: Null"), style);
-                        lines.push(Spans::from(node_info));
-                    }
-                },
+                    lines.push(Spans::from(Span::styled(
+                        format!("P2P state: {}", node.state),
+                        style,
+                    )));
+                }
                 Some(SelectableObject::Session(session)) => {
                     if session.accept_addr.is_some() {
                         let session_info = Span::styled(
@@ -248,6 +254,7 @@ impl View {
                     }
                 }
                 Some(SelectableObject::Connect(connect)) => {
+                    // get + display the msg log
                     let log = self.msg_log.get(&connect.id);
                     match log {
                         Some(values) => {
@@ -267,6 +274,11 @@ impl View {
                         }
                         None => return Err(DnetViewError::CannotFindId),
                     }
+                    // display the connection state
+                    lines.push(Spans::from(Span::styled(
+                        format!("State: {}", &connect.state),
+                        style,
+                    )));
                 }
                 None => return Err(DnetViewError::NotSelectableObject),
             }
