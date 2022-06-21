@@ -6,11 +6,11 @@ use std::net::SocketAddr;
 
 use async_channel::{Receiver, Sender};
 use async_executor::Executor;
-
 use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
 use fxhash::FxHashMap;
 use log::{error, info, warn};
 use rand::rngs::OsRng;
+use ringbuffer::RingBufferExt;
 use smol::future;
 use structopt_toml::StructOptToml;
 
@@ -75,6 +75,7 @@ impl Ircd {
             .spawn(async move {
                 while let Ok(msg) = p2p_receiver_cloned.recv().await {
                     for (addr, sender) in senders.lock().await.iter() {
+                        // TODO: this need stop signal instead 
                         if let Err(e) = sender.send(msg.clone()).await {
                             error!("Can't send msg to the client {}: {}", addr, e);
                             // removing a client sender from the hashmap if any error occured
@@ -109,7 +110,13 @@ impl Ircd {
         );
 
         let (sender, receiver) = async_channel::unbounded();
-        self.add_to_senders(&peer_addr, sender).await;
+
+        // send messages history
+        for msg in self.privmsgs_buffer.lock().await.to_vec() {
+            sender.send(msg).await?;
+        }
+
+        self.add_to_senders(&peer_addr, sender.clone()).await;
 
         executor
             .spawn(async move {
