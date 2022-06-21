@@ -24,23 +24,31 @@ const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 fn create_coins_sks(len: usize) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>) {
     /*
     at the onset of an epoch, the first slot's coin's secret key
-    is sampled at random, and the reset of the secret keys are derived,
+    is sampled at random, and the rest of the secret keys are derived,
     for sk (secret key) at time i+1 is derived from secret key at time i.
      */
     let mut rng = thread_rng();
-    let sk: u64 = rng.gen();
+    let sku64 : u64 = rng.gen();
     let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(len);
     let mut root_sks: Vec<MerkleNode> = vec![];
     let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
+    let mut prev_sk_base : pallas::Base = pallas::Base::one();
     for _i in 0..len {
-        //TODO (research) why the conversion between point and base is panicing?
-        // is the endianess different?
-        let base = pedersen_commitment_scalar(pallas::Scalar::one(), pallas::Scalar::from(sk));
-        let _coord = base.to_affine().coordinates().unwrap();
-        //let sk =  coord.x() * coord.y();
-        //let sk =  *coord.y();
-        let sk: [u8; 32] = pallas::Base::random(rng.clone()).to_repr();
-        let node = MerkleNode::from_bytes(&sk).unwrap();
+        let sk_bytes = if _i ==0 {
+            let base = pedersen_commitment_scalar(pallas::Scalar::one(), pallas::Scalar::from(sku64));
+            let coord = base.to_affine().coordinates().unwrap();
+            let sk_base =  coord.x() * coord.y();
+            prev_sk_base = sk_base;
+            sk_base.to_repr()
+
+        } else {
+            let base = pedersen_commitment_scalar(pallas::Scalar::one(), mod_r_p(prev_sk_base));
+            let coord = base.to_affine().coordinates().unwrap();
+            let sk_base =  coord.x() * coord.y();
+            prev_sk_base = sk_base;
+            sk_base.to_repr()
+        };
+        let node = MerkleNode::from_bytes(&sk_bytes).unwrap();
         //let serialized = serde_json::to_string(&node).unwrap();
         //println!("serialized: {}", serialized);
         tree.append(&node.clone());
@@ -83,7 +91,7 @@ fn create_coins(
 
         //
         let c_tau = pallas::Base::from(u64::try_from(i).unwrap()); // let's assume it's sl for simplicity
-                                                                   //
+        //
         let c_root_sk: MerkleNode = root_sks[i];
 
         let c_pk = pedersen_commitment_scalar(mod_r_p(c_tau), mod_r_p(c_root_sk.inner()));
@@ -110,15 +118,15 @@ fn create_coins(
         let c_seed2 = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));
         let c_seed2_pt = c_seed2.to_affine().coordinates().unwrap();
         /*
-            let lead_coin_msg = [c_pk_pt_y.clone(),
-            c_pk_pt_x.clone(),
-            c_v,
-             *c_seed2_pt.x(),
-             *c_seed2_pt.y()
-        ];
-            let lead_coin_msg_hash =
-            poseidon::Hash::<_, P128Pow5T3, ConstantLength<5>, 3, 2>::init().hash(lead_coin_msg);
-             */
+        let lead_coin_msg = [c_pk_pt_y.clone(),
+        c_pk_pt_x.clone(),
+        c_v,
+         *c_seed2_pt.x(),
+         *c_seed2_pt.y()
+    ];
+        let lead_coin_msg_hash =
+        poseidon::Hash::<_, P128Pow5T3, ConstantLength<5>, 3, 2>::init().hash(lead_coin_msg);
+         */
         let lead_coin_msg = c_pk_pt_y * c_pk_pt_x * c_v * *c_seed2_pt.x() * *c_seed2_pt.y();
         let c_cm2 = pedersen_commitment_scalar(mod_r_p(lead_coin_msg), mod_r_p(c_cm2_blind));
         let c_root_sk = root_sks[i];
