@@ -4,7 +4,7 @@ use async_std::{
 };
 use std::net::SocketAddr;
 
-use async_channel::Receiver;
+use async_channel::{Receiver, Sender};
 use async_executor::Executor;
 
 use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
@@ -53,7 +53,7 @@ struct Ircd {
     configured_chans: FxHashMap<String, ChannelInfo>,
     // p2p
     p2p: net::P2pPtr,
-    p2p_receiver: Receiver<Privmsg>,
+    senders: Arc<Mutex<FxHashMap<SocketAddr, Sender<Privmsg>>>>,
 }
 
 impl Ircd {
@@ -63,9 +63,31 @@ impl Ircd {
         autojoin_chans: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
         p2p: net::P2pPtr,
-        p2p_receiver: Receiver<Privmsg>,
     ) -> Self {
-        Self { seen_msg_ids, privmsgs_buffer, autojoin_chans, configured_chans, p2p, p2p_receiver }
+        let senders = Arc::new(Mutex::new(FxHashMap::default()));
+        Self { seen_msg_ids, privmsgs_buffer, autojoin_chans, configured_chans, p2p, senders }
+    }
+
+    fn start_p2p_receive_loop(&self, executor: Arc<Executor<'_>>, p2p_receiver: Receiver<Privmsg>) {
+        let senders = self.senders.clone();
+        let p2p_receiver_cloned = p2p_receiver.clone();
+        executor
+            .spawn(async move {
+                while let Ok(msg) = p2p_receiver_cloned.recv().await {
+                    for (addr, sender) in senders.lock().await.iter() {
+                        if let Err(e) = sender.send(msg.clone()).await {
+                            error!("Can't send msg to the client {}: {}", addr, e);
+                            // removing a client sender from the hashmap if any error occured
+                            senders.lock().await.remove(addr);
+                        }
+                    }
+                }
+            })
+            .detach();
+    }
+
+    async fn add_to_senders(&self, addr: &SocketAddr, sender: Sender<Privmsg>) {
+        self.senders.lock().await.insert(addr.clone(), sender);
     }
 
     async fn process(
@@ -86,14 +108,15 @@ impl Ircd {
             self.p2p.clone(),
         );
 
-        let p2p_receiver = self.p2p_receiver.clone();
+        let (sender, receiver) = async_channel::unbounded();
+        self.add_to_senders(&peer_addr, sender).await;
 
         executor
             .spawn(async move {
                 loop {
                     let mut line = String::new();
                     futures::select! {
-                        privmsg = p2p_receiver.recv().fuse() => {
+                        privmsg = receiver.recv().fuse() => {
                             let mut msg = privmsg?;
                             info!("Received msg from P2p network: {:?}", msg);
 
@@ -233,8 +256,9 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                 settings.autojoin.clone(),
                 configured_chans.clone(),
                 p2p.clone(),
-                p2p_recv_channel.clone(),
             );
+
+            ircd.start_p2p_receive_loop(executor_cloned.clone(), p2p_recv_channel);
 
             loop {
                 let (stream, peer_addr) = match listener.accept().await {
