@@ -314,7 +314,7 @@ name = "zk"
 path = "example/zk.rs"
 required-features = ["crypto"]
 
-#[[example]]
-#name = "lead"
-#path = "example/lead.rs"
-#required-features = ["node"]
+[[example]]
+name = "lead"
+path = "example/lead.rs"
+required-features = ["node"]

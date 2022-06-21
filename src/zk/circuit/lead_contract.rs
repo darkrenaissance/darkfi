@@ -591,8 +591,7 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
         // ===========================
-        let path: Option<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
-            self.path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
+        let path : Value<[pallas::Base;MERKLE_DEPTH_ORCHARD]> = self.path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
         let merkle_inputs = MerklePath::construct(
             [config.merkle_chip_1(), config.merkle_chip_2()],
@@ -621,7 +620,7 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_PATH_OFFSET,
         )?;
 
-        let _node = MerkleNode::from_bytes(&self.root_sk.unwrap().to_repr()).unwrap();
+        //let _node = MerkleNode::from_bytes(&self.root_sk.unwrap().to_repr()).unwrap();
         //let serialized = serde_json::to_string(&node).unwrap();
         //println!("root_sk: {}", serialized);
 
@@ -656,14 +655,15 @@ impl Circuit<pallas::Base> for LeadContract {
             y_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_y)?
         };
         let y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-
+        let y_commit_base = y_commit.inner().x();
+        /*
         // ============================
-        let _y_commit_bytes: [u8; 32] = y_commit.inner().point().unwrap().to_bytes();
+        let _y_commit_bytes: [u8; 32] = y_commit.inner().point().into().unwrap().to_bytes();
         let y_commit_base_bytes: [u8; 32] = [0; 32];
-        // FIXME: why is it assigning to itself?
-        // for i in 0..23 {
-        // y_commit_base_bytes[i] = y_commit_base_bytes[i];
-        // }
+        //note! due to 24bytes size limitation in the comparision gate we need first 24bytes
+        for i in 0..23 {
+            y_commit_base_bytes[i] = y_commit_base_bytes[i];
+        }
         let y_commit_base_temp = pallas::Base::from_repr(y_commit_base_bytes).unwrap();
 
         let y_commit_base = self.load_private(
@@ -671,7 +671,7 @@ impl Circuit<pallas::Base> for LeadContract {
             config.advices[0],
             Value::known(y_commit_base_temp),
         )?;
-
+        */
         // ============================
         // constraint rho
         // ============================
