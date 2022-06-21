@@ -18,6 +18,8 @@ use crate::{
     model::{NodeInfo, SelectableObject},
 };
 
+use log::debug;
+
 #[derive(Debug)]
 pub struct View {
     pub nodes: NodeInfoView,
@@ -94,6 +96,8 @@ impl View {
 
         let mut id_list = self.render_id_list(f, slice.clone())?;
 
+        // might not need this
+        // also assert in test case might be better
         id_list.dedup();
         if id_list.is_empty() {
             // we have not received any data
@@ -224,15 +228,16 @@ impl View {
             let info = self.selectables.get(&selected);
 
             match info {
-                Some(SelectableObject::Node(node)) => {
-                    if node.external_addr.is_some() {
-                        let node_info = Span::styled(
-                            format!("External addr: {}", node.external_addr.as_ref().unwrap()),
-                            style,
-                        );
+                Some(SelectableObject::Node(node)) => match &node.external_addr {
+                    Some(addr) => {
+                        let node_info = Span::styled(format!("External addr: {}", addr), style);
                         lines.push(Spans::from(node_info));
                     }
-                }
+                    None => {
+                        let node_info = Span::styled(format!("External addr: Null"), style);
+                        lines.push(Spans::from(node_info));
+                    }
+                },
                 Some(SelectableObject::Session(session)) => {
                     if session.accept_addr.is_some() {
                         let session_info = Span::styled(
