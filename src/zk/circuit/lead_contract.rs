@@ -656,9 +656,19 @@ impl Circuit<pallas::Base> for LeadContract {
         };
         let y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let y_commit_base = y_commit.inner().x();
-        /*
+
         // ============================
-        let _y_commit_bytes: [u8; 32] = y_commit.inner().point().into().unwrap().to_bytes();
+        //let _y_commit_bytes : [u8;32] = y_commit.inner().point().inner().unwrap().to_repr();
+
+        //TODO (fix) temp abuse until even_bits is fixed.
+        let zero_base_bytes : [u8;32] = [0;32];
+        let y_commit_base_temp = pallas::Base::from_repr(zero_base_bytes).unwrap();
+        let y_commit_base = self.load_private(
+            layouter.namespace(|| "load coin y commit as pallas::base"),
+            config.advices[0],
+            Value::known(y_commit_base_temp),
+        )?;
+        /*
         let y_commit_base_bytes: [u8; 32] = [0; 32];
         //note! due to 24bytes size limitation in the comparision gate we need first 24bytes
         for i in 0..23 {
