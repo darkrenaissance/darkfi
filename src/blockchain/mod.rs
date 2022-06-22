@@ -12,6 +12,9 @@ use crate::{
     Result,
 };
 
+pub mod epoch;
+pub use epoch::{Epoch,EpochItem,LifeTime};
+
 pub mod blockstore;
 pub use blockstore::{BlockOrderStore, BlockStore};
 

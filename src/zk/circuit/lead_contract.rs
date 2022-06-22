@@ -730,7 +730,7 @@ impl Circuit<pallas::Base> for LeadContract {
         //      )?;
         //eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
 
-        //layouter.constrain_instance(is_gt.0.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?;
+        //layouter.constrain_instance(is_gt.0.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?
 
         Ok(())
     }
