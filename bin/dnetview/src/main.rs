@@ -141,6 +141,7 @@ async fn try_connect(
             }
             Err(e) => {
                 error!("{}", e);
+                parse_offline(node_name.clone(), model.clone()).await?;
                 async_util::sleep(2).await;
             }
         }
