@@ -8,14 +8,14 @@ pub struct Metadata {
     /// Proof that the stakeholder is the block owner
     pub proof: String,
     /// Random seed for VRF
-    pub r: String,
+    pub rand_seed: String,
     /// Block owner signature
-    pub s: String,
+    pub signature: String,
 }
 
 impl Metadata {
-    pub fn new(proof: String, r: String, s: String) -> Self {
-        Self { proof, r, s }
+    pub fn new(proof: String, rand_seed: String, signature: String) -> Self {
+        Self { proof, rand_seed, signature }
     }
 }
 

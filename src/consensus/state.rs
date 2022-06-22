@@ -210,8 +210,8 @@ impl ValidatorState {
         let mut slot = 0;
         for chain in &self.consensus.proposals {
             for proposal in &chain.proposals {
-                if proposal.block.header.sl > slot {
-                    slot = proposal.block.header.sl;
+                if proposal.block.header.slot > slot {
+                    slot = proposal.block.header.slot;
                 }
             }
         }
@@ -222,8 +222,8 @@ impl ValidatorState {
             return Ok(slot)
         }
 
-        let (last_sl, _) = self.blockchain.last()?;
-        Ok(last_sl)
+        let (last_slot, _) = self.blockchain.last()?;
+        Ok(last_slot)
     }
 
     /// Calculates seconds until next slot starting time.
@@ -442,7 +442,7 @@ impl ValidatorState {
             self.public,
             signed_hash,
             proposal_hash,
-            proposal.block.header.sl,
+            proposal.block.header.slot,
             self.address,
         )))
     }
@@ -464,19 +464,21 @@ impl ValidatorState {
         for (index, chain) in self.consensus.proposals.iter().enumerate() {
             let last = chain.proposals.last().unwrap();
             let hash = last.block.header.headerhash();
-            if proposal.block.header.st == hash && proposal.block.header.sl > last.block.header.sl {
+            if proposal.block.header.state == hash &&
+                proposal.block.header.slot > last.block.header.slot
+            {
                 return Ok(index as i64)
             }
 
-            if proposal.block.header.st == last.block.header.st &&
-                proposal.block.header.sl == last.block.header.sl
+            if proposal.block.header.state == last.block.header.state &&
+                proposal.block.header.slot == last.block.header.slot
             {
                 debug!("find_extended_chain_index(): Proposal already received");
                 return Ok(-2)
             }
 
-            if proposal.block.header.st == last.block.header.st &&
-                proposal.block.header.sl > last.block.header.sl
+            if proposal.block.header.state == last.block.header.state &&
+                proposal.block.header.slot > last.block.header.slot
             {
                 fork = Some(chain.clone());
             }
@@ -495,8 +497,8 @@ impl ValidatorState {
             None => (),
         }
 
-        let (last_sl, last_block) = self.blockchain.last()?;
-        if proposal.block.header.st != last_block || proposal.block.header.sl <= last_sl {
+        let (last_slot, last_block) = self.blockchain.last()?;
+        if proposal.block.header.state != last_block || proposal.block.header.slot <= last_slot {
             debug!("find_extended_chain_index(): Proposal doesn't extend any known chain");
             return Ok(-2)
         }
@@ -555,11 +557,11 @@ impl ValidatorState {
                 // Updating participant vote
                 match participant.voted {
                     Some(voted) => {
-                        if vote.sl > voted {
-                            participant.voted = Some(vote.sl);
+                        if vote.slot > voted {
+                            participant.voted = Some(vote.slot);
                         }
                     }
-                    None => participant.voted = Some(vote.sl),
+                    None => participant.voted = Some(vote.slot),
                 }
 
                 // Invalidating quarantine
@@ -709,12 +711,12 @@ impl ValidatorState {
         }
 
         let last_block = *blockhashes.last().unwrap();
-        let last_sl = finalized.last().unwrap().header.sl;
+        let last_slot = finalized.last().unwrap().header.slot;
 
         let mut dropped = vec![];
         for chain in self.consensus.proposals.iter() {
             let first = chain.proposals.first().unwrap();
-            if first.block.header.st != last_block || first.block.header.sl <= last_sl {
+            if first.block.header.state != last_block || first.block.header.slot <= last_slot {
                 dropped.push(chain.clone());
             }
         }
@@ -726,7 +728,7 @@ impl ValidatorState {
         // Remove orphan votes
         let mut orphans = vec![];
         for vote in self.consensus.orphan_votes.iter() {
-            if vote.sl <= last_sl {
+            if vote.slot <= last_slot {
                 orphans.push(vote.clone());
             }
         }

@@ -88,7 +88,7 @@ impl Blockchain {
             self.blocks.insert(&[_block])?;
 
             // Store block order
-            self.order.insert(&[block.header.sl], &[headerhash[0]])?;
+            self.order.insert(&[block.header.slot], &[headerhash[0]])?;
 
             // Store streamlet metadata
             self.streamlet_metadata.insert(&[headerhash[0]], &[block.sm.clone()])?;
@@ -102,7 +102,7 @@ impl Blockchain {
 
     /// Check if the given [`BlockInfo`] is in the database and all trees.
     pub fn has_block(&self, block: &BlockInfo) -> Result<bool> {
-        let blockhash = match self.order.get(&[block.header.sl], true) {
+        let blockhash = match self.order.get(&[block.header.slot], true) {
             Ok(v) => v[0].unwrap(),
             Err(_) => return Ok(false),
         };

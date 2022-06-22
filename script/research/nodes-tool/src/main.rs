@@ -43,16 +43,16 @@ impl ParticipantInfo {
 #[derive(Debug)]
 struct VoteInfo {
     _proposal: blake3::Hash,
-    _sl: u64,
+    _slot: u64,
     _address: String,
 }
 
 impl VoteInfo {
     pub fn new(vote: &Vote) -> VoteInfo {
         let _proposal = vote.proposal;
-        let _sl = vote.sl;
+        let _slot = vote.slot;
         let _address = vote.address.to_string();
-        VoteInfo { _proposal, _sl, _address }
+        VoteInfo { _proposal, _slot, _address }
     }
 }
 
@@ -83,16 +83,16 @@ impl StreamletMetadataInfo {
 #[derive(Debug)]
 struct MetadataInfo {
     _proof: String,
-    _r: String,
-    _s: String,
+    _rand_seed: String,
+    _signature: String,
 }
 
 impl MetadataInfo {
     pub fn new(metadata: &Metadata) -> MetadataInfo {
         let _proof = metadata.proof.clone();
-        let _r = metadata.r.clone();
-        let _s = metadata.s.clone();
-        MetadataInfo { _proof, _r, _s }
+        let _rand_seed = metadata.rand_seed.clone();
+        let _signature = metadata.signature.clone();
+        MetadataInfo { _proof, _rand_seed, _signature }
     }
 }
 
@@ -155,23 +155,23 @@ impl ConsensusInfo {
 #[derive(Debug)]
 struct HeaderInfo {
     _hash: blake3::Hash,
-    _v: u8,
-    _st: blake3::Hash,
-    _e: u64,
-    _sl: u64,
+    _version: u8,
+    _state: blake3::Hash,
+    _epoch: u64,
+    _slot: u64,
     _timestamp: Timestamp,
     _root: MerkleNode,
 }
 
 impl HeaderInfo {
     pub fn new(_hash: blake3::Hash, header: &Header) -> HeaderInfo {
-        let _v = header.v;
-        let _st = header.st;
-        let _e = header.e;
-        let _sl = header.sl;
+        let _version = header.version;
+        let _state = header.state;
+        let _epoch = header.epoch;
+        let _slot = header.slot;
         let _timestamp = header.timestamp;
         let _root = header.root;
-        HeaderInfo { _hash, _v, _st, _e, _sl, _timestamp, _root }
+        HeaderInfo { _hash, _version, _state, _epoch, _slot, _timestamp, _root }
     }
 }
 
@@ -238,13 +238,13 @@ impl BlockInfoChain {
 
 #[derive(Debug)]
 struct OrderInfo {
-    _sl: u64,
+    _slot: u64,
     _hash: blake3::Hash,
 }
 
 impl OrderInfo {
-    pub fn new(_sl: u64, _hash: blake3::Hash) -> OrderInfo {
-        OrderInfo { _sl, _hash }
+    pub fn new(_slot: u64, _hash: blake3::Hash) -> OrderInfo {
+        OrderInfo { _slot, _hash }
     }
 }
 

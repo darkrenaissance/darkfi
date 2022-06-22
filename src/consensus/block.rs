@@ -24,13 +24,13 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Header {
     /// Block version
-    pub v: u8,
+    pub version: u8,
     /// Previous block hash
-    pub st: blake3::Hash,
+    pub state: blake3::Hash,
     /// Epoch
-    pub e: u64,
+    pub epoch: u64,
     /// Slot UID
-    pub sl: u64,
+    pub slot: u64,
     /// Block creation timestamp
     pub timestamp: Timestamp,
     /// Root of the transaction hashes merkle tree
@@ -38,9 +38,15 @@ pub struct Header {
 }
 
 impl Header {
-    pub fn new(st: blake3::Hash, e: u64, sl: u64, timestamp: Timestamp, root: MerkleNode) -> Self {
-        let v = *BLOCK_VERSION;
-        Self { v, st, e, sl, timestamp, root }
+    pub fn new(
+        state: blake3::Hash,
+        epoch: u64,
+        slot: u64,
+        timestamp: Timestamp,
+        root: MerkleNode,
+    ) -> Self {
+        let version = *BLOCK_VERSION;
+        Self { version, state, epoch, slot, timestamp, root }
     }
 
     /// Generate the genesis block.
@@ -91,7 +97,7 @@ impl Block {
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct BlockOrder {
     /// Slot UID
-    pub sl: u64,
+    pub slot: u64,
     /// Block headerhash of that slot
     pub block: blake3::Hash,
 }
@@ -221,14 +227,14 @@ impl ProposalChain {
     /// excluding the genesis block proposal.
     /// Additional validity rules can be applied.
     pub fn check_proposal(&self, proposal: &BlockProposal, previous: &BlockProposal) -> bool {
-        if proposal.block.header.st == self.genesis_block {
+        if proposal.block.header.state == self.genesis_block {
             debug!("check_proposal(): Genesis block proposal provided.");
             return false
         }
 
         let prev_hash = previous.block.header.headerhash();
-        if proposal.block.header.st != prev_hash ||
-            proposal.block.header.sl <= previous.block.header.sl
+        if proposal.block.header.state != prev_hash ||
+            proposal.block.header.slot <= previous.block.header.slot
         {
             debug!("check_proposal(): Provided proposal is invalid.");
             return false

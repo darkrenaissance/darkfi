@@ -70,7 +70,7 @@ impl ProtocolSync {
             debug!("ProtocolSync::handle_receive_request() received {:?}", order);
 
             // Extra validations can be added here
-            let key = order.sl;
+            let key = order.slot;
             let blocks = match self.state.read().await.blockchain.get_blocks_after(key, BATCH) {
                 Ok(v) => v,
                 Err(e) => {

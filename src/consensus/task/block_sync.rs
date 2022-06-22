@@ -34,7 +34,7 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
 
         loop {
             // Node creates a `BlockOrder` and sends it
-            let order = BlockOrder { sl: last.0, block: last.1 };
+            let order = BlockOrder { slot: last.0, block: last.1 };
             channel.send(order).await?;
 
             // Node stores response data.
