@@ -7,18 +7,22 @@ use std::{
 
 use async_std::sync::{Arc, Mutex, RwLock};
 use chrono::{NaiveDateTime, Utc};
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, Metadata, Participant, ProposalChain, StreamletMetadata, Vote,
+    Block, BlockInfo, BlockProposal, Header, Metadata, Participant, ProposalChain,
+    StreamletMetadata, Vote,
 };
 use crate::{
     blockchain::Blockchain,
     crypto::{
         address::Address,
+        constants::MERKLE_DEPTH,
         keypair::{PublicKey, SecretKey},
+        merkle_node::MerkleNode,
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
     net,
@@ -206,8 +210,8 @@ impl ValidatorState {
         let mut slot = 0;
         for chain in &self.consensus.proposals {
             for proposal in &chain.proposals {
-                if proposal.block.sl > slot {
-                    slot = proposal.block.sl;
+                if proposal.block.header.sl > slot {
+                    slot = proposal.block.header.sl;
                 }
             }
         }
@@ -271,30 +275,29 @@ impl ValidatorState {
         let (prev_hash, index) = self.longest_notarized_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
 
-        let metadata = Metadata::new(
-            Timestamp::current_time(),
-            String::from("proof"),
-            String::from("r"),
-            String::from("s"),
-        );
+        let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        for tx in &unproposed_txs {
+            for output in &tx.outputs {
+                tree.append(&MerkleNode::from_coin(&output.revealed.coin));
+                tree.witness();
+            }
+        }
+        let root = tree.root(0).unwrap();
+
+        let header =
+            Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
+
+        let metadata = Metadata::new(String::from("proof"), String::from("r"), String::from("s"));
 
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
-        let prop = BlockProposal::to_proposal_hash(
-            prev_hash,
-            self.slot_epoch(slot),
-            slot,
-            &unproposed_txs,
-            &metadata,
-        );
-        let signed_proposal = self.secret.sign(&prop.as_bytes()[..]);
+
+        let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
 
         Ok(Some(BlockProposal::new(
             self.public,
             signed_proposal,
             self.address,
-            prev_hash,
-            self.slot_epoch(slot),
-            slot,
+            header,
             unproposed_txs,
             metadata,
             sm,
@@ -344,7 +347,7 @@ impl ValidatorState {
         }
 
         let hash = match longest_notarized_chain {
-            Some(chain) => chain.proposals.last().unwrap().hash(),
+            Some(chain) => chain.proposals.last().unwrap().block.header.headerhash(),
             None => self.blockchain.last()?.1,
         };
 
@@ -377,17 +380,10 @@ impl ValidatorState {
             return Ok(None)
         }
 
-        if !proposal.public_key.verify(
-            BlockProposal::to_proposal_hash(
-                proposal.block.st,
-                proposal.block.e,
-                proposal.block.sl,
-                &proposal.block.txs,
-                &proposal.block.metadata,
-            )
-            .as_bytes(),
-            &proposal.signature,
-        ) {
+        if !proposal
+            .public_key
+            .verify(proposal.block.header.headerhash().as_bytes(), &proposal.signature)
+        {
             warn!("Proposer ({}) signature could not be verified", proposal.address.to_string());
             return Ok(None)
         }
@@ -403,7 +399,7 @@ impl ValidatorState {
         let mut proposal = proposal.clone();
 
         // Generate proposal hash
-        let proposal_hash = proposal.hash();
+        let proposal_hash = proposal.block.header.headerhash();
 
         // Add orphan votes
         let mut orphans = Vec::new();
@@ -446,7 +442,7 @@ impl ValidatorState {
             self.public,
             signed_hash,
             proposal_hash,
-            proposal.block.sl,
+            proposal.block.header.sl,
             self.address,
         )))
     }
@@ -467,17 +463,21 @@ impl ValidatorState {
         let mut fork = None;
         for (index, chain) in self.consensus.proposals.iter().enumerate() {
             let last = chain.proposals.last().unwrap();
-            let hash = last.hash();
-            if proposal.block.st == hash && proposal.block.sl > last.block.sl {
+            let hash = last.block.header.headerhash();
+            if proposal.block.header.st == hash && proposal.block.header.sl > last.block.header.sl {
                 return Ok(index as i64)
             }
 
-            if proposal.block.st == last.block.st && proposal.block.sl == last.block.sl {
+            if proposal.block.header.st == last.block.header.st &&
+                proposal.block.header.sl == last.block.header.sl
+            {
                 debug!("find_extended_chain_index(): Proposal already received");
                 return Ok(-2)
             }
 
-            if proposal.block.st == last.block.st && proposal.block.sl > last.block.sl {
+            if proposal.block.header.st == last.block.header.st &&
+                proposal.block.header.sl > last.block.header.sl
+            {
                 fork = Some(chain.clone());
             }
         }
@@ -496,7 +496,7 @@ impl ValidatorState {
         }
 
         let (last_sl, last_block) = self.blockchain.last()?;
-        if proposal.block.st != last_block || proposal.block.sl <= last_sl {
+        if proposal.block.header.st != last_block || proposal.block.header.sl <= last_sl {
             debug!("find_extended_chain_index(): Proposal doesn't extend any known chain");
             return Ok(-2)
         }
@@ -623,7 +623,7 @@ impl ValidatorState {
     ) -> Result<Option<(&mut BlockProposal, i64)>> {
         for (index, chain) in &mut self.consensus.proposals.iter_mut().enumerate() {
             for proposal in chain.proposals.iter_mut().rev() {
-                let proposal_hash = proposal.hash();
+                let proposal_hash = proposal.block.header.headerhash();
                 if vote_proposal == &proposal_hash {
                     return Ok(Some((proposal, index as i64)))
                 }
@@ -709,12 +709,12 @@ impl ValidatorState {
         }
 
         let last_block = *blockhashes.last().unwrap();
-        let last_sl = finalized.last().unwrap().sl;
+        let last_sl = finalized.last().unwrap().header.sl;
 
         let mut dropped = vec![];
         for chain in self.consensus.proposals.iter() {
             let first = chain.proposals.first().unwrap();
-            if first.block.st != last_block || first.block.sl <= last_sl {
+            if first.block.header.st != last_block || first.block.header.sl <= last_sl {
                 dropped.push(chain.clone());
             }
         }

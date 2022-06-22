@@ -1,10 +1,16 @@
 use std::io;
 
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 
-use super::{Metadata, StreamletMetadata, BLOCK_VERSION};
+use super::{
+    Metadata, StreamletMetadata, BLOCK_INFO_MAGIC_BYTES, BLOCK_MAGIC_BYTES, BLOCK_VERSION,
+};
 use crate::{
-    crypto::{address::Address, keypair::PublicKey, schnorr::Signature},
+    crypto::{
+        address::Address, constants::MERKLE_DEPTH, keypair::PublicKey, merkle_node::MerkleNode,
+        schnorr::Signature,
+    },
     impl_vec, net,
     tx::Transaction,
     util::{
@@ -14,19 +20,52 @@ use crate::{
     Result,
 };
 
-/// This struct represents a tuple of the form (`v`, `st`, `e`, `sl`, `txs`, `metadata`).
-/// The transactions here are stored as hashes, which serve as pointers to
-/// the actual transaction data in the blockchain database.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct Block {
+/// This struct represents a tuple of the form (version, state, epoch, slot, timestamp, merkle_root).
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct Header {
     /// Block version
     pub v: u8,
     /// Previous block hash
     pub st: blake3::Hash,
     /// Epoch
     pub e: u64,
-    /// Slot uid
+    /// Slot UID
     pub sl: u64,
+    /// Block creation timestamp
+    pub timestamp: Timestamp,
+    /// Root of the transaction hashes merkle tree
+    pub root: MerkleNode,
+}
+
+impl Header {
+    pub fn new(st: blake3::Hash, e: u64, sl: u64, timestamp: Timestamp, root: MerkleNode) -> Self {
+        let v = *BLOCK_VERSION;
+        Self { v, st, e, sl, timestamp, root }
+    }
+
+    /// Generate the genesis block.
+    pub fn genesis_header(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
+        let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        let root = tree.root(0).unwrap();
+
+        Self::new(genesis_data, 0, 0, genesis_ts, root)
+    }
+
+    /// Calculate the header hash
+    pub fn headerhash(&self) -> blake3::Hash {
+        blake3::hash(&serialize(self))
+    }
+}
+
+/// This struct represents a tuple of the form (`magic`, `header`, `counter`, `txs`, `metadata`).
+/// The header and transactions are stored as hashes, serving as pointers to
+/// the actual data in the sled database.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct Block {
+    /// Block magic bytes
+    pub magic: [u8; 4],
+    /// Block header hash
+    pub header: blake3::Hash,
     /// Transaction hashes
     pub txs: Vec<blake3::Hash>,
     /// Additional block information
@@ -34,28 +73,17 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(
-        st: blake3::Hash,
-        e: u64,
-        sl: u64,
-        txs: Vec<blake3::Hash>,
-        metadata: Metadata,
-    ) -> Self {
-        let v = *BLOCK_VERSION;
-        Self { v, st, e, sl, txs, metadata }
+    pub fn new(header: blake3::Hash, txs: Vec<blake3::Hash>, metadata: Metadata) -> Self {
+        let magic = *BLOCK_MAGIC_BYTES;
+        Self { magic, header, txs, metadata }
     }
 
     /// Generate the genesis block.
     pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
-        let metadata =
-            Metadata::new(genesis_ts, String::from("proof"), String::from("r"), String::from("s"));
+        let header = Header::genesis_header(genesis_ts, genesis_data);
+        let metadata = Metadata::new(String::from("proof"), String::from("r"), String::from("s"));
 
-        Self::new(genesis_data, 0, 0, vec![], metadata)
-    }
-
-    /// Calculate the block hash
-    pub fn blockhash(&self) -> blake3::Hash {
-        blake3::hash(&serialize(self))
+        Self::new(header.headerhash(), vec![], metadata)
     }
 }
 
@@ -64,7 +92,7 @@ impl Block {
 pub struct BlockOrder {
     /// Slot UID
     pub sl: u64,
-    /// Blockhash of that slot
+    /// Block headerhash of that slot
     pub block: blake3::Hash,
 }
 
@@ -77,14 +105,10 @@ impl net::Message for BlockOrder {
 /// Structure representing full block data.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockInfo {
-    /// Block version
-    pub v: u8,
-    /// Previous block hash
-    pub st: blake3::Hash,
-    /// Epoch
-    pub e: u64,
-    /// Slot uid
-    pub sl: u64,
+    /// BlockInfo magic bytes
+    pub magic: [u8; 4],
+    /// Block header data
+    pub header: Header,
     /// Transactions payload
     pub txs: Vec<Transaction>,
     /// Additional proposal information
@@ -95,28 +119,13 @@ pub struct BlockInfo {
 
 impl BlockInfo {
     pub fn new(
-        st: blake3::Hash,
-        e: u64,
-        sl: u64,
+        header: Header,
         txs: Vec<Transaction>,
         metadata: Metadata,
         sm: StreamletMetadata,
     ) -> Self {
-        let v = *BLOCK_VERSION;
-        Self { v, st, e, sl, txs, metadata, sm }
-    }
-
-    /// Calculate the block hash
-    pub fn blockhash(&self) -> blake3::Hash {
-        let block: Block = self.clone().into();
-        block.blockhash()
-    }
-}
-
-impl From<BlockInfo> for Block {
-    fn from(b: BlockInfo) -> Self {
-        let txids = b.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
-        Self { v: b.v, st: b.st, e: b.e, sl: b.sl, txs: txids, metadata: b.metadata }
+        let magic = *BLOCK_INFO_MAGIC_BYTES;
+        Self { magic, header, txs, metadata, sm }
     }
 }
 
@@ -160,42 +169,13 @@ impl BlockProposal {
         public_key: PublicKey,
         signature: Signature,
         address: Address,
-        st: blake3::Hash,
-        e: u64,
-        sl: u64,
+        header: Header,
         txs: Vec<Transaction>,
         metadata: Metadata,
         sm: StreamletMetadata,
     ) -> Self {
-        let block = BlockInfo::new(st, e, sl, txs, metadata, sm);
+        let block = BlockInfo::new(header, txs, metadata, sm);
         Self { public_key, signature, address, block }
-    }
-
-    /// Produce proposal hash using `st`, `e`, `sl`, `txs`, and `metadata`.
-    pub fn hash(&self) -> blake3::Hash {
-        Self::to_proposal_hash(
-            self.block.st,
-            self.block.e,
-            self.block.sl,
-            &self.block.txs,
-            &self.block.metadata,
-        )
-    }
-
-    /// Generate a proposal hash using provided `st`, `e`, `sl`, `txs`, and `metadata`.
-    pub fn to_proposal_hash(
-        st: blake3::Hash,
-        e: u64,
-        sl: u64,
-        transactions: &[Transaction],
-        metadata: &Metadata,
-    ) -> blake3::Hash {
-        let mut txs = Vec::with_capacity(transactions.len());
-        for tx in transactions {
-            txs.push(blake3::hash(&serialize(tx)));
-        }
-
-        blake3::hash(&serialize(&Block::new(st, e, sl, txs, metadata.clone())))
     }
 }
 
@@ -204,9 +184,7 @@ impl PartialEq for BlockProposal {
         self.public_key == other.public_key &&
             self.signature == other.signature &&
             self.address == other.address &&
-            self.block.st == other.block.st &&
-            self.block.e == other.block.e &&
-            self.block.sl == other.block.sl &&
+            self.block.header == other.block.header &&
             self.block.txs == other.block.txs &&
             self.block.metadata == other.block.metadata
     }
@@ -243,13 +221,15 @@ impl ProposalChain {
     /// excluding the genesis block proposal.
     /// Additional validity rules can be applied.
     pub fn check_proposal(&self, proposal: &BlockProposal, previous: &BlockProposal) -> bool {
-        if proposal.block.st == self.genesis_block {
+        if proposal.block.header.st == self.genesis_block {
             debug!("check_proposal(): Genesis block proposal provided.");
             return false
         }
 
-        let prev_hash = previous.hash();
-        if proposal.block.st != prev_hash || proposal.block.sl <= previous.block.sl {
+        let prev_hash = previous.block.header.headerhash();
+        if proposal.block.header.st != prev_hash ||
+            proposal.block.header.sl <= previous.block.header.sl
+        {
             debug!("check_proposal(): Provided proposal is invalid.");
             return false
         }

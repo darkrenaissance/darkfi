@@ -3,23 +3,23 @@ use std::{fs::File, io::Write};
 
 use darkfi::{
     blockchain::{
-        blockstore::{BlockOrderStore, BlockStore},
+        blockstore::{BlockOrderStore, BlockStore, HeaderStore},
         metadatastore::StreamletMetadataStore,
         txstore::TxStore,
         Blockchain,
     },
     consensus::{
-        block::{Block, BlockProposal, ProposalChain},
-        metadata::{Metadata, OuroborosMetadata, StreamletMetadata},
+        block::{Block, BlockProposal, Header, ProposalChain},
+        metadata::{Metadata, StreamletMetadata},
         participant::Participant,
         state::{ConsensusState, ValidatorState},
         vote::Vote,
         TESTNET_GENESIS_HASH_BYTES,
     },
-    crypto::token_list::DrkTokenList,
+    crypto::{merkle_node::MerkleNode, token_list::DrkTokenList},
     node::Client,
     tx::Transaction,
-    util::{expand_path, time::Timestamp},
+    util::{expand_path, serial::serialize, time::Timestamp},
     wallet::walletdb::init_wallet,
     Result,
 };
@@ -81,54 +81,42 @@ impl StreamletMetadataInfo {
 }
 
 #[derive(Debug)]
-struct OuroborosMetadataInfo {
+struct MetadataInfo {
     _proof: String,
     _r: String,
     _s: String,
 }
 
-impl OuroborosMetadataInfo {
-    pub fn new(metadata: &OuroborosMetadata) -> OuroborosMetadataInfo {
+impl MetadataInfo {
+    pub fn new(metadata: &Metadata) -> MetadataInfo {
         let _proof = metadata.proof.clone();
         let _r = metadata.r.clone();
         let _s = metadata.s.clone();
-        OuroborosMetadataInfo { _proof, _r, _s }
-    }
-}
-
-#[derive(Debug)]
-struct MetadataInfo {
-    _timestamp: Timestamp,
-    _om: OuroborosMetadataInfo,
-}
-
-impl MetadataInfo {
-    pub fn new(metadata: &Metadata) -> MetadataInfo {
-        let _timestamp = metadata.timestamp.clone();
-        let _om = OuroborosMetadataInfo::new(&metadata.om);
-        MetadataInfo { _timestamp, _om }
+        MetadataInfo { _proof, _r, _s }
     }
 }
 
 #[derive(Debug)]
 struct ProposalInfo {
     _address: String,
-    _st: blake3::Hash,
-    _sl: u64,
-    _txs: Vec<Transaction>,
-    _metadata: MetadataInfo,
+    _block: BlockInfo,
     _sm: StreamletMetadataInfo,
 }
 
 impl ProposalInfo {
     pub fn new(proposal: &BlockProposal) -> ProposalInfo {
         let _address = proposal.address.to_string();
-        let _st = proposal.block.st;
-        let _sl = proposal.block.sl;
-        let _txs = proposal.block.txs.clone();
+        let _header = proposal.block.header.headerhash();
+        let mut _txs = vec![];
+        for tx in &proposal.block.txs {
+            let hash = blake3::hash(&serialize(tx));
+            _txs.push(hash);
+        }
         let _metadata = MetadataInfo::new(&proposal.block.metadata);
+        let _block =
+            BlockInfo { _hash: _header, _magic: proposal.block.magic, _header, _txs, _metadata };
         let _sm = StreamletMetadataInfo::new(&proposal.block.sm);
-        ProposalInfo { _address, _st, _sl, _txs, _metadata, _sm }
+        ProposalInfo { _address, _block, _sm }
     }
 }
 
@@ -165,19 +153,65 @@ impl ConsensusInfo {
 }
 
 #[derive(Debug)]
+struct HeaderInfo {
+    _hash: blake3::Hash,
+    _v: u8,
+    _st: blake3::Hash,
+    _e: u64,
+    _sl: u64,
+    _timestamp: Timestamp,
+    _root: MerkleNode,
+}
+
+impl HeaderInfo {
+    pub fn new(_hash: blake3::Hash, header: &Header) -> HeaderInfo {
+        let _v = header.v;
+        let _st = header.st;
+        let _e = header.e;
+        let _sl = header.sl;
+        let _timestamp = header.timestamp;
+        let _root = header.root;
+        HeaderInfo { _hash, _v, _st, _e, _sl, _timestamp, _root }
+    }
+}
+
+#[derive(Debug)]
+struct HeaderStoreInfo {
+    _headers: Vec<HeaderInfo>,
+}
+
+impl HeaderStoreInfo {
+    pub fn new(headerstore: &HeaderStore) -> HeaderStoreInfo {
+        let mut _headers = Vec::new();
+        let result = headerstore.get_all();
+        match result {
+            Ok(iter) => {
+                for (hash, header) in iter.iter() {
+                    _headers.push(HeaderInfo::new(hash.clone(), &header));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        HeaderStoreInfo { _headers }
+    }
+}
+
+#[derive(Debug)]
 struct BlockInfo {
     _hash: blake3::Hash,
-    _st: blake3::Hash,
-    _sl: u64,
+    _magic: [u8; 4],
+    _header: blake3::Hash,
     _txs: Vec<blake3::Hash>,
+    _metadata: MetadataInfo,
 }
 
 impl BlockInfo {
     pub fn new(_hash: blake3::Hash, block: &Block) -> BlockInfo {
-        let _st = block.st;
-        let _sl = block.sl;
+        let _magic = block.magic;
+        let _header = block.header;
         let _txs = block.txs.clone();
-        BlockInfo { _hash, _st, _sl, _txs }
+        let _metadata = MetadataInfo::new(&block.metadata);
+        BlockInfo { _hash, _magic, _header, _txs, _metadata }
     }
 }
 
@@ -305,6 +339,7 @@ impl MetadataStoreInfo {
 
 #[derive(Debug)]
 struct BlockchainInfo {
+    _headers: HeaderStoreInfo,
     _blocks: BlockInfoChain,
     _order: BlockOrderStoreInfo,
     _transactions: TxStoreInfo,
@@ -313,11 +348,12 @@ struct BlockchainInfo {
 
 impl BlockchainInfo {
     pub fn new(blockchain: &Blockchain) -> BlockchainInfo {
+        let _headers = HeaderStoreInfo::new(&blockchain.headers);
         let _blocks = BlockInfoChain::new(&blockchain.blocks);
         let _order = BlockOrderStoreInfo::new(&blockchain.order);
         let _transactions = TxStoreInfo::new(&blockchain.transactions);
         let _metadata = MetadataStoreInfo::new(&blockchain.streamlet_metadata);
-        BlockchainInfo { _blocks, _order, _transactions, _metadata }
+        BlockchainInfo { _headers, _blocks, _order, _transactions, _metadata }
     }
 }
 
@@ -337,41 +373,51 @@ impl StateInfo {
     }
 }
 
-#[async_std::main]
-async fn main() -> Result<()> {
-    let nodes = 4;
+async fn generate(name: &str, folder: &str) -> Result<()> {
     let genesis_ts = Timestamp(1648383795);
     let genesis_data = *TESTNET_GENESIS_HASH_BYTES;
     let pass = "changeme";
-    for i in 0..nodes {
-        // Initialize or load wallet
-        let path = format!("../../../tmp/node{:?}/wallet.db", i);
-        let wallet = init_wallet(&path, &pass).await?;
-        let address = wallet.get_default_address().await?;
-        let tokenlist = Arc::new(DrkTokenList::new(&[
-            ("drk", include_bytes!("../../../../contrib/token/darkfi_token_list.min.json")),
-            ("btc", include_bytes!("../../../../contrib/token/bitcoin_token_list.min.json")),
-            ("eth", include_bytes!("../../../../contrib/token/erc20_token_list.min.json")),
-            ("sol", include_bytes!("../../../../contrib/token/solana_token_list.min.json")),
-        ])?);
-        let client = Arc::new(Client::new(wallet, tokenlist).await?);
+    // Initialize or load wallet
+    let path = folder.to_owned() + "/wallet.db";
+    let wallet = init_wallet(&path, &pass).await?;
+    let address = wallet.get_default_address().await?;
+    let tokenlist = Arc::new(DrkTokenList::new(&[
+        ("drk", include_bytes!("../../../../contrib/token/darkfi_token_list.min.json")),
+        ("btc", include_bytes!("../../../../contrib/token/bitcoin_token_list.min.json")),
+        ("eth", include_bytes!("../../../../contrib/token/erc20_token_list.min.json")),
+        ("sol", include_bytes!("../../../../contrib/token/solana_token_list.min.json")),
+    ])?);
+    let client = Arc::new(Client::new(wallet, tokenlist).await?);
 
-        // Initialize or load sled database
-        let path = format!("../../../tmp/node{:?}/blockchain/testnet", i);
-        let db_path = expand_path(&path).unwrap();
-        let sled_db = sled::open(&db_path)?;
+    // Initialize or load sled database
+    let path = folder.to_owned() + "/blockchain/testnet";
+    let db_path = expand_path(&path).unwrap();
+    let sled_db = sled::open(&db_path)?;
 
-        // Data export
-        println!("Exporting data for node{:?} - {:?}", i, address.to_string());
-        let state =
-            ValidatorState::new(&sled_db, genesis_ts, genesis_data, client, vec![], vec![]).await?;
-        let info = StateInfo::new(&*state.read().await);
-        let info_string = format!("{:#?}", info);
-        let path = format!("node{:?}_testnet_db", i);
-        let mut file = File::create(path)?;
-        file.write(info_string.as_bytes())?;
-        drop(sled_db);
-    }
+    // Data export
+    println!("Exporting data for {:?} - {:?}", name, address.to_string());
+    let state =
+        ValidatorState::new(&sled_db, genesis_ts, genesis_data, client, vec![], vec![]).await?;
+    let info = StateInfo::new(&*state.read().await);
+    let info_string = format!("{:#?}", info);
+    let path = name.to_owned() + "_testnet_db";
+    let mut file = File::create(path)?;
+    file.write(info_string.as_bytes())?;
+    drop(sled_db);
+
+    Ok(())
+}
+
+#[async_std::main]
+async fn main() -> Result<()> {
+    // darkfid0
+    generate("darkfid0", "../../../contrib/localnet/darkfid0").await?;
+    // darkfid1
+    generate("darkfid1", "../../../contrib/localnet/darkfid1").await?;
+    // darkfid2
+    generate("darkfid2", "../../../contrib/localnet/darkfid2").await?;
+    // faucetd
+    generate("faucetd", "../../../contrib/localnet/faucetd").await?;
 
     Ok(())
 }

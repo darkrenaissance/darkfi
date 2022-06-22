@@ -108,7 +108,10 @@ impl ProtocolSync {
                 }
             };
 
-            info!("ProtocolSync::handle_receive_block() Received block {}", info.blockhash());
+            info!(
+                "ProtocolSync::handle_receive_block() Received block {}",
+                info.header.headerhash()
+            );
 
             // We block here if there's a pending validation, otherwise we might
             // apply the same block twice.

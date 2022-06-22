@@ -216,6 +216,9 @@ pub enum Error {
     #[error("Transaction {0} not found in database")]
     TransactionNotFound(String),
 
+    #[error("Header {0} not found in database")]
+    HeaderNotFound(String),
+
     #[error("Block {0} not found in database")]
     BlockNotFound(String),
 
