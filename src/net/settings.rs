@@ -21,6 +21,7 @@ pub struct Settings {
     pub external_addr: Option<Url>,
     pub peers: Vec<Url>,
     pub seeds: Vec<Url>,
+    pub node_id: String,
 }
 
 impl Default for Settings {
@@ -36,6 +37,7 @@ impl Default for Settings {
             external_addr: None,
             peers: Vec::new(),
             seeds: Vec::new(),
+            node_id: String::new(),
         }
     }
 }
@@ -76,6 +78,10 @@ pub struct SettingsOpt {
     pub channel_handshake_seconds: Option<u32>,
     #[structopt(skip)]
     pub channel_heartbeat_seconds: Option<u32>,
+
+    #[serde(default)]
+    #[structopt(skip)]
+    pub node_id: String,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -91,6 +97,7 @@ impl From<SettingsOpt> for Settings {
             external_addr: settings_opt.external_addr,
             peers: settings_opt.peers,
             seeds: settings_opt.seeds,
+            node_id: settings_opt.node_id,
         }
     }
 }
