@@ -105,7 +105,7 @@ async fn main() -> DnetViewResult<()> {
         .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
         .finish(|| {
             smol::future::block_on(async move {
-                poll_and_update_model(&config, ex2.clone(), model.clone()).await?;
+                connect_rpc(&config, ex2.clone(), model.clone()).await?;
                 render_view(&mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok(())
@@ -117,7 +117,7 @@ async fn main() -> DnetViewResult<()> {
 
 // create a new RPC instance for every node in the config file
 // spawn poll() and detach in the background
-async fn poll_and_update_model(
+async fn connect_rpc(
     config: &DnvConfig,
     ex: Arc<Executor<'_>>,
     model: Arc<Model>,
@@ -126,7 +126,10 @@ async fn poll_and_update_model(
         info!("Attempting to poll {}, RPC URL: {}", node.name, node.rpc_url);
         match DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone()).await {
             Ok(client) => ex.spawn(poll(client, model.clone())).detach(),
-            Err(e) => error!("{}", e),
+            Err(e) => {
+                error!("{}", e);
+                parse_offline(node.name.clone(), model.clone()).await?;
+            }
         }
     }
     Ok(())
@@ -144,18 +147,17 @@ async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
             }
             Err(e) => {
                 error!("{:?}", e);
-                parse_offline(&client, model.clone()).await?;
+                parse_offline(client.name.clone(), model.clone()).await?;
             }
         }
         async_util::sleep(2).await;
     }
 }
 
-async fn parse_offline(client: &DnetView, model: Arc<Model>) -> DnetViewResult<()> {
+async fn parse_offline(node_name: String, model: Arc<Model>) -> DnetViewResult<()> {
     let name = "Offline".to_string();
     let session_type = Session::Offline;
-    let node_name = &client.name;
-    let node_id = make_node_id(node_name)?;
+    let node_id = make_node_id(&node_name)?;
     let session_id = make_session_id(&node_id, &session_type)?;
     let mut connects: Vec<ConnectInfo> = Vec::new();
     let mut sessions: Vec<SessionInfo> = Vec::new();
