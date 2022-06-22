@@ -4,7 +4,7 @@ use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
-        constants::MERKLE_DEPTH_ORCHARD,
+        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
@@ -22,8 +22,6 @@ use darkfi::{
     zk::circuit::{BurnContract, MintContract},
     Result,
 };
-
-const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 /// The state machine, held in memory.
 struct MemoryState {

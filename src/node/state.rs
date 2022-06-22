@@ -7,7 +7,7 @@ use crate::{
     blockchain::{nfstore::NullifierStore, rootstore::RootStore},
     crypto::{
         coin::Coin,
-        constants::MERKLE_DEPTH_ORCHARD,
+        constants::MERKLE_DEPTH,
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
@@ -21,8 +21,6 @@ use crate::{
     zk::circuit::{BurnContract, MintContract},
     Result, VerifyFailed, VerifyResult,
 };
-
-const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 /// Trait implementing the state functions used by the state transition.
 pub trait ProgramState {

@@ -10,15 +10,13 @@ use rand::{thread_rng, Rng};
 
 use darkfi::{
     crypto::{
-        constants::MERKLE_DEPTH_ORCHARD,
+        constants::{MERKLE_DEPTH_ORCHARD, MERKLE_DEPTH},
         leadcoin::LeadCoin,
         merkle_node::MerkleNode,
         util::{mod_r_p, pedersen_commitment_scalar},
     },
     zk::circuit::lead_contract::LeadContract,
 };
-
-const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 fn create_coins_sks(len: usize) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>) {
     /*

@@ -75,7 +75,7 @@ impl Ircd {
             .spawn(async move {
                 while let Ok(msg) = p2p_receiver_cloned.recv().await {
                     for (addr, sender) in senders.lock().await.iter() {
-                        // TODO: this need stop signal instead 
+                        // TODO: this need stop signal instead
                         if let Err(e) = sender.send(msg.clone()).await {
                             error!("Can't send msg to the client {}: {}", addr, e);
                             // removing a client sender from the hashmap if any error occured
