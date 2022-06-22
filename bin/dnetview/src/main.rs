@@ -25,7 +25,7 @@ use darkfi::{
 };
 
 use dnetview::{
-    config::{DnvConfig, CONFIG_FILE_CONTENTS},
+    config::{DnvConfig, IrcNode, CONFIG_FILE_CONTENTS},
     error::{DnetViewError, DnetViewResult},
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
@@ -105,7 +105,7 @@ async fn main() -> DnetViewResult<()> {
         .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
         .finish(|| {
             smol::future::block_on(async move {
-                connect_rpc(&config, ex2.clone(), model.clone()).await?;
+                start_connect_slots(&config, ex2.clone(), model.clone()).await?;
                 render_view(&mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok(())
@@ -115,24 +115,36 @@ async fn main() -> DnetViewResult<()> {
     result
 }
 
-// create a new RPC instance for every node in the config file
-// spawn poll() and detach in the background
-async fn connect_rpc(
+async fn start_connect_slots(
     config: &DnvConfig,
     ex: Arc<Executor<'_>>,
     model: Arc<Model>,
 ) -> DnetViewResult<()> {
     for node in &config.nodes {
-        info!("Attempting to poll {}, RPC URL: {}", node.name, node.rpc_url);
-        match DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone()).await {
-            Ok(client) => ex.spawn(poll(client, model.clone())).detach(),
+        ex.spawn(try_connect(ex.clone(), model.clone(), node.name.clone(), node.rpc_url.clone()))
+            .detach();
+    }
+    Ok(())
+}
+
+async fn try_connect(
+    ex: Arc<Executor<'_>>,
+    model: Arc<Model>,
+    node_name: String,
+    rpc_url: String,
+) -> DnetViewResult<()> {
+    loop {
+        info!("Attempting to poll {}, RPC URL: {}", node_name, rpc_url);
+        match DnetView::new(Url::parse(&rpc_url)?, node_name.clone()).await {
+            Ok(client) => {
+                ex.spawn(poll(client, model.clone())).detach();
+            }
             Err(e) => {
                 error!("{}", e);
-                parse_offline(node.name.clone(), model.clone()).await?;
+                async_util::sleep(2).await;
             }
         }
     }
-    Ok(())
 }
 
 async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
