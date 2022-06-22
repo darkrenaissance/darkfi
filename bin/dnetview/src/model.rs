@@ -98,6 +98,7 @@ pub struct ConnectInfo {
     pub is_empty: bool,
     pub last_msg: String,
     pub last_status: String,
+    pub remote_node_id: String,
 }
 
 impl ConnectInfo {
@@ -111,7 +112,18 @@ impl ConnectInfo {
         is_empty: bool,
         last_msg: String,
         last_status: String,
+        remote_node_id: String,
     ) -> ConnectInfo {
-        ConnectInfo { id, addr, state, parent, msg_log, is_empty, last_msg, last_status }
+        ConnectInfo {
+            id,
+            addr,
+            state,
+            parent,
+            msg_log,
+            is_empty,
+            last_msg,
+            last_status,
+            remote_node_id,
+        }
     }
 }

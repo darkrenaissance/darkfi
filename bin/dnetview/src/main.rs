@@ -137,7 +137,7 @@ async fn try_connect(
         info!("Attempting to poll {}, RPC URL: {}", node_name, rpc_url);
         match DnetView::new(Url::parse(&rpc_url)?, node_name.clone()).await {
             Ok(client) => {
-                ex.spawn(poll(client, model.clone())).detach();
+                poll(client, model.clone()).await?;
             }
             Err(e) => {
                 error!("{}", e);
@@ -183,6 +183,7 @@ async fn parse_offline(node_name: String, model: Arc<Model>) -> DnetViewResult<(
     let is_empty = true;
     let last_msg = "Null".to_string();
     let last_status = "Null".to_string();
+    let remote_node_id = "Null".to_string();
     let connect_info = ConnectInfo::new(
         id,
         addr,
@@ -192,6 +193,7 @@ async fn parse_offline(node_name: String, model: Arc<Model>) -> DnetViewResult<(
         is_empty,
         last_msg,
         last_status,
+        remote_node_id,
     );
     connects.push(connect_info.clone());
 
@@ -344,6 +346,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                     let is_empty = true;
                     let last_msg = "Null".to_string();
                     let last_status = "Null".to_string();
+                    let remote_node_id = "Null".to_string();
                     let connect_info = ConnectInfo::new(
                         id,
                         addr,
@@ -353,6 +356,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                         is_empty,
                         last_msg,
                         last_status,
+                        remote_node_id,
                     );
                     connects.push(connect_info);
                 }
@@ -394,6 +398,17 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                             .as_str()
                             .unwrap()
                             .to_string();
+                        let remote_node_id = info2
+                            .unwrap()
+                            .get("remote_node_id")
+                            .unwrap()
+                            .as_str()
+                            .unwrap()
+                            .to_string();
+                        let r_node_id: String = match remote_node_id.is_empty() {
+                            true => "no remote id".to_string(),
+                            false => remote_node_id,
+                        };
                         let connect_info = ConnectInfo::new(
                             id,
                             addr,
@@ -403,6 +418,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                             is_empty,
                             last_msg,
                             last_status,
+                            r_node_id,
                         );
                         connects.push(connect_info.clone());
                     }
@@ -444,8 +460,18 @@ async fn _parse_manual(_manual: &Value, node_id: &String) -> DnetViewResult<Sess
     let is_empty = true;
     let msg = "Null".to_string();
     let status = "Null".to_string();
-    let connect_info =
-        ConnectInfo::new(connect_id.clone(), addr, state, parent, msg_log, is_empty, msg, status);
+    let remote_node_id = "Null".to_string();
+    let connect_info = ConnectInfo::new(
+        connect_id.clone(),
+        addr,
+        state,
+        parent,
+        msg_log,
+        is_empty,
+        msg,
+        status,
+        remote_node_id,
+    );
     connects.push(connect_info);
     let parent = connect_id;
     let is_empty = is_empty_session(&connects);
@@ -481,6 +507,7 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                         let is_empty = true;
                         let last_msg = "Null".to_string();
                         let last_status = "Null".to_string();
+                        let remote_node_id = "Null".to_string();
                         let connect_info = ConnectInfo::new(
                             id,
                             addr,
@@ -490,6 +517,7 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                             is_empty,
                             last_msg,
                             last_status,
+                            remote_node_id,
                         );
                         connects.push(connect_info.clone());
                     }
@@ -513,6 +541,12 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                         let is_empty = false;
                         let last_msg = channel["last_msg"].as_str().unwrap().to_string();
                         let last_status = channel["last_status"].as_str().unwrap().to_string();
+                        let remote_node_id =
+                            channel["remote_node_id"].as_str().unwrap().to_string();
+                        let r_node_id: String = match remote_node_id.is_empty() {
+                            true => "no remote id".to_string(),
+                            false => remote_node_id,
+                        };
                         let connect_info = ConnectInfo::new(
                             id,
                             addr,
@@ -522,6 +556,7 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                             is_empty,
                             last_msg,
                             last_status,
+                            r_node_id,
                         );
                         connects.push(connect_info.clone());
                     }
