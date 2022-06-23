@@ -153,6 +153,7 @@ async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
         match client.get_info().await {
             Ok(reply) => {
                 if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+                    debug!("FROM {}", client.name);
                     parse_data(reply.as_object().unwrap(), &client, model.clone()).await?;
                 } else {
                     return Err(DnetViewError::EmptyRpcReply)
@@ -232,7 +233,6 @@ async fn parse_data(
 
     let node_name = &client.name;
     let node_id = make_node_id(node_name)?;
-    //let external_addr = ext_addr.unwrap().as_str().unwrap();
 
     let ext_addr = parse_external_addr(addr).await?;
     let in_session = parse_inbound(inbound, &node_id).await?;
@@ -498,14 +498,14 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                 slot_count += 1;
                 match slot["channel"].is_null() {
                     true => {
-                        // channel is empty. initialize with empty values
+                        // TODO: this is not actually empty
                         let id = make_empty_id(node_id, &session_type, slot_count)?;
                         let addr = "Null".to_string();
                         let state = &slot["state"];
                         let state = state.as_str().unwrap().to_string();
                         let parent = parent.clone();
                         let msg_log = Vec::new();
-                        let is_empty = true;
+                        let is_empty = false;
                         let last_msg = "Null".to_string();
                         let last_status = "Null".to_string();
                         let remote_node_id = "Null".to_string();

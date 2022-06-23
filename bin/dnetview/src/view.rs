@@ -161,14 +161,28 @@ impl View {
                             ids.push(session.id.clone());
                             for connection in &session.children {
                                 let mut info = Vec::new();
-                                let name = Span::styled(
-                                    format!(
-                                        "        {} ({})",
-                                        connection.addr, connection.remote_node_id
-                                    ),
-                                    style,
-                                );
-                                info.push(name);
+                                match connection.addr.as_str() {
+                                    "Null" => {
+                                        let style = Style::default()
+                                            .fg(Color::Blue)
+                                            .add_modifier(Modifier::ITALIC);
+                                        let name = Span::styled(
+                                            format!("        {} ", connection.addr),
+                                            style,
+                                        );
+                                        info.push(name);
+                                    }
+                                    addr => {
+                                        let name = Span::styled(
+                                            format!(
+                                                "        {} ({})",
+                                                addr, connection.remote_node_id
+                                            ),
+                                            style,
+                                        );
+                                        info.push(name);
+                                    }
+                                }
                                 match connection.last_status.as_str() {
                                     "recv" => {
                                         let msg = Span::styled(
