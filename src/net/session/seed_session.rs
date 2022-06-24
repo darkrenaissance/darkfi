@@ -105,16 +105,20 @@ impl SeedSession {
 
                 info!("Connected seed #{} [{}]", seed_index, seed);
 
-                self.clone().register_channel(channel.clone(), executor.clone()).await?;
+                if let Err(err) =
+                    self.clone().register_channel(channel.clone(), executor.clone()).await
+                {
+                    warn!("Failure during seed session #{} [{}]: {}", seed_index, seed, err);
+                }
 
-                debug!("Disconnecting from seed #{} [{}]", seed_index, seed);
+                info!("Disconnecting from seed #{} [{}]", seed_index, seed);
                 channel.stop().await;
 
                 debug!(target: "net", "SeedSession::start_seed(i={}) [END]", seed_index);
                 Ok(())
             }
             Err(err) => {
-                info!("Failure contacting seed #{} [{}]: {}", seed_index, seed, err);
+                warn!("Failure contacting seed #{} [{}]: {}", seed_index, seed, err);
                 Err(err)
             }
         }

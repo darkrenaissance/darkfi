@@ -7,7 +7,9 @@ use smol::Executor;
 use crate::Result;
 
 use super::{
-    super::{message, ChannelPtr, HostsPtr, P2pPtr, SettingsPtr},
+    super::{
+        message, message_subscriber::MessageSubscription, ChannelPtr, HostsPtr, P2pPtr, SettingsPtr,
+    },
     ProtocolBase, ProtocolBasePtr,
 };
 
@@ -16,6 +18,7 @@ pub struct ProtocolSeed {
     channel: ChannelPtr,
     hosts: HostsPtr,
     settings: SettingsPtr,
+    addr_sub: MessageSubscription<message::AddrsMessage>,
 }
 
 impl ProtocolSeed {
@@ -24,7 +27,14 @@ impl ProtocolSeed {
         let hosts = p2p.hosts();
         let settings = p2p.settings();
 
-        Arc::new(Self { channel, hosts, settings })
+        //// Create a subscription to address message.
+        let addr_sub = channel
+            .clone()
+            .subscribe_msg::<message::AddrsMessage>()
+            .await
+            .expect("Missing addr dispatcher!");
+
+        Arc::new(Self { channel, hosts, settings, addr_sub })
     }
 
     /// Sends own external address over a channel. Imports own external address
@@ -50,13 +60,6 @@ impl ProtocolBase for ProtocolSeed {
     /// message and receives an address message.
     async fn start(self: Arc<Self>, _executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "ProtocolSeed::start() [START]");
-        // Create a subscription to address message.
-        let addr_sub = self
-            .channel
-            .clone()
-            .subscribe_msg::<message::AddrsMessage>()
-            .await
-            .expect("Missing addrs dispatcher!");
 
         // Send own address to the seed server.
         self.send_self_address().await?;
@@ -66,7 +69,7 @@ impl ProtocolBase for ProtocolSeed {
         self.channel.clone().send(get_addr).await?;
 
         // Receive addresses.
-        let addrs_msg = addr_sub.receive().await?;
+        let addrs_msg = self.addr_sub.receive().await?;
         debug!(target: "net", "ProtocolSeed::start() received {} addrs", addrs_msg.addrs.len());
         self.hosts.store(addrs_msg.addrs.clone()).await;
 
