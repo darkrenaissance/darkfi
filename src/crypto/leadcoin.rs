@@ -1,4 +1,3 @@
-// FIXME: This needs a cleanup and halo2 0.2 port
 use pasta_curves::pallas;
 
 use crate::crypto::{
@@ -12,6 +11,7 @@ use incrementalmerkletree::Hashable;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 
 //use halo2_proofs::arithmetic::CurveAffine;
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
     pub value: Option<pallas::Base>, //stake
@@ -31,8 +31,8 @@ pub struct LeadCoin {
     pub root_sk: Option<pallas::Base>,
     pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
     pub path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
-    pub opening1: Option<pallas::Base>,
-    pub opening2: Option<pallas::Base>,
+    pub c1_blind: Option<pallas::Scalar>,
+    pub c2_blind: Option<pallas::Scalar>,
 }
 
 impl LeadCoin {
@@ -79,10 +79,10 @@ impl LeadCoin {
             *po_sn.y(),
             *po_cm.x(),
             *po_cm.y(),
-            *po_cm2.x(),
-            *po_cm2.y(),
-            cm_root.0,
-            po_cmp,
+            //*po_cm2.x(),
+            //*po_cm2.y(),
+            //cm_root.0,
+            //po_cmp,
         ];
         public_inputs
     }

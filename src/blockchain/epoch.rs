@@ -1,5 +1,7 @@
 use halo2_proofs::{arithmetic::Field, dev::MockProver, circuit::Value};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use halo2_gadgets::poseidon::primitives as poseidon;
+
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::PrimeField, Curve},
@@ -14,12 +16,11 @@ use crate::{
         leadcoin::LeadCoin,
         merkle_node::MerkleNode,
         util::{mod_r_p, pedersen_commitment_scalar},
+        types::DrkValueBlind,
     },
 };
 
-
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
-
 
 #[derive(Copy,Debug,Default,Clone)]
 pub struct EpochItem
@@ -66,7 +67,6 @@ impl Epoch {
                 let sk_base =  pallas::Base::one();
                 prev_sk_base = sk_base;
                 sk_base.to_repr()
-
             } else {
                 /*
                 let base = pedersen_commitment_scalar(pallas::Scalar::one(), mod_r_p(prev_sk_base));
@@ -108,8 +108,8 @@ impl Epoch {
         let (root_sks, path_sks) = self.create_coins_sks();
         let cm1_val: u64 = rng.gen();
         //random commitment blinding values
-        let cm1_blind: pallas::Base = pallas::Base::random(&mut rng);
-        let cm2_blind: pallas::Base = pallas::Base::random(&mut rng);
+        let c_cm1_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
+        let c_cm2_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
 
         let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(self.len.unwrap() as usize);
         let mut coins: Vec<LeadCoin> = vec![];
@@ -120,6 +120,7 @@ impl Epoch {
             // coin slot number
             let c_sl = pallas::Base::from(u64::try_from(i).unwrap());
             //
+            //TODO (fix)
             let c_tau = pallas::Base::from(u64::try_from(i).unwrap()); // let's assume it's sl for simplicity
             //
             let c_root_sk: MerkleNode = root_sks[i];
@@ -132,10 +133,21 @@ impl Epoch {
             let c_pk_pt_x: pallas::Base = *c_pk_pt.x();
             let c_pk_pt_y: pallas::Base = *c_pk_pt.y();
 
-            let c_cm_v = c_v * c_seed * c_pk_pt_x * c_pk_pt_y;
-            let c_cm1_blind = cm1_blind; //TODO (fix) should be read from DrkValueBlind
-            let c_cm2_blind = cm2_blind; //TODO (fix) should be read from DrkValueBlind
-            let c_cm: pallas::Point = pedersen_commitment_scalar(mod_r_p(c_cm_v), mod_r_p(c_cm1_blind));
+            //
+            let lead_coin_msg = [
+                //TODO (fix)
+                pallas::Scalar::one(),
+                //c_pk_pt_x.clone(),
+                //c_pk_pt_y.clone(),
+                //c_v,
+                //*c_seed_pt.x(), //TODO(fix) will be c_seed(base) only after calculating c_seed as hash
+                //*c_seed_pt.y(),
+            ];
+            let lead_coin_msg_hash : pallas::Scalar = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
+            //TODO (FIX) THIS PANICS, ONLY PANICS ON LARGE VALUES!
+            //let c_cm: pallas::Point = pedersen_commitment_scalar(lead_coin_msg_hash, c_cm1_blind);
+            //note c_v is set to zero, should work
+            let c_cm: pallas::Point = pedersen_commitment_scalar(mod_r_p(c_v), c_cm1_blind);
 
             let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
             let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
@@ -147,23 +159,22 @@ impl Epoch {
             // lead coin commitment
             let c_seed2 = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));
             let c_seed2_pt = c_seed2.to_affine().coordinates().unwrap();
-            /*
-            let lead_coin_msg = [c_pk_pt_y.clone(),
-            c_pk_pt_x.clone(),
-            c_v,
-             *c_seed2_pt.x(),
-             *c_seed2_pt.y()
+
+            let lead_coin_msg = [
+                //c_pk_pt_y.clone(),
+                //c_pk_pt_x.clone(),
+                //c_v,
+                //c_seed,
+                pallas::Base::one(),
             ];
-            let lead_coin_msg_hash =
-            poseidon::Hash::<_, P128Pow5T3, ConstantLength<5>, 3, 2>::init().hash(lead_coin_msg);
-             */
-            //TODO (fix) hash this
-            let lead_coin_msg = c_pk_pt_y * c_pk_pt_x * c_v * *c_seed2_pt.x() * *c_seed2_pt.y();
-            let c_cm2 = pedersen_commitment_scalar(mod_r_p(lead_coin_msg), mod_r_p(c_cm2_blind));
+            let lead_coin_msg_hash  = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
+            let c_cm2 = pedersen_commitment_scalar(mod_r_p(lead_coin_msg_hash), c_cm2_blind);
+
             let c_root_sk = root_sks[i];
 
             let c_root_sk_bytes: [u8; 32] = c_root_sk.inner().to_repr();
             let mut c_root_sk_base_bytes: [u8; 32] = [0; 32];
+            //TODO (fix) using only first 24, use the whoel root
             c_root_sk_base_bytes[..23].copy_from_slice(&c_root_sk_bytes[..23]);
             let _c_root_sk_base = pallas::Base::from_repr(c_root_sk_base_bytes);
 
@@ -186,8 +197,8 @@ impl Epoch {
                 root_sk: Some(c_root_sk.inner()),
                 path: Some(c_cm_path.as_slice().try_into().unwrap()),
                 path_sk: Some(c_path_sk),
-                opening1: Some(c_cm1_blind),
-                opening2: Some(c_cm2_blind),
+                c1_blind: Some(c_cm1_blind),
+                c2_blind: Some(c_cm2_blind),
             };
             coins.push(coin);
         }
