@@ -107,7 +107,8 @@ impl SeedSession {
 
                 self.clone().register_channel(channel.clone(), executor.clone()).await?;
 
-                //self.attach_protocols(channel, hosts, settings, executor).await?;
+                debug!("Disconnecting from seed #{} [{}]", seed_index, seed);
+                channel.stop().await;
 
                 debug!(target: "net", "SeedSession::start_seed(i={}) [END]", seed_index);
                 Ok(())
