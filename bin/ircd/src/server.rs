@@ -1,4 +1,8 @@
-use async_std::net::TcpStream;
+use async_std::{
+    net::TcpStream,
+    sync::{Arc, Mutex},
+};
+use std::net::SocketAddr;
 
 use futures::{io::WriteHalf, AsyncWriteExt};
 use fxhash::FxHashMap;
@@ -9,7 +13,7 @@ use ringbuffer::RingBufferWrite;
 use darkfi::{net::P2pPtr, Error, Result};
 
 use crate::{
-    crypto::encrypt_message,
+    crypto::{encrypt_message, try_decrypt_message},
     privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
     ChannelInfo,
 };
@@ -21,6 +25,7 @@ const RPL_NAMEREPLY: u32 = 353;
 pub struct IrcServerConnection {
     // server stream
     write_stream: WriteHalf<TcpStream>,
+    peer_address: SocketAddr,
     // msg ids
     seen_msg_ids: SeenMsgIds,
     privmsgs_buffer: PrivmsgsBuffer,
@@ -33,19 +38,23 @@ pub struct IrcServerConnection {
     pub configured_chans: FxHashMap<String, ChannelInfo>,
     // p2p
     p2p: P2pPtr,
+    senders: Arc<Mutex<FxHashMap<SocketAddr, async_channel::Sender<Privmsg>>>>,
 }
 
 impl IrcServerConnection {
     pub fn new(
         write_stream: WriteHalf<TcpStream>,
+        peer_address: SocketAddr,
         seen_msg_ids: SeenMsgIds,
         privmsgs_buffer: PrivmsgsBuffer,
         auto_channels: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
         p2p: P2pPtr,
+        senders: Arc<Mutex<FxHashMap<SocketAddr, async_channel::Sender<Privmsg>>>>,
     ) -> Self {
         Self {
             write_stream,
+            peer_address,
             seen_msg_ids,
             privmsgs_buffer,
             is_nick_init: false,
@@ -55,6 +64,7 @@ impl IrcServerConnection {
             auto_channels,
             configured_chans,
             p2p,
+            senders,
         }
     }
 
@@ -206,6 +216,16 @@ impl IrcServerConnection {
                             (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
                         }
 
+                        let senders = self.senders.lock().await;
+                        for (peer_addr, sender) in senders.iter() {
+                            if peer_addr == &self.peer_address {
+                                continue
+                            }
+                            // TODO this need more robust design
+                            sender.send(protocol_msg.clone()).await?;
+                        }
+                        drop(senders);
+
                         debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
                         self.p2p.broadcast(protocol_msg).await?;
                     }
@@ -262,5 +282,69 @@ impl IrcServerConnection {
         self.write_stream.write_all(message.as_bytes()).await?;
         debug!("Sent {}", message);
         Ok(())
+    }
+
+    pub async fn process_msg_from_p2p(&mut self, msg: &Privmsg) -> Result<()> {
+        let mut msg = msg.clone();
+        // Try to potentially decrypt the incoming message.
+        if self.configured_chans.contains_key(&msg.channel) {
+            let chan_info = self.configured_chans.get_mut(&msg.channel).unwrap();
+            if !chan_info.joined {
+                return Ok(())
+            }
+
+            let salt_box = chan_info.salt_box.clone();
+
+            if salt_box.is_some() {
+                let decrypted_msg = try_decrypt_message(&salt_box.unwrap(), &msg.message);
+
+                if decrypted_msg.is_none() {
+                    return Ok(())
+                }
+
+                msg.message = decrypted_msg.unwrap();
+                info!("Decrypted received message: {:?}", msg);
+            }
+
+            // add the nickname to the channel's names
+            if !chan_info.names.contains(&msg.nickname) {
+                chan_info.names.push(msg.nickname.clone());
+            }
+        }
+
+        self.reply(&msg.to_irc_msg()).await?;
+        Ok(())
+    }
+
+    pub async fn process_line_from_client(&mut self, line: String) -> Result<()> {
+        info!("Received msg from IRC client: {:?}", line);
+        let irc_msg = self.clean_input_line(line)?;
+
+        info!("Send msg to IRC client '{}' from {}", irc_msg, self.peer_address);
+
+        if let Err(e) = self.update(irc_msg).await {
+            warn!("Connection error: {} for {}", e, self.peer_address);
+            return Err(Error::ChannelStopped)
+        }
+        Ok(())
+    }
+
+    fn clean_input_line(&self, mut line: String) -> Result<String> {
+        if line.is_empty() {
+            warn!("Received empty line from {}. ", self.peer_address);
+            warn!("Closing connection.");
+            return Err(Error::ChannelStopped)
+        }
+
+        if &line[(line.len() - 2)..] != "\r\n" {
+            warn!("Closing connection.");
+            return Err(Error::ChannelStopped)
+        }
+
+        // Remove CRLF
+        line.pop();
+        line.pop();
+
+        Ok(line.clone())
     }
 }

@@ -30,16 +30,13 @@ pub mod protocol_privmsg;
 pub mod rpc;
 pub mod server;
 pub mod settings;
-pub mod util;
 
 use crate::{
-    crypto::try_decrypt_message,
     privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
     protocol_privmsg::ProtocolPrivmsg,
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
     settings::{parse_configured_channels, Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
-    util::clean_input,
 };
 
 const SIZE_OF_MSGS_BUFFER: usize = 4096;
@@ -102,11 +99,13 @@ impl Ircd {
         let mut reader = BufReader::new(reader);
         let mut conn = IrcServerConnection::new(
             writer,
+            peer_addr,
             self.seen_msg_ids.clone(),
             self.privmsgs_buffer.clone(),
             self.autojoin_chans.clone(),
             self.configured_chans.clone(),
             self.p2p.clone(),
+            self.senders.clone(),
         );
 
         let (sender, receiver) = async_channel::unbounded();
@@ -124,62 +123,24 @@ impl Ircd {
                     let mut line = String::new();
                     futures::select! {
                         privmsg = receiver.recv().fuse() => {
-                            let mut msg = privmsg?;
+                            let msg = privmsg?;
                             info!("Received msg from P2p network: {:?}", msg);
-
-                            // Try to potentially decrypt the incoming message.
-                            if conn.configured_chans.contains_key(&msg.channel) {
-                                let chan_info = conn.configured_chans.get_mut(&msg.channel).unwrap();
-                                if !chan_info.joined {
-                                    continue
-                                }
-
-                                let salt_box = chan_info.salt_box.clone();
-
-                                if salt_box.is_some() {
-                                    let decrypted_msg =
-                                        try_decrypt_message(&salt_box.unwrap(), &msg.message);
-
-                                    if decrypted_msg.is_none() {
-                                        continue
-                                    }
-
-                                    msg.message = decrypted_msg.unwrap();
-                                    info!("Decrypted received message: {:?}", msg);
-
-                                }
-
-                                // add the nickname to the channel's names
-                                if !chan_info.names.contains(&msg.nickname) {
-                                    chan_info.names.push(msg.nickname.clone());
-                                }
-                            }
-
-                            conn.reply(&msg.to_irc_msg()).await?;
+                            conn.process_msg_from_p2p(&msg).await?;
                         }
                         err = reader.read_line(&mut line).fuse() => {
                             if let Err(e) = err {
                                 warn!("Read line error. Closing stream for {}: {}", peer_addr, e);
                                 return Ok(())
                             }
-
-                            info!("Received msg from IRC client: {:?}", line);
-                            let irc_msg = match clean_input(line, &peer_addr) {
-                                Ok(m) => m,
-                                Err(e) => return Err(e)
-                            };
-
-                            info!("Send msg to IRC client '{}' from {}", irc_msg, peer_addr);
-
-                            if let Err(e) = conn.update(irc_msg).await {
-                                warn!("Connection error: {} for {}", e, peer_addr);
+                            if let Err(e) = conn.process_line_from_client(line).await {
+                                error!("Process line from client failed {}: {}", peer_addr, e);
                                 return Err(Error::ChannelStopped)
                             }
                         }
                     };
                 }
             })
-        .detach();
+            .detach();
 
         Ok(())
     }
