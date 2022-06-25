@@ -88,7 +88,8 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
             }
         };
 
-        info!("consensus: Node is the slot leader: Proposed block: {:?}", proposal);
+        info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
+        debug!("consensus: Full proposal: {:?}", proposal);
         let vote = state.write().await.receive_proposal(&proposal);
         let vote = match vote {
             Ok(v) => {

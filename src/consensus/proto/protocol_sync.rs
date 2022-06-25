@@ -109,7 +109,7 @@ impl ProtocolSync {
             };
 
             info!(
-                "ProtocolSync::handle_receive_block() Received block {}",
+                "ProtocolSync::handle_receive_block(): Received block: {}",
                 info.header.headerhash()
             );
 

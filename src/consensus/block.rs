@@ -1,4 +1,4 @@
-use std::io;
+use std::{fmt, io};
 
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
@@ -193,6 +193,19 @@ impl PartialEq for BlockProposal {
             self.block.header == other.block.header &&
             self.block.txs == other.block.txs &&
             self.block.metadata == other.block.metadata
+    }
+}
+
+impl fmt::Display for BlockProposal {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_fmt(format_args!(
+            "BlockProposal {{ leader: {}, hash: {}, epoch: {}, slot: {}, txs: {} }}",
+            self.address.to_string(),
+            self.block.header.headerhash(),
+            self.block.header.epoch,
+            self.block.header.slot,
+            self.block.txs.len()
+        ))
     }
 }
 

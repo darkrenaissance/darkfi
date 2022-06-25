@@ -59,7 +59,8 @@ impl ProtocolProposal {
                 }
             };
 
-            info!("ProtocolProposal::handle_receive_proposal() recv: {:?}", proposal);
+            info!("ProtocolProposal::handle_receive_proposal(): recv: {}", proposal);
+            debug!("ProtocolProposal::handle_receive_proposal(): Full proposal: {:?}", proposal);
 
             let proposal_copy = (*proposal).clone();
 
