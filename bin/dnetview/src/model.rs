@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use darkfi::util::NanoTimestamp;
 
+// Mutex<FxHashMap<ConnectInfo.id, Vec<(NanoTimestamp, send, recv)>>>
 type MsgLogMutex = Mutex<FxHashMap<String, Vec<(NanoTimestamp, String, String)>>>;
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

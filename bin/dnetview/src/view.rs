@@ -277,14 +277,16 @@ impl View {
                     let log = self.msg_log.get(&connect.id);
                     match log {
                         Some(values) => {
-                            for (t, k, v) in values {
+                            for (i, (t, k, v)) in values.into_iter().enumerate() {
                                 lines.push(Spans::from(match k.as_str() {
-                                    "send" => {
-                                        Span::styled(format!("{}             S: {}", t, v), style)
-                                    }
-                                    "recv" => {
-                                        Span::styled(format!("{}             R: {}", t, v), style)
-                                    }
+                                    "send" => Span::styled(
+                                        format!("{}  {}             S: {}", i, t, v),
+                                        style,
+                                    ),
+                                    "recv" => Span::styled(
+                                        format!("{}  {}             R: {}", i, t, v),
+                                        style,
+                                    ),
                                     data => {
                                         return Err(DnetViewError::UnexpectedData(data.to_string()))
                                     }
