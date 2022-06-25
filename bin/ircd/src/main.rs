@@ -4,7 +4,7 @@ use async_std::{
 };
 use std::net::SocketAddr;
 
-use async_channel::{Receiver, Sender};
+use async_channel::Receiver;
 use async_executor::Executor;
 use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
 use fxhash::FxHashMap;
@@ -17,6 +17,7 @@ use structopt_toml::StructOptToml;
 use darkfi::{
     async_daemonize, net,
     rpc::server::listen_and_serve,
+    system::{Subscriber, SubscriberPtr},
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
         path::get_config_path,
@@ -50,7 +51,7 @@ struct Ircd {
     configured_chans: FxHashMap<String, ChannelInfo>,
     // p2p
     p2p: net::P2pPtr,
-    senders: Arc<Mutex<FxHashMap<SocketAddr, Sender<Privmsg>>>>,
+    senders: SubscriberPtr<Privmsg>,
 }
 
 impl Ircd {
@@ -61,7 +62,7 @@ impl Ircd {
         configured_chans: FxHashMap<String, ChannelInfo>,
         p2p: net::P2pPtr,
     ) -> Self {
-        let senders = Arc::new(Mutex::new(FxHashMap::default()));
+        let senders = Subscriber::new();
         Self { seen_msg_ids, privmsgs_buffer, autojoin_chans, configured_chans, p2p, senders }
     }
 
@@ -71,21 +72,10 @@ impl Ircd {
         executor
             .spawn(async move {
                 while let Ok(msg) = p2p_receiver_cloned.recv().await {
-                    for (addr, sender) in senders.lock().await.iter() {
-                        // TODO: this need stop signal instead
-                        if let Err(e) = sender.send(msg.clone()).await {
-                            error!("Can't send msg to the client {}: {}", addr, e);
-                            // removing a client sender from the hashmap if any error occured
-                            senders.lock().await.remove(addr);
-                        }
-                    }
+                    senders.notify(msg).await;
                 }
             })
             .detach();
-    }
-
-    async fn add_to_senders(&self, addr: &SocketAddr, sender: Sender<Privmsg>) {
-        self.senders.lock().await.insert(addr.clone(), sender);
     }
 
     async fn process(
@@ -108,36 +98,43 @@ impl Ircd {
             self.senders.clone(),
         );
 
-        let (sender, receiver) = async_channel::unbounded();
+        let receiver = self.senders.clone().subscribe().await;
 
         // send messages history
         for msg in self.privmsgs_buffer.lock().await.to_vec() {
-            sender.send(msg).await?;
+            receiver.self_notify(msg).await;
         }
-
-        self.add_to_senders(&peer_addr, sender.clone()).await;
 
         executor
             .spawn(async move {
                 loop {
                     let mut line = String::new();
-                    futures::select! {
-                        privmsg = receiver.recv().fuse() => {
-                            let msg = privmsg?;
+                    let result: Result<()> = futures::select! {
+                        msg = receiver.receive().fuse() => {
                             info!("Received msg from P2p network: {:?}", msg);
-                            conn.process_msg_from_p2p(&msg).await?;
+                            match conn.process_msg_from_p2p(&msg).await {
+                                Ok(_) => Ok(()),
+                                Err(e) => {
+                                    error!("Process msg from p2p failed {}: {}", peer_addr, e);
+                                    Err(Error::ChannelStopped)
+                                }
+                            }
                         }
                         err = reader.read_line(&mut line).fuse() => {
-                            if let Err(e) = err {
-                                warn!("Read line error. Closing stream for {}: {}", peer_addr, e);
-                                return Ok(())
-                            }
-                            if let Err(e) = conn.process_line_from_client(line).await {
-                                error!("Process line from client failed {}: {}", peer_addr, e);
-                                return Err(Error::ChannelStopped)
+                            match conn.process_line_from_client(err, line).await {
+                                Ok(_) => Ok(()),
+                                Err(e) => {
+                                    error!("Process line from client failed {}: {}", peer_addr, e);
+                                    Err(Error::ChannelStopped)
+                                }
                             }
                         }
                     };
+
+                    if let Err(e) = result {
+                        warn!("Close connection for clinet {}: {}", peer_addr, e);
+                        receiver.unsubscribe().await;
+                    }
                 }
             })
             .detach();

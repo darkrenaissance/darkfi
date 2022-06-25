@@ -1,7 +1,4 @@
-use async_std::{
-    net::TcpStream,
-    sync::{Arc, Mutex},
-};
+use async_std::net::TcpStream;
 use std::net::SocketAddr;
 
 use futures::{io::WriteHalf, AsyncWriteExt};
@@ -10,7 +7,7 @@ use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
 use ringbuffer::RingBufferWrite;
 
-use darkfi::{net::P2pPtr, Error, Result};
+use darkfi::{net::P2pPtr, system::SubscriberPtr, Error, Result};
 
 use crate::{
     crypto::{encrypt_message, try_decrypt_message},
@@ -38,7 +35,7 @@ pub struct IrcServerConnection {
     pub configured_chans: FxHashMap<String, ChannelInfo>,
     // p2p
     p2p: P2pPtr,
-    senders: Arc<Mutex<FxHashMap<SocketAddr, async_channel::Sender<Privmsg>>>>,
+    senders: SubscriberPtr<Privmsg>,
 }
 
 impl IrcServerConnection {
@@ -50,7 +47,7 @@ impl IrcServerConnection {
         auto_channels: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
         p2p: P2pPtr,
-        senders: Arc<Mutex<FxHashMap<SocketAddr, async_channel::Sender<Privmsg>>>>,
+        senders: SubscriberPtr<Privmsg>,
     ) -> Self {
         Self {
             write_stream,
@@ -216,15 +213,7 @@ impl IrcServerConnection {
                             (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
                         }
 
-                        let senders = self.senders.lock().await;
-                        for (peer_addr, sender) in senders.iter() {
-                            if peer_addr == &self.peer_address {
-                                continue
-                            }
-                            // TODO this need more robust design
-                            sender.send(protocol_msg.clone()).await?;
-                        }
-                        drop(senders);
+                        self.senders.notify(protocol_msg.clone()).await;
 
                         debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
                         self.p2p.broadcast(protocol_msg).await?;
@@ -316,7 +305,16 @@ impl IrcServerConnection {
         Ok(())
     }
 
-    pub async fn process_line_from_client(&mut self, line: String) -> Result<()> {
+    pub async fn process_line_from_client(
+        &mut self,
+        err: std::result::Result<usize, std::io::Error>,
+        line: String,
+    ) -> Result<()> {
+        if let Err(e) = err {
+            warn!("Read line error {}: {}", self.peer_address, e);
+            return Err(Error::ChannelStopped)
+        }
+
         info!("Received msg from IRC client: {:?}", line);
         let irc_msg = self.clean_input_line(line)?;
 
