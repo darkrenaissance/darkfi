@@ -36,6 +36,7 @@ pub struct IrcServerConnection {
     // p2p
     p2p: P2pPtr,
     senders: SubscriberPtr<Privmsg>,
+    subscriber_id: u64,
 }
 
 impl IrcServerConnection {
@@ -48,6 +49,7 @@ impl IrcServerConnection {
         configured_chans: FxHashMap<String, ChannelInfo>,
         p2p: P2pPtr,
         senders: SubscriberPtr<Privmsg>,
+        subscriber_id: u64,
     ) -> Self {
         Self {
             write_stream,
@@ -62,6 +64,7 @@ impl IrcServerConnection {
             configured_chans,
             p2p,
             senders,
+            subscriber_id,
         }
     }
 
@@ -213,7 +216,9 @@ impl IrcServerConnection {
                             (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
                         }
 
-                        self.senders.notify(protocol_msg.clone()).await;
+                        self.senders
+                            .notify_with_exclude(protocol_msg.clone(), &[self.subscriber_id])
+                            .await;
 
                         debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
                         self.p2p.broadcast(protocol_msg).await?;

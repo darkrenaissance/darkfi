@@ -87,6 +87,11 @@ impl Ircd {
         let (reader, writer) = stream.split();
 
         let mut reader = BufReader::new(reader);
+
+        // New subscriber
+        let receiver = self.senders.clone().subscribe().await;
+
+        // New irc connection
         let mut conn = IrcServerConnection::new(
             writer,
             peer_addr,
@@ -96,11 +101,10 @@ impl Ircd {
             self.configured_chans.clone(),
             self.p2p.clone(),
             self.senders.clone(),
+            receiver.get_id(),
         );
 
-        let receiver = self.senders.clone().subscribe().await;
-
-        // send messages history
+        // Send messages in buffer
         for msg in self.privmsgs_buffer.lock().await.to_vec() {
             receiver.self_notify(msg).await;
         }
@@ -134,6 +138,7 @@ impl Ircd {
                     if let Err(e) = result {
                         warn!("Close connection for clinet {}: {}", peer_addr, e);
                         receiver.unsubscribe().await;
+                        break
                     }
                 }
             })
@@ -237,7 +242,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                 let result = ircd.process(executor_cloned.clone(), stream, peer_addr).await;
 
                 if let Err(e) = result {
-                    error!("failed process the {} connections: {}", peer_addr, e);
+                    error!("Failed processing connection {}: {}", peer_addr, e);
                     continue
                 };
 
