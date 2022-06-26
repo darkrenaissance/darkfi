@@ -61,6 +61,21 @@ impl<'a> View {
         }
     }
 
+    fn update_msg_len(&mut self) {
+        match self.id_list.state.selected() {
+            Some(i) => match self.id_list.ids.get(i) {
+                Some(i) => match self.msg_list.msg_log.get(i) {
+                    Some(i) => {
+                        self.msg_list.msg_len = i.len();
+                    }
+                    None => {}
+                },
+                None => {}
+            },
+            None => {}
+        }
+    }
+
     fn update_msg_list(
         &mut self,
         msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
@@ -114,15 +129,7 @@ impl<'a> View {
             match self.id_list.state.selected() {
                 Some(i) => match self.id_list.ids.get(i) {
                     Some(i) => {
-                        match self.msg_list.msg_log.get(i) {
-                            Some(i) => {
-                                // set the length of msg_list to current len
-                                self.msg_list.msg_len = i.len();
-                            }
-                            None => {}
-                        }
                         self.render_info(f, slice.clone(), i.to_string())?;
-                        //self.msg_auto_scroll(f);
                         Ok(())
                     }
                     None => Err(DnetViewError::NoIdAtIndex),
@@ -299,6 +306,8 @@ impl<'a> View {
         Ok(())
     }
 
+    // the most recent value
+    //
     fn msg_auto_scroll<B: Backend>(&mut self, f: &mut Frame<'_, B>) {
         let rect = f.size();
         if usize::from(rect.height) < self.msg_list.msg_len {
