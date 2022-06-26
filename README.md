@@ -37,14 +37,16 @@ to install the required dependencies:
     libexpat1-dev
 ```
 
-Alternatively users can use the automated script in
-`contrib/mac_setup.sh` by running. This script will install brew
-if it does not already exists on the system and then automatically
-install the dependencies:
+Alternatively, users can chose one of the automated scripts 
+under `contrib` folder by executing:
 
 ```shell
-% bash contrib/mac_setup.sh
+% bash contrib/*_setup.sh
 ```
+
+The following setup script are provided:
+* **mac_setup.sh**: installation using brew (brew will be installed if not present).
+* **void_setup.sh**: Xbps dependencies for Void Linux.
 
 To build the necessary binaries, we can just clone the repo, and use the 
 provided Makefile to build the project. This will download the trusted 

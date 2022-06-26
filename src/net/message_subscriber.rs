@@ -194,7 +194,7 @@ impl MessageSubsystem {
             None => {
                 // normall return failure here
                 // for now panic
-                return Err(Error::OperationFailed)
+                return Err(Error::NetworkOperationFailed)
             }
         };
 

@@ -2,6 +2,7 @@ use async_std::{
     future::timeout,
     sync::{Arc, Weak},
 };
+use futures::future;
 use std::time::Duration;
 
 use async_executor::Executor;
@@ -36,6 +37,12 @@ impl SeedSession {
 
         if settings.seeds.is_empty() {
             warn!("Skipping seed sync process since no seeds are configured.");
+            // Store external address in hosts explicitly
+            match &settings.external_addr {
+                Some(addr) => self.p2p().hosts().store(vec![addr.clone()]).await,
+                None => (),
+            }
+
             return Ok(())
         }
 
@@ -43,34 +50,39 @@ impl SeedSession {
 
         let mut tasks = Vec::new();
 
+        // This loops through all the seeds and tries to start them.
+        // If the seed_query_timeout_seconds times out before they are finished,
+        // it will return an error.
         for (i, seed) in settings.seeds.iter().enumerate() {
-            tasks.push(executor.spawn(self.clone().start_seed(i, seed.clone(), executor.clone())));
-        }
+            let ex2 = executor.clone();
+            let self2 = self.clone();
+            let sett2 = settings.clone();
+            tasks.push(async move {
+                let task = self2.clone().start_seed(i, seed.clone(), ex2.clone());
 
-        // This line loops through all the tasks and waits for them to finish.
-        // But if the seed_query_timeout_seconds times out before they are finished,
-        // then it will simply quit and the tasks will get dropped.
-        let result =
-            timeout(Duration::from_secs(settings.seed_query_timeout_seconds.into()), async move {
-                for (i, task) in tasks.into_iter().enumerate() {
-                    // Ignore errors
-                    match task.await {
-                        Ok(()) => info!("Successfully queried seed #{}", i),
-                        Err(err) => warn!("Seed query #{} failed for reason: {}", i, err),
-                    }
+                let result =
+                    timeout(Duration::from_secs(sett2.seed_query_timeout_seconds.into()), task)
+                        .await;
+
+                match result {
+                    Ok(t) => match t {
+                        Ok(()) => {
+                            info!("Seed #{} connected successfully", i)
+                        }
+                        Err(err) => {
+                            warn!("Seed #{} failed for reason {}", i, err)
+                        }
+                    },
+                    Err(_err) => error!("Seed #{} timed out", i),
                 }
-            })
-            .await;
-
-        if result.is_err() {
-            error!("Querying seeds timed out");
-            return Err(Error::OperationFailed)
+            });
         }
+        future::join_all(tasks).await;
 
         // Seed process complete
         if self.p2p().hosts().is_empty().await {
             error!("Hosts pool still empty after seeding");
-            return Err(Error::OperationFailed)
+            return Err(Error::NetworkOperationFailed)
         }
 
         debug!(target: "net", "SeedSession::start() [END]");
@@ -99,15 +111,20 @@ impl SeedSession {
 
                 info!("Connected seed #{} [{}]", seed_index, seed);
 
-                self.clone().register_channel(channel.clone(), executor.clone()).await?;
+                if let Err(err) =
+                    self.clone().register_channel(channel.clone(), executor.clone()).await
+                {
+                    warn!("Failure during seed session #{} [{}]: {}", seed_index, seed, err);
+                }
 
-                //self.attach_protocols(channel, hosts, settings, executor).await?;
+                info!("Disconnecting from seed #{} [{}]", seed_index, seed);
+                channel.stop().await;
 
                 debug!(target: "net", "SeedSession::start_seed(i={}) [END]", seed_index);
                 Ok(())
             }
             Err(err) => {
-                info!("Failure contacting seed #{} [{}]: {}", seed_index, seed, err);
+                warn!("Failure contacting seed #{} [{}]: {}", seed_index, seed, err);
                 Err(err)
             }
         }

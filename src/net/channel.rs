@@ -27,6 +27,7 @@ pub type ChannelPtr = Arc<Channel>;
 
 struct ChannelInfo {
     random_id: u32,
+    remote_node_id: String,
     last_msg: String,
     last_status: String,
     // Message log which is cleared on querying get_info
@@ -37,6 +38,7 @@ impl ChannelInfo {
     fn new() -> Self {
         Self {
             random_id: rand::thread_rng().gen(),
+            remote_node_id: String::new(),
             last_msg: String::new(),
             last_status: String::new(),
             log: Mutex::new(Vec::new()),
@@ -46,6 +48,7 @@ impl ChannelInfo {
     async fn get_info(&self) -> serde_json::Value {
         let result = json!({
             "random_id": self.random_id,
+            "remote_node_id": self.remote_node_id,
             "last_msg": self.last_msg,
             "last_status": self.last_status,
             "log": self.log.lock().await.clone(),
@@ -103,7 +106,7 @@ impl Channel {
         self.receive_task.clone().start(
             self.clone().main_receive_loop(),
             |result| self2.handle_stop(result),
-            Error::ServiceStopped,
+            Error::NetworkServiceStopped,
             executor,
         );
         debug!(target: "net", "Channel::start() [END, address={}]", self.address());
@@ -230,6 +233,13 @@ impl Channel {
     /// Return the local socket address.
     pub fn address(&self) -> Url {
         self.address.clone()
+    }
+
+    pub async fn remote_node_id(&self) -> String {
+        self.info.lock().await.remote_node_id.clone()
+    }
+    pub async fn set_remote_node_id(&self, remote_node_id: String) {
+        self.info.lock().await.remote_node_id = remote_node_id;
     }
 
     /// End of file error. Triggered when unexpected end of file occurs.

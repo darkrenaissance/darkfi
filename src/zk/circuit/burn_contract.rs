@@ -14,21 +14,25 @@ use halo2_gadgets::{
             MerklePath,
         },
     },
-    utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
+    utilities::lookup_range_check::LookupRangeCheckConfig,
 };
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner},
+    circuit::{floor_planner, AssignedCell, Layouter, Value},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn},
 };
 use pasta_curves::{pallas, Fp};
 
-use crate::crypto::{
-    constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-        util::gen_const_array,
-        NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
+use crate::{
+    crypto::{
+        constants::{
+            sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
+            util::gen_const_array,
+            NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
+            MERKLE_DEPTH_ORCHARD,
+        },
+        merkle_node::MerkleNode,
     },
-    merkle_node::MerkleNode,
+    zk::assign_free_advice,
 };
 
 #[allow(dead_code)]
@@ -94,26 +98,21 @@ const BURN_SIGKEYY_OFFSET: usize = 7;
 
 #[derive(Default, Debug)]
 pub struct BurnContract {
-    pub secret_key: Option<pallas::Base>,
-    pub serial: Option<pallas::Base>,
-    pub value: Option<pallas::Base>,
-    pub token: Option<pallas::Base>,
-    pub coin_blind: Option<pallas::Base>,
-    pub value_blind: Option<pallas::Scalar>,
-    pub token_blind: Option<pallas::Scalar>,
-    pub leaf_pos: Option<u32>,
-    pub merkle_path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
-    //pub sig_secret: Option<pallas::Scalar>,
-    pub sig_secret: Option<pallas::Base>,
-}
-
-impl UtilitiesInstructions<pallas::Base> for BurnContract {
-    type Var = AssignedCell<Fp, Fp>;
+    pub secret_key: Value<pallas::Base>,
+    pub serial: Value<pallas::Base>,
+    pub value: Value<pallas::Base>,
+    pub token: Value<pallas::Base>,
+    pub coin_blind: Value<pallas::Base>,
+    pub value_blind: Value<pallas::Scalar>,
+    pub token_blind: Value<pallas::Scalar>,
+    pub leaf_pos: Value<u32>,
+    pub merkle_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
+    pub sig_secret: Value<pallas::Base>,
 }
 
 impl Circuit<pallas::Base> for BurnContract {
     type Config = BurnConfig;
-    type FloorPlanner = SimpleFloorPlanner;
+    type FloorPlanner = floor_planner::V1;
 
     fn without_witnesses(&self) -> Self {
         Self::default()
@@ -246,13 +245,13 @@ impl Circuit<pallas::Base> for BurnContract {
         // =========
         // Nullifier
         // =========
-        let secret_key = self.load_private(
+        let secret_key = assign_free_advice(
             layouter.namespace(|| "load sinsemilla(secret key)"),
             config.advices[0],
             self.secret_key,
         )?;
 
-        let serial = self.load_private(
+        let serial = assign_free_advice(
             layouter.namespace(|| "load serial"),
             config.advices[0],
             self.serial,
@@ -288,12 +287,12 @@ impl Circuit<pallas::Base> for BurnContract {
         //     )?
 
         let value =
-            self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
+            assign_free_advice(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
 
         let token =
-            self.load_private(layouter.namespace(|| "load token"), config.advices[0], self.token)?;
+            assign_free_advice(layouter.namespace(|| "load token"), config.advices[0], self.token)?;
 
-        let coin_blind = self.load_private(
+        let coin_blind = assign_free_advice(
             layouter.namespace(|| "load coin_blind"),
             config.advices[0],
             self.coin_blind,
@@ -335,7 +334,7 @@ impl Circuit<pallas::Base> for BurnContract {
         // Merkle root
         // ===========
 
-        let path: Option<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
+        let path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
             self.merkle_path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
         let merkle_inputs = MerklePath::construct(
@@ -359,14 +358,14 @@ impl Circuit<pallas::Base> for BurnContract {
         // ================
 
         // This constant one is used for multiplication
-        let one = self.load_private(
+        let one = assign_free_advice(
             layouter.namespace(|| "load constant one"),
             config.advices[0],
-            Some(pallas::Base::one()),
+            Value::known(pallas::Base::one()),
         )?;
 
         let value =
-            self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
+            assign_free_advice(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
 
         // v * G_1
         let (commitment, _) = {
@@ -410,7 +409,7 @@ impl Circuit<pallas::Base> for BurnContract {
         // ================
 
         let token =
-            self.load_private(layouter.namespace(|| "load token"), config.advices[0], self.token)?;
+            assign_free_advice(layouter.namespace(|| "load token"), config.advices[0], self.token)?;
 
         // a * G_1
         let (commitment, _) = {
@@ -454,7 +453,7 @@ impl Circuit<pallas::Base> for BurnContract {
         // ========================
         // Signature key derivation
         // ========================
-        let sig_secret = self.load_private(
+        let sig_secret = assign_free_advice(
             layouter.namespace(|| "load sig_secret"),
             config.advices[0],
             self.sig_secret,
@@ -478,6 +477,130 @@ impl Circuit<pallas::Base> for BurnContract {
         )?;
 
         // At this point we've enforced all of our public inputs.
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        crypto::{
+            keypair::{PublicKey, SecretKey},
+            proof::{ProvingKey, VerifyingKey},
+            util::{mod_r_p, pedersen_commitment_scalar},
+            Proof,
+        },
+        Result,
+    };
+    use group::{ff::Field, Curve};
+    use halo2_gadgets::poseidon::{
+        primitives as poseidon,
+        primitives::{ConstantLength, P128Pow5T3},
+    };
+    use halo2_proofs::dev::{CircuitLayout, MockProver};
+    use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+    use pasta_curves::arithmetic::CurveAffine;
+    use rand::rngs::OsRng;
+    use std::time::Instant;
+
+    #[test]
+    fn burn_circuit_assert() -> Result<()> {
+        let value = pallas::Base::from(42);
+        let token_id = pallas::Base::from(22);
+        let value_blind = pallas::Scalar::random(&mut OsRng);
+        let token_blind = pallas::Scalar::random(&mut OsRng);
+        let serial = pallas::Base::random(&mut OsRng);
+        let coin_blind = pallas::Base::random(&mut OsRng);
+        let secret = SecretKey::random(&mut OsRng);
+        let sig_secret = SecretKey::random(&mut OsRng);
+
+        let coin2 = {
+            let coords = PublicKey::from_secret(secret).0.to_affine().coordinates().unwrap();
+            let msg = [*coords.x(), *coords.y(), value, token_id, serial, coin_blind];
+            poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(msg)
+        };
+
+        let mut tree = BridgeTree::<MerkleNode, 32>::new(100);
+        let coin0 = pallas::Base::random(&mut OsRng);
+        let coin1 = pallas::Base::random(&mut OsRng);
+        let coin3 = pallas::Base::random(&mut OsRng);
+
+        tree.append(&MerkleNode(coin0));
+        tree.witness();
+        tree.append(&MerkleNode(coin1));
+        tree.append(&MerkleNode(coin2));
+        let leaf_pos = tree.witness().unwrap();
+        tree.append(&MerkleNode(coin3));
+        tree.witness();
+
+        let merkle_root = tree.root(0).unwrap();
+        let merkle_path = tree.authentication_path(leaf_pos, &merkle_root).unwrap();
+        let leaf_pos: u64 = leaf_pos.into();
+
+        let nullifier = [secret.0, serial];
+        let nullifier =
+            poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(nullifier);
+
+        let value_commit = pedersen_commitment_scalar(mod_r_p(value), value_blind);
+        let value_coords = value_commit.to_affine().coordinates().unwrap();
+
+        let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
+        let token_coords = token_commit.to_affine().coordinates().unwrap();
+
+        let sig_pubkey = PublicKey::from_secret(sig_secret);
+        let sig_coords = sig_pubkey.0.to_affine().coordinates().unwrap();
+
+        let public_inputs = vec![
+            nullifier,
+            *value_coords.x(),
+            *value_coords.y(),
+            *token_coords.x(),
+            *token_coords.y(),
+            merkle_root.0,
+            *sig_coords.x(),
+            *sig_coords.y(),
+        ];
+
+        let circuit = BurnContract {
+            secret_key: Value::known(secret.0),
+            serial: Value::known(serial),
+            value: Value::known(value),
+            token: Value::known(token_id),
+            coin_blind: Value::known(coin_blind),
+            value_blind: Value::known(value_blind),
+            token_blind: Value::known(token_blind),
+            leaf_pos: Value::known(leaf_pos.try_into().unwrap()),
+            merkle_path: Value::known(merkle_path.try_into().unwrap()),
+            sig_secret: Value::known(sig_secret.0),
+        };
+
+        use plotters::prelude::*;
+        let root = BitMapBackend::new("burn_circuit_layout.png", (3840, 2160)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root.titled("Burn Circuit Layout", ("sans-serif", 60)).unwrap();
+        CircuitLayout::default().render(11, &circuit, &root).unwrap();
+
+        let prover = MockProver::run(11, &circuit, vec![public_inputs.clone()])?;
+        prover.assert_satisfied();
+
+        let now = Instant::now();
+        let proving_key = ProvingKey::build(11, &circuit);
+        println!("ProvingKey built [{:?}]", now.elapsed());
+        let now = Instant::now();
+        let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
+        println!("Proof created [{:?}]", now.elapsed());
+
+        let circuit = BurnContract::default();
+        let now = Instant::now();
+        let verifying_key = VerifyingKey::build(11, &circuit);
+        println!("VerifyingKey built [{:?}]", now.elapsed());
+        let now = Instant::now();
+        proof.verify(&verifying_key, &public_inputs)?;
+        println!("Proof verified [{:?}]", now.elapsed());
+
+        println!("Proof size [{} kB]", proof.as_ref().len() as f64 / 1024.0);
+
         Ok(())
     }
 }

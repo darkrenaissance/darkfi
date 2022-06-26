@@ -1,3 +1,4 @@
+// FIXME: This needs a cleanup and halo2 0.2 port
 use pasta_curves::pallas;
 
 use crate::crypto::{

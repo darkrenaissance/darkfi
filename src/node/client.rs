@@ -8,7 +8,7 @@ use crate::{
     crypto::{
         address::Address,
         coin::Coin,
-        constants::MERKLE_DEPTH_ORCHARD,
+        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey},
         merkle_node::MerkleNode,
         proof::ProvingKey,
@@ -28,8 +28,6 @@ use crate::{
     zk::circuit::{BurnContract, MintContract},
     ClientFailed, ClientResult, Result,
 };
-
-const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 /// The Client structure, used for transaction operations.
 /// This includes, receiving, broadcasting, and building.
@@ -226,7 +224,7 @@ impl Client {
 
     fn build_mint_pk() -> ProvingKey {
         debug!("Building proving key for MintContract");
-        ProvingKey::build(11, &MintContract::default())
+        ProvingKey::build(8, &MintContract::default())
     }
 
     fn build_burn_pk() -> ProvingKey {

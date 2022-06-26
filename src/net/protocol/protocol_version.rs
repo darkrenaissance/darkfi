@@ -75,7 +75,7 @@ impl ProtocolVersion {
     /// Send version info and wait for version acknowledgement.
     async fn send_version(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolVersion::send_version() [START]");
-        let version = message::VersionMessage {};
+        let version = message::VersionMessage { node_id: self.settings.node_id.clone() };
         self.channel.clone().send(version).await?;
 
         // Wait for version acknowledgement
@@ -88,8 +88,9 @@ impl ProtocolVersion {
     /// acknowledgement.
     async fn recv_version(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolVersion::recv_version() [START]");
-        // Rec
-        let _version_msg = self.version_sub.receive().await?;
+        // Receive version message
+        let version = self.version_sub.receive().await?;
+        self.channel.set_remote_node_id(version.node_id.clone()).await;
 
         // Check the message is OK
 

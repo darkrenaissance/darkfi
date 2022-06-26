@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use halo2_gadgets::poseidon::primitives as poseidon;
+use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve};
@@ -137,16 +138,16 @@ pub fn create_burn_proof(
     let leaf_position: u64 = leaf_position.into();
 
     let c = BurnContract {
-        secret_key: Some(secret.0),
-        serial: Some(serial),
-        value: Some(DrkValue::from(value)),
-        token: Some(token_id),
-        coin_blind: Some(coin_blind),
-        value_blind: Some(value_blind),
-        token_blind: Some(token_blind),
-        leaf_pos: Some(leaf_position as u32),
-        merkle_path: Some(merkle_path.try_into().unwrap()),
-        sig_secret: Some(signature_secret.0),
+        secret_key: Value::known(secret.0),
+        serial: Value::known(serial),
+        value: Value::known(DrkValue::from(value)),
+        token: Value::known(token_id),
+        coin_blind: Value::known(coin_blind),
+        value_blind: Value::known(value_blind),
+        token_blind: Value::known(token_blind),
+        leaf_pos: Value::known(leaf_position as u32),
+        merkle_path: Value::known(merkle_path.try_into().unwrap()),
+        sig_secret: Value::known(signature_secret.0),
     };
 
     let start = Instant::now();

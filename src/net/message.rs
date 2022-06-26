@@ -36,7 +36,9 @@ pub struct AddrsMessage {
 }
 
 /// Requests version information of outbound connection.
-pub struct VersionMessage {}
+pub struct VersionMessage {
+    pub node_id: String,
+}
 
 /// Sends version information to inbound connection. Response to VersionMessage.
 pub struct VerackMessage {}
@@ -133,14 +135,16 @@ impl Decodable for AddrsMessage {
 }
 
 impl Encodable for VersionMessage {
-    fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
-        Ok(0)
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += self.node_id.encode(&mut s)?;
+        Ok(len)
     }
 }
 
 impl Decodable for VersionMessage {
-    fn decode<D: io::Read>(_d: D) -> Result<Self> {
-        Ok(Self {})
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        Ok(Self { node_id: Decodable::decode(&mut d)? })
     }
 }
 

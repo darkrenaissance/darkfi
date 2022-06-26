@@ -4,7 +4,7 @@ use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
-        constants::MERKLE_DEPTH_ORCHARD,
+        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
@@ -22,8 +22,6 @@ use darkfi::{
     zk::circuit::{BurnContract, MintContract},
     Result,
 };
-
-const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 /// The state machine, held in memory.
 struct MemoryState {
@@ -129,9 +127,8 @@ fn main() -> Result<()> {
 
     let keypair = Keypair::random(&mut OsRng);
 
-    const K: u32 = 11;
-    let mint_vk = VerifyingKey::build(K, &MintContract::default());
-    let burn_vk = VerifyingKey::build(K, &BurnContract::default());
+    let mint_vk = VerifyingKey::build(8, &MintContract::default());
+    let burn_vk = VerifyingKey::build(11, &BurnContract::default());
 
     let mut state = MemoryState {
         tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
@@ -162,8 +159,8 @@ fn main() -> Result<()> {
         }],
     };
 
-    let mint_pk = ProvingKey::build(K, &MintContract::default());
-    let burn_pk = ProvingKey::build(K, &BurnContract::default());
+    let mint_pk = ProvingKey::build(8, &MintContract::default());
+    let burn_pk = ProvingKey::build(11, &BurnContract::default());
     let tx = builder.build(&mint_pk, &burn_pk)?;
 
     tx.verify(&state.mint_vk, &state.burn_vk)?;

@@ -7,16 +7,19 @@ use halo2_gadgets::{
         primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
         Pow5Config as PoseidonConfig,
     },
-    utilities::{lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
+    utilities::lookup_range_check::LookupRangeCheckConfig,
 };
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner},
+    circuit::{floor_planner, AssignedCell, Layouter, Value},
     plonk,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
 use pasta_curves::{pallas, Fp};
 
-use crate::crypto::constants::{OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV};
+use crate::{
+    crypto::constants::{OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV},
+    zk::assign_free_advice,
+};
 
 #[derive(Clone, Debug)]
 pub struct MintConfig {
@@ -45,23 +48,27 @@ const MINT_TOKCOMY_OFFSET: usize = 4;
 
 #[derive(Default, Debug)]
 pub struct MintContract {
-    pub pub_x: Option<pallas::Base>,         // x coordinate for pubkey
-    pub pub_y: Option<pallas::Base>,         // y coordinate for pubkey
-    pub value: Option<pallas::Base>,         // The value of this coin
-    pub token: Option<pallas::Base>,         // The token ID
-    pub serial: Option<pallas::Base>,        // Unique serial number corresponding to this coin
-    pub coin_blind: Option<pallas::Base>,    // Random blinding factor for coin
-    pub value_blind: Option<pallas::Scalar>, // Random blinding factor for value commitment
-    pub token_blind: Option<pallas::Scalar>, // Random blinding factor for the token ID
-}
-
-impl UtilitiesInstructions<pallas::Base> for MintContract {
-    type Var = AssignedCell<pallas::Base, pallas::Base>;
+    /// X coordinate for public key
+    pub pub_x: Value<pallas::Base>,
+    /// Y coordinate for public key
+    pub pub_y: Value<pallas::Base>,
+    /// The value of this coin
+    pub value: Value<pallas::Base>,
+    /// The token ID
+    pub token: Value<pallas::Base>,
+    /// Unique serial number corresponding to this coin
+    pub serial: Value<pallas::Base>,
+    /// Random blinding factor for coin
+    pub coin_blind: Value<pallas::Base>,
+    /// Random blinding factor for value commitment
+    pub value_blind: Value<pallas::Scalar>,
+    /// Random blinding factor for the token ID
+    pub token_blind: Value<pallas::Scalar>,
 }
 
 impl Circuit<pallas::Base> for MintContract {
     type Config = MintConfig;
-    type FloorPlanner = SimpleFloorPlanner;
+    type FloorPlanner = floor_planner::V1;
 
     fn without_witnesses(&self) -> Self {
         Self::default()
@@ -93,12 +100,7 @@ impl Circuit<pallas::Base> for MintContract {
             meta.enable_equality(*advice);
         }
 
-        // Poseidon requires four advice columns, while ECC incomplete addition
-        // requires six. We can reduce the proof size by sharing fixed columns
-        // between the ECC and Poseidon chips.
-        // TODO: For multiple invocations they could/should be configured in
-        // parallel rather than sharing perhaps?
-        let lagrange_coeffs = [
+        let ecc_lagrange_coeffs = [
             meta.fixed_column(),
             meta.fixed_column(),
             meta.fixed_column(),
@@ -108,25 +110,39 @@ impl Circuit<pallas::Base> for MintContract {
             meta.fixed_column(),
             meta.fixed_column(),
         ];
-        let rc_a = lagrange_coeffs[2..5].try_into().unwrap();
-        let rc_b = lagrange_coeffs[5..8].try_into().unwrap();
+
+        let poseidon_lagrange_coeffs = [
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
+        ];
+
+        let rc_a = poseidon_lagrange_coeffs[0..3].try_into().unwrap();
+        let rc_b = poseidon_lagrange_coeffs[3..6].try_into().unwrap();
 
         // Also use the first Lagrange coefficient column for loading global constants.
-        meta.enable_constant(lagrange_coeffs[0]);
+        meta.enable_constant(ecc_lagrange_coeffs[0]);
 
         // Use one of the right-most advice columns for all of our range checks.
         let range_check = LookupRangeCheckConfig::configure(meta, advices[9], table_idx);
 
         // Configuration for curve point operations.
         // This uses 10 advice columns and spans the whole circuit.
-        let ecc_config =
-            EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
+        let ecc_config = EccChip::<OrchardFixedBases>::configure(
+            meta,
+            advices,
+            ecc_lagrange_coeffs,
+            range_check,
+        );
 
         // Configuration for the Poseidon hash
         let poseidon_config = PoseidonChip::configure::<poseidon::P128Pow5T3>(
             meta,
-            advices[6..9].try_into().unwrap(),
-            advices[5],
+            advices[7..10].try_into().unwrap(),
+            advices[6],
             rc_a,
             rc_b,
         );
@@ -141,33 +157,33 @@ impl Circuit<pallas::Base> for MintContract {
     ) -> Result<(), plonk::Error> {
         let ecc_chip = config.ecc_chip();
 
-        let pub_x = self.load_private(
+        let pub_x = assign_free_advice(
             layouter.namespace(|| "load pubkey x"),
-            config.advices[0],
+            config.advices[6],
             self.pub_x,
         )?;
 
-        let pub_y = self.load_private(
+        let pub_y = assign_free_advice(
             layouter.namespace(|| "load pubkey y"),
-            config.advices[0],
+            config.advices[6],
             self.pub_y,
         )?;
 
         let value =
-            self.load_private(layouter.namespace(|| "load value"), config.advices[0], self.value)?;
+            assign_free_advice(layouter.namespace(|| "load value"), config.advices[6], self.value)?;
 
         let token =
-            self.load_private(layouter.namespace(|| "load token"), config.advices[0], self.token)?;
+            assign_free_advice(layouter.namespace(|| "load token"), config.advices[6], self.token)?;
 
-        let serial = self.load_private(
+        let serial = assign_free_advice(
             layouter.namespace(|| "load serial"),
-            config.advices[0],
+            config.advices[6],
             self.serial,
         )?;
 
-        let coin_blind = self.load_private(
+        let coin_blind = assign_free_advice(
             layouter.namespace(|| "load coin_blind"),
-            config.advices[0],
+            config.advices[6],
             self.coin_blind,
         )?;
 
@@ -203,10 +219,10 @@ impl Circuit<pallas::Base> for MintContract {
         // ================
 
         // This constant one is used for short multiplication
-        let one = self.load_private(
+        let one = assign_free_advice(
             layouter.namespace(|| "load constant one"),
-            config.advices[0],
-            Some(pallas::Base::one()),
+            config.advices[6],
+            Value::known(pallas::Base::one()),
         )?;
 
         // v * G_1
@@ -291,6 +307,95 @@ impl Circuit<pallas::Base> for MintContract {
         )?;
 
         // At this point we've enforced all of our public inputs.
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        crypto::{
+            keypair::PublicKey,
+            proof::{ProvingKey, VerifyingKey},
+            util::{mod_r_p, pedersen_commitment_scalar},
+            Proof,
+        },
+        Result,
+    };
+    use group::{ff::Field, Curve};
+    use halo2_gadgets::poseidon::{
+        primitives as poseidon,
+        primitives::{ConstantLength, P128Pow5T3},
+    };
+    use halo2_proofs::{
+        circuit::Value,
+        dev::{CircuitLayout, MockProver},
+    };
+    use pasta_curves::arithmetic::CurveAffine;
+    use rand::rngs::OsRng;
+    use std::time::Instant;
+
+    #[test]
+    fn mint_circuit_assert() -> Result<()> {
+        let value = pallas::Base::from(42);
+        let token_id = pallas::Base::from(22);
+        let value_blind = pallas::Scalar::random(&mut OsRng);
+        let token_blind = pallas::Scalar::random(&mut OsRng);
+        let serial = pallas::Base::random(&mut OsRng);
+        let coin_blind = pallas::Base::random(&mut OsRng);
+        let public_key = PublicKey::random(&mut OsRng);
+        let coords = public_key.0.to_affine().coordinates().unwrap();
+
+        let msg = [*coords.x(), *coords.y(), value, token_id, serial, coin_blind];
+        let coin = poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(msg);
+
+        let value_commit = pedersen_commitment_scalar(mod_r_p(value), value_blind);
+        let value_coords = value_commit.to_affine().coordinates().unwrap();
+
+        let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
+        let token_coords = token_commit.to_affine().coordinates().unwrap();
+
+        let public_inputs =
+            vec![coin, *value_coords.x(), *value_coords.y(), *token_coords.x(), *token_coords.y()];
+
+        let circuit = MintContract {
+            pub_x: Value::known(*coords.x()),
+            pub_y: Value::known(*coords.y()),
+            value: Value::known(value),
+            token: Value::known(token_id),
+            serial: Value::known(serial),
+            coin_blind: Value::known(coin_blind),
+            value_blind: Value::known(value_blind),
+            token_blind: Value::known(token_blind),
+        };
+
+        use plotters::prelude::*;
+        let root = BitMapBackend::new("mint_circuit_layout.png", (3840, 2160)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root.titled("Mint Circuit Layout", ("sans-serif", 60)).unwrap();
+        CircuitLayout::default().render(8, &circuit, &root).unwrap();
+
+        let prover = MockProver::run(8, &circuit, vec![public_inputs.clone()])?;
+        prover.assert_satisfied();
+
+        let now = Instant::now();
+        let proving_key = ProvingKey::build(8, &circuit);
+        println!("ProvingKey built [{:?}]", now.elapsed());
+        let now = Instant::now();
+        let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
+        println!("Proof created [{:?}]", now.elapsed());
+
+        let circuit = MintContract::default();
+        let now = Instant::now();
+        let verifying_key = VerifyingKey::build(8, &circuit);
+        println!("VerifyingKey built [{:?}]", now.elapsed());
+        let now = Instant::now();
+        proof.verify(&verifying_key, &public_inputs)?;
+        println!("Proof verified [{:?}]", now.elapsed());
+
+        println!("Proof size [{} kB]", proof.as_ref().len() as f64 / 1024.0);
+
         Ok(())
     }
 }

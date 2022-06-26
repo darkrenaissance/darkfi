@@ -30,8 +30,10 @@ use dnetview::{
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
     util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
-    view::{IdListView, NodeInfoView, View},
+    view::{IdListView, MsgList, NodeInfoView, View},
 };
+
+use log::debug;
 
 struct DnetView {
     name: String,
@@ -90,8 +92,9 @@ async fn main() -> DnetViewResult<()> {
     let ids = Mutex::new(FxHashSet::default());
     let nodes = Mutex::new(FxHashMap::default());
     let selectables = Mutex::new(FxHashMap::default());
-    let msg_log = Mutex::new(FxHashMap::default());
-    let model = Arc::new(Model::new(ids, nodes, selectables, msg_log));
+    let msg_map = Mutex::new(FxHashMap::default());
+    let msg_log = Mutex::new(Vec::new());
+    let model = Arc::new(Model::new(ids, nodes, msg_map, msg_log, selectables));
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -103,7 +106,7 @@ async fn main() -> DnetViewResult<()> {
         .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
         .finish(|| {
             smol::future::block_on(async move {
-                poll_and_update_model(&config, ex2.clone(), model.clone()).await?;
+                start_connect_slots(&config, ex2.clone(), model.clone()).await?;
                 render_view(&mut terminal, model.clone()).await?;
                 drop(signal);
                 Ok(())
@@ -113,21 +116,31 @@ async fn main() -> DnetViewResult<()> {
     result
 }
 
-// create a new RPC instance for every node in the config file
-// spawn poll() and detach in the background
-async fn poll_and_update_model(
+async fn start_connect_slots(
     config: &DnvConfig,
     ex: Arc<Executor<'_>>,
     model: Arc<Model>,
 ) -> DnetViewResult<()> {
     for node in &config.nodes {
-        info!("Attempting to poll {}, RPC URL: {}", node.name, node.rpc_url);
-        match DnetView::new(Url::parse(&node.rpc_url)?, node.name.clone()).await {
-            Ok(client) => ex.spawn(poll(client, model.clone())).detach(),
-            Err(e) => error!("{}", e),
-        }
+        ex.spawn(try_connect(model.clone(), node.name.clone(), node.rpc_url.clone())).detach();
     }
     Ok(())
+}
+
+async fn try_connect(model: Arc<Model>, node_name: String, rpc_url: String) -> DnetViewResult<()> {
+    loop {
+        info!("Attempting to poll {}, RPC URL: {}", node_name, rpc_url);
+        match DnetView::new(Url::parse(&rpc_url)?, node_name.clone()).await {
+            Ok(client) => {
+                poll(client, model.clone()).await?;
+            }
+            Err(e) => {
+                error!("{}", e);
+                parse_offline(node_name.clone(), model.clone()).await?;
+                async_util::sleep(2).await;
+            }
+        }
+    }
 }
 
 async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
@@ -135,6 +148,7 @@ async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
         match client.get_info().await {
             Ok(reply) => {
                 if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
+                    debug!("FROM {}", client.name);
                     parse_data(reply.as_object().unwrap(), &client, model.clone()).await?;
                 } else {
                     return Err(DnetViewError::EmptyRpcReply)
@@ -142,18 +156,17 @@ async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
             }
             Err(e) => {
                 error!("{:?}", e);
-                parse_offline(&client, model.clone()).await?;
+                parse_offline(client.name.clone(), model.clone()).await?;
             }
         }
         async_util::sleep(2).await;
     }
 }
 
-async fn parse_offline(client: &DnetView, model: Arc<Model>) -> DnetViewResult<()> {
+async fn parse_offline(node_name: String, model: Arc<Model>) -> DnetViewResult<()> {
     let name = "Offline".to_string();
     let session_type = Session::Offline;
-    let node_name = &client.name;
-    let node_id = make_node_id(node_name)?;
+    let node_id = make_node_id(&node_name)?;
     let session_id = make_session_id(&node_id, &session_type)?;
     let mut connects: Vec<ConnectInfo> = Vec::new();
     let mut sessions: Vec<SessionInfo> = Vec::new();
@@ -167,8 +180,18 @@ async fn parse_offline(client: &DnetView, model: Arc<Model>) -> DnetViewResult<(
     let is_empty = true;
     let last_msg = "Null".to_string();
     let last_status = "Null".to_string();
-    let connect_info =
-        ConnectInfo::new(id, addr, state, parent.clone(), msg_log, is_empty, last_msg, last_status);
+    let remote_node_id = "Null".to_string();
+    let connect_info = ConnectInfo::new(
+        id,
+        addr,
+        state.clone(),
+        parent.clone(),
+        msg_log,
+        is_empty,
+        last_msg,
+        last_status,
+        remote_node_id,
+    );
     connects.push(connect_info.clone());
 
     let accept_addr = None;
@@ -176,7 +199,14 @@ async fn parse_offline(client: &DnetView, model: Arc<Model>) -> DnetViewResult<(
         SessionInfo::new(session_id, name, is_empty, parent.clone(), connects, accept_addr);
     sessions.push(session_info);
 
-    let node = NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone(), None, true);
+    let node = NodeInfo::new(
+        node_id.clone(),
+        node_name.to_string(),
+        state.clone(),
+        sessions.clone(),
+        None,
+        true,
+    );
 
     update_node(model.clone(), node.clone(), node_id.clone()).await;
     update_selectable_and_ids(model.clone(), sessions, node.clone()).await?;
@@ -192,12 +222,12 @@ async fn parse_data(
     let inbound = &reply["session_inbound"];
     let _manual = &reply["session_manual"];
     let outbound = &reply["session_outbound"];
+    let state = &reply["state"];
 
     let mut sessions: Vec<SessionInfo> = Vec::new();
 
     let node_name = &client.name;
     let node_id = make_node_id(node_name)?;
-    //let external_addr = ext_addr.unwrap().as_str().unwrap();
 
     let ext_addr = parse_external_addr(addr).await?;
     let in_session = parse_inbound(inbound, &node_id).await?;
@@ -208,8 +238,14 @@ async fn parse_data(
     sessions.push(out_session.clone());
     //sessions.push(man_session.clone());
 
-    let node =
-        NodeInfo::new(node_id.clone(), node_name.to_string(), sessions.clone(), ext_addr, false);
+    let node = NodeInfo::new(
+        node_id.clone(),
+        node_name.to_string(),
+        state.as_str().unwrap().to_string(),
+        sessions.clone(),
+        ext_addr,
+        false,
+    );
 
     update_node(model.clone(), node.clone(), node_id.clone()).await;
     update_selectable_and_ids(model.clone(), sessions.clone(), node.clone()).await?;
@@ -224,10 +260,12 @@ async fn parse_data(
 async fn update_msgs(model: Arc<Model>, sessions: Vec<SessionInfo>) -> DnetViewResult<()> {
     for session in sessions {
         for connection in session.children {
-            if !model.msg_log.lock().await.contains_key(&connection.id) {
-                model.msg_log.lock().await.insert(connection.id, connection.msg_log);
+            if !model.msg_map.lock().await.contains_key(&connection.id) {
+                // we don't have this ID: it is a new node
+                model.msg_map.lock().await.insert(connection.id, connection.msg_log.clone());
             } else {
-                match model.msg_log.lock().await.entry(connection.id) {
+                // we have this id: append the msg values
+                match model.msg_map.lock().await.entry(connection.id) {
                     Entry::Vacant(e) => {
                         e.insert(connection.msg_log);
                     }
@@ -306,6 +344,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                     let is_empty = true;
                     let last_msg = "Null".to_string();
                     let last_status = "Null".to_string();
+                    let remote_node_id = "Null".to_string();
                     let connect_info = ConnectInfo::new(
                         id,
                         addr,
@@ -315,6 +354,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                         is_empty,
                         last_msg,
                         last_status,
+                        remote_node_id,
                     );
                     connects.push(connect_info);
                 }
@@ -356,6 +396,17 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                             .as_str()
                             .unwrap()
                             .to_string();
+                        let remote_node_id = info2
+                            .unwrap()
+                            .get("remote_node_id")
+                            .unwrap()
+                            .as_str()
+                            .unwrap()
+                            .to_string();
+                        let r_node_id: String = match remote_node_id.is_empty() {
+                            true => "no remote id".to_string(),
+                            false => remote_node_id,
+                        };
                         let connect_info = ConnectInfo::new(
                             id,
                             addr,
@@ -365,6 +416,7 @@ async fn parse_inbound(inbound: &Value, node_id: &String) -> DnetViewResult<Sess
                             is_empty,
                             last_msg,
                             last_status,
+                            r_node_id,
                         );
                         connects.push(connect_info.clone());
                     }
@@ -406,8 +458,18 @@ async fn _parse_manual(_manual: &Value, node_id: &String) -> DnetViewResult<Sess
     let is_empty = true;
     let msg = "Null".to_string();
     let status = "Null".to_string();
-    let connect_info =
-        ConnectInfo::new(connect_id.clone(), addr, state, parent, msg_log, is_empty, msg, status);
+    let remote_node_id = "Null".to_string();
+    let connect_info = ConnectInfo::new(
+        connect_id.clone(),
+        addr,
+        state,
+        parent,
+        msg_log,
+        is_empty,
+        msg,
+        status,
+        remote_node_id,
+    );
     connects.push(connect_info);
     let parent = connect_id;
     let is_empty = is_empty_session(&connects);
@@ -433,16 +495,17 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                 slot_count += 1;
                 match slot["channel"].is_null() {
                     true => {
-                        // channel is empty. initialize with empty values
+                        // TODO: this is not actually empty
                         let id = make_empty_id(node_id, &session_type, slot_count)?;
                         let addr = "Null".to_string();
                         let state = &slot["state"];
                         let state = state.as_str().unwrap().to_string();
                         let parent = parent.clone();
                         let msg_log = Vec::new();
-                        let is_empty = true;
+                        let is_empty = false;
                         let last_msg = "Null".to_string();
                         let last_status = "Null".to_string();
+                        let remote_node_id = "Null".to_string();
                         let connect_info = ConnectInfo::new(
                             id,
                             addr,
@@ -452,6 +515,7 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                             is_empty,
                             last_msg,
                             last_status,
+                            remote_node_id,
                         );
                         connects.push(connect_info.clone());
                     }
@@ -475,6 +539,12 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                         let is_empty = false;
                         let last_msg = channel["last_msg"].as_str().unwrap().to_string();
                         let last_status = channel["last_status"].as_str().unwrap().to_string();
+                        let remote_node_id =
+                            channel["remote_node_id"].as_str().unwrap().to_string();
+                        let r_node_id: String = match remote_node_id.is_empty() {
+                            true => "no remote id".to_string(),
+                            false => remote_node_id,
+                        };
                         let connect_info = ConnectInfo::new(
                             id,
                             addr,
@@ -484,6 +554,7 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
                             is_empty,
                             last_msg,
                             last_status,
+                            r_node_id,
                         );
                         connects.push(connect_info.clone());
                     }
@@ -509,17 +580,18 @@ async fn render_view<B: Backend>(
     terminal.clear()?;
 
     let nodes = NodeInfoView::new(FxHashMap::default());
-    let msg_log = FxHashMap::default();
-    let active_ids = IdListView::new(FxHashSet::default());
+    let msg_list = MsgList::new(FxHashMap::default(), 0);
+    let id_list = IdListView::new(Vec::new());
     let selectables = FxHashMap::default();
 
-    let mut view = View::new(nodes, msg_log, active_ids, selectables);
-    view.active_ids.state.select(Some(0));
+    let mut view = View::new(nodes, msg_list, id_list, selectables);
+    view.id_list.state.select(Some(0));
+    view.msg_list.state.select(Some(0));
 
     loop {
         view.update(
             model.nodes.lock().await.clone(),
-            model.msg_log.lock().await.clone(),
+            model.msg_map.lock().await.clone(),
             model.selectables.lock().await.clone(),
         );
 
@@ -544,10 +616,16 @@ async fn render_view<B: Backend>(
                     return Ok(())
                 }
                 Key::Char('j') => {
-                    view.active_ids.next();
+                    view.id_list.next();
                 }
                 Key::Char('k') => {
-                    view.active_ids.previous();
+                    view.id_list.previous();
+                }
+                Key::Char('n') => {
+                    view.msg_list.next();
+                }
+                Key::Char('p') => {
+                    view.msg_list.previous();
                 }
                 _ => (),
             }

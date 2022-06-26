@@ -44,7 +44,7 @@ impl ManualSession {
             self.clone().channel_connect_loop(addr.clone(), executor.clone()),
             // Ignore stop handler
             |_| async {},
-            Error::ServiceStopped,
+            Error::NetworkServiceStopped,
             executor.clone(),
         );
 

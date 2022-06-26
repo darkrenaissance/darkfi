@@ -24,9 +24,9 @@ use super::{
     DataStore,
 };
 
-const HEARTBEATTIMEOUT: u64 = 100;
-const TIMEOUT: u64 = 300;
-const TIMEOUT_NODES: u64 = 300;
+const HEARTBEATTIMEOUT: u64 = 300;
+const TIMEOUT: u64 = 900;
+const TIMEOUT_NODES: u64 = 900;
 
 async fn load_node_ids_loop(
     nodes: Arc<Mutex<HashMap<NodeId, Url>>>,

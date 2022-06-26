@@ -66,7 +66,7 @@ impl InboundSession {
             self.clone().channel_sub_loop(executor.clone()),
             // Ignore stop handler
             |_| async {},
-            Error::ServiceStopped,
+            Error::NetworkServiceStopped,
             executor,
         );
 
@@ -149,9 +149,7 @@ impl Session for InboundSession {
                     infos.insert(addr.to_string(), info);
                 }
             }
-            None => {
-                info!(target: "net", "Not configured for accepting incoming connections.");
-            }
+            None => {}
         }
         json!({
             "connected": infos,

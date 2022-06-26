@@ -69,6 +69,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 
 [[package]]
+name = "array-init"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6945cc5422176fc5e602e590c2878d2c2acd9a4fe20a4baa7c28022521698ec6"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1678,6 +1684,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "blake3",
+ "bs58",
  "chrono",
  "ctrlc-async",
  "darkfi",
@@ -2047,8 +2054,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13f3914f58cc4af5e4fe83d48b02d582be18976bc7e96c3151aa2bf1c98e9f60"
+source = "git+https://github.com/zcash/halo2.git?rev=a898d65ae3ad3d41987666f6a03cfc15edae01c4#a898d65ae3ad3d41987666f6a03cfc15edae01c4"
 dependencies = [
  "arrayvec 0.7.2",
  "bitvec",
@@ -2067,8 +2073,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e925780549adee8364c7f2b685c753f6f3df23bde520c67416e93bf615933760"
+source = "git+https://github.com/zcash/halo2.git?rev=a898d65ae3ad3d41987666f6a03cfc15edae01c4#a898d65ae3ad3d41987666f6a03cfc15edae01c4"
 dependencies = [
  "backtrace",
  "blake2b_simd 1.0.0",
@@ -2232,6 +2237,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "irc-raft"
+version = "0.3.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "async-trait",
+ "bs58",
+ "clap 3.1.18",
+ "crypto_box",
+ "ctrlc-async",
+ "darkfi",
+ "easy-parallel",
+ "futures",
+ "futures-rustls",
+ "fxhash",
+ "log",
+ "rand",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "toml",
+ "url",
+]
+
+[[package]]
 name = "ircd"
 version = "0.3.0"
 dependencies = [
@@ -2250,6 +2284,7 @@ dependencies = [
  "fxhash",
  "log",
  "rand",
+ "ringbuffer",
  "serde",
  "serde_json",
  "simplelog",
@@ -3281,6 +3316,15 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
+]
+
+[[package]]
+name = "ringbuffer"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b30a00730a27595dcf899dce512aa031dd650f86aafcb132fd8dd9f409b369d0"
+dependencies = [
+ "array-init",
 ]
 
 [[package]]

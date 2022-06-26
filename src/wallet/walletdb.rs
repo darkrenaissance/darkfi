@@ -14,7 +14,7 @@ use crate::{
     crypto::{
         address::Address,
         coin::Coin,
-        constants::MERKLE_DEPTH_ORCHARD,
+        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::Note,
@@ -31,8 +31,6 @@ use crate::{
     Error::{WalletEmptyPassword, WalletTreeExists},
     Result,
 };
-
-const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 pub type WalletPtr = Arc<WalletDb>;
 

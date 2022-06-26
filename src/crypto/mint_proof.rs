@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use halo2_gadgets::poseidon::primitives as poseidon;
+use halo2_proofs::circuit::Value;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
@@ -89,14 +90,14 @@ pub fn create_mint_proof(
     let coords = public_key.0.to_affine().coordinates().unwrap();
 
     let c = MintContract {
-        pub_x: Some(*coords.x()),
-        pub_y: Some(*coords.y()),
-        value: Some(DrkValue::from(value)),
-        token: Some(token_id),
-        serial: Some(serial),
-        coin_blind: Some(coin_blind),
-        value_blind: Some(value_blind),
-        token_blind: Some(token_blind),
+        pub_x: Value::known(*coords.x()),
+        pub_y: Value::known(*coords.y()),
+        value: Value::known(DrkValue::from(value)),
+        token: Value::known(token_id),
+        serial: Value::known(serial),
+        coin_blind: Value::known(coin_blind),
+        value_blind: Value::known(value_blind),
+        token_blind: Value::known(token_blind),
     };
 
     let start = Instant::now();

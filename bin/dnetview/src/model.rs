@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use darkfi::util::NanoTimestamp;
 
-type MsgLogMutex = Mutex<FxHashMap<String, Vec<(NanoTimestamp, String, String)>>>;
+// Mutex<FxHashMap<ConnectInfo.id, Vec<(NanoTimestamp, send, recv)>>>
+type MsgMap = Mutex<FxHashMap<String, Vec<(NanoTimestamp, String, String)>>>;
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Session {
@@ -25,7 +26,8 @@ pub enum SelectableObject {
 pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
     pub nodes: Mutex<FxHashMap<String, NodeInfo>>,
-    pub msg_log: MsgLogMutex,
+    pub msg_map: MsgMap,
+    pub msg_log: Mutex<Vec<(NanoTimestamp, String, String)>>,
     pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
 }
 
@@ -33,10 +35,11 @@ impl Model {
     pub fn new(
         ids: Mutex<FxHashSet<String>>,
         nodes: Mutex<FxHashMap<String, NodeInfo>>,
-        msg_log: MsgLogMutex,
+        msg_map: MsgMap,
+        msg_log: Mutex<Vec<(NanoTimestamp, String, String)>>,
         selectables: Mutex<FxHashMap<String, SelectableObject>>,
     ) -> Model {
-        Model { ids, nodes, msg_log, selectables }
+        Model { ids, nodes, msg_map, msg_log, selectables }
     }
 }
 
@@ -44,6 +47,7 @@ impl Model {
 pub struct NodeInfo {
     pub id: String,
     pub name: String,
+    pub state: String,
     pub children: Vec<SessionInfo>,
     pub external_addr: Option<String>,
     pub is_offline: bool,
@@ -53,11 +57,12 @@ impl NodeInfo {
     pub fn new(
         id: String,
         name: String,
+        state: String,
         children: Vec<SessionInfo>,
         external_addr: Option<String>,
         is_offline: bool,
     ) -> NodeInfo {
-        NodeInfo { id, name, children, external_addr, is_offline }
+        NodeInfo { id, name, state, children, external_addr, is_offline }
     }
 }
 
@@ -96,6 +101,7 @@ pub struct ConnectInfo {
     pub is_empty: bool,
     pub last_msg: String,
     pub last_status: String,
+    pub remote_node_id: String,
 }
 
 impl ConnectInfo {
@@ -109,7 +115,18 @@ impl ConnectInfo {
         is_empty: bool,
         last_msg: String,
         last_status: String,
+        remote_node_id: String,
     ) -> ConnectInfo {
-        ConnectInfo { id, addr, state, parent, msg_log, is_empty, last_msg, last_status }
+        ConnectInfo {
+            id,
+            addr,
+            state,
+            parent,
+            msg_log,
+            is_empty,
+            last_msg,
+            last_status,
+            remote_node_id,
+        }
     }
 }

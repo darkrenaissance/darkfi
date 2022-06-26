@@ -1,48 +1,70 @@
-use std::sync::atomic::Ordering;
-
 use async_std::net::TcpStream;
+use std::net::SocketAddr;
+
 use futures::{io::WriteHalf, AsyncWriteExt};
 use fxhash::FxHashMap;
 use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
+use ringbuffer::RingBufferWrite;
 
-use darkfi::{Error, Result};
+use darkfi::{net::P2pPtr, system::SubscriberPtr, Error, Result};
 
-use crate::{crypto::encrypt_message, privmsg::Privmsg, ChannelInfo, SeenMsgIds};
+use crate::{
+    crypto::{encrypt_message, try_decrypt_message},
+    privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
+    ChannelInfo,
+};
 
 const RPL_NOTOPIC: u32 = 331;
 const RPL_TOPIC: u32 = 332;
+const RPL_NAMEREPLY: u32 = 353;
 
 pub struct IrcServerConnection {
+    // server stream
     write_stream: WriteHalf<TcpStream>,
+    peer_address: SocketAddr,
+    // msg ids
+    seen_msg_ids: SeenMsgIds,
+    privmsgs_buffer: PrivmsgsBuffer,
+    // user & channels
     is_nick_init: bool,
     is_user_init: bool,
     is_registered: bool,
     nickname: String,
-    seen_msg_id: SeenMsgIds,
-    p2p_sender: async_channel::Sender<Privmsg>,
     auto_channels: Vec<String>,
     pub configured_chans: FxHashMap<String, ChannelInfo>,
+    // p2p
+    p2p: P2pPtr,
+    senders: SubscriberPtr<Privmsg>,
+    subscriber_id: u64,
 }
 
 impl IrcServerConnection {
     pub fn new(
         write_stream: WriteHalf<TcpStream>,
-        seen_msg_id: SeenMsgIds,
-        p2p_sender: async_channel::Sender<Privmsg>,
+        peer_address: SocketAddr,
+        seen_msg_ids: SeenMsgIds,
+        privmsgs_buffer: PrivmsgsBuffer,
         auto_channels: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
+        p2p: P2pPtr,
+        senders: SubscriberPtr<Privmsg>,
+        subscriber_id: u64,
     ) -> Self {
         Self {
             write_stream,
+            peer_address,
+            seen_msg_ids,
+            privmsgs_buffer,
             is_nick_init: false,
             is_user_init: false,
             is_registered: false,
             nickname: "anon".to_string(),
-            seen_msg_id,
-            p2p_sender,
             auto_channels,
             configured_chans,
+            p2p,
+            senders,
+            subscriber_id,
         }
     }
 
@@ -59,6 +81,33 @@ impl IrcServerConnection {
                 // We can stuff any extra things like public keys in here.
                 // Ignore it for now.
                 self.is_user_init = true;
+            }
+            "NAMES" => {
+                let channels = tokens.next().ok_or(Error::MalformedPacket)?;
+                for chan in channels.split(',') {
+                    if !chan.starts_with('#') {
+                        warn!("{} is not a valid name for channel", chan);
+                        continue
+                    }
+
+                    if self.configured_chans.contains_key(chan) {
+                        let chan_info = self.configured_chans.get(chan).unwrap();
+
+                        if chan_info.names.is_empty() {
+                            continue
+                        }
+
+                        let names_reply = format!(
+                            ":{}!anon@dark.fi {} = {} : {}\r\n",
+                            self.nickname,
+                            RPL_NAMEREPLY,
+                            chan,
+                            chan_info.names.join(" ")
+                        );
+
+                        self.reply(&names_reply).await?;
+                    }
+                }
             }
             "NICK" => {
                 let nickname = tokens.next().ok_or(Error::MalformedPacket)?;
@@ -81,7 +130,7 @@ impl IrcServerConnection {
                         self.configured_chans.insert(chan.to_string(), ChannelInfo::new()?);
                     } else {
                         let chan_info = self.configured_chans.get_mut(chan).unwrap();
-                        chan_info.joined.store(true, Ordering::Relaxed);
+                        chan_info.joined = true;
                     }
                 }
             }
@@ -92,7 +141,7 @@ impl IrcServerConnection {
                     self.reply(&part_reply).await?;
                     if self.configured_chans.contains_key(chan) {
                         let chan_info = self.configured_chans.get_mut(chan).unwrap();
-                        chan_info.joined.store(false, Ordering::Relaxed);
+                        chan_info.joined = false;
                     }
                 }
             }
@@ -124,12 +173,9 @@ impl IrcServerConnection {
                 }
             }
             "PING" => {
-                let line_clone = line.clone();
-                let split_line: Vec<&str> = line_clone.split_whitespace().collect();
-                if split_line.len() > 1 {
-                    let pong = format!("PONG {}\r\n", split_line[1]);
-                    self.reply(&pong).await?;
-                }
+                let pong = tokens.next().ok_or(Error::MalformedPacket)?;
+                let pong = format!("PONG {}\r\n", pong);
+                self.reply(&pong).await?;
             }
             "PRIVMSG" => {
                 let channel = tokens.next().ok_or(Error::MalformedPacket)?;
@@ -144,7 +190,7 @@ impl IrcServerConnection {
 
                 if self.configured_chans.contains_key(channel) {
                     let channel_info = self.configured_chans.get(channel).unwrap();
-                    if channel_info.joined.load(Ordering::Relaxed) {
+                    if channel_info.joined {
                         let message = if let Some(salt_box) = &channel_info.salt_box {
                             let encrypted = encrypt_message(salt_box, message);
                             info!("(Encrypted) PRIVMSG {} :{}", channel, encrypted);
@@ -153,7 +199,7 @@ impl IrcServerConnection {
                             message.to_string()
                         };
 
-                        let random_id = OsRng.next_u32();
+                        let random_id = OsRng.next_u64();
 
                         let protocol_msg = Privmsg {
                             id: random_id,
@@ -162,18 +208,23 @@ impl IrcServerConnection {
                             message,
                         };
 
-                        let mut smi = self.seen_msg_id.lock().await;
-                        smi.push(random_id);
-                        drop(smi);
+                        {
+                            (*self.seen_msg_ids.lock().await).push(random_id);
+                            (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
+                        }
+
+                        self.senders
+                            .notify_with_exclude(protocol_msg.clone(), &[self.subscriber_id])
+                            .await;
 
                         debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
-                        self.p2p_sender.send(protocol_msg).await?;
+                        self.p2p.broadcast(protocol_msg).await?;
                     }
                 }
             }
             "QUIT" => {
                 // Close the connection
-                return Err(Error::ServiceStopped)
+                return Err(Error::NetworkServiceStopped)
             }
             _ => {
                 warn!("Unimplemented `{}` command", command);
@@ -222,5 +273,80 @@ impl IrcServerConnection {
         self.write_stream.write_all(message.as_bytes()).await?;
         debug!("Sent {}", message);
         Ok(())
+    }
+
+    pub async fn process_msg_from_p2p(&mut self, msg: &Privmsg) -> Result<()> {
+        let mut msg = msg.clone();
+        // Try to potentially decrypt the incoming message.
+        if self.configured_chans.contains_key(&msg.channel) {
+            let chan_info = self.configured_chans.get_mut(&msg.channel).unwrap();
+            if !chan_info.joined {
+                return Ok(())
+            }
+
+            let salt_box = chan_info.salt_box.clone();
+
+            if salt_box.is_some() {
+                let decrypted_msg = try_decrypt_message(&salt_box.unwrap(), &msg.message);
+
+                if decrypted_msg.is_none() {
+                    return Ok(())
+                }
+
+                msg.message = decrypted_msg.unwrap();
+                info!("Decrypted received message: {:?}", msg);
+            }
+
+            // add the nickname to the channel's names
+            if !chan_info.names.contains(&msg.nickname) {
+                chan_info.names.push(msg.nickname.clone());
+            }
+        }
+
+        self.reply(&msg.to_irc_msg()).await?;
+        Ok(())
+    }
+
+    pub async fn process_line_from_client(
+        &mut self,
+        err: std::result::Result<usize, std::io::Error>,
+        line: String,
+    ) -> Result<()> {
+        if let Err(e) = err {
+            warn!("Read line error {}: {}", self.peer_address, e);
+            return Err(Error::ChannelStopped)
+        }
+
+        info!("Received msg from IRC client: {:?}", line);
+        let irc_msg = self.clean_input_line(line)?;
+
+        info!("Send msg to IRC client '{}' from {}", irc_msg, self.peer_address);
+
+        if let Err(e) = self.update(irc_msg).await {
+            warn!("Connection error: {} for {}", e, self.peer_address);
+            return Err(Error::ChannelStopped)
+        }
+        Ok(())
+    }
+
+    fn clean_input_line(&self, mut line: String) -> Result<String> {
+        if line.is_empty() {
+            warn!("Received empty line from {}. ", self.peer_address);
+            warn!("Closing connection.");
+            return Err(Error::ChannelStopped)
+        }
+
+        if &line[(line.len() - 2)..] == "\r\n" {
+            // Remove CRLF
+            line.pop();
+            line.pop();
+        } else if &line[(line.len() - 1)..] == "\n" {
+            line.pop();
+        } else {
+            warn!("Closing connection.");
+            return Err(Error::ChannelStopped)
+        }
+
+        Ok(line.clone())
     }
 }

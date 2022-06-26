@@ -1,7 +1,4 @@
-use std::{
-    path::PathBuf,
-    sync::{atomic::AtomicBool, Arc},
-};
+use std::path::PathBuf;
 
 use fxhash::FxHashMap;
 use log::info;
@@ -32,10 +29,6 @@ pub struct Args {
     /// IRC listen URL
     #[structopt(long = "irc", default_value = "tcp://127.0.0.1:11066")]
     pub irc_listen: Url,
-
-    /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.config/darkfi/ircd")]
-    pub datastore: String,
 
     /// Generate a new NaCl secret and exit
     #[structopt(long)]
@@ -73,12 +66,14 @@ pub struct ChannelInfo {
     /// Optional NaCl box for the channel, used for {en,de}cryption.
     pub salt_box: Option<crypto_box::Box>,
     /// Flag indicates whether the user has joined the channel or not
-    pub joined: Arc<AtomicBool>,
+    pub joined: bool,
+    /// All nicknames which are visible on the channel
+    pub names: Vec<String>,
 }
 
 impl ChannelInfo {
     pub fn new() -> Result<Self> {
-        Ok(Self { topic: None, salt_box: None, joined: Arc::new(AtomicBool::new(true)) })
+        Ok(Self { topic: None, salt_box: None, joined: true, names: vec![] })
     }
 }
 

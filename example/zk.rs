@@ -13,6 +13,7 @@ use darkfi::{
     zkas::decoder::ZkBinary,
     Result,
 };
+use halo2_proofs::circuit::Value;
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::Field, Curve},
@@ -35,8 +36,10 @@ fn main() -> Result<()> {
     let value = 42;
     let value_blind = pallas::Scalar::random(&mut OsRng);
 
-    let prover_witnesses =
-        vec![Witness::Base(Some(pallas::Base::from(value))), Witness::Scalar(Some(value_blind))];
+    let prover_witnesses = vec![
+        Witness::Base(Value::known(pallas::Base::from(value))),
+        Witness::Scalar(Value::known(value_blind)),
+    ];
 
     // Create the public inputs
     let value_commit = pedersen_commitment_u64(value, value_blind);

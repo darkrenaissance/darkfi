@@ -119,12 +119,7 @@ impl ArithInstruction<pallas::Base> for ArithChip {
                 b.copy_advice(|| "copy b", &mut region, self.config.b, 0)?;
 
                 let scalar_val = a.value().zip(b.value()).map(|(a, b)| a + b);
-                region.assign_advice(
-                    || "c",
-                    self.config.c,
-                    0,
-                    || scalar_val.ok_or(plonk::Error::Synthesis),
-                )
+                region.assign_advice(|| "c", self.config.c, 0, || scalar_val)
             },
         )
     }
@@ -144,12 +139,7 @@ impl ArithInstruction<pallas::Base> for ArithChip {
                 b.copy_advice(|| "copy b", &mut region, self.config.b, 0)?;
 
                 let scalar_val = a.value().zip(b.value()).map(|(a, b)| a - b);
-                region.assign_advice(
-                    || "c",
-                    self.config.c,
-                    0,
-                    || scalar_val.ok_or(plonk::Error::Synthesis),
-                )
+                region.assign_advice(|| "c", self.config.c, 0, || scalar_val)
             },
         )
     }
@@ -169,12 +159,7 @@ impl ArithInstruction<pallas::Base> for ArithChip {
                 b.copy_advice(|| "copy b", &mut region, self.config.b, 0)?;
 
                 let scalar_val = a.value().zip(b.value()).map(|(a, b)| a * b);
-                region.assign_advice(
-                    || "c",
-                    self.config.c,
-                    0,
-                    || scalar_val.ok_or(plonk::Error::Synthesis),
-                )
+                region.assign_advice(|| "c", self.config.c, 0, || scalar_val)
             },
         )
     }
