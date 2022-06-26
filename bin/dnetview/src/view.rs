@@ -15,7 +15,7 @@ use darkfi::util::NanoTimestamp;
 
 use crate::{
     error::{DnetViewError, DnetViewResult},
-    model::{NodeInfo, SelectableObject},
+    model::{ConnectInfo, NodeInfo, SelectableObject},
 };
 
 use log::debug;
@@ -23,31 +23,32 @@ use log::debug;
 #[derive(Debug)]
 pub struct View {
     pub nodes: NodeInfoView,
-    pub msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+    pub msg_list: MsgList,
+    //pub msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
     pub active_ids: IdListView,
     pub selectables: FxHashMap<String, SelectableObject>,
 }
 
-impl View {
+impl<'a> View {
     pub fn new(
         nodes: NodeInfoView,
-        msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+        msg_list: MsgList,
         active_ids: IdListView,
         selectables: FxHashMap<String, SelectableObject>,
     ) -> View {
-        View { nodes, msg_log, active_ids, selectables }
+        View { nodes, msg_list, active_ids, selectables }
     }
 
     pub fn update(
         &mut self,
         nodes: FxHashMap<String, NodeInfo>,
-        msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+        msg_list: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
         selectables: FxHashMap<String, SelectableObject>,
     ) {
         self.update_nodes(nodes);
         self.update_selectable(selectables);
         self.update_active_ids();
-        self.update_msg_log(msg_log);
+        self.update_msg_log(msg_list);
     }
 
     fn update_nodes(&mut self, nodes: FxHashMap<String, NodeInfo>) {
@@ -79,7 +80,7 @@ impl View {
 
     fn update_msg_log(&mut self, msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>) {
         for (id, msg) in msg_log {
-            self.msg_log.insert(id, msg);
+            self.msg_list.msg_log.insert(id, msg);
         }
     }
 
@@ -107,7 +108,7 @@ impl View {
             match self.active_ids.state.selected() {
                 Some(i) => match id_list.get(i) {
                     Some(i) => {
-                        self.render_info(f, slice, i.to_string())?;
+                        self.render_info(f, slice.clone(), i.to_string())?;
                         Ok(())
                     }
                     None => Err(DnetViewError::NoIdAtIndex),
@@ -183,34 +184,6 @@ impl View {
                                         info.push(name);
                                     }
                                 }
-                                match connection.last_status.as_str() {
-                                    "recv" => {
-                                        let msg = Span::styled(
-                                            format!(
-                                                "                    [R: {}]",
-                                                connection.last_msg
-                                            ),
-                                            style,
-                                        );
-                                        info.push(msg);
-                                    }
-                                    "sent" => {
-                                        let msg = Span::styled(
-                                            format!(
-                                                "                    [S: {}]",
-                                                connection.last_msg
-                                            ),
-                                            style,
-                                        );
-                                        info.push(msg);
-                                    }
-                                    "Null" => {
-                                        // Empty msg log. Do nothing
-                                    }
-                                    data => {
-                                        return Err(DnetViewError::UnexpectedData(data.to_string()))
-                                    }
-                                }
 
                                 let lines = vec![Spans::from(info)];
                                 let names = ListItem::new(lines);
@@ -229,6 +202,35 @@ impl View {
         f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
 
         Ok(ids)
+    }
+
+    fn parse_msg_list<'_a>(&self, connect: &ConnectInfo) -> DnetViewResult<List<'a>> {
+        let style = Style::default();
+        let mut list_vec = Vec::new();
+        let mut lines = Vec::new();
+        let log = self.msg_list.msg_log.get(&connect.id);
+        match log {
+            Some(values) => {
+                for (i, (t, k, v)) in values.into_iter().enumerate() {
+                    lines.push(Span::from(match k.as_str() {
+                        "send" => Span::styled(format!("{}  {}             S: {}", i, t, v), style),
+                        "recv" => Span::styled(format!("{}  {}             R: {}", i, t, v), style),
+                        data => return Err(DnetViewError::UnexpectedData(data.to_string())),
+                    }));
+                }
+            }
+            None => return Err(DnetViewError::CannotFindId),
+        }
+        for line in lines.clone() {
+            let list = ListItem::new(line);
+            list_vec.push(list);
+        }
+
+        let msg_list = List::new(list_vec)
+            .block(Block::default().borders(Borders::ALL))
+            .highlight_symbol(">> ");
+
+        Ok(msg_list)
     }
 
     fn render_info<B: Backend>(
@@ -273,33 +275,8 @@ impl View {
                     }
                 }
                 Some(SelectableObject::Connect(connect)) => {
-                    // get + display the msg log
-                    let log = self.msg_log.get(&connect.id);
-                    match log {
-                        Some(values) => {
-                            for (i, (t, k, v)) in values.into_iter().enumerate() {
-                                lines.push(Spans::from(match k.as_str() {
-                                    "send" => Span::styled(
-                                        format!("{}  {}             S: {}", i, t, v),
-                                        style,
-                                    ),
-                                    "recv" => Span::styled(
-                                        format!("{}  {}             R: {}", i, t, v),
-                                        style,
-                                    ),
-                                    data => {
-                                        return Err(DnetViewError::UnexpectedData(data.to_string()))
-                                    }
-                                }));
-                            }
-                        }
-                        None => return Err(DnetViewError::CannotFindId),
-                    }
-                    // display the connection state
-                    lines.push(Spans::from(Span::styled(
-                        format!("State: {}", &connect.state),
-                        style,
-                    )));
+                    let list = self.parse_msg_list(connect)?;
+                    f.render_stateful_widget(list, slice[1], &mut self.active_ids.state);
                 }
                 None => return Err(DnetViewError::NotSelectableObject),
             }
@@ -344,6 +321,50 @@ impl IdListView {
             Some(i) => {
                 if i == 0 {
                     self.ids.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn unselect(&mut self) {
+        self.state.select(None);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MsgList {
+    pub state: ListState,
+    pub msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+}
+
+impl MsgList {
+    pub fn new(msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>) -> MsgList {
+        MsgList { state: ListState::default(), msg_log }
+    }
+
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.msg_log.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.msg_log.len() - 1
                 } else {
                     i - 1
                 }

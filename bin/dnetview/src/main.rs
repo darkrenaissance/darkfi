@@ -30,7 +30,7 @@ use dnetview::{
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
     util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
-    view::{IdListView, NodeInfoView, View},
+    view::{IdListView, MsgList, NodeInfoView, View},
 };
 
 use log::debug;
@@ -585,9 +585,11 @@ async fn render_view<B: Backend>(
     let nodes = NodeInfoView::new(FxHashMap::default());
     let msg_log = FxHashMap::default();
     let active_ids = IdListView::new(FxHashSet::default());
+    let msg_list = MsgList::new(msg_log);
     let selectables = FxHashMap::default();
 
-    let mut view = View::new(nodes, msg_log, active_ids, selectables);
+    // pass msg list into view
+    let mut view = View::new(nodes, msg_list, active_ids, selectables);
     view.active_ids.state.select(Some(0));
 
     loop {
@@ -622,6 +624,9 @@ async fn render_view<B: Backend>(
                 }
                 Key::Char('k') => {
                     view.active_ids.previous();
+                }
+                Key::Left => {
+                    view.msg_list.state.select(Some(0));
                 }
                 _ => (),
             }
