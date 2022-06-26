@@ -173,12 +173,9 @@ impl IrcServerConnection {
                 }
             }
             "PING" => {
-                let line_clone = line.clone();
-                let split_line: Vec<&str> = line_clone.split_whitespace().collect();
-                if split_line.len() > 1 {
-                    let pong = format!("PONG {}\r\n", split_line[1]);
-                    self.reply(&pong).await?;
-                }
+                let pong = tokens.next().ok_or(Error::MalformedPacket)?;
+                let pong = format!("PONG {}\r\n", pong);
+                self.reply(&pong).await?;
             }
             "PRIVMSG" => {
                 let channel = tokens.next().ok_or(Error::MalformedPacket)?;
@@ -339,14 +336,16 @@ impl IrcServerConnection {
             return Err(Error::ChannelStopped)
         }
 
-        if &line[(line.len() - 2)..] != "\r\n" {
+        if &line[(line.len() - 2)..] == "\r\n" {
+            // Remove CRLF
+            line.pop();
+            line.pop();
+        } else if &line[(line.len() - 1)..] == "\n" {
+            line.pop();
+        } else {
             warn!("Closing connection.");
             return Err(Error::ChannelStopped)
         }
-
-        // Remove CRLF
-        line.pop();
-        line.pop();
 
         Ok(line.clone())
     }
