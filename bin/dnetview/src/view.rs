@@ -1,5 +1,5 @@
 //use darkfi::error::{Error, Result};
-use fxhash::{FxHashMap, FxHashSet};
+use fxhash::FxHashMap;
 use tui::widgets::ListState;
 
 use tui::{
@@ -18,14 +18,13 @@ use crate::{
     model::{ConnectInfo, NodeInfo, SelectableObject},
 };
 
-use log::debug;
+//use log::debug;
 
 #[derive(Debug)]
 pub struct View {
     pub nodes: NodeInfoView,
     pub msg_list: MsgList,
-    //pub msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
-    pub active_ids: IdListView,
+    pub id_list: IdListView,
     pub selectables: FxHashMap<String, SelectableObject>,
 }
 
@@ -33,22 +32,22 @@ impl<'a> View {
     pub fn new(
         nodes: NodeInfoView,
         msg_list: MsgList,
-        active_ids: IdListView,
+        id_list: IdListView,
         selectables: FxHashMap<String, SelectableObject>,
     ) -> View {
-        View { nodes, msg_list, active_ids, selectables }
+        View { nodes, msg_list, id_list, selectables }
     }
 
     pub fn update(
         &mut self,
         nodes: FxHashMap<String, NodeInfo>,
-        msg_list: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+        msg_map: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
         selectables: FxHashMap<String, SelectableObject>,
     ) {
         self.update_nodes(nodes);
         self.update_selectable(selectables);
-        self.update_active_ids();
-        self.update_msg_log(msg_list);
+        self.update_msg_list(msg_map.clone());
+        self.update_ids();
     }
 
     fn update_nodes(&mut self, nodes: FxHashMap<String, NodeInfo>) {
@@ -63,24 +62,35 @@ impl<'a> View {
         }
     }
 
-    fn update_active_ids(&mut self) {
-        self.active_ids.ids.clear();
-        for info in self.nodes.infos.values() {
-            self.active_ids.ids.insert(info.id.to_string());
-            for session in &info.children {
-                if !session.is_empty {
-                    self.active_ids.ids.insert(session.id.to_string());
-                    for connect in &session.children {
-                        self.active_ids.ids.insert(connect.id.to_string());
-                    }
-                }
-            }
+    fn update_msg_list(
+        &mut self,
+        msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+    ) {
+        for (id, msg) in msg_log {
+            self.msg_list.msg_log.insert(id, msg);
         }
     }
 
-    fn update_msg_log(&mut self, msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>) {
-        for (id, msg) in msg_log {
-            self.msg_list.msg_log.insert(id, msg);
+    // step through all the data and update ids
+    pub fn update_ids(&mut self) {
+        self.id_list.ids.clear();
+        for info in self.nodes.infos.values() {
+            match info.is_offline {
+                true => {
+                    self.id_list.ids.push(info.id.clone());
+                }
+                false => {
+                    self.id_list.ids.push(info.id.clone());
+                    for session in &info.children {
+                        if !session.is_empty {
+                            self.id_list.ids.push(session.id.clone());
+                            for connect in &session.children {
+                                self.id_list.ids.push(connect.id.clone());
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -95,18 +105,15 @@ impl<'a> View {
             .constraints(cnstrnts)
             .split(f.size());
 
-        let mut id_list = self.render_id_list(f, slice.clone())?;
+        self.render_ids(f, slice.clone())?;
 
-        // might not need this
-        // also assert in test case might be better
-        id_list.dedup();
-        if id_list.is_empty() {
+        if self.id_list.ids.is_empty() {
             // we have not received any data
             Ok(())
         } else {
             // get the id at the current index
-            match self.active_ids.state.selected() {
-                Some(i) => match id_list.get(i) {
+            match self.id_list.state.selected() {
+                Some(i) => match self.id_list.ids.get(i) {
                     Some(i) => {
                         self.render_info(f, slice.clone(), i.to_string())?;
                         Ok(())
@@ -119,17 +126,13 @@ impl<'a> View {
         }
     }
 
-    fn render_id_list<B: Backend>(
+    fn render_ids<B: Backend>(
         &mut self,
         f: &mut Frame<'_, B>,
         slice: Vec<Rect>,
-    ) -> DnetViewResult<Vec<String>> {
+    ) -> DnetViewResult<()> {
         let style = Style::default();
         let mut nodes = Vec::new();
-        let mut node_ids: Vec<String> = Vec::new();
-        let mut session_ids: Vec<String> = Vec::new();
-        let mut connect_ids: Vec<String> = Vec::new();
-        let mut ids: Vec<String> = Vec::new();
 
         for info in self.nodes.infos.values() {
             match info.is_offline {
@@ -142,24 +145,18 @@ impl<'a> View {
                     let lines = vec![Spans::from(name_span)];
                     let names = ListItem::new(lines);
                     nodes.push(names);
-                    ids.push(info.id.clone());
-                    node_ids.push(info.id.clone());
                 }
                 false => {
                     let name_span = Span::raw(&info.name);
                     let lines = vec![Spans::from(name_span)];
                     let names = ListItem::new(lines);
                     nodes.push(names);
-                    ids.push(info.id.clone());
-                    node_ids.push(info.id.clone());
                     for session in &info.children {
                         if !session.is_empty {
                             let name = Span::styled(format!("    {}", session.name), style);
                             let lines = vec![Spans::from(name)];
                             let names = ListItem::new(lines);
                             nodes.push(names);
-                            session_ids.push(session.id.clone());
-                            ids.push(session.id.clone());
                             for connection in &session.children {
                                 let mut info = Vec::new();
                                 match connection.addr.as_str() {
@@ -188,8 +185,6 @@ impl<'a> View {
                                 let lines = vec![Spans::from(info)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
-                                connect_ids.push(connection.id.clone());
-                                ids.push(connection.id.clone());
                             }
                         }
                     }
@@ -199,13 +194,14 @@ impl<'a> View {
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
-        f.render_stateful_widget(nodes, slice[0], &mut self.active_ids.state);
+        f.render_stateful_widget(nodes, slice[0], &mut self.id_list.state);
 
-        Ok(ids)
+        Ok(())
     }
 
     fn parse_msg_list<'_a>(&self, connect: &ConnectInfo) -> DnetViewResult<List<'a>> {
-        let style = Style::default();
+        let send_style = Style::default().fg(Color::LightCyan);
+        let recv_style = Style::default().fg(Color::DarkGray);
         let mut list_vec = Vec::new();
         let mut lines = Vec::new();
         let log = self.msg_list.msg_log.get(&connect.id);
@@ -213,8 +209,12 @@ impl<'a> View {
             Some(values) => {
                 for (i, (t, k, v)) in values.into_iter().enumerate() {
                     lines.push(Span::from(match k.as_str() {
-                        "send" => Span::styled(format!("{}  {}             S: {}", i, t, v), style),
-                        "recv" => Span::styled(format!("{}  {}             R: {}", i, t, v), style),
+                        "send" => {
+                            Span::styled(format!("{}  {}             S: {}", i, t, v), send_style)
+                        }
+                        "recv" => {
+                            Span::styled(format!("{}  {}             R: {}", i, t, v), recv_style)
+                        }
                         data => return Err(DnetViewError::UnexpectedData(data.to_string())),
                     }));
                 }
@@ -228,7 +228,7 @@ impl<'a> View {
 
         let msg_list = List::new(list_vec)
             .block(Block::default().borders(Borders::ALL))
-            .highlight_symbol(">> ");
+            .highlight_style(Style::default().add_modifier(Modifier::BOLD));
 
         Ok(msg_list)
     }
@@ -276,7 +276,8 @@ impl<'a> View {
                 }
                 Some(SelectableObject::Connect(connect)) => {
                     let list = self.parse_msg_list(connect)?;
-                    f.render_stateful_widget(list, slice[1], &mut self.active_ids.state);
+                    f.render_stateful_widget(list, slice[1], &mut self.msg_list.state);
+                    //self.msg_auto_scroll(f);
                 }
                 None => return Err(DnetViewError::NotSelectableObject),
             }
@@ -290,16 +291,23 @@ impl<'a> View {
 
         Ok(())
     }
+
+    //fn msg_auto_scroll<B: Backend>(&mut self, f: &mut Frame<'_, B>) {
+    //    let rect = f.size();
+    //    if usize::from(rect.height) < self.msg_list.msg_log.len() {
+    //        self.msg_list.next();
+    //    }
+    //}
 }
 
 #[derive(Debug, Clone)]
 pub struct IdListView {
     pub state: ListState,
-    pub ids: FxHashSet<String>,
+    pub ids: Vec<String>,
 }
 
 impl IdListView {
-    pub fn new(ids: FxHashSet<String>) -> IdListView {
+    pub fn new(ids: Vec<String>) -> IdListView {
         IdListView { state: ListState::default(), ids }
     }
     pub fn next(&mut self) {
@@ -347,9 +355,11 @@ impl MsgList {
     }
 
     pub fn next(&mut self) {
+        //debug!("CONTENT {:?}", self.msg_log.values());
+        //debug!("MSG LOG LEN: {}", self.msg_log.values().len());
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.msg_log.len() - 1 {
+                if i >= self.msg_log.values().len() - 1 {
                     0
                 } else {
                     i + 1

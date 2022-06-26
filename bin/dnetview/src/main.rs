@@ -25,7 +25,7 @@ use darkfi::{
 };
 
 use dnetview::{
-    config::{DnvConfig, IrcNode, CONFIG_FILE_CONTENTS},
+    config::{DnvConfig, CONFIG_FILE_CONTENTS},
     error::{DnetViewError, DnetViewResult},
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
@@ -92,8 +92,9 @@ async fn main() -> DnetViewResult<()> {
     let ids = Mutex::new(FxHashSet::default());
     let nodes = Mutex::new(FxHashMap::default());
     let selectables = Mutex::new(FxHashMap::default());
-    let msg_log = Mutex::new(FxHashMap::default());
-    let model = Arc::new(Model::new(ids, nodes, selectables, msg_log));
+    let msg_map = Mutex::new(FxHashMap::default());
+    let msg_log = Mutex::new(Vec::new());
+    let model = Arc::new(Model::new(ids, nodes, msg_map, msg_log, selectables));
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -121,18 +122,12 @@ async fn start_connect_slots(
     model: Arc<Model>,
 ) -> DnetViewResult<()> {
     for node in &config.nodes {
-        ex.spawn(try_connect(ex.clone(), model.clone(), node.name.clone(), node.rpc_url.clone()))
-            .detach();
+        ex.spawn(try_connect(model.clone(), node.name.clone(), node.rpc_url.clone())).detach();
     }
     Ok(())
 }
 
-async fn try_connect(
-    ex: Arc<Executor<'_>>,
-    model: Arc<Model>,
-    node_name: String,
-    rpc_url: String,
-) -> DnetViewResult<()> {
+async fn try_connect(model: Arc<Model>, node_name: String, rpc_url: String) -> DnetViewResult<()> {
     loop {
         info!("Attempting to poll {}, RPC URL: {}", node_name, rpc_url);
         match DnetView::new(Url::parse(&rpc_url)?, node_name.clone()).await {
@@ -265,10 +260,16 @@ async fn parse_data(
 async fn update_msgs(model: Arc<Model>, sessions: Vec<SessionInfo>) -> DnetViewResult<()> {
     for session in sessions {
         for connection in session.children {
-            if !model.msg_log.lock().await.contains_key(&connection.id) {
-                model.msg_log.lock().await.insert(connection.id, connection.msg_log);
+            //// update the data
+            //for connect in connection.msg_log.clone() {
+            //    model.msg_log.lock().await.push(connect);
+            //}
+            if !model.msg_map.lock().await.contains_key(&connection.id) {
+                // we don't have this ID: it is a new node
+                model.msg_map.lock().await.insert(connection.id, connection.msg_log.clone());
             } else {
-                match model.msg_log.lock().await.entry(connection.id) {
+                // we have this id: append the msg values
+                match model.msg_map.lock().await.entry(connection.id) {
                     Entry::Vacant(e) => {
                         e.insert(connection.msg_log);
                     }
@@ -583,19 +584,19 @@ async fn render_view<B: Backend>(
     terminal.clear()?;
 
     let nodes = NodeInfoView::new(FxHashMap::default());
-    let msg_log = FxHashMap::default();
-    let active_ids = IdListView::new(FxHashSet::default());
-    let msg_list = MsgList::new(msg_log);
+    let msg_list = MsgList::new(FxHashMap::default());
+    let id_list = IdListView::new(Vec::new());
     let selectables = FxHashMap::default();
 
     // pass msg list into view
-    let mut view = View::new(nodes, msg_list, active_ids, selectables);
-    view.active_ids.state.select(Some(0));
+    let mut view = View::new(nodes, msg_list, id_list, selectables);
+    view.id_list.state.select(Some(0));
+    view.msg_list.state.select(Some(0));
 
     loop {
         view.update(
             model.nodes.lock().await.clone(),
-            model.msg_log.lock().await.clone(),
+            model.msg_map.lock().await.clone(),
             model.selectables.lock().await.clone(),
         );
 
@@ -620,13 +621,38 @@ async fn render_view<B: Backend>(
                     return Ok(())
                 }
                 Key::Char('j') => {
-                    view.active_ids.next();
+                    view.id_list.next();
                 }
                 Key::Char('k') => {
-                    view.active_ids.previous();
+                    view.id_list.previous();
                 }
-                Key::Left => {
-                    view.msg_list.state.select(Some(0));
+                Key::Char('n') => {
+                    debug!("STATE: {:?}", view.msg_list.state);
+                    //view.msg_list.next();
+                }
+                Key::Char('\n') => {
+                    // select an id
+                    //match view.active_ids.state.selected() {
+                    //    // behavior:
+                    //    //          get selected index
+                    //    //          return id at index
+                    //    //          if it's a connection id
+                    //    //              msg_log = msg_map.get(id)
+                    //    //          Key::Char('n')
+                    //    //              msg_log.next()
+                    //    //
+                    //    //
+                    //    //Some(i) => match view.id_list.get(i) {
+                    //    //    //Some(i) => {
+                    //    //    //    self.render_info(f, slice.clone(), i.to_string())?;
+                    //    //    //    Ok(())
+                    //    //    //}
+                    //    //    //None => Err(DnetViewError::NoIdAtIndex),
+                    //    //},
+                    //    //// nothing is selected right now
+                    //    //None => Ok(()),
+                    //}
+                    // if the id at this index is a connection, render the msg log
                 }
                 _ => (),
             }
