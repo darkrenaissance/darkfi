@@ -18,8 +18,14 @@ pub fn due_as_timestamp(due: &str) -> Option<i64> {
     }
     let (day, month) = (due[..2].parse::<u32>().unwrap(), due[2..].parse::<u32>().unwrap());
 
+    if day > 31 || month > 12 {
+        error!("Invalid or out-of-range date");
+        return None
+    }
+
     let mut year = Local::today().year();
 
+    // Ensure the due date is in future
     if month < Local::today().month() {
         year += 1;
     }
