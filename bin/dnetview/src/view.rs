@@ -1,4 +1,3 @@
-//use darkfi::error::{Error, Result};
 use fxhash::FxHashMap;
 use tui::widgets::ListState;
 
@@ -115,7 +114,15 @@ impl<'a> View {
             match self.id_list.state.selected() {
                 Some(i) => match self.id_list.ids.get(i) {
                     Some(i) => {
+                        match self.msg_list.msg_log.get(i) {
+                            Some(i) => {
+                                // set the length of msg_list to current len
+                                self.msg_list.msg_len = i.len();
+                            }
+                            None => {}
+                        }
                         self.render_info(f, slice.clone(), i.to_string())?;
+                        //self.msg_auto_scroll(f);
                         Ok(())
                     }
                     None => Err(DnetViewError::NoIdAtIndex),
@@ -292,12 +299,12 @@ impl<'a> View {
         Ok(())
     }
 
-    //fn msg_auto_scroll<B: Backend>(&mut self, f: &mut Frame<'_, B>) {
-    //    let rect = f.size();
-    //    if usize::from(rect.height) < self.msg_list.msg_log.len() {
-    //        self.msg_list.next();
-    //    }
-    //}
+    fn msg_auto_scroll<B: Backend>(&mut self, f: &mut Frame<'_, B>) {
+        let rect = f.size();
+        if usize::from(rect.height) < self.msg_list.msg_len {
+            self.msg_list.previous();
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -347,19 +354,21 @@ impl IdListView {
 pub struct MsgList {
     pub state: ListState,
     pub msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+    pub msg_len: usize,
 }
 
 impl MsgList {
-    pub fn new(msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>) -> MsgList {
-        MsgList { state: ListState::default(), msg_log }
+    pub fn new(
+        msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+        msg_len: usize,
+    ) -> MsgList {
+        MsgList { state: ListState::default(), msg_log, msg_len }
     }
 
     pub fn next(&mut self) {
-        //debug!("CONTENT {:?}", self.msg_log.values());
-        //debug!("MSG LOG LEN: {}", self.msg_log.values().len());
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.msg_log.values().len() - 1 {
+                if i >= self.msg_len - 1 {
                     0
                 } else {
                     i + 1
@@ -374,7 +383,7 @@ impl MsgList {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.msg_log.len() - 1
+                    self.msg_len - 1
                 } else {
                     i - 1
                 }

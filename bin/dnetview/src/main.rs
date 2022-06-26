@@ -260,10 +260,6 @@ async fn parse_data(
 async fn update_msgs(model: Arc<Model>, sessions: Vec<SessionInfo>) -> DnetViewResult<()> {
     for session in sessions {
         for connection in session.children {
-            //// update the data
-            //for connect in connection.msg_log.clone() {
-            //    model.msg_log.lock().await.push(connect);
-            //}
             if !model.msg_map.lock().await.contains_key(&connection.id) {
                 // we don't have this ID: it is a new node
                 model.msg_map.lock().await.insert(connection.id, connection.msg_log.clone());
@@ -584,11 +580,10 @@ async fn render_view<B: Backend>(
     terminal.clear()?;
 
     let nodes = NodeInfoView::new(FxHashMap::default());
-    let msg_list = MsgList::new(FxHashMap::default());
+    let msg_list = MsgList::new(FxHashMap::default(), 0);
     let id_list = IdListView::new(Vec::new());
     let selectables = FxHashMap::default();
 
-    // pass msg list into view
     let mut view = View::new(nodes, msg_list, id_list, selectables);
     view.id_list.state.select(Some(0));
     view.msg_list.state.select(Some(0));
@@ -627,32 +622,10 @@ async fn render_view<B: Backend>(
                     view.id_list.previous();
                 }
                 Key::Char('n') => {
-                    debug!("STATE: {:?}", view.msg_list.state);
-                    //view.msg_list.next();
+                    view.msg_list.next();
                 }
-                Key::Char('\n') => {
-                    // select an id
-                    //match view.active_ids.state.selected() {
-                    //    // behavior:
-                    //    //          get selected index
-                    //    //          return id at index
-                    //    //          if it's a connection id
-                    //    //              msg_log = msg_map.get(id)
-                    //    //          Key::Char('n')
-                    //    //              msg_log.next()
-                    //    //
-                    //    //
-                    //    //Some(i) => match view.id_list.get(i) {
-                    //    //    //Some(i) => {
-                    //    //    //    self.render_info(f, slice.clone(), i.to_string())?;
-                    //    //    //    Ok(())
-                    //    //    //}
-                    //    //    //None => Err(DnetViewError::NoIdAtIndex),
-                    //    //},
-                    //    //// nothing is selected right now
-                    //    //None => Ok(()),
-                    //}
-                    // if the id at this index is a connection, render the msg log
+                Key::Char('p') => {
+                    view.msg_list.previous();
                 }
                 _ => (),
             }
