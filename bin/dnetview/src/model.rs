@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use darkfi::util::NanoTimestamp;
 
-// Mutex<FxHashMap<ConnectInfo.id, Vec<(NanoTimestamp, send, recv)>>>
-type MsgMap = Mutex<FxHashMap<String, Vec<(NanoTimestamp, String, String)>>>;
+type MsgLog = Vec<(NanoTimestamp, String, String)>;
+type MsgMap = Mutex<FxHashMap<String, MsgLog>>;
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Session {
@@ -27,7 +27,7 @@ pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
     pub nodes: Mutex<FxHashMap<String, NodeInfo>>,
     pub msg_map: MsgMap,
-    pub msg_log: Mutex<Vec<(NanoTimestamp, String, String)>>,
+    pub msg_log: Mutex<MsgLog>,
     pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
 }
 
@@ -36,7 +36,7 @@ impl Model {
         ids: Mutex<FxHashSet<String>>,
         nodes: Mutex<FxHashMap<String, NodeInfo>>,
         msg_map: MsgMap,
-        msg_log: Mutex<Vec<(NanoTimestamp, String, String)>>,
+        msg_log: Mutex<MsgLog>,
         selectables: Mutex<FxHashMap<String, SelectableObject>>,
     ) -> Model {
         Model { ids, nodes, msg_map, msg_log, selectables }

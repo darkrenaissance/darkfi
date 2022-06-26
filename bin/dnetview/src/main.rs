@@ -24,7 +24,14 @@ use darkfi::{
     },
 };
 
-use dnetview::{
+pub mod config;
+pub mod error;
+pub mod model;
+pub mod options;
+pub mod util;
+pub mod view;
+
+use crate::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
     error::{DnetViewError, DnetViewResult},
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
@@ -580,11 +587,12 @@ async fn render_view<B: Backend>(
     terminal.clear()?;
 
     let nodes = NodeInfoView::new(FxHashMap::default());
-    let msg_list = MsgList::new(FxHashMap::default(), 0);
+    let msg_list = MsgList::new(Vec::new());
+    let msg_map = FxHashMap::default();
     let id_list = IdListView::new(Vec::new());
     let selectables = FxHashMap::default();
 
-    let mut view = View::new(nodes, msg_list, id_list, selectables);
+    let mut view = View::new(nodes, msg_list, msg_map, id_list, selectables);
     view.id_list.state.select(Some(0));
     view.msg_list.state.select(Some(0));
 
@@ -592,6 +600,7 @@ async fn render_view<B: Backend>(
         view.update(
             model.nodes.lock().await.clone(),
             model.msg_map.lock().await.clone(),
+            model.msg_log.lock().await.clone(),
             model.selectables.lock().await.clone(),
         );
 

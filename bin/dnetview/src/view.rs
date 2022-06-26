@@ -1,3 +1,4 @@
+use async_std::sync::Mutex;
 use fxhash::FxHashMap;
 use tui::widgets::ListState;
 
@@ -17,12 +18,14 @@ use crate::{
     model::{ConnectInfo, NodeInfo, SelectableObject},
 };
 
-//use log::debug;
+type MsgLog = Vec<(NanoTimestamp, String, String)>;
+type MsgMap = FxHashMap<String, MsgLog>;
 
 #[derive(Debug)]
 pub struct View {
     pub nodes: NodeInfoView,
     pub msg_list: MsgList,
+    pub msg_map: MsgMap,
     pub id_list: IdListView,
     pub selectables: FxHashMap<String, SelectableObject>,
 }
@@ -31,21 +34,24 @@ impl<'a> View {
     pub fn new(
         nodes: NodeInfoView,
         msg_list: MsgList,
+        msg_map: MsgMap,
         id_list: IdListView,
         selectables: FxHashMap<String, SelectableObject>,
     ) -> View {
-        View { nodes, msg_list, id_list, selectables }
+        View { nodes, msg_list, msg_map, id_list, selectables }
     }
 
     pub fn update(
         &mut self,
         nodes: FxHashMap<String, NodeInfo>,
-        msg_map: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+        msg_map: MsgMap,
+        msg_log: MsgLog,
         selectables: FxHashMap<String, SelectableObject>,
     ) {
         self.update_nodes(nodes);
         self.update_selectable(selectables);
-        self.update_msg_list(msg_map.clone());
+        self.update_msg_list(msg_log);
+        self.update_msg_map(msg_map);
         self.update_ids();
     }
 
@@ -55,33 +61,42 @@ impl<'a> View {
         }
     }
 
+    fn update_msg_list(&mut self, msg_log: MsgLog) {
+        let old_len = self.msg_list.msg_log.len();
+        let new_len = msg_log.len();
+        let difference = old_len - new_len;
+        self.msg_list.scroll(difference);
+
+        for msg in msg_log {
+            self.msg_list.msg_log.push(msg);
+        }
+    }
+
     fn update_selectable(&mut self, selectables: FxHashMap<String, SelectableObject>) {
         for (id, obj) in selectables {
             self.selectables.insert(id, obj);
         }
     }
 
-    fn update_msg_len(&mut self) {
-        match self.id_list.state.selected() {
-            Some(i) => match self.id_list.ids.get(i) {
-                Some(i) => match self.msg_list.msg_log.get(i) {
-                    Some(i) => {
-                        self.msg_list.msg_len = i.len();
-                    }
-                    None => {}
-                },
-                None => {}
-            },
-            None => {}
-        }
-    }
+    // dynamically resize msg_list when it's selected
+    //fn update_msg_len(&mut self) {
+    //    match self.id_list.state.selected() {
+    //        Some(i) => match self.id_list.ids.get(i) {
+    //            Some(i) => match self.msg_list.msg_map.get(i) {
+    //                Some(i) => {
+    //                    self.msg_list.msg_len = i.len();
+    //                }
+    //                None => {}
+    //            },
+    //            None => {}
+    //        },
+    //        None => {}
+    //    }
+    //}
 
-    fn update_msg_list(
-        &mut self,
-        msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
-    ) {
-        for (id, msg) in msg_log {
-            self.msg_list.msg_log.insert(id, msg);
+    fn update_msg_map(&mut self, msg_map: MsgMap) {
+        for (id, msg) in msg_map {
+            self.msg_map.insert(id, msg);
         }
     }
 
@@ -218,7 +233,7 @@ impl<'a> View {
         let recv_style = Style::default().fg(Color::DarkGray);
         let mut list_vec = Vec::new();
         let mut lines = Vec::new();
-        let log = self.msg_list.msg_log.get(&connect.id);
+        let log = self.msg_map.get(&connect.id);
         match log {
             Some(values) => {
                 for (i, (t, k, v)) in values.into_iter().enumerate() {
@@ -306,13 +321,11 @@ impl<'a> View {
         Ok(())
     }
 
-    // the most recent value
-    //
     fn msg_auto_scroll<B: Backend>(&mut self, f: &mut Frame<'_, B>) {
-        let rect = f.size();
-        if usize::from(rect.height) < self.msg_list.msg_len {
-            self.msg_list.previous();
-        }
+        //let rect = f.size();
+        //if usize::from(rect.height) < self.msg_list.msg_len {
+        //    self.msg_list.previous();
+        //}
     }
 }
 
@@ -359,25 +372,37 @@ impl IdListView {
     }
 }
 
+// Instead of creating a new list for every ID that has msgs
+// We are using a single list
+// and updating its length depending on what is selected
+// We are storing msg_map in the class but it's used elsewhere
+// msg_log.push(msgs)
+// vector has increased by N elements
+// call next() N times to update page
+//
+
+// it's not a list
+// it\s just text
+// you move it up and down w arrow keys
 #[derive(Debug, Clone)]
 pub struct MsgList {
+    // pub msg_map
+    // pub usize
     pub state: ListState,
-    pub msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
-    pub msg_len: usize,
+    pub msg_log: MsgLog,
+    //pub previous_len: usize,
+    //pub current_len: usize,
 }
 
 impl MsgList {
-    pub fn new(
-        msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
-        msg_len: usize,
-    ) -> MsgList {
-        MsgList { state: ListState::default(), msg_log, msg_len }
+    pub fn new(msg_log: MsgLog) -> MsgList {
+        MsgList { state: ListState::default(), msg_log }
     }
 
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.msg_len - 1 {
+                if i >= self.msg_log.len() - 1 {
                     0
                 } else {
                     i + 1
@@ -392,9 +417,26 @@ impl MsgList {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.msg_len - 1
+                    self.msg_log.len() - 1
                 } else {
                     i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    // update_msgs(vec_len_6)
+    // update_msgs(vec_len_12)
+    // len = old_len - new_len
+    pub fn scroll(&mut self, len: usize) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.msg_log.len() - len
+                } else {
+                    i - len
                 }
             }
             None => 0,
