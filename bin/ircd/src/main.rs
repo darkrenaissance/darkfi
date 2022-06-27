@@ -10,7 +10,6 @@ use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
 use fxhash::FxHashMap;
 use log::{error, info, warn};
 use rand::rngs::OsRng;
-use ringbuffer::RingBufferExt;
 use smol::future;
 use structopt_toml::StructOptToml;
 
@@ -103,11 +102,6 @@ impl Ircd {
             self.senders.clone(),
             receiver.get_id(),
         );
-
-        // Send messages in buffer
-        for msg in self.privmsgs_buffer.lock().await.to_vec() {
-            receiver.self_notify(msg).await;
-        }
 
         executor
             .spawn(async move {

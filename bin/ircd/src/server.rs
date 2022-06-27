@@ -5,7 +5,7 @@ use futures::{io::WriteHalf, AsyncWriteExt};
 use fxhash::FxHashMap;
 use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
-use ringbuffer::RingBufferWrite;
+use ringbuffer::{RingBufferExt, RingBufferWrite};
 
 use darkfi::{net::P2pPtr, system::SubscriberPtr, Error, Result};
 
@@ -131,6 +131,13 @@ impl IrcServerConnection {
                     } else {
                         let chan_info = self.configured_chans.get_mut(chan).unwrap();
                         chan_info.joined = true;
+                    }
+
+                    // Send messages in buffer
+                    for msg in self.privmsgs_buffer.lock().await.to_vec() {
+                        if msg.channel == chan {
+                            self.senders.notify_with_id(msg, self.subscriber_id).await;
+                        }
                     }
                 }
             }
