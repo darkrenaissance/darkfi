@@ -68,7 +68,11 @@ impl IrcServerConnection {
         }
     }
 
-    pub async fn update(&mut self, line: String) -> Result<()> {
+    async fn update(&mut self, line: String) -> Result<()> {
+        if line.len() > 513 {
+            return Err(Error::MalformedPacket)
+        }
+
         let mut tokens = line.split_ascii_whitespace();
         // Commands can begin with :garbage but we will reject clients doing
         // that for now to keep the protocol simple and focused.
