@@ -133,21 +133,8 @@ impl IrcServerConnection {
                         warn!("{} is not a valid name for channel", chan);
                         continue
                     }
-                    let join_reply = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, chan);
-                    self.reply(&join_reply).await?;
-                    if !self.configured_chans.contains_key(chan) {
-                        self.configured_chans.insert(chan.to_string(), ChannelInfo::new()?);
-                    } else {
-                        let chan_info = self.configured_chans.get_mut(chan).unwrap();
-                        chan_info.joined = true;
-                    }
 
-                    // Send messages in buffer
-                    for msg in self.privmsgs_buffer.lock().await.to_vec() {
-                        if msg.channel == chan {
-                            self.senders.notify_by_id(msg, self.subscriber_id).await;
-                        }
-                    }
+                    self.on_join(chan).await?;
                 }
             }
             "PART" => {
@@ -247,47 +234,69 @@ impl IrcServerConnection {
             }
         }
 
+        // on registration
         if !self.is_registered && self.is_nick_init && self.is_user_init {
             debug!("Initializing peer connection");
             let register_reply = format!(":darkfi 001 {} :Let there be dark\r\n", self.nickname);
             self.reply(&register_reply).await?;
             self.is_registered = true;
 
-            // Auto-joins
-            macro_rules! autojoin {
-                ($channel:expr,$topic:expr) => {
-                    let j = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, $channel);
-                    let t = format!(":DarkFi TOPIC {} :{}\r\n", $channel, $topic);
-                    self.reply(&j).await?;
-                    self.reply(&t).await?;
-                };
-            }
-
             for chan in self.auto_channels.clone() {
-                if self.configured_chans.contains_key(&chan) {
-                    let chan_info = self.configured_chans.get_mut(&chan).unwrap();
-                    let topic = if let Some(topic) = chan_info.topic.clone() {
-                        topic
-                    } else {
-                        "n/a".to_string()
-                    };
-                    chan_info.topic = Some(topic.to_string());
-                    autojoin!(chan, topic);
-                } else {
-                    let mut chan_info = ChannelInfo::new()?;
-                    chan_info.topic = Some("n/a".to_string());
-                    self.configured_chans.insert(chan.clone(), chan_info);
-                    autojoin!(chan, "n/a");
-                }
+                self.on_join(&chan).await?;
             }
         }
 
         Ok(())
     }
 
-    pub async fn reply(&mut self, message: &str) -> Result<()> {
+    async fn reply(&mut self, message: &str) -> Result<()> {
         self.write_stream.write_all(message.as_bytes()).await?;
         debug!("Sent {}", message);
+        Ok(())
+    }
+
+    async fn on_join(&mut self, chan: &str) -> Result<()> {
+        if !self.configured_chans.contains_key(chan) {
+            let mut chan_info = ChannelInfo::new()?;
+            chan_info.topic = Some("n/a".to_string());
+            self.configured_chans.insert(chan.to_string(), chan_info);
+        }
+
+        let chan_info = self.configured_chans.get_mut(chan).unwrap();
+        let topic =
+            if let Some(topic) = chan_info.topic.clone() { topic } else { "n/a".to_string() };
+        chan_info.topic = Some(topic.to_string());
+        chan_info.joined = true;
+
+        {
+            let j = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, chan);
+            let t = format!(":DarkFi TOPIC {} :{}\r\n", chan, topic);
+            self.reply(&j).await?;
+            self.reply(&t).await?;
+        }
+
+        // Send messages in buffer
+        for msg in self.privmsgs_buffer.lock().await.to_vec() {
+            if msg.channel == chan {
+                self.senders.notify_by_id(msg, self.subscriber_id).await;
+            }
+        }
+
+        let chan_info = self.configured_chans.get_mut(chan).unwrap();
+
+        if chan_info.names.is_empty() {
+            return Ok(())
+        }
+
+        let names_reply = format!(
+            ":{}!anon@dark.fi {} = {} : {}\r\n",
+            self.nickname,
+            RPL_NAMEREPLY,
+            chan,
+            chan_info.names.join(" ")
+        );
+
+        self.reply(&names_reply).await?;
         Ok(())
     }
 
