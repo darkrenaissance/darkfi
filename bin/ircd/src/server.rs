@@ -111,6 +111,11 @@ impl IrcServerConnection {
             }
             "NICK" => {
                 let nickname = tokens.next().ok_or(Error::MalformedPacket)?;
+
+                if nickname.len() > 10 {
+                    return Ok(())
+                }
+
                 self.is_nick_init = true;
                 let old_nick = std::mem::replace(&mut self.nickname, nickname.to_string());
 

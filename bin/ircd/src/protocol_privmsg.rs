@@ -59,6 +59,10 @@ impl ProtocolPrivmsg {
         loop {
             let msg = self.msg_sub.receive().await?;
 
+            if msg.nickname.len() > 10 {
+                continue
+            }
+
             if self.msg_ids.lock().await.contains(&msg.id) {
                 continue
             }
