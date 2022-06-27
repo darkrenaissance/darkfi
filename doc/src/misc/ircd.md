@@ -70,6 +70,9 @@ following commands (there is an assumption that `irc_listen` in the
 ```
 
 This will set up the server, save the settings, and exit weechat.
+You are now ready to begin using the chat. Simply start weechat
+and everything should work.
+
 We can now proceed with installing the `mallumo` weechat script, which
 is used for E2E encryption in private messages on this IRC network.
 
@@ -109,6 +112,9 @@ able to chat with other participants.
 
 
 ## Usage (Local Deployment)
+
+These steps below are only for developers who wish to make a testing
+deployment. The previous sections are sufficient to join the chat.
 
 ### Seed Node
 
