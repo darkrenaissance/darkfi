@@ -136,7 +136,7 @@ impl IrcServerConnection {
                     // Send messages in buffer
                     for msg in self.privmsgs_buffer.lock().await.to_vec() {
                         if msg.channel == chan {
-                            self.senders.notify_with_id(msg, self.subscriber_id).await;
+                            self.senders.notify_by_id(msg, self.subscriber_id).await;
                         }
                     }
                 }
