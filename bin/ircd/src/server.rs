@@ -18,6 +18,7 @@ use crate::{
 const RPL_NOTOPIC: u32 = 331;
 const RPL_TOPIC: u32 = 332;
 const RPL_NAMEREPLY: u32 = 353;
+const RPL_ENDOFNAMES: u32 = 366;
 
 pub struct IrcServerConnection {
     // server stream
@@ -94,23 +95,7 @@ impl IrcServerConnection {
                         continue
                     }
 
-                    if self.configured_chans.contains_key(chan) {
-                        let chan_info = self.configured_chans.get(chan).unwrap();
-
-                        if chan_info.names.is_empty() {
-                            continue
-                        }
-
-                        let names_reply = format!(
-                            ":{}!anon@dark.fi {} = {} : {}\r\n",
-                            self.nickname,
-                            RPL_NAMEREPLY,
-                            chan,
-                            chan_info.names.join(" ")
-                        );
-
-                        self.reply(&names_reply).await?;
-                    }
+                    self.names(chan).await?;
                 }
             }
             "NICK" => {
@@ -255,6 +240,40 @@ impl IrcServerConnection {
         Ok(())
     }
 
+    async fn names(&mut self, chan: &str) -> Result<()> {
+        if self.configured_chans.contains_key(chan) {
+            let chan_info = self.configured_chans.get(chan).unwrap();
+
+            if chan_info.names.is_empty() {
+                self.end_of_names(chan).await?;
+                return Ok(())
+            }
+            let names_reply = format!(
+                ":{}!anon@dark.fi {} = {} : {}\r\n",
+                self.nickname,
+                RPL_NAMEREPLY,
+                chan,
+                chan_info.names.join(" ")
+            );
+
+            self.reply(&names_reply).await?;
+
+            self.end_of_names(chan).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn end_of_names(&mut self, chan: &str) -> Result<()> {
+        let end_of_names = format!(
+            ":DarkFi {:03} {} {} :End of NAMES list\r\n",
+            RPL_ENDOFNAMES, self.nickname, chan
+        );
+
+        self.reply(&end_of_names).await?;
+        Ok(())
+    }
+
     async fn on_join(&mut self, chan: &str) -> Result<()> {
         if !self.configured_chans.contains_key(chan) {
             let mut chan_info = ChannelInfo::new()?;
@@ -282,21 +301,7 @@ impl IrcServerConnection {
             }
         }
 
-        let chan_info = self.configured_chans.get_mut(chan).unwrap();
-
-        if chan_info.names.is_empty() {
-            return Ok(())
-        }
-
-        let names_reply = format!(
-            ":{}!anon@dark.fi {} = {} : {}\r\n",
-            self.nickname,
-            RPL_NAMEREPLY,
-            chan,
-            chan_info.names.join(" ")
-        );
-
-        self.reply(&names_reply).await?;
+        self.names(chan).await?;
         Ok(())
     }
 
