@@ -18,6 +18,8 @@ use crate::{
     model::{ConnectInfo, NodeInfo, SelectableObject},
 };
 
+//use log::debug;
+
 type MsgLog = Vec<(NanoTimestamp, String, String)>;
 type MsgMap = FxHashMap<String, MsgLog>;
 
@@ -25,7 +27,6 @@ type MsgMap = FxHashMap<String, MsgLog>;
 pub struct View {
     pub nodes: NodeInfoView,
     pub msg_list: MsgList,
-    pub msg_map: MsgMap,
     pub id_list: IdListView,
     pub selectables: FxHashMap<String, SelectableObject>,
 }
@@ -34,24 +35,22 @@ impl<'a> View {
     pub fn new(
         nodes: NodeInfoView,
         msg_list: MsgList,
-        msg_map: MsgMap,
         id_list: IdListView,
         selectables: FxHashMap<String, SelectableObject>,
     ) -> View {
-        View { nodes, msg_list, msg_map, id_list, selectables }
+        View { nodes, msg_list, id_list, selectables }
     }
 
     pub fn update(
         &mut self,
         nodes: FxHashMap<String, NodeInfo>,
         msg_map: MsgMap,
-        msg_log: MsgLog,
         selectables: FxHashMap<String, SelectableObject>,
     ) {
         self.update_nodes(nodes);
         self.update_selectable(selectables);
-        self.update_msg_list(msg_log);
-        self.update_msg_map(msg_map);
+        self.update_msg_list(msg_map);
+        self.update_msg_len();
         self.update_ids();
     }
 
@@ -61,42 +60,32 @@ impl<'a> View {
         }
     }
 
-    fn update_msg_list(&mut self, msg_log: MsgLog) {
-        let old_len = self.msg_list.msg_log.len();
-        let new_len = msg_log.len();
-        let difference = old_len - new_len;
-        self.msg_list.scroll(difference);
-
-        for msg in msg_log {
-            self.msg_list.msg_log.push(msg);
-        }
-    }
-
     fn update_selectable(&mut self, selectables: FxHashMap<String, SelectableObject>) {
         for (id, obj) in selectables {
             self.selectables.insert(id, obj);
         }
     }
 
-    // dynamically resize msg_list when it's selected
-    //fn update_msg_len(&mut self) {
-    //    match self.id_list.state.selected() {
-    //        Some(i) => match self.id_list.ids.get(i) {
-    //            Some(i) => match self.msg_list.msg_map.get(i) {
-    //                Some(i) => {
-    //                    self.msg_list.msg_len = i.len();
-    //                }
-    //                None => {}
-    //            },
-    //            None => {}
-    //        },
-    //        None => {}
-    //    }
-    //}
+    // get the msg_list at the selected connection ID
+    // and set the list index to the size of the returned vector
+    fn update_msg_len(&mut self) {
+        match self.id_list.state.selected() {
+            Some(i) => match self.id_list.ids.get(i) {
+                Some(i) => match self.msg_list.msg_map.get(i) {
+                    Some(i) => {
+                        self.msg_list.msg_len = i.len();
+                    }
+                    None => {}
+                },
+                None => {}
+            },
+            None => {}
+        }
+    }
 
-    fn update_msg_map(&mut self, msg_map: MsgMap) {
+    fn update_msg_list(&mut self, msg_map: MsgMap) {
         for (id, msg) in msg_map {
-            self.msg_map.insert(id, msg);
+            self.msg_list.msg_map.insert(id, msg);
         }
     }
 
@@ -231,9 +220,9 @@ impl<'a> View {
     fn parse_msg_list<'_a>(&self, connect: &ConnectInfo) -> DnetViewResult<List<'a>> {
         let send_style = Style::default().fg(Color::LightCyan);
         let recv_style = Style::default().fg(Color::DarkGray);
-        let mut list_vec = Vec::new();
+        let mut texts = Vec::new();
         let mut lines = Vec::new();
-        let log = self.msg_map.get(&connect.id);
+        let log = self.msg_list.msg_map.get(&connect.id);
         match log {
             Some(values) => {
                 for (i, (t, k, v)) in values.into_iter().enumerate() {
@@ -251,13 +240,11 @@ impl<'a> View {
             None => return Err(DnetViewError::CannotFindId),
         }
         for line in lines.clone() {
-            let list = ListItem::new(line);
-            list_vec.push(list);
+            let text = ListItem::new(line);
+            texts.push(text);
         }
 
-        let msg_list = List::new(list_vec)
-            .block(Block::default().borders(Borders::ALL))
-            .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+        let msg_list = List::new(texts).block(Block::default().borders(Borders::ALL));
 
         Ok(msg_list)
     }
@@ -304,9 +291,8 @@ impl<'a> View {
                     }
                 }
                 Some(SelectableObject::Connect(connect)) => {
-                    let list = self.parse_msg_list(connect)?;
-                    f.render_stateful_widget(list, slice[1], &mut self.msg_list.state);
-                    //self.msg_auto_scroll(f);
+                    let text = self.parse_msg_list(connect)?;
+                    f.render_stateful_widget(text, slice[1], &mut self.msg_list.state);
                 }
                 None => return Err(DnetViewError::NotSelectableObject),
             }
@@ -319,13 +305,6 @@ impl<'a> View {
         f.render_widget(graph, slice[1]);
 
         Ok(())
-    }
-
-    fn msg_auto_scroll<B: Backend>(&mut self, f: &mut Frame<'_, B>) {
-        //let rect = f.size();
-        //if usize::from(rect.height) < self.msg_list.msg_len {
-        //    self.msg_list.previous();
-        //}
     }
 }
 
@@ -372,76 +351,53 @@ impl IdListView {
     }
 }
 
-// Instead of creating a new list for every ID that has msgs
-// We are using a single list
-// and updating its length depending on what is selected
-// We are storing msg_map in the class but it's used elsewhere
-// msg_log.push(msgs)
-// vector has increased by N elements
-// call next() N times to update page
-//
-
-// it's not a list
-// it\s just text
-// you move it up and down w arrow keys
 #[derive(Debug, Clone)]
 pub struct MsgList {
-    // pub msg_map
-    // pub usize
     pub state: ListState,
-    pub msg_log: MsgLog,
-    //pub previous_len: usize,
-    //pub current_len: usize,
+    pub msg_map: MsgMap,
+    pub msg_len: usize,
 }
 
 impl MsgList {
-    pub fn new(msg_log: MsgLog) -> MsgList {
-        MsgList { state: ListState::default(), msg_log }
+    pub fn new(msg_map: MsgMap, msg_len: usize) -> MsgList {
+        MsgList { state: ListState::default(), msg_map, msg_len }
     }
 
-    pub fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.msg_log.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
+    // TODO: reimplement
+    //pub fn next(&mut self) {
+    //    let i = match self.state.selected() {
+    //        Some(i) => {
+    //            if i >= self.msg_len - 1 {
+    //                0
+    //            } else {
+    //                i + 1
+    //            }
+    //        }
+    //        None => 0,
+    //    };
+    //    self.state.select(Some(i));
+    //}
 
-    pub fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.msg_log.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
+    //pub fn previous(&mut self) {
+    //    let i = match self.state.selected() {
+    //        Some(i) => {
+    //            if i == 0 {
+    //                self.msg_len - 1
+    //            } else {
+    //                i - 1
+    //            }
+    //        }
+    //        None => 0,
+    //    };
+    //    self.state.select(Some(i));
+    //}
 
-    // update_msgs(vec_len_6)
-    // update_msgs(vec_len_12)
-    // len = old_len - new_len
-    pub fn scroll(&mut self, len: usize) {
+    pub fn scroll(&mut self) -> DnetViewResult<()> {
         let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.msg_log.len() - len
-                } else {
-                    i - len
-                }
-            }
+            Some(i) => i + self.msg_len,
             None => 0,
         };
-        self.state.select(Some(i));
+        Ok(self.state.select(Some(i)))
     }
 
     pub fn unselect(&mut self) {

@@ -587,12 +587,13 @@ async fn render_view<B: Backend>(
     terminal.clear()?;
 
     let nodes = NodeInfoView::new(FxHashMap::default());
-    let msg_list = MsgList::new(Vec::new());
     let msg_map = FxHashMap::default();
+
+    let msg_list = MsgList::new(msg_map.clone(), 0);
     let id_list = IdListView::new(Vec::new());
     let selectables = FxHashMap::default();
 
-    let mut view = View::new(nodes, msg_list, msg_map, id_list, selectables);
+    let mut view = View::new(nodes, msg_list, id_list, selectables);
     view.id_list.state.select(Some(0));
     view.msg_list.state.select(Some(0));
 
@@ -600,7 +601,7 @@ async fn render_view<B: Backend>(
         view.update(
             model.nodes.lock().await.clone(),
             model.msg_map.lock().await.clone(),
-            model.msg_log.lock().await.clone(),
+            //model.msg_log.lock().await.clone(),
             model.selectables.lock().await.clone(),
         );
 
@@ -618,6 +619,8 @@ async fn render_view<B: Backend>(
             None => {}
         }
 
+        view.msg_list.scroll()?;
+
         for k in asi.by_ref().keys() {
             match k.unwrap() {
                 Key::Char('q') => {
@@ -630,11 +633,11 @@ async fn render_view<B: Backend>(
                 Key::Char('k') => {
                     view.id_list.previous();
                 }
-                Key::Char('n') => {
-                    view.msg_list.next();
+                Key::Char('u') => {
+                    //view.msg_list.next();
                 }
-                Key::Char('p') => {
-                    view.msg_list.previous();
+                Key::Char('d') => {
+                    //view.msg_list.previous();
                 }
                 _ => (),
             }
