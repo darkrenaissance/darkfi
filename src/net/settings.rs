@@ -18,6 +18,7 @@ pub struct Settings {
     pub connect_timeout_seconds: u32,
     pub channel_handshake_seconds: u32,
     pub channel_heartbeat_seconds: u32,
+    pub outbound_retry_seconds: u64,
     pub external_addr: Option<Url>,
     pub peers: Vec<Url>,
     pub seeds: Vec<Url>,
@@ -34,6 +35,7 @@ impl Default for Settings {
             connect_timeout_seconds: 10,
             channel_handshake_seconds: 4,
             channel_heartbeat_seconds: 10,
+            outbound_retry_seconds: 20,
             external_addr: None,
             peers: Vec::new(),
             seeds: Vec::new(),
@@ -78,6 +80,8 @@ pub struct SettingsOpt {
     pub channel_handshake_seconds: Option<u32>,
     #[structopt(skip)]
     pub channel_heartbeat_seconds: Option<u32>,
+    #[structopt(skip)]
+    pub outbound_retry_seconds: Option<u64>,
 
     #[serde(default)]
     #[structopt(skip)]
@@ -94,6 +98,7 @@ impl From<SettingsOpt> for Settings {
             connect_timeout_seconds: settings_opt.connect_timeout_seconds.unwrap_or(10),
             channel_handshake_seconds: settings_opt.channel_handshake_seconds.unwrap_or(4),
             channel_heartbeat_seconds: settings_opt.channel_heartbeat_seconds.unwrap_or(10),
+            outbound_retry_seconds: settings_opt.outbound_retry_seconds.unwrap_or(20),
             external_addr: settings_opt.external_addr,
             peers: settings_opt.peers,
             seeds: settings_opt.seeds,

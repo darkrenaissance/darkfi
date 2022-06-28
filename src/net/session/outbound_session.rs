@@ -3,13 +3,14 @@ use std::fmt;
 
 use async_executor::Executor;
 use async_trait::async_trait;
-use log::{error, info};
+use log::{info, warn};
 use rand::seq::SliceRandom;
 use serde_json::json;
 use url::Url;
 
 use crate::{
     system::{StoppableTask, StoppableTaskPtr},
+    util::async_util,
     Error, Result,
 };
 
@@ -191,37 +192,41 @@ impl OutboundSession {
     /// (exists) or connecting (pending). Keeps looping until address is
     /// found that passes all checks.
     async fn load_address(&self, slot_number: u32) -> Result<Url> {
-        let p2p = self.p2p();
-        let self_inbound_addr = p2p.settings().external_addr.clone();
+        loop {
+            let p2p = self.p2p();
+            let self_inbound_addr = p2p.settings().external_addr.clone();
 
-        let mut addrs;
+            let mut addrs;
 
-        {
-            let hosts = p2p.hosts().load_all().await;
-            addrs = hosts;
+            {
+                let hosts = p2p.hosts().load_all().await;
+                addrs = hosts;
+            }
+
+            addrs.shuffle(&mut rand::thread_rng());
+
+            for addr in addrs {
+                if p2p.exists(&addr).await {
+                    continue
+                }
+
+                // Obtain a lock on this address to prevent duplicate connections
+                if !p2p.add_pending(addr.clone()).await {
+                    continue
+                }
+
+                if Self::is_self_inbound(&addr, &self_inbound_addr) {
+                    continue
+                }
+
+                return Ok(addr)
+            }
+
+            warn!(target: "net", "Hosts address pool is empty. Retrying connect slot #{}", slot_number);
+
+            let retry_time = p2p.settings().outbound_retry_seconds.clone();
+            async_util::sleep(retry_time).await;
         }
-
-        addrs.shuffle(&mut rand::thread_rng());
-
-        for addr in addrs {
-            if p2p.exists(&addr).await {
-                continue
-            }
-
-            // Obtain a lock on this address to prevent duplicate connections
-            if !p2p.add_pending(addr.clone()).await {
-                continue
-            }
-
-            if Self::is_self_inbound(&addr, &self_inbound_addr) {
-                continue
-            }
-
-            return Ok(addr)
-        }
-
-        error!(target: "net", "Hosts address pool is empty. Closing connect slot #{}", slot_number);
-        Err(Error::NetworkServiceStopped)
     }
 
     /// Checks whether an address is our own inbound address to avoid connecting
