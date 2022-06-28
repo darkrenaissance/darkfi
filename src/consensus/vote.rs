@@ -8,7 +8,7 @@ use crate::{
 };
 
 /// This struct represents a `Vote` used by the Streamlet consensus
-#[derive(Debug, Clone, PartialEq, SerialDecodable, SerialEncodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialDecodable, SerialEncodable)]
 pub struct Vote {
     /// Node public key
     pub public_key: PublicKey,

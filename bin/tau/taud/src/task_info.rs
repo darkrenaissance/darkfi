@@ -29,7 +29,7 @@ impl TaskEvent {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, SerialDecodable, SerialEncodable, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerialDecodable, SerialEncodable, PartialEq, Eq)]
 pub struct Comment {
     content: String,
     author: String,
@@ -48,11 +48,11 @@ impl Comment {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct TaskEvents(Vec<TaskEvent>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskComments(Vec<Comment>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskProjects(Vec<String>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskAssigns(Vec<String>);
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]

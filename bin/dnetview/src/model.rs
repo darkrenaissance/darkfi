@@ -8,7 +8,7 @@ use darkfi::util::NanoTimestamp;
 type MsgLog = Vec<(NanoTimestamp, String, String)>;
 type MsgMap = Mutex<FxHashMap<String, MsgLog>>;
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub enum Session {
     Inbound,
     Outbound,
@@ -16,7 +16,7 @@ pub enum Session {
     Offline,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub enum SelectableObject {
     Node(NodeInfo),
     Session(SessionInfo),
@@ -43,7 +43,7 @@ impl Model {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub struct NodeInfo {
     pub id: String,
     pub name: String,
@@ -66,7 +66,7 @@ impl NodeInfo {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub struct SessionInfo {
     // TODO: make all values optional to handle empty sessions
     pub id: String,
@@ -90,7 +90,7 @@ impl SessionInfo {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub struct ConnectInfo {
     // TODO: make all values optional to handle empty connections
     pub id: String,

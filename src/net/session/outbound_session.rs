@@ -224,8 +224,7 @@ impl OutboundSession {
 
             warn!(target: "net", "Hosts address pool is empty. Retrying connect slot #{}", slot_number);
 
-            let retry_time = p2p.settings().outbound_retry_seconds.clone();
-            async_util::sleep(retry_time).await;
+            async_util::sleep(p2p.settings().outbound_retry_seconds).await;
         }
     }
 

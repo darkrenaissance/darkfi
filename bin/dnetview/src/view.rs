@@ -1,4 +1,3 @@
-use async_std::sync::Mutex;
 use fxhash::FxHashMap;
 use tui::widgets::ListState;
 
@@ -125,7 +124,7 @@ impl<'a> View {
 
         self.render_ids(f, slice.clone())?;
 
-        if self.id_list.ids.is_empty() {
+        if !self.id_list.ids.is_empty() {
             // we have not received any data
             Ok(())
         } else {
@@ -133,7 +132,8 @@ impl<'a> View {
             match self.id_list.state.selected() {
                 Some(i) => match self.id_list.ids.get(i) {
                     Some(i) => {
-                        self.render_info(f, slice.clone(), i.to_string())?;
+                        let id = i.clone();
+                        self.render_info(f, slice, id)?;
                         Ok(())
                     }
                     None => Err(DnetViewError::NoIdAtIndex),
@@ -217,7 +217,7 @@ impl<'a> View {
         Ok(())
     }
 
-    fn parse_msg_list<'_a>(&self, connect: &ConnectInfo) -> DnetViewResult<List<'a>> {
+    fn parse_msg_list(&self, connect: &ConnectInfo) -> DnetViewResult<List<'a>> {
         let send_style = Style::default().fg(Color::LightCyan);
         let recv_style = Style::default().fg(Color::DarkGray);
         let mut texts = Vec::new();
@@ -225,8 +225,8 @@ impl<'a> View {
         let log = self.msg_list.msg_map.get(&connect.id);
         match log {
             Some(values) => {
-                for (i, (t, k, v)) in values.into_iter().enumerate() {
-                    lines.push(Span::from(match k.as_str() {
+                for (i, (t, k, v)) in values.iter().enumerate() {
+                    lines.push(match k.as_str() {
                         "send" => {
                             Span::styled(format!("{}  {}             S: {}", i, t, v), send_style)
                         }
@@ -234,7 +234,7 @@ impl<'a> View {
                             Span::styled(format!("{}  {}             R: {}", i, t, v), recv_style)
                         }
                         data => return Err(DnetViewError::UnexpectedData(data.to_string())),
-                    }));
+                    });
                 }
             }
             None => return Err(DnetViewError::CannotFindId),
@@ -272,7 +272,7 @@ impl<'a> View {
                             lines.push(Spans::from(node_info));
                         }
                         None => {
-                            let node_info = Span::styled(format!("External addr: Null"), style);
+                            let node_info = Span::styled("External addr: Null".to_string(), style);
                             lines.push(Spans::from(node_info));
                         }
                     }
@@ -397,7 +397,8 @@ impl MsgList {
             Some(i) => i + self.msg_len,
             None => 0,
         };
-        Ok(self.state.select(Some(i)))
+        self.state.select(Some(i));
+        Ok(())
     }
 
     pub fn unselect(&mut self) {

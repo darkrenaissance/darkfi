@@ -21,7 +21,7 @@ use crate::{
 };
 
 /// This struct represents a tuple of the form (version, state, epoch, slot, timestamp, merkle_root).
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Header {
     /// Block version
     pub version: u8,
@@ -200,7 +200,7 @@ impl fmt::Display for BlockProposal {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_fmt(format_args!(
             "BlockProposal {{ leader: {}, hash: {}, epoch: {}, slot: {}, txs: {} }}",
-            self.address.to_string(),
+            self.address,
             self.block.header.headerhash(),
             self.block.header.epoch,
             self.block.header.slot,

@@ -69,10 +69,9 @@ impl Ircd {
 
     fn start_p2p_receive_loop(&self, executor: Arc<Executor<'_>>, p2p_receiver: Receiver<Privmsg>) {
         let senders = self.senders.clone();
-        let p2p_receiver_cloned = p2p_receiver.clone();
         executor
             .spawn(async move {
-                while let Ok(msg) = p2p_receiver_cloned.recv().await {
+                while let Ok(msg) = p2p_receiver.recv().await {
                     senders.notify(msg).await;
                 }
             })

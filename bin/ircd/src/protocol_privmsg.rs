@@ -49,7 +49,7 @@ impl ProtocolPrivmsg {
 
     async fn handle_receive_msg(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_msg() [START]");
-        let exclude_list = vec![self.channel.address().clone()];
+        let exclude_list = vec![self.channel.address()];
 
         // once a channel get started
         let msgs_buffer = self.msgs.lock().await;

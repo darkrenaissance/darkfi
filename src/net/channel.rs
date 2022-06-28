@@ -117,10 +117,8 @@ impl Channel {
     /// the channel has been closed.
     pub async fn stop(&self) {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
-        let mut stopped = *self.stopped.lock().await;
-        if !stopped {
-            stopped = true;
-            drop(stopped);
+        if !(*self.stopped.lock().await) {
+            *self.stopped.lock().await = true;
 
             self.stop_subscriber.notify(Error::ChannelStopped).await;
             self.receive_task.stop().await;

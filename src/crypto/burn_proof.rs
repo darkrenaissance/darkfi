@@ -23,7 +23,7 @@ use crate::{
     Result,
 };
 
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct BurnRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,

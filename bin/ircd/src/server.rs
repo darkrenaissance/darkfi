@@ -41,6 +41,7 @@ pub struct IrcServerConnection {
 }
 
 impl IrcServerConnection {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         write_stream: WriteHalf<TcpStream>,
         peer_address: SocketAddr,

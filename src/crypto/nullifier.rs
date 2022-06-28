@@ -9,7 +9,7 @@ use crate::{
     Result,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Nullifier(pub(crate) pallas::Base);
 
 impl Nullifier {

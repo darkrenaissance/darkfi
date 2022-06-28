@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use prettytable::{
     cell,
     format::{consts::FORMAT_NO_COLSEP, FormatBuilder, LinePosition, LineSeparator},
@@ -114,7 +116,7 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
 pub fn comments_as_string(comments: Vec<Comment>) -> String {
     let mut comments_str = String::new();
     for comment in comments {
-        comments_str.push_str(&format!("{}\n", comment));
+        writeln!(comments_str, "{}", comment).unwrap();
     }
     comments_str.pop();
     comments_str
@@ -123,7 +125,7 @@ pub fn comments_as_string(comments: Vec<Comment>) -> String {
 pub fn events_as_string(events: Vec<TaskEvent>) -> String {
     let mut events_str = String::new();
     for event in events {
-        events_str.push_str(&format!("State changed to {} at {}\n", event.action, event.timestamp));
+        writeln!(events_str, "State changed to {} at {}", event.action, event.timestamp).unwrap();
     }
     events_str
 }

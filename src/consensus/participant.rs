@@ -9,7 +9,7 @@ use crate::{
 
 /// This struct represents a tuple of the form:
 /// (`node_address`, `slot_joined`, `last_slot_voted`, `slot_quarantined`)
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Participant {
     /// Node wallet address
     pub address: Address,

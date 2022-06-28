@@ -15,7 +15,7 @@ use crate::{
     util::{load, save},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MonthTasks {
     created_at: Timestamp,
     task_tks: Vec<String>,

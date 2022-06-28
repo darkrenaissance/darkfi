@@ -3,7 +3,7 @@ use crate::util::serial::{SerialDecodable, SerialEncodable};
 
 /// This struct represents [`Block`](super::Block) information used by the Ouroboros
 /// Praos consensus protocol.
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Metadata {
     /// Proof that the stakeholder is the block owner
     pub proof: String,

@@ -47,7 +47,7 @@ impl<F: FieldExt> IsZeroChip<F> {
             let q_enable = q_enable(meta);
             let value_inv = meta.query_advice(value_inv, Rotation::cur());
 
-            is_zero_expr = Expression::Constant(F::one()) - value.clone() * value_inv.clone();
+            is_zero_expr = Expression::Constant(F::one()) - value.clone() * value_inv;
             vec![q_enable * value * is_zero_expr.clone()]
         });
 
