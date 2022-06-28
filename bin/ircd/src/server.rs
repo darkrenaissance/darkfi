@@ -95,7 +95,7 @@ impl IrcServerConnection {
                         continue
                     }
 
-                    self.names(chan).await?;
+                    self.on_receive_names(chan).await?;
                 }
             }
             "NICK" => {
@@ -240,14 +240,21 @@ impl IrcServerConnection {
         Ok(())
     }
 
-    async fn names(&mut self, chan: &str) -> Result<()> {
+    async fn on_receive_names(&mut self, chan: &str) -> Result<()> {
         if self.configured_chans.contains_key(chan) {
+            let end_of_names = format!(
+                ":DarkFi {:03} {} {} :End of NAMES list\r\n",
+                RPL_ENDOFNAMES, self.nickname, chan
+            );
+
+            self.reply(&end_of_names).await?;
+
             let chan_info = self.configured_chans.get(chan).unwrap();
 
             if chan_info.names.is_empty() {
-                self.end_of_names(chan).await?;
                 return Ok(())
             }
+
             let names_reply = format!(
                 ":{}!anon@dark.fi {} = {} : {}\r\n",
                 self.nickname,
@@ -257,20 +264,8 @@ impl IrcServerConnection {
             );
 
             self.reply(&names_reply).await?;
-
-            self.end_of_names(chan).await?;
         }
 
-        Ok(())
-    }
-
-    async fn end_of_names(&mut self, chan: &str) -> Result<()> {
-        let end_of_names = format!(
-            ":DarkFi {:03} {} {} :End of NAMES list\r\n",
-            RPL_ENDOFNAMES, self.nickname, chan
-        );
-
-        self.reply(&end_of_names).await?;
         Ok(())
     }
 
@@ -301,7 +296,7 @@ impl IrcServerConnection {
             }
         }
 
-        self.names(chan).await?;
+        self.on_receive_names(chan).await?;
         Ok(())
     }
 
