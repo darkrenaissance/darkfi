@@ -12,7 +12,7 @@ use darkfi::{net::P2pPtr, system::SubscriberPtr, Error, Result};
 use crate::{
     crypto::{encrypt_message, try_decrypt_message},
     privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
-    ChannelInfo,
+    ChannelInfo, MAXIMUM_LENGTH_OF_MESSAGE, MAXIMUM_LENGTH_OF_NICKNAME,
 };
 
 const RPL_NOTOPIC: u32 = 331;
@@ -69,7 +69,7 @@ impl IrcServerConnection {
     }
 
     async fn update(&mut self, line: String) -> Result<()> {
-        if line.len() > 513 {
+        if line.len() > MAXIMUM_LENGTH_OF_MESSAGE {
             return Err(Error::MalformedPacket)
         }
 
@@ -116,7 +116,7 @@ impl IrcServerConnection {
             "NICK" => {
                 let nickname = tokens.next().ok_or(Error::MalformedPacket)?;
 
-                if nickname.len() > 10 {
+                if nickname.len() > MAXIMUM_LENGTH_OF_NICKNAME {
                     return Ok(())
                 }
 

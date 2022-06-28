@@ -7,7 +7,10 @@ use ringbuffer::{RingBufferExt, RingBufferWrite};
 
 use darkfi::{net, Result};
 
-use crate::privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds};
+use crate::{
+    privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
+    MAXIMUM_LENGTH_OF_NICKNAME,
+};
 
 pub struct ProtocolPrivmsg {
     jobsman: net::ProtocolJobsManagerPtr,
@@ -59,7 +62,7 @@ impl ProtocolPrivmsg {
         loop {
             let msg = self.msg_sub.receive().await?;
 
-            if msg.nickname.len() > 10 {
+            if msg.nickname.len() > MAXIMUM_LENGTH_OF_NICKNAME {
                 continue
             }
 
