@@ -354,9 +354,14 @@ impl IrcServerConnection {
             if !chan_info.names.contains(&msg.nickname) {
                 chan_info.names.push(msg.nickname.clone());
             }
+
+            self.reply(&msg.to_irc_msg()).await?;
         }
 
-        self.reply(&msg.to_irc_msg()).await?;
+        if self.is_nick_init && self.nickname == msg.target {
+            self.reply(&msg.to_irc_msg()).await?;
+        }
+
         Ok(())
     }
 
