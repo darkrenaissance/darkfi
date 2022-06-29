@@ -110,7 +110,6 @@ impl Ircd {
                     let mut line = String::new();
                     let result: Result<()> = futures::select! {
                         msg = receiver.receive().fuse() => {
-                            info!("Received msg from P2p network: {:?}", msg);
                             match conn.process_msg_from_p2p(&msg).await {
                                 Ok(_) => Ok(()),
                                 Err(e) => {

@@ -14,7 +14,7 @@ pub type PrivmsgsBuffer = Arc<Mutex<AllocRingBuffer<Privmsg>>>;
 pub struct Privmsg {
     pub id: PrivmsgId,
     pub nickname: String,
-    pub channel: String,
+    pub target: String,
     pub message: String,
 }
 
@@ -22,7 +22,7 @@ impl Privmsg {
     pub fn to_irc_msg(&self) -> String {
         let irc_msg = format!(
             ":{}!anon@dark.fi PRIVMSG {} :{}\r\n",
-            self.nickname, self.channel, self.message
+            self.nickname, self.target, self.message
         );
         irc_msg
     }

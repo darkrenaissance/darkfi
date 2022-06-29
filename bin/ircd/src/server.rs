@@ -167,7 +167,7 @@ impl IrcServerConnection {
                 self.reply(&pong).await?;
             }
             "PRIVMSG" => {
-                let channel = tokens.next().ok_or(Error::MalformedPacket)?;
+                let target = tokens.next().ok_or(Error::MalformedPacket)?;
                 let substr_idx = line.find(':').ok_or(Error::MalformedPacket)?;
 
                 if substr_idx >= line.len() {
@@ -175,39 +175,34 @@ impl IrcServerConnection {
                 }
 
                 let message = &line[substr_idx + 1..];
-                info!("(Plain) PRIVMSG {} :{}", channel, message);
+                info!("(Plain) PRIVMSG {} :{}", target, message);
 
-                if self.configured_chans.contains_key(channel) {
-                    let channel_info = self.configured_chans.get(channel).unwrap();
-                    if channel_info.joined {
-                        let message = if let Some(salt_box) = &channel_info.salt_box {
-                            let encrypted = encrypt_message(salt_box, message);
-                            info!("(Encrypted) PRIVMSG {} :{}", channel, encrypted);
-                            encrypted
-                        } else {
-                            message.to_string()
-                        };
+                if target.starts_with("#") {
+                    if !self.configured_chans.contains_key(target) {
+                        return Ok(())
+                    }
 
-                        let random_id = OsRng.next_u64();
+                    let channel_info = self.configured_chans.get(target).unwrap();
 
-                        let protocol_msg = Privmsg {
-                            id: random_id,
-                            nickname: self.nickname.clone(),
-                            channel: channel.to_string(),
-                            message,
-                        };
+                    if !channel_info.joined {
+                        return Ok(())
+                    }
 
-                        {
-                            (*self.seen_msg_ids.lock().await).push(random_id);
-                            (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
+                    let message = if let Some(salt_box) = &channel_info.salt_box {
+                        let encrypted = encrypt_message(salt_box, message);
+                        info!("(Encrypted) PRIVMSG {} :{}", target, encrypted);
+                        encrypted
+                    } else {
+                        message.to_string()
+                    };
+
+                    self.on_receive_privmsg(&message, target).await?;
+                } else {
+                    let channels = self.configured_chans.clone();
+                    for chan in channels.values() {
+                        if chan.joined && chan.names.contains(&target.to_string()) {
+                            self.on_receive_privmsg(&message, target).await?;
                         }
-
-                        self.senders
-                            .notify_with_exclude(protocol_msg.clone(), &[self.subscriber_id])
-                            .await;
-
-                        debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
-                        self.p2p.broadcast(protocol_msg).await?;
                     }
                 }
             }
@@ -229,6 +224,13 @@ impl IrcServerConnection {
 
             for chan in self.auto_channels.clone() {
                 self.on_join(&chan).await?;
+            }
+
+            // Send dm messages in buffer
+            for msg in self.privmsgs_buffer.lock().await.to_vec() {
+                if msg.target == self.nickname {
+                    self.senders.notify_by_id(msg, self.subscriber_id).await;
+                }
             }
         }
 
@@ -270,6 +272,29 @@ impl IrcServerConnection {
         Ok(())
     }
 
+    async fn on_receive_privmsg(&mut self, message: &str, target: &str) -> Result<()> {
+        let random_id = OsRng.next_u64();
+
+        let protocol_msg = Privmsg {
+            id: random_id,
+            nickname: self.nickname.clone(),
+            target: target.to_string(),
+            message: message.to_string(),
+        };
+
+        {
+            (*self.seen_msg_ids.lock().await).push(random_id);
+            (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
+        }
+
+        self.senders.notify_with_exclude(protocol_msg.clone(), &[self.subscriber_id]).await;
+
+        debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
+        self.p2p.broadcast(protocol_msg).await?;
+
+        Ok(())
+    }
+
     async fn on_join(&mut self, chan: &str) -> Result<()> {
         if !self.configured_chans.contains_key(chan) {
             let mut chan_info = ChannelInfo::new()?;
@@ -292,7 +317,7 @@ impl IrcServerConnection {
 
         // Send messages in buffer
         for msg in self.privmsgs_buffer.lock().await.to_vec() {
-            if msg.channel == chan {
+            if msg.target == chan {
                 self.senders.notify_by_id(msg, self.subscriber_id).await;
             }
         }
@@ -302,10 +327,12 @@ impl IrcServerConnection {
     }
 
     pub async fn process_msg_from_p2p(&mut self, msg: &Privmsg) -> Result<()> {
+        info!("Received msg from P2p network: {:?}", msg);
+
         let mut msg = msg.clone();
         // Try to potentially decrypt the incoming message.
-        if self.configured_chans.contains_key(&msg.channel) {
-            let chan_info = self.configured_chans.get_mut(&msg.channel).unwrap();
+        if self.configured_chans.contains_key(&msg.target) {
+            let chan_info = self.configured_chans.get_mut(&msg.target).unwrap();
             if !chan_info.joined {
                 return Ok(())
             }
