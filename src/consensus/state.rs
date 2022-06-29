@@ -437,13 +437,7 @@ impl ValidatorState {
         }
 
         let signed_hash = self.secret.sign(&serialize(&proposal_hash));
-        Ok(Some(Vote::new(
-            self.public,
-            signed_hash,
-            proposal_hash,
-            proposal.block.header.slot,
-            self.address,
-        )))
+        Ok(Some(Vote::new(signed_hash, proposal_hash, proposal.block.header.slot, self.address)))
     }
 
     /// Verify if the provided chain is notarized excluding the last block.
@@ -527,19 +521,6 @@ impl ValidatorState {
             None => return Ok((false, None)),
         }
 
-        let mut encoded_proposal = vec![];
-
-        if let Err(e) = vote.proposal.encode(&mut encoded_proposal) {
-            error!("consensus: Proposal encoding failed: {:?}", e);
-            return Ok((false, None))
-        };
-
-        let va = vote.address.to_string();
-        if !vote.public_key.verify(&encoded_proposal, &vote.vote) {
-            warn!("consensus: Voter ({}), signature couldn't be verified", va);
-            return Ok((false, None))
-        }
-
         // Node refreshes participants records
         self.refresh_participants()?;
         let node_count = self.consensus.participants.len();
@@ -548,8 +529,21 @@ impl ValidatorState {
         match self.consensus.participants.get(&vote.address) {
             Some(participant) => {
                 let mut participant = participant.clone();
+                let va = vote.address.to_string();
                 if current_slot <= participant.joined {
                     warn!("consensus: Voter ({}) joined after current slot.", va);
+                    return Ok((false, None))
+                }
+
+                let mut encoded_proposal = vec![];
+
+                if let Err(e) = vote.proposal.encode(&mut encoded_proposal) {
+                    error!("consensus: Proposal encoding failed: {:?}", e);
+                    return Ok((false, None))
+                };
+
+                if !participant.public_key.verify(&encoded_proposal, &vote.vote) {
+                    warn!("consensus: Voter ({}), signature couldn't be verified", va);
                     return Ok((false, None))
                 }
 

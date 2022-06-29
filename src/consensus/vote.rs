@@ -1,7 +1,7 @@
 use std::io;
 
 use crate::{
-    crypto::{address::Address, keypair::PublicKey, schnorr::Signature},
+    crypto::{address::Address, schnorr::Signature},
     impl_vec, net,
     util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,
@@ -10,8 +10,6 @@ use crate::{
 /// This struct represents a `Vote` used by the Streamlet consensus
 #[derive(Debug, Clone, PartialEq, Eq, SerialDecodable, SerialEncodable)]
 pub struct Vote {
-    /// Node public key
-    pub public_key: PublicKey,
     /// Block signature
     pub vote: Signature,
     /// Block proposal hash to vote on
@@ -23,14 +21,8 @@ pub struct Vote {
 }
 
 impl Vote {
-    pub fn new(
-        public_key: PublicKey,
-        vote: Signature,
-        proposal: blake3::Hash,
-        slot: u64,
-        address: Address,
-    ) -> Self {
-        Self { public_key, vote, proposal, slot, address }
+    pub fn new(vote: Signature, proposal: blake3::Hash, slot: u64, address: Address) -> Self {
+        Self { vote, proposal, slot, address }
     }
 }
 
