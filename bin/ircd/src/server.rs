@@ -174,7 +174,7 @@ impl IrcServerConnection {
                     return Err(Error::MalformedPacket)
                 }
 
-                let message = &line[substr_idx + 1..];
+                let mut message = line[substr_idx + 1..].to_string();
                 info!("(Plain) PRIVMSG {} :{}", target, message);
 
                 if target.starts_with("#") {
@@ -188,24 +188,18 @@ impl IrcServerConnection {
                         return Ok(())
                     }
 
-                    let message = if let Some(salt_box) = &channel_info.salt_box {
-                        let encrypted = encrypt_message(salt_box, message);
+                    message = if let Some(salt_box) = &channel_info.salt_box {
+                        let encrypted = encrypt_message(salt_box, &message);
                         info!("(Encrypted) PRIVMSG {} :{}", target, encrypted);
                         encrypted
                     } else {
                         message.to_string()
                     };
-
-                    self.on_receive_privmsg(&message, target).await?;
-                } else {
-                    let channels = self.configured_chans.clone();
-                    for chan in channels.values() {
-                        if chan.joined && chan.names.contains(&target.to_string()) {
-                            self.on_receive_privmsg(&message, target).await?;
-                        }
-                    }
                 }
+
+                self.on_receive_privmsg(&message, target).await?;
             }
+            "CAP" => {}
             "QUIT" => {
                 // Close the connection
                 return Err(Error::NetworkServiceStopped)
@@ -228,10 +222,12 @@ impl IrcServerConnection {
 
             // Send dm messages in buffer
             for msg in self.privmsgs_buffer.lock().await.to_vec() {
-                if msg.target == self.nickname {
+                if msg.target == self.nickname || msg.nickname == self.nickname {
                     self.senders.notify_by_id(msg, self.subscriber_id).await;
                 }
             }
+
+            // send names command
         }
 
         Ok(())
@@ -245,13 +241,6 @@ impl IrcServerConnection {
 
     async fn on_receive_names(&mut self, chan: &str) -> Result<()> {
         if self.configured_chans.contains_key(chan) {
-            let end_of_names = format!(
-                ":DarkFi {:03} {} {} :End of NAMES list\r\n",
-                RPL_ENDOFNAMES, self.nickname, chan
-            );
-
-            self.reply(&end_of_names).await?;
-
             let chan_info = self.configured_chans.get(chan).unwrap();
 
             if chan_info.names.is_empty() {
@@ -267,6 +256,13 @@ impl IrcServerConnection {
             );
 
             self.reply(&names_reply).await?;
+
+            let end_of_names = format!(
+                ":DarkFi {:03} {} {} :End of NAMES list\r\n",
+                RPL_ENDOFNAMES, self.nickname, chan
+            );
+
+            self.reply(&end_of_names).await?;
         }
 
         Ok(())
@@ -356,9 +352,10 @@ impl IrcServerConnection {
             }
 
             self.reply(&msg.to_irc_msg()).await?;
+            return Ok(())
         }
 
-        if self.is_nick_init && self.nickname == msg.target {
+        if self.is_nick_init && (self.nickname == msg.target || self.nickname == msg.nickname) {
             self.reply(&msg.to_irc_msg()).await?;
         }
 
