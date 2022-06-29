@@ -8,8 +8,7 @@ use super::{
 };
 use crate::{
     crypto::{
-        address::Address, constants::MERKLE_DEPTH, keypair::PublicKey, merkle_node::MerkleNode,
-        schnorr::Signature,
+        address::Address, constants::MERKLE_DEPTH, merkle_node::MerkleNode, schnorr::Signature,
     },
     impl_vec, net,
     tx::Transaction,
@@ -159,8 +158,6 @@ impl net::Message for BlockResponse {
 /// This struct represents a block proposal, used for consensus.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockProposal {
-    /// Leader public key
-    pub public_key: PublicKey,
     /// Block signature
     pub signature: Signature,
     /// Leader address
@@ -172,7 +169,6 @@ pub struct BlockProposal {
 impl BlockProposal {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        public_key: PublicKey,
         signature: Signature,
         address: Address,
         header: Header,
@@ -181,14 +177,13 @@ impl BlockProposal {
         sm: StreamletMetadata,
     ) -> Self {
         let block = BlockInfo::new(header, txs, metadata, sm);
-        Self { public_key, signature, address, block }
+        Self { signature, address, block }
     }
 }
 
 impl PartialEq for BlockProposal {
     fn eq(&self, other: &Self) -> bool {
-        self.public_key == other.public_key &&
-            self.signature == other.signature &&
+        self.signature == other.signature &&
             self.address == other.address &&
             self.block.header == other.block.header &&
             self.block.txs == other.block.txs &&
