@@ -73,7 +73,7 @@ struct Args {
     /// Path to blockchain database
     database: String,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1:8340")]
+    #[structopt(long, default_value = "tcp://127.0.0.1:9340")]
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
