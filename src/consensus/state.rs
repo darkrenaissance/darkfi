@@ -866,7 +866,7 @@ impl ValidatorState {
 
         if self.consensus.participants.is_empty() {
             // If no nodes are active, node becomes a single node network.
-            let participant = Participant::new(self.address, self.current_slot());
+            let participant = Participant::new(self.public, self.address, self.current_slot());
             self.consensus.participants.insert(participant.address, participant);
         }
 

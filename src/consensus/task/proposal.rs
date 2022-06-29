@@ -39,9 +39,10 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
     };
 
     // Node signals the network that it will start participating
+    let public = state.read().await.public;
     let address = state.read().await.address;
     let cur_slot = state.read().await.current_slot();
-    let participant = Participant::new(address, cur_slot);
+    let participant = Participant::new(public, address, cur_slot);
     state.write().await.append_participant(participant.clone());
 
     match consensus_p2p.broadcast(participant).await {

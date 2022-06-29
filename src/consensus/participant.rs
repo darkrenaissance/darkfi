@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, io};
 
 use crate::{
-    crypto::address::Address,
+    crypto::{address::Address, keypair::PublicKey},
     impl_vec, net,
     util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result,
@@ -11,6 +11,8 @@ use crate::{
 /// (`node_address`, `slot_joined`, `last_slot_voted`, `slot_quarantined`)
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Participant {
+    /// Node public key
+    pub public_key: PublicKey,
     /// Node wallet address
     pub address: Address,
     /// Slot node joined the network
@@ -22,8 +24,8 @@ pub struct Participant {
 }
 
 impl Participant {
-    pub fn new(address: Address, joined: u64) -> Self {
-        Self { address, joined, voted: None, quarantined: None }
+    pub fn new(public_key: PublicKey, address: Address, joined: u64) -> Self {
+        Self { public_key, address, joined, voted: None, quarantined: None }
     }
 }
 
