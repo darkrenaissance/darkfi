@@ -31,9 +31,11 @@ pub struct IrcServerConnection {
     is_nick_init: bool,
     is_user_init: bool,
     is_registered: bool,
+    is_cap_end: bool,
     nickname: String,
     auto_channels: Vec<String>,
     pub configured_chans: FxHashMap<String, ChannelInfo>,
+    capabilities: FxHashMap<String, bool>,
     // p2p
     p2p: P2pPtr,
     senders: SubscriberPtr<Privmsg>,
@@ -53,6 +55,8 @@ impl IrcServerConnection {
         senders: SubscriberPtr<Privmsg>,
         subscriber_id: u64,
     ) -> Self {
+        let mut capabilities = FxHashMap::default();
+        capabilities.insert("no-history".to_string(), false);
         Self {
             write_stream,
             peer_address,
@@ -61,9 +65,11 @@ impl IrcServerConnection {
             is_nick_init: false,
             is_user_init: false,
             is_registered: false,
+            is_cap_end: false,
             nickname: "anon".to_string(),
             auto_channels,
             configured_chans,
+            capabilities,
             p2p,
             senders,
             subscriber_id,
@@ -199,7 +205,78 @@ impl IrcServerConnection {
 
                 self.on_receive_privmsg(&message, target).await?;
             }
-            "CAP" => {}
+            "CAP" => {
+                let subcommand = tokens.next().ok_or(Error::MalformedPacket)?.to_uppercase();
+
+                let capabilities_keys: Vec<String> = self.capabilities.keys().cloned().collect();
+
+                if subcommand == "LS" {
+                    let cap_ls_reply = format!(
+                        ":{}!anon@dark.fi CAP * LS :{}\r\n",
+                        self.nickname,
+                        capabilities_keys.join(" ")
+                    );
+                    self.reply(&cap_ls_reply).await?;
+                }
+
+                if subcommand == "REQ" {
+                    let substr_idx = line.find(':').ok_or(Error::MalformedPacket)?;
+
+                    if substr_idx >= line.len() {
+                        return Err(Error::MalformedPacket)
+                    }
+
+                    let cap: Vec<&str> = line[substr_idx + 1..].split(" ").collect();
+
+                    let mut ack_list = vec![];
+                    let mut nak_list = vec![];
+
+                    for c in cap {
+                        if self.capabilities.contains_key(c) {
+                            self.capabilities.insert(c.to_string(), true);
+                            ack_list.push(c);
+                        } else {
+                            nak_list.push(c);
+                        }
+                    }
+
+                    let cap_ack_reply = format!(
+                        ":{}!anon@dark.fi CAP * ACK :{}\r\n",
+                        self.nickname,
+                        ack_list.join(" ")
+                    );
+
+                    let cap_nak_reply = format!(
+                        ":{}!anon@dark.fi CAP * NAK :{}\r\n",
+                        self.nickname,
+                        nak_list.join(" ")
+                    );
+
+                    self.reply(&cap_ack_reply).await?;
+                    self.reply(&cap_nak_reply).await?;
+                }
+
+                if subcommand == "LIST" {
+                    let enabled_capabilities: Vec<String> = self
+                        .capabilities
+                        .clone()
+                        .into_iter()
+                        .filter(|(_, v)| *v)
+                        .map(|(k, _)| k)
+                        .collect();
+
+                    let cap_list_reply = format!(
+                        ":{}!anon@dark.fi CAP * LIST :{}\r\n",
+                        self.nickname,
+                        enabled_capabilities.join(" ")
+                    );
+                    self.reply(&cap_list_reply).await?;
+                }
+
+                if subcommand == "END" {
+                    self.is_cap_end = true;
+                }
+            }
             "QUIT" => {
                 // Close the connection
                 return Err(Error::NetworkServiceStopped)
@@ -210,7 +287,7 @@ impl IrcServerConnection {
         }
 
         // on registration
-        if !self.is_registered && self.is_nick_init && self.is_user_init {
+        if !self.is_registered && self.is_cap_end && self.is_nick_init && self.is_user_init {
             debug!("Initializing peer connection");
             let register_reply = format!(":darkfi 001 {} :Let there be dark\r\n", self.nickname);
             self.reply(&register_reply).await?;
@@ -221,13 +298,13 @@ impl IrcServerConnection {
             }
 
             // Send dm messages in buffer
-            for msg in self.privmsgs_buffer.lock().await.to_vec() {
-                if msg.target == self.nickname || msg.nickname == self.nickname {
-                    self.senders.notify_by_id(msg, self.subscriber_id).await;
+            if !self.capabilities.get("no-history").unwrap() {
+                for msg in self.privmsgs_buffer.lock().await.to_vec() {
+                    if msg.target == self.nickname || msg.nickname == self.nickname {
+                        self.senders.notify_by_id(msg, self.subscriber_id).await;
+                    }
                 }
             }
-
-            // send names command
         }
 
         Ok(())
@@ -282,7 +359,6 @@ impl IrcServerConnection {
             (*self.seen_msg_ids.lock().await).push(random_id);
             (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
         }
-
         self.senders.notify_with_exclude(protocol_msg.clone(), &[self.subscriber_id]).await;
 
         debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
@@ -312,9 +388,11 @@ impl IrcServerConnection {
         }
 
         // Send messages in buffer
-        for msg in self.privmsgs_buffer.lock().await.to_vec() {
-            if msg.target == chan {
-                self.senders.notify_by_id(msg, self.subscriber_id).await;
+        if !self.capabilities.get("no-history").unwrap() {
+            for msg in self.privmsgs_buffer.lock().await.to_vec() {
+                if msg.target == chan {
+                    self.senders.notify_by_id(msg, self.subscriber_id).await;
+                }
             }
         }
 
@@ -355,7 +433,10 @@ impl IrcServerConnection {
             return Ok(())
         }
 
-        if self.is_nick_init && (self.nickname == msg.target || self.nickname == msg.nickname) {
+        if self.is_cap_end &&
+            self.is_nick_init &&
+            (self.nickname == msg.target || self.nickname == msg.nickname)
+        {
             self.reply(&msg.to_irc_msg()).await?;
         }
 
