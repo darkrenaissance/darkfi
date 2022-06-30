@@ -169,8 +169,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let net_settings = settings.net;
     let datastore_raft = datastore_path.join("ircd.db");
     let mut raft = Raft::<Privmsg>::new(net_settings.inbound.clone(), datastore_raft)?;
-    let raft_sender = raft.get_broadcast();
-    let raft_receiver = raft.get_commits();
+    let raft_sender = raft.get_msgs_channel();
+    let raft_receiver = raft.get_commits_channel();
 
     // P2p setup
     let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<NetMsg>();
