@@ -300,7 +300,9 @@ impl IrcServerConnection {
             // Send dm messages in buffer
             if !self.capabilities.get("no-history").unwrap() {
                 for msg in self.privmsgs_buffer.lock().await.to_vec() {
-                    if msg.target == self.nickname || msg.nickname == self.nickname {
+                    if msg.target == self.nickname ||
+                        (msg.nickname == self.nickname && !msg.target.starts_with("#"))
+                    {
                         self.senders.notify_by_id(msg, self.subscriber_id).await;
                     }
                 }
@@ -404,8 +406,13 @@ impl IrcServerConnection {
         info!("Received msg from P2p network: {:?}", msg);
 
         let mut msg = msg.clone();
-        // Try to potentially decrypt the incoming message.
-        if self.configured_chans.contains_key(&msg.target) {
+
+        if msg.target.starts_with("#") {
+            // Try to potentially decrypt the incoming message.
+            if !self.configured_chans.contains_key(&msg.target) {
+                return Ok(())
+            }
+
             let chan_info = self.configured_chans.get_mut(&msg.target).unwrap();
             if !chan_info.joined {
                 return Ok(())
