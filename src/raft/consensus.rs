@@ -24,9 +24,9 @@ use super::{
     DataStore,
 };
 
-const HEARTBEATTIMEOUT: u64 = 300;
-const TIMEOUT: u64 = 900;
-const TIMEOUT_NODES: u64 = 900;
+const HEARTBEATTIMEOUT: u64 = 1000;
+const TIMEOUT: u64 = 3000;
+const TIMEOUT_NODES: u64 = 3000;
 
 async fn load_node_ids_loop(
     nodes: Arc<Mutex<HashMap<NodeId, Url>>>,
@@ -37,33 +37,23 @@ async fn load_node_ids_loop(
         return Ok(())
     }
     loop {
-        debug!(target: "raft", "load node ids from p2p hosts ips");
+        debug!(target: "raft", "Loading node ids from p2p hosts",);
         task::sleep(Duration::from_millis(TIMEOUT_NODES * 10)).await;
         let hosts = p2p.hosts().clone();
         let nodes_ip = hosts.load_all().await.clone();
-        let mut nodes = nodes.lock().await;
+
         for ip in nodes_ip.iter() {
-            nodes.insert(NodeId::from(ip.clone()), ip.clone());
+            (*nodes.lock().await).insert(NodeId::from(ip.clone()), ip.clone());
         }
-        drop(nodes);
     }
 }
 
 async fn p2p_send_loop(receiver: async_channel::Receiver<NetMsg>, p2p: net::P2pPtr) -> Result<()> {
     loop {
-        let msg: NetMsg = match receiver.recv().await {
-            Ok(m) => m,
-            Err(e) => {
-                error!(target: "raft", "error occurred while receiving a msg: {}", e);
-                continue
-            }
-        };
-        match p2p.broadcast(msg).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!(target: "raft", "error occurred during broadcasting a msg: {}", e);
-                continue
-            }
+        let msg: NetMsg = receiver.recv().await?;
+        if let Err(e) = p2p.broadcast(msg).await {
+            error!(target: "raft", "error occurred during broadcasting a msg: {}", e);
+            continue
         }
     }
 }
@@ -150,8 +140,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         executor: Arc<Executor<'_>>,
         stop_signal: async_channel::Receiver<()>,
     ) -> Result<()> {
-        let receiver = self.sender.1.clone();
-        let p2p_send_task = executor.spawn(p2p_send_loop(receiver.clone(), p2p.clone()));
+        let p2p_send_task = executor.spawn(p2p_send_loop(self.sender.1.clone(), p2p.clone()));
 
         let load_ips_task =
             executor.spawn(load_node_ids_loop(self.nodes.clone(), p2p.clone(), self.role.clone()));
@@ -177,7 +166,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             let timeout: Duration = if self.role == Role::Leader {
                 Duration::from_millis(HEARTBEATTIMEOUT)
             } else {
-                Duration::from_millis(rng.gen_range(0..200) + TIMEOUT)
+                Duration::from_millis(rng.gen_range(0..HEARTBEATTIMEOUT) + TIMEOUT)
             };
 
             let result: Result<()>;
@@ -378,7 +367,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                         self.receive_sync_response(&sr).await?;
                         break
                     }},
-                    _ = stop_signal.recv().fuse() => break,
+                _ = stop_signal.recv().fuse() => break,
             }
         }
         Ok(())
