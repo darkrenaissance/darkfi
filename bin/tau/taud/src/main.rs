@@ -133,8 +133,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let datastore_raft = datastore_path.join("tau.db");
     let mut raft = Raft::<EncryptedTask>::new(net_settings.inbound.clone(), datastore_raft)?;
 
-    let raft_sender = raft.get_broadcast();
-    let commits = raft.get_commits();
+    let raft_msgs_sender = raft.get_msgs_channel();
+    let commits_recv = raft.get_commits_channel();
 
     let datastore_path_cloned = datastore_path.clone();
     let recv_update: smol::Task<TaudResult<()>> = executor.spawn(async move {
@@ -147,10 +147,10 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                         info!(target: "tau", "save the received task {:?}", tk);
                         let encrypted_task = encrypt_task(&tk, &secret_key,&mut rng)?;
                         tk.save(&datastore_path_cloned)?;
-                        raft_sender.send(encrypted_task).await.map_err(Error::from)?;
+                        raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
                     }
                 }
-                task = commits.recv().fuse() => {
+                task = commits_recv.recv().fuse() => {
                     let recv = task.map_err(Error::from)?;
                     let task = decrypt_task(&recv, &secret_key);
 
