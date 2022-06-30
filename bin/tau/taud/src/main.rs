@@ -72,6 +72,44 @@ fn decrypt_task(encrypt_task: &EncryptedTask, secret_key: &SecretKey) -> TaudRes
     Ok(task)
 }
 
+async fn start_sync_loop(
+    rpc_rcv: async_channel::Receiver<Option<TaskInfo>>,
+    raft_msgs_sender: async_channel::Sender<EncryptedTask>,
+    commits_recv: async_channel::Receiver<EncryptedTask>,
+    datastore_path: std::path::PathBuf,
+    secret_key: SecretKey,
+    mut rng: crypto_box::rand_core::OsRng,
+) -> TaudResult<()> {
+    info!(target: "tau", "Start sync loop");
+
+    loop {
+        select! {
+            task = rpc_rcv.recv().fuse() => {
+                let task = task.map_err(Error::from)?;
+                if let Some(tk) = task {
+                    info!(target: "tau", "Save the received task {:?}", tk);
+                    let encrypted_task = encrypt_task(&tk, &secret_key,&mut rng)?;
+                    tk.save(&datastore_path)?;
+                    raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
+                }
+            }
+            task = commits_recv.recv().fuse() => {
+                let recv = task.map_err(Error::from)?;
+                let task = decrypt_task(&recv, &secret_key);
+
+                if let Err(e) = task {
+                    warn!("unable to decrypt the task: {}", e);
+                    continue
+                }
+
+                let task = task.unwrap();
+                info!(target: "tau", "Receive update from the commits {:?}", task);
+                task.save(&datastore_path)?;
+            }
+        }
+    }
+}
+
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let datastore_path = expand_path(&settings.datastore)?;
@@ -91,7 +129,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let mut rng = crypto_box::rand_core::OsRng;
 
     let secret_key = if settings.key_gen {
-        info!(target: "tau", "generating a new secret key");
+        info!(target: "tau", "Generating a new secret key");
         let secret = SecretKey::generate(&mut rng);
         let sk_string = hex::encode(secret.as_bytes());
         save::<String>(&datastore_path.join("secret_key"), &sk_string)?;
@@ -102,7 +140,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         if loaded_key.is_err() {
             error!(
                 "Could not load secret key from file, \
-                 please run \"taud --help\" for more information"
+                 Please run \"taud --help\" for more information"
             );
             return Ok(())
         }
@@ -117,55 +155,29 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
 
     let (rpc_snd, rpc_rcv) = async_channel::unbounded::<Option<TaskInfo>>();
-
     let rpc_interface =
         Arc::new(JsonRpcInterface::new(rpc_snd, datastore_path.clone(), nickname.unwrap()));
-
-    let executor_cloned = executor.clone();
-    let rpc_listener_task =
-        executor_cloned.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface));
-
-    let net_settings = settings.net;
+    executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface)).detach();
 
     //
     //Raft
     //
+
+    let net_settings = settings.net;
+
     let datastore_raft = datastore_path.join("tau.db");
     let mut raft = Raft::<EncryptedTask>::new(net_settings.inbound.clone(), datastore_raft)?;
 
-    let raft_msgs_sender = raft.get_msgs_channel();
-    let commits_recv = raft.get_commits_channel();
-
-    let datastore_path_cloned = datastore_path.clone();
-    let recv_update: smol::Task<TaudResult<()>> = executor.spawn(async move {
-        info!(target: "tau", "Start initial sync");
-        loop {
-            select! {
-                task = rpc_rcv.recv().fuse() => {
-                    let task = task.map_err(Error::from)?;
-                    if let Some(tk) = task {
-                        info!(target: "tau", "save the received task {:?}", tk);
-                        let encrypted_task = encrypt_task(&tk, &secret_key,&mut rng)?;
-                        tk.save(&datastore_path_cloned)?;
-                        raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
-                    }
-                }
-                task = commits_recv.recv().fuse() => {
-                    let recv = task.map_err(Error::from)?;
-                    let task = decrypt_task(&recv, &secret_key);
-
-                    if let Err(e) = task {
-                        warn!("unable to decrypt the task: {}", e);
-                        continue
-                    }
-
-                    let task = task.unwrap();
-                    info!(target: "tau", "receive update from the commits {:?}", task);
-                    task.save(&datastore_path_cloned)?;
-                }
-            }
-        }
-    });
+    executor
+        .spawn(start_sync_loop(
+            rpc_rcv,
+            raft.get_msgs_channel(),
+            raft.get_commits_channel(),
+            datastore_path,
+            secret_key,
+            rng,
+        ))
+        .detach();
 
     // P2p setup
     let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<NetMsg>();
@@ -190,17 +202,13 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     p2p.clone().start(executor.clone()).await?;
 
-    let executor_cloned = executor.clone();
-    let p2p_run_task = executor_cloned.spawn(p2p.clone().run(executor.clone()));
+    executor.spawn(p2p.clone().run(executor.clone())).detach();
 
     let (signal, shutdown) = async_channel::bounded::<()>(1);
     ctrlc_async::set_async_handler(async move {
         warn!(target: "tau", "taud start() Exit Signal");
         // cleaning up tasks running in the background
         signal.send(()).await.unwrap();
-        rpc_listener_task.cancel().await;
-        recv_update.cancel().await;
-        p2p_run_task.cancel().await;
     })
     .unwrap();
 
