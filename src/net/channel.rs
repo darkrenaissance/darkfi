@@ -19,7 +19,7 @@ use crate::{
 use super::{
     message,
     message_subscriber::{MessageSubscription, MessageSubsystem},
-    TransportStream,
+    SessionWeakPtr, TransportStream,
 };
 
 /// Atomic pointer to async channel.
@@ -68,13 +68,18 @@ pub struct Channel {
     receive_task: StoppableTaskPtr,
     stopped: Mutex<bool>,
     info: Mutex<ChannelInfo>,
+    //session: SessionWeakPtr,
 }
 
 impl Channel {
     /// Sets up a new channel. Creates a reader and writer TCP stream and
     /// summons the message subscriber subsystem. Performs a network
     /// handshake on the subsystem dispatchers.
-    pub async fn new(stream: Box<dyn TransportStream>, address: Url) -> Arc<Self> {
+    pub async fn new(
+        stream: Box<dyn TransportStream>,
+        address: Url,
+        //session: SessionWeakPtr,
+    ) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
@@ -91,6 +96,7 @@ impl Channel {
             receive_task: StoppableTask::new(),
             stopped: Mutex::new(false),
             info: Mutex::new(ChannelInfo::new()),
+            //session,
         })
     }
 

@@ -104,7 +104,10 @@ impl SeedSession {
             (p2p.hosts(), p2p.settings())
         };
 
-        let connector = Connector::new(settings.clone());
+        let parent = Arc::downgrade(&self);
+        let connector = Connector::new(
+            settings.clone(), //Arc::new(parent)
+        );
         match connector.connect(seed.clone()).await {
             Ok(channel) => {
                 // Blacklist goes here

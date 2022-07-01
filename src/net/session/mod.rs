@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use log::debug;
@@ -46,6 +46,8 @@ pub use manual_session::ManualSession;
 pub use outbound_session::OutboundSession;
 pub use seed_session::SeedSession;
 
+pub type SessionWeakPtr = Arc<Weak<dyn Session + Send + Sync + 'static>>;
+
 /// Removes channel from the list of connected channels when a stop signal is
 /// received.
 async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
@@ -75,7 +77,7 @@ pub trait Session: Sync {
     /// Registers a new channel with the session. Performs a network handshake
     /// and starts the channel.
     async fn register_channel(
-        self: Arc<Self>,
+        self_: Arc<dyn Session>,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
@@ -85,14 +87,14 @@ pub trait Session: Sync {
         // We do this so that the protocols can begin receiving and buffering messages
         // while the handshake protocol is ongoing.
         // They are currently in sleep mode.
-        let p2p = self.p2p();
+        let p2p = self_.p2p();
         let protocols =
-            p2p.protocol_registry().attach(self.type_id(), channel.clone(), p2p.clone()).await;
+            p2p.protocol_registry().attach(self_.type_id(), channel.clone(), p2p.clone()).await;
 
         // Perform the handshake protocol
-        let protocol_version = ProtocolVersion::new(channel.clone(), self.p2p().settings()).await;
+        let protocol_version = ProtocolVersion::new(channel.clone(), self_.p2p().settings()).await;
         let handshake_task =
-            self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
+            self_.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 
         // Switch on the channel
         channel.start(executor.clone());

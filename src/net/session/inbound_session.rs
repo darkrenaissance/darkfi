@@ -38,14 +38,21 @@ pub struct InboundSession {
 impl InboundSession {
     /// Create a new inbound session.
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
+        //let acceptor = Acceptor::new(Mutex::new(None));
         let acceptor = Acceptor::new();
 
-        Arc::new(Self {
+        let self_ = Arc::new(Self {
             p2p,
             acceptor,
             accept_task: StoppableTask::new(),
             connect_infos: Mutex::new(FxHashMap::default()),
-        })
+        });
+
+        //let parent = Arc::downgrade(&self_);
+
+        //*self_.acceptor.session.lock().await = Some(Arc::new(parent));
+
+        self_
     }
 
     /// Starts the inbound session. Begins by accepting connections and fails if

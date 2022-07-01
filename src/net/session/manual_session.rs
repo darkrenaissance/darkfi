@@ -56,7 +56,12 @@ impl ManualSession {
         addr: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let connector = Connector::new(self.p2p().settings());
+        let parent = Arc::downgrade(&self);
+        let connector = Connector::new(
+            self.p2p().settings(),
+            //Arc::new(parent)
+        );
+
         let settings = self.p2p().settings();
 
         let attempts = settings.manual_attempt_limit;

@@ -135,7 +135,12 @@ impl OutboundSession {
         slot_number: u32,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let connector = Connector::new(self.p2p().settings());
+        let parent = Arc::downgrade(&self);
+
+        let connector = Connector::new(
+            self.p2p().settings(),
+            //Arc::new(parent)
+        );
 
         loop {
             let addr = self.load_address(slot_number).await?;

@@ -1,4 +1,4 @@
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use std::{env, fs};
 
 use log::{error, info};
@@ -11,7 +11,8 @@ use crate::{
 };
 
 use super::{
-    Channel, ChannelPtr, TcpTransport, TorTransport, Transport, TransportListener, TransportName,
+    Channel, ChannelPtr, SessionWeakPtr, TcpTransport, TorTransport, Transport, TransportListener,
+    TransportName,
 };
 
 /// Atomic pointer to Acceptor class.
@@ -21,12 +22,17 @@ pub type AcceptorPtr = Arc<Acceptor>;
 pub struct Acceptor {
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     task: StoppableTaskPtr,
+    //pub session: Mutex<Option<SessionWeakPtr>>,
 }
 
 impl Acceptor {
     /// Create new Acceptor object.
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { channel_subscriber: Subscriber::new(), task: StoppableTask::new() })
+        Arc::new(Self {
+            channel_subscriber: Subscriber::new(),
+            task: StoppableTask::new(),
+            //session,
+        })
     }
     /// Start accepting inbound socket connections. Creates a listener to start
     /// listening on a local socket address. Then runs an accept loop in a new
@@ -91,7 +97,7 @@ impl Acceptor {
                             "Please set the env var DARKFI_TOR_COOKIE to the configured tor cookie file. \
                     For example: \
                     \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'".to_string(),
-                    ))
+                    ));
                 }
 
                 let auth_cookie = auth_cookie.unwrap();
