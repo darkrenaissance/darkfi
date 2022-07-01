@@ -87,7 +87,7 @@ pub trait Session: Sync {
         // They are currently in sleep mode.
         let p2p = self.p2p();
         let protocols =
-            p2p.protocol_registry().attach(self.selector_id(), channel.clone(), p2p.clone()).await;
+            p2p.protocol_registry().attach(self.type_id(), channel.clone(), p2p.clone()).await;
 
         // Perform the handshake protocol
         let protocol_version = ProtocolVersion::new(channel.clone(), self.p2p().settings()).await;
@@ -144,5 +144,5 @@ pub trait Session: Sync {
     /// Returns a pointer to the p2p network interface.
     fn p2p(&self) -> P2pPtr;
 
-    fn selector_id(&self) -> u32;
+    fn type_id(&self) -> u32;
 }

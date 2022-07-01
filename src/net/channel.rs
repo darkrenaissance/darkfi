@@ -98,6 +98,10 @@ impl Channel {
         self.info.lock().await.get_info().await
     }
 
+    async fn session_type_id(&self) -> Result<()> {
+        //
+    }
+
     /// Starts the channel. Runs a receive loop to start receiving messages or
     /// handles a network failure.
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {

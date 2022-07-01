@@ -163,7 +163,7 @@ impl Session for SeedSession {
         self.p2p.upgrade().unwrap()
     }
 
-    fn selector_id(&self) -> SessionBitflag {
+    fn type_id(&self) -> SessionBitflag {
         SESSION_SEED
     }
 }
