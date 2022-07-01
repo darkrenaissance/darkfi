@@ -41,7 +41,7 @@ use crate::{
 
 const SIZE_OF_MSGS_BUFFER: usize = 4096;
 pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
-pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 9;
+pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 32;
 
 struct Ircd {
     // msgs
