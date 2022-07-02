@@ -2237,35 +2237,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "irc-raft"
-version = "0.3.0"
-dependencies = [
- "async-channel",
- "async-executor",
- "async-std",
- "async-trait",
- "bs58",
- "clap 3.1.18",
- "crypto_box",
- "ctrlc-async",
- "darkfi",
- "easy-parallel",
- "futures",
- "futures-rustls",
- "fxhash",
- "log",
- "rand",
- "serde",
- "serde_json",
- "simplelog",
- "smol",
- "structopt",
- "structopt-toml",
- "toml",
- "url",
-]
-
-[[package]]
 name = "ircd"
 version = "0.3.0"
 dependencies = [

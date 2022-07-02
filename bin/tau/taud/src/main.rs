@@ -164,9 +164,14 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
 
     let net_settings = settings.net;
+    let seen_net_msgs = Arc::new(Mutex::new(vec![]));
 
     let datastore_raft = datastore_path.join("tau.db");
-    let mut raft = Raft::<EncryptedTask>::new(net_settings.inbound.clone(), datastore_raft)?;
+    let mut raft = Raft::<EncryptedTask>::new(
+        net_settings.inbound.clone(),
+        datastore_raft,
+        seen_net_msgs.clone(),
+    )?;
 
     executor
         .spawn(start_sync_loop(
@@ -187,15 +192,14 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let registry = p2p.protocol_registry();
 
-    let seen_net_msg = Arc::new(Mutex::new(vec![]));
     let raft_node_id = raft.id.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let raft_node_id = raft_node_id.clone();
             let sender = p2p_send_channel.clone();
-            let seen_net_msg_cloned = seen_net_msg.clone();
+            let seen_net_msgs_cloned = seen_net_msgs.clone();
             async move {
-                ProtocolRaft::init(raft_node_id, channel, sender, p2p, seen_net_msg_cloned).await
+                ProtocolRaft::init(raft_node_id, channel, sender, p2p, seen_net_msgs_cloned).await
             }
         })
         .await;

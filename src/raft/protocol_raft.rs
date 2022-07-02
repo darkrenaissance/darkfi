@@ -14,7 +14,7 @@ pub struct ProtocolRaft {
     notify_queue_sender: async_channel::Sender<NetMsg>,
     msg_sub: net::MessageSubscription<NetMsg>,
     p2p: net::P2pPtr,
-    msgs: Arc<Mutex<Vec<u64>>>,
+    seen_msgs: Arc<Mutex<Vec<u64>>>,
 }
 
 impl ProtocolRaft {
@@ -23,7 +23,7 @@ impl ProtocolRaft {
         channel: net::ChannelPtr,
         notify_queue_sender: async_channel::Sender<NetMsg>,
         p2p: net::P2pPtr,
-        msgs: Arc<Mutex<Vec<u64>>>,
+        seen_msgs: Arc<Mutex<Vec<u64>>>,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<NetMsg>().await;
@@ -36,7 +36,7 @@ impl ProtocolRaft {
             msg_sub,
             jobsman: net::ProtocolJobsManager::new("ProtocolRaft", channel),
             p2p,
-            msgs,
+            seen_msgs,
         })
     }
 
@@ -52,7 +52,7 @@ impl ProtocolRaft {
             );
 
             {
-                let mut msgs = self.msgs.lock().await;
+                let mut msgs = self.seen_msgs.lock().await;
                 if msgs.contains(&msg.id) {
                     continue
                 }

@@ -24,9 +24,9 @@ use super::{
     DataStore,
 };
 
-const HEARTBEATTIMEOUT: u64 = 1000;
-const TIMEOUT: u64 = 3000;
-const TIMEOUT_NODES: u64 = 3000;
+const HEARTBEATTIMEOUT: u64 = 500;
+const TIMEOUT: u64 = 6000;
+const TIMEOUT_NODES: u64 = 1000;
 
 async fn load_node_ids_loop(
     nodes: Arc<Mutex<HashMap<NodeId, Url>>>,
@@ -38,7 +38,7 @@ async fn load_node_ids_loop(
     }
     loop {
         debug!(target: "raft", "Loading node ids from p2p hosts",);
-        task::sleep(Duration::from_millis(TIMEOUT_NODES * 10)).await;
+        task::sleep(Duration::from_millis(TIMEOUT_NODES)).await;
         let hosts = p2p.hosts().clone();
         let nodes_ip = hosts.load_all().await.clone();
 
@@ -87,10 +87,16 @@ pub struct Raft<T> {
     commits_channel: Channel<T>,
 
     datastore: DataStore<T>,
+
+    seen_msgs: Arc<Mutex<Vec<u64>>>,
 }
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
-    pub fn new(addr: Option<Url>, db_path: PathBuf) -> Result<Self> {
+    pub fn new(
+        addr: Option<Url>,
+        db_path: PathBuf,
+        seen_msgs: Arc<Mutex<Vec<u64>>>,
+    ) -> Result<Self> {
         if db_path.to_str().is_none() {
             error!(target: "raft", "datastore path is incorrect");
             return Err(Error::ParseFailed("unable to parse pathbuf to str"))
@@ -130,6 +136,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             msgs_channel,
             commits_channel,
             datastore,
+            seen_msgs,
         })
     }
 
@@ -348,6 +355,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.role, random_id, &recipient_id.is_some(), &method);
 
         let net_msg = NetMsg { id: random_id, recipient_id, payload: payload.to_vec(), method };
+        self.seen_msgs.lock().await.push(random_id);
         self.sender.0.send(net_msg).await?;
 
         Ok(())
@@ -395,6 +403,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.set_current_term(&(self.current_term + 1))?;
         self.role = Role::Candidate;
         self.set_voted_for(&Some(self_id.clone()))?;
+        self.votes_received = vec![];
         self.votes_received.push(self_id.clone());
 
         self.reset_last_term();
@@ -461,7 +470,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             let nodes_cloned = nodes.clone();
             drop(nodes);
 
-            if self.votes_received.len() >= ((nodes_cloned.len() + 1) / 2) {
+            if self.votes_received.len() >= (nodes_cloned.len() / 2) {
                 self.role = Role::Leader;
                 self.current_leader = Some(self.id.clone().unwrap());
                 for node in nodes_cloned.iter() {
