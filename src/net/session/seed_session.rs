@@ -105,9 +105,7 @@ impl SeedSession {
         };
 
         let parent = Arc::downgrade(&self);
-        let connector = Connector::new(
-            settings.clone(), //Arc::new(parent)
-        );
+        let connector = Connector::new(settings.clone(), Arc::new(parent));
         match connector.connect(seed.clone()).await {
             Ok(channel) => {
                 // Blacklist goes here

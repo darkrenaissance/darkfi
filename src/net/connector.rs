@@ -14,15 +14,13 @@ use super::{
 /// Create outbound socket connections.
 pub struct Connector {
     settings: SettingsPtr,
-    //pub session: SessionWeakPtr,
+    pub session: SessionWeakPtr,
 }
 
 impl Connector {
     /// Create a new connector with default network settings.
-    pub fn new(settings: SettingsPtr, // session: SessionWeakPtr
-    ) -> Self {
-        Self { settings, // session
-                        }
+    pub fn new(settings: SettingsPtr, session: SessionWeakPtr) -> Self {
+        Self { settings, session }
     }
 
     /// Establish an outbound connection.
@@ -58,10 +56,13 @@ impl Connector {
 
                 let channel = match $upgrade {
                     // session
-                    None => Channel::new(Box::new(stream?), connect_url.clone()).await,
+                    None => {
+                        Channel::new(Box::new(stream?), connect_url.clone(), self.session.clone())
+                            .await
+                    }
                     Some(u) if u == "tls" => {
                         let stream = $transport.upgrade_dialer(stream?)?.await;
-                        Channel::new(Box::new(stream?), connect_url).await
+                        Channel::new(Box::new(stream?), connect_url, self.session.clone()).await
                     }
                     Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
                 };

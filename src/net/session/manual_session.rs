@@ -57,10 +57,7 @@ impl ManualSession {
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let parent = Arc::downgrade(&self);
-        let connector = Connector::new(
-            self.p2p().settings(),
-            //Arc::new(parent)
-        );
+        let connector = Connector::new(self.p2p().settings(), Arc::new(parent));
 
         let settings = self.p2p().settings();
 

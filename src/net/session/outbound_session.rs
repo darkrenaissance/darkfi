@@ -137,10 +137,7 @@ impl OutboundSession {
     ) -> Result<()> {
         let parent = Arc::downgrade(&self);
 
-        let connector = Connector::new(
-            self.p2p().settings(),
-            //Arc::new(parent)
-        );
+        let connector = Connector::new(self.p2p().settings(), Arc::new(parent));
 
         loop {
             let addr = self.load_address(slot_number).await?;

@@ -22,16 +22,16 @@ pub type AcceptorPtr = Arc<Acceptor>;
 pub struct Acceptor {
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     task: StoppableTaskPtr,
-    //pub session: Mutex<Option<SessionWeakPtr>>,
+    pub session: Mutex<Option<SessionWeakPtr>>,
 }
 
 impl Acceptor {
     /// Create new Acceptor object.
-    pub fn new() -> Arc<Self> {
+    pub fn new(session: Mutex<Option<SessionWeakPtr>>) -> Arc<Self> {
         Arc::new(Self {
             channel_subscriber: Subscriber::new(),
             task: StoppableTask::new(),
-            //session,
+            session,
         })
     }
     /// Start accepting inbound socket connections. Creates a listener to start
@@ -148,7 +148,8 @@ impl Acceptor {
         loop {
             match listener.next().await {
                 Ok((stream, url)) => {
-                    let channel = Channel::new(stream, url).await;
+                    let channel =
+                        Channel::new(stream, url, self.session.lock().await.clone().unwrap()).await;
                     self.channel_subscriber.notify(Ok(channel)).await;
                 }
                 Err(e) => {

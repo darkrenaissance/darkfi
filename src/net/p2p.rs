@@ -94,7 +94,7 @@ impl P2p {
         let parent = Arc::downgrade(&self_);
 
         *self_.session_manual.lock().await = Some(ManualSession::new(parent.clone()));
-        *self_.session_inbound.lock().await = Some(InboundSession::new(parent.clone()));
+        *self_.session_inbound.lock().await = Some(InboundSession::new(parent.clone()).await);
         *self_.session_outbound.lock().await = Some(OutboundSession::new(parent));
 
         register_default_protocols(self_.clone()).await;

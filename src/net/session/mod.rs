@@ -76,8 +76,12 @@ async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
 pub trait Session: Sync {
     /// Registers a new channel with the session. Performs a network handshake
     /// and starts the channel.
+    // if we need to pass Self as an Arc we can do so like this:
+    // pub trait MyTrait: Send + Sync {
+    //      async fn foo(&self, self_: Arc<dyn MyTrait>) {}
+    // }
     async fn register_channel(
-        self_: Arc<dyn Session>,
+        &self,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
@@ -87,14 +91,14 @@ pub trait Session: Sync {
         // We do this so that the protocols can begin receiving and buffering messages
         // while the handshake protocol is ongoing.
         // They are currently in sleep mode.
-        let p2p = self_.p2p();
+        let p2p = self.p2p();
         let protocols =
-            p2p.protocol_registry().attach(self_.type_id(), channel.clone(), p2p.clone()).await;
+            p2p.protocol_registry().attach(self.type_id(), channel.clone(), p2p.clone()).await;
 
         // Perform the handshake protocol
-        let protocol_version = ProtocolVersion::new(channel.clone(), self_.p2p().settings()).await;
+        let protocol_version = ProtocolVersion::new(channel.clone(), self.p2p().settings()).await;
         let handshake_task =
-            self_.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
+            self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 
         // Switch on the channel
         channel.start(executor.clone());

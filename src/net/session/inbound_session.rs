@@ -37,9 +37,8 @@ pub struct InboundSession {
 
 impl InboundSession {
     /// Create a new inbound session.
-    pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
-        //let acceptor = Acceptor::new(Mutex::new(None));
-        let acceptor = Acceptor::new();
+    pub async fn new(p2p: Weak<P2p>) -> Arc<Self> {
+        let acceptor = Acceptor::new(Mutex::new(None));
 
         let self_ = Arc::new(Self {
             p2p,
@@ -48,9 +47,9 @@ impl InboundSession {
             connect_infos: Mutex::new(FxHashMap::default()),
         });
 
-        //let parent = Arc::downgrade(&self_);
+        let parent = Arc::downgrade(&self_);
 
-        //*self_.acceptor.session.lock().await = Some(Arc::new(parent));
+        *self_.acceptor.session.lock().await = Some(Arc::new(parent));
 
         self_
     }

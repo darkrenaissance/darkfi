@@ -68,7 +68,7 @@ pub struct Channel {
     receive_task: StoppableTaskPtr,
     stopped: Mutex<bool>,
     info: Mutex<ChannelInfo>,
-    //session: SessionWeakPtr,
+    session: SessionWeakPtr,
 }
 
 impl Channel {
@@ -78,7 +78,7 @@ impl Channel {
     pub async fn new(
         stream: Box<dyn TransportStream>,
         address: Url,
-        //session: SessionWeakPtr,
+        session: SessionWeakPtr,
     ) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
@@ -96,7 +96,7 @@ impl Channel {
             receive_task: StoppableTask::new(),
             stopped: Mutex::new(false),
             info: Mutex::new(ChannelInfo::new()),
-            //session,
+            session,
         })
     }
 
