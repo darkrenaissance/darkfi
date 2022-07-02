@@ -65,7 +65,7 @@ impl IrcServerConnection {
             is_nick_init: false,
             is_user_init: false,
             is_registered: false,
-            is_cap_end: false,
+            is_cap_end: true,
             nickname: "anon".to_string(),
             auto_channels,
             configured_chans,
@@ -206,6 +206,8 @@ impl IrcServerConnection {
                 self.on_receive_privmsg(&message, target).await?;
             }
             "CAP" => {
+                self.is_cap_end = false;
+
                 let subcommand = tokens.next().ok_or(Error::MalformedPacket)?.to_uppercase();
 
                 let capabilities_keys: Vec<String> = self.capabilities.keys().cloned().collect();
@@ -377,10 +379,14 @@ impl IrcServerConnection {
         }
 
         let chan_info = self.configured_chans.get_mut(chan).unwrap();
+        if chan_info.joined {
+            return Ok(())
+        }
+        chan_info.joined = true;
+
         let topic =
             if let Some(topic) = chan_info.topic.clone() { topic } else { "n/a".to_string() };
         chan_info.topic = Some(topic.to_string());
-        chan_info.joined = true;
 
         {
             let j = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, chan);

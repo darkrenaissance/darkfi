@@ -73,7 +73,7 @@ pub struct ChannelInfo {
 
 impl ChannelInfo {
     pub fn new() -> Result<Self> {
-        Ok(Self { topic: None, salt_box: None, joined: true, names: vec![] })
+        Ok(Self { topic: None, salt_box: None, joined: false, names: vec![] })
     }
 }
 
