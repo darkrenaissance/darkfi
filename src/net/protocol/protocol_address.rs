@@ -3,13 +3,18 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
+use url::Url;
 
-use crate::Result;
+use crate::{util::async_util, Result};
 
 use super::{
-    super::{message, message_subscriber::MessageSubscription, ChannelPtr, HostsPtr, P2pPtr},
+    super::{
+        message, message_subscriber::MessageSubscription, ChannelPtr, HostsPtr, P2pPtr, SettingsPtr,
+    },
     ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr,
 };
+
+const SEND_ADDR_SLEEP_SECONDS: u64 = 10;
 
 /// Defines address and get-address messages.
 pub struct ProtocolAddress {
@@ -18,12 +23,14 @@ pub struct ProtocolAddress {
     get_addrs_sub: MessageSubscription<message::GetAddrsMessage>,
     hosts: HostsPtr,
     jobsman: ProtocolJobsManagerPtr,
+    settings: SettingsPtr,
 }
 
 impl ProtocolAddress {
     /// Create a new address protocol. Makes an address and get-address
     /// subscription and adds them to the address protocol instance.
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+        let settings = p2p.settings();
         let hosts = p2p.hosts();
 
         // Creates a subscription to address message.
@@ -46,6 +53,7 @@ impl ProtocolAddress {
             get_addrs_sub,
             hosts,
             jobsman: ProtocolJobsManager::new("ProtocolAddress", channel),
+            settings,
         })
     }
 
@@ -92,6 +100,16 @@ impl ProtocolAddress {
             self.channel.clone().send(addrs_msg).await?;
         }
     }
+
+    async fn send_addrs(self: Arc<Self>, addrs: Vec<Url>) -> Result<()> {
+        debug!(target: "net", "ProtocolAddress::send_addrs() [START]");
+        loop {
+            let addrs = addrs.clone();
+            let addr_msg = message::AddrsMessage { addrs };
+            self.channel.clone().send(addr_msg).await?;
+            async_util::sleep(SEND_ADDR_SLEEP_SECONDS).await;
+        }
+    }
 }
 
 #[async_trait]
@@ -100,6 +118,21 @@ impl ProtocolBase for ProtocolAddress {
     /// protocols on the protocol task manager. Then sends get-address
     /// message.
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        let type_id = self.channel.session_type_id();
+
+        // if it's an outbound session + has an external address
+        // send our address
+        if type_id == 0b0010 && self.settings.external_addr.is_some() {
+            self.jobsman.clone().start(executor.clone());
+            self.jobsman
+                .clone()
+                .spawn(
+                    self.clone().send_addrs(vec![self.settings.external_addr.clone().unwrap()]),
+                    executor.clone(),
+                )
+                .await;
+        }
+
         debug!(target: "net", "ProtocolAddress::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), executor.clone()).await;

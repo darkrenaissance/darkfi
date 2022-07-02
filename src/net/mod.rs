@@ -97,8 +97,8 @@ pub use message_subscriber::MessageSubscription;
 pub use p2p::{P2p, P2pPtr};
 pub use protocol::{ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr};
 pub use session::{
-    Session, SessionWeakPtr, SESSION_ALL, SESSION_INBOUND, SESSION_MANUAL, SESSION_OUTBOUND,
-    SESSION_SEED,
+    Session, SessionBitflag, SessionWeakPtr, SESSION_ALL, SESSION_INBOUND, SESSION_MANUAL,
+    SESSION_OUTBOUND, SESSION_SEED,
 };
 pub use settings::{Settings, SettingsPtr};
 pub use transport::{

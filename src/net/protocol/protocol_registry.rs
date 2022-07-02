@@ -2,7 +2,7 @@ use async_std::sync::Mutex;
 use std::future::Future;
 
 use futures::future::BoxFuture;
-use log::debug;
+use log::{debug, warn};
 
 use super::{
     super::{session::SessionBitflag, ChannelPtr, P2pPtr},
@@ -49,11 +49,19 @@ impl ProtocolRegistry {
         for (session_flags, construct) in self.protocol_constructors.lock().await.iter() {
             // Skip protocols that are not registered for this session
             if selector_id & session_flags == 0 {
+                // debug
+                //warn!("Skipping {:?}, {:?}", selector_id, session_flags);
                 continue
             }
 
             let protocol: ProtocolBasePtr = construct(channel.clone(), p2p.clone()).await;
             debug!(target: "net", "Attached {}", protocol.name());
+
+            // debug
+            //if protocol.name() == "ProtocolAddress" {
+            //    warn!("PROTOCOL ADDRESS ATTACHED");
+            //}
+
             protocols.push(protocol)
         }
         protocols

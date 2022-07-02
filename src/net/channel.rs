@@ -19,7 +19,7 @@ use crate::{
 use super::{
     message,
     message_subscriber::{MessageSubscription, MessageSubsystem},
-    Session, SessionWeakPtr, TransportStream,
+    Session, SessionBitflag, SessionWeakPtr, TransportStream,
 };
 
 /// Atomic pointer to async channel.
@@ -326,5 +326,10 @@ impl Channel {
 
     fn session(&self) -> Arc<dyn Session> {
         self.session.upgrade().unwrap()
+    }
+
+    pub fn session_type_id(&self) -> SessionBitflag {
+        let session = self.session();
+        session.type_id()
     }
 }
