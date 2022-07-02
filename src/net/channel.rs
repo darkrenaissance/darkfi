@@ -19,7 +19,7 @@ use crate::{
 use super::{
     message,
     message_subscriber::{MessageSubscription, MessageSubsystem},
-    SessionWeakPtr, TransportStream,
+    Session, SessionWeakPtr, TransportStream,
 };
 
 /// Atomic pointer to async channel.
@@ -103,10 +103,6 @@ impl Channel {
     pub async fn get_info(&self) -> serde_json::Value {
         self.info.lock().await.get_info().await
     }
-
-    //async fn session_type_id(&self) -> Result<()> {
-    //    //
-    //}
 
     /// Starts the channel. Runs a receive loop to start receiving messages or
     /// handles a network failure.
@@ -326,5 +322,9 @@ impl Channel {
             }
         }
         debug!(target: "net", "Channel::handle_stop() [END, address={}]", self.address());
+    }
+
+    fn session(&self) -> Arc<dyn Session> {
+        self.session.upgrade().unwrap()
     }
 }
