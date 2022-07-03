@@ -39,6 +39,7 @@ use crate::{
     settings::{parse_configured_channels, Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
+const SIZE_OF_MSG_IDSS_BUFFER: usize = 65536;
 const SIZE_OF_MSGS_BUFFER: usize = 4096;
 pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
 pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 32;
@@ -144,7 +145,8 @@ impl Ircd {
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
-    let seen_msg_ids = Arc::new(Mutex::new(vec![]));
+    let seen_msg_ids =
+        Arc::new(Mutex::new(ringbuffer::AllocRingBuffer::with_capacity(SIZE_OF_MSG_IDSS_BUFFER)));
     let privmsgs_buffer: PrivmsgsBuffer =
         Arc::new(Mutex::new(ringbuffer::AllocRingBuffer::with_capacity(SIZE_OF_MSGS_BUFFER)));
 

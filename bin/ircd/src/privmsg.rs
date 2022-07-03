@@ -6,7 +6,7 @@ use darkfi::util::serial::{SerialDecodable, SerialEncodable};
 
 pub type PrivmsgId = u64;
 
-pub type SeenMsgIds = Arc<Mutex<Vec<u64>>>;
+pub type SeenMsgIds = Arc<Mutex<AllocRingBuffer<u64>>>;
 
 pub type PrivmsgsBuffer = Arc<Mutex<AllocRingBuffer<Privmsg>>>;
 
