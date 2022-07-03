@@ -12,7 +12,7 @@
 #irc_tls_secret = "/etc/letsencrypt/ircd/privkey.pem"
 
 ## List of channels to autojoin for new client connections
-autojoin = ["#dev"]
+autojoin = ["#dev", "#memes", "#philosophy", "#markets", "#math"]
 
 ## P2P net settings
 [net]
