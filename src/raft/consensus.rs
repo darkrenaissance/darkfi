@@ -18,15 +18,15 @@ use crate::{
 
 use super::{
     primitives::{
-        Broadcast, BroadcastMsgRequest, Log, LogRequest, LogResponse, Logs, MapLength, NetMsg,
+        BroadcastMsgRequest, Channel, Log, LogRequest, LogResponse, Logs, MapLength, NetMsg,
         NetMsgMethod, NodeId, Role, Sender, SyncRequest, SyncResponse, VoteRequest, VoteResponse,
     },
     DataStore,
 };
 
-const HEARTBEATTIMEOUT: u64 = 300;
-const TIMEOUT: u64 = 900;
-const TIMEOUT_NODES: u64 = 900;
+const HEARTBEATTIMEOUT: u64 = 500;
+const TIMEOUT: u64 = 6000;
+const TIMEOUT_NODES: u64 = 1000;
 
 async fn load_node_ids_loop(
     nodes: Arc<Mutex<HashMap<NodeId, Url>>>,
@@ -37,33 +37,23 @@ async fn load_node_ids_loop(
         return Ok(())
     }
     loop {
-        debug!(target: "raft", "load node ids from p2p hosts ips");
-        task::sleep(Duration::from_millis(TIMEOUT_NODES * 10)).await;
+        debug!(target: "raft", "Loading node ids from p2p hosts",);
+        task::sleep(Duration::from_millis(TIMEOUT_NODES)).await;
         let hosts = p2p.hosts().clone();
         let nodes_ip = hosts.load_all().await.clone();
-        let mut nodes = nodes.lock().await;
+
         for ip in nodes_ip.iter() {
-            nodes.insert(NodeId::from(ip.clone()), ip.clone());
+            (*nodes.lock().await).insert(NodeId::from(ip.clone()), ip.clone());
         }
-        drop(nodes);
     }
 }
 
 async fn p2p_send_loop(receiver: async_channel::Receiver<NetMsg>, p2p: net::P2pPtr) -> Result<()> {
     loop {
-        let msg: NetMsg = match receiver.recv().await {
-            Ok(m) => m,
-            Err(e) => {
-                error!(target: "raft", "error occurred while receiving a msg: {}", e);
-                continue
-            }
-        };
-        match p2p.broadcast(msg).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!(target: "raft", "error occurred during broadcasting a msg: {}", e);
-                continue
-            }
+        let msg: NetMsg = receiver.recv().await?;
+        if let Err(e) = p2p.broadcast(msg).await {
+            error!(target: "raft", "error occurred during broadcasting a msg: {}", e);
+            continue
         }
     }
 }
@@ -93,14 +83,20 @@ pub struct Raft<T> {
 
     sender: Sender,
 
-    broadcast_msg: Broadcast<T>,
-    broadcast_commits: Broadcast<T>,
+    msgs_channel: Channel<T>,
+    commits_channel: Channel<T>,
 
     datastore: DataStore<T>,
+
+    seen_msgs: Arc<Mutex<Vec<u64>>>,
 }
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
-    pub fn new(addr: Option<Url>, db_path: PathBuf) -> Result<Self> {
+    pub fn new(
+        addr: Option<Url>,
+        db_path: PathBuf,
+        seen_msgs: Arc<Mutex<Vec<u64>>>,
+    ) -> Result<Self> {
         if db_path.to_str().is_none() {
             error!(target: "raft", "datastore path is incorrect");
             return Err(Error::ParseFailed("unable to parse pathbuf to str"))
@@ -115,8 +111,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let commit_length = datastore.commits.get_all()?.len() as u64;
 
         // broadcasting channels
-        let broadcast_msg = async_channel::unbounded::<T>();
-        let broadcast_commits = async_channel::unbounded::<T>();
+        let msgs_channel = async_channel::unbounded::<T>();
+        let commits_channel = async_channel::unbounded::<T>();
 
         let sender = async_channel::unbounded::<NetMsg>();
 
@@ -137,9 +133,10 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             nodes: Arc::new(Mutex::new(HashMap::new())),
             last_term: 0,
             sender,
-            broadcast_msg,
-            broadcast_commits,
+            msgs_channel,
+            commits_channel,
             datastore,
+            seen_msgs,
         })
     }
 
@@ -150,8 +147,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         executor: Arc<Executor<'_>>,
         stop_signal: async_channel::Receiver<()>,
     ) -> Result<()> {
-        let receiver = self.sender.1.clone();
-        let p2p_send_task = executor.spawn(p2p_send_loop(receiver.clone(), p2p.clone()));
+        let p2p_send_task = executor.spawn(p2p_send_loop(self.sender.1.clone(), p2p.clone()));
 
         let load_ips_task =
             executor.spawn(load_node_ids_loop(self.nodes.clone(), p2p.clone(), self.role.clone()));
@@ -163,7 +159,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
             let sync_request = SyncRequest { logs_len: self.logs.len(), last_term };
 
-            info!("send sync request");
+            info!("Send sync request");
             self.send(None, &serialize(&sync_request), NetMsgMethod::SyncRequest, None).await?;
 
             self.waiting_for_sync(p2p_recv_channel.clone(), stop_signal.clone()).await?;
@@ -171,13 +167,13 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let mut rng = rand::thread_rng();
 
-        let broadcast_msg_rv = self.broadcast_msg.1.clone();
+        let broadcast_msg_rv = self.msgs_channel.1.clone();
 
         loop {
             let timeout: Duration = if self.role == Role::Leader {
                 Duration::from_millis(HEARTBEATTIMEOUT)
             } else {
-                Duration::from_millis(rng.gen_range(0..200) + TIMEOUT)
+                Duration::from_millis(rng.gen_range(0..HEARTBEATTIMEOUT) + TIMEOUT)
             };
 
             let result: Result<()>;
@@ -208,12 +204,12 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         Ok(())
     }
 
-    pub fn get_commits(&self) -> async_channel::Receiver<T> {
-        self.broadcast_commits.1.clone()
+    pub fn get_commits_channel(&self) -> async_channel::Receiver<T> {
+        self.commits_channel.1.clone()
     }
 
-    pub fn get_broadcast(&self) -> async_channel::Sender<T> {
-        self.broadcast_msg.0.clone()
+    pub fn get_msgs_channel(&self) -> async_channel::Sender<T> {
+        self.msgs_channel.0.clone()
     }
 
     async fn broadcast_msg(&mut self, msg: &T, msg_id: Option<u64>) -> Result<()> {
@@ -263,7 +259,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                 self.broadcast_msg(&d, Some(msg.id)).await?;
             }
             NetMsgMethod::SyncRequest => {
-                info!("receive sync request");
+                info!("Receive sync request");
                 let sr: SyncRequest = deserialize(&msg.payload)?;
                 self.receive_sync_request(&sr, msg.id).await?;
             }
@@ -297,7 +293,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                 wipe,
             };
 
-            info!("send sync response");
+            info!("Send sync response");
             for _ in 0..2 {
                 self.send(
                     self.current_leader.clone(),
@@ -321,7 +317,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn receive_sync_response(&mut self, sr: &SyncResponse) -> Result<()> {
-        info!("receive sync response");
+        info!("Receive sync response");
         if sr.wipe {
             self.set_commit_length(&0)?;
             self.push_logs(&sr.logs)?;
@@ -359,6 +355,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.role, random_id, &recipient_id.is_some(), &method);
 
         let net_msg = NetMsg { id: random_id, recipient_id, payload: payload.to_vec(), method };
+        self.seen_msgs.lock().await.push(random_id);
         self.sender.0.send(net_msg).await?;
 
         Ok(())
@@ -378,7 +375,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                         self.receive_sync_response(&sr).await?;
                         break
                     }},
-                    _ = stop_signal.recv().fuse() => break,
+                _ = stop_signal.recv().fuse() => break,
             }
         }
         Ok(())
@@ -406,6 +403,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.set_current_term(&(self.current_term + 1))?;
         self.role = Role::Candidate;
         self.set_voted_for(&Some(self_id.clone()))?;
+        self.votes_received = vec![];
         self.votes_received.push(self_id.clone());
 
         self.reset_last_term();
@@ -472,7 +470,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             let nodes_cloned = nodes.clone();
             drop(nodes);
 
-            if self.votes_received.len() >= ((nodes_cloned.len() + 1) / 2) {
+            if self.votes_received.len() >= (nodes_cloned.len() / 2) {
                 self.role = Role::Leader;
                 self.current_leader = Some(self.id.clone().unwrap());
                 for node in nodes_cloned.iter() {
@@ -676,7 +674,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
     async fn push_commit(&mut self, commit: &[u8]) -> Result<()> {
         let commit: T = deserialize(commit)?;
-        self.broadcast_commits.0.send(commit.clone()).await?;
+        self.commits_channel.0.send(commit.clone()).await?;
         self.datastore.commits.insert(&commit)
     }
     fn push_log(&mut self, log: &Log) -> Result<()> {

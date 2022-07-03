@@ -19,6 +19,9 @@ use crate::{
 
 //use log::debug;
 
+type MsgLog = Vec<(NanoTimestamp, String, String)>;
+type MsgMap = FxHashMap<String, MsgLog>;
+
 #[derive(Debug)]
 pub struct View {
     pub nodes: NodeInfoView,
@@ -40,12 +43,13 @@ impl<'a> View {
     pub fn update(
         &mut self,
         nodes: FxHashMap<String, NodeInfo>,
-        msg_map: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+        msg_map: MsgMap,
         selectables: FxHashMap<String, SelectableObject>,
     ) {
         self.update_nodes(nodes);
         self.update_selectable(selectables);
-        self.update_msg_list(msg_map.clone());
+        self.update_msg_list(msg_map);
+        self.update_msg_len();
         self.update_ids();
     }
 
@@ -61,10 +65,12 @@ impl<'a> View {
         }
     }
 
+    // get the msg_list at the selected connection ID
+    // and set the list index to the size of the returned vector
     fn update_msg_len(&mut self) {
         match self.id_list.state.selected() {
             Some(i) => match self.id_list.ids.get(i) {
-                Some(i) => match self.msg_list.msg_log.get(i) {
+                Some(i) => match self.msg_list.msg_map.get(i) {
                     Some(i) => {
                         self.msg_list.msg_len = i.len();
                     }
@@ -76,12 +82,9 @@ impl<'a> View {
         }
     }
 
-    fn update_msg_list(
-        &mut self,
-        msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
-    ) {
-        for (id, msg) in msg_log {
-            self.msg_list.msg_log.insert(id, msg);
+    fn update_msg_list(&mut self, msg_map: MsgMap) {
+        for (id, msg) in msg_map {
+            self.msg_list.msg_map.insert(id, msg);
         }
     }
 
@@ -121,7 +124,7 @@ impl<'a> View {
 
         self.render_ids(f, slice.clone())?;
 
-        if self.id_list.ids.is_empty() {
+        if !self.id_list.ids.is_empty() {
             // we have not received any data
             Ok(())
         } else {
@@ -129,7 +132,8 @@ impl<'a> View {
             match self.id_list.state.selected() {
                 Some(i) => match self.id_list.ids.get(i) {
                     Some(i) => {
-                        self.render_info(f, slice.clone(), i.to_string())?;
+                        let id = i.clone();
+                        self.render_info(f, slice, id)?;
                         Ok(())
                     }
                     None => Err(DnetViewError::NoIdAtIndex),
@@ -213,16 +217,16 @@ impl<'a> View {
         Ok(())
     }
 
-    fn parse_msg_list<'_a>(&self, connect: &ConnectInfo) -> DnetViewResult<List<'a>> {
+    fn parse_msg_list(&self, connect: &ConnectInfo) -> DnetViewResult<List<'a>> {
         let send_style = Style::default().fg(Color::LightCyan);
         let recv_style = Style::default().fg(Color::DarkGray);
-        let mut list_vec = Vec::new();
+        let mut texts = Vec::new();
         let mut lines = Vec::new();
-        let log = self.msg_list.msg_log.get(&connect.id);
+        let log = self.msg_list.msg_map.get(&connect.id);
         match log {
             Some(values) => {
-                for (i, (t, k, v)) in values.into_iter().enumerate() {
-                    lines.push(Span::from(match k.as_str() {
+                for (i, (t, k, v)) in values.iter().enumerate() {
+                    lines.push(match k.as_str() {
                         "send" => {
                             Span::styled(format!("{}  {}             S: {}", i, t, v), send_style)
                         }
@@ -230,19 +234,17 @@ impl<'a> View {
                             Span::styled(format!("{}  {}             R: {}", i, t, v), recv_style)
                         }
                         data => return Err(DnetViewError::UnexpectedData(data.to_string())),
-                    }));
+                    });
                 }
             }
             None => return Err(DnetViewError::CannotFindId),
         }
         for line in lines.clone() {
-            let list = ListItem::new(line);
-            list_vec.push(list);
+            let text = ListItem::new(line);
+            texts.push(text);
         }
 
-        let msg_list = List::new(list_vec)
-            .block(Block::default().borders(Borders::ALL))
-            .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+        let msg_list = List::new(texts).block(Block::default().borders(Borders::ALL));
 
         Ok(msg_list)
     }
@@ -270,7 +272,7 @@ impl<'a> View {
                             lines.push(Spans::from(node_info));
                         }
                         None => {
-                            let node_info = Span::styled(format!("External addr: Null"), style);
+                            let node_info = Span::styled("External addr: Null".to_string(), style);
                             lines.push(Spans::from(node_info));
                         }
                     }
@@ -289,9 +291,8 @@ impl<'a> View {
                     }
                 }
                 Some(SelectableObject::Connect(connect)) => {
-                    let list = self.parse_msg_list(connect)?;
-                    f.render_stateful_widget(list, slice[1], &mut self.msg_list.state);
-                    //self.msg_auto_scroll(f);
+                    let text = self.parse_msg_list(connect)?;
+                    f.render_stateful_widget(text, slice[1], &mut self.msg_list.state);
                 }
                 None => return Err(DnetViewError::NotSelectableObject),
             }
@@ -304,15 +305,6 @@ impl<'a> View {
         f.render_widget(graph, slice[1]);
 
         Ok(())
-    }
-
-    // the most recent value
-    //
-    fn msg_auto_scroll<B: Backend>(&mut self, f: &mut Frame<'_, B>) {
-        let rect = f.size();
-        if usize::from(rect.height) < self.msg_list.msg_len {
-            self.msg_list.previous();
-        }
     }
 }
 
@@ -362,44 +354,51 @@ impl IdListView {
 #[derive(Debug, Clone)]
 pub struct MsgList {
     pub state: ListState,
-    pub msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
+    pub msg_map: MsgMap,
     pub msg_len: usize,
 }
 
 impl MsgList {
-    pub fn new(
-        msg_log: FxHashMap<String, Vec<(NanoTimestamp, String, String)>>,
-        msg_len: usize,
-    ) -> MsgList {
-        MsgList { state: ListState::default(), msg_log, msg_len }
+    pub fn new(msg_map: MsgMap, msg_len: usize) -> MsgList {
+        MsgList { state: ListState::default(), msg_map, msg_len }
     }
 
-    pub fn next(&mut self) {
+    // TODO: reimplement
+    //pub fn next(&mut self) {
+    //    let i = match self.state.selected() {
+    //        Some(i) => {
+    //            if i >= self.msg_len - 1 {
+    //                0
+    //            } else {
+    //                i + 1
+    //            }
+    //        }
+    //        None => 0,
+    //    };
+    //    self.state.select(Some(i));
+    //}
+
+    //pub fn previous(&mut self) {
+    //    let i = match self.state.selected() {
+    //        Some(i) => {
+    //            if i == 0 {
+    //                self.msg_len - 1
+    //            } else {
+    //                i - 1
+    //            }
+    //        }
+    //        None => 0,
+    //    };
+    //    self.state.select(Some(i));
+    //}
+
+    pub fn scroll(&mut self) -> DnetViewResult<()> {
         let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.msg_len - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
+            Some(i) => i + self.msg_len,
             None => 0,
         };
         self.state.select(Some(i));
-    }
-
-    pub fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.msg_len - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.state.select(Some(i));
+        Ok(())
     }
 
     pub fn unselect(&mut self) {

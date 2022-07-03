@@ -26,7 +26,7 @@ use pasta_curves::{group::Curve, pallas, Fp};
 
 use super::gadget::{
     arithmetic::{ArithChip, ArithConfig, ArithInstruction},
-    even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
+    even_bits::{EvenBitsChip, EvenBitsConfig},
 };
 
 use super::assign_free_advice;

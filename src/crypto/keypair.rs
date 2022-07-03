@@ -16,7 +16,7 @@ use crate::{
     Error, Result,
 };
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[cfg(feature = "serde")]
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Keypair {
@@ -36,7 +36,7 @@ impl Keypair {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, SerialDecodable, SerialEncodable)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, SerialDecodable, SerialEncodable)]
 pub struct SecretKey(pub pallas::Base);
 
 impl SecretKey {
@@ -57,7 +57,7 @@ impl SecretKey {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, SerialDecodable, SerialEncodable)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, SerialDecodable, SerialEncodable)]
 pub struct PublicKey(pub pallas::Point);
 
 impl PublicKey {

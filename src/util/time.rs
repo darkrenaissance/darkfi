@@ -28,6 +28,7 @@ use crate::{
     SerialDecodable,
     PartialEq,
     PartialOrd,
+    Eq,
 )]
 pub struct Timestamp(pub i64);
 
@@ -68,6 +69,7 @@ impl std::fmt::Display for Timestamp {
     SerialDecodable,
     PartialEq,
     PartialOrd,
+    Eq,
 )]
 pub struct NanoTimestamp(pub i64);
 

@@ -16,7 +16,7 @@ pub const NOTE_PLAINTEXT_SIZE: usize = 32 + 8 + 32 + 32 + 32 + 32;
 pub const AEAD_TAG_SIZE: usize = 16;
 pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
-#[derive(Copy, Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Note {
     pub serial: DrkSerial,
     pub value: u64,
@@ -48,7 +48,7 @@ impl Note {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct EncryptedNote {
     ciphertext: [u8; ENC_CIPHERTEXT_SIZE],
     ephem_public: PublicKey,

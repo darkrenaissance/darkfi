@@ -25,7 +25,7 @@ pub mod builder;
 mod partial;
 
 /// A DarkFi transaction
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Transaction {
     /// Clear inputs
     pub clear_inputs: Vec<TransactionClearInput>,
@@ -36,7 +36,7 @@ pub struct Transaction {
 }
 
 /// A transaction's clear input
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TransactionClearInput {
     /// Input's value (amount)
     pub value: u64,
@@ -53,7 +53,7 @@ pub struct TransactionClearInput {
 }
 
 /// A transaction's anonymous input
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TransactionInput {
     /// Zero-knowledge proof for the input
     pub burn_proof: Proof,
@@ -64,7 +64,7 @@ pub struct TransactionInput {
 }
 
 /// A transaction's anonymous output
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TransactionOutput {
     /// Zero-knowledge proof for the output
     pub mint_proof: Proof,

@@ -78,7 +78,7 @@ impl Transport for TcpTransport {
         }
 
         let socket_addr = url.socket_addrs(|| None)?[0];
-        debug!("{} transport: listening on {}", url.scheme(), socket_addr);
+        debug!(target: "net", "{} transport: listening on {}", url.scheme(), socket_addr);
         Ok(Box::pin(self.do_listen(socket_addr)))
     }
 
@@ -94,7 +94,7 @@ impl Transport for TcpTransport {
         }
 
         let socket_addr = url.socket_addrs(|| None)?[0];
-        debug!("{} transport: dialing {}", url.scheme(), socket_addr);
+        debug!(target: "net", "{} transport: dialing {}", url.scheme(), socket_addr);
         Ok(Box::pin(self.do_dial(socket_addr, timeout)))
     }
 

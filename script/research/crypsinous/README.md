@@ -73,6 +73,20 @@ $$path_{sk_{c_i}^{COIN}} \text{ is a valid path to a leaf at position } \tau \te
 $$sn_{c_i}=PRF_{root_{sk_{c_i}^{COIN}}}^{sn}(\rho_{c_i}), \forall_i \in \{1,2\}$$
 
 
+# toward better decentralization in ouroboros
+
+the randomization of the leader selection at each slot is hinged on the random $y$, $\mu_y$, $\rho_c$, those three values are dervied from $\eta$, and root of the secret keys, the root of the secret keys for each stakeholder can be sampled, and derived beforehand, but $\eta$ is a response to global random oracle, so the whole security of the leader selection is hinged on $\textit{centralized global random node}$.
+
+## solution
+
+to break this centeralization, a decentralized emulation of $G_{ro}$ functionality for calculation of: $\eta_i=PRF^{G_{ro}}_{\eta_{i-1}}(\psi)$
+$$\psi=hash(tx^{ep}_{0})$$
+$$\eta_0=hash("let there be dark!")$$
+note that first transaction in the block, is the proof transaction.
+
+### (TODO add UC proof)
+
+
 # Performance
 since Crypsinous is based of sapling scheme, the performance relative to zerocash sapling scheme is that number of constraints in the PRF is improved by replacing sha256 (83,712 constraints) by pederson commitment (2,542 constraints), but on the other hand the proving take twice that of the sapling.
 

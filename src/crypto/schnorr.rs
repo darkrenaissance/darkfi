@@ -17,7 +17,7 @@ use crate::{
     Result,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Signature {
     commit: pallas::Point,
     response: pallas::Scalar,

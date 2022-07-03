@@ -26,7 +26,7 @@ pub use proof::Proof;
 
 use keypair::SecretKey;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct OwnCoin {
     pub coin: coin::Coin,
     pub note: note::Note,

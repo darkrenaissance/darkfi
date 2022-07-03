@@ -1,5 +1,5 @@
 /// Types supported by the VM
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum Type {
     /// Elliptic curve point

@@ -7,7 +7,10 @@ use ringbuffer::{RingBufferExt, RingBufferWrite};
 
 use darkfi::{net, Result};
 
-use crate::privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds};
+use crate::{
+    privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
+    MAXIMUM_LENGTH_OF_NICKNAME,
+};
 
 pub struct ProtocolPrivmsg {
     jobsman: net::ProtocolJobsManagerPtr,
@@ -46,7 +49,7 @@ impl ProtocolPrivmsg {
 
     async fn handle_receive_msg(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_msg() [START]");
-        let exclude_list = vec![self.channel.address().clone()];
+        let exclude_list = vec![self.channel.address()];
 
         // once a channel get started
         let msgs_buffer = self.msgs.lock().await;
@@ -58,6 +61,10 @@ impl ProtocolPrivmsg {
 
         loop {
             let msg = self.msg_sub.receive().await?;
+
+            if msg.nickname.len() > MAXIMUM_LENGTH_OF_NICKNAME {
+                continue
+            }
 
             if self.msg_ids.lock().await.contains(&msg.id) {
                 continue

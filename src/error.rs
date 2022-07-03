@@ -184,6 +184,10 @@ pub enum Error {
     #[error("Invalid DarkFi address")]
     InvalidAddress,
 
+    #[cfg(feature = "futures-rustls")]
+    #[error(transparent)]
+    RustlsError(#[from] futures_rustls::rustls::Error),
+
     // =======================
     // Protocol-related errors
     // =======================

@@ -14,12 +14,12 @@ tui = {version = "0.18.0", features = ["termion"]}
 
 # Async
 smol = "1.2.5"
-async-std = {version = "1.11.0", features = ["attributes"]}
+async-std = {version = "1.12.0", features = ["attributes"]}
 easy-parallel = "3.2.0"
 async-channel = "1.6.1"
 
 # Misc
-clap = "3.1.18"
+clap = "3.2.8"
 rand = "0.8.5"
 simplelog = "0.12.0"
 log = "0.4.17"
@@ -29,6 +29,6 @@ fxhash = "0.2.1"
 thiserror = "1.0.31"
 
 # Encoding and parsing
-serde_json = "1.0.81"
-serde = {version = "1.0.137", features = ["derive"]}
+serde_json = "1.0.82"
+serde = {version = "1.0.138", features = ["derive"]}
 

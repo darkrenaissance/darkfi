@@ -30,6 +30,12 @@ pub struct Args {
     #[structopt(long = "irc", default_value = "tcp://127.0.0.1:11066")]
     pub irc_listen: Url,
 
+    /// Optional TLS certificate file path if `irc_listen` uses TLS
+    pub irc_tls_cert: Option<String>,
+
+    /// Optional TLS certificate key file path if `irc_listen` uses TLS
+    pub irc_tls_secret: Option<String>,
+
     /// Generate a new NaCl secret and exit
     #[structopt(long)]
     pub gen_secret: bool,
@@ -73,7 +79,7 @@ pub struct ChannelInfo {
 
 impl ChannelInfo {
     pub fn new() -> Result<Self> {
-        Ok(Self { topic: None, salt_box: None, joined: true, names: vec![] })
+        Ok(Self { topic: None, salt_box: None, joined: false, names: vec![] })
     }
 }
 

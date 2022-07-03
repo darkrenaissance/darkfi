@@ -19,12 +19,12 @@ name = "darkfi"
 [workspace]
 members = [
 	"bin/zkas",
-#"bin/cashierd",
+	#"bin/cashierd",
 	"bin/darkfid",
 	"bin/drk",
 	"bin/faucetd",
 	"bin/ircd",
-	"bin/irc-raft",
+	#"bin/irc-raft",
 	"bin/dnetview",
 	"bin/daod",
 	"bin/dao-cli",
@@ -46,8 +46,8 @@ thiserror = "1.0.31"
 # async-runtime
 smol = {version = "1.2.5", optional = true}
 futures = {version = "0.3.21", optional = true}
-async-std = {version = "1.11.0", features = ["attributes"], optional = true}
-async-trait = {version = "0.1.53", optional = true}
+async-std = {version = "1.12.0", features = ["attributes"], optional = true}
+async-trait = {version = "0.1.56", optional = true}
 async-channel = {version = "1.6.1", optional = true}
 async-executor = {version = "1.4.1", optional = true}
 
@@ -71,8 +71,8 @@ toml = {version = "0.5.9", optional = true}
 bytes = {version = "1.1.0", optional = true}
 bincode = {version = "2.0.0-rc.1", features = ["serde"], optional = true}
 num-bigint = {version = "0.4.3", features = ["serde"], optional = true}
-serde_json = {version = "1.0.81", optional = true}
-serde = {version = "1.0.137", features = ["derive"], optional = true}
+serde_json = {version = "1.0.82", optional = true}
+serde = {version = "1.0.138", features = ["derive"], optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.0", optional = true}
 
@@ -83,7 +83,7 @@ subtle = {version = "2.4.1", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
 lazy-init = {version = "0.5.0", optional = true}
 fxhash = {version = "0.2.1", optional = true}
-indexmap = {version = "1.8.1", optional = true}
+indexmap = {version = "1.9.1", optional = true}
 itertools = {version = "0.10.3", optional = true}
 darkfi-derive = {path = "src/util/derive", optional = true}
 darkfi-derive-internal = {path = "src/util/derive-internal", optional = true}
@@ -112,30 +112,30 @@ blake2b_simd = {version = "1.0.0", optional = true}
 pasta_curves = {version = "0.4.0", optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
 incrementalmerkletree = {version = "0.3.0", optional = true}
-#halo2_proofs = {version = "0.1.0", optional = true}
-#halo2_gadgets = {version = "0.1.0", optional = true}
-halo2_proofs = {git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4", optional = true}
-halo2_gadgets = {git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4", optional = true}
+halo2_proofs = {version = "0.2.0", optional = true}
+halo2_gadgets = {version = "0.2.0", optional = true}
+#halo2_proofs = {git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4", optional = true}
+#halo2_gadgets = {git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4", optional = true}
 
 # Smart contract runtime
 drk-sdk = {path = "src/sdk", optional = true}
-wasmer = {version = "2.2.1", optional = true}
-wasmer-compiler-singlepass = {version = "2.2.1", optional = true}
-wasmer-middlewares = {version = "2.2.1", optional = true}
+wasmer = {version = "2.3.0", optional = true}
+wasmer-compiler-singlepass = {version = "2.3.0", optional = true}
+wasmer-middlewares = {version = "2.3.0", optional = true}
 
 # Wallet management
-sqlx = {version = "0.5.13", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
+sqlx = {version = "0.6.0", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
 libsqlite3-sys = {version = "0.24.2", features = ["bundled-sqlcipher"],  optional = true }
 
 # Blockchain store
 sled = {version = "0.34.7", optional = true}
 
 [dev-dependencies]
-clap = {version = "3.1.18", features = ["derive"]}
-#halo2_proofs = {version = "0.1.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
-#halo2_gadgets = {version = "0.1.0", features = ["dev-graph", "test-dependencies"]}
-halo2_proofs = {git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
-halo2_gadgets = {git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4", features = ["dev-graph", "test-dependencies"]}
+clap = {version = "3.2.8", features = ["derive"]}
+halo2_proofs = {version = "0.2.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
+halo2_gadgets = {version = "0.2.0", features = ["dev-graph", "test-dependencies"]}
+#halo2_proofs = {git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
+#halo2_gadgets = {git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4", features = ["dev-graph", "test-dependencies"]}
 
 plotters = "0.3.1"
 

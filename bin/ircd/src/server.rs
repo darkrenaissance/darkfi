@@ -1,27 +1,27 @@
-use async_std::net::TcpStream;
 use std::net::SocketAddr;
 
-use futures::{io::WriteHalf, AsyncWriteExt};
+use futures::{io::WriteHalf, AsyncRead, AsyncWrite, AsyncWriteExt};
 use fxhash::FxHashMap;
 use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
-use ringbuffer::RingBufferWrite;
+use ringbuffer::{RingBufferExt, RingBufferWrite};
 
 use darkfi::{net::P2pPtr, system::SubscriberPtr, Error, Result};
 
 use crate::{
     crypto::{encrypt_message, try_decrypt_message},
     privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
-    ChannelInfo,
+    ChannelInfo, MAXIMUM_LENGTH_OF_MESSAGE, MAXIMUM_LENGTH_OF_NICKNAME,
 };
 
 const RPL_NOTOPIC: u32 = 331;
 const RPL_TOPIC: u32 = 332;
 const RPL_NAMEREPLY: u32 = 353;
+const RPL_ENDOFNAMES: u32 = 366;
 
-pub struct IrcServerConnection {
+pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     // server stream
-    write_stream: WriteHalf<TcpStream>,
+    write_stream: WriteHalf<C>,
     peer_address: SocketAddr,
     // msg ids
     seen_msg_ids: SeenMsgIds,
@@ -30,18 +30,21 @@ pub struct IrcServerConnection {
     is_nick_init: bool,
     is_user_init: bool,
     is_registered: bool,
+    is_cap_end: bool,
     nickname: String,
     auto_channels: Vec<String>,
     pub configured_chans: FxHashMap<String, ChannelInfo>,
+    capabilities: FxHashMap<String, bool>,
     // p2p
     p2p: P2pPtr,
     senders: SubscriberPtr<Privmsg>,
     subscriber_id: u64,
 }
 
-impl IrcServerConnection {
+impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        write_stream: WriteHalf<TcpStream>,
+        write_stream: WriteHalf<C>,
         peer_address: SocketAddr,
         seen_msg_ids: SeenMsgIds,
         privmsgs_buffer: PrivmsgsBuffer,
@@ -51,6 +54,8 @@ impl IrcServerConnection {
         senders: SubscriberPtr<Privmsg>,
         subscriber_id: u64,
     ) -> Self {
+        let mut capabilities = FxHashMap::default();
+        capabilities.insert("no-history".to_string(), false);
         Self {
             write_stream,
             peer_address,
@@ -59,16 +64,22 @@ impl IrcServerConnection {
             is_nick_init: false,
             is_user_init: false,
             is_registered: false,
+            is_cap_end: true,
             nickname: "anon".to_string(),
             auto_channels,
             configured_chans,
+            capabilities,
             p2p,
             senders,
             subscriber_id,
         }
     }
 
-    pub async fn update(&mut self, line: String) -> Result<()> {
+    async fn update(&mut self, line: String) -> Result<()> {
+        if line.len() > MAXIMUM_LENGTH_OF_MESSAGE {
+            return Err(Error::MalformedPacket)
+        }
+
         let mut tokens = line.split_ascii_whitespace();
         // Commands can begin with :garbage but we will reject clients doing
         // that for now to keep the protocol simple and focused.
@@ -90,27 +101,16 @@ impl IrcServerConnection {
                         continue
                     }
 
-                    if self.configured_chans.contains_key(chan) {
-                        let chan_info = self.configured_chans.get(chan).unwrap();
-
-                        if chan_info.names.is_empty() {
-                            continue
-                        }
-
-                        let names_reply = format!(
-                            ":{}!anon@dark.fi {} = {} : {}\r\n",
-                            self.nickname,
-                            RPL_NAMEREPLY,
-                            chan,
-                            chan_info.names.join(" ")
-                        );
-
-                        self.reply(&names_reply).await?;
-                    }
+                    self.on_receive_names(chan).await?;
                 }
             }
             "NICK" => {
                 let nickname = tokens.next().ok_or(Error::MalformedPacket)?;
+
+                if nickname.len() > MAXIMUM_LENGTH_OF_NICKNAME {
+                    return Ok(())
+                }
+
                 self.is_nick_init = true;
                 let old_nick = std::mem::replace(&mut self.nickname, nickname.to_string());
 
@@ -124,14 +124,8 @@ impl IrcServerConnection {
                         warn!("{} is not a valid name for channel", chan);
                         continue
                     }
-                    let join_reply = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, chan);
-                    self.reply(&join_reply).await?;
-                    if !self.configured_chans.contains_key(chan) {
-                        self.configured_chans.insert(chan.to_string(), ChannelInfo::new()?);
-                    } else {
-                        let chan_info = self.configured_chans.get_mut(chan).unwrap();
-                        chan_info.joined = true;
-                    }
+
+                    self.on_join(chan).await?;
                 }
             }
             "PART" => {
@@ -178,48 +172,110 @@ impl IrcServerConnection {
                 self.reply(&pong).await?;
             }
             "PRIVMSG" => {
-                let channel = tokens.next().ok_or(Error::MalformedPacket)?;
+                let target = tokens.next().ok_or(Error::MalformedPacket)?;
                 let substr_idx = line.find(':').ok_or(Error::MalformedPacket)?;
 
                 if substr_idx >= line.len() {
                     return Err(Error::MalformedPacket)
                 }
 
-                let message = &line[substr_idx + 1..];
-                info!("(Plain) PRIVMSG {} :{}", channel, message);
+                let mut message = line[substr_idx + 1..].to_string();
+                info!("(Plain) PRIVMSG {} :{}", target, message);
 
-                if self.configured_chans.contains_key(channel) {
-                    let channel_info = self.configured_chans.get(channel).unwrap();
-                    if channel_info.joined {
-                        let message = if let Some(salt_box) = &channel_info.salt_box {
-                            let encrypted = encrypt_message(salt_box, message);
-                            info!("(Encrypted) PRIVMSG {} :{}", channel, encrypted);
-                            encrypted
-                        } else {
-                            message.to_string()
-                        };
-
-                        let random_id = OsRng.next_u64();
-
-                        let protocol_msg = Privmsg {
-                            id: random_id,
-                            nickname: self.nickname.clone(),
-                            channel: channel.to_string(),
-                            message,
-                        };
-
-                        {
-                            (*self.seen_msg_ids.lock().await).push(random_id);
-                            (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
-                        }
-
-                        self.senders
-                            .notify_with_exclude(protocol_msg.clone(), &[self.subscriber_id])
-                            .await;
-
-                        debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
-                        self.p2p.broadcast(protocol_msg).await?;
+                if target.starts_with('#') {
+                    if !self.configured_chans.contains_key(target) {
+                        return Ok(())
                     }
+
+                    let channel_info = self.configured_chans.get(target).unwrap();
+
+                    if !channel_info.joined {
+                        return Ok(())
+                    }
+
+                    message = if let Some(salt_box) = &channel_info.salt_box {
+                        let encrypted = encrypt_message(salt_box, &message);
+                        info!("(Encrypted) PRIVMSG {} :{}", target, encrypted);
+                        encrypted
+                    } else {
+                        message.to_string()
+                    };
+                }
+
+                self.on_receive_privmsg(&message, target).await?;
+            }
+            "CAP" => {
+                self.is_cap_end = false;
+
+                let subcommand = tokens.next().ok_or(Error::MalformedPacket)?.to_uppercase();
+
+                let capabilities_keys: Vec<String> = self.capabilities.keys().cloned().collect();
+
+                if subcommand == "LS" {
+                    let cap_ls_reply = format!(
+                        ":{}!anon@dark.fi CAP * LS :{}\r\n",
+                        self.nickname,
+                        capabilities_keys.join(" ")
+                    );
+                    self.reply(&cap_ls_reply).await?;
+                }
+
+                if subcommand == "REQ" {
+                    let substr_idx = line.find(':').ok_or(Error::MalformedPacket)?;
+
+                    if substr_idx >= line.len() {
+                        return Err(Error::MalformedPacket)
+                    }
+
+                    let cap: Vec<&str> = line[substr_idx + 1..].split(' ').collect();
+
+                    let mut ack_list = vec![];
+                    let mut nak_list = vec![];
+
+                    for c in cap {
+                        if self.capabilities.contains_key(c) {
+                            self.capabilities.insert(c.to_string(), true);
+                            ack_list.push(c);
+                        } else {
+                            nak_list.push(c);
+                        }
+                    }
+
+                    let cap_ack_reply = format!(
+                        ":{}!anon@dark.fi CAP * ACK :{}\r\n",
+                        self.nickname,
+                        ack_list.join(" ")
+                    );
+
+                    let cap_nak_reply = format!(
+                        ":{}!anon@dark.fi CAP * NAK :{}\r\n",
+                        self.nickname,
+                        nak_list.join(" ")
+                    );
+
+                    self.reply(&cap_ack_reply).await?;
+                    self.reply(&cap_nak_reply).await?;
+                }
+
+                if subcommand == "LIST" {
+                    let enabled_capabilities: Vec<String> = self
+                        .capabilities
+                        .clone()
+                        .into_iter()
+                        .filter(|(_, v)| *v)
+                        .map(|(k, _)| k)
+                        .collect();
+
+                    let cap_list_reply = format!(
+                        ":{}!anon@dark.fi CAP * LIST :{}\r\n",
+                        self.nickname,
+                        enabled_capabilities.join(" ")
+                    );
+                    self.reply(&cap_list_reply).await?;
+                }
+
+                if subcommand == "END" {
+                    self.is_cap_end = true;
                 }
             }
             "QUIT" => {
@@ -231,37 +287,27 @@ impl IrcServerConnection {
             }
         }
 
-        if !self.is_registered && self.is_nick_init && self.is_user_init {
+        // on registration
+        if !self.is_registered && self.is_cap_end && self.is_nick_init && self.is_user_init {
             debug!("Initializing peer connection");
             let register_reply = format!(":darkfi 001 {} :Let there be dark\r\n", self.nickname);
             self.reply(&register_reply).await?;
             self.is_registered = true;
 
-            // Auto-joins
-            macro_rules! autojoin {
-                ($channel:expr,$topic:expr) => {
-                    let j = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, $channel);
-                    let t = format!(":DarkFi TOPIC {} :{}\r\n", $channel, $topic);
-                    self.reply(&j).await?;
-                    self.reply(&t).await?;
-                };
+            for chan in self.auto_channels.clone() {
+                self.on_join(&chan).await?;
             }
 
-            for chan in self.auto_channels.clone() {
-                if self.configured_chans.contains_key(&chan) {
-                    let chan_info = self.configured_chans.get_mut(&chan).unwrap();
-                    let topic = if let Some(topic) = chan_info.topic.clone() {
-                        topic
-                    } else {
-                        "n/a".to_string()
-                    };
-                    chan_info.topic = Some(topic.to_string());
-                    autojoin!(chan, topic);
-                } else {
-                    let mut chan_info = ChannelInfo::new()?;
-                    chan_info.topic = Some("n/a".to_string());
-                    self.configured_chans.insert(chan.clone(), chan_info);
-                    autojoin!(chan, "n/a");
+            // Send dm messages in buffer
+            if *self.capabilities.get("no-history").unwrap() {
+                return Ok(())
+            }
+
+            for msg in self.privmsgs_buffer.lock().await.to_vec() {
+                if msg.target == self.nickname ||
+                    (msg.nickname == self.nickname && !msg.target.starts_with('#'))
+                {
+                    self.senders.notify_by_id(msg, self.subscriber_id).await;
                 }
             }
         }
@@ -269,17 +315,113 @@ impl IrcServerConnection {
         Ok(())
     }
 
-    pub async fn reply(&mut self, message: &str) -> Result<()> {
+    async fn reply(&mut self, message: &str) -> Result<()> {
         self.write_stream.write_all(message.as_bytes()).await?;
         debug!("Sent {}", message);
         Ok(())
     }
 
+    async fn on_receive_names(&mut self, chan: &str) -> Result<()> {
+        if self.configured_chans.contains_key(chan) {
+            let chan_info = self.configured_chans.get(chan).unwrap();
+
+            if chan_info.names.is_empty() {
+                return Ok(())
+            }
+
+            let names_reply = format!(
+                ":{}!anon@dark.fi {} = {} : {}\r\n",
+                self.nickname,
+                RPL_NAMEREPLY,
+                chan,
+                chan_info.names.join(" ")
+            );
+
+            self.reply(&names_reply).await?;
+
+            let end_of_names = format!(
+                ":DarkFi {:03} {} {} :End of NAMES list\r\n",
+                RPL_ENDOFNAMES, self.nickname, chan
+            );
+
+            self.reply(&end_of_names).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn on_receive_privmsg(&mut self, message: &str, target: &str) -> Result<()> {
+        let random_id = OsRng.next_u64();
+
+        let protocol_msg = Privmsg {
+            id: random_id,
+            nickname: self.nickname.clone(),
+            target: target.to_string(),
+            message: message.to_string(),
+        };
+
+        {
+            (*self.seen_msg_ids.lock().await).push(random_id);
+            (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
+        }
+
+        self.senders.notify_with_exclude(protocol_msg.clone(), &[self.subscriber_id]).await;
+
+        debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
+        self.p2p.broadcast(protocol_msg).await?;
+
+        Ok(())
+    }
+
+    async fn on_join(&mut self, chan: &str) -> Result<()> {
+        if !self.configured_chans.contains_key(chan) {
+            let mut chan_info = ChannelInfo::new()?;
+            chan_info.topic = Some("n/a".to_string());
+            self.configured_chans.insert(chan.to_string(), chan_info);
+        }
+
+        let chan_info = self.configured_chans.get_mut(chan).unwrap();
+        if chan_info.joined {
+            return Ok(())
+        }
+        chan_info.joined = true;
+
+        let topic =
+            if let Some(topic) = chan_info.topic.clone() { topic } else { "n/a".to_string() };
+        chan_info.topic = Some(topic.to_string());
+
+        {
+            let j = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, chan);
+            let t = format!(":DarkFi TOPIC {} :{}\r\n", chan, topic);
+            self.reply(&j).await?;
+            self.reply(&t).await?;
+        }
+
+        // Send messages in buffer
+        if !self.capabilities.get("no-history").unwrap() {
+            for msg in self.privmsgs_buffer.lock().await.to_vec() {
+                if msg.target == chan {
+                    self.senders.notify_by_id(msg, self.subscriber_id).await;
+                }
+            }
+        }
+
+        self.on_receive_names(chan).await?;
+        Ok(())
+    }
+
     pub async fn process_msg_from_p2p(&mut self, msg: &Privmsg) -> Result<()> {
+        info!("Received msg from P2p network: {:?}", msg);
+
         let mut msg = msg.clone();
-        // Try to potentially decrypt the incoming message.
-        if self.configured_chans.contains_key(&msg.channel) {
-            let chan_info = self.configured_chans.get_mut(&msg.channel).unwrap();
+
+        if msg.target.starts_with('#') {
+            // Try to potentially decrypt the incoming message.
+            if !self.configured_chans.contains_key(&msg.target) {
+                return Ok(())
+            }
+
+            let chan_info = self.configured_chans.get_mut(&msg.target).unwrap();
             if !chan_info.joined {
                 return Ok(())
             }
@@ -301,9 +443,18 @@ impl IrcServerConnection {
             if !chan_info.names.contains(&msg.nickname) {
                 chan_info.names.push(msg.nickname.clone());
             }
+
+            self.reply(&msg.to_irc_msg()).await?;
+            return Ok(())
         }
 
-        self.reply(&msg.to_irc_msg()).await?;
+        if self.is_cap_end &&
+            self.is_nick_init &&
+            (self.nickname == msg.target || self.nickname == msg.nickname)
+        {
+            self.reply(&msg.to_irc_msg()).await?;
+        }
+
         Ok(())
     }
 
@@ -319,8 +470,6 @@ impl IrcServerConnection {
 
         info!("Received msg from IRC client: {:?}", line);
         let irc_msg = self.clean_input_line(line)?;
-
-        info!("Send msg to IRC client '{}' from {}", irc_msg, self.peer_address);
 
         if let Err(e) = self.update(irc_msg).await {
             warn!("Connection error: {} for {}", e, self.peer_address);

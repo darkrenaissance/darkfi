@@ -2,6 +2,7 @@ use async_std::sync::Mutex;
 use std::sync::Arc;
 
 use fxhash::FxHashMap;
+use log::warn;
 use rand::Rng;
 
 pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
@@ -11,7 +12,6 @@ pub type SubscriptionId = u64;
 pub struct Subscription<T> {
     id: SubscriptionId,
     recv_queue: async_channel::Receiver<T>,
-    send_queue: async_channel::Sender<T>,
     parent: Arc<Subscriber<T>>,
 }
 
@@ -27,15 +27,6 @@ impl<T: Clone> Subscription<T> {
             Ok(message_result) => message_result,
             Err(err) => {
                 panic!("MessageSubscription::receive() recv_queue failed! {}", err);
-            }
-        }
-    }
-
-    pub async fn self_notify(&self, message: T) {
-        match self.send_queue.send(message).await {
-            Ok(_) => {}
-            Err(err) => {
-                panic!("MessageSubscription::self_notify() send_queue failed! {}", err);
             }
         }
     }
@@ -66,9 +57,9 @@ impl<T: Clone> Subscriber<T> {
 
         let sub_id = Self::random_id();
 
-        self.subs.lock().await.insert(sub_id, sender.clone());
+        self.subs.lock().await.insert(sub_id, sender);
 
-        Subscription { id: sub_id, recv_queue: recvr, send_queue: sender, parent: self.clone() }
+        Subscription { id: sub_id, recv_queue: recvr, parent: self.clone() }
     }
 
     async fn unsubscribe(self: Arc<Self>, sub_id: SubscriptionId) {
@@ -80,7 +71,18 @@ impl<T: Clone> Subscriber<T> {
             match sub.send(message_result.clone()).await {
                 Ok(()) => {}
                 Err(err) => {
-                    panic!("Error returned sending message in notify() call! {}", err);
+                    warn!("Error returned sending message in notify() call! {}", err);
+                }
+            }
+        }
+    }
+
+    pub async fn notify_by_id(&self, message_result: T, id: u64) {
+        if let Some(sub) = (*self.subs.lock().await).get(&id) {
+            match sub.send(message_result.clone()).await {
+                Ok(()) => {}
+                Err(err) => {
+                    warn!("Error returned sending message in notify_by_id() call! {}", err);
                 }
             }
         }
@@ -94,7 +96,7 @@ impl<T: Clone> Subscriber<T> {
             match sub.send(message_result.clone()).await {
                 Ok(()) => {}
                 Err(err) => {
-                    panic!("Error returned sending message in notify_with_exclude() call! {}", err);
+                    warn!("Error returned sending message in notify_with_exclude() call! {}", err);
                 }
             }
         }

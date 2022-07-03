@@ -24,7 +24,14 @@ use darkfi::{
     },
 };
 
-use dnetview::{
+pub mod config;
+pub mod error;
+pub mod model;
+pub mod options;
+pub mod util;
+pub mod view;
+
+use crate::{
     config::{DnvConfig, CONFIG_FILE_CONTENTS},
     error::{DnetViewError, DnetViewResult},
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
@@ -580,7 +587,9 @@ async fn render_view<B: Backend>(
     terminal.clear()?;
 
     let nodes = NodeInfoView::new(FxHashMap::default());
-    let msg_list = MsgList::new(FxHashMap::default(), 0);
+    let msg_map = FxHashMap::default();
+
+    let msg_list = MsgList::new(msg_map.clone(), 0);
     let id_list = IdListView::new(Vec::new());
     let selectables = FxHashMap::default();
 
@@ -592,6 +601,7 @@ async fn render_view<B: Backend>(
         view.update(
             model.nodes.lock().await.clone(),
             model.msg_map.lock().await.clone(),
+            //model.msg_log.lock().await.clone(),
             model.selectables.lock().await.clone(),
         );
 
@@ -609,6 +619,8 @@ async fn render_view<B: Backend>(
             None => {}
         }
 
+        view.msg_list.scroll()?;
+
         for k in asi.by_ref().keys() {
             match k.unwrap() {
                 Key::Char('q') => {
@@ -621,11 +633,11 @@ async fn render_view<B: Backend>(
                 Key::Char('k') => {
                     view.id_list.previous();
                 }
-                Key::Char('n') => {
-                    view.msg_list.next();
+                Key::Char('u') => {
+                    //view.msg_list.next();
                 }
-                Key::Char('p') => {
-                    view.msg_list.previous();
+                Key::Char('d') => {
+                    //view.msg_list.previous();
                 }
                 _ => (),
             }

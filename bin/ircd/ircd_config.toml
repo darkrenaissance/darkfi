@@ -2,7 +2,14 @@
 #rpc_listen="tcp://127.0.0.1:11055"
 
 ## IRC listen URL
-#irc_listen="tcp://127.0.0.1:11066"
+#irc_listen="tcp://127.0.0.1:6667"
+#irc_listen="tls://0.0.0.0:6697"
+
+## TLS certificate path if IRC acceptor uses TLS (optional)
+#irc_tls_cert = "/etc/letsencrypt/ircd/fullchain.pem"
+
+## TLS secret key path if IRC acceptor uses TLS (optional)
+#irc_tls_secret = "/etc/letsencrypt/ircd/privkey.pem"
 
 ## List of channels to autojoin for new client connections
 autojoin = ["#dev"]

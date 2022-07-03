@@ -98,6 +98,10 @@ impl Channel {
         self.info.lock().await.get_info().await
     }
 
+    //async fn session_type_id(&self) -> Result<()> {
+    //    //
+    //}
+
     /// Starts the channel. Runs a receive loop to start receiving messages or
     /// handles a network failure.
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
@@ -117,10 +121,8 @@ impl Channel {
     /// the channel has been closed.
     pub async fn stop(&self) {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
-        let mut stopped = *self.stopped.lock().await;
-        if !stopped {
-            stopped = true;
-            drop(stopped);
+        if !(*self.stopped.lock().await) {
+            *self.stopped.lock().await = true;
 
             self.stop_subscriber.notify(Error::ChannelStopped).await;
             self.receive_task.stop().await;

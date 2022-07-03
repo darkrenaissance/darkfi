@@ -2,11 +2,6 @@ use crate::model::{ConnectInfo, Session};
 use darkfi::{util::serial, Result};
 
 pub fn make_node_id(node_name: &String) -> Result<String> {
-    //match serial::serialize_hex(node_name).as_str() {
-    //    e => {
-    //        debug!("NODE ID {} IS DERIVED FROM NODE NAME {} ", e, node_name);
-    //    }
-    //}
     Ok(serial::serialize_hex(node_name))
 }
 
@@ -28,20 +23,10 @@ pub fn make_session_id(node_id: &str, session: &Session) -> Result<String> {
         num += i as u64
     }
 
-    //match serial::serialize_hex(&num).as_str() {
-    //    e => {
-    //        debug!("SESSION ID {} IS DERIVED FROM NODE ID {} AND SESSION {:?}", e, node_id, session);
-    //    }
-    //}
     Ok(serial::serialize_hex(&num))
 }
 
 pub fn make_connect_id(id: &u64) -> Result<String> {
-    //match serial::serialize_hex(id).as_str() {
-    //    e => {
-    //        debug!("CONNECT ID {} IS DERIVED FROM ID {}", e, id);
-    //    }
-    //}
     Ok(serial::serialize_hex(id))
 }
 
@@ -67,11 +52,6 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
 
     num += count;
 
-    //match serial::serialize_hex(&num).as_str() {
-    //    e => {
-    //        debug!("EMPTY ID {} IS DERIVED FROM NODE ID {} AND SESSION {:?} AND COUNT {}", e, node_id, session, count);
-    //    }
-    //}
     Ok(serial::serialize_hex(&num))
 }
 

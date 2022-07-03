@@ -3,7 +3,6 @@ use async_std::sync::{Arc, Mutex};
 use async_executor::Executor;
 use async_trait::async_trait;
 use log::debug;
-use url::Url;
 
 use crate::{net, Result};
 
@@ -15,8 +14,7 @@ pub struct ProtocolRaft {
     notify_queue_sender: async_channel::Sender<NetMsg>,
     msg_sub: net::MessageSubscription<NetMsg>,
     p2p: net::P2pPtr,
-    msgs: Arc<Mutex<Vec<u64>>>,
-    channel_address: Url,
+    seen_msgs: Arc<Mutex<Vec<u64>>>,
 }
 
 impl ProtocolRaft {
@@ -25,13 +23,12 @@ impl ProtocolRaft {
         channel: net::ChannelPtr,
         notify_queue_sender: async_channel::Sender<NetMsg>,
         p2p: net::P2pPtr,
-        msgs: Arc<Mutex<Vec<u64>>>,
+        seen_msgs: Arc<Mutex<Vec<u64>>>,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<NetMsg>().await;
 
         let msg_sub = channel.subscribe_msg::<NetMsg>().await.expect("Missing NetMsg dispatcher!");
-        let channel_address = channel.address();
 
         Arc::new(Self {
             id,
@@ -39,14 +36,12 @@ impl ProtocolRaft {
             msg_sub,
             jobsman: net::ProtocolJobsManager::new("ProtocolRaft", channel),
             p2p,
-            msgs,
-            channel_address,
+            seen_msgs,
         })
     }
 
     async fn handle_receive_msg(self: Arc<Self>) -> Result<()> {
         debug!(target: "raft", "ProtocolRaft::handle_receive_msg() [START]");
-        let exclude_list = vec![self.channel_address.clone()];
         loop {
             let msg = self.msg_sub.receive().await?;
 
@@ -56,14 +51,16 @@ impl ProtocolRaft {
                 &msg.id, &msg.method
             );
 
-            if self.msgs.lock().await.contains(&msg.id) {
-                continue
+            {
+                let mut msgs = self.seen_msgs.lock().await;
+                if msgs.contains(&msg.id) {
+                    continue
+                }
+                msgs.push(msg.id);
             }
 
-            self.msgs.lock().await.push(msg.id);
-
             let msg = (*msg).clone();
-            self.p2p.broadcast_with_exclude(msg.clone(), &exclude_list).await?;
+            self.p2p.broadcast(msg.clone()).await?;
 
             match (self.id.clone(), msg.recipient_id.clone()) {
                 // check if the ids are equal when both

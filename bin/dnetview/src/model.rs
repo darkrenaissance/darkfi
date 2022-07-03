@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 
 use darkfi::util::NanoTimestamp;
 
-// Mutex<FxHashMap<ConnectInfo.id, Vec<(NanoTimestamp, send, recv)>>>
-type MsgMap = Mutex<FxHashMap<String, Vec<(NanoTimestamp, String, String)>>>;
+type MsgLog = Vec<(NanoTimestamp, String, String)>;
+type MsgMap = Mutex<FxHashMap<String, MsgLog>>;
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub enum Session {
     Inbound,
     Outbound,
@@ -16,7 +16,7 @@ pub enum Session {
     Offline,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub enum SelectableObject {
     Node(NodeInfo),
     Session(SessionInfo),
@@ -27,7 +27,7 @@ pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
     pub nodes: Mutex<FxHashMap<String, NodeInfo>>,
     pub msg_map: MsgMap,
-    pub msg_log: Mutex<Vec<(NanoTimestamp, String, String)>>,
+    pub msg_log: Mutex<MsgLog>,
     pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
 }
 
@@ -36,14 +36,14 @@ impl Model {
         ids: Mutex<FxHashSet<String>>,
         nodes: Mutex<FxHashMap<String, NodeInfo>>,
         msg_map: MsgMap,
-        msg_log: Mutex<Vec<(NanoTimestamp, String, String)>>,
+        msg_log: Mutex<MsgLog>,
         selectables: Mutex<FxHashMap<String, SelectableObject>>,
     ) -> Model {
         Model { ids, nodes, msg_map, msg_log, selectables }
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub struct NodeInfo {
     pub id: String,
     pub name: String,
@@ -66,7 +66,7 @@ impl NodeInfo {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub struct SessionInfo {
     // TODO: make all values optional to handle empty sessions
     pub id: String,
@@ -90,7 +90,7 @@ impl SessionInfo {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub struct ConnectInfo {
     // TODO: make all values optional to handle empty connections
     pub id: String,
