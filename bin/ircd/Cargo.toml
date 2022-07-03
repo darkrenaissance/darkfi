@@ -14,6 +14,7 @@ darkfi = {path = "../../", features = ["net", "rpc"]}
 smol = "1.2.5"
 futures = "0.3.21"
 futures-rustls = "0.22.1"
+rustls-pemfile = "1.0.0"
 async-std = "1.11.0"
 async-trait = "0.1.53"
 async-channel = "1.6.1"

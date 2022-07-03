@@ -1,12 +1,13 @@
 use async_std::{
-    net::{TcpListener, TcpStream},
+    net::TcpListener,
     sync::{Arc, Mutex},
 };
-use std::net::SocketAddr;
+use std::{fs::File, net::SocketAddr};
 
 use async_channel::Receiver;
 use async_executor::Executor;
-use futures::{io::BufReader, AsyncBufReadExt, AsyncReadExt, FutureExt};
+use futures::{io::BufReader, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, FutureExt};
+use futures_rustls::{rustls, TlsAcceptor};
 use fxhash::FxHashMap;
 use log::{error, info, warn};
 use rand::rngs::OsRng;
@@ -19,6 +20,7 @@ use darkfi::{
     system::{Subscriber, SubscriberPtr},
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
+        expand_path,
         path::get_config_path,
     },
     Error, Result,
@@ -79,10 +81,10 @@ impl Ircd {
             .detach();
     }
 
-    async fn process_new_connection(
+    async fn process_new_connection<C: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
         &self,
         executor: Arc<Executor<'_>>,
-        stream: TcpStream,
+        stream: C,
         peer_addr: SocketAddr,
     ) -> Result<()> {
         let (reader, writer) = stream.split();
@@ -209,10 +211,42 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // IRC instance
     //
-    let irc_listen_addr = settings.irc_listen.socket_addrs(|| None)?[0];
-    let listener = TcpListener::bind(irc_listen_addr).await?;
-    let local_addr = listener.local_addr()?;
-    info!("IRC listening on {}", local_addr);
+    let listenaddr = settings.irc_listen.socket_addrs(|| None)?[0];
+    let listener = TcpListener::bind(listenaddr).await?;
+
+    let acceptor = match settings.irc_listen.scheme() {
+        "tls" => {
+            // openssl genpkey -algorithm ED25519 > example.com.key
+            // openssl req -new -out example.com.csr -key example.com.key
+            // openssl x509 -req -days 700 -in example.com.csr -signkey example.com.key -out example.com.crt
+
+            if settings.irc_tls_secret.is_none() || settings.irc_tls_cert.is_none() {
+                error!("To listen using TLS, please set irc_tls_secret and irc_tls_cert in your config file.");
+                return Err(Error::KeypairPathNotFound)
+            }
+
+            let file = File::open(expand_path(&settings.irc_tls_secret.unwrap())?)?;
+            let mut reader = std::io::BufReader::new(file);
+            let secret = &rustls_pemfile::pkcs8_private_keys(&mut reader)?[0];
+            let secret = rustls::PrivateKey(secret.clone());
+
+            let file = File::open(expand_path(&settings.irc_tls_cert.unwrap())?)?;
+            let mut reader = std::io::BufReader::new(file);
+            let certificate = &rustls_pemfile::certs(&mut reader)?[0];
+            let certificate = rustls::Certificate(certificate.clone());
+
+            let config = rustls::ServerConfig::builder()
+                .with_safe_defaults()
+                .with_no_client_auth()
+                .with_single_cert(vec![certificate], secret)?;
+
+            let acceptor = TlsAcceptor::from(Arc::new(config));
+            Some(acceptor)
+        }
+        _ => None,
+    };
+
+    info!("IRC listening on {}", settings.irc_listen);
 
     let executor_cloned = executor.clone();
     executor
@@ -236,8 +270,18 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                     }
                 };
 
-                let result =
-                    ircd.process_new_connection(executor_cloned.clone(), stream, peer_addr).await;
+                let result = if let Some(acceptor) = acceptor.clone() {
+                    let stream = match acceptor.accept(stream).await {
+                        Ok(s) => s,
+                        Err(e) => {
+                            error!("Failed accepting TLS connection: {}", e);
+                            continue
+                        }
+                    };
+                    ircd.process_new_connection(executor_cloned.clone(), stream, peer_addr).await
+                } else {
+                    ircd.process_new_connection(executor_cloned.clone(), stream, peer_addr).await
+                };
 
                 if let Err(e) = result {
                     error!("Failed processing connection {}: {}", peer_addr, e);

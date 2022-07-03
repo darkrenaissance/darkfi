@@ -2256,6 +2256,7 @@ dependencies = [
  "log",
  "rand",
  "ringbuffer",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "simplelog",

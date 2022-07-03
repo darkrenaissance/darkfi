@@ -1,7 +1,6 @@
-use async_std::net::TcpStream;
 use std::net::SocketAddr;
 
-use futures::{io::WriteHalf, AsyncWriteExt};
+use futures::{io::WriteHalf, AsyncRead, AsyncWrite, AsyncWriteExt};
 use fxhash::FxHashMap;
 use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
@@ -20,9 +19,9 @@ const RPL_TOPIC: u32 = 332;
 const RPL_NAMEREPLY: u32 = 353;
 const RPL_ENDOFNAMES: u32 = 366;
 
-pub struct IrcServerConnection {
+pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     // server stream
-    write_stream: WriteHalf<TcpStream>,
+    write_stream: WriteHalf<C>,
     peer_address: SocketAddr,
     // msg ids
     seen_msg_ids: SeenMsgIds,
@@ -42,10 +41,10 @@ pub struct IrcServerConnection {
     subscriber_id: u64,
 }
 
-impl IrcServerConnection {
+impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        write_stream: WriteHalf<TcpStream>,
+        write_stream: WriteHalf<C>,
         peer_address: SocketAddr,
         seen_msg_ids: SeenMsgIds,
         privmsgs_buffer: PrivmsgsBuffer,
