@@ -79,7 +79,7 @@ impl Ircd {
             .detach();
     }
 
-    async fn process(
+    async fn process_new_connection(
         &self,
         executor: Arc<Executor<'_>>,
         stream: TcpStream,
@@ -109,6 +109,7 @@ impl Ircd {
             .spawn(async move {
                 loop {
                     let mut line = String::new();
+
                     let result: Result<()> = futures::select! {
                         msg = receiver.receive().fuse() => {
                             match conn.process_msg_from_p2p(&msg).await {
@@ -235,7 +236,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                     }
                 };
 
-                let result = ircd.process(executor_cloned.clone(), stream, peer_addr).await;
+                let result =
+                    ircd.process_new_connection(executor_cloned.clone(), stream, peer_addr).await;
 
                 if let Err(e) = result {
                     error!("Failed processing connection {}: {}", peer_addr, e);

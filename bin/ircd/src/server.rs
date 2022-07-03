@@ -300,13 +300,15 @@ impl IrcServerConnection {
             }
 
             // Send dm messages in buffer
-            if !self.capabilities.get("no-history").unwrap() {
-                for msg in self.privmsgs_buffer.lock().await.to_vec() {
-                    if msg.target == self.nickname ||
-                        (msg.nickname == self.nickname && !msg.target.starts_with("#"))
-                    {
-                        self.senders.notify_by_id(msg, self.subscriber_id).await;
-                    }
+            if *self.capabilities.get("no-history").unwrap() {
+                return Ok(())
+            }
+
+            for msg in self.privmsgs_buffer.lock().await.to_vec() {
+                if msg.target == self.nickname ||
+                    (msg.nickname == self.nickname && !msg.target.starts_with("#"))
+                {
+                    self.senders.notify_by_id(msg, self.subscriber_id).await;
                 }
             }
         }
@@ -363,6 +365,7 @@ impl IrcServerConnection {
             (*self.seen_msg_ids.lock().await).push(random_id);
             (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
         }
+
         self.senders.notify_with_exclude(protocol_msg.clone(), &[self.subscriber_id]).await;
 
         debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
@@ -468,8 +471,6 @@ impl IrcServerConnection {
 
         info!("Received msg from IRC client: {:?}", line);
         let irc_msg = self.clean_input_line(line)?;
-
-        info!("Send msg to IRC client '{}' from {}", irc_msg, self.peer_address);
 
         if let Err(e) = self.update(irc_msg).await {
             warn!("Connection error: {} for {}", e, self.peer_address);
