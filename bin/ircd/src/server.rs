@@ -182,7 +182,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                 let mut message = line[substr_idx + 1..].to_string();
                 info!("(Plain) PRIVMSG {} :{}", target, message);
 
-                if target.starts_with("#") {
+                if target.starts_with('#') {
                     if !self.configured_chans.contains_key(target) {
                         return Ok(())
                     }
@@ -227,7 +227,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                         return Err(Error::MalformedPacket)
                     }
 
-                    let cap: Vec<&str> = line[substr_idx + 1..].split(" ").collect();
+                    let cap: Vec<&str> = line[substr_idx + 1..].split(' ').collect();
 
                     let mut ack_list = vec![];
                     let mut nak_list = vec![];
@@ -305,7 +305,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
             for msg in self.privmsgs_buffer.lock().await.to_vec() {
                 if msg.target == self.nickname ||
-                    (msg.nickname == self.nickname && !msg.target.starts_with("#"))
+                    (msg.nickname == self.nickname && !msg.target.starts_with('#'))
                 {
                     self.senders.notify_by_id(msg, self.subscriber_id).await;
                 }
@@ -415,7 +415,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
         let mut msg = msg.clone();
 
-        if msg.target.starts_with("#") {
+        if msg.target.starts_with('#') {
             // Try to potentially decrypt the incoming message.
             if !self.configured_chans.contains_key(&msg.target) {
                 return Ok(())
