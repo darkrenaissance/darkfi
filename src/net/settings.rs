@@ -8,6 +8,7 @@ use url::Url;
 /// Atomic pointer to network settings.
 pub type SettingsPtr = Arc<Settings>;
 
+// TODO: better documentation
 /// Defines the network settings.
 #[derive(Clone, Debug)]
 pub struct Settings {

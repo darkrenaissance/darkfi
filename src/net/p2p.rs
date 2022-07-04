@@ -73,6 +73,7 @@ pub struct P2p {
 }
 
 impl P2p {
+    // TODO: documentation is unclear
     /// Create a new p2p network.
     pub async fn new(settings: Settings) -> Arc<Self> {
         let settings = Arc::new(settings);
@@ -146,6 +147,7 @@ impl P2p {
         self.session_outbound.lock().await.as_ref().unwrap().clone()
     }
 
+    // TODO: this documentation is wrong
     /// Synchronize the blockchain and then begin long running sessions,
     /// call after start() is invoked.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {

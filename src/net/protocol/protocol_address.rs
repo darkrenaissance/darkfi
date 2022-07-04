@@ -9,12 +9,13 @@ use crate::{util::async_util, Result};
 
 use super::{
     super::{
-        message, message_subscriber::MessageSubscription, ChannelPtr, HostsPtr, P2pPtr, SettingsPtr,
+        message, message_subscriber::MessageSubscription, ChannelPtr, HostsPtr, P2pPtr,
+        SettingsPtr, SESSION_OUTBOUND,
     },
     ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr,
 };
 
-const SEND_ADDR_SLEEP_SECONDS: u64 = 10;
+const SEND_ADDR_SLEEP_SECONDS: u64 = 900;
 
 /// Defines address and get-address messages.
 pub struct ProtocolAddress {
@@ -122,7 +123,7 @@ impl ProtocolBase for ProtocolAddress {
 
         // if it's an outbound session + has an external address
         // send our address
-        if type_id == 0b0010 && self.settings.external_addr.is_some() {
+        if type_id == SESSION_OUTBOUND && self.settings.external_addr.is_some() {
             self.jobsman.clone().start(executor.clone());
             self.jobsman
                 .clone()
