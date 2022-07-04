@@ -2,7 +2,7 @@ use std::io;
 
 use log::debug;
 
-use super::{Metadata, StreamletMetadata, BLOCK_VERSION};
+use super::{Metadata, StreamletMetadata, OuroborosMetadata, BLOCK_VERSION};
 use crate::{
     crypto::{address::Address, keypair::PublicKey, schnorr::Signature},
     impl_vec, net,
@@ -46,9 +46,9 @@ impl Block {
     }
 
     /// Generate the genesis block.
-    pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
+    pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash, eta: [u8;32]) -> Self {
         let metadata =
-            Metadata::new(genesis_ts, String::from("proof"), String::from("r"), String::from("s"));
+            Metadata::new(genesis_ts, eta);
 
         Self::new(genesis_data, 0, 0, vec![], metadata)
     }

@@ -33,6 +33,9 @@ pub struct LeadCoin {
     pub path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
     pub c1_blind: Option<pallas::Scalar>,
     pub c2_blind: Option<pallas::Scalar>,
+    // election seeds
+    pub y_mu: Option<pallas::Base>,
+    pub rho_mu: Option<pallas::Base>,
 }
 
 impl LeadCoin {
