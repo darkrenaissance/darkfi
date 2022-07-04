@@ -20,6 +20,7 @@ pub use blockstore::{BlockOrderStore, BlockStore};
 
 pub mod metadatastore;
 pub use metadatastore::StreamletMetadataStore;
+pub use metadatastore::OuroborosMetadataStore;
 
 pub mod nfstore;
 pub use nfstore::NullifierStore;
@@ -38,8 +39,8 @@ pub struct Blockchain {
     pub order: BlockOrderStore,
     /// Transactions sled tree
     pub transactions: TxStore,
-    /// Streamlet metadata sled tree
-    pub streamlet_metadata: StreamletMetadataStore,
+    /// Ourobors metadata sled tree
+    pub ouroboros_metadata: OuroborosMetadataStore,
     /// Nullifiers sled tree
     pub nullifiers: NullifierStore,
     /// Merkle roots sled tree
@@ -48,15 +49,16 @@ pub struct Blockchain {
 
 impl Blockchain {
     /// Instantiate a new `Blockchain` with the given `sled` database.
-    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
+    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: flake3::Hash) -> Result<Self> {
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
-        let streamlet_metadata = StreamletMetadataStore::new(db, genesis_ts, genesis_data)?;
+        let eta0 = flake3::Hash(b"let there be dark").as_bytes()?;
+        let ouroboros_metadata = OuroborosMetadataStore::new(db, genesis_ts, genesis_data, eta0)?;
         let transactions = TxStore::new(db)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
 
-        Ok(Self { blocks, order, transactions, streamlet_metadata, nullifiers, merkle_roots })
+        Ok(Self { blocks, order, transactions, ourboros_metadata, nullifiers, merkle_roots })
     }
 
     /// Insert a given slice of [`BlockInfo`] into the blockchain database.
@@ -79,8 +81,8 @@ impl Blockchain {
             // Store block order
             self.order.insert(&[block.sl], &[blockhash[0]])?;
 
-            // Store streamlet metadata
-            self.streamlet_metadata.insert(&[blockhash[0]], &[block.sm.clone()])?;
+            // Store ouroboros metadata
+            self.ouroboros_metadata.insert(&[blockhash[0]], &[block.metadata.om.clone()])?;
 
             // NOTE: The nullifiers and Merkle roots are applied in the state
             // transition apply function.
@@ -107,7 +109,7 @@ impl Blockchain {
         let mut ret = Vec::with_capacity(hashes.len());
 
         let blocks = self.blocks.get(hashes, true)?;
-        let metadata = self.streamlet_metadata.get(hashes, true)?;
+        let metadata = self.ouroboros_metadata.get(hashes, true)?;
 
         for (i, block) in blocks.iter().enumerate() {
             let block = block.clone().unwrap();
