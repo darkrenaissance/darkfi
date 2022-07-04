@@ -15,8 +15,8 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    pub fn new(timestamp: Timestamp, proof: String, r: String, s: String) -> Self {
-        Self { timestamp, om: OuroborosMetadata::new(proof, r, s) }
+    pub fn new(timestamp: Timestamp, eta: [u8;32]) -> Self {
+        Self { timestamp, om: OuroborosMetadata::new(eta) }
     }
 }
 
@@ -24,17 +24,13 @@ impl Metadata {
 /// Praos consensus protocol.
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct OuroborosMetadata {
-    /// Proof that the stakeholder is the block owner
-    pub proof: String,
-    /// Random seed for VRF
-    pub r: String,
-    /// Block owner signature
-    pub s: String,
+    // response of global random oracle, or it's emulation.
+    pub eta: [u8;32],
 }
 
 impl OuroborosMetadata {
-    pub fn new(proof: String, r: String, s: String) -> Self {
-        Self { proof, r, s }
+    pub fn new(eta: [u8;32]) -> Self {
+        Self { eta }
     }
 }
 
