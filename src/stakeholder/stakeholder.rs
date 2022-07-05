@@ -1,35 +1,43 @@
-use super::blockchain::{Blockchain, Block, BlockInfo};
-use super::util::time::Timestamp;
+use crate::{
+    consensus::{BlockInfo},
+    util::time::Timestamp,
+    blockchain::{Blockchain},
+    Result,
+};
 
-#[derive(Copy,Debug,Default,Clone)]
+use pasta_curves::{
+    pallas,
+};
+use group::ff::PrimeField;
+
 pub struct Stakeholder
 {
-    blockchain: Blockchain // stakeholder view of the blockchain
+    pub blockchain: Blockchain // stakeholder view of the blockchain
 }
 
 impl Stakeholder
 {
-    fn init() {
+    pub fn new() -> Result<Self> {
         //TODO initialize the blockchain
         let path = "/tmp";
-        let db = sled::open(path)?;
+        let db = sled::open(path).unwrap();
         let ts = Timestamp::current_time();
-        let genesis_data = "data":
-        let genesis_hash = flake3::Hash(genesis_data.as_bytes());
-        let eta0 = flake3::Hash("let there be dark!");
-        self.blockchain = Blockchain::new(db, ts, genesis_hash, eta0.as_bytes());
+        let genesis_hash = blake3::hash(b"data");
+        let bc = Blockchain::new(&db, ts, genesis_hash).unwrap();
+        Ok(Self{blockchain: bc})
     }
 
-    fn add_block(&self, block: BlockInfo)
+    pub fn add_block(&self, block: BlockInfo)
     {
         let blocks = [block];
-        self.blockchain.add(blocks);
+        self.blockchain.add(&blocks);
     }
 
-    fn get_eta(&self) -> pallas::Base
+    pub fn get_eta(&self) -> pallas::Base
     {
         let last_proof_slot : u64 = 0;
-        let (sl, proof_tx_hash) = self.blockchain.last()?;
-        pallas::Base::from_bytes(proof_tx_hash.to_bytees())
+        let (sl, proof_tx_hash) = self.blockchain.last().unwrap();
+        let bytes = *proof_tx_hash.as_bytes();
+        pallas::Base::from_repr(bytes).unwrap()
     }
 }

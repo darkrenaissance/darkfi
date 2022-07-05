@@ -20,7 +20,6 @@ impl BlockStore {
     pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let tree = db.open_tree(SLED_BLOCK_TREE)?;
         let store = Self(tree);
-
         // In case the store is empty, initialize it with the genesis block.
         if store.0.is_empty() {
             let genesis_block = Block::genesis_block(genesis_ts, genesis_data);

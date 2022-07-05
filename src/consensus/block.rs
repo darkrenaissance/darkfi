@@ -46,7 +46,8 @@ impl Block {
     }
 
     /// Generate the genesis block.
-    pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash, eta: [u8;32]) -> Self {
+    pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
+        let eta : [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
         let metadata =
             Metadata::new(genesis_ts, eta);
 
@@ -89,7 +90,7 @@ pub struct BlockInfo {
     pub txs: Vec<Transaction>,
     /// Additional proposal information
     pub metadata: Metadata,
-    /// Proposal information used by Streamlet consensus
+    // Proposal information used by Streamlet consensus
     pub sm: StreamletMetadata,
 }
 
@@ -100,10 +101,10 @@ impl BlockInfo {
         sl: u64,
         txs: Vec<Transaction>,
         metadata: Metadata,
-        sm: StreamletMetadata,
+        sm: StreamletMetadata
     ) -> Self {
         let v = *BLOCK_VERSION;
-        Self { v, st, e, sl, txs, metadata, sm }
+        Self { v, st, e, sl, txs, metadata, sm}
     }
 
     /// Calculate the block hash

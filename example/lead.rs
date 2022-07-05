@@ -7,7 +7,12 @@ use pasta_curves::{
 };
 
 use darkfi::{
-    blockchain::epoch::{Epoch,EpochItem},
+    blockchain::{
+        Blockchain,
+        epoch::{Epoch,EpochItem},
+    },
+    stakeholder::stakeholder::{Stakeholder},
+    util::time::{Timestamp},
     crypto::{
         constants::MERKLE_DEPTH_ORCHARD,
         leadcoin::LeadCoin,
@@ -25,8 +30,8 @@ fn main() {
     //let lead_vk = VerifyingKey::build(k, &LeadContract::default());
     //
     const LEN: usize = 10;
-    let epoch_item = EpochItem{
-        value: 1,  //static stake value
+    let epoch_item = EpochItem {
+        value: 0,  //static stake value
     };
 
     //TODO to read eta you need an access to the blockchain proof transaction.
@@ -34,10 +39,10 @@ fn main() {
     //TODO who should have view of the blockchain if not the stakeholder?
     // or should the blockchain be a node in itself?
     // but that doesn't make sense, since each stakeholder might end up with different view of it.
-    let genesis_data = flake3::Hash(b"");
-    let oc = Blockchain::new(sled_db, Timestamp::curent_time(), genesis_data);
-    let stakeholder = Stakeholder
-    {
+    let genesis_data = blake3::hash(b"");
+    let db = sled::open("/tmp/darkfi.db").unwrap();
+    let oc = Blockchain::new(&db, Timestamp::current_time(), genesis_data).unwrap();
+    let stakeholder = Stakeholder {
         blockchain: oc,
     };
     let eta : pallas::Base = stakeholder.get_eta();
@@ -65,8 +70,8 @@ fn main() {
         cm_pos: Value::known(coin.idx),
         //sn_c1: Value::known(coin.sn.unwrap()),
         slot: Value::known(coin.sl.unwrap()),
-        mau_rho: Value::known(mod_r_p(coin.rho_mu)),
-        mau_y: Value::known(mod_r_p(coin.y_mu)),
+        mau_rho: Value::known(mod_r_p(coin.rho_mu.unwrap())),
+        mau_y: Value::known(mod_r_p(coin.y_mu.unwrap())),
         root_cm: Value::known(coin.root_cm.unwrap()),
     };
 

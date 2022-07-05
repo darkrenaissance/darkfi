@@ -4,7 +4,7 @@ pub use block::{Block, BlockInfo, BlockProposal, ProposalChain};
 
 /// Consensus metadata
 pub mod metadata;
-pub use metadata::{Metadata, StreamletMetadata};
+pub use metadata::{Metadata, StreamletMetadata, OuroborosMetadata};
 
 /// Consensus participant
 pub mod participant;

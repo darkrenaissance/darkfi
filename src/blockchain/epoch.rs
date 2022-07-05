@@ -23,14 +23,12 @@ use crate::{
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 #[derive(Copy,Debug,Default,Clone)]
-pub struct EpochItem
-{
+pub struct EpochItem {
     pub value: u64, // the stake value is static during the epoch.
 }
 
 #[derive(Copy,Debug,Default,Clone)]
-pub struct Epoch
-{
+pub struct Epoch {
     // TODO this need to emulate epoch
     // should have ep, slot, current block, etc.
     //epoch metadata
@@ -42,34 +40,34 @@ pub struct Epoch
 }
 
 #[derive(Debug,Default,Clone)]
-pub struct LifeTime
-{
+pub struct LifeTime {
     //lifetime metadata
     //...
     //lifetime epochs
     pub epochs : Vec<Epoch>,
 }
 
-const ELECTION_SEED_NONCE = pallas::Base::from(3);
-const ELECTION_SEED_LEAD = pallas::Base::from(22);
 
 impl Epoch {
 
     fn create_coins_election_seeds(&self, sl: pallas::Base) -> (pallas::Base, pallas::Base) {
+        let ELECTION_SEED_NONCE : pallas::Base = pallas::Base::from(3);
+        let ELECTION_SEED_LEAD : pallas::Base = pallas::Base::from(22);
+
         // mu_rho
         let nonce_mu_msg = [
             ELECTION_SEED_NONCE,
             self.eta,
             sl,
         ];
-        let nonce_mu : pallas::Scalar = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(nonce_mu_msg);
+        let nonce_mu : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(nonce_mu_msg);
         // mu_y
         let lead_mu_msg = [
             ELECTION_SEED_LEAD,
             self.eta,
             sl,
         ];
-        let lead_mu : pallas::Scalar = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(lead_mu_msg);
+        let lead_mu : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(lead_mu_msg);
         (lead_mu, nonce_mu)
     }
 
@@ -169,7 +167,7 @@ impl Epoch {
                 //*c_seed_pt.x(), //TODO(fix) will be c_seed(base) only after calculating c_seed as hash
                 //*c_seed_pt.y(),
             ];
-            let lead_coin_msg_hash : pallas::Scalar = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);p
+            let lead_coin_msg_hash : pallas::Scalar = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
             //TODO (FIX) THIS PANICS, ONLY PANICS ON LARGE VALUES!
             //let c_cm: pallas::Point = pedersen_commitment_scalar(lead_coin_msg_hash, c_cm1_blind);
             //note c_v is set to zero, should work
@@ -207,7 +205,7 @@ impl Epoch {
             let c_path_sk = path_sks[i];
 
             // election seeds
-            (y_mu, rho_mu) = self.create_coins_election_seeds(c_sl);
+            let (y_mu, rho_mu) = self.create_coins_election_seeds(c_sl);
             let coin = LeadCoin {
                 value: Some(c_v),
                 cm: Some(c_cm),

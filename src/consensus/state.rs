@@ -271,11 +271,11 @@ impl ValidatorState {
         let (prev_hash, index) = self.longest_notarized_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
 
+        let eta : [u8;32] = *blake3::hash(b"let there be dark!").as_bytes();
         let metadata = Metadata::new(
             Timestamp::current_time(),
-            String::from("proof"),
-            String::from("r"),
-            String::from("s"),
+            // empty seed
+            eta,
         );
 
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());

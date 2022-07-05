@@ -5,6 +5,9 @@ pub use error::{ClientFailed, ClientResult, Error, Result, VerifyFailed, VerifyR
 pub mod blockchain;
 
 #[cfg(feature = "blockchain")]
+pub mod stakeholder;
+
+#[cfg(feature = "blockchain")]
 pub mod consensus;
 
 #[cfg(feature = "crypto")]

@@ -3,7 +3,7 @@ use std::io;
 use log::debug;
 
 use crate::{
-    consensus::{Block, BlockInfo},
+    consensus::{Block, BlockInfo, StreamletMetadata},
     impl_vec,
     util::{
         serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub mod epoch;
-pub use epoch::{Epoch,EpochItem,LifeTime};
+pub use epoch::{Epoch, EpochItem};
 
 pub mod blockstore;
 pub use blockstore::{BlockOrderStore, BlockStore};
@@ -49,16 +49,15 @@ pub struct Blockchain {
 
 impl Blockchain {
     /// Instantiate a new `Blockchain` with the given `sled` database.
-    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: flake3::Hash) -> Result<Self> {
+    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
-        let eta0 = flake3::Hash(b"let there be dark").as_bytes()?;
-        let ouroboros_metadata = OuroborosMetadataStore::new(db, genesis_ts, genesis_data, eta0)?;
+        let ouroboros_metadata = OuroborosMetadataStore::new(db, genesis_ts, genesis_data)?;
         let transactions = TxStore::new(db)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
 
-        Ok(Self { blocks, order, transactions, ourboros_metadata, nullifiers, merkle_roots })
+        Ok(Self { blocks, order, transactions, ouroboros_metadata, nullifiers, merkle_roots })
     }
 
     /// Insert a given slice of [`BlockInfo`] into the blockchain database.
@@ -113,8 +112,8 @@ impl Blockchain {
 
         for (i, block) in blocks.iter().enumerate() {
             let block = block.clone().unwrap();
-            let sm = metadata[i].clone().unwrap();
-
+            // empty streamlet censensus.
+            let sm = StreamletMetadata::new(vec![]);
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
