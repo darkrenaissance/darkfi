@@ -6,8 +6,6 @@ use pasta_curves::{
     pallas,
 };
 
-use rand::{thread_rng, Rng};
-
 use darkfi::{
     blockchain::epoch::{Epoch,EpochItem},
     crypto::{
@@ -30,19 +28,27 @@ fn main() {
     let epoch_item = EpochItem{
         value: 1,  //static stake value
     };
+
+    //TODO to read eta you need an access to the blockchain proof transaction.
+    //need an emulation of the stakeholder as a node
+    //TODO who should have view of the blockchain if not the stakeholder?
+    // or should the blockchain be a node in itself?
+    // but that doesn't make sense, since each stakeholder might end up with different view of it.
+    let genesis_data = flake3::Hash(b"");
+    let oc = Blockchain::new(sled_db, Timestamp::curent_time(), genesis_data);
+    let stakeholder = Stakeholder
+    {
+        blockchain: oc,
+    };
+    let eta : pallas::Base = stakeholder.get_eta();
     let epoch = Epoch {
         len: Some(LEN),
         item: Some(epoch_item),
+        eta: eta,
     };
-    let mut rng = thread_rng();
     let coins: Vec<LeadCoin> = epoch.create_coins();
     let coin_idx = 0;
     let coin = coins[coin_idx];
-
-    let yu64: u64 = rng.gen();
-    let rhou64: u64 = rng.gen();
-    let mau_y: pallas::Base = pallas::Base::from(yu64);
-    let mau_rho: pallas::Base = pallas::Base::from(rhou64);
 
     let contract = LeadContract {
         path: Value::known(coin.path.unwrap()),
@@ -59,8 +65,8 @@ fn main() {
         cm_pos: Value::known(coin.idx),
         //sn_c1: Value::known(coin.sn.unwrap()),
         slot: Value::known(coin.sl.unwrap()),
-        mau_rho: Value::known(mod_r_p(mau_rho)),
-        mau_y: Value::known(mod_r_p(mau_y)),
+        mau_rho: Value::known(mod_r_p(coin.rho_mu)),
+        mau_y: Value::known(mod_r_p(coin.y_mu)),
         root_cm: Value::known(coin.root_cm.unwrap()),
     };
 
