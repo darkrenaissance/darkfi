@@ -3,7 +3,7 @@ import asyncio
 
 async def start():
     host = "127.0.0.1"
-    port = 11066
+    port = 6667
     channel = "#dev"
     nickname = "meeting_bot"
 
@@ -32,8 +32,6 @@ async def start():
     while True:
         msg = await reader.read(1024)
         msg = msg.decode('utf8').strip()
-
-        print(msg)
 
         if not msg:
             print("Error: Receive empty msg")
