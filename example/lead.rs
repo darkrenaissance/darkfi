@@ -1,4 +1,4 @@
-use halo2_proofs::{arithmetic::Field, dev::MockProver, circuit::Value};
+use halo2_proofs::{arithmetic::Field, dev::MockProver};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{
     arithmetic::CurveAffine,
@@ -54,27 +54,7 @@ fn main() {
     let coins: Vec<LeadCoin> = epoch.create_coins();
     let coin_idx = 0;
     let coin = coins[coin_idx];
-
-    let contract = LeadContract {
-        path: Value::known(coin.path.unwrap()),
-        coin_pk_x: Value::known(coin.pk_x.unwrap()),
-        coin_pk_y: Value::known(coin.pk_y.unwrap()),
-        root_sk: Value::known(coin.root_sk.unwrap()),
-        sf_root_sk: Value::known(mod_r_p(coin.root_sk.unwrap())),
-        path_sk: Value::known(coin.path_sk.unwrap()),
-        coin_timestamp: Value::known(coin.tau.unwrap()), //
-        coin_nonce: Value::known(coin.nonce.unwrap()),
-        coin1_blind: Value::known(coin.c1_blind.unwrap()),
-        value: Value::known(coin.value.unwrap()),
-        coin2_blind: Value::known(coin.c2_blind.unwrap()),
-        cm_pos: Value::known(coin.idx),
-        //sn_c1: Value::known(coin.sn.unwrap()),
-        slot: Value::known(coin.sl.unwrap()),
-        mau_rho: Value::known(mod_r_p(coin.rho_mu.unwrap())),
-        mau_y: Value::known(mod_r_p(coin.y_mu.unwrap())),
-        root_cm: Value::known(coin.root_cm.unwrap()),
-    };
-
+    let contract = coin.create_contract();
     //let proof = create_lead_proof(lead_pk.clone(), coin.clone()).unwrap();
     //verify_lead_proof(&lead_vk, &proof, coin);
 

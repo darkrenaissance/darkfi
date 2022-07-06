@@ -8,6 +8,7 @@ use crate::{
 use pasta_curves::{
     pallas,
 };
+
 use group::ff::PrimeField;
 
 pub struct Stakeholder

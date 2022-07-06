@@ -1,9 +1,12 @@
 use pasta_curves::pallas;
-
-use crate::crypto::{
-    constants::MERKLE_DEPTH_ORCHARD,
-    merkle_node::MerkleNode,
-    util::{mod_r_p, pedersen_commitment_scalar},
+use halo2_proofs::{circuit::Value};
+use crate::{
+    zk::circuit::lead_contract::LeadContract,
+    crypto::{
+        constants::MERKLE_DEPTH_ORCHARD,
+        merkle_node::MerkleNode,
+        util::{mod_r_p, pedersen_commitment_scalar},
+    }
 };
 
 use incrementalmerkletree::Hashable;
@@ -88,5 +91,29 @@ impl LeadCoin {
             //po_cmp,
         ];
         public_inputs
+    }
+
+    pub fn create_contract(&self) -> LeadContract
+    {
+        let contract = LeadContract {
+            path: Value::known(self.path.unwrap()),
+            coin_pk_x: Value::known(self.pk_x.unwrap()),
+            coin_pk_y: Value::known(self.pk_y.unwrap()),
+            root_sk: Value::known(self.root_sk.unwrap()),
+            sf_root_sk: Value::known(mod_r_p(self.root_sk.unwrap())),
+            path_sk: Value::known(self.path_sk.unwrap()),
+            coin_timestamp: Value::known(self.tau.unwrap()), //
+            coin_nonce: Value::known(self.nonce.unwrap()),
+            coin1_blind: Value::known(self.c1_blind.unwrap()),
+            value: Value::known(self.value.unwrap()),
+            coin2_blind: Value::known(self.c2_blind.unwrap()),
+            cm_pos: Value::known(self.idx),
+            //sn_c1: Value::known(self.sn.unwrap()),
+            slot: Value::known(self.sl.unwrap()),
+            mau_rho: Value::known(mod_r_p(self.rho_mu.unwrap())),
+            mau_y: Value::known(mod_r_p(self.y_mu.unwrap())),
+            root_cm: Value::known(self.root_cm.unwrap()),
+        };
+        contract
     }
 }
