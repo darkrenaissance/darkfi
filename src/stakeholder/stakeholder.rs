@@ -17,7 +17,8 @@ pub struct Stakeholder
 
 impl Stakeholder
 {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Result<Self>
+    {
         //TODO initialize the blockchain
         let path = "/tmp";
         let db = sled::open(path).unwrap();
@@ -37,7 +38,10 @@ impl Stakeholder
     {
         let last_proof_slot : u64 = 0;
         let (sl, proof_tx_hash) = self.blockchain.last().unwrap();
-        let bytes = *proof_tx_hash.as_bytes();
+        let mut bytes : [u8;32] = *proof_tx_hash.as_bytes();
+        // read first 254 bits
+        bytes[30] = 0;
+        bytes[31] = 0;
         pallas::Base::from_repr(bytes).unwrap()
     }
 }
