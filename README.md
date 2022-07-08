@@ -5,6 +5,9 @@
 [![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-informational?logo=minutemailer&logoColor=white&style=flat-square)](https://dark.fi/manifesto.html)
 [![Book - mdbook](https://img.shields.io/badge/Book-mdbook-orange?logo=gitbook&logoColor=white&style=flat-square)](https://darkrenaissance.github.io/darkfi)
 
+## Connect to darkfi IRC
+
+Follow [installation instructions](https://darkrenaissance.github.io/darkfi/misc/ircd.html#installation) for the p2p IRC daemon.
 
 ## Build
 
