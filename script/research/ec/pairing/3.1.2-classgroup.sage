@@ -11,7 +11,7 @@ inf = E(0)
 D1 = ((1, P), (1, Q), (1, R))
 D2 = ((4, inf), (-1, S))
 
-# D1 ~ D2 <=> D1 = D2 + <f>
+# D1 ~ D2 <=> D1 = D2 + div(f)
 # sum(div(f)) = O, deg(div(f)) = 0
 
 def dsum(D):
