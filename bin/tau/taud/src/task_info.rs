@@ -17,7 +17,7 @@ use crate::{
     util::{find_free_id, load, random_ref_id, save},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, Eq)]
 struct TaskEvent {
     action: String,
     timestamp: Timestamp,
@@ -46,7 +46,7 @@ impl Comment {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskEvents(Vec<TaskEvent>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskComments(Vec<Comment>);

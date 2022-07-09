@@ -88,6 +88,7 @@ fn load_task_path_from_osstr(task_path: std::path::PathBuf) -> Option<String> {
 }
 
 async fn start_sync_loop(
+    commits_received: Arc<Mutex<Vec<String>>>,
     broadcast_rcv: async_channel::Receiver<TaskInfo>,
     raft_msgs_sender: async_channel::Sender<EncryptedTask>,
     commits_recv: async_channel::Receiver<EncryptedTask>,
@@ -115,6 +116,9 @@ async fn start_sync_loop(
                 }
 
                 let task = task.unwrap();
+                if !commits_received.lock().await.contains(&task.ref_id) {
+                    commits_received.lock().await.push(task.ref_id.clone());
+                }
                 info!(target: "tau", "Receive update from the commits {:?}", task);
                 task.save(&datastore_path)?;
             }
@@ -123,17 +127,16 @@ async fn start_sync_loop(
 }
 
 async fn watch_files(
+    commits_received: Arc<Mutex<Vec<String>>>,
     broadcast_snd: async_channel::Sender<TaskInfo>,
     datastore_path: std::path::PathBuf,
     (tx, rx): (mpsc::Sender<DebouncedEvent>, mpsc::Receiver<DebouncedEvent>),
 ) -> TaudResult<()> {
-    let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(1)).unwrap();
+    let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_millis(500)).unwrap();
 
     let watch_path = datastore_path.join("task");
     info!("Start watching local tasks files: {:?}", &watch_path);
     watcher.watch(watch_path, RecursiveMode::Recursive).unwrap();
-
-    let mut last_write = TaskInfo::new("", "", "", None, 0.0, &datastore_path)?;
 
     loop {
         let event = rx.recv();
@@ -145,33 +148,31 @@ async fn watch_files(
 
         let event = event.unwrap();
         match event {
-            DebouncedEvent::Write(ev) => {
+            DebouncedEvent::Write(ev) | DebouncedEvent::Create(ev) => {
                 let task_path = load_task_path_from_osstr(ev);
 
                 if task_path.is_none() {
                     continue
                 }
 
-                if let Ok(task) = TaskInfo::load(&task_path.unwrap(), &datastore_path) {
-                    if last_write == task {
-                        continue
-                    }
+                let task = TaskInfo::load(&task_path.unwrap(), &datastore_path);
 
-                    last_write = task.clone();
-
-                    broadcast_snd.send(task).await.map_err(Error::from)?;
-                }
-            }
-            DebouncedEvent::Create(ev) => {
-                let task_path = load_task_path_from_osstr(ev);
-
-                if task_path.is_none() {
+                if let Err(_) = task {
                     continue
                 }
 
-                if let Ok(task) = TaskInfo::load(&task_path.unwrap(), &datastore_path) {
-                    broadcast_snd.send(task).await.map_err(Error::from)?;
+                let task = task.unwrap();
+
+                let mut commits_received = commits_received.lock().await;
+                if commits_received.contains(&task.ref_id) {
+                    let index_task =
+                        commits_received.iter().position(|r| r == &task.ref_id).unwrap();
+                    commits_received.remove(index_task);
+                    continue
                 }
+                drop(commits_received);
+
+                broadcast_snd.send(task).await.map_err(Error::from)?;
             }
             DebouncedEvent::Error(err, _) => {
                 warn!("Catching files changes: {}", err);
@@ -244,8 +245,11 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         seen_net_msgs.clone(),
     )?;
 
+    let commits_received: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+
     executor
         .spawn(start_sync_loop(
+            commits_received.clone(),
             broadcast_rcv,
             raft.get_msgs_channel(),
             raft.get_commits_channel(),
@@ -285,7 +289,14 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     // Watch changes in tasks files
     //
     let (tx, rx) = mpsc::channel();
-    executor.spawn(watch_files(broadcast_snd, datastore_path.clone(), (tx.clone(), rx))).detach();
+    executor
+        .spawn(watch_files(
+            commits_received,
+            broadcast_snd,
+            datastore_path.clone(),
+            (tx.clone(), rx),
+        ))
+        .detach();
 
     //
     // Waiting Exit signal
