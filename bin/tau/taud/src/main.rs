@@ -1,10 +1,11 @@
 use async_std::sync::{Arc, Mutex};
-use std::{env, fs::create_dir_all};
+use std::{env, fs::create_dir_all, sync::mpsc, time::Duration};
 
 use async_executor::Executor;
 use crypto_box::{aead::Aead, Box, SecretKey, KEY_SIZE};
 use futures::{select, FutureExt};
 use log::{debug, error, info, warn};
+use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use smol::future;
 use structopt_toml::StructOptToml;
 
@@ -72,8 +73,22 @@ fn decrypt_task(encrypt_task: &EncryptedTask, secret_key: &SecretKey) -> TaudRes
     Ok(task)
 }
 
+fn load_task_path_from_osstr(task_path: std::path::PathBuf) -> Option<String> {
+    if task_path.file_name().is_none() {
+        return None
+    }
+
+    let task_path = task_path.file_name().unwrap().to_str().unwrap_or("");
+
+    if task_path.is_empty() {
+        return None
+    }
+
+    Some(task_path.to_string())
+}
+
 async fn start_sync_loop(
-    rpc_rcv: async_channel::Receiver<Option<TaskInfo>>,
+    broadcast_rcv: async_channel::Receiver<TaskInfo>,
     raft_msgs_sender: async_channel::Sender<EncryptedTask>,
     commits_recv: async_channel::Receiver<EncryptedTask>,
     datastore_path: std::path::PathBuf,
@@ -84,14 +99,11 @@ async fn start_sync_loop(
 
     loop {
         select! {
-            task = rpc_rcv.recv().fuse() => {
-                let task = task.map_err(Error::from)?;
-                if let Some(tk) = task {
-                    info!(target: "tau", "Save the received task {:?}", tk);
-                    let encrypted_task = encrypt_task(&tk, &secret_key,&mut rng)?;
-                    tk.save(&datastore_path)?;
-                    raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
-                }
+            task = broadcast_rcv.recv().fuse() => {
+                let tk = task.map_err(Error::from)?;
+                info!(target: "tau", "Save the received task {:?}", tk);
+                let encrypted_task = encrypt_task(&tk, &secret_key,&mut rng)?;
+                raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
             }
             task = commits_recv.recv().fuse() => {
                 let recv = task.map_err(Error::from)?;
@@ -108,6 +120,67 @@ async fn start_sync_loop(
             }
         }
     }
+}
+
+async fn watch_files(
+    broadcast_snd: async_channel::Sender<TaskInfo>,
+    datastore_path: std::path::PathBuf,
+    (tx, rx): (mpsc::Sender<DebouncedEvent>, mpsc::Receiver<DebouncedEvent>),
+) -> TaudResult<()> {
+    let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_secs(1)).unwrap();
+
+    let watch_path = datastore_path.join("task");
+    info!("Start watching local tasks files: {:?}", &watch_path);
+    watcher.watch(watch_path, RecursiveMode::Recursive).unwrap();
+
+    let mut last_write = TaskInfo::new("", "", "", None, 0.0, &datastore_path)?;
+
+    loop {
+        let event = rx.recv();
+
+        if let Err(e) = event {
+            error!("Watch files error: {:?}", e);
+            continue
+        }
+
+        let event = event.unwrap();
+        match event {
+            DebouncedEvent::Write(ev) => {
+                let task_path = load_task_path_from_osstr(ev);
+
+                if task_path.is_none() {
+                    continue
+                }
+
+                if let Ok(task) = TaskInfo::load(&task_path.unwrap(), &datastore_path) {
+                    if last_write == task {
+                        continue
+                    }
+
+                    last_write = task.clone();
+
+                    broadcast_snd.send(task).await.map_err(Error::from)?;
+                }
+            }
+            DebouncedEvent::Create(ev) => {
+                let task_path = load_task_path_from_osstr(ev);
+
+                if task_path.is_none() {
+                    continue
+                }
+
+                if let Ok(task) = TaskInfo::load(&task_path.unwrap(), &datastore_path) {
+                    broadcast_snd.send(task).await.map_err(Error::from)?;
+                }
+            }
+            DebouncedEvent::Error(err, _) => {
+                warn!("Catching files changes: {}", err);
+                break
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 async_daemonize!(realmain);
@@ -150,19 +223,17 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         SecretKey::try_from(sk_bytes)?
     };
 
+    let (broadcast_snd, broadcast_rcv) = async_channel::unbounded::<TaskInfo>();
+
     //
     // RPC
     //
-
-    let (rpc_snd, rpc_rcv) = async_channel::unbounded::<Option<TaskInfo>>();
-    let rpc_interface =
-        Arc::new(JsonRpcInterface::new(rpc_snd, datastore_path.clone(), nickname.unwrap()));
+    let rpc_interface = Arc::new(JsonRpcInterface::new(datastore_path.clone(), nickname.unwrap()));
     executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface)).detach();
 
     //
     //Raft
     //
-
     let net_settings = settings.net;
     let seen_net_msgs = Arc::new(Mutex::new(vec![]));
 
@@ -175,16 +246,18 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     executor
         .spawn(start_sync_loop(
-            rpc_rcv,
+            broadcast_rcv,
             raft.get_msgs_channel(),
             raft.get_commits_channel(),
-            datastore_path,
+            datastore_path.clone(),
             secret_key,
             rng,
         ))
         .detach();
 
+    //
     // P2p setup
+    //
     let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<NetMsg>();
 
     let p2p = net::P2p::new(net_settings.into()).await;
@@ -208,15 +281,25 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     executor.spawn(p2p.clone().run(executor.clone())).detach();
 
+    //
+    // Watch changes in tasks files
+    //
+    let (tx, rx) = mpsc::channel();
+    executor.spawn(watch_files(broadcast_snd, datastore_path.clone(), (tx.clone(), rx))).detach();
+
+    //
+    // Waiting Exit signal
+    //
     let (signal, shutdown) = async_channel::bounded::<()>(1);
     ctrlc_async::set_async_handler(async move {
-        warn!(target: "tau", "taud start() Exit Signal");
+        warn!(target: "tau", "Catch exit signal");
         // cleaning up tasks running in the background
         signal.send(()).await.unwrap();
+        tx.send(DebouncedEvent::Error(notify::Error::Generic("Catch exit signal".into()), None))
+            .unwrap();
     })
     .unwrap();
 
-    // blocking
     raft.start(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
 
     Ok(())

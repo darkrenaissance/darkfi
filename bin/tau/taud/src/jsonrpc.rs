@@ -11,7 +11,6 @@ use darkfi::{
         server::RequestHandler,
     },
     util::Timestamp,
-    Error,
 };
 
 use crate::{
@@ -22,7 +21,6 @@ use crate::{
 
 pub struct JsonRpcInterface {
     dataset_path: PathBuf,
-    notify_queue_sender: async_channel::Sender<Option<TaskInfo>>,
     nickname: String,
 }
 
@@ -36,8 +34,6 @@ struct BaseTaskInfo {
     rank: Option<f32>,
 }
 
-// TODO: Make more like RPC in darkfid, this implies the method categories,
-// and function signatures, and safety checks.
 #[async_trait]
 impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
@@ -46,10 +42,6 @@ impl RequestHandler for JsonRpcInterface {
         }
 
         let params = req.params.as_array().unwrap();
-
-        if self.notify_queue_sender.send(None).await.is_err() {
-            return JsonError::new(ErrorCode::InternalError, None, req.id).into()
-        }
 
         let rep = match req.method.as_str() {
             Some("add") => self.add(params).await,
@@ -66,12 +58,8 @@ impl RequestHandler for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
-    pub fn new(
-        notify_queue_sender: async_channel::Sender<Option<TaskInfo>>,
-        dataset_path: PathBuf,
-        nickname: String,
-    ) -> Self {
-        Self { notify_queue_sender, dataset_path, nickname }
+    pub fn new(dataset_path: PathBuf, nickname: String) -> Self {
+        Self { dataset_path, nickname }
     }
 
     // RPCAPI:
@@ -104,8 +92,7 @@ impl JsonRpcInterface {
         new_task.set_project(&task.project);
         new_task.set_assign(&task.assign);
 
-        self.notify_queue_sender.send(Some(new_task)).await.map_err(Error::from)?;
-
+        new_task.save(&self.dataset_path)?;
         Ok(json!(true))
     }
 
@@ -132,9 +119,7 @@ impl JsonRpcInterface {
         }
 
         let task = self.check_params_for_update(&params[0], &params[1])?;
-
-        self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
-
+        task.save(&self.dataset_path)?;
         Ok(json!(true))
     }
 
@@ -160,7 +145,7 @@ impl JsonRpcInterface {
             task.set_state(&state);
         }
 
-        self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
+        task.save(&self.dataset_path)?;
 
         Ok(json!(true))
     }
@@ -181,7 +166,8 @@ impl JsonRpcInterface {
         let mut task: TaskInfo = self.load_task_by_id(&params[0])?;
         task.set_comment(Comment::new(&comment_content, &self.nickname));
 
-        self.notify_queue_sender.send(Some(task)).await.map_err(Error::from)?;
+        task.save(&self.dataset_path)?;
+
         Ok(json!(true))
     }
 
