@@ -89,9 +89,7 @@ impl SeedSession {
         Ok(())
     }
 
-    /// Connects to a seed socket address. Registers a new channel with a
-    /// network handshake, then starts the keep-alive messages and seed
-    /// protocol.
+    /// Connects to a seed socket address.
     async fn start_seed(
         self: Arc<Self>,
         seed_index: usize,
