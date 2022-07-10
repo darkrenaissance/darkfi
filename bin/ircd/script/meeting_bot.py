@@ -48,15 +48,15 @@ async def start():
 
             reply = None
 
-            if msg_title == "#m_start":
+            if msg_title == "!start":
                 reply = f"PRIVMSG {channel} :meeting started \r\n"
-                msg_title = "#m_list"
+                msg_title = "!list"
 
-            if msg_title == "#m_end":
+            if msg_title == "!end":
                 reply = f"PRIVMSG {channel} :meeting end \r\n"
                 topics = []
 
-            if msg_title == "#m_topic":
+            if msg_title == "!topic":
                 topic = msg.split(" ", 4)
                 if len(topic) != 5:
                     continue
@@ -64,7 +64,7 @@ async def start():
                 topics.append(topic)
                 reply = f"PRIVMSG {channel} :add topic: {topic} \r\n"
 
-            if msg_title == "#m_list":
+            if msg_title == "!list":
                 rep = f"PRIVMSG {channel} :topics: \r\n"
                 writer.write(rep.encode('utf8'))
 
@@ -73,7 +73,7 @@ async def start():
                     writer.write(rep.encode('utf8'))
                 await writer.drain()
 
-            if msg_title == "#m_next":
+            if msg_title == "!next":
                 if len(topics) == 0:
                     reply = f"PRIVMSG {channel} :no topics \r\n"
                 else:
