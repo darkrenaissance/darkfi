@@ -96,8 +96,6 @@ async fn start_sync_loop(
     secret_key: SecretKey,
     mut rng: crypto_box::rand_core::OsRng,
 ) -> TaudResult<()> {
-    info!(target: "tau", "Start sync loop");
-
     loop {
         select! {
             task = broadcast_rcv.recv().fuse() => {
@@ -175,7 +173,7 @@ async fn watch_files(
                 broadcast_snd.send(task).await.map_err(Error::from)?;
             }
             DebouncedEvent::Error(err, _) => {
-                warn!("Catching files changes: {}", err);
+                debug!("Watching files Error: {}", err);
                 break
             }
             _ => {}
@@ -305,13 +303,19 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     ctrlc_async::set_async_handler(async move {
         warn!(target: "tau", "Catch exit signal");
         // cleaning up tasks running in the background
-        signal.send(()).await.unwrap();
-        tx.send(DebouncedEvent::Error(notify::Error::Generic("Catch exit signal".into()), None))
-            .unwrap();
+        if let Err(e) = signal.send(()).await {
+            error!("Error on sending exit signal: {}", e);
+        }
     })
     .unwrap();
 
     raft.start(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
+
+    if let Ok(_) =
+        tx.send(DebouncedEvent::Error(notify::Error::Generic("Catch exit signal".into()), None))
+    {
+        warn!(target: "tau", "Terminating..");
+    }
 
     Ok(())
 }
