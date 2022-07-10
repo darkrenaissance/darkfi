@@ -65,7 +65,7 @@ enum TauSubcommand {
         /// Task ID
         task_id: u64,
         /// Comment content
-        content: Option<String>,
+        content: Vec<String>,
     },
 
     /// Get task info by ID
@@ -127,15 +127,16 @@ async fn main() -> Result<()> {
                 }
             },
 
-            TauSubcommand::Comment { task_id, content } => match content {
-                Some(content) => tau.set_comment(task_id, content.trim()).await,
-                None => {
+            TauSubcommand::Comment { task_id, content } => {
+                if content.is_empty() {
                     let task = tau.get_task_by_id(task_id).await?;
                     let comments = comments_as_string(task.comments);
                     println!("Comments {}:\n{}", task_id, comments);
                     Ok(())
+                } else {
+                    tau.set_comment(task_id, &content.join(" ")).await
                 }
-            },
+            }
 
             TauSubcommand::Info { task_id } => {
                 let task = tau.get_task_by_id(task_id).await?;
