@@ -28,9 +28,9 @@ use super::{
 const HEARTBEATTIMEOUT: u64 = 500;
 const TIMEOUT: u64 = 6000;
 const TIMEOUT_NODES: u64 = 1000;
-const SYNC_TIMEOUT_FOR_EACH_ATTEMPT: u64 = 1000;
+const SYNC_TIMEOUT_FOR_EACH_ATTEMPT: u64 = 1500;
 
-const SYNC_ATTEMPTS: u64 = 8;
+const SYNC_ATTEMPTS: u64 = 12;
 
 async fn load_node_ids_loop(
     nodes: Arc<Mutex<HashMap<NodeId, Url>>>,
