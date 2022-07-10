@@ -1,6 +1,41 @@
-use darkfi::{util::Timestamp, Result};
+use std::{fmt, str::FromStr};
+
+use darkfi::{util::Timestamp, Error, Result};
 
 use crate::due_as_timestamp;
+
+pub enum State {
+    Open,
+    Start,
+    Pause,
+    Stop,
+}
+
+impl fmt::Display for State {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            State::Open => write!(f, "open"),
+            State::Start => write!(f, "start"),
+            State::Stop => write!(f, "stop"),
+            State::Pause => write!(f, "pause"),
+        }
+    }
+}
+
+impl FromStr for State {
+    type Err = Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let result = match s.to_lowercase().as_str() {
+            "open" => State::Open,
+            "stop" => State::Stop,
+            "start" => State::Start,
+            "pause" => State::Pause,
+            _ => return Err(Error::ParseFailed("unable to parse state")),
+        };
+        Ok(result)
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct BaseTask {
@@ -42,7 +77,7 @@ impl std::fmt::Display for TaskEvent {
 
 impl Default for TaskEvent {
     fn default() -> Self {
-        Self { action: "open".into(), timestamp: Timestamp::current_time() }
+        Self { action: State::Open.to_string(), timestamp: Timestamp::current_time() }
     }
 }
 

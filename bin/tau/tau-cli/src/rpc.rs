@@ -4,7 +4,7 @@ use serde_json::json;
 use darkfi::{rpc::jsonrpc::JsonRequest, Result};
 
 use crate::{
-    primitives::{BaseTask, TaskInfo},
+    primitives::{BaseTask, State, TaskInfo},
     Tau,
 };
 
@@ -45,8 +45,8 @@ impl Tau {
     }
 
     /// Set the state for a task.
-    pub async fn set_state(&self, id: u64, state: &str) -> Result<()> {
-        let req = JsonRequest::new("set_state", json!([id, state]));
+    pub async fn set_state(&self, id: u64, state: &State) -> Result<()> {
+        let req = JsonRequest::new("set_state", json!([id, state.to_string()]));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);

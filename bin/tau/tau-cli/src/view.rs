@@ -49,10 +49,12 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
     for task in tasks {
         let state = task.events.last().unwrap_or(&TaskEvent::default()).action.clone();
 
-        let (max_style, min_style, mid_style, gen_style) = if state == "open" {
-            ("bFC", "Fb", "Fc", "")
+        let (max_style, min_style, mid_style, gen_style) = if state == "start" {
+            ("Fc", "Fc", "Fc", "Fc")
+        } else if state == "pause" {
+            ("Fy", "Fy", "Fy", "Fy")
         } else {
-            ("iFYBd", "iFYBd", "iFYBd", "iFYBd")
+            ("", "", "", "")
         };
 
         let rank = task.rank.to_string();

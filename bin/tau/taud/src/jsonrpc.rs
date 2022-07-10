@@ -129,7 +129,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     async fn set_state(&self, params: &[Value]) -> TaudResult<Value> {
         // Allowed states for a task
-        let states = ["stop", "open", "pause"];
+        let states = ["stop", "start", "open", "pause"];
 
         debug!(target: "tau", "JsonRpc::set_state() params {:?}", params);
 

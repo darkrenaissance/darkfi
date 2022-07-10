@@ -1,4 +1,4 @@
-use std::process::exit;
+use std::{process::exit, str::FromStr};
 
 use clap::{Parser, Subcommand};
 use log::error;
@@ -17,7 +17,7 @@ mod rpc;
 mod util;
 mod view;
 
-use primitives::{task_from_cli, TaskEvent};
+use primitives::{task_from_cli, State, TaskEvent};
 use util::{desc_in_editor, due_as_timestamp};
 use view::{comments_as_string, print_task_info, print_task_list};
 
@@ -87,9 +87,6 @@ async fn main() -> Result<()> {
     let rpc_client = RpcClient::new(args.endpoint).await?;
     let tau = Tau { rpc_client };
 
-    // Allowed states for a task
-    let states = ["stop", "open", "pause"];
-
     // Parse subcommands
     match args.command {
         Some(sc) => match sc {
@@ -115,14 +112,10 @@ async fn main() -> Result<()> {
             TauSubcommand::State { task_id, state } => match state {
                 Some(state) => {
                     let state = state.trim().to_lowercase();
-                    if states.contains(&state.as_str()) {
-                        tau.set_state(task_id, &state).await
+                    if let Ok(st) = State::from_str(&state) {
+                        tau.set_state(task_id, &st).await
                     } else {
-                        error!(
-                            "Task state can only be one of the following {}: {:?}",
-                            states.len(),
-                            states
-                        );
+                        error!("State can only be one of the following: open start stop pause",);
                         Ok(())
                     }
                 }
