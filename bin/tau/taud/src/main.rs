@@ -74,9 +74,7 @@ fn decrypt_task(encrypt_task: &EncryptedTask, secret_key: &SecretKey) -> TaudRes
 }
 
 fn load_task_path_from_osstr(task_path: std::path::PathBuf) -> Option<String> {
-    if task_path.file_name().is_none() {
-        return None
-    }
+    task_path.file_name()?;
 
     let task_path = task_path.file_name().unwrap().to_str().unwrap_or("");
 
@@ -155,7 +153,7 @@ async fn watch_files(
 
                 let task = TaskInfo::load(&task_path.unwrap(), &datastore_path);
 
-                if let Err(_) = task {
+                if task.is_err() {
                     continue
                 }
 
@@ -311,8 +309,9 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     raft.start(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
 
-    if let Ok(_) =
-        tx.send(DebouncedEvent::Error(notify::Error::Generic("Catch exit signal".into()), None))
+    if tx
+        .send(DebouncedEvent::Error(notify::Error::Generic("Catch exit signal".into()), None))
+        .is_ok()
     {
         warn!(target: "tau", "Terminating..");
     }
