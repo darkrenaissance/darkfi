@@ -1,0 +1,26 @@
+on: [push]
+
+jobs:
+  send-message:
+    runs-on: ubuntu-latest
+    name: Send message via Matrix
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - run: |
+          ALL_MSGS=""
+          for i in ${{ join(github.event.commits.*.id, ' ') }}; do
+            MSG=$(git --no-pager show -s --format='%h <b>%an</b>: %s' $i)
+            ALL_MSGS="$ALL_MSGS$MSG<br>"
+          done
+          echo "::set-output name=COMMIT_MESSAGE::$ALL_MSGS"
+        id: commit-message
+      - uses: Gottox/irc-message-action@v2 
+        with:
+          server: 'irc1.dark.fi'
+          channel: '#dev'
+          nickname: b1-66er
+          message: '${{ steps.commit-message.outputs.COMMIT_MESSAGE }}'
+
