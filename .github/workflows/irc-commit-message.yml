@@ -3,7 +3,7 @@ on: [push]
 jobs:
   send-message:
     runs-on: ubuntu-latest
-    name: Send message via Matrix
+    name: Send message via IRC 
     steps:
       - name: checkout
         uses: actions/checkout@v2
