@@ -1,7 +1,14 @@
 [package]
 name = "taud"
+description = "Encrypted tasks management app using peer-to-peer network and raft consensus."
 version = "0.3.0"
 edition = "2021"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
+homepage = "https://dark.fi"
+repository = "https://github.com/darkrenaissance/darkfi"
+keywords = []
+categories = []
 
 [dependencies]
 darkfi = { path = "../../../", features = ["rpc", "raft", "net"]}

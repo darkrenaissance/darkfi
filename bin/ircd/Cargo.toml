@@ -1,12 +1,14 @@
 [package]
 name = "ircd"
-version = "0.3.0"
-homepage = "https://dark.fi"
 description = "P2P IRC daemon"
-authors = ["darkfi <dev@dark.fi>"]
-repository = "https://github.com/darkrenaissance/darkfi"
-license = "AGPL-3.0-only"
+version = "0.3.0"
 edition = "2021"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
+homepage = "https://dark.fi"
+repository = "https://github.com/darkrenaissance/darkfi"
+keywords = []
+categories = []
 
 [dependencies]
 darkfi = {path = "../../", features = ["net", "rpc"]}
@@ -32,7 +34,7 @@ simplelog = "0.12.0"
 fxhash = "0.2.1"
 ctrlc-async = {version= "3.2.2", default-features = false, features = ["async-std", "termination"]}
 url = "2.2.2"
-ringbuffer = "0.8.4" 
+ringbuffer = "0.8.4"
 
 # Encoding and parsing
 serde_json = "1.0.82"
