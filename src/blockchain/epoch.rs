@@ -86,22 +86,13 @@ impl Epoch {
             let sk_bytes = if _i ==0 {
                 let base = pedersen_commitment_scalar(pallas::Scalar::one(), pallas::Scalar::random(&mut rng));
                 let coord = base.to_affine().coordinates().unwrap();
-                //let sk_base =  coord.x() * coord.y();
-                let sk_base =  pallas::Base::one();
-                prev_sk_base = sk_base;
-                sk_base.to_repr()
-            } else {
-                /*
-                let base = pedersen_commitment_scalar(pallas::Scalar::one(), mod_r_p(prev_sk_base));
-                let coord = base.to_affine().coordinates().unwrap();
                 let sk_base =  coord.x() * coord.y();
                 prev_sk_base = sk_base;
                 sk_base.to_repr()
-                 */
-                let base = pedersen_commitment_scalar(pallas::Scalar::one(), pallas::Scalar::random(&mut rng));
+            } else {
+                let base = pedersen_commitment_scalar(pallas::Scalar::one(), mod_r_p(prev_sk_base));
                 let coord = base.to_affine().coordinates().unwrap();
-                //let sk_base =  coord.x() * coord.y();
-                let sk_base =  pallas::Base::one();
+                let sk_base =  coord.x() * coord.y();
                 prev_sk_base = sk_base;
                 sk_base.to_repr()
             };

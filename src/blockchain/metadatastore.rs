@@ -1,5 +1,5 @@
 use crate::{
-    consensus::{Block, StreamletMetadata, OuroborosMetadata},
+    consensus::{Block, StreamletMetadata, OuroborosMetadata, TransactionLeadProof},
     util::{
         serial::{deserialize, serialize},
         time::Timestamp,
@@ -120,11 +120,14 @@ impl OuroborosMetadataStore {
             let genesis_block = Block::genesis_block(genesis_ts, genesis_data);
             let genesis_hash = blake3::hash(&serialize(&genesis_block));
 
+            let empty_lead_proof = TransactionLeadProof::default();
             let metadata = OuroborosMetadata {
-                eta,
+                eta: eta,
+                lead_proof: empty_lead_proof,
             };
 
-            store.insert(&[genesis_hash], &[metadata])?;
+            store.insert(&[genesis_hash],
+                         &[metadata])?;
         }
 
         Ok(store)

@@ -12,7 +12,7 @@ use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, Metadata, Participant, ProposalChain, StreamletMetadata, Vote,
+    Block, BlockInfo, BlockProposal, Metadata, Participant, ProposalChain, StreamletMetadata, Vote, TransactionLeadProof,
 };
 use crate::{
     blockchain::Blockchain,
@@ -272,10 +272,12 @@ impl ValidatorState {
         let unproposed_txs = self.unproposed_txs(index);
 
         let eta : [u8;32] = *blake3::hash(b"let there be dark!").as_bytes();
+        let empty_lead_proof = TransactionLeadProof::default();
         let metadata = Metadata::new(
             Timestamp::current_time(),
             // empty seed
             eta,
+            empty_lead_proof,
         );
 
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());

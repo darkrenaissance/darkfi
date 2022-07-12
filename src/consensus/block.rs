@@ -2,7 +2,7 @@ use std::io;
 
 use log::debug;
 
-use super::{Metadata, StreamletMetadata, OuroborosMetadata, BLOCK_VERSION};
+use super::{Metadata, StreamletMetadata, OuroborosMetadata, BLOCK_VERSION, TransactionLeadProof};
 use crate::{
     crypto::{address::Address, keypair::PublicKey, schnorr::Signature},
     impl_vec, net,
@@ -11,6 +11,7 @@ use crate::{
         serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
         time::Timestamp,
     },
+
     Result,
 };
 
@@ -48,8 +49,9 @@ impl Block {
     /// Generate the genesis block.
     pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
         let eta : [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
+        let empty_lead_proof = TransactionLeadProof::default();
         let metadata =
-            Metadata::new(genesis_ts, eta);
+            Metadata::new(genesis_ts, eta, empty_lead_proof);
 
         Self::new(genesis_data, 0, 0, vec![], metadata)
     }

@@ -1,7 +1,11 @@
 use std::time::Instant;
 
+
 use halo2_proofs::circuit::Value;
-use log::debug;
+use log::{
+    debug,
+    error
+};
 use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
@@ -12,7 +16,7 @@ use crate::{
         util::mod_r_p,
     },
     zk::circuit::lead_contract::LeadContract,
-    Result,
+    Result, VerifyResult, VerifyFailed,
 };
 
 use rand::{thread_rng, Rng};
@@ -45,17 +49,21 @@ pub fn create_lead_proof(pk: ProvingKey, coin: LeadCoin) -> Result<Proof> {
         root_cm: Value::known(coin.root_cm.unwrap()),
     };
 
-    let start = Instant::now();
+    //let start = Instant::now();
     let public_inputs = coin.public_inputs();
     let proof = Proof::create(&pk, &[contract], &public_inputs, &mut OsRng)?;
-    debug!("Prove lead: [{:?}]", start.elapsed());
+    //debug!("Prove lead: [{:?}]", start.elapsed());
     Ok(proof)
 }
 
-pub fn verify_lead_proof(vk: &VerifyingKey, proof: &Proof, coin: LeadCoin) -> Result<()> {
+pub fn verify_lead_proof(vk: &VerifyingKey, proof: &Proof, coin: LeadCoin) -> VerifyResult<()> {
     let start = Instant::now();
     let public_inputs = coin.public_inputs();
-    proof.verify(vk, &public_inputs)?;
-    debug!("Verify lead: [{:?}]", start.elapsed());
-    Ok(())
+    match proof.verify(vk, &public_inputs) {
+        Ok(()) => {Ok(())},
+        Err(e) => {
+            error!("lead verification failed: {}", e);
+            Err(VerifyFailed::InternalError("lead verification failure".to_string()))
+        }
+    }
 }

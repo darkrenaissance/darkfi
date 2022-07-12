@@ -1,10 +1,16 @@
 use std::io;
 
+use halo2_proofs::{
+    plonk
+};
+
 use log::error;
 use pasta_curves::group::Group;
 
 use crate::{
     crypto::{
+        leadcoin::LeadCoin,
+        lead_proof,
         burn_proof::verify_burn_proof,
         keypair::PublicKey,
         mint_proof::verify_mint_proof,
