@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use group::ff::PrimeFieldBits;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Chip, Layouter, Value},
+    circuit::{AssignedCell, Chip, Layouter, Region, Value},
     plonk::{Advice, Column, ConstraintSystem, Error, Selector, TableColumn},
     poly::Rotation,
 };
@@ -79,4 +79,86 @@ impl<F: FieldExt + PrimeFieldBits, const WINDOW_SIZE: usize> RangeCheckChip<F, W
             },
         )
     }
+
+    pub fn range_check(
+        &self,
+        mut layouter: impl Layouter<F>,
+        element: AssignedCell<F, F>,
+        num_of_bits: usize,
+        num_of_windows: usize,
+    ) -> Result<(), Error> {
+        assert!(WINDOW_SIZE * num_of_windows < num_of_bits + WINDOW_SIZE);
+
+        layouter.assign_region(
+            || "name",
+            |mut region: Region<'_, F>| {
+                // enable selectors
+                for index in 0..num_of_windows {
+                    self.config.s_rc.enable(&mut region, index);
+                }
+
+                // copy element to z_0
+                let z_0 = element.copy_advice(|| "z_0", &mut region, self.config.z, 0)?;
+
+                let mut z_values: Vec<AssignedCell<F, F>> = vec![z_0.clone()];
+                let mut z = z_0.clone();
+                let decomposed_chunks = z_0
+                    .value()
+                    .map(|val| decompose_value::<F, WINDOW_SIZE>(val, num_of_bits))
+                    .transpose_vec(num_of_windows);
+
+                let two_pow_k_inverse =
+                    Value::known(F::from(1 << WINDOW_SIZE as u64).invert().unwrap());
+                for (i, chunk) in decomposed_chunks.iter().enumerate() {
+                    let z_next = {
+                        let z_curr = z.value().copied();
+                        let chunk_value = chunk
+                            .map(|c| F::from(c.iter().fold(0, |acc, c| (acc << 1) + *c as u64)));
+                        // z_next = (z_curr - k_i) / 2^K
+                        let z_next = (z_curr - chunk_value) * two_pow_k_inverse;
+                        region.assign_advice(
+                            || format!("z_{}", i + 1),
+                            self.config.z,
+                            i + 1,
+                            || z_next,
+                        )?
+                    };
+                    z_values.push(z_next.clone());
+                    z = z_next.clone();
+                }
+
+                assert!(z_values.len() == num_of_windows + 1);
+
+                region.constrain_constant(z_values.last().unwrap().cell(), F::zero())?;
+
+                Ok(())
+            },
+        );
+
+        Ok(())
+    }
+}
+
+/// ### Reference  
+pub fn decompose_value<F: FieldExt + PrimeFieldBits, const WINDOW_SIZE: usize>(
+    value: &F,
+    num_of_bits: usize,
+) -> Vec<[bool; WINDOW_SIZE]> {
+    let padding = (WINDOW_SIZE - num_of_bits % WINDOW_SIZE) % WINDOW_SIZE;
+
+    let bits: Vec<bool> = value
+        .to_le_bits()
+        .into_iter()
+        .take(num_of_bits)
+        .chain(std::iter::repeat(false).take(padding))
+        .collect();
+    assert_eq!(bits.len(), num_of_bits + padding);
+
+    bits.chunks_exact(WINDOW_SIZE)
+        .map(|x| {
+            let chunks = [false; WINDOW_SIZE];
+            chunks.copy_from_slice(x);
+            chunks
+        })
+        .collect()
 }
