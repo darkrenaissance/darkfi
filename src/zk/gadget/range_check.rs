@@ -156,7 +156,7 @@ pub fn decompose_value<F: FieldExt + PrimeFieldBits, const WINDOW_SIZE: usize>(
 
     bits.chunks_exact(WINDOW_SIZE)
         .map(|x| {
-            let chunks = [false; WINDOW_SIZE];
+            let mut chunks = [false; WINDOW_SIZE];
             chunks.copy_from_slice(x);
             chunks
         })
