@@ -9,3 +9,6 @@ pub mod even_bits;
 
 /// Comparison gadget
 pub mod cmp;
+
+/// Range check gadget;
+pub mod range_check;
