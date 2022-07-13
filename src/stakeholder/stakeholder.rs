@@ -38,7 +38,7 @@ impl Stakeholder
     pub fn get_eta(&self) -> pallas::Base
     {
         let last_proof_slot : u64 = 0;
-        let (sl, proof_tx_hash) = self.blockchain.last().unwrap();
+        let proof_tx_hash = self.blockchain.get_last_proof_hash().unwrap();
         let mut bytes : [u8;32] = *proof_tx_hash.as_bytes();
         // read first 254 bits
         bytes[30] = 0;

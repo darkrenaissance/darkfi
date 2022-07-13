@@ -2,6 +2,8 @@ use std::io;
 
 use log::debug;
 
+use std::error;
+
 use crate::{
     consensus::{Block, BlockInfo, StreamletMetadata},
     impl_vec,
@@ -148,6 +150,12 @@ impl Blockchain {
     pub fn last(&self) -> Result<(u64, blake3::Hash)> {
         self.order.get_last()
     }
+
+    pub fn get_last_proof_hash(&self) -> Result<blake3::Hash> {
+        let (hash, om) = self.ouroboros_metadata.get_last().unwrap();
+        Ok(hash)
+    }
+
 }
 
 impl Encodable for blake3::Hash {

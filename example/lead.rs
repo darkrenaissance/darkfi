@@ -59,16 +59,10 @@ fn main() {
 
     //
     //let proof = lead_proof::create_lead_proof(lead_pk.clone(), coin.clone());
-    //lead_proof::verify_lead_proof(&lead_vk, &proof, coin);
 
-    let proof = lead_proof::create_lead_proof(lead_pk.clone(), coin.clone()).unwrap();
+    //TODO (fix) proof panics
     let lead_tx = TransactionLeadProof::new(lead_pk, coin.clone());
-    //TODO (fix)
     //lead_tx.verify(lead_vk, coin);
-    //2 add proof transaction to the blockchain.
-    //2.1 first add the lead proof to the block metadata
-    //2.2 secondly read eta from the proof metadata
-    //3.3 (fix) blake3
     let (st_id, st_hash)  = stakeholder.blockchain.last().unwrap();
     let empty_txs : Vec<Transaction> = vec!();
     let metadata = Metadata::new(Timestamp::current_time(), epoch.eta.to_repr(), lead_tx);

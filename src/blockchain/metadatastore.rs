@@ -196,4 +196,10 @@ impl OuroborosMetadataStore {
 
         Ok(hashes)
     }
+
+    /// Retrive last key/val
+    pub fn get_last(&self) -> Result<(blake3::Hash, OuroborosMetadata)> {
+        let all = self.get_all().unwrap();
+        Ok(all[all.len()-1].clone())
+    }
 }
