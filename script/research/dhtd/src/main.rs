@@ -81,7 +81,8 @@ struct Args {
     verbose: u8,
 }
 
-/// Struct representing DHT daemon state
+/// Struct representing DHT daemon state.
+/// In this example we store String data.
 pub struct Dhtd {
     /// Daemon state
     state: StatePtr,
@@ -118,7 +119,10 @@ impl Dhtd {
         // it will query the P2P network and saves the response in its local cache.
         let key = params[0].to_string();
         match self.state.read().await.map.get(&key) {
-            Some(v) => return JsonResponse::new(json!(v), id).into(),
+            Some(v) => {
+                let string = std::str::from_utf8(&v).unwrap();
+                return JsonResponse::new(json!(string), id).into()
+            }
             None => info!("Requested key doesn't exist, querying the network..."),
         };
 
@@ -146,7 +150,8 @@ impl Dhtd {
                 Some(response) => {
                     info!("Key found!");
                     self.state.write().await.map.insert(response.key, response.value.clone());
-                    JsonResponse::new(json!(response.value), id).into()
+                    let string = std::str::from_utf8(&response.value).unwrap();
+                    JsonResponse::new(json!(string), id).into()
                 }
                 None => {
                     info!("Did not find key: {}", key);
@@ -196,7 +201,7 @@ impl Dhtd {
         let key = params[0].to_string();
         let value = params[1].to_string();
 
-        self.state.write().await.map.insert(key.clone(), value.clone());
+        self.state.write().await.map.insert(key.clone(), value.as_bytes().to_vec());
         // TODO: inform network for the insert/update
 
         JsonResponse::new(json!((key, value)), id).into()

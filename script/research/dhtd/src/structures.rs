@@ -12,13 +12,17 @@ use darkfi::{
 pub type StatePtr = Arc<RwLock<State>>;
 
 // TODO: add lookup table
+// Using string in structures because we are at an external crate
+// and cant use blake3 serialization. To be replaced once merged with core src.
+
 /// Struct representing DHT daemon state.
 pub struct State {
     /// Daemon id
     pub id: blake3::Hash,
-    /// Daemon hasmap, using String as key and value for simplicity
-    pub map: FxHashMap<String, String>,
-    /// Daemon seen requests/responses ids, to prevent rebroadcasting and loops
+    /// Daemon hasmap
+    pub map: FxHashMap<String, Vec<u8>>,
+    /// Daemon seen requests/responses ids and timestamp,
+    /// to prevent rebroadcasting and loops
     pub seen: FxHashMap<String, i64>,
 }
 
@@ -40,9 +44,7 @@ impl State {
 /// This struct represents a DHT key request
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
 pub struct KeyRequest {
-    /// Request id
-    // Using string here because we are at an external crate
-    // and cant use blake3 serialization
+    /// Request id    
     pub id: String,
     /// Daemon id requesting the key
     pub daemon: String,
@@ -76,11 +78,11 @@ pub struct KeyResponse {
     /// Key entry
     pub key: String,
     /// Key value
-    pub value: String,
+    pub value: Vec<u8>,
 }
 
 impl KeyResponse {
-    pub fn new(daemon: String, key: String, value: String) -> Self {
+    pub fn new(daemon: String, key: String, value: Vec<u8>) -> Self {
         // Generate a random id
         let mut rng = rand::thread_rng();
         let n: u16 = rng.gen();
