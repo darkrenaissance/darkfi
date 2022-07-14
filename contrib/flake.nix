@@ -1,7 +1,7 @@
 {
   description = "Darkfi Dev Environment";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-21.11";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-22.05";
   inputs.flake-utils.url = "github:numtide/flake-utils";
   inputs.mozilla = { url = "github:mozilla/nixpkgs-mozilla"; flake = false; };
 
@@ -14,8 +14,8 @@
     } @inputs:
     let rustOverlay = final: prev:
           let rustChannel = prev.rustChannelOf {
-            channel = "1.58.0";
-            sha256 = "sha256-eQBpSmy9+oHfVyPs0Ea+GVZ0fvIatj6QVhNhYKOJ6Jk=";
+            channel = "1.60.0";
+            sha256 = "sha256-otgm+7nEl94JG/B+TYhWseZsHV1voGcBsW/lOD2/68g=";
           };
           in
           { inherit rustChannel;
