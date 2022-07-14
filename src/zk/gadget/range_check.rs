@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use group::ff::PrimeFieldBits;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -6,6 +5,7 @@ use halo2_proofs::{
     plonk::{Advice, Column, ConstraintSystem, Error, Selector, TableColumn},
     poly::Rotation,
 };
+use std::marker::PhantomData;
 
 #[derive(Clone, Debug)]
 pub struct RangeCheckConfig {
@@ -218,14 +218,14 @@ mod tests {
         fn synthesize(
             &self,
             config: Self::Config,
-            layouter: impl Layouter<F>,
+            mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             let chip = RangeCheckChip::<F, WINDOW_SIZE>::construct(config.clone());
 
             // construct `WINDOW_SIZE` lookup table
-            RangeCheckChip::<F, WINDOW_SIZE>::load_k_table(&mut layouter, config.k_values_table);
+            RangeCheckChip::<F, WINDOW_SIZE>::load_k_table(&mut layouter, config.k_values_table)?;
 
-            chip.witness_range_check(&mut layouter, self.value, 0, NUM_OF_BITS, NUM_OF_WINDOWS);
+            chip.witness_range_check(&mut layouter, self.value, 0, NUM_OF_BITS, NUM_OF_WINDOWS)?;
 
             Ok(())
         }
