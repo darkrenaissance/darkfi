@@ -1,5 +1,4 @@
 use std::marker::PhantomData;
-
 use group::ff::PrimeFieldBits;
 use halo2_proofs::{
     arithmetic::FieldExt,
