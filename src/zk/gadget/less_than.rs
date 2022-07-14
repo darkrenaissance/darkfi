@@ -1,10 +1,9 @@
 use std::marker::PhantomData;
-
 use group::ff::PrimeFieldBits;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::Chip,
-    plonk::{Advice, Column, ConstraintSystem, Selector},
+    circuit::{AssignedCell, Chip, Layouter, Region, Value},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
     poly::Rotation,
 };
 
@@ -16,6 +15,7 @@ pub struct LessThanConfig {
     pub a: Column<Advice>,
     pub b: Column<Advice>,
     pub a_offset: Column<Advice>,
+
     pub range_a_config: RangeCheckConfig,
     pub range_a_offset_config: RangeCheckConfig,
 }
@@ -82,11 +82,65 @@ impl<
             let a = meta.query_advice(config.a, Rotation::cur());
             let b = meta.query_advice(config.b, Rotation::cur());
             let a_offset = meta.query_advice(config.a_offset, Rotation::cur());
-
+            let two_pow_m = Expression::Constant(F::from(1 << NUM_OF_BITS));
             // a_offset - 2^m + b - a = 0
-            vec![s_lt * (a_offset + b - a)]
+            vec![s_lt * (a_offset - two_pow_m + b - a)]
         });
 
         config
+    }
+
+    pub fn witness_less_than(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        a: Value<F>,
+        b: Value<F>,
+        offset: usize,
+    ) -> Result<(), Error> {
+        layouter.assign_region(
+            || "less than",
+            |mut region: Region<'_, F>| {
+                let a = region.assign_advice(|| "a", self.config.a, offset, || a)?;
+                let b = region.assign_advice(|| "b", self.config.b, offset, || b)?;
+                self.less_than(region, a, b, offset)?;
+                Ok(())
+            },
+        )
+    }
+
+    pub fn copy_less_than(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        a: AssignedCell<F, F>,
+        b: AssignedCell<F, F>,
+        offset: usize,
+    ) -> Result<(), Error> {
+        layouter.assign_region(
+            || "less than",
+            |mut region: Region<'_, F>| {
+                let a = a.copy_advice(|| "a", &mut region, self.config.a, offset)?;
+                let b = b.copy_advice(|| "b", &mut region, self.config.b, offset)?;
+                self.less_than(region, a, b, offset)?;
+                Ok(())
+            },
+        )
+    }
+
+    pub fn less_than(
+        &self,
+        mut region: Region<'_, F>,
+        a: AssignedCell<F, F>,
+        b: AssignedCell<F, F>,
+        offset: usize,
+    ) -> Result<(), Error> {
+        // enable `less_than` selector
+        self.config.s_lt.enable(&mut region, offset)?;
+
+        // assign `a + offset`
+        let two_pow_m = F::from(1 << NUM_OF_BITS);
+        let a_offset = a.value().zip(b.value()).map(|(a, b)| *a + (two_pow_m - b));
+        let _ = region.assign_advice(|| "offset", self.config.a_offset, offset, || a_offset)?;
+
+        Ok(())
     }
 }
