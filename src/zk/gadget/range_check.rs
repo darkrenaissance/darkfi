@@ -45,6 +45,8 @@ impl<F: FieldExt + PrimeFieldBits, const WINDOW_SIZE: usize> RangeCheckChip<F, W
         k_values_table: TableColumn,
     ) -> RangeCheckConfig {
         let z = meta.advice_column();
+        meta.enable_equality(z);
+
         let s_rc = meta.complex_selector();
 
         let config = RangeCheckConfig { z, s_rc, k_values_table };
@@ -212,6 +214,10 @@ mod tests {
 
         fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
             let table_column = meta.lookup_table_column();
+
+            let constants = meta.fixed_column();
+            meta.enable_constant(constants);
+
             RangeCheckChip::<F, WINDOW_SIZE>::configure(meta, table_column)
         }
 
@@ -232,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bit() {
+    fn test_bit_64() {
         let value = pallas::Base::from(rand::random::<u64>());
         let circuit = MyCircuit::<pallas::Base, 3, 64, 22> { value: Value::known(value) };
         let prover = MockProver::run(8, &circuit, vec![]).unwrap();
