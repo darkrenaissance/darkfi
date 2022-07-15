@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use group::ff::PrimeFieldBits;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -5,7 +7,6 @@ use halo2_proofs::{
     plonk::{Advice, Column, ConstraintSystem, Error, Selector, TableColumn},
     poly::Rotation,
 };
-use std::marker::PhantomData;
 
 #[derive(Clone, Debug)]
 pub struct RangeCheckConfig {
@@ -183,13 +184,13 @@ mod tests {
     use group::ff::PrimeFieldBits;
     use halo2_proofs::{
         arithmetic::FieldExt,
-        circuit::{SimpleFloorPlanner, Value},
-        dev::MockProver,
+        circuit::{floor_planner, Value},
+        dev::{CircuitLayout, MockProver},
         plonk::Circuit,
     };
     use pasta_curves::pallas;
 
-    struct MyCircuit<
+    struct RangeCheckCircuit<
         F: FieldExt + PrimeFieldBits,
         const WINDOW_SIZE: usize,
         const NUM_OF_BITS: usize,
@@ -203,10 +204,10 @@ mod tests {
             const WINDOW_SIZE: usize,
             const NUM_OF_BITS: usize,
             const NUM_OF_WINDOWS: usize,
-        > Circuit<F> for MyCircuit<F, WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
+        > Circuit<F> for RangeCheckCircuit<F, WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
     {
         type Config = RangeCheckConfig;
-        type FloorPlanner = SimpleFloorPlanner;
+        type FloorPlanner = floor_planner::V1;
 
         fn without_witnesses(&self) -> Self {
             Self { value: Value::unknown() }
@@ -238,10 +239,39 @@ mod tests {
     }
 
     #[test]
-    fn test_bit_64() {
-        let value = pallas::Base::from(rand::random::<u64>());
-        let circuit = MyCircuit::<pallas::Base, 3, 64, 22> { value: Value::known(value) };
-        let prover = MockProver::run(8, &circuit, vec![]).unwrap();
-        assert_ne!(prover.verify(), Ok(()));
+    fn range_check_test() {
+        let valid_64bit = vec![
+            pallas::Base::zero(),
+            pallas::Base::one(),
+            pallas::Base::from(u64::MAX),
+            pallas::Base::from(rand::random::<u64>()),
+        ];
+
+        /*
+        let invalid_64bit = vec![
+            pallas::Base::from(u64::MAX as u128 + 1),
+            pallas::Base::from(-1),
+            pallas::Base::from(-u64::MAX),
+        ];
+        */
+
+        let k = 5;
+
+        use plotters::prelude::*;
+        let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> {
+            value: Value::known(pallas::Base::one()),
+        };
+        let root = BitMapBackend::new("target/rangecheck_circuit_layout.png", (3840, 2160))
+            .into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root.titled("Arithmetic Circuit Layout", ("sans-serif", 60)).unwrap();
+        CircuitLayout::default().render(k, &circuit, &root).unwrap();
+
+        for val in valid_64bit {
+            println!("64-bit range check for {:?}", val);
+            let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> { value: Value::known(val) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
     }
 }
