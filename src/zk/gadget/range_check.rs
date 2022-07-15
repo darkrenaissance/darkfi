@@ -239,15 +239,15 @@ mod tests {
     }
 
     #[test]
-    fn range_check_test() {
-        let valid_64bit = vec![
+    fn range_check_64bit() {
+        let valid = vec![
             pallas::Base::zero(),
             pallas::Base::one(),
             pallas::Base::from(u64::MAX),
             pallas::Base::from(rand::random::<u64>()),
         ];
 
-        let invalid_64bit = vec![
+        let invalid = vec![
             -pallas::Base::one(),
             pallas::Base::from_u128(u64::MAX as u128 + 1),
             -pallas::Base::from(u64::MAX),
@@ -259,24 +259,107 @@ mod tests {
         let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> {
             value: Value::known(pallas::Base::one()),
         };
-        let root = BitMapBackend::new("target/rangecheck_circuit_layout.png", (3840, 2160))
+        let root = BitMapBackend::new("target/rangecheck64_circuit_layout.png", (3840, 2160))
             .into_drawing_area();
         root.fill(&WHITE).unwrap();
-        let root = root.titled("Range Check Circuit Layout", ("sans-serif", 60)).unwrap();
+        let root = root.titled("Range Check (64-bit) Circuit Layout", ("sans-serif", 60)).unwrap();
         CircuitLayout::default().render(k, &circuit, &root).unwrap();
 
-        for val in valid_64bit {
+        for val in valid {
             println!("64-bit range check for {:?}", val);
             let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> { value: Value::known(val) };
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             prover.assert_satisfied();
         }
 
-        for val in invalid_64bit {
+        for val in invalid {
             println!("64-bit range check for {:?}", val);
             let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> { value: Value::known(val) };
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             assert!(prover.verify().is_err());
+        }
+    }
+
+    #[test]
+    fn range_check_128bit() {
+        let valid = vec![
+            pallas::Base::zero(),
+            pallas::Base::one(),
+            pallas::Base::from_u128(u128::MAX),
+            pallas::Base::from_u128(rand::random::<u128>()),
+        ];
+
+        let invalid = vec![
+            pallas::Base::from_u128(u128::MAX) + pallas::Base::one(),
+            -pallas::Base::from_u128(u128::MAX),
+        ];
+
+        let k = 6;
+
+        use plotters::prelude::*;
+        let circuit = RangeCheckCircuit::<pallas::Base, 3, 128, 43> {
+            value: Value::known(pallas::Base::one()),
+        };
+        let root = BitMapBackend::new("target/rangecheck128_circuit_layout.png", (3840, 2160))
+            .into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root.titled("Range Check (128-bit) Circuit Layout", ("sans-serif", 60)).unwrap();
+        CircuitLayout::default().render(k, &circuit, &root).unwrap();
+
+        for val in valid {
+            println!("128-bit range check for {:?}", val);
+            let circuit =
+                RangeCheckCircuit::<pallas::Base, 3, 128, 43> { value: Value::known(val) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
+
+        for val in invalid {
+            println!("128-bit range check for {:?}", val);
+            let circuit =
+                RangeCheckCircuit::<pallas::Base, 3, 128, 43> { value: Value::known(val) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            assert!(prover.verify().is_err());
+        }
+    }
+
+    #[test]
+    fn range_check_253bit() {
+        use group::ff::PrimeField;
+
+        let valid = vec![
+            pallas::Base::zero(),
+            pallas::Base::one(),
+            // 2^253 - 1
+            pallas::Base::from_str_vartime(
+                "14474011154664524427946373126085988481658748083205070504932198000989141204991",
+            )
+            .unwrap(),
+            // 2^253 / 2
+            pallas::Base::from_str_vartime(
+                "7237005577332262213973186563042994240829374041602535252466099000494570602496",
+            )
+            .unwrap(),
+        ];
+
+        let k = 7;
+
+        use plotters::prelude::*;
+        let circuit = RangeCheckCircuit::<pallas::Base, 3, 253, 85> {
+            value: Value::known(pallas::Base::one()),
+        };
+        let root = BitMapBackend::new("target/rangecheck253_circuit_layout.png", (3840, 2160))
+            .into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root.titled("Range Check (253-bit) Circuit Layout", ("sans-serif", 60)).unwrap();
+        CircuitLayout::default().render(k, &circuit, &root).unwrap();
+
+        for val in valid {
+            println!("253-bit range check for {:?}", val);
+            let circuit =
+                RangeCheckCircuit::<pallas::Base, 3, 253, 85> { value: Value::known(val) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
         }
     }
 }
