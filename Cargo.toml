@@ -99,7 +99,7 @@ tungstenite = {version = "0.17.2", optional = true}
 async-tungstenite = {version = "0.17.2", optional = true}
 
 # socks5
-fast-socks5 = {git = "https://github.com/ghassmo/fast-socks5", optional = true}
+fast-socks5 = {version = "0.4.3", optional = true}
 
 # Crypto
 bitvec = {version = "1.0.0", optional = true}

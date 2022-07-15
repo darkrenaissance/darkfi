@@ -1647,7 +1647,8 @@ checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 [[package]]
 name = "fast-socks5"
 version = "0.4.3"
-source = "git+https://github.com/ghassmo/fast-socks5#52118864c981a418b167bfa4f0a92de6fbed30e7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba337793c1ee49731350a8d971d791651ed51d6e814ab4ddabd79c12b5366140"
 dependencies = [
  "anyhow",
  "async-std",
