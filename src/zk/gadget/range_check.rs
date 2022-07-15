@@ -132,7 +132,7 @@ impl<F: FieldExt + PrimeFieldBits, const WINDOW_SIZE: usize> RangeCheckChip<F, W
             let z_next = {
                 let z_curr = z.value().copied();
                 let chunk_value =
-                    chunk.map(|c| F::from(c.iter().fold(0, |acc, c| (acc << 1) + *c as u64)));
+                    chunk.map(|c| F::from(c.iter().rev().fold(0, |acc, c| (acc << 1) + *c as u64)));
                 // z_next = (z_curr - k_i) / 2^K
                 let z_next = (z_curr - chunk_value) * two_pow_k_inverse;
                 region.assign_advice(
@@ -255,7 +255,7 @@ mod tests {
         ];
         */
 
-        let k = 5;
+        let k = 8;
 
         use plotters::prelude::*;
         let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> {
@@ -268,10 +268,16 @@ mod tests {
         CircuitLayout::default().render(k, &circuit, &root).unwrap();
 
         for val in valid_64bit {
-            println!("64-bit range check for {:?}", val);
             let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> { value: Value::known(val) };
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             prover.assert_satisfied();
         }
     }
+    // #[test]
+    // fn test_bit_64() {
+    //     let value = pallas::Base::from(rand::random::<u64>());
+    //     let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> { value: Value::known(value) };
+    //     let prover = MockProver::run(8, &circuit, vec![]).unwrap();
+    //     assert_eq!(prover.verify(), Ok(()));
+    // }
 }
