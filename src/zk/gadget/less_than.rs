@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use group::ff::PrimeFieldBits;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -5,7 +7,6 @@ use halo2_proofs::{
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector, TableColumn},
     poly::Rotation,
 };
-use std::marker::PhantomData;
 
 use super::range_check::{RangeCheckChip, RangeCheckConfig};
 
@@ -151,13 +152,13 @@ mod tests {
     use group::ff::PrimeFieldBits;
     use halo2_proofs::{
         arithmetic::FieldExt,
-        circuit::{SimpleFloorPlanner, Value},
-        dev::MockProver,
+        circuit::{floor_planner, Value},
+        dev::{CircuitLayout, MockProver},
         plonk::Circuit,
     };
     use pasta_curves::pallas;
 
-    struct MyCircuit<
+    struct LessThanCircuit<
         F: FieldExt + PrimeFieldBits,
         const WINDOW_SIZE: usize,
         const NUM_OF_BITS: usize,
@@ -172,10 +173,10 @@ mod tests {
             const WINDOW_SIZE: usize,
             const NUM_OF_BITS: usize,
             const NUM_OF_WINDOWS: usize,
-        > Circuit<F> for MyCircuit<F, WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
+        > Circuit<F> for LessThanCircuit<F, WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
     {
         type Config = LessThanConfig;
-        type FloorPlanner = SimpleFloorPlanner;
+        type FloorPlanner = floor_planner::V1;
 
         fn without_witnesses(&self) -> Self {
             Self { a: Value::unknown(), b: Value::unknown() }
@@ -215,12 +216,34 @@ mod tests {
     }
 
     #[test]
-    fn test_a_b_128_bits() {
-        let a = pallas::Base::from_u128(rand::random::<u128>());
-        let b = a + pallas::Base::from_u128(rand::random::<u128>());
-        let circuit =
-            MyCircuit::<pallas::Base, 10, 253, 26> { a: Value::known(a), b: Value::known(b) };
-        let prover = MockProver::run(8, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()));
+    fn less_than() {
+        let k = 5;
+
+        let valid_a_vals = vec![pallas::Base::zero(), pallas::Base::from(15)];
+        let valid_b_vals = vec![pallas::Base::one(), pallas::Base::from(11)];
+
+        use plotters::prelude::*;
+        let circuit = LessThanCircuit::<pallas::Base, 10, 253, 26> {
+            a: Value::known(pallas::Base::zero()),
+            b: Value::known(pallas::Base::one()),
+        };
+        let root = BitMapBackend::new("target/lessthan_circuit_layout.png", (3840, 2160))
+            .into_drawing_area();
+        CircuitLayout::default().render(k, &circuit, &root).unwrap();
+
+        for i in 0..valid_a_vals.len() {
+            let a = valid_a_vals[i];
+            let b = valid_b_vals[i];
+
+            println!("{:?} < {:?}", a, b);
+
+            let circuit = LessThanCircuit::<pallas::Base, 10, 253, 26> {
+                a: Value::known(a),
+                b: Value::known(b),
+            };
+
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
     }
 }

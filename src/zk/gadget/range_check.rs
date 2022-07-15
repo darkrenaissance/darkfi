@@ -96,7 +96,7 @@ impl<F: FieldExt + PrimeFieldBits, const WINDOW_SIZE: usize> RangeCheckChip<F, W
         num_of_windows: usize,
     ) -> Result<(), Error> {
         layouter.assign_region(
-            || "name",
+            || "witness range check",
             |mut region: Region<'_, F>| {
                 let z_0 = region.assign_advice(|| "z_0", self.config.z, offset, || value)?;
                 self.decompose(region, z_0, offset, num_of_bits, num_of_windows)?;
