@@ -247,15 +247,13 @@ mod tests {
             pallas::Base::from(rand::random::<u64>()),
         ];
 
-        /*
         let invalid_64bit = vec![
-            pallas::Base::from(u64::MAX as u128 + 1),
-            pallas::Base::from(-1),
-            pallas::Base::from(-u64::MAX),
+            -pallas::Base::one(),
+            pallas::Base::from_u128(u64::MAX as u128 + 1),
+            -pallas::Base::from(u64::MAX),
         ];
-        */
 
-        let k = 8;
+        let k = 5;
 
         use plotters::prelude::*;
         let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> {
@@ -264,20 +262,21 @@ mod tests {
         let root = BitMapBackend::new("target/rangecheck_circuit_layout.png", (3840, 2160))
             .into_drawing_area();
         root.fill(&WHITE).unwrap();
-        let root = root.titled("Arithmetic Circuit Layout", ("sans-serif", 60)).unwrap();
+        let root = root.titled("Range Check Circuit Layout", ("sans-serif", 60)).unwrap();
         CircuitLayout::default().render(k, &circuit, &root).unwrap();
 
         for val in valid_64bit {
+            println!("64-bit range check for {:?}", val);
             let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> { value: Value::known(val) };
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             prover.assert_satisfied();
         }
+
+        for val in invalid_64bit {
+            println!("64-bit range check for {:?}", val);
+            let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> { value: Value::known(val) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            assert!(prover.verify().is_err());
+        }
     }
-    // #[test]
-    // fn test_bit_64() {
-    //     let value = pallas::Base::from(rand::random::<u64>());
-    //     let circuit = RangeCheckCircuit::<pallas::Base, 3, 64, 22> { value: Value::known(value) };
-    //     let prover = MockProver::run(8, &circuit, vec![]).unwrap();
-    //     assert_eq!(prover.verify(), Ok(()));
-    // }
 }
