@@ -34,7 +34,7 @@ mod error;
 use error::{server_error, RpcError};
 
 mod structures;
-use structures::{KeyRequest, KeyResponse, State, StatePtr};
+use structures::{KeyRequest, KeyResponse, LookupRequest, State, StatePtr};
 
 mod protocol;
 use protocol::Protocol;
@@ -82,7 +82,8 @@ struct Args {
 }
 
 /// Struct representing DHT daemon state.
-/// In this example we store String data.
+/// This example/temp-impl stores String data.
+/// In final version everything will be in bytes (Vec<u8).
 pub struct Dhtd {
     /// Daemon state
     state: StatePtr,
@@ -105,7 +106,7 @@ impl Dhtd {
     }
 
     // RPCAPI:
-    // Checks if provided key exist in local map, otherwise queries the network.
+    // Checks if provided key exists and retrieve it from the local map or queries the network.
     // Returns key value or not found message.
     // --> {"jsonrpc": "2.0", "method": "get", "params": ["key"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "value", "id": 1}
@@ -114,16 +115,27 @@ impl Dhtd {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
+        // Node verifies the key exist in the lookup map.
+        let key = params[0].to_string();
+        let peers = match self.state.read().await.lookup.get(&key) {
+            Some(v) => v.clone(),
+            None => {
+                info!("Did not find key: {}", key);
+                return server_error(RpcError::UnknownKey, id).into()
+            }
+        };
+
+        debug!("Key is in peers: {:?}", peers);
+
         // Each node holds a local map, acting as its cache.
         // When the node receives a request for a key it doesn't hold,
         // it will query the P2P network and saves the response in its local cache.
-        let key = params[0].to_string();
         match self.state.read().await.map.get(&key) {
             Some(v) => {
                 let string = std::str::from_utf8(&v).unwrap();
                 return JsonResponse::new(json!(string), id).into()
             }
-            None => info!("Requested key doesn't exist, querying the network..."),
+            None => info!("Requested key doesn't exist locally, querying the network..."),
         };
 
         // We retrieve p2p network connected channels, to verify if we
@@ -136,9 +148,11 @@ impl Dhtd {
         }
 
         // We create a key request, and broadcast it to the network
-        // TODO: this should be based on the lookup table, and ask peers directly
         let daemon = self.state.read().await.id.to_string();
-        let request = KeyRequest::new(daemon, key.clone());
+        // We choose last known peer as request recipient
+        let peer = peers.iter().last().unwrap().to_string();
+        let request = KeyRequest::new(daemon.clone(), peer, key.clone());
+        // TODO: ask connected peers directly, not broadcast
         if let Err(e) = self.p2p.broadcast(request).await {
             error!("Failed broadcasting request: {}", e);
             return server_error(RpcError::RequestBroadcastFail, id)
@@ -149,9 +163,8 @@ impl Dhtd {
             Ok(resp) => match resp {
                 Some(response) => {
                     info!("Key found!");
-                    self.state.write().await.map.insert(response.key, response.value.clone());
-                    let string = std::str::from_utf8(&response.value).unwrap();
-                    JsonResponse::new(json!(string), id).into()
+                    let string = std::str::from_utf8(&response.value).unwrap().to_string();
+                    self.insert_pair(id, response.key, string).await
                 }
                 None => {
                     info!("Did not find key: {}", key);
@@ -166,7 +179,6 @@ impl Dhtd {
     }
 
     // Auxilary function to wait for a key response from the P2P network.
-    // TODO: if no node holds the key, we shouldn't wait until the request timeout.
     async fn waiting_for_response(&self) -> Result<Option<KeyResponse>> {
         let ex = Arc::new(async_executor::Executor::new());
         let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
@@ -201,10 +213,62 @@ impl Dhtd {
         let key = params[0].to_string();
         let value = params[1].to_string();
 
-        self.state.write().await.map.insert(key.clone(), value.as_bytes().to_vec());
-        // TODO: inform network for the insert/update
+        self.insert_pair(id, key, value).await
+    }
+
+    /// Auxilary function to handle pair insertion to state
+    async fn insert_pair(&self, id: Value, key: String, value: String) -> JsonResult {
+        if let Err(e) = self.state.write().await.insert(key.clone(), value.as_bytes().to_vec()) {
+            error!("Failed to insert key: {}", e);
+            return server_error(RpcError::KeyInsertFail, id)
+        }
+
+        let daemon = self.state.read().await.id.to_string();
+        let request = LookupRequest::new(daemon, key.clone(), 0);
+        if let Err(e) = self.p2p.broadcast(request).await {
+            error!("Failed broadcasting request: {}", e);
+            return server_error(RpcError::RequestBroadcastFail, id)
+        }
 
         JsonResponse::new(json!((key, value)), id).into()
+    }
+
+    // RPCAPI:
+    // Remove key value pair from local map.
+    // --> {"jsonrpc": "2.0", "method": "remove", "params": ["key"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "key", "id": 1}
+    async fn remove(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let key = params[0].to_string();
+        // Check if key value pair existed and act accordingly
+        let result = self.state.write().await.remove(key.clone());
+        match result {
+            Ok(option) => match option {
+                Some(k) => {
+                    info!("Key removed: {}", k);
+
+                    let daemon = self.state.read().await.id.to_string();
+                    let request = LookupRequest::new(daemon, key.clone(), 1);
+                    if let Err(e) = self.p2p.broadcast(request).await {
+                        error!("Failed broadcasting request: {}", e);
+                        return server_error(RpcError::RequestBroadcastFail, id)
+                    }
+
+                    JsonResponse::new(json!(k), id).into()
+                }
+                None => {
+                    info!("Did not find key: {}", key);
+                    server_error(RpcError::UnknownKey, id).into()
+                }
+            },
+            Err(e) => {
+                error!("Failed to remove key: {}", e);
+                server_error(RpcError::KeyRemoveFail, id)
+            }
+        }
     }
 
     // RPCAPI:
@@ -214,6 +278,15 @@ impl Dhtd {
     pub async fn map(&self, id: Value, _params: &[Value]) -> JsonResult {
         let map = self.state.read().await.map.clone();
         JsonResponse::new(json!(map), id).into()
+    }
+
+    // RPCAPI:
+    // Returns current lookup map.
+    // --> {"jsonrpc": "2.0", "method": "lookup", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "lookup", "id": 1}
+    pub async fn lookup(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let lookup = self.state.read().await.lookup.clone();
+        JsonResponse::new(json!(lookup), id).into()
     }
 }
 
@@ -229,7 +302,9 @@ impl RequestHandler for Dhtd {
         match req.method.as_str() {
             Some("get") => return self.get(req.id, params).await,
             Some("insert") => return self.insert(req.id, params).await,
+            Some("remove") => return self.remove(req.id, params).await,
             Some("map") => return self.map(req.id, params).await,
+            Some("lookup") => return self.lookup(req.id, params).await,
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
