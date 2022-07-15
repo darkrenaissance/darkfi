@@ -1,11 +1,11 @@
-use std::marker::PhantomData;
 use group::ff::PrimeFieldBits;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Chip, Layouter, Region, Value},
-    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector, TableColumn},
     poly::Rotation,
 };
+use std::marker::PhantomData;
 
 use super::range_check::{RangeCheckChip, RangeCheckConfig};
 
@@ -66,11 +66,11 @@ impl<
         a: Column<Advice>,
         b: Column<Advice>,
         a_offset: Column<Advice>,
+        k_values_table: TableColumn,
     ) -> LessThanConfig {
         let s_lt = meta.selector();
 
         // configure range check for `a` and `offset`
-        let k_values_table = meta.lookup_table_column();
         let range_a_config = RangeCheckChip::<F, WINDOW_SIZE>::configure(meta, k_values_table);
         let range_a_offset_config =
             RangeCheckChip::<F, WINDOW_SIZE>::configure(meta, k_values_table);
@@ -142,5 +142,85 @@ impl<
         let _ = region.assign_advice(|| "offset", self.config.a_offset, offset, || a_offset)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use group::ff::PrimeFieldBits;
+    use halo2_proofs::{
+        arithmetic::FieldExt,
+        circuit::{SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::Circuit,
+    };
+    use pasta_curves::pallas;
+
+    struct MyCircuit<
+        F: FieldExt + PrimeFieldBits,
+        const WINDOW_SIZE: usize,
+        const NUM_OF_BITS: usize,
+        const NUM_OF_WINDOWS: usize,
+    > {
+        a: Value<F>,
+        b: Value<F>,
+    }
+
+    impl<
+            F: FieldExt + PrimeFieldBits,
+            const WINDOW_SIZE: usize,
+            const NUM_OF_BITS: usize,
+            const NUM_OF_WINDOWS: usize,
+        > Circuit<F> for MyCircuit<F, WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
+    {
+        type Config = LessThanConfig;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            Self { a: Value::unknown(), b: Value::unknown() }
+        }
+
+        fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = meta.advice_column();
+            let b = meta.advice_column();
+            let a_offset = meta.advice_column();
+
+            let k_values_table = meta.lookup_table_column();
+
+            let constants = meta.fixed_column();
+            meta.enable_constant(constants);
+
+            LessThanChip::<F, NUM_OF_BITS, WINDOW_SIZE, NUM_OF_WINDOWS>::configure(
+                meta,
+                a,
+                b,
+                a_offset,
+                k_values_table,
+            )
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let less_than_chip =
+                LessThanChip::<F, NUM_OF_BITS, WINDOW_SIZE, NUM_OF_BITS>::construct(config);
+
+            less_than_chip.witness_less_than(&mut layouter, self.a, self.b, 0)?;
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_a_b_128_bits() {
+        let a = pallas::Base::from_u128(rand::random::<u128>());
+        let b = a + pallas::Base::from_u128(rand::random::<u128>());
+        let circuit =
+            MyCircuit::<pallas::Base, 10, 253, 26> { a: Value::known(a), b: Value::known(b) };
+        let prover = MockProver::run(8, &circuit, vec![]).unwrap();
+        assert_eq!(prover.verify(), Ok(()));
     }
 }
