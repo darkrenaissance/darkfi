@@ -19,8 +19,8 @@ pub mod net;
 #[cfg(feature = "node")]
 pub mod node;
 
-#[cfg(feature = "wasm-runtime")]
-pub mod runtime;
+//#[cfg(feature = "wasm-runtime")]
+//pub mod runtime;
 
 #[cfg(feature = "raft")]
 pub mod raft;
