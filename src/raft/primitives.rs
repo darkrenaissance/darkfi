@@ -102,9 +102,6 @@ impl Logs {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-    pub fn push(&mut self, d: &Log) {
-        self.0.push(d.clone());
-    }
 
     pub fn slice_from(&self, start: u64) -> Option<Self> {
         if self.len() >= start {

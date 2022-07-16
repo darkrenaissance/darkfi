@@ -86,11 +86,19 @@ impl<T: Decodable + Encodable> DataTree<T> {
         Ok(ret)
     }
 
+    pub fn len(&self) -> u64 {
+        self.tree.len() as u64
+    }
+
     pub fn get_last(&self) -> Result<Option<T>> {
         if let Some(found) = self.tree.last()? {
             let da = deserialize(&found.1)?;
             return Ok(Some(da))
         }
         Ok(None)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.tree.is_empty()
     }
 }
