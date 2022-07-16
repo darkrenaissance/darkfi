@@ -286,9 +286,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             let logs = if sr.logs_len == 0 {
                 self.logs()?.clone()
             } else if self.logs_len() >= sr.logs_len &&
-                self.logs()?.get(sr.logs_len - 1)?.term == sr.last_term
+                self.get_log(sr.logs_len - 1)?.term == sr.last_term
             {
-                self.logs()?.slice_from(sr.logs_len).unwrap()
+                self.slice_logs_from(sr.logs_len)?
             } else {
                 wipe = true;
                 self.logs()?.clone()
@@ -331,7 +331,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
 
         for i in self.commits_len()..sr.commit_length {
-            self.push_commit(&self.logs()?.get(i)?.msg).await?;
+            self.push_commit(&self.get_log(i)?.msg).await?;
         }
 
         self.current_leader = Some(sr.leader_id.clone());
@@ -491,6 +491,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         Ok(())
     }
 
+    // only the leader broadcast this
     async fn update_logs(&self, node_id: &NodeId) -> Result<()> {
         let prefix_len = match self.sent_length.get(node_id) {
             Ok(len) => len,
@@ -500,16 +501,15 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
         };
 
-        let suffix: Logs = if self.logs()?.slice_from(prefix_len).is_some() {
-            self.logs()?.slice_from(prefix_len).unwrap()
-        } else {
-            return Ok(())
+        let suffix: Logs = match self.slice_logs_from(prefix_len) {
+            Ok(l) => l,
+            Err(_) => return Ok(()),
         };
 
         let mut prefix_term = 0;
 
         if prefix_len > 0 {
-            prefix_term = self.logs()?.get(prefix_len - 1)?.term;
+            prefix_term = self.get_log(prefix_len - 1)?.term;
         }
 
         let request = LogRequest {
@@ -539,7 +539,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
 
         let mut ok = (self.logs_len() >= lr.prefix_len) &&
-            (lr.prefix_len == 0 || self.logs()?.get(lr.prefix_len - 1)?.term == lr.prefix_term);
+            (lr.prefix_len == 0 || self.get_log(lr.prefix_len - 1)?.term == lr.prefix_term);
 
         let mut ack = 0;
 
@@ -626,10 +626,10 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let max_ready = *ready.iter().max().unwrap();
 
         if max_ready > self.commits_len() &&
-            self.logs()?.get(max_ready - 1)?.term == self.current_term()?
+            self.get_log(max_ready - 1)?.term == self.current_term()?
         {
             for i in self.commits_len()..max_ready {
-                self.push_commit(&self.logs()?.get(i)?.msg).await?;
+                self.push_commit(&self.get_log(i)?.msg).await?;
             }
         }
 
@@ -644,8 +644,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     ) -> Result<()> {
         if !suffix.is_empty() && self.logs_len() > prefix_len {
             let index = min(self.logs_len(), prefix_len + suffix.len()) - 1;
-            if self.logs()?.get(index)?.term != suffix.get(index - prefix_len)?.term {
-                self.push_logs(&self.logs()?.slice_to(prefix_len))?;
+            if self.get_log(index)?.term != suffix.get(index - prefix_len)?.term {
+                self.push_logs(&self.slice_logs_to(prefix_len)?)?;
             }
         }
 
@@ -657,7 +657,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         if leader_commit > self.commits_len() {
             for i in self.commits_len()..leader_commit {
-                self.push_commit(&self.logs()?.get(i)?.msg).await?;
+                self.push_commit(&self.get_log(i)?.msg).await?;
             }
         }
 
@@ -702,5 +702,14 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
     fn last_log(&self) -> Result<Option<Log>> {
         self.datastore.logs.get_last()
+    }
+    fn get_log(&self, index: u64) -> Result<Log> {
+        self.datastore.logs.get(index)
+    }
+    fn slice_logs_from(&self, index: u64) -> Result<Logs> {
+        Ok(Logs(self.datastore.logs.get_gt(index)?))
+    }
+    fn slice_logs_to(&self, index: u64) -> Result<Logs> {
+        Ok(Logs(self.datastore.logs.get_lt(index)?))
     }
 }

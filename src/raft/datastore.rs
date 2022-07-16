@@ -5,7 +5,7 @@ use sled::Batch;
 
 use crate::{
     util::serial::{deserialize, serialize, Decodable, Encodable},
-    Result,
+    Error, Result,
 };
 
 use super::primitives::{Log, NodeId};
@@ -54,8 +54,12 @@ impl<T: Decodable + Encodable> DataTree<T> {
 
     pub fn insert(&self, data: &T) -> Result<()> {
         let serialized = serialize(data);
-        let datahash = blake3::hash(&serialized);
-        self.tree.insert(datahash.as_bytes(), serialized)?;
+        let last_index: u64 = if let Some(d) = self.tree.last()? {
+            u64::from_be_bytes(d.0.to_vec().try_into().unwrap())
+        } else {
+            0
+        };
+        self.tree.insert(last_index.to_be_bytes(), serialized)?;
         Ok(())
     }
 
@@ -64,10 +68,9 @@ impl<T: Decodable + Encodable> DataTree<T> {
 
         let mut batch = Batch::default();
 
-        for i in data {
-            let serialized = serialize(i);
-            let hash = blake3::hash(&serialized);
-            batch.insert(hash.as_bytes(), serialized);
+        for (i, d) in data.iter().enumerate() {
+            let serialized = serialize(d);
+            batch.insert(&(i as u64).to_be_bytes(), serialized);
         }
 
         self.tree.apply_batch(batch)?;
@@ -96,6 +99,53 @@ impl<T: Decodable + Encodable> DataTree<T> {
             return Ok(Some(da))
         }
         Ok(None)
+    }
+
+    pub fn get(&self, index: u64) -> Result<T> {
+        let index_bytes = index.to_be_bytes();
+        if let Some(found) = self.tree.get(index_bytes)? {
+            let da = deserialize(&found)?;
+            return Ok(da)
+        }
+        Err(Error::RaftError(format!(
+            "Unable to get the item with index {} {:?}",
+            index,
+            self.is_empty()
+        )))
+    }
+
+    pub fn get_lt(&self, index: u64) -> Result<Vec<T>> {
+        let mut ret: Vec<T> = Vec::new();
+
+        let index = index.to_be_bytes();
+
+        for i in self.tree.get_lt(index).iter() {
+            if i.is_none() {
+                return Ok(ret)
+            }
+            let data = i.as_ref().unwrap();
+            let data = deserialize(&data.1)?;
+            ret.push(data)
+        }
+
+        Ok(ret)
+    }
+
+    pub fn get_gt(&self, index: u64) -> Result<Vec<T>> {
+        let mut ret: Vec<T> = Vec::new();
+
+        let index = (index - 1).to_be_bytes();
+
+        for i in self.tree.get_gt(index).iter() {
+            if i.is_none() {
+                return Ok(ret)
+            }
+            let data = i.as_ref().unwrap();
+            let data = deserialize(&data.1)?;
+            ret.push(data)
+        }
+
+        Ok(ret)
     }
 
     pub fn is_empty(&self) -> bool {
