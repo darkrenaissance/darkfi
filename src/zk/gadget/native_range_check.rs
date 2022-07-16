@@ -202,51 +202,69 @@ mod tests {
     };
     use pasta_curves::arithmetic::FieldExt;
 
-    #[derive(Default)]
-    struct Range64Circuit {
-        a: Value<pallas::Base>,
-    }
+    macro_rules! test_circuit {
+        ($window_size:expr, $num_bits:expr, $num_windows:expr) => {
+            #[derive(Default)]
+            struct RangeCheckCircuit {
+                a: Value<pallas::Base>,
+            }
 
-    impl Circuit<pallas::Base> for Range64Circuit {
-        type Config = (NativeRangeCheckConfig<3, 64, 22>, Column<Advice>);
-        type FloorPlanner = floor_planner::V1;
+            impl Circuit<pallas::Base> for RangeCheckCircuit {
+                type Config =
+                    (NativeRangeCheckConfig<$window_size, $num_bits, $num_windows>, Column<Advice>);
+                type FloorPlanner = floor_planner::V1;
 
-        fn without_witnesses(&self) -> Self {
-            Self::default()
-        }
+                fn without_witnesses(&self) -> Self {
+                    Self::default()
+                }
 
-        fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
-            let w = meta.advice_column();
-            meta.enable_equality(w);
-            let z = meta.advice_column();
-            let table_column = meta.lookup_table_column();
-            let constants = meta.fixed_column();
-            meta.enable_constant(constants);
+                fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+                    let w = meta.advice_column();
+                    meta.enable_equality(w);
+                    let z = meta.advice_column();
+                    let table_column = meta.lookup_table_column();
+                    let constants = meta.fixed_column();
+                    meta.enable_constant(constants);
+                    (
+                        NativeRangeCheckChip::<$window_size, $num_bits, $num_windows>::configure(
+                            meta,
+                            z,
+                            table_column,
+                        ),
+                        w,
+                    )
+                }
 
-            (NativeRangeCheckChip::<3, 64, 22>::configure(meta, z, table_column), w)
-        }
+                fn synthesize(
+                    &self,
+                    config: Self::Config,
+                    mut layouter: impl Layouter<pallas::Base>,
+                ) -> Result<(), plonk::Error> {
+                    let rangecheck_chip =
+                        NativeRangeCheckChip::<$window_size, $num_bits, $num_windows>::construct(
+                            config.0.clone(),
+                        );
+                    rangecheck_chip.load_k_table(&mut layouter, config.0.k_values_table)?;
 
-        fn synthesize(
-            &self,
-            config: Self::Config,
-            mut layouter: impl Layouter<pallas::Base>,
-        ) -> Result<(), plonk::Error> {
-            let rangecheck_chip = NativeRangeCheckChip::<3, 64, 22>::construct(config.0.clone());
-            rangecheck_chip.load_k_table(&mut layouter, config.0.k_values_table)?;
+                    let a = assign_free_advice(layouter.namespace(|| "load a"), config.1, self.a)?;
+                    rangecheck_chip
+                        .copy_range_check(layouter.namespace(|| "copy a and range check"), a)?;
 
-            let a = assign_free_advice(layouter.namespace(|| "load a"), config.1, self.a)?;
-            rangecheck_chip.copy_range_check(layouter.namespace(|| "copy a and range check"), a)?;
+                    rangecheck_chip.witness_range_check(
+                        layouter.namespace(|| "witness a and range check"),
+                        self.a,
+                    )?;
 
-            rangecheck_chip
-                .witness_range_check(layouter.namespace(|| "witness a and range check"), self.a)?;
-
-            Ok(())
-        }
+                    Ok(())
+                }
+            }
+        };
     }
 
     // cargo test --release --all-features --lib native_range_check -- --nocapture
     #[test]
     fn native_range_check_64() {
+        test_circuit!(3, 64, 22);
         let k = 6;
 
         let valid_values = vec![
@@ -275,7 +293,7 @@ mod tests {
         ];
 
         use plotters::prelude::*;
-        let circuit = Range64Circuit { a: Value::known(pallas::Base::one()) };
+        let circuit = RangeCheckCircuit { a: Value::known(pallas::Base::one()) };
         let root =
             BitMapBackend::new("target/native_range_check_64_circuit_layout.png", (3840, 2160))
                 .into_drawing_area();
@@ -286,7 +304,7 @@ mod tests {
 
         for i in valid_values {
             println!("64-bit (valid) range check for {:?}", i);
-            let circuit = Range64Circuit { a: Value::known(i) };
+            let circuit = RangeCheckCircuit { a: Value::known(i) };
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             prover.assert_satisfied();
             println!("Constraints satisfied");
@@ -294,7 +312,107 @@ mod tests {
 
         for i in invalid_values {
             println!("64-bit (invalid) range check for {:?}", i);
-            let circuit = Range64Circuit { a: Value::known(i) };
+            let circuit = RangeCheckCircuit { a: Value::known(i) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            assert!(prover.verify().is_err());
+        }
+    }
+
+    #[test]
+    fn native_range_check_128() {
+        test_circuit!(3, 128, 43);
+        let k = 7;
+
+        let valid_values = vec![
+            pallas::Base::zero(),
+            pallas::Base::one(),
+            pallas::Base::from_u128(u128::MAX),
+            pallas::Base::from_u128(rand::random::<u128>()),
+        ];
+
+        let invalid_values = vec![
+            -pallas::Base::one(),
+            pallas::Base::from_u128(u128::MAX) + pallas::Base::one(),
+            -pallas::Base::from_u128(u128::MAX) + pallas::Base::one(),
+            -pallas::Base::from_u128(u128::MAX),
+        ];
+
+        use plotters::prelude::*;
+        let circuit = RangeCheckCircuit { a: Value::known(pallas::Base::one()) };
+        let root =
+            BitMapBackend::new("target/native_range_check_128_circuit_layout.png", (3840, 2160))
+                .into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root =
+            root.titled("128-bit Native Range Check Circuit Layout", ("sans-serif", 60)).unwrap();
+        CircuitLayout::default().render(k, &circuit, &root).unwrap();
+
+        for i in valid_values {
+            println!("128-bit (valid) range check for {:?}", i);
+            let circuit = RangeCheckCircuit { a: Value::known(i) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+            println!("Constraints satisfied");
+        }
+
+        for i in invalid_values {
+            println!("128-bit (invalid) range check for {:?}", i);
+            let circuit = RangeCheckCircuit { a: Value::known(i) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            assert!(prover.verify().is_err());
+        }
+    }
+
+    #[test]
+    fn native_range_check_253() {
+        test_circuit!(3, 253, 85);
+        let k = 8;
+
+        let valid_values = vec![
+            pallas::Base::zero(),
+            pallas::Base::one(),
+            // 2^253 - 1
+            pallas::Base::from_str_vartime(
+                "14474011154664524427946373126085988481658748083205070504932198000989141204991",
+            )
+            .unwrap(),
+            // 2^253 / 2
+            pallas::Base::from_str_vartime(
+                "7237005577332262213973186563042994240829374041602535252466099000494570602496",
+            )
+            .unwrap(),
+        ];
+
+        let invalid_values = vec![
+            -pallas::Base::one(),
+            // p - 1
+            pallas::Base::from_str_vartime(
+                "28948022309329048855892746252171976963363056481941560715954676764349967630336",
+            )
+            .unwrap(),
+        ];
+
+        use plotters::prelude::*;
+        let circuit = RangeCheckCircuit { a: Value::known(pallas::Base::one()) };
+        let root =
+            BitMapBackend::new("target/native_range_check_253_circuit_layout.png", (3840, 2160))
+                .into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root =
+            root.titled("253-bit Native Range Check Circuit Layout", ("sans-serif", 60)).unwrap();
+        CircuitLayout::default().render(k, &circuit, &root).unwrap();
+
+        for i in valid_values {
+            println!("253-bit (valid) range check for {:?}", i);
+            let circuit = RangeCheckCircuit { a: Value::known(i) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+            println!("Constraints satisfied");
+        }
+
+        for i in invalid_values {
+            println!("253-bit (invalid) range check for {:?}", i);
+            let circuit = RangeCheckCircuit { a: Value::known(i) };
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             assert!(prover.verify().is_err());
         }

@@ -1,5 +1,8 @@
-/// Scalar arithmetic
+/// Base field scalar arithmetic
 pub mod arithmetic;
+
+/// Field-native range check gadget;
+pub mod native_range_check;
 
 /// Even-bits lookup table
 pub mod even_bits;
@@ -10,11 +13,5 @@ pub mod even_bits;
 /// Comparison gadget
 pub mod cmp;
 
-/// Range check gadget;
-//pub mod range_check;
-
 // Less than gadget
 //pub mod less_than;
-
-/// Field-native range check gadget;
-pub mod native_range_check;
