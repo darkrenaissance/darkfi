@@ -240,6 +240,7 @@ mod tests {
             meta.enable_equality(constants);
 
             let f = meta.fixed_column();
+            meta.enable_equality(f);
 
             (RangeCheckChip::<F, WINDOW_SIZE>::configure(meta, table_column), f)
         }

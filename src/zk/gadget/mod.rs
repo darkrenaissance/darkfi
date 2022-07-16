@@ -11,7 +11,10 @@ pub mod even_bits;
 pub mod cmp;
 
 /// Range check gadget;
-pub mod range_check;
+//pub mod range_check;
 
-/// Less than gadget
-pub mod less_than;
+// Less than gadget
+//pub mod less_than;
+
+/// Field-native range check gadget;
+pub mod native_range_check;
