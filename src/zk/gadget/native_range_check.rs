@@ -54,6 +54,9 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         z: Column<Advice>,
         k_values_table: TableColumn,
     ) -> NativeRangeCheckConfig<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS> {
+        // Enable permutation on z column
+        meta.enable_equality(z);
+
         let s_rc = meta.complex_selector();
 
         meta.lookup(|meta| {
@@ -114,7 +117,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
     pub fn decompose(
         &self,
-        mut region: Region<'_, pallas::Base>,
+        region: &mut Region<'_, pallas::Base>,
         z_0: AssignedCell<pallas::Base, pallas::Base>,
         offset: usize,
     ) -> Result<(), plonk::Error> {
@@ -122,7 +125,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
         // Enable selectors
         for index in 0..NUM_WINDOWS {
-            self.config.s_rc.enable(&mut region, index + offset)?;
+            self.config.s_rc.enable(region, index + offset)?;
         }
 
         let mut z_values: Vec<AssignedCell<pallas::Base, pallas::Base>> = vec![z_0.clone()];
@@ -143,7 +146,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
                 region.assign_advice(
                     || format!("z_{}", i + offset + 1),
                     self.config.z,
-                    i + offset,
+                    i + offset + 1,
                     || z_next,
                 )?
             };
@@ -158,14 +161,14 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
     pub fn witness_range_check(
         &self,
-        layouter: &mut impl Layouter<pallas::Base>,
+        mut layouter: impl Layouter<pallas::Base>,
         value: Value<pallas::Base>,
     ) -> Result<(), plonk::Error> {
         layouter.assign_region(
             || format!("witness {}-bit native range check", NUM_BITS),
             |mut region: Region<'_, pallas::Base>| {
                 let z_0 = region.assign_advice(|| "z_0", self.config.z, 0, || value)?;
-                self.decompose(region, z_0, 0)?;
+                self.decompose(&mut region, z_0, 0)?;
                 Ok(())
             },
         )
@@ -173,14 +176,14 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
     pub fn copy_range_check(
         &self,
-        layouter: &mut impl Layouter<pallas::Base>,
+        mut layouter: impl Layouter<pallas::Base>,
         value: AssignedCell<pallas::Base, pallas::Base>,
     ) -> Result<(), plonk::Error> {
         layouter.assign_region(
             || format!("copy {}-bit native range check", NUM_BITS),
             |mut region: Region<'_, pallas::Base>| {
                 let z_0 = value.copy_advice(|| "z_0", &mut region, self.config.z, 0)?;
-                self.decompose(region, z_0, 0)?;
+                self.decompose(&mut region, z_0, 0)?;
                 Ok(())
             },
         )
@@ -199,25 +202,13 @@ mod tests {
     };
     use pasta_curves::arithmetic::FieldExt;
 
-    #[derive(Clone)]
-    struct Range64CircuitConfig {
-        w: Column<Advice>,
-        rangecheck_config: NativeRangeCheckConfig<3, 64, 22>,
-    }
-
-    impl Range64CircuitConfig {
-        fn rangecheck_chip(&self) -> NativeRangeCheckChip<3, 64, 22> {
-            NativeRangeCheckChip::<3, 64, 22>::construct(self.rangecheck_config.clone())
-        }
-    }
-
     #[derive(Default)]
     struct Range64Circuit {
         a: Value<pallas::Base>,
     }
 
     impl Circuit<pallas::Base> for Range64Circuit {
-        type Config = Range64CircuitConfig;
+        type Config = (NativeRangeCheckConfig<3, 64, 22>, Column<Advice>);
         type FloorPlanner = floor_planner::V1;
 
         fn without_witnesses(&self) -> Self {
@@ -225,21 +216,14 @@ mod tests {
         }
 
         fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+            let w = meta.advice_column();
+            meta.enable_equality(w);
+            let z = meta.advice_column();
             let table_column = meta.lookup_table_column();
-
             let constants = meta.fixed_column();
             meta.enable_constant(constants);
 
-            let w = meta.advice_column();
-            meta.enable_equality(w);
-
-            let z = meta.advice_column();
-            meta.enable_equality(z);
-
-            let rangecheck_config =
-                NativeRangeCheckChip::<3, 64, 22>::configure(meta, z, table_column);
-
-            Range64CircuitConfig { w, rangecheck_config }
+            (NativeRangeCheckChip::<3, 64, 22>::configure(meta, z, table_column), w)
         }
 
         fn synthesize(
@@ -247,14 +231,14 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<pallas::Base>,
         ) -> Result<(), plonk::Error> {
-            let rangecheck_chip = config.rangecheck_chip();
+            let rangecheck_chip = NativeRangeCheckChip::<3, 64, 22>::construct(config.0.clone());
+            rangecheck_chip.load_k_table(&mut layouter, config.0.k_values_table)?;
 
-            rangecheck_chip.load_k_table(&mut layouter, config.rangecheck_config.k_values_table)?;
+            let a = assign_free_advice(layouter.namespace(|| "load a"), config.1, self.a)?;
+            rangecheck_chip.copy_range_check(layouter.namespace(|| "copy a and range check"), a)?;
 
-            let a = assign_free_advice(layouter.namespace(|| "load a"), config.w, self.a)?;
-
-            rangecheck_chip.witness_range_check(&mut layouter, self.a)?;
-            rangecheck_chip.copy_range_check(&mut layouter, a)?;
+            rangecheck_chip
+                .witness_range_check(layouter.namespace(|| "witness a and range check"), self.a)?;
 
             Ok(())
         }
