@@ -98,7 +98,7 @@ async fn start_sync_loop(
         select! {
             task = broadcast_rcv.recv().fuse() => {
                 let tk = task.map_err(Error::from)?;
-                info!(target: "tau", "Save the received task {:?}", tk);
+                info!(target: "tau", "Save the task: ref: {}", tk.ref_id);
                 let encrypted_task = encrypt_task(&tk, &secret_key,&mut rng)?;
                 raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
             }
@@ -115,7 +115,7 @@ async fn start_sync_loop(
                 if !commits_received.lock().await.contains(&task.ref_id) {
                     commits_received.lock().await.push(task.ref_id.clone());
                 }
-                info!(target: "tau", "Receive update from the commits {:?}", task);
+                info!(target: "tau", "Update the task: ref: {}", task.ref_id);
                 task.save(&datastore_path)?;
             }
         }

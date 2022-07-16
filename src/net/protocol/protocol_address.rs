@@ -72,7 +72,7 @@ impl ProtocolAddress {
             addrs_msg.addrs.len()
             );
             for (i, addr) in addrs_msg.addrs.iter().enumerate() {
-                debug!("  addr[{}]: {}", i, addr);
+                debug!(target: "net", "  addr[{}]: {}", i, addr);
             }
             self.hosts.store(addrs_msg.addrs.clone()).await;
         }
