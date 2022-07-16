@@ -19,6 +19,7 @@ pub struct LessThanConfig {
 
     pub range_a_config: RangeCheckConfig,
     pub range_a_offset_config: RangeCheckConfig,
+    pub k_values_table: TableColumn,
 }
 
 #[derive(Clone, Debug)]
@@ -71,12 +72,24 @@ impl<
     ) -> LessThanConfig {
         let s_lt = meta.selector();
 
+        meta.enable_equality(a);
+        meta.enable_equality(b);
+        meta.enable_equality(a_offset);
+
         // configure range check for `a` and `offset`
         let range_a_config = RangeCheckChip::<F, WINDOW_SIZE>::configure(meta, k_values_table);
         let range_a_offset_config =
             RangeCheckChip::<F, WINDOW_SIZE>::configure(meta, k_values_table);
 
-        let config = LessThanConfig { s_lt, a, b, a_offset, range_a_config, range_a_offset_config };
+        let config = LessThanConfig {
+            s_lt,
+            a,
+            b,
+            a_offset,
+            range_a_config,
+            range_a_offset_config,
+            k_values_table,
+        };
 
         meta.create_gate("a_offset - 2^m + b - a", |meta| {
             let s_lt = meta.query_selector(config.s_lt);
@@ -98,15 +111,19 @@ impl<
         b: Value<F>,
         offset: usize,
     ) -> Result<(), Error> {
-        layouter.assign_region(
+        let (a, _, a_offset) = layouter.assign_region(
             || "less than",
             |mut region: Region<'_, F>| {
                 let a = region.assign_advice(|| "a", self.config.a, offset, || a)?;
                 let b = region.assign_advice(|| "b", self.config.b, offset, || b)?;
-                self.less_than(region, a, b, offset)?;
-                Ok(())
+                let a_offset = self.less_than(region, a.clone(), b.clone(), offset)?;
+                Ok((a, b, a_offset))
             },
-        )
+        )?;
+
+        self.less_than_range_check(layouter, a, a_offset, offset)?;
+
+        Ok(())
     }
 
     pub fn copy_less_than(
@@ -116,15 +133,43 @@ impl<
         b: AssignedCell<F, F>,
         offset: usize,
     ) -> Result<(), Error> {
-        layouter.assign_region(
+        let (a, _, a_offset) = layouter.assign_region(
             || "less than",
             |mut region: Region<'_, F>| {
                 let a = a.copy_advice(|| "a", &mut region, self.config.a, offset)?;
                 let b = b.copy_advice(|| "b", &mut region, self.config.b, offset)?;
-                self.less_than(region, a, b, offset)?;
-                Ok(())
+                let a_offset = self.less_than(region, a.clone(), b.clone(), offset)?;
+                Ok((a, b, a_offset))
             },
-        )
+        )?;
+
+        self.less_than_range_check(layouter, a, a_offset, offset)?;
+
+        Ok(())
+    }
+
+    pub fn less_than_range_check(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        a: AssignedCell<F, F>,
+        a_offset: AssignedCell<F, F>,
+        offset: usize,
+    ) -> Result<(), Error> {
+        let range_a_chip =
+            RangeCheckChip::<F, WINDOW_SIZE>::construct(self.config.range_a_config.clone());
+        let range_a_offset_chip =
+            RangeCheckChip::<F, WINDOW_SIZE>::construct(self.config.range_a_offset_config.clone());
+
+        range_a_chip.copy_range_check(layouter, a, offset, NUM_OF_BITS, NUM_OF_WINDOWS)?;
+        range_a_offset_chip.copy_range_check(
+            layouter,
+            a_offset,
+            offset,
+            NUM_OF_BITS,
+            NUM_OF_WINDOWS,
+        )?;
+
+        Ok(())
     }
 
     pub fn less_than(
@@ -133,16 +178,17 @@ impl<
         a: AssignedCell<F, F>,
         b: AssignedCell<F, F>,
         offset: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<AssignedCell<F, F>, Error> {
         // enable `less_than` selector
         self.config.s_lt.enable(&mut region, offset)?;
 
         // assign `a + offset`
         let two_pow_m = F::from(1 << NUM_OF_BITS);
         let a_offset = a.value().zip(b.value()).map(|(a, b)| *a + (two_pow_m - b));
-        let _ = region.assign_advice(|| "offset", self.config.a_offset, offset, || a_offset)?;
+        let a_offset =
+            region.assign_advice(|| "offset", self.config.a_offset, offset, || a_offset)?;
 
-        Ok(())
+        Ok(a_offset)
     }
 }
 
@@ -207,7 +253,11 @@ mod tests {
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             let less_than_chip =
-                LessThanChip::<F, NUM_OF_BITS, WINDOW_SIZE, NUM_OF_BITS>::construct(config);
+                LessThanChip::<F, NUM_OF_BITS, WINDOW_SIZE, NUM_OF_WINDOWS>::construct(
+                    config.clone(),
+                );
+
+            RangeCheckChip::<F, WINDOW_SIZE>::load_k_table(&mut layouter, config.k_values_table)?;
 
             less_than_chip.witness_less_than(&mut layouter, self.a, self.b, 0)?;
 
@@ -217,19 +267,19 @@ mod tests {
 
     #[test]
     fn less_than() {
-        let k = 5;
+        let k = 15;
 
-        let valid_a_vals = vec![pallas::Base::zero(), pallas::Base::from(15)];
-        let valid_b_vals = vec![pallas::Base::one(), pallas::Base::from(11)];
+        let valid_a_vals = vec![pallas::Base::from(15)];
+        let valid_b_vals = vec![pallas::Base::from(11)];
 
-        use plotters::prelude::*;
-        let circuit = LessThanCircuit::<pallas::Base, 10, 253, 26> {
-            a: Value::known(pallas::Base::zero()),
-            b: Value::known(pallas::Base::one()),
-        };
-        let root = BitMapBackend::new("target/lessthan_circuit_layout.png", (3840, 2160))
-            .into_drawing_area();
-        CircuitLayout::default().render(k, &circuit, &root).unwrap();
+        // use plotters::prelude::*;
+        // let circuit = LessThanCircuit::<pallas::Base, 10, 253, 26> {
+        //     a: Value::known(pallas::Base::zero()),
+        //     b: Value::known(pallas::Base::one()),
+        // };
+        // let root = BitMapBackend::new("target/lessthan_circuit_layout.png", (3840, 2160))
+        //     .into_drawing_area();
+        // CircuitLayout::default().render(k, &circuit, &root).unwrap();
 
         for i in 0..valid_a_vals.len() {
             let a = valid_a_vals[i];
