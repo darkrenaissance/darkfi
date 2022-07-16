@@ -190,6 +190,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::zk::assign_free_advice;
     use group::ff::PrimeField;
     use halo2_proofs::{
         circuit::floor_planner,
@@ -200,6 +201,7 @@ mod tests {
 
     #[derive(Clone)]
     struct Range64CircuitConfig {
+        w: Column<Advice>,
         rangecheck_config: NativeRangeCheckConfig<3, 64, 22>,
     }
 
@@ -228,13 +230,16 @@ mod tests {
             let constants = meta.fixed_column();
             meta.enable_constant(constants);
 
+            let w = meta.advice_column();
+            meta.enable_equality(w);
+
             let z = meta.advice_column();
             meta.enable_equality(z);
 
             let rangecheck_config =
                 NativeRangeCheckChip::<3, 64, 22>::configure(meta, z, table_column);
 
-            Range64CircuitConfig { rangecheck_config }
+            Range64CircuitConfig { w, rangecheck_config }
         }
 
         fn synthesize(
@@ -245,7 +250,11 @@ mod tests {
             let rangecheck_chip = config.rangecheck_chip();
 
             rangecheck_chip.load_k_table(&mut layouter, config.rangecheck_config.k_values_table)?;
+
+            let a = assign_free_advice(layouter.namespace(|| "load a"), config.w, self.a)?;
+
             rangecheck_chip.witness_range_check(&mut layouter, self.a)?;
+            rangecheck_chip.copy_range_check(&mut layouter, a)?;
 
             Ok(())
         }
@@ -254,7 +263,7 @@ mod tests {
     // cargo test --release --all-features --lib native_range_check -- --nocapture
     #[test]
     fn native_range_check_64() {
-        let k = 5;
+        let k = 6;
 
         let valid_values = vec![
             pallas::Base::zero(),
@@ -296,6 +305,7 @@ mod tests {
             let circuit = Range64Circuit { a: Value::known(i) };
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             prover.assert_satisfied();
+            println!("Constraints satisfied");
         }
 
         for i in invalid_values {
