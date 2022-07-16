@@ -371,7 +371,8 @@ mod tests {
         };
 
         use plotters::prelude::*;
-        let root = BitMapBackend::new("mint_circuit_layout.png", (3840, 2160)).into_drawing_area();
+        let root =
+            BitMapBackend::new("target/mint_circuit_layout.png", (3840, 2160)).into_drawing_area();
         root.fill(&WHITE).unwrap();
         let root = root.titled("Mint Circuit Layout", ("sans-serif", 60)).unwrap();
         CircuitLayout::default().render(8, &circuit, &root).unwrap();
