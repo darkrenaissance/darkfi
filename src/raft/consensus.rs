@@ -2,10 +2,11 @@ use async_std::{
     sync::{Arc, Mutex},
     task,
 };
-use std::{cmp::min, collections::HashMap, path::PathBuf, time::Duration};
+use std::{cmp::min, path::PathBuf, time::Duration};
 
 use async_executor::Executor;
 use futures::{select, FutureExt};
+use fxhash::FxHashMap;
 use log::{debug, error, info, warn};
 use rand::{rngs::OsRng, Rng, RngCore};
 use url::Url;
@@ -33,7 +34,7 @@ const SYNC_TIMEOUT_FOR_EACH_ATTEMPT: u64 = 2000;
 const SYNC_ATTEMPTS: u64 = 30;
 
 async fn load_node_ids_loop(
-    nodes: Arc<Mutex<HashMap<NodeId, Url>>>,
+    nodes: Arc<Mutex<FxHashMap<NodeId, Url>>>,
     p2p: net::P2pPtr,
     role: Role,
 ) -> Result<()> {
@@ -75,7 +76,7 @@ pub struct Raft<T> {
     sent_length: MapLength,
     acked_length: MapLength,
 
-    nodes: Arc<Mutex<HashMap<NodeId, Url>>>,
+    nodes: Arc<Mutex<FxHashMap<NodeId, Url>>>,
 
     last_term: u64,
 
@@ -116,9 +117,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             role,
             current_leader: None,
             votes_received: vec![],
-            sent_length: MapLength(HashMap::new()),
-            acked_length: MapLength(HashMap::new()),
-            nodes: Arc::new(Mutex::new(HashMap::new())),
+            sent_length: MapLength(FxHashMap::default()),
+            acked_length: MapLength(FxHashMap::default()),
+            nodes: Arc::new(Mutex::new(FxHashMap::default())),
             last_term: 0,
             sender,
             msgs_channel,
@@ -599,7 +600,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         Ok(())
     }
 
-    fn acks(&self, nodes: HashMap<NodeId, Url>, length: u64) -> HashMap<NodeId, Url> {
+    fn acks(&self, nodes: FxHashMap<NodeId, Url>, length: u64) -> FxHashMap<NodeId, Url> {
         nodes
             .into_iter()
             .filter(|n| {

@@ -1,5 +1,6 @@
-use std::{collections::HashMap, io};
+use std::io;
 
+use fxhash::FxHashMap;
 use url::Url;
 
 use crate::{
@@ -132,7 +133,7 @@ impl Logs {
 }
 
 #[derive(Clone, Debug)]
-pub struct MapLength(pub HashMap<NodeId, u64>);
+pub struct MapLength(pub FxHashMap<NodeId, u64>);
 
 impl MapLength {
     pub fn get(&self, key: &NodeId) -> Result<u64> {
