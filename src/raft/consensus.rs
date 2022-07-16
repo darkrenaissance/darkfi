@@ -145,10 +145,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         // Sync listener node
         if self.role == Role::Listener {
-            let last_term =
-                if !self.is_logs_empty() { self.get_last_log()?.unwrap().term } else { 0 };
+            let last_term = if !self.is_logs_empty() { self.last_log()?.unwrap().term } else { 0 };
 
-            let sync_request = SyncRequest { logs_len: self.get_logs_len(), last_term };
+            let sync_request = SyncRequest { logs_len: self.logs_len(), last_term };
 
             info!("Start Syncing...");
             for _ in 0..SYNC_ATTEMPTS {
@@ -224,10 +223,10 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     async fn broadcast_msg(&mut self, msg: &T, msg_id: Option<u64>) -> Result<()> {
         if self.role == Role::Leader {
             let msg = serialize(msg);
-            let log = Log { msg, term: self.get_current_term()? };
+            let log = Log { msg, term: self.current_term()? };
             self.push_log(&log)?;
 
-            self.acked_length.insert(&self.id.clone().unwrap(), self.get_logs_len());
+            self.acked_length.insert(&self.id.clone().unwrap(), self.logs_len());
         } else {
             let b_msg = BroadcastMsgRequest(serialize(msg));
             self.send(
@@ -285,19 +284,19 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             let mut wipe = false;
 
             let logs = if sr.logs_len == 0 {
-                self.get_logs()?.clone()
-            } else if self.get_logs_len() >= sr.logs_len &&
-                self.get_logs()?.get(sr.logs_len - 1)?.term == sr.last_term
+                self.logs()?.clone()
+            } else if self.logs_len() >= sr.logs_len &&
+                self.logs()?.get(sr.logs_len - 1)?.term == sr.last_term
             {
-                self.get_logs()?.slice_from(sr.logs_len).unwrap()
+                self.logs()?.slice_from(sr.logs_len).unwrap()
             } else {
                 wipe = true;
-                self.get_logs()?.clone()
+                self.logs()?.clone()
             };
 
             let sync_response = SyncResponse {
                 logs,
-                commit_length: self.get_commits_len(),
+                commit_length: self.commits_len(),
                 leader_id: self.id.clone().unwrap(),
                 wipe,
             };
@@ -327,12 +326,12 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
         }
 
-        if !self.get_logs()?.is_empty() {
-            self.set_current_term(&self.get_logs()?.0.last().unwrap().term.clone())?;
+        if !self.logs()?.is_empty() {
+            self.set_current_term(&self.logs()?.0.last().unwrap().term.clone())?;
         }
 
-        for i in self.get_commits_len()..sr.commit_length {
-            self.push_commit(&self.get_logs()?.get(i)?.msg).await?;
+        for i in self.commits_len()..sr.commit_length {
+            self.push_commit(&self.logs()?.get(i)?.msg).await?;
         }
 
         self.current_leader = Some(sr.leader_id.clone());
@@ -408,7 +407,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let self_id = self.id.clone().unwrap();
 
-        self.set_current_term(&(self.get_current_term()? + 1))?;
+        self.set_current_term(&(self.current_term()? + 1))?;
         self.role = Role::Candidate;
         self.set_voted_for(&Some(self_id.clone()))?;
         self.votes_received = vec![];
@@ -418,8 +417,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let request = VoteRequest {
             node_id: self_id,
-            current_term: self.get_current_term()?,
-            log_length: self.get_logs_len(),
+            current_term: self.current_term()?,
+            log_length: self.logs_len(),
             last_term: self.last_term,
         };
 
@@ -432,7 +431,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             return Ok(())
         }
 
-        if vr.current_term > self.get_current_term()? {
+        if vr.current_term > self.current_term()? {
             self.set_current_term(&vr.current_term)?;
             self.set_voted_for(&None)?;
             self.role = Role::Follower;
@@ -442,22 +441,19 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         // check the logs of the candidate
         let vote_ok = (vr.last_term > self.last_term) ||
-            (vr.last_term == self.last_term && vr.log_length >= self.get_logs_len());
+            (vr.last_term == self.last_term && vr.log_length >= self.logs_len());
 
         // slef.voted_for equal to vr.node_id or is None or voted to someone else
-        let vote = if let Some(voted_for) = self.get_voted_for()? {
-            voted_for == vr.node_id
-        } else {
-            true
-        };
+        let vote =
+            if let Some(voted_for) = self.voted_for()? { voted_for == vr.node_id } else { true };
 
         let mut response = VoteResponse {
             node_id: self.id.clone().unwrap(),
-            current_term: self.get_current_term()?,
+            current_term: self.current_term()?,
             ok: false,
         };
 
-        if vr.current_term == self.get_current_term()? && vote_ok && vote {
+        if vr.current_term == self.current_term()? && vote_ok && vote {
             self.set_voted_for(&Some(vr.node_id.clone()))?;
             response.set_ok(true);
         }
@@ -471,7 +467,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             return Ok(())
         }
 
-        if self.role == Role::Candidate && vr.current_term == self.get_current_term()? && vr.ok {
+        if self.role == Role::Candidate && vr.current_term == self.current_term()? && vr.ok {
             self.votes_received.push(vr.node_id);
 
             let nodes = self.nodes.lock().await;
@@ -482,11 +478,11 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                 self.role = Role::Leader;
                 self.current_leader = Some(self.id.clone().unwrap());
                 for node in nodes_cloned.iter() {
-                    self.sent_length.insert(node.0, self.get_logs_len());
+                    self.sent_length.insert(node.0, self.logs_len());
                     self.acked_length.insert(node.0, 0);
                 }
             }
-        } else if vr.current_term > self.get_current_term()? {
+        } else if vr.current_term > self.current_term()? {
             self.set_current_term(&vr.current_term)?;
             self.role = Role::Follower;
             self.set_voted_for(&None)?;
@@ -504,8 +500,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
         };
 
-        let suffix: Logs = if self.get_logs()?.slice_from(prefix_len).is_some() {
-            self.get_logs()?.slice_from(prefix_len).unwrap()
+        let suffix: Logs = if self.logs()?.slice_from(prefix_len).is_some() {
+            self.logs()?.slice_from(prefix_len).unwrap()
         } else {
             return Ok(())
         };
@@ -513,15 +509,15 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let mut prefix_term = 0;
 
         if prefix_len > 0 {
-            prefix_term = self.get_logs()?.get(prefix_len - 1)?.term;
+            prefix_term = self.logs()?.get(prefix_len - 1)?.term;
         }
 
         let request = LogRequest {
             leader_id: self.id.clone().unwrap(),
-            current_term: self.get_current_term()?,
+            current_term: self.current_term()?,
             prefix_len,
             prefix_term,
-            commit_length: self.get_commits_len(),
+            commit_length: self.commits_len(),
             suffix,
         };
 
@@ -530,25 +526,24 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn receive_log_request(&mut self, lr: LogRequest) -> Result<()> {
-        if lr.current_term > self.get_current_term()? {
+        if lr.current_term > self.current_term()? {
             self.set_current_term(&lr.current_term)?;
             self.set_voted_for(&None)?;
         }
 
-        if lr.current_term == self.get_current_term()? {
+        if lr.current_term == self.current_term()? {
             if self.role != Role::Listener {
                 self.role = Role::Follower;
             }
             self.current_leader = Some(lr.leader_id.clone());
         }
 
-        let mut ok = (self.get_logs_len() >= lr.prefix_len) &&
-            (lr.prefix_len == 0 ||
-                self.get_logs()?.get(lr.prefix_len - 1)?.term == lr.prefix_term);
+        let mut ok = (self.logs_len() >= lr.prefix_len) &&
+            (lr.prefix_len == 0 || self.logs()?.get(lr.prefix_len - 1)?.term == lr.prefix_term);
 
         let mut ack = 0;
 
-        if lr.current_term == self.get_current_term()? && ok {
+        if lr.current_term == self.current_term()? && ok {
             self.append_log(lr.prefix_len, lr.commit_length, &lr.suffix).await?;
             ack = lr.prefix_len + lr.suffix.len();
         } else {
@@ -561,7 +556,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let response = LogResponse {
             node_id: self.id.clone().unwrap(),
-            current_term: self.get_current_term()?,
+            current_term: self.current_term()?,
             ack,
             ok,
         };
@@ -571,7 +566,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn receive_log_response(&mut self, lr: LogResponse) -> Result<()> {
-        if lr.current_term == self.get_current_term()? && self.role == Role::Leader {
+        if lr.current_term == self.current_term()? && self.role == Role::Leader {
             if lr.ok && lr.ack >= self.acked_length.get(&lr.node_id)? {
                 self.sent_length.insert(&lr.node_id, lr.ack);
                 self.acked_length.insert(&lr.node_id, lr.ack);
@@ -579,7 +574,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             } else if self.sent_length.get(&lr.node_id)? > 0 {
                 self.sent_length.insert(&lr.node_id, self.sent_length.get(&lr.node_id)? - 1);
             }
-        } else if lr.current_term > self.get_current_term()? {
+        } else if lr.current_term > self.current_term()? {
             self.set_current_term(&lr.current_term)?;
             if self.role != Role::Listener {
                 self.role = Role::Follower;
@@ -593,7 +588,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     fn reset_last_term(&mut self) -> Result<()> {
         self.last_term = 0;
 
-        if let Some(log) = self.get_last_log()? {
+        if let Some(log) = self.last_log()? {
             self.last_term = log.term;
         }
 
@@ -618,7 +613,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let mut ready: Vec<u64> = vec![];
 
-        for len in 1..(self.get_logs_len() + 1) {
+        for len in 1..(self.logs_len() + 1) {
             if self.acks(nodes.clone(), len).len() >= min_acks {
                 ready.push(len);
             }
@@ -630,11 +625,11 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let max_ready = *ready.iter().max().unwrap();
 
-        if max_ready > self.get_commits_len() &&
-            self.get_logs()?.get(max_ready - 1)?.term == self.get_current_term()?
+        if max_ready > self.commits_len() &&
+            self.logs()?.get(max_ready - 1)?.term == self.current_term()?
         {
-            for i in self.get_commits_len()..max_ready {
-                self.push_commit(&self.get_logs()?.get(i)?.msg).await?;
+            for i in self.commits_len()..max_ready {
+                self.push_commit(&self.logs()?.get(i)?.msg).await?;
             }
         }
 
@@ -647,22 +642,22 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         leader_commit: u64,
         suffix: &Logs,
     ) -> Result<()> {
-        if !suffix.is_empty() && self.get_logs_len() > prefix_len {
-            let index = min(self.get_logs_len(), prefix_len + suffix.len()) - 1;
-            if self.get_logs()?.get(index)?.term != suffix.get(index - prefix_len)?.term {
-                self.push_logs(&self.get_logs()?.slice_to(prefix_len))?;
+        if !suffix.is_empty() && self.logs_len() > prefix_len {
+            let index = min(self.logs_len(), prefix_len + suffix.len()) - 1;
+            if self.logs()?.get(index)?.term != suffix.get(index - prefix_len)?.term {
+                self.push_logs(&self.logs()?.slice_to(prefix_len))?;
             }
         }
 
-        if prefix_len + suffix.len() > self.get_logs_len() {
-            for i in (self.get_logs_len() - prefix_len)..suffix.len() {
+        if prefix_len + suffix.len() > self.logs_len() {
+            for i in (self.logs_len() - prefix_len)..suffix.len() {
                 self.push_log(&suffix.get(i)?)?;
             }
         }
 
-        if leader_commit > self.get_commits_len() {
-            for i in self.get_commits_len()..leader_commit {
-                self.push_commit(&self.get_logs()?.get(i)?.msg).await?;
+        if leader_commit > self.commits_len() {
+            for i in self.commits_len()..leader_commit {
+                self.push_commit(&self.logs()?.get(i)?.msg).await?;
             }
         }
 
@@ -672,7 +667,6 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     fn set_current_term(&mut self, i: &u64) -> Result<()> {
         self.datastore.current_term.insert(i)
     }
-
     fn set_voted_for(&mut self, i: &Option<NodeId>) -> Result<()> {
         self.datastore.voted_for.insert(i)
     }
@@ -687,26 +681,26 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     fn push_logs(&mut self, logs: &Logs) -> Result<()> {
         self.datastore.logs.wipe_insert_all(&logs.to_vec())
     }
-    fn get_current_term(&self) -> Result<u64> {
-        Ok(self.datastore.current_term.get_last()?.unwrap_or(0))
-    }
-    fn get_voted_for(&self) -> Result<Option<NodeId>> {
-        Ok(self.datastore.voted_for.get_last()?.flatten())
-    }
-    fn get_commits_len(&self) -> u64 {
-        self.datastore.commits.len()
-    }
-    fn get_logs(&self) -> Result<Logs> {
-        Ok(Logs(self.datastore.logs.get_all()?))
-    }
-    fn get_logs_len(&self) -> u64 {
-        self.datastore.logs.len()
-    }
     fn is_logs_empty(&self) -> bool {
         self.datastore.logs.is_empty()
     }
 
-    fn get_last_log(&self) -> Result<Option<Log>> {
+    fn current_term(&self) -> Result<u64> {
+        Ok(self.datastore.current_term.get_last()?.unwrap_or(0))
+    }
+    fn voted_for(&self) -> Result<Option<NodeId>> {
+        Ok(self.datastore.voted_for.get_last()?.flatten())
+    }
+    fn commits_len(&self) -> u64 {
+        self.datastore.commits.len()
+    }
+    fn logs(&self) -> Result<Logs> {
+        Ok(Logs(self.datastore.logs.get_all()?))
+    }
+    fn logs_len(&self) -> u64 {
+        self.datastore.logs.len()
+    }
+    fn last_log(&self) -> Result<Option<Log>> {
         self.datastore.logs.get_last()
     }
 }
