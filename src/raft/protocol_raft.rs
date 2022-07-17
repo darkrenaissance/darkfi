@@ -2,6 +2,7 @@ use async_std::sync::{Arc, Mutex};
 
 use async_executor::Executor;
 use async_trait::async_trait;
+use fxhash::FxHashMap;
 use log::debug;
 
 use crate::{net, Result};
@@ -14,7 +15,7 @@ pub struct ProtocolRaft {
     notify_queue_sender: async_channel::Sender<NetMsg>,
     msg_sub: net::MessageSubscription<NetMsg>,
     p2p: net::P2pPtr,
-    seen_msgs: Arc<Mutex<Vec<u64>>>,
+    seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
 }
 
 impl ProtocolRaft {
@@ -23,7 +24,7 @@ impl ProtocolRaft {
         channel: net::ChannelPtr,
         notify_queue_sender: async_channel::Sender<NetMsg>,
         p2p: net::P2pPtr,
-        seen_msgs: Arc<Mutex<Vec<u64>>>,
+        seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<NetMsg>().await;
@@ -53,10 +54,10 @@ impl ProtocolRaft {
 
             {
                 let mut msgs = self.seen_msgs.lock().await;
-                if msgs.contains(&msg.id) {
+                if msgs.contains_key(&msg.id.to_string()) {
                     continue
                 }
-                msgs.push(msg.id);
+                msgs.insert(msg.id.to_string(), chrono::Utc::now().timestamp());
             }
 
             let msg = (*msg).clone();

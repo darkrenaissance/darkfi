@@ -4130,6 +4130,7 @@ dependencies = [
  "darkfi",
  "easy-parallel",
  "futures",
+ "fxhash",
  "hex",
  "log",
  "notify",

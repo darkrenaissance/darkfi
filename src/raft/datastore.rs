@@ -114,40 +114,6 @@ impl<T: Decodable + Encodable> DataTree<T> {
         )))
     }
 
-    pub fn get_lt(&self, index: u64) -> Result<Vec<T>> {
-        let mut ret: Vec<T> = Vec::new();
-
-        let index = index.to_be_bytes();
-
-        for i in self.tree.get_lt(index).iter() {
-            if i.is_none() {
-                return Ok(ret)
-            }
-            let data = i.as_ref().unwrap();
-            let data = deserialize(&data.1)?;
-            ret.push(data)
-        }
-
-        Ok(ret)
-    }
-
-    pub fn get_gt(&self, index: u64) -> Result<Vec<T>> {
-        let mut ret: Vec<T> = Vec::new();
-
-        let index = (index - 1).to_be_bytes();
-
-        for i in self.tree.get_gt(index).iter() {
-            if i.is_none() {
-                return Ok(ret)
-            }
-            let data = i.as_ref().unwrap();
-            let data = deserialize(&data.1)?;
-            ret.push(data)
-        }
-
-        Ok(ret)
-    }
-
     pub fn is_empty(&self) -> bool {
         self.tree.is_empty()
     }

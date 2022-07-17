@@ -5,6 +5,7 @@ use async_std::{
 use std::{cmp::min, path::PathBuf, time::Duration};
 
 use async_executor::Executor;
+use chrono::Utc;
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{debug, error, info, warn};
@@ -25,11 +26,14 @@ use super::{
     DataStore,
 };
 
-// In milliseconds
+// Milliseconds
 const HEARTBEATTIMEOUT: u64 = 500;
 const TIMEOUT: u64 = 6000;
 const TIMEOUT_NODES: u64 = 1000;
 const SYNC_TIMEOUT_FOR_EACH_ATTEMPT: u64 = 2000;
+
+// Seconds
+const SEEN_DURATION: i64 = 120;
 
 const SYNC_ATTEMPTS: u64 = 30;
 
@@ -49,6 +53,24 @@ async fn load_node_ids_loop(
 
         for ip in nodes_ip.iter() {
             (*nodes.lock().await).insert(NodeId::from(ip.clone()), ip.clone());
+        }
+    }
+}
+
+// Auxilary function to periodically prun seen messages, based on when they were received.
+// This helps us to prevent broadcasting loops.
+async fn prune_seen_messages(map: Arc<Mutex<fxhash::FxHashMap<String, i64>>>) {
+    loop {
+        crate::util::sleep(SEEN_DURATION as u64).await;
+        debug!("Pruning seen messages");
+
+        let now = Utc::now().timestamp();
+
+        let mut map = map.lock().await;
+        for (k, v) in map.clone().iter() {
+            if now - v > SEEN_DURATION {
+                map.remove(k);
+            }
         }
     }
 }
@@ -87,14 +109,14 @@ pub struct Raft<T> {
 
     datastore: DataStore<T>,
 
-    seen_msgs: Arc<Mutex<Vec<u64>>>,
+    seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
 }
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
     pub fn new(
         addr: Option<Url>,
         db_path: PathBuf,
-        seen_msgs: Arc<Mutex<Vec<u64>>>,
+        seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
     ) -> Result<Self> {
         if db_path.to_str().is_none() {
             error!(target: "raft", "datastore path is incorrect");
@@ -140,6 +162,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let load_ips_task =
             executor.spawn(load_node_ids_loop(self.nodes.clone(), p2p.clone(), self.role.clone()));
+
+        let prune_seen_messages_task = executor.spawn(prune_seen_messages(self.seen_msgs.clone()));
 
         let mut synced = false;
 
@@ -208,6 +232,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         warn!(target: "raft", "Raft Terminating...");
         load_ips_task.cancel().await;
         p2p_send_task.cancel().await;
+        prune_seen_messages_task.cancel().await;
         self.datastore.flush().await?;
         Ok(())
     }
@@ -288,7 +313,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             } else if self.logs_len() >= sr.logs_len &&
                 self.get_log(sr.logs_len - 1)?.term == sr.last_term
             {
-                self.slice_logs_from(sr.logs_len)?
+                self.slice_logs_from(sr.logs_len)?.unwrap()
             } else {
                 wipe = true;
                 self.logs()?.clone()
@@ -352,7 +377,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
            self.role, random_id, &recipient_id.is_some(), &method);
 
         let net_msg = NetMsg { id: random_id, recipient_id, payload: payload.to_vec(), method };
-        self.seen_msgs.lock().await.push(random_id);
+        self.seen_msgs.lock().await.insert(random_id.to_string(), Utc::now().timestamp());
         self.sender.0.send(net_msg).await?;
 
         Ok(())
@@ -501,9 +526,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
         };
 
-        let suffix: Logs = match self.slice_logs_from(prefix_len) {
-            Ok(l) => l,
-            Err(_) => return Ok(()),
+        let suffix: Logs = match self.slice_logs_from(prefix_len)? {
+            Some(l) => l,
+            None => return Ok(()),
         };
 
         let mut prefix_term = 0;
@@ -706,10 +731,12 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     fn get_log(&self, index: u64) -> Result<Log> {
         self.datastore.logs.get(index)
     }
-    fn slice_logs_from(&self, index: u64) -> Result<Logs> {
-        Ok(Logs(self.datastore.logs.get_gt(index)?))
+    fn slice_logs_from(&self, index: u64) -> Result<Option<Logs>> {
+        let logs = self.logs()?;
+        Ok(logs.slice_from(index))
     }
     fn slice_logs_to(&self, index: u64) -> Result<Logs> {
-        Ok(Logs(self.datastore.logs.get_lt(index)?))
+        let logs = self.logs()?;
+        Ok(logs.slice_to(index))
     }
 }

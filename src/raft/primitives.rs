@@ -104,6 +104,22 @@ impl Logs {
         self.0.is_empty()
     }
 
+    pub fn slice_from(&self, start: u64) -> Option<Self> {
+        if self.len() >= start {
+            return Some(Self(self.0[start as usize..].to_vec()))
+        }
+        None
+    }
+
+    pub fn slice_to(&self, end: u64) -> Self {
+        for i in (0..end).rev() {
+            if self.len() >= i {
+                return Self(self.0[..i as usize].to_vec())
+            }
+        }
+        Self(vec![])
+    }
+
     pub fn get(&self, index: u64) -> Result<Log> {
         match self.0.get(index as usize) {
             Some(l) => Ok(l.clone()),

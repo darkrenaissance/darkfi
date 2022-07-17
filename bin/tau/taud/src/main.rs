@@ -8,6 +8,7 @@ use log::{debug, error, info, warn};
 use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use smol::future;
 use structopt_toml::StructOptToml;
+use fxhash::FxHashMap;
 
 use darkfi::{
     async_daemonize, net,
@@ -232,7 +233,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //Raft
     //
     let net_settings = settings.net;
-    let seen_net_msgs = Arc::new(Mutex::new(vec![]));
+    let seen_net_msgs = Arc::new(Mutex::new(FxHashMap::default()));
 
     let datastore_raft = datastore_path.join("tau.db");
     let mut raft = Raft::<EncryptedTask>::new(
