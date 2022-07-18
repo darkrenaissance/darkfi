@@ -4,14 +4,8 @@ pub mod arithmetic;
 /// Field-native range check gadget;
 pub mod native_range_check;
 
-/// Even-bits lookup table
-pub mod even_bits;
-
-// Greater than comparison gadget;
-//pub mod greater_than;
-
-/// Comparison gadget
-pub mod cmp;
-
-// Less than gadget
+// Field-native less than comparison gadget
 pub mod less_than;
+
+/// is_zero comparison gadget
+pub mod is_zero;

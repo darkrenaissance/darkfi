@@ -1,11 +1,10 @@
-use halo2_gadgets::utilities::FieldValue;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Chip, Layouter, Region, Value},
+    pasta::pallas,
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector, TableColumn},
     poly::Rotation,
 };
-use pasta_curves::pallas;
 
 use super::native_range_check::{NativeRangeCheckChip, NativeRangeCheckConfig};
 
@@ -200,9 +199,9 @@ mod tests {
     use halo2_proofs::{
         circuit::{floor_planner, Value},
         dev::{CircuitLayout, MockProver},
+        pasta::pallas,
         plonk::Circuit,
     };
-    use pasta_curves::pallas;
 
     macro_rules! test_circuit {
         ($window_size:expr, $num_bits:expr, $num_windows:expr) => {

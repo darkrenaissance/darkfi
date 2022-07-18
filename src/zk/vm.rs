@@ -24,10 +24,7 @@ use halo2_proofs::{
 use log::debug;
 use pasta_curves::{group::Curve, pallas, Fp};
 
-use super::gadget::{
-    arithmetic::{ArithChip, ArithConfig, ArithInstruction},
-    even_bits::{EvenBitsChip, EvenBitsConfig},
-};
+use super::gadget::arithmetic::{ArithChip, ArithConfig, ArithInstruction};
 
 use super::assign_free_advice;
 pub use super::vm_stack::{StackVar, Witness};
@@ -51,8 +48,6 @@ pub struct VmConfig {
     _sinsemilla_cfg2: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
     arith_config: ArithConfig,
-    evenbits_config: EvenBitsConfig,
-    //greaterthan_config: GreaterThanConfig,
 }
 
 impl VmConfig {
@@ -93,14 +88,6 @@ impl VmConfig {
     fn arithmetic_chip(&self) -> ArithChip {
         ArithChip::construct(self.arith_config.clone())
     }
-
-    fn evenbits_chip(&self) -> EvenBitsChip<pallas::Base, 24> {
-        EvenBitsChip::construct(self.evenbits_config.clone())
-    }
-
-    //fn greaterthan_chip(&self) -> GreaterThanChip<pallas::Base, 24> {
-    //  GreaterThanChip::construct(self.greaterthan_config.clone())
-    //    }
 }
 
 #[derive(Clone, Default)]
@@ -200,13 +187,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // Configuration for the Arithmetic chip
         let arith_config = ArithChip::configure(meta, advices[7], advices[8], advices[6]);
 
-        // Configuration for the EvenBits chip
-        let evenbits_config = EvenBitsChip::<pallas::Base, 24>::configure(meta);
-
-        // Configuration for the GreaterThan chip
-        //let greaterthan_config =
-        //            GreaterThanChip::<pallas::Base, 24>::configure(meta, [advices[8], advices[9]], primary);
-
         // Configuration for a Sinsemilla hash instantiation and a
         // Merkle hash instantiation using this Sinsemilla instance.
         // Since the Sinsemilla config uses only 5 advice columns,
@@ -247,8 +227,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
             _sinsemilla_cfg2,
             poseidon_config,
             arith_config,
-            evenbits_config,
-            //greaterthan_config,
         }
     }
 
@@ -273,13 +251,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Construct the Arithmetic chip.
         let arith_chip = config.arithmetic_chip();
-
-        // Construct the EvenBits chip.
-        let eb_chip = config.evenbits_chip();
-        eb_chip.alloc_table(&mut layouter.namespace(|| "alloc table"))?;
-
-        // Construct the GreaterThan chip.
-        //let gt_chip = config.greaterthan_chip();
 
         // This constant one is used for short multiplication
         let one = assign_free_advice(
