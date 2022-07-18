@@ -99,7 +99,8 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
             let a = meta.query_advice(config.a, Rotation::cur());
             let b = meta.query_advice(config.b, Rotation::cur());
             let a_offset = meta.query_advice(config.a_offset, Rotation::cur());
-            let two_pow_m = Expression::Constant(pallas::Base::from_u128(1 << NUM_OF_BITS));
+            let two_pow_m =
+                Expression::Constant(pallas::Base::from(2).pow(&[NUM_OF_BITS as u64, 0, 0, 0]));
             // a_offset - 2^m + b - a = 0
             vec![s_lt * (a_offset - two_pow_m + b - a)]
         });
@@ -184,7 +185,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         self.config.s_lt.enable(&mut region, offset)?;
 
         // assign `a + offset`
-        let two_pow_m = pallas::Base::from_u128(1 << 64);
+        let two_pow_m = pallas::Base::from(2).pow(&[NUM_OF_BITS as u64, 0, 0, 0]);
         let a_offset = a.value().zip(b.value()).map(|(a, b)| *a + (two_pow_m - b));
         let a_offset =
             region.assign_advice(|| "a_offset", self.config.a_offset, offset, || a_offset)?;
