@@ -1,46 +1,42 @@
-use std::marker::PhantomData;
-
-use group::ff::PrimeFieldBits;
+use halo2_gadgets::utilities::FieldValue;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Chip, Layouter, Region, Value},
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector, TableColumn},
     poly::Rotation,
 };
+use pasta_curves::pallas;
 
-use super::range_check::{RangeCheckChip, RangeCheckConfig};
+use super::native_range_check::{NativeRangeCheckChip, NativeRangeCheckConfig};
 
 #[derive(Clone, Debug)]
-pub struct LessThanConfig {
+pub struct LessThanConfig<
+    const WINDOW_SIZE: usize,
+    const NUM_OF_BITS: usize,
+    const NUM_OF_WINDOWS: usize,
+> {
     pub s_lt: Selector,
     pub a: Column<Advice>,
     pub b: Column<Advice>,
     pub a_offset: Column<Advice>,
-
-    pub range_a_config: RangeCheckConfig,
-    pub range_a_offset_config: RangeCheckConfig,
+    pub range_a_config: NativeRangeCheckConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>,
+    pub range_a_offset_config: NativeRangeCheckConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>,
     pub k_values_table: TableColumn,
 }
 
 #[derive(Clone, Debug)]
 pub struct LessThanChip<
-    F: FieldExt + PrimeFieldBits,
-    const NUM_OF_BITS: usize,
     const WINDOW_SIZE: usize,
+    const NUM_OF_BITS: usize,
     const NUM_OF_WINDOWS: usize,
 > {
-    config: LessThanConfig,
-    _marker: PhantomData<F>,
+    config: LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>,
 }
 
-impl<
-        F: FieldExt + PrimeFieldBits,
-        const NUM_OF_BITS: usize,
-        const WINDOW_SIZE: usize,
-        const NUM_OF_WINDOWS: usize,
-    > Chip<F> for LessThanChip<F, NUM_OF_BITS, WINDOW_SIZE, NUM_OF_WINDOWS>
+impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: usize>
+    Chip<pallas::Base> for LessThanChip<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
 {
-    type Config = LessThanConfig;
+    type Config = LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>;
     type Loaded = ();
 
     fn config(&self) -> &Self::Config {
@@ -52,24 +48,20 @@ impl<
     }
 }
 
-impl<
-        F: FieldExt + PrimeFieldBits,
-        const NUM_OF_BITS: usize,
-        const WINDOW_SIZE: usize,
-        const NUM_OF_WINDOWS: usize,
-    > LessThanChip<F, NUM_OF_BITS, WINDOW_SIZE, NUM_OF_WINDOWS>
+impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: usize>
+    LessThanChip<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
 {
-    pub fn construct(config: LessThanConfig) -> Self {
-        Self { config, _marker: PhantomData }
+    pub fn construct(config: LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>) -> Self {
+        Self { config }
     }
 
     pub fn configure(
-        meta: &mut ConstraintSystem<F>,
+        meta: &mut ConstraintSystem<pallas::Base>,
         a: Column<Advice>,
         b: Column<Advice>,
         a_offset: Column<Advice>,
         k_values_table: TableColumn,
-    ) -> LessThanConfig {
+    ) -> LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS> {
         let s_lt = meta.selector();
 
         meta.enable_equality(a);
@@ -77,9 +69,20 @@ impl<
         meta.enable_equality(a_offset);
 
         // configure range check for `a` and `offset`
-        let range_a_config = RangeCheckChip::<F, WINDOW_SIZE>::configure(meta, k_values_table);
+        let z = meta.advice_column();
+        let range_a_config =
+            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::configure(
+                meta,
+                z,
+                k_values_table,
+            );
+        let z = meta.advice_column();
         let range_a_offset_config =
-            RangeCheckChip::<F, WINDOW_SIZE>::configure(meta, k_values_table);
+            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::configure(
+                meta,
+                z,
+                k_values_table,
+            );
 
         let config = LessThanConfig {
             s_lt,
@@ -96,7 +99,7 @@ impl<
             let a = meta.query_advice(config.a, Rotation::cur());
             let b = meta.query_advice(config.b, Rotation::cur());
             let a_offset = meta.query_advice(config.a_offset, Rotation::cur());
-            let two_pow_m = Expression::Constant(F::from(1 << NUM_OF_BITS));
+            let two_pow_m = Expression::Constant(pallas::Base::from_u128(1 << NUM_OF_BITS));
             // a_offset - 2^m + b - a = 0
             vec![s_lt * (a_offset - two_pow_m + b - a)]
         });
@@ -106,14 +109,14 @@ impl<
 
     pub fn witness_less_than(
         &self,
-        layouter: &mut impl Layouter<F>,
-        a: Value<F>,
-        b: Value<F>,
+        mut layouter: impl Layouter<pallas::Base>,
+        a: Value<pallas::Base>,
+        b: Value<pallas::Base>,
         offset: usize,
     ) -> Result<(), Error> {
         let (a, _, a_offset) = layouter.assign_region(
-            || "less than",
-            |mut region: Region<'_, F>| {
+            || "a less than b",
+            |mut region: Region<'_, pallas::Base>| {
                 let a = region.assign_advice(|| "a", self.config.a, offset, || a)?;
                 let b = region.assign_advice(|| "b", self.config.b, offset, || b)?;
                 let a_offset = self.less_than(region, a.clone(), b.clone(), offset)?;
@@ -121,21 +124,21 @@ impl<
             },
         )?;
 
-        self.less_than_range_check(layouter, a, a_offset, offset)?;
+        self.less_than_range_check(layouter, a, a_offset)?;
 
         Ok(())
     }
 
     pub fn copy_less_than(
         &self,
-        layouter: &mut impl Layouter<F>,
-        a: AssignedCell<F, F>,
-        b: AssignedCell<F, F>,
+        mut layouter: impl Layouter<pallas::Base>,
+        a: AssignedCell<pallas::Base, pallas::Base>,
+        b: AssignedCell<pallas::Base, pallas::Base>,
         offset: usize,
     ) -> Result<(), Error> {
         let (a, _, a_offset) = layouter.assign_region(
-            || "less than",
-            |mut region: Region<'_, F>| {
+            || "a less than b",
+            |mut region: Region<'_, pallas::Base>| {
                 let a = a.copy_advice(|| "a", &mut region, self.config.a, offset)?;
                 let b = b.copy_advice(|| "b", &mut region, self.config.b, offset)?;
                 let a_offset = self.less_than(region, a.clone(), b.clone(), offset)?;
@@ -143,50 +146,48 @@ impl<
             },
         )?;
 
-        self.less_than_range_check(layouter, a, a_offset, offset)?;
+        self.less_than_range_check(layouter, a, a_offset)?;
 
         Ok(())
     }
 
     pub fn less_than_range_check(
         &self,
-        layouter: &mut impl Layouter<F>,
-        a: AssignedCell<F, F>,
-        a_offset: AssignedCell<F, F>,
-        offset: usize,
+        mut layouter: impl Layouter<pallas::Base>,
+        a: AssignedCell<pallas::Base, pallas::Base>,
+        a_offset: AssignedCell<pallas::Base, pallas::Base>,
     ) -> Result<(), Error> {
         let range_a_chip =
-            RangeCheckChip::<F, WINDOW_SIZE>::construct(self.config.range_a_config.clone());
+            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::construct(
+                self.config.range_a_config.clone(),
+            );
         let range_a_offset_chip =
-            RangeCheckChip::<F, WINDOW_SIZE>::construct(self.config.range_a_offset_config.clone());
+            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::construct(
+                self.config.range_a_offset_config.clone(),
+            );
 
-        range_a_chip.copy_range_check(layouter, a, offset, NUM_OF_BITS, NUM_OF_WINDOWS)?;
-        range_a_offset_chip.copy_range_check(
-            layouter,
-            a_offset,
-            offset,
-            NUM_OF_BITS,
-            NUM_OF_WINDOWS,
-        )?;
+        range_a_chip.copy_range_check(layouter.namespace(|| "a copy_range_check"), a)?;
+        range_a_offset_chip
+            .copy_range_check(layouter.namespace(|| "a_offset copy_range_check"), a_offset)?;
 
         Ok(())
     }
 
     pub fn less_than(
         &self,
-        mut region: Region<'_, F>,
-        a: AssignedCell<F, F>,
-        b: AssignedCell<F, F>,
+        mut region: Region<'_, pallas::Base>,
+        a: AssignedCell<pallas::Base, pallas::Base>,
+        b: AssignedCell<pallas::Base, pallas::Base>,
         offset: usize,
-    ) -> Result<AssignedCell<F, F>, Error> {
+    ) -> Result<AssignedCell<pallas::Base, pallas::Base>, Error> {
         // enable `less_than` selector
         self.config.s_lt.enable(&mut region, offset)?;
 
         // assign `a + offset`
-        let two_pow_m = F::from(1 << NUM_OF_BITS);
+        let two_pow_m = pallas::Base::from_u128(1 << 64);
         let a_offset = a.value().zip(b.value()).map(|(a, b)| *a + (two_pow_m - b));
         let a_offset =
-            region.assign_advice(|| "offset", self.config.a_offset, offset, || a_offset)?;
+            region.assign_advice(|| "a_offset", self.config.a_offset, offset, || a_offset)?;
 
         Ok(a_offset)
     }
@@ -195,105 +196,120 @@ impl<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use group::ff::PrimeFieldBits;
     use halo2_proofs::{
-        arithmetic::FieldExt,
         circuit::{floor_planner, Value},
         dev::{CircuitLayout, MockProver},
         plonk::Circuit,
     };
     use pasta_curves::pallas;
 
-    struct LessThanCircuit<
-        F: FieldExt + PrimeFieldBits,
-        const WINDOW_SIZE: usize,
-        const NUM_OF_BITS: usize,
-        const NUM_OF_WINDOWS: usize,
-    > {
-        a: Value<F>,
-        b: Value<F>,
-    }
+    macro_rules! test_circuit {
+        ($window_size:expr, $num_bits:expr, $num_windows:expr) => {
+            #[derive(Default)]
+            struct LessThanCircuit {
+                a: Value<pallas::Base>,
+                b: Value<pallas::Base>,
+            }
 
-    impl<
-            F: FieldExt + PrimeFieldBits,
-            const WINDOW_SIZE: usize,
-            const NUM_OF_BITS: usize,
-            const NUM_OF_WINDOWS: usize,
-        > Circuit<F> for LessThanCircuit<F, WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
-    {
-        type Config = LessThanConfig;
-        type FloorPlanner = floor_planner::V1;
+            impl Circuit<pallas::Base> for LessThanCircuit {
+                type Config =
+                    (LessThanConfig<$window_size, $num_bits, $num_windows>, Column<Advice>);
+                type FloorPlanner = floor_planner::V1;
 
-        fn without_witnesses(&self) -> Self {
-            Self { a: Value::unknown(), b: Value::unknown() }
-        }
+                fn without_witnesses(&self) -> Self {
+                    Self { a: Value::unknown(), b: Value::unknown() }
+                }
 
-        fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = meta.advice_column();
-            let b = meta.advice_column();
-            let a_offset = meta.advice_column();
+                fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+                    let w = meta.advice_column();
+                    meta.enable_equality(w);
 
-            let k_values_table = meta.lookup_table_column();
+                    let a = meta.advice_column();
+                    let b = meta.advice_column();
+                    let a_offset = meta.advice_column();
 
-            let constants = meta.fixed_column();
-            meta.enable_constant(constants);
+                    let k_values_table = meta.lookup_table_column();
 
-            LessThanChip::<F, NUM_OF_BITS, WINDOW_SIZE, NUM_OF_WINDOWS>::configure(
-                meta,
-                a,
-                b,
-                a_offset,
-                k_values_table,
-            )
-        }
+                    let constants = meta.fixed_column();
+                    meta.enable_constant(constants);
 
-        fn synthesize(
-            &self,
-            config: Self::Config,
-            mut layouter: impl Layouter<F>,
-        ) -> Result<(), Error> {
-            let less_than_chip =
-                LessThanChip::<F, NUM_OF_BITS, WINDOW_SIZE, NUM_OF_WINDOWS>::construct(
-                    config.clone(),
-                );
+                    (
+                        LessThanChip::<$window_size, $num_bits, $num_windows>::configure(
+                            meta,
+                            a,
+                            b,
+                            a_offset,
+                            k_values_table,
+                        ),
+                        w,
+                    )
+                }
 
-            RangeCheckChip::<F, WINDOW_SIZE>::load_k_table(&mut layouter, config.k_values_table)?;
+                fn synthesize(
+                    &self,
+                    config: Self::Config,
+                    mut layouter: impl Layouter<pallas::Base>,
+                ) -> Result<(), Error> {
+                    let less_than_chip =
+                        LessThanChip::<$window_size, $num_bits, $num_windows>::construct(
+                            config.0.clone(),
+                        );
 
-            less_than_chip.witness_less_than(&mut layouter, self.a, self.b, 0)?;
+                    NativeRangeCheckChip::<$window_size, $num_bits, $num_windows>::load_k_table(
+                        &mut layouter,
+                        config.0.k_values_table,
+                    )?;
 
-            Ok(())
-        }
+                    less_than_chip.witness_less_than(layouter, self.a, self.b, 0)?;
+
+                    Ok(())
+                }
+            }
+        };
     }
 
     #[test]
     fn less_than() {
-        let k = 15;
+        test_circuit!(3, 64, 22);
+        let k = 8;
 
-        let valid_a_vals = vec![pallas::Base::from(15)];
-        let valid_b_vals = vec![pallas::Base::from(11)];
+        let valid_a_vals = vec![pallas::Base::from(13)];
+        let valid_b_vals = vec![pallas::Base::from(15)];
 
-        // use plotters::prelude::*;
-        // let circuit = LessThanCircuit::<pallas::Base, 10, 253, 26> {
-        //     a: Value::known(pallas::Base::zero()),
-        //     b: Value::known(pallas::Base::one()),
-        // };
-        // let root = BitMapBackend::new("target/lessthan_circuit_layout.png", (3840, 2160))
-        //     .into_drawing_area();
-        // CircuitLayout::default().render(k, &circuit, &root).unwrap();
+        let invalid_a_vals = vec![pallas::Base::from(14)];
+        let invalid_b_vals = vec![pallas::Base::from(11)];
+
+        use plotters::prelude::*;
+        let circuit = LessThanCircuit {
+            a: Value::known(pallas::Base::zero()),
+            b: Value::known(pallas::Base::one()),
+        };
+        let root = BitMapBackend::new("target/lessthan_circuit_layout.png", (3840, 2160))
+            .into_drawing_area();
+        CircuitLayout::default().render(k, &circuit, &root).unwrap();
 
         for i in 0..valid_a_vals.len() {
             let a = valid_a_vals[i];
             let b = valid_b_vals[i];
 
-            println!("{:?} < {:?}", a, b);
+            println!("64 bit (valid) {:?} < {:?} check", a, b);
 
-            let circuit = LessThanCircuit::<pallas::Base, 10, 253, 26> {
-                a: Value::known(a),
-                b: Value::known(b),
-            };
+            let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
 
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             prover.assert_satisfied();
+        }
+
+        for i in 0..invalid_a_vals.len() {
+            let a = invalid_a_vals[i];
+            let b = invalid_b_vals[i];
+
+            println!("64 bit (invalid) {:?} < {:?} check", a, b);
+
+            let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
+
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            assert!(prover.verify().is_err())
         }
     }
 }

@@ -75,7 +75,6 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
     /// `k_values_table` should be reused across different chips
     /// which is why we don't limit it to a specific instance.
     pub fn load_k_table(
-        &self,
         layouter: &mut impl Layouter<pallas::Base>,
         k_values_table: TableColumn,
     ) -> Result<(), plonk::Error> {
@@ -135,6 +134,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
         let two_pow_k_inverse =
             Value::known(pallas::Base::from(1 << WINDOW_SIZE as u64).invert().unwrap());
+
         for (i, chunk) in decomposed_chunks.iter().enumerate() {
             let z_next = {
                 let z_curr = z.value().copied();
@@ -223,6 +223,7 @@ mod tests {
                     meta.enable_equality(w);
                     let z = meta.advice_column();
                     let table_column = meta.lookup_table_column();
+
                     let constants = meta.fixed_column();
                     meta.enable_constant(constants);
                     (
@@ -244,7 +245,10 @@ mod tests {
                         NativeRangeCheckChip::<$window_size, $num_bits, $num_windows>::construct(
                             config.0.clone(),
                         );
-                    rangecheck_chip.load_k_table(&mut layouter, config.0.k_values_table)?;
+                    NativeRangeCheckChip::<$window_size, $num_bits, $num_windows>::load_k_table(
+                        &mut layouter,
+                        config.0.k_values_table,
+                    )?;
 
                     let a = assign_free_advice(layouter.namespace(|| "load a"), config.1, self.a)?;
                     rangecheck_chip

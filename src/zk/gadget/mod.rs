@@ -14,4 +14,4 @@ pub mod even_bits;
 pub mod cmp;
 
 // Less than gadget
-//pub mod less_than;
+pub mod less_than;
