@@ -114,6 +114,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
             .collect()
     }
 
+    // TODO: strict bool
     pub fn decompose(
         &self,
         region: &mut Region<'_, pallas::Base>,
