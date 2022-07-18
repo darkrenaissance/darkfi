@@ -65,7 +65,6 @@ impl ProtocolParticipant {
                     self.p2p.broadcast_with_exclude(participant_copy, &exclude_list).await
                 {
                     error!("ProtocolParticipant::handle_receive_participant(): p2p broadcast failed: {}", e);
-                    continue
                 };
             }
         }

@@ -98,7 +98,6 @@ impl ProtocolTx {
             if self.state.write().await.append_tx(tx_copy.clone()) {
                 if let Err(e) = self.p2p.broadcast_with_exclude(tx_copy, &exclude_list).await {
                     error!("handle_receive_tx(): p2p broadcast fail: {}", e);
-                    continue
                 };
             }
         }
