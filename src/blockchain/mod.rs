@@ -50,6 +50,8 @@ pub struct Blockchain {
 }
 
 impl Blockchain {
+    //FIXME why the blockchain taking genesis_data on the constructor as a hash?
+    //genesis data are supposed to be a a hash?
     /// Instantiate a new `Blockchain` with the given `sled` database.
     pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;

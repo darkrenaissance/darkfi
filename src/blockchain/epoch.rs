@@ -27,6 +27,30 @@ pub struct EpochItem {
     pub value: u64, // the stake value is static during the epoch.
 }
 
+/// epoch configuration
+/// this struct need be a singleton,
+/// should be populated from configuration file.
+#[derive(Copy,Debug,Default,Clone)]
+pub struct EpochConsensus {
+    pub len : u64, /// number of slots per epoch
+    pub reward: u64,
+}
+
+impl EpochConsensus{
+    fn new(len: u64, reward: u64) {
+        Self {len, reward}
+    }
+
+    /// TODO how is the reward derived?
+    fn get_reward(&self) {
+        self.reward
+    }
+
+    fn get_sl(&self) {
+        self.len
+    }
+}
+
 #[derive(Copy,Debug,Default,Clone)]
 pub struct Epoch {
     // TODO this need to emulate epoch
@@ -36,20 +60,18 @@ pub struct Epoch {
     //epoch item
     pub item: Option<EpochItem>,
     pub eta: pallas::Base, // CRS for the leader selection.
-
+    pub coins: Vec<LeadCoin>,
 }
-
-#[derive(Debug,Default,Clone)]
-pub struct LifeTime {
-    //lifetime metadata
-    //...
-    //lifetime epochs
-    pub epochs : Vec<Epoch>,
-}
-
 
 impl Epoch {
 
+    pub fn new(consensus: EpochConsensus, true_random:pallas::Base)
+    {
+        Self {len: consensus.len,
+              item: EpochItem {consensus.reward},
+              eta: true_random,
+        }
+    }
     fn create_coins_election_seeds(&self, sl: pallas::Base) -> (pallas::Base, pallas::Base) {
         let ELECTION_SEED_NONCE : pallas::Base = pallas::Base::from(3);
         let ELECTION_SEED_LEAD : pallas::Base = pallas::Base::from(22);
@@ -221,6 +243,41 @@ impl Epoch {
             };
             coins.push(coin);
         }
+        self.coins = coins;
         coins
     }
+
+    /// retrive leadership lottary coins of static stake,
+    /// retrived for for commitment in the genesis data
+    pub fn get_coins(&self) -> Vec<LeadCoin> {
+        return self.coins
+    }
+
+    /// see if the participant stakeholder of this epoch is
+    /// winning the lottery, in case of success return True
+    pub fn is_leader(&self, sl: u64) -> bool {
+        let coin = self.coins[i];
+        let y_exp = [
+            coin.root_sk,
+            coin.nonce,
+        ];
+        let y_exp_hash : pallas::Base = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ContractLength<2>,3,2,>::init(y_exp);
+        let y = pedersen_commitment_scalar(coin.y_mu, y_exp_hash);
+        let ord = 1024; //TODO (res)
+        let target = ord*coin.value;
+        y < target
+    }
+
+    pub fn get_proof(&self, sl: u64) -> Proof {
+        let coin = self.coins[sl];
+        lead_proof::create_lead_proof(pk, coin)
+    }
+}
+
+#[derive(Debug,Default,Clone)]
+pub struct LifeTime {
+    //lifetime metadata
+    //...
+    //lifetime epochs
+    pub epochs : Vec<Epoch>,
 }

@@ -651,9 +651,9 @@ impl Circuit<pallas::Base> for LeadContract {
 
         //TODO (research) this multiplication panics!
         let y_commit_exp = ar_chip.mul(
-            layouter.namespace(|| ""),
+        layouter.namespace(|| ""),
+        //root_sk.clone(), //(fix)
             &coin_nonce,
-            //root_sk.clone(), //(fix)
             &one,
         )?;
 
