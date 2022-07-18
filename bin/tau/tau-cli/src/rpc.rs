@@ -69,4 +69,14 @@ impl Tau {
 
         Ok(serde_json::from_value(rep)?)
     }
+
+    /// Switch workspace.
+    pub async fn switch_ws(&self, workspace: String) -> Result<()> {
+        let req = JsonRequest::new("switch_ws", json!([workspace]));
+        let rep = self.rpc_client.request(req).await?;
+
+        debug!("Got reply: {:?}", rep);
+
+        Ok(())
+    }
 }

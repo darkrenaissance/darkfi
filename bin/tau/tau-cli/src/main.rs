@@ -70,6 +70,12 @@ enum TauSubcommand {
 
     /// Get task info by ID
     Info { task_id: u64 },
+
+    /// Switch workspace
+    Switch {
+        /// Tau workspace
+        workspace: String,
+    },
 }
 
 pub struct Tau {
@@ -141,6 +147,11 @@ async fn main() -> Result<()> {
             TauSubcommand::Info { task_id } => {
                 let task = tau.get_task_by_id(task_id).await?;
                 print_task_info(task)
+            }
+
+            TauSubcommand::Switch { workspace } => {
+                tau.switch_ws(workspace).await?;
+                Ok(())
             }
         },
         None => {

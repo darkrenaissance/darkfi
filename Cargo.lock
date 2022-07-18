@@ -4124,12 +4124,14 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
+ "bs58",
  "chrono",
  "crypto_box",
  "ctrlc-async",
  "darkfi",
  "easy-parallel",
  "futures",
+ "fxhash",
  "hex",
  "log",
  "notify",
@@ -4141,6 +4143,7 @@ dependencies = [
  "structopt",
  "structopt-toml",
  "thiserror",
+ "toml",
  "url",
 ]
 

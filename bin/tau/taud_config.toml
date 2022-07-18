@@ -30,3 +30,11 @@
 #connect_timeout_seconds=10
 #channel_handshake_seconds=4
 #channel_heartbeat_seconds=10
+
+## Per-workspace settings
+[workspace."darkfi"]
+## Create with `taud --key-gen`
+secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+[workspace."general"]
+## Create with `taud --key-gen`
+secret = "6ZkvojUcSRML7wSGc3AMmM5meyyEXLoykT23cyUUB6GM"
