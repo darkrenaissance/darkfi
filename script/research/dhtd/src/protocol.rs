@@ -12,7 +12,7 @@ use darkfi::{
     Result,
 };
 
-use crate::structures::{KeyRequest, KeyResponse, LookupRequest, StatePtr};
+use crate::structures::{DhtPtr, KeyRequest, KeyResponse, LookupRequest};
 
 pub struct Protocol {
     channel: ChannelPtr,
@@ -21,7 +21,7 @@ pub struct Protocol {
     resp_sub: MessageSubscription<KeyResponse>,
     lookup_sub: MessageSubscription<LookupRequest>,
     jobsman: ProtocolJobsManagerPtr,
-    state: StatePtr,
+    dht: DhtPtr,
     p2p: P2pPtr,
 }
 
@@ -29,7 +29,7 @@ impl Protocol {
     pub async fn init(
         channel: ChannelPtr,
         notify_queue_sender: async_channel::Sender<KeyResponse>,
-        state: StatePtr,
+        dht: DhtPtr,
         p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {
         debug!("Adding Protocol to the protocol registry");
@@ -49,7 +49,7 @@ impl Protocol {
             resp_sub,
             lookup_sub,
             jobsman: ProtocolJobsManager::new("Protocol", channel),
-            state,
+            dht,
             p2p,
         }))
     }
@@ -69,14 +69,14 @@ impl Protocol {
             let req_copy = (*req).clone();
             debug!("Protocol::handle_receive_request(): req: {:?}", req_copy);
 
-            if self.state.read().await.seen.contains_key(&req_copy.id) {
+            if self.dht.read().await.seen.contains_key(&req_copy.id) {
                 debug!("Protocol::handle_receive_request(): We have already seen this request.");
                 continue
             }
 
-            self.state.write().await.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
+            self.dht.write().await.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
 
-            let daemon = self.state.read().await.id.to_string();
+            let daemon = self.dht.read().await.id.to_string();
             if daemon != req_copy.to {
                 if let Err(e) =
                     self.p2p.broadcast_with_exclude(req_copy.clone(), &exclude_list).await
@@ -86,7 +86,7 @@ impl Protocol {
                 };
             }
 
-            match self.state.read().await.map.get(&req_copy.key) {
+            match self.dht.read().await.map.get(&req_copy.key) {
                 Some(value) => {
                     let response =
                         KeyResponse::new(daemon, req_copy.from, req_copy.key, value.clone());
@@ -119,14 +119,14 @@ impl Protocol {
             let resp_copy = (*resp).clone();
             debug!("Protocol::handle_receive_response(): resp: {:?}", resp_copy);
 
-            if self.state.read().await.seen.contains_key(&resp_copy.id) {
+            if self.dht.read().await.seen.contains_key(&resp_copy.id) {
                 debug!("Protocol::handle_receive_response(): We have already seen this response.");
                 continue
             }
 
-            self.state.write().await.seen.insert(resp_copy.id.clone(), Utc::now().timestamp());
+            self.dht.write().await.seen.insert(resp_copy.id.clone(), Utc::now().timestamp());
 
-            if self.state.read().await.id.to_string() != resp_copy.to {
+            if self.dht.read().await.id.to_string() != resp_copy.to {
                 if let Err(e) =
                     self.p2p.broadcast_with_exclude(resp_copy.clone(), &exclude_list).await
                 {
@@ -159,23 +159,23 @@ impl Protocol {
                 continue
             }
 
-            if self.state.read().await.seen.contains_key(&req_copy.id) {
+            if self.dht.read().await.seen.contains_key(&req_copy.id) {
                 debug!(
                     "Protocol::handle_receive_lookup_request(): We have already seen this request."
                 );
                 continue
             }
 
-            self.state.write().await.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
+            self.dht.write().await.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
 
             let result = match req_copy.req_type {
                 0 => self
-                    .state
+                    .dht
                     .write()
                     .await
                     .lookup_insert(req_copy.key.clone(), req_copy.daemon.clone()),
                 _ => self
-                    .state
+                    .dht
                     .write()
                     .await
                     .lookup_remove(req_copy.key.clone(), req_copy.daemon.clone()),

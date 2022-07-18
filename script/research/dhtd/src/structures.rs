@@ -9,16 +9,16 @@ use darkfi::{
     Result,
 };
 
-/// Atomic pointer to DHT daemon state
-pub type StatePtr = Arc<RwLock<State>>;
+/// Atomic pointer to DHT state
+pub type DhtPtr = Arc<RwLock<Dht>>;
 
 // TODO: lookup table to be based on directly connected peers, not broadcast based
 // TODO: replace Strings with blake3 hashes
 // Using string in structures because we are at an external crate
 // and cant use blake3 serialization. To be replaced once merged with core src.
 
-/// Struct representing DHT daemon state.
-pub struct State {
+/// Struct representing DHT state.
+pub struct Dht {
     /// Daemon id
     pub id: blake3::Hash,
     /// Daemon hasmap
@@ -30,17 +30,20 @@ pub struct State {
     pub seen: FxHashMap<String, i64>,
 }
 
-impl State {
-    pub async fn new() -> Result<StatePtr> {
+impl Dht {
+    pub async fn new(initial: Option<FxHashMap<String, HashSet<String>>>) -> Result<DhtPtr> {
         // Generate a random id
         let mut rng = rand::thread_rng();
         let n: u16 = rng.gen();
         let id = blake3::hash(&serialize(&n));
         let map = FxHashMap::default();
-        let lookup = FxHashMap::default();
+        let lookup = match initial {
+            Some(l) => l,
+            None => FxHashMap::default(),
+        };
         let seen = FxHashMap::default();
 
-        let state = Arc::new(RwLock::new(State { id, map, lookup, seen }));
+        let state = Arc::new(RwLock::new(Dht { id, map, lookup, seen }));
 
         Ok(state)
     }

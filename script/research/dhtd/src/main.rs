@@ -34,7 +34,7 @@ mod error;
 use error::{server_error, RpcError};
 
 mod structures;
-use structures::{KeyRequest, KeyResponse, LookupRequest, State, StatePtr};
+use structures::{Dht, DhtPtr, KeyRequest, KeyResponse, LookupRequest};
 
 mod protocol;
 use protocol::Protocol;
@@ -81,12 +81,12 @@ struct Args {
     verbose: u8,
 }
 
-/// Struct representing DHT daemon state.
+/// Struct representing DHT daemon.
 /// This example/temp-impl stores String data.
 /// In final version everything will be in bytes (Vec<u8).
 pub struct Dhtd {
-    /// Daemon state
-    state: StatePtr,
+    /// Daemon dht state
+    dht: DhtPtr,
     /// P2P network pointer
     p2p: P2pPtr,
     /// Channel to receive responses from P2P
@@ -97,12 +97,12 @@ pub struct Dhtd {
 
 impl Dhtd {
     pub async fn new(
-        state: StatePtr,
+        dht: DhtPtr,
         p2p: P2pPtr,
         p2p_recv_channel: async_channel::Receiver<KeyResponse>,
         stop_signal: async_channel::Receiver<()>,
     ) -> Result<Self> {
-        Ok(Self { state, p2p, p2p_recv_channel, stop_signal })
+        Ok(Self { dht, p2p, p2p_recv_channel, stop_signal })
     }
 
     // RPCAPI:
@@ -117,7 +117,7 @@ impl Dhtd {
 
         // Node verifies the key exist in the lookup map.
         let key = params[0].to_string();
-        let peers = match self.state.read().await.lookup.get(&key) {
+        let peers = match self.dht.read().await.lookup.get(&key) {
             Some(v) => v.clone(),
             None => {
                 info!("Did not find key: {}", key);
@@ -130,7 +130,7 @@ impl Dhtd {
         // Each node holds a local map, acting as its cache.
         // When the node receives a request for a key it doesn't hold,
         // it will query the P2P network and saves the response in its local cache.
-        match self.state.read().await.map.get(&key) {
+        match self.dht.read().await.map.get(&key) {
             Some(v) => {
                 let string = std::str::from_utf8(&v).unwrap();
                 return JsonResponse::new(json!(string), id).into()
@@ -148,7 +148,7 @@ impl Dhtd {
         }
 
         // We create a key request, and broadcast it to the network
-        let daemon = self.state.read().await.id.to_string();
+        let daemon = self.dht.read().await.id.to_string();
         // We choose last known peer as request recipient
         let peer = peers.iter().last().unwrap().to_string();
         let request = KeyRequest::new(daemon.clone(), peer, key.clone());
@@ -216,14 +216,14 @@ impl Dhtd {
         self.insert_pair(id, key, value).await
     }
 
-    /// Auxilary function to handle pair insertion to state
+    /// Auxilary function to handle pair insertion to dht
     async fn insert_pair(&self, id: Value, key: String, value: String) -> JsonResult {
-        if let Err(e) = self.state.write().await.insert(key.clone(), value.as_bytes().to_vec()) {
+        if let Err(e) = self.dht.write().await.insert(key.clone(), value.as_bytes().to_vec()) {
             error!("Failed to insert key: {}", e);
             return server_error(RpcError::KeyInsertFail, id)
         }
 
-        let daemon = self.state.read().await.id.to_string();
+        let daemon = self.dht.read().await.id.to_string();
         let request = LookupRequest::new(daemon, key.clone(), 0);
         if let Err(e) = self.p2p.broadcast(request).await {
             error!("Failed broadcasting request: {}", e);
@@ -244,13 +244,13 @@ impl Dhtd {
 
         let key = params[0].to_string();
         // Check if key value pair existed and act accordingly
-        let result = self.state.write().await.remove(key.clone());
+        let result = self.dht.write().await.remove(key.clone());
         match result {
             Ok(option) => match option {
                 Some(k) => {
                     info!("Key removed: {}", k);
 
-                    let daemon = self.state.read().await.id.to_string();
+                    let daemon = self.dht.read().await.id.to_string();
                     let request = LookupRequest::new(daemon, key.clone(), 1);
                     if let Err(e) = self.p2p.broadcast(request).await {
                         error!("Failed broadcasting request: {}", e);
@@ -276,7 +276,7 @@ impl Dhtd {
     // --> {"jsonrpc": "2.0", "method": "map", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "map", "id": 1}
     pub async fn map(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let map = self.state.read().await.map.clone();
+        let map = self.dht.read().await.map.clone();
         JsonResponse::new(json!(map), id).into()
     }
 
@@ -285,7 +285,7 @@ impl Dhtd {
     // --> {"jsonrpc": "2.0", "method": "lookup", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "lookup", "id": 1}
     pub async fn lookup(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let lookup = self.state.read().await.lookup.clone();
+        let lookup = self.dht.read().await.lookup.clone();
         JsonResponse::new(json!(lookup), id).into()
     }
 }
@@ -312,7 +312,7 @@ impl RequestHandler for Dhtd {
 
 // Auxilary function to periodically prun seen messages, based on when they were received.
 // This helps us to prevent broadcasting loops.
-async fn prune_seen_messages(state: StatePtr) {
+async fn prune_seen_messages(dht: DhtPtr) {
     loop {
         sleep(SEEN_DURATION as u64).await;
         debug!("Pruning seen messages");
@@ -320,7 +320,7 @@ async fn prune_seen_messages(state: StatePtr) {
         let now = Utc::now().timestamp();
 
         let mut prune = vec![];
-        let map = state.read().await.seen.clone();
+        let map = dht.read().await.seen.clone();
         for (k, v) in map.iter() {
             if now - v > SEEN_DURATION {
                 prune.push(k);
@@ -332,7 +332,7 @@ async fn prune_seen_messages(state: StatePtr) {
             map.remove(i);
         }
 
-        state.write().await.seen = map;
+        dht.write().await.seen = map;
     }
 }
 
@@ -347,8 +347,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     })
     .unwrap();
 
-    // Initialize daemon state
-    let state = State::new().await?;
+    // Initialize daemon dht
+    let dht = Dht::new(None).await?;
 
     // P2P network
     let network_settings = net::Settings {
@@ -365,21 +365,21 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     let registry = p2p.protocol_registry();
 
     info!("Registering P2P protocols...");
-    let _state = state.clone();
+    let _dht = dht.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let sender = p2p_send_channel.clone();
-            let state = _state.clone();
-            async move { Protocol::init(channel, sender, state, p2p).await.unwrap() }
+            let dht = _dht.clone();
+            async move { Protocol::init(channel, sender, dht, p2p).await.unwrap() }
         })
         .await;
 
-    // Initialize program state
-    let dhtd = Dhtd::new(state.clone(), p2p.clone(), p2p_recv_channel, shutdown.clone()).await?;
+    // Initialize daemon
+    let dhtd = Dhtd::new(dht.clone(), p2p.clone(), p2p_recv_channel, shutdown.clone()).await?;
     let dhtd = Arc::new(dhtd);
 
     // Task to periodically clean up daemon seen messages
-    ex.spawn(prune_seen_messages(state.clone())).detach();
+    ex.spawn(prune_seen_messages(dht.clone())).detach();
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
