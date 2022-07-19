@@ -19,6 +19,7 @@ use halo2_proofs::{
 };
 
 use pasta_curves::{pallas, Fp};
+use crate::zk::gadget::greater_than::GreaterThanInstruction;
 
 use crate::crypto::{
     constants::{
@@ -32,6 +33,7 @@ use crate::crypto::{
 use crate::zk::gadget::{
     arithmetic::{ArithChip, ArithConfig, ArithInstruction},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
+    greater_than::{ GreaterThanConfig, GreaterThanChip},
 };
 
 use pasta_curves::group::{ff::PrimeField, GroupEncoding};
@@ -50,7 +52,7 @@ pub struct LeadConfig {
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     _sinsemilla_config_2:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    //greaterthan_config: GreaterThanConfig,
+    greaterthan_config: GreaterThanConfig,
     evenbits_config: EvenBitsConfig,
     arith_config: ArithConfig,
 }
@@ -76,9 +78,9 @@ impl LeadConfig {
         MerkleChip::construct(self.merkle_config_2.clone())
     }
 
-    // fn greaterthan_chip(&self) -> GreaterThanChip<pallas::Base, WORD_BITS> {
-    // GreaterThanChip::construct(self.greaterthan_config.clone())
-    // }
+    fn greaterthan_chip(&self) -> GreaterThanChip<pallas::Base, WORD_BITS> {
+        GreaterThanChip::construct(self.greaterthan_config.clone())
+    }
 
     fn evenbits_chip(&self) -> EvenBitsChip<pallas::Base, WORD_BITS> {
         EvenBitsChip::construct(self.evenbits_config.clone())
@@ -93,11 +95,11 @@ const LEAD_COIN_NONCE2_OFFSET: usize = 0;
 const LEAD_COIN_PK_OFFSET: usize = 1;
 const LEAD_COIN_SERIAL_NUMBER_OFFSET: usize = 2;
 const LEAD_COIN_COMMIT_X_OFFSET: usize = 3;
-const LEAD_COIN_COMMIT_Y_OFFSET: usize = 7;
-const LEAD_COIN_COMMIT2_X_OFFSET: usize = 8;
-const LEAD_COIN_COMMIT2_Y_OFFSET: usize = 9;
-const LEAD_COIN_COMMIT_PATH_OFFSET: usize = 10;
-const LEAD_THRESHOLD_OFFSET: usize = 11;
+const LEAD_COIN_COMMIT_Y_OFFSET: usize = 4;
+const LEAD_COIN_COMMIT2_X_OFFSET: usize = 5;
+const LEAD_COIN_COMMIT2_Y_OFFSET: usize = 6;
+const LEAD_COIN_COMMIT_PATH_OFFSET: usize = 7;
+const LEAD_THRESHOLD_OFFSET: usize = 8;
 
 pub fn concat_u8(lhs: &[u8], rhs: &[u8]) -> Vec<u8> {
     [lhs, rhs].concat()
@@ -226,11 +228,11 @@ impl Circuit<pallas::Base> for LeadContract {
             (sinsemilla_config_2, merkle_config_2)
         };
 
-        // let greaterthan_config = GreaterThanChip::<pallas::Base, WORD_BITS>::configure(
-        // meta,
-        // advices[10..12].try_into().unwrap(),
-        // primary,
-        // );
+         let greaterthan_config = GreaterThanChip::<pallas::Base, WORD_BITS>::configure(
+             meta,
+             advices[10..12].try_into().unwrap(),
+             primary,
+         );
         let evenbits_config = EvenBitsChip::<pallas::Base, WORD_BITS>::configure(meta);
         let arith_config = ArithChip::configure(meta, advices[7], advices[8], advices[6]);
 
@@ -243,7 +245,7 @@ impl Circuit<pallas::Base> for LeadContract {
             merkle_config_2,
             sinsemilla_config_1,
             _sinsemilla_config_2: sinsemilla_config_2,
-            //greaterthan_config,
+            greaterthan_config,
             evenbits_config,
             arith_config,
         }
@@ -259,7 +261,7 @@ impl Circuit<pallas::Base> for LeadContract {
         let ar_chip = config.arith_chip();
         let _ps_chip = config.poseidon_chip();
         let eb_chip = config.evenbits_chip();
-        //let greater_than_chip = config.greaterthan_chip();
+        let greater_than_chip = config.greaterthan_chip();
 
         eb_chip.alloc_table(&mut layouter.namespace(|| "alloc table"))?;
 
@@ -388,7 +390,7 @@ impl Circuit<pallas::Base> for LeadContract {
             config.primary,
             LEAD_COIN_SERIAL_NUMBER_OFFSET,
         )?;
-        /*
+
         // ================================================
         // coin commiment H=COMMIT(pk||V||nonce||r)
         // ================================================
@@ -436,7 +438,6 @@ impl Circuit<pallas::Base> for LeadContract {
             config.primary,
             LEAD_COIN_COMMIT_Y_OFFSET,
         )?;
-
 
         // ================================================
         // coin2 commiment H=COMMIT(pk||V||nonce2||r2)
@@ -594,6 +595,7 @@ impl Circuit<pallas::Base> for LeadContract {
 
         let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
         let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value.clone())?;
+
         eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
         eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
 
@@ -603,8 +605,8 @@ impl Circuit<pallas::Base> for LeadContract {
                     y_commit_base.into(),
         )?;
         eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
-        layouter.constrain_instance(is_gt.0.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?
-        */
+        //layouter.constrain_instance(is_gt.0.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?
+
         Ok(())
     }
 }

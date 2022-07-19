@@ -5,7 +5,7 @@ pub mod arithmetic;
 pub mod even_bits;
 
 // Greater than comparison gadget;
-//pub mod greater_than;
+pub mod greater_than;
 
 /// Comparison gadget
 pub mod cmp;

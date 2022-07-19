@@ -9,6 +9,7 @@ use halo2_proofs::{
 
 use pasta_curves::pallas;
 
+
 #[derive(Clone, Debug)]
 pub struct GreaterThanConfig {
     pub advice: [Column<Advice>; 2],

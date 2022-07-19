@@ -77,11 +77,11 @@ impl LeadCoin {
             po_nonce,
             po_pk,
             po_sn,
-            //*po_cm.x(),
-            //*po_cm.y(),
-            //*po_cm2.x(),
-            //*po_cm2.y(),
-            //cm_root.0,
+            *po_cm.x(),
+            *po_cm.y(),
+            *po_cm2.x(),
+            *po_cm2.y(),
+            cm_root.0,
             //po_cmp,
         ];
         public_inputs
