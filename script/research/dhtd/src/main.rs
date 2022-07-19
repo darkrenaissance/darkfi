@@ -10,7 +10,9 @@ use structopt_toml::StructOptToml;
 use url::Url;
 
 use darkfi::{
-    async_daemonize, cli_desc, net,
+    async_daemonize, cli_desc,
+    dht::{waiting_for_response, Dht, DhtPtr},
+    net,
     rpc::{
         jsonrpc::{
             ErrorCode::{InvalidParams, MethodNotFound},
@@ -28,14 +30,6 @@ use darkfi::{
 
 mod error;
 use error::{server_error, RpcError};
-
-mod dht;
-use dht::{waiting_for_response, Dht, DhtPtr};
-
-mod messages;
-
-mod protocol;
-
 const CONFIG_FILE: &str = "dhtd_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../dhtd_config.toml");
 

@@ -7,15 +7,15 @@ use log::{debug, error};
 use rand::Rng;
 use std::{collections::HashSet, time::Duration};
 
-use darkfi::{
+use crate::{
     net,
     net::P2pPtr,
     util::{serial::serialize, sleep},
-    Error::TorError,
+    Error::{NetworkNotConnected, UnknownKey},
     Result,
 };
 
-use crate::{
+use super::{
     messages::{KeyRequest, KeyResponse, LookupRequest},
     protocol::Protocol,
 };
@@ -192,10 +192,7 @@ impl Dht {
         // Verify the key exist in the lookup map.
         let peers = match self.lookup.get(&key) {
             Some(v) => v.clone(),
-            None => {
-                error!("Key doesn't exist.");
-                return Err(TorError("Key doesn't exist.".to_string()))
-            }
+            None => return Err(UnknownKey),
         };
 
         debug!("Key is in peers: {:?}", peers);
@@ -205,8 +202,7 @@ impl Dht {
         // Using len here because is_empty() uses unstable library feature
         // called 'exact_size_is_empty'.
         if self.p2p.channels().lock().await.values().len() == 0 {
-            error!("Node is not connected to other nodes.");
-            return Err(TorError("Node is not connected to other nodes.".to_string()))
+            return Err(NetworkNotConnected)
         }
 
         // We create a key request, and broadcast it to the network

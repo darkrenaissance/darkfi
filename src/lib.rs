@@ -10,6 +10,9 @@ pub mod consensus;
 #[cfg(feature = "crypto")]
 pub mod crypto;
 
+#[cfg(feature = "dht")]
+pub mod dht;
+
 #[cfg(feature = "crypto")]
 pub mod zk;
 

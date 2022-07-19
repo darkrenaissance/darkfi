@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use log::{debug, error};
 
-use darkfi::{
+use crate::{
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
@@ -12,7 +12,7 @@ use darkfi::{
     Result,
 };
 
-use crate::{
+use super::{
     dht::DhtPtr,
     messages::{KeyRequest, KeyResponse, LookupRequest},
 };

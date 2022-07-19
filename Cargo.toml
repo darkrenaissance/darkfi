@@ -300,6 +300,10 @@ tx = [
 	"util",
 ]
 
+dht = [
+    "util",
+]
+
 [[example]]
 name = "net"
 path = "example/net.rs"

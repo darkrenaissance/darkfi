@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use darkfi::{
+use crate::{
     net,
     util::serial::{serialize, SerialDecodable, SerialEncodable},
 };
