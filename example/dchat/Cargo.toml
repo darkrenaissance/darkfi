@@ -1,0 +1,32 @@
+[package]
+name = "dchat"
+version = "0.1.0"
+edition = "2021"
+description = "Demo chat to document darkfi net code"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+darkfi = {path = "../../", features = ["net", "rpc"]}
+
+# Async
+futures = "0.3.0"
+async-std = "1"
+async-trait = "0.1.56"
+async-executor = "1.4.1"
+async-channel = "1.6.1"
+easy-parallel = "3.2.0"
+smol = "1.2.5"
+
+# Misc
+simplelog = "0.12.0"
+ringbuffer = "0.8.4"
+url = "2.2.2"
+clap = {version = "3.2.8", features = ["derive"]}
+
+# Encoding and parsing
+serde = {version = "1.0.138", features = ["derive"]}
+structopt = "0.3.26"
+structopt-toml = "0.5.0"
+
+
