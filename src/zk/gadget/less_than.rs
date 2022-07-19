@@ -269,15 +269,31 @@ mod tests {
     }
 
     #[test]
-    fn less_than() {
+    fn less_than_64() {
         test_circuit!(3, 64, 22);
-        let k = 8;
+        let k = 5;
 
-        let valid_a_vals = vec![pallas::Base::from(13)];
-        let valid_b_vals = vec![pallas::Base::from(15)];
+        let valid_a_vals = vec![pallas::Base::from(13), pallas::Base::zero(), pallas::Base::one()];
+        let valid_b_vals = vec![
+            pallas::Base::from(15),
+            pallas::Base::from(u64::MAX),
+            pallas::Base::from(rand::random::<u64>()),
+        ];
 
-        let invalid_a_vals = vec![pallas::Base::from(14)];
-        let invalid_b_vals = vec![pallas::Base::from(11)];
+        let invalid_a_vals = vec![
+            pallas::Base::from(14),
+            pallas::Base::from(u64::MAX),
+            pallas::Base::zero(),
+            pallas::Base::one(),
+            pallas::Base::from(u64::MAX),
+        ];
+        let invalid_b_vals = vec![
+            pallas::Base::from(11),
+            pallas::Base::zero(),
+            pallas::Base::zero(),
+            pallas::Base::one(),
+            pallas::Base::from(u64::MAX),
+        ];
 
         use plotters::prelude::*;
         let circuit = LessThanCircuit {
