@@ -21,6 +21,7 @@ use darkfi::{
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
         path::get_config_path,
+        serial::serialize,
     },
     Result,
 };
@@ -99,10 +100,11 @@ impl Dhtd {
         }
 
         let key = params[0].to_string();
+        let key_hash = blake3::hash(&serialize(&key));
 
         // We execute this sequence to prevent lock races between threads
         // Verify key exists
-        let exists = self.dht.read().await.contains_key(key.clone());
+        let exists = self.dht.read().await.contains_key(key_hash.clone());
         if let None = exists {
             info!("Did not find key: {}", key);
             return server_error(RpcError::UnknownKey, id).into()
@@ -111,7 +113,7 @@ impl Dhtd {
         // Check if key is local or shoud query network
         let local = exists.unwrap();
         if local {
-            match self.dht.read().await.get(key.clone()) {
+            match self.dht.read().await.get(key_hash.clone()) {
                 Some(value) => {
                     let string = std::str::from_utf8(&value).unwrap().to_string();
                     return JsonResponse::new(json!((key, string)), id).into()
@@ -124,7 +126,7 @@ impl Dhtd {
         }
 
         info!("Key doesn't exist locally, querring network...");
-        if let Err(e) = self.dht.read().await.request_key(key.clone()).await {
+        if let Err(e) = self.dht.read().await.request_key(key_hash).await {
             error!("Failed to query key: {}", e);
             return server_error(RpcError::QueryFailed, id).into()
         }
@@ -168,10 +170,10 @@ impl Dhtd {
         }
 
         let key = params[0].to_string();
+        let key_hash = blake3::hash(&serialize(&key));
         let value = params[1].to_string();
 
-        if let Err(e) = self.dht.write().await.insert(key.clone(), value.as_bytes().to_vec()).await
-        {
+        if let Err(e) = self.dht.write().await.insert(key_hash, value.as_bytes().to_vec()).await {
             error!("Failed to insert key: {}", e);
             return server_error(RpcError::KeyInsertFail, id)
         }
@@ -189,13 +191,15 @@ impl Dhtd {
         }
 
         let key = params[0].to_string();
+        let key_hash = blake3::hash(&serialize(&key));
+
         // Check if key value pair existed and act accordingly
-        let result = self.dht.write().await.remove(key.clone()).await;
+        let result = self.dht.write().await.remove(key_hash).await;
         match result {
             Ok(option) => match option {
                 Some(k) => {
-                    info!("Key removed: {}", k);
-                    JsonResponse::new(json!(k), id).into()
+                    info!("Hash key removed: {}", k);
+                    JsonResponse::new(json!(k.to_string()), id).into()
                 }
                 None => {
                     info!("Did not find key: {}", key);
@@ -215,7 +219,8 @@ impl Dhtd {
     // <-- {"jsonrpc": "2.0", "result": "map", "id": 1}
     pub async fn map(&self, id: Value, _params: &[Value]) -> JsonResult {
         let map = self.dht.read().await.map.clone();
-        JsonResponse::new(json!(map), id).into()
+        let map_string = format!("{:#?}", map);
+        JsonResponse::new(json!(map_string), id).into()
     }
 
     // RPCAPI:
@@ -224,7 +229,8 @@ impl Dhtd {
     // <-- {"jsonrpc": "2.0", "result": "lookup", "id": 1}
     pub async fn lookup(&self, id: Value, _params: &[Value]) -> JsonResult {
         let lookup = self.dht.read().await.lookup.clone();
-        JsonResponse::new(json!(lookup), id).into()
+        let lookup_string = format!("{:#?}", lookup);
+        JsonResponse::new(json!(lookup_string), id).into()
     }
 }
 

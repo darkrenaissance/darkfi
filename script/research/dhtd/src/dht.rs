@@ -29,7 +29,6 @@ pub type DhtPtr = Arc<RwLock<Dht>>;
 
 // TODO: proper errors
 // TODO: lookup table to be based on directly connected peers, not broadcast based
-// TODO: replace Strings with blake3 hashes
 // Using string in structures because we are at an external crate
 // and cant use blake3 serialization. To be replaced once merged with core src.
 
@@ -38,9 +37,9 @@ pub struct Dht {
     /// Daemon id
     pub id: blake3::Hash,
     /// Daemon hasmap
-    pub map: FxHashMap<String, Vec<u8>>,
+    pub map: FxHashMap<blake3::Hash, Vec<u8>>,
     /// Network lookup map, containing nodes that holds each key
-    pub lookup: FxHashMap<String, HashSet<String>>,
+    pub lookup: FxHashMap<blake3::Hash, HashSet<blake3::Hash>>,
     /// P2P network pointer
     p2p: P2pPtr,
     /// Channel to receive responses from P2P
@@ -49,12 +48,12 @@ pub struct Dht {
     stop_signal: async_channel::Receiver<()>,
     /// Daemon seen requests/responses ids and timestamp,
     /// to prevent rebroadcasting and loops
-    pub seen: FxHashMap<String, i64>,
+    pub seen: FxHashMap<blake3::Hash, i64>,
 }
 
 impl Dht {
     pub async fn new(
-        initial: Option<FxHashMap<String, HashSet<String>>>,
+        initial: Option<FxHashMap<blake3::Hash, HashSet<blake3::Hash>>>,
         p2p_ptr: P2pPtr,
         stop_signal: async_channel::Receiver<()>,
         ex: Arc<Executor<'_>>,
@@ -99,43 +98,20 @@ impl Dht {
         Ok(dht)
     }
 
-    /// Store provided key value pair and update lookup map
-    pub async fn insert(&mut self, key: String, value: Vec<u8>) -> Result<Option<String>> {
+    /// Store provided key value pair, update lookup map and broadcast new insert to network
+    pub async fn insert(
+        &mut self,
+        key: blake3::Hash,
+        value: Vec<u8>,
+    ) -> Result<Option<blake3::Hash>> {
         self.map.insert(key.clone(), value);
-        self.lookup_insert(key, self.id.to_string()).await
-    }
 
-    /// Remove provided key value pair and update lookup map
-    pub async fn remove(&mut self, key: String) -> Result<Option<String>> {
-        // Check if key value pair existed and act accordingly
-        match self.map.remove(&key) {
-            Some(_) => {
-                debug!("Key removed: {}", key);
-                let daemon = self.id.to_string();
-                let request = LookupRequest::new(daemon, key.clone(), 1);
-                if let Err(e) = self.p2p.broadcast(request).await {
-                    error!("Failed broadcasting request: {}", e);
-                    return Err(e)
-                }
-
-                self.lookup_remove(key.clone(), self.id.to_string())
-            }
-            None => Ok(None),
-        }
-    }
-
-    /// Store provided key node pair in lookup map and update network
-    pub async fn lookup_insert(&mut self, key: String, node_id: String) -> Result<Option<String>> {
-        let mut lookup_set = match self.lookup.get(&key) {
-            Some(s) => s.clone(),
-            None => HashSet::new(),
+        if let Err(e) = self.lookup_insert(key, self.id) {
+            error!("Failed to insert record to lookup map: {}", e);
+            return Err(e)
         };
 
-        lookup_set.insert(node_id);
-        self.lookup.insert(key.clone(), lookup_set);
-
-        let daemon = self.id.to_string();
-        let request = LookupRequest::new(daemon, key.clone(), 0);
+        let request = LookupRequest::new(self.id, key.clone(), 0);
         if let Err(e) = self.p2p.broadcast(request).await {
             error!("Failed broadcasting request: {}", e);
             return Err(e)
@@ -144,8 +120,47 @@ impl Dht {
         Ok(Some(key))
     }
 
+    /// Remove provided key value pair and update lookup map
+    pub async fn remove(&mut self, key: blake3::Hash) -> Result<Option<blake3::Hash>> {
+        // Check if key value pair existed and act accordingly
+        match self.map.remove(&key) {
+            Some(_) => {
+                debug!("Key removed: {}", key);
+                let request = LookupRequest::new(self.id, key.clone(), 1);
+                if let Err(e) = self.p2p.broadcast(request).await {
+                    error!("Failed broadcasting request: {}", e);
+                    return Err(e)
+                }
+
+                self.lookup_remove(key.clone(), self.id)
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Store provided key node pair in lookup map and update network
+    pub fn lookup_insert(
+        &mut self,
+        key: blake3::Hash,
+        node_id: blake3::Hash,
+    ) -> Result<Option<blake3::Hash>> {
+        let mut lookup_set = match self.lookup.get(&key) {
+            Some(s) => s.clone(),
+            None => HashSet::new(),
+        };
+
+        lookup_set.insert(node_id);
+        self.lookup.insert(key.clone(), lookup_set);
+
+        Ok(Some(key))
+    }
+
     /// Remove provided node id from keys set in local lookup map
-    pub fn lookup_remove(&mut self, key: String, node_id: String) -> Result<Option<String>> {
+    pub fn lookup_remove(
+        &mut self,
+        key: blake3::Hash,
+        node_id: blake3::Hash,
+    ) -> Result<Option<blake3::Hash>> {
         if let Some(s) = self.lookup.get(&key) {
             let mut lookup_set = s.clone();
             lookup_set.remove(&node_id);
@@ -160,7 +175,7 @@ impl Dht {
     }
 
     /// Verify if provided key exists and return flag if local or in network
-    pub fn contains_key(&self, key: String) -> Option<bool> {
+    pub fn contains_key(&self, key: blake3::Hash) -> Option<bool> {
         match self.lookup.contains_key(&key) {
             true => Some(self.map.contains_key(&key)),
             false => None,
@@ -168,12 +183,12 @@ impl Dht {
     }
 
     /// Get key from local map, acting as daemon cache
-    pub fn get(&self, key: String) -> Option<&Vec<u8>> {
+    pub fn get(&self, key: blake3::Hash) -> Option<&Vec<u8>> {
         self.map.get(&key)
     }
 
     /// Generate key request and broadcast it to the network
-    pub async fn request_key(&self, key: String) -> Result<()> {
+    pub async fn request_key(&self, key: blake3::Hash) -> Result<()> {
         // Verify the key exist in the lookup map.
         let peers = match self.lookup.get(&key) {
             Some(v) => v.clone(),
@@ -195,10 +210,9 @@ impl Dht {
         }
 
         // We create a key request, and broadcast it to the network
-        let daemon = self.id.to_string();
         // We choose last known peer as request recipient
-        let peer = peers.iter().last().unwrap().to_string();
-        let request = KeyRequest::new(daemon.clone(), peer, key.clone());
+        let peer = peers.iter().last().unwrap().clone();
+        let request = KeyRequest::new(self.id, peer, key);
         // TODO: ask connected peers directly, not broadcast
         if let Err(e) = self.p2p.broadcast(request).await {
             error!("Failed broadcasting request: {}", e);

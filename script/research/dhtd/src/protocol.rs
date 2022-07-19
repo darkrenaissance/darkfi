@@ -84,7 +84,7 @@ impl Protocol {
                 dht.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
             }
 
-            let daemon = self.dht.read().await.id.to_string();
+            let daemon = self.dht.read().await.id;
             if daemon != req_copy.to {
                 if let Err(e) =
                     self.p2p.broadcast_with_exclude(req_copy.clone(), &exclude_list).await
@@ -137,7 +137,7 @@ impl Protocol {
                 dht.seen.insert(resp_copy.id.clone(), Utc::now().timestamp());
             }
 
-            if self.dht.read().await.id.to_string() != resp_copy.to {
+            if self.dht.read().await.id != resp_copy.to {
                 if let Err(e) =
                     self.p2p.broadcast_with_exclude(resp_copy.clone(), &exclude_list).await
                 {
@@ -183,13 +183,11 @@ impl Protocol {
             }
 
             let result = match req_copy.req_type {
-                0 => {
-                    self.dht
-                        .write()
-                        .await
-                        .lookup_insert(req_copy.key.clone(), req_copy.daemon.clone())
-                        .await
-                }
+                0 => self
+                    .dht
+                    .write()
+                    .await
+                    .lookup_insert(req_copy.key.clone(), req_copy.daemon.clone()),
                 _ => self
                     .dht
                     .write()
