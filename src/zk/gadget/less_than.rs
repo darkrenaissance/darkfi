@@ -260,7 +260,12 @@ mod tests {
                         config.0.k_values_table,
                     )?;
 
-                    less_than_chip.witness_less_than(layouter, self.a, self.b, 0)?;
+                    less_than_chip.witness_less_than(
+                        layouter.namespace(|| "a < b"),
+                        self.a,
+                        self.b,
+                        0,
+                    )?;
 
                     Ok(())
                 }
