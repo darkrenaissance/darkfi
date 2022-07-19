@@ -503,6 +503,7 @@ macro_rules! impl_vec {
 impl_vec!(SocketAddr);
 impl_vec!(Url);
 impl_vec!([u8; 32]);
+impl_vec!(blake3::Hash);
 
 impl Encodable for IpAddr {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
@@ -643,6 +644,21 @@ impl Decodable for BigUint {
         let mut bytes = vec![];
         d.read_slice(&mut bytes)?;
         Ok(BigUint::from_bytes_le(&bytes))
+    }
+}
+
+impl Encodable for blake3::Hash {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        s.write_slice(self.as_bytes())?;
+        Ok(32)
+    }
+}
+
+impl Decodable for blake3::Hash {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let mut bytes = [0u8; 32];
+        d.read_slice(&mut bytes)?;
+        Ok(bytes.into())
     }
 }
 
