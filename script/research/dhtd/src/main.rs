@@ -29,7 +29,7 @@ mod error;
 use error::{server_error, RpcError};
 
 mod dht;
-use dht::{Dht, DhtPtr};
+use dht::{waiting_for_response, Dht, DhtPtr};
 
 mod messages;
 
@@ -99,30 +99,61 @@ impl Dhtd {
         }
 
         let key = params[0].to_string();
-        let result = self.dht.read().await.get(key.clone()).await;
-        match result {
-            Ok(res) => match res {
+
+        // We execute this sequence to prevent lock races between threads
+        // Verify key exists
+        let exists = self.dht.read().await.contains_key(key.clone());
+        if let None = exists {
+            info!("Did not find key: {}", key);
+            return server_error(RpcError::UnknownKey, id).into()
+        }
+
+        // Check if key is local or shoud query network
+        let local = exists.unwrap();
+        if local {
+            match self.dht.read().await.get(key.clone()) {
                 Some(value) => {
-                    info!("Key found!");
-                    // Optionally, we insert the key to our local map.
-                    // This must happen here because we got blocking/race conditions
-                    // if we try to insert the value in dht.get().
-                    if let Err(e) = self.dht.write().await.insert(key.clone(), value.clone()).await
-                    {
-                        error!("Failed to insert key: {}", e);
-                        return server_error(RpcError::KeyInsertFail, id)
-                    }
                     let string = std::str::from_utf8(&value).unwrap().to_string();
-                    JsonResponse::new(json!((key, string)), id).into()
+                    return JsonResponse::new(json!((key, string)), id).into()
                 }
                 None => {
                     info!("Did not find key: {}", key);
-                    server_error(RpcError::UnknownKey, id).into()
+                    return server_error(RpcError::UnknownKey, id).into()
                 }
-            },
+            }
+        }
+
+        info!("Key doesn't exist locally, querring network...");
+        if let Err(e) = self.dht.read().await.request_key(key.clone()).await {
+            error!("Failed to query key: {}", e);
+            return server_error(RpcError::QueryFailed, id).into()
+        }
+
+        info!("Waiting response...");
+        match waiting_for_response(self.dht.clone()).await {
+            Ok(response) => {
+                match response {
+                    Some(resp) => {
+                        info!("Key found!");
+                        // Optionally, we insert the key to our local map
+                        if let Err(e) =
+                            self.dht.write().await.insert(resp.key, resp.value.clone()).await
+                        {
+                            error!("Failed to insert key: {}", e);
+                            return server_error(RpcError::KeyInsertFail, id)
+                        }
+                        let string = std::str::from_utf8(&resp.value).unwrap().to_string();
+                        JsonResponse::new(json!((key, string)), id).into()
+                    }
+                    None => {
+                        info!("Did not find key: {}", key);
+                        server_error(RpcError::UnknownKey, id).into()
+                    }
+                }
+            }
             Err(e) => {
-                error!("Failed to query key: {}", e);
-                server_error(RpcError::QueryFailed, id).into()
+                error!("Error while waiting network response: {}", e);
+                server_error(RpcError::WaitingNetworkError, id).into()
             }
         }
     }

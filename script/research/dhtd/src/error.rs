@@ -7,6 +7,7 @@ pub enum RpcError {
     QueryFailed = -35108,
     KeyInsertFail = -35110,
     KeyRemoveFail = -35111,
+    WaitingNetworkError = -35112,
 }
 
 fn to_tuple(e: RpcError) -> (i64, String) {
@@ -15,6 +16,7 @@ fn to_tuple(e: RpcError) -> (i64, String) {
         RpcError::QueryFailed => "Failed to query key",
         RpcError::KeyInsertFail => "Failed to insert key",
         RpcError::KeyRemoveFail => "Failed to remove key",
+        RpcError::WaitingNetworkError => "Error while waiting network response.",
     };
 
     (e as i64, msg.to_string())

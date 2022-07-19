@@ -11,6 +11,7 @@ use darkfi::{
     net,
     net::P2pPtr,
     util::{serial::serialize, sleep},
+    Error::TorError,
     Result,
 };
 
@@ -26,6 +27,7 @@ const SEEN_DURATION: i64 = 120;
 /// Atomic pointer to DHT state
 pub type DhtPtr = Arc<RwLock<Dht>>;
 
+// TODO: proper errors
 // TODO: lookup table to be based on directly connected peers, not broadcast based
 // TODO: replace Strings with blake3 hashes
 // Using string in structures because we are at an external crate
@@ -157,31 +159,39 @@ impl Dht {
         Ok(Some(key))
     }
 
-    /// Check if provided key exists and retrieve it from the local map or query the network.
-    pub async fn get(&self, key: String) -> Result<Option<Vec<u8>>> {
+    /// Verify if provided key exists and return flag if local or in network
+    pub fn contains_key(&self, key: String) -> Option<bool> {
+        match self.lookup.contains_key(&key) {
+            true => Some(self.map.contains_key(&key)),
+            false => None,
+        }
+    }
+
+    /// Get key from local map, acting as daemon cache
+    pub fn get(&self, key: String) -> Option<&Vec<u8>> {
+        self.map.get(&key)
+    }
+
+    /// Generate key request and broadcast it to the network
+    pub async fn request_key(&self, key: String) -> Result<()> {
         // Verify the key exist in the lookup map.
         let peers = match self.lookup.get(&key) {
             Some(v) => v.clone(),
-            None => return Ok(None),
+            None => {
+                error!("Key doesn't exist.");
+                return Err(TorError("Key doesn't exist.".to_string()))
+            }
         };
 
         debug!("Key is in peers: {:?}", peers);
-
-        // Each node holds a local map, acting as its cache.
-        // When the node receives a request for a key it doesn't hold,
-        // it will query the P2P network and saves the response in its local cache.
-        match self.map.get(&key) {
-            Some(v) => return Ok(Some(v.clone())),
-            None => debug!("Requested key doesn't exist locally, querying the network..."),
-        };
 
         // We retrieve p2p network connected channels, to verify if we
         // are connected to a network.
         // Using len here because is_empty() uses unstable library feature
         // called 'exact_size_is_empty'.
         if self.p2p.channels().lock().await.values().len() == 0 {
-            debug!("Node is not connected to other nodes");
-            return Ok(None)
+            error!("Node is not connected to other nodes.");
+            return Err(TorError("Node is not connected to other nodes.".to_string()))
         }
 
         // We create a key request, and broadcast it to the network
@@ -195,38 +205,35 @@ impl Dht {
             return Err(e)
         }
 
-        // Waiting network response
-        match self.waiting_for_response().await {
-            Ok(resp) => match resp {
-                Some(response) => Ok(Some(response.value)),
-                None => Ok(None),
+        Ok(())
+    }
+}
+
+// Auxilary function to wait for a key response from the P2P network.
+pub async fn waiting_for_response(dht: DhtPtr) -> Result<Option<KeyResponse>> {
+    let (p2p_recv_channel, stop_signal) = {
+        let _dht = dht.read().await;
+        (_dht.p2p_recv_channel.clone(), _dht.stop_signal.clone())
+    };
+    let ex = Arc::new(async_executor::Executor::new());
+    let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
+    ex.spawn(async move {
+        sleep(Duration::from_millis(REQUEST_TIMEOUT).as_secs()).await;
+        timeout_s.send(()).await.unwrap_or(());
+    })
+    .detach();
+
+    loop {
+        select! {
+            msg = p2p_recv_channel.recv().fuse() => {
+                let response = msg?;
+                return Ok(Some(response))
             },
-            Err(e) => Err(e),
+            _ = stop_signal.recv().fuse() => break,
+            _ = timeout_r.recv().fuse() => break,
         }
     }
-
-    // Auxilary function to wait for a key response from the P2P network.
-    async fn waiting_for_response(&self) -> Result<Option<KeyResponse>> {
-        let ex = Arc::new(async_executor::Executor::new());
-        let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
-        ex.spawn(async move {
-            sleep(Duration::from_millis(REQUEST_TIMEOUT).as_secs()).await;
-            timeout_s.send(()).await.unwrap_or(());
-        })
-        .detach();
-
-        loop {
-            select! {
-                msg = self.p2p_recv_channel.recv().fuse() => {
-                    let response = msg?;
-                    return Ok(Some(response))
-                },
-                _ = self.stop_signal.recv().fuse() => break,
-                _ = timeout_r.recv().fuse() => break,
-            }
-        }
-        Ok(None)
-    }
+    Ok(None)
 }
 
 // Auxilary function to periodically prun seen messages, based on when they were received.

@@ -72,12 +72,17 @@ impl Protocol {
             let req_copy = (*req).clone();
             debug!("Protocol::handle_receive_request(): req: {:?}", req_copy);
 
-            if self.dht.read().await.seen.contains_key(&req_copy.id) {
-                debug!("Protocol::handle_receive_request(): We have already seen this request.");
-                continue
-            }
+            {
+                let dht = &mut self.dht.write().await;
+                if dht.seen.contains_key(&req_copy.id) {
+                    debug!(
+                        "Protocol::handle_receive_request(): We have already seen this request."
+                    );
+                    continue
+                }
 
-            self.dht.write().await.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
+                dht.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
+            }
 
             let daemon = self.dht.read().await.id.to_string();
             if daemon != req_copy.to {
@@ -120,26 +125,28 @@ impl Protocol {
             let resp_copy = (*resp).clone();
             debug!("Protocol::handle_receive_response(): resp: {:?}", resp_copy);
 
-            if self.dht.read().await.seen.contains_key(&resp_copy.id) {
-                error!("0.1");
-                debug!("Protocol::handle_receive_response(): We have already seen this response.");
-                continue
+            {
+                let dht = &mut self.dht.write().await;
+                if dht.seen.contains_key(&resp_copy.id) {
+                    debug!(
+                        "Protocol::handle_receive_request(): We have already seen this request."
+                    );
+                    continue
+                }
+
+                dht.seen.insert(resp_copy.id.clone(), Utc::now().timestamp());
             }
 
             if self.dht.read().await.id.to_string() != resp_copy.to {
-                error!("2.1");
                 if let Err(e) =
                     self.p2p.broadcast_with_exclude(resp_copy.clone(), &exclude_list).await
                 {
                     error!("Protocol::handle_receive_response(): p2p broadcast fail: {}", e);
                 };
-
-                self.dht.write().await.seen.insert(resp_copy.id, Utc::now().timestamp());
                 continue
             }
 
             self.notify_queue_sender.send(resp_copy.clone()).await?;
-            self.dht.write().await.seen.insert(resp_copy.id, Utc::now().timestamp());
         }
     }
 
@@ -163,14 +170,17 @@ impl Protocol {
                 continue
             }
 
-            if self.dht.read().await.seen.contains_key(&req_copy.id) {
-                debug!(
-                    "Protocol::handle_receive_lookup_request(): We have already seen this request."
-                );
-                continue
-            }
+            {
+                let dht = &mut self.dht.write().await;
+                if dht.seen.contains_key(&req_copy.id) {
+                    debug!(
+                        "Protocol::handle_receive_request(): We have already seen this request."
+                    );
+                    continue
+                }
 
-            self.dht.write().await.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
+                dht.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
+            }
 
             let result = match req_copy.req_type {
                 0 => {
