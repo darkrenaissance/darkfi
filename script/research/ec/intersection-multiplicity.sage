@@ -7,7 +7,9 @@ Q = E(10, 26)
 C = E.defining_polynomial()
 
 R.<x, y, z> = PolynomialRing(K)
-f = y - Q[1] * z
+f = y - Q[1]
+# Homogenize f
+f = z^f.degree() * f(x/z, y/z, 1)
 
 P.<x,y,z> = ProjectiveSpace(K, 2)
 X = P.subscheme([C(x, y, z)])
