@@ -27,3 +27,8 @@ for i in range(100):
     assert V[0][x] == Px
     assert V[0][y] == Py
 
+# Note: to reduce D = [P] - [Q], just note that
+# D = [P] - [Q]
+#   = ([P] - [∞]) - ([Q] - [∞])
+#   = div(f) - div(g) = div(f/g)
+
