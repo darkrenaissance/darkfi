@@ -13,7 +13,7 @@
 #inbound="tcp://127.0.0.1:12002" 
 
 ## Connection slots
-#outbound_connections=0 
+outbound_connections=5
 
 ## P2P external address
 #external_addr="tls://127.0.0.1:12002"
@@ -22,7 +22,7 @@
 #peers=["tls://127.0.0.1:12003"]
 
 ## Seed nodes to connect to 
-#seeds=["tls://127.0.0.1:12001"]
+seeds=["tls://tau0.dark.fi:12001", "tls://tau1.dark.fi:12001"]
 
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0
