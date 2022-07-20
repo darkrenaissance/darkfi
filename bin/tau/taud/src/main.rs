@@ -1,12 +1,11 @@
 use async_std::sync::{Arc, Mutex};
-use std::{env, fs::create_dir_all, sync::mpsc, time::Duration};
+use std::{env, fs::create_dir_all};
 
 use async_executor::Executor;
 use crypto_box::{aead::Aead, Box, SecretKey};
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{debug, error, info, warn};
-use notify::{DebouncedEvent, RecommendedWatcher, RecursiveMode, Watcher};
 use smol::future;
 use structopt_toml::StructOptToml;
 
@@ -72,18 +71,6 @@ fn decrypt_task(encrypt_task: &EncryptedTask, salsa_box: &Box) -> TaudResult<Tas
     Ok(task)
 }
 
-fn load_task_path_from_osstr(task_path: std::path::PathBuf) -> Option<String> {
-    task_path.file_name()?;
-
-    let task_path = task_path.file_name().unwrap().to_str().unwrap_or("");
-
-    if task_path.is_empty() {
-        return None
-    }
-
-    Some(task_path.to_string())
-}
-
 async fn start_sync_loop(
     commits_received: Arc<Mutex<Vec<String>>>,
     broadcast_rcv: async_channel::Receiver<TaskInfo>,
@@ -130,64 +117,6 @@ async fn start_sync_loop(
     }
 }
 
-async fn watch_files(
-    commits_received: Arc<Mutex<Vec<String>>>,
-    broadcast_snd: async_channel::Sender<TaskInfo>,
-    datastore_path: std::path::PathBuf,
-    (tx, rx): (mpsc::Sender<DebouncedEvent>, mpsc::Receiver<DebouncedEvent>),
-) -> TaudResult<()> {
-    let mut watcher: RecommendedWatcher = Watcher::new(tx, Duration::from_millis(500)).unwrap();
-
-    let watch_path = datastore_path.join("task");
-    info!("Start watching local tasks files: {:?}", &watch_path);
-    watcher.watch(watch_path, RecursiveMode::Recursive).unwrap();
-
-    loop {
-        let event = rx.recv();
-
-        if let Err(e) = event {
-            error!("Watch files error: {:?}", e);
-            continue
-        }
-
-        let event = event.unwrap();
-        match event {
-            DebouncedEvent::Write(ev) | DebouncedEvent::Create(ev) => {
-                let task_path = load_task_path_from_osstr(ev);
-
-                if task_path.is_none() {
-                    continue
-                }
-
-                let task = TaskInfo::load(&task_path.unwrap(), &datastore_path);
-
-                if task.is_err() {
-                    continue
-                }
-
-                let task = task.unwrap();
-
-                let mut commits_received = commits_received.lock().await;
-                if commits_received.contains(&task.ref_id) {
-                    let index_task =
-                        commits_received.iter().position(|r| r == &task.ref_id).unwrap();
-                    commits_received.remove(index_task);
-                    continue
-                }
-                drop(commits_received);
-
-                broadcast_snd.send(task).await.map_err(Error::from)?;
-            }
-            DebouncedEvent::Error(err, _) => {
-                debug!("Watching files Error: {}", err);
-                break
-            }
-            _ => {}
-        }
-    }
-    Ok(())
-}
-
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let datastore_path = expand_path(&settings.datastore)?;
@@ -229,6 +158,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     let rpc_interface = Arc::new(JsonRpcInterface::new(
         datastore_path.clone(),
+        broadcast_snd,
         nickname.unwrap(),
         workspace,
         configured_ws.clone(),
@@ -289,19 +219,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     executor.spawn(p2p.clone().run(executor.clone())).detach();
 
     //
-    // Watch changes in tasks files
-    //
-    let (tx, rx) = mpsc::channel();
-    executor
-        .spawn(watch_files(
-            commits_received,
-            broadcast_snd,
-            datastore_path.clone(),
-            (tx.clone(), rx),
-        ))
-        .detach();
-
-    //
     // Waiting Exit signal
     //
     let (signal, shutdown) = async_channel::bounded::<()>(1);
@@ -315,13 +232,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     .unwrap();
 
     raft.start(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
-
-    if tx
-        .send(DebouncedEvent::Error(notify::Error::Generic("Catch exit signal".into()), None))
-        .is_ok()
-    {
-        warn!(target: "tau", "Terminating..");
-    }
 
     Ok(())
 }

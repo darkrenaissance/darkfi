@@ -13,6 +13,7 @@ use darkfi::{
         server::RequestHandler,
     },
     util::Timestamp,
+    Error,
 };
 
 use crate::{
@@ -24,6 +25,7 @@ use crate::{
 
 pub struct JsonRpcInterface {
     dataset_path: PathBuf,
+    notify_queue_sender: async_channel::Sender<TaskInfo>,
     nickname: String,
     workspace: Arc<Mutex<String>>,
     configured_ws: FxHashMap<String, Workspace>,
@@ -66,11 +68,12 @@ impl RequestHandler for JsonRpcInterface {
 impl JsonRpcInterface {
     pub fn new(
         dataset_path: PathBuf,
+        notify_queue_sender: async_channel::Sender<TaskInfo>,
         nickname: String,
         workspace: Arc<Mutex<String>>,
         configured_ws: FxHashMap<String, Workspace>,
     ) -> Self {
-        Self { dataset_path, nickname, workspace, configured_ws }
+        Self { dataset_path, nickname, workspace, configured_ws, notify_queue_sender }
     }
 
     // RPCAPI:
@@ -105,7 +108,7 @@ impl JsonRpcInterface {
         new_task.set_project(&task.project);
         new_task.set_assign(&task.assign);
 
-        new_task.save(&self.dataset_path)?;
+        self.notify_queue_sender.send(new_task).await.map_err(Error::from)?;
         Ok(json!(true))
     }
 
@@ -134,7 +137,7 @@ impl JsonRpcInterface {
         let ws = self.workspace.lock().await.clone();
 
         let task = self.check_params_for_update(&params[0], &params[1], ws)?;
-        task.save(&self.dataset_path)?;
+        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
         Ok(json!(true))
     }
 
@@ -161,7 +164,7 @@ impl JsonRpcInterface {
             task.set_state(&state);
         }
 
-        task.save(&self.dataset_path)?;
+        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
         Ok(json!(true))
     }
@@ -183,7 +186,7 @@ impl JsonRpcInterface {
         let mut task: TaskInfo = self.load_task_by_id(&params[0], ws)?;
         task.set_comment(Comment::new(&comment_content, &self.nickname));
 
-        task.save(&self.dataset_path)?;
+        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
         Ok(json!(true))
     }
