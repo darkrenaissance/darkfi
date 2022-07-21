@@ -291,8 +291,8 @@ mod tests {
         };
 
         use plotters::prelude::*;
-        let root =
-            BitMapBackend::new("arithmetic_circuit_layout.png", (3840, 2160)).into_drawing_area();
+        let root = BitMapBackend::new("target/arithmetic_circuit_layout.png", (3840, 2160))
+            .into_drawing_area();
         root.fill(&WHITE).unwrap();
         let root = root.titled("Arithmetic Circuit Layout", ("sans-serif", 60)).unwrap();
         CircuitLayout::default().render(4, &circuit, &root).unwrap();

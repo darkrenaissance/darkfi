@@ -1,20 +1,18 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use chrono::Utc;
-use futures::{select, FutureExt};
 use futures_lite::future;
-use log::{debug, error, info, warn};
+use log::{error, info};
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
-use std::time::Duration;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use url::Url;
 
 use darkfi::{
-    async_daemonize, cli_desc, net,
-    net::P2pPtr,
+    async_daemonize, cli_desc,
+    dht::{waiting_for_response, Dht, DhtPtr},
+    net,
     rpc::{
         jsonrpc::{
             ErrorCode::{InvalidParams, MethodNotFound},
@@ -25,24 +23,15 @@ use darkfi::{
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
         path::get_config_path,
-        sleep,
+        serial::serialize,
     },
     Result,
 };
 
 mod error;
 use error::{server_error, RpcError};
-
-mod structures;
-use structures::{KeyRequest, KeyResponse, LookupRequest, State, StatePtr};
-
-mod protocol;
-use protocol::Protocol;
-
 const CONFIG_FILE: &str = "dhtd_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../dhtd_config.toml");
-const REQUEST_TIMEOUT: u64 = 2400;
-const SEEN_DURATION: i64 = 120;
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -81,28 +70,17 @@ struct Args {
     verbose: u8,
 }
 
-/// Struct representing DHT daemon state.
+/// Struct representing DHT daemon.
 /// This example/temp-impl stores String data.
 /// In final version everything will be in bytes (Vec<u8).
 pub struct Dhtd {
-    /// Daemon state
-    state: StatePtr,
-    /// P2P network pointer
-    p2p: P2pPtr,
-    /// Channel to receive responses from P2P
-    p2p_recv_channel: async_channel::Receiver<KeyResponse>,
-    /// Stop signal channel to terminate background processes
-    stop_signal: async_channel::Receiver<()>,
+    /// Daemon dht state
+    dht: DhtPtr,
 }
 
 impl Dhtd {
-    pub async fn new(
-        state: StatePtr,
-        p2p: P2pPtr,
-        p2p_recv_channel: async_channel::Receiver<KeyResponse>,
-        stop_signal: async_channel::Receiver<()>,
-    ) -> Result<Self> {
-        Ok(Self { state, p2p, p2p_recv_channel, stop_signal })
+    pub async fn new(dht: DhtPtr) -> Result<Self> {
+        Ok(Self { dht })
     }
 
     // RPCAPI:
@@ -115,94 +93,69 @@ impl Dhtd {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        // Node verifies the key exist in the lookup map.
         let key = params[0].to_string();
-        let peers = match self.state.read().await.lookup.get(&key) {
-            Some(v) => v.clone(),
-            None => {
-                info!("Did not find key: {}", key);
-                return server_error(RpcError::UnknownKey, id).into()
-            }
-        };
+        let key_hash = blake3::hash(&serialize(&key));
 
-        debug!("Key is in peers: {:?}", peers);
-
-        // Each node holds a local map, acting as its cache.
-        // When the node receives a request for a key it doesn't hold,
-        // it will query the P2P network and saves the response in its local cache.
-        match self.state.read().await.map.get(&key) {
-            Some(v) => {
-                let string = std::str::from_utf8(&v).unwrap();
-                return JsonResponse::new(json!(string), id).into()
-            }
-            None => info!("Requested key doesn't exist locally, querying the network..."),
-        };
-
-        // We retrieve p2p network connected channels, to verify if we
-        // are connected to a network.
-        // Using len here because is_empty() uses unstable library feature
-        // called 'exact_size_is_empty'.
-        if self.p2p.channels().lock().await.values().len() == 0 {
-            warn!("Node is not connected to other nodes");
+        // We execute this sequence to prevent lock races between threads
+        // Verify key exists
+        let exists = self.dht.read().await.contains_key(key_hash.clone());
+        if let None = exists {
+            info!("Did not find key: {}", key);
             return server_error(RpcError::UnknownKey, id).into()
         }
 
-        // We create a key request, and broadcast it to the network
-        let daemon = self.state.read().await.id.to_string();
-        // We choose last known peer as request recipient
-        let peer = peers.iter().last().unwrap().to_string();
-        let request = KeyRequest::new(daemon.clone(), peer, key.clone());
-        // TODO: ask connected peers directly, not broadcast
-        if let Err(e) = self.p2p.broadcast(request).await {
-            error!("Failed broadcasting request: {}", e);
-            return server_error(RpcError::RequestBroadcastFail, id)
-        }
-
-        // Waiting network response
-        match self.waiting_for_response().await {
-            Ok(resp) => match resp {
-                Some(response) => {
-                    info!("Key found!");
-                    let string = std::str::from_utf8(&response.value).unwrap().to_string();
-                    self.insert_pair(id, response.key, string).await
+        // Check if key is local or shoud query network
+        let local = exists.unwrap();
+        if local {
+            match self.dht.read().await.get(key_hash.clone()) {
+                Some(value) => {
+                    let string = std::str::from_utf8(&value).unwrap().to_string();
+                    return JsonResponse::new(json!((key, string)), id).into()
                 }
                 None => {
                     info!("Did not find key: {}", key);
-                    server_error(RpcError::UnknownKey, id).into()
+                    return server_error(RpcError::UnknownKey, id).into()
                 }
-            },
+            }
+        }
+
+        info!("Key doesn't exist locally, querring network...");
+        if let Err(e) = self.dht.read().await.request_key(key_hash).await {
+            error!("Failed to query key: {}", e);
+            return server_error(RpcError::QueryFailed, id).into()
+        }
+
+        info!("Waiting response...");
+        match waiting_for_response(self.dht.clone()).await {
+            Ok(response) => {
+                match response {
+                    Some(resp) => {
+                        info!("Key found!");
+                        // Optionally, we insert the key to our local map
+                        if let Err(e) =
+                            self.dht.write().await.insert(resp.key, resp.value.clone()).await
+                        {
+                            error!("Failed to insert key: {}", e);
+                            return server_error(RpcError::KeyInsertFail, id)
+                        }
+                        let string = std::str::from_utf8(&resp.value).unwrap().to_string();
+                        JsonResponse::new(json!((key, string)), id).into()
+                    }
+                    None => {
+                        info!("Did not find key: {}", key);
+                        server_error(RpcError::UnknownKey, id).into()
+                    }
+                }
+            }
             Err(e) => {
-                error!("Failed to query key: {}", e);
-                server_error(RpcError::QueryFailed, id).into()
+                error!("Error while waiting network response: {}", e);
+                server_error(RpcError::WaitingNetworkError, id).into()
             }
         }
-    }
-
-    // Auxilary function to wait for a key response from the P2P network.
-    async fn waiting_for_response(&self) -> Result<Option<KeyResponse>> {
-        let ex = Arc::new(async_executor::Executor::new());
-        let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
-        ex.spawn(async move {
-            sleep(Duration::from_millis(REQUEST_TIMEOUT).as_secs()).await;
-            timeout_s.send(()).await.unwrap_or(());
-        })
-        .detach();
-
-        loop {
-            select! {
-                msg =  self.p2p_recv_channel.recv().fuse() => {
-                    let response = msg?;
-                    return Ok(Some(response))
-                },
-                _ = self.stop_signal.recv().fuse() => break,
-                _ = timeout_r.recv().fuse() => break,
-            }
-        }
-        Ok(None)
     }
 
     // RPCAPI:
-    // Insert key value pair in local map.
+    // Insert key value pair in dht.
     // --> {"jsonrpc": "2.0", "method": "insert", "params": ["key", "value"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "(key, value)", "id": 1}
     async fn insert(&self, id: Value, params: &[Value]) -> JsonResult {
@@ -211,23 +164,12 @@ impl Dhtd {
         }
 
         let key = params[0].to_string();
+        let key_hash = blake3::hash(&serialize(&key));
         let value = params[1].to_string();
 
-        self.insert_pair(id, key, value).await
-    }
-
-    /// Auxilary function to handle pair insertion to state
-    async fn insert_pair(&self, id: Value, key: String, value: String) -> JsonResult {
-        if let Err(e) = self.state.write().await.insert(key.clone(), value.as_bytes().to_vec()) {
+        if let Err(e) = self.dht.write().await.insert(key_hash, value.as_bytes().to_vec()).await {
             error!("Failed to insert key: {}", e);
             return server_error(RpcError::KeyInsertFail, id)
-        }
-
-        let daemon = self.state.read().await.id.to_string();
-        let request = LookupRequest::new(daemon, key.clone(), 0);
-        if let Err(e) = self.p2p.broadcast(request).await {
-            error!("Failed broadcasting request: {}", e);
-            return server_error(RpcError::RequestBroadcastFail, id)
         }
 
         JsonResponse::new(json!((key, value)), id).into()
@@ -243,21 +185,15 @@ impl Dhtd {
         }
 
         let key = params[0].to_string();
+        let key_hash = blake3::hash(&serialize(&key));
+
         // Check if key value pair existed and act accordingly
-        let result = self.state.write().await.remove(key.clone());
+        let result = self.dht.write().await.remove(key_hash).await;
         match result {
             Ok(option) => match option {
                 Some(k) => {
-                    info!("Key removed: {}", k);
-
-                    let daemon = self.state.read().await.id.to_string();
-                    let request = LookupRequest::new(daemon, key.clone(), 1);
-                    if let Err(e) = self.p2p.broadcast(request).await {
-                        error!("Failed broadcasting request: {}", e);
-                        return server_error(RpcError::RequestBroadcastFail, id)
-                    }
-
-                    JsonResponse::new(json!(k), id).into()
+                    info!("Hash key removed: {}", k);
+                    JsonResponse::new(json!(k.to_string()), id).into()
                 }
                 None => {
                     info!("Did not find key: {}", key);
@@ -276,8 +212,9 @@ impl Dhtd {
     // --> {"jsonrpc": "2.0", "method": "map", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "map", "id": 1}
     pub async fn map(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let map = self.state.read().await.map.clone();
-        JsonResponse::new(json!(map), id).into()
+        let map = self.dht.read().await.map.clone();
+        let map_string = format!("{:#?}", map);
+        JsonResponse::new(json!(map_string), id).into()
     }
 
     // RPCAPI:
@@ -285,8 +222,9 @@ impl Dhtd {
     // --> {"jsonrpc": "2.0", "method": "lookup", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "lookup", "id": 1}
     pub async fn lookup(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let lookup = self.state.read().await.lookup.clone();
-        JsonResponse::new(json!(lookup), id).into()
+        let lookup = self.dht.read().await.lookup.clone();
+        let lookup_string = format!("{:#?}", lookup);
+        JsonResponse::new(json!(lookup_string), id).into()
     }
 }
 
@@ -310,32 +248,6 @@ impl RequestHandler for Dhtd {
     }
 }
 
-// Auxilary function to periodically prun seen messages, based on when they were received.
-// This helps us to prevent broadcasting loops.
-async fn prune_seen_messages(state: StatePtr) {
-    loop {
-        sleep(SEEN_DURATION as u64).await;
-        debug!("Pruning seen messages");
-
-        let now = Utc::now().timestamp();
-
-        let mut prune = vec![];
-        let map = state.read().await.seen.clone();
-        for (k, v) in map.iter() {
-            if now - v > SEEN_DURATION {
-                prune.push(k);
-            }
-        }
-
-        let mut map = map.clone();
-        for i in prune {
-            map.remove(i);
-        }
-
-        state.write().await.seen = map;
-    }
-}
-
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // We use this handler to block this function after detaching all
@@ -347,9 +259,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     })
     .unwrap();
 
-    // Initialize daemon state
-    let state = State::new().await?;
-
     // P2P network
     let network_settings = net::Settings {
         inbound: args.p2p_accept,
@@ -360,26 +269,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         ..Default::default()
     };
 
-    let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<KeyResponse>();
     let p2p = net::P2p::new(network_settings).await;
-    let registry = p2p.protocol_registry();
 
-    info!("Registering P2P protocols...");
-    let _state = state.clone();
-    registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
-            let sender = p2p_send_channel.clone();
-            let state = _state.clone();
-            async move { Protocol::init(channel, sender, state, p2p).await.unwrap() }
-        })
-        .await;
+    // Initialize daemon dht
+    let dht = Dht::new(None, p2p.clone(), shutdown.clone(), ex.clone()).await?;
 
-    // Initialize program state
-    let dhtd = Dhtd::new(state.clone(), p2p.clone(), p2p_recv_channel, shutdown.clone()).await?;
+    // Initialize daemon
+    let dhtd = Dhtd::new(dht.clone()).await?;
     let dhtd = Arc::new(dhtd);
-
-    // Task to periodically clean up daemon seen messages
-    ex.spawn(prune_seen_messages(state.clone())).detach();
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");

@@ -496,6 +496,11 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             return Err(Error::ChannelStopped)
         }
 
+        if line == "\n" {
+            warn!("Closing connection.");
+            return Err(Error::ChannelStopped)
+        }
+
         Ok(line.clone())
     }
 }

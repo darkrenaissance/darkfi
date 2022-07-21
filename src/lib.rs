@@ -10,6 +10,9 @@ pub mod consensus;
 #[cfg(feature = "crypto")]
 pub mod crypto;
 
+#[cfg(feature = "dht")]
+pub mod dht;
+
 #[cfg(feature = "crypto")]
 pub mod zk;
 
@@ -19,8 +22,8 @@ pub mod net;
 #[cfg(feature = "node")]
 pub mod node;
 
-#[cfg(feature = "wasm-runtime")]
-pub mod runtime;
+//#[cfg(feature = "wasm-runtime")]
+//pub mod runtime;
 
 #[cfg(feature = "raft")]
 pub mod raft;

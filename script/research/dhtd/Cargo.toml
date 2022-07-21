@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies.darkfi]
 path = "../../../"
-features = ["util"]
+features = ["dht"]
 
 [dependencies]
 async-channel = "1.6.1"
@@ -13,14 +13,10 @@ async-executor = "1.4.1"
 async-std = "1.12.0"
 async-trait = "0.1.56"
 blake3 = "1.3.1"
-chrono = "0.4.19"
 ctrlc-async = {version = "3.2.2", default-features = false, features = ["async-std", "termination"]}
 easy-parallel = "3.2.0"
-futures = "0.3.21"
 futures-lite = "1.12.0"
-fxhash = "0.2.1"
 log = "0.4.17"
-rand = "0.8.5"
 serde_json = "1.0.82"
 simplelog = "0.12.0"
 url = "2.2.2"

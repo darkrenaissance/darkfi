@@ -1,7 +1,9 @@
+use async_std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-use log::debug;
+use fxhash::FxHashMap;
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -11,17 +13,22 @@ use darkfi::{
         server::RequestHandler,
     },
     util::Timestamp,
+    Error,
 };
 
 use crate::{
     error::{to_json_result, TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
+    util::Workspace,
 };
 
 pub struct JsonRpcInterface {
     dataset_path: PathBuf,
+    notify_queue_sender: async_channel::Sender<TaskInfo>,
     nickname: String,
+    workspace: Arc<Mutex<String>>,
+    configured_ws: FxHashMap<String, Workspace>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -50,6 +57,7 @@ impl RequestHandler for JsonRpcInterface {
             Some("set_state") => self.set_state(params).await,
             Some("set_comment") => self.set_comment(params).await,
             Some("get_task_by_id") => self.get_task_by_id(params).await,
+            Some("switch_ws") => self.switch_ws(params).await,
             Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         };
 
@@ -58,8 +66,14 @@ impl RequestHandler for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
-    pub fn new(dataset_path: PathBuf, nickname: String) -> Self {
-        Self { dataset_path, nickname }
+    pub fn new(
+        dataset_path: PathBuf,
+        notify_queue_sender: async_channel::Sender<TaskInfo>,
+        nickname: String,
+        workspace: Arc<Mutex<String>>,
+        configured_ws: FxHashMap<String, Workspace>,
+    ) -> Self {
+        Self { dataset_path, nickname, workspace, configured_ws, notify_queue_sender }
     }
 
     // RPCAPI:
@@ -81,7 +95,9 @@ impl JsonRpcInterface {
         debug!(target: "tau", "JsonRpc::add() params {:?}", params);
 
         let task: BaseTaskInfo = serde_json::from_value(params[0].clone())?;
+        let ws = self.workspace.lock().await.clone();
         let mut new_task: TaskInfo = TaskInfo::new(
+            ws,
             &task.title,
             &task.desc,
             &self.nickname,
@@ -92,7 +108,7 @@ impl JsonRpcInterface {
         new_task.set_project(&task.project);
         new_task.set_assign(&task.assign);
 
-        new_task.save(&self.dataset_path)?;
+        self.notify_queue_sender.send(new_task).await.map_err(Error::from)?;
         Ok(json!(true))
     }
 
@@ -102,7 +118,8 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
     async fn get_ids(&self, params: &[Value]) -> TaudResult<Value> {
         debug!(target: "tau", "JsonRpc::get_ids() params {:?}", params);
-        let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
+        let ws = self.workspace.lock().await.clone();
+        let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path, ws)?;
         let task_ids: Vec<u32> = tasks.iter().map(|task| task.get_id()).collect();
         Ok(json!(task_ids))
     }
@@ -117,9 +134,10 @@ impl JsonRpcInterface {
         if params.len() != 2 {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
+        let ws = self.workspace.lock().await.clone();
 
-        let task = self.check_params_for_update(&params[0], &params[1])?;
-        task.save(&self.dataset_path)?;
+        let task = self.check_params_for_update(&params[0], &params[1], ws)?;
+        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
         Ok(json!(true))
     }
 
@@ -138,14 +156,15 @@ impl JsonRpcInterface {
         }
 
         let state: String = serde_json::from_value(params[1].clone())?;
+        let ws = self.workspace.lock().await.clone();
 
-        let mut task: TaskInfo = self.load_task_by_id(&params[0])?;
+        let mut task: TaskInfo = self.load_task_by_id(&params[0], ws)?;
 
         if states.contains(&state.as_str()) {
             task.set_state(&state);
         }
 
-        task.save(&self.dataset_path)?;
+        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
         Ok(json!(true))
     }
@@ -162,11 +181,12 @@ impl JsonRpcInterface {
         }
 
         let comment_content: String = serde_json::from_value(params[1].clone())?;
+        let ws = self.workspace.lock().await.clone();
 
-        let mut task: TaskInfo = self.load_task_by_id(&params[0])?;
+        let mut task: TaskInfo = self.load_task_by_id(&params[0], ws)?;
         task.set_comment(Comment::new(&comment_content, &self.nickname));
 
-        task.save(&self.dataset_path)?;
+        self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
         Ok(json!(true))
     }
@@ -181,23 +201,55 @@ impl JsonRpcInterface {
         if params.len() != 1 {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
         }
+        let ws = self.workspace.lock().await.clone();
 
-        let task: TaskInfo = self.load_task_by_id(&params[0])?;
+        let task: TaskInfo = self.load_task_by_id(&params[0], ws)?;
 
         Ok(json!(task))
     }
 
-    fn load_task_by_id(&self, task_id: &Value) -> TaudResult<TaskInfo> {
-        let task_id: u64 = serde_json::from_value(task_id.clone())?;
+    // RPCAPI:
+    // Switch tasks workspace.
+    // --> {"jsonrpc": "2.0", "method": "switch_ws", "params": [workspace], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
+    async fn switch_ws(&self, params: &[Value]) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::switch_ws() params {:?}", params);
 
-        let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path)?;
+        if params.len() != 1 {
+            return Err(TaudError::InvalidData("len of params should be 1".into()))
+        }
+
+        if !params[0].is_string() {
+            return Err(TaudError::InvalidData("Invalid workspace".into()))
+        }
+
+        let ws = params[0].as_str().unwrap().to_string();
+        let mut s = self.workspace.lock().await;
+
+        if self.configured_ws.contains_key(&ws) {
+            *s = ws
+        } else {
+            warn!("Workspace \"{}\" is not configured", ws);
+        }
+
+        Ok(json!(true))
+    }
+
+    fn load_task_by_id(&self, task_id: &Value, ws: String) -> TaudResult<TaskInfo> {
+        let task_id: u64 = serde_json::from_value(task_id.clone())?;
+        let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path, ws)?;
         let task = tasks.into_iter().find(|t| (t.get_id() as u64) == task_id);
 
         task.ok_or(TaudError::InvalidId)
     }
 
-    fn check_params_for_update(&self, task_id: &Value, fields: &Value) -> TaudResult<TaskInfo> {
-        let mut task: TaskInfo = self.load_task_by_id(task_id)?;
+    fn check_params_for_update(
+        &self,
+        task_id: &Value,
+        fields: &Value,
+        ws: String,
+    ) -> TaudResult<TaskInfo> {
+        let mut task: TaskInfo = self.load_task_by_id(task_id, ws)?;
 
         if !fields.is_object() {
             return Err(TaudError::InvalidData("Invalid task's data".into()))

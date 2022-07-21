@@ -26,6 +26,7 @@ def degree(D):
 def neg(D):
     return tuple((-order, pnt) for order, pnt in D)
 
+# This means D1 ~ D2 because D1 - D2 ∈ Pic(E)
 D = D1 + neg(D2)
 assert degree(D) == 0
 assert dsum(D) == inf

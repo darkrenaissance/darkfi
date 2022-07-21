@@ -120,9 +120,14 @@ impl MonthTasks {
         }
     }
 
-    pub fn load_current_open_tasks(dataset_path: &Path) -> TaudResult<Vec<TaskInfo>> {
+    pub fn load_current_open_tasks(dataset_path: &Path, ws: String) -> TaudResult<Vec<TaskInfo>> {
         let mt = Self::load_or_create(None, dataset_path)?;
-        Ok(mt.objects(dataset_path)?.into_iter().filter(|t| t.get_state() != "stop").collect())
+        Ok(mt
+            .objects(dataset_path)?
+            .into_iter()
+            .filter(|t| t.get_state() != "stop")
+            .filter(|t| t.workspace == ws)
+            .collect())
     }
 }
 
@@ -156,8 +161,15 @@ mod tests {
         // load and save TaskInfo
         ///////////////////////
 
-        let mut task =
-            TaskInfo::new("test_title", "test_desc", "NICKNAME", None, 0.0, &dataset_path)?;
+        let mut task = TaskInfo::new(
+            "darkfi".to_string(),
+            "test_title",
+            "test_desc",
+            "NICKNAME",
+            None,
+            0.0,
+            &dataset_path,
+        )?;
 
         task.save(&dataset_path)?;
 
@@ -197,8 +209,15 @@ mod tests {
         // activate task
         ///////////////////////
 
-        let task =
-            TaskInfo::new("test_title_3", "test_desc", "NICKNAME", None, 0.0, &dataset_path)?;
+        let task = TaskInfo::new(
+            "darkfi".to_string(),
+            "test_title_3",
+            "test_desc",
+            "NICKNAME",
+            None,
+            0.0,
+            &dataset_path,
+        )?;
 
         task.save(&dataset_path)?;
 

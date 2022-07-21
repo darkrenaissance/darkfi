@@ -576,7 +576,8 @@ mod tests {
         };
 
         use plotters::prelude::*;
-        let root = BitMapBackend::new("burn_circuit_layout.png", (3840, 2160)).into_drawing_area();
+        let root =
+            BitMapBackend::new("target/burn_circuit_layout.png", (3840, 2160)).into_drawing_area();
         root.fill(&WHITE).unwrap();
         let root = root.titled("Burn Circuit Layout", ("sans-serif", 60)).unwrap();
         CircuitLayout::default().render(11, &circuit, &root).unwrap();

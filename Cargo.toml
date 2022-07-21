@@ -160,6 +160,7 @@ websockets = [
 ]
 
 util = [
+    "blake3",
 	"bs58",
 	"hex",
 	"bincode",
@@ -297,6 +298,10 @@ raft = [
 tx = [
 	"crypto",
 	"util",
+]
+
+dht = [
+    "util",
 ]
 
 [[example]]
