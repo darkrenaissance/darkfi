@@ -21,6 +21,8 @@ use primitives::{task_from_cli, State, TaskEvent};
 use util::{desc_in_editor, due_as_timestamp};
 use view::{comments_as_string, print_task_info, print_task_list};
 
+const DEFAULT_PATH: &str = "~/tau_exported_tasks";
+
 #[derive(Parser)]
 #[clap(name = "tau", version)]
 struct Args {
@@ -76,6 +78,12 @@ enum TauSubcommand {
         /// Tau workspace
         workspace: String,
     },
+
+    /// Import tasks from a specified directory.
+    Import { path: Option<String> },
+
+    /// Export tasks to a specified directory.
+    Export { path: Option<String> },
 }
 
 pub struct Tau {
@@ -151,6 +159,23 @@ async fn main() -> Result<()> {
 
             TauSubcommand::Switch { workspace } => {
                 tau.switch_ws(workspace).await?;
+                Ok(())
+            }
+
+            TauSubcommand::Export { path } => {
+                if path.is_some() {
+                    tau.export_to(path.unwrap()).await?;
+                } else {
+                    tau.export_to(DEFAULT_PATH.into()).await?;
+                }
+                Ok(())
+            }
+            TauSubcommand::Import { path } => {
+                if path.is_some() {
+                    tau.import_from(path.unwrap()).await?;
+                } else {
+                    tau.import_from(DEFAULT_PATH.into()).await?;
+                }
                 Ok(())
             }
         },

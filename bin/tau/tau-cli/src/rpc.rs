@@ -79,4 +79,24 @@ impl Tau {
 
         Ok(())
     }
+
+    /// Export tasks.
+    pub async fn export_to(&self, path: String) -> Result<()> {
+        let req = JsonRequest::new("export", json!([path]));
+        let rep = self.rpc_client.request(req).await?;
+
+        debug!("Got reply: {:?}", rep);
+
+        Ok(())
+    }
+
+    /// Import tasks.
+    pub async fn import_from(&self, path: String) -> Result<()> {
+        let req = JsonRequest::new("import", json!([path]));
+        let rep = self.rpc_client.request(req).await?;
+
+        debug!("Got reply: {:?}", rep);
+
+        Ok(())
+    }
 }
