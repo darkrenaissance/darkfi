@@ -8,7 +8,6 @@ use fxhash::FxHashMap;
 use log::{debug, error, info, warn};
 use smol::future;
 use structopt_toml::StructOptToml;
-use fxhash::FxHashMap;
 
 use darkfi::{
     async_daemonize, net,
