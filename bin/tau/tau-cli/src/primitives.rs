@@ -50,6 +50,7 @@ pub struct BaseTask {
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct TaskInfo {
     pub ref_id: String,
+    pub workspace: String,
     pub id: u32,
     pub title: String,
     pub desc: String,

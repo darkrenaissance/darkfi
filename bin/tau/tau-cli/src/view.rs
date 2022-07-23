@@ -46,6 +46,12 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
         min_rank = last.rank;
     }
 
+    let workspace = if tasks.first().is_some() {
+        format!("Workspace: {}", tasks.first().unwrap().workspace.clone())
+    } else {
+        format!("Workspace: ")
+    };
+
     for task in tasks {
         let state = task.events.last().unwrap_or(&TaskEvent::default()).action.clone();
 
@@ -76,6 +82,15 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
         ]));
     }
 
+    let mut ws_table = table!([Fb => workspace]);
+    ws_table.set_format(
+        FormatBuilder::new()
+            .padding(1, 1)
+            .separators(&[LinePosition::Bottom], LineSeparator::new('-', ' ', ' ', ' '))
+            .build(),
+    );
+
+    ws_table.printstd();
     table.printstd();
     Ok(())
 }
