@@ -34,6 +34,7 @@ pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'stati
     nickname: String,
     auto_channels: Vec<String>,
     pub configured_chans: FxHashMap<String, ChannelInfo>,
+    pub configured_contacts: FxHashMap<String, crypto_box::Box>,
     capabilities: FxHashMap<String, bool>,
     // p2p
     p2p: P2pPtr,
@@ -50,6 +51,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         privmsgs_buffer: PrivmsgsBuffer,
         auto_channels: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
+        configured_contacts: FxHashMap<String, crypto_box::Box>,
         p2p: P2pPtr,
         senders: SubscriberPtr<Privmsg>,
         subscriber_id: u64,
@@ -68,6 +70,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             nickname: "anon".to_string(),
             auto_channels,
             configured_chans,
+            configured_contacts,
             capabilities,
             p2p,
             senders,
@@ -200,6 +203,12 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                     } else {
                         message.to_string()
                     };
+                } else {
+                    // If we have a configured secret for this nick, we encrypt the message.
+                    if let Some(salt_box) = self.configured_contacts.get(target) {
+                        message = encrypt_message(salt_box, &message);
+                        info!("(Encrypted) PRIVMSG {} :{}", target, message);
+                    }
                 }
 
                 self.on_receive_privmsg(&message, target).await?;
@@ -446,13 +455,21 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
             self.reply(&msg.to_irc_msg()).await?;
             return Ok(())
-        }
+        } else {
+            if self.is_cap_end &&
+                self.is_nick_init &&
+                (self.nickname == msg.target || self.nickname == msg.nickname)
+            {
+                if self.configured_contacts.contains_key(&msg.target) {
+                    let salt_box = self.configured_contacts.get(&msg.target).unwrap();
+                    if let Some(decrypted) = try_decrypt_message(&salt_box, &msg.message) {
+                        msg.message = decrypted;
+                        info!("Decrypted received message: {:?}", msg);
+                    }
+                }
 
-        if self.is_cap_end &&
-            self.is_nick_init &&
-            (self.nickname == msg.target || self.nickname == msg.nickname)
-        {
-            self.reply(&msg.to_irc_msg()).await?;
+                self.reply(&msg.to_irc_msg()).await?;
+            }
         }
 
         Ok(())
