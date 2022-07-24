@@ -15,6 +15,7 @@ fn check_task_state(task: &TaskInfo, state: State) -> bool {
 pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
     match filter {
         "open" => tasks.retain(|task| check_task_state(task, State::Open)),
+        "start" => tasks.retain(|task| check_task_state(task, State::Start)),
         "pause" => tasks.retain(|task| check_task_state(task, State::Pause)),
 
         _ if filter.len() == 4 && filter.parse::<u32>().is_ok() => {
