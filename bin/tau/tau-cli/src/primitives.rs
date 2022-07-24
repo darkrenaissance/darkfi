@@ -11,6 +11,15 @@ pub enum State {
     Stop,
 }
 
+impl State {
+    pub const fn is_start(&self) -> bool {
+        matches!(*self, Self::Start)
+    }
+    pub const fn is_pause(&self) -> bool {
+        matches!(*self, Self::Pause)
+    }
+}
+
 impl fmt::Display for State {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

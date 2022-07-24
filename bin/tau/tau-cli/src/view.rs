@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::{fmt::Write, str::FromStr};
 
 use prettytable::{
     cell,
@@ -13,7 +13,7 @@ use darkfi::{
 
 use crate::{
     filter::apply_filter,
-    primitives::{Comment, TaskInfo},
+    primitives::{Comment, State, TaskInfo},
     TaskEvent,
 };
 
@@ -54,10 +54,11 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
 
     for task in tasks {
         let state = task.events.last().unwrap_or(&TaskEvent::default()).action.clone();
+        let state = State::from_str(&state)?;
 
-        let (max_style, min_style, mid_style, gen_style) = if state == "start" {
+        let (max_style, min_style, mid_style, gen_style) = if state.is_start() {
             ("bFg", "Fc", "Fg", "Fg")
-        } else if state == "pause" {
+        } else if state.is_pause() {
             ("iFYBd", "iFYBd", "iFYBd", "iFYBd")
         } else {
             ("", "", "", "")
