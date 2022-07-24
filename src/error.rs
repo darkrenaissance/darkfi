@@ -156,6 +156,9 @@ pub enum Error {
     #[error("Tor error: {0}")]
     TorError(String),
 
+    #[error("Node is not connected to other nodes.")]
+    NetworkNotConnected,
+
     // =============
     // Crypto errors
     // =============
@@ -318,6 +321,12 @@ pub enum Error {
 
     #[error(transparent)]
     ClientFailed(#[from] ClientFailed),
+
+    // ==============
+    // DHT errors
+    // ==============
+    #[error("Did not find key")]
+    UnknownKey,
 }
 
 /// Transaction verification errors

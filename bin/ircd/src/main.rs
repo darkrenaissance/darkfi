@@ -38,7 +38,10 @@ use crate::{
     protocol_privmsg::ProtocolPrivmsg,
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
-    settings::{parse_configured_channels, Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
+    settings::{
+        parse_configured_channels, parse_configured_contacts, Args, ChannelInfo, CONFIG_FILE,
+        CONFIG_FILE_CONTENTS,
+    },
 };
 
 const SIZE_OF_MSG_IDSS_BUFFER: usize = 65536;
@@ -53,6 +56,7 @@ struct Ircd {
     // channels
     autojoin_chans: Vec<String>,
     configured_chans: FxHashMap<String, ChannelInfo>,
+    configured_contacts: FxHashMap<String, crypto_box::Box>,
     // p2p
     p2p: net::P2pPtr,
     senders: SubscriberPtr<Privmsg>,
@@ -64,10 +68,19 @@ impl Ircd {
         privmsgs_buffer: PrivmsgsBuffer,
         autojoin_chans: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
+        configured_contacts: FxHashMap<String, crypto_box::Box>,
         p2p: net::P2pPtr,
     ) -> Self {
         let senders = Subscriber::new();
-        Self { seen_msg_ids, privmsgs_buffer, autojoin_chans, configured_chans, p2p, senders }
+        Self {
+            seen_msg_ids,
+            privmsgs_buffer,
+            autojoin_chans,
+            configured_chans,
+            configured_contacts,
+            p2p,
+            senders,
+        }
     }
 
     fn start_p2p_receive_loop(&self, executor: Arc<Executor<'_>>, p2p_receiver: Receiver<Privmsg>) {
@@ -102,6 +115,7 @@ impl Ircd {
             self.privmsgs_buffer.clone(),
             self.autojoin_chans.clone(),
             self.configured_chans.clone(),
+            self.configured_contacts.clone(),
             self.p2p.clone(),
             self.senders.clone(),
             receiver.get_id(),
@@ -162,7 +176,9 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     // Pick up channel settings from the TOML configuration
     let cfg_path = get_config_path(settings.config, CONFIG_FILE)?;
-    let configured_chans = parse_configured_channels(&cfg_path)?;
+    let toml_contents = std::fs::read_to_string(cfg_path)?;
+    let configured_chans = parse_configured_channels(&toml_contents)?;
+    let configured_contacts = parse_configured_contacts(&toml_contents)?;
 
     //
     // P2p setup
@@ -256,6 +272,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                 privmsgs_buffer.clone(),
                 settings.autojoin.clone(),
                 configured_chans.clone(),
+                configured_contacts.clone(),
                 p2p.clone(),
             );
 

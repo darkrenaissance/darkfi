@@ -215,7 +215,7 @@ pub fn timestamp_to_date(timestamp: i64, format: DateFormat) -> String {
 
     match format {
         DateFormat::Date => {
-            NaiveDateTime::from_timestamp(timestamp, 0).date().format("%A %-d %B").to_string()
+            NaiveDateTime::from_timestamp(timestamp, 0).date().format("%-d %b").to_string()
         }
         DateFormat::DateTime => {
             NaiveDateTime::from_timestamp(timestamp, 0).format("%H:%M:%S %A %-d %B").to_string()

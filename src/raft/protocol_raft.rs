@@ -62,17 +62,14 @@ impl ProtocolRaft {
             let msg = (*msg).clone();
             self.p2p.broadcast(msg.clone()).await?;
 
-            match (self.id.clone(), msg.recipient_id.clone()) {
-                // check if the ids are equal when both
-                // the local node and recipient ids are Some(id)
-                (Some(id), Some(m_id)) => {
-                    if id != m_id {
+            // check if the ids are equal when both
+            // the local node and recipient ids are Some(id)
+            if let Some(self_id) = &self.id {
+                if let Some(recipient_id) = &msg.recipient_id {
+                    if self_id != recipient_id {
                         continue
                     }
                 }
-                // reject if both local node and recipient ids are None then
-                (None, None) => continue,
-                _ => {}
             }
 
             self.notify_queue_sender.send(msg).await?;

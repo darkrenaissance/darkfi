@@ -17,7 +17,7 @@ use crate::{
     util::{find_free_id, load, random_ref_id, save},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, Eq)]
 struct TaskEvent {
     action: String,
     timestamp: Timestamp,
@@ -46,7 +46,7 @@ impl Comment {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskEvents(Vec<TaskEvent>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskComments(Vec<Comment>);
@@ -58,6 +58,7 @@ pub struct TaskAssigns(Vec<String>);
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct TaskInfo {
     pub(crate) ref_id: String,
+    pub(crate) workspace: String,
     id: u32,
     title: String,
     desc: String,
@@ -73,6 +74,7 @@ pub struct TaskInfo {
 
 impl TaskInfo {
     pub fn new(
+        workspace: String,
         title: &str,
         desc: &str,
         owner: &str,
@@ -86,7 +88,10 @@ impl TaskInfo {
         let created_at = Timestamp::current_time();
 
         let task_ids: Vec<u32> =
-            MonthTasks::load_current_open_tasks(dataset_path)?.into_iter().map(|t| t.id).collect();
+            MonthTasks::load_current_open_tasks(dataset_path, workspace.clone())?
+                .into_iter()
+                .map(|t| t.id)
+                .collect();
 
         let id: u32 = find_free_id(&task_ids);
 
@@ -98,6 +103,7 @@ impl TaskInfo {
 
         Ok(Self {
             ref_id,
+            workspace,
             id,
             title: title.into(),
             desc: desc.into(),

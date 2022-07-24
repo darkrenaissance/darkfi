@@ -73,7 +73,13 @@ pub struct P2p {
 }
 
 impl P2p {
-    /// Create a new p2p network.
+    /// Initialize a new p2p network.
+    ///
+    /// Initializes all sessions and protocols. Adds the protocols to the protocol registry, along
+    /// with a bitflag session selector that includes or excludes sessions from seed, version, and
+    /// address protocols.
+    ///
+    /// Creates a weak pointer to self that is used by all sessions to access the p2p parent class.
     pub async fn new(settings: Settings) -> Arc<Self> {
         let settings = Arc::new(settings);
 
@@ -94,7 +100,7 @@ impl P2p {
         let parent = Arc::downgrade(&self_);
 
         *self_.session_manual.lock().await = Some(ManualSession::new(parent.clone()));
-        *self_.session_inbound.lock().await = Some(InboundSession::new(parent.clone()));
+        *self_.session_inbound.lock().await = Some(InboundSession::new(parent.clone()).await);
         *self_.session_outbound.lock().await = Some(OutboundSession::new(parent));
 
         register_default_protocols(self_.clone()).await;
@@ -146,8 +152,8 @@ impl P2p {
         self.session_outbound.lock().await.as_ref().unwrap().clone()
     }
 
-    /// Synchronize the blockchain and then begin long running sessions,
-    /// call after start() is invoked.
+    /// Runs the network. Starts inbound, outbound and manual sessions.
+    /// Waits for a stop signal and stops the network if received.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::run() [BEGIN]");
 

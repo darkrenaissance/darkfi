@@ -61,24 +61,27 @@ impl ProtocolPrivmsg {
 
         loop {
             let msg = self.msg_sub.receive().await?;
+            let mut msg = (*msg).to_owned();
 
             if msg.nickname.len() > MAXIMUM_LENGTH_OF_NICKNAME {
-                continue
+                msg.nickname = msg.nickname[..MAXIMUM_LENGTH_OF_NICKNAME].to_string();
             }
 
-            if self.msg_ids.lock().await.contains(&msg.id) {
-                continue
-            }
+            {
+                let msg_ids = &mut self.msg_ids.lock().await;
+                if msg_ids.contains(&msg.id) {
+                    continue
+                }
 
-            self.msg_ids.lock().await.push(msg.id);
-            let msg = (*msg).clone();
+                msg_ids.push(msg.id);
+            }
 
             // add the msg to the buffer
             self.msgs.lock().await.push(msg.clone());
 
             self.notify_queue_sender.send(msg.clone()).await?;
 
-            self.p2p.broadcast_with_exclude(msg.clone(), &exclude_list).await?;
+            self.p2p.broadcast_with_exclude(msg, &exclude_list).await?;
         }
     }
 }

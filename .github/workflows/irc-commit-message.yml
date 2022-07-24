@@ -1,0 +1,23 @@
+name: "Push Notification IRC"
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: irc push
+        uses: rectalogic/notify-irc@v1
+        if: github.event_name == 'push'
+        with:
+          channel: "#dev"
+          server: "irc1.dark.fi"
+          nickname: github-notifier
+          message: ${{ github.actor }} pushed ${{ join(github.event.commits.*.message) }} ${{ github.event.ref }}
+      - name: irc pull request
+        uses: rectalogic/notify-irc@v1
+        if: github.event_name == 'pull_request'
+        with:
+          channel: "#dev"
+          server: "irc1.dark.fi"
+          nickname: github-notifier
+          message: ${{ github.actor }} opened PR ${{ github.event.pull_request.html_url }}

@@ -4,7 +4,7 @@ use serde_json::json;
 use darkfi::{rpc::jsonrpc::JsonRequest, Result};
 
 use crate::{
-    primitives::{BaseTask, TaskInfo},
+    primitives::{BaseTask, State, TaskInfo},
     Tau,
 };
 
@@ -45,8 +45,8 @@ impl Tau {
     }
 
     /// Set the state for a task.
-    pub async fn set_state(&self, id: u64, state: &str) -> Result<()> {
-        let req = JsonRequest::new("set_state", json!([id, state]));
+    pub async fn set_state(&self, id: u64, state: &State) -> Result<()> {
+        let req = JsonRequest::new("set_state", json!([id, state.to_string()]));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
@@ -66,6 +66,36 @@ impl Tau {
     pub async fn get_task_by_id(&self, id: u64) -> Result<TaskInfo> {
         let req = JsonRequest::new("get_task_by_id", json!([id]));
         let rep = self.rpc_client.request(req).await?;
+
+        Ok(serde_json::from_value(rep)?)
+    }
+
+    /// Switch workspace.
+    pub async fn switch_ws(&self, workspace: String) -> Result<()> {
+        let req = JsonRequest::new("switch_ws", json!([workspace]));
+        let rep = self.rpc_client.request(req).await?;
+
+        debug!("Got reply: {:?}", rep);
+
+        Ok(())
+    }
+
+    /// Export tasks.
+    pub async fn export_to(&self, path: String) -> Result<bool> {
+        let req = JsonRequest::new("export", json!([path]));
+        let rep = self.rpc_client.request(req).await?;
+
+        debug!("Got reply: {:?}", rep);
+
+        Ok(serde_json::from_value(rep)?)
+    }
+
+    /// Import tasks.
+    pub async fn import_from(&self, path: String) -> Result<bool> {
+        let req = JsonRequest::new("import", json!([path]));
+        let rep = self.rpc_client.request(req).await?;
+
+        debug!("Got reply: {:?}", rep);
 
         Ok(serde_json::from_value(rep)?)
     }

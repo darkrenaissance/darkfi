@@ -1,7 +1,14 @@
 [package]
 name = "taud"
+description = "Encrypted tasks management app using peer-to-peer network and raft consensus."
 version = "0.3.0"
 edition = "2021"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
+homepage = "https://dark.fi"
+repository = "https://github.com/darkrenaissance/darkfi"
+keywords = []
+categories = []
 
 [dependencies]
 darkfi = { path = "../../../", features = ["rpc", "raft", "net"]}
@@ -23,6 +30,7 @@ chrono = "0.4.19"
 thiserror = "1.0.31"
 ctrlc-async = {version= "3.2.2", default-features = false, features = ["async-std", "termination"]}
 url = "2.2.2"
+fxhash = "0.2.1"
 
 # Encoding and parsing
 serde = {version = "1.0.138", features = ["derive"]}
@@ -31,3 +39,5 @@ structopt = "0.3.26"
 structopt-toml = "0.5.0"
 crypto_box = {version = "0.7.2", features = ["std"]}
 hex = "0.4.3"
+bs58 = "0.4.0"
+toml = "0.5.9"

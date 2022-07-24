@@ -19,7 +19,7 @@ use crate::{
 use super::{
     message,
     message_subscriber::{MessageSubscription, MessageSubsystem},
-    TransportStream,
+    Session, SessionBitflag, SessionWeakPtr, TransportStream,
 };
 
 /// Atomic pointer to async channel.
@@ -68,13 +68,18 @@ pub struct Channel {
     receive_task: StoppableTaskPtr,
     stopped: Mutex<bool>,
     info: Mutex<ChannelInfo>,
+    session: SessionWeakPtr,
 }
 
 impl Channel {
     /// Sets up a new channel. Creates a reader and writer TCP stream and
     /// summons the message subscriber subsystem. Performs a network
     /// handshake on the subsystem dispatchers.
-    pub async fn new(stream: Box<dyn TransportStream>, address: Url) -> Arc<Self> {
+    pub async fn new(
+        stream: Box<dyn TransportStream>,
+        address: Url,
+        session: SessionWeakPtr,
+    ) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
@@ -91,16 +96,13 @@ impl Channel {
             receive_task: StoppableTask::new(),
             stopped: Mutex::new(false),
             info: Mutex::new(ChannelInfo::new()),
+            session,
         })
     }
 
     pub async fn get_info(&self) -> serde_json::Value {
         self.info.lock().await.get_info().await
     }
-
-    //async fn session_type_id(&self) -> Result<()> {
-    //    //
-    //}
 
     /// Starts the channel. Runs a receive loop to start receiving messages or
     /// handles a network failure.
@@ -320,5 +322,14 @@ impl Channel {
             }
         }
         debug!(target: "net", "Channel::handle_stop() [END, address={}]", self.address());
+    }
+
+    fn session(&self) -> Arc<dyn Session> {
+        self.session.upgrade().unwrap()
+    }
+
+    pub fn session_type_id(&self) -> SessionBitflag {
+        let session = self.session();
+        session.type_id()
     }
 }

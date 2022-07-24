@@ -1,0 +1,30 @@
+[package]
+name = "dhtd"
+version = "0.3.0"
+edition = "2021"
+
+[dependencies.darkfi]
+path = "../../../"
+features = ["dht"]
+
+[dependencies]
+async-channel = "1.6.1"
+async-executor = "1.4.1"
+async-std = "1.12.0"
+async-trait = "0.1.56"
+blake3 = "1.3.1"
+ctrlc-async = {version = "3.2.2", default-features = false, features = ["async-std", "termination"]}
+easy-parallel = "3.2.0"
+futures-lite = "1.12.0"
+log = "0.4.17"
+serde_json = "1.0.82"
+simplelog = "0.12.0"
+url = "2.2.2"
+
+# Argument parsing
+serde = "1.0.138"
+serde_derive = "1.0.138"
+structopt = "0.3.26"
+structopt-toml = "0.5.0"
+
+[workspace]

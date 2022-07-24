@@ -89,9 +89,7 @@ impl SeedSession {
         Ok(())
     }
 
-    /// Connects to a seed socket address. Registers a new channel with a
-    /// network handshake, then starts the keep-alive messages and seed
-    /// protocol.
+    /// Connects to a seed socket address.
     async fn start_seed(
         self: Arc<Self>,
         seed_index: usize,
@@ -104,7 +102,8 @@ impl SeedSession {
             (p2p.hosts(), p2p.settings())
         };
 
-        let connector = Connector::new(settings.clone());
+        let parent = Arc::downgrade(&self);
+        let connector = Connector::new(settings.clone(), Arc::new(parent));
         match connector.connect(seed.clone()).await {
             Ok(channel) => {
                 // Blacklist goes here

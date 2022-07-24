@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use fxhash::FxHashMap;
 use log::info;
 use serde::Deserialize;
@@ -83,13 +81,57 @@ impl ChannelInfo {
     }
 }
 
-/// Parse the configuration file for any configured channels and return
+fn salt_box_from_shared_secret(s: &str) -> Result<crypto_box::Box> {
+    let bytes: [u8; 32] = bs58::decode(s).into_vec()?.try_into().unwrap();
+    let secret = crypto_box::SecretKey::from(bytes);
+    let public = secret.public_key();
+    Ok(crypto_box::Box::new(&public, &secret))
+}
+
+/// Parse a TOML string for any configured contact list and return
 /// a map containing said configurations.
-pub fn parse_configured_channels(config_file: &PathBuf) -> Result<FxHashMap<String, ChannelInfo>> {
-    let toml_contents = std::fs::read_to_string(config_file)?;
+///
+/// ```toml
+/// [contact."7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"]
+/// nicks = ["sneed", "chuck"]
+/// ```
+pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, crypto_box::Box>> {
     let mut ret = FxHashMap::default();
 
-    if let Value::Table(map) = toml::from_str(&toml_contents)? {
+    if let Value::Table(map) = toml::from_str(data)? {
+        if map.contains_key("contact") && map["contact"].is_table() {
+            for contact in map["contact"].as_table().unwrap() {
+                // (secret, nicks = [nick0, nick1])
+                if contact.1.as_table().unwrap().contains_key("nicks") {
+                    if let Some(nicks) = contact.1["nicks"].as_array() {
+                        let salt_box = salt_box_from_shared_secret(contact.0.as_str())?;
+                        for nick in nicks {
+                            if let Some(n) = nick.as_str() {
+                                info!("Instantiated salt box for {}", n);
+                                ret.insert(n.to_string(), salt_box.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(ret)
+}
+
+/// Parse a TOML string for any configured channels and return
+/// a map containing said configurations.
+///
+/// ```toml
+/// [channel."#memes"]
+/// secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+/// topic = "Dank Memes"
+/// ```
+pub fn parse_configured_channels(data: &str) -> Result<FxHashMap<String, ChannelInfo>> {
+    let mut ret = FxHashMap::default();
+
+    if let Value::Table(map) = toml::from_str(data)? {
         if map.contains_key("channel") && map["channel"].is_table() {
             for chan in map["channel"].as_table().unwrap() {
                 info!("Found configuration for channel {}", chan.0);
@@ -103,13 +145,11 @@ pub fn parse_configured_channels(config_file: &PathBuf) -> Result<FxHashMap<Stri
 
                 if chan.1.as_table().unwrap().contains_key("secret") {
                     // Build the NaCl box
-                    let s = chan.1["secret"].as_str().unwrap();
-                    let bytes: [u8; 32] = bs58::decode(s).into_vec()?.try_into().unwrap();
-                    let secret = crypto_box::SecretKey::from(bytes);
-                    let public = secret.public_key();
-                    let msg_box = crypto_box::Box::new(&public, &secret);
-                    channel_info.salt_box = Some(msg_box);
-                    info!("Instantiated NaCl box for channel {}", chan.0);
+                    if let Some(s) = chan.1["secret"].as_str() {
+                        let salt_box = salt_box_from_shared_secret(s)?;
+                        channel_info.salt_box = Some(salt_box);
+                        info!("Instantiated NaCl box for channel {}", chan.0);
+                    }
                 }
 
                 ret.insert(chan.0.to_string(), channel_info);

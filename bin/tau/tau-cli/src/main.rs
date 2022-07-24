@@ -1,7 +1,7 @@
-use std::process::exit;
+use std::{process::exit, str::FromStr};
 
 use clap::{Parser, Subcommand};
-use log::error;
+use log::{error, info};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
@@ -17,9 +17,11 @@ mod rpc;
 mod util;
 mod view;
 
-use primitives::{task_from_cli, TaskEvent};
+use primitives::{task_from_cli, State, TaskEvent};
 use util::{desc_in_editor, due_as_timestamp};
 use view::{comments_as_string, print_task_info, print_task_list};
+
+const DEFAULT_PATH: &str = "~/tau_exported_tasks";
 
 #[derive(Parser)]
 #[clap(name = "tau", version)]
@@ -65,11 +67,23 @@ enum TauSubcommand {
         /// Task ID
         task_id: u64,
         /// Comment content
-        content: Option<String>,
+        content: Vec<String>,
     },
 
     /// Get task info by ID
     Info { task_id: u64 },
+
+    /// Switch workspace
+    Switch {
+        /// Tau workspace
+        workspace: String,
+    },
+
+    /// Import tasks from a specified directory.
+    Import { path: Option<String> },
+
+    /// Export tasks to a specified directory.
+    Export { path: Option<String> },
 }
 
 pub struct Tau {
@@ -86,9 +100,6 @@ async fn main() -> Result<()> {
 
     let rpc_client = RpcClient::new(args.endpoint).await?;
     let tau = Tau { rpc_client };
-
-    // Allowed states for a task
-    let states = ["stop", "open", "pause"];
 
     // Parse subcommands
     match args.command {
@@ -115,14 +126,10 @@ async fn main() -> Result<()> {
             TauSubcommand::State { task_id, state } => match state {
                 Some(state) => {
                     let state = state.trim().to_lowercase();
-                    if states.contains(&state.as_str()) {
-                        tau.set_state(task_id, &state).await
+                    if let Ok(st) = State::from_str(&state) {
+                        tau.set_state(task_id, &st).await
                     } else {
-                        error!(
-                            "Task state can only be one of the following {}: {:?}",
-                            states.len(),
-                            states
-                        );
+                        error!("State can only be one of the following: open start stop pause",);
                         Ok(())
                     }
                 }
@@ -134,19 +141,50 @@ async fn main() -> Result<()> {
                 }
             },
 
-            TauSubcommand::Comment { task_id, content } => match content {
-                Some(content) => tau.set_comment(task_id, content.trim()).await,
-                None => {
+            TauSubcommand::Comment { task_id, content } => {
+                if content.is_empty() {
                     let task = tau.get_task_by_id(task_id).await?;
                     let comments = comments_as_string(task.comments);
                     println!("Comments {}:\n{}", task_id, comments);
                     Ok(())
+                } else {
+                    tau.set_comment(task_id, &content.join(" ")).await
                 }
-            },
+            }
 
             TauSubcommand::Info { task_id } => {
                 let task = tau.get_task_by_id(task_id).await?;
                 print_task_info(task)
+            }
+
+            TauSubcommand::Switch { workspace } => {
+                tau.switch_ws(workspace).await?;
+                Ok(())
+            }
+
+            TauSubcommand::Export { path } => {
+                let path = path.unwrap_or(DEFAULT_PATH.into());
+                let res = tau.export_to(path.clone()).await?;
+
+                if res {
+                    info!("Exported to {}", path);
+                } else {
+                    error!("Error exporting to {}", path);
+                }
+
+                Ok(())
+            }
+            TauSubcommand::Import { path } => {
+                let path = path.unwrap_or(DEFAULT_PATH.into());
+                let res = tau.import_from(path.clone()).await?;
+
+                if res {
+                    info!("Imported from {}", path);
+                } else {
+                    error!("Error importing from {}", path);
+                }
+
+                Ok(())
             }
         },
         None => {

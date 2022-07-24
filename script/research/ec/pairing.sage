@@ -59,8 +59,9 @@ G2 = E2(x2, y2)
 k = GF(r)(q).multiplicative_order()
 assert k == 12
 
-#assert G1.tate_pairing(G1, r, k, q) == 1
-#assert G2.tate_pairing(G2, r, k, q) == 1
+# We need to map G1 -> G2
+# and then G2 -> G12
+#assert G1.tate_pairing(G2, r, k, q) == 1
 
 # G₁ ⊂ E(F)
 # G₂ ⊂ E'(F₂)

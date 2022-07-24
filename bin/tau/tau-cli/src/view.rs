@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::{fmt::Write, str::FromStr};
 
 use prettytable::{
     cell,
@@ -13,7 +13,7 @@ use darkfi::{
 
 use crate::{
     filter::apply_filter,
-    primitives::{Comment, TaskInfo},
+    primitives::{Comment, State, TaskInfo},
     TaskEvent,
 };
 
@@ -46,13 +46,22 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
         min_rank = last.rank;
     }
 
+    let workspace = if tasks.first().is_some() {
+        format!("Workspace: {}", tasks.first().unwrap().workspace.clone())
+    } else {
+        format!("Workspace: ")
+    };
+
     for task in tasks {
         let state = task.events.last().unwrap_or(&TaskEvent::default()).action.clone();
+        let state = State::from_str(&state)?;
 
-        let (max_style, min_style, mid_style, gen_style) = if state == "open" {
-            ("bFC", "Fb", "Fc", "")
-        } else {
+        let (max_style, min_style, mid_style, gen_style) = if state.is_start() {
+            ("bFg", "Fc", "Fg", "Fg")
+        } else if state.is_pause() {
             ("iFYBd", "iFYBd", "iFYBd", "iFYBd")
+        } else {
+            ("", "", "", "")
         };
 
         let rank = task.rank.to_string();
@@ -74,6 +83,15 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
         ]));
     }
 
+    let mut ws_table = table!([Fb => workspace]);
+    ws_table.set_format(
+        FormatBuilder::new()
+            .padding(1, 1)
+            .separators(&[LinePosition::Bottom], LineSeparator::new('-', ' ', ' ', ' '))
+            .build(),
+    );
+
+    ws_table.printstd();
     table.printstd();
     Ok(())
 }
