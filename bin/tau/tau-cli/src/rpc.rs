@@ -81,22 +81,22 @@ impl Tau {
     }
 
     /// Export tasks.
-    pub async fn export_to(&self, path: String) -> Result<()> {
+    pub async fn export_to(&self, path: String) -> Result<bool> {
         let req = JsonRequest::new("export", json!([path]));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
 
-        Ok(())
+        Ok(serde_json::from_value(rep)?)
     }
 
     /// Import tasks.
-    pub async fn import_from(&self, path: String) -> Result<()> {
+    pub async fn import_from(&self, path: String) -> Result<bool> {
         let req = JsonRequest::new("import", json!([path]));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
 
-        Ok(())
+        Ok(serde_json::from_value(rep)?)
     }
 }

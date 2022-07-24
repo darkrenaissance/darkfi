@@ -1,7 +1,7 @@
 use std::{process::exit, str::FromStr};
 
 use clap::{Parser, Subcommand};
-use log::error;
+use log::{error, info};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
@@ -163,19 +163,27 @@ async fn main() -> Result<()> {
             }
 
             TauSubcommand::Export { path } => {
-                if path.is_some() {
-                    tau.export_to(path.unwrap()).await?;
+                let path = path.unwrap_or(DEFAULT_PATH.into());
+                let res = tau.export_to(path.clone()).await?;
+
+                if res {
+                    info!("Exported to {}", path);
                 } else {
-                    tau.export_to(DEFAULT_PATH.into()).await?;
+                    error!("Error exporting to {}", path);
                 }
+
                 Ok(())
             }
             TauSubcommand::Import { path } => {
-                if path.is_some() {
-                    tau.import_from(path.unwrap()).await?;
+                let path = path.unwrap_or(DEFAULT_PATH.into());
+                let res = tau.import_from(path.clone()).await?;
+
+                if res {
+                    info!("Imported from {}", path);
                 } else {
-                    tau.import_from(DEFAULT_PATH.into()).await?;
+                    error!("Error importing from {}", path);
                 }
+
                 Ok(())
             }
         },
