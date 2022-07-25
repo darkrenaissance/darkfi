@@ -29,6 +29,7 @@ struct ParticipantInfo {
     _address: String,
     _joined: u64,
     _voted: Option<u64>,
+    _quarantined: Option<u64>,
 }
 
 impl ParticipantInfo {
@@ -36,7 +37,8 @@ impl ParticipantInfo {
         let _address = participant.address.to_string();
         let _joined = participant.joined;
         let _voted = participant.voted;
-        ParticipantInfo { _address, _joined, _voted }
+        let _quarantined = participant.quarantined;
+        ParticipantInfo { _address, _joined, _voted, _quarantined }
     }
 }
 
@@ -82,30 +84,24 @@ impl StreamletMetadataInfo {
 
 #[derive(Debug)]
 struct MetadataInfo {
-    _proof: String,
-    _rand_seed: String,
-    _signature: String,
+    _address: String,
 }
 
 impl MetadataInfo {
     pub fn new(metadata: &Metadata) -> MetadataInfo {
-        let _proof = metadata.proof.clone();
-        let _rand_seed = metadata.rand_seed.clone();
-        let _signature = metadata.signature.clone();
-        MetadataInfo { _proof, _rand_seed, _signature }
+        let _address = metadata.address.to_string();
+        MetadataInfo { _address }
     }
 }
 
 #[derive(Debug)]
 struct ProposalInfo {
-    _address: String,
     _block: BlockInfo,
     _sm: StreamletMetadataInfo,
 }
 
 impl ProposalInfo {
     pub fn new(proposal: &BlockProposal) -> ProposalInfo {
-        let _address = proposal.address.to_string();
         let _header = proposal.block.header.headerhash();
         let mut _txs = vec![];
         for tx in &proposal.block.txs {
@@ -116,7 +112,7 @@ impl ProposalInfo {
         let _block =
             BlockInfo { _hash: _header, _magic: proposal.block.magic, _header, _txs, _metadata };
         let _sm = StreamletMetadataInfo::new(&proposal.block.sm);
-        ProposalInfo { _address, _block, _sm }
+        ProposalInfo { _block, _sm }
     }
 }
 
