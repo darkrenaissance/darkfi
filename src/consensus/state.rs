@@ -287,20 +287,14 @@ impl ValidatorState {
         let header =
             Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
-        let metadata = Metadata::new(String::from("proof"), String::from("r"), String::from("s"));
+        let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
+
+        let metadata =
+            Metadata::new(String::from("proof"), String::from("r"), signed_proposal, self.address);
 
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
 
-        let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
-
-        Ok(Some(BlockProposal::new(
-            signed_proposal,
-            self.address,
-            header,
-            unproposed_txs,
-            metadata,
-            sm,
-        )))
+        Ok(Some(BlockProposal::new(header, unproposed_txs, metadata, sm)))
     }
 
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
@@ -370,20 +364,19 @@ impl ValidatorState {
         self.refresh_participants()?;
 
         let leader = self.slot_leader();
-        if leader.address != proposal.address {
+        if leader.address != proposal.block.metadata.address {
             warn!(
                 "Received proposal not from slot leader ({}), but from ({})",
-                leader.address.to_string(),
-                proposal.address.to_string()
+                leader.address, proposal.block.metadata.address
             );
             return Ok(None)
         }
 
-        if !leader
-            .public_key
-            .verify(proposal.block.header.headerhash().as_bytes(), &proposal.signature)
-        {
-            warn!("Proposer ({}) signature could not be verified", proposal.address.to_string());
+        if !leader.public_key.verify(
+            proposal.block.header.headerhash().as_bytes(),
+            &proposal.block.metadata.signature,
+        ) {
+            warn!("Proposer ({}) signature could not be verified", proposal.block.metadata.address);
             return Ok(None)
         }
 
@@ -529,7 +522,7 @@ impl ValidatorState {
         match self.consensus.participants.get(&vote.address) {
             Some(participant) => {
                 let mut participant = participant.clone();
-                let va = vote.address.to_string();
+                let va = vote.address;
                 if current_slot <= participant.joined {
                     warn!("consensus: Voter ({}) joined after current slot.", va);
                     return Ok((false, None))
@@ -563,7 +556,7 @@ impl ValidatorState {
                 self.consensus.participants.insert(participant.address, participant);
             }
             None => {
-                warn!("consensus: Voter ({}) is not a participant!", vote.address.to_string());
+                warn!("consensus: Voter ({}) is not a participant!", vote.address);
                 return Ok((false, None))
             }
         }
@@ -792,7 +785,7 @@ impl ValidatorState {
 
         debug!(
             "refresh_participants(): Node {:?} checking slots: previous - {:?}, last - {:?}, previous from last - {:?}",
-            self.address.to_string(), previous_slot, last_slot, previous_from_last_slot
+            self.address, previous_slot, last_slot, previous_from_last_slot
         );
 
         let leader = self.slot_leader();
@@ -802,7 +795,7 @@ impl ValidatorState {
                     if (current - slot) > QUARANTINE_DURATION {
                         warn!(
                             "refresh_participants(): Removing participant: {:?} (joined {:?}, voted {:?})",
-                            participant.address.to_string(),
+                            participant.address,
                             participant.joined,
                             participant.voted
                         );
@@ -815,7 +808,7 @@ impl ValidatorState {
                     if participant.address == leader.address {
                         debug!(
                             "refresh_participants(): Quaranteening leader: {:?} (joined {:?}, voted {:?})",
-                            participant.address.to_string(),
+                            participant.address,
                             participant.joined,
                             participant.voted
                         );
@@ -827,7 +820,7 @@ impl ValidatorState {
                             if slot < last_slot {
                                 warn!(
                                     "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
-                                    participant.address.to_string(),
+                                    participant.address,
                                     participant.joined,
                                     participant.voted
                                 );
@@ -841,7 +834,7 @@ impl ValidatorState {
                             {
                                 warn!(
                                     "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
-                                    participant.address.to_string(),
+                                    participant.address,
                                     participant.joined,
                                     participant.voted
                                 );

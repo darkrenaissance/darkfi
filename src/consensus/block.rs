@@ -2,13 +2,15 @@ use std::{fmt, io};
 
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
+use rand::rngs::OsRng;
 
 use super::{
     Metadata, StreamletMetadata, BLOCK_INFO_MAGIC_BYTES, BLOCK_MAGIC_BYTES, BLOCK_VERSION,
 };
 use crate::{
     crypto::{
-        address::Address, constants::MERKLE_DEPTH, merkle_node::MerkleNode, schnorr::Signature,
+        address::Address, constants::MERKLE_DEPTH, keypair::Keypair, merkle_node::MerkleNode,
+        schnorr::SchnorrSecret,
     },
     impl_vec, net,
     tx::Transaction,
@@ -86,7 +88,11 @@ impl Block {
     /// Generate the genesis block.
     pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
         let header = Header::genesis_header(genesis_ts, genesis_data);
-        let metadata = Metadata::new(String::from("proof"), String::from("r"), String::from("s"));
+        // Signing the genesis data using a random keypair
+        let keypair = Keypair::random(&mut OsRng);
+        let signature = keypair.secret.sign(&genesis_data.as_bytes()[..]);
+        let address = Address::from(keypair.public);
+        let metadata = Metadata::new(String::from("proof"), String::from("r"), signature, address);
 
         Self::new(header.headerhash(), vec![], metadata)
     }
@@ -158,10 +164,6 @@ impl net::Message for BlockResponse {
 /// This struct represents a block proposal, used for consensus.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockProposal {
-    /// Block signature
-    pub signature: Signature,
-    /// Leader address
-    pub address: Address,
     /// Block data
     pub block: BlockInfo,
 }
@@ -169,23 +171,19 @@ pub struct BlockProposal {
 impl BlockProposal {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        signature: Signature,
-        address: Address,
         header: Header,
         txs: Vec<Transaction>,
         metadata: Metadata,
         sm: StreamletMetadata,
     ) -> Self {
         let block = BlockInfo::new(header, txs, metadata, sm);
-        Self { signature, address, block }
+        Self { block }
     }
 }
 
 impl PartialEq for BlockProposal {
     fn eq(&self, other: &Self) -> bool {
-        self.signature == other.signature &&
-            self.address == other.address &&
-            self.block.header == other.block.header &&
+        self.block.header == other.block.header &&
             self.block.txs == other.block.txs &&
             self.block.metadata == other.block.metadata
     }
@@ -195,7 +193,7 @@ impl fmt::Display for BlockProposal {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_fmt(format_args!(
             "BlockProposal {{ leader: {}, hash: {}, epoch: {}, slot: {}, txs: {} }}",
-            self.address,
+            self.block.metadata.address,
             self.block.header.headerhash(),
             self.block.header.epoch,
             self.block.header.slot,

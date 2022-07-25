@@ -228,11 +228,11 @@ without the need of forking the blockchain.
 
 |   Field     |        Type        |            Description                     |
 |-------------|--------------------|--------------------------------------------|
-| `v`         | `u8`               | Version                                    |
-| `st`        | `blake3Hash`       | Previous block hash                        |
-| `e`         | `u64`              | Epoch                                      |
-| `sl`        | `u64`              | Slot UID                                   |
-| `time`      | `Timestamp`        | Block creation timestamp                   |
+| `version`   | `u8`               | Version                                    |
+| `state`     | `blake3Hash`       | Previous block hash                        |
+| `epoch`     | `u64`              | Epoch                                      |
+| `slot`      | `u64`              | Slot UID                                   |
+| `timestamp` | `Timestamp`        | Block creation timestamp                   |
 | `root`      | `MerkleRoot`       | Root of the transaction hashes merkle tree |
 
 
@@ -259,11 +259,12 @@ without the need of forking the blockchain.
 
 ## Metadata
 
-|    Field    |         Type        |                  Description                  |
-|-------------|---------------------|-----------------------------------------------|
-| `proof`     | `VRFOutput`         | Proof the stakeholder is the block owner      |
-| `r`         | `Seed`              | Random seed for the VRF                       |
-| `s`         | `Signature`         | Block owner signature                         |
+|    Field       |         Type        |                  Description                 |
+|----------------|---------------------|----------------------------------------------|
+| `proof`        | `VRFOutput`         | Proof the stakeholder is the block owner     |
+| `rand_seed`    | `Seed`              | Random seed for the VRF                      |
+| `signature`    | `Signature`         | Block owner signature                        |
+| `address`      | `Address`           | Block owner address                          |
 
 
 ## Streamlet Metadata
@@ -273,3 +274,13 @@ without the need of forking the blockchain.
 | `votes`     | `Vec<Vote>`         | Epoch votes for the block                     |
 | `notarized` | `bool`              | Block notarization flag                       |
 | `finalized` | `bool`              | Block finalization flag                       |
+
+## Participant
+
+|    Field      |         Type        |                  Description                  |
+|---------------|---------------------|-----------------------------------------------|
+| `public_key`  | `PublicKey`         | Node public key                               |
+| `address`     | `Address`           | Node wallet address                           |
+| `joined`      | `u64`               | Slot node joined the network                  |
+| `voted`       | `Option<u64>`       | Last slot node voted                          |
+| `quarantined` | `Option<u64>`       | Slot participant was quarantined by the node  |
