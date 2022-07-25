@@ -405,14 +405,6 @@ def perm(inp):
     return state_words
 
 
-def debug(n, s, m):
-    if enable_debug:
-        print(f"State {n} absorb:")
-        pprint([hex(int(i)) for i in s])
-        print(f"Mode {n} absorb:")
-        pprint([hex(int(i)) if i is not None else None for i in m])
-
-
 def poseidon_hash(messages):
     L = len(messages)
     k = int((L + RATE - 1) / RATE)
@@ -430,7 +422,6 @@ def poseidon_hash(messages):
 
     # This outermost loop absorbs the messages in the sponge.
     for n, value in enumerate(messages):
-        debug(f"before {n+1}", state, mode)
         loop = False  # Use this to mark we should reiterate
         for i in range(0, len(mode)):
             if mode[i] is None:
@@ -439,7 +430,6 @@ def poseidon_hash(messages):
                 break
 
         if loop:
-            debug(f"after {n+1}", state, mode)
             continue
 
         # zip short-circuits when one iterator completes, so this will
@@ -457,9 +447,6 @@ def poseidon_hash(messages):
         mode = [None] * RATE
         mode[0] = value
 
-        debug(f"after {n+1}", state, mode)
-
-    debug("before final", state, mode)
     for i, _ in enumerate(zip(state, mode)):
         state[i] += mode[i]
 
@@ -471,23 +458,12 @@ def poseidon_hash(messages):
 
     # Sponge now has the output, so the first element is our hash.
     mode = output
-    debug("after final", state, mode)
     return output[0]
 
 
 if __name__ == "__main__":
-    enable_debug = False
-    if enable_debug:
-        from pprint import pprint
-
-    #input_words = []
-    #for i in range(0, T):
-    #    input_words.append(Fp(i))
-    #output_words = perm(input_words)
-    #print([hex(int(i)) for i in output_words])
-
     words = []
-    for i in range(0, 10):
-        words.append(Fp(i))
+    for word in range(0, 10):
+        words.append(Fp(word))
         h = poseidon_hash(words.copy())
         print(hex(int(h)))
