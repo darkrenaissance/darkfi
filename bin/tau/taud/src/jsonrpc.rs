@@ -1,5 +1,5 @@
 use async_std::sync::{Arc, Mutex};
-use std::path::PathBuf;
+use std::{fs::create_dir_all, path::PathBuf};
 
 use async_trait::async_trait;
 use fxhash::FxHashMap;
@@ -12,7 +12,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         server::RequestHandler,
     },
-    util::Timestamp,
+    util::{expand_path, Timestamp},
     Error,
 };
 
@@ -58,6 +58,8 @@ impl RequestHandler for JsonRpcInterface {
             Some("set_comment") => self.set_comment(params).await,
             Some("get_task_by_id") => self.get_task_by_id(params).await,
             Some("switch_ws") => self.switch_ws(params).await,
+            Some("export") => self.export_to(params).await,
+            Some("import") => self.import_from(params).await,
             Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         };
 
@@ -232,6 +234,60 @@ impl JsonRpcInterface {
             warn!("Workspace \"{}\" is not configured", ws);
         }
 
+        Ok(json!(true))
+    }
+
+    // RPCAPI:
+    // Export tasks.
+    // --> {"jsonrpc": "2.0", "method": "export_to", "params": [path], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
+    async fn export_to(&self, params: &[Value]) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::export_to() params {:?}", params);
+
+        if params.len() != 1 {
+            return Err(TaudError::InvalidData("len of params should be 1".into()))
+        }
+
+        if !params[0].is_string() {
+            return Err(TaudError::InvalidData("Invalid path".into()))
+        }
+
+        let path = expand_path(params[0].as_str().unwrap())?.join("exported_tasks");
+        // mkdir datastore_path if not exists
+        create_dir_all(path.join("month")).map_err(Error::from)?;
+        create_dir_all(path.join("task")).map_err(Error::from)?;
+        let mt = MonthTasks::load_or_create(None, &self.dataset_path)?;
+        let tasks = mt.objects(&self.dataset_path)?;
+
+        for task in tasks {
+            task.save(&path)?;
+        }
+
+        Ok(json!(true))
+    }
+
+    // RPCAPI:
+    // Import tasks.
+    // --> {"jsonrpc": "2.0", "method": "import_from", "params": [path], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
+    async fn import_from(&self, params: &[Value]) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::import_from() params {:?}", params);
+
+        if params.len() != 1 {
+            return Err(TaudError::InvalidData("len of params should be 1".into()))
+        }
+
+        if !params[0].is_string() {
+            return Err(TaudError::InvalidData("Invalid path".into()))
+        }
+
+        let path = expand_path(params[0].as_str().unwrap())?.join("exported_tasks");
+        let mt = MonthTasks::load_or_create(None, &path)?;
+        let tasks = mt.objects(&path)?;
+
+        for task in tasks {
+            self.notify_queue_sender.send(task).await.map_err(Error::from)?;
+        }
         Ok(json!(true))
     }
 

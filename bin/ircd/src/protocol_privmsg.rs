@@ -67,11 +67,14 @@ impl ProtocolPrivmsg {
                 msg.nickname = msg.nickname[..MAXIMUM_LENGTH_OF_NICKNAME].to_string();
             }
 
-            if self.msg_ids.lock().await.contains(&msg.id) {
-                continue
-            }
+            {
+                let msg_ids = &mut self.msg_ids.lock().await;
+                if msg_ids.contains(&msg.id) {
+                    continue
+                }
 
-            self.msg_ids.lock().await.push(msg.id);
+                msg_ids.push(msg.id);
+            }
 
             // add the msg to the buffer
             self.msgs.lock().await.push(msg.clone());

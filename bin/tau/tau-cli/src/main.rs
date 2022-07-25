@@ -1,7 +1,7 @@
 use std::{process::exit, str::FromStr};
 
 use clap::{Parser, Subcommand};
-use log::error;
+use log::{error, info};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
 
@@ -20,6 +20,8 @@ mod view;
 use primitives::{task_from_cli, State, TaskEvent};
 use util::{desc_in_editor, due_as_timestamp};
 use view::{comments_as_string, print_task_info, print_task_list};
+
+const DEFAULT_PATH: &str = "~/tau_exported_tasks";
 
 #[derive(Parser)]
 #[clap(name = "tau", version)]
@@ -76,6 +78,12 @@ enum TauSubcommand {
         /// Tau workspace
         workspace: String,
     },
+
+    /// Import tasks from a specified directory.
+    Import { path: Option<String> },
+
+    /// Export tasks to a specified directory.
+    Export { path: Option<String> },
 }
 
 pub struct Tau {
@@ -151,6 +159,31 @@ async fn main() -> Result<()> {
 
             TauSubcommand::Switch { workspace } => {
                 tau.switch_ws(workspace).await?;
+                Ok(())
+            }
+
+            TauSubcommand::Export { path } => {
+                let path = path.unwrap_or(DEFAULT_PATH.into());
+                let res = tau.export_to(path.clone()).await?;
+
+                if res {
+                    info!("Exported to {}", path);
+                } else {
+                    error!("Error exporting to {}", path);
+                }
+
+                Ok(())
+            }
+            TauSubcommand::Import { path } => {
+                let path = path.unwrap_or(DEFAULT_PATH.into());
+                let res = tau.import_from(path.clone()).await?;
+
+                if res {
+                    info!("Imported from {}", path);
+                } else {
+                    error!("Error importing from {}", path);
+                }
+
                 Ok(())
             }
         },

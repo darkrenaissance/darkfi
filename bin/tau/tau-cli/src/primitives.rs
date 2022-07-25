@@ -11,6 +11,15 @@ pub enum State {
     Stop,
 }
 
+impl State {
+    pub const fn is_start(&self) -> bool {
+        matches!(*self, Self::Start)
+    }
+    pub const fn is_pause(&self) -> bool {
+        matches!(*self, Self::Pause)
+    }
+}
+
 impl fmt::Display for State {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -50,6 +59,7 @@ pub struct BaseTask {
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct TaskInfo {
     pub ref_id: String,
+    pub workspace: String,
     pub id: u32,
     pub title: String,
     pub desc: String,
