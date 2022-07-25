@@ -8,18 +8,12 @@ use crate::dchatmsg::Dchatmsg;
 
 pub struct ProtocolDchat {
     jobsman: net::ProtocolJobsManagerPtr,
-    //sender: async_channel::Sender<Dchatmsg>,
     msg_sub: net::MessageSubscription<Dchatmsg>,
     p2p: net::P2pPtr,
-    channel: net::ChannelPtr,
 }
 
 impl ProtocolDchat {
-    pub async fn init(
-        channel: net::ChannelPtr,
-        //sender: async_channel::Sender<Dchatmsg>,
-        p2p: net::P2pPtr,
-    ) -> net::ProtocolBasePtr {
+    pub async fn init(channel: net::ChannelPtr, p2p: net::P2pPtr) -> net::ProtocolBasePtr {
         debug!(target: "dchat", "ProtocolDchat::init() [START]");
 
         let message_subsytem = channel.get_message_subsystem();
@@ -30,10 +24,8 @@ impl ProtocolDchat {
 
         Arc::new(Self {
             jobsman: net::ProtocolJobsManager::new("ProtocolDchat", channel.clone()),
-            //sender,
             msg_sub,
             p2p,
-            channel,
         })
     }
 
