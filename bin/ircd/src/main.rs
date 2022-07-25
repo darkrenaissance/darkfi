@@ -187,7 +187,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<Privmsg>();
 
     let p2p = net::P2p::new(net_settings.into()).await;
-    let p2p = p2p.clone();
+    let p2p2 = p2p.clone();
 
     let registry = p2p.protocol_registry();
 
@@ -323,6 +323,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     shutdown.recv().await?;
     print!("\r");
     info!("Caught termination signal, cleaning up and exiting...");
+
+    p2p2.stop().await;
 
     Ok(())
 }

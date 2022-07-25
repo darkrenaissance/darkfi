@@ -58,7 +58,7 @@ pub struct P2p {
     channels: ConnectedChannels,
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     // Used both internally and externally
-    stop_subscriber: SubscriberPtr<Error>,
+    stop_subscriber: SubscriberPtr<()>,
     hosts: HostsPtr,
     protocol_registry: ProtocolRegistry,
 
@@ -183,6 +183,10 @@ impl P2p {
         Ok(())
     }
 
+    pub async fn stop(&self) {
+        self.stop_subscriber.notify(()).await
+    }
+
     /// Broadcasts a message across all channels.
     pub async fn broadcast<M: Message + Clone>(&self, message: M) -> Result<()> {
         for channel in self.channels.lock().await.values() {
@@ -258,7 +262,7 @@ impl P2p {
     }
 
     /// Subscribe to a stop signal.
-    pub async fn subscribe_stop(&self) -> Subscription<Error> {
+    pub async fn subscribe_stop(&self) -> Subscription<()> {
         self.stop_subscriber.clone().subscribe().await
     }
 
