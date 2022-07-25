@@ -45,6 +45,8 @@ async fn load_node_ids_loop(
     if role == Role::Listener {
         return Ok(())
     }
+
+    let self_ip = p2p.settings().external_addr.as_ref().unwrap().clone();
     loop {
         debug!(target: "raft", "Loading node ids from p2p hosts",);
         task::sleep(Duration::from_millis(TIMEOUT_NODES)).await;
@@ -52,6 +54,9 @@ async fn load_node_ids_loop(
         let nodes_ip = hosts.load_all().await.clone();
 
         for ip in nodes_ip.iter() {
+            if ip == &self_ip {
+                continue
+            }
             (*nodes.lock().await).insert(NodeId::from(ip.clone()), ip.clone());
         }
     }
@@ -160,18 +165,24 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     ) -> Result<()> {
         let p2p_send_task = executor.spawn(p2p_send_loop(self.sender.1.clone(), p2p.clone()));
 
-        let load_ips_task =
-            executor.spawn(load_node_ids_loop(self.nodes.clone(), p2p.clone(), self.role.clone()));
+        if self.role != Role::Listener {
+            executor
+                .spawn(load_node_ids_loop(self.nodes.clone(), p2p.clone(), self.role.clone()))
+                .detach();
+        }
 
         let prune_seen_messages_task = executor.spawn(prune_seen_messages(self.seen_msgs.clone()));
 
-        let mut synced = false;
+        let mut synced = true;
 
         // Sync listener node
         if self.role == Role::Listener {
+            synced = false;
             let last_term = if !self.is_logs_empty() { self.last_log()?.unwrap().term } else { 0 };
 
-            let sync_request = SyncRequest { logs_len: self.logs_len(), last_term };
+            let sync_request_id = OsRng.next_u64();
+            let sync_request =
+                SyncRequest { id: sync_request_id, logs_len: self.logs_len(), last_term };
 
             info!("Start Syncing...");
             for _ in 0..SYNC_ATTEMPTS {
@@ -186,6 +197,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                         executor.clone(),
                         p2p_recv_channel.clone(),
                         stop_signal.clone(),
+                        sync_request_id,
                     )
                     .await?;
             }
@@ -198,7 +210,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let broadcast_msg_rv = self.msgs_channel.1.clone();
 
-        if !synced && self.role == Role::Listener {
+        if !synced {
             error!("SYNCING FAILED!!");
         } else {
             loop {
@@ -229,8 +241,8 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                 }
             }
         }
+
         warn!(target: "raft", "Raft Terminating...");
-        load_ips_task.cancel().await;
         p2p_send_task.cancel().await;
         prune_seen_messages_task.cancel().await;
         self.datastore.flush().await?;
@@ -299,7 +311,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             NetMsgMethod::SyncResponse => {}
         }
 
-        debug!(target: "raft", "Role: {:?}  receive msg id: {}  recipient_id: {:?} method: {:?} ",
+        debug!(target: "raft", "Role: {:?}  receive a msg with id: {}  recipient_id: {:?} method: {:?} ",
            self.role, msg.id, &msg.recipient_id.is_some(), &msg.method);
         Ok(())
     }
@@ -320,6 +332,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             };
 
             let sync_response = SyncResponse {
+                id: sr.id,
                 logs,
                 commit_length: self.commits_len(),
                 leader_id: self.id.clone().unwrap(),
@@ -373,7 +386,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     ) -> Result<()> {
         let random_id = if msg_id.is_some() { msg_id.unwrap() } else { OsRng.next_u64() };
 
-        debug!(target: "raft","Role: {:?}  send a msg id: {}  recipient_id: {:?} method: {:?} ",
+        debug!(target: "raft","Role: {:?}  send a msg with id: {}  recipient_id: {:?} method: {:?} ",
            self.role, random_id, &recipient_id.is_some(), &method);
 
         let net_msg = NetMsg { id: random_id, recipient_id, payload: payload.to_vec(), method };
@@ -388,6 +401,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         executor: Arc<Executor<'_>>,
         p2p_recv_channel: async_channel::Receiver<NetMsg>,
         stop_signal: async_channel::Receiver<()>,
+        sync_request_id: u64,
     ) -> Result<bool> {
         let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
         executor
@@ -400,12 +414,19 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         loop {
             select! {
                 msg =  p2p_recv_channel.recv().fuse() => {
-                    let msg = msg?;
-                    if msg.method == NetMsgMethod::SyncResponse {
+                        let msg = msg?;
+                        if msg.method != NetMsgMethod::SyncResponse {
+                            continue
+                        }
+
                         let sr: SyncResponse = deserialize(&msg.payload)?;
+                        if sr.id != sync_request_id {
+                            continue
+                        }
+
                         self.receive_sync_response(&sr).await?;
                         return Ok(true)
-                    }},
+                    },
                 _ = stop_signal.recv().fuse() => break,
                 _ = timeout_r.recv().fuse() => break,
             }
@@ -551,6 +572,11 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn receive_log_request(&mut self, lr: LogRequest) -> Result<()> {
+        debug!(target: "raft",
+            "Receive LogRequest current_term: {} prefix_term: {} prefix_len: {} commit_length: {} suffixlen {}",
+            lr.current_term, lr.prefix_term, lr.prefix_len, lr.commit_length, lr.suffix.len(),
+        );
+
         if lr.current_term > self.current_term()? {
             self.set_current_term(&lr.current_term)?;
             self.set_voted_for(&None)?;
@@ -585,6 +611,11 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             ack,
             ok,
         };
+
+        debug!(target: "raft",
+            "Send LogResponse current_term: {} ack: {} ok: {}",
+            response.current_term, response.ack, response.ok
+        );
 
         let payload = serialize(&response);
         self.send(Some(lr.leader_id.clone()), &payload, NetMsgMethod::LogResponse, None).await

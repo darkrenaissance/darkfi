@@ -55,10 +55,11 @@ impl<T: Decodable + Encodable> DataTree<T> {
     pub fn insert(&self, data: &T) -> Result<()> {
         let serialized = serialize(data);
         let last_index: u64 = if let Some(d) = self.tree.last()? {
-            u64::from_be_bytes(d.0.to_vec().try_into().unwrap())
+            u64::from_be_bytes(d.0.to_vec().try_into().unwrap()) + 1
         } else {
             0
         };
+
         self.tree.insert(last_index.to_be_bytes(), serialized)?;
         Ok(())
     }

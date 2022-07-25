@@ -22,12 +22,14 @@ pub enum Role {
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct SyncRequest {
+    pub id: u64,
     pub logs_len: u64,
     pub last_term: u64,
 }
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 pub struct SyncResponse {
+    pub id: u64,
     pub logs: Logs,
     pub commit_length: u64,
     pub leader_id: NodeId,

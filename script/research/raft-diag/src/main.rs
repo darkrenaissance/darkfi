@@ -90,10 +90,9 @@ fn check(args: Args) -> Result<()> {
 }
 
 async fn start_broadcasting(n: u32, sender: async_channel::Sender<Message>) -> Result<()> {
-    sleep(10).await;
+    sleep(8).await;
     info!("Start broadcasting...");
     for id in 0..n {
-        sleep(3).await;
         let msg = format!("msg_test_{}", id);
         info!("Send a message {:?}", msg);
         let msg = Message { payload: msg };
