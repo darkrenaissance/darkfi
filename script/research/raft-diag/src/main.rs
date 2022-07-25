@@ -10,7 +10,7 @@ use url::Url;
 
 use darkfi::{
     net,
-    raft::{DataStore, NetMsg, ProtocolRaft, Raft},
+    raft::{DataStore, NetMsg, ProtocolRaft, Raft, RaftSettings},
     util::{
         cli::{get_log_config, get_log_level},
         expand_path,
@@ -126,8 +126,13 @@ async fn start(args: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let seen_net_msgs = Arc::new(Mutex::new(FxHashMap::default()));
 
-    let mut raft =
-        Raft::<Message>::new(net_settings.inbound.clone(), datastore_raft, seen_net_msgs.clone())?;
+    let raft_settings = RaftSettings {
+        datastore_path: datastore_raft,
+        external_addr: net_settings.external_addr.clone(),
+        ..RaftSettings::default()
+    };
+
+    let mut raft = Raft::<Message>::new(raft_settings, seen_net_msgs.clone())?;
 
     //
     // P2p setup

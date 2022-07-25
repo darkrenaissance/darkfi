@@ -11,7 +11,7 @@ use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize, net,
-    raft::{NetMsg, ProtocolRaft, Raft},
+    raft::{NetMsg, ProtocolRaft, Raft, RaftSettings},
     rpc::server::listen_and_serve,
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
@@ -172,11 +172,13 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let seen_net_msgs = Arc::new(Mutex::new(FxHashMap::default()));
 
     let datastore_raft = datastore_path.join("tau.db");
-    let mut raft = Raft::<EncryptedTask>::new(
-        net_settings.inbound.clone(),
-        datastore_raft,
-        seen_net_msgs.clone(),
-    )?;
+    let raft_settings = RaftSettings {
+        datastore_path: datastore_raft,
+        external_addr: net_settings.external_addr.clone(),
+        ..RaftSettings::default()
+    };
+
+    let mut raft = Raft::<EncryptedTask>::new(raft_settings, seen_net_msgs.clone())?;
 
     let commits_received: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
 
