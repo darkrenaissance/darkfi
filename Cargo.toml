@@ -37,6 +37,7 @@ members = [
 	"src/util/derive-internal",
 
     "example/dchat",
+    "example/dchat-seed",
 ]
 
 [dependencies]

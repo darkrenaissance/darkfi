@@ -1360,12 +1360,33 @@ dependencies = [
  "darkfi",
  "easy-parallel",
  "futures",
+ "log",
+ "num_cpus",
  "ringbuffer",
  "serde",
  "simplelog",
  "smol",
  "structopt",
  "structopt-toml",
+ "termion",
+ "url",
+]
+
+[[package]]
+name = "dchat_seed"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "darkfi",
+ "dchat",
+ "easy-parallel",
+ "futures",
+ "log",
+ "num_cpus",
+ "simplelog",
+ "smol",
  "url",
 ]
 
