@@ -1,11 +1,10 @@
 use std::io;
 
 use fxhash::FxHashMap;
-use url::Url;
 
 use crate::{
     impl_vec,
-    util::serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Error, Result,
 };
 
@@ -14,7 +13,6 @@ pub type Sender = (async_channel::Sender<NetMsg>, async_channel::Receiver<NetMsg
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Role {
-    Listener,
     Follower,
     Candidate,
     Leader,
@@ -69,6 +67,11 @@ pub struct LogResponse {
     pub ok: bool,
 }
 
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
+pub struct NodeIdMsg {
+    pub id: NodeId,
+}
+
 impl VoteResponse {
     pub fn set_ok(&mut self, ok: bool) {
         self.ok = ok;
@@ -85,15 +88,7 @@ pub struct Log {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, SerialDecodable, SerialEncodable)]
-pub struct NodeId(pub Vec<u8>);
-
-impl From<Url> for NodeId {
-    fn from(addr: Url) -> Self {
-        let ser = serialize(&addr);
-        let hash = blake3::hash(&ser).as_bytes().to_vec();
-        Self(hash)
-    }
-}
+pub struct NodeId(pub String);
 
 #[derive(Clone, Debug, SerialDecodable, SerialEncodable)]
 pub struct Logs(pub Vec<Log>);
@@ -166,9 +161,7 @@ pub enum NetMsgMethod {
     VoteResponse = 2,
     VoteRequest = 3,
     BroadcastRequest = 4,
-    // this only used for listener node
-    SyncRequest = 5,
-    SyncResponse = 6,
+    NodeIdMsg = 5,
 }
 
 impl Encodable for NetMsgMethod {
@@ -179,8 +172,7 @@ impl Encodable for NetMsgMethod {
             Self::VoteResponse => 2,
             Self::VoteRequest => 3,
             Self::BroadcastRequest => 4,
-            Self::SyncRequest => 5,
-            Self::SyncResponse => 6,
+            Self::NodeIdMsg => 5,
         };
         (len as u8).encode(s)
     }
@@ -195,8 +187,7 @@ impl Decodable for NetMsgMethod {
             2 => Self::VoteResponse,
             3 => Self::VoteRequest,
             4 => Self::BroadcastRequest,
-            5 => Self::SyncRequest,
-            _ => Self::SyncResponse,
+            _ => Self::NodeIdMsg,
         })
     }
 }

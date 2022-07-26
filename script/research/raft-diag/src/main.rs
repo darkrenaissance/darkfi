@@ -91,10 +91,10 @@ fn check(args: Args) -> Result<()> {
 
 async fn start_broadcasting(n: u32, sender: async_channel::Sender<Message>) -> Result<()> {
     sleep(8).await;
-    info!("Start broadcasting...");
+    info!(target: "raft", "Start broadcasting...");
     for id in 0..n {
         let msg = format!("msg_test_{}", id);
-        info!("Send a message {:?}", msg);
+        info!(target: "raft", "Send a message {:?}", msg);
         let msg = Message { payload: msg };
         sender.send(msg).await?;
     }
@@ -105,7 +105,7 @@ async fn start_broadcasting(n: u32, sender: async_channel::Sender<Message>) -> R
 async fn receive_loop(receiver: async_channel::Receiver<Message>) -> Result<()> {
     loop {
         let msg = receiver.recv().await?;
-        info!("Receive new msg {:?}", msg);
+        info!(target: "raft", "Receive new msg {:?}", msg);
     }
 }
 
@@ -126,11 +126,7 @@ async fn start(args: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let seen_net_msgs = Arc::new(Mutex::new(FxHashMap::default()));
 
-    let raft_settings = RaftSettings {
-        datastore_path: datastore_raft,
-        external_addr: net_settings.external_addr.clone(),
-        ..RaftSettings::default()
-    };
+    let raft_settings = RaftSettings { datastore_path: datastore_raft, ..RaftSettings::default() };
 
     let mut raft = Raft::<Message>::new(raft_settings, seen_net_msgs.clone())?;
 
@@ -145,7 +141,7 @@ async fn start(args: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let registry = p2p.protocol_registry();
 
-    let raft_node_id = raft.id.clone();
+    let raft_node_id = raft.get_id();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let raft_node_id = raft_node_id.clone();

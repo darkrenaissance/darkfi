@@ -172,11 +172,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let seen_net_msgs = Arc::new(Mutex::new(FxHashMap::default()));
 
     let datastore_raft = datastore_path.join("tau.db");
-    let raft_settings = RaftSettings {
-        datastore_path: datastore_raft,
-        external_addr: net_settings.external_addr.clone(),
-        ..RaftSettings::default()
-    };
+    let raft_settings = RaftSettings { datastore_path: datastore_raft, ..RaftSettings::default() };
 
     let mut raft = Raft::<EncryptedTask>::new(raft_settings, seen_net_msgs.clone())?;
 
@@ -204,7 +200,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let registry = p2p.protocol_registry();
 
-    let raft_node_id = raft.id.clone();
+    let raft_node_id = raft.get_id();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let raft_node_id = raft_node_id.clone();

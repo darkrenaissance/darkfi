@@ -15,6 +15,7 @@ const SLED_COMMITS_TREE: &[u8] = b"_commits";
 const _SLED_COMMITS_LENGTH_TREE: &[u8] = b"_commit_length";
 const SLED_VOTED_FOR_TREE: &[u8] = b"_voted_for";
 const SLED_CURRENT_TERM_TREE: &[u8] = b"_current_term";
+const SLED_ID_TREE: &[u8] = b"_id";
 
 pub struct DataStore<T> {
     _db: sled::Db,
@@ -22,6 +23,7 @@ pub struct DataStore<T> {
     pub commits: DataTree<T>,
     pub voted_for: DataTree<Option<NodeId>>,
     pub current_term: DataTree<u64>,
+    pub id: DataTree<NodeId>,
 }
 
 impl<T: Encodable + Decodable> DataStore<T> {
@@ -31,8 +33,9 @@ impl<T: Encodable + Decodable> DataStore<T> {
         let commits = DataTree::new(&_db, SLED_COMMITS_TREE)?;
         let voted_for = DataTree::new(&_db, SLED_VOTED_FOR_TREE)?;
         let current_term = DataTree::new(&_db, SLED_CURRENT_TERM_TREE)?;
+        let id = DataTree::new(&_db, SLED_ID_TREE)?;
 
-        Ok(Self { _db, logs, commits, voted_for, current_term })
+        Ok(Self { _db, logs, commits, voted_for, current_term, id })
     }
     pub async fn flush(&self) -> Result<()> {
         debug!(target: "raft", "DataStore flush");
