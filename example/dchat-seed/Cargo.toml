@@ -7,7 +7,6 @@ description = "Seed node for dchat"
 
 [dependencies]
 darkfi = {path = "../../", features = ["net", "rpc"]}
-dchat = {path = "../dchat"}
 
 # Async
 futures = "0.3.0"

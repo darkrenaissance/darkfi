@@ -1,12 +1,11 @@
 use async_executor::Executor;
-use async_std::{net::TcpListener, sync::Arc};
+use async_std::sync::Arc;
 use easy_parallel::Parallel;
 use log::{error, info};
 use simplelog::WriteLogger;
 use std::{
     fs::File,
     io::{self, Write},
-    net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 use termion::{event::Key, input::TermRead};
 use url::Url;
@@ -56,7 +55,10 @@ impl Dchat {
                                 break
                             }
                             Key::Char('i') => {}
-                            Key::Char('s') => {}
+                            Key::Char('s') => {
+                                // TODO
+                                //self.send().await?;
+                            }
                             _ => {}
                         },
                         Err(e) => {
@@ -87,9 +89,11 @@ impl Dchat {
         info!("DCHAT::start()::start");
         let dchat = Dchat::new(self.p2p.clone());
 
-        self.p2p.clone().start(executor.clone()).await?;
-
         dchat.register_protocol().await?;
+
+        self.p2p.clone().start(executor.clone()).await?;
+        let executor_cloned = executor.clone();
+        executor_cloned.spawn(self.p2p.clone().run(executor.clone())).detach();
 
         let result = dchat.render(executor.clone()).await;
 
@@ -97,35 +101,11 @@ impl Dchat {
             error!("Rendering failed {}", e);
         };
 
-        let executor_cloned = executor.clone();
-        executor_cloned.spawn(self.p2p.clone().run(executor.clone())).detach();
-
-        self.send().await?;
-
-        let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        let listener = TcpListener::bind(socket).await?;
-
-        executor
-            .spawn(async move {
-                loop {
-                    let (_stream, peer_addr) = match listener.accept().await {
-                        Ok((s, a)) => (s, a),
-                        Err(e) => {
-                            error!("failed accepting new connections: {}", e);
-                            continue
-                        }
-                    };
-
-                    info!("dchat accepted new client: {}", peer_addr);
-                }
-            })
-            .detach();
-
         info!("DCHAT::start()::stop");
         Ok(())
     }
 
-    async fn send(&self) -> Result<()> {
+    async fn _send(&self) -> Result<()> {
         let dchatmsg = Dchatmsg { message: "helloworld".to_string() };
         self.p2p.broadcast(dchatmsg).await?;
         Ok(())
@@ -141,10 +121,12 @@ async fn main() -> Result<()> {
     let file = File::create(log_path).unwrap();
     WriteLogger::init(log_level, log_config, file)?;
 
-    let url = Url::parse("tcp://127.0.0.1:55555").unwrap();
+    let seed = Url::parse("tcp://127.0.0.1:55555").unwrap();
+    let inbound = Url::parse("tcp://127.0.0.1:55554").unwrap();
+    let ext_addr = Url::parse("tcp://127.0.0.1:55544").unwrap();
 
     let settings = Settings {
-        inbound: Some(url),
+        inbound: Some(inbound),
         outbound_connections: 0,
         manual_attempt_limit: 0,
         seed_query_timeout_seconds: 8,
@@ -152,13 +134,12 @@ async fn main() -> Result<()> {
         channel_handshake_seconds: 4,
         channel_heartbeat_seconds: 10,
         outbound_retry_seconds: 1200,
-        external_addr: None,
+        external_addr: Some(ext_addr),
         peers: Vec::new(),
-        seeds: Vec::new(),
+        seeds: vec![seed],
         node_id: String::new(),
     };
 
-    //let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<Dchatmsg>();
     let p2p = net::P2p::new(settings).await;
     let p2p = p2p.clone();
 
