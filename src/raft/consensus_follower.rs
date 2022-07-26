@@ -31,7 +31,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             if let Some(voted_for) = self.voted_for()? { voted_for == vr.node_id } else { true };
 
         let mut response =
-            VoteResponse { node_id: self.get_id(), current_term: self.current_term()?, ok: false };
+            VoteResponse { node_id: self.id(), current_term: self.current_term()?, ok: false };
 
         if vr.current_term == self.current_term()? && vote_ok && vote {
             self.set_voted_for(&Some(vr.node_id.clone()))?;
@@ -71,7 +71,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
 
         let response =
-            LogResponse { node_id: self.get_id(), current_term: self.current_term()?, ack, ok };
+            LogResponse { node_id: self.id(), current_term: self.current_term()?, ack, ok };
 
         debug!(target: "raft",
          "Send LogResponse current_term: {} ack: {} ok: {}",

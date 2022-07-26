@@ -141,7 +141,7 @@ async fn start(args: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let registry = p2p.protocol_registry();
 
-    let raft_node_id = raft.get_id();
+    let raft_node_id = raft.id();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let raft_node_id = raft_node_id.clone();
@@ -171,12 +171,12 @@ async fn start(args: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     .unwrap();
 
     if args.broadcast != 0 {
-        executor.spawn(start_broadcasting(args.broadcast, raft.get_msgs_channel())).detach();
+        executor.spawn(start_broadcasting(args.broadcast, raft.sender())).detach();
     }
 
-    executor.spawn(receive_loop(raft.get_commits_channel())).detach();
+    executor.spawn(receive_loop(raft.receiver())).detach();
 
-    raft.start(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
+    raft.run(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
     Ok(())
 }
 

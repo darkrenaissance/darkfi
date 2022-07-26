@@ -43,7 +43,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         }
 
         let request = LogRequest {
-            leader_id: self.get_id(),
+            leader_id: self.id(),
             current_term: self.current_term()?,
             prefix_len,
             prefix_term,

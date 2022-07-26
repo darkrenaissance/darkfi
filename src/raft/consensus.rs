@@ -37,7 +37,6 @@ async fn send_node_id_loop(sender: async_channel::Sender<()>, timeout: i64) -> R
 }
 
 pub struct Raft<T> {
-    // this will be derived from the ip
     id: NodeId,
 
     pub(super) role: Role,
@@ -53,7 +52,7 @@ pub struct Raft<T> {
 
     pub(super) last_term: u64,
 
-    sender: Sender,
+    p2p_sender: Sender,
 
     msgs_channel: Channel<T>,
     commits_channel: Channel<T>,
@@ -81,7 +80,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let msgs_channel = async_channel::unbounded::<T>();
         let commits_channel = async_channel::unbounded::<T>();
 
-        let sender = async_channel::unbounded::<NetMsg>();
+        let p2p_sender = async_channel::unbounded::<NetMsg>();
 
         let id = match datastore.id.get_last()? {
             Some(_id) => _id,
@@ -103,7 +102,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             acked_length: MapLength(FxHashMap::default()),
             nodes: Arc::new(Mutex::new(FxHashMap::default())),
             last_term: 0,
-            sender,
+            p2p_sender,
             msgs_channel,
             commits_channel,
             datastore,
@@ -112,14 +111,17 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         })
     }
 
-    pub async fn start(
+    ///  
+    ///  Run raft consensus and wait stop_signal channel to terminate
+    ///
+    pub async fn run(
         &mut self,
         p2p: net::P2pPtr,
         p2p_recv_channel: async_channel::Receiver<NetMsg>,
         executor: Arc<Executor<'_>>,
         stop_signal: async_channel::Receiver<()>,
     ) -> Result<()> {
-        let p2p_send_task = executor.spawn(p2p_send_loop(self.sender.1.clone(), p2p.clone()));
+        let p2p_send_task = executor.spawn(p2p_send_loop(self.p2p_sender.1.clone(), p2p.clone()));
 
         let prune_seen_messages_task = executor.spawn(prune_map::<String>(
             self.seen_msgs.clone(),
@@ -174,6 +176,29 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         send_node_id_loop_task.cancel().await;
         self.datastore.flush().await?;
         Ok(())
+    }
+
+    ///  
+    /// Return async receiver channel which can be used to receive T Messages
+    /// from raft consensus
+    ///
+    pub fn receiver(&self) -> async_channel::Receiver<T> {
+        self.commits_channel.1.clone()
+    }
+
+    ///  
+    /// Return async sender channel which can be used to broadcast T Messages
+    /// to raft consensus
+    ///
+    pub fn sender(&self) -> async_channel::Sender<T> {
+        self.msgs_channel.0.clone()
+    }
+
+    ///  
+    /// Return the raft node id
+    ///
+    pub fn id(&self) -> NodeId {
+        self.id.clone()
     }
 
     async fn send_node_id_msg(&self) -> Result<()> {
@@ -255,7 +280,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
         let net_msg = NetMsg { id: random_id, recipient_id, payload: payload.to_vec(), method };
         self.seen_msgs.lock().await.insert(random_id.to_string(), Utc::now().timestamp());
-        self.sender.0.send(net_msg).await?;
+        self.p2p_sender.0.send(net_msg).await?;
 
         Ok(())
     }
@@ -298,18 +323,6 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
     pub(super) fn voted_for(&self) -> Result<Option<NodeId>> {
         Ok(self.datastore.voted_for.get_last()?.flatten())
-    }
-
-    pub fn get_commits_channel(&self) -> async_channel::Receiver<T> {
-        self.commits_channel.1.clone()
-    }
-
-    pub fn get_msgs_channel(&self) -> async_channel::Sender<T> {
-        self.msgs_channel.0.clone()
-    }
-
-    pub fn get_id(&self) -> NodeId {
-        self.id.clone()
     }
 
     pub(super) fn commits_len(&self) -> u64 {

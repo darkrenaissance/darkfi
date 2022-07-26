@@ -10,7 +10,7 @@ use super::{
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
     pub(super) async fn send_vote_request(&mut self) -> Result<()> {
-        let self_id = self.get_id();
+        let self_id = self.id();
 
         self.set_current_term(&(self.current_term()? + 1))?;
         self.role = Role::Candidate;
@@ -41,7 +41,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
             if self.votes_received.len() >= ((nodes_cloned.len() + 1) / 2) {
                 self.role = Role::Leader;
-                self.current_leader = self.get_id();
+                self.current_leader = self.id();
                 for node in nodes_cloned.iter() {
                     self.sent_length.insert(node.0, self.logs_len());
                     self.acked_length.insert(node.0, 0);

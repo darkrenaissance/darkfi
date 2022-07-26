@@ -9,7 +9,7 @@ use url::Url;
 
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
-    Error, Result,
+    Result,
 };
 
 use super::{

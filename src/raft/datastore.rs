@@ -67,7 +67,7 @@ impl<T: Decodable + Encodable> DataTree<T> {
         Ok(())
     }
 
-    pub fn wipe_insert_all(&self, data: &Vec<T>) -> Result<()> {
+    pub fn wipe_insert_all(&self, data: &[T]) -> Result<()> {
         self.tree.clear()?;
 
         let mut batch = Batch::default();

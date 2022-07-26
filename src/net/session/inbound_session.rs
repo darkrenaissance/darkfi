@@ -147,15 +147,12 @@ impl InboundSession {
 impl Session for InboundSession {
     async fn get_info(&self) -> serde_json::Value {
         let mut infos = FxHashMap::default();
-        match self.p2p().settings().inbound.as_ref() {
-            Some(accept_addr) => {
-                for (addr, info) in self.connect_infos.lock().await.iter() {
-                    let json_addr = json!({ "accept_addr": accept_addr });
-                    let info = vec![json_addr, info.get_info().await];
-                    infos.insert(addr.to_string(), info);
-                }
+        if let Some(accept_addr) = self.p2p().settings().inbound.as_ref() {
+            for (addr, info) in self.connect_infos.lock().await.iter() {
+                let json_addr = json!({ "accept_addr": accept_addr });
+                let info = vec![json_addr, info.get_info().await];
+                infos.insert(addr.to_string(), info);
             }
-            None => {}
         }
         json!({
             "connected": infos,
