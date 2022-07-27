@@ -1,0 +1,55 @@
+## seedd configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+# Daemon published url, common for all enabled networks
+url = "tcp://127.0.0.1"
+
+# Darkfid activation flag
+#darkfid = true
+
+# Ircd activation flag
+#ircd = true
+
+# Taud activation flag
+#taud = true
+
+# Following specific network settings shouldn't be commended even if 
+# their corresponding network is not enabled.
+
+# Darkfid network settings.
+[darkfid_opts]
+# Network port
+port = 7650
+
+# Seed nodes to connect to
+seeds = []
+
+# Peers to connect to
+peers = []
+
+# Ircd network settings.
+[ircd_opts]
+# Network port
+port = 8760
+
+# Seed nodes to connect to
+seeds = []
+
+# Peers to connect to
+peers = []
+
+# Taud network settings.
+[taud_opts]
+# Network port
+port = 9870
+
+# Seed nodes to connect to
+seeds = []
+
+# Peers to connect to
+peers = []
