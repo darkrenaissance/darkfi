@@ -5,9 +5,9 @@ use log::{error, info};
 use simplelog::WriteLogger;
 use std::{
     fs::File,
-    io::{self, Write},
+    io::{self, Read, Write},
 };
-use termion::{event::Key, input::TermRead};
+use termion::{async_stdin, event::Key, input::TermRead};
 use url::Url;
 
 use darkfi::{
@@ -27,15 +27,14 @@ struct Dchat {
 }
 
 impl Dchat {
-    fn new(p2p: net::P2pPtr) -> Self {
-        Self { p2p }
+    fn new(p2p: net::P2pPtr) -> Arc<Self> {
+        Arc::new(Self { p2p })
     }
 
     async fn render(&self, ex: Arc<Executor<'_>>) -> Result<()> {
         info!("DCHAT::render()::start");
         let mut stdout = io::stdout().lock();
-        let stdin = termion::async_stdin();
-        let mut keys = stdin.keys();
+        let mut stdin = async_stdin();
 
         stdout.write_all(
             b"Welcome to dchat
@@ -44,33 +43,33 @@ impl Dchat {
     q: quit \n",
         )?;
 
-        ex.spawn(async move {
-            loop {
-                let k = keys.next();
-                match k {
-                    Some(k) => match k {
-                        Ok(k) => match k {
-                            Key::Char('q') => {
-                                info!("DCHAT::Q pressed.... exiting");
-                                break
-                            }
-                            Key::Char('i') => {}
-                            Key::Char('s') => {
-                                // TODO
-                                //self.send().await?;
-                            }
-                            _ => {}
-                        },
-                        Err(e) => {
-                            error!("found error: {}", e);
-                        }
-                    },
-                    None => {}
+        loop {
+            for k in stdin.by_ref().keys() {
+                match k.unwrap() {
+                    Key::Char('q') => {
+                        info!("DCHAT::Q pressed.... exiting");
+                        return Ok(())
+                    }
+                    Key::Char('i') => {}
+
+                    Key::Char('s') => {
+                        let msg = self.get_input().await?;
+                        self.send(msg).await?;
+                    }
+                    _ => {}
                 }
             }
-        })
-        .detach();
-        Ok(())
+        }
+    }
+
+    async fn get_input(&self) -> Result<String> {
+        let mut stdout = io::stdout().lock();
+        stdout.write_all(b"type your message and then press enter\n")?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+        stdout.write_all(b"you entered:")?;
+        stdout.write_all(input.as_bytes())?;
+        return Ok(input)
     }
 
     async fn register_protocol(&self) -> Result<()> {
@@ -85,28 +84,26 @@ impl Dchat {
         Ok(())
     }
 
-    async fn start(&self, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn start(&self, ex: Arc<Executor<'_>>) -> Result<()> {
         info!("DCHAT::start()::start");
+        let ex2 = ex.clone();
+
         let dchat = Dchat::new(self.p2p.clone());
 
         dchat.register_protocol().await?;
 
-        self.p2p.clone().start(executor.clone()).await?;
-        let executor_cloned = executor.clone();
-        executor_cloned.spawn(self.p2p.clone().run(executor.clone())).detach();
-
-        let result = dchat.render(executor.clone()).await;
-
-        if let Err(e) = result {
-            error!("Rendering failed {}", e);
-        };
+        self.p2p.clone().start(ex.clone()).await?;
+        ex2.spawn(self.p2p.clone().run(ex.clone())).detach();
 
         info!("DCHAT::start()::stop");
         Ok(())
     }
 
-    async fn _send(&self) -> Result<()> {
-        let dchatmsg = Dchatmsg { message: "helloworld".to_string() };
+    async fn send(&self, message: String) -> Result<()> {
+        let mut stdout = io::stdout().lock();
+        stdout.write_all(b"sending: ")?;
+        stdout.write_all(message.as_bytes())?;
+        let dchatmsg = Dchatmsg { message };
         self.p2p.broadcast(dchatmsg).await?;
         Ok(())
     }
@@ -148,6 +145,7 @@ async fn main() -> Result<()> {
 
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();
+    let ex3 = ex.clone();
 
     let dchat = Dchat::new(p2p.clone());
 
@@ -155,7 +153,8 @@ async fn main() -> Result<()> {
         .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
         .finish(|| {
             smol::future::block_on(async move {
-                dchat.start(ex2).await?;
+                dchat.start(ex3).await?;
+                dchat.render(ex2).await?;
                 drop(signal);
                 Ok(())
             })

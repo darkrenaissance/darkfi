@@ -1380,7 +1380,6 @@ dependencies = [
  "async-executor",
  "async-std",
  "darkfi",
- "dchat",
  "easy-parallel",
  "futures",
  "log",
