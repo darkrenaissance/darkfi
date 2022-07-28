@@ -31,5 +31,6 @@ termion = "1.5.6"
 serde = {version = "1.0.138", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.0"
+toml = "0.4.2"
 
 

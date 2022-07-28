@@ -1221,7 +1221,7 @@ dependencies = [
  "subtle",
  "termion",
  "thiserror",
- "toml",
+ "toml 0.5.9",
  "tungstenite",
  "url",
  "wasmer",
@@ -1369,6 +1369,7 @@ dependencies = [
  "structopt",
  "structopt-toml",
  "termion",
+ "toml 0.4.10",
  "url",
 ]
 
@@ -2368,7 +2369,7 @@ dependencies = [
  "smol",
  "structopt",
  "structopt-toml",
- "toml",
+ "toml 0.5.9",
  "url",
 ]
 
@@ -3153,7 +3154,7 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d6ea3c4595b96363c13943497db34af4460fb474a95c43f4446ad341b8c9785"
 dependencies = [
- "toml",
+ "toml 0.5.9",
 ]
 
 [[package]]
@@ -3163,7 +3164,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e17d47ce914bf4de440332250b0edd23ce48c005f59fab39d3335866b114f11a"
 dependencies = [
  "thiserror",
- "toml",
+ "toml 0.5.9",
 ]
 
 [[package]]
@@ -4075,7 +4076,7 @@ dependencies = [
  "skeptic",
  "structopt",
  "structopt-toml-derive",
- "toml",
+ "toml 0.5.9",
 ]
 
 [[package]]
@@ -4319,6 +4320,15 @@ name = "tinyvec_macros"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
+
+[[package]]
+name = "toml"
+version = "0.4.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "758664fc71a3a69038656bee8b6be6477d2a6c315a6b81f7081f591bffa4111f"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "toml"
