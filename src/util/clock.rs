@@ -12,6 +12,8 @@ enum Ticks {
     IDLE, // idle clock state
     OUTOFSYNC, //clock, and blockchain are out of sync
 }
+const BB_SL : i64 = -1; //big bang slot time (need to be negative value)
+const BB_E : i64 = -1; //big bang epoch time.
 
 #[derive(Debug)]
 pub struct Clock {
@@ -24,12 +26,10 @@ pub struct Clock {
 
 }
 
-
-
 impl Clock {
     pub fn new(e_len: Option<u8>, sl_len: Option<u8>, tick_len: Option<u8>, peers: Vec<Url>) {
-        Self { sl:0,
-               e:0,
+        Self { sl: BB_SL, //necessary for genesis slot
+               e: BB_E,
                tick_len: tick_len.unwrap_or(22), // 22 seconds
                sl_len: sl_len.unwrap_or(22),// ~8 minutes
                e_len: e_len.unwrap_or(3), // 24.2 minutes
@@ -109,7 +109,9 @@ impl Clock {
         let e = self.epoch_abs();
         let sl = self.slot_relative();
         if self.ticking() {
-            if e==prev_e&&e==0 {
+            if e==prev_e&&e==BB_E && sl==prev_sl && sl==BB_SL {
+                self.sl=sl;
+                self.e=e;
                 Ticks::GENESIS
             } else if e==prev_e&&sl==prev_sl+1 {
                 self.sl=sl;
