@@ -9,9 +9,11 @@ enum Ticks {
     NEWSLOT{e: u8, sl: u8}, // new slot
     NEWEPOCH{e: u8, sl: u8}, // new epoch
     TOCKS, //tocks, or slot is ending
+    IDLE, // idle clock state
     OUTOFSYNC, //clock, and blockchain are out of sync
 }
 
+#[derive(Debug)]
 pub struct Clock {
     pub sl : i64, // relative slot index (zero-based) [0-len[
     pub e : i64, //epoch index (zero-based) [0-\inf[
@@ -73,26 +75,6 @@ impl Clock {
         rel < self.tick_len/3
     }
 
-    pub fn clockticks() -> Ticks {
-        let prev_e = self.e;
-        let prev_sl = self.sl;
-        let e = self.epoch_abs();
-        let sl = self.slot_relative();
-        if self.ticking() {
-            if e==prev_e&&e==0 {
-                Ticks::GENESIS
-            } else if e==prev_e&&sl==prev_sl+1 {
-                Ticks::NEWSLOT{e:e, sl:sl}
-            } else if e==prev_e+1 {
-                Ticks::NEWEPOCH{e:e, sl:sl}
-            } else {
-                //clock is out of sync
-                Ticks::OUTOFSYNC
-            }
-        } else {
-            Ticks::TOCKS
-        }
-    }
 
     pub fn sync(&self) Result<()>{
         let e = self.epoch_abs();
@@ -120,17 +102,33 @@ impl Clock {
         res.abs()
     }
 
-    /// any discrepancies in the stakeholder tick/tocks, and local sl/e
-    /// will end up with different POV of the blockchain,
-    /// this verify if you are in sync with the global beacon.
-    pub fn verify_unit_monotonic_increments(&self) -> bool {
-        //
-        let beacon_e = self.epoch_abs()
-        let beacon_sl = self.slot_relative();
-        self.sl == beacon_sl && self.e == beacon_e
+    /// clock ticks return the ticks phase with corresponding phase parameters
+    pub fn ticks() -> Ticks {
+        let prev_e = self.e;
+        let prev_sl = self.sl;
+        let e = self.epoch_abs();
+        let sl = self.slot_relative();
+        if self.ticking() {
+            if e==prev_e&&e==0 {
+                Ticks::GENESIS
+            } else if e==prev_e&&sl==prev_sl+1 {
+                self.sl=sl;
+                Ticks::NEWSLOT{e:e, sl:sl}
+            } else if e==prev_e+1 && sl==0 {
+                self.e=e;
+                self.sl=sl;
+                Ticks::NEWEPOCH{e:e, sl:sl}
+            }
+            else if e==prev_e && sl==prev_sl {
+                Ticks::IDLE
+            }
+            else {
+                //clock is out of sync
+                Ticks::OUTOFSYNC
+            }
+        } else {
+            Ticks::TOCKS
+        }
     }
 
-    pub fn ticks() {
-
-    }
 }
