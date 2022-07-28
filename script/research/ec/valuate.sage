@@ -39,10 +39,15 @@ assert comp(decomp(f, basis), basis) == f
 # So at every step we replace the component for (y - Py)
 # with the reduction to the component for (x - Px)
 
-A = 4
-B = 0
+EC_A = 4
+EC_B = 0
 
-E = y^2 - x^3 - A*x - B
+EC = y^2 - x^3 - A*x - B
+
+# so we can replace (y - Py) with this
+sub_poly_f = b0^2 + binomial(3,2)*Px*b0^1 + (3*Px^2 + EC_A)
+sub_poly_g = (y + Py)
+assert EC == b1*sub_poly_g - b0*sub_poly_f
 
 # f / g
 # Technically we don't need g but we keep track of it anyway
@@ -51,14 +56,22 @@ def apply_reduction(comp_f, comp_g, basis):
     #comp_f[1] = 0
 
     b0, b1, _ = basis
-    # so we can replace (y - Py) with this
-    sub_poly_f = b0^2 + binomial(3,2)*Px*b0^1 + (3*Px^2 + A)
-    sub_poly_g = (y + Py)
-    assert E == b1*sub_poly_g - b0*sub_poly_f
     # b1 == b0 * f / g
     # so we can replace c b1 with (cf/g) b0
 
-    comp_f[0] = comp_f[0]*sub_poly_g + comp_g[2]*sub_poly_f
+    # a2 = 0
+    assert comp_f[2] == 0
+    # note that
+    #   b1 = (f/g) b0
+    # so
+    #   x = a0 b0 + a1 b1 + 0 b2
+    #     = (a0 + a1 f/g) b0
+    # let a0 = p/q
+    #   x = (pg + a1 f)
+    #       ----------- b0
+    #           qg
+
+    comp_f[0] = comp_f[0]*sub_poly_g + comp_f[1]*sub_poly_f
     comp_g[2] *= sub_poly_g
 
 k = 1
