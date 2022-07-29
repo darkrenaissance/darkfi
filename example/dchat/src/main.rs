@@ -1,5 +1,5 @@
 use async_executor::Executor;
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use easy_parallel::Parallel;
 use log::{error, info};
 use simplelog::WriteLogger;
@@ -17,18 +17,22 @@ use darkfi::{
     Error, Result,
 };
 
-use crate::{dchatmsg::Dchatmsg, protocol_dchat::ProtocolDchat};
+use crate::{
+    dchatmsg::{Dchatmsg, DchatmsgsBuffer},
+    protocol_dchat::ProtocolDchat,
+};
 
 pub mod dchatmsg;
 pub mod protocol_dchat;
 
 struct Dchat {
     p2p: net::P2pPtr,
+    msgs: DchatmsgsBuffer,
 }
 
 impl Dchat {
-    fn new(p2p: net::P2pPtr) -> Arc<Self> {
-        Arc::new(Self { p2p })
+    fn new(p2p: net::P2pPtr, msgs: DchatmsgsBuffer) -> Arc<Self> {
+        Arc::new(Self { p2p, msgs })
     }
 
     async fn render(&self) -> Result<()> {
@@ -36,12 +40,12 @@ impl Dchat {
         let mut stdout = io::stdout().lock();
         let mut stdin = async_stdin();
 
-        stdout.write_all(
-            b"Welcome to dchat
-    s: send message
-    i. inbox
-    q: quit \n",
-        )?;
+        println!(
+            "Welcome to dchat
+                s: send message
+                i. inbox
+                q: quit \n",
+        );
 
         loop {
             for k in stdin.by_ref().keys() {
@@ -50,9 +54,25 @@ impl Dchat {
                         info!(target: "dchat", "DCHAT::Q pressed.... exiting");
                         return Ok(())
                     }
-                    Key::Char('i') => {}
+                    Key::Char('i') => {
+                        let vec = self.msgs.lock().await;
+                        for i in vec.iter() {
+                            println!("iterated version {:?}", i);
+                        }
+                        println!("with indexing {:?}", vec[0]);
+                        //for v in vec {
+                        //    //
+                        //}
+                        //for msg in self.msgs.lock().await {
+                        //    //println!("{}", msg);
+                        //}
+                    }
 
                     Key::Char('s') => {
+                        //stdout.write_all(b"type your message and then press enter\n")?;
+                        //let mut input = String::new();
+                        //stdin.read_line(&mut input)?;
+
                         let msg = self.get_input().await?;
                         self.send(msg).await?;
                     }
@@ -72,12 +92,13 @@ impl Dchat {
         return Ok(input)
     }
 
-    async fn register_protocol(&self) -> Result<()> {
+    async fn register_protocol(&self, msgs: DchatmsgsBuffer) -> Result<()> {
         info!(target: "dchat", "dchat::register_protocol()::start");
         let registry = self.p2p.protocol_registry();
         registry
-            .register(net::SESSION_ALL, move |channel, p2p| async move {
-                ProtocolDchat::init(channel, p2p).await
+            .register(net::SESSION_ALL, move |channel, p2p| {
+                let msgs2 = msgs.clone();
+                async move { ProtocolDchat::init(channel, p2p, msgs2).await }
             })
             .await;
         info!(target: "dchat", "DCHAT::register_protocol()::stop");
@@ -89,10 +110,7 @@ impl Dchat {
 
         let ex2 = ex.clone();
 
-        let dchat = Dchat::new(self.p2p.clone());
-
-        dchat.register_protocol().await?;
-
+        self.register_protocol(self.msgs.clone()).await?;
         self.p2p.clone().start(ex.clone()).await?;
         ex2.spawn(self.p2p.clone().run(ex.clone())).detach();
 
@@ -105,14 +123,7 @@ impl Dchat {
         stdout.write_all(b"sending: ")?;
         stdout.write_all(message.as_bytes())?;
         let dchatmsg = Dchatmsg { message };
-        match self.p2p.broadcast(dchatmsg).await {
-            Ok(_o) => {
-                info!(target: "dchat", "SEND: MSG BROADCAST SUCCESSFULLY");
-            }
-            Err(e) => {
-                error!(target: "dchat", "SEND: MSG FAILED TO BROADCAST {}", e);
-            }
-        }
+        self.p2p.broadcast(dchatmsg).await?;
         Ok(())
     }
 }
@@ -197,7 +208,7 @@ async fn main() -> Result<()> {
 
     let p2p = net::P2p::new(settings?.into()).await;
 
-    let p2p = p2p.clone();
+    //let p2p = p2p.clone();
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -205,7 +216,9 @@ async fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();
 
-    let dchat = Dchat::new(p2p.clone());
+    let msgs: DchatmsgsBuffer = Arc::new(Mutex::new(vec![Dchatmsg { message: String::new() }]));
+
+    let dchat = Dchat::new(p2p, msgs);
 
     let (_, result) = Parallel::new()
         .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))

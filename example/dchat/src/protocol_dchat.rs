@@ -4,16 +4,21 @@ use async_trait::async_trait;
 use darkfi::{net, Result};
 use log::info;
 
-use crate::dchatmsg::Dchatmsg;
+use crate::dchatmsg::{Dchatmsg, DchatmsgsBuffer};
 
 pub struct ProtocolDchat {
     jobsman: net::ProtocolJobsManagerPtr,
     msg_sub: net::MessageSubscription<Dchatmsg>,
     p2p: net::P2pPtr,
+    msgs: DchatmsgsBuffer,
 }
 
 impl ProtocolDchat {
-    pub async fn init(channel: net::ChannelPtr, p2p: net::P2pPtr) -> net::ProtocolBasePtr {
+    pub async fn init(
+        channel: net::ChannelPtr,
+        p2p: net::P2pPtr,
+        msgs: DchatmsgsBuffer,
+    ) -> net::ProtocolBasePtr {
         info!(target: "dchat", "ProtocolDchat::init() [START]");
 
         let message_subsytem = channel.get_message_subsystem();
@@ -26,17 +31,27 @@ impl ProtocolDchat {
             jobsman: net::ProtocolJobsManager::new("ProtocolDchat", channel.clone()),
             msg_sub,
             p2p,
+            msgs,
         })
     }
 
     async fn handle_receive_msg(self: Arc<Self>) -> Result<()> {
+        //let mut msg_vec = Vec::new();
         info!(target: "dchat", "ProtocolDchat::handle_receive_msg() [START]");
-
-        loop {
-            let msg = self.msg_sub.receive().await?;
+        while let Ok(msg) = self.msg_sub.receive().await {
             let msg = (*msg).to_owned();
-            self.p2p.broadcast(msg).await?;
+            self.msgs.lock().await.push(msg);
+            //self.p2p.broadcast(msg).await?;
+            //msg_vec.push(msg);
+            //senders.notify(msg).await;
         }
+        Ok(())
+
+        //loop {
+        //    let msg = self.msg_sub.receive().await?;
+        //    let msg = (*msg).to_owned();
+        //    self.p2p.broadcast(msg).await?;
+        //}
     }
 }
 
