@@ -28,6 +28,15 @@ pub struct Metadata {
     pub om: OuroborosMetadata,
 }
 
+impl Default for Metadata {
+    fn default() -> Self {
+        Self {
+            timestamp: Timestamp::current_time(),
+            om: OuroborosMetadata::default(),
+        }
+    }
+}
+
 impl Metadata {
     pub fn new(timestamp: Timestamp, eta: [u8;32], lead_proof: TransactionLeadProof) -> Self {
         Self { timestamp, om: OuroborosMetadata::new(eta, lead_proof) }
@@ -35,10 +44,19 @@ impl Metadata {
 }
 
 
+/// wrapper over the Proof, for possiblity any metadata necessary in the future.
 #[derive(Debug, Clone, PartialEq,  SerialEncodable, SerialDecodable)]
 pub struct TransactionLeadProof {
     /// leadership proof
     pub lead_proof: Proof,
+}
+
+impl Default for TransactionLeadProof {
+    fn default() -> Self {
+        Self {
+            lead_proof : Proof::default(),
+        }
+    }
 }
 
 impl TransactionLeadProof {
@@ -54,12 +72,13 @@ impl TransactionLeadProof {
     }
 }
 
-impl Default for TransactionLeadProof {
-    fn default() -> Self
-    {
-        Self {lead_proof: Proof::new(vec!())}
+impl From<Proof> for TransactionLeadProof {
+    fn from(proof: Proof) -> Self {
+        Self { lead_proof: proof}
     }
 }
+
+
 
 
 /// This struct represents [`Block`](super::Block) information used by the Ouroboros
@@ -72,6 +91,15 @@ pub struct OuroborosMetadata {
     pub lead_proof : TransactionLeadProof,
 }
 
+impl Default for OuroborosMetadata {
+    fn default() -> Self {
+        Self {
+            eta: [0;32],
+            lead_proof: TransactionLeadProof::default(),
+        }
+    }
+}
+
 impl OuroborosMetadata {
     pub fn new(eta: [u8;32], lead_proof: TransactionLeadProof) -> Self {
         Self { eta, lead_proof }
@@ -80,7 +108,7 @@ impl OuroborosMetadata {
 
 /// This struct represents [`Block`](super::Block) information used by the Streamlet
 /// consensus protocol.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, Default, SerialEncodable, SerialDecodable)]
 pub struct StreamletMetadata {
     /// Slot votes
     pub votes: Vec<Vote>,

@@ -1,6 +1,8 @@
 use halo2_proofs::{arithmetic::Field, dev::MockProver, circuit::Value};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use halo2_gadgets::poseidon::primitives as poseidon;
+use halo2_gadgets::{
+    poseidon::{primitives as poseidon},
+};
 
 use pasta_curves::{
     arithmetic::CurveAffine,
@@ -14,8 +16,10 @@ use crate::{
     crypto::{
         constants::MERKLE_DEPTH_ORCHARD,
         leadcoin::LeadCoin,
+        lead_proof,
+        proof::{Proof, ProvingKey, VerifyingKey},
         merkle_node::MerkleNode,
-        util::{mod_r_p, pedersen_commitment_scalar},
+        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_base, pedersen_commitment_u64},
         types::DrkValueBlind,
     },
 };
@@ -37,21 +41,21 @@ pub struct EpochConsensus {
 }
 
 impl EpochConsensus{
-    fn new(len: u64, reward: u64) {
+    fn new(len: u64, reward: u64) -> Self{
         Self {len, reward}
     }
 
     /// TODO how is the reward derived?
-    fn get_reward(&self) {
+    fn get_reward(&self)  -> u64{
         self.reward
     }
 
-    fn get_sl(&self) {
+    fn get_sl(&self)  -> u64{
         self.len
     }
 }
 
-#[derive(Copy,Debug,Default,Clone)]
+#[derive(Debug,Default,Clone)]
 pub struct Epoch {
     // TODO this need to emulate epoch
     // should have ep, slot, current block, etc.
@@ -60,16 +64,17 @@ pub struct Epoch {
     //epoch item
     pub item: Option<EpochItem>,
     pub eta: pallas::Base, // CRS for the leader selection.
-    pub coins: Vec<LeadCoin>,
+    pub coins: Vec<LeadCoin>, // competing coins
 }
 
 impl Epoch {
 
-    pub fn new(consensus: EpochConsensus, true_random:pallas::Base)
+    pub fn new(consensus: EpochConsensus, true_random:pallas::Base) -> Self
     {
-        Self {len: consensus.len,
-              item: EpochItem {consensus.reward},
+        Self {len: Some(consensus.len as usize),
+              item: Some(EpochItem {value: consensus.reward}),
               eta: true_random,
+              coins:vec!(),
         }
     }
     fn create_coins_election_seeds(&self, sl: pallas::Base) -> (pallas::Base, pallas::Base) {
@@ -106,13 +111,13 @@ impl Epoch {
         let mut prev_sk_base : pallas::Base = pallas::Base::one();
         for _i in 0..self.len.unwrap() {
             let sk_bytes = if _i ==0 {
-                let base = pedersen_commitment_scalar(pallas::Scalar::one(), pallas::Scalar::random(&mut rng));
+                let base = pedersen_commitment_u64(1, pallas::Scalar::random(&mut rng));
                 let coord = base.to_affine().coordinates().unwrap();
                 let sk_base =  coord.x() * coord.y();
                 prev_sk_base = sk_base;
                 sk_base.to_repr()
             } else {
-                let base = pedersen_commitment_scalar(pallas::Scalar::one(), mod_r_p(prev_sk_base));
+                let base = pedersen_commitment_u64(1, mod_r_p(prev_sk_base));
                 let coord = base.to_affine().coordinates().unwrap();
                 let sk_base =  coord.x() * coord.y();
                 prev_sk_base = sk_base;
@@ -134,7 +139,7 @@ impl Epoch {
         (root_sks, path_sks)
     }
     //note! the strategy here is single competing coin per slot.
-    pub fn create_coins(&self) -> Vec<LeadCoin> {
+    pub fn create_coins(& mut self) -> Vec<LeadCoin> {
         let mut rng = thread_rng();
         let mut seeds: Vec<u64> = vec![];
         for _i in 0..self.len.unwrap() {
@@ -162,10 +167,10 @@ impl Epoch {
             //
             let c_root_sk: MerkleNode = root_sks[i];
 
-            let c_pk = pedersen_commitment_scalar(mod_r_p(c_tau), mod_r_p(c_root_sk.inner()));
+            let c_pk = pedersen_commitment_base(c_tau, mod_r_p(c_root_sk.inner()));
 
             let c_seed = pallas::Base::from(seeds[i]);
-            let c_sn = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));
+            let c_sn = pedersen_commitment_base(c_seed, mod_r_p(c_root_sk.inner()));
             let c_pk_pt = c_pk.to_affine().coordinates().unwrap();
             let c_pk_pt_x: pallas::Base = *c_pk_pt.x();
             let c_pk_pt_y: pallas::Base = *c_pk_pt.y();
@@ -184,7 +189,7 @@ impl Epoch {
             //TODO (FIX) THIS PANICS, ONLY PANICS ON LARGE VALUES!
             //let c_cm: pallas::Point = pedersen_commitment_scalar(lead_coin_msg_hash, c_cm1_blind);
             //note c_v is set to zero, should work
-            let c_cm: pallas::Point = pedersen_commitment_scalar(mod_r_p(c_v), c_cm1_blind);
+            let c_cm: pallas::Point = pedersen_commitment_base(c_v, c_cm1_blind);
 
             let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
             let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
@@ -194,7 +199,7 @@ impl Epoch {
             let c_root_cm = tree_cm.root(0).unwrap();
             let c_cm_path = tree_cm.authentication_path(leaf_position.unwrap(), &c_root_cm).unwrap();
             // lead coin commitment
-            let c_seed2 = pedersen_commitment_scalar(mod_r_p(c_seed), mod_r_p(c_root_sk.inner()));
+            let c_seed2 = pedersen_commitment_base(c_seed, mod_r_p(c_root_sk.inner()));
             let c_seed2_pt = c_seed2.to_affine().coordinates().unwrap();
 
             let lead_coin_msg = [
@@ -205,7 +210,7 @@ impl Epoch {
                 pallas::Base::one(),
             ];
             let lead_coin_msg_hash : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
-            let c_cm2 = pedersen_commitment_scalar(mod_r_p(lead_coin_msg_hash), c_cm2_blind);
+            let c_cm2 = pedersen_commitment_base(lead_coin_msg_hash, c_cm2_blind);
 
             let c_root_sk = root_sks[i];
 
@@ -243,34 +248,35 @@ impl Epoch {
             };
             coins.push(coin);
         }
-        self.coins = coins;
+        self.coins = coins.clone();
         coins
     }
 
     /// retrive leadership lottary coins of static stake,
     /// retrived for for commitment in the genesis data
     pub fn get_coins(&self) -> Vec<LeadCoin> {
-        return self.coins
+        return self.coins.clone()
     }
 
     /// see if the participant stakeholder of this epoch is
     /// winning the lottery, in case of success return True
     pub fn is_leader(&self, sl: u64) -> bool {
-        let coin = self.coins[i];
+        let coin = self.coins[sl as usize];
         let y_exp = [
-            coin.root_sk,
-            coin.nonce,
+            coin.root_sk.unwrap(),
+            coin.nonce.unwrap(),
         ];
-        let y_exp_hash : pallas::Base = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ContractLength<2>,3,2,>::init(y_exp);
-        let y = pedersen_commitment_scalar(coin.y_mu, y_exp_hash);
-        let ord = 1024; //TODO (res)
-        let target = ord*coin.value;
-        y < target
+        let y_exp_hash : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>,3,2>::init().hash(y_exp);
+        // pick x coordiante of y for comparison
+        let y_x : pallas::Base = *pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash)).to_affine().coordinates().unwrap().x();
+        let ord = pallas::Base::from(1024); //TODO fine tune this scalar.
+        let target = ord*coin.value.unwrap();
+        y_x < target
     }
 
-    pub fn get_proof(&self, sl: u64) -> Proof {
-        let coin = self.coins[sl];
-        lead_proof::create_lead_proof(pk, coin)
+    pub fn get_proof(&self, sl: u64, pk: ProvingKey) -> Proof {
+        let coin = self.coins[sl as usize];
+        lead_proof::create_lead_proof(pk, coin).unwrap()
     }
 }
 

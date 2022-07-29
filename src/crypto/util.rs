@@ -18,6 +18,7 @@ pub fn hash_to_scalar(persona: &[u8], a: &[u8], b: &[u8]) -> pallas::Scalar {
     pallas::Scalar::from_bytes_wide(ret.as_array())
 }
 
+
 #[allow(non_snake_case)]
 pub fn pedersen_commitment_scalar(value: pallas::Scalar, blind: DrkValueBlind) -> DrkValueCommit {
     let hasher = DrkValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
@@ -29,6 +30,15 @@ pub fn pedersen_commitment_scalar(value: pallas::Scalar, blind: DrkValueBlind) -
 
 pub fn pedersen_commitment_u64(value: u64, blind: DrkValueBlind) -> DrkValueCommit {
     pedersen_commitment_scalar(mod_r_p(DrkValue::from(value)), blind)
+}
+
+#[allow(non_snake_case)]
+pub fn pedersen_commitment_base(value: pallas::Base, blind: DrkValueBlind) -> DrkValueCommit {
+    let hasher = DrkValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
+    let V = hasher(&VALUE_COMMITMENT_V_BYTES);
+    let R = hasher(&VALUE_COMMITMENT_R_BYTES);
+
+    V * mod_r_p(value) + R * blind
 }
 
 /// Converts from pallas::Base to pallas::Scalar (aka $x \pmod{r_\mathbb{P}}$).

@@ -34,6 +34,12 @@ pub struct Block {
     pub metadata: Metadata,
 }
 
+impl net::Message for Block {
+    fn name() -> &'static str {
+        "block"
+    }
+}
+
 impl Block {
     pub fn new(
         st: blake3::Hash,
@@ -96,6 +102,27 @@ pub struct BlockInfo {
     pub sm: StreamletMetadata,
 }
 
+impl Default for BlockInfo {
+    fn default() -> Self {
+        Self {
+            v: 0,
+            st: blake3::hash(b""),
+            e: 0,
+            sl: 0,
+            txs: vec![],
+            metadata: Metadata::default(),
+            sm: StreamletMetadata::default(),
+        }
+    }
+}
+
+impl net::Message for BlockInfo {
+    fn name() -> &'static str {
+        "blockinfo"
+    }
+}
+
+
 impl BlockInfo {
     pub fn new(
         st: blake3::Hash,
@@ -120,12 +147,6 @@ impl From<BlockInfo> for Block {
     fn from(b: BlockInfo) -> Self {
         let txids = b.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
         Self { v: b.v, st: b.st, e: b.e, sl: b.sl, txs: txids, metadata: b.metadata }
-    }
-}
-
-impl net::Message for BlockInfo {
-    fn name() -> &'static str {
-        "blockinfo"
     }
 }
 

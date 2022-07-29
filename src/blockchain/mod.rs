@@ -15,7 +15,7 @@ use crate::{
 };
 
 pub mod epoch;
-pub use epoch::{Epoch, EpochItem};
+pub use epoch::{Epoch, EpochItem,EpochConsensus};
 
 pub mod blockstore;
 pub use blockstore::{BlockOrderStore, BlockStore};

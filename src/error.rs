@@ -314,6 +314,11 @@ pub enum Error {
 
     #[error(transparent)]
     ClientFailed(#[from] ClientFailed),
+    //=============
+    // clock
+    //
+    #[error("clock out of sync with peers: {0}")]
+    ClockOutOfSync(String),
 }
 
 /// Transaction verification errors
@@ -351,6 +356,7 @@ pub enum VerifyFailed {
 
     #[error("Internal error: {0}")]
     InternalError(String),
+
 }
 
 /// Client module errors

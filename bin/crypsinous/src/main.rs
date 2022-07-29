@@ -1,7 +1,10 @@
 use darkfi::{
     stakeholder::Stakeholder,
-    blockchain::{EpochConsensus}
+    blockchain::{EpochConsensus,},
+    net::{Settings,},
 };
+
+use std::thread;
 
 fn main()
 {
@@ -12,13 +15,19 @@ fn main()
     let n = 3;
     /// initialize n stakeholders
     let stakeholders = vec!(n);
+    let settings = net::Settings::new();
+    //TODO populate settings with peers urls
+    let k : u32 = 13; //proof's number of rows
+    let handles = vec!(0);
     for i in n {
-        let stakeholder = Stakeholder::new();
+        let stakeholder = Stakeholder::new(epoch_consensus, settings, Some(k));
         stakeholders.push(stakeholder);
+        let handle = thread.spawn(|| {
+            stakeholders.background();
+        });
+        handles.push(handle);
     }
-    /// when the clock signal a new slot.
-    /// check for leadership.
-    /// if lead publish construct block metadata.
-    /// push the new block before the end of the slot (clock should siganl the beging, and 1/k of the way to the end).
-    ///TODO stakeholder should signal new epoch, new slot in the background
+    for handle in handles {
+        handle.join().unwrap();
+    }
 }

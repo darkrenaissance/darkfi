@@ -85,6 +85,7 @@ impl std::fmt::Display for NanoTimestamp {
 
 // Clock sync parameters
 const RETRIES: u8 = 10;
+///TODO loop through set of ntps, get their average response concurrently.
 const NTP_ADDRESS: &str = "pool.ntp.org:123";
 const EPOCH: i64 = 2208988800; //1900
 
@@ -112,7 +113,7 @@ async fn peer_request(peers: &Vec<Url>) -> Result<Option<Timestamp>> {
 }
 
 // Raw ntp request execution
-async fn ntp_request() -> Result<Timestamp> {
+pub async fn ntp_request() -> Result<Timestamp> {
     // Create socket
     let sock = UdpSocket::bind("0.0.0.0:0")?;
     sock.set_read_timeout(Some(Duration::from_secs(5)))?;
