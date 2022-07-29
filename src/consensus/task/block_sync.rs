@@ -1,11 +1,9 @@
 use crate::{
     consensus::{
         block::{BlockOrder, BlockResponse},
-        ValidatorState, ValidatorStatePtr,
+        ValidatorStatePtr,
     },
-    net,
-    node::MemoryState,
-    Result,
+    net, Result,
 };
 use log::{debug, info, warn};
 
@@ -40,28 +38,9 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
             // Node stores response data.
             let resp = response_sub.receive().await?;
 
-            // Verify state transitions for all blocks and their respective transactions.
-            debug!("block_sync_task(): Starting state transition validations");
-            let mut canon_updates = vec![];
-            let canon_state_clone = state.read().await.state_machine.lock().await.clone();
-            let mut mem_state = MemoryState::new(canon_state_clone);
-            for block in &resp.blocks {
-                let mut state_updates =
-                    ValidatorState::validate_state_transitions(mem_state.clone(), &block.txs)?;
-
-                for update in &state_updates {
-                    mem_state.apply(update.clone());
-                }
-
-                canon_updates.append(&mut state_updates);
-            }
-            debug!("block_sync_task(): All state transitions passed");
-
-            debug!("block_sync_task(): Updating canon state");
-            state.write().await.update_canon_state(canon_updates, None).await?;
-
-            debug!("block_sync_task(): Appending blocks to ledger");
-            state.write().await.blockchain.add(&resp.blocks)?;
+            // Verify and store retrieved blocks
+            debug!("block_sync_task(): Processing received blocks");
+            state.write().await.receive_blocks(&resp.blocks).await?;
 
             let last_received = state.read().await.blockchain.last()?;
             info!("Last received block: {:?} - {:?}", last_received.0, last_received.1);

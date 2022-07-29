@@ -179,13 +179,32 @@ impl ValidatorState {
         Ok(state)
     }
 
-    /// The node retrieves a transaction and appends it to the unconfirmed
-    /// transactions list. Additional validity rules must be defined by the
-    /// protocol for transactions.
-    pub fn append_tx(&mut self, tx: Transaction) -> bool {
-        if self.unconfirmed_txs.contains(&tx) {
-            debug!("append_tx(): We already have this tx");
+    /// The node retrieves a transaction, validates its state transition,
+    /// and appends it to the unconfirmed transactions list.
+    pub async fn append_tx(&mut self, tx: Transaction) -> bool {
+        let tx_hash = blake3::hash(&serialize(&tx));
+        let tx_in_txstore = match self.blockchain.transactions.contains(&tx_hash) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("append_tx(): Failed querying txstore: {}", e);
+                return false
+            }
+        };
+
+        if self.unconfirmed_txs.contains(&tx) || tx_in_txstore {
+            debug!("append_tx(): We have already seen this tx.");
             return false
+        }
+
+        debug!("append_tx(): Starting state transition validation");
+        let canon_state_clone = self.state_machine.lock().await.clone();
+        let mem_state = MemoryState::new(canon_state_clone);
+        match self.validate_state_transitions(mem_state, &[tx.clone()]) {
+            Ok(_) => debug!("append_tx(): State transition valid"),
+            Err(e) => {
+                warn!("append_tx(): State transition fail: {}", e);
+                return false
+            }
         }
 
         debug!("append_tx(): Appended tx to mempool");
@@ -349,7 +368,7 @@ impl ValidatorState {
 
     /// Receive the proposed block, verify its sender (slot leader),
     /// and proceed with voting on it.
-    pub fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
+    pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
         // Node hasn't started participating
         match self.participating {
             Some(start) => {
@@ -380,14 +399,14 @@ impl ValidatorState {
             return Ok(None)
         }
 
-        self.vote(proposal)
+        self.vote(proposal).await
     }
 
     /// Given a proposal, the node finds which blockchain it extends.
     /// If the proposal extends the canonical blockchain, a new fork chain
     /// is created. The node votes on the proposal only if it extends the
-    /// longest notarized fork chain it has seen.
-    pub fn vote(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
+    /// longest notarized fork chain it has seen and its state transition is valid.
+    pub async fn vote(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
         let mut proposal = proposal.clone();
 
         // Generate proposal hash
@@ -427,6 +446,20 @@ impl ValidatorState {
         if !self.extends_notarized_chain(chain) {
             debug!("vote(): Proposal does not extend notarized chain");
             return Ok(None)
+        }
+
+        debug!("vote(): Starting state transition validation");
+        let canon_state_clone = self.state_machine.lock().await.clone();
+        let mem_state = MemoryState::new(canon_state_clone);
+
+        match self.validate_state_transitions(mem_state, &proposal.block.txs) {
+            Ok(_) => {
+                debug!("vote(): State transition valid")
+            }
+            Err(e) => {
+                warn!("vote(): State transition fail: {}", e);
+                return Ok(None)
+            }
         }
 
         let signed_hash = self.secret.sign(&serialize(&proposal_hash));
@@ -691,7 +724,7 @@ impl ValidatorState {
             debug!(target: "consensus", "Applying state transition for finalized block");
             let canon_state_clone = self.state_machine.lock().await.clone();
             let mem_st = MemoryState::new(canon_state_clone);
-            let state_updates = ValidatorState::validate_state_transitions(mem_st, &proposal.txs)?;
+            let state_updates = self.validate_state_transitions(mem_st, &proposal.txs)?;
             self.update_canon_state(state_updates, None).await?;
             self.remove_txs(proposal.txs.clone())?;
         }
@@ -884,9 +917,63 @@ impl ValidatorState {
     // State transition functions
     // ==========================
 
+    /// Validate and append to canonical state received blocks.
+    pub async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
+        // Verify state transitions for all blocks and their respective transactions.
+        debug!("receive_blocks(): Starting state transition validations");
+        let mut canon_updates = vec![];
+        let canon_state_clone = self.state_machine.lock().await.clone();
+        let mut mem_state = MemoryState::new(canon_state_clone);
+        for block in blocks {
+            let mut state_updates =
+                self.validate_state_transitions(mem_state.clone(), &block.txs)?;
+
+            for update in &state_updates {
+                mem_state.apply(update.clone());
+            }
+
+            canon_updates.append(&mut state_updates);
+        }
+        debug!("receive_blocks(): All state transitions passed");
+
+        debug!("receive_blocks(): Updating canon state");
+        self.update_canon_state(canon_updates, None).await?;
+
+        debug!("receive_blocks(): Appending blocks to ledger");
+        self.blockchain.add(blocks)?;
+
+        Ok(())
+    }
+
+    /// Validate and append to canonical state received finalized block.
+    /// Returns boolean flag indicating already existing block.
+    pub async fn receive_finalized_block(&mut self, block: BlockInfo) -> Result<bool> {
+        match self.blockchain.has_block(&block) {
+            Ok(v) => {
+                if v {
+                    debug!("receive_finalized_block(): Existing block received");
+                    return Ok(false)
+                }
+            }
+            Err(e) => {
+                error!("receive_finalized_block(): failed checking for has_block(): {}", e);
+                return Ok(false)
+            }
+        };
+
+        debug!("receive_finalized_block(): Executing state transitions");
+        self.receive_blocks(&[block.clone()]).await?;
+
+        debug!("receive_finalized_block(): Removing block transactions from unconfirmed_txs");
+        self.remove_txs(block.txs.clone())?;
+
+        Ok(true)
+    }
+
     /// Validate state transitions for given transactions and state and
     /// return a vector of [`StateUpdate`]
     pub fn validate_state_transitions(
+        &self,
         state: MemoryState,
         txs: &[Transaction],
     ) -> Result<Vec<StateUpdate>> {

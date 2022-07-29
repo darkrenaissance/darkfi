@@ -2,16 +2,15 @@ use async_std::sync::Arc;
 
 use async_executor::Executor;
 use async_trait::async_trait;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use url::Url;
 
 use crate::{
-    consensus::{BlockProposal, ValidatorState, ValidatorStatePtr},
+    consensus::{BlockProposal, ValidatorStatePtr},
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
-    node::MemoryState,
     Result,
 };
 
@@ -64,26 +63,7 @@ impl ProtocolProposal {
 
             let proposal_copy = (*proposal).clone();
 
-            debug!(
-                "ProtocolProposal::handle_receive_proposal(): Starting state transition validation"
-            );
-            let canon_state_clone = self.state.read().await.state_machine.lock().await.clone();
-            let mem_state = MemoryState::new(canon_state_clone);
-
-            match ValidatorState::validate_state_transitions(mem_state, &proposal_copy.block.txs) {
-                Ok(_) => {
-                    debug!("ProtocolProposal::handle_receive_proposal(): State transition valid")
-                }
-                Err(e) => {
-                    warn!(
-                        "ProtocolProposal::handle_receive_proposal(): State transition fail: {}",
-                        e
-                    );
-                    continue
-                }
-            }
-
-            let vote = match self.state.write().await.receive_proposal(&proposal_copy) {
+            let vote = match self.state.write().await.receive_proposal(&proposal_copy).await {
                 Ok(v) => {
                     if v.is_none() {
                         debug!("ProtocolProposal::handle_receive_proposal(): Node didn't vote for proposed block.");
