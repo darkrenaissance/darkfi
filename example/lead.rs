@@ -6,6 +6,7 @@ use pasta_curves::{
     pallas,
 };
 
+use futures::executor::block_on;
 
 use darkfi::crypto::proof::VerifyingKey;
 use darkfi::crypto::proof::ProvingKey;
@@ -13,6 +14,7 @@ use darkfi::crypto::proof::ProvingKey;
 use darkfi::{
     blockchain::{
         Blockchain,
+        EpochConsensus,
         epoch::{Epoch,EpochItem},
     },
     stakeholder::stakeholder::{Stakeholder},
@@ -26,36 +28,40 @@ use darkfi::{
     },
     tx::Transaction,
     consensus::{TransactionLeadProof, Metadata, StreamletMetadata, BlockInfo},
+    net::{P2p,Settings, SettingsPtr,},
     zk::circuit::lead_contract::LeadContract,
 };
 
 fn main() {
+    println!("--> starting lead example");
     let k: u32 = 13;
     //
-    let lead_pk = ProvingKey::build(k, &LeadContract::default());
-    let lead_vk = VerifyingKey::build(k, &LeadContract::default());
+
     //
     const LEN: usize = 10;
     let epoch_item = EpochItem {
         value: 0,  //static stake value
     };
     //
-    let genesis_data = blake3::hash(b"");
-    let db = sled::open("/tmp/darkfi.db").unwrap();
-    let oc = Blockchain::new(&db, Timestamp::current_time(), genesis_data).unwrap();
-    let stakeholder = Stakeholder {
-        blockchain: oc,
-    };
+    let settings = Settings::default();
+    let consensus = EpochConsensus::new(Some(22), Some(3), Some(22), Some(1));
+    println!("--> block on stakeholder future");
+    let stakeholder : Stakeholder = block_on(Stakeholder::new(consensus, settings, Some(13))).unwrap();
+    println!("block on stakeholder future <--|");
     let eta : pallas::Base = stakeholder.get_eta();
-    let epoch = Epoch {
+    let mut epoch = Epoch {
         len: Some(LEN),
         item: Some(epoch_item),
         eta: eta,
+        coins: vec![],
     };
     let coins: Vec<LeadCoin> = epoch.create_coins();
     let coin_idx = 0;
     let coin = coins[coin_idx];
     let contract = coin.create_contract();
+
+    let lead_pk = stakeholder.get_provkingkey();
+    let lead_vk = stakeholder.get_verifyingkey();
 
     //
     //let proof = lead_proof::create_lead_proof(lead_pk.clone(), coin.clone());

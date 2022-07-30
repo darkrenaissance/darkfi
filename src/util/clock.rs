@@ -42,6 +42,14 @@ impl Clock {
         }
     }
 
+    pub fn get_sl_len(&self) -> u64 {
+        self.sl_len
+    }
+
+    pub fn get_e_len(&self) -> u64 {
+        self.e_len
+    }
+
     async fn time(&self) -> Result<Timestamp> {
         match time::check_clock(self.peers.clone()).await {
             Ok(t) => {

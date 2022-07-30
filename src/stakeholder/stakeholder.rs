@@ -122,27 +122,39 @@ impl Stakeholder
         let ts = Timestamp::current_time();
         let genesis_hash = blake3::hash(b"");
         //TODO lisen and add transactions
+        println!("--> new blockchain");
         let bc = Blockchain::new(&db, ts, genesis_hash).unwrap();
+        println!("--> bc initialized");
         //TODO replace with const
         let eta = pallas::Base::one();
         let epoch = Epoch::new(consensus, eta);
+        println!("--> building zk proving key");
         let lead_pk = ProvingKey::build(k.unwrap(), &LeadContract::default());
+        println!("--> building zk veryfing key ");
         let lead_vk = VerifyingKey::build(k.unwrap(), &LeadContract::default());
+        println!("-->new network");
         let p2p = P2p::new(settings.clone()).await;
+        println!("--> network initialized");
         //TODO
         let workspace = SlotWorkspace::default();
         let subscription : Subscription<Result<ChannelPtr>> = p2p.subscribe_channel().await;
+        println!("--> channel");
         let chanptr : ChannelPtr =  subscription.receive().await.unwrap();
+        println!("--> received channel");
         //
         let message_subsytem = chanptr.get_message_subsystem();
+        println!("--> adding dispatcher to msg subsystem");
         message_subsytem.add_dispatch::<BlockInfo>().await;
+        println!("--> added");
         //TODO start channel if isn't started yet
         //let info = chanptr.get_info();
         //println!("channel info: {}", info);
+        println!("--> subscribe msg_sub");
         let msg_sub : MessageSubscription::<BlockInfo> =
             chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
+        println!("--> subscribed");
         //
-        let clock = Clock::new(Some(3), Some(22), Some(22), settings.peers);
+        let clock = Clock::new(Some(consensus.get_epoch_len()), Some(consensus.get_slot_len()), Some(consensus.get_tick_len()), settings.peers);
         Ok(Self{blockchain: bc,
                 net: p2p,
                 clock: clock,
@@ -158,6 +170,14 @@ impl Stakeholder
                 chanptr: chanptr,
                 msgsub: msg_sub,
         })
+    }
+
+    pub fn get_provkingkey(&self) -> ProvingKey {
+        self.pk.clone()
+    }
+
+    pub fn get_verifyingkey(&self) -> VerifyingKey {
+        self.vk.clone()
     }
 
     /// get list stakeholder peers on the p2p network for synchronization
@@ -190,8 +210,7 @@ impl Stakeholder
     }
 
     /// add new blockinfo to the blockchain
-    pub fn add_block(&self, block: BlockInfo)
-    {
+    pub fn add_block(&self, block: BlockInfo) {
         let blocks = [block];
         self.blockchain.add(&blocks);
     }

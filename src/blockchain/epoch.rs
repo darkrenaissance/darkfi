@@ -36,22 +36,37 @@ pub struct EpochItem {
 /// should be populated from configuration file.
 #[derive(Copy,Debug,Default,Clone)]
 pub struct EpochConsensus {
-    pub len : u64, /// number of slots per epoch
+    pub sl_len : u64, /// number of slots per epoch
+    pub e_len : u64,
+    pub tick_len: u64,
     pub reward: u64,
 }
 
 impl EpochConsensus{
-    fn new(len: u64, reward: u64) -> Self{
-        Self {len, reward}
+    pub fn new(sl_len: Option<u64>, e_len: Option<u64>, tick_len: Option<u64>, reward: Option<u64>) -> Self {
+        Self {
+            sl_len: sl_len.unwrap_or(22),
+            e_len: e_len.unwrap_or(3),
+            tick_len: tick_len.unwrap_or(22),
+            reward: reward.unwrap_or(1)
+        }
     }
 
     /// TODO how is the reward derived?
-    fn get_reward(&self)  -> u64{
+    pub fn get_reward(&self)  -> u64{
         self.reward
     }
 
-    fn get_sl(&self)  -> u64{
-        self.len
+    pub fn get_slot_len(&self)  -> u64{
+        self.sl_len
+    }
+
+    pub fn get_epoch_len(&self) -> u64 {
+        self.e_len
+    }
+
+    pub fn get_tick_len(&self) -> u64 {
+        self.tick_len
     }
 }
 
@@ -71,7 +86,7 @@ impl Epoch {
 
     pub fn new(consensus: EpochConsensus, true_random:pallas::Base) -> Self
     {
-        Self {len: Some(consensus.len as usize),
+        Self {len: Some(consensus.get_slot_len() as usize),
               item: Some(EpochItem {value: consensus.reward}),
               eta: true_random,
               coins:vec!(),

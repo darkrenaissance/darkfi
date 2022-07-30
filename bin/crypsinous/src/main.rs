@@ -8,9 +8,11 @@ use std::thread;
 
 fn main()
 {
-    let slots=3;
-    let reward=22;
-    let epoch_consensus = EpochConsensus::new(slots, reward);
+    let slots=22;
+    let epochs=3;
+    let ticks=22;
+    let reward=1;
+    let epoch_consensus = EpochConsensus::new(Some(slots), Some(epochs), Some(ticks), reward);
     /// read n from the cmd
     let n = 3;
     /// initialize n stakeholders
