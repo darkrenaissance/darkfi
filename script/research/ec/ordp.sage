@@ -63,7 +63,7 @@ def ordp(P, original_f, debug=True):
 
     return k
 
-if __name__ == "__main__":
+def _ordp_test():
     K.<x, y> = GF(11)[]
     EC_A = 4
     EC_B = 0
