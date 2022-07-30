@@ -12,12 +12,16 @@ J = ideal(C, g)
 
 load("ordp.sage")
 
+total_k = 0
 for info in I.variety():
     Px, Py = P = info[x], info[y]
-    k = ordp(P, f, debug=False)
+    k = ordp(P, f)
     print(f"ordp(({Px}, {Py}), {f}) = {k}")
+    total_k += k
 for info in J.variety():
     Px, Py = P = info[x], info[y]
-    k = ordp(P, g, debug=False)
-    print(f"ordp(({Px}, {Py}), {g}) = {k}")
+    k = ordp(P, g)
+    print(f"ordp(({Px}, {Py}), 1/({g})) = -{k}")
+    total_k -= k
+print(f"ordp(∞, ({f})/({g}) = -{total_k}")
 

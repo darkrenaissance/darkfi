@@ -20,16 +20,26 @@ def apply_reduction(a, g, Ef, Eg):
     g[0] *= Eg
 
 # EC_A, EC_B must be defined before calling this function
-def ordp(P, original_f, debug=True):
+def ordp(P, original_f, debug=False):
     EC = y^2 - x^3 - EC_A*x - EC_B
 
     Px, Py = P
-    b0, b1, b2 = basis = [(x - Px), (y - Py), 1]
 
-    # so we can replace (y - Py) with this
-    Ef = b0^2 + binomial(3,2)*Px*b0^1 + (3*Px^2 + EC_A)
-    Eg = (y + Py)
-    assert EC == b1*Eg - b0*Ef
+    if Py != 0:
+        b0, b1, b2 = [(x - Px), (y - Py), 1]
+
+        # so we can replace (y - Py) with this
+        Ef = b0^2 + binomial(3,2)*Px*b0^1 + (3*Px^2 + EC_A)
+        Eg = (y + Py)
+        assert EC == b1*Eg - b0*Ef
+    else:
+        b0, b1, b2 = [y, x, 1]
+
+        # we can replace x with this
+        Ef = b0
+        Eg = x^2 + EC_A + EC_B
+
+    basis = [b0, b1, b2]
 
     k = 0
     a = [original_f, 0, 0]
@@ -61,14 +71,20 @@ def ordp(P, original_f, debug=True):
     if debug:
         print(tabulate(table))
 
+    u = b0
+    f = comp(a, basis)
+    g = g[0]
+    assert u(Px, Py) == 0
+    assert f(Px, Py) != 0
+    #assert g(Px, Py) != 0
+
     return k
 
-def _ordp_test():
-    K.<x, y> = GF(11)[]
-    EC_A = 4
-    EC_B = 0
-    P = (2, 4)
-    f = y - 2*x
-    k = ordp(P, f)
-    print(f"k = {k}")
+#K.<x, y> = GF(11)[]
+#EC_A = 4
+#EC_B = 0
+#P = (2, 4)
+#f = y - 2*x
+#k = ordp(P, f, debug=True)
+#print(f"k = {k}")
 
