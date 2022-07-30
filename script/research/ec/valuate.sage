@@ -42,9 +42,10 @@ assert comp(decomp(original_f, basis), basis) == original_f
 EC_A = 4
 EC_B = 0
 
-EC = y^2 - x^3 - A*x - B
+EC = y^2 - x^3 - EC_A*x - EC_B
 
 # so we can replace (y - Py) with this
+b0, b1, b2 = basis
 Ef = b0^2 + binomial(3,2)*Px*b0^1 + (3*Px^2 + EC_A)
 Eg = (y + Py)
 assert EC == b1*Eg - b0*Ef
