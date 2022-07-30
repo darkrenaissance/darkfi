@@ -1,13 +1,13 @@
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use easy_parallel::Parallel;
-use log::{error, info};
+use log::debug;
 use simplelog::WriteLogger;
 use std::{
     fs::File,
-    io::{self, Read, Write},
+    io::{stdin, stdout, Read, Write},
 };
-use termion::{async_stdin, event::Key, input::TermRead};
+use termion::{event::Key, input::TermRead, raw::IntoRawMode};
 use url::Url;
 
 use darkfi::{
@@ -27,101 +27,194 @@ pub mod protocol_dchat;
 
 struct Dchat {
     p2p: net::P2pPtr,
-    msgs: DchatmsgsBuffer,
+    recv_msgs: DchatmsgsBuffer,
+    input: String,
+    display: DisplayMode,
+}
+
+#[derive(Debug)]
+enum DisplayMode {
+    Normal,
+    Editing,
+    Inbox,
+    MessageSent,
 }
 
 impl Dchat {
-    fn new(p2p: net::P2pPtr, msgs: DchatmsgsBuffer) -> Arc<Self> {
-        Arc::new(Self { p2p, msgs })
+    fn new(
+        p2p: net::P2pPtr,
+        recv_msgs: DchatmsgsBuffer,
+        input: String,
+        display: DisplayMode,
+    ) -> Self {
+        Self { p2p, recv_msgs, input, display }
     }
 
-    async fn render(&self) -> Result<()> {
-        info!(target: "dchat", "DCHAT::render()::start");
-        let mut stdout = io::stdout().lock();
-        let mut stdin = async_stdin();
-
-        println!(
-            "Welcome to dchat
-                s: send message
-                i. inbox
-                q: quit \n",
-        );
+    async fn menu(&mut self) -> Result<()> {
+        debug!(target: "dchat", "Dchat::menu() [START]");
+        let stdout = stdout();
+        let mut stdout = stdout.lock().into_raw_mode().unwrap();
+        let mut stdin = stdin();
 
         loop {
+            self.render().await?;
             for k in stdin.by_ref().keys() {
-                match k.unwrap() {
-                    Key::Char('q') => {
-                        info!(target: "dchat", "DCHAT::Q pressed.... exiting");
-                        return Ok(())
-                    }
-                    Key::Char('i') => {
-                        let vec = self.msgs.lock().await;
-                        for i in vec.iter() {
-                            println!("iterated version {:?}", i);
+                match self.display {
+                    DisplayMode::Normal => match k.unwrap() {
+                        Key::Char('q') => return Ok(()),
+                        Key::Char('i') => {
+                            self.display = DisplayMode::Inbox;
+                            break
                         }
-                        println!("with indexing {:?}", vec[0]);
-                        //for v in vec {
-                        //    //
-                        //}
-                        //for msg in self.msgs.lock().await {
-                        //    //println!("{}", msg);
-                        //}
-                    }
 
-                    Key::Char('s') => {
-                        //stdout.write_all(b"type your message and then press enter\n")?;
-                        //let mut input = String::new();
-                        //stdin.read_line(&mut input)?;
-
-                        let msg = self.get_input().await?;
-                        self.send(msg).await?;
+                        Key::Char('s') => {
+                            self.display = DisplayMode::Editing;
+                            break
+                        }
+                        _ => {}
+                    },
+                    DisplayMode::Editing => {
+                        match k.unwrap() {
+                            Key::Char('q') => return Ok(()),
+                            Key::Char('\n') => {
+                                match self.send().await {
+                                    Ok(_) => {
+                                        self.display = DisplayMode::MessageSent;
+                                    }
+                                    // TODO
+                                    Err(_) => {}
+                                }
+                                break
+                            }
+                            Key::Char(c) => {
+                                self.input.push(c);
+                            }
+                            Key::Esc => {
+                                self.display = DisplayMode::Normal;
+                                break
+                            }
+                            _ => {}
+                        }
                     }
-                    _ => {}
+                    DisplayMode::MessageSent => match k.unwrap() {
+                        Key::Char('q') => return Ok(()),
+                        Key::Esc => {
+                            self.display = DisplayMode::Normal;
+                            break
+                        }
+                        _ => {}
+                    },
+                    DisplayMode::Inbox => match k.unwrap() {
+                        Key::Char('q') => return Ok(()),
+                        _ => {}
+                    },
                 }
             }
+            stdout.flush()?;
         }
     }
 
-    async fn get_input(&self) -> Result<String> {
-        let mut stdout = io::stdout().lock();
-        stdout.write_all(b"type your message and then press enter\n")?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        stdout.write_all(b"you entered:")?;
-        stdout.write_all(input.as_bytes())?;
-        return Ok(input)
-    }
+    async fn render(&mut self) -> Result<()> {
+        debug!(target: "dchat", "Dchat::render() [START]");
+        let stdout = stdout();
+        let mut stdout = stdout.lock().into_raw_mode().unwrap();
 
+        match self.display {
+            DisplayMode::Normal => {
+                write!(
+                    stdout,
+                    "{}{}{}Welcome to dchat. {} s: send message {} i: inbox {} q: quit {}",
+                    termion::clear::All,
+                    termion::style::Bold,
+                    termion::cursor::Goto(1, 2),
+                    termion::cursor::Goto(1, 3),
+                    termion::cursor::Goto(1, 4),
+                    termion::cursor::Goto(1, 5),
+                    termion::cursor::Goto(1, 6)
+                )?;
+                stdout.flush()?;
+            }
+            DisplayMode::Editing => {
+                write!(
+                    stdout,
+                    "{}{}{}enter your msg.{} esc: stop editing {} enter: send {}",
+                    termion::clear::All,
+                    termion::style::Bold,
+                    termion::cursor::Goto(1, 2),
+                    termion::cursor::Goto(1, 3),
+                    termion::cursor::Goto(1, 4),
+                    termion::cursor::Goto(1, 5)
+                )?;
+                stdout.flush()?;
+            }
+            DisplayMode::Inbox => {
+                let msgs = self.recv_msgs.lock().await;
+                for i in msgs.iter() {
+                    if !i.message.is_empty() {
+                        write!(
+                            stdout,
+                            "{}{}{}received msg: {}",
+                            termion::clear::All,
+                            termion::style::Bold,
+                            termion::cursor::Goto(1, 2),
+                            i.message
+                        )?;
+                    } else {
+                        write!(
+                            stdout,
+                            "{}{}{}inbox is empty",
+                            termion::clear::All,
+                            termion::style::Bold,
+                            termion::cursor::Goto(1, 2),
+                        )?;
+                    }
+                }
+                stdout.flush()?;
+            }
+            DisplayMode::MessageSent => {
+                write!(
+                    stdout,
+                    "{}{}{}message sent! {} esc: return to main menu {}",
+                    termion::clear::All,
+                    termion::style::Bold,
+                    termion::cursor::Goto(1, 2),
+                    termion::cursor::Goto(1, 3),
+                    termion::cursor::Goto(1, 4),
+                )?;
+                stdout.flush()?;
+            }
+        }
+
+        Ok(())
+    }
     async fn register_protocol(&self, msgs: DchatmsgsBuffer) -> Result<()> {
-        info!(target: "dchat", "dchat::register_protocol()::start");
+        debug!(target: "dchat", "Dchat::register_protocol() [START]");
         let registry = self.p2p.protocol_registry();
         registry
-            .register(net::SESSION_ALL, move |channel, p2p| {
+            .register(net::SESSION_ALL, move |channel, _p2p| {
                 let msgs2 = msgs.clone();
-                async move { ProtocolDchat::init(channel, p2p, msgs2).await }
+                async move { ProtocolDchat::init(channel, msgs2).await }
             })
             .await;
-        info!(target: "dchat", "DCHAT::register_protocol()::stop");
+        debug!(target: "dchat", "Dchat::register_protocol() [STOP]");
         Ok(())
     }
 
     async fn start(&self, ex: Arc<Executor<'_>>) -> Result<()> {
-        info!(target: "dchat", "DCHAT::start()::start");
+        debug!(target: "dchat", "Dchat::start() [START]");
 
         let ex2 = ex.clone();
 
-        self.register_protocol(self.msgs.clone()).await?;
+        self.register_protocol(self.recv_msgs.clone()).await?;
         self.p2p.clone().start(ex.clone()).await?;
         ex2.spawn(self.p2p.clone().run(ex.clone())).detach();
 
-        info!(target: "dchat", "DCHAT::start()::stop");
+        debug!(target: "dchat", "Dchat::start() [STOP]");
         Ok(())
     }
 
-    async fn send(&self, message: String) -> Result<()> {
-        let mut stdout = io::stdout().lock();
-        stdout.write_all(b"sending: ")?;
-        stdout.write_all(message.as_bytes())?;
+    async fn send(&self) -> Result<()> {
+        let message = self.input.clone();
         let dchatmsg = Dchatmsg { message };
         self.p2p.broadcast(dchatmsg).await?;
         Ok(())
@@ -187,14 +280,8 @@ async fn main() -> Result<()> {
     // TODO:: proper error handling
     let settings: Result<Settings> = match std::env::args().nth(1) {
         Some(id) => match id.as_str() {
-            "a" => {
-                println!("alice selected");
-                alice()
-            }
-            "b" => {
-                println!("bob selected");
-                bob()
-            }
+            "a" => alice(),
+            "b" => bob(),
             _ => {
                 println!("you must specify either a or b");
                 Err(Error::ConfigInvalid)
@@ -208,8 +295,6 @@ async fn main() -> Result<()> {
 
     let p2p = net::P2p::new(settings?.into()).await;
 
-    //let p2p = p2p.clone();
-
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
@@ -218,14 +303,14 @@ async fn main() -> Result<()> {
 
     let msgs: DchatmsgsBuffer = Arc::new(Mutex::new(vec![Dchatmsg { message: String::new() }]));
 
-    let dchat = Dchat::new(p2p, msgs);
+    let mut dchat = Dchat::new(p2p, msgs, String::new(), DisplayMode::Normal);
 
     let (_, result) = Parallel::new()
         .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
         .finish(|| {
             smol::future::block_on(async move {
                 dchat.start(ex2).await?;
-                dchat.render().await?;
+                dchat.menu().await?;
                 drop(signal);
                 Ok(())
             })
