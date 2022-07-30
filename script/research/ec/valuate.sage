@@ -5,7 +5,7 @@ from tabulate import tabulate
 # ord_P(y - 2x) = 2
 # from Washington example 11.4 page 345
 
-K.<x, y> = Integers(11)[]
+K.<x, y> = GF(11)[]
 Px, Py = K(2), K(4)
 
 assert (3*Px^2 + 4) / (2*Py) == 2
@@ -24,8 +24,8 @@ def decomp(f, basis):
 def comp(comps, basis):
     return sum(a*b for a, b in zip(comps, basis))
 
-f = y - 2*x
-assert comp(decomp(f, basis), basis) == f
+original_f = y - 2*x
+assert comp(decomp(original_f, basis), basis) == original_f
 
 # P = (a, b)
 # y² = x³ + Ax + B
@@ -45,22 +45,22 @@ EC_B = 0
 EC = y^2 - x^3 - A*x - B
 
 # so we can replace (y - Py) with this
-sub_poly_f = b0^2 + binomial(3,2)*Px*b0^1 + (3*Px^2 + EC_A)
-sub_poly_g = (y + Py)
-assert EC == b1*sub_poly_g - b0*sub_poly_f
+Ef = b0^2 + binomial(3,2)*Px*b0^1 + (3*Px^2 + EC_A)
+Eg = (y + Py)
+assert EC == b1*Eg - b0*Ef
 
 # f / g
 # Technically we don't need g but we keep track of it anyway
-def apply_reduction(comp_f, comp_g, basis):
-    #a1 = comp_f[1]
-    #comp_f[1] = 0
+def apply_reduction(f, g, basis):
+    #a1 = f[1]
+    #f[1] = 0
 
     b0, b1, _ = basis
     # b1 == b0 * f / g
     # so we can replace c b1 with (cf/g) b0
 
     # a2 = 0
-    assert comp_f[2] == 0
+    assert f[2] == 0
     # note that
     #   b1 = (f/g) b0
     # so
@@ -71,49 +71,61 @@ def apply_reduction(comp_f, comp_g, basis):
     #       ----------- b0
     #           qg
 
-    comp_f[0] = comp_f[0]*sub_poly_g + comp_f[1]*sub_poly_f
-    comp_g[2] *= sub_poly_g
+    f[0] = f[0]*Eg + f[1]*Ef
+    f[1] = 0
+    g[0] *= Eg
 
 k = 1
 
 table = []
 table.append(("", "f", "g", "k"))
 
-def log(step_name, comp_f, comp_g, k):
-    table.append((step_name, str(comp_f), str(comp_g), k))
+def log(step_name, f, g, k):
+    table.append((step_name, str(f), str(g), k))
 
-comp_f = decomp(f, basis)
-comp_g = [0, 0, 1]
-log("start", comp_f, comp_g, k)
+f = decomp(original_f, basis)
+g = [1]
+log("start", f, g, k)
 
 # Reduce
-apply_reduction(comp_f, comp_g, basis)
-log("reduce", comp_f, comp_g, k)
+apply_reduction(f, g, basis)
+log("reduce", f, g, k)
 
-f = comp_f[0]
+f = f[0]
 # Decompose
-comp_f = decomp(f, basis)
-comp_g = [0, 0, 1]
-log("decomp", comp_f, comp_g, k)
+f = decomp(f, basis)
+log("decomp", f, g, k)
 
-assert comp(comp_f, basis) == (x - 2)^2 - 5*(x - 2) - 2*(y - 4)
-assert comp_f[2] == 0
+assert comp(f, basis) == (x - 2)^2 - 5*(x - 2) - 2*(y - 4)
+assert f[2] == 0
 k += 1
 
 # Reduce
-apply_reduction(comp_f, comp_g, basis)
-log("reduce", comp_f, comp_g, k)
+apply_reduction(f, g, basis)
+log("reduce", f, g, k)
 
-f = comp_f[0]
+f = f[0]
 # Decompose
-comp_f = decomp(f, basis)
-comp_g = [0, 0, 1]
-log("decomp", comp_f, comp_g, k)
+f = decomp(f, basis)
+log("decomp", f, g, k)
 
 # Program terminates because remainder is nonzero
-assert comp_f[2] != 0
+assert f[2] != 0
 
 print(f"basis = {basis}")
 print(tabulate(table))
 print(f"k = {k}")
+
+# Test final value is correct
+S = K.quotient(y^2 - x^3 - 4*x).fraction_field()
+f0, f1, f2 = f
+f = f0*b0 + f1*b1 + f2*b2
+g = g[0]
+fprime = b0^k * f/g
+assert fprime == S(original_f)
+# to convert fprime back again:
+#f, g = fprime.numerator().lift(), fprime.denominator().lift()
+assert g(Px, Py) != 0
+assert f(Px, Py) != 0
+assert b0(Px, Py) == 0
 
