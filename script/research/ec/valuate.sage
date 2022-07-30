@@ -125,7 +125,11 @@ g = g[0]
 fprime = b0^k * f/g
 assert fprime == S(original_f)
 # to convert fprime back again:
-#f, g = fprime.numerator().lift(), fprime.denominator().lift()
+#   f, g = fprime.numerator().lift(), fprime.denominator().lift()
+# to get the parent ring use:
+#   f.parent()
+# to move up the hierarchy
+#   S.ring().cover_ring()
 assert g(Px, Py) != 0
 assert f(Px, Py) != 0
 assert b0(Px, Py) == 0

@@ -76,7 +76,11 @@ def ordp(P, original_f, debug=False):
     g = g[0]
     assert u(Px, Py) == 0
     assert f(Px, Py) != 0
-    #assert g(Px, Py) != 0
+    assert g(Px, Py) != 0
+    if debug:
+        print(f"u = {u}")
+        print(f"f = {f}")
+        print(f"g = {g}")
 
     return k
 
