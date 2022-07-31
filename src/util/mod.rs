@@ -5,6 +5,7 @@ pub mod async_util;
 
 pub mod cli;
 pub mod endian;
+pub mod file;
 pub mod net_name;
 pub mod parse;
 pub mod path;
