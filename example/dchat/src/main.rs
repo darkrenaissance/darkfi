@@ -220,7 +220,7 @@ impl Dchat {
         Ok(())
     }
 
-    async fn start(&self, ex: Arc<Executor<'_>>) -> Result<()> {
+    async fn start(&mut self, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "dchat", "Dchat::start() [START]");
 
         let ex2 = ex.clone();
@@ -228,6 +228,8 @@ impl Dchat {
         self.register_protocol(self.recv_msgs.clone()).await?;
         self.p2p.clone().start(ex.clone()).await?;
         ex2.spawn(self.p2p.clone().run(ex.clone())).detach();
+
+        self.menu().await?;
 
         debug!(target: "dchat", "Dchat::start() [STOP]");
         Ok(())
@@ -323,7 +325,6 @@ async fn main() -> Result<()> {
         .finish(|| {
             smol::future::block_on(async move {
                 dchat.start(ex2).await?;
-                dchat.menu().await?;
                 drop(signal);
                 Ok(())
             })
