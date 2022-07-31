@@ -8,7 +8,7 @@ pub struct MissingSpecifier;
 
 impl fmt::Display for MissingSpecifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "missing node specifier")
+        write!(f, "missing node specifier. you must specify either a or b")
     }
 }
 

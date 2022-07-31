@@ -301,20 +301,13 @@ async fn main() -> Result<()> {
     let file = File::create(log_path).unwrap();
     WriteLogger::init(log_level, log_config, file)?;
 
-    // TODO:: proper error handling
     let settings: Result<Settings> = match std::env::args().nth(1) {
         Some(id) => match id.as_str() {
             "a" => alice(),
             "b" => bob(),
-            _ => {
-                println!("you must specify either a or b");
-                Err(MissingSpecifier.into())
-            }
+            _ => Err(MissingSpecifier.into()),
         },
-        None => {
-            println!("you must specify either a or b");
-            Err(MissingSpecifier.into())
-        }
+        None => Err(MissingSpecifier.into()),
     };
 
     let p2p = net::P2p::new(settings?.into()).await;
