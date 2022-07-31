@@ -1,0 +1,30 @@
+## JSON-RPC listen URL
+#rpc_listen="tcp://127.0.0.1:13055"
+
+## Sets Datastore Path
+#datastore="~/.config/darkfi/darkwiki"
+
+## Raft net settings
+[net]
+## P2P accept address
+inbound="tcp://127.0.0.1:13001" 
+
+## Connection slots
+#outbound_connections=5
+
+## P2P external address
+external_addr="tls://127.0.0.1:13001"
+
+## Peers to connect to
+#peers=["tls://127.0.0.1:13003"]
+
+## Seed nodes to connect to 
+#seeds=[]
+
+## these are the default configuration for the p2p network
+#manual_attempt_limit=0
+#seed_query_timeout_seconds=8
+#connect_timeout_seconds=10
+#channel_handshake_seconds=4
+#channel_heartbeat_seconds=10
+
