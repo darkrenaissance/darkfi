@@ -212,6 +212,7 @@ impl MessageSubsystem {
             }
             None => {
                 warn!(
+                    target: "MessageSubsystem::notify",
                     "MessageSubsystem::notify(\"{}\", payload) did not find a dispatcher",
                     command
                 );
