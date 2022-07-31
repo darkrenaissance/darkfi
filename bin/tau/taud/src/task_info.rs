@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use darkfi::util::{
     file::{load_json_file, save_json_file},
+    gen_id,
     serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Timestamp,
 };
@@ -15,7 +16,7 @@ use darkfi::util::{
 use crate::{
     error::{TaudError, TaudResult},
     month_tasks::MonthTasks,
-    util::{find_free_id, random_ref_id},
+    util::find_free_id,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, Eq)]
@@ -84,7 +85,7 @@ impl TaskInfo {
         dataset_path: &Path,
     ) -> TaudResult<Self> {
         // generate ref_id
-        let ref_id = random_ref_id();
+        let ref_id = gen_id(30);
 
         let created_at = Timestamp::current_time();
 

@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use fxhash::FxHashMap;
 use log::info;
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
 use darkfi::Result;
 
@@ -46,10 +45,6 @@ pub fn parse_workspaces(config_file: &PathBuf) -> Result<FxHashMap<String, Works
     };
 
     Ok(ret)
-}
-
-pub fn random_ref_id() -> String {
-    thread_rng().sample_iter(&Alphanumeric).take(30).map(char::from).collect()
 }
 
 pub fn find_free_id(task_ids: &[u32]) -> u32 {

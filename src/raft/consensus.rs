@@ -14,14 +14,14 @@ use rand::{rngs::OsRng, Rng, RngCore};
 use crate::{
     net,
     util::{
-        self,
+        self, gen_id,
         serial::{deserialize, serialize, Decodable, Encodable},
     },
     Error, Result,
 };
 
 use super::{
-    gen_id, p2p_send_loop,
+    p2p_send_loop,
     primitives::{
         BroadcastMsgRequest, Channel, Log, LogRequest, LogResponse, Logs, MapLength, NetMsg,
         NetMsgMethod, NodeId, NodeIdMsg, Role, Sender, VoteRequest, VoteResponse,
@@ -85,7 +85,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let id = match datastore.id.get_last()? {
             Some(_id) => _id,
             None => {
-                let id = gen_id();
+                let id = NodeId(gen_id(30));
                 datastore.id.insert(&id)?;
                 id
             }
