@@ -15,5 +15,5 @@ impl net::Message for Dchatmsg {
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Dchatmsg {
-    pub message: String,
+    pub msg: String,
 }

@@ -13,11 +13,7 @@ use url::Url;
 
 use termion::{event::Key, input::TermRead, raw::IntoRawMode};
 
-use darkfi::{
-    net,
-    net::Settings,
-    util::cli::{get_log_config, get_log_level},
-};
+use darkfi::{net, net::Settings};
 
 use crate::{
     dchatmsg::{Dchatmsg, DchatmsgsBuffer},
@@ -161,14 +157,14 @@ impl Dchat {
             DisplayMode::Inbox => {
                 let msgs = self.recv_msgs.lock().await;
                 for i in msgs.iter() {
-                    if !i.message.is_empty() {
+                    if !i.msg.is_empty() {
                         write!(
                             stdout,
                             "{}{}{}received msg: {}",
                             termion::clear::All,
                             termion::style::Bold,
                             termion::cursor::Goto(1, 2),
-                            i.message
+                            i.msg
                         )?;
                     } else {
                         write!(
@@ -238,8 +234,8 @@ impl Dchat {
     }
 
     async fn send(&self) -> Result<()> {
-        let message = self.input.clone();
-        let dchatmsg = Dchatmsg { message };
+        let msg = self.input.clone();
+        let dchatmsg = Dchatmsg { msg };
         self.p2p.broadcast(dchatmsg).await?;
         Ok(())
     }
@@ -294,8 +290,8 @@ fn bob() -> Result<Settings> {
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    let log_level = get_log_level(1);
-    let log_config = get_log_config();
+    let log_level = simplelog::LevelFilter::Debug;
+    let log_config = simplelog::Config::default();
 
     let log_path = "/tmp/dchat.log";
     let file = File::create(log_path).unwrap();
@@ -318,7 +314,7 @@ async fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();
 
-    let msgs: DchatmsgsBuffer = Arc::new(Mutex::new(vec![Dchatmsg { message: String::new() }]));
+    let msgs: DchatmsgsBuffer = Arc::new(Mutex::new(vec![Dchatmsg { msg: String::new() }]));
 
     let mut dchat = Dchat::new(p2p, msgs, String::new(), DisplayMode::Normal);
 
