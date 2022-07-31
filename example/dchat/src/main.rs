@@ -1,28 +1,32 @@
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use easy_parallel::Parallel;
-use log::debug;
-use simplelog::WriteLogger;
+
 use std::{
     fs::File,
     io::{stdin, stdout, Read, Write},
 };
-use termion::{event::Key, input::TermRead, raw::IntoRawMode};
+
+use log::debug;
+use simplelog::WriteLogger;
 use url::Url;
+
+use termion::{event::Key, input::TermRead, raw::IntoRawMode};
 
 use darkfi::{
     net,
     net::Settings,
     util::cli::{get_log_config, get_log_level},
-    Error, Result,
 };
 
 use crate::{
     dchatmsg::{Dchatmsg, DchatmsgsBuffer},
+    error::{Error, MissingSpecifier, Result},
     protocol_dchat::ProtocolDchat,
 };
 
 pub mod dchatmsg;
+pub mod error;
 pub mod protocol_dchat;
 
 struct Dchat {
@@ -32,12 +36,12 @@ struct Dchat {
     display: DisplayMode,
 }
 
-#[derive(Debug)]
 enum DisplayMode {
     Normal,
     Editing,
     Inbox,
     MessageSent,
+    SendFailed(Error),
 }
 
 impl Dchat {
@@ -59,7 +63,7 @@ impl Dchat {
         loop {
             self.render().await?;
             for k in stdin.by_ref().keys() {
-                match self.display {
+                match &self.display {
                     DisplayMode::Normal => match k.unwrap() {
                         Key::Char('q') => return Ok(()),
                         Key::Char('i') => {
@@ -73,29 +77,28 @@ impl Dchat {
                         }
                         _ => {}
                     },
-                    DisplayMode::Editing => {
-                        match k.unwrap() {
-                            Key::Char('q') => return Ok(()),
-                            Key::Char('\n') => {
-                                match self.send().await {
-                                    Ok(_) => {
-                                        self.display = DisplayMode::MessageSent;
-                                    }
-                                    // TODO
-                                    Err(_) => {}
+                    DisplayMode::Editing => match k.unwrap() {
+                        Key::Char('q') => return Ok(()),
+                        Key::Char('\n') => {
+                            match self.send().await {
+                                Ok(_) => {
+                                    self.display = DisplayMode::MessageSent;
                                 }
-                                break
+                                Err(e) => {
+                                    self.display = DisplayMode::SendFailed(e);
+                                }
                             }
-                            Key::Char(c) => {
-                                self.input.push(c);
-                            }
-                            Key::Esc => {
-                                self.display = DisplayMode::Normal;
-                                break
-                            }
-                            _ => {}
+                            break
                         }
-                    }
+                        Key::Char(c) => {
+                            self.input.push(c);
+                        }
+                        Key::Esc => {
+                            self.display = DisplayMode::Normal;
+                            break
+                        }
+                        _ => {}
+                    },
                     DisplayMode::MessageSent => match k.unwrap() {
                         Key::Char('q') => return Ok(()),
                         Key::Esc => {
@@ -106,6 +109,14 @@ impl Dchat {
                     },
                     DisplayMode::Inbox => match k.unwrap() {
                         Key::Char('q') => return Ok(()),
+                        _ => {}
+                    },
+                    DisplayMode::SendFailed(_) => match k.unwrap() {
+                        Key::Char('q') => return Ok(()),
+                        Key::Esc => {
+                            self.display = DisplayMode::Normal;
+                            break
+                        }
                         _ => {}
                     },
                 }
@@ -119,7 +130,7 @@ impl Dchat {
         let stdout = stdout();
         let mut stdout = stdout.lock().into_raw_mode().unwrap();
 
-        match self.display {
+        match &self.display {
             DisplayMode::Normal => {
                 write!(
                     stdout,
@@ -178,6 +189,19 @@ impl Dchat {
                     termion::clear::All,
                     termion::style::Bold,
                     termion::cursor::Goto(1, 2),
+                    termion::cursor::Goto(1, 3),
+                    termion::cursor::Goto(1, 4),
+                )?;
+                stdout.flush()?;
+            }
+            DisplayMode::SendFailed(e) => {
+                write!(
+                    stdout,
+                    "{}{}{}send message failed! reason: {} {} esc: return to main menu {}",
+                    termion::clear::All,
+                    termion::style::Bold,
+                    termion::cursor::Goto(1, 2),
+                    e,
                     termion::cursor::Goto(1, 3),
                     termion::cursor::Goto(1, 4),
                 )?;
@@ -284,12 +308,12 @@ async fn main() -> Result<()> {
             "b" => bob(),
             _ => {
                 println!("you must specify either a or b");
-                Err(Error::ConfigInvalid)
+                Err(MissingSpecifier.into())
             }
         },
         None => {
             println!("you must specify either a or b");
-            Err(Error::ConfigInvalid)
+            Err(MissingSpecifier.into())
         }
     };
 
