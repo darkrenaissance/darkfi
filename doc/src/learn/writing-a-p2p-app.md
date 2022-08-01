@@ -1,4 +1,4 @@
-# Tutorial: Writing a p2p chat app
+# Writing a p2p app
 
 This tutorial will teach you how to deploy an app on DarkFi's p2p network.
 

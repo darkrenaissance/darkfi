@@ -25,4 +25,4 @@
 - [Learn](learn/learn.md)
   - [Research](learn/research.md)
   - [ZK explainer](learn/zk_explainer.md)
-  - [Tutorial- Writing a p2p app](learn/writing-a-p2p-app.md)
+  - [Writing a p2p app](learn/writing-a-p2p-app.md)
