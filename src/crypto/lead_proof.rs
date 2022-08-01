@@ -23,18 +23,10 @@ use rand::{thread_rng, Rng};
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_lead_proof(pk: ProvingKey, coin: LeadCoin) -> Result<Proof> {
-    //
-    //let mut rng = thread_rng();
-    //let yu64: u64 = rng.gen();
-    //let rhou64: u64 = rng.gen();
-    //let mau_y: pallas::Base = pallas::Base::from(yu64);
-    //let mau_rho: pallas::Base = pallas::Base::from(rhou64);
     let contract = coin.create_contract();
     //let start = Instant::now();
     let public_inputs = coin.public_inputs();
-    println!("creating proof");
     let proof = Proof::create(&pk, &[contract], &public_inputs, &mut OsRng)?;
-    println!("proof created");
     //debug!("Prove lead: [{:?}]", start.elapsed());
     Ok(proof)
 }

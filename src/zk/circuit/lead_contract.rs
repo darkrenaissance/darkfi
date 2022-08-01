@@ -463,6 +463,7 @@ impl Circuit<pallas::Base> for LeadContract {
          */
 
 
+        /*
         let coin_hash : AssignedCell<Fp,Fp> = {
             let poseidon_message = [
                 //TODO (fix)
@@ -484,8 +485,13 @@ impl Circuit<pallas::Base> for LeadContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
+        */
+        let coin_val = {
+            let coin_val_pt = ar_chip.mul(layouter.namespace(|| ""), &coin_pk_y, &coin_pk_x)?;
 
-
+            let coin_val0 = ar_chip.mul(layouter.namespace(|| ""), &coin_nonce, &coin_value)?;
+            ar_chip.mul(layouter.namespace(|| ""), &coin_val_pt, &coin_val0)?
+        };
         let (com, _) = {
             let coin_commit_v = ValueCommitV;
             let coin_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), coin_commit_v);
