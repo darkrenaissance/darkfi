@@ -174,11 +174,12 @@ impl Epoch {
             //random sampling of the same size of prf,
             //pseudo random sampling that is the size of pederson commitment
             // coin slot number
-            //TODO (fix) need to be multiplied by the ep
+
+            //TODO this has to be absolute path
             let c_sl = pallas::Base::from(u64::try_from(i).unwrap());
             //
-            //TODO (fix)
-            let c_tau = pallas::Base::from(u64::try_from(i).unwrap()); // let's assume it's sl for simplicity
+            //let's assume it's sl for simplicity
+            let c_tau = pallas::Base::from(u64::try_from(i).unwrap());
             //
             let c_root_sk: MerkleNode = root_sks[i];
 
@@ -187,7 +188,6 @@ impl Epoch {
                 c_root_sk.inner(),
             ];
             let c_pk : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_pk_msg);
-            //let c_pk = pedersen_commitment_base(c_tau, mod_r_p(c_root_sk.inner()));
 
             let c_seed = pallas::Base::from(seeds[i]);
             let sn_msg = [
@@ -196,15 +196,6 @@ impl Epoch {
             ];
             let c_sn : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_pk_msg);
 
-
-            //let lead_coin_msg = [
-              //  c_pk.clone(),
-
-                //c_v,
-                // *c_seed_pt.x(), //TODO(fix) will be c_seed(base) only after calculating c_seed as hash
-                //*c_seed_pt.y(),
-            //];
-            //let lead_coin_msg_hash : pallas::Scalar = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
 
             let coin_commit_msg = c_pk*c_v*c_seed;
             let c_cm: pallas::Point = pedersen_commitment_scalar(mod_r_p(coin_commit_msg), c_cm1_blind);
@@ -225,25 +216,10 @@ impl Epoch {
             let c_seed2_pt_x = c_seed2.clone();
             let c_seed2_pt_y = c_seed2.clone();
 
-            //let lead_coin_msg = [
-                //c_pk_pt_y.clone(),
-                //c_pk_pt_x.clone(),
-                //c_v,
-                //c_seed,
-            //pallas::Base::one(),
-            //];
-            //let lead_coin_msg_hash : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
             let coin2_commit_msg = c_pk*c_seed2_pt_x*c_seed2_pt_y*c_v;
             let c_cm2 = pedersen_commitment_base(coin2_commit_msg, c_cm2_blind);
 
             let c_root_sk = root_sks[i];
-
-            let c_root_sk_bytes: [u8; 32] = c_root_sk.inner().to_repr();
-            let mut c_root_sk_base_bytes: [u8; 32] = [0; 32];
-            //TODO (fix) using only first 24, use the whole root
-            c_root_sk_base_bytes[..23].copy_from_slice(&c_root_sk_bytes[..23]);
-            let _c_root_sk_base = pallas::Base::from_repr(c_root_sk_base_bytes);
-
             let c_path_sk = path_sks[i];
 
             // election seeds

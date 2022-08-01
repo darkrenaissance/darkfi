@@ -438,7 +438,9 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
 
-
+        // ================================================
+        // coin2 commiment H=COMMIT(pk||V||nonce2||r2)
+        // ================================================
         let coin2_hash_cm = ar_chip.mul(
             layouter.namespace(|| ""),
             &coin_pk_commit,
@@ -484,6 +486,9 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT2_Y_OFFSET,
         )?;
 
+
+        // ===========================
+        // path is valid path to cm1
         // ===========================
         let path : Value<[pallas::Base;MERKLE_DEPTH_ORCHARD]> = self.path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
@@ -514,10 +519,10 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_PATH_OFFSET,
         )?;
 
-        //let _node = MerkleNode::from_bytes(&self.root_sk.unwrap().to_repr()).unwrap();
-        //let serialized = serde_json::to_string(&node).unwrap();
-        //println!("root_sk: {}", serialized);
 
+        //================================
+        // y as COMIT(root_sk*nonce, mau_y)
+        //================================
         let y_commit_exp = ar_chip.mul(
         layouter.namespace(|| ""),
             &_root_sk.clone(),
@@ -550,7 +555,7 @@ impl Circuit<pallas::Base> for LeadContract {
         let y_commit_base = y_commit.inner().x();
 
         // ============================
-        // constraint rho
+        // constraint rho as COMIT(root_sk*nonce, mau_rho)
         // ============================
         let (com, _) = {
             let rho_commit_v = ValueCommitV;
@@ -572,7 +577,7 @@ impl Circuit<pallas::Base> for LeadContract {
         };
         let _rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
 
-        // that the coin value never get past it.
+        //used for fine tuning the leader election frequency
         let scalar = self.load_private(
             layouter.namespace(|| "load scalar "),
             config.advices[0],
@@ -585,21 +590,21 @@ impl Circuit<pallas::Base> for LeadContract {
             config.advices[0],
             Value::known(pallas::Base::one()), // note! this parameter to be tuned.
         )?;
-        //let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
 
-        //let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value.clone())?;
-        //eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
-        //eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
+        /*
+        let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
+        let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value.clone())?;
+        eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
+        eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
 
-        //let (helper, is_gt) = greater_than_chip.greater_than(
-        //  layouter.namespace(|| "t>y"),
-        //target.into(),
-        //            y_commit_base.into(),
-        //      )?;
-        //eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
-
-        //layouter.constrain_instance(is_gt.0.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?
-
+        let (helper, is_gt) = greater_than_chip.greater_than(
+            layouter.namespace(|| "t>y"),
+            target.into(),
+                    y_commit_base.into(),
+        )?;
+        eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
+        layouter.constrain_instance(is_gt.0.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?
+        */
         Ok(())
     }
 }
