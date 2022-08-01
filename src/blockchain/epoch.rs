@@ -190,21 +190,18 @@ impl Epoch {
             let c_pk_pt_x: pallas::Base = *c_pk_pt.x();
             let c_pk_pt_y: pallas::Base = *c_pk_pt.y();
 
-            //
-            let lead_coin_msg = [
-                //TODO (fix)
-                pallas::Scalar::one(),
-                //c_pk_pt_x.clone(),
+
+            //let lead_coin_msg = [
+              //  c_pk_pt_x.clone(),
                 //c_pk_pt_y.clone(),
                 //c_v,
-                //*c_seed_pt.x(), //TODO(fix) will be c_seed(base) only after calculating c_seed as hash
+                // *c_seed_pt.x(), //TODO(fix) will be c_seed(base) only after calculating c_seed as hash
                 //*c_seed_pt.y(),
-            ];
-            let lead_coin_msg_hash : pallas::Scalar = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
-            //TODO (FIX) THIS PANICS, ONLY PANICS ON LARGE VALUES!
-            let c_cm: pallas::Point = pedersen_commitment_scalar(lead_coin_msg_hash, c_cm1_blind);
+            //];
+            //let lead_coin_msg_hash : pallas::Scalar = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
 
-
+            let coin_commit_msg = c_pk_pt_x*c_pk_pt_y*c_v*c_seed;
+            let c_cm: pallas::Point = pedersen_commitment_scalar(mod_r_p(coin_commit_msg), c_cm1_blind);
             let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
             let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
             let c_cm_node = MerkleNode(c_cm_base);
@@ -212,25 +209,32 @@ impl Epoch {
             let leaf_position = tree_cm.witness();
             let c_root_cm = tree_cm.root(0).unwrap();
             let c_cm_path = tree_cm.authentication_path(leaf_position.unwrap(), &c_root_cm).unwrap();
-            // lead coin commitment
-            let c_seed2 = pedersen_commitment_base(c_seed, mod_r_p(c_root_sk.inner()));
-            let c_seed2_pt = c_seed2.to_affine().coordinates().unwrap();
 
-            let lead_coin_msg = [
+            let coin_nonce2_msg = [
+                c_seed,
+                c_root_sk.inner()
+            ];
+            let c_seed2 : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_nonce2_msg);
+
+            let c_seed2_pt_x = c_seed2.clone();
+            let c_seed2_pt_y = c_seed2.clone();
+
+            //let lead_coin_msg = [
                 //c_pk_pt_y.clone(),
                 //c_pk_pt_x.clone(),
                 //c_v,
                 //c_seed,
-                pallas::Base::one(),
-            ];
-            let lead_coin_msg_hash : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
-            let c_cm2 = pedersen_commitment_base(lead_coin_msg_hash, c_cm2_blind);
+            //pallas::Base::one(),
+            //];
+            //let lead_coin_msg_hash : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
+            let coin2_commit_msg = c_pk_pt_x*c_pk_pt_y*c_seed2_pt_x*c_seed2_pt_y*c_v;
+            let c_cm2 = pedersen_commitment_base(coin2_commit_msg, c_cm2_blind);
 
             let c_root_sk = root_sks[i];
 
             let c_root_sk_bytes: [u8; 32] = c_root_sk.inner().to_repr();
             let mut c_root_sk_base_bytes: [u8; 32] = [0; 32];
-            //TODO (fix) using only first 24, use the whoel root
+            //TODO (fix) using only first 24, use the whole root
             c_root_sk_base_bytes[..23].copy_from_slice(&c_root_sk_bytes[..23]);
             let _c_root_sk_base = pallas::Base::from_repr(c_root_sk_base_bytes);
 

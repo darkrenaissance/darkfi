@@ -24,7 +24,7 @@ pub struct LeadCoin {
     pub sl: Option<pallas::Base>, //slot id
     pub tau: Option<pallas::Base>,
     pub nonce: Option<pallas::Base>,
-    pub nonce_cm: Option<pallas::Point>,
+    pub nonce_cm: Option<pallas::Base>,
     pub sn: Option<pallas::Point>, // coin's serial number
     //sk : Option<SecretKey>,
     pub pk: Option<pallas::Point>,
@@ -43,8 +43,7 @@ pub struct LeadCoin {
 
 impl LeadCoin {
     pub fn public_inputs(&self) -> Vec<pallas::Base> {
-        let po_nonce = self.nonce_cm.unwrap().to_affine().coordinates().unwrap();
-
+        let po_nonce = self.nonce_cm.unwrap();
         let _po_tau = pedersen_commitment_scalar(mod_r_p(self.tau.unwrap()), self.root_cm.unwrap())
             .to_affine()
             .coordinates()
@@ -77,17 +76,16 @@ impl LeadCoin {
             current
         };
         let public_inputs: Vec<pallas::Base> = vec![
-            *po_nonce.x(),
-            *po_nonce.y(),
+            po_nonce,
             *po_pk.x(),
             *po_pk.y(),
             *po_sn.x(),
             *po_sn.y(),
             *po_cm.x(),
             *po_cm.y(),
-            //*po_cm2.x(),
-            //*po_cm2.y(),
-            //cm_root.0,
+            *po_cm2.x(),
+            *po_cm2.y(),
+            cm_root.0,
             //po_cmp,
         ];
         public_inputs

@@ -34,7 +34,6 @@ use darkfi::{
 };
 
 fn main() {
-    println!("--> starting lead example");
     let k: u32 = 13;
     //
 
@@ -59,9 +58,9 @@ fn main() {
         ].to_vec(),
     };
     let consensus = EpochConsensus::new(Some(22), Some(3), Some(22), Some(0));
-    println!("--> block on stakeholder future");
-    let stakeholder : Stakeholder = block_on(Stakeholder::new(consensus, settings, Some(13))).unwrap();
-    println!("block on stakeholder future <--|");
+
+    let stakeholder : Stakeholder = block_on(Stakeholder::new(consensus, settings, Some(k))).unwrap();
+
     let eta : pallas::Base = stakeholder.get_eta();
     let mut epoch = Epoch {
         len: Some(LEN),

@@ -118,25 +118,23 @@ impl Stakeholder
     pub async fn new(consensus: EpochConsensus, settings: Settings, k: Option<u32>) -> Result<Self>
     {
         let path = "tmp";
-        println!("opening db");
         let db = sled::open(path).unwrap();
-        println!("opened db");
+
         let ts = Timestamp::current_time();
         let genesis_hash = blake3::hash(b"");
         //TODO lisen and add transactions
-        println!("--> new blockchain");
+
         let bc = Blockchain::new(&db, ts, genesis_hash).unwrap();
-        println!("--> bc initialized");
+
         //TODO replace with const
         let eta = pallas::Base::one();
         let epoch = Epoch::new(consensus, eta);
-        println!("--> building zk proving key");
+
         let lead_pk = ProvingKey::build(k.unwrap(), &LeadContract::default());
-        println!("--> building zk veryfing key ");
+
         let lead_vk = VerifyingKey::build(k.unwrap(), &LeadContract::default());
-        println!("-->new network");
         let p2p = P2p::new(settings.clone()).await;
-        println!("--> network initialized");
+
         //TODO
         let workspace = SlotWorkspace::default();
 

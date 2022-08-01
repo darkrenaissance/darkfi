@@ -89,8 +89,7 @@ impl LeadConfig {
     }
 }
 
-const LEAD_COIN_NONCE2_X_OFFSET: usize = 0;
-const LEAD_COIN_NONCE2_Y_OFFSET: usize = 1;
+const LEAD_COIN_NONCE2_OFFSET: usize = 0;
 const LEAD_COIN_PK_X_OFFSET: usize = 2;
 const LEAD_COIN_PK_Y_OFFSET: usize = 3;
 const LEAD_COIN_SERIAL_NUMBER_X_OFFSET: usize = 4;
@@ -283,8 +282,7 @@ impl Circuit<pallas::Base> for LeadContract {
             Value::known(pallas::Base::zero()),
         )?;
 
-        // coin_timestamp tau
-
+        // coin_timestamp
         let coin_timestamp = self.load_private(
             layouter.namespace(|| "load coin time stamp"),
             config.advices[0],
@@ -320,42 +318,27 @@ impl Circuit<pallas::Base> for LeadContract {
             self.load_private(layouter.namespace(|| ""), config.advices[0], self.root_sk)?;
 
         // ===============
-        // coin 2 nonce
+        // nonce2  =  PRF_{root_sk}(coin_nonce)
         // ===============
-        // m*G_1
-        let (com, _) = {
-            let nonce2_commit_v = ValueCommitV;
-            let nonce2_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), nonce2_commit_v);
-            let coin_nonce = ScalarFixedShort::new(
-                ecc_chip.clone(),
-                layouter.namespace(|| "coin_nonce*1"),
-                (coin_nonce.clone(), one.clone()),
+        let coin2_nonce : AssignedCell<Fp,Fp> = {
+            let poseidon_message = [
+                coin_nonce.clone(),
+                _root_sk.clone()
+            ];
+            let poseidon_hasher = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+                config.poseidon_chip(),
+                layouter.namespace(|| "Poseidon init"),
             )?;
-            nonce2_commit_v.mul(layouter.namespace(|| "coin_pk commit v"), coin_nonce)?
-        };
-        // r*G_2
-        let (blind, _) = {
-            let nonce2_commit_r = OrchardFixedBasesFull::ValueCommitR;
-            let nonce2_commit_r = FixedPoint::from_inner(ecc_chip.clone(), nonce2_commit_r);
-            let root_sk = ScalarFixed::new(
-                ecc_chip.clone(),
-                layouter.namespace(|| "root_sk scalar"),
-                self.sf_root_sk,
-            )?;
-            nonce2_commit_r.mul(layouter.namespace(|| "nonce2 commit R"), root_sk)?
-        };
-        let coin2_nonce = com.add(layouter.namespace(|| "nonce2 commit"), &blind)?;
 
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
+            poseidon_output
+        };
         layouter.constrain_instance(
-            coin2_nonce.inner().x().cell(),
+            coin2_nonce.cell(),
             config.primary,
-            LEAD_COIN_NONCE2_X_OFFSET,
-        )?;
-        // constrain coin's pub key y value
-        layouter.constrain_instance(
-            coin2_nonce.inner().y().cell(),
-            config.primary,
-            LEAD_COIN_NONCE2_Y_OFFSET,
+            LEAD_COIN_NONCE2_OFFSET,
         )?;
 
         // ================
@@ -412,13 +395,13 @@ impl Circuit<pallas::Base> for LeadContract {
         let (com, _) = {
             let sn_commit_v = ValueCommitV;
             let sn_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), sn_commit_v);
-            let coin_nonce = ScalarFixedShort::new(
+            let rcv = ScalarFixedShort::new(
                 ecc_chip.clone(),
                 layouter.namespace(|| "coin nonce * 1"),
                 (coin_nonce.clone(), one.clone()),
             )?;
 
-            sn_commit_v.mul(layouter.namespace(|| "coin serial number commit v"), coin_nonce)?
+            sn_commit_v.mul(layouter.namespace(|| "coin serial number commit v"), rcv)?
         };
         // r*G_2
         let (blind, _) = {
@@ -447,64 +430,17 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_SERIAL_NUMBER_Y_OFFSET,
         )?;
 
-        // ==========================
-        // commitment of coins c1,c2
-        // ==========================
-        //TODO (res) should the reward be added to new minted coin?
-        /*
         let coin_val = {
-        let coin_val_pt = ar_chip.mul(layouter.namespace(|| ""), &coin_pk_y, &coin_pk_x)?;
-
-        //TODO (FIX)
-        //let coin_val0 = ar_chip.mul(layouter.namespace(|| ""), &coin_nonce, &coin_value)?;
-        let coin_val0 = ar_chip.mul(layouter.namespace(|| ""), &one.clone(), &zero.clone())?;
-        ar_chip.mul(layouter.namespace(|| ""), &coin_val_pt, &coin_val0)?
-    };
-         */
-
-
-        /*
-        let coin_hash : AssignedCell<Fp,Fp> = {
-            let poseidon_message = [
-                //TODO (fix)
-                //coin_pk_x.clone(),
-                //coin_pk_y.clone(),
-                //coin_value.clone(),
-                //coin_nonce.clone(),  //TODO (fix) nocne need to be for (x,y), or if the seed is changed to hash it can be just pallas
-                one.clone(),
-            ];
-
-            let poseidon_hasher = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init(
-                config.poseidon_chip(),
-                layouter.namespace(|| "Poseidon init"),
-            )?;
-
-            let poseidon_output =
-                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
-
-            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
-            poseidon_output
-        };
-        */
-        let coin_val = {
-            let coin_val_pt = ar_chip.mul(layouter.namespace(|| ""), &coin_pk_y, &coin_pk_x)?;
-
-            let coin_val0 = ar_chip.mul(layouter.namespace(|| ""), &coin_nonce, &coin_value)?;
-            ar_chip.mul(layouter.namespace(|| ""), &coin_val_pt, &coin_val0)?
+            let coin_pk_mul = ar_chip.mul(layouter.namespace(|| ""), &coin_pk_y, &coin_pk_x)?;
+            let coin_val_mul = ar_chip.mul(layouter.namespace(|| ""), &coin_pk_mul, &coin_value)?;
+            //let coin_nonce_mul = ar_chip.mul(layouter.namespace(|| ""), &coin_val_mul, coin_nonce)?;
+            let coin_val0 = ar_chip.mul(layouter.namespace(|| ""), &coin_nonce, &coin_val_mul)?;
+            coin_val0
+            //ar_chip.mul(layouter.namespace(|| ""), &coin_val_pt, &coin_val0)?
         };
         let (com, _) = {
             let coin_commit_v = ValueCommitV;
             let coin_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), coin_commit_v);
-            //TODO (FIX) THIS PANICS, ONLY PANICS ON LARGE VALUES!
-            /*
-            let coin_hash_pt = ScalarFixedShort::new(
-            ecc_chip.clone(),
-            layouter.namespace(|| "coin_val*1"),
-            (coin_hash, one.clone()),
-            )?;
-             */
-            //note c_v is set to zero, should work
-
 
             let coin_hash_pt = ScalarFixedShort::new(
                 ecc_chip.clone(),
@@ -543,46 +479,21 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_Y_OFFSET,
         )?;
 
-        //
-        /*
-        let coin2_hash = {
-            let poseidon_message = [
-                //coin_pk_commit.inner().x(),
-                //coin_pk_commit.inner().y(),
-                //coin_value.clone(),
-                //coin2_nonce.inner().x(),
-                //coin2_nonce.inner().y(),
-                zero.clone(),
-            ];
 
-            let poseidon_hasher = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ConstantLength<5>, 3, 2>::init(
-                config.poseidon_chip(),
-                layouter.namespace(|| "Poseidon init"),
-            )?;
 
-            let poseidon_output =
-                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
-
-            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
-            poseidon_output
-        };
-        /*
-        let coin2_hash0 = ar_chip.mul(
+        let coin2_hash_cm = ar_chip.mul(
             layouter.namespace(|| ""),
             &coin_pk_commit.inner().x(),
             &coin_pk_commit.inner().y(),
         )?;
-        let coin2_hash1 = ar_chip.mul(
+        let coin2_hash_nonce = ar_chip.mul(
             layouter.namespace(|| ""),
-            &coin2_nonce.inner().x(),
-            &coin2_nonce.inner().y(),
+            &coin2_nonce,
+            &coin2_nonce,
         )?;
-        let coin2_hash2 = ar_chip.mul(layouter.namespace(|| ""), &coin2_hash0, &coin2_hash1)?;
+        let coin2_hash_mul = ar_chip.mul(layouter.namespace(|| ""), &coin2_hash_cm, &coin2_hash_nonce)?;
+        let coin2_hash = ar_chip.mul(layouter.namespace(|| ""), &coin_value.clone(), &coin2_hash_mul)?;
 
-        //TODO (fix)
-        //let coin2_hash = ar_chip.mul(layouter.namespace(|| ""), &coin_value.clone(), &coin2_hash2)?;
-        let coin2_hash = ar_chip.mul(layouter.namespace(|| ""), &one.clone(), &zero.clone())?;
-        */
         let (com, _) = {
             let coin_commit_v = ValueCommitV;
             let coin_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), coin_commit_v);
@@ -655,12 +566,10 @@ impl Circuit<pallas::Base> for LeadContract {
         //let serialized = serde_json::to_string(&node).unwrap();
         //println!("root_sk: {}", serialized);
 
-        //TODO (research) this multiplication panics!
         let y_commit_exp = ar_chip.mul(
         layouter.namespace(|| ""),
-        //root_sk.clone(), //(fix)
+            &_root_sk.clone(),
             &coin_nonce,
-            &one,
         )?;
 
         let (com, _) = {
@@ -689,42 +598,17 @@ impl Circuit<pallas::Base> for LeadContract {
         let y_commit_base = y_commit.inner().x();
 
         // ============================
-        //let _y_commit_bytes : [u8;32] = y_commit.inner().point().inner().unwrap().to_repr();
-
-        //TODO (fix) temp abuse until even_bits is fixed.
-        let zero_base_bytes : [u8;32] = [0;32];
-        let y_commit_base_temp = pallas::Base::from_repr(zero_base_bytes).unwrap();
-        let y_commit_base = self.load_private(
-            layouter.namespace(|| "load coin y commit as pallas::base"),
-            config.advices[0],
-            Value::known(y_commit_base_temp),
-        )?;
-        /*
-        let y_commit_base_bytes: [u8; 32] = [0; 32];
-        //note! due to 24bytes size limitation in the comparision gate we need first 24bytes
-        for i in 0..23 {
-            y_commit_base_bytes[i] = y_commit_base_bytes[i];
-        }
-        let y_commit_base_temp = pallas::Base::from_repr(y_commit_base_bytes).unwrap();
-
-        let y_commit_base = self.load_private(
-            layouter.namespace(|| "load coin y commit as pallas::base"),
-            config.advices[0],
-            Value::known(y_commit_base_temp),
-        )?;
-        */
-        // ============================
         // constraint rho
         // ============================
         let (com, _) = {
             let rho_commit_v = ValueCommitV;
             let rho_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), rho_commit_v);
-            let y_commit_base = ScalarFixedShort::new(
+            let rcv = ScalarFixedShort::new(
                 ecc_chip.clone(),
                 layouter.namespace(|| "y_commit_base*1"),
                 (y_commit_base.clone(), one.clone()),
             )?;
-            rho_commit_v.mul(layouter.namespace(|| "coin commit v"), y_commit_base)?
+            rho_commit_v.mul(layouter.namespace(|| "coin commit v"), rcv)?
         };
         // r*G_2
         let (blind, _) = {
@@ -743,18 +627,18 @@ impl Circuit<pallas::Base> for LeadContract {
             Value::known(pallas::Base::from(1024)),
         )?;
         //leadership coefficient
+
         let c = self.load_private(
             layouter.namespace(|| ""),
             config.advices[0],
             Value::known(pallas::Base::one()), // note! this parameter to be tuned.
         )?;
-        let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
-        //TODO (fix)
+        //let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
+
         //let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value.clone())?;
-        let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &one.clone(), &zero.clone())?;
-        eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
-        eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
-        */
+        //eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
+        //eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
+
         //let (helper, is_gt) = greater_than_chip.greater_than(
         //  layouter.namespace(|| "t>y"),
         //target.into(),
