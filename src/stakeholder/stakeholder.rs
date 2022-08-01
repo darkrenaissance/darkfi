@@ -117,8 +117,10 @@ impl Stakeholder
 {
     pub async fn new(consensus: EpochConsensus, settings: Settings, k: Option<u32>) -> Result<Self>
     {
-        let path = "/tmp";
+        let path = "tmp";
+        println!("opening db");
         let db = sled::open(path).unwrap();
+        println!("opened db");
         let ts = Timestamp::current_time();
         let genesis_hash = blake3::hash(b"");
         //TODO lisen and add transactions

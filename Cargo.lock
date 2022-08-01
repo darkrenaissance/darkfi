@@ -1020,6 +1020,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
+name = "crypsinous"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "darkfi",
+ "futures",
+ "thread",
+ "url",
+]
+
+[[package]]
 name = "crypto-common"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4109,6 +4120,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "thread"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afe9c0e959dd1e7b871071b51bc674380d1889cd4fed9f4b3b1f5c1772d9f796"
 
 [[package]]
 name = "time"

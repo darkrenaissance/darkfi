@@ -31,7 +31,7 @@ members = [
 	"bin/tau/taud",
 	"bin/tau/tau-cli",
 	"bin/vanityaddr",
-
+        "bin/crypsinous",
 	"src/sdk",
 	"src/util/derive",
 	"src/util/derive-internal",

@@ -1,9 +1,11 @@
-use darkfi::{
+use  ::darkfi::{
     stakeholder::Stakeholder,
     blockchain::{EpochConsensus,},
     net::{Settings,},
 };
 
+use futures::executor::block_on;
+use url::Url;
 use std::thread;
 
 fn main()
@@ -12,11 +14,11 @@ fn main()
     let epochs=3;
     let ticks=22;
     let reward=1;
-    let epoch_consensus = EpochConsensus::new(Some(slots), Some(epochs), Some(ticks), reward);
+    let epoch_consensus = EpochConsensus::new(Some(slots), Some(epochs), Some(ticks), Some(reward));
     /// read n from the cmd
     let n = 3;
     /// initialize n stakeholders
-    let stakeholders = vec!(n);
+    //let mut stakeholders = vec!();
     let settings = Settings{
         inbound: Some(Url::parse("tls://127.0.0.1:12002").unwrap()),
         outbound_connections: 4,
@@ -32,13 +34,13 @@ fn main()
         ].to_vec(),
     };
     let k : u32 = 13; //proof's number of rows
-    let handles = vec!(0);
-    for i in n {
-        let stakeholder = Stakeholder::new(epoch_consensus, settings, Some(k));
-        stakeholders.push(stakeholder);
-        let handle = thread.spawn(|| {
-            stakeholders.background();
+    let mut handles = vec!();
+    for i in 0..n {
+        let mut stakeholder = block_on(Stakeholder::new(epoch_consensus.clone(), settings.clone(), Some(k))).unwrap();
+        let handle = thread::spawn(move || {
+            block_on(stakeholder.background());
         });
+        //stakeholders.push(stakeholder);
         handles.push(handle);
     }
     for handle in handles {
