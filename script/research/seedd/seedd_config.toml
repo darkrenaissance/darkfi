@@ -7,49 +7,20 @@
 ## uncommenting, or by using the command-line.
 
 # Daemon published url, common for all enabled networks
-url = "tcp://127.0.0.1"
+#url = "tcp://127.0.0.1"
 
-# Darkfid activation flag
-#darkfid = true
+## Per-network settings
+#[network."darkfid"]
+#port = 7650
+#seeds = []
+#peers = []
 
-# Ircd activation flag
-#ircd = true
+#[network."ircd"]
+#port = 8760
+#seeds = []
+#peers = []
 
-# Taud activation flag
-#taud = true
-
-# Following specific network settings shouldn't be commended even if 
-# their corresponding network is not enabled.
-
-# Darkfid network settings.
-[darkfid_opts]
-# Network port
-port = 7650
-
-# Seed nodes to connect to
-seeds = []
-
-# Peers to connect to
-peers = []
-
-# Ircd network settings.
-[ircd_opts]
-# Network port
-port = 8760
-
-# Seed nodes to connect to
-seeds = []
-
-# Peers to connect to
-peers = []
-
-# Taud network settings.
-[taud_opts]
-# Network port
-port = 9870
-
-# Seed nodes to connect to
-seeds = []
-
-# Peers to connect to
-peers = []
+#[network."taud"]
+#port = 9870
+#seeds = []
+#peers = []

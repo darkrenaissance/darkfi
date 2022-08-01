@@ -15,25 +15,23 @@ use darkfi::{
 };
 
 mod config;
-use config::{Args, NetOpt};
-
-// TODO: disable unregistered protocols message subscription warning
+use config::{parse_configured_networks, Args, NetInfo};
 
 const CONFIG_FILE: &str = "seedd_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../seedd_config.toml");
 
 async fn spawn_network(
     name: &str,
+    info: NetInfo,
     mut url: Url,
-    opts: NetOpt,
     ex: Arc<Executor<'_>>,
 ) -> Result<()> {
-    url.set_port(Some(opts.port))?;
+    url.set_port(Some(info.port))?;
     let network_settings = net::Settings {
         inbound: Some(url.clone()),
         external_addr: Some(url.clone()),
-        seeds: opts.seeds,
-        peers: opts.peers,
+        seeds: info.seeds,
+        peers: info.peers,
         outbound_connections: 0,
         ..Default::default()
     };
@@ -64,33 +62,21 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     })
     .unwrap();
 
+    // Pick up network settings from the TOML configuration
+    let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
+    let toml_contents = std::fs::read_to_string(cfg_path)?;
+    let configured_nets = parse_configured_networks(&toml_contents)?;
+
     // Verify any daemon network is enabled
-    let check = args.darkfid || args.ircd || args.taud;
-    if !check {
+    if configured_nets.is_empty() {
         info!("No daemon network is enabled!");
         return Ok(())
     }
 
-    // Spawn darkfid network, if configured
-    if args.darkfid {
-        if let Err(e) =
-            spawn_network("darkfid", args.url.clone(), args.darkfid_opts, ex.clone()).await
-        {
-            error!("Failed starting darkfid P2P network seed: {}", e);
-        }
-    }
-
-    // Spawn ircd network, if configured
-    if args.ircd {
-        if let Err(e) = spawn_network("ircd", args.url.clone(), args.ircd_opts, ex.clone()).await {
-            error!("Failed starting ircd P2P network seed: {}", e);
-        }
-    }
-
-    // Spawn taud network, if configured
-    if args.taud {
-        if let Err(e) = spawn_network("taud", args.url, args.taud_opts, ex).await {
-            error!("Failed starting taud P2P network seed: {}", e);
+    // Spawn configured networks
+    for (name, info) in &configured_nets {
+        if let Err(e) = spawn_network(name, info.clone(), args.url.clone(), ex.clone()).await {
+            error!("Failed starting {} P2P network seed: {}", name, e);
         }
     }
 
