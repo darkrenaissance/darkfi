@@ -62,7 +62,7 @@ impl Default for TransactionLeadProof {
 impl TransactionLeadProof {
     pub fn new(pk : ProvingKey, coin: LeadCoin) -> Self
     {
-        let proof = lead_proof::create_lead_proof(pk.clone(), coin.clone()).unwrap();
+        let proof = lead_proof::create_lead_proof(pk, coin.clone()).unwrap();
         Self { lead_proof: proof }
     }
 

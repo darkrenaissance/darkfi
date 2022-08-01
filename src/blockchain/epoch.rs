@@ -202,9 +202,8 @@ impl Epoch {
             ];
             let lead_coin_msg_hash : pallas::Scalar = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init().hash(lead_coin_msg);
             //TODO (FIX) THIS PANICS, ONLY PANICS ON LARGE VALUES!
-            //let c_cm: pallas::Point = pedersen_commitment_scalar(lead_coin_msg_hash, c_cm1_blind);
-            //note c_v is set to zero, should work
-            let c_cm: pallas::Point = pedersen_commitment_base(c_v, c_cm1_blind);
+            let c_cm: pallas::Point = pedersen_commitment_scalar(lead_coin_msg_hash, c_cm1_blind);
+
 
             let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
             let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();

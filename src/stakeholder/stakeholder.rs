@@ -108,9 +108,9 @@ pub struct Stakeholder
     pub vk : VerifyingKey,
     pub playing: bool,
     pub workspace : SlotWorkspace,
-    pub subscription: Subscription<Result<ChannelPtr>>,
-    pub chanptr : ChannelPtr,
-    pub msgsub : MessageSubscription::<BlockInfo>,
+    //pub subscription: Subscription<Result<ChannelPtr>>,
+    //pub chanptr : ChannelPtr,
+    //pub msgsub : MessageSubscription::<BlockInfo>,
 }
 
 impl Stakeholder
@@ -137,22 +137,8 @@ impl Stakeholder
         println!("--> network initialized");
         //TODO
         let workspace = SlotWorkspace::default();
-        let subscription : Subscription<Result<ChannelPtr>> = p2p.subscribe_channel().await;
-        println!("--> channel");
-        let chanptr : ChannelPtr =  subscription.receive().await.unwrap();
-        println!("--> received channel");
-        //
-        let message_subsytem = chanptr.get_message_subsystem();
-        println!("--> adding dispatcher to msg subsystem");
-        message_subsytem.add_dispatch::<BlockInfo>().await;
-        println!("--> added");
-        //TODO start channel if isn't started yet
-        //let info = chanptr.get_info();
-        //println!("channel info: {}", info);
-        println!("--> subscribe msg_sub");
-        let msg_sub : MessageSubscription::<BlockInfo> =
-            chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
-        println!("--> subscribed");
+
+
         //
         let clock = Clock::new(Some(consensus.get_epoch_len()), Some(consensus.get_slot_len()), Some(consensus.get_tick_len()), settings.peers);
         Ok(Self{blockchain: bc,
@@ -166,9 +152,9 @@ impl Stakeholder
                 vk:lead_vk,
                 playing: true,
                 workspace: workspace,
-                subscription: subscription,
-                chanptr: chanptr,
-                msgsub: msg_sub,
+                //subscription: subscription,
+                //chanptr: chanptr,
+                //msgsub: msg_sub,
         })
     }
 
@@ -250,7 +236,24 @@ impl Stakeholder
     /// validate the block proof, and the transactions,
     /// if so add the proof to metadata if stakeholder isn't the lead.
     pub async fn sync_block(&self) {
-        let res = self.msgsub.receive().await.unwrap();
+        let subscription : Subscription<Result<ChannelPtr>> = self.net.subscribe_channel().await;
+        println!("--> channel");
+        let chanptr : ChannelPtr =  subscription.receive().await.unwrap();
+        println!("--> received channel");
+        //
+        let message_subsytem = chanptr.get_message_subsystem();
+        println!("--> adding dispatcher to msg subsystem");
+        message_subsytem.add_dispatch::<BlockInfo>().await;
+        println!("--> added");
+        //TODO start channel if isn't started yet
+        //let info = chanptr.get_info();
+        //println!("channel info: {}", info);
+        println!("--> subscribe msg_sub");
+        let msg_sub : MessageSubscription::<BlockInfo> =
+            chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
+        println!("--> subscribed");
+
+        let res = msg_sub.receive().await.unwrap();
         let blk : BlockInfo = (*res).to_owned();
         //TODO validate the block proof, and transactions.
         if self.valid_block(blk.clone())  {
