@@ -25,11 +25,9 @@ pub struct LeadCoin {
     pub tau: Option<pallas::Base>,
     pub nonce: Option<pallas::Base>,
     pub nonce_cm: Option<pallas::Base>,
-    pub sn: Option<pallas::Point>, // coin's serial number
+    pub sn: Option<pallas::Base>, // coin's serial number
     //sk : Option<SecretKey>,
-    pub pk: Option<pallas::Point>,
-    pub pk_x: Option<pallas::Base>,
-    pub pk_y: Option<pallas::Base>,
+    pub pk: Option<pallas::Base>,
     pub root_cm: Option<pallas::Scalar>,
     pub root_sk: Option<pallas::Base>,
     pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
@@ -52,8 +50,8 @@ impl LeadCoin {
         let po_cm = self.cm.unwrap().to_affine().coordinates().unwrap();
         let po_cm2 = self.cm2.unwrap().to_affine().coordinates().unwrap();
 
-        let po_pk = self.pk.unwrap().to_affine().coordinates().unwrap();
-        let po_sn = self.sn.unwrap().to_affine().coordinates().unwrap();
+        let po_pk = self.pk.unwrap();
+        let po_sn = self.sn.unwrap();
 
         let po_cmp = pallas::Base::from(0);
         let _zero = pallas::Base::from(0);
@@ -77,10 +75,8 @@ impl LeadCoin {
         };
         let public_inputs: Vec<pallas::Base> = vec![
             po_nonce,
-            *po_pk.x(),
-            *po_pk.y(),
-            *po_sn.x(),
-            *po_sn.y(),
+            po_pk,
+            po_sn,
             *po_cm.x(),
             *po_cm.y(),
             *po_cm2.x(),
@@ -95,8 +91,7 @@ impl LeadCoin {
     {
         let contract = LeadContract {
             path: Value::known(self.path.unwrap()),
-            coin_pk_x: Value::known(self.pk_x.unwrap()),
-            coin_pk_y: Value::known(self.pk_y.unwrap()),
+            coin_pk: Value::known(self.pk.unwrap()),
             root_sk: Value::known(self.root_sk.unwrap()),
             sf_root_sk: Value::known(mod_r_p(self.root_sk.unwrap())),
             path_sk: Value::known(self.path_sk.unwrap()),
