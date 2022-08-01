@@ -245,6 +245,13 @@ impl Dchat {
 
 // inbound
 fn alice() -> Result<Settings> {
+    let log_level = simplelog::LevelFilter::Debug;
+    let log_config = simplelog::Config::default();
+
+    let log_path = "/tmp/alice.log";
+    let file = File::create(log_path).unwrap();
+    WriteLogger::init(log_level, log_config, file)?;
+
     let seed = Url::parse("tcp://127.0.0.1:55555").unwrap();
     let inbound = Url::parse("tcp://127.0.0.1:55554").unwrap();
     let ext_addr = Url::parse("tcp://127.0.0.1:55554").unwrap();
@@ -269,6 +276,13 @@ fn alice() -> Result<Settings> {
 
 // outbound
 fn bob() -> Result<Settings> {
+    let log_level = simplelog::LevelFilter::Debug;
+    let log_config = simplelog::Config::default();
+
+    let log_path = "/tmp/bob.log";
+    let file = File::create(log_path).unwrap();
+    WriteLogger::init(log_level, log_config, file)?;
+
     let seed = Url::parse("tcp://127.0.0.1:55555").unwrap();
     let oc = 5;
 
@@ -292,13 +306,6 @@ fn bob() -> Result<Settings> {
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    let log_level = simplelog::LevelFilter::Debug;
-    let log_config = simplelog::Config::default();
-
-    let log_path = "/tmp/dchat.log";
-    let file = File::create(log_path).unwrap();
-    WriteLogger::init(log_level, log_config, file)?;
-
     let settings: Result<Settings> = match std::env::args().nth(1) {
         Some(id) => match id.as_str() {
             "a" => alice(),
