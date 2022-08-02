@@ -18,8 +18,8 @@ the p2p network, in particular:
 The source code for this tutorial can be found at
 [example/dchat](../../../example/dchat).
 
-# Part 1: Deploying the p2p network
-## Getting started
+## Part 1: Deploying the p2p network
+### Getting started
 
 We'll create a new cargo directory and add DarkFi to our Cargo.toml,
 like so:
@@ -56,14 +56,13 @@ num_cpus = "1.13.1"
 log = "0.4.17"
 simplelog = "0.12.0"
 url = "2.2.2"
-termion = "1.5.6"
 
 # Encoding and parsing
 serde = {version = "1.0.138", features = ["derive"]}
 toml = "0.4.2"
 ```
 
-## Writing a daemon
+### Writing a daemon
 
 DarkFi consists of many seperate daemons communicating with each other. To
 run the p2p network, we'll need to implement our own daemon.  So we'll
@@ -114,18 +113,24 @@ DarkFi binaries to minimize boilerplate in the repo.  To keep things
 simple we will ignore this macro for the purpose of this tutorial.  But
 check it out if you are curious: [util/cli.rs](../../../src/util/cli.rs).
 
-## Inbound and Outbound nodes
+### Inbound and Outbound nodes
 
 To create an instance of the p2p network, we must configure our p2p
 network settings into a type called net::Settings. These settings
 determine whether our node will be an outbound, inbound, manual or
 seed node.
 
-On production-ready software, you would usually configure your network
-settings using a config file or command line inputs. On dchat we are
-keeping things ultra simple. We pass a command line flag that is either
-`a` or `b`. If we pass `a` we will initialize an inbound node. If we pass
-`b` we will initialize an outbound node.
+Inbound, outbound and seed nodes perform different roles on the p2p
+network. An inbound node receives connections. An outbound node makes
+connections. A seed node is used when connecting to the network: it is
+a special kind of inbound node that gets connected to, sends over a list
+of addresses and disconnects again.
+
+On production-ready software, you would usually configure your node
+using a config file or command line inputs. On dchat we are keeping
+things ultra simple. We pass a command line flag that is either `a` or
+`b`. If we pass `a` we will initialize an inbound node. If we pass `b`
+we will initialize an outbound node.
 
 Here's how that works. We define two methods called alice() and
 bob(). alice() returns the Settings that will create an inbound
@@ -211,9 +216,6 @@ fn bob() -> Result<Settings> {
 }
 ```
 
-These nodes perform different roles on the p2p network. An inbound node
-receives connections. An outbound node makes connections.
-
 Both outbound and inbound nodes specify a seed address to connect to. The
 inbound node also specifies an external address and an inbound address:
 this is where it will receive connections. The outbound node specifies
@@ -223,7 +225,7 @@ connections the node will try to make.
 These are the only settings we need to think about. For the rest, we
 use the network defaults.
 
-## Error handling 
+### Error handling 
 
 Before we continue, we need to quickly add some error handling to handle
 the case where a user forgets to add the command-line flag. We'll use a
@@ -261,7 +263,7 @@ let settings: Result<Settings> = match std::env::args().nth(1) {
 };
 ```
 
-## Creating the p2p network
+### Creating the p2p network
 
 Now that we have initialized the network settings we can create an
 instance of the p2p network.
@@ -272,10 +274,10 @@ Add the following to main():
 let p2p = net::P2p::new(settings?.into()).await;
 ```
 
-## Running the p2p network
+### Running the p2p network
 
 We will next create a Dchat struct that will store all the data required
-by dchat. For now, it will hold a pointer to the p2p network.
+by dchat. For now, it will just hold a pointer to the p2p network.
 
 To accesss this we will need to add net to our imports, like so:
 
@@ -339,7 +341,7 @@ If a seed node connects successfully, it runs a version exchange protocol,
 stores the channel in the p2p list of channels, and disconnects, removing
 the channel from the channel list.
 
-## The seed node
+### The seed node
 
 Let's create an instance of dchat inside our main function and pass the
 p2p network into it.  Then we'll add dchat::start() to our async loop
@@ -407,7 +409,7 @@ node just specifies an inbound address which other nodes will connect to.
 Crucially, this inbound address must match the seed address we specified
 earlier in Alice and Bob's settings.
 
-## Deploying a local network
+### Deploying a local network
 
 Get ready to spin up a bunch of different terminals. We are going to
 run 3 nodes: Alice and Bob and our seed node. To run the seed node,
@@ -482,7 +484,11 @@ We have created a local deployment of the p2p network.
 
 ## Part 2: Building a p2p chat app
 
-## Creating a custom Message type
+Now that we've deployed a local version of the p2p network, we can start
+creating a custom protocol and message types that dchat will use to
+send and receive messages across the network.
+
+### Creating a custom Message type
 
 We'll start by creating a custom Message type called Dchatmsg. This is the
 data structure that we'll use to send messages between dchat instances.
@@ -526,13 +532,201 @@ use async_std::sync::{Arc, Mutex};
 pub type DchatmsgsBuffer = Arc<Mutex<Vec<Dchatmsg>>>;
 ```
 
+### Understanding protocols
+
+We now need to implement a custom protocol which defines how our chat
+program interacts with the p2p network.
+
+We've already interacted with several protocols already. Protocols
+are automatically activated when nodes connect to eachother on the
+p2p network. Here are examples of two protocols that every node runs
+continuously in the background:
+
+[ProtocolPing](../../../src/net/protocol/protocol_ping.rs): sends ping,
+receives pong
+[ProtocolAddress](../../../src/net/protocol/protocol_address.rs): receives
+a get_address message, sends an address message
+
+Under the hood, these protocols have a few similarities:
+
+1. They create a subscription to a message type, such as Ping and Pong.
+2. They implement [ProtocolBase](../../../src/net/protocol/protocol_base.rs),
+DarkFi's generic protocol trait.
+3. They run asynchronously using the
+[ProtocolJobsManager](../../../src/net/protocol/protocol_jobs_manager.rs).
+4. They hold a pointer to [Channel](../../../src/net/channel.rs) which
+invokes the [MessageSubsystem](../../../src/net/message_subscriber).
+
+This introduces several generic interfaces that we must use to build
+our custom protocol. In particular:
+
+1. The Message Subsystem
+
+MessageSubsystem is a generic publish/subscribe class that can
+dispatch any kind of message to a list of dispatchers. This is how we
+can send and receive custom messages on the p2p network.
+
+2. Message Subscription
+
+A subscription to a message type. 
+
+3. The Protocol Registry 
+
+ProtocolRegistry takes any kind of generic protocol and initializes it. We
+use it through the method register() which passes a protocol constructor
+and a session bitflag which determines which sessions (outbound, inbound,
+or seed) will run our protocol.
+
+4. ProtocolJobsManager
+
+An asynchronous job manager that spawns and stops tasks created by
+protocols across the network.
+
+5. ProtocolBase
+
+A generic protocol trait that all protocols must implement.
+
+### Writing a custom protocol
+
+Let's start tying these concepts together. We'll define a struct called
+ProtocolDchat that contains a MessageSubscription to Dchatmsg and a
+pointer to the ProtocolJobsManager. We'll also include the DchatmsgsBuffer
+in the struct as it will come in handy later on.
+
+```
+use darkfi::net;
+
+use crate::dchatmsg::{Dchatmsg, DchatmsgsBuffer};
+
+pub struct ProtocolDchat {
+    jobsman: net::ProtocolJobsManagerPtr,
+    msg_sub: net::MessageSubscription<Dchatmsg>,
+    msgs: DchatmsgsBuffer,
+}
+```
+
+Next we'll implement the trait ProtocolBase. ProtocolBase requires two
+functions, start() and name(). In start() we will start up the Protocol
+Jobs Manager. name() will return a str of the protocol name.
+
+```
+use async_executor::Executor;
+use async_std::sync::Arc;
+use async_trait::async_trait;
+use darkfi::{net, Result};
+
+use crate::dchatmsg::{Dchatmsg, DchatmsgsBuffer};
+
+#[async_trait]
+impl net::ProtocolBase for ProtocolDchat {
+    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        self.jobsman.clone().start(executor.clone());
+        Ok(())
+    }
+
+    fn name(&self) -> &'static str {
+        "ProtocolDchat"
+    }
+}
+```
+
+Once that's done, we'll need to create a ProtocolDchat constructor that
+we will pass to the ProtocolRegistry to register our protocol. The
+constructor passes a pointer to channel which it uses to invoke the
+Message Subsystem and add Dchatmsg as to the list of dispatchers. Next,
+we'll create a message subscription to Dchatmsg using the method
+subscribe_msg().
+
+We'll also initialize the Protocol Jobs Manager and finally return a
+pointer to the protocol.
+
+```
+impl ProtocolDchat {
+    pub async fn init(channel: net::ChannelPtr, msgs: DchatmsgsBuffer) -> net::ProtocolBasePtr {
+        let message_subsytem = channel.get_message_subsystem();
+        message_subsytem.add_dispatch::<Dchatmsg>().await;
+
+        let msg_sub = channel
+            .subscribe_msg::<Dchatmsg>()
+            .await
+            .expect("Missing DchatMsg dispatcher!");
+
+        Arc::new(Self {
+            jobsman: net::ProtocolJobsManager::new("ProtocolDchat", channel.clone()),
+            msg_sub,
+            msgs,
+        })
+    }
+}
+```
+
+We're nearly there. But right now the protocol doesn't actually do
+anything. Let's write a method called handle_receive_msg() which receives
+a message on our message subscription and adds it to DchatmsgsBuffer.
+ 
+Put this inside the ProtocolDchat implementation:
+
+```
+async fn handle_receive_msg(self: Arc<Self>) -> Result<()> {
+    while let Ok(msg) = self.msg_sub.receive().await {
+        let msg = (*msg).to_owned();
+        self.msgs.lock().await.push(msg);
+    }
+
+    Ok(())
+}
+```
+
+As a final step, let's add that task to the jobs manager that is invoked
+in start():
+
+```
+async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+    self.jobsman.clone().start(executor.clone());
+    self.jobsman
+        .clone()
+        .spawn(self.clone().handle_receive_msg(), executor.clone())
+        .await;
+    Ok(())
+}
+```
+
+### Registering a protocol
+
+We've now successfully created a custom protocol. The next step is the
+register the protocol with the protocol registry.
+
+We'll define a new function inside the Dchat implementation called
+register_protocol(). It will invoke the protocol_registry using the
+handle to the p2p network contained in the Dchat struct. It will then
+call register() on the registry and pass the ProtocolDchat constructor.
+
+Be sure to import Dchatmsg and ProtocolDchat so we can access their data.
+
+```
+pub mod dchatmsg;
+pub mod protocol_dchat;
+
+async fn register_protocol(&self, msgs: DchatmsgsBuffer) -> Result<()> {
+    let registry = self.p2p.protocol_registry();
+    registry
+        .register(net::SESSION_ALL, move |channel, _p2p| {
+            let msgs2 = msgs.clone();
+            async move { ProtocolDchat::init(channel, msgs2).await }
+        })
+        .await;
+    Ok(())
+}
+```
+
+We set the bitflag to SESSION_ALL to specify that this protocol should
+be performed by every session. We also use a closure to capture a pointer
+to Channel, which we pass into the ProtocolDchat constructor. This gives
+us access to the message subscriber methods.
+
 <!---TODO-->
 
-## Understanding protocols
-## Writing a protocol
-## Registering a protocol
-## Adding a UI
-
-# Part 3: Network tools
-## Attaching DarkFi RPC
-## Using dnetview
+### Adding a UI
+## Part 3: Network tools
+### Attaching DarkFi RPC
+### Using dnetview
