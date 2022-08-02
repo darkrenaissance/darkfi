@@ -10,17 +10,23 @@
 #url = "tcp://127.0.0.1"
 
 ## Per-network settings
-#[network."darkfid"]
-#port = 7650
+#[network."darkfid_sync"]
+#port = 33032
+#seeds = []
+#peers = []
+
+## Per-network settings
+#[network."darkfid_consensus"]
+#port = 33033
 #seeds = []
 #peers = []
 
 #[network."ircd"]
-#port = 8760
+#port = 25551
 #seeds = []
 #peers = []
 
 #[network."taud"]
-#port = 9870
+#port = 23331
 #seeds = []
 #peers = []
