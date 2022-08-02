@@ -2,22 +2,17 @@ use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use easy_parallel::Parallel;
 
-use std::{
-    fs::File,
-    io::{stdin, stdout, Read, Write},
-};
+use std::{fs::File, io::stdin};
 
 use log::debug;
 use simplelog::WriteLogger;
 use url::Url;
 
-use termion::{event::Key, input::TermRead, raw::IntoRawMode};
-
 use darkfi::{net, net::Settings};
 
 use crate::{
     dchatmsg::{Dchatmsg, DchatmsgsBuffer},
-    error::{Error, MissingSpecifier, Result},
+    error::{MissingSpecifier, Result},
     protocol_dchat::ProtocolDchat,
 };
 
@@ -28,185 +23,61 @@ pub mod protocol_dchat;
 struct Dchat {
     p2p: net::P2pPtr,
     recv_msgs: DchatmsgsBuffer,
-    input: String,
-    display: DisplayMode,
-}
-
-enum DisplayMode {
-    Normal,
-    Editing,
-    Inbox,
-    MessageSent,
-    SendFailed(Error),
 }
 
 impl Dchat {
-    fn new(
-        p2p: net::P2pPtr,
-        recv_msgs: DchatmsgsBuffer,
-        input: String,
-        display: DisplayMode,
-    ) -> Self {
-        Self { p2p, recv_msgs, input, display }
+    fn new(p2p: net::P2pPtr, recv_msgs: DchatmsgsBuffer) -> Self {
+        Self { p2p, recv_msgs }
     }
 
-    async fn menu(&mut self) -> Result<()> {
-        debug!(target: "dchat", "Dchat::menu() [START]");
-        let stdout = stdout();
-        let mut stdout = stdout.lock().into_raw_mode().unwrap();
-        let mut stdin = stdin();
-
+    async fn menu(&self) -> Result<()> {
+        let mut buffer = String::new();
+        let stdin = stdin();
         loop {
-            self.render().await?;
-            for k in stdin.by_ref().keys() {
-                match &self.display {
-                    DisplayMode::Normal => match k.unwrap() {
-                        Key::Char('q') => return Ok(()),
-                        Key::Char('i') => {
-                            self.display = DisplayMode::Inbox;
-                            break
+            println!(
+                "Welcome to dchat.
+    s: send message
+    i: inbox
+    q: quit "
+            );
+            stdin.read_line(&mut buffer)?;
+            // Remove trailing \n
+            buffer.pop();
+            match buffer.as_str() {
+                "q" => return Ok(()),
+                "s" => {
+                    // Remove trailing s
+                    buffer.pop();
+                    stdin.read_line(&mut buffer)?;
+                    match self.send(buffer.clone()).await {
+                        Ok(_) => {
+                            println!("you sent: {}", buffer);
                         }
-
-                        Key::Char('s') => {
-                            self.display = DisplayMode::Editing;
-                            break
+                        Err(e) => {
+                            println!("send failed for reason: {}", e);
                         }
-                        _ => {}
-                    },
-                    DisplayMode::Editing => match k.unwrap() {
-                        Key::Char('q') => return Ok(()),
-                        Key::Char('\n') => {
-                            match self.send().await {
-                                Ok(_) => {
-                                    self.display = DisplayMode::MessageSent;
-                                }
-                                Err(e) => {
-                                    self.display = DisplayMode::SendFailed(e);
-                                }
-                            }
-                            break
-                        }
-                        Key::Char(c) => {
-                            self.input.push(c);
-                        }
-                        Key::Esc => {
-                            self.display = DisplayMode::Normal;
-                            break
-                        }
-                        _ => {}
-                    },
-                    DisplayMode::MessageSent => match k.unwrap() {
-                        Key::Char('q') => return Ok(()),
-                        Key::Esc => {
-                            self.display = DisplayMode::Normal;
-                            break
-                        }
-                        _ => {}
-                    },
-                    DisplayMode::Inbox => match k.unwrap() {
-                        Key::Char('q') => return Ok(()),
-                        _ => {}
-                    },
-                    DisplayMode::SendFailed(_) => match k.unwrap() {
-                        Key::Char('q') => return Ok(()),
-                        Key::Esc => {
-                            self.display = DisplayMode::Normal;
-                            break
-                        }
-                        _ => {}
-                    },
-                }
-            }
-            stdout.flush()?;
-        }
-    }
-
-    async fn render(&mut self) -> Result<()> {
-        debug!(target: "dchat", "Dchat::render() [START]");
-        let stdout = stdout();
-        let mut stdout = stdout.lock().into_raw_mode().unwrap();
-
-        match &self.display {
-            DisplayMode::Normal => {
-                write!(
-                    stdout,
-                    "{}{}{}Welcome to dchat. {} s: send message {} i: inbox {} q: quit {}",
-                    termion::clear::All,
-                    termion::style::Bold,
-                    termion::cursor::Goto(1, 2),
-                    termion::cursor::Goto(1, 3),
-                    termion::cursor::Goto(1, 4),
-                    termion::cursor::Goto(1, 5),
-                    termion::cursor::Goto(1, 6)
-                )?;
-                stdout.flush()?;
-            }
-            DisplayMode::Editing => {
-                write!(
-                    stdout,
-                    "{}{}{}enter your msg.{} esc: stop editing {} enter: send {}",
-                    termion::clear::All,
-                    termion::style::Bold,
-                    termion::cursor::Goto(1, 2),
-                    termion::cursor::Goto(1, 3),
-                    termion::cursor::Goto(1, 4),
-                    termion::cursor::Goto(1, 5)
-                )?;
-                stdout.flush()?;
-            }
-            DisplayMode::Inbox => {
-                let msgs = self.recv_msgs.lock().await;
-                for i in msgs.iter() {
-                    if !i.msg.is_empty() {
-                        write!(
-                            stdout,
-                            "{}{}{}received msg: {}",
-                            termion::clear::All,
-                            termion::style::Bold,
-                            termion::cursor::Goto(1, 2),
-                            i.msg
-                        )?;
-                    } else {
-                        write!(
-                            stdout,
-                            "{}{}{}inbox is empty",
-                            termion::clear::All,
-                            termion::style::Bold,
-                            termion::cursor::Goto(1, 2),
-                        )?;
                     }
+                    buffer.clear();
                 }
-                stdout.flush()?;
-            }
-            DisplayMode::MessageSent => {
-                write!(
-                    stdout,
-                    "{}{}{}message sent! {} esc: return to main menu {}",
-                    termion::clear::All,
-                    termion::style::Bold,
-                    termion::cursor::Goto(1, 2),
-                    termion::cursor::Goto(1, 3),
-                    termion::cursor::Goto(1, 4),
-                )?;
-                stdout.flush()?;
-            }
-            DisplayMode::SendFailed(e) => {
-                write!(
-                    stdout,
-                    "{}{}{}send message failed! reason: {} {} esc: return to main menu {}",
-                    termion::clear::All,
-                    termion::style::Bold,
-                    termion::cursor::Goto(1, 2),
-                    e,
-                    termion::cursor::Goto(1, 3),
-                    termion::cursor::Goto(1, 4),
-                )?;
-                stdout.flush()?;
+                "i" => {
+                    let msgs = self.recv_msgs.lock().await;
+                    if msgs.is_empty() {
+                        println!("inbox is empty")
+                    } else {
+                        println!("received:");
+                        for i in msgs.iter() {
+                            if !i.msg.is_empty() {
+                                println!("{}", i.msg);
+                            }
+                        }
+                    }
+                    buffer.clear();
+                }
+                _ => {}
             }
         }
-
-        Ok(())
     }
+
     async fn register_protocol(&self, msgs: DchatmsgsBuffer) -> Result<()> {
         debug!(target: "dchat", "Dchat::register_protocol() [START]");
         let registry = self.p2p.protocol_registry();
@@ -235,8 +106,8 @@ impl Dchat {
         Ok(())
     }
 
-    async fn send(&self) -> Result<()> {
-        let msg = self.input.clone();
+    async fn send(&self, msg: String) -> Result<()> {
+        //let msg = self.input.clone();
         let dchatmsg = Dchatmsg { msg };
         self.p2p.broadcast(dchatmsg).await?;
         Ok(())
@@ -325,7 +196,7 @@ async fn main() -> Result<()> {
 
     let msgs: DchatmsgsBuffer = Arc::new(Mutex::new(vec![Dchatmsg { msg: String::new() }]));
 
-    let mut dchat = Dchat::new(p2p, msgs, String::new(), DisplayMode::Normal);
+    let mut dchat = Dchat::new(p2p, msgs);
 
     let (_, result) = Parallel::new()
         .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))

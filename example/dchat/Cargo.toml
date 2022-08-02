@@ -20,7 +20,6 @@ num_cpus = "1.13.1"
 log = "0.4.17"
 simplelog = "0.12.0"
 url = "2.2.2"
-termion = "1.5.6"
 
 # Encoding and parsing
 serde = {version = "1.0.138", features = ["derive"]}
