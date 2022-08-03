@@ -1,6 +1,8 @@
 use std::{process::exit, str::FromStr, time::Instant};
 
 use clap::{Parser, Subcommand};
+use num_bigint::BigUint;
+use prettytable::{cell, format, row, Table};
 
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
@@ -8,11 +10,11 @@ use url::Url;
 
 use darkfi::{
     cli_desc,
-    crypto::address::Address,
+    crypto::{address::Address, token_id},
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
         cli::{get_log_config, get_log_level},
-        NetworkName,
+        encode_base10, NetworkName,
     },
     Result,
 };
@@ -51,6 +53,10 @@ enum DrkSubcommand {
 
         /// f64 amount requested for airdrop
         amount: f64,
+
+        /// Token ID to airdrop
+        #[clap(long)]
+        token_id: String,
     },
 
     /// Wallet operations
@@ -110,7 +116,13 @@ impl Drk {
         Ok(())
     }
 
-    async fn airdrop(&self, address: Option<Address>, endpoint: Url, amount: f64) -> Result<()> {
+    async fn airdrop(
+        &self,
+        address: Option<Address>,
+        endpoint: Url,
+        amount: f64,
+        token_id: String,
+    ) -> Result<()> {
         let addr = if address.is_some() {
             address.unwrap()
         } else {
@@ -119,8 +131,14 @@ impl Drk {
             Address::from_str(rep.as_array().unwrap()[0].as_str().unwrap())?
         };
 
+        // Check if token ID is valid base58
+        if token_id::parse_b58(&token_id).is_err() {
+            eprintln!("Error: Invalid Token ID passed as argument.");
+            exit(1);
+        }
+
         println!("Requesting airdrop for {}", addr);
-        let req = JsonRequest::new("airdrop", json!([json!(addr.to_string()), amount]));
+        let req = JsonRequest::new("airdrop", json!([json!(addr.to_string()), amount, token_id]));
         let rpc_client = RpcClient::new(endpoint).await?;
         let rep = rpc_client.request(req).await?;
         rpc_client.close().await?;
@@ -139,8 +157,27 @@ impl Drk {
     async fn wallet_balance(&self) -> Result<()> {
         let req = JsonRequest::new("wallet.get_balances", json!([]));
         let rep = self.rpc_client.request(req).await?;
-        // TODO: Better representation
-        println!("Balances:\n{:#?}", rep);
+
+        if !rep.is_object() {
+            eprintln!("Invalid balance data received from darkfid RPC endpoint.");
+            exit(1);
+        }
+
+        let mut table = Table::new();
+        table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+        table.set_titles(row!["Token ID", "Balance"]);
+
+        for i in rep.as_object().unwrap().keys() {
+            if let Some(balance) = rep[i].as_u64() {
+                table.add_row(row![i, encode_base10(BigUint::from(balance), 8)]);
+                continue
+            }
+
+            eprintln!("Found invalid balance data for key \"{}\"", i);
+        }
+
+        println!("{}", table);
+
         Ok(())
     }
 
@@ -193,8 +230,8 @@ async fn main() -> Result<()> {
     match args.command {
         DrkSubcommand::Ping => drk.ping().await,
 
-        DrkSubcommand::Airdrop { address, faucet_endpoint, amount } => {
-            drk.airdrop(address, faucet_endpoint, amount).await
+        DrkSubcommand::Airdrop { address, faucet_endpoint, amount, token_id } => {
+            drk.airdrop(address, faucet_endpoint, amount, token_id).await
         }
 
         DrkSubcommand::Wallet { keygen, balance, address, all_addresses } => {
