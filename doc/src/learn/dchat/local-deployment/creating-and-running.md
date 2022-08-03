@@ -1,4 +1,4 @@
-### Creating the p2p network
+# Creating the p2p network
 
 Now that we have initialized the network settings we can create an
 instance of the p2p network.
@@ -9,7 +9,7 @@ Add the following to main():
 let p2p = net::P2p::new(settings?.into()).await;
 ```
 
-### Running the p2p network
+# Running the p2p network
 
 We will next create a Dchat struct that will store all the data required
 by dchat. For now, it will just hold a pointer to the p2p network.

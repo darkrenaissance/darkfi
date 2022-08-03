@@ -1,4 +1,4 @@
-### Sending messages
+# Sending messages
 
 The core of our application has been built. All that's left is to add a UI
 that takes user input, creates a Dchatmsg and sends it over the network.

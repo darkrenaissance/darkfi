@@ -1,4 +1,4 @@
-### Registering a protocol
+# Registering a protocol
 
 We've now successfully created a custom protocol. The next step is the
 register the protocol with the protocol registry.

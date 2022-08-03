@@ -1,4 +1,4 @@
-### Creating a custom Message type
+# Creating a Message type
 
 We'll start by creating a custom Message type called Dchatmsg. This is the
 data structure that we'll use to send messages between dchat instances.

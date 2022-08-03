@@ -1,4 +1,4 @@
-### Error handling 
+# Error handling 
 
 Before we continue, we need to quickly add some error handling to handle
 the case where a user forgets to add the command-line flag. We'll use a

@@ -1,4 +1,4 @@
-### The seed node
+# The seed node
 
 Let's create an instance of dchat inside our main function and pass the
 p2p network into it.  Then we'll add dchat::start() to our async loop

@@ -1,4 +1,4 @@
-### Deploying a local network
+# Deploying a local network
 
 Get ready to spin up a bunch of different terminals. We are going to
 run 3 nodes: Alice and Bob and our seed node. To run the seed node,

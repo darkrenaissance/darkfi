@@ -1,4 +1,4 @@
-### Getting started
+# Getting started
 
 We'll create a new cargo directory and add DarkFi to our Cargo.toml,
 like so:

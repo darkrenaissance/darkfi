@@ -1,4 +1,4 @@
-### Slap on a UI
+# Slap on a UI
 
 We'll create a new method called menu() inside the Dchat
 implementation. It implements a highly simple UI that allows a user to

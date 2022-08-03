@@ -1,4 +1,4 @@
-### Inbound and Outbound nodes
+# Inbound and Outbound nodes
 
 To create an instance of the p2p network, we must configure our p2p
 network settings into a type called net::Settings. These settings

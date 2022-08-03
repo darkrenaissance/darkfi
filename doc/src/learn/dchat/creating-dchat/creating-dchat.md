@@ -1,4 +1,4 @@
-## Part 2: Creating dchat
+# Part 2: Creating dchat
 
 Now that we've deployed a local version of the p2p network, we can start
 creating a custom protocol and message types that dchat will use to

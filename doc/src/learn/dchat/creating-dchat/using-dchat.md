@@ -1,4 +1,4 @@
-### Using dchat
+# Using dchat
 
 We are finally ready to test our program. Spin up 5 different terminals.
 

@@ -1,4 +1,4 @@
-### Writing a custom protocol
+# ProtocolDchat
 
 Let's start tying these concepts together. We'll define a struct called
 ProtocolDchat that contains a MessageSubscription to Dchatmsg and a

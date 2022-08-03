@@ -1,4 +1,4 @@
-### Writing a daemon
+# Writing a daemon
 
 DarkFi consists of many seperate daemons communicating with each other. To
 run the p2p network, we'll need to implement our own daemon.  So we'll
