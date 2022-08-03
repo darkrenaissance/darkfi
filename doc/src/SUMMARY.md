@@ -3,6 +3,7 @@
 [DarkFi](README.md)
 - [Ideology](IDEOLOGY.md)
 - [Development](development.md)
+- [Port ranges](portranges.md)
 - [Architecture](architecture/architecture.md)
   - [Overview](architecture/overview.md)
   - [Layers](architecture/layers.md)
