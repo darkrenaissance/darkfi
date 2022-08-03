@@ -107,7 +107,6 @@ impl Dchat {
     }
 
     async fn send(&self, msg: String) -> Result<()> {
-        //let msg = self.input.clone();
         let dchatmsg = Dchatmsg { msg };
         self.p2p.broadcast(dchatmsg).await?;
         Ok(())
