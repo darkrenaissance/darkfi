@@ -22,7 +22,7 @@ use darkfi::{
         ValidatorState, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
         TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
     },
-    crypto::{address::Address, keypair::PublicKey, token_list::DrkTokenList},
+    crypto::{address::Address, keypair::PublicKey},
     net,
     net::P2pPtr,
     node::Client,
@@ -256,18 +256,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     };
 
-    debug!("Parsing token lists...");
-    let tokenlist = Arc::new(DrkTokenList::new(&[
-        ("drk", include_bytes!("../../../contrib/token/darkfi_token_list.min.json")),
-        ("btc", include_bytes!("../../../contrib/token/bitcoin_token_list.min.json")),
-        ("eth", include_bytes!("../../../contrib/token/erc20_token_list.min.json")),
-        ("sol", include_bytes!("../../../contrib/token/solana_token_list.min.json")),
-    ])?);
-    debug!("Finished parsing token lists");
-
     // TODO: sqldb init cleanup
     // Initialize Client
-    let client = Arc::new(Client::new(wallet, tokenlist).await?);
+    let client = Arc::new(Client::new(wallet).await?);
 
     // Parse cashier addresses
     let mut cashier_pubkeys = vec![];

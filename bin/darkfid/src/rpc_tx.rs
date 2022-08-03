@@ -4,12 +4,9 @@ use log::{error, warn};
 use serde_json::{json, Value};
 
 use darkfi::{
-    crypto::{address::Address, keypair::PublicKey, token_id::generate_id},
-    rpc::jsonrpc::{
-        ErrorCode::{InternalError, InvalidParams},
-        JsonError, JsonResponse, JsonResult,
-    },
-    util::{decode_base10, serial::serialize, NetworkName},
+    crypto::{address::Address, keypair::PublicKey, token_id},
+    rpc::jsonrpc::{ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
+    util::serial::serialize,
 };
 
 use super::Darkfid;
@@ -19,27 +16,30 @@ impl Darkfid {
     // RPCAPI:
     // Transfer a given amount of some token to the given address.
     // Returns a transaction ID upon success.
-    // --> {"jsonrpc": "2.0", "method": "tx.transfer", "params": ["darkfi" "gdrk", "1DarkFi...", 12.0], "id": 1}
+    //
+    // * `dest_addr` -> Recipient's DarkFi address
+    // * `token_id` -> ID of the token to send
+    // * `12345` -> Amount in `u64` of the funds to send
+    //
+    // --> {"jsonrpc": "2.0", "method": "tx.transfer", "params": ["dest_addr", "token_id", 12345], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID...", "id": 1}
     pub async fn transfer(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 4 ||
+        if params.len() != 3 ||
             !params[0].is_string() ||
             !params[1].is_string() ||
-            !params[2].is_string() ||
-            !params[3].is_f64()
+            !params[2].is_u64()
         {
             return JsonError::new(InvalidParams, None, id).into()
         }
-
-        let network = params[0].as_str().unwrap();
-        let token = params[1].as_str().unwrap();
-        let address = params[2].as_str().unwrap();
-        let amount = params[3].as_f64().unwrap();
 
         if !(*self.synced.lock().await) {
             error!("transfer(): Blockchain is not yet synced");
             return server_error(RpcError::NotYetSynced, id)
         }
+
+        let address = params[0].as_str().unwrap();
+        let token = params[1].as_str().unwrap();
+        let amount = params[2].as_u64().unwrap();
 
         let address = match Address::from_str(address) {
             Ok(v) => v,
@@ -57,42 +57,13 @@ impl Darkfid {
             }
         };
 
-        let amount = amount.to_string();
-        let amount = match decode_base10(&amount, 8, true) {
+        let token_id = match token_id::parse_b58(token) {
             Ok(v) => v,
             Err(e) => {
-                error!("transfer(): Failed parsing amount from string: {}", e);
-                return server_error(RpcError::InvalidAmountParam, id)
+                error!("transfer(): Failed parsing Token ID from string: {}", e);
+                return server_error(RpcError::ParseError, id)
             }
         };
-        let amount: u64 = match amount.try_into() {
-            Ok(v) => v,
-            Err(e) => {
-                error!("transfer(): Failed converting biguint to u64: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
-
-        let network = match NetworkName::from_str(network) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("transfer(): Failed parsing NetworkName: {}", e);
-                return server_error(RpcError::NetworkNameError, id)
-            }
-        };
-
-        let token_id =
-            if let Some(tok) = self.client.tokenlist.by_net[&network].get(token.to_uppercase()) {
-                tok.drk_address
-            } else {
-                match generate_id(&network, token) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("transfer(): Failed generate_id(): {}", e);
-                        return JsonError::new(InternalError, None, id).into()
-                    }
-                }
-            };
 
         let tx = match self
             .client

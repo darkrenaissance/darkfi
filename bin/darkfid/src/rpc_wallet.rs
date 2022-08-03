@@ -1,6 +1,5 @@
 use fxhash::FxHashMap;
-use log::{error, warn};
-use num_bigint::BigUint;
+use log::error;
 use pasta_curves::group::ff::PrimeField;
 use serde_json::{json, Value};
 
@@ -13,7 +12,6 @@ use darkfi::{
         ErrorCode::{InternalError, InvalidParams},
         JsonError, JsonResponse, JsonResult,
     },
-    util::{decode_base10, encode_base10, NetworkName},
 };
 
 use super::Darkfid;
@@ -191,10 +189,10 @@ impl Darkfid {
     }
 
     // RPCAPI:
-    // Queries the wallet for known balances.
-    // Returns a map of balances, indexed by `network`, and token ID.
+    /// Queries the wallet for known tokens with active balances.
+    /// Returns a map of balances, indexed by the token ID.
     // --> {"jsonrpc": "2.0", "method": "wallet.get_balances", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": [{"btc": [100, "Bitcoin"]}, {...}], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [{"1Foobar...": 100}, {...}]", "id": 1}
     pub async fn get_balances(&self, id: Value, _params: &[Value]) -> JsonResult {
         let balances = match self.client.get_balances().await {
             Ok(v) => v,
@@ -204,50 +202,18 @@ impl Darkfid {
             }
         };
 
-        // k: ticker/drk_addr, v: (amount, network, net_addr, drk_addr)
-        let mut ret: FxHashMap<String, (String, String, String, String)> = FxHashMap::default();
+        // k: token_id, v: [amount]
+        let mut ret: FxHashMap<String, u64> = FxHashMap::default();
 
         for balance in balances.list {
-            let drk_addr = bs58::encode(balance.token_id.to_repr()).into_string();
-            let mut amount = BigUint::from(balance.value);
+            let token_id = bs58::encode(balance.token_id.to_repr()).into_string();
+            let mut amount = balance.value;
 
-            let (net_name, net_addr) =
-                if let Some((net, tok)) = self.client.tokenlist.by_addr.get(&drk_addr) {
-                    (net, tok.net_address.clone())
-                } else {
-                    warn!("Could not find network name and token info for {}", drk_addr);
-                    (&NetworkName::DarkFi, "unknown".to_string())
-                };
-
-            let mut ticker = None;
-            for (k, v) in self.client.tokenlist.by_net[net_name].0.iter() {
-                if v.net_address == net_addr {
-                    ticker = Some(k.clone());
-                    break
-                }
+            if let Some(prev) = ret.get(&token_id) {
+                amount += prev;
             }
 
-            if ticker.is_none() {
-                ticker = Some(drk_addr.clone())
-            }
-
-            let ticker = ticker.unwrap();
-
-            if let Some(prev) = ret.get(&ticker) {
-                // TODO: We shouldn't be hardcoding everything to 8 decimals.
-                let prev_amnt = match decode_base10(&prev.0, 8, false) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("Failed to decode_base10(): {}", e);
-                        return JsonError::new(InternalError, None, id).into()
-                    }
-                };
-
-                amount += prev_amnt;
-            }
-
-            let amount = encode_base10(amount, 8);
-            ret.insert(ticker, (amount, net_name.to_string(), net_addr, drk_addr));
+            ret.insert(token_id, amount);
         }
 
         JsonResponse::new(json!(ret), id).into()
