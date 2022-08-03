@@ -176,7 +176,7 @@ impl RequestHandler for Darkfid {
             Some("blockchain.merkle_roots") => return self.merkle_roots(req.id, params).await,
             Some("tx.transfer") => return self.transfer(req.id, params).await,
             Some("wallet.keygen") => return self.keygen(req.id, params).await,
-            Some("wallet.get_key") => return self.get_key(req.id, params).await,
+            Some("wallet.get_addrs") => return self.get_addrs(req.id, params).await,
             Some("wallet.export_keypair") => return self.export_keypair(req.id, params).await,
             Some("wallet.import_keypair") => return self.import_keypair(req.id, params).await,
             Some("wallet.set_default_address") => {

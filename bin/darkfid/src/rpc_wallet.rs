@@ -35,9 +35,9 @@ impl Darkfid {
     // RPCAPI:
     // Fetches public keys by given indexes from the wallet and returns it in an
     // encoded format. `-1` is supported to fetch all available keys.
-    // --> {"jsonrpc": "2.0", "method": "wallet.get_key", "params": [1, 2], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "wallet.get_addrs", "params": [1, 2], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["foo", "bar"], "id": 1}
-    pub async fn get_key(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn get_addrs(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }

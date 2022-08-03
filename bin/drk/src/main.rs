@@ -182,14 +182,14 @@ impl Drk {
     }
 
     async fn wallet_address(&self) -> Result<()> {
-        let req = JsonRequest::new("wallet.get_key", json!([0_i64]));
+        let req = JsonRequest::new("wallet.get_addrs", json!([0_i64]));
         let rep = self.rpc_client.request(req).await?;
         println!("Default wallet address: {}", rep);
         Ok(())
     }
 
     async fn wallet_all_addresses(&self) -> Result<()> {
-        let req = JsonRequest::new("wallet.get_key", json!([-1]));
+        let req = JsonRequest::new("wallet.get_addrs", json!([-1]));
         let rep = self.rpc_client.request(req).await?;
         println!("Wallet addresses:\n{:#?}", rep);
         Ok(())
