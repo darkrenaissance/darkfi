@@ -10,7 +10,7 @@ use darkfi::{cli_desc, Result};
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
-#[structopt(name = "seedd", about = cli_desc!())]
+#[structopt(name = "lilith", about = cli_desc!())]
 pub struct Args {
     #[structopt(short, long)]
     /// Configuration file to use

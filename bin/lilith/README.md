@@ -1,4 +1,4 @@
-seedd
+lilith
 ==========
 
 A tool to deploy multiple P2P network seed nodes for darkfi applications, in a single daemon.
@@ -6,11 +6,11 @@ A tool to deploy multiple P2P network seed nodes for darkfi applications, in a s
 ## Usage
 
 ```
-seedd 0.3.0
-Defines the network specific settings
+lilith 0.3.0
+Daemon that spawns P2P seeds
 
 USAGE:
-    seedd [FLAGS] [OPTIONS]
+    lilith [FLAGS] [OPTIONS]
 
 FLAGS:
     -h, --help       Prints help information
@@ -22,13 +22,13 @@ OPTIONS:
         --url <url>          Daemon published url, common for all enabled networks [default: tcp://127.0.0.1]
 ```
 
-On first execution, daemon will create default config file ~/.config/darkfi/seedd_config.toml.
+On first execution, daemon will create default config file ~/.config/darkfi/lilith_config.toml.
 Configuration must be verified, and application networks should be configured accordingly.
 
-Run seedd as follows:
+Run lilith as follows:
 
 ```
-% cargo run
+% lilith
 13:02:30 [INFO] Found configuration for network: darkfid
 13:02:30 [INFO] Found configuration for network: ircd
 13:02:30 [INFO] Found configuration for network: taud

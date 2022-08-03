@@ -2382,6 +2382,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "lilith"
+version = "0.3.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "ctrlc-async",
+ "darkfi",
+ "easy-parallel",
+ "futures-lite",
+ "fxhash",
+ "log",
+ "serde",
+ "serde_derive",
+ "simplelog",
+ "structopt",
+ "structopt-toml",
+ "toml 0.5.9",
+ "url",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

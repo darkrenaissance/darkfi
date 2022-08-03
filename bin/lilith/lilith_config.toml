@@ -1,4 +1,4 @@
-## seedd configuration file
+## lilith configuration file
 ##
 ## Please make sure you go through all the settings so you can configure
 ## your daemon properly.
@@ -15,7 +15,6 @@
 #seeds = []
 #peers = []
 
-## Per-network settings
 #[network."darkfid_consensus"]
 #port = 33033
 #seeds = []

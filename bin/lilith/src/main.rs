@@ -17,8 +17,8 @@ use darkfi::{
 mod config;
 use config::{parse_configured_networks, Args, NetInfo};
 
-const CONFIG_FILE: &str = "seedd_config.toml";
-const CONFIG_FILE_CONTENTS: &str = include_str!("../seedd_config.toml");
+const CONFIG_FILE: &str = "lilith_config.toml";
+const CONFIG_FILE_CONTENTS: &str = include_str!("../lilith_config.toml");
 
 async fn spawn_network(
     name: &str,
