@@ -11,12 +11,13 @@ connections. A seed node is used when connecting to the network: it is
 a special kind of inbound node that gets connected to, sends over a list
 of addresses and disconnects again.
 
-The behavior of the different kinds of nodes is defined in what is
-called a [Session](../../../src/net/session/mod.rs). Session is a trait
-that outbound, inbound, manual and seed nodes all implement. Session
-implementations expose methods such as stopping and starting a channel,
-accepting connections (inbound nodes) or making connections (outbound
-nodes).
+The behavior of the different
+kinds of nodes is defined in what is called a
+[Session](https://github.com/darkrenaissance/darkfi/blob/master/src/net/session/mod.rs#L93).
+Session is a trait that outbound, inbound, manual and seed nodes all
+implement. Session implementations expose methods such as stopping and
+starting a channel, accepting connections (inbound nodes) or making
+connections (outbound nodes).
 
 On production-ready software, you would usually configure your node
 using a config file or command line inputs. On dchat we are keeping

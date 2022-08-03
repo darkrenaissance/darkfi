@@ -47,5 +47,5 @@ but soon we'll run dchat inside this block.
 Note: DarkFi includes a macro called async_daemonize that is used by
 DarkFi binaries to minimize boilerplate in the repo.  To keep things
 simple we will ignore this macro for the purpose of this tutorial.  But
-check it out if you are curious: [util/cli.rs](../../../src/util/cli.rs).
+check it out if you are curious: [util/cli.rs](https://github.com/darkrenaissance/darkfi/blob/master/src/util/cli.rs#L154).
 

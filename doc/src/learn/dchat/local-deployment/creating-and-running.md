@@ -45,7 +45,7 @@ async fn start(&self, ex: Arc<Executor<'_>>) -> Result<()> {
 
 Let's take a quick look at the underlying p2p methods we're using here.
 
-This is [start()](../../../src/net/p2p.rs):
+This is [start()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L129):
 
 ```
 pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
@@ -66,7 +66,7 @@ pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
 ```
 
 start() changes the P2pState to P2pState::Start and runs a [seed
-session](../../../src/net/session/seed_session.rs).
+session](https://github.com/darkrenaissance/darkfi/blob/master/src/net/session/seed_session.rs).
 
 This loops through the seed addresses specified in our Settings and
 tries to connect to them. The seed session either connects successfully,
@@ -76,7 +76,7 @@ If a seed node connects successfully, it runs a version exchange protocol,
 stores the channel in the p2p list of channels, and disconnects, removing
 the channel from the channel list.
 
-This is [run()](../../../src/net/p2p.rs):
+This is [run()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L157):
 
 ```
 pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
