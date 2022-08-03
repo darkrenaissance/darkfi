@@ -12,7 +12,6 @@ use crate::{
         keypair::{Keypair, PublicKey},
         merkle_node::MerkleNode,
         proof::ProvingKey,
-        token_list::DrkTokenList,
         types::DrkTokenId,
         OwnCoin,
     },
@@ -34,13 +33,12 @@ use crate::{
 pub struct Client {
     pub main_keypair: Mutex<Keypair>,
     pub wallet: WalletPtr,
-    pub tokenlist: Arc<DrkTokenList>,
     mint_pk: Lazy<ProvingKey>,
     burn_pk: Lazy<ProvingKey>,
 }
 
 impl Client {
-    pub async fn new(wallet: WalletPtr, tokenlist: Arc<DrkTokenList>) -> Result<Self> {
+    pub async fn new(wallet: WalletPtr) -> Result<Self> {
         // Initialize or load the wallet
         wallet.init_db().await?;
 
@@ -57,7 +55,6 @@ impl Client {
         Ok(Self {
             main_keypair: Mutex::new(main_keypair),
             wallet,
-            tokenlist,
             mint_pk: Lazy::new(),
             burn_pk: Lazy::new(),
         })
