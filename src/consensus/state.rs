@@ -1039,13 +1039,7 @@ impl ValidatorState {
         let mut state = self.state_machine.lock().await;
         for update in updates {
             state
-                .apply(
-                    update,
-                    secret_keys.clone(),
-                    notify.clone(),
-                    self.client.wallet.clone(),
-                    self.client.tokenlist.clone(),
-                )
+                .apply(update, secret_keys.clone(), notify.clone(), self.client.wallet.clone())
                 .await?;
         }
         drop(state);
