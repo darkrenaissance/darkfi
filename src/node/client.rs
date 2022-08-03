@@ -190,6 +190,10 @@ impl Client {
         self.wallet.confirm_spend_coin(coin).await
     }
 
+    pub async fn revert_spend_coin(&self, coin: &Coin) -> Result<()> {
+        self.wallet.revert_spend_coin(coin).await
+    }
+
     pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
         self.wallet.get_keypairs().await
     }

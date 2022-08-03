@@ -345,6 +345,21 @@ impl WalletDb {
         Ok(())
     }
 
+    pub async fn revert_spend_coin(&self, coin: &Coin) -> Result<()> {
+        debug!("Revert spend coin");
+        let is_spent = 0;
+        let coin = serialize(coin);
+
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query("UPDATE coins SET is_spent = ?1 WHERE coin = ?2;")
+            .bind(is_spent)
+            .bind(coin)
+            .execute(&mut conn)
+            .await?;
+
+        Ok(())
+    }
+
     pub async fn get_balances(&self) -> Result<Balances> {
         debug!("Getting tokens and balances");
         let is_spent = 0;
