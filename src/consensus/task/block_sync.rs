@@ -40,7 +40,7 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
 
             // Verify and store retrieved blocks
             debug!("block_sync_task(): Processing received blocks");
-            state.write().await.receive_blocks(&resp.blocks).await?;
+            state.write().await.receive_sync_blocks(&resp.blocks).await?;
 
             let last_received = state.read().await.blockchain.last()?;
             info!("Last received block: {:?} - {:?}", last_received.0, last_received.1);

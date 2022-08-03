@@ -970,6 +970,37 @@ impl ValidatorState {
         Ok(true)
     }
 
+    /// Validate and append to canonical state received finalized blocks from block sync task.
+    /// Already existing blocks are ignored.
+    pub async fn receive_sync_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
+        let mut new_blocks = vec![];
+        for block in blocks {
+            match self.blockchain.has_block(&block) {
+                Ok(v) => {
+                    if v {
+                        debug!("receive_sync_blocks(): Existing block received");
+                        continue
+                    }
+                    new_blocks.push(block.clone());
+                }
+                Err(e) => {
+                    error!("receive_sync_blocks(): failed checking for has_block(): {}", e);
+                    continue
+                }
+            };
+        }
+
+        if new_blocks.is_empty() {
+            debug!("receive_sync_blocks(): no new blocks to append");
+            return Ok(())
+        }
+
+        debug!("receive_sync_blocks(): Executing state transitions");
+        self.receive_blocks(&new_blocks[..]).await?;
+
+        Ok(())
+    }
+
     /// Validate state transitions for given transactions and state and
     /// return a vector of [`StateUpdate`]
     pub fn validate_state_transitions(
