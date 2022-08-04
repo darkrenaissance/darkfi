@@ -1,8 +1,8 @@
 [package]
-name = "drk"
+name = "darkotc"
 version = "0.3.0"
 homepage = "https://dark.fi"
-description = "Command-line client for darkfid"
+description = "Atomic swap commandline tool"
 authors = ["darkfi <dev@dark.fi>"]
 repository = "https://github.com/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
@@ -10,11 +10,12 @@ edition = "2021"
 
 [dependencies]
 async-std = {version = "1.12.0", features = ["attributes"]}
+bs58 = "0.4.0"
 clap = {version = "3.2.16", features = ["derive"]}
-darkfi = {path = "../../", features = ["crypto", "util", "rpc"]}
-log = "0.4.17"
+darkfi = {path = "../../", features = ["crypto", "rpc", "util"]}
+halo2_proofs = "0.2.0"
+halo2_gadgets = "0.2.0"
 num-bigint = {version = "0.4.3", features = ["serde"]}
-prettytable-rs = "0.8.0"
+rand = "0.8.5"
 serde_json = "1.0.83"
-simplelog = "0.12.0"
 url = "2.2.2"

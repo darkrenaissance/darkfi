@@ -8,8 +8,8 @@ description = "Demo chat to document darkfi net code"
 darkfi = {path = "../../", features = ["net", "rpc"]}
 
 # Async
-async-std = "1"
-async-trait = "0.1.56"
+async-std = "1.12.0"
+async-trait = "0.1.57"
 async-executor = "1.4.1"
 async-channel = "1.6.1"
 easy-parallel = "3.2.0"
@@ -22,7 +22,7 @@ simplelog = "0.12.0"
 url = "2.2.2"
 
 # Encoding and parsing
-serde = {version = "1.0.138", features = ["derive"]}
-toml = "0.4.2"
+serde = {version = "1.0.142", features = ["derive"]}
+toml = "0.5.9"
 
 

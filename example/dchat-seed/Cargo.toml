@@ -9,8 +9,8 @@ description = "Seed node for dchat"
 darkfi = {path = "../../", features = ["net", "rpc"]}
 
 # Async
-futures = "0.3.0"
-async-std = "1"
+futures = "0.3.21"
+async-std = "1.12.0"
 async-executor = "1.4.1"
 async-channel = "1.6.1"
 easy-parallel = "3.2.0"
