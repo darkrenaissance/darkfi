@@ -219,6 +219,15 @@ impl Client {
         self.wallet.get_balances().await
     }
 
+    pub async fn get_coins_valtok(
+        &self,
+        value: u64,
+        token_id: DrkTokenId,
+        unspent: bool,
+    ) -> Result<Vec<OwnCoin>> {
+        self.wallet.get_coins_valtok(value, token_id, unspent).await
+    }
+
     pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
         self.wallet.get_tree().await
     }

@@ -1,6 +1,7 @@
 use std::{fs::create_dir_all, path::Path, str::FromStr, time::Duration};
 
 use async_std::sync::Arc;
+use group::ff::PrimeField;
 use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, error, info, LevelFilter};
 use rand::rngs::OsRng;
@@ -283,6 +284,65 @@ impl WalletDb {
         Ok(own_coins)
     }
 
+    pub async fn get_coins_valtok(
+        &self,
+        value: u64,
+        token_id: DrkTokenId,
+        unspent: bool,
+    ) -> Result<Vec<OwnCoin>> {
+        debug!(
+            "Querying for coins with value {} and token_id {}",
+            value,
+            bs58::encode(token_id.to_repr()).into_string()
+        );
+
+        let mut conn = self.conn.acquire().await?;
+        let rows = match unspent {
+            true => {
+                sqlx::query(
+                    "SELECT * FROM coins WHERE is_spent = ?1 AND value = ?2 AND token_id = ?3;",
+                )
+                .bind(0)
+                .bind(serialize(&value))
+                .bind(serialize(&token_id))
+                .fetch_all(&mut conn)
+                .await?
+            }
+            false => {
+                sqlx::query("SELECT * FROM coins WHERE value = ?1 AND token_id = ?2;")
+                    .bind(serialize(&value))
+                    .bind(serialize(&token_id))
+                    .fetch_all(&mut conn)
+                    .await?
+            }
+        };
+
+        let mut coins = vec![];
+
+        for row in rows {
+            let coin = deserialize(row.get("coin"))?;
+
+            // Note
+            let serial = deserialize(row.get("serial"))?;
+            let coin_blind = deserialize(row.get("coin_blind"))?;
+            let value_blind = deserialize(row.get("valcom_blind"))?;
+            let value = deserialize(row.get("value"))?;
+            let token_id = deserialize(row.get("token_id"))?;
+            let token_blind = deserialize(row.get("token_blind"))?;
+            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind };
+
+            let secret = deserialize(row.get("secret"))?;
+            let nullifier = deserialize(row.get("nullifier"))?;
+            let leaf_position = deserialize(row.get("leaf_position"))?;
+
+            let oc = OwnCoin { coin, note, secret, nullifier, leaf_position };
+
+            coins.push(oc);
+        }
+
+        Ok(coins)
+    }
+
     pub async fn put_own_coin(&self, own_coin: OwnCoin) -> Result<()> {
         debug!("Putting own coin into wallet database");
 
@@ -312,7 +372,7 @@ impl WalletDb {
         .bind(value_blind)
         .bind(token_blind)
         .bind(value)
-        .bind(token_id) // token_id
+        .bind(token_id)
         .bind(secret)
         .bind(is_spent)
         .bind(nullifier)
