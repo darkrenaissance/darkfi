@@ -14,8 +14,6 @@ let p2p = net::P2p::new(settings?.into()).await;
 We will next create a Dchat struct that will store all the data required
 by dchat. For now, it will just hold a pointer to the p2p network.
 
-To accesss this we will need to add net to our imports, like so:
-
 ```
 use darkfi::net;
 

@@ -28,32 +28,36 @@ our custom protocol. In particular:
 
 1. The Message Subsystem
 
-MessageSubsystem is a generic publish/subscribe class that can
-dispatch any kind of message to a list of dispatchers. This is how we
-can send and receive custom messages on the p2p network.
+MessageSubsystem is a generic publish/subscribe class that contains
+a list of Message dispatchers. A new dispatcher is created for every
+Message type. These Message-specific dispatchers maintain a list of
+susbscribers that are subscribed to a particular message.
 
 2. Message Subscription
 
-A subscription to a message type. 
+A subscription to a specific Message type. Handles receiving messages
+on a subscription.
 
 3. Channel
 
 A channel is an async connection for communication between nodes. It is
 also a powerful interface that exposes methods to the Message Subsystem
-and implements message subscriptions.  Channel also contains a weak
-pointer to its parent, Session.
+and implements message subscriptions.
 
 4. The Protocol Registry 
 
-ProtocolRegistry takes any kind of generic protocol and initializes it. We
-use it through the method register() which passes a protocol constructor
-and a session bitflag which determines which sessions (outbound, inbound,
-or seed) will run our protocol.
+ProtocolRegistry is a registry of all protocols. We use it through the
+method register() which passes a protocol constructor and a session
+bitflag. The bitflag specifies which sessions the protocol is created
+for. The ProtocolRegistry then spawns new protocols for different channels
+depending on the session.
 
 5. ProtocolJobsManager
 
-An asynchronous job manager that spawns and stops tasks created by
-protocols across the network.
+An asynchronous job manager that spawns and stops tasks. Its main
+purpose is so a protocol can cleanly close all started jobs, through
+the function close_all_tasks().  This way if the connection between
+nodes is dropped and the channel closes, all protocols are also shutdown.
 
 6. ProtocolBase
 

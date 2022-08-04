@@ -49,8 +49,15 @@ It should output the following error:
 Error: NetworkOperationFailed
 ```
 
-That's because there is no seed node online for our nodes to connect
-to. Let's remedy that.
+That's because there is no seed node online for our nodes to connect to. A
+seed node is used when connecting to the network: it is a special kind
+of inbound node that gets connected to, sends over a list of addresses
+and disconnects again.  This behavior is defined in the ProtocolSeed.
+
+Everytime we run `p2p.start()` we attempt to connect to a seed using a
+SeedSyncSession.  If the SeedSyncSession fails, p2p.start() will fail,
+so without a seed node, our inbound and outbound nodes cannot establish
+a connection to the network. Let's remedy that.
 
 We have two options here. First, we could implement our own seed node.
 Alternatively, DarkFi maintains a master seed node called lilith that

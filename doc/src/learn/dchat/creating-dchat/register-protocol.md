@@ -8,8 +8,6 @@ register_protocol(). It will invoke the protocol_registry using the
 handle to the p2p network contained in the Dchat struct. It will then
 call register() on the registry and pass the ProtocolDchat constructor.
 
-Be sure to import Dchatmsg and ProtocolDchat so we can access their data.
-
 ```
 use crate::{dchatmsg::DchatmsgsBuffer, protocol_dchat::ProtocolDchat};
 
@@ -28,12 +26,28 @@ async fn register_protocol(&self, msgs: DchatmsgsBuffer) -> Result<()> {
 }
 ```
 
-We set the bitflag to SESSION_ALL to specify that this protocol should
-be performed by every session. We also use a closure to capture a pointer
-to Channel, which we pass into the ProtocolDchat constructor. This gives
-us access to the message subscriber methods.
+There's a lot going on here. register() takes a closure with two
+arguments, `channel` and `p2p`. We use `move` to capture these values. We
+then create an async closure that captures these values and the value
+`msgs` and use them to call ProtocolDchat::init() in the async block.
 
-Notice that register_protocol() requires a DchatmsgsBuffer that we send
+The code would be expressed more simply as:
+
+```
+registry.register(net::SESSION_ALL, async move |channel, _p2p| {
+        ProtocolDchat::init(channel, msgs).await
+    })
+    .await;
+```
+
+However we cannot do this due to limitation with async closures. So
+instead we wrap the `async move` in a `move` in order to capture the
+variables needed by ProtocolDchat::init().
+
+Notice the use of a bitflag. We use SESSION_ALL to specify that this
+protocol should be performed by every session. 
+
+Also notice that register_protocol() requires a DchatmsgsBuffer that we send
 to the ProtocolDchat constructor. We'll create the DchatmsgsBuffer in
 main() and pass it to Dchat::new(). Let's add DchatmsgsBuffer to the
 Dchat struct definition first.
