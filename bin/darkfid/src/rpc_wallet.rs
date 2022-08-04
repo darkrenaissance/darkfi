@@ -1,4 +1,5 @@
 use fxhash::FxHashMap;
+use incrementalmerkletree::Tree;
 use log::error;
 use pasta_curves::group::ff::PrimeField;
 use serde_json::{json, Value};
@@ -256,6 +257,30 @@ impl Darkfid {
 
         let ret: Vec<String> =
             coins.iter().map(|x| bs58::encode(serialize(x)).into_string()).collect();
+        JsonResponse::new(json!(ret), id).into()
+    }
+
+    // RPCAPI:
+    // Query the state merkle tree for the merkle path of a given leaf position.
+    // --> {"jsonrpc": "2.0", "method": "wallet.get_merkle_path", "params": [3], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["f091uf1...", "081ff0h10w1h0...", ...], "id": 1}
+    pub async fn get_merkle_path(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_u64() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let leaf_pos: incrementalmerkletree::Position =
+            ((params[0].as_u64().unwrap() as u64) as usize).into();
+
+        let validator_state = self.validator_state.read().await;
+        let state = validator_state.state_machine.lock().await;
+        let root = state.tree.root(0).unwrap();
+        let merkle_path = state.tree.authentication_path(leaf_pos, &root).unwrap();
+        drop(state);
+        drop(validator_state);
+
+        let ret: Vec<String> =
+            merkle_path.iter().map(|x| bs58::encode(serialize(x)).into_string()).collect();
         JsonResponse::new(json!(ret), id).into()
     }
 }

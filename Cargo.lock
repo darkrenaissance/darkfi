@@ -1271,6 +1271,7 @@ dependencies = [
  "easy-parallel",
  "futures-lite",
  "fxhash",
+ "incrementalmerkletree",
  "lazy-init",
  "log",
  "num-bigint",
