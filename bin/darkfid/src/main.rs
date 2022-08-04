@@ -183,6 +183,7 @@ impl RequestHandler for Darkfid {
                 return self.set_default_address(req.id, params).await
             }
             Some("wallet.get_balances") => return self.get_balances(req.id, params).await,
+            Some("wallet.get_coins_valtok") => return self.get_coins_valtok(req.id, params).await,
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }

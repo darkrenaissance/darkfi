@@ -7,11 +7,13 @@ use darkfi::{
     crypto::{
         address::Address,
         keypair::{Keypair, PublicKey, SecretKey},
+        token_id,
     },
     rpc::jsonrpc::{
-        ErrorCode::{InternalError, InvalidParams},
+        ErrorCode::{InternalError, InvalidParams, ParseError},
         JsonError, JsonResponse, JsonResult,
     },
+    util::serial::serialize,
 };
 
 use super::Darkfid;
@@ -189,8 +191,8 @@ impl Darkfid {
     }
 
     // RPCAPI:
-    /// Queries the wallet for known tokens with active balances.
-    /// Returns a map of balances, indexed by the token ID.
+    // Queries the wallet for known tokens with active balances.
+    // Returns a map of balances, indexed by the token ID.
     // --> {"jsonrpc": "2.0", "method": "wallet.get_balances", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [{"1Foobar...": 100}, {...}]", "id": 1}
     pub async fn get_balances(&self, id: Value, _params: &[Value]) -> JsonResult {
@@ -216,6 +218,44 @@ impl Darkfid {
             ret.insert(token_id, amount);
         }
 
+        JsonResponse::new(json!(ret), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the wallet for a coin containing given parameters (value, token_id, unspent),
+    // and returns the entire row with the coin's data:
+    //
+    // --> {"jsonrpc": "2.0", "method": "wallet.get_coins_valtok", "params": [1234, "F00b4r...", true], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["coin", "data", ...], "id": 1}
+    pub async fn get_coins_valtok(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 3 ||
+            !params[0].is_u64() ||
+            !params[1].is_string() ||
+            !params[2].is_boolean()
+        {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let value = params[0].as_u64().unwrap();
+        let unspent = params[2].as_bool().unwrap();
+        let token_id = match token_id::parse_b58(params[1].as_str().unwrap()) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Failed parsing token_id from base58 string: {}", e);
+                return JsonError::new(ParseError, None, id).into()
+            }
+        };
+
+        let coins = match self.client.get_coins_valtok(value, token_id, unspent).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Failed fetching coins by valtok from wallet: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        let ret: Vec<String> =
+            coins.iter().map(|x| bs58::encode(serialize(x)).into_string()).collect();
         JsonResponse::new(json!(ret), id).into()
     }
 }
