@@ -15,7 +15,7 @@ use crate::{
 use super::{
     message::Message,
     protocol::{register_default_protocols, ProtocolRegistry},
-    session::{InboundSession, ManualSession, OutboundSession, SeedSession, Session},
+    session::{InboundSession, ManualSession, OutboundSession, SeedSyncSession, Session},
     Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr,
 };
 
@@ -132,7 +132,7 @@ impl P2p {
         *self.state.lock().await = P2pState::Start;
 
         // Start seed session
-        let seed = SeedSession::new(Arc::downgrade(&self));
+        let seed = SeedSyncSession::new(Arc::downgrade(&self));
         // This will block until all seed queries have finished
         seed.start(executor.clone()).await?;
 

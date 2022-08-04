@@ -19,20 +19,20 @@ use super::{
 };
 
 /// Defines seed connections session.
-pub struct SeedSession {
+pub struct SeedSyncSession {
     p2p: Weak<P2p>,
 }
 
-impl SeedSession {
-    /// Create a new seed session instance.
+impl SeedSyncSession {
+    /// Create a new seed sync session instance.
     pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
         Arc::new(Self { p2p })
     }
 
-    /// Start the seed session. Creates a new task for every seed connection and
+    /// Start the seed sync session. Creates a new task for every seed connection and
     /// starts the seed on each task.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net", "SeedSession::start() [START]");
+        debug!(target: "net", "SeedSyncSession::start() [START]");
         let settings = self.p2p().settings();
 
         if settings.seeds.is_empty() {
@@ -85,7 +85,7 @@ impl SeedSession {
             return Err(Error::NetworkOperationFailed)
         }
 
-        debug!(target: "net", "SeedSession::start() [END]");
+        debug!(target: "net", "SeedSyncSession::start() [END]");
         Ok(())
     }
 
@@ -96,7 +96,7 @@ impl SeedSession {
         seed: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        debug!(target: "net", "SeedSession::start_seed(i={}) [START]", seed_index);
+        debug!(target: "net", "SeedSyncSession::start_seed(i={}) [START]", seed_index);
         let (_hosts, settings) = {
             let p2p = self.p2p.upgrade().unwrap();
             (p2p.hosts(), p2p.settings())
@@ -113,13 +113,13 @@ impl SeedSession {
                 if let Err(err) =
                     self.clone().register_channel(channel.clone(), executor.clone()).await
                 {
-                    warn!("Failure during seed session #{} [{}]: {}", seed_index, seed, err);
+                    warn!("Failure during seed sync session #{} [{}]: {}", seed_index, seed, err);
                 }
 
                 info!("Disconnecting from seed #{} [{}]", seed_index, seed);
                 channel.stop().await;
 
-                debug!(target: "net", "SeedSession::start_seed(i={}) [END]", seed_index);
+                debug!(target: "net", "SeedSyncSession::start_seed(i={}) [END]", seed_index);
                 Ok(())
             }
             Err(err) => {
@@ -151,7 +151,7 @@ impl SeedSession {
 }
 
 #[async_trait]
-impl Session for SeedSession {
+impl Session for SeedSyncSession {
     async fn get_info(&self) -> serde_json::Value {
         json!({
             "key": 110

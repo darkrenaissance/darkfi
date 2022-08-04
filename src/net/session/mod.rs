@@ -8,10 +8,10 @@ use crate::Result;
 
 use super::{p2p::P2pPtr, protocol::ProtocolVersion, ChannelPtr};
 
-/// Seed session creates a connection to the seed nodes specified in settings.
-/// A new seed session is created every time we call p2p::start(). The seed
-/// session loops through all the configured seeds and tries to connect to
-/// them using a Connector. The seed session either connects successfully,
+/// Seed sync session creates a connection to the seed nodes specified in settings.
+/// A new seed sync session is created every time we call p2p::start(). The seed
+/// sync session loops through all the configured seeds and tries to connect to
+/// them using a Connector. Seed sync either connects successfully,
 /// fails with an error or times out.
 ///
 /// If a seed node connects successfully, it runs a version exchange protocol,
@@ -28,7 +28,7 @@ use super::{p2p::P2pPtr, protocol::ProtocolVersion, ChannelPtr};
 /// perform_handshake_protocols(). This runs the version exchange protocol,
 /// stores the channel in the p2p list of channels, and subscribes to a stop
 /// signal.
-pub mod seed_session;
+pub mod seedsync_session;
 
 pub mod manual_session;
 
@@ -61,7 +61,7 @@ pub const SESSION_ALL: SessionBitflag = 0b1111;
 pub use inbound_session::InboundSession;
 pub use manual_session::ManualSession;
 pub use outbound_session::OutboundSession;
-pub use seed_session::SeedSession;
+pub use seedsync_session::SeedSyncSession;
 
 pub type SessionWeakPtr = Arc<Weak<dyn Session + Send + Sync + 'static>>;
 
