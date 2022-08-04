@@ -10,7 +10,7 @@ start() {
 	PWHOME="$(getent passwd $USER | awk -F: '{ print $6 }')"
 
 	ebegin "Starting lilith"
-	env TERM="xterm" \
+	env TERM="xterm" DARKFI_LOG="/tmp/lilith.log" \
 		start-stop-daemon \
 			--start \
 			--make-pidfile \
