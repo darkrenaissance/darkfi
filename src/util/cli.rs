@@ -4,8 +4,10 @@ use std::{
     marker::PhantomData,
     path::{Path, PathBuf},
     str,
+    time::Duration,
 };
 
+use indicatif::{ProgressBar, ProgressStyle};
 use serde::{de::DeserializeOwned, Serialize};
 use simplelog::ConfigBuilder;
 
@@ -195,4 +197,14 @@ macro_rules! async_daemonize {
             result
         }
     };
+}
+
+pub fn progress_bar(message: &str) -> ProgressBar {
+    let progress_bar = ProgressBar::new(42);
+    progress_bar.set_style(
+        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+    );
+    progress_bar.enable_steady_tick(Duration::from_millis(100));
+    progress_bar.set_message(message.to_string());
+    progress_bar
 }
