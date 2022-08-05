@@ -1,27 +1,38 @@
-use std::{process::exit, str::FromStr};
+use std::{
+    io::{stdin, Read},
+    process::exit,
+    str::FromStr,
+};
 
 use clap::{Parser, Subcommand};
-use halo2_proofs::arithmetic::Field;
+use darkfi::crypto::proof::VerifyingKey;
+use halo2_proofs::{arithmetic::Field, pasta::group::ff::PrimeField};
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use serde_json::json;
+use termion::color;
 use url::Url;
 
 use darkfi::{
     cli_desc,
     crypto::{
         address::Address,
-        burn_proof::create_burn_proof,
+        burn_proof::{create_burn_proof, verify_burn_proof},
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
-        mint_proof::create_mint_proof,
+        mint_proof::{create_mint_proof, verify_mint_proof},
         proof::ProvingKey,
         token_id,
-        types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
-        OwnCoin,
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+        BurnRevealedValues, MintRevealedValues, OwnCoin, Proof,
     },
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
-    util::{cli::progress_bar, encode_base10, serial::deserialize},
+    util::{
+        cli::progress_bar,
+        encode_base10,
+        serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
+    },
     zk::circuit::{BurnContract, MintContract},
     Result,
 };
@@ -57,6 +68,9 @@ enum Subcmd {
         /// Pair of values to swap: e.g. value_to_send:value_to_recv
         value_pair: String,
     },
+
+    /// Inspect swap data from stdin or file.
+    Inspect,
 }
 
 struct Rpc {
@@ -241,11 +255,11 @@ async fn init_swap(
     };
 
     // Build proving keys
-    let pb = progress_bar("Building proving key for the mint contract...");
+    let pb = progress_bar("Building proving key for the mint contract");
     let mint_pk = ProvingKey::build(8, &MintContract::default());
     pb.finish();
 
-    let pb = progress_bar("Building proving key for the burn contract...");
+    let pb = progress_bar("Building proving key for the burn contract");
     let burn_pk = ProvingKey::build(11, &BurnContract::default());
     pb.finish();
 
@@ -299,10 +313,194 @@ async fn init_swap(
 
     // Pack proofs together with pedersen commitment openings so
     // counterparty can verify correctness.
+    let swap_data = SwapData {
+        mint_proof,
+        mint_revealed,
+        mint_value: vp.1,
+        mint_token: tp.1,
+        mint_value_blind: recv_value_blind,
+        mint_token_blind: recv_token_blind,
+        burn_proof,
+        burn_value: vp.0,
+        burn_token: tp.0,
+        burn_revealed,
+        burn_value_blind: coin.note.value_blind,
+        burn_token_blind: coin.note.token_blind,
+    };
 
     // Print encoded data.
+    println!("{}", bs58::encode(serialize(&swap_data)).into_string());
 
     Ok(())
+}
+
+fn inspect(data: &str) -> Result<()> {
+    let mut mint_valid = false;
+    let mut burn_valid = false;
+    let mut mint_value_valid = false;
+    let mut mint_token_valid = false;
+    let mut burn_value_valid = false;
+    let mut burn_token_valid = false;
+
+    let bytes = match bs58::decode(data).into_vec() {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error decoding base58 data from input: {}", e);
+            exit(1);
+        }
+    };
+
+    let sd: SwapData = match deserialize(&bytes) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: Failed to deserialize swap data into struct: {}", e);
+            exit(1);
+        }
+    };
+
+    eprintln!("Successfully decoded data into SwapData struct");
+
+    // Build verifying keys
+    let pb = progress_bar("Building verifying key for the mint contract");
+    let mint_vk = VerifyingKey::build(8, &MintContract::default());
+    pb.finish();
+
+    let pb = progress_bar("Building verifying key for the burn contract");
+    let burn_vk = VerifyingKey::build(11, &BurnContract::default());
+    pb.finish();
+
+    let pb = progress_bar("Verifying burn proof");
+    if verify_burn_proof(&burn_vk, &sd.burn_proof, &sd.burn_revealed).is_ok() {
+        burn_valid = true;
+    }
+    pb.finish();
+
+    let pb = progress_bar("Verifying mint proof");
+    if verify_mint_proof(&mint_vk, &sd.mint_proof, &sd.mint_revealed).is_ok() {
+        mint_valid = true;
+    }
+    pb.finish();
+
+    eprintln!("  Verifying pedersen commitments");
+
+    if pedersen_commitment_u64(sd.burn_value, sd.burn_value_blind) == sd.burn_revealed.value_commit
+    {
+        burn_value_valid = true;
+    }
+
+    if pedersen_commitment_scalar(mod_r_p(sd.burn_token), sd.burn_token_blind) ==
+        sd.burn_revealed.token_commit
+    {
+        burn_token_valid = true;
+    }
+
+    if pedersen_commitment_u64(sd.mint_value, sd.mint_value_blind) == sd.mint_revealed.value_commit
+    {
+        mint_value_valid = true;
+    }
+
+    if pedersen_commitment_scalar(mod_r_p(sd.mint_token), sd.mint_token_blind) ==
+        sd.mint_revealed.token_commit
+    {
+        mint_token_valid = true;
+    }
+
+    let mut valid = true;
+    eprintln!("Summary:");
+
+    eprint!("  Burn proof: ");
+    if burn_valid {
+        eprintln!("{}VALID{}", color::Fg(color::Green), color::Fg(color::Reset));
+    } else {
+        eprintln!("{}INVALID{}", color::Fg(color::Red), color::Fg(color::Reset));
+        valid = false;
+    }
+
+    eprint!("  Burn proof value commitment: ");
+    if burn_value_valid {
+        eprintln!("{}VALID{}", color::Fg(color::Green), color::Fg(color::Reset));
+    } else {
+        eprintln!("{}INVALID{}", color::Fg(color::Red), color::Fg(color::Reset));
+        valid = false;
+    }
+
+    eprint!("  Burn proof token commitment: ");
+    if burn_token_valid {
+        eprintln!("{}VALID{}", color::Fg(color::Green), color::Fg(color::Reset));
+    } else {
+        eprintln!("{}INVALID{}", color::Fg(color::Red), color::Fg(color::Reset));
+        valid = false;
+    }
+
+    eprint!("  Mint proof: ");
+    if mint_valid {
+        eprintln!("{}VALID{}", color::Fg(color::Green), color::Fg(color::Reset));
+    } else {
+        eprintln!("{}INVALID{}", color::Fg(color::Red), color::Fg(color::Reset));
+        valid = false;
+    }
+
+    eprint!("  Mint proof value commitment: ");
+    if mint_value_valid {
+        eprintln!("{}VALID{}", color::Fg(color::Green), color::Fg(color::Reset));
+    } else {
+        eprintln!("{}INVALID{}", color::Fg(color::Red), color::Fg(color::Reset));
+        valid = false;
+    }
+
+    eprint!("  Mint proof token commitment: ");
+    if mint_token_valid {
+        eprintln!("{}VALID{}", color::Fg(color::Green), color::Fg(color::Reset));
+    } else {
+        eprintln!("{}INVALID{}", color::Fg(color::Red), color::Fg(color::Reset));
+        valid = false;
+    }
+
+    eprintln!("========================================");
+
+    eprintln!(
+        "Mint: {} {}",
+        encode_base10(BigUint::from(sd.mint_value), 8),
+        bs58::encode(sd.mint_token.to_repr()).into_string()
+    );
+    eprintln!(
+        "Burn: {} {}",
+        encode_base10(BigUint::from(sd.burn_value), 8),
+        bs58::encode(sd.burn_token.to_repr()).into_string()
+    );
+
+    if !valid {
+        eprintln!(
+            "\nThe ZK proofs and commitments inspected are {}NOT VALID{}",
+            color::Fg(color::Red),
+            color::Fg(color::Reset)
+        );
+        exit(1);
+    } else {
+        eprintln!(
+            "\nThe ZK proofs and commitments inspected are {}VALID{}",
+            color::Fg(color::Green),
+            color::Fg(color::Reset)
+        );
+    }
+
+    Ok(())
+}
+
+#[derive(SerialEncodable, SerialDecodable)]
+struct SwapData {
+    mint_proof: Proof,
+    mint_revealed: MintRevealedValues,
+    mint_value: u64,
+    mint_token: DrkTokenId,
+    mint_value_blind: DrkValueBlind,
+    mint_token_blind: DrkValueBlind,
+    burn_proof: Proof,
+    burn_revealed: BurnRevealedValues,
+    burn_value: u64,
+    burn_token: DrkTokenId,
+    burn_value_blind: DrkValueBlind,
+    burn_token_blind: DrkValueBlind,
 }
 
 #[async_std::main]
@@ -313,8 +511,12 @@ async fn main() -> Result<()> {
         Subcmd::Init { token_pair, value_pair } => {
             let token_pair = parse_token_pair(&token_pair)?;
             let value_pair = parse_value_pair(&value_pair)?;
-            let init_swap_data = init_swap(args.endpoint, token_pair, value_pair).await?;
-            Ok(())
+            init_swap(args.endpoint, token_pair, value_pair).await
+        }
+        Subcmd::Inspect => {
+            let mut buf = String::new();
+            stdin().read_to_string(&mut buf)?;
+            inspect(&buf.trim())
         }
     }
 }

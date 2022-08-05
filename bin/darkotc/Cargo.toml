@@ -18,4 +18,5 @@ halo2_gadgets = "0.2.0"
 num-bigint = {version = "0.4.3", features = ["serde"]}
 rand = "0.8.5"
 serde_json = "1.0.83"
+termion = "1.5.6"
 url = "2.2.2"
