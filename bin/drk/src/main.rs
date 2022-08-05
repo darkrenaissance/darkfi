@@ -13,7 +13,7 @@ use darkfi::{
     crypto::{address::Address, token_id},
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
-        cli::{get_log_config, get_log_level},
+        cli::{get_log_config, get_log_level, progress_bar},
         encode_base10, NetworkName,
     },
     Result,
@@ -126,7 +126,7 @@ impl Drk {
         let addr = if address.is_some() {
             address.unwrap()
         } else {
-            let req = JsonRequest::new("wallet.get_key", json!([0_i64]));
+            let req = JsonRequest::new("wallet.get_addrs", json!([0_i64]));
             let rep = self.rpc_client.request(req).await?;
             Address::from_str(rep.as_array().unwrap()[0].as_str().unwrap())?
         };
@@ -137,13 +137,20 @@ impl Drk {
             exit(1);
         }
 
-        println!("Requesting airdrop for {}", addr);
+        let pb = progress_bar(&format!("Requesting airdrop for {}", addr));
+
         let req = JsonRequest::new("airdrop", json!([json!(addr.to_string()), amount, token_id]));
         let rpc_client = RpcClient::new(endpoint).await?;
-        let rep = rpc_client.request(req).await?;
-        rpc_client.close().await?;
+        let rep = match rpc_client.oneshot_request(req).await {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("{}", e);
+                exit(1);
+            }
+        };
+        pb.finish();
 
-        println!("Success! Transaction ID: {}", rep);
+        println!("Transaction ID: {}", rep);
         Ok(())
     }
 
@@ -176,7 +183,11 @@ impl Drk {
             eprintln!("Found invalid balance data for key \"{}\"", i);
         }
 
-        println!("{}", table);
+        if table.is_empty() {
+            println!("No balances.");
+        } else {
+            println!("{}", table);
+        }
 
         Ok(())
     }
