@@ -1,8 +1,5 @@
 use std::{error, fmt};
 
-pub type Error = Box<dyn error::Error>;
-pub type Result<T> = std::result::Result<T, Error>;
-
 #[derive(Debug, Clone)]
 pub struct ErrorMissingSpecifier;
 
@@ -13,4 +10,3 @@ impl fmt::Display for ErrorMissingSpecifier {
 }
 
 impl error::Error for ErrorMissingSpecifier {}
-
