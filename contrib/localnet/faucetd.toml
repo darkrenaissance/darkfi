@@ -35,3 +35,9 @@ sync_p2p_seed = ["tls://127.0.0.1:8342"]
 
 # Peers to connect to for the syncing protocol
 #sync_p2p_peer = []
+
+# Airdrop timeout limit in seconds
+airdrop_timeout = 10
+
+# Airdrop amount limit
+airdrop_limit = "1000000"
