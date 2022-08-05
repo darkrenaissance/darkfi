@@ -27,7 +27,7 @@
   - [Research](learn/research.md)
   - [ZK explainer](learn/zk_explainer.md)
   - [Dchat](learn/dchat/dchat.md)
-    - [Deployment](learn/dchat/local-deployment/local-deployment.md)
+    - [Deployment](learn/dchat/deployment/local-deployment.md)
       - [Getting started](learn/dchat/deployment/getting-started.md)
       - [Writing a daemon](learn/dchat/deployment/writing-a-daemon.md)
       - [Sessions](learn/dchat/deployment/sessions.md)
