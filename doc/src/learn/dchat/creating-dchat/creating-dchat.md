@@ -6,8 +6,8 @@ send and receive messages across the network.
 
 This section will cover:
 
-* The Message type
-* Protocols and the protocol registry
-* The message subsystem
-* Message subscriptions
-* Channels
+* The `Message` type
+* `Protocols` and the `ProtocolRegistry`
+* The `MessageSubsystem`
+* `MessageSubscription`
+* `Channel`

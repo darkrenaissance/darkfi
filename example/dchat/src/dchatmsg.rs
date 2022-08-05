@@ -5,15 +5,15 @@ use darkfi::{
     util::serial::{SerialDecodable, SerialEncodable},
 };
 
-pub type DchatmsgsBuffer = Arc<Mutex<Vec<Dchatmsg>>>;
+pub type DchatMsgsBuffer = Arc<Mutex<Vec<DchatMsg>>>;
 
-impl net::Message for Dchatmsg {
+impl net::Message for DchatMsg {
     fn name() -> &'static str {
-        "Dchatmsg"
+        "DchatMsg"
     }
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct Dchatmsg {
+pub struct DchatMsg {
     pub msg: String,
 }

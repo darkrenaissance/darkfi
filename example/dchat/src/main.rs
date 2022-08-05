@@ -2,7 +2,7 @@ use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use easy_parallel::Parallel;
 
-use std::{fs::File, io::stdin};
+use std::{error, fs::File, io::stdin};
 
 use log::debug;
 use simplelog::WriteLogger;
@@ -11,22 +11,25 @@ use url::Url;
 use darkfi::{net, net::Settings};
 
 use crate::{
-    dchatmsg::{Dchatmsg, DchatmsgsBuffer},
-    error::{MissingSpecifier, Result},
+    dchat_error::ErrorMissingSpecifier,
+    dchatmsg::{DchatMsg, DchatMsgsBuffer},
     protocol_dchat::ProtocolDchat,
 };
 
+pub mod dchat_error;
 pub mod dchatmsg;
-pub mod error;
 pub mod protocol_dchat;
+
+pub type Error = Box<dyn error::Error>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 struct Dchat {
     p2p: net::P2pPtr,
-    recv_msgs: DchatmsgsBuffer,
+    recv_msgs: DchatMsgsBuffer,
 }
 
 impl Dchat {
-    fn new(p2p: net::P2pPtr, recv_msgs: DchatmsgsBuffer) -> Self {
+    fn new(p2p: net::P2pPtr, recv_msgs: DchatMsgsBuffer) -> Self {
         Self { p2p, recv_msgs }
     }
 
@@ -78,11 +81,11 @@ impl Dchat {
         }
     }
 
-    async fn register_protocol(&self, msgs: DchatmsgsBuffer) -> Result<()> {
+    async fn register_protocol(&self, msgs: DchatMsgsBuffer) -> Result<()> {
         debug!(target: "dchat", "Dchat::register_protocol() [START]");
         let registry = self.p2p.protocol_registry();
         registry
-            .register(net::SESSION_ALL, move |channel, _p2p| {
+            .register(!net::SESSION_SEED, move |channel, _p2p| {
                 let msgs2 = msgs.clone();
                 async move { ProtocolDchat::init(channel, msgs2).await }
             })
@@ -102,18 +105,19 @@ impl Dchat {
 
         self.menu().await?;
 
+        self.p2p.stop().await;
+
         debug!(target: "dchat", "Dchat::start() [STOP]");
         Ok(())
     }
 
     async fn send(&self, msg: String) -> Result<()> {
-        let dchatmsg = Dchatmsg { msg };
+        let dchatmsg = DchatMsg { msg };
         self.p2p.broadcast(dchatmsg).await?;
         Ok(())
     }
 }
 
-// inbound
 fn alice() -> Result<Settings> {
     let log_level = simplelog::LevelFilter::Debug;
     let log_config = simplelog::Config::default();
@@ -128,23 +132,14 @@ fn alice() -> Result<Settings> {
 
     let settings = Settings {
         inbound: Some(inbound),
-        outbound_connections: 0,
-        manual_attempt_limit: 0,
-        seed_query_timeout_seconds: 8,
-        connect_timeout_seconds: 10,
-        channel_handshake_seconds: 4,
-        channel_heartbeat_seconds: 10,
-        outbound_retry_seconds: 1200,
         external_addr: Some(ext_addr),
-        peers: Vec::new(),
         seeds: vec![seed],
-        node_id: String::new(),
+        ..Default::default()
     };
 
     Ok(settings)
 }
 
-// outbound
 fn bob() -> Result<Settings> {
     let log_level = simplelog::LevelFilter::Debug;
     let log_config = simplelog::Config::default();
@@ -154,21 +149,12 @@ fn bob() -> Result<Settings> {
     WriteLogger::init(log_level, log_config, file)?;
 
     let seed = Url::parse("tcp://127.0.0.1:55555").unwrap();
-    let oc = 5;
 
     let settings = Settings {
         inbound: None,
-        outbound_connections: oc,
-        manual_attempt_limit: 0,
-        seed_query_timeout_seconds: 8,
-        connect_timeout_seconds: 10,
-        channel_handshake_seconds: 4,
-        channel_heartbeat_seconds: 10,
-        outbound_retry_seconds: 1200,
-        external_addr: None,
-        peers: Vec::new(),
+        outbound_connections: 5,
         seeds: vec![seed],
-        node_id: String::new(),
+        ..Default::default()
     };
 
     Ok(settings)
@@ -180,9 +166,9 @@ async fn main() -> Result<()> {
         Some(id) => match id.as_str() {
             "a" => alice(),
             "b" => bob(),
-            _ => Err(MissingSpecifier.into()),
+            _ => Err(ErrorMissingSpecifier.into()),
         },
-        None => Err(MissingSpecifier.into()),
+        None => Err(ErrorMissingSpecifier.into()),
     };
 
     let p2p = net::P2p::new(settings?.into()).await;
@@ -193,7 +179,7 @@ async fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();
 
-    let msgs: DchatmsgsBuffer = Arc::new(Mutex::new(vec![Dchatmsg { msg: String::new() }]));
+    let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
 
     let mut dchat = Dchat::new(p2p, msgs);
 
