@@ -98,12 +98,12 @@ Execution examples:
 13:25:14 [INFO] No keys were removed.
 13:25:14 [INFO] ------------------------------
 
-$ fu sync
+% fu sync
 13:25:46 [INFO] Daemon synced successfully!
 
-$ fu get -f lt.py
+% fu get -f lt.py
 13:26:23 [INFO] File waits you at: /home/x/.config/darkfi/fud/lt.py
 
-$ fu get -f sdsd
+% fu get -f sdsd
 Error: JsonRpcError("\"Did not find key\"")
 ```
