@@ -1,10 +1,8 @@
 use std::process::exit;
 
-use num_bigint::BigUint;
-
 use darkfi::{util::decode_base10, Result};
 
-pub fn parse_value_pair(s: &str) -> Result<(BigUint, BigUint)> {
+pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     let v: Vec<&str> = s.split(':').collect();
     if v.len() != 2 {
         eprintln!("Invalid value pair. Use a pair such as '13.37:11.0'.");

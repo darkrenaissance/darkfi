@@ -7,7 +7,6 @@ use std::{
 use clap::{Parser, Subcommand};
 use darkfi::crypto::proof::VerifyingKey;
 use halo2_proofs::{arithmetic::Field, pasta::group::ff::PrimeField};
-use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use serde_json::json;
 use termion::color;
@@ -201,13 +200,12 @@ impl Rpc {
 async fn init_swap(
     endpoint: Url,
     token_pair: (String, String),
-    value_pair: (BigUint, BigUint),
+    value_pair: (u64, u64),
 ) -> Result<()> {
     let rpc_client = RpcClient::new(endpoint).await?;
     let rpc = Rpc { rpc_client };
 
-    // TODO: Rethink the use of BigUint throughout the codebase. Can we just use u64?
-    // TODO: Think about decimals as well, there has to be some metadata to keep track.
+    // TODO: Think about decimals, there has to be some metadata to keep track.
     let tp = (token_id::parse_b58(&token_pair.0)?, token_id::parse_b58(&token_pair.1)?);
     let vp: (u64, u64) =
         (value_pair.0.clone().try_into().unwrap(), value_pair.1.clone().try_into().unwrap());
@@ -219,11 +217,7 @@ async fn init_swap(
             "Error: There is not enough balance for token \"{}\" in your wallet.",
             token_pair.0
         );
-        eprintln!(
-            "Available balance is {} ({})",
-            encode_base10(BigUint::from(balance), 8),
-            balance
-        );
+        eprintln!("Available balance is {} ({})", encode_base10(balance, 8), balance);
         exit(1);
     }
 
@@ -460,12 +454,12 @@ fn inspect(data: &str) -> Result<()> {
 
     eprintln!(
         "Mint: {} {}",
-        encode_base10(BigUint::from(sd.mint_value), 8),
+        encode_base10(sd.mint_value, 8),
         bs58::encode(sd.mint_token.to_repr()).into_string()
     );
     eprintln!(
         "Burn: {} {}",
-        encode_base10(BigUint::from(sd.burn_value), 8),
+        encode_base10(sd.burn_value, 8),
         bs58::encode(sd.burn_token.to_repr()).into_string()
     );
 

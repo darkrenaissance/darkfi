@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use chrono::Utc;
 use futures_lite::future;
 use log::{debug, error, info};
-use num_bigint::BigUint;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 use structopt::StructOpt;
@@ -111,7 +110,7 @@ struct Args {
 
     #[structopt(long, default_value = "10")]
     /// Airdrop amount limit
-    airdrop_limit: String, // We convert this to biguint with decode_base10
+    airdrop_limit: String, // We convert this to u64 with decode_base10
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -124,7 +123,7 @@ pub struct Faucetd {
     client: Arc<Client>,
     validator_state: ValidatorStatePtr,
     airdrop_timeout: i64,
-    airdrop_limit: BigUint,
+    airdrop_limit: u64,
     airdrop_map: Arc<Mutex<HashMap<Address, i64>>>,
 }
 
@@ -149,7 +148,7 @@ impl Faucetd {
         validator_state: ValidatorStatePtr,
         sync_p2p: P2pPtr,
         timeout: i64,
-        limit: BigUint,
+        limit: u64,
     ) -> Result<Self> {
         let client = validator_state.read().await.client.clone();
 
@@ -232,19 +231,11 @@ impl Faucetd {
         };
         drop(map);
 
-        let amnt: u64 = match amount.try_into() {
-            Ok(v) => v,
-            Err(e) => {
-                error!("airdrop(): Failed converting biguint to u64: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
-
         let tx = match self
             .client
             .build_transaction(
                 pubkey,
-                amnt,
+                amount,
                 token_id,
                 true,
                 self.validator_state.read().await.state_machine.clone(),

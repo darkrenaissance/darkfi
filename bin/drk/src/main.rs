@@ -1,7 +1,6 @@
 use std::{process::exit, str::FromStr, time::Instant};
 
 use clap::{Parser, Subcommand};
-use num_bigint::BigUint;
 use prettytable::{cell, format, row, Table};
 
 use serde_json::json;
@@ -176,7 +175,7 @@ impl Drk {
 
         for i in rep.as_object().unwrap().keys() {
             if let Some(balance) = rep[i].as_u64() {
-                table.add_row(row![i, encode_base10(BigUint::from(balance), 8)]);
+                table.add_row(row![i, encode_base10(balance, 8)]);
                 continue
             }
 

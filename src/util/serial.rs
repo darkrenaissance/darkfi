@@ -8,7 +8,6 @@ use std::{
     str::FromStr,
 };
 
-use num_bigint::BigUint;
 use url::Url;
 
 pub use darkfi_derive::{SerialDecodable, SerialEncodable};
@@ -628,22 +627,6 @@ impl Decodable for Box<[u8]> {
     #[inline]
     fn decode<D: io::Read>(d: D) -> Result<Self> {
         <Vec<u8>>::decode(d).map(From::from)
-    }
-}
-
-impl Encodable for BigUint {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let bytes = self.to_bytes_le();
-        s.write_slice(&bytes)?;
-        Ok(bytes.len())
-    }
-}
-
-impl Decodable for BigUint {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let mut bytes = vec![];
-        d.read_slice(&mut bytes)?;
-        Ok(BigUint::from_bytes_le(&bytes))
     }
 }
 
