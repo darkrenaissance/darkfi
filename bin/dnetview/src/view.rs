@@ -14,7 +14,7 @@ use darkfi::util::NanoTimestamp;
 
 use crate::{
     error::{DnetViewError, DnetViewResult},
-    model::{ConnectInfo, NodeInfo, SelectableObject},
+    model::{NodeInfo, SelectableObject},
 };
 
 //use log::debug;
@@ -24,38 +24,37 @@ type MsgMap = FxHashMap<String, MsgLog>;
 
 #[derive(Debug)]
 pub struct View {
-    pub nodes: NodeInfoView,
+    pub id_menu: IdMenu,
     pub msg_list: MsgList,
-    pub id_list: IdListView,
     pub selectables: FxHashMap<String, SelectableObject>,
 }
 
 impl<'a> View {
     pub fn new(
-        nodes: NodeInfoView,
+        id_menu: IdMenu,
         msg_list: MsgList,
-        id_list: IdListView,
         selectables: FxHashMap<String, SelectableObject>,
     ) -> View {
-        View { nodes, msg_list, id_list, selectables }
+        View { id_menu, msg_list, selectables }
     }
 
     pub fn update(
         &mut self,
-        nodes: FxHashMap<String, NodeInfo>,
+        ids: Vec<String>,
         msg_map: MsgMap,
         selectables: FxHashMap<String, SelectableObject>,
     ) {
-        self.update_nodes(nodes);
         self.update_selectable(selectables);
         self.update_msg_list(msg_map);
-        self.update_msg_len();
-        self.update_ids();
+        self.update_id_menu(ids);
+        self.update_msg_index();
     }
 
-    fn update_nodes(&mut self, nodes: FxHashMap<String, NodeInfo>) {
-        for (id, node) in nodes {
-            self.nodes.infos.insert(id, node);
+    fn update_id_menu(&mut self, ids: Vec<String>) {
+        for id in ids {
+            if !self.id_menu.ids.iter().any(|i| i == &id) {
+                self.id_menu.ids.push(id);
+            }
         }
     }
 
@@ -65,14 +64,15 @@ impl<'a> View {
         }
     }
 
-    // get the msg_list at the selected connection ID
-    // and set the list index to the size of the returned vector
-    fn update_msg_len(&mut self) {
-        match self.id_list.state.selected() {
-            Some(i) => match self.id_list.ids.get(i) {
+    // TODO: this function is dynamically resizing the msgs index
+    // according to what set of msgs is selected.
+    // it's ugly. would prefer something more simple
+    fn update_msg_index(&mut self) {
+        match self.id_menu.state.selected() {
+            Some(i) => match self.id_menu.ids.get(i) {
                 Some(i) => match self.msg_list.msg_map.get(i) {
                     Some(i) => {
-                        self.msg_list.msg_len = i.len();
+                        self.msg_list.index = i.len();
                     }
                     None => {}
                 },
@@ -88,29 +88,6 @@ impl<'a> View {
         }
     }
 
-    // step through all the data and update ids
-    pub fn update_ids(&mut self) {
-        self.id_list.ids.clear();
-        for info in self.nodes.infos.values() {
-            match info.is_offline {
-                true => {
-                    self.id_list.ids.push(info.id.clone());
-                }
-                false => {
-                    self.id_list.ids.push(info.id.clone());
-                    for session in &info.children {
-                        if !session.is_empty {
-                            self.id_list.ids.push(session.id.clone());
-                            for connect in &session.children {
-                                self.id_list.ids.push(connect.id.clone());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     pub fn render<B: Backend>(&mut self, f: &mut Frame<'_, B>) -> DnetViewResult<()> {
         let margin = 2;
         let direction = Direction::Horizontal;
@@ -123,14 +100,13 @@ impl<'a> View {
             .split(f.size());
 
         self.render_ids(f, slice.clone())?;
-
-        if !self.id_list.ids.is_empty() {
+        if self.id_menu.ids.is_empty() {
             // we have not received any data
             Ok(())
         } else {
             // get the id at the current index
-            match self.id_list.state.selected() {
-                Some(i) => match self.id_list.ids.get(i) {
+            match self.id_menu.state.selected() {
+                Some(i) => match self.id_menu.ids.get(i) {
                     Some(i) => {
                         let id = i.clone();
                         self.render_info(f, slice, id)?;
@@ -152,77 +128,80 @@ impl<'a> View {
         let style = Style::default();
         let mut nodes = Vec::new();
 
-        for info in self.nodes.infos.values() {
-            match info.is_offline {
-                true => {
-                    let style = Style::default().fg(Color::Blue).add_modifier(Modifier::ITALIC);
-                    let mut name = String::new();
-                    name.push_str(&info.name);
-                    name.push_str("(Offline)");
-                    let name_span = Span::styled(name, style);
-                    let lines = vec![Spans::from(name_span)];
-                    let names = ListItem::new(lines);
-                    nodes.push(names);
-                }
-                false => {
-                    let name_span = Span::raw(&info.name);
-                    let lines = vec![Spans::from(name_span)];
-                    let names = ListItem::new(lines);
-                    nodes.push(names);
-                    for session in &info.children {
-                        if !session.is_empty {
-                            let name = Span::styled(format!("    {}", session.name), style);
-                            let lines = vec![Spans::from(name)];
-                            let names = ListItem::new(lines);
-                            nodes.push(names);
-                            for connection in &session.children {
-                                let mut info = Vec::new();
-                                match connection.addr.as_str() {
-                                    "Null" => {
-                                        let style = Style::default()
-                                            .fg(Color::Blue)
-                                            .add_modifier(Modifier::ITALIC);
-                                        let name = Span::styled(
-                                            format!("        {} ", connection.addr),
-                                            style,
-                                        );
-                                        info.push(name);
-                                    }
-                                    addr => {
-                                        let name = Span::styled(
-                                            format!(
-                                                "        {} ({})",
-                                                addr, connection.remote_node_id
-                                            ),
-                                            style,
-                                        );
-                                        info.push(name);
-                                    }
-                                }
-
-                                let lines = vec![Spans::from(info)];
+        for obj in self.selectables.values() {
+            match obj {
+                SelectableObject::Node(info) => match info.is_offline {
+                    true => {
+                        let style = Style::default().fg(Color::Blue).add_modifier(Modifier::ITALIC);
+                        let mut name = String::new();
+                        name.push_str(&info.name);
+                        name.push_str("(Offline)");
+                        let name_span = Span::styled(name, style);
+                        let lines = vec![Spans::from(name_span)];
+                        let names = ListItem::new(lines);
+                        nodes.push(names);
+                    }
+                    false => {
+                        let name_span = Span::raw(&info.name);
+                        let lines = vec![Spans::from(name_span)];
+                        let names = ListItem::new(lines);
+                        nodes.push(names);
+                        for session in &info.children {
+                            if !session.is_empty {
+                                let name = Span::styled(format!("    {}", session.name), style);
+                                let lines = vec![Spans::from(name)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
+                                for connection in &session.children {
+                                    let mut info = Vec::new();
+                                    match connection.addr.as_str() {
+                                        "Null" => {
+                                            let style = Style::default()
+                                                .fg(Color::Blue)
+                                                .add_modifier(Modifier::ITALIC);
+                                            let name = Span::styled(
+                                                format!("        {} ", connection.addr),
+                                                style,
+                                            );
+                                            info.push(name);
+                                        }
+                                        addr => {
+                                            let name = Span::styled(
+                                                format!(
+                                                    "        {} ({})",
+                                                    addr, connection.remote_node_id
+                                                ),
+                                                style,
+                                            );
+                                            info.push(name);
+                                        }
+                                    }
+
+                                    let lines = vec![Spans::from(info)];
+                                    let names = ListItem::new(lines);
+                                    nodes.push(names);
+                                }
                             }
                         }
                     }
-                }
+                },
+                _ => {}
             }
         }
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
-        f.render_stateful_widget(nodes, slice[0], &mut self.id_list.state);
+        f.render_stateful_widget(nodes, slice[0], &mut self.id_menu.state);
 
         Ok(())
     }
 
-    fn parse_msg_list(&self, connect: &ConnectInfo) -> DnetViewResult<List<'a>> {
+    fn parse_msg_list(&self, connect_id: String) -> DnetViewResult<List<'a>> {
         let send_style = Style::default().fg(Color::LightCyan);
         let recv_style = Style::default().fg(Color::DarkGray);
         let mut texts = Vec::new();
         let mut lines = Vec::new();
-        let log = self.msg_list.msg_map.get(&connect.id);
+        let log = self.msg_list.msg_map.get(&connect_id);
         match log {
             Some(values) => {
                 for (i, (t, k, v)) in values.iter().enumerate() {
@@ -291,7 +270,7 @@ impl<'a> View {
                     }
                 }
                 Some(SelectableObject::Connect(connect)) => {
-                    let text = self.parse_msg_list(connect)?;
+                    let text = self.parse_msg_list(connect.id.clone())?;
                     f.render_stateful_widget(text, slice[1], &mut self.msg_list.state);
                 }
                 None => return Err(DnetViewError::NotSelectableObject),
@@ -309,14 +288,14 @@ impl<'a> View {
 }
 
 #[derive(Debug, Clone)]
-pub struct IdListView {
+pub struct IdMenu {
     pub state: ListState,
     pub ids: Vec<String>,
 }
 
-impl IdListView {
-    pub fn new(ids: Vec<String>) -> IdListView {
-        IdListView { state: ListState::default(), ids }
+impl IdMenu {
+    pub fn new(ids: Vec<String>) -> IdMenu {
+        IdMenu { state: ListState::default(), ids }
     }
     pub fn next(&mut self) {
         let i = match self.state.selected() {
@@ -355,12 +334,12 @@ impl IdListView {
 pub struct MsgList {
     pub state: ListState,
     pub msg_map: MsgMap,
-    pub msg_len: usize,
+    pub index: usize,
 }
 
 impl MsgList {
-    pub fn new(msg_map: MsgMap, msg_len: usize) -> MsgList {
-        MsgList { state: ListState::default(), msg_map, msg_len }
+    pub fn new(msg_map: MsgMap, index: usize) -> MsgList {
+        MsgList { state: ListState::default(), msg_map, index }
     }
 
     // TODO: reimplement
@@ -394,7 +373,7 @@ impl MsgList {
 
     pub fn scroll(&mut self) -> DnetViewResult<()> {
         let i = match self.state.selected() {
-            Some(i) => i + self.msg_len,
+            Some(i) => i + self.index,
             None => 0,
         };
         self.state.select(Some(i));
@@ -419,15 +398,15 @@ impl NodeInfoView {
         NodeInfoView { index, infos }
     }
 
-    pub fn next(&mut self) {
-        self.index = (self.index + 1) % self.infos.len();
-    }
+    //pub fn next(&mut self) {
+    //    self.index = (self.index + 1) % self.infos.len();
+    //}
 
-    pub fn previous(&mut self) {
-        if self.index > 0 {
-            self.index -= 1;
-        } else {
-            self.index = self.infos.len() - 1;
-        }
-    }
+    //pub fn previous(&mut self) {
+    //    if self.index > 0 {
+    //        self.index -= 1;
+    //    } else {
+    //        self.index = self.infos.len() - 1;
+    //    }
+    //}
 }

@@ -37,7 +37,7 @@ use crate::{
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
     util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
-    view::{IdListView, MsgList, NodeInfoView, View},
+    view::{IdMenu, MsgList, View},
 };
 
 use log::debug;
@@ -101,7 +101,8 @@ async fn main() -> DnetViewResult<()> {
     let selectables = Mutex::new(FxHashMap::default());
     let msg_map = Mutex::new(FxHashMap::default());
     let msg_log = Mutex::new(Vec::new());
-    let model = Arc::new(Model::new(ids, nodes, msg_map, msg_log, selectables));
+    let new_id = Mutex::new(Vec::new());
+    let model = Arc::new(Model::new(ids, new_id, nodes, msg_map, msg_log, selectables));
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
@@ -155,7 +156,6 @@ async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
         match client.get_info().await {
             Ok(reply) => {
                 if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-                    debug!("FROM {}", client.name);
                     parse_data(reply.as_object().unwrap(), &client, model.clone()).await?;
                 } else {
                     return Err(DnetViewError::EmptyRpcReply)
@@ -257,9 +257,10 @@ async fn parse_data(
     update_node(model.clone(), node.clone(), node_id.clone()).await;
     update_selectable_and_ids(model.clone(), sessions.clone(), node.clone()).await?;
     update_msgs(model.clone(), sessions.clone()).await?;
+    update_new_id(model.clone()).await;
 
-    //debug!("IDS: {:?}", model.ids.lock().await);
-    //debug!("INFOS: {:?}", model.nodes.lock().await);
+    debug!("IDS: {:?}", model.ids.lock().await);
+    debug!("INFOS: {:?}", model.nodes.lock().await);
 
     Ok(())
 }
@@ -292,6 +293,13 @@ async fn update_ids(model: Arc<Model>, id: String) {
     model.ids.lock().await.insert(id);
 }
 
+async fn update_new_id(model: Arc<Model>) {
+    let ids = model.ids.lock().await.clone();
+
+    for id in ids.iter() {
+        model.new_id.lock().await.push(id.to_string());
+    }
+}
 async fn update_node(model: Arc<Model>, node: NodeInfo, id: String) {
     model.nodes.lock().await.insert(id, node);
 }
@@ -301,17 +309,24 @@ async fn update_selectable_and_ids(
     sessions: Vec<SessionInfo>,
     node: NodeInfo,
 ) -> DnetViewResult<()> {
-    let node_obj = SelectableObject::Node(node.clone());
-    model.selectables.lock().await.insert(node.id.clone(), node_obj);
-    update_ids(model.clone(), node.id.clone()).await;
-    for session in sessions {
-        let session_obj = SelectableObject::Session(session.clone());
-        model.selectables.lock().await.insert(session.clone().id, session_obj);
-        update_ids(model.clone(), session.clone().id).await;
-        for connect in session.children {
-            let connect_obj = SelectableObject::Connect(connect.clone());
-            model.selectables.lock().await.insert(connect.clone().id, connect_obj);
-            update_ids(model.clone(), connect.clone().id).await;
+    if node.is_offline == true {
+        let node_obj = SelectableObject::Node(node.clone());
+        model.selectables.lock().await.insert(node.id.clone(), node_obj);
+    } else {
+        let node_obj = SelectableObject::Node(node.clone());
+        model.selectables.lock().await.insert(node.id.clone(), node_obj);
+        update_ids(model.clone(), node.id.clone()).await;
+        for session in sessions {
+            if !session.is_empty {
+                let session_obj = SelectableObject::Session(session.clone());
+                model.selectables.lock().await.insert(session.clone().id, session_obj);
+                update_ids(model.clone(), session.clone().id).await;
+                for connect in session.children {
+                    let connect_obj = SelectableObject::Connect(connect.clone());
+                    model.selectables.lock().await.insert(connect.clone().id, connect_obj);
+                    update_ids(model.clone(), connect.clone().id).await;
+                }
+            }
         }
     }
     Ok(())
@@ -586,22 +601,20 @@ async fn render_view<B: Backend>(
 
     terminal.clear()?;
 
-    let nodes = NodeInfoView::new(FxHashMap::default());
     let msg_map = FxHashMap::default();
-
     let msg_list = MsgList::new(msg_map.clone(), 0);
-    let id_list = IdListView::new(Vec::new());
     let selectables = FxHashMap::default();
+    let id_menu = IdMenu::new(Vec::new());
 
-    let mut view = View::new(nodes, msg_list, id_list, selectables);
-    view.id_list.state.select(Some(0));
+    let mut view = View::new(id_menu, msg_list, selectables);
+
+    view.id_menu.state.select(Some(0));
     view.msg_list.state.select(Some(0));
 
     loop {
         view.update(
-            model.nodes.lock().await.clone(),
+            model.new_id.lock().await.clone(),
             model.msg_map.lock().await.clone(),
-            //model.msg_log.lock().await.clone(),
             model.selectables.lock().await.clone(),
         );
 
@@ -628,15 +641,17 @@ async fn render_view<B: Backend>(
                     return Ok(())
                 }
                 Key::Char('j') => {
-                    view.id_list.next();
+                    view.id_menu.next();
                 }
                 Key::Char('k') => {
-                    view.id_list.previous();
+                    view.id_menu.previous();
                 }
                 Key::Char('u') => {
+                    // TODO
                     //view.msg_list.next();
                 }
                 Key::Char('d') => {
+                    // TODO
                     //view.msg_list.previous();
                 }
                 _ => (),

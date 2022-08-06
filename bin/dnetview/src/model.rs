@@ -25,6 +25,7 @@ pub enum SelectableObject {
 
 pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
+    pub new_id: Mutex<Vec<String>>,
     pub nodes: Mutex<FxHashMap<String, NodeInfo>>,
     pub msg_map: MsgMap,
     pub msg_log: Mutex<MsgLog>,
@@ -34,12 +35,13 @@ pub struct Model {
 impl Model {
     pub fn new(
         ids: Mutex<FxHashSet<String>>,
+        new_id: Mutex<Vec<String>>,
         nodes: Mutex<FxHashMap<String, NodeInfo>>,
         msg_map: MsgMap,
         msg_log: Mutex<MsgLog>,
         selectables: Mutex<FxHashMap<String, SelectableObject>>,
     ) -> Model {
-        Model { ids, nodes, msg_map, msg_log, selectables }
+        Model { ids, new_id, nodes, msg_map, msg_log, selectables }
     }
 }
 
