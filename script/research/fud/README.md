@@ -65,7 +65,7 @@ Command-line client for fud.
 
 ```
 fu 0.3.0
-Daemon that spawns P2P seeds
+Command-line client for fud
 
 USAGE:
     fu [OPTIONS] <SUBCOMMAND>
