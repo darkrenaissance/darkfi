@@ -47,7 +47,7 @@ struct Args {
     /// Path to the contents directory
     folder: String,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1:9540")]
+    #[structopt(long, default_value = "tcp://127.0.0.1:13336")]
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
@@ -65,11 +65,11 @@ struct Args {
 
     #[structopt(long)]
     /// Connect to seed (repeatable flag)
-    p2p_seed: Vec<Url>,
+    seeds: Vec<Url>,
 
     #[structopt(long)]
     /// Connect to peer (repeatable flag)
-    p2p_peer: Vec<Url>,
+    peers: Vec<Url>,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
