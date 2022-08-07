@@ -22,9 +22,9 @@ OPTIONS:
         --folder <folder>                Path to the contents directory [default: ~/.config/darkfi/fud]
         --p2p-accept <p2p-accept>        P2P accept address
         --p2p-external <p2p-external>    P2P external address
-        --p2p-peer <p2p-peer>...         Connect to peer (repeatable flag)
-        --p2p-seed <p2p-seed>...         Connect to seed (repeatable flag)
-        --rpc-listen <rpc-listen>        JSON-RPC listen URL [default: tcp://127.0.0.1:13337]
+        --peers <peers>...               Connect to peer (repeatable flag)
+        --rpc-listen <rpc-listen>        JSON-RPC listen URL [default: tcp://127.0.0.1:13336]
+        --seeds <seeds>...               Connect to seed (repeatable flag)
         --slots <slots>                  Connection slots [default: 8]
 ```
 

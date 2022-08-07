@@ -351,8 +351,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         inbound: args.p2p_accept,
         outbound_connections: args.slots,
         external_addr: args.p2p_external,
-        peers: args.p2p_seed.clone(),
-        seeds: args.p2p_seed.clone(),
+        peers: args.peers.clone(),
+        seeds: args.seeds.clone(),
         ..Default::default()
     };
 
