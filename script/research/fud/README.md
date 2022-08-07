@@ -24,7 +24,7 @@ OPTIONS:
         --p2p-external <p2p-external>    P2P external address
         --p2p-peer <p2p-peer>...         Connect to peer (repeatable flag)
         --p2p-seed <p2p-seed>...         Connect to seed (repeatable flag)
-        --rpc-listen <rpc-listen>        JSON-RPC listen URL [default: tcp://127.0.0.1:9540]
+        --rpc-listen <rpc-listen>        JSON-RPC listen URL [default: tcp://127.0.0.1:13337]
         --slots <slots>                  Connection slots [default: 8]
 ```
 
@@ -41,7 +41,7 @@ Run fud as follows:
 13:23:04 [WARN] Skipping seed sync process since no seeds are configured.
 13:23:04 [INFO] Initializing fud dht state for folder: "/home/x/.config/darkfi/fud"
 13:23:04 [INFO] Not configured for accepting incoming connections.
-13:23:04 [INFO] JSON-RPC listener bound to tcp://127.0.0.1:9540
+13:23:04 [INFO] JSON-RPC listener bound to tcp://127.0.0.1:13337
 13:23:04 [INFO] Entry: seedd_config.toml
 13:23:04 [INFO] Starting 8 outbound connection slots.
 13:23:04 [INFO] Entry: lt.py
@@ -71,7 +71,7 @@ USAGE:
     fu [OPTIONS] <SUBCOMMAND>
 
 OPTIONS:
-    -e, --endpoint <ENDPOINT>    fud JSON-RPC endpoint [default: tcp://127.0.0.1:9540]
+    -e, --endpoint <ENDPOINT>    fud JSON-RPC endpoint [default: tcp://127.0.0.1:13336]
     -h, --help                   Print help information
     -v                           Increase verbosity (-vvv supported)
     -V, --version                Print version information
