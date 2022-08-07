@@ -7,6 +7,8 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 
 use darkfi::util::{
+    file::{load_json_file, save_json_file},
+    gen_id,
     serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Timestamp,
 };
@@ -14,7 +16,7 @@ use darkfi::util::{
 use crate::{
     error::{TaudError, TaudResult},
     month_tasks::MonthTasks,
-    util::{find_free_id, load, random_ref_id, save},
+    util::find_free_id,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, Eq)]
@@ -83,7 +85,7 @@ impl TaskInfo {
         dataset_path: &Path,
     ) -> TaudResult<Self> {
         // generate ref_id
-        let ref_id = random_ref_id();
+        let ref_id = gen_id(30);
 
         let created_at = Timestamp::current_time();
 
@@ -120,13 +122,13 @@ impl TaskInfo {
 
     pub fn load(ref_id: &str, dataset_path: &Path) -> TaudResult<Self> {
         debug!(target: "tau", "TaskInfo::load()");
-        let task = load::<Self>(&Self::get_path(ref_id, dataset_path))?;
+        let task = load_json_file::<Self>(&Self::get_path(ref_id, dataset_path))?;
         Ok(task)
     }
 
     pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
         debug!(target: "tau", "TaskInfo::save()");
-        save::<Self>(&Self::get_path(&self.ref_id, dataset_path), self)
+        save_json_file::<Self>(&Self::get_path(&self.ref_id, dataset_path), self)
             .map_err(TaudError::Darkfi)?;
 
         if self.get_state() == "stop" {

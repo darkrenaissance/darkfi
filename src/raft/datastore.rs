@@ -5,7 +5,7 @@ use sled::Batch;
 
 use crate::{
     util::serial::{deserialize, serialize, Decodable, Encodable},
-    Result,
+    Error, Result,
 };
 
 use super::primitives::{Log, NodeId};
@@ -15,6 +15,7 @@ const SLED_COMMITS_TREE: &[u8] = b"_commits";
 const _SLED_COMMITS_LENGTH_TREE: &[u8] = b"_commit_length";
 const SLED_VOTED_FOR_TREE: &[u8] = b"_voted_for";
 const SLED_CURRENT_TERM_TREE: &[u8] = b"_current_term";
+const SLED_ID_TREE: &[u8] = b"_id";
 
 pub struct DataStore<T> {
     _db: sled::Db,
@@ -22,6 +23,7 @@ pub struct DataStore<T> {
     pub commits: DataTree<T>,
     pub voted_for: DataTree<Option<NodeId>>,
     pub current_term: DataTree<u64>,
+    pub id: DataTree<NodeId>,
 }
 
 impl<T: Encodable + Decodable> DataStore<T> {
@@ -31,8 +33,9 @@ impl<T: Encodable + Decodable> DataStore<T> {
         let commits = DataTree::new(&_db, SLED_COMMITS_TREE)?;
         let voted_for = DataTree::new(&_db, SLED_VOTED_FOR_TREE)?;
         let current_term = DataTree::new(&_db, SLED_CURRENT_TERM_TREE)?;
+        let id = DataTree::new(&_db, SLED_ID_TREE)?;
 
-        Ok(Self { _db, logs, commits, voted_for, current_term })
+        Ok(Self { _db, logs, commits, voted_for, current_term, id })
     }
     pub async fn flush(&self) -> Result<()> {
         debug!(target: "raft", "DataStore flush");
@@ -54,20 +57,24 @@ impl<T: Decodable + Encodable> DataTree<T> {
 
     pub fn insert(&self, data: &T) -> Result<()> {
         let serialized = serialize(data);
-        let datahash = blake3::hash(&serialized);
-        self.tree.insert(datahash.as_bytes(), serialized)?;
+        let last_index: u64 = if let Some(d) = self.tree.last()? {
+            u64::from_be_bytes(d.0.to_vec().try_into().unwrap()) + 1
+        } else {
+            0
+        };
+
+        self.tree.insert(last_index.to_be_bytes(), serialized)?;
         Ok(())
     }
 
-    pub fn wipe_insert_all(&self, data: &Vec<T>) -> Result<()> {
+    pub fn wipe_insert_all(&self, data: &[T]) -> Result<()> {
         self.tree.clear()?;
 
         let mut batch = Batch::default();
 
-        for i in data {
-            let serialized = serialize(i);
-            let hash = blake3::hash(&serialized);
-            batch.insert(hash.as_bytes(), serialized);
+        for (i, d) in data.iter().enumerate() {
+            let serialized = serialize(d);
+            batch.insert(&(i as u64).to_be_bytes(), serialized);
         }
 
         self.tree.apply_batch(batch)?;
@@ -86,11 +93,32 @@ impl<T: Decodable + Encodable> DataTree<T> {
         Ok(ret)
     }
 
+    pub fn len(&self) -> u64 {
+        self.tree.len() as u64
+    }
+
     pub fn get_last(&self) -> Result<Option<T>> {
         if let Some(found) = self.tree.last()? {
             let da = deserialize(&found.1)?;
             return Ok(Some(da))
         }
         Ok(None)
+    }
+
+    pub fn get(&self, index: u64) -> Result<T> {
+        let index_bytes = index.to_be_bytes();
+        if let Some(found) = self.tree.get(index_bytes)? {
+            let da = deserialize(&found)?;
+            return Ok(da)
+        }
+        Err(Error::RaftError(format!(
+            "Unable to get the item with index {} {:?}",
+            index,
+            self.is_empty()
+        )))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.tree.is_empty()
     }
 }

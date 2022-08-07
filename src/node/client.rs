@@ -12,7 +12,6 @@ use crate::{
         keypair::{Keypair, PublicKey},
         merkle_node::MerkleNode,
         proof::ProvingKey,
-        token_list::DrkTokenList,
         types::DrkTokenId,
         OwnCoin,
     },
@@ -34,13 +33,12 @@ use crate::{
 pub struct Client {
     pub main_keypair: Mutex<Keypair>,
     pub wallet: WalletPtr,
-    pub tokenlist: Arc<DrkTokenList>,
     mint_pk: Lazy<ProvingKey>,
     burn_pk: Lazy<ProvingKey>,
 }
 
 impl Client {
-    pub async fn new(wallet: WalletPtr, tokenlist: Arc<DrkTokenList>) -> Result<Self> {
+    pub async fn new(wallet: WalletPtr) -> Result<Self> {
         // Initialize or load the wallet
         wallet.init_db().await?;
 
@@ -57,7 +55,6 @@ impl Client {
         Ok(Self {
             main_keypair: Mutex::new(main_keypair),
             wallet,
-            tokenlist,
             mint_pk: Lazy::new(),
             burn_pk: Lazy::new(),
         })
@@ -193,6 +190,10 @@ impl Client {
         self.wallet.confirm_spend_coin(coin).await
     }
 
+    pub async fn revert_spend_coin(&self, coin: &Coin) -> Result<()> {
+        self.wallet.revert_spend_coin(coin).await
+    }
+
     pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
         self.wallet.get_keypairs().await
     }
@@ -216,6 +217,15 @@ impl Client {
 
     pub async fn get_balances(&self) -> Result<Balances> {
         self.wallet.get_balances().await
+    }
+
+    pub async fn get_coins_valtok(
+        &self,
+        value: u64,
+        token_id: DrkTokenId,
+        unspent: bool,
+    ) -> Result<Vec<OwnCoin>> {
+        self.wallet.get_coins_valtok(value, token_id, unspent).await
     }
 
     pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {

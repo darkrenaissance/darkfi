@@ -9,13 +9,13 @@ use url::Url;
 
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
-    Error, Result,
+    Result,
 };
 
 use super::{
     message::Message,
     protocol::{register_default_protocols, ProtocolRegistry},
-    session::{InboundSession, ManualSession, OutboundSession, SeedSession, Session},
+    session::{InboundSession, ManualSession, OutboundSession, SeedSyncSession, Session},
     Channel, ChannelPtr, Hosts, HostsPtr, Settings, SettingsPtr,
 };
 
@@ -58,7 +58,7 @@ pub struct P2p {
     channels: ConnectedChannels,
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     // Used both internally and externally
-    stop_subscriber: SubscriberPtr<Error>,
+    stop_subscriber: SubscriberPtr<()>,
     hosts: HostsPtr,
     protocol_registry: ProtocolRegistry,
 
@@ -132,7 +132,7 @@ impl P2p {
         *self.state.lock().await = P2pState::Start;
 
         // Start seed session
-        let seed = SeedSession::new(Arc::downgrade(&self));
+        let seed = SeedSyncSession::new(Arc::downgrade(&self));
         // This will block until all seed queries have finished
         seed.start(executor.clone()).await?;
 
@@ -181,6 +181,10 @@ impl P2p {
 
         debug!(target: "net", "P2p::run() [END]");
         Ok(())
+    }
+
+    pub async fn stop(&self) {
+        self.stop_subscriber.notify(()).await
     }
 
     /// Broadcasts a message across all channels.
@@ -258,7 +262,7 @@ impl P2p {
     }
 
     /// Subscribe to a stop signal.
-    pub async fn subscribe_stop(&self) -> Subscription<Error> {
+    pub async fn subscribe_stop(&self) -> Subscription<()> {
         self.stop_subscriber.clone().subscribe().await
     }
 

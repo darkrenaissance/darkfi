@@ -2,9 +2,10 @@ use std::{convert::TryFrom, io, str::FromStr};
 
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
+    arithmetic::CurveAffine,
     group::{
         ff::{Field, PrimeField},
-        Group, GroupEncoding,
+        Curve, Group, GroupEncoding,
     },
     pallas,
 };
@@ -81,6 +82,14 @@ impl PublicKey {
             Some(k) => Ok(Self(k)),
             None => Err(Error::PublicKeyFromBytes),
         }
+    }
+
+    pub fn x(&self) -> pallas::Base {
+        *self.0.to_affine().coordinates().unwrap().x()
+    }
+
+    pub fn y(&self) -> pallas::Base {
+        *self.0.to_affine().coordinates().unwrap().y()
     }
 }
 

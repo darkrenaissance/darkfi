@@ -1,7 +1,5 @@
 use std::{iter::FromIterator, str::FromStr};
 
-use num_bigint::BigUint;
-
 use crate::{Error, Result};
 
 fn is_digit(c: char) -> bool {
@@ -12,7 +10,7 @@ fn char_eq(a: char, b: char) -> bool {
     a == b
 }
 
-pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Result<BigUint> {
+pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Result<u64> {
     let mut s: Vec<char> = amount.to_string().chars().collect();
 
     // Get rid of the decimal point:
@@ -54,19 +52,17 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
     }
 
     // Convert to an integer
-    let number = BigUint::from_str(&String::from_iter(&s))?;
+    let number = u64::from_str(&String::from_iter(&s))?;
 
     // Round and return
-    /*
     if round && number == u64::MAX {
-    return Err(Error::ParseFailed("u64 overflow"));
+        return Err(Error::ParseFailed("u64 overflow"))
     }
-    */
 
     Ok(number + round as u64)
 }
 
-pub fn encode_base10(amount: BigUint, decimal_places: usize) -> String {
+pub fn encode_base10(amount: u64, decimal_places: usize) -> String {
     let mut s: Vec<char> =
         format!("{:0width$}", amount, width = 1 + decimal_places).chars().collect();
     s.insert(s.len() - decimal_places, '.');
@@ -95,24 +91,23 @@ pub fn truncate(amount: u64, decimals: u16, token_decimals: u16) -> Result<u64> 
 #[cfg(test)]
 mod tests {
     use super::{decode_base10, encode_base10, truncate};
-    use num_bigint::ToBigUint;
 
     #[test]
     fn test_decode_base10() {
-        assert_eq!(124.to_biguint().unwrap(), decode_base10("12.33", 1, false).unwrap());
-        assert_eq!(1233000.to_biguint().unwrap(), decode_base10("12.33", 5, false).unwrap());
-        assert_eq!(1200000.to_biguint().unwrap(), decode_base10("12.", 5, false).unwrap());
-        assert_eq!(1200000.to_biguint().unwrap(), decode_base10("12", 5, false).unwrap());
+        assert_eq!(124, decode_base10("12.33", 1, false).unwrap());
+        assert_eq!(1233000, decode_base10("12.33", 5, false).unwrap());
+        assert_eq!(1200000, decode_base10("12.", 5, false).unwrap());
+        assert_eq!(1200000, decode_base10("12", 5, false).unwrap());
         assert!(decode_base10("12.33", 1, true).is_err());
     }
 
     #[test]
     fn test_encode_base10() {
-        assert_eq!("23.4321111", &encode_base10(234321111_u64.to_biguint().unwrap(), 7));
-        assert_eq!("23432111.1", &encode_base10(234321111_u64.to_biguint().unwrap(), 1));
-        assert_eq!("234321.1", &encode_base10(2343211_u64.to_biguint().unwrap(), 1));
-        assert_eq!("2343211", &encode_base10(2343211_u64.to_biguint().unwrap(), 0));
-        assert_eq!("0.00002343", &encode_base10(2343_u64.to_biguint().unwrap(), 8));
+        assert_eq!("23.4321111", &encode_base10(234321111, 7));
+        assert_eq!("23432111.1", &encode_base10(234321111, 1));
+        assert_eq!("234321.1", &encode_base10(2343211, 1));
+        assert_eq!("2343211", &encode_base10(2343211, 0));
+        assert_eq!("0.00002343", &encode_base10(2343, 8));
     }
 
     #[test]

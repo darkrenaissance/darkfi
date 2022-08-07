@@ -1,0 +1,28 @@
+## fud configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+# Path to the contents directory
+#folder = "~/.config/darkfi/fud"
+
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:13336"
+
+# P2P accept address
+p2p_accept = "tls://127.0.0.1:13337"
+
+# P2P external address
+p2p_external = "tls://127.0.0.1:13337"
+
+# Connection slots
+#slots = 8
+
+# Seed nodes to connect to
+seeds = ["tls://lilith0.dark.fi:13337", "tls://lilith1.dark.fi:13337"]
+
+# Peers to connect to
+#peers = []

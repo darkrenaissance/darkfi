@@ -34,8 +34,7 @@ async def start():
         msg = msg.decode('utf8').strip()
 
         if not msg:
-            print("Error: Receive empty msg")
-            break
+            continue
 
         command = msg.split(" ")[1]
 

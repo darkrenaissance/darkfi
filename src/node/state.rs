@@ -1,4 +1,3 @@
-use async_std::sync::Arc;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error};
@@ -13,7 +12,6 @@ use crate::{
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::VerifyingKey,
-        token_list::DrkTokenList,
         OwnCoin,
     },
     tx::Transaction,
@@ -142,7 +140,6 @@ impl State {
         secret_keys: Vec<SecretKey>,
         notify: Option<async_channel::Sender<(PublicKey, u64)>>,
         wallet: WalletPtr,
-        tokenlist: Arc<DrkTokenList>,
     ) -> Result<()> {
         debug!(target: "state_apply", "Extend nullifier set");
         debug!("Existing nullifiers: {:#?}", self.nullifiers.get_all()?);
@@ -170,12 +167,12 @@ impl State {
                     let own_coin =
                         OwnCoin { coin, note, secret: *secret, nullifier, leaf_position };
 
-                    // FIXME: BUG check values inside the note are correct
+                    // TODO: FIXME: BUG check values inside the note are correct
                     // We need to hash them all and check them against the coin
                     // for them to be accepted.
                     // Don't trust - verify.
 
-                    wallet.put_own_coin(own_coin, tokenlist.clone()).await?;
+                    wallet.put_own_coin(own_coin).await?;
 
                     if let Some(ch) = notify.clone() {
                         debug!(target: "state_apply", "Send a notification");

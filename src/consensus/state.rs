@@ -179,13 +179,32 @@ impl ValidatorState {
         Ok(state)
     }
 
-    /// The node retrieves a transaction and appends it to the unconfirmed
-    /// transactions list. Additional validity rules must be defined by the
-    /// protocol for transactions.
-    pub fn append_tx(&mut self, tx: Transaction) -> bool {
-        if self.unconfirmed_txs.contains(&tx) {
-            debug!("append_tx(): We already have this tx");
+    /// The node retrieves a transaction, validates its state transition,
+    /// and appends it to the unconfirmed transactions list.
+    pub async fn append_tx(&mut self, tx: Transaction) -> bool {
+        let tx_hash = blake3::hash(&serialize(&tx));
+        let tx_in_txstore = match self.blockchain.transactions.contains(&tx_hash) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("append_tx(): Failed querying txstore: {}", e);
+                return false
+            }
+        };
+
+        if self.unconfirmed_txs.contains(&tx) || tx_in_txstore {
+            debug!("append_tx(): We have already seen this tx.");
             return false
+        }
+
+        debug!("append_tx(): Starting state transition validation");
+        let canon_state_clone = self.state_machine.lock().await.clone();
+        let mem_state = MemoryState::new(canon_state_clone);
+        match self.validate_state_transitions(mem_state, &[tx.clone()]) {
+            Ok(_) => debug!("append_tx(): State transition valid"),
+            Err(e) => {
+                warn!("append_tx(): State transition fail: {}", e);
+                return false
+            }
         }
 
         debug!("append_tx(): Appended tx to mempool");
@@ -287,20 +306,14 @@ impl ValidatorState {
         let header =
             Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
-        let metadata = Metadata::new(String::from("proof"), String::from("r"), String::from("s"));
+        let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
+
+        let metadata =
+            Metadata::new(String::from("proof"), String::from("r"), signed_proposal, self.address);
 
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
 
-        let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
-
-        Ok(Some(BlockProposal::new(
-            signed_proposal,
-            self.address,
-            header,
-            unproposed_txs,
-            metadata,
-            sm,
-        )))
+        Ok(Some(BlockProposal::new(header, unproposed_txs, metadata, sm)))
     }
 
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
@@ -355,7 +368,7 @@ impl ValidatorState {
 
     /// Receive the proposed block, verify its sender (slot leader),
     /// and proceed with voting on it.
-    pub fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
+    pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
         // Node hasn't started participating
         match self.participating {
             Some(start) => {
@@ -370,31 +383,30 @@ impl ValidatorState {
         self.refresh_participants()?;
 
         let leader = self.slot_leader();
-        if leader.address != proposal.address {
+        if leader.address != proposal.block.metadata.address {
             warn!(
                 "Received proposal not from slot leader ({}), but from ({})",
-                leader.address.to_string(),
-                proposal.address.to_string()
+                leader.address, proposal.block.metadata.address
             );
             return Ok(None)
         }
 
-        if !leader
-            .public_key
-            .verify(proposal.block.header.headerhash().as_bytes(), &proposal.signature)
-        {
-            warn!("Proposer ({}) signature could not be verified", proposal.address.to_string());
+        if !leader.public_key.verify(
+            proposal.block.header.headerhash().as_bytes(),
+            &proposal.block.metadata.signature,
+        ) {
+            warn!("Proposer ({}) signature could not be verified", proposal.block.metadata.address);
             return Ok(None)
         }
 
-        self.vote(proposal)
+        self.vote(proposal).await
     }
 
     /// Given a proposal, the node finds which blockchain it extends.
     /// If the proposal extends the canonical blockchain, a new fork chain
     /// is created. The node votes on the proposal only if it extends the
-    /// longest notarized fork chain it has seen.
-    pub fn vote(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
+    /// longest notarized fork chain it has seen and its state transition is valid.
+    pub async fn vote(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
         let mut proposal = proposal.clone();
 
         // Generate proposal hash
@@ -434,6 +446,20 @@ impl ValidatorState {
         if !self.extends_notarized_chain(chain) {
             debug!("vote(): Proposal does not extend notarized chain");
             return Ok(None)
+        }
+
+        debug!("vote(): Starting state transition validation");
+        let canon_state_clone = self.state_machine.lock().await.clone();
+        let mem_state = MemoryState::new(canon_state_clone);
+
+        match self.validate_state_transitions(mem_state, &proposal.block.txs) {
+            Ok(_) => {
+                debug!("vote(): State transition valid")
+            }
+            Err(e) => {
+                warn!("vote(): State transition fail: {}", e);
+                return Ok(None)
+            }
         }
 
         let signed_hash = self.secret.sign(&serialize(&proposal_hash));
@@ -529,7 +555,7 @@ impl ValidatorState {
         match self.consensus.participants.get(&vote.address) {
             Some(participant) => {
                 let mut participant = participant.clone();
-                let va = vote.address.to_string();
+                let va = vote.address;
                 if current_slot <= participant.joined {
                     warn!("consensus: Voter ({}) joined after current slot.", va);
                     return Ok((false, None))
@@ -563,7 +589,7 @@ impl ValidatorState {
                 self.consensus.participants.insert(participant.address, participant);
             }
             None => {
-                warn!("consensus: Voter ({}) is not a participant!", vote.address.to_string());
+                warn!("consensus: Voter ({}) is not a participant!", vote.address);
                 return Ok((false, None))
             }
         }
@@ -698,7 +724,7 @@ impl ValidatorState {
             debug!(target: "consensus", "Applying state transition for finalized block");
             let canon_state_clone = self.state_machine.lock().await.clone();
             let mem_st = MemoryState::new(canon_state_clone);
-            let state_updates = ValidatorState::validate_state_transitions(mem_st, &proposal.txs)?;
+            let state_updates = self.validate_state_transitions(mem_st, &proposal.txs)?;
             self.update_canon_state(state_updates, None).await?;
             self.remove_txs(proposal.txs.clone())?;
         }
@@ -792,7 +818,7 @@ impl ValidatorState {
 
         debug!(
             "refresh_participants(): Node {:?} checking slots: previous - {:?}, last - {:?}, previous from last - {:?}",
-            self.address.to_string(), previous_slot, last_slot, previous_from_last_slot
+            self.address, previous_slot, last_slot, previous_from_last_slot
         );
 
         let leader = self.slot_leader();
@@ -802,7 +828,7 @@ impl ValidatorState {
                     if (current - slot) > QUARANTINE_DURATION {
                         warn!(
                             "refresh_participants(): Removing participant: {:?} (joined {:?}, voted {:?})",
-                            participant.address.to_string(),
+                            participant.address,
                             participant.joined,
                             participant.voted
                         );
@@ -815,7 +841,7 @@ impl ValidatorState {
                     if participant.address == leader.address {
                         debug!(
                             "refresh_participants(): Quaranteening leader: {:?} (joined {:?}, voted {:?})",
-                            participant.address.to_string(),
+                            participant.address,
                             participant.joined,
                             participant.voted
                         );
@@ -827,7 +853,7 @@ impl ValidatorState {
                             if slot < last_slot {
                                 warn!(
                                     "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
-                                    participant.address.to_string(),
+                                    participant.address,
                                     participant.joined,
                                     participant.voted
                                 );
@@ -841,7 +867,7 @@ impl ValidatorState {
                             {
                                 warn!(
                                     "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
-                                    participant.address.to_string(),
+                                    participant.address,
                                     participant.joined,
                                     participant.voted
                                 );
@@ -891,9 +917,94 @@ impl ValidatorState {
     // State transition functions
     // ==========================
 
+    /// Validate and append to canonical state received blocks.
+    pub async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
+        // Verify state transitions for all blocks and their respective transactions.
+        debug!("receive_blocks(): Starting state transition validations");
+        let mut canon_updates = vec![];
+        let canon_state_clone = self.state_machine.lock().await.clone();
+        let mut mem_state = MemoryState::new(canon_state_clone);
+        for block in blocks {
+            let mut state_updates =
+                self.validate_state_transitions(mem_state.clone(), &block.txs)?;
+
+            for update in &state_updates {
+                mem_state.apply(update.clone());
+            }
+
+            canon_updates.append(&mut state_updates);
+        }
+        debug!("receive_blocks(): All state transitions passed");
+
+        debug!("receive_blocks(): Updating canon state");
+        self.update_canon_state(canon_updates, None).await?;
+
+        debug!("receive_blocks(): Appending blocks to ledger");
+        self.blockchain.add(blocks)?;
+
+        Ok(())
+    }
+
+    /// Validate and append to canonical state received finalized block.
+    /// Returns boolean flag indicating already existing block.
+    pub async fn receive_finalized_block(&mut self, block: BlockInfo) -> Result<bool> {
+        match self.blockchain.has_block(&block) {
+            Ok(v) => {
+                if v {
+                    debug!("receive_finalized_block(): Existing block received");
+                    return Ok(false)
+                }
+            }
+            Err(e) => {
+                error!("receive_finalized_block(): failed checking for has_block(): {}", e);
+                return Ok(false)
+            }
+        };
+
+        debug!("receive_finalized_block(): Executing state transitions");
+        self.receive_blocks(&[block.clone()]).await?;
+
+        debug!("receive_finalized_block(): Removing block transactions from unconfirmed_txs");
+        self.remove_txs(block.txs.clone())?;
+
+        Ok(true)
+    }
+
+    /// Validate and append to canonical state received finalized blocks from block sync task.
+    /// Already existing blocks are ignored.
+    pub async fn receive_sync_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
+        let mut new_blocks = vec![];
+        for block in blocks {
+            match self.blockchain.has_block(&block) {
+                Ok(v) => {
+                    if v {
+                        debug!("receive_sync_blocks(): Existing block received");
+                        continue
+                    }
+                    new_blocks.push(block.clone());
+                }
+                Err(e) => {
+                    error!("receive_sync_blocks(): failed checking for has_block(): {}", e);
+                    continue
+                }
+            };
+        }
+
+        if new_blocks.is_empty() {
+            debug!("receive_sync_blocks(): no new blocks to append");
+            return Ok(())
+        }
+
+        debug!("receive_sync_blocks(): Executing state transitions");
+        self.receive_blocks(&new_blocks[..]).await?;
+
+        Ok(())
+    }
+
     /// Validate state transitions for given transactions and state and
     /// return a vector of [`StateUpdate`]
     pub fn validate_state_transitions(
+        &self,
         state: MemoryState,
         txs: &[Transaction],
     ) -> Result<Vec<StateUpdate>> {
@@ -928,13 +1039,7 @@ impl ValidatorState {
         let mut state = self.state_machine.lock().await;
         for update in updates {
             state
-                .apply(
-                    update,
-                    secret_keys.clone(),
-                    notify.clone(),
-                    self.client.wallet.clone(),
-                    self.client.tokenlist.clone(),
-                )
+                .apply(update, secret_keys.clone(), notify.clone(), self.client.wallet.clone())
                 .await?;
         }
         drop(state);

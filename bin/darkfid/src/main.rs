@@ -22,7 +22,7 @@ use darkfi::{
         ValidatorState, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
         TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
     },
-    crypto::{address::Address, keypair::PublicKey, token_list::DrkTokenList},
+    crypto::{address::Address, keypair::PublicKey},
     net,
     net::P2pPtr,
     node::Client,
@@ -176,13 +176,15 @@ impl RequestHandler for Darkfid {
             Some("blockchain.merkle_roots") => return self.merkle_roots(req.id, params).await,
             Some("tx.transfer") => return self.transfer(req.id, params).await,
             Some("wallet.keygen") => return self.keygen(req.id, params).await,
-            Some("wallet.get_key") => return self.get_key(req.id, params).await,
+            Some("wallet.get_addrs") => return self.get_addrs(req.id, params).await,
             Some("wallet.export_keypair") => return self.export_keypair(req.id, params).await,
             Some("wallet.import_keypair") => return self.import_keypair(req.id, params).await,
             Some("wallet.set_default_address") => {
                 return self.set_default_address(req.id, params).await
             }
             Some("wallet.get_balances") => return self.get_balances(req.id, params).await,
+            Some("wallet.get_coins_valtok") => return self.get_coins_valtok(req.id, params).await,
+            Some("wallet.get_merkle_path") => return self.get_merkle_path(req.id, params).await,
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
@@ -256,18 +258,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     };
 
-    debug!("Parsing token lists...");
-    let tokenlist = Arc::new(DrkTokenList::new(&[
-        ("drk", include_bytes!("../../../contrib/token/darkfi_token_list.min.json")),
-        ("btc", include_bytes!("../../../contrib/token/bitcoin_token_list.min.json")),
-        ("eth", include_bytes!("../../../contrib/token/erc20_token_list.min.json")),
-        ("sol", include_bytes!("../../../contrib/token/solana_token_list.min.json")),
-    ])?);
-    debug!("Finished parsing token lists");
-
     // TODO: sqldb init cleanup
     // Initialize Client
-    let client = Arc::new(Client::new(wallet, tokenlist).await?);
+    let client = Arc::new(Client::new(wallet).await?);
 
     // Parse cashier addresses
     let mut cashier_pubkeys = vec![];

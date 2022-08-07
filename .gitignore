@@ -11,6 +11,7 @@
 /dao-cli
 /daod
 /darkfid
+/darkotc
 /dnetview
 /drk
 /faucetd
@@ -19,3 +20,4 @@
 /taud
 /vanityaddr
 /zkas
+/lilith

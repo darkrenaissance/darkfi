@@ -7,12 +7,14 @@ use chrono::{TimeZone, Utc};
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use darkfi::util::Timestamp;
+use darkfi::util::{
+    file::{load_json_file, save_json_file},
+    Timestamp,
+};
 
 use crate::{
     error::{TaudError, TaudResult},
     task_info::TaskInfo,
-    util::{load, save},
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -63,7 +65,7 @@ impl MonthTasks {
 
     pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
         debug!(target: "tau", "MonthTasks::save()");
-        save::<Self>(&Self::get_path(&self.created_at, dataset_path), self)
+        save_json_file::<Self>(&Self::get_path(&self.created_at, dataset_path), self)
             .map_err(TaudError::Darkfi)
     }
 
@@ -94,7 +96,7 @@ impl MonthTasks {
         // if a date is given we load that date's month tasks
         // if not, we load tasks from all months
         match date {
-            Some(date) => match load::<Self>(&Self::get_path(date, dataset_path)) {
+            Some(date) => match load_json_file::<Self>(&Self::get_path(date, dataset_path)) {
                 Ok(mt) => Ok(mt),
                 Err(_) => Self::create(date, dataset_path),
             },
@@ -107,7 +109,7 @@ impl MonthTasks {
                 let mut loaded_mt = Self::new(&[]);
 
                 for path in path_all {
-                    let mt = load::<Self>(&path)?;
+                    let mt = load_json_file::<Self>(&path)?;
                     loaded_mt.created_at = mt.created_at;
                     for tks in mt.task_tks {
                         if !loaded_mt.task_tks.contains(&tks) {

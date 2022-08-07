@@ -11,7 +11,7 @@ use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize, net,
-    raft::{NetMsg, ProtocolRaft, Raft},
+    raft::{NetMsg, ProtocolRaft, Raft, RaftSettings},
     rpc::server::listen_and_serve,
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
@@ -169,14 +169,12 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     // Raft
     //
     let net_settings = settings.net;
-    let seen_net_msgs = Arc::new(Mutex::new(vec![]));
+    let seen_net_msgs = Arc::new(Mutex::new(FxHashMap::default()));
 
     let datastore_raft = datastore_path.join("tau.db");
-    let mut raft = Raft::<EncryptedTask>::new(
-        net_settings.inbound.clone(),
-        datastore_raft,
-        seen_net_msgs.clone(),
-    )?;
+    let raft_settings = RaftSettings { datastore_path: datastore_raft, ..RaftSettings::default() };
+
+    let mut raft = Raft::<EncryptedTask>::new(raft_settings, seen_net_msgs.clone())?;
 
     let commits_received: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
 
@@ -184,8 +182,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         .spawn(start_sync_loop(
             commits_received.clone(),
             broadcast_rcv,
-            raft.get_msgs_channel(),
-            raft.get_commits_channel(),
+            raft.sender(),
+            raft.receiver(),
             datastore_path.clone(),
             configured_ws,
             rng,
@@ -202,7 +200,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let registry = p2p.protocol_registry();
 
-    let raft_node_id = raft.id.clone();
+    let raft_node_id = raft.id();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let raft_node_id = raft_node_id.clone();
@@ -231,7 +229,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     })
     .unwrap();
 
-    raft.start(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
+    raft.run(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
 
     Ok(())
 }

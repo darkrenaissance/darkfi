@@ -52,8 +52,7 @@ trait MessageDispatcherInterface: Send + Sync {
     fn as_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 }
 
-/// Maintains a list of active subscribers and handles sending messages across
-/// subscriptions.
+/// A dispatchers that is unique to every Message. Maintains a list of subscribers that are subscribed to that unique Message type and handles sending messages across these subscriptions.
 struct MessageDispatcher<M: Message> {
     subs: Mutex<FxHashMap<MessageSubscriptionId, async_channel::Sender<MessageResult<M>>>>,
 }
@@ -86,9 +85,9 @@ impl<M: Message> MessageDispatcher<M> {
         self.subs.lock().await.remove(&sub_id);
     }
 
-    /// Send a message to all subscriber channels. Automatically clear inactive
-    /// channels.
-    async fn trigger_all(&self, message: MessageResult<M>) {
+    /// Private function to transmit a message to all subscriber channels. Automatically clear inactive
+    /// channels. Used strictly internally.
+    async fn _trigger_all(&self, message: MessageResult<M>) {
         debug!(
             target: "net",
             "MessageDispatcher<M={}>::trigger_all({}) [START, subs={}]",
@@ -133,7 +132,7 @@ impl<M: Message> MessageDispatcher<M> {
 #[async_trait]
 // Local implementation of the Message Dispatcher Interface.
 impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
-    /// Deserialize data into a message type.
+    /// Internal function to deserialize data into a message type and dispatch it across subscriber channels.
     async fn trigger(&self, payload: Vec<u8>) {
         // deserialize data into type
         // send down the pipes
@@ -141,7 +140,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
         match M::decode(cursor) {
             Ok(message) => {
                 let message = Ok(Arc::new(message));
-                self.trigger_all(message).await
+                self._trigger_all(message).await
             }
             Err(err) => {
                 error!("Unable to decode data. Dropping...: {}", err);
@@ -149,10 +148,9 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
         }
     }
 
-    /// Sends a message to all subscriber channels. Clears any inactive
-    /// channels.
+    /// Interal function that sends a Error message to all subscriber channels.
     async fn trigger_error(&self, err: Error) {
-        self.trigger_all(Err(err)).await;
+        self._trigger_all(Err(err)).await;
     }
 
     /// Converts to Any trait. Enables the dynamic modification of static types.
@@ -161,8 +159,8 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
     }
 }
 
-/// Publish/subscribe class that can dispatch any kind of message to a
-/// list of dispatchers.
+/// Generic publish/subscribe class that maintains a list of dispatchers. Dispatchers transmit
+/// messages to subscribers and are specific to one message type.
 pub struct MessageSubsystem {
     dispatchers: Mutex<FxHashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }
@@ -173,12 +171,13 @@ impl MessageSubsystem {
         MessageSubsystem { dispatchers: Mutex::new(FxHashMap::default()) }
     }
 
-    /// Add a new message dispatcher.
+    /// Add a new dispatcher for specified Message.
     pub async fn add_dispatch<M: Message>(&self) {
         self.dispatchers.lock().await.insert(M::name(), Arc::new(MessageDispatcher::<M>::new()));
     }
 
-    /// Add a dispatcher to the list of subscribers.
+    /// Subscribes to a Message. Using the Message name, the method returns an the associated MessageDispatcher from the list of
+    /// dispatchers and calls subscribe().
     pub async fn subscribe<M: Message>(&self) -> Result<MessageSubscription<M>> {
         let dispatcher = self.dispatchers.lock().await.get(M::name()).cloned();
 
@@ -201,8 +200,8 @@ impl MessageSubsystem {
         Ok(sub)
     }
 
-    /// Sends a message out to subscribers. Returns an error if the message
-    /// doesn't send.
+    /// Transmits a payload to a dispatcher. Returns an error if the payload
+    /// fails to transmit.
     pub async fn notify(&self, command: &str, payload: Vec<u8>) {
         let dispatcher = self.dispatchers.lock().await.get(command).cloned();
 
@@ -212,6 +211,7 @@ impl MessageSubsystem {
             }
             None => {
                 warn!(
+                    target: "MessageSubsystem::notify",
                     "MessageSubsystem::notify(\"{}\", payload) did not find a dispatcher",
                     command
                 );
@@ -219,7 +219,7 @@ impl MessageSubsystem {
         }
     }
 
-    /// Send a message to all subscriber channels. Clear any inactive channels.
+    /// Transmits an error message across dispatchers.
     pub async fn trigger_error(&self, err: Error) {
         // TODO: this could be parallelized
         for dispatcher in self.dispatchers.lock().await.values() {

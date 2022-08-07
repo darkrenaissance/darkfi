@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use chrono::Utc;
 use futures_lite::future;
 use log::{debug, error, info};
-use num_bigint::BigUint;
 use serde_derive::Deserialize;
 use serde_json::{json, Value};
 use structopt::StructOpt;
@@ -21,7 +20,7 @@ use darkfi::{
         ValidatorState, ValidatorStatePtr, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
         TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
     },
-    crypto::{address::Address, keypair::PublicKey, token_list::DrkTokenList},
+    crypto::{address::Address, keypair::PublicKey, token_id},
     net,
     net::P2pPtr,
     node::Client,
@@ -37,7 +36,7 @@ use darkfi::{
         decode_base10, expand_path,
         path::get_config_path,
         serial::serialize,
-        sleep, NetworkName,
+        sleep,
     },
     wallet::walletdb::init_wallet,
     Error, Result,
@@ -111,7 +110,7 @@ struct Args {
 
     #[structopt(long, default_value = "10")]
     /// Airdrop amount limit
-    airdrop_limit: String, // We convert this to biguint with decode_base10
+    airdrop_limit: String, // We convert this to u64 with decode_base10
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -124,7 +123,7 @@ pub struct Faucetd {
     client: Arc<Client>,
     validator_state: ValidatorStatePtr,
     airdrop_timeout: i64,
-    airdrop_limit: BigUint,
+    airdrop_limit: u64,
     airdrop_map: Arc<Mutex<HashMap<Address, i64>>>,
 }
 
@@ -149,7 +148,7 @@ impl Faucetd {
         validator_state: ValidatorStatePtr,
         sync_p2p: P2pPtr,
         timeout: i64,
-        limit: BigUint,
+        limit: u64,
     ) -> Result<Self> {
         let client = validator_state.read().await.client.clone();
 
@@ -165,12 +164,16 @@ impl Faucetd {
     }
 
     // RPCAPI:
-    // Processes an airdrop request and airdrops requested amount to address.
+    // Processes an airdrop request and airdrops requested token and amount to address.
     // Returns the transaction ID upon success.
-    // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42, "1F00b4r..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
     async fn airdrop(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 2 || !params[0].is_string() || !params[1].is_f64() {
+        if params.len() != 3 ||
+            !params[0].is_string() ||
+            !params[1].is_f64() ||
+            !params[2].is_string()
+        {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
@@ -208,6 +211,16 @@ impl Faucetd {
             return server_error(RpcError::AmountExceedsLimit, id)
         }
 
+        // Here we allow the faucet to mint arbitrary token IDs.
+        // TODO: Revert this to native token when we have contracts for minting tokens.
+        let token_id = match token_id::parse_b58(params[2].as_str().unwrap()) {
+            Ok(v) => v,
+            Err(_) => {
+                error!("airdrop(): Failed parsing token id from string");
+                return server_error(RpcError::ParseError, id)
+            }
+        };
+
         // Check if there as a previous airdrop and the timeout has passed.
         let now = Utc::now().timestamp();
         let map = self.airdrop_map.lock().await;
@@ -218,24 +231,11 @@ impl Faucetd {
         };
         drop(map);
 
-        let token_id = self.client.tokenlist.by_net[&NetworkName::DarkFi]
-            .get("DRK".to_string())
-            .unwrap()
-            .drk_address;
-
-        let amnt: u64 = match amount.try_into() {
-            Ok(v) => v,
-            Err(e) => {
-                error!("airdrop(): Failed converting biguint to u64: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
-
         let tx = match self
             .client
             .build_transaction(
                 pubkey,
-                amnt,
+                amount,
                 token_id,
                 true,
                 self.validator_state.read().await.state_machine.clone(),
@@ -321,16 +321,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     };
 
-    let tokenlist = Arc::new(DrkTokenList::new(&[
-        ("drk", include_bytes!("../../../contrib/token/darkfi_token_list.min.json")),
-        ("btc", include_bytes!("../../../contrib/token/bitcoin_token_list.min.json")),
-        ("eth", include_bytes!("../../../contrib/token/erc20_token_list.min.json")),
-        ("sol", include_bytes!("../../../contrib/token/solana_token_list.min.json")),
-    ])?);
-
     // TODO: sqldb init cleanup
     // Initialize client
-    let client = Arc::new(Client::new(wallet.clone(), tokenlist).await?);
+    let client = Arc::new(Client::new(wallet.clone()).await?);
 
     // Parse cashier addresses
     let mut cashier_pubkeys = vec![];
