@@ -13,7 +13,7 @@ use crate::{
         schnorr,
         schnorr::SchnorrPublic,
         types::{DrkTokenId, DrkValueBlind, DrkValueCommit},
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
     impl_vec,
@@ -163,8 +163,7 @@ impl Transaction {
 
         failed = failed ||
             self.clear_inputs.iter().any(|input| {
-                pedersen_commitment_scalar(mod_r_p(input.token_id), input.token_blind) !=
-                    token_commit_value
+                pedersen_commitment_base(input.token_id, input.token_blind) != token_commit_value
             });
         !failed
     }

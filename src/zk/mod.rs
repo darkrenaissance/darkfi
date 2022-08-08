@@ -15,7 +15,8 @@ use halo2_proofs::{
     plonk::{Advice, Assigned, Column},
 };
 
-pub(in crate::zk) fn assign_free_advice<F: Field, V: Copy>(
+//pub(in crate::zk) fn assign_free_advice<F: Field, V: Copy>(
+pub fn assign_free_advice<F: Field, V: Copy>(
     mut layouter: impl Layouter<F>,
     column: Column<Advice>,
     value: Value<V>,

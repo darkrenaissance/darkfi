@@ -23,7 +23,7 @@ use darkfi::{
         proof::ProvingKey,
         token_id,
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, OwnCoin, Proof,
     },
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
@@ -382,8 +382,7 @@ fn inspect(data: &str) -> Result<()> {
         burn_value_valid = true;
     }
 
-    if pedersen_commitment_scalar(mod_r_p(sd.burn_token), sd.burn_token_blind) ==
-        sd.burn_revealed.token_commit
+    if pedersen_commitment_base(sd.burn_token, sd.burn_token_blind) == sd.burn_revealed.token_commit
     {
         burn_token_valid = true;
     }
@@ -393,8 +392,7 @@ fn inspect(data: &str) -> Result<()> {
         mint_value_valid = true;
     }
 
-    if pedersen_commitment_scalar(mod_r_p(sd.mint_token), sd.mint_token_blind) ==
-        sd.mint_revealed.token_commit
+    if pedersen_commitment_base(sd.mint_token, sd.mint_token_blind) == sd.mint_revealed.token_commit
     {
         mint_token_valid = true;
     }

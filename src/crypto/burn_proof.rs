@@ -10,7 +10,7 @@ use rand::rngs::OsRng;
 use super::{
     nullifier::Nullifier,
     proof::{Proof, ProvingKey, VerifyingKey},
-    util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+    util::{pedersen_commitment_base, pedersen_commitment_u64},
 };
 use crate::{
     crypto::{
@@ -76,7 +76,7 @@ impl BurnRevealedValues {
         };
 
         let value_commit = pedersen_commitment_u64(value, value_blind);
-        let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
+        let token_commit = pedersen_commitment_base(token_id, token_blind);
 
         BurnRevealedValues {
             value_commit,
