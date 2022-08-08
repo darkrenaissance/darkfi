@@ -2,26 +2,45 @@
 
 Get ready to spin up a bunch of different terminals. We are going to
 run 3 nodes: Alice and Bob and our seed node. To run the seed node,
-go to the `lilith` directory and run it by passing `dchat` as an argument:
+go to the `lilith` directory and spawn a new config file by running it once:
 
 ```bash
-cargo run -- --dchat
+cd darkfi
+make BINS=lilith
+./lilith
+```
+
+You should see the following output:
+
+```
+Config file created in '"/home/USER/.config/darkfi/lilith_config.toml"'. Please review it and try again.
+ ```
+
+Add dchat to the config as follows, keeping in mind that the port number must match the seed we specified
+earlier in Alice and Bob's settings.
+
+```toml
+[network."dchat"]
+port = 50515
+```
+
+Now run `lilith`:
+
+```bash
+./lilith
 ```
 
 Here's what the debug output should look like:
 
 ```
-[DEBUG] (1) net: P2p::start() [BEGIN]
-[DEBUG] (1) net: SeedSession::start() [START]
+[INFO] Found configuration for network: dchat
+[INFO] Starting seed network node for dchat at: tcp://127.0.0.1:50515
 [WARN] Skipping seed sync process since no seeds are configured.
-[DEBUG] (1) net: P2p::start() [END]
-[DEBUG] (1) net: P2p::run() [BEGIN]
-[INFO] Starting inbound session on tcp://127.0.0.1:55555
-[DEBUG] (1) net: tcp transport: listening on 127.0.0.1:55555
+[INFO] Starting inbound session on tcp://127.0.0.1:50515
 [INFO] Starting 0 outbound connection slots.
 ```
 
-Next we'll run Alice.
+Next we'll head back to `dchat` and run Alice. 
 
 ```bash
 cargo run a

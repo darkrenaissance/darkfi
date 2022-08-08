@@ -5,7 +5,41 @@ p2p network into it.  Then we'll add `dchat::start()` to our async loop
 in the main function. 
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:163:197}}
+#[async_std::main]
+async fn main() -> Result<()> {
+    let settings: Result<Settings> = match std::env::args().nth(1) {
+        Some(id) => match id.as_str() {
+            "a" => alice(),
+            "b" => bob(),
+            _ => Err(MissingSpecifier.into()),
+        },
+        None => Err(MissingSpecifier.into()),
+    };
+
+    let p2p = net::P2p::new(settings?.into()).await;
+
+    let dchat = Dchat::new(p2p);
+
+    let nthreads = num_cpus::get();
+    let (signal, shutdown) = async_channel::unbounded::<()>();
+
+    let ex = Arc::new(Executor::new());
+    let ex2 = ex.clone();
+
+    let (_, result) = Parallel::new()
+        .each(0..nthreads, |_| {
+            smol::future::block_on(ex.run(shutdown.recv()))
+        })
+        .finish(|| {
+            smol::future::block_on(async move {
+                dchat.start(ex2).await?;
+                drop(signal);
+                Ok(())
+            })
+        });
+
+    result
+}
 ```
 
 Now try to run the program, don't forget to add a specifier `a` or `b`

@@ -8,13 +8,13 @@ can run the p2p network.
 ```rust
 {{#include ../../../../../example/dchat/src/main.rs::9}}
 
-{{#include ../../../../../example/dchat/src/main.rs:23:24}}
+{{#include ../../../../../example/dchat/src/main.rs:25:26}}
 
-{{#include ../../../../../example/dchat/src/main.rs:163:164}}
-{{#include ../../../../../example/dchat/src/main.rs:176:179}}
+{{#include ../../../../../example/dchat/src/main.rs:183:184}}
+{{#include ../../../../../example/dchat/src/main.rs:198:199}}
 
-{{#include ../../../../../example/dchat/src/main.rs:186:189}}
-{{#include ../../../../../example/dchat/src/main.rs:191:197}}
+{{#include ../../../../../example/dchat/src/main.rs:213:216}}
+{{#include ../../../../../example/dchat/src/main.rs:218:224}}
 ```
 
 We get the number of cpu cores using `num_cpus::get()` and spin up a

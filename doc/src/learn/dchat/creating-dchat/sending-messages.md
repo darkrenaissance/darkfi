@@ -8,7 +8,7 @@ introduce us to a new p2p method that is essential to our chat app:
 `p2p.broadcast()`.
 
 ```
-{{#include ../../../../../example/dchat/src/main.rs:114:118}}
+{{#include ../../../../../example/dchat/src/main.rs:116:120}}
 ```
 
 We pass a `String` called msg that will be taken from user input. We use

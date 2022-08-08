@@ -40,7 +40,7 @@ use crate::{
     view::{IdMenu, MsgList, View},
 };
 
-use log::debug;
+//use log::debug;
 
 struct DnetView {
     name: String,
@@ -55,7 +55,7 @@ impl DnetView {
 
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    async fn _ping(&self) -> Result<Value> {
+    async fn ping(&self) -> Result<Value> {
         let req = JsonRequest::new("ping", json!([]));
         self.rpc_client.request(req).await
     }
@@ -153,6 +153,11 @@ async fn try_connect(model: Arc<Model>, node_name: String, rpc_url: String) -> D
 
 async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
     loop {
+        match client.ping().await {
+            // TODO
+            Ok(reply) => {}
+            Err(e) => {}
+        }
         match client.get_info().await {
             Ok(reply) => {
                 if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
@@ -259,8 +264,8 @@ async fn parse_data(
     update_msgs(model.clone(), sessions.clone()).await?;
     update_new_id(model.clone()).await;
 
-    debug!("IDS: {:?}", model.ids.lock().await);
-    debug!("INFOS: {:?}", model.nodes.lock().await);
+    //debug!("IDS: {:?}", model.ids.lock().await);
+    //debug!("INFOS: {:?}", model.nodes.lock().await);
 
     Ok(())
 }

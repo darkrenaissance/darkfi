@@ -9,19 +9,17 @@ simply displays the messages that `ProtocolDchat` has saved in the
 Here's what is should look like:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:36:82}}
+{{#include ../../../../../example/dchat/src/main.rs:38:84}}
 ```
 
 We'll call `menu()` inside of `dchat::start()` along with our other methods, like so:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:97:98}}
+{{#include ../../../../../example/dchat/src/main.rs:99:100}}
 
-{{#include ../../../../../example/dchat/src/main.rs:103}}
-
+{{#include ../../../../../example/dchat/src/main.rs:104:105}}
         self.p2p.clone().run(ex.clone()).await?;
-
-{{#include ../../../../../example/dchat/src/main.rs:108:112}}
+{{#include ../../../../../example/dchat/src/main.rs:107:114}}
 ```
 
 But wait- if you try running this code, you'll notice that the menu never
@@ -33,5 +31,5 @@ to detach it in the background.
 The complete implementaion looks like this:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:97:112}}
+{{#include ../../../../../example/dchat/src/main.rs:99:114}}
 ```

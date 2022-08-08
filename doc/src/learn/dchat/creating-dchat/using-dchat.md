@@ -5,7 +5,7 @@ We are finally ready to test our program. Spin up 5 different terminals.
 In terminal 1, run `lilith`.
 
 ```
-cargo run --dchat
+./lilith
 ```
 
 In terminal 2, run Alice.
