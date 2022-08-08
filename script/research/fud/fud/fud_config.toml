@@ -10,13 +10,13 @@
 #folder = "~/.config/darkfi/fud"
 
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:13336"
+#rpc_listen = "tcp://127.0.0.1:13336"
 
 # P2P accept address
-p2p_accept = "tls://127.0.0.1:13337"
+#p2p_accept = "tls://127.0.0.1:13337"
 
 # P2P external address
-p2p_external = "tls://127.0.0.1:13337"
+#p2p_external = "tls://127.0.0.1:13337"
 
 # Connection slots
 #slots = 8
