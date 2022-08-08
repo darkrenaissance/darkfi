@@ -12,7 +12,7 @@ use crate::{
         keypair::PublicKey,
         proof::{Proof, ProvingKey, VerifyingKey},
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::{pedersen_commitment_base, pedersen_commitment_u64},
     },
     util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::mint_contract::MintContract,
@@ -37,7 +37,7 @@ impl MintRevealedValues {
         public_key: PublicKey,
     ) -> Self {
         let value_commit = pedersen_commitment_u64(value, value_blind);
-        let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
+        let token_commit = pedersen_commitment_base(token_id, token_blind);
 
         let coords = public_key.0.to_affine().coordinates().unwrap();
         let messages =

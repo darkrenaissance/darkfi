@@ -1,23 +1,27 @@
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointShort, ScalarFixed, ScalarFixedShort,
+        FixedPoint, FixedPointBaseField, FixedPointShort, ScalarFixed, ScalarFixedShort,
     },
     poseidon::{
         primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
         Pow5Config as PoseidonConfig,
     },
+    sinsemilla::chip::{SinsemillaChip, SinsemillaConfig},
     utilities::lookup_range_check::LookupRangeCheckConfig,
 };
 use halo2_proofs::{
     circuit::{floor_planner, AssignedCell, Layouter, Value},
+    pasta::{pallas, Fp},
     plonk,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
-use pasta_curves::{pallas, Fp};
 
 use crate::{
-    crypto::constants::{OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV},
+    crypto::constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
+        NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
+    },
     zk::assign_free_advice,
 };
 
@@ -27,6 +31,8 @@ pub struct MintConfig {
     advices: [Column<Advice>; 10],
     ecc_config: EccConfig<OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
+    sinsemilla_config:
+        SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
 }
 
 impl MintConfig {
@@ -89,7 +95,9 @@ impl Circuit<pallas::Base> for MintContract {
             meta.advice_column(),
         ];
 
+        // Fixed columns for the Sinsemilla generator lookup table
         let table_idx = meta.lookup_table_column();
+        let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
 
         // Instance column used for public inputs
         let primary = meta.instance_column();
@@ -147,7 +155,16 @@ impl Circuit<pallas::Base> for MintContract {
             rc_b,
         );
 
-        MintConfig { primary, advices, ecc_config, poseidon_config }
+        let sinsemilla_config = SinsemillaChip::configure(
+            meta,
+            advices[..5].try_into().unwrap(),
+            advices[6],
+            ecc_lagrange_coeffs[0],
+            lookup,
+            range_check,
+        );
+
+        MintConfig { primary, advices, ecc_config, poseidon_config, sinsemilla_config }
     }
 
     fn synthesize(
@@ -155,6 +172,9 @@ impl Circuit<pallas::Base> for MintContract {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), plonk::Error> {
+        // Load the Sinsemilla generator lookup table used by the whole circuit.
+        SinsemillaChip::load(config.sinsemilla_config.clone(), &mut layouter)?;
+
         let ecc_chip = config.ecc_chip();
 
         let pub_x = assign_free_advice(
@@ -227,8 +247,7 @@ impl Circuit<pallas::Base> for MintContract {
 
         // v * G_1
         let (commitment, _) = {
-            let value_commit_v = ValueCommitV;
-            let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), value_commit_v);
+            let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), ValueCommitV);
             let value = ScalarFixedShort::new(
                 ecc_chip.clone(),
                 layouter.namespace(|| "value"),
@@ -244,8 +263,8 @@ impl Circuit<pallas::Base> for MintContract {
                 layouter.namespace(|| "value_blind"),
                 self.value_blind,
             )?;
-            let value_commit_r = OrchardFixedBasesFull::ValueCommitR;
-            let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), value_commit_r);
+            let value_commit_r =
+                FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
         };
 
@@ -268,15 +287,9 @@ impl Circuit<pallas::Base> for MintContract {
         // Token commitment
         // ================
         // a * G_1
-        let (commitment, _) = {
-            let token_commit_v = ValueCommitV;
-            let token_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), token_commit_v);
-            let token = ScalarFixedShort::new(
-                ecc_chip.clone(),
-                layouter.namespace(|| "token"),
-                (token, one),
-            )?;
-            token_commit_v.mul(layouter.namespace(|| "[token] ValueCommitV"), token)?
+        let commitment = {
+            let token_commit_v = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
+            token_commit_v.mul(layouter.namespace(|| "[token] NullifierK"), token)?
         };
 
         // r_A * G_2
@@ -286,8 +299,8 @@ impl Circuit<pallas::Base> for MintContract {
                 layouter.namespace(|| "token_blind"),
                 self.token_blind,
             )?;
-            let token_commit_r = OrchardFixedBasesFull::ValueCommitR;
-            let token_commit_r = FixedPoint::from_inner(ecc_chip, token_commit_r);
+            let token_commit_r =
+                FixedPoint::from_inner(ecc_chip, OrchardFixedBasesFull::ValueCommitR);
             token_commit_r.mul(layouter.namespace(|| "[token_blind] ValueCommitR"), rca)?
         };
 
@@ -318,12 +331,11 @@ mod tests {
         crypto::{
             keypair::PublicKey,
             proof::{ProvingKey, VerifyingKey},
-            util::{mod_r_p, pedersen_commitment_scalar},
+            util::{pedersen_commitment_base, pedersen_commitment_u64},
             Proof,
         },
         Result,
     };
-    use group::{ff::Field, Curve};
     use halo2_gadgets::poseidon::{
         primitives as poseidon,
         primitives::{ConstantLength, P128Pow5T3},
@@ -332,14 +344,17 @@ mod tests {
         circuit::Value,
         dev::{CircuitLayout, MockProver},
     };
-    use pasta_curves::arithmetic::CurveAffine;
+    use pasta_curves::{
+        arithmetic::CurveAffine,
+        group::{ff::Field, Curve},
+    };
     use rand::rngs::OsRng;
     use std::time::Instant;
 
     #[test]
     fn mint_circuit_assert() -> Result<()> {
-        let value = pallas::Base::from(42);
-        let token_id = pallas::Base::from(22);
+        let value = 42;
+        let token_id = pallas::Base::random(&mut OsRng);
         let value_blind = pallas::Scalar::random(&mut OsRng);
         let token_blind = pallas::Scalar::random(&mut OsRng);
         let serial = pallas::Base::random(&mut OsRng);
@@ -347,13 +362,14 @@ mod tests {
         let public_key = PublicKey::random(&mut OsRng);
         let coords = public_key.0.to_affine().coordinates().unwrap();
 
-        let msg = [*coords.x(), *coords.y(), value, token_id, serial, coin_blind];
+        let msg =
+            [*coords.x(), *coords.y(), pallas::Base::from(value), token_id, serial, coin_blind];
         let coin = poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(msg);
 
-        let value_commit = pedersen_commitment_scalar(mod_r_p(value), value_blind);
+        let value_commit = pedersen_commitment_u64(value, value_blind);
         let value_coords = value_commit.to_affine().coordinates().unwrap();
 
-        let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
+        let token_commit = pedersen_commitment_base(token_id, token_blind);
         let token_coords = token_commit.to_affine().coordinates().unwrap();
 
         let public_inputs =
@@ -362,7 +378,7 @@ mod tests {
         let circuit = MintContract {
             pub_x: Value::known(*coords.x()),
             pub_y: Value::known(*coords.y()),
-            value: Value::known(value),
+            value: Value::known(pallas::Base::from(value)),
             token: Value::known(token_id),
             serial: Value::known(serial),
             coin_blind: Value::known(coin_blind),
@@ -374,13 +390,13 @@ mod tests {
         let root = BitMapBackend::new("mint_circuit_layout.png", (3840, 2160)).into_drawing_area();
         root.fill(&WHITE).unwrap();
         let root = root.titled("Mint Circuit Layout", ("sans-serif", 60)).unwrap();
-        CircuitLayout::default().render(8, &circuit, &root).unwrap();
+        CircuitLayout::default().render(11, &circuit, &root).unwrap();
 
-        let prover = MockProver::run(8, &circuit, vec![public_inputs.clone()])?;
+        let prover = MockProver::run(11, &circuit, vec![public_inputs.clone()])?;
         prover.assert_satisfied();
 
         let now = Instant::now();
-        let proving_key = ProvingKey::build(8, &circuit);
+        let proving_key = ProvingKey::build(11, &circuit);
         println!("ProvingKey built [{:?}]", now.elapsed());
         let now = Instant::now();
         let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
@@ -388,7 +404,7 @@ mod tests {
 
         let circuit = MintContract::default();
         let now = Instant::now();
-        let verifying_key = VerifyingKey::build(8, &circuit);
+        let verifying_key = VerifyingKey::build(11, &circuit);
         println!("VerifyingKey built [{:?}]", now.elapsed());
         let now = Instant::now();
         proof.verify(&verifying_key, &public_inputs)?;

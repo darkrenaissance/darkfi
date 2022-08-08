@@ -263,7 +263,7 @@ impl<'de> serde::Deserialize<'de> for PublicKey {
 mod tests {
     use super::*;
     use crate::{
-        crypto::util::pedersen_commitment_scalar,
+        crypto::util::pedersen_commitment_base,
         util::serial::{deserialize, serialize},
     };
 
@@ -291,15 +291,15 @@ mod tests {
         );
         assert_eq!(deserialize(&serialized).ok(), Some(fourtwenty));
 
-        let a = pallas::Scalar::from(420);
+        let a = pallas::Base::from(420);
         let b = pallas::Scalar::from(69);
-        let pc: pallas::Point = pedersen_commitment_scalar(a, b);
+        let pc: pallas::Point = pedersen_commitment_base(a, b);
         let serialized = serialize(&pc);
         assert_eq!(
             serialized,
             vec![
-                55, 48, 126, 42, 114, 27, 18, 55, 155, 141, 83, 75, 44, 50, 244, 223, 254, 216, 22,
-                167, 208, 59, 212, 201, 150, 149, 96, 207, 216, 74, 60, 131
+                57, 232, 32, 239, 229, 119, 41, 70, 218, 174, 237, 25, 122, 81, 81, 252, 54, 192,
+                225, 207, 145, 124, 177, 46, 28, 37, 55, 70, 6, 33, 51, 42,
             ]
         );
         assert_eq!(deserialize(&serialized).ok(), Some(pc));

@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn test_proof_serialization() -> Result<()> {
         let value = 110_u64;
-        let token_id = DrkTokenId::from(42);
+        let token_id = DrkTokenId::random(&mut OsRng);
         let value_blind = DrkValueBlind::random(&mut OsRng);
         let token_blind = DrkValueBlind::random(&mut OsRng);
         let serial = DrkSerial::random(&mut OsRng);

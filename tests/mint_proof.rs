@@ -2,7 +2,7 @@ use darkfi::{
     crypto::{
         keypair::PublicKey,
         proof::{ProvingKey, VerifyingKey},
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::{pedersen_commitment_base, pedersen_commitment_u64},
         Proof,
     },
     zk::{
@@ -33,7 +33,7 @@ fn mint_proof() -> Result<()> {
 
     // Witness values
     let value = 42;
-    let token_id = pallas::Base::from(22);
+    let token_id = pallas::Base::random(&mut OsRng);
     let value_blind = pallas::Scalar::random(&mut OsRng);
     let token_blind = pallas::Scalar::random(&mut OsRng);
     let serial = pallas::Base::random(&mut OsRng);
@@ -60,7 +60,7 @@ fn mint_proof() -> Result<()> {
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
 
-    let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
+    let token_commit = pedersen_commitment_base(token_id, token_blind);
     let token_coords = token_commit.to_affine().coordinates().unwrap();
 
     let public_inputs =
