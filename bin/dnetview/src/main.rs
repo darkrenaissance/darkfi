@@ -3,7 +3,7 @@ use std::{collections::hash_map::Entry, fs::File, io, io::Read, path::PathBuf};
 
 use easy_parallel::Parallel;
 use fxhash::{FxHashMap, FxHashSet};
-use log::{error, info};
+use log::{error, info, trace};
 use serde_json::{json, Value};
 use simplelog::*;
 use smol::Executor;
@@ -39,8 +39,6 @@ use crate::{
     util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
     view::{IdMenu, MsgList, View},
 };
-
-//use log::debug;
 
 struct DnetView {
     name: String,
@@ -106,6 +104,8 @@ async fn main() -> DnetViewResult<()> {
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
+
+    let (s, r) = async_channel::unbounded::<()>();
 
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();
@@ -222,6 +222,7 @@ async fn parse_offline(node_name: String, model: Arc<Model>) -> DnetViewResult<(
 
     update_node(model.clone(), node.clone(), node_id.clone()).await;
     update_selectable_and_ids(model.clone(), sessions, node.clone()).await?;
+    update_new_id(model.clone()).await;
     Ok(())
 }
 
@@ -317,6 +318,7 @@ async fn update_selectable_and_ids(
     if node.is_offline == true {
         let node_obj = SelectableObject::Node(node.clone());
         model.selectables.lock().await.insert(node.id.clone(), node_obj);
+        update_ids(model.clone(), node.id.clone()).await;
     } else {
         let node_obj = SelectableObject::Node(node.clone());
         model.selectables.lock().await.insert(node.id.clone(), node_obj);
@@ -623,6 +625,8 @@ async fn render_view<B: Backend>(
             model.selectables.lock().await.clone(),
         );
 
+        trace!(target: "dnetview::render_view()", "ID LIST: {:?}", view.id_menu.ids);
+
         let mut err: Option<DnetViewError> = None;
 
         terminal.draw(|f| match view.render(f) {
@@ -662,5 +666,6 @@ async fn render_view<B: Backend>(
                 _ => (),
             }
         }
+        //async_util::sleep(1).await;
     }
 }
