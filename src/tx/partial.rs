@@ -12,14 +12,14 @@ use crate::{
     Result,
 };
 
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct PartialTransaction {
     pub clear_inputs: Vec<PartialTransactionClearInput>,
     pub inputs: Vec<PartialTransactionInput>,
     pub outputs: Vec<TransactionOutput>,
 }
 
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct PartialTransactionClearInput {
     pub value: u64,
     pub token_id: DrkTokenId,
@@ -28,7 +28,7 @@ pub struct PartialTransactionClearInput {
     pub signature_public: PublicKey,
 }
 
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct PartialTransactionInput {
     pub burn_proof: Proof,
     pub revealed: BurnRevealedValues,

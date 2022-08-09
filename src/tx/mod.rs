@@ -22,7 +22,7 @@ use crate::{
 };
 
 pub mod builder;
-mod partial;
+pub mod partial;
 
 /// A DarkFi transaction
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
@@ -206,7 +206,7 @@ impl TransactionClearInput {
 }
 
 impl TransactionInput {
-    fn from_partial(
+    pub fn from_partial(
         partial: partial::PartialTransactionInput,
         signature: schnorr::Signature,
     ) -> Self {
