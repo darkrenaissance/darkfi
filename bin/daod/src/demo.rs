@@ -1,9 +1,13 @@
-use std::time::Instant;
-use log::debug;
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use pasta_curves::{arithmetic::CurveAffine, group::{Curve, ff::Field}, pallas};
 use halo2_gadgets::poseidon::primitives as poseidon;
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use log::debug;
+use pasta_curves::{
+    arithmetic::CurveAffine,
+    group::{ff::Field, Curve},
+    pallas,
+};
 use rand::rngs::OsRng;
+use std::time::Instant;
 
 use darkfi::{
     crypto::{
@@ -16,9 +20,7 @@ use darkfi::{
         token_id::generate_id,
         OwnCoin, OwnCoins,
     },
-    node::{
-        state::{state_transition, ProgramState, StateUpdate},
-    },
+    node::state::{state_transition, ProgramState, StateUpdate},
     tx::builder::{
         TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
         TransactionBuilderOutputInfo,
@@ -123,7 +125,6 @@ impl MemoryState {
 }
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-
 mod DaoContract {
     use pasta_curves::pallas;
 
@@ -131,14 +132,12 @@ mod DaoContract {
 
     /// This DAO state is for all DAOs on the network. There should only be a single instance.
     pub struct State {
-        dao_bullas: Vec<DaoBulla>
+        dao_bullas: Vec<DaoBulla>,
     }
 
     impl State {
         pub fn new() -> Self {
-            Self {
-                dao_bullas: Vec::new()
-            }
+            Self { dao_bullas: Vec::new() }
         }
     }
 
@@ -177,8 +176,8 @@ mod DaoContract {
     /// let tx = builder.build();
     /// ```
     pub mod Mint {
-        use pasta_curves::pallas;
         use darkfi::crypto::keypair::PublicKey;
+        use pasta_curves::pallas;
 
         pub struct Builder {
             dao_proposer_limit: u64,
@@ -204,22 +203,19 @@ mod DaoContract {
                     dao_approval_ratio,
                     gov_token_id,
                     dao_pubkey,
-                    dao_bulla_blind
+                    dao_bulla_blind,
                 }
             }
 
             /// Consumes self, and produces the actual Tx
             pub fn build(self) -> Tx {
-                Tx {
-                }
+                Tx {}
             }
         }
 
-        pub struct Tx {
-        }
+        pub struct Tx {}
 
-        impl Tx {
-        }
+        impl Tx {}
     }
 }
 
@@ -269,7 +265,7 @@ pub async fn demo() -> Result<()> {
     };
 
     /////////////////////////////////////////////////
-    
+
     //
     let dao_state = DaoContract::State::new();
 
@@ -315,7 +311,7 @@ pub async fn demo() -> Result<()> {
         dao_approval_ratio,
         gdrk_token_id,
         dao_keypair.public,
-        dao_bulla_blind
+        dao_bulla_blind,
     );
     let tx = builder.build();
 
@@ -354,7 +350,7 @@ pub async fn demo() -> Result<()> {
 
     // Now spend
     let owncoin = &money_state.own_coins[0];
-    let note = owncoin.note;
+    let note = &owncoin.note;
     let leaf_position = owncoin.leaf_position;
     let root = money_state.tree.root(0).unwrap();
     let merkle_path = money_state.tree.authentication_path(leaf_position, &root).unwrap();
@@ -365,7 +361,7 @@ pub async fn demo() -> Result<()> {
             leaf_position,
             merkle_path,
             secret: keypair.secret,
-            note,
+            note: note.clone(),
         }],
         outputs: vec![TransactionBuilderOutputInfo {
             value: 110,
@@ -381,4 +377,3 @@ pub async fn demo() -> Result<()> {
 
     Ok(())
 }
-

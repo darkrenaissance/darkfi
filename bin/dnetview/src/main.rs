@@ -18,10 +18,8 @@ use darkfi::{
     error::Result,
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
-        //async_util,
         cli::{get_log_config, get_log_level, spawn_config, Config},
-        join_config_path,
-        NanoTimestamp,
+        join_config_path, NanoTimestamp,
     },
 };
 
