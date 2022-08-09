@@ -18,9 +18,10 @@ use darkfi::{
     error::Result,
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
-        async_util,
+        //async_util,
         cli::{get_log_config, get_log_level, spawn_config, Config},
-        join_config_path, NanoTimestamp,
+        join_config_path,
+        NanoTimestamp,
     },
 };
 
@@ -36,7 +37,9 @@ use crate::{
     error::{DnetViewError, DnetViewResult},
     model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
     options::ProgramOptions,
-    util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
+    util::{
+        is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id, sleep,
+    },
     view::{IdMenu, MsgList, View},
 };
 
@@ -102,6 +105,13 @@ async fn main() -> DnetViewResult<()> {
     let new_id = Mutex::new(Vec::new());
     let model = Arc::new(Model::new(ids, new_id, nodes, msg_map, msg_log, selectables));
 
+    let msg_map = FxHashMap::default();
+    let msg_list = MsgList::new(msg_map.clone(), 0);
+    let selectables = FxHashMap::default();
+    let id_menu = IdMenu::new(Vec::new());
+
+    let mut view = View::new(id_menu, msg_list, selectables);
+
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
@@ -109,13 +119,14 @@ async fn main() -> DnetViewResult<()> {
 
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();
+    let ex3 = ex.clone();
 
     let (_, result) = Parallel::new()
         .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
         .finish(|| {
             smol::future::block_on(async move {
                 start_connect_slots(&config, ex2.clone(), model.clone()).await?;
-                render_view(&mut terminal, model.clone()).await?;
+                render_view(&mut terminal, model.clone(), &mut view.clone(), ex3).await?;
                 drop(signal);
                 Ok(())
             })
@@ -145,7 +156,7 @@ async fn try_connect(model: Arc<Model>, node_name: String, rpc_url: String) -> D
             Err(e) => {
                 error!("{}", e);
                 parse_offline(node_name.clone(), model.clone()).await?;
-                async_util::sleep(2).await;
+                util::sleep(2000).await;
             }
         }
     }
@@ -171,7 +182,7 @@ async fn poll(client: DnetView, model: Arc<Model>) -> DnetViewResult<()> {
                 parse_offline(client.name.clone(), model.clone()).await?;
             }
         }
-        async_util::sleep(2).await;
+        util::sleep(2000).await;
     }
 }
 
@@ -265,8 +276,8 @@ async fn parse_data(
     update_msgs(model.clone(), sessions.clone()).await?;
     update_new_id(model.clone()).await;
 
-    //debug!("IDS: {:?}", model.ids.lock().await);
-    //debug!("INFOS: {:?}", model.nodes.lock().await);
+    //trace!("IDS: {:?}", model.ids.lock().await);
+    //trace!("INFOS: {:?}", model.nodes.lock().await);
 
     Ok(())
 }
@@ -603,17 +614,12 @@ async fn parse_outbound(outbound: &Value, node_id: &String) -> DnetViewResult<Se
 async fn render_view<B: Backend>(
     terminal: &mut Terminal<B>,
     model: Arc<Model>,
+    view: &mut View,
+    ex: Arc<Executor<'_>>,
 ) -> DnetViewResult<()> {
     let mut asi = async_stdin();
 
     terminal.clear()?;
-
-    let msg_map = FxHashMap::default();
-    let msg_list = MsgList::new(msg_map.clone(), 0);
-    let selectables = FxHashMap::default();
-    let id_menu = IdMenu::new(Vec::new());
-
-    let mut view = View::new(id_menu, msg_list, selectables);
 
     view.id_menu.state.select(Some(0));
     view.msg_list.state.select(Some(0));
@@ -666,6 +672,6 @@ async fn render_view<B: Backend>(
                 _ => (),
             }
         }
-        //async_util::sleep(1).await;
+        util::sleep(200).await;
     }
 }

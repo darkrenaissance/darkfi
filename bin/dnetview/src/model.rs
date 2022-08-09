@@ -23,6 +23,7 @@ pub enum SelectableObject {
     Connect(ConnectInfo),
 }
 
+#[derive(Debug)]
 pub struct Model {
     pub ids: Mutex<FxHashSet<String>>,
     pub new_id: Mutex<Vec<String>>,

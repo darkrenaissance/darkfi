@@ -22,7 +22,7 @@ use crate::{
 type MsgLog = Vec<(NanoTimestamp, String, String)>;
 type MsgMap = FxHashMap<String, MsgLog>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct View {
     pub id_menu: IdMenu,
     pub msg_list: MsgList,

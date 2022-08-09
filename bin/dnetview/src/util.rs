@@ -1,5 +1,12 @@
 use crate::model::{ConnectInfo, Session};
 use darkfi::{util::serial, Result};
+use smol::Timer;
+use std::time::Duration;
+
+/// Sleep for any number of milliseconds.
+pub async fn sleep(millis: u64) {
+    Timer::after(Duration::from_millis(millis)).await;
+}
 
 pub fn make_node_id(node_name: &String) -> Result<String> {
     Ok(serial::serialize_hex(node_name))

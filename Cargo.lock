@@ -1391,23 +1391,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dchat_seed"
-version = "0.1.0"
-dependencies = [
- "async-channel",
- "async-executor",
- "async-std",
- "darkfi",
- "easy-parallel",
- "futures",
- "log",
- "num_cpus",
- "simplelog",
- "smol",
- "url",
-]
-
-[[package]]
 name = "deflate"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
