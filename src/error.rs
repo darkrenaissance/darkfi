@@ -324,6 +324,12 @@ pub enum Error {
 /// Transaction verification errors
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum VerifyFailed {
+    #[error("Transaction has no inputs")]
+    LackingInputs,
+
+    #[error("Transaction has no outputs")]
+    LackingOutputs,
+
     #[error("Invalid cashier/faucet public key for clear input {0}")]
     InvalidCashierOrFaucetKey(usize),
 

@@ -77,6 +77,16 @@ pub struct TransactionOutput {
 impl Transaction {
     /// Verify the transaction
     pub fn verify(&self, mint_vk: &VerifyingKey, burn_vk: &VerifyingKey) -> VerifyResult<()> {
+        // Transaction must have minimum 1 clear or anon input, and 1 output
+        if self.clear_inputs.len() + self.inputs.len() == 0 {
+            error!("tx::verify(): Missing inputs");
+            return Err(VerifyFailed::LackingInputs)
+        }
+        if self.outputs.len() == 0 {
+            error!("tx::verify(): Missing outputs");
+            return Err(VerifyFailed::LackingOutputs)
+        }
+
         // Accumulator for the value commitments
         let mut valcom_total = DrkValueCommit::identity();
 

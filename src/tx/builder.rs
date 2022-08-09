@@ -69,6 +69,8 @@ impl TransactionBuilder {
     }
 
     pub fn build(self, mint_pk: &ProvingKey, burn_pk: &ProvingKey) -> Result<Transaction> {
+        assert!(self.clear_inputs.len() + self.inputs.len() > 0);
+
         let mut clear_inputs = vec![];
         let token_blind = DrkValueBlind::random(&mut OsRng);
         for input in &self.clear_inputs {
@@ -89,9 +91,8 @@ impl TransactionBuilder {
         let mut input_blinds = vec![];
         let mut signature_secrets = vec![];
         for input in self.inputs {
-            // FIXME: BUG - looks like we are reusing the value_blind from the output
-            // This must be a completely new random value or the value_commit will be the same.
-            input_blinds.push(input.note.value_blind);
+            let value_blind = DrkValueBlind::random(&mut OsRng);
+            input_blinds.push(value_blind);
 
             let signature_secret = SecretKey::random(&mut OsRng);
 
@@ -99,7 +100,7 @@ impl TransactionBuilder {
                 burn_pk,
                 input.note.value,
                 input.note.token_id,
-                input.note.value_blind,
+                value_blind,
                 token_blind,
                 input.note.serial,
                 input.note.coin_blind,
@@ -118,6 +119,8 @@ impl TransactionBuilder {
 
         let mut outputs = vec![];
         let mut output_blinds = vec![];
+        // This value_blind calc assumes there will always be at least a single output
+        assert!(self.outputs.len() > 0);
 
         for (i, output) in self.outputs.iter().enumerate() {
             let value_blind = if i == self.outputs.len() - 1 {
