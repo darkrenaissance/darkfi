@@ -25,7 +25,6 @@ use darkfi::{
         leadcoin::LeadCoin,
         lead_proof,
         merkle_node::MerkleNode,
-        util::{mod_r_p, pedersen_commitment_scalar},
     },
     tx::Transaction,
     consensus::{TransactionLeadProof, Metadata, StreamletMetadata, BlockInfo},
@@ -81,8 +80,9 @@ fn main() {
 
     //TODO (fix) proof panics
     let lead_tx = TransactionLeadProof::new(lead_pk, coin.clone());
-    /*
+
     //lead_tx.verify(lead_vk, coin);
+
     let (st_id, st_hash)  = stakeholder.blockchain.last().unwrap();
     let empty_txs : Vec<Transaction> = vec!();
     let metadata = Metadata::new(Timestamp::current_time(), epoch.eta.to_repr(), lead_tx);
@@ -95,5 +95,4 @@ fn main() {
     let public_inputs = coin.public_inputs();
     let prover = MockProver::run(k, &contract, vec![public_inputs]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
-    */
 }

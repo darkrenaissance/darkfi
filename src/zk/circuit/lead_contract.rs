@@ -90,9 +90,9 @@ impl LeadConfig {
 }
 
 const LEAD_COIN_NONCE2_OFFSET: usize = 0;
-const LEAD_COIN_PK_OFFSET: usize = 2;
-const LEAD_COIN_SERIAL_NUMBER_OFFSET: usize = 4;
-const LEAD_COIN_COMMIT_X_OFFSET: usize = 6;
+const LEAD_COIN_PK_OFFSET: usize = 1;
+const LEAD_COIN_SERIAL_NUMBER_OFFSET: usize = 2;
+const LEAD_COIN_COMMIT_X_OFFSET: usize = 3;
 const LEAD_COIN_COMMIT_Y_OFFSET: usize = 7;
 const LEAD_COIN_COMMIT2_X_OFFSET: usize = 8;
 const LEAD_COIN_COMMIT2_Y_OFFSET: usize = 9;
@@ -388,7 +388,7 @@ impl Circuit<pallas::Base> for LeadContract {
             config.primary,
             LEAD_COIN_SERIAL_NUMBER_OFFSET,
         )?;
-
+        /*
         // ================================================
         // coin commiment H=COMMIT(pk||V||nonce||r)
         // ================================================
@@ -591,7 +591,7 @@ impl Circuit<pallas::Base> for LeadContract {
             Value::known(pallas::Base::one()), // note! this parameter to be tuned.
         )?;
 
-        /*
+
         let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
         let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value.clone())?;
         eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;

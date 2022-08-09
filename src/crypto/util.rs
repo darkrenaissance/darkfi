@@ -45,6 +45,7 @@ pub fn pedersen_commitment_u64(value: u64, blind: DrkValueBlind) -> DrkValueComm
     V * mod_r_p(DrkValue::from(value)) + R * blind
 }
 
+/*
 #[allow(non_snake_case)]
 pub fn pedersen_commitment_base(value: pallas::Base, blind: DrkValueBlind) -> DrkValueCommit {
     let hasher = DrkValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
@@ -53,7 +54,7 @@ pub fn pedersen_commitment_base(value: pallas::Base, blind: DrkValueBlind) -> Dr
 
     V * mod_r_p(value) + R * blind
 }
-
+*/
 /// Converts from pallas::Base to pallas::Scalar (aka $x \pmod{r_\mathbb{P}}$).
 ///
 /// This requires no modular reduction because Pallas' base field is smaller than its

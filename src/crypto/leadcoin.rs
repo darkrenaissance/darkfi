@@ -5,7 +5,7 @@ use crate::{
     crypto::{
         constants::MERKLE_DEPTH_ORCHARD,
         merkle_node::MerkleNode,
-        util::{mod_r_p, pedersen_commitment_scalar},
+        util::{mod_r_p, pedersen_commitment_base},
     }
 };
 
@@ -42,7 +42,7 @@ pub struct LeadCoin {
 impl LeadCoin {
     pub fn public_inputs(&self) -> Vec<pallas::Base> {
         let po_nonce = self.nonce_cm.unwrap();
-        let _po_tau = pedersen_commitment_scalar(mod_r_p(self.tau.unwrap()), self.root_cm.unwrap())
+        let _po_tau = pedersen_commitment_base(self.tau.unwrap(), self.root_cm.unwrap())
             .to_affine()
             .coordinates()
             .unwrap();
@@ -77,11 +77,11 @@ impl LeadCoin {
             po_nonce,
             po_pk,
             po_sn,
-            *po_cm.x(),
-            *po_cm.y(),
-            *po_cm2.x(),
-            *po_cm2.y(),
-            cm_root.0,
+            //*po_cm.x(),
+            //*po_cm.y(),
+            //*po_cm2.x(),
+            //*po_cm2.y(),
+            //cm_root.0,
             //po_cmp,
         ];
         public_inputs

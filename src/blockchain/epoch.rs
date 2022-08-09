@@ -19,7 +19,7 @@ use crate::{
         lead_proof,
         proof::{Proof, ProvingKey, VerifyingKey},
         merkle_node::MerkleNode,
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_base, pedersen_commitment_u64},
+        util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
         types::DrkValueBlind,
     },
 };
@@ -194,11 +194,11 @@ impl Epoch {
                 c_seed,
                 c_root_sk.inner(),
             ];
-            let c_sn : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_pk_msg);
+            let c_sn : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(sn_msg);
 
 
             let coin_commit_msg = c_pk*c_v*c_seed;
-            let c_cm: pallas::Point = pedersen_commitment_scalar(mod_r_p(coin_commit_msg), c_cm1_blind);
+            let c_cm: pallas::Point = pedersen_commitment_base(coin_commit_msg, c_cm1_blind);
             let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
             let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
             let c_cm_node = MerkleNode(c_cm_base);
