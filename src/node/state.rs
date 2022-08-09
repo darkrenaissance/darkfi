@@ -195,7 +195,7 @@ impl State {
         Ok(())
     }
 
-    fn try_decrypt_note(ciphertext: &EncryptedNote, secret: SecretKey) -> Option<Note> {
+    pub fn try_decrypt_note(ciphertext: &EncryptedNote, secret: SecretKey) -> Option<Note> {
         match ciphertext.decrypt(&secret) {
             Ok(note) => Some(note),
             Err(_) => None,

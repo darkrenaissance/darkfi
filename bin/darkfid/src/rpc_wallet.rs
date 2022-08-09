@@ -10,11 +10,12 @@ use darkfi::{
         keypair::{Keypair, PublicKey, SecretKey},
         token_id,
     },
+    node::State,
     rpc::jsonrpc::{
         ErrorCode::{InternalError, InvalidParams, ParseError},
         JsonError, JsonResponse, JsonResult,
     },
-    util::serial::serialize,
+    util::serial::{deserialize, serialize},
 };
 
 use super::Darkfid;
@@ -282,5 +283,49 @@ impl Darkfid {
         let ret: Vec<String> =
             merkle_path.iter().map(|x| bs58::encode(serialize(x)).into_string()).collect();
         JsonResponse::new(json!(ret), id).into()
+    }
+
+    // RPCAPI:
+    // Try to decrypt a given encrypted note with the secret keys
+    // found in the wallet.
+    // --> {"jsonrpc": "2.0", "method": "wallet.decrypt_note", params": [ciphertext], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "base58_encoded_plain_note", "id": 1}
+    pub async fn decrypt_note(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let bytes = match bs58::decode(params[0].as_str().unwrap()).into_vec() {
+            Ok(v) => v,
+            Err(e) => {
+                error!("decrypt_note(): Failed decoding base58 string: {}", e);
+                return JsonError::new(ParseError, None, id).into()
+            }
+        };
+
+        let enc_note = match deserialize(&bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("decrypt_note(): Failed deserializing bytes into EncryptedNote: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        let keypairs = match self.client.get_keypairs().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("decrypt_note(): Failed fetching keypairs: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        for kp in keypairs {
+            if let Some(note) = State::try_decrypt_note(&enc_note, kp.secret) {
+                let s = bs58::encode(&serialize(&note)).into_string();
+                return JsonResponse::new(json!(s), id).into()
+            }
+        }
+
+        return server_error(RpcError::DecryptionFailed, id)
     }
 }
