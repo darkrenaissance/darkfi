@@ -170,7 +170,7 @@ fn main() -> Result<()> {
 
     // Now spend
     let owncoin = &state.own_coins[0];
-    let note = owncoin.note;
+    let note = &owncoin.note;
     let leaf_position = owncoin.leaf_position;
     let root = state.tree.root(0).unwrap();
     let merkle_path = state.tree.authentication_path(leaf_position, &root).unwrap();
@@ -181,7 +181,7 @@ fn main() -> Result<()> {
             leaf_position,
             merkle_path,
             secret: keypair.secret,
-            note,
+            note: note.clone(),
         }],
         outputs: vec![TransactionBuilderOutputInfo {
             value: 110,
