@@ -2,7 +2,7 @@ use std::io;
 
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
-    group::{ff::Field, GroupEncoding},
+    group::{ff::Field, Group, GroupEncoding},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -21,6 +21,12 @@ use crate::{
 pub struct Signature {
     commit: pallas::Point,
     response: pallas::Scalar,
+}
+
+impl Signature {
+    pub fn dummy() -> Self {
+        Self { commit: pallas::Point::identity(), response: pallas::Scalar::zero() }
+    }
 }
 
 pub trait SchnorrSecret {
