@@ -1301,7 +1301,6 @@ dependencies = [
  "halo2_proofs",
  "rand",
  "serde_json",
- "termion",
  "url",
 ]
 
