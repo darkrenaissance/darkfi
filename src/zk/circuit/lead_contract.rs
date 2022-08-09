@@ -19,7 +19,7 @@ use halo2_proofs::{
 };
 
 use pasta_curves::{pallas, Fp};
-use crate::zk::gadget::greater_than::GreaterThanInstruction;
+use crate::zk::gadget::less_than::LessThanInstruction;
 
 use crate::crypto::{
     constants::{
@@ -33,7 +33,7 @@ use crate::crypto::{
 use crate::zk::gadget::{
     arithmetic::{ArithChip, ArithConfig, ArithInstruction},
     even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
-    greater_than::{ GreaterThanConfig, GreaterThanChip},
+    less_than::{ LessThanConfig, LessThanChip},
 };
 
 use pasta_curves::group::{ff::PrimeField, GroupEncoding};
@@ -52,7 +52,7 @@ pub struct LeadConfig {
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     _sinsemilla_config_2:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    greaterthan_config: GreaterThanConfig,
+    lessthan_config: LessThanConfig,
     evenbits_config: EvenBitsConfig,
     arith_config: ArithConfig,
 }
@@ -78,8 +78,8 @@ impl LeadConfig {
         MerkleChip::construct(self.merkle_config_2.clone())
     }
 
-    fn greaterthan_chip(&self) -> GreaterThanChip<pallas::Base, WORD_BITS> {
-        GreaterThanChip::construct(self.greaterthan_config.clone())
+    fn lessthan_chip(&self) -> LessThanChip<pallas::Base, WORD_BITS> {
+        LessThanChip::construct(self.lessthan_config.clone())
     }
 
     fn evenbits_chip(&self) -> EvenBitsChip<pallas::Base, WORD_BITS> {
@@ -228,7 +228,7 @@ impl Circuit<pallas::Base> for LeadContract {
             (sinsemilla_config_2, merkle_config_2)
         };
 
-         let greaterthan_config = GreaterThanChip::<pallas::Base, WORD_BITS>::configure(
+         let lessthan_config = LessThanChip::<pallas::Base, WORD_BITS>::configure(
              meta,
              advices[10..12].try_into().unwrap(),
              primary,
@@ -245,7 +245,7 @@ impl Circuit<pallas::Base> for LeadContract {
             merkle_config_2,
             sinsemilla_config_1,
             _sinsemilla_config_2: sinsemilla_config_2,
-            greaterthan_config,
+            lessthan_config,
             evenbits_config,
             arith_config,
         }
@@ -261,7 +261,7 @@ impl Circuit<pallas::Base> for LeadContract {
         let ar_chip = config.arith_chip();
         let _ps_chip = config.poseidon_chip();
         let eb_chip = config.evenbits_chip();
-        let greater_than_chip = config.greaterthan_chip();
+        let less_than_chip = config.lessthan_chip();
 
         eb_chip.alloc_table(&mut layouter.namespace(|| "alloc table"))?;
 
@@ -599,7 +599,7 @@ impl Circuit<pallas::Base> for LeadContract {
         eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
         eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
 
-        let (helper, is_gt) = greater_than_chip.greater_than(
+        let (helper, is_gt) = less_than_chip.less_than(
             layouter.namespace(|| "t>y"),
             target.into(),
                     y_commit_base.into(),
