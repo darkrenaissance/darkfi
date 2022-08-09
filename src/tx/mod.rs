@@ -48,7 +48,7 @@ pub struct TransactionClearInput {
     pub token_blind: DrkValueBlind,
     /// Public key for the signature
     pub signature_public: PublicKey,
-    /// Input's signature
+    /// Transaction signature
     pub signature: schnorr::Signature,
 }
 

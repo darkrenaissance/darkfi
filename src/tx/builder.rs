@@ -145,7 +145,6 @@ impl TransactionBuilder {
             )?;
 
             // Encrypted note
-
             let note = Note {
                 serial,
                 value: output.value,
@@ -153,6 +152,7 @@ impl TransactionBuilder {
                 coin_blind,
                 value_blind,
                 token_blind,
+                memo: vec![],
             };
 
             let encrypted_note = note.encrypt(&output.public)?;

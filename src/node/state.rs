@@ -164,8 +164,13 @@ impl State {
                     debug!(target: "state_apply", "Received a coin: amount {}", note.value);
                     let leaf_position = self.tree.witness().unwrap();
                     let nullifier = Nullifier::new(*secret, note.serial);
-                    let own_coin =
-                        OwnCoin { coin, note, secret: *secret, nullifier, leaf_position };
+                    let own_coin = OwnCoin {
+                        coin,
+                        note: note.clone(),
+                        secret: *secret,
+                        nullifier,
+                        leaf_position,
+                    };
 
                     // TODO: FIXME: BUG check values inside the note are correct
                     // We need to hash them all and check them against the coin

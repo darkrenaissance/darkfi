@@ -101,7 +101,7 @@ impl Client {
                     leaf_position,
                     merkle_path,
                     secret: own_coin.secret,
-                    note: own_coin.note,
+                    note: own_coin.note.clone(),
                 };
 
                 inputs.push(input);
