@@ -35,7 +35,7 @@ impl Default for Settings {
             connect_timeout_seconds: 10,
             channel_handshake_seconds: 4,
             channel_heartbeat_seconds: 10,
-            outbound_retry_seconds: 1200,
+            outbound_retry_seconds: 20,
             external_addr: None,
             peers: Vec::new(),
             seeds: Vec::new(),
