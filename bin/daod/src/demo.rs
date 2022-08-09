@@ -1,49 +1,69 @@
-use incrementalmerkletree::{bridgetree::BridgeTree, Frontier, Tree};
+use std::time::Instant;
+use log::debug;
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use pasta_curves::{arithmetic::CurveAffine, group::{Curve, ff::Field}, pallas};
+use halo2_gadgets::poseidon::primitives as poseidon;
 use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
-        coin::Coin,
+        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
-        token_id::generate_id2,
+        token_id::generate_id,
+        OwnCoin, OwnCoins,
     },
-    node::state::{state_transition, ProgramState, StateUpdate},
-    tx,
+    node::{
+        state::{state_transition, ProgramState, StateUpdate},
+    },
+    tx::builder::{
+        TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
+        TransactionBuilderOutputInfo,
+    },
     util::NetworkName,
-    zk::circuit::{mint_contract::MintContract, spend_contract::SpendContract},
-    Result,
+    zk::circuit::{BurnContract, MintContract},
 };
 
+/// The state machine, held in memory.
 struct MemoryState {
-    // The entire merkle tree state
-    tree: BridgeTree<MerkleNode, 32>,
-    // List of all previous and the current merkle roots
-    // This is the hashed value of all the children.
+    /// The entire Merkle tree state
+    tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    /// List of all previous and the current Merkle roots.
+    /// This is the hashed value of all the children.
     merkle_roots: Vec<MerkleNode>,
-    // Nullifiers prevent double spending
+    /// Nullifiers prevent double spending
     nullifiers: Vec<Nullifier>,
-    // All received coins
-    // NOTE: we need maybe a flag to keep track of which ones are spent
-    // Maybe the spend field links to a tx hash:input index
-    // We should also keep track of the tx hash:output index where this
-    // coin was received
-    own_coins: Vec<(Coin, Note)>,
+    /// All received coins
+    // NOTE: We need maybe a flag to keep track of which ones are
+    // spent. Maybe the spend field links to a tx hash:input index.
+    // We should also keep track of the tx hash:output index where
+    // this coin was received.
+    own_coins: OwnCoins,
+    /// Verifying key for the mint zk circuit.
     mint_vk: VerifyingKey,
-    spend_vk: VerifyingKey,
+    /// Verifying key for the burn zk circuit.
+    burn_vk: VerifyingKey,
 
-    // Public key of the cashier
+    /// Public key of the cashier
     cashier_signature_public: PublicKey,
-    // List of all our secret keys
+
+    /// Public key of the faucet
+    faucet_signature_public: PublicKey,
+
+    /// List of all our secret keys
     secrets: Vec<SecretKey>,
 }
 
 impl ProgramState for MemoryState {
     fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
         public == &self.cashier_signature_public
+    }
+
+    fn is_valid_faucet_public_key(&self, public: &PublicKey) -> bool {
+        public == &self.faucet_signature_public
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
@@ -58,8 +78,8 @@ impl ProgramState for MemoryState {
         &self.mint_vk
     }
 
-    fn spend_vk(&self) -> &VerifyingKey {
-        &self.spend_vk
+    fn burn_vk(&self) -> &VerifyingKey {
+        &self.burn_vk
     }
 }
 
@@ -70,16 +90,19 @@ impl MemoryState {
 
         // Update merkle tree and witnesses
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
-            // Add the new coins to the merkle tree
+            // Add the new coins to the Merkle tree
             let node = MerkleNode(coin.0);
             self.tree.append(&node);
 
-            // Keep track of all merkle roots that have existed
-            self.merkle_roots.push(self.tree.root());
+            // Keep track of all Merkle roots that have existed
+            self.merkle_roots.push(self.tree.root(0).unwrap());
 
-            if let Some((note, _secret)) = self.try_decrypt_note(enc_note) {
-                self.own_coins.push((coin, note));
-                self.tree.witness();
+            // If it's our own coin, witness it and append to the vector.
+            if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
+                let leaf_position = self.tree.witness().unwrap();
+                let nullifier = Nullifier::new(secret, note.serial);
+                let own_coin = OwnCoin { coin, note, secret, nullifier, leaf_position };
+                self.own_coins.push(own_coin);
             }
         }
     }
@@ -87,48 +110,275 @@ impl MemoryState {
     fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, SecretKey)> {
         // Loop through all our secret keys...
         for secret in &self.secrets {
-            // ... attempt to decrypt the note ...
+            // .. attempt to decrypt the note ...
             if let Ok(note) = ciphertext.decrypt(secret) {
                 // ... and return the decrypted note for this coin.
                 return Some((note, *secret))
             }
         }
+
         // We weren't able to decrypt the note with any of our keys.
         None
     }
 }
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-pub fn demo() -> Result<()> {
-    // Create the treasury token: xDRK
-    //   - mint a new token supply using clear inputs
-    // Create the governance token: gDRK
-    //   - mint a new token supply using clear inputs
-    // Create the DAO instance
-    //   - create proposal auth keypair
-    //   - mint a new bulla:
-    //
-    //       DAO {
-    //           proposal_auth_key
-    //           gov_token_id
-    //           treasury_token_id
-    //       }
-    //
-    // Receive payment to DAO treasury
-    //   - send token to a coin that has:
-    //     - parent set to DAO bulla
-    //     - owner set to contract:function unique address (checked by consensus)
-    // Create a proposal
-    // Proposal is signed
-    // Successful voting
-    // Proposal is executed
-    //   - burn conditions are met
-    //     - DAO bulla matches parent field in coins being spent
-    //     - correct contract:function fields are set
-    //     - burn the coins, but not the DAO
-    //   - main dao execute: voting threshold and outcome
 
+mod DaoContract {
+    use pasta_curves::pallas;
+
+    pub struct DaoBulla(pub pallas::Base);
+
+    /// This DAO state is for all DAOs on the network. There should only be a single instance.
+    pub struct State {
+        dao_bullas: Vec<DaoBulla>
+    }
+
+    impl State {
+        pub fn new() -> Self {
+            Self {
+                dao_bullas: Vec::new()
+            }
+        }
+    }
+
+    /// This is an anonymous contract function that mutates the internal DAO state.
+    ///
+    /// Corresponds to `mint(proposer_limit, quorum, approval_ratio, dao_pubkey, dao_blind)`
+    ///
+    /// The prover creates a `Builder`, which then constructs the `Tx` that the verifier can
+    /// check using `state_transition()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `proposer_limit` - Number of governance tokens that holder must possess in order to
+    ///   propose a new vote.
+    /// * `quorum` - Number of minimum votes that must be met for a proposal to pass.
+    /// * `approval_ratio` - Ratio of winning to total votes for a proposal to pass.
+    /// * `dao_pubkey` - Public key of the DAO for permissioned access. This can also be
+    ///   shared publicly if you want a full decentralized DAO.
+    /// * `dao_blind` - Blinding factor for the DAO bulla.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let dao_proposer_limit = 110;
+    /// let dao_quorum = 110;
+    /// let dao_approval_ratio = 2;
+    ///
+    /// let builder = DaoContract::Mint::Builder(
+    ///     dao_proposer_limit,
+    ///     dao_quorum,
+    ///     dao_approval_ratio,
+    ///     gov_token_id,
+    ///     dao_pubkey,
+    ///     dao_blind
+    /// );
+    /// let tx = builder.build();
+    /// ```
+    pub mod Mint {
+        use pasta_curves::pallas;
+        use darkfi::crypto::keypair::PublicKey;
+
+        pub struct Builder {
+            dao_proposer_limit: u64,
+            dao_quorum: u64,
+            dao_approval_ratio: u64,
+            gov_token_id: pallas::Base,
+            dao_pubkey: PublicKey,
+            dao_bulla_blind: pallas::Base,
+        }
+
+        impl Builder {
+            pub fn new(
+                dao_proposer_limit: u64,
+                dao_quorum: u64,
+                dao_approval_ratio: u64,
+                gov_token_id: pallas::Base,
+                dao_pubkey: PublicKey,
+                dao_bulla_blind: pallas::Base,
+            ) -> Self {
+                Self {
+                    dao_proposer_limit,
+                    dao_quorum,
+                    dao_approval_ratio,
+                    gov_token_id,
+                    dao_pubkey,
+                    dao_bulla_blind
+                }
+            }
+
+            /// Consumes self, and produces the actual Tx
+            pub fn build(self) -> Tx {
+                Tx {
+                }
+            }
+        }
+
+        pub struct Tx {
+        }
+
+        impl Tx {
+        }
+    }
+}
+
+pub async fn demo() -> Result<()> {
+    // Money parameters
     let xdrk_supply = 1_000_000;
+    let xdrk_token_id = pallas::Base::random(&mut OsRng);
+
+    // Governance token parameters
     let gdrk_supply = 1_000_000;
+    let gdrk_token_id = pallas::Base::random(&mut OsRng);
+
+    // DAO parameters
+    let dao_proposer_limit = 110;
+    let dao_quorum = 110;
+    let dao_approval_ratio = 2;
+
+    /////////////////////////////////////////////////
+
+    // State for money contracts
+    let cashier_signature_secret = SecretKey::random(&mut OsRng);
+    let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
+    let faucet_signature_secret = SecretKey::random(&mut OsRng);
+    let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
+
+    let start = Instant::now();
+    let mint_vk = VerifyingKey::build(11, &MintContract::default());
+    debug!("Mint VK: [{:?}]", start.elapsed());
+    let start = Instant::now();
+    let burn_vk = VerifyingKey::build(11, &BurnContract::default());
+    debug!("Burn VK: [{:?}]", start.elapsed());
+
+    // TODO: this should not be here.
+    // We should separate wallet functionality from the State completely
+    let keypair = Keypair::random(&mut OsRng);
+
+    let mut money_state = MemoryState {
+        tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
+        merkle_roots: vec![],
+        nullifiers: vec![],
+        own_coins: vec![],
+        mint_vk,
+        burn_vk,
+        cashier_signature_public,
+        faucet_signature_public,
+        secrets: vec![keypair.secret],
+    };
+
+    /////////////////////////////////////////////////
+    
+    //
+    let dao_state = DaoContract::State::new();
+
+    // For this demo lets create 10 random preexisting DAO bullas
+    for _ in 0..10 {
+        let messages = [pallas::Base::random(&mut OsRng)];
+        let coin =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init()
+                .hash(messages);
+    }
+
+    /////////////////////////////////////////////////
+    // Create the DAO bulla
+    /////////////////////////////////////////////////
+
+    // Setup the DAO
+    let dao_keypair = Keypair::random(&mut OsRng);
+    let dao_bulla_blind = pallas::Base::random(&mut OsRng);
+
+    //let dao_proposer_limit = pallas::Base::from(110);
+    //let dao_quorum = pallas::Base::from(110);
+    //let dao_approval_ratio = pallas::Base::from(2);
+    //
+    //let dao_pubkey_coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
+    //let messages = [
+    //    dao_proposer_limit,
+    //    dao_quorum,
+    //    dao_approval_ratio,
+    //    gdrk_token_id,
+    //    *dao_pubkey_coords.x(),
+    //    *dao_pubkey_coords.y(),
+    //    dao_bulla_blind,
+    //];
+    //let dao_bulla =
+    //    poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<7>, 3, 2>::init()
+    //        .hash(messages);
+    //let dao_bulla = DaoContract::DaoBulla(dao_bulla);
+
+    // Create DAO mint tx
+    let builder = DaoContract::Mint::Builder::new(
+        dao_proposer_limit,
+        dao_quorum,
+        dao_approval_ratio,
+        gdrk_token_id,
+        dao_keypair.public,
+        dao_bulla_blind
+    );
+    let tx = builder.build();
+
+    /////////////////////////////////////////////////
+
+    let token_id = pallas::Base::random(&mut OsRng);
+
+    let builder = TransactionBuilder {
+        clear_inputs: vec![TransactionBuilderClearInputInfo {
+            value: 110,
+            token_id,
+            signature_secret: cashier_signature_secret,
+        }],
+        inputs: vec![],
+        outputs: vec![TransactionBuilderOutputInfo {
+            value: 110,
+            token_id,
+            public: keypair.public,
+        }],
+    };
+
+    let start = Instant::now();
+    let mint_pk = ProvingKey::build(11, &MintContract::default());
+    debug!("Mint PK: [{:?}]", start.elapsed());
+    let start = Instant::now();
+    let burn_pk = ProvingKey::build(11, &BurnContract::default());
+    debug!("Burn PK: [{:?}]", start.elapsed());
+    let tx = builder.build(&mint_pk, &burn_pk)?;
+
+    tx.verify(&money_state.mint_vk, &money_state.burn_vk)?;
+
+    let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret)?;
+
+    let update = state_transition(&money_state, tx)?;
+    money_state.apply(update);
+
+    // Now spend
+    let owncoin = &money_state.own_coins[0];
+    let note = owncoin.note;
+    let leaf_position = owncoin.leaf_position;
+    let root = money_state.tree.root(0).unwrap();
+    let merkle_path = money_state.tree.authentication_path(leaf_position, &root).unwrap();
+
+    let builder = TransactionBuilder {
+        clear_inputs: vec![],
+        inputs: vec![TransactionBuilderInputInfo {
+            leaf_position,
+            merkle_path,
+            secret: keypair.secret,
+            note,
+        }],
+        outputs: vec![TransactionBuilderOutputInfo {
+            value: 110,
+            token_id,
+            public: keypair.public,
+        }],
+    };
+
+    let tx = builder.build(&mint_pk, &burn_pk)?;
+
+    let update = state_transition(&money_state, tx)?;
+    money_state.apply(update);
 
     Ok(())
 }
+
