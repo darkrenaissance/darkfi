@@ -234,7 +234,7 @@ impl Client {
 
     fn build_mint_pk() -> ProvingKey {
         debug!("Building proving key for MintContract");
-        ProvingKey::build(8, &MintContract::default())
+        ProvingKey::build(11, &MintContract::default())
     }
 
     fn build_burn_pk() -> ProvingKey {

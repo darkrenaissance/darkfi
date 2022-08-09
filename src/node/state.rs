@@ -238,7 +238,7 @@ impl ProgramState for State {
 
 fn build_mint_vk() -> VerifyingKey {
     debug!("Building verifying key for MintContract");
-    VerifyingKey::build(8, &MintContract::default())
+    VerifyingKey::build(11, &MintContract::default())
 }
 
 fn build_burn_vk() -> VerifyingKey {
