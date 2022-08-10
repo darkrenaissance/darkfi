@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use halo2_gadgets::poseidon::primitives as poseidon;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
@@ -7,7 +9,11 @@ use pasta_curves::{
     pallas,
 };
 use rand::rngs::OsRng;
-use std::time::Instant;
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+    time::Instant,
+};
 
 use darkfi::{
     crypto::{
@@ -125,8 +131,9 @@ impl MemoryState {
 }
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-mod DaoContract {
+mod dao_contract {
     use pasta_curves::pallas;
+    use std::any::Any;
 
     pub struct DaoBulla(pub pallas::Base);
 
@@ -136,8 +143,8 @@ mod DaoContract {
     }
 
     impl State {
-        pub fn new() -> Self {
-            Self { dao_bullas: Vec::new() }
+        pub fn new() -> Box<dyn Any> {
+            Box::new(Self { dao_bullas: Vec::new() })
         }
     }
 
@@ -165,7 +172,7 @@ mod DaoContract {
     /// let dao_quorum = 110;
     /// let dao_approval_ratio = 2;
     ///
-    /// let builder = DaoContract::Mint::Builder(
+    /// let builder = dao_contract::Mint::Builder(
     ///     dao_proposer_limit,
     ///     dao_quorum,
     ///     dao_approval_ratio,
@@ -175,9 +182,15 @@ mod DaoContract {
     /// );
     /// let tx = builder.build();
     /// ```
-    pub mod Mint {
+    pub mod mint {
         use darkfi::crypto::keypair::PublicKey;
         use pasta_curves::pallas;
+        use std::{
+            any::{Any, TypeId},
+            time::Instant,
+        };
+
+        use super::super::Transaction;
 
         pub struct Builder {
             dao_proposer_limit: u64,
@@ -208,14 +221,46 @@ mod DaoContract {
             }
 
             /// Consumes self, and produces the actual Tx
-            pub fn build(self) -> Tx {
-                Tx {}
+            pub fn build(self) -> Box<dyn Any> {
+                Box::new(FuncCall {})
             }
         }
 
-        pub struct Tx {}
+        pub struct FuncCall {}
 
-        impl Tx {}
+        impl FuncCall {}
+
+        pub fn state_transition(tx: Transaction, func_call_index: usize) {
+            let func_call = &tx.func_calls[func_call_index].1;
+            assert_eq!((&*func_call).type_id(), TypeId::of::<FuncCall>());
+        }
+    }
+}
+
+// This will be a hash. Just use a string for the demo.
+type FuncId = String;
+// Use an Any type so plugins can inject their code.
+// An alternative is using a trait with downcast (see MessageSubsystem in net/)
+type GenericFuncCall = Box<dyn Any>;
+
+pub struct Transaction {
+    func_calls: Vec<(FuncId, GenericFuncCall)>,
+}
+
+type ContractId = String;
+type GenericContractState = Box<dyn Any>;
+
+pub struct StateRegistry {
+    states: HashMap<ContractId, GenericContractState>,
+}
+
+impl StateRegistry {
+    fn new() -> Self {
+        Self { states: HashMap::new() }
+    }
+
+    fn register(&mut self, contract_id: ContractId, state: GenericContractState) {
+        self.states.insert(contract_id, state);
     }
 }
 
@@ -232,6 +277,9 @@ pub async fn demo() -> Result<()> {
     let dao_proposer_limit = 110;
     let dao_quorum = 110;
     let dao_approval_ratio = 2;
+
+    // Lookup table for smart contract states
+    let mut state_registry = StateRegistry::new();
 
     /////////////////////////////////////////////////
 
@@ -252,7 +300,7 @@ pub async fn demo() -> Result<()> {
     // We should separate wallet functionality from the State completely
     let keypair = Keypair::random(&mut OsRng);
 
-    let mut money_state = MemoryState {
+    let money_state = Box::new(MemoryState {
         tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
         merkle_roots: vec![],
         nullifiers: vec![],
@@ -262,12 +310,13 @@ pub async fn demo() -> Result<()> {
         cashier_signature_public,
         faucet_signature_public,
         secrets: vec![keypair.secret],
-    };
+    });
+    state_registry.register("MoneyContract".to_string(), money_state);
 
     /////////////////////////////////////////////////
 
-    //
-    let dao_state = DaoContract::State::new();
+    let dao_state = dao_contract::State::new();
+    state_registry.register("dao_contract".to_string(), dao_state);
 
     // For this demo lets create 10 random preexisting DAO bullas
     for _ in 0..10 {
@@ -302,10 +351,10 @@ pub async fn demo() -> Result<()> {
     //let dao_bulla =
     //    poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<7>, 3, 2>::init()
     //        .hash(messages);
-    //let dao_bulla = DaoContract::DaoBulla(dao_bulla);
+    //let dao_bulla = dao_contract::DaoBulla(dao_bulla);
 
     // Create DAO mint tx
-    let builder = DaoContract::Mint::Builder::new(
+    let builder = dao_contract::mint::Builder::new(
         dao_proposer_limit,
         dao_quorum,
         dao_approval_ratio,
@@ -313,67 +362,78 @@ pub async fn demo() -> Result<()> {
         dao_keypair.public,
         dao_bulla_blind,
     );
-    let tx = builder.build();
+    let func_call = builder.build();
+
+    let tx = Transaction { func_calls: vec![("dao_contract::mint".to_string(), func_call)] };
+    for (func_id, func_call) in &tx.func_calls {
+        // So then the verifier will lookup the corresponding state_transition and apply
+        // functions based off the func_id
+        if func_id == "dao_contract::mint" {
+            debug!("dao_contract::mint::state_transition()");
+        }
+    }
 
     /////////////////////////////////////////////////
 
-    let token_id = pallas::Base::random(&mut OsRng);
+    /*
+        let token_id = pallas::Base::random(&mut OsRng);
 
-    let builder = TransactionBuilder {
-        clear_inputs: vec![TransactionBuilderClearInputInfo {
-            value: 110,
-            token_id,
-            signature_secret: cashier_signature_secret,
-        }],
-        inputs: vec![],
-        outputs: vec![TransactionBuilderOutputInfo {
-            value: 110,
-            token_id,
-            public: keypair.public,
-        }],
-    };
+        let builder = TransactionBuilder {
+            clear_inputs: vec![TransactionBuilderClearInputInfo {
+                value: 110,
+                token_id,
+                signature_secret: cashier_signature_secret,
+            }],
+            inputs: vec![],
+            outputs: vec![TransactionBuilderOutputInfo {
+                value: 110,
+                token_id,
+                public: keypair.public,
+            }],
+        };
 
-    let start = Instant::now();
-    let mint_pk = ProvingKey::build(11, &MintContract::default());
-    debug!("Mint PK: [{:?}]", start.elapsed());
-    let start = Instant::now();
-    let burn_pk = ProvingKey::build(11, &BurnContract::default());
-    debug!("Burn PK: [{:?}]", start.elapsed());
-    let tx = builder.build(&mint_pk, &burn_pk)?;
+        let start = Instant::now();
+        let mint_pk = ProvingKey::build(11, &MintContract::default());
+        debug!("Mint PK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let burn_pk = ProvingKey::build(11, &BurnContract::default());
+        debug!("Burn PK: [{:?}]", start.elapsed());
+        let tx = builder.build(&mint_pk, &burn_pk)?;
 
-    tx.verify(&money_state.mint_vk, &money_state.burn_vk)?;
+        tx.verify(&money_state.mint_vk, &money_state.burn_vk)?;
 
-    let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret)?;
+        let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret)?;
 
-    let update = state_transition(&money_state, tx)?;
-    money_state.apply(update);
+        let update = state_transition(&money_state, tx)?;
+        money_state.apply(update);
 
-    // Now spend
-    let owncoin = &money_state.own_coins[0];
-    let note = &owncoin.note;
-    let leaf_position = owncoin.leaf_position;
-    let root = money_state.tree.root(0).unwrap();
-    let merkle_path = money_state.tree.authentication_path(leaf_position, &root).unwrap();
+        // Now spend
+        let owncoin = &money_state.own_coins[0];
+        let note = &owncoin.note;
+        let leaf_position = owncoin.leaf_position;
+        let root = money_state.tree.root(0).unwrap();
+        let merkle_path = money_state.tree.authentication_path(leaf_position, &root).unwrap();
 
-    let builder = TransactionBuilder {
-        clear_inputs: vec![],
-        inputs: vec![TransactionBuilderInputInfo {
-            leaf_position,
-            merkle_path,
-            secret: keypair.secret,
-            note: note.clone(),
-        }],
-        outputs: vec![TransactionBuilderOutputInfo {
-            value: 110,
-            token_id,
-            public: keypair.public,
-        }],
-    };
+        let builder = TransactionBuilder {
+            clear_inputs: vec![],
+            inputs: vec![TransactionBuilderInputInfo {
+                leaf_position,
+                merkle_path,
+                secret: keypair.secret,
+                note: note.clone(),
+            }],
+            outputs: vec![TransactionBuilderOutputInfo {
+                value: 110,
+                token_id,
+                public: keypair.public,
+            }],
+        };
 
-    let tx = builder.build(&mint_pk, &burn_pk)?;
+        let tx = builder.build(&mint_pk, &burn_pk)?;
 
-    let update = state_transition(&money_state, tx)?;
-    money_state.apply(update);
+        let update = state_transition(&money_state, tx)?;
+        money_state.apply(update);
+    */
 
     Ok(())
 }

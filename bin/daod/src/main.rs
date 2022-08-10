@@ -17,7 +17,7 @@ use darkfi::{
 mod demo;
 use crate::demo::demo;
 
-async fn start() -> Result<()> {
+async fn _start() -> Result<()> {
     let rpc_addr = Url::parse("tcp://127.0.0.1:7777")?;
     let rpc_interface = Arc::new(JsonRpcInterface {});
 
@@ -61,6 +61,6 @@ async fn main() -> Result<()> {
     )?;
 
     //start().await?;
-    demo().await;
+    demo().await.unwrap();
     Ok(())
 }
