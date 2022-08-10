@@ -1,4 +1,4 @@
-use async_std::sync::Mutex;
+use async_std::sync::{Arc, Mutex};
 
 use fxhash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -34,15 +34,14 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn new(
-        ids: Mutex<FxHashSet<String>>,
-        new_id: Mutex<Vec<String>>,
-        nodes: Mutex<FxHashMap<String, NodeInfo>>,
-        msg_map: MsgMap,
-        msg_log: Mutex<MsgLog>,
-        selectables: Mutex<FxHashMap<String, SelectableObject>>,
-    ) -> Model {
-        Model { ids, new_id, nodes, msg_map, msg_log, selectables }
+    pub fn new() -> Arc<Self> {
+        let ids = Mutex::new(FxHashSet::default());
+        let nodes = Mutex::new(FxHashMap::default());
+        let selectables = Mutex::new(FxHashMap::default());
+        let msg_map = Mutex::new(FxHashMap::default());
+        let msg_log = Mutex::new(Vec::new());
+        let new_id = Mutex::new(Vec::new());
+        Arc::new(Model { ids, new_id, nodes, msg_map, msg_log, selectables })
     }
 }
 

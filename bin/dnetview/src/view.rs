@@ -30,11 +30,12 @@ pub struct View {
 }
 
 impl<'a> View {
-    pub fn new(
-        id_menu: IdMenu,
-        msg_list: MsgList,
-        selectables: FxHashMap<String, SelectableObject>,
-    ) -> View {
+    pub fn new() -> View {
+        let msg_map = FxHashMap::default();
+        let msg_list = MsgList::new(msg_map.clone(), 0);
+        let selectables = FxHashMap::default();
+        let id_menu = IdMenu::new(Vec::new());
+
         View { id_menu, msg_list, selectables }
     }
 
