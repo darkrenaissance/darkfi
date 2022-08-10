@@ -7,7 +7,7 @@ They are also verifiers in our model.
 
 Lets take a pseudocode smart contract:
 
-```rust
+```
 contract Dao {
     # 1: the DAO's global state
     dao_bullas = DaoBulla[]
@@ -37,7 +37,7 @@ mod dao_contract {
         proposal_nulls: Vec<ProposalNull>
     }
 
-    // Corresponds to mint()
+    // Corresponds to 2. mint()
     mod mint {
         // Prover specific
         struct Builder {
@@ -58,6 +58,8 @@ mod dao_contract {
 
         // Verifier code
         struct FuncCall {
+            ...
+            // contains the function call data
             ...
         }
     }
@@ -81,7 +83,7 @@ struct Transaction {
 
 Function calls represent mutations of the current active state to a new state.
 
-The `ContractFuncId` of a function call corresponds predefined objects in the module:
+The `ContractFuncId` of a function call corresponds to predefined objects in the module:
 * `Builder` creates the `FuncCall` invocation. Ran by the prover.
 * `FuncCall` is the function call invocation that verifiers have access to.
 * `state_transition()` that runs the function call on the current state.
@@ -106,6 +108,8 @@ mod dao_contract {
         fn state_transition(states: &StateRegistry, func_call_index: usize, parent_tx: &Transaction) -> Result<Update> {
             // we could pass the func_call, index and parent_tx also
             let (_, func_call) = parent_tx.func_calls[func_call_index];
+            // we can elide this with macro magic
+            let func_call = func_call.as_any().downcast_ref::<FuncCall>();
 
             ...
         }
@@ -153,7 +157,7 @@ The transaction verification pipeline roughly looks like this:
 ## Parallelisation Techniques
 
 Since verification is done through `state_transition()` which returns an update that is then committed
-to the state using `apply()`, we can perform verify all transactions in a block in parallel.
+to the state using `apply()`, we can verify all transactions in a block in parallel.
 
 To enable calling another transaction within the same block (such as flashloans), we can add a special
 depends field within the tx that makes a tx wait on another tx before being allowed to verify.
