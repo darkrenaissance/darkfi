@@ -60,6 +60,7 @@ impl RequestHandler for JsonRpcInterface {
             Some("switch_ws") => self.switch_ws(params).await,
             Some("export") => self.export_to(params).await,
             Some("import") => self.import_from(params).await,
+            Some("get_stop_tasks") => self.get_stop_tasks(params).await,
             Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         };
 
@@ -121,7 +122,7 @@ impl JsonRpcInterface {
     async fn get_ids(&self, params: &[Value]) -> TaudResult<Value> {
         debug!(target: "tau", "JsonRpc::get_ids() params {:?}", params);
         let ws = self.workspace.lock().await.clone();
-        let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path, ws)?;
+        let tasks = MonthTasks::load_current_tasks(&self.dataset_path, ws, false)?;
         let task_ids: Vec<u32> = tasks.iter().map(|task| task.get_id()).collect();
         Ok(json!(task_ids))
     }
@@ -211,6 +212,27 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
+    // Get all tasks.
+    // --> {"jsonrpc": "2.0", "method": "get_all_tasks", "params": [task_id], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
+    async fn get_stop_tasks(&self, params: &[Value]) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::get_all_tasks() params {:?}", params);
+
+        if params.len() != 1 {
+            return Err(TaudError::InvalidData("len of params should be 1".into()))
+        }
+        if !params[0].is_i64() {
+            return Err(TaudError::InvalidData("Invalid month".into()))
+        }
+        let month = Timestamp(params[0].as_i64().unwrap());
+        let ws = self.workspace.lock().await.clone();
+
+        let tasks = MonthTasks::load_stop_tasks(&self.dataset_path, ws, &month)?;
+
+        Ok(json!(tasks))
+    }
+
+    // RPCAPI:
     // Switch tasks workspace.
     // --> {"jsonrpc": "2.0", "method": "switch_ws", "params": [workspace], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
@@ -252,15 +274,18 @@ impl JsonRpcInterface {
             return Err(TaudError::InvalidData("Invalid path".into()))
         }
 
+        let ws = self.workspace.lock().await.clone();
         let path = expand_path(params[0].as_str().unwrap())?.join("exported_tasks");
         // mkdir datastore_path if not exists
         create_dir_all(path.join("month")).map_err(Error::from)?;
         create_dir_all(path.join("task")).map_err(Error::from)?;
-        let mt = MonthTasks::load_or_create(None, &self.dataset_path)?;
-        let tasks = mt.objects(&self.dataset_path)?;
+
+        let tasks = MonthTasks::load_current_tasks(&self.dataset_path, ws, true)?;
 
         for task in tasks {
             task.save(&path)?;
+            // save_json_file::<TaskInfo>(&TaskInfo::get_path(&task.ref_id, &path), &task)
+            //     .map_err(TaudError::Darkfi)?;
         }
 
         Ok(json!(true))
@@ -281,9 +306,9 @@ impl JsonRpcInterface {
             return Err(TaudError::InvalidData("Invalid path".into()))
         }
 
+        let ws = self.workspace.lock().await.clone();
         let path = expand_path(params[0].as_str().unwrap())?.join("exported_tasks");
-        let mt = MonthTasks::load_or_create(None, &path)?;
-        let tasks = mt.objects(&path)?;
+        let tasks = MonthTasks::load_current_tasks(&path, ws, true)?;
 
         for task in tasks {
             self.notify_queue_sender.send(task).await.map_err(Error::from)?;
@@ -293,7 +318,7 @@ impl JsonRpcInterface {
 
     fn load_task_by_id(&self, task_id: &Value, ws: String) -> TaudResult<TaskInfo> {
         let task_id: u64 = serde_json::from_value(task_id.clone())?;
-        let tasks = MonthTasks::load_current_open_tasks(&self.dataset_path, ws)?;
+        let tasks = MonthTasks::load_current_tasks(&self.dataset_path, ws, false)?;
         let task = tasks.into_iter().find(|t| (t.get_id() as u64) == task_id);
 
         task.ok_or(TaudError::InvalidId)

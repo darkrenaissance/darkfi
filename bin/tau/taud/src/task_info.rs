@@ -90,7 +90,7 @@ impl TaskInfo {
         let created_at = Timestamp::current_time();
 
         let task_ids: Vec<u32> =
-            MonthTasks::load_current_open_tasks(dataset_path, workspace.clone())?
+            MonthTasks::load_current_tasks(dataset_path, workspace.clone(), false)?
                 .into_iter()
                 .map(|t| t.id)
                 .collect();
@@ -163,7 +163,7 @@ impl TaskInfo {
         }
     }
 
-    fn get_path(ref_id: &str, dataset_path: &Path) -> PathBuf {
+    pub fn get_path(ref_id: &str, dataset_path: &Path) -> PathBuf {
         debug!(target: "tau", "TaskInfo::get_path()");
         dataset_path.join("task").join(ref_id)
     }

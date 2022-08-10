@@ -56,7 +56,7 @@ pub struct BaseTask {
     pub rank: Option<f32>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
 pub struct TaskInfo {
     pub ref_id: String,
     pub workspace: String,
@@ -73,7 +73,7 @@ pub struct TaskInfo {
     pub comments: Vec<Comment>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
 pub struct TaskEvent {
     pub action: String,
     pub timestamp: Timestamp,
@@ -91,7 +91,7 @@ impl Default for TaskEvent {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
 pub struct Comment {
     content: String,
     author: String,

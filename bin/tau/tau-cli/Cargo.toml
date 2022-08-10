@@ -14,10 +14,13 @@ categories = ["command-line-utilities"]
 async-std = {version = "1.12.0", features = ["attributes"]}
 chrono = "0.4.19"
 clap = {version = "3.2.16", features = ["derive"]}
+colored = "2.0.0"
 darkfi = { path = "../../../", features = ["rpc"]}
+fxhash = "0.2.1"
 log = "0.4.17"
 prettytable-rs = "0.8.0"
 serde = {version = "1.0.142", features = ["derive"]}
 serde_json = "1.0.83"
 simplelog = "0.12.0"
+term_grid = { git = "https://github.com/Dastan-glitch/rust-term-grid.git" }
 url = "2.2.2"

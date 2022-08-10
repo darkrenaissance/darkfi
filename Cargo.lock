@@ -737,6 +737,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
+name = "colored"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3616f750b84d8f0de8a58bda93e08e2a81ad3f523089b05f1dffecab48c6cbd"
+dependencies = [
+ "atty",
+ "lazy_static",
+ "winapi",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3973,12 +3984,15 @@ dependencies = [
  "async-std",
  "chrono",
  "clap 3.2.16",
+ "colored",
  "darkfi",
+ "fxhash",
  "log",
  "prettytable-rs",
  "serde",
  "serde_json",
  "simplelog",
+ "term_grid",
  "url",
 ]
 
@@ -4035,6 +4049,15 @@ dependencies = [
  "byteorder",
  "dirs 1.0.5",
  "winapi",
+]
+
+[[package]]
+name = "term_grid"
+version = "0.2.0"
+source = "git+https://github.com/Dastan-glitch/rust-term-grid.git#51c28e47aad0fb9f67de558e9b80c525cd01a4ae"
+dependencies = [
+ "colored",
+ "unicode-width",
 ]
 
 [[package]]
