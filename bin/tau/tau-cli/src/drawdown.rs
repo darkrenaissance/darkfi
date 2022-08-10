@@ -15,10 +15,7 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, owner: String) -> Result<()>
         let stopped_tasks = tasks
             .clone()
             .into_iter()
-            .filter(|t| {
-                t.events.last().unwrap_or(&TaskEvent::default()).action.clone() == "stop" &&
-                    t.owner == owner
-            })
+            .filter(|t| t.state == "stop" && t.owner == owner)
             .collect::<Vec<TaskInfo>>();
         ret.insert(owner, stopped_tasks);
     }
@@ -62,6 +59,7 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, owner: String) -> Result<()>
             let date_tasks: Vec<TaskInfo> = owner_stopped_tasks
                 .into_iter()
                 .filter(|t| {
+                    // last event is always state stop
                     let event_date = NaiveDateTime::from_timestamp(
                         t.events.last().unwrap_or(&TaskEvent::default()).timestamp.0,
                         0,

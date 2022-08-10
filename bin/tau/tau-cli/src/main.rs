@@ -140,7 +140,7 @@ async fn main() -> Result<()> {
                 }
                 None => {
                     let task = tau.get_task_by_id(task_id).await?;
-                    let state = &task.events.last().unwrap_or(&TaskEvent::default()).action.clone();
+                    let state = State::from_str(&task.state)?;
                     println!("Task {}: {}", task_id, state);
                     Ok(())
                 }

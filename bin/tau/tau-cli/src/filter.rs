@@ -1,22 +1,13 @@
 use chrono::{Datelike, NaiveDateTime, Utc};
 use serde_json::Value;
 
-use crate::{
-    primitives::{State, TaskInfo},
-    TaskEvent,
-};
-
-/// Helper function to check task's state
-fn check_task_state(task: &TaskInfo, state: State) -> bool {
-    let last_state = task.events.last().unwrap_or(&TaskEvent::default()).action.clone();
-    state.to_string() == last_state
-}
+use crate::primitives::{State, TaskInfo};
 
 pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
     match filter {
-        "open" => tasks.retain(|task| check_task_state(task, State::Open)),
-        "start" => tasks.retain(|task| check_task_state(task, State::Start)),
-        "pause" => tasks.retain(|task| check_task_state(task, State::Pause)),
+        "open" => tasks.retain(|task| task.state == State::Open.to_string()),
+        "start" => tasks.retain(|task| task.state == State::Start.to_string()),
+        "pause" => tasks.retain(|task| task.state == State::Pause.to_string()),
 
         _ if filter.len() == 4 && filter.parse::<u32>().is_ok() => {
             let (month, year) =

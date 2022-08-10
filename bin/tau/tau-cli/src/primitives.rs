@@ -69,6 +69,7 @@ pub struct TaskInfo {
     pub due: Option<i64>,
     pub rank: f32,
     pub created_at: i64,
+    pub state: String,
     pub events: Vec<TaskEvent>,
     pub comments: Vec<Comment>,
 }
@@ -76,6 +77,7 @@ pub struct TaskInfo {
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
 pub struct TaskEvent {
     pub action: String,
+    pub content: String,
     pub timestamp: Timestamp,
 }
 
@@ -87,7 +89,11 @@ impl std::fmt::Display for TaskEvent {
 
 impl Default for TaskEvent {
     fn default() -> Self {
-        Self { action: State::Open.to_string(), timestamp: Timestamp::current_time() }
+        Self {
+            action: State::Open.to_string(),
+            content: "".to_string(),
+            timestamp: Timestamp::current_time(),
+        }
     }
 }
 

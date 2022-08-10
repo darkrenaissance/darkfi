@@ -284,8 +284,6 @@ impl JsonRpcInterface {
 
         for task in tasks {
             task.save(&path)?;
-            // save_json_file::<TaskInfo>(&TaskInfo::get_path(&task.ref_id, &path), &task)
-            //     .map_err(TaudError::Darkfi)?;
         }
 
         Ok(json!(true))
