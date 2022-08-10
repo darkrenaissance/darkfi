@@ -19,7 +19,6 @@ use halo2_proofs::{
 };
 
 use pasta_curves::{pallas, Fp};
-use crate::zk::gadget::less_than::LessThanInstruction;
 
 use crate::crypto::{
     constants::{
@@ -32,13 +31,18 @@ use crate::crypto::{
 
 use crate::zk::gadget::{
     arithmetic::{ArithChip, ArithConfig, ArithInstruction},
-    even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
+    //even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
+
     less_than::{ LessThanConfig, LessThanChip},
+    native_range_check::{NativeRangeCheckChip},
 };
 
 use pasta_curves::group::{ff::PrimeField, GroupEncoding};
 
 const WORD_BITS: u32 = 24;
+const WINDOW_SIZE: usize = 3;
+const NUM_OF_BITS: usize = 255;
+const NUM_OF_WINDOWS: usize = 22;
 
 #[derive(Clone, Debug)]
 pub struct LeadConfig {
@@ -52,8 +56,10 @@ pub struct LeadConfig {
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     _sinsemilla_config_2:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    lessthan_config: LessThanConfig,
-    evenbits_config: EvenBitsConfig,
+
+    lessthan_config: LessThanConfig<WINDOW_SIZE,NUM_OF_BITS,NUM_OF_WINDOWS>,
+    //evenbits_config: EvenBitsConfig,
+
     arith_config: ArithConfig,
 }
 
@@ -78,13 +84,16 @@ impl LeadConfig {
         MerkleChip::construct(self.merkle_config_2.clone())
     }
 
-    fn lessthan_chip(&self) -> LessThanChip<pallas::Base, WORD_BITS> {
+
+    fn lessthan_chip(&self) -> LessThanChip<WINDOW_SIZE,NUM_OF_BITS,NUM_OF_WINDOWS> {
         LessThanChip::construct(self.lessthan_config.clone())
     }
 
+    /*
     fn evenbits_chip(&self) -> EvenBitsChip<pallas::Base, WORD_BITS> {
         EvenBitsChip::construct(self.evenbits_config.clone())
     }
+     */
 
     fn arith_chip(&self) -> ArithChip {
         ArithChip::construct(self.arith_config.clone())
@@ -228,12 +237,39 @@ impl Circuit<pallas::Base> for LeadContract {
             (sinsemilla_config_2, merkle_config_2)
         };
 
-         let lessthan_config = LessThanChip::<pallas::Base, WORD_BITS>::configure(
-             meta,
-             advices[10..12].try_into().unwrap(),
-             primary,
-         );
-        let evenbits_config = EvenBitsChip::<pallas::Base, WORD_BITS>::configure(meta);
+
+        let lessthan_config = {
+            //let w = meta.advice_column();
+            //meta.enable_equality(w);
+
+
+
+            let a = meta.advice_column();
+            let b = meta.advice_column();
+            let a_offset = meta.advice_column();
+
+            let k_values_table = meta.lookup_table_column();
+
+            let constants = meta.fixed_column();
+            meta.enable_constant(constants);
+            //TODO fix
+            /*
+            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::load_k_table(
+                &mut layouter,
+                k_values_table,
+            )?;
+            */
+            LessThanChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::configure(
+                meta,
+                a,
+                b,
+                a_offset,
+                k_values_table,
+            )
+
+        };
+        //let evenbits_config = EvenBitsChip::<pallas::Base, WORD_BITS>::configure(meta);
+
         let arith_config = ArithChip::configure(meta, advices[7], advices[8], advices[6]);
 
         LeadConfig {
@@ -246,7 +282,8 @@ impl Circuit<pallas::Base> for LeadContract {
             sinsemilla_config_1,
             _sinsemilla_config_2: sinsemilla_config_2,
             lessthan_config,
-            evenbits_config,
+
+            //evenbits_config,
             arith_config,
         }
     }
@@ -260,10 +297,11 @@ impl Circuit<pallas::Base> for LeadContract {
         let ecc_chip = config.ecc_chip();
         let ar_chip = config.arith_chip();
         let _ps_chip = config.poseidon_chip();
-        let eb_chip = config.evenbits_chip();
+
+        //let eb_chip = config.evenbits_chip();
         let less_than_chip = config.lessthan_chip();
 
-        eb_chip.alloc_table(&mut layouter.namespace(|| "alloc table"))?;
+        //eb_chip.alloc_table(&mut layouter.namespace(|| "alloc table"))?;
 
         // ===============
         // load witnesses
@@ -488,9 +526,11 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
 
+
         // ===========================
         // path is valid path to cm1
         // ===========================
+
         let path : Value<[pallas::Base;MERKLE_DEPTH_ORCHARD]> = self.path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
         let merkle_inputs = MerklePath::construct(
@@ -596,16 +636,23 @@ impl Circuit<pallas::Base> for LeadContract {
         let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
         let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value.clone())?;
 
-        eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
-        eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
+        //eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
+        //eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
 
-        let (helper, is_gt) = less_than_chip.less_than(
-            layouter.namespace(|| "t>y"),
-            target.into(),
-                    y_commit_base.into(),
-        )?;
-        eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
-        //layouter.constrain_instance(is_gt.0.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?
+        let is_lt = layouter.assign_region(|| "y<t",
+                               |mut region| {
+                                   less_than_chip.less_than(
+                                       region,
+                                       //target.clone(),
+                                       zero.clone(),
+                                       one.clone(),
+                                       //y_commit_base.clone(),
+                                       0,
+                                   )
+                               })?;
+
+        //eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
+        layouter.constrain_instance(is_lt.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?;
 
         Ok(())
     }

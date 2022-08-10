@@ -318,3 +318,8 @@ required-features = ["crypto"]
 name = "lead"
 path = "example/lead.rs"
 required-features = ["node"]
+
+[[example]]
+name = "lessthan"
+path = "example/lessthan.rs"
+required-features = ["node"]
