@@ -15,11 +15,9 @@ use halo2_gadgets::{
 };
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, TableColumn, Instance as InstanceColumn,},
 };
-
 use pasta_curves::{pallas, Fp};
-
 use crate::crypto::{
     constants::{
         sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
@@ -41,8 +39,8 @@ use pasta_curves::group::{ff::PrimeField, GroupEncoding};
 
 const WORD_BITS: u32 = 24;
 const WINDOW_SIZE: usize = 3;
-const NUM_OF_BITS: usize = 255;
-const NUM_OF_WINDOWS: usize = 22;
+const NUM_OF_BITS: usize = 254;
+const NUM_OF_WINDOWS: usize = 85;
 
 #[derive(Clone, Debug)]
 pub struct LeadConfig {
@@ -58,7 +56,6 @@ pub struct LeadConfig {
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
 
     lessthan_config: LessThanConfig<WINDOW_SIZE,NUM_OF_BITS,NUM_OF_WINDOWS>,
-    //evenbits_config: EvenBitsConfig,
 
     arith_config: ArithConfig,
 }
@@ -237,28 +234,16 @@ impl Circuit<pallas::Base> for LeadContract {
             (sinsemilla_config_2, merkle_config_2)
         };
 
+        let k_values_table = meta.lookup_table_column();
 
         let lessthan_config = {
-            //let w = meta.advice_column();
-            //meta.enable_equality(w);
-
-
-
             let a = meta.advice_column();
             let b = meta.advice_column();
             let a_offset = meta.advice_column();
 
-            let k_values_table = meta.lookup_table_column();
-
             let constants = meta.fixed_column();
             meta.enable_constant(constants);
-            //TODO fix
-            /*
-            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::load_k_table(
-                &mut layouter,
-                k_values_table,
-            )?;
-            */
+
             LessThanChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::configure(
                 meta,
                 a,
@@ -282,7 +267,6 @@ impl Circuit<pallas::Base> for LeadContract {
             sinsemilla_config_1,
             _sinsemilla_config_2: sinsemilla_config_2,
             lessthan_config,
-
             //evenbits_config,
             arith_config,
         }
@@ -298,10 +282,12 @@ impl Circuit<pallas::Base> for LeadContract {
         let ar_chip = config.arith_chip();
         let _ps_chip = config.poseidon_chip();
 
-        //let eb_chip = config.evenbits_chip();
-        let less_than_chip = config.lessthan_chip();
+        NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::load_k_table(
+            &mut layouter,
+            config.lessthan_config.k_values_table,
+        )?;
 
-        //eb_chip.alloc_table(&mut layouter.namespace(|| "alloc table"))?;
+        let less_than_chip = config.lessthan_chip();
 
         // ===============
         // load witnesses
@@ -636,22 +622,19 @@ impl Circuit<pallas::Base> for LeadContract {
         let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
         let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value.clone())?;
 
-        //eb_chip.decompose(layouter.namespace(|| "target range check"), target.clone())?;
-        //eb_chip.decompose(layouter.namespace(|| "y_commit  range check"), y_commit_base.clone())?;
 
         let is_lt = layouter.assign_region(|| "y<t",
                                |mut region| {
                                    less_than_chip.less_than(
                                        region,
+                                       //y_commit_base.clone(),
                                        //target.clone(),
                                        zero.clone(),
                                        one.clone(),
-                                       //y_commit_base.clone(),
                                        0,
                                    )
                                })?;
 
-        //eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
         layouter.constrain_instance(is_lt.cell(), config.primary, LEAD_THRESHOLD_OFFSET)?;
 
         Ok(())

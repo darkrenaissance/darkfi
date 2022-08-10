@@ -19,8 +19,8 @@ struct LessThanCircuit {
 }
 
 const WINDOW_SIZE: usize = 3;
-const NUM_OF_BITS: usize = 255;
-const NUM_OF_WINDOWS: usize = 22;
+const NUM_OF_BITS: usize = 254;
+const NUM_OF_WINDOWS: usize = 85;
 
 
 impl Circuit<pallas::Base> for LessThanCircuit {
@@ -84,19 +84,19 @@ impl Circuit<pallas::Base> for LessThanCircuit {
 }
 
 fn main() {
-    let k = 5;
+    let k = 13;
     let valid_a_vals = vec![
         pallas::Base::from(3),
-        //pallas::Base::zero(),
-        //pallas::Base::one()
+        pallas::Base::zero(),
+        pallas::Base::one()
     ];
     let valid_b_vals = vec![
         pallas::Base::from(5),
-        //pallas::Base::from(u64::MAX),
-        //pallas::Base::from(rand::random::<u64>()),
+        pallas::Base::from(u64::MAX),
+        pallas::Base::from(rand::random::<u64>()),
     ];
 
-    /*
+
     let invalid_a_vals = vec![
         pallas::Base::from(14),
         pallas::Base::from(u64::MAX),
@@ -111,7 +111,6 @@ fn main() {
         pallas::Base::one(),
         pallas::Base::from(u64::MAX),
     ];
-    */
     use plotters::prelude::*;
     let circuit = LessThanCircuit {
         a: Value::known(pallas::Base::zero()),
@@ -133,7 +132,7 @@ fn main() {
         prover.assert_satisfied();
     }
 
-    /*
+
     for i in 0..invalid_a_vals.len() {
         let a = invalid_a_vals[i];
         let b = invalid_b_vals[i];
@@ -144,6 +143,6 @@ fn main() {
 
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         assert!(prover.verify().is_err())
-}
-    */
+    }
+
 }

@@ -53,7 +53,7 @@ impl LeadCoin {
         let po_pk = self.pk.unwrap();
         let po_sn = self.sn.unwrap();
 
-        let po_cmp = pallas::Base::from(0);
+        let po_cmp = pallas::Base::from(1);
         let _zero = pallas::Base::from(0);
         // ===============
 
@@ -82,7 +82,7 @@ impl LeadCoin {
             *po_cm2.x(),
             *po_cm2.y(),
             cm_root.0,
-            //po_cmp,
+            po_cmp,
         ];
         public_inputs
     }
