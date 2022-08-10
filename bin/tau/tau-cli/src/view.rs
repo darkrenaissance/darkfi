@@ -82,7 +82,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
         ]));
     }
 
-    let mut ws_table = table!([Fb => workspace]);
+    let mut ws_table = table!([workspace]);
     ws_table.set_format(
         FormatBuilder::new()
             .padding(1, 1)
