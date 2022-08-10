@@ -30,11 +30,11 @@ impl ProgramState for MemoryState {
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
-        self.canon.is_valid_merkle(merkle_root) || self.merkle_roots.contains(merkle_root)
+        self.merkle_roots.contains(merkle_root) || self.canon.is_valid_merkle(merkle_root)
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        self.canon.nullifier_exists(nullifier) || self.nullifiers.contains(nullifier)
+        self.nullifiers.contains(nullifier) || self.canon.nullifier_exists(nullifier)
     }
 
     fn mint_vk(&self) -> &VerifyingKey {

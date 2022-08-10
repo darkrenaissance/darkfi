@@ -7,7 +7,7 @@ They are also verifiers in our model.
 
 Lets take a pseudocode smart contract:
 
-```rust
+```
 contract Dao {
     # 1: the DAO's global state
     dao_bullas = DaoBulla[]
@@ -37,7 +37,7 @@ mod dao_contract {
         proposal_nulls: Vec<ProposalNull>
     }
 
-    // Corresponds to mint()
+    // Corresponds to 2. mint()
     mod mint {
         // Prover specific
         struct Builder {
@@ -57,41 +57,52 @@ mod dao_contract {
         }
 
         // Verifier code
-        struct FuncCall {
+        struct CallData {
+            ...
+            // contains the function call data
             ...
         }
     }
 }
 ```
 
-There is a pipeline where the prover runs `Builder::build()` to create the `FuncCall` object that
+There is a pipeline where the prover runs `Builder::build()` to create the `CallData` object that
 is then broadcast to the verifiers through the p2p network.
 
 ## Atomic Transactions
 
 Transactions represent several function call invocations that are atomic. If any function call fails,
-then the entire tx is rejected. Additionally some smart contracts might impose additional conditions
+the entire tx is rejected. Additionally some smart contracts might impose additional conditions
 on the transaction's structure or other function calls (such as their call data).
 
 ```rust
 struct Transaction {
-    func_calls: Vec<Box<FuncCallBase>>
+    func_calls: Vec<FuncCall>
 }
 ```
 
 Function calls represent mutations of the current active state to a new state.
 
-The `ContractFuncId` of a function call corresponds predefined objects in the module:
-* `Builder` creates the `FuncCall` invocation. Ran by the prover.
-* `FuncCall` is the function call invocation that verifiers have access to.
-* `state_transition()` that runs the function call on the current state.
-* `apply()` commits the update to the current state taking it to the next state.
-
 ```rust
-trait FuncCallBase {
-    fn contract_func_id() -> ContractFuncId;
+struct FuncCall {
+    contract_id: ContractId,
+    func_id: FuncId,
+    call_data: Box<dyn Any>,
 }
 ```
+
+The `contract_id` corresponds to the top level module for the contract which
+includes the global `State`.
+
+The `func_id` of a function call corresponds to predefined objects in the submodules:
+* `Builder` creates the anonymized `CallData`. Ran by the prover.
+* `CallData` is the parameters used by the anonymized function call invocation.
+  Verifiers have this.
+* `state_transition()` that runs the function call on the current state using the `CallData`.
+* `apply()` commits the update to the current state taking it to the next state.
+
+An example of a `contract_id` could represent `DAO` or `Money`. Examples of `func_id` could
+represent `DAO::mint()` or `Money::transfer()`.
 
 Each function call invocation is ran using its own `state_transition()` function.
 
@@ -104,8 +115,17 @@ mod dao_contract {
         ...
 
         fn state_transition(states: &StateRegistry, func_call_index: usize, parent_tx: &Transaction) -> Result<Update> {
-            // we could pass the func_call, index and parent_tx also
-            let (_, func_call) = parent_tx.func_calls[func_call_index];
+            // we could also change the state_transition() function signature
+            // so we pass the func_call itself in
+            let func_call = parent_tx.func_calls[func_call_index];
+            let call_data = func_call.call_data;
+            // It's useful to have the func_call_index within parent_tx because
+            // we might want to enforce that it appears at a certain index exactly.
+            // So we know the tx is well formed.
+
+            // we can elide this with macro magic
+            assert_eq((&*call_data).type_id(), TypeId::of::<CallData>());
+            let func_call = func_call.call_data.downcast_ref::<CallData>();
 
             ...
         }
@@ -115,7 +135,7 @@ mod dao_contract {
 
 The `state_transition()` has access to the entire atomic transaction to enforce correctness. For example
 chaining of function calls is used by the `DAO::exec()` smart contract function to execute moving money out
-of the treasury using `Money::pay()` within the same transaction.
+of the treasury using `Money::transfer()` within the same transaction.
 
 Additionally `StateRegistry` gives smart contracts access to the global states of all smart contracts on the network,
 which is needed for some contracts.
@@ -143,17 +163,17 @@ mod dao_contract {
 The transaction verification pipeline roughly looks like this:
 
 1. Loop through all function call invocations within the transaction:
-    1. Lookup their respective `state_transition()` function based off their `contract_func_id`.
-       The `contract_func_id` corresponds to the contract and specific function, such as `DAO::mint()`.
+    1. Lookup their respective `state_transition()` function based off their `contract_id` and `func_id`.
+       The `contract_id` and `func_id` corresponds to the contract and specific function, such as `DAO::mint()`.
     2. Call the `state_transition()` function and store the update. Halt if this function fails.
 2. Loop through all updates
-    1. Lookup specific `apply()` function based off the `contract_func_id`.
+    1. Lookup specific `apply()` function based off the `contract_id` and `func_id`.
     2. Call `apply(update)` to finalize the change.
 
 ## Parallelisation Techniques
 
 Since verification is done through `state_transition()` which returns an update that is then committed
-to the state using `apply()`, we can perform verify all transactions in a block in parallel.
+to the state using `apply()`, we can verify all transactions in a block in parallel.
 
 To enable calling another transaction within the same block (such as flashloans), we can add a special
 depends field within the tx that makes a tx wait on another tx before being allowed to verify.
