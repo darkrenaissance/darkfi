@@ -17,6 +17,10 @@ between hosts.
 % sudo make install BINS=ircd
 ```
 
+Follow the instructions in the
+[README](https://darkrenaissance.github.io/darkfi/index.html) to ensure
+you have all the necessary dependenices.
+
 ## Usage (DarkFi Network)
 
 Upon installing `ircd` as described above, the preconfigured defaults
@@ -72,44 +76,6 @@ following commands (there is an assumption that `irc_listen` in the
 This will set up the server, save the settings, and exit weechat.
 You are now ready to begin using the chat. Simply start weechat
 and everything should work.
-
-We can now proceed with installing the `mallumo` weechat script, which
-is used for E2E encryption in private messages on this IRC network.
-
-#### E2E encryption with mallumo
-
-`mallumo` is a Python plugin for Weechat that can be used to
-enable end-to-end encryption for private messages between you and
-other users of the DarkFi IRC network. The verbose installation
-and configuration instructions can be found in the [mallumo git
-repository](https://github.com/darkrenaissance/mallumo).
-
-Briefly, make sure you install python3 and
-[`pynacl`](https://github.com/pyca/pynacl/) (can usually be done with
-your distribution's package manager or `pip`).
-
-Then find where weechat has put its configuration files. It is usually
-`~/.weechat` or `~/.local/share/weechat` (here we will assume the
-latter). Go to the directory, clone the repo, and make a couple of
-symlinks:
-
-```shell
-% cd ~/.local/share/weechat
-% mkdir -p src
-% git clone https://github.com/darkrenaissance/mallumo src/mallumo
-% cd python
-% ln -s `realpath ../src/mallumo/mallumo` mallumo
-% ln -s `realpath ../src/mallumo/mallumo/__init__.py` autoload/mallumo.py
-```
-
-Refer to
-[darkrenaissance/mallumo](https://github.com/darkrenaissance/mallumo)
-and its README for usage instructions.
-
-After this has been set up, the next time you start `ircd` and then
-`weechat`, you will be connected to the DarkFi IRC network and be
-able to chat with other participants.
-
 
 ## Usage (Local Deployment)
 
