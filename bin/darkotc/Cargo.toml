@@ -12,10 +12,9 @@ edition = "2021"
 async-std = {version = "1.12.0", features = ["attributes"]}
 bs58 = "0.4.0"
 clap = {version = "3.2.16", features = ["derive"]}
-darkfi = {path = "../../", features = ["crypto", "rpc", "util"]}
+darkfi = {path = "../../", features = ["crypto", "rpc", "util", "tx"]}
 halo2_proofs = "0.2.0"
 halo2_gadgets = "0.2.0"
 rand = "0.8.5"
 serde_json = "1.0.83"
-termion = "1.5.6"
 url = "2.2.2"

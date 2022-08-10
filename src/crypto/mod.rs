@@ -32,7 +32,7 @@ use crate::{
 use keypair::SecretKey;
 use std::io;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct OwnCoin {
     pub coin: coin::Coin,
     pub note: note::Note,

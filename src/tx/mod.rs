@@ -22,7 +22,7 @@ use crate::{
 };
 
 pub mod builder;
-mod partial;
+pub mod partial;
 
 /// A DarkFi transaction
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
@@ -48,7 +48,7 @@ pub struct TransactionClearInput {
     pub token_blind: DrkValueBlind,
     /// Public key for the signature
     pub signature_public: PublicKey,
-    /// Input's signature
+    /// Transaction signature
     pub signature: schnorr::Signature,
 }
 
@@ -77,6 +77,16 @@ pub struct TransactionOutput {
 impl Transaction {
     /// Verify the transaction
     pub fn verify(&self, mint_vk: &VerifyingKey, burn_vk: &VerifyingKey) -> VerifyResult<()> {
+        // Transaction must have minimum 1 clear or anon input, and 1 output
+        if self.clear_inputs.len() + self.inputs.len() == 0 {
+            error!("tx::verify(): Missing inputs");
+            return Err(VerifyFailed::LackingInputs)
+        }
+        if self.outputs.len() == 0 {
+            error!("tx::verify(): Missing outputs");
+            return Err(VerifyFailed::LackingOutputs)
+        }
+
         // Accumulator for the value commitments
         let mut valcom_total = DrkValueCommit::identity();
 
@@ -196,7 +206,7 @@ impl TransactionClearInput {
 }
 
 impl TransactionInput {
-    fn from_partial(
+    pub fn from_partial(
         partial: partial::PartialTransactionInput,
         signature: schnorr::Signature,
     ) -> Self {

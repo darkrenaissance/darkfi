@@ -177,6 +177,7 @@ util = [
 	"fxhash",
 	"chrono",
 	"indicatif",
+	"termion",
 
     "async-net",
     "async-runtime",

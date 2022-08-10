@@ -270,7 +270,8 @@ impl WalletDb {
             let value = deserialize(row.get("value"))?;
             let token_id = deserialize(row.get("token_id"))?;
             let token_blind = deserialize(row.get("token_blind"))?;
-            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind };
+            let memo = deserialize(row.get("memo"))?;
+            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind, memo };
 
             let secret = deserialize(row.get("secret"))?;
             let nullifier = deserialize(row.get("nullifier"))?;
@@ -329,7 +330,8 @@ impl WalletDb {
             let value = deserialize(row.get("value"))?;
             let token_id = deserialize(row.get("token_id"))?;
             let token_blind = deserialize(row.get("token_blind"))?;
-            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind };
+            let memo = deserialize(row.get("memo"))?;
+            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind, memo };
 
             let secret = deserialize(row.get("secret"))?;
             let nullifier = deserialize(row.get("nullifier"))?;
@@ -356,15 +358,16 @@ impl WalletDb {
         let secret = serialize(&own_coin.secret);
         let nullifier = serialize(&own_coin.nullifier);
         let leaf_position = serialize(&own_coin.leaf_position);
+        let memo = serialize(&own_coin.note.memo);
         let is_spent: u8 = 0;
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
             "INSERT OR REPLACE INTO coins
             (coin, serial, coin_blind, valcom_blind, token_blind, value,
-             token_id, secret, is_spent, nullifier, leaf_position)
+             token_id, secret, is_spent, nullifier, leaf_position, memo)
             VALUES
-             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);",
+             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);",
         )
         .bind(coin)
         .bind(serial)
@@ -377,6 +380,7 @@ impl WalletDb {
         .bind(is_spent)
         .bind(nullifier)
         .bind(leaf_position)
+        .bind(memo)
         .execute(&mut conn)
         .await?;
 
@@ -510,6 +514,7 @@ mod tests {
             coin_blind: DrkCoinBlind::random(&mut OsRng),
             value_blind: DrkValueBlind::random(&mut OsRng),
             token_blind: DrkValueBlind::random(&mut OsRng),
+            memo: vec![],
         };
 
         let coin = Coin(pallas::Base::random(&mut OsRng));
@@ -541,19 +546,19 @@ mod tests {
         let c3 = dummy_coin(&keypair.secret, 11, &token_id);
 
         // put_own_coin()
-        wallet.put_own_coin(c0).await?;
+        wallet.put_own_coin(c0.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c0.coin));
         tree1.witness();
 
-        wallet.put_own_coin(c1).await?;
+        wallet.put_own_coin(c1.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c1.coin));
         tree1.witness();
 
-        wallet.put_own_coin(c2).await?;
+        wallet.put_own_coin(c2.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c2.coin));
         tree1.witness();
 
-        wallet.put_own_coin(c3).await?;
+        wallet.put_own_coin(c3.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c3.coin));
         tree1.witness();
 

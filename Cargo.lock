@@ -1157,8 +1157,12 @@ dependencies = [
  "darkfi",
  "easy-parallel",
  "futures",
+ "halo2_gadgets",
+ "incrementalmerkletree",
  "log",
  "num_cpus",
+ "pasta_curves",
+ "rand",
  "serde_json",
  "simplelog",
  "smol",
@@ -1297,7 +1301,6 @@ dependencies = [
  "halo2_proofs",
  "rand",
  "serde_json",
- "termion",
  "url",
 ]
 

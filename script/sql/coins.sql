@@ -9,5 +9,6 @@ CREATE TABLE IF NOT EXISTS coins(
 	secret BLOB NOT NULL,
 	is_spent BOOLEAN NOT NULL,
 	nullifier BLOB NOT NULL,
-	leaf_position BLOB NOT NULL
+	leaf_position BLOB NOT NULL,
+	memo BLOB
 );

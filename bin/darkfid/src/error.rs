@@ -17,6 +17,7 @@ pub enum RpcError {
     NotYetSynced = -32112,
     InvalidAddressParam = -32113,
     InvalidAmountParam = -32114,
+    DecryptionFailed = -32115,
 }
 
 fn to_tuple(e: RpcError) -> (i64, String) {
@@ -35,6 +36,7 @@ fn to_tuple(e: RpcError) -> (i64, String) {
         RpcError::NotYetSynced => "Blockchain not yet synced",
         RpcError::InvalidAddressParam => "Invalid address parameter",
         RpcError::InvalidAmountParam => "invalid amount parameter",
+        RpcError::DecryptionFailed => "Decryption failed",
     };
 
     (e as i64, msg.to_string())

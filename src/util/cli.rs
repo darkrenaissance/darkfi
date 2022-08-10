@@ -10,6 +10,7 @@ use std::{
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{de::DeserializeOwned, Serialize};
 use simplelog::ConfigBuilder;
+use termion::color;
 
 use crate::{Error, Result};
 
@@ -207,4 +208,12 @@ pub fn progress_bar(message: &str) -> ProgressBar {
     progress_bar.enable_steady_tick(Duration::from_millis(100));
     progress_bar.set_message(message.to_string());
     progress_bar
+}
+
+pub fn fg_red(message: &str) -> String {
+    format!("{}{}{}", color::Fg(color::Red), message, color::Fg(color::Reset))
+}
+
+pub fn fg_green(message: &str) -> String {
+    format!("{}{}{}", color::Fg(color::Green), message, color::Fg(color::Reset))
 }

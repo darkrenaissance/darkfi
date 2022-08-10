@@ -14,6 +14,9 @@ use darkfi::{
     Result,
 };
 
+mod demo;
+use crate::demo::demo;
+
 async fn start() -> Result<()> {
     let rpc_addr = Url::parse("tcp://127.0.0.1:7777")?;
     let rpc_interface = Arc::new(JsonRpcInterface {});
@@ -57,6 +60,7 @@ async fn main() -> Result<()> {
         ColorChoice::Auto,
     )?;
 
-    start().await?;
+    //start().await?;
+    demo().await;
     Ok(())
 }

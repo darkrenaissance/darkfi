@@ -14,7 +14,6 @@ use tui::{
     backend::{Backend, TermionBackend},
     Terminal,
 };
-
 pub mod config;
 pub mod error;
 pub mod model;
