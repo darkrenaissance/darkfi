@@ -50,6 +50,10 @@ mod dao_contract {
             fn new(...) -> Self {
                 ...
             }
+
+            fn build() -> Box<FuncCallBase> {
+                ...
+            }
         }
 
         // Verifier code
@@ -71,11 +75,24 @@ on the transaction's structure or other function calls (such as their call data)
 
 ```rust
 struct Transaction {
-    func_calls: Vec<(ContractFuncId, Box<FuncCallBase>)>
+    func_calls: Vec<Box<FuncCallBase>>
 }
 ```
 
 Function calls represent mutations of the current active state to a new state.
+
+The `ContractFuncId` of a function call corresponds predefined objects in the module:
+* `Builder` creates the `FuncCall` invocation. Ran by the prover.
+* `FuncCall` is the function call invocation that verifiers have access to.
+* `state_transition()` that runs the function call on the current state.
+* `apply()` commits the update to the current state taking it to the next state.
+
+```rust
+trait FuncCallBase {
+    fn contract_func_id() -> ContractFuncId;
+}
+```
+
 Each function call invocation is ran using its own `state_transition()` function.
 
 ```rust
