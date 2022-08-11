@@ -11,12 +11,14 @@ use darkfi::{
     Result,
 };
 
+mod drawdown;
 mod filter;
 mod primitives;
 mod rpc;
 mod util;
 mod view;
 
+use drawdown::{drawdown, to_naivedate};
 use primitives::{task_from_cli, State, TaskEvent};
 use util::{desc_in_editor, due_as_timestamp};
 use view::{comments_as_string, print_task_info, print_task_list};
@@ -84,6 +86,9 @@ enum TauSubcommand {
 
     /// Export tasks to a specified directory.
     Export { path: Option<String> },
+
+    /// Drawdown.
+    Log { month: String, owner: String },
 }
 
 pub struct Tau {
@@ -135,7 +140,7 @@ async fn main() -> Result<()> {
                 }
                 None => {
                     let task = tau.get_task_by_id(task_id).await?;
-                    let state = &task.events.last().unwrap_or(&TaskEvent::default()).action.clone();
+                    let state = State::from_str(&task.state)?;
                     println!("Task {}: {}", task_id, state);
                     Ok(())
                 }
@@ -174,6 +179,7 @@ async fn main() -> Result<()> {
 
                 Ok(())
             }
+
             TauSubcommand::Import { path } => {
                 let path = path.unwrap_or(DEFAULT_PATH.into());
                 let res = tau.import_from(path.clone()).await?;
@@ -183,6 +189,14 @@ async fn main() -> Result<()> {
                 } else {
                     error!("Error importing from {}", path);
                 }
+
+                Ok(())
+            }
+
+            TauSubcommand::Log { month, owner } => {
+                let ts = to_naivedate(month.clone())?.and_hms(12, 0, 0).timestamp();
+                let tasks = tau.get_stop_tasks(ts).await?;
+                drawdown(month, tasks, owner)?;
 
                 Ok(())
             }

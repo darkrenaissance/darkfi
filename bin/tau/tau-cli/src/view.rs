@@ -53,8 +53,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
     };
 
     for task in tasks {
-        let state = task.events.last().unwrap_or(&TaskEvent::default()).action.clone();
-        let state = State::from_str(&state)?;
+        let state = State::from_str(&task.state.clone())?;
 
         let (max_style, min_style, mid_style, gen_style) = if state.is_start() {
             ("bFg", "Fc", "Fg", "Fg")
@@ -83,7 +82,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
         ]));
     }
 
-    let mut ws_table = table!([Fb => workspace]);
+    let mut ws_table = table!([workspace]);
     ws_table.set_format(
         FormatBuilder::new()
             .padding(1, 1)
@@ -97,7 +96,6 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
 }
 
 pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
-    let current_state = &taskinfo.events.last().unwrap_or(&TaskEvent::default()).action.clone();
     let due = timestamp_to_date(taskinfo.due.unwrap_or(0), DateFormat::Date);
     let created_at = timestamp_to_date(taskinfo.created_at, DateFormat::DateTime);
 
@@ -113,7 +111,7 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
         [Bd =>"due", due],
         ["rank", &taskinfo.rank.to_string()],
         [Bd =>"created_at", created_at],
-        ["current_state", current_state]);
+        ["current_state", &taskinfo.state]);
 
     table.set_format(
         FormatBuilder::new()
@@ -144,7 +142,21 @@ pub fn comments_as_string(comments: Vec<Comment>) -> String {
 pub fn events_as_string(events: Vec<TaskEvent>) -> String {
     let mut events_str = String::new();
     for event in events {
-        writeln!(events_str, "State changed to {} at {}", event.action, event.timestamp).unwrap();
+        match event.action.as_str() {
+            "state" => {
+                writeln!(events_str, "State changed to {} at {}", event.content, event.timestamp)
+                    .unwrap()
+            }
+            "assign" => {
+                writeln!(events_str, "Assigned to {} at {}", event.content, event.timestamp)
+                    .unwrap();
+            }
+            "comment" => {
+                writeln!(events_str, "{} added a comment at {}", event.content, event.timestamp)
+                    .unwrap();
+            }
+            _ => {}
+        }
     }
     events_str
 }

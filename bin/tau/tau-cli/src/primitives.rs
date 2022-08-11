@@ -56,7 +56,7 @@ pub struct BaseTask {
     pub rank: Option<f32>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
 pub struct TaskInfo {
     pub ref_id: String,
     pub workspace: String,
@@ -69,13 +69,15 @@ pub struct TaskInfo {
     pub due: Option<i64>,
     pub rank: f32,
     pub created_at: i64,
+    pub state: String,
     pub events: Vec<TaskEvent>,
     pub comments: Vec<Comment>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
 pub struct TaskEvent {
     pub action: String,
+    pub content: String,
     pub timestamp: Timestamp,
 }
 
@@ -87,11 +89,15 @@ impl std::fmt::Display for TaskEvent {
 
 impl Default for TaskEvent {
     fn default() -> Self {
-        Self { action: State::Open.to_string(), timestamp: Timestamp::current_time() }
+        Self {
+            action: State::Open.to_string(),
+            content: "".to_string(),
+            timestamp: Timestamp::current_time(),
+        }
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
 pub struct Comment {
     content: String,
     author: String,
