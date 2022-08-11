@@ -7,7 +7,7 @@ contract "DaoMint" {
     Base dao_approval_ratio,
     Base gdrk_token_id,
     Base dao_public_x,
-    #Base dao_public_y,
+    Base dao_public_y,
     Base dao_bulla_blind,
 }
 
@@ -19,7 +19,9 @@ circuit "DaoMint" {
         dao_approval_ratio,
         gdrk_token_id,
         dao_public_x,
-        #dao_public_y,
+        dao_public_y,
+        dao_bulla_blind,
+        # @tmp-workaround
         dao_bulla_blind,
     );
     constrain_instance(bulla);

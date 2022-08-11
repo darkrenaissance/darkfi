@@ -408,11 +408,13 @@ pub async fn demo() -> Result<()> {
         dao_approval_ratio__base,
         gdrk_token_id,
         dao_public_x,
-        //dao_public_y,
+        dao_public_y,
+        dao_bulla_blind,
+        // @tmp-workaround
         dao_bulla_blind,
     ];
     let dao_bulla =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<8>, 3, 2>::init()
             .hash(messages);
 
     // Lets repeat this in ZK
@@ -434,7 +436,7 @@ pub async fn demo() -> Result<()> {
         Witness::Base(Value::known(dao_approval_ratio__base)),
         Witness::Base(Value::known(gdrk_token_id)),
         Witness::Base(Value::known(dao_public_x)),
-        //Witness::Base(Value::known(dao_public_y)),
+        Witness::Base(Value::known(dao_public_y)),
         Witness::Base(Value::known(dao_bulla_blind)),
     ];
 
