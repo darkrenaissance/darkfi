@@ -125,9 +125,8 @@ impl DataParser {
             true,
         );
 
-        self.update_node(node.clone(), node_id.clone()).await;
         self.update_selectable_and_ids(sessions, node.clone()).await?;
-        self.update_new_id().await;
+        self.update_id_vec().await;
         Ok(())
     }
 
@@ -165,10 +164,9 @@ impl DataParser {
             false,
         );
 
-        self.update_node(node.clone(), node_id.clone()).await;
         self.update_selectable_and_ids(sessions.clone(), node.clone()).await?;
         self.update_msgs(sessions.clone()).await?;
-        self.update_new_id().await;
+        self.update_id_vec().await;
 
         //debug!("IDS: {:?}", self.model.ids.lock().await);
         //debug!("INFOS: {:?}", self.model.nodes.lock().await);
@@ -204,19 +202,16 @@ impl DataParser {
         Ok(())
     }
 
-    async fn update_ids(&self, id: String) {
-        self.model.ids.lock().await.insert(id);
+    async fn update_unique_ids(&self, id: String) {
+        self.model.unique_ids.lock().await.insert(id);
     }
 
-    async fn update_new_id(&self) {
-        let ids = self.model.ids.lock().await.clone();
+    async fn update_id_vec(&self) {
+        let ids = self.model.unique_ids.lock().await.clone();
 
         for id in ids.iter() {
-            self.model.new_id.lock().await.push(id.to_string());
+            self.model.id_vec.lock().await.push(id.to_string());
         }
-    }
-    async fn update_node(&self, node: NodeInfo, id: String) {
-        self.model.nodes.lock().await.insert(id, node);
     }
 
     async fn update_selectable_and_ids(
@@ -227,20 +222,20 @@ impl DataParser {
         if node.is_offline == true {
             let node_obj = SelectableObject::Node(node.clone());
             self.model.selectables.lock().await.insert(node.id.clone(), node_obj);
-            self.update_ids(node.id.clone()).await;
+            self.update_unique_ids(node.id.clone()).await;
         } else {
             let node_obj = SelectableObject::Node(node.clone());
             self.model.selectables.lock().await.insert(node.id.clone(), node_obj);
-            self.update_ids(node.id.clone()).await;
+            self.update_unique_ids(node.id.clone()).await;
             for session in sessions {
                 if !session.is_empty {
                     let session_obj = SelectableObject::Session(session.clone());
                     self.model.selectables.lock().await.insert(session.clone().id, session_obj);
-                    self.update_ids(session.clone().id).await;
+                    self.update_unique_ids(session.clone().id).await;
                     for connect in session.children {
                         let connect_obj = SelectableObject::Connect(connect.clone());
                         self.model.selectables.lock().await.insert(connect.clone().id, connect_obj);
-                        self.update_ids(connect.clone().id).await;
+                        self.update_unique_ids(connect.clone().id).await;
                     }
                 }
             }

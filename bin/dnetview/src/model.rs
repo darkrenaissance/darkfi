@@ -25,9 +25,8 @@ pub enum SelectableObject {
 
 #[derive(Debug)]
 pub struct Model {
-    pub ids: Mutex<FxHashSet<String>>,
-    pub new_id: Mutex<Vec<String>>,
-    pub nodes: Mutex<FxHashMap<String, NodeInfo>>,
+    pub unique_ids: Mutex<FxHashSet<String>>,
+    pub id_vec: Mutex<Vec<String>>,
     pub msg_map: MsgMap,
     pub msg_log: Mutex<MsgLog>,
     pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
@@ -35,13 +34,12 @@ pub struct Model {
 
 impl Model {
     pub fn new() -> Arc<Self> {
-        let ids = Mutex::new(FxHashSet::default());
-        let nodes = Mutex::new(FxHashMap::default());
+        let unique_ids = Mutex::new(FxHashSet::default());
+        let id_vec = Mutex::new(Vec::new());
         let selectables = Mutex::new(FxHashMap::default());
         let msg_map = Mutex::new(FxHashMap::default());
         let msg_log = Mutex::new(Vec::new());
-        let new_id = Mutex::new(Vec::new());
-        Arc::new(Model { ids, new_id, nodes, msg_map, msg_log, selectables })
+        Arc::new(Model { unique_ids, id_vec, msg_map, msg_log, selectables })
     }
 }
 
@@ -70,7 +68,6 @@ impl NodeInfo {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub struct SessionInfo {
-    // TODO: make all values optional to handle empty sessions
     pub id: String,
     pub name: String,
     pub parent: String,
@@ -94,7 +91,6 @@ impl SessionInfo {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub struct ConnectInfo {
-    // TODO: make all values optional to handle empty connections
     pub id: String,
     pub addr: String,
     pub state: String,
