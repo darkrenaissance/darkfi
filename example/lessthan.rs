@@ -72,11 +72,13 @@ impl Circuit<pallas::Base> for LessThanCircuit {
             config.0.k_values_table,
         )?;
 
+
         less_than_chip.witness_less_than(
             layouter.namespace(|| "a < b"),
             self.a,
             self.b,
             0,
+            true,
         )?;
 
         Ok(())
@@ -86,7 +88,7 @@ impl Circuit<pallas::Base> for LessThanCircuit {
 fn main() {
     let k = 13;
     let valid_a_vals = vec![
-        pallas::Base::from(3),
+        pallas::Base::from(4),
         pallas::Base::zero(),
         pallas::Base::one()
     ];
@@ -120,6 +122,10 @@ fn main() {
         .into_drawing_area();
     CircuitLayout::default().render(k, &circuit, &root).unwrap();
 
+    let one = pallas::Base::one();
+    let zero = pallas::Base::zero();
+    let public_inputs = vec![one];
+
     for i in 0..valid_a_vals.len() {
         let a = valid_a_vals[i];
         let b = valid_b_vals[i];
@@ -128,7 +134,7 @@ fn main() {
 
         let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
 
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        let prover = MockProver::run(k, &circuit, public_inputs).unwrap();
         prover.assert_satisfied();
     }
 
@@ -141,7 +147,7 @@ fn main() {
 
         let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
 
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        let prover = MockProver::run(k, &circuit, public_inputs).unwrap();
         assert!(prover.verify().is_err())
     }
 

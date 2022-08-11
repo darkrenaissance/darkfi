@@ -130,6 +130,30 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         Ok(())
     }
 
+    pub fn witness_less_than2(
+        &self,
+        mut layouter: impl Layouter<pallas::Base>,
+        a: Value<pallas::Base>,
+        b: Value<pallas::Base>,
+        offset: usize,
+        strict: bool,
+    ) -> Result<AssignedCell<pallas::Base, pallas::Base>, Error> {
+        let (a, _, a_offset) = layouter.assign_region(
+            || "a less than b",
+            |mut region: Region<'_, pallas::Base>| {
+                let a = region.assign_advice(|| "a", self.config.a, offset, || a)?;
+                let b = region.assign_advice(|| "b", self.config.b, offset, || b)?;
+                let a_offset = self.less_than(region, a.clone(), b.clone(), offset)?;
+                Ok((a, b, a_offset))
+            },
+        )?;
+
+        self.less_than_range_check(layouter, a, a_offset.clone(), strict)?;
+
+        Ok(a_offset)
+    }
+
+
     pub fn copy_less_than(
         &self,
         mut layouter: impl Layouter<pallas::Base>,

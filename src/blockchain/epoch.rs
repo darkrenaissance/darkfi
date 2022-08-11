@@ -197,7 +197,12 @@ impl Epoch {
             let c_sn : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(sn_msg);
 
 
-            let coin_commit_msg = c_pk*c_v*c_seed;
+            let coin_commit_msg_input = [
+                c_pk,
+                c_v,
+                c_seed
+            ];
+            let coin_commit_msg : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(coin_commit_msg_input);
             let c_cm: pallas::Point = pedersen_commitment_base(coin_commit_msg, c_cm1_blind);
             let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
             let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
@@ -213,10 +218,12 @@ impl Epoch {
             ];
             let c_seed2 : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_nonce2_msg);
 
-            let c_seed2_pt_x = c_seed2.clone();
-            let c_seed2_pt_y = c_seed2.clone();
-
-            let coin2_commit_msg = c_pk*c_seed2_pt_x*c_seed2_pt_y*c_v;
+            let coin2_commit_msg_input = [
+                c_pk,
+                c_v,
+                c_seed,
+            ];
+            let coin2_commit_msg : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(coin2_commit_msg_input);
             let c_cm2 = pedersen_commitment_base(coin2_commit_msg, c_cm2_blind);
 
             let c_root_sk = root_sks[i];

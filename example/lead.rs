@@ -39,7 +39,7 @@ fn main() {
     //
     const LEN: usize = 10;
     let epoch_item = EpochItem {
-        value: 0,  //static stake value
+        value: 332233,  //static stake value
     };
     //
     let settings = Settings{
@@ -72,8 +72,10 @@ fn main() {
     let coin = coins[coin_idx];
     let contract = coin.create_contract();
 
+    /*
     let lead_pk = stakeholder.get_provkingkey();
     let lead_vk = stakeholder.get_verifyingkey();
+
 
     //
     //let proof = lead_proof::create_lead_proof(lead_pk.clone(), coin.clone());
@@ -90,7 +92,7 @@ fn main() {
     let bk_info = BlockInfo::new(st_hash, 1, 0, empty_txs, metadata, sm);
     let blks = [bk_info];
     stakeholder.blockchain.add(&blks);
-
+    */
     // calculate public inputs
     let public_inputs = coin.public_inputs();
     let prover = MockProver::run(k, &contract, vec![public_inputs]).unwrap();

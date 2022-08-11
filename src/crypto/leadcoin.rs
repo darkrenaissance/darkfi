@@ -74,15 +74,14 @@ impl LeadCoin {
             current
         };
         let public_inputs: Vec<pallas::Base> = vec![
-            po_nonce,
             po_pk,
             po_sn,
             *po_cm.x(),
             *po_cm.y(),
             *po_cm2.x(),
             *po_cm2.y(),
-            cm_root.0,
-            po_cmp,
+            po_nonce,
+            //cm_root.0,
         ];
         public_inputs
     }
