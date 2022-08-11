@@ -1169,6 +1169,7 @@ dependencies = [
  "easy-parallel",
  "futures",
  "halo2_gadgets",
+ "halo2_proofs",
  "incrementalmerkletree",
  "log",
  "num_cpus",

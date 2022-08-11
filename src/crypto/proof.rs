@@ -10,7 +10,7 @@ use pasta_curves::vesta;
 use rand::RngCore;
 
 use crate::{
-    crypto::types::*,
+    crypto::types::DrkCircuitField,
     util::serial::{encode_with_size, Decodable, Encodable, ReadExt, VarInt},
     Result,
 };
@@ -117,6 +117,7 @@ mod tests {
     use super::*;
     use crate::{
         crypto::{keypair::PublicKey, mint_proof::create_mint_proof},
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
         zk::circuit::MintContract,
     };
     use group::ff::Field;

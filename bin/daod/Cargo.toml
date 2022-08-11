@@ -28,6 +28,7 @@ thiserror = "1.0.32"
 incrementalmerkletree = "0.3.0"
 pasta_curves = "0.4.0"
 halo2_gadgets = "0.2.0"
+halo2_proofs = "0.2.0"
 rand = "0.8.5"
 
 # Encoding and parsing

@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use halo2_gadgets::poseidon::primitives as poseidon;
+use halo2_proofs::circuit::Value;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use pasta_curves::{
@@ -24,7 +25,8 @@ use darkfi::{
         nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
         token_id::generate_id,
-        OwnCoin, OwnCoins,
+        types::DrkCircuitField,
+        OwnCoin, OwnCoins, Proof,
     },
     node::state::{state_transition, ProgramState, StateUpdate},
     tx::builder::{
@@ -32,12 +34,13 @@ use darkfi::{
         TransactionBuilderOutputInfo,
     },
     util::NetworkName,
-    zk::circuit::{BurnContract, MintContract},
+    zk::{
+        circuit::{BurnContract, MintContract},
+        vm::{Witness, ZkCircuit},
+        vm_stack::empty_witnesses,
+    },
+    zkas::decoder::ZkBinary,
 };
-
-fn type_of<T>(_: &T) -> &'static str {
-    std::any::type_name::<T>()
-}
 
 /// The state machine, held in memory.
 struct MemoryState {
@@ -187,7 +190,7 @@ mod dao_contract {
     /// let tx = builder.build();
     /// ```
     pub mod mint {
-        use darkfi::crypto::keypair::PublicKey;
+        use darkfi::crypto::{keypair::PublicKey, types::DrkCircuitField};
         use log::debug;
         use pasta_curves::pallas;
         use std::{
@@ -195,7 +198,7 @@ mod dao_contract {
             time::Instant,
         };
 
-        use super::super::{StateRegistry, Transaction};
+        use super::super::{CallDataBase, FuncCall, StateRegistry, Transaction};
 
         pub struct Builder {
             dao_proposer_limit: u64,
@@ -225,13 +228,29 @@ mod dao_contract {
                 }
             }
 
-            /// Consumes self, and produces the actual Tx
-            pub fn build(self) -> Box<dyn Any> {
-                Box::new(CallData {})
+            /// Consumes self, and produces the function call
+            pub fn build(self) -> FuncCall {
+                let call_data = CallData {};
+                FuncCall {
+                    contract_id: "DAO".to_string(),
+                    func_id: "DAO::mint()".to_string(),
+                    call_data: Box::new(call_data),
+                    proofs: vec![],
+                }
             }
         }
 
         pub struct CallData {}
+
+        impl CallDataBase for CallData {
+            fn public_inputs(&self) -> Vec<Vec<DrkCircuitField>> {
+                vec![]
+            }
+
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
 
         #[derive(Debug, Clone, thiserror::Error)]
         pub enum Error {
@@ -246,10 +265,10 @@ mod dao_contract {
             parent_tx: &Transaction,
         ) -> Result<Update> {
             let func_call = &parent_tx.func_calls[func_call_index];
-            let call_data = &func_call.call_data;
+            let call_data = func_call.call_data.as_any();
 
-            assert_eq!((&**call_data).type_id(), TypeId::of::<CallData>());
-            let func_call = func_call.call_data.downcast_ref::<CallData>();
+            assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
+            let call_data = call_data.downcast_ref::<CallData>();
             Ok(Update {})
         }
 
@@ -267,10 +286,20 @@ pub struct Transaction {
 type ContractId = String;
 type FuncId = String;
 
-struct FuncCall {
+pub struct FuncCall {
     contract_id: ContractId,
     func_id: FuncId,
-    call_data: Box<dyn Any>,
+    call_data: Box<dyn CallDataBase>,
+    proofs: Vec<Proof>,
+}
+
+pub trait CallDataBase {
+    // Public inputs for verifying the proofs
+    // Needed so we can convert internal types so they can be used in Proof::verify()
+    fn public_inputs(&self) -> Vec<Vec<DrkCircuitField>>;
+
+    // For upcasting to CallData itself so it can be read in state_transition()
+    fn as_any(&self) -> &dyn Any;
 }
 
 type GenericContractState = Box<dyn Any>;
@@ -286,6 +315,11 @@ impl StateRegistry {
 
     fn register(&mut self, contract_id: ContractId, state: GenericContractState) {
         self.states.insert(contract_id, state);
+    }
+
+    // Lookup State
+    fn lookup<S>(&self, contract_id: ContractId) -> Option<&S> {
+        None
     }
 }
 
@@ -308,35 +342,37 @@ pub async fn demo() -> Result<()> {
 
     /////////////////////////////////////////////////
 
-    // State for money contracts
-    let cashier_signature_secret = SecretKey::random(&mut OsRng);
-    let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
-    let faucet_signature_secret = SecretKey::random(&mut OsRng);
-    let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
+    /*
+        // State for money contracts
+        let cashier_signature_secret = SecretKey::random(&mut OsRng);
+        let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
+        let faucet_signature_secret = SecretKey::random(&mut OsRng);
+        let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
 
-    let start = Instant::now();
-    let mint_vk = VerifyingKey::build(11, &MintContract::default());
-    debug!("Mint VK: [{:?}]", start.elapsed());
-    let start = Instant::now();
-    let burn_vk = VerifyingKey::build(11, &BurnContract::default());
-    debug!("Burn VK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let mint_vk = VerifyingKey::build(11, &MintContract::default());
+        debug!("Mint VK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let burn_vk = VerifyingKey::build(11, &BurnContract::default());
+        debug!("Burn VK: [{:?}]", start.elapsed());
 
-    // TODO: this should not be here.
-    // We should separate wallet functionality from the State completely
-    let keypair = Keypair::random(&mut OsRng);
+        // TODO: this should not be here.
+        // We should separate wallet functionality from the State completely
+        let keypair = Keypair::random(&mut OsRng);
 
-    let money_state = Box::new(MemoryState {
-        tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
-        merkle_roots: vec![],
-        nullifiers: vec![],
-        own_coins: vec![],
-        mint_vk,
-        burn_vk,
-        cashier_signature_public,
-        faucet_signature_public,
-        secrets: vec![keypair.secret],
-    });
-    states.register("MoneyContract".to_string(), money_state);
+        let money_state = Box::new(MemoryState {
+            tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
+            merkle_roots: vec![],
+            nullifiers: vec![],
+            own_coins: vec![],
+            mint_vk,
+            burn_vk,
+            cashier_signature_public,
+            faucet_signature_public,
+            secrets: vec![keypair.secret],
+        });
+        states.register("MoneyContract".to_string(), money_state);
+    */
 
     /////////////////////////////////////////////////
 
@@ -346,7 +382,7 @@ pub async fn demo() -> Result<()> {
     // For this demo lets create 10 random preexisting DAO bullas
     for _ in 0..10 {
         let messages = [pallas::Base::random(&mut OsRng)];
-        let coin =
+        let bulla =
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init()
                 .hash(messages);
     }
@@ -359,24 +395,84 @@ pub async fn demo() -> Result<()> {
     let dao_keypair = Keypair::random(&mut OsRng);
     let dao_bulla_blind = pallas::Base::random(&mut OsRng);
 
-    //let dao_proposer_limit = pallas::Base::from(110);
-    //let dao_quorum = pallas::Base::from(110);
-    //let dao_approval_ratio = pallas::Base::from(2);
-    //
-    //let dao_pubkey_coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
-    //let messages = [
-    //    dao_proposer_limit,
-    //    dao_quorum,
-    //    dao_approval_ratio,
-    //    gdrk_token_id,
-    //    *dao_pubkey_coords.x(),
-    //    *dao_pubkey_coords.y(),
-    //    dao_bulla_blind,
-    //];
-    //let dao_bulla =
-    //    poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<7>, 3, 2>::init()
-    //        .hash(messages);
-    //let dao_bulla = dao_contract::DaoBulla(dao_bulla);
+    // !!!!!!! TEST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    let dao_proposer_limit__base = pallas::Base::from(110);
+    let dao_quorum__base = pallas::Base::from(110);
+    let dao_approval_ratio__base = pallas::Base::from(2);
+
+    let dao_pubkey_coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
+    let dao_public_x = *dao_pubkey_coords.x();
+    let dao_public_y = *dao_pubkey_coords.x();
+
+    let messages = [
+        dao_proposer_limit__base,
+        //dao_quorum__base,
+        //dao_approval_ratio__base,
+        //gdrk_token_id,
+        //dao_public_x,
+        //dao_public_y,
+        //dao_bulla_blind,
+    ];
+    let dao_bulla =
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init()
+            .hash(messages);
+
+    // Lets repeat this in ZK
+
+    let bincode = include_bytes!("../proof/dao-mint.zk.bin");
+    let zkbin = ZkBinary::decode(bincode)?;
+
+    // ======
+    // Prover
+    // ======
+    // Bigger k = more rows, but slower circuit
+    // Number of rows is 2^k
+    let k = 13;
+
+    // Witness values
+    let prover_witnesses = vec![
+        Witness::Base(Value::known(dao_proposer_limit__base)),
+        //Witness::Base(Value::known(dao_quorum__base)),
+        //Witness::Base(Value::known(dao_approval_ratio__base)),
+        //Witness::Base(Value::known(gdrk_token_id)),
+        //Witness::Base(Value::known(dao_public_x)),
+        //Witness::Base(Value::known(dao_public_y)),
+        //Witness::Base(Value::known(dao_bulla_blind)),
+    ];
+
+    // Create the public inputs
+    let public_inputs = vec![dao_bulla];
+
+    // Create the circuit
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+
+    let now = std::time::Instant::now();
+    let proving_key = ProvingKey::build(k, &circuit);
+    println!("DAO::mint() ProvingKey built [{} s]", now.elapsed().as_secs_f64());
+    let now = std::time::Instant::now();
+    let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)
+        .expect("DAO::mint() proving error!");
+    println!("DAO::mint() Proof created [{} s]", now.elapsed().as_secs_f64());
+
+    // ========
+    // Verifier
+    // ========
+
+    // Construct empty witnesses
+    let verifier_witnesses = empty_witnesses(&zkbin);
+
+    // Create the circuit
+    let circuit = ZkCircuit::new(verifier_witnesses, zkbin);
+
+    let now = std::time::Instant::now();
+    let verifying_key = VerifyingKey::build(k, &circuit);
+    println!("DAO::mint() VerifyingKey built [{} s]", now.elapsed().as_secs_f64());
+    let now = std::time::Instant::now();
+    proof.verify(&verifying_key, &public_inputs).expect("verify DAO::mint() failed!");
+    println!("DAO::mint() proof verify [{} s]", now.elapsed().as_secs_f64());
+
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     // Create DAO mint tx
     let builder = dao_contract::mint::Builder::new(
@@ -387,15 +483,10 @@ pub async fn demo() -> Result<()> {
         dao_keypair.public,
         dao_bulla_blind,
     );
-    let call_data = builder.build();
+    let func_call = builder.build();
 
-    let tx = Transaction {
-        func_calls: vec![FuncCall {
-            contract_id: "DAO".to_string(),
-            func_id: "DAO::mint()".to_string(),
-            call_data,
-        }],
-    };
+    let tx = Transaction { func_calls: vec![func_call] };
+
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
         // functions based off the func_id

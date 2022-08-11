@@ -51,7 +51,7 @@ mod dao_contract {
                 ...
             }
 
-            fn build() -> Box<FuncCallBase> {
+            fn build() -> FuncCall {
                 ...
             }
         }
@@ -66,7 +66,7 @@ mod dao_contract {
 }
 ```
 
-There is a pipeline where the prover runs `Builder::build()` to create the `CallData` object that
+There is a pipeline where the prover runs `Builder::build()` to create the `FuncCall` object that
 is then broadcast to the verifiers through the p2p network.
 
 The `CallData` usually is the public values exported from a ZK proof. Essentially it is the data
