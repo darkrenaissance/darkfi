@@ -190,7 +190,7 @@ mod dao_contract {
             time::Instant,
         };
 
-        use super::super::Transaction;
+        use super::super::{StateRegistry, Transaction};
 
         pub struct Builder {
             dao_proposer_limit: u64,
@@ -222,32 +222,52 @@ mod dao_contract {
 
             /// Consumes self, and produces the actual Tx
             pub fn build(self) -> Box<dyn Any> {
-                Box::new(FuncCall {})
+                Box::new(CallData {})
             }
         }
 
-        pub struct FuncCall {}
+        pub struct CallData {}
 
-        impl FuncCall {}
-
-        pub fn state_transition(tx: Transaction, func_call_index: usize) {
-            let func_call = &tx.func_calls[func_call_index].1;
-            assert_eq!((&*func_call).type_id(), TypeId::of::<FuncCall>());
+        #[derive(Debug, Clone, thiserror::Error)]
+        pub enum Error {
+            #[error("Malformed packet")]
+            MalformedPacket,
         }
+        type Result<T> = std::result::Result<T, Error>;
+
+        pub fn state_transition(
+            states: &StateRegistry,
+            func_call_index: usize,
+            parent_tx: &Transaction,
+        ) -> Result<Update> {
+            let func_call = &parent_tx.func_calls[func_call_index];
+            let call_data = &func_call.call_data;
+
+            assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
+            let func_call = func_call.call_data.downcast_ref::<CallData>();
+            Ok(Update {})
+        }
+
+        pub struct Update {}
+
+        pub fn apply(states: &mut StateRegistry, update: Update) {}
     }
 }
 
-// This will be a hash. Just use a string for the demo.
-type FuncId = String;
-// Use an Any type so plugins can inject their code.
-// An alternative is using a trait with downcast (see MessageSubsystem in net/)
-type GenericFuncCall = Box<dyn Any>;
-
 pub struct Transaction {
-    func_calls: Vec<(FuncId, GenericFuncCall)>,
+    func_calls: Vec<FuncCall>,
 }
 
+// These would normally be a hash or sth
 type ContractId = String;
+type FuncId = String;
+
+struct FuncCall {
+    contract_id: ContractId,
+    func_id: FuncId,
+    call_data: Box<dyn Any>,
+}
+
 type GenericContractState = Box<dyn Any>;
 
 pub struct StateRegistry {
@@ -279,7 +299,7 @@ pub async fn demo() -> Result<()> {
     let dao_approval_ratio = 2;
 
     // Lookup table for smart contract states
-    let mut state_registry = StateRegistry::new();
+    let mut states = StateRegistry::new();
 
     /////////////////////////////////////////////////
 
@@ -311,12 +331,12 @@ pub async fn demo() -> Result<()> {
         faucet_signature_public,
         secrets: vec![keypair.secret],
     });
-    state_registry.register("MoneyContract".to_string(), money_state);
+    states.register("MoneyContract".to_string(), money_state);
 
     /////////////////////////////////////////////////
 
     let dao_state = dao_contract::State::new();
-    state_registry.register("dao_contract".to_string(), dao_state);
+    states.register("dao_contract".to_string(), dao_state);
 
     // For this demo lets create 10 random preexisting DAO bullas
     for _ in 0..10 {
@@ -362,14 +382,23 @@ pub async fn demo() -> Result<()> {
         dao_keypair.public,
         dao_bulla_blind,
     );
-    let func_call = builder.build();
+    let call_data = builder.build();
 
-    let tx = Transaction { func_calls: vec![("dao_contract::mint".to_string(), func_call)] };
-    for (func_id, func_call) in &tx.func_calls {
+    let tx = Transaction {
+        func_calls: vec![FuncCall {
+            contract_id: "DAO".to_string(),
+            func_id: "DAO::mint()".to_string(),
+            call_data,
+        }],
+    };
+    for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
         // functions based off the func_id
-        if func_id == "dao_contract::mint" {
+        if func_call.func_id == "DAO::mint()" {
             debug!("dao_contract::mint::state_transition()");
+
+            let update = dao_contract::mint::state_transition(&states, idx, &tx).unwrap();
+            dao_contract::mint::apply(&mut states, update);
         }
     }
 
