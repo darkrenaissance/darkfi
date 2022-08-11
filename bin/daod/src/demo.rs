@@ -381,10 +381,7 @@ pub async fn demo() -> Result<()> {
 
     // For this demo lets create 10 random preexisting DAO bullas
     for _ in 0..10 {
-        let messages = [pallas::Base::random(&mut OsRng)];
-        let bulla =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init()
-                .hash(messages);
+        let bulla = pallas::Base::random(&mut OsRng);
     }
 
     /////////////////////////////////////////////////
@@ -398,24 +395,24 @@ pub async fn demo() -> Result<()> {
     // !!!!!!! TEST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     let dao_proposer_limit__base = pallas::Base::from(110);
-    //let dao_quorum__base = pallas::Base::from(110);
-    //let dao_approval_ratio__base = pallas::Base::from(2);
+    let dao_quorum__base = pallas::Base::from(110);
+    let dao_approval_ratio__base = pallas::Base::from(2);
 
-    //let dao_pubkey_coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
-    //let dao_public_x = *dao_pubkey_coords.x();
-    //let dao_public_y = *dao_pubkey_coords.x();
+    let dao_pubkey_coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
+    let dao_public_x = *dao_pubkey_coords.x();
+    let dao_public_y = *dao_pubkey_coords.x();
 
     let messages = [
         dao_proposer_limit__base,
-        //dao_quorum__base,
-        //dao_approval_ratio__base,
-        //gdrk_token_id,
-        //dao_public_x,
+        dao_quorum__base,
+        dao_approval_ratio__base,
+        gdrk_token_id,
+        dao_public_x,
         //dao_public_y,
-        //dao_bulla_blind,
+        dao_bulla_blind,
     ];
     let dao_bulla =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<1>, 3, 2>::init()
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
             .hash(messages);
 
     // Lets repeat this in ZK
@@ -433,12 +430,12 @@ pub async fn demo() -> Result<()> {
     // Witness values
     let prover_witnesses = vec![
         Witness::Base(Value::known(dao_proposer_limit__base)),
-        //Witness::Base(Value::known(dao_quorum__base)),
-        //Witness::Base(Value::known(dao_approval_ratio__base)),
-        //Witness::Base(Value::known(gdrk_token_id)),
-        //Witness::Base(Value::known(dao_public_x)),
+        Witness::Base(Value::known(dao_quorum__base)),
+        Witness::Base(Value::known(dao_approval_ratio__base)),
+        Witness::Base(Value::known(gdrk_token_id)),
+        Witness::Base(Value::known(dao_public_x)),
         //Witness::Base(Value::known(dao_public_y)),
-        //Witness::Base(Value::known(dao_bulla_blind)),
+        Witness::Base(Value::known(dao_bulla_blind)),
     ];
 
     // Create the public inputs
