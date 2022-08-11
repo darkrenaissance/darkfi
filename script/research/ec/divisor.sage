@@ -57,7 +57,7 @@ class Divisor:
 
     __rmul__ = __mul__
 
-    def __str__(self):
+    def __repr__(self):
         out = ""
         if not self._div:
             out += "0"
@@ -68,11 +68,16 @@ class Divisor:
                     out += " + "
                 else:
                     out += " - "
+            else:
+                if n < 0:
+                    out += "-"
             assert type_id in (DIV_POINT, DIV_FUNC)
+            if abs(n) > 1:
+                out += f"{abs(n)}"
             if type_id == DIV_POINT:
-                out += f"{abs(n)}" + self._format_point(obj)
+                out += self._format_point(obj)
             elif type_id == DIV_FUNC:
-                out += f"{abs(n)} div({obj})"
+                out += f" div({obj})"
         return out
 
     def _format_point(self, P):
