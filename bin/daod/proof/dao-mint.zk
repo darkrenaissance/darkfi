@@ -1,3 +1,6 @@
+constant "DaoMint" {
+}
+
 contract "DaoMint" {
     Base dao_proposer_limit,
     #Base dao_quorum,
