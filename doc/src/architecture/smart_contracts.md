@@ -69,6 +69,9 @@ mod dao_contract {
 There is a pipeline where the prover runs `Builder::build()` to create the `CallData` object that
 is then broadcast to the verifiers through the p2p network.
 
+The `CallData` usually is the public values exported from a ZK proof. Essentially it is the data
+used by the verifier to check the function call for `DAO::mint()`.
+
 ## Atomic Transactions
 
 Transactions represent several function call invocations that are atomic. If any function call fails,
