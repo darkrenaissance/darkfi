@@ -116,8 +116,11 @@ impl Decodable for Proof {
 mod tests {
     use super::*;
     use crate::{
-        crypto::{keypair::PublicKey, mint_proof::create_mint_proof},
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+        crypto::{
+            keypair::PublicKey,
+            mint_proof::create_mint_proof,
+            types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+        },
         zk::circuit::MintContract,
     };
     use group::ff::Field;

@@ -398,12 +398,12 @@ pub async fn demo() -> Result<()> {
     // !!!!!!! TEST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     let dao_proposer_limit__base = pallas::Base::from(110);
-    let dao_quorum__base = pallas::Base::from(110);
-    let dao_approval_ratio__base = pallas::Base::from(2);
+    //let dao_quorum__base = pallas::Base::from(110);
+    //let dao_approval_ratio__base = pallas::Base::from(2);
 
-    let dao_pubkey_coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
-    let dao_public_x = *dao_pubkey_coords.x();
-    let dao_public_y = *dao_pubkey_coords.x();
+    //let dao_pubkey_coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
+    //let dao_public_x = *dao_pubkey_coords.x();
+    //let dao_public_y = *dao_pubkey_coords.x();
 
     let messages = [
         dao_proposer_limit__base,

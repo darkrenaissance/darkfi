@@ -13,7 +13,7 @@ contract "DaoMint" {
 
 circuit "DaoMint" {
     # BullaMint subroutine
-	bulla = poseidon_hash(
+    bulla = poseidon_hash(
         dao_proposer_limit,
         #dao_quorum,
         #dao_approval_ratio,
