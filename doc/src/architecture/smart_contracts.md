@@ -127,7 +127,7 @@ mod dao_contract {
             // So we know the tx is well formed.
 
             // we can elide this with macro magic
-            assert_eq((&*call_data).type_id(), TypeId::of::<CallData>());
+            assert_eq((&**call_data).type_id(), TypeId::of::<CallData>());
             let func_call = func_call.call_data.downcast_ref::<CallData>();
 
             ...

@@ -35,6 +35,10 @@ use darkfi::{
     zk::circuit::{BurnContract, MintContract},
 };
 
+fn type_of<T>(_: &T) -> &'static str {
+    std::any::type_name::<T>()
+}
+
 /// The state machine, held in memory.
 struct MemoryState {
     /// The entire Merkle tree state
@@ -184,6 +188,7 @@ mod dao_contract {
     /// ```
     pub mod mint {
         use darkfi::crypto::keypair::PublicKey;
+        use log::debug;
         use pasta_curves::pallas;
         use std::{
             any::{Any, TypeId},
@@ -243,7 +248,7 @@ mod dao_contract {
             let func_call = &parent_tx.func_calls[func_call_index];
             let call_data = &func_call.call_data;
 
-            assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
+            assert_eq!((&**call_data).type_id(), TypeId::of::<CallData>());
             let func_call = func_call.call_data.downcast_ref::<CallData>();
             Ok(Update {})
         }
