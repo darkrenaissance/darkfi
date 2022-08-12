@@ -40,8 +40,8 @@ pub mod util;
 #[cfg(feature = "wallet")]
 pub mod wallet;
 
-//#[cfg(feature = "wasm-runtime")]
-//pub mod runtime;
+#[cfg(feature = "wasm-runtime")]
+pub mod runtime;
 
 #[cfg(feature = "zkas")]
 pub mod zkas;
