@@ -153,7 +153,7 @@ impl Transaction {
         Ok(())
     }
 
-    fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    pub fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.clear_inputs.encode_without_signature(&mut s)?;
         len += self.inputs.encode_without_signature(&mut s)?;

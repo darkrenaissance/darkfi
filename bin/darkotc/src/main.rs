@@ -72,10 +72,13 @@ enum Subcmd {
     },
 
     /// Inspect partial swap data from stdin.
-    Inspect,
+    InspectPartial,
 
     /// Join two partial swap data files and build a tx
     Join { data0: String, data1: String },
+
+    /// Sign a transaction given from stdin.
+    SignTx,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
@@ -258,7 +261,7 @@ async fn init_swap(
     Ok(partial_swap_data)
 }
 
-fn inspect(data: &str) -> Result<()> {
+fn inspect_partial(data: &str) -> Result<()> {
     let mut mint_valid = false;
     let mut burn_valid = false;
     let mut mint_value_valid = false;
@@ -403,9 +406,6 @@ fn inspect(data: &str) -> Result<()> {
 }
 
 async fn join(endpoint: Url, d0: PartialSwapData, d1: PartialSwapData) -> Result<Transaction> {
-    let rpc_client = RpcClient::new(endpoint).await?;
-    let rpc = Rpc { rpc_client };
-
     eprintln!("Joining data into a transaction");
 
     let input0 = PartialTransactionInput { burn_proof: d0.burn_proof, revealed: d0.burn_revealed };
@@ -432,7 +432,14 @@ async fn join(endpoint: Url, d0: PartialSwapData, d1: PartialSwapData) -> Result
     let mut signed: bool;
 
     eprint!("Trying to decrypt the note of the first half... ");
-    if let Some(note) = rpc.decrypt_note(&d0.encrypted_note).await? {
+    let rpc_client = RpcClient::new(endpoint.clone()).await?;
+    let rpc = Rpc { rpc_client };
+    let note = match rpc.decrypt_note(&d0.encrypted_note).await {
+        Ok(v) => v,
+        Err(_) => None,
+    };
+
+    if let Some(note) = note {
         eprintln!("{}", fg_green("Success"));
         let signature = try_sign_tx(&note, &unsigned_tx_data[..])?;
         let input = TransactionInput::from_partial(partial_tx.inputs[0].clone(), signature);
@@ -446,21 +453,30 @@ async fn join(endpoint: Url, d0: PartialSwapData, d1: PartialSwapData) -> Result
         signed = false;
     }
 
-    // If we have signed, we shouldn't have to look in the other one.
-    if !signed {
-        eprint!("Trying to decrypt the note of the second half... ");
-        if let Some(note) = rpc.decrypt_note(&d1.encrypted_note).await? {
-            eprintln!("{}", fg_green("Success"));
-            let signature = try_sign_tx(&note, &unsigned_tx_data[..])?;
-            let input = TransactionInput::from_partial(partial_tx.inputs[1].clone(), signature);
-            inputs.push(input);
-            signed = true;
-        } else {
-            eprintln!("{}", fg_red("Failure"));
-            let signature = schnorr::Signature::dummy();
-            let input = TransactionInput::from_partial(partial_tx.inputs[1].clone(), signature);
-            inputs.push(input);
-            signed = false;
+    // If we have signed, we shouldn't have to look in the other one, but we might
+    // be sending to ourself for some reason.
+    eprint!("Trying to decrypt the note of the second half... ");
+    let rpc_client = RpcClient::new(endpoint).await?;
+    let rpc = Rpc { rpc_client };
+    let note = match rpc.decrypt_note(&d1.encrypted_note).await {
+        Ok(v) => v,
+        Err(_) => None,
+    };
+
+    if let Some(note) = note {
+        eprintln!("{}", fg_green("Success"));
+        let signature = try_sign_tx(&note, &unsigned_tx_data[..])?;
+        let input = TransactionInput::from_partial(partial_tx.inputs[1].clone(), signature);
+        inputs.push(input);
+        signed = true;
+    } else {
+        eprintln!("{}", fg_red("Failure"));
+        let signature = schnorr::Signature::dummy();
+        let input = TransactionInput::from_partial(partial_tx.inputs[1].clone(), signature);
+        inputs.push(input);
+        if !signed {
+            eprintln!("Error: Failed to sign transaction!");
+            exit(1);
         }
     }
 
@@ -473,6 +489,67 @@ async fn join(endpoint: Url, d0: PartialSwapData, d1: PartialSwapData) -> Result
     Ok(tx)
 }
 
+async fn sign_tx(endpoint: Url, data: &str) -> Result<Transaction> {
+    eprintln!("Trying to sign transaction");
+    let mut tx: Transaction = deserialize(&bs58::decode(data).into_vec()?)?;
+
+    let mut input_idxs = vec![];
+    let mut signature = schnorr::Signature::dummy();
+
+    // Find dummy signatures to fill. We assume we're using the same
+    // signature everywhere.
+    eprintln!("Looking for dummy signatures...");
+    for (i, input) in tx.inputs.iter().enumerate() {
+        if input.signature == schnorr::Signature::dummy() {
+            eprintln!("Found dummy signature in input {}", i);
+            input_idxs.push(i);
+        }
+    }
+
+    if input_idxs.is_empty() {
+        eprintln!("Error: Did not find any dummy signatures in the transaction.");
+        exit(1);
+    }
+
+    // Find a note to decrypt that holds our secret key.
+    let mut found_secret = false;
+    for (i, output) in tx.outputs.iter().enumerate() {
+        // TODO: FIXME: Consider not closing the RPC on failure.
+        let rpc_client = RpcClient::new(endpoint.clone()).await?;
+        let rpc = Rpc { rpc_client };
+
+        let note = match rpc.decrypt_note(&output.enc_note).await {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        if let Some(note) = note {
+            eprintln!("Successfully decrypted note in output {}", i);
+            eprintln!("Creating signature...");
+            let mut unsigned_tx_data = vec![];
+            let _ = tx.encode_without_signature(&mut unsigned_tx_data)?;
+
+            signature = try_sign_tx(&note, &unsigned_tx_data[..])?;
+            found_secret = true;
+            break
+        }
+
+        eprintln!("Failed to find a note to decrypt. Signing failed.");
+        exit(1);
+    }
+
+    if !found_secret {
+        eprintln!("Error: Did not manage to sign transaction. Couldn't find any secret keys.");
+        exit(1);
+    }
+
+    for i in input_idxs {
+        tx.inputs[i].signature = signature.clone();
+    }
+
+    Ok(tx)
+}
+
 fn try_sign_tx(note: &Note, tx_data: &[u8]) -> Result<schnorr::Signature> {
     if note.memo.len() != 32 {
         eprintln!("Error: The note memo is not 32 bytes");
@@ -482,7 +559,7 @@ fn try_sign_tx(note: &Note, tx_data: &[u8]) -> Result<schnorr::Signature> {
     let secret = match SecretKey::from_bytes(note.memo.clone().try_into().unwrap()) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("Did not manage to coerce the bytes into SecretKey: {}", e);
+            eprintln!("Did not manage to cast bytes into SecretKey: {}", e);
             exit(1);
         }
     };
@@ -501,21 +578,37 @@ async fn main() -> Result<()> {
             let token_pair = parse_token_pair(&token_pair)?;
             let value_pair = parse_value_pair(&value_pair)?;
             let swap_data = init_swap(args.endpoint, token_pair, value_pair).await?;
+
             println!("{}", bs58::encode(serialize(&swap_data)).into_string());
             Ok(())
         }
-        Subcmd::Inspect => {
+        Subcmd::InspectPartial => {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
-            inspect(&buf.trim())
+
+            inspect_partial(&buf.trim())
         }
         Subcmd::Join { data0, data1 } => {
             let d0 = std::fs::read_to_string(data0)?;
             let d1 = std::fs::read_to_string(data1)?;
-            let d0 = deserialize(&bs58::decode(&d0).into_vec()?)?;
-            let d1 = deserialize(&bs58::decode(&d1).into_vec()?)?;
+
+            let d0 = deserialize(&bs58::decode(&d0.trim()).into_vec()?)?;
+            let d1 = deserialize(&bs58::decode(&d1.trim()).into_vec()?)?;
+
             let tx = join(args.endpoint, d0, d1).await?;
+
             println!("{}", bs58::encode(&serialize(&tx)).into_string());
+            eprintln!("Successfully signed transaction");
+            Ok(())
+        }
+        Subcmd::SignTx => {
+            let mut buf = String::new();
+            stdin().read_to_string(&mut buf)?;
+
+            let tx = sign_tx(args.endpoint, &buf.trim()).await?;
+
+            println!("{}", bs58::encode(&serialize(&tx)).into_string());
+            eprintln!("Successfully signed transaction");
             Ok(())
         }
     }

@@ -157,7 +157,7 @@ impl Rpc {
     pub async fn decrypt_note(&self, enc_note: &EncryptedNote) -> Result<Option<Note>> {
         let encoded = bs58::encode(&serialize(enc_note)).into_string();
         let req = JsonRequest::new("wallet.decrypt_note", json!([encoded]));
-        let rep = self.rpc_client.request(req).await?;
+        let rep = self.rpc_client.oneshot_request(req).await?;
 
         if !rep.is_string() {
             eprintln!("Error: decrypt_note() RPC call returned invalid data");
