@@ -185,6 +185,10 @@ mod dao_contract {
         pub fn new() -> Box<dyn Any> {
             Box::new(Self { dao_bullas: Vec::new() })
         }
+
+        pub fn add_bulla(&mut self, bulla: DaoBulla) {
+            self.dao_bullas.push(bulla);
+        }
     }
 
     /// This is an anonymous contract function that mutates the internal DAO state.
@@ -375,7 +379,7 @@ mod dao_contract {
             assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
             let call_data = call_data.downcast_ref::<CallData>();
 
-            // TODO: should not call unwrap! never use unwrap in contracts
+            // This will be inside wasm so unwrap is fine.
             let call_data = call_data.unwrap();
 
             // Code goes here
@@ -389,7 +393,12 @@ mod dao_contract {
 
         pub fn apply(states: &mut StateRegistry, update: Update) {
             // Lookup dao_contract state from registry
+            ////// FIXME /////////
+            let state = states.states.get_mut(&"dao_contract".to_string()).unwrap();
+            let state = state.downcast_mut::<super::State>().unwrap();
+            //////////////////////
             // Add dao_bulla to state.dao_bullas
+            state.add_bulla(update.dao_bulla);
         }
     }
 }
@@ -454,7 +463,7 @@ pub trait CallDataBase {
 type GenericContractState = Box<dyn Any>;
 
 pub struct StateRegistry {
-    states: HashMap<ContractId, GenericContractState>,
+    pub states: HashMap<ContractId, GenericContractState>,
 }
 
 impl StateRegistry {
@@ -466,11 +475,28 @@ impl StateRegistry {
         self.states.insert(contract_id, state);
     }
 
-    // Lookup State
-    fn lookup<S>(&self, contract_id: ContractId) -> Option<&S> {
-        None
+    /*
+    fn lookup<'a, S>(&'a mut self, contract_id: &ContractId) -> Option<StateRefWrapper<'a, S>> {
+        match self.states.get_mut(contract_id) {
+            Some(state) => {
+                let ptr = state.downcast_mut::<S>();
+                match ptr {
+                    Some(ptr) => Some(StateRefWrapper { _mut: state, ptr }),
+                    None => None,
+                }
+            }
+            None => None,
+        }
     }
+    */
 }
+
+/*
+struct StateRefWrapper<'a, S> {
+    _mut: &'a mut Box<dyn Any>,
+    ptr: &'a mut S,
+}
+*/
 
 pub async fn demo() -> Result<()> {
     // Money parameters
