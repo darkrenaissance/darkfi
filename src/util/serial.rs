@@ -1,7 +1,7 @@
 use fxhash::FxHashMap;
 use std::{
     borrow::Cow,
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     io,
     io::{Cursor, Read, Write},
     mem,
@@ -686,6 +686,31 @@ impl<T: Decodable + std::cmp::Eq + std::hash::Hash, U: Decodable> Decodable for 
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = FxHashMap::default();
+        for _ in 0..len {
+            let key: T = Decodable::decode(&mut d)?;
+            let entry: U = Decodable::decode(&mut d)?;
+            ret.insert(key, entry);
+        }
+        Ok(ret)
+    }
+}
+
+impl<T: Encodable, U: Encodable> Encodable for BTreeMap<T, U> {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(&mut s)?;
+        for c in self.iter() {
+            len += c.0.encode(&mut s)?;
+            len += c.1.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+
+impl<T: Decodable + std::cmp::Ord, U: Decodable> Decodable for BTreeMap<T, U> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let len = VarInt::decode(&mut d)?.0;
+        let mut ret = BTreeMap::new();
         for _ in 0..len {
             let key: T = Decodable::decode(&mut d)?;
             let entry: U = Decodable::decode(&mut d)?;
