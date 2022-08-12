@@ -12,6 +12,9 @@ contract "DaoMint" {
 }
 
 circuit "DaoMint" {
+    # This circuit is not that interesting.
+    # It just states the bulla is a hash of 8 values.
+
     # BullaMint subroutine
     bulla = poseidon_hash(
         dao_proposer_limit,
