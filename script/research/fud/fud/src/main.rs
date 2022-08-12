@@ -196,6 +196,11 @@ impl Fud {
             let records = lock.map.clone();
             let mut entries_hashes = HashSet::new();
 
+            // Sync lookup map with network
+            if let Err(e) = lock.sync_lookup_map().await {
+                error!("Failed to sync lookup map: {}", e);
+            }
+
             // We iterate files for new records
             for entry in entries {
                 let e = entry.unwrap();

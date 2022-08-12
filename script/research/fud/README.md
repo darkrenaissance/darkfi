@@ -56,6 +56,12 @@ Run fud as follows:
 13:23:07 [INFO] Caught termination signal, cleaning up and exiting...
 ```
 
+After daemon has been initialized, execute network syncing as follows:
+```
+% fu sync
+13:25:46 [INFO] Daemon synced successfully!
+```
+
 fu
 =======
 

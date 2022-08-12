@@ -3,7 +3,7 @@ use async_std::sync::{Arc, RwLock};
 use chrono::Utc;
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
-use log::{debug, error};
+use log::{debug, error, warn};
 use rand::Rng;
 use std::{collections::HashSet, time::Duration};
 
@@ -16,7 +16,7 @@ use crate::{
 };
 
 use super::{
-    messages::{KeyRequest, KeyResponse, LookupRequest},
+    messages::{KeyRequest, KeyResponse, LookupMapRequest, LookupMapResponse, LookupRequest},
     protocol::Protocol,
 };
 
@@ -215,6 +215,43 @@ impl Dht {
             return Err(e)
         }
 
+        Ok(())
+    }
+
+    /// Auxilary function to sync lookup map with network
+    pub async fn sync_lookup_map(&mut self) -> Result<()> {
+        debug!("Starting lookup map sync...");
+
+        // Using len here because is_empty() uses unstable library feature
+        // called 'exact_size_is_empty'.
+        if self.p2p.channels().lock().await.values().len() != 0 {
+            // Currently we will just use the last channel
+            let channel = self.p2p.channels().lock().await.values().last().unwrap().clone();
+
+            // Communication setup
+            let msg_subsystem = channel.get_message_subsystem();
+            msg_subsystem.add_dispatch::<LookupMapResponse>().await;
+            let response_sub = channel.subscribe_msg::<LookupMapResponse>().await?;
+
+            // Node creates a `LookupMapRequest` and sends it
+            let order = LookupMapRequest::new(self.id);
+            channel.send(order).await?;
+
+            // Node stores response data.
+            let resp = response_sub.receive().await?;
+
+            // Store retrieved records
+            debug!("Processing received records");
+            for (k, v) in &resp.lookup {
+                for node in v {
+                    self.lookup_insert(*k, *node)?;
+                }
+            }
+        } else {
+            warn!("Node is not connected to other nodes");
+        }
+
+        debug!("Lookup map synced!");
         Ok(())
     }
 }
