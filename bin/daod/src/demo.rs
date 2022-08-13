@@ -393,10 +393,7 @@ mod dao_contract {
 
         pub fn apply(states: &mut StateRegistry, update: Update) {
             // Lookup dao_contract state from registry
-            ////// FIXME /////////
-            let state = states.states.get_mut(&"dao_contract".to_string()).unwrap();
-            let state = state.downcast_mut::<super::State>().unwrap();
-            //////////////////////
+            let state = states.lookup::<super::State>(&"foo_contract".to_string()).unwrap();
             // Add dao_bulla to state.dao_bullas
             state.add_bulla(update.dao_bulla);
         }
@@ -475,28 +472,10 @@ impl StateRegistry {
         self.states.insert(contract_id, state);
     }
 
-    /*
-    fn lookup<'a, S>(&'a mut self, contract_id: &ContractId) -> Option<StateRefWrapper<'a, S>> {
-        match self.states.get_mut(contract_id) {
-            Some(state) => {
-                let ptr = state.downcast_mut::<S>();
-                match ptr {
-                    Some(ptr) => Some(StateRefWrapper { _mut: state, ptr }),
-                    None => None,
-                }
-            }
-            None => None,
-        }
+    fn lookup<'a, S: 'static>(&'a mut self, contract_id: &ContractId) -> Option<&'a mut S> {
+        self.states.get_mut(contract_id).and_then(|state| state.downcast_mut())
     }
-    */
 }
-
-/*
-struct StateRefWrapper<'a, S> {
-    _mut: &'a mut Box<dyn Any>,
-    ptr: &'a mut S,
-}
-*/
 
 pub async fn demo() -> Result<()> {
     // Money parameters
