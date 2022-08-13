@@ -222,30 +222,38 @@ impl Dht {
     pub async fn sync_lookup_map(&mut self) -> Result<()> {
         debug!("Starting lookup map sync...");
 
+        let channels_map = self.p2p.channels().lock().await.clone();
+        let values = channels_map.values();
         // Using len here because is_empty() uses unstable library feature
         // called 'exact_size_is_empty'.
-        if self.p2p.channels().lock().await.values().len() != 0 {
-            // Currently we will just use the last channel
-            let channel = self.p2p.channels().lock().await.values().last().unwrap().clone();
+        if values.len() != 0 {
+            // Node iterates the channel peers to ask for their lookup map
+            for channel in values {
+                // Communication setup
+                let msg_subsystem = channel.get_message_subsystem();
+                msg_subsystem.add_dispatch::<LookupMapResponse>().await;
+                let response_sub = channel.subscribe_msg::<LookupMapResponse>().await?;
 
-            // Communication setup
-            let msg_subsystem = channel.get_message_subsystem();
-            msg_subsystem.add_dispatch::<LookupMapResponse>().await;
-            let response_sub = channel.subscribe_msg::<LookupMapResponse>().await?;
+                // Node creates a `LookupMapRequest` and sends it
+                let order = LookupMapRequest::new(self.id);
+                channel.send(order).await?;
 
-            // Node creates a `LookupMapRequest` and sends it
-            let order = LookupMapRequest::new(self.id);
-            channel.send(order).await?;
-
-            // Node stores response data.
-            let resp = response_sub.receive().await?;
-
-            // Store retrieved records
-            debug!("Processing received records");
-            for (k, v) in &resp.lookup {
-                for node in v {
-                    self.lookup_insert(*k, *node)?;
+                // Node stores response data.
+                let resp = response_sub.receive().await?;
+                if resp.lookup.is_empty() {
+                    warn!("Retrieved empty lookup map from an unsynced node, retrying...");
+                    continue
                 }
+
+                // Store retrieved records
+                debug!("Processing received records");
+                for (k, v) in &resp.lookup {
+                    for node in v {
+                        self.lookup_insert(*k, *node)?;
+                    }
+                }
+
+                break
             }
         } else {
             warn!("Node is not connected to other nodes");
