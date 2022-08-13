@@ -16,7 +16,7 @@ use std::{
     time::Instant,
 };
 
-use crate::money;
+use crate::money_contract;
 
 use darkfi::{
     crypto::{
