@@ -51,12 +51,6 @@ struct MemoryState {
     merkle_roots: Vec<MerkleNode>,
     /// Nullifiers prevent double spending
     nullifiers: Vec<Nullifier>,
-    /// All received coins
-    // NOTE: We need maybe a flag to keep track of which ones are
-    // spent. Maybe the spend field links to a tx hash:input index.
-    // We should also keep track of the tx hash:output index where
-    // this coin was received.
-    own_coins: OwnCoins,
     /// Verifying key for the mint zk circuit.
     mint_vk: VerifyingKey,
     /// Verifying key for the burn zk circuit.
@@ -67,9 +61,6 @@ struct MemoryState {
 
     /// Public key of the faucet
     faucet_signature_public: PublicKey,
-
-    /// List of all our secret keys
-    secrets: Vec<SecretKey>,
 }
 
 impl ProgramState for MemoryState {
@@ -111,29 +102,7 @@ impl MemoryState {
 
             // Keep track of all Merkle roots that have existed
             self.merkle_roots.push(self.tree.root(0).unwrap());
-
-            // If it's our own coin, witness it and append to the vector.
-            if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
-                let leaf_position = self.tree.witness().unwrap();
-                let nullifier = Nullifier::new(secret, note.serial);
-                let own_coin = OwnCoin { coin, note, secret, nullifier, leaf_position };
-                self.own_coins.push(own_coin);
-            }
         }
-    }
-
-    fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, SecretKey)> {
-        // Loop through all our secret keys...
-        for secret in &self.secrets {
-            // .. attempt to decrypt the note ...
-            if let Ok(note) = ciphertext.decrypt(secret) {
-                // ... and return the decrypted note for this coin.
-                return Some((note, *secret))
-            }
-        }
-
-        // We weren't able to decrypt the note with any of our keys.
-        None
     }
 }
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -393,7 +362,7 @@ mod dao_contract {
 
         pub fn apply(states: &mut StateRegistry, update: Update) {
             // Lookup dao_contract state from registry
-            let state = states.lookup::<super::State>(&"foo_contract".to_string()).unwrap();
+            let state = states.lookup::<super::State>(&"dao_contract".to_string()).unwrap();
             // Add dao_bulla to state.dao_bullas
             state.add_bulla(update.dao_bulla);
         }
@@ -503,35 +472,29 @@ pub async fn demo() -> Result<()> {
     /////////////////////////////////////////////////
 
     /*
-        // State for money contracts
-        let cashier_signature_secret = SecretKey::random(&mut OsRng);
-        let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
-        let faucet_signature_secret = SecretKey::random(&mut OsRng);
-        let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
+    // State for money contracts
+    let cashier_signature_secret = SecretKey::random(&mut OsRng);
+    let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
+    let faucet_signature_secret = SecretKey::random(&mut OsRng);
+    let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
 
-        let start = Instant::now();
-        let mint_vk = VerifyingKey::build(11, &MintContract::default());
-        debug!("Mint VK: [{:?}]", start.elapsed());
-        let start = Instant::now();
-        let burn_vk = VerifyingKey::build(11, &BurnContract::default());
-        debug!("Burn VK: [{:?}]", start.elapsed());
+    let start = Instant::now();
+    let mint_vk = VerifyingKey::build(11, &MintContract::default());
+    debug!("Mint VK: [{:?}]", start.elapsed());
+    let start = Instant::now();
+    let burn_vk = VerifyingKey::build(11, &BurnContract::default());
+    debug!("Burn VK: [{:?}]", start.elapsed());
 
-        // TODO: this should not be here.
-        // We should separate wallet functionality from the State completely
-        let keypair = Keypair::random(&mut OsRng);
-
-        let money_state = Box::new(MemoryState {
-            tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
-            merkle_roots: vec![],
-            nullifiers: vec![],
-            own_coins: vec![],
-            mint_vk,
-            burn_vk,
-            cashier_signature_public,
-            faucet_signature_public,
-            secrets: vec![keypair.secret],
-        });
-        states.register("MoneyContract".to_string(), money_state);
+    let money_state = Box::new(MemoryState {
+        tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
+        merkle_roots: vec![],
+        nullifiers: vec![],
+        mint_vk,
+        burn_vk,
+        cashier_signature_public,
+        faucet_signature_public,
+    });
+    states.register("money_contract".to_string(), money_state);
     */
 
     /////////////////////////////////////////////////
