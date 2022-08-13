@@ -15,6 +15,7 @@ use darkfi::{
 };
 
 mod demo;
+mod money;
 use crate::demo::demo;
 
 async fn _start() -> Result<()> {

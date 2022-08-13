@@ -16,6 +16,8 @@ use std::{
     time::Instant,
 };
 
+use crate::money;
+
 use darkfi::{
     crypto::{
         constants::MERKLE_DEPTH,
