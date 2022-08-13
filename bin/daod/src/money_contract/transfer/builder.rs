@@ -5,6 +5,7 @@ use super::{
     partial::{PartialTransaction, PartialTransactionClearInput, PartialTransactionInput},
     Transaction, TransactionClearInput, TransactionInput, TransactionOutput,
 };
+
 use darkfi::{
     crypto::{
         burn_proof::create_burn_proof,
