@@ -24,13 +24,8 @@ pub use proof::Proof;
 //pub mod lead_proof;
 //pub mod leadcoin;
 
-use crate::{
-    impl_vec,
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Result,
-};
+use crate::util::serial::{SerialDecodable, SerialEncodable};
 use keypair::SecretKey;
-use std::io;
 
 #[derive(Clone, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct OwnCoin {
@@ -42,4 +37,3 @@ pub struct OwnCoin {
 }
 
 pub type OwnCoins = Vec<OwnCoin>;
-impl_vec!(OwnCoin);

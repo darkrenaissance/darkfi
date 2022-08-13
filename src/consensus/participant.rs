@@ -1,10 +1,7 @@
-use std::io;
-
 use crate::{
     crypto::{address::Address, keypair::PublicKey},
-    impl_vec, net,
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Result,
+    net,
+    util::serial::{SerialDecodable, SerialEncodable},
 };
 
 /// This struct represents a tuple of the form:
@@ -34,5 +31,3 @@ impl net::Message for Participant {
         "participant"
     }
 }
-
-impl_vec!(Participant);

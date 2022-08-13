@@ -1,5 +1,3 @@
-use std::io;
-
 use super::TransactionOutput;
 use crate::{
     crypto::{
@@ -7,9 +5,7 @@ use crate::{
         types::{DrkTokenId, DrkValueBlind},
         BurnRevealedValues, Proof,
     },
-    impl_vec,
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Result,
+    util::serial::{SerialDecodable, SerialEncodable},
 };
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
@@ -33,6 +29,3 @@ pub struct PartialTransactionInput {
     pub burn_proof: Proof,
     pub revealed: BurnRevealedValues,
 }
-
-impl_vec!(PartialTransactionClearInput);
-impl_vec!(PartialTransactionInput);

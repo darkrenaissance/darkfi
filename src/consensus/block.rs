@@ -1,4 +1,4 @@
-use std::{fmt, io};
+use std::fmt;
 
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
@@ -12,13 +12,12 @@ use crate::{
         address::Address, constants::MERKLE_DEPTH, keypair::Keypair, merkle_node::MerkleNode,
         schnorr::SchnorrSecret,
     },
-    impl_vec, net,
+    net,
     tx::Transaction,
     util::{
-        serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+        serial::{serialize, SerialDecodable, SerialEncodable},
         time::Timestamp,
     },
-    Result,
 };
 
 /// This struct represents a tuple of the form (version, state, epoch, slot, timestamp, merkle_root).
@@ -146,8 +145,6 @@ impl net::Message for BlockInfo {
     }
 }
 
-impl_vec!(BlockInfo);
-
 /// Auxiliary structure used for blockchain syncing
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockResponse {
@@ -207,8 +204,6 @@ impl net::Message for BlockProposal {
         "proposal"
     }
 }
-
-impl_vec!(BlockProposal);
 
 impl From<BlockProposal> for BlockInfo {
     fn from(block: BlockProposal) -> BlockInfo {
@@ -279,5 +274,3 @@ impl ProposalChain {
         true
     }
 }
-
-impl_vec!(ProposalChain);

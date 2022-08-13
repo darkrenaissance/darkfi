@@ -3,8 +3,7 @@ use std::io;
 use fxhash::FxHashMap;
 
 use crate::{
-    impl_vec,
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
 
@@ -191,5 +190,3 @@ impl Decodable for NetMsgMethod {
         })
     }
 }
-
-impl_vec!(Log);

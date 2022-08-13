@@ -16,8 +16,7 @@ use crate::{
         util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
-    impl_vec,
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::serial::{Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result, VerifyFailed, VerifyResult,
 };
 
@@ -240,10 +239,5 @@ macro_rules! impl_vec_without_signature {
         }
     };
 }
-
 impl_vec_without_signature!(TransactionClearInput);
 impl_vec_without_signature!(TransactionInput);
-impl_vec!(TransactionClearInput);
-impl_vec!(TransactionInput);
-impl_vec!(TransactionOutput);
-impl_vec!(Transaction);
