@@ -2,8 +2,8 @@ use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
 
 use super::{
-    partial::{PartialTransaction, PartialTransactionClearInput, PartialTransactionInput},
-    Transaction, TransactionClearInput, TransactionInput, TransactionOutput,
+    partial::{Partial, PartialClearInput, PartialInput},
+    ClearInput, FuncCall, Input, Output,
 };
 
 use darkfi::{
@@ -21,34 +21,34 @@ use darkfi::{
     Result,
 };
 
-pub struct TransactionBuilder {
-    pub clear_inputs: Vec<TransactionBuilderClearInputInfo>,
-    pub inputs: Vec<TransactionBuilderInputInfo>,
-    pub outputs: Vec<TransactionBuilderOutputInfo>,
+pub struct Builder {
+    pub clear_inputs: Vec<BuilderClearInputInfo>,
+    pub inputs: Vec<BuilderInputInfo>,
+    pub outputs: Vec<BuilderOutputInfo>,
 }
 
-pub struct TransactionBuilderClearInputInfo {
+pub struct BuilderClearInputInfo {
     pub value: u64,
     pub token_id: DrkTokenId,
     pub signature_secret: SecretKey,
 }
 
-pub struct TransactionBuilderInputInfo {
+pub struct BuilderInputInfo {
     pub leaf_position: incrementalmerkletree::Position,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
     pub note: Note,
 }
 
-pub struct TransactionBuilderOutputInfo {
+pub struct BuilderOutputInfo {
     pub value: u64,
     pub token_id: DrkTokenId,
     pub public: PublicKey,
 }
 
-impl TransactionBuilder {
+impl Builder {
     fn compute_remainder_blind(
-        clear_inputs: &[PartialTransactionClearInput],
+        clear_inputs: &[PartialClearInput],
         input_blinds: &[DrkValueBlind],
         output_blinds: &[DrkValueBlind],
     ) -> DrkValueBlind {
@@ -69,7 +69,7 @@ impl TransactionBuilder {
         total
     }
 
-    pub fn build(self, mint_pk: &ProvingKey, burn_pk: &ProvingKey) -> Result<Transaction> {
+    pub fn build(self, mint_pk: &ProvingKey, burn_pk: &ProvingKey) -> Result<FuncCall> {
         assert!(self.clear_inputs.len() + self.inputs.len() > 0);
 
         let mut clear_inputs = vec![];
@@ -78,7 +78,7 @@ impl TransactionBuilder {
             let signature_public = PublicKey::from_secret(input.signature_secret);
             let value_blind = DrkValueBlind::random(&mut OsRng);
 
-            let clear_input = PartialTransactionClearInput {
+            let clear_input = PartialClearInput {
                 value: input.value,
                 token_id: input.token_id,
                 value_blind,
@@ -114,7 +114,7 @@ impl TransactionBuilder {
             // First we make the tx then sign after
             signature_secrets.push(signature_secret);
 
-            let input = PartialTransactionInput { burn_proof: proof, revealed };
+            let input = PartialInput { burn_proof: proof, revealed };
             inputs.push(input);
         }
 
@@ -158,11 +158,11 @@ impl TransactionBuilder {
 
             let encrypted_note = note.encrypt(&output.public)?;
 
-            let output = TransactionOutput { mint_proof, revealed, enc_note: encrypted_note };
+            let output = Output { mint_proof, revealed, enc_note: encrypted_note };
             outputs.push(output);
         }
 
-        let partial_tx = PartialTransaction { clear_inputs, inputs, outputs };
+        let partial_tx = Partial { clear_inputs, inputs, outputs };
 
         let mut unsigned_tx_data = vec![];
         partial_tx.encode(&mut unsigned_tx_data)?;
@@ -171,7 +171,7 @@ impl TransactionBuilder {
         for (input, info) in partial_tx.clear_inputs.into_iter().zip(self.clear_inputs) {
             let secret = info.signature_secret;
             let signature = secret.sign(&unsigned_tx_data[..]);
-            let input = TransactionClearInput::from_partial(input, signature);
+            let input = ClearInput::from_partial(input, signature);
             clear_inputs.push(input);
         }
 
@@ -180,10 +180,10 @@ impl TransactionBuilder {
             partial_tx.inputs.into_iter().zip(signature_secrets.into_iter())
         {
             let signature = signature_secret.sign(&unsigned_tx_data[..]);
-            let input = TransactionInput::from_partial(input, signature);
+            let input = Input::from_partial(input, signature);
             inputs.push(input);
         }
 
-        Ok(Transaction { clear_inputs, inputs, outputs: partial_tx.outputs })
+        Ok(FuncCall { clear_inputs, inputs, outputs: partial_tx.outputs })
     }
 }

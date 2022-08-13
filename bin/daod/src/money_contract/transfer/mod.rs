@@ -25,18 +25,18 @@ pub mod partial;
 
 /// A DarkFi transaction
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct Transaction {
+pub struct FuncCall {
     /// Clear inputs
-    pub clear_inputs: Vec<TransactionClearInput>,
+    pub clear_inputs: Vec<ClearInput>,
     /// Anonymous inputs
-    pub inputs: Vec<TransactionInput>,
+    pub inputs: Vec<Input>,
     /// Anonymous outputs
-    pub outputs: Vec<TransactionOutput>,
+    pub outputs: Vec<Output>,
 }
 
 /// A transaction's clear input
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct TransactionClearInput {
+pub struct ClearInput {
     /// Input's value (amount)
     pub value: u64,
     /// Input's token ID
@@ -47,13 +47,13 @@ pub struct TransactionClearInput {
     pub token_blind: DrkValueBlind,
     /// Public key for the signature
     pub signature_public: PublicKey,
-    /// Transaction signature
+    ///  signature
     pub signature: schnorr::Signature,
 }
 
 /// A transaction's anonymous input
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct TransactionInput {
+pub struct Input {
     /// Zero-knowledge proof for the input
     pub burn_proof: Proof,
     /// Public inputs for the zero-knowledge proof
@@ -64,7 +64,7 @@ pub struct TransactionInput {
 
 /// A transaction's anonymous output
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct TransactionOutput {
+pub struct Output {
     /// Zero-knowledge proof for the output
     pub mint_proof: Proof,
     /// Public inputs for the zero-knowledge proof
@@ -73,10 +73,10 @@ pub struct TransactionOutput {
     pub enc_note: EncryptedNote,
 }
 
-impl Transaction {
+impl FuncCall {
     /// Verify the transaction
     pub fn verify(&self, mint_vk: &VerifyingKey, burn_vk: &VerifyingKey) -> VerifyResult<()> {
-        // Transaction must have minimum 1 clear or anon input, and 1 output
+        //  must have minimum 1 clear or anon input, and 1 output
         if self.clear_inputs.len() + self.inputs.len() == 0 {
             error!("tx::verify(): Missing inputs");
             return Err(VerifyFailed::LackingInputs)
@@ -178,11 +178,8 @@ impl Transaction {
     }
 }
 
-impl TransactionClearInput {
-    fn from_partial(
-        partial: partial::PartialTransactionClearInput,
-        signature: schnorr::Signature,
-    ) -> Self {
+impl ClearInput {
+    fn from_partial(partial: partial::PartialClearInput, signature: schnorr::Signature) -> Self {
         Self {
             value: partial.value,
             token_id: partial.token_id,
@@ -204,11 +201,8 @@ impl TransactionClearInput {
     }
 }
 
-impl TransactionInput {
-    pub fn from_partial(
-        partial: partial::PartialTransactionInput,
-        signature: schnorr::Signature,
-    ) -> Self {
+impl Input {
+    pub fn from_partial(partial: partial::PartialInput, signature: schnorr::Signature) -> Self {
         Self { burn_proof: partial.burn_proof, revealed: partial.revealed, signature }
     }
 
@@ -239,5 +233,5 @@ macro_rules! impl_vec_without_signature {
         }
     };
 }
-impl_vec_without_signature!(TransactionClearInput);
-impl_vec_without_signature!(TransactionInput);
+impl_vec_without_signature!(ClearInput);
+impl_vec_without_signature!(Input);

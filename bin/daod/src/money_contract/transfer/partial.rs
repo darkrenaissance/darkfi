@@ -1,4 +1,4 @@
-use super::TransactionOutput;
+use super::Output;
 use darkfi::{
     crypto::{
         keypair::PublicKey,
@@ -9,14 +9,14 @@ use darkfi::{
 };
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct PartialTransaction {
-    pub clear_inputs: Vec<PartialTransactionClearInput>,
-    pub inputs: Vec<PartialTransactionInput>,
-    pub outputs: Vec<TransactionOutput>,
+pub struct Partial {
+    pub clear_inputs: Vec<PartialClearInput>,
+    pub inputs: Vec<PartialInput>,
+    pub outputs: Vec<Output>,
 }
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct PartialTransactionClearInput {
+pub struct PartialClearInput {
     pub value: u64,
     pub token_id: DrkTokenId,
     pub value_blind: DrkValueBlind,
@@ -25,7 +25,7 @@ pub struct PartialTransactionClearInput {
 }
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct PartialTransactionInput {
+pub struct PartialInput {
     pub burn_proof: Proof,
     pub revealed: BurnRevealedValues,
 }
