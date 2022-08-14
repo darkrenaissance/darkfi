@@ -3,7 +3,7 @@ use std::time::Instant;
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
 use log::debug;
-use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use rand::rngs::OsRng;
 
 use crate::{
@@ -11,7 +11,10 @@ use crate::{
         coin::Coin,
         keypair::PublicKey,
         proof::{Proof, ProvingKey, VerifyingKey},
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
+        types::{
+            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind,
+            DrkValueCommit,
+        },
         util::{pedersen_commitment_base, pedersen_commitment_u64},
     },
     util::serial::{SerialDecodable, SerialEncodable},
@@ -50,7 +53,7 @@ impl MintRevealedValues {
         MintRevealedValues { value_commit, token_commit, coin: Coin(coin) }
     }
 
-    pub fn make_outputs(&self) -> [pallas::Base; 5] {
+    pub fn make_outputs(&self) -> Vec<DrkCircuitField> {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
 

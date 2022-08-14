@@ -87,7 +87,7 @@ impl BurnRevealedValues {
         }
     }
 
-    pub fn make_outputs(&self) -> [DrkCircuitField; 8] {
+    pub fn make_outputs(&self) -> Vec<DrkCircuitField> {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
         let merkle_root = self.merkle_root.0;
