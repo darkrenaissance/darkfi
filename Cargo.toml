@@ -323,3 +323,8 @@ required-features = ["node"]
 name = "lessthan"
 path = "example/lessthan.rs"
 required-features = ["node"]
+
+[[example]]
+name = "crypsinous"
+path = "example/crypsinous.rs"
+required-features = ["node"]

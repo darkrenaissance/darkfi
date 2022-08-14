@@ -73,7 +73,7 @@ impl Clock {
                 Ok(t)
             },
             e => {
-                println!("ntp request failed: {}", e);
+                debug!("ntp request failed: {}", e);
                 Err(Error::ClockOutOfSync(e.to_string()))
             }
     }
@@ -100,7 +100,7 @@ impl Clock {
     /// return true if the clock is at the begining (before 2/3 of the slot).
     async fn ticking(&self) -> bool {
         let (abs, rel) =  self.tick_time().await;
-        println!("abs ticks: {}, rel ticks: {}", abs, rel);
+        debug!("abs ticks: {}, rel ticks: {}", abs, rel);
         rel < (self.tick_len) /3
     }
 
@@ -115,21 +115,21 @@ impl Clock {
     /// absolute zero based slot index
     async fn slot_abs(&self) -> u64 {
         let sl_abs = self.tick_time().await.0 / self.sl_len;
-        println!("[slot_abs] slot len: {} - slot abs: {}", self.sl_len, sl_abs);
+        debug!("[slot_abs] slot len: {} - slot abs: {}", self.sl_len, sl_abs);
         sl_abs
     }
 
     /// relative zero based slot index
     async fn  slot_relative(&self) -> u64 {
         let e_abs = self.slot_abs().await % self.e_len;
-        println!("[slot_relative] slot len: {} - slot relative: {}", self.sl_len, e_abs);
+        debug!("[slot_relative] slot len: {} - slot relative: {}", self.sl_len, e_abs);
         e_abs
     }
 
     /// absolute zero based epoch index.
     async fn epoch_abs(&self) -> u64 {
         let res = self.slot_abs().await / self.e_len;
-        println!("[epoch_abs] epoch len: {} - epoch abs: {}", self.e_len, res);
+        debug!("[epoch_abs] epoch len: {} - epoch abs: {}", self.e_len, res);
         res
     }
 
@@ -138,34 +138,34 @@ impl Clock {
         let e = self.epoch_abs().await;
         let sl = self.slot_relative().await;
         if self.ticking().await {
-            println!("e/e`: {}/{} sl/sl`: {}/{}, BB_E/BB_SL: {}/{}", e, self.e, sl, self.sl, BB_E, BB_SL);
+            debug!("e/e`: {}/{} sl/sl`: {}/{}, BB_E/BB_SL: {}/{}", e, self.e, sl, self.sl, BB_E, BB_SL);
             if e==self.e&&e==BB_E &&  self.sl==BB_SL {
                 self.sl=sl+1; // 0
                 self.e=e; // 0
-                println!("new genesis");
+                debug!("new genesis");
                 Ticks::GENESIS{e:e, sl:sl}
             } else if e==self.e&&sl==self.sl+1 {
                 self.sl=sl;
-                println!("new slot");
+                debug!("new slot");
                 Ticks::NEWSLOT{e:e, sl:sl}
             } else if e==self.e+1 && sl==0 {
                 self.e=e;
                 self.sl=sl;
-                println!("new epoch");
+                debug!("new epoch");
                 Ticks::NEWEPOCH{e:e, sl:sl}
             }
             else if e==self.e && sl==self.sl {
-                println!("clock is idle");
+                debug!("clock is idle");
                 thread::sleep(Duration::from_millis(100));
                 Ticks::IDLE
             }
             else {
-                println!("clock is out of sync");
+                debug!("clock is out of sync");
                 //clock is out of sync
                 Ticks::OUTOFSYNC
             }
         } else {
-            println!("tocks");
+            debug!("tocks");
             Ticks::TOCKS
         }
     }

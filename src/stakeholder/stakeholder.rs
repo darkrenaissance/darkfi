@@ -125,9 +125,9 @@ impl Stakeholder
     pub async fn new(consensus: EpochConsensus, settings: Settings, rel_path: &str, id: u8, k: Option<u32>) -> Result<Self>
     {
         let path = expand_path(&rel_path).unwrap();
-        println!("opening db");
+        debug!("opening db");
         let db = sled::open(&path)?;
-        println!("opend db");
+        debug!("opend db");
         let ts = Timestamp::current_time();
         let genesis_hash = blake3::hash(b"");
         //TODO lisen and add transactions
@@ -147,7 +147,7 @@ impl Stakeholder
 
         //
         let clock = Clock::new(Some(consensus.get_epoch_len()), Some(consensus.get_slot_len()), Some(consensus.get_tick_len()), settings.peers);
-        println!("stakeholder constructed...");
+        debug!("stakeholder constructed...");
         Ok(Self{blockchain: bc,
                 net: p2p,
                 clock: clock,
@@ -245,21 +245,21 @@ impl Stakeholder
     /// if so add the proof to metadata if stakeholder isn't the lead.
     pub async fn sync_block(&self) {
         let subscription : Subscription<Result<ChannelPtr>> = self.net.subscribe_channel().await;
-        println!("--> channel");
+        debug!("--> channel");
         let chanptr : ChannelPtr =  subscription.receive().await.unwrap();
-        println!("--> received channel");
+        debug!("--> received channel");
         //
         let message_subsytem = chanptr.get_message_subsystem();
-        println!("--> adding dispatcher to msg subsystem");
+        debug!("--> adding dispatcher to msg subsystem");
         message_subsytem.add_dispatch::<BlockInfo>().await;
-        println!("--> added");
+        debug!("--> added");
         //TODO start channel if isn't started yet
         //let info = chanptr.get_info();
-        //println!("channel info: {}", info);
-        println!("--> subscribe msg_sub");
+        //debug!("channel info: {}", info);
+        debug!("--> subscribe msg_sub");
         let msg_sub : MessageSubscription::<BlockInfo> =
             chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
-        println!("--> subscribed");
+        debug!("--> subscribed");
 
         let res = msg_sub.receive().await.unwrap();
         let blk : BlockInfo = (*res).to_owned();
@@ -268,7 +268,7 @@ impl Stakeholder
             //TODO if valid only.
             self.blockchain.add(&[blk.clone()]);
         } else {
-            println!("received block is invalid!");
+            debug!("received block is invalid!");
         }
     }
 
@@ -293,6 +293,7 @@ impl Stakeholder
                     // sync, and validate.
                     // no more transactions to be received/send to the end of slot.
                     if self.workspace.is_leader {
+                        debug!("<<<--- [[[leadership won]]] --->>>");
                         //craete block
                         let (block_info, block_hash) = self.workspace.new_block();
                         //add the block to the blockchain
@@ -326,7 +327,7 @@ impl Stakeholder
     /// in the epoch's gen2esis data.
     fn new_epoch(&mut self)
     {
-        println!("[new epoch] 4 {}", self);
+        debug!("[new epoch] 4 {}", self);
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, self.get_eta());
         epoch.create_coins(); // set epoch interal fields working space with competing coins
@@ -342,7 +343,7 @@ impl Stakeholder
     /// this will encourage each potential leader to play with honesty.
     fn new_slot(&mut self, e: u64, sl: u64)
     {
-        println!("[new slot] 4 {}\ne:{}, sl:{}", self, e, sl);
+        debug!("[new slot] 4 {}\ne:{}, sl:{}", self, e, sl);
         let EMPTY_PTR = blake3::hash(b"");
         let st : blake3::Hash = if e>0 || (e==0&&sl>0) {
             self.workspace.block.blockhash()
@@ -352,7 +353,6 @@ impl Stakeholder
         let is_leader : bool = self.epoch.is_leader(sl);
         // if is leader create proof
         let proof = if is_leader {
-            println!("<<<--- [[[leadership won]]] --->>>");
             self.epoch.get_proof(sl, &self.pk.clone())
         } else {
             Proof::new(vec![])
@@ -365,7 +365,6 @@ impl Stakeholder
         self.workspace.set_proof(proof.clone());
         //
         if is_leader {
-            println!("<<<--- [[[leadership won]]] --->>>");
             let metadata = Metadata::new(Timestamp::current_time(),
                                          self.get_eta().to_repr(),
                                          TransactionLeadProof::from(proof.clone()));

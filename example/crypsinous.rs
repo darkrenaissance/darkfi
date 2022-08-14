@@ -19,7 +19,6 @@ async fn main()
     /// read n from the cmd
     let n = 3;
     /// initialize n stakeholders
-    //let mut stakeholders = vec!();
     let alice_settings = Settings {
         inbound: Some(Url::parse("tls://127.0.0.1:12002").unwrap()),
         outbound_connections: 4,
@@ -50,7 +49,7 @@ async fn main()
     };
     let k : u32 = 13; //proof's number of rows
     let mut handles = vec!();
-    let path = "db";
+    let path = "/tmp/db";
     for i in 0..2 {
         let rel_path =  format!("{}{}",path, i.to_string());
 
@@ -69,7 +68,6 @@ async fn main()
         let handle = thread::spawn(move || {
             block_on(stakeholder.background());
         });
-        //stakeholders.push(stakeholder);
         handles.push(handle);
     }
     for handle in handles {

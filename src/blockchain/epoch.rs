@@ -4,6 +4,8 @@ use halo2_gadgets::{
     poseidon::{primitives as poseidon},
 };
 
+use log::debug;
+
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::PrimeField, Curve},
@@ -142,7 +144,7 @@ impl Epoch {
             };
             let node = MerkleNode::from_bytes(&sk_bytes).unwrap();
             //let serialized = serde_json::to_string(&node).unwrap();
-            //println!("serialized: {}", serialized);
+            //debug!("serialized: {}", serialized);
             tree.append(&node.clone());
             let leaf_position = tree.witness();
             let root = tree.root(0).unwrap();
@@ -271,7 +273,7 @@ impl Epoch {
     /// winning the lottery, in case of success return True
     pub fn is_leader(&self, sl: u64) -> bool {
         let slusize = sl as usize;
-        println!("slot: {}, coin len: {}", sl, self.coins.len());
+        debug!("slot: {}, coin len: {}", sl, self.coins.len());
         assert!(slusize < self.coins.len()  && sl>=0);
         let coin = self.coins[sl as usize];
         let y_exp = [
@@ -283,7 +285,7 @@ impl Epoch {
         let y_x : pallas::Base = *pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash)).to_affine().coordinates().unwrap().x();
         let ord = pallas::Base::from(10241024); //TODO fine tune this scalar.
         let target = ord*coin.value.unwrap();
-        println!("y_x: {:?}, target: {:?}", y_x, target);
+        debug!("y_x: {:?}, target: {:?}", y_x, target);
         //reversed for testing
         target < y_x
     }
