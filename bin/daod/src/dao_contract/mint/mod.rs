@@ -6,6 +6,7 @@ use super::state::DaoBulla;
 use crate::demo::CallDataBase;
 
 pub mod builder;
+pub mod validate;
 pub use builder::Builder;
 
 /// This is an anonymous contract function that mutates the internal DAO state.

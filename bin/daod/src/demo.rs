@@ -42,14 +42,6 @@ use darkfi::{
     zkas::decoder::ZkBinary,
 };
 
-use crate::{
-    dao_contract::{
-        mint::Builder,
-        state::{apply, state_transition, DaoBulla, State},
-    },
-    money_contract,
-};
-
 /// The state machine, held in memory.
 struct MemoryState {
     /// The entire Merkle tree state
@@ -218,8 +210,12 @@ impl StateRegistry {
         self.states.insert(contract_id, state);
     }
 
-    pub fn lookup<'a, S: 'static>(&'a mut self, contract_id: &ContractId) -> Option<&'a mut S> {
+    pub fn lookup_mut<'a, S: 'static>(&'a mut self, contract_id: &ContractId) -> Option<&'a mut S> {
         self.states.get_mut(contract_id).and_then(|state| state.downcast_mut())
+    }
+
+    pub fn lookup<'a, S: 'static>(&'a self, contract_id: &ContractId) -> Option<&'a S> {
+        self.states.get(contract_id).and_then(|state| state.downcast_ref())
     }
 }
 
@@ -246,19 +242,24 @@ pub async fn demo() -> Result<()> {
     let zk_dao_mint_bin = ZkBinary::decode(zk_dao_mint_bincode)?;
     zk_bins.add_contract("dao-mint".to_string(), zk_dao_mint_bin, 13);
 
+    /*
     /////////////////////////////////////////////////
 
-    /*
     TODO: The following money_contract behaviors are still unimplemented:
 
     [ ] money_contract/transfer/builder.rs.
         The mint proof is currently part of its outputs and CallData::proofs is an empty vector.
     [ ] CallDataBase
         Not fully implemented for money_contract/mint/mod::CallData.
+
+        all inputs and outputs have proofs. if there are 7 inputs/outputs, there are 7 proofs
+        proofs need to be moved outside of inputs/ouputs and into Vec<Proof>
+
     [ ] money_contract/state.rs
         State transition function is totally unimplemented.
 
     /////////////////////////////////////////////////
+    */
 
     // State for money contracts
     let cashier_signature_secret = SecretKey::random(&mut OsRng);
@@ -283,12 +284,10 @@ pub async fn demo() -> Result<()> {
         faucet_signature_public,
     });
     states.register("money_contract".to_string(), money_state);
-    */
 
-    /////////////////////////////////////////////////
+    ///////////////////////////////////////////////////
 
-    let dao_state = State::new();
-    //let dao_state = State::new();
+    let dao_state = crate::dao_contract::State::new();
     states.register("dao_contract".to_string(), dao_state);
 
     // For this demo lets create 10 random preexisting DAO bullas
@@ -296,16 +295,16 @@ pub async fn demo() -> Result<()> {
         let bulla = pallas::Base::random(&mut OsRng);
     }
 
-    /////////////////////////////////////////////////
-    // Create the DAO bulla
-    /////////////////////////////////////////////////
+    ///////////////////////////////////////////////////
+    //// Create the DAO bulla
+    ///////////////////////////////////////////////////
 
-    // Setup the DAO
+    //// Setup the DAO
     let dao_keypair = Keypair::random(&mut OsRng);
     let dao_bulla_blind = pallas::Base::random(&mut OsRng);
 
     // Create DAO mint tx
-    let builder = Builder::new(
+    let builder = crate::dao_contract::mint::Builder::new(
         dao_proposer_limit,
         dao_quorum,
         dao_approval_ratio,
@@ -323,74 +322,66 @@ pub async fn demo() -> Result<()> {
         if func_call.func_id == "DAO::mint()" {
             debug!("dao_contract::mint::state_transition()");
 
-            let update = state_transition(&states, idx, &tx).unwrap();
-            apply(&mut states, update);
+            let update =
+                crate::dao_contract::mint::validate::state_transition(&states, idx, &tx).unwrap();
+            crate::dao_contract::mint::validate::apply(&mut states, update);
         }
     }
 
     tx.zk_verify(&zk_bins);
 
-    /////////////////////////////////////////////////
+    ///////////////////////////////////////////////////
+    //// Mint the initial supply of treasury token
+    //// and send it all to the DAO directly
+    ///////////////////////////////////////////////////
 
-    /*
-        let token_id = pallas::Base::random(&mut OsRng);
+    let token_id = pallas::Base::random(&mut OsRng);
+    let keypair = Keypair::random(&mut OsRng);
 
-        let builder = TransactionBuilder {
-            clear_inputs: vec![TransactionBuilderClearInputInfo {
-                value: 110,
-                token_id,
-                signature_secret: cashier_signature_secret,
-            }],
-            inputs: vec![],
-            outputs: vec![TransactionBuilderOutputInfo {
-                value: 110,
-                token_id,
-                public: keypair.public,
-            }],
-        };
+    let builder = crate::money_contract::transfer::builder::Builder {
+        clear_inputs: vec![crate::money_contract::transfer::builder::BuilderClearInputInfo {
+            value: 110,
+            token_id,
+            signature_secret: cashier_signature_secret,
+        }],
+        inputs: vec![],
+        outputs: vec![crate::money_contract::transfer::builder::BuilderOutputInfo {
+            value: 110,
+            token_id,
+            public: keypair.public,
+        }],
+    };
 
-        let start = Instant::now();
-        let mint_pk = ProvingKey::build(11, &MintContract::default());
-        debug!("Mint PK: [{:?}]", start.elapsed());
-        let start = Instant::now();
-        let burn_pk = ProvingKey::build(11, &BurnContract::default());
-        debug!("Burn PK: [{:?}]", start.elapsed());
-        let tx = builder.build(&mint_pk, &burn_pk)?;
+    let start = Instant::now();
+    let mint_pk = ProvingKey::build(11, &MintContract::default());
+    debug!("Mint PK: [{:?}]", start.elapsed());
+    let start = Instant::now();
+    let burn_pk = ProvingKey::build(11, &BurnContract::default());
+    debug!("Burn PK: [{:?}]", start.elapsed());
 
-        tx.verify(&money_state.mint_vk, &money_state.burn_vk)?;
+    let func_call = builder.build(&mint_pk, &burn_pk)?;
 
-        let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret)?;
+    //tx.verify(&money_state.mint_vk, &money_state.burn_vk)?;
 
-        let update = state_transition(&money_state, tx)?;
-        money_state.apply(update);
+    let tx = Transaction { func_calls: vec![func_call] };
 
-        // Now spend
-        let owncoin = &money_state.own_coins[0];
-        let note = &owncoin.note;
-        let leaf_position = owncoin.leaf_position;
-        let root = money_state.tree.root(0).unwrap();
-        let merkle_path = money_state.tree.authentication_path(leaf_position, &root).unwrap();
+    //    let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret)?;
+    for (idx, func_call) in tx.func_calls.iter().enumerate() {
+        // So then the verifier will lookup the corresponding state_transition and apply
+        // functions based off the func_id
+        if func_call.func_id == "money::transfer()" {
+            debug!("money_contract::transfer::state_transition()");
 
-        let builder = TransactionBuilder {
-            clear_inputs: vec![],
-            inputs: vec![TransactionBuilderInputInfo {
-                leaf_position,
-                merkle_path,
-                secret: keypair.secret,
-                note: note.clone(),
-            }],
-            outputs: vec![TransactionBuilderOutputInfo {
-                value: 110,
-                token_id,
-                public: keypair.public,
-            }],
-        };
+            let update =
+                crate::money_contract::transfer::validate::state_transition(&states, idx, &tx)
+                    .unwrap();
+            crate::money_contract::transfer::validate::apply(&mut states, update);
+        }
+    }
 
-        let tx = builder.build(&mint_pk, &burn_pk)?;
+    //tx.zk_verify(&zk_bins);
 
-        let update = state_transition(&money_state, tx)?;
-        money_state.apply(update);
-    */
+    ///////////////////////////////////////////////////
 
     Ok(())
 }
