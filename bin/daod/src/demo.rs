@@ -42,6 +42,8 @@ use darkfi::{
     zkas::decoder::ZkBinary,
 };
 
+use crate::{dao_contract, money_contract};
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub struct ZkContractInfo {
@@ -195,7 +197,7 @@ pub async fn demo() -> Result<()> {
     let burn_vk = VerifyingKey::build(11, &BurnContract::default());
     debug!("Burn VK: [{:?}]", start.elapsed());
 
-    let money_state = Box::new(crate::money_contract::state::State {
+    let money_state = Box::new(money_contract::state::State {
         tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
         merkle_roots: vec![],
         nullifiers: vec![],
@@ -208,7 +210,7 @@ pub async fn demo() -> Result<()> {
 
     /////////////////////////////////////////////////////
 
-    let dao_state = crate::dao_contract::State::new();
+    let dao_state = dao_contract::State::new();
     states.register("dao_contract".to_string(), dao_state);
 
     // For this demo lets create 10 random preexisting DAO bullas
@@ -225,7 +227,7 @@ pub async fn demo() -> Result<()> {
     let dao_bulla_blind = pallas::Base::random(&mut OsRng);
 
     // Create DAO mint tx
-    let builder = crate::dao_contract::mint::Builder::new(
+    let builder = dao_contract::mint::Builder::new(
         dao_proposer_limit,
         dao_quorum,
         dao_approval_ratio,
@@ -243,9 +245,9 @@ pub async fn demo() -> Result<()> {
         if func_call.func_id == "DAO::mint()" {
             debug!("dao_contract::mint::state_transition()");
 
-            let update = crate::dao_contract::mint::validate::state_transition(&states, idx, &tx)
+            let update = dao_contract::mint::validate::state_transition(&states, idx, &tx)
                 .expect("dao_contract::mint::validate::state_transition() failed!");
-            crate::dao_contract::mint::validate::apply(&mut states, update);
+            dao_contract::mint::validate::apply(&mut states, update);
         }
     }
 
@@ -259,14 +261,14 @@ pub async fn demo() -> Result<()> {
     let token_id = pallas::Base::random(&mut OsRng);
     let keypair = Keypair::random(&mut OsRng);
 
-    let builder = crate::money_contract::transfer::builder::Builder {
-        clear_inputs: vec![crate::money_contract::transfer::builder::BuilderClearInputInfo {
+    let builder = money_contract::transfer::builder::Builder {
+        clear_inputs: vec![money_contract::transfer::builder::BuilderClearInputInfo {
             value: 110,
             token_id,
             signature_secret: cashier_signature_secret,
         }],
         inputs: vec![],
-        outputs: vec![crate::money_contract::transfer::builder::BuilderOutputInfo {
+        outputs: vec![money_contract::transfer::builder::BuilderOutputInfo {
             value: 110,
             token_id,
             public: keypair.public,
@@ -293,10 +295,9 @@ pub async fn demo() -> Result<()> {
         if func_call.func_id == "money::transfer()" {
             debug!("money_contract::transfer::state_transition()");
 
-            let update =
-                crate::money_contract::transfer::validate::state_transition(&states, idx, &tx)
-                    .expect("money_contract::state_transition() failed!");
-            crate::money_contract::transfer::validate::apply(&mut states, update);
+            let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
+                .expect("money_contract::state_transition() failed!");
+            money_contract::transfer::validate::apply(&mut states, update);
         }
     }
 
