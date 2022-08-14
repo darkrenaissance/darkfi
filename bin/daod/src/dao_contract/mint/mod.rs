@@ -1,14 +1,3 @@
-use std::any::Any;
-
-use darkfi::crypto::types::DrkCircuitField;
-
-use super::state::DaoBulla;
-use crate::demo::CallDataBase;
-
-pub mod builder;
-pub mod validate;
-pub use builder::Builder;
-
 /// This is an anonymous contract function that mutates the internal DAO state.
 ///
 /// Corresponds to `mint(proposer_limit, quorum, approval_ratio, dao_pubkey, dao_blind)`
@@ -43,21 +32,6 @@ pub use builder::Builder;
 /// );
 /// let tx = builder.build();
 /// ```
-
-pub struct CallData {
-    pub dao_bulla: DaoBulla,
-}
-
-impl CallDataBase for CallData {
-    fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
-        vec![vec![self.dao_bulla.0]]
-    }
-
-    fn zk_proof_addrs(&self) -> Vec<String> {
-        vec!["dao-mint".to_string()]
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+pub mod builder;
+pub mod validate;
+pub use builder::Builder;

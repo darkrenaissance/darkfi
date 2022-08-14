@@ -18,15 +18,15 @@ pub struct State {
     /// Nullifiers prevent double spending
     pub nullifiers: Vec<Nullifier>,
     /// Verifying key for the mint zk circuit.
-    mint_vk: VerifyingKey,
+    pub mint_vk: VerifyingKey,
     /// Verifying key for the burn zk circuit.
-    burn_vk: VerifyingKey,
+    pub burn_vk: VerifyingKey,
 
     /// Public key of the cashier
-    cashier_signature_public: PublicKey,
+    pub cashier_signature_public: PublicKey,
 
     /// Public key of the faucet
-    faucet_signature_public: PublicKey,
+    pub faucet_signature_public: PublicKey,
 }
 
 impl ProgramState for State {

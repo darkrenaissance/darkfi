@@ -1,9 +1,11 @@
 use pasta_curves::pallas;
 use std::any::{Any, TypeId};
 
+use darkfi::crypto::types::DrkCircuitField;
+
 use crate::{
-    dao_contract::{mint::CallData, DaoBulla, State},
-    demo::{StateRegistry, Transaction},
+    dao_contract::{DaoBulla, State},
+    demo::{CallDataBase, StateRegistry, Transaction},
 };
 
 pub fn state_transition(
@@ -42,3 +44,21 @@ pub enum Error {
     MalformedPacket,
 }
 type Result<T> = std::result::Result<T, Error>;
+
+pub struct CallData {
+    pub dao_bulla: DaoBulla,
+}
+
+impl CallDataBase for CallData {
+    fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
+        vec![vec![self.dao_bulla.0]]
+    }
+
+    fn zk_proof_addrs(&self) -> Vec<String> {
+        vec!["dao-mint".to_string()]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

@@ -2,7 +2,7 @@ use pasta_curves::pallas;
 use std::any::{Any, TypeId};
 
 use crate::{
-    dao_contract::mint::CallData,
+    dao_contract::mint::validate::CallData,
     demo::{StateRegistry, Transaction},
     Result,
 };

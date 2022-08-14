@@ -11,7 +11,7 @@ use halo2_proofs::circuit::Value;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
-use crate::{demo::FuncCall, CallDataBase, ZkBinaryTable};
+use crate::{dao_contract::mint::validate::CallData, demo::FuncCall, CallDataBase, ZkBinaryTable};
 
 pub struct Builder {
     dao_proposer_limit: u64,
@@ -99,23 +99,5 @@ impl Builder {
             call_data: Box::new(call_data),
             proofs: vec![mint_proof],
         }
-    }
-}
-
-pub struct CallData {
-    dao_bulla: DaoBulla,
-}
-
-impl CallDataBase for CallData {
-    fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
-        vec![vec![self.dao_bulla.0]]
-    }
-
-    fn zk_proof_addrs(&self) -> Vec<String> {
-        vec!["dao-mint".to_string()]
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }

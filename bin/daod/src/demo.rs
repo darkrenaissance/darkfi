@@ -42,69 +42,6 @@ use darkfi::{
     zkas::decoder::ZkBinary,
 };
 
-/// The state machine, held in memory.
-struct MemoryState {
-    /// The entire Merkle tree state
-    tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
-    /// List of all previous and the current Merkle roots.
-    /// This is the hashed value of all the children.
-    merkle_roots: Vec<MerkleNode>,
-    /// Nullifiers prevent double spending
-    nullifiers: Vec<Nullifier>,
-    /// Verifying key for the mint zk circuit.
-    mint_vk: VerifyingKey,
-    /// Verifying key for the burn zk circuit.
-    burn_vk: VerifyingKey,
-
-    /// Public key of the cashier
-    cashier_signature_public: PublicKey,
-
-    /// Public key of the faucet
-    faucet_signature_public: PublicKey,
-}
-
-impl ProgramState for MemoryState {
-    fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
-        public == &self.cashier_signature_public
-    }
-
-    fn is_valid_faucet_public_key(&self, public: &PublicKey) -> bool {
-        public == &self.faucet_signature_public
-    }
-
-    fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
-        self.merkle_roots.iter().any(|m| m == merkle_root)
-    }
-
-    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        self.nullifiers.iter().any(|n| n == nullifier)
-    }
-
-    fn mint_vk(&self) -> &VerifyingKey {
-        &self.mint_vk
-    }
-
-    fn burn_vk(&self) -> &VerifyingKey {
-        &self.burn_vk
-    }
-}
-
-impl MemoryState {
-    fn apply(&mut self, mut update: StateUpdate) {
-        // Extend our list of nullifiers with the ones from the update
-        self.nullifiers.append(&mut update.nullifiers);
-
-        // Update merkle tree and witnesses
-        for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
-            // Add the new coins to the Merkle tree
-            let node = MerkleNode(coin.0);
-            self.tree.append(&node);
-
-            // Keep track of all Merkle roots that have existed
-            self.merkle_roots.push(self.tree.root(0).unwrap());
-        }
-    }
-}
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub struct ZkContractInfo {
@@ -207,6 +144,7 @@ impl StateRegistry {
     }
 
     fn register(&mut self, contract_id: ContractId, state: GenericContractState) {
+        debug!(target: "StateRegistry::register()", "contract_id: {:?}", contract_id);
         self.states.insert(contract_id, state);
     }
 
@@ -242,30 +180,13 @@ pub async fn demo() -> Result<()> {
     let zk_dao_mint_bin = ZkBinary::decode(zk_dao_mint_bincode)?;
     zk_bins.add_contract("dao-mint".to_string(), zk_dao_mint_bin, 13);
 
-    /*
-    /////////////////////////////////////////////////
-
-    TODO: The following money_contract behaviors are still unimplemented:
-
-    [ ] money_contract/transfer/builder.rs.
-        The mint proof is currently part of its outputs and CallData::proofs is an empty vector.
-    [ ] CallDataBase
-        Not fully implemented for money_contract/mint/mod::CallData.
-
-        all inputs and outputs have proofs. if there are 7 inputs/outputs, there are 7 proofs
-        proofs need to be moved outside of inputs/ouputs and into Vec<Proof>
-
-    [ ] money_contract/state.rs
-        State transition function is totally unimplemented.
-
-    /////////////////////////////////////////////////
-    */
-
     // State for money contracts
     let cashier_signature_secret = SecretKey::random(&mut OsRng);
     let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
     let faucet_signature_secret = SecretKey::random(&mut OsRng);
     let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
+
+    ///////////////////////////////////////////////////
 
     let start = Instant::now();
     let mint_vk = VerifyingKey::build(11, &MintContract::default());
@@ -274,7 +195,7 @@ pub async fn demo() -> Result<()> {
     let burn_vk = VerifyingKey::build(11, &BurnContract::default());
     debug!("Burn VK: [{:?}]", start.elapsed());
 
-    let money_state = Box::new(MemoryState {
+    let money_state = Box::new(crate::money_contract::state::State {
         tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
         merkle_roots: vec![],
         nullifiers: vec![],
@@ -285,7 +206,7 @@ pub async fn demo() -> Result<()> {
     });
     states.register("money_contract".to_string(), money_state);
 
-    ///////////////////////////////////////////////////
+    /////////////////////////////////////////////////////
 
     let dao_state = crate::dao_contract::State::new();
     states.register("dao_contract".to_string(), dao_state);
@@ -295,9 +216,9 @@ pub async fn demo() -> Result<()> {
         let bulla = pallas::Base::random(&mut OsRng);
     }
 
-    ///////////////////////////////////////////////////
-    //// Create the DAO bulla
-    ///////////////////////////////////////////////////
+    /////////////////////////////////////////////////////
+    ////// Create the DAO bulla
+    /////////////////////////////////////////////////////
 
     //// Setup the DAO
     let dao_keypair = Keypair::random(&mut OsRng);
@@ -322,8 +243,8 @@ pub async fn demo() -> Result<()> {
         if func_call.func_id == "DAO::mint()" {
             debug!("dao_contract::mint::state_transition()");
 
-            let update =
-                crate::dao_contract::mint::validate::state_transition(&states, idx, &tx).unwrap();
+            let update = crate::dao_contract::mint::validate::state_transition(&states, idx, &tx)
+                .expect("dao_contract::mint::validate::state_transition() failed!");
             crate::dao_contract::mint::validate::apply(&mut states, update);
         }
     }
@@ -374,7 +295,7 @@ pub async fn demo() -> Result<()> {
 
             let update =
                 crate::money_contract::transfer::validate::state_transition(&states, idx, &tx)
-                    .unwrap();
+                    .expect("money_contract::state_transition() failed!");
             crate::money_contract::transfer::validate::apply(&mut states, update);
         }
     }
