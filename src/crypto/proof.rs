@@ -52,7 +52,6 @@ impl AsRef<[u8]> for Proof {
         &self.0
     }
 }
-
 impl Proof {
     pub fn create(
         pk: &ProvingKey,

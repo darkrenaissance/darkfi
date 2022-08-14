@@ -5,6 +5,7 @@ use crate::{
         time::Timestamp,
     },
     crypto::{
+        types::*,
         proof::{
             Proof,
             ProvingKey,
@@ -60,15 +61,15 @@ impl Default for TransactionLeadProof {
 }
 
 impl TransactionLeadProof {
-    pub fn new(pk : ProvingKey, coin: LeadCoin) -> Self
+    pub fn new(pk : &ProvingKey, coin: LeadCoin) -> Self
     {
         let proof = lead_proof::create_lead_proof(pk, coin.clone()).unwrap();
         Self { lead_proof: proof }
     }
 
-    pub fn verify(&self, vk : VerifyingKey, coin: LeadCoin) -> VerifyResult<()>
+    pub fn verify(&self, vk : VerifyingKey, public_inputs: &[DrkCircuitField]) -> VerifyResult<()>
     {
-        lead_proof::verify_lead_proof(&vk, &self.lead_proof, coin)
+        lead_proof::verify_lead_proof(&vk, &self.lead_proof, public_inputs)
     }
 }
 

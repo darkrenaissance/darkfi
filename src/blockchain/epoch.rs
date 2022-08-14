@@ -24,6 +24,8 @@ use crate::{
     },
 };
 
+const PRF_NULLIFIER_PREFIX : u64 = 0;
+
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 #[derive(Copy,Debug,Default,Clone)]
@@ -198,11 +200,12 @@ impl Epoch {
 
 
             let coin_commit_msg_input = [
+                pallas::Base::from(PRF_NULLIFIER_PREFIX),
                 c_pk,
                 c_v,
                 c_seed
             ];
-            let coin_commit_msg : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(coin_commit_msg_input);
+            let coin_commit_msg : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init().hash(coin_commit_msg_input);
             let c_cm: pallas::Point = pedersen_commitment_base(coin_commit_msg, c_cm1_blind);
             let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
             let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
@@ -219,11 +222,12 @@ impl Epoch {
             let c_seed2 : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_nonce2_msg);
 
             let coin2_commit_msg_input = [
+                pallas::Base::from(PRF_NULLIFIER_PREFIX),
                 c_pk,
                 c_v,
-                c_seed,
+                c_seed2,
             ];
-            let coin2_commit_msg : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(coin2_commit_msg_input);
+            let coin2_commit_msg : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init().hash(coin2_commit_msg_input);
             let c_cm2 = pedersen_commitment_base(coin2_commit_msg, c_cm2_blind);
 
             let c_root_sk = root_sks[i];
@@ -266,6 +270,9 @@ impl Epoch {
     /// see if the participant stakeholder of this epoch is
     /// winning the lottery, in case of success return True
     pub fn is_leader(&self, sl: u64) -> bool {
+        let slusize = sl as usize;
+        println!("slot: {}, coin len: {}", sl, self.coins.len());
+        assert!(slusize < self.coins.len()  && sl>=0);
         let coin = self.coins[sl as usize];
         let y_exp = [
             coin.root_sk.unwrap(),
@@ -274,12 +281,14 @@ impl Epoch {
         let y_exp_hash : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>,3,2>::init().hash(y_exp);
         // pick x coordiante of y for comparison
         let y_x : pallas::Base = *pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash)).to_affine().coordinates().unwrap().x();
-        let ord = pallas::Base::from(1024); //TODO fine tune this scalar.
+        let ord = pallas::Base::from(10241024); //TODO fine tune this scalar.
         let target = ord*coin.value.unwrap();
-        y_x < target
+        println!("y_x: {:?}, target: {:?}", y_x, target);
+        //reversed for testing
+        target < y_x
     }
 
-    pub fn get_proof(&self, sl: u64, pk: ProvingKey) -> Proof {
+    pub fn get_proof(&self, sl: u64, pk: &ProvingKey) -> Proof {
         let coin = self.coins[sl as usize];
         lead_proof::create_lead_proof(pk, coin).unwrap()
     }

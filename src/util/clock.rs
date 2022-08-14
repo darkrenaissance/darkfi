@@ -1,8 +1,10 @@
 use url::Url;
 use log::debug;
+use std::time::Duration;
+use std::thread;
 use async_trait::async_trait;
 use crate::{
-    util::{time,Timestamp},
+    util::{time,Timestamp, NanoTimestamp},
     error,
     Result,
     error::Error
@@ -17,9 +19,8 @@ pub enum Ticks {
     OUTOFSYNC, //clock, and blockchain are out of sync
 }
 
-const BB_SL : u64 = u64::MAX; //big bang slot time (need to be negative value)
+const BB_SL : u64 = u64::MAX-1; //big bang slot time (need to be negative value)
 const BB_E : u64 = 0; //big bang epoch time.
-const GENESIS_TIME : i64 = 0;
 
 #[derive(Debug)]
 pub struct Clock {
@@ -29,16 +30,19 @@ pub struct Clock {
     pub sl_len: u64, // slot length in ticks
     pub e_len: u64, // epoch length in slots
     pub peers: Vec<Url>,
+    pub genesis_time: Timestamp,
 }
 
 impl Clock {
     pub fn new(e_len: Option<u64>, sl_len: Option<u64>, tick_len: Option<u64>, peers: Vec<Url>) -> Self{
+        let gt : Timestamp = Timestamp::current_time();
         Self { sl: BB_SL, //necessary for genesis slot
                e: BB_E,
                tick_len: tick_len.unwrap_or(22), // 22 seconds
                sl_len: sl_len.unwrap_or(22),// ~8 minutes
                e_len: e_len.unwrap_or(3), // 24.2 minutes
                peers: peers,
+               genesis_time: gt,
         }
     }
 
@@ -51,20 +55,36 @@ impl Clock {
     }
 
     async fn time(&self) -> Result<Timestamp> {
+        //TODO (fix) add more than ntp server to time.
+        /*
         match time::check_clock(self.peers.clone()).await {
             Ok(t) => {
                 Ok(time::ntp_request().await?)
             },
             Err(e) => {
-                Err(Error::ClockOutOfSync(e.to_string()
-))
+                Err(Error::ClockOutOfSync(e.to_string()))
             }
         }
+         */
+        //TODO (panics)
+        /*
+        match time::ntp_request().await.unwrap() {
+            t => {
+                Ok(t)
+            },
+            e => {
+                println!("ntp request failed: {}", e);
+                Err(Error::ClockOutOfSync(e.to_string()))
+            }
+    }
+         */
+        Ok(Timestamp::current_time())
     }
 
     /// time since genesis
     async fn time_to_genesis(&self) -> Timestamp {
-        let genesis_time : i64 = GENESIS_TIME;
+        //TODO this value need to be assigned to kickoff time.
+        let genesis_time : i64 = self.genesis_time.0;
         let abs_time = self.time().await.unwrap();
         Timestamp(abs_time.0 - genesis_time)
     }
@@ -72,14 +92,15 @@ impl Clock {
     async fn tick_time(&self) -> (u64, u64) {
         let time = self.time_to_genesis().await;
         let time_i = time.0 as u64;
-        let tick_abs: u64 = time_i / self.tick_len;
+        //let tick_abs: u64 = time_i / self.tick_len;
         let tick_rel: u64 = time_i % self.tick_len;
-        (tick_abs, tick_rel)
+        (time_i, tick_rel)
     }
 
     /// return true if the clock is at the begining (before 2/3 of the slot).
     async fn ticking(&self) -> bool {
         let (abs, rel) =  self.tick_time().await;
+        println!("abs ticks: {}, rel ticks: {}", abs, rel);
         rel < (self.tick_len) /3
     }
 
@@ -94,48 +115,57 @@ impl Clock {
     /// absolute zero based slot index
     async fn slot_abs(&self) -> u64 {
         let sl_abs = self.tick_time().await.0 / self.sl_len;
+        println!("[slot_abs] slot len: {} - slot abs: {}", self.sl_len, sl_abs);
         sl_abs
     }
 
     /// relative zero based slot index
     async fn  slot_relative(&self) -> u64 {
         let e_abs = self.slot_abs().await % self.e_len;
+        println!("[slot_relative] slot len: {} - slot relative: {}", self.sl_len, e_abs);
         e_abs
     }
 
     /// absolute zero based epoch index.
     async fn epoch_abs(&self) -> u64 {
         let res = self.slot_abs().await / self.e_len;
+        println!("[epoch_abs] epoch len: {} - epoch abs: {}", self.e_len, res);
         res
     }
 
     /// clock ticks return the ticks phase with corresponding phase parameters
     pub async fn ticks(&mut self) -> Ticks {
-        let prev_e = self.e;
-        let prev_sl = self.sl;
         let e = self.epoch_abs().await;
         let sl = self.slot_relative().await;
         if self.ticking().await {
-            if e==prev_e&&e==BB_E && sl==prev_sl && sl==BB_SL {
-                self.sl=sl; // 0
+            println!("e/e`: {}/{} sl/sl`: {}/{}, BB_E/BB_SL: {}/{}", e, self.e, sl, self.sl, BB_E, BB_SL);
+            if e==self.e&&e==BB_E &&  self.sl==BB_SL {
+                self.sl=sl+1; // 0
                 self.e=e; // 0
+                println!("new genesis");
                 Ticks::GENESIS{e:e, sl:sl}
-            } else if e==prev_e&&sl==prev_sl+1 {
+            } else if e==self.e&&sl==self.sl+1 {
                 self.sl=sl;
+                println!("new slot");
                 Ticks::NEWSLOT{e:e, sl:sl}
-            } else if e==prev_e+1 && sl==0 {
+            } else if e==self.e+1 && sl==0 {
                 self.e=e;
                 self.sl=sl;
+                println!("new epoch");
                 Ticks::NEWEPOCH{e:e, sl:sl}
             }
-            else if e==prev_e && sl==prev_sl {
+            else if e==self.e && sl==self.sl {
+                println!("clock is idle");
+                thread::sleep(Duration::from_millis(100));
                 Ticks::IDLE
             }
             else {
+                println!("clock is out of sync");
                 //clock is out of sync
                 Ticks::OUTOFSYNC
             }
         } else {
+            println!("tocks");
             Ticks::TOCKS
         }
     }

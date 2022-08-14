@@ -15,6 +15,8 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 
 //use halo2_proofs::arithmetic::CurveAffine;
 
+pub const LEAD_PUBLIC_INPUT_LEN : usize = 8;
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
     pub value: Option<pallas::Base>, //stake
@@ -40,7 +42,7 @@ pub struct LeadCoin {
 }
 
 impl LeadCoin {
-    pub fn public_inputs(&self) -> Vec<pallas::Base> {
+    pub fn public_inputs_as_array(&self) -> [pallas::Base;LEAD_PUBLIC_INPUT_LEN] {
         let po_nonce = self.nonce_cm.unwrap();
         let _po_tau = pedersen_commitment_base(self.tau.unwrap(), self.root_cm.unwrap())
             .to_affine()
@@ -73,17 +75,24 @@ impl LeadCoin {
             }
             current
         };
-        let public_inputs: Vec<pallas::Base> = vec![
+        let public_inputs : [pallas::Base;LEAD_PUBLIC_INPUT_LEN] = [
             po_pk,
             po_sn,
+
             *po_cm.x(),
             *po_cm.y(),
+
             *po_cm2.x(),
             *po_cm2.y(),
+
             po_nonce,
-            //cm_root.0,
+            cm_root.0,
         ];
         public_inputs
+    }
+
+    pub fn public_inputs(&self) -> Vec<pallas::Base> {
+        self.public_inputs_as_array().to_vec()
     }
 
     pub fn create_contract(&self) -> LeadContract
