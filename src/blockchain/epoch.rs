@@ -179,7 +179,6 @@ impl Epoch {
             //pseudo random sampling that is the size of pederson commitment
             // coin slot number
 
-            //TODO this has to be absolute path
             let c_sl = pallas::Base::from(u64::try_from(i).unwrap());
             //
             //let's assume it's sl for simplicity

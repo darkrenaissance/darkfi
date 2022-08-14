@@ -273,6 +273,7 @@ impl Stakeholder
     }
 
     pub async fn background(&mut self) {
+        self.clock.sync().await;
         while self.playing {
             // clock ticks slot begins
             // initialize the epoch if it's the time
@@ -373,11 +374,7 @@ impl Stakeholder
     }
 }
 
-impl fmt::Display
-
-
-
-for Stakeholder {
+impl fmt::Display for Stakeholder {
     fn fmt(&self, formater : &mut fmt::Formatter) ->  fmt::Result {
         formater.write_fmt(format_args!("stakeholder with id: {}", self.id))
     }

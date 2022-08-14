@@ -77,10 +77,10 @@ fn main() {
     let lead_pk = stakeholder.get_provkingkey();
     let lead_vk = stakeholder.get_verifyingkey();
 
-    let proof = lead_proof::create_lead_proof(&lead_pk.clone(), coin.clone()).unwrap();
-    lead_proof::verify_lead_proof(&lead_vk, &proof, &public_inputs);
+    //let proof = lead_proof::create_lead_proof(&lead_pk.clone(), coin.clone()).unwrap();
+    //lead_proof::verify_lead_proof(&lead_vk, &proof, &public_inputs);
 
-    //let prover = MockProver::run(k, &contract, vec![public_inputs.to_vec()]).unwrap();
-    //prover.assert_satisfied();
+    let prover = MockProver::run(k, &contract, vec![public_inputs.to_vec()]).unwrap();
+    prover.assert_satisfied();
     //assert_eq!(prover.verify(), Ok(()));
 }

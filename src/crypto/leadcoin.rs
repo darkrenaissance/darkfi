@@ -19,26 +19,25 @@ pub const LEAD_PUBLIC_INPUT_LEN : usize = 8;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
-    pub value: Option<pallas::Base>, //stake
-    pub cm: Option<pallas::Point>,
-    pub cm2: Option<pallas::Point>,
-    pub idx: u32,
-    pub sl: Option<pallas::Base>, //slot id
-    pub tau: Option<pallas::Base>,
-    pub nonce: Option<pallas::Base>,
-    pub nonce_cm: Option<pallas::Base>,
+    pub value: Option<pallas::Base>, // coin stake
+    pub cm: Option<pallas::Point>, // coin commitment
+    pub cm2: Option<pallas::Point>, // poured coin commitment
+    pub idx: u32, // coin idex
+    pub sl: Option<pallas::Base>, // coin slot id
+    pub tau: Option<pallas::Base>, // coin time stamp
+    pub nonce: Option<pallas::Base>, // coin nonce
+    pub nonce_cm: Option<pallas::Base>, // coin nonce's commitment
     pub sn: Option<pallas::Base>, // coin's serial number
-    //sk : Option<SecretKey>,
-    pub pk: Option<pallas::Base>,
-    pub root_cm: Option<pallas::Scalar>,
-    pub root_sk: Option<pallas::Base>,
-    pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
-    pub path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
-    pub c1_blind: Option<pallas::Scalar>,
-    pub c2_blind: Option<pallas::Scalar>,
+    pub pk: Option<pallas::Base>, // coin public key
+    pub root_cm: Option<pallas::Scalar>, // root of coin commitment
+    pub root_sk: Option<pallas::Base>, // coin's secret key
+    pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the coin's commitment
+    pub path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the coin's secret key
+    pub c1_blind: Option<pallas::Scalar>, // coin opening
+    pub c2_blind: Option<pallas::Scalar>, // poured coin opening
     // election seeds
-    pub y_mu: Option<pallas::Base>,
-    pub rho_mu: Option<pallas::Base>,
+    pub y_mu: Option<pallas::Base>, // leader election nonce derived from eta at onset of epoch
+    pub rho_mu: Option<pallas::Base>, // leader election nonce derived from eta at onset of epoch
 }
 
 impl LeadCoin {
@@ -57,6 +56,7 @@ impl LeadCoin {
 
         let po_cmp = pallas::Base::from(1);
         let _zero = pallas::Base::from(0);
+
         // ===============
 
         let cm_pos = self.idx;
@@ -76,8 +76,6 @@ impl LeadCoin {
             current
         };
         let public_inputs : [pallas::Base;LEAD_PUBLIC_INPUT_LEN] = [
-            po_pk,
-            po_sn,
 
             *po_cm.x(),
             *po_cm.y(),
@@ -87,6 +85,10 @@ impl LeadCoin {
 
             po_nonce,
             cm_root.0,
+
+            po_pk,
+            po_sn,
+
         ];
         public_inputs
     }
@@ -95,13 +97,10 @@ impl LeadCoin {
         self.public_inputs_as_array().to_vec()
     }
 
-    pub fn create_contract(&self) -> LeadContract
-    {
+    pub fn create_contract(&self) -> LeadContract {
         let contract = LeadContract {
             path: Value::known(self.path.unwrap()),
-            coin_pk: Value::known(self.pk.unwrap()),
             root_sk: Value::known(self.root_sk.unwrap()),
-            sf_root_sk: Value::known(mod_r_p(self.root_sk.unwrap())),
             path_sk: Value::known(self.path_sk.unwrap()),
             coin_timestamp: Value::known(self.tau.unwrap()), //
             coin_nonce: Value::known(self.nonce.unwrap()),

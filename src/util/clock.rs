@@ -55,7 +55,7 @@ impl Clock {
     }
 
     async fn time(&self) -> Result<Timestamp> {
-        //TODO (fix) add more than ntp server to time.
+        //TODO (fix) add more than ntp server to time, and take the avg
         /*
         match time::check_clock(self.peers.clone()).await {
             Ok(t) => {
@@ -64,20 +64,8 @@ impl Clock {
             Err(e) => {
                 Err(Error::ClockOutOfSync(e.to_string()))
             }
-        }
-         */
-        //TODO (panics)
-        /*
-        match time::ntp_request().await.unwrap() {
-            t => {
-                Ok(t)
-            },
-            e => {
-                debug!("ntp request failed: {}", e);
-                Err(Error::ClockOutOfSync(e.to_string()))
-            }
     }
-         */
+        */
         Ok(Timestamp::current_time())
     }
 
