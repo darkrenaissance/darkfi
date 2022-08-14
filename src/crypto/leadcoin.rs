@@ -1,5 +1,9 @@
 use pasta_curves::pallas;
 use halo2_proofs::{circuit::Value};
+use halo2_gadgets::{
+    poseidon::{primitives as poseidon},
+};
+
 use crate::{
     zk::circuit::lead_contract::LeadContract,
     crypto::{
@@ -15,7 +19,7 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 
 //use halo2_proofs::arithmetic::CurveAffine;
 
-pub const LEAD_PUBLIC_INPUT_LEN : usize = 8;
+pub const LEAD_PUBLIC_INPUT_LEN : usize = 9;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
@@ -54,6 +58,23 @@ impl LeadCoin {
         let po_pk = self.pk.unwrap();
         let po_sn = self.sn.unwrap();
 
+        let y_mu = self.y_mu.unwrap();
+        let rho_mu = self.rho_mu.unwrap();
+        let root_sk  = self.root_sk.unwrap();
+        let nonce = self.nonce.unwrap();
+        let lottery_msg_input = [
+            root_sk,
+            nonce,
+        ];
+        let lottery_msg : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(lottery_msg_input);
+        //
+        let po_y_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(y_mu));
+        let po_y = *po_y_pt.to_affine().coordinates().unwrap().x();
+        //
+        let po_rho_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(rho_mu));
+        let po_rho = *po_rho_pt.to_affine().coordinates().unwrap().x();
+
+
         let po_cmp = pallas::Base::from(1);
         let _zero = pallas::Base::from(0);
 
@@ -89,6 +110,8 @@ impl LeadCoin {
             po_pk,
             po_sn,
 
+            po_y,
+            //po_rho,
         ];
         public_inputs
     }

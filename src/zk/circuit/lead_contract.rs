@@ -103,6 +103,8 @@ const LEAD_COIN_NONCE2_OFFSET: usize = 4;
 const LEAD_COIN_COMMIT_PATH_OFFSET: usize = 5;
 const LEAD_COIN_PK_OFFSET: usize = 6;
 const LEAD_COIN_SERIAL_NUMBER_OFFSET: usize = 7;
+const LEAD_Y_COMMIT_BASE_OFFSET: usize = 8;
+const LEAD_RHO_COMMIT_BASE_OFFSET: usize =9;
 
 pub fn concat_u8(lhs: &[u8], rhs: &[u8]) -> Vec<u8> {
     [lhs, rhs].concat()
@@ -514,7 +516,7 @@ impl Circuit<pallas::Base> for LeadContract {
         /// *  y as COMIT(root_sk||nonce, mau_y)
         /// beging the commitment to the coin's secret key, coin's nonce, and
         /// random value deriven from the epoch sampled random eta.
-        let y_commit_msg : AssignedCell<Fp,Fp> = {
+        let lottery_commit_msg : AssignedCell<Fp,Fp> = {
             let poseidon_message = [
                 _root_sk.clone(),
                 coin_nonce.clone(),
@@ -532,7 +534,7 @@ impl Circuit<pallas::Base> for LeadContract {
 
         let com = {
             let y_commit_v = FixedPointBaseField::from_inner(ecc_chip.clone(),  NullifierK);
-            y_commit_v.mul(layouter.namespace(|| "coin commit v"), y_commit_msg)?
+            y_commit_v.mul(layouter.namespace(|| "coin commit v"), lottery_commit_msg)?
         };
 
         // r*G_2
@@ -548,32 +550,19 @@ impl Circuit<pallas::Base> for LeadContract {
         let y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let y_commit_base = y_commit.inner().x();
 
-        //TODO public constraint y
-        // ============================
-        // constraint rho as COMIT(root_sk*nonce, mau_rho)
-        // ============================
-        /*
-        let (com, _) = {
-            let rho_commit_v = ValueCommitV;
-            let rho_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), rho_commit_v);
-            let rcv = ScalarFixedShort::new(
-                ecc_chip.clone(),
-                layouter.namespace(|| "y_commit_base*1"),
-                (y_commit_base.clone(), one.clone()),
-            )?;
-            rho_commit_v.mul(layouter.namespace(|| "coin commit v"), rcv)?
-        };
-
+        /// constraint rho as COMIT(PRF(root_sk||nonce), rho_mu)
         // r*G_2
         let (blind, _) = {
-            let rho_commit_r = OrchardFixedBasesFull::ValueCommitR;
-            let rho_commit_r = FixedPoint::from_inner(ecc_chip.clone(), rho_commit_r);
-            let mau_rho =
-                ScalarFixed::new(ecc_chip, layouter.namespace(|| "mau_rho scalar"), self.mau_rho)?;
+            let mau_rho = ScalarFixed::new(
+                ecc_chip.clone(),
+                layouter.namespace(|| "mau_rho scalar"),
+                self.mau_rho
+            )?;
+            let rho_commit_r = FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_rho)?
         };
-        let _rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        */
+        let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
+        let rho_commit_base = rho_commit.inner().x();
 
         let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
         let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value.clone())?;
@@ -642,6 +631,19 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_SERIAL_NUMBER_OFFSET,
         )?;
 
+        layouter.constrain_instance(
+            y_commit_base.cell(),
+            config.primary,
+            LEAD_Y_COMMIT_BASE_OFFSET,
+        )?;
+
+        /*
+        layouter.constrain_instance(
+            rho_commit_base.cell(),
+            config.primary,
+            LEAD_RHO_COMMIT_BASE_OFFSET,
+        )?;
+        */
         Ok(())
     }
 }
