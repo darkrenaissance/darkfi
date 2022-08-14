@@ -3,8 +3,9 @@ use rand::rngs::OsRng;
 
 use super::{
     partial::{Partial, PartialClearInput, PartialInput},
-    ClearInput, FuncCall, Input, Output,
+    CallData, ClearInput, Input, Output,
 };
+use crate::demo::FuncCall;
 
 use darkfi::{
     crypto::{
@@ -184,6 +185,14 @@ impl Builder {
             inputs.push(input);
         }
 
-        Ok(FuncCall { clear_inputs, inputs, outputs: partial_tx.outputs })
+        let call_data = CallData { clear_inputs, inputs, outputs: partial_tx.outputs };
+
+        // TODO: Proofs is an empty vector right now.
+        Ok(FuncCall {
+            contract_id: "money".to_string(),
+            func_id: "money::transfer()".to_string(),
+            call_data: Box::new(call_data),
+            proofs: vec![],
+        })
     }
 }

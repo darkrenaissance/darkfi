@@ -16,8 +16,6 @@ use std::{
     time::Instant,
 };
 
-use crate::money_contract;
-
 use darkfi::{
     crypto::{
         constants::MERKLE_DEPTH,
@@ -30,7 +28,7 @@ use darkfi::{
         types::DrkCircuitField,
         OwnCoin, OwnCoins, Proof,
     },
-    node::state::{state_transition, ProgramState, StateUpdate},
+    node::state::{ProgramState, StateUpdate},
     tx::builder::{
         TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
         TransactionBuilderOutputInfo,
@@ -42,6 +40,14 @@ use darkfi::{
         vm_stack::empty_witnesses,
     },
     zkas::decoder::ZkBinary,
+};
+
+use crate::{
+    dao_contract::{
+        mint::Builder,
+        state::{apply, state_transition, DaoBulla, State},
+    },
+    money_contract,
 };
 
 /// The state machine, held in memory.
@@ -140,237 +146,6 @@ impl ZkBinaryTable {
     }
 }
 
-mod dao_contract {
-    use pasta_curves::pallas;
-    use std::any::Any;
-
-    #[derive(Clone)]
-    pub struct DaoBulla(pub pallas::Base);
-
-    /// This DAO state is for all DAOs on the network. There should only be a single instance.
-    pub struct State {
-        dao_bullas: Vec<DaoBulla>,
-    }
-
-    impl State {
-        pub fn new() -> Box<dyn Any> {
-            Box::new(Self { dao_bullas: Vec::new() })
-        }
-
-        pub fn add_bulla(&mut self, bulla: DaoBulla) {
-            self.dao_bullas.push(bulla);
-        }
-    }
-
-    /// This is an anonymous contract function that mutates the internal DAO state.
-    ///
-    /// Corresponds to `mint(proposer_limit, quorum, approval_ratio, dao_pubkey, dao_blind)`
-    ///
-    /// The prover creates a `Builder`, which then constructs the `Tx` that the verifier can
-    /// check using `state_transition()`.
-    ///
-    /// # Arguments
-    ///
-    /// * `proposer_limit` - Number of governance tokens that holder must possess in order to
-    ///   propose a new vote.
-    /// * `quorum` - Number of minimum votes that must be met for a proposal to pass.
-    /// * `approval_ratio` - Ratio of winning to total votes for a proposal to pass.
-    /// * `dao_pubkey` - Public key of the DAO for permissioned access. This can also be
-    ///   shared publicly if you want a full decentralized DAO.
-    /// * `dao_blind` - Blinding factor for the DAO bulla.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// let dao_proposer_limit = 110;
-    /// let dao_quorum = 110;
-    /// let dao_approval_ratio = 2;
-    ///
-    /// let builder = dao_contract::Mint::Builder(
-    ///     dao_proposer_limit,
-    ///     dao_quorum,
-    ///     dao_approval_ratio,
-    ///     gov_token_id,
-    ///     dao_pubkey,
-    ///     dao_blind
-    /// );
-    /// let tx = builder.build();
-    /// ```
-    pub mod mint {
-        use darkfi::{
-            crypto::{keypair::PublicKey, proof::ProvingKey, types::DrkCircuitField, Proof},
-            zk::vm::{Witness, ZkCircuit},
-        };
-        use halo2_gadgets::poseidon::primitives as poseidon;
-        use halo2_proofs::circuit::Value;
-        use log::debug;
-        use pasta_curves::{
-            arithmetic::CurveAffine,
-            group::{ff::Field, Curve},
-            pallas,
-        };
-        use rand::rngs::OsRng;
-        use std::{
-            any::{Any, TypeId},
-            time::Instant,
-        };
-
-        use super::{
-            super::{CallDataBase, FuncCall, StateRegistry, Transaction, ZkBinaryTable},
-            DaoBulla,
-        };
-
-        pub struct Builder {
-            dao_proposer_limit: u64,
-            dao_quorum: u64,
-            dao_approval_ratio: u64,
-            gov_token_id: pallas::Base,
-            dao_pubkey: PublicKey,
-            dao_bulla_blind: pallas::Base,
-        }
-
-        impl Builder {
-            pub fn new(
-                dao_proposer_limit: u64,
-                dao_quorum: u64,
-                dao_approval_ratio: u64,
-                gov_token_id: pallas::Base,
-                dao_pubkey: PublicKey,
-                dao_bulla_blind: pallas::Base,
-            ) -> Self {
-                Self {
-                    dao_proposer_limit,
-                    dao_quorum,
-                    dao_approval_ratio,
-                    gov_token_id,
-                    dao_pubkey,
-                    dao_bulla_blind,
-                }
-            }
-
-            /// Consumes self, and produces the function call
-            pub fn build(self, zk_bins: &ZkBinaryTable) -> FuncCall {
-                // Dao bulla
-                let dao_proposer_limit = pallas::Base::from(self.dao_proposer_limit);
-                let dao_quorum = pallas::Base::from(self.dao_quorum);
-                let dao_approval_ratio = pallas::Base::from(self.dao_approval_ratio);
-
-                let dao_pubkey_coords = self.dao_pubkey.0.to_affine().coordinates().unwrap();
-                let dao_public_x = *dao_pubkey_coords.x();
-                let dao_public_y = *dao_pubkey_coords.x();
-
-                let messages = [
-                    dao_proposer_limit,
-                    dao_quorum,
-                    dao_approval_ratio,
-                    self.gov_token_id,
-                    dao_public_x,
-                    dao_public_y,
-                    self.dao_bulla_blind,
-                    // @tmp-workaround
-                    self.dao_bulla_blind,
-                ];
-                let dao_bulla = poseidon::Hash::<
-                    _,
-                    poseidon::P128Pow5T3,
-                    poseidon::ConstantLength<8>,
-                    3,
-                    2,
-                >::init()
-                .hash(messages);
-                let dao_bulla = DaoBulla(dao_bulla);
-
-                // Now create the mint proof
-                let zk_info = zk_bins.lookup(&"dao-mint".to_string()).unwrap();
-                let zk_bin = zk_info.bincode.clone();
-                let prover_witnesses = vec![
-                    Witness::Base(Value::known(dao_proposer_limit)),
-                    Witness::Base(Value::known(dao_quorum)),
-                    Witness::Base(Value::known(dao_approval_ratio)),
-                    Witness::Base(Value::known(self.gov_token_id)),
-                    Witness::Base(Value::known(dao_public_x)),
-                    Witness::Base(Value::known(dao_public_y)),
-                    Witness::Base(Value::known(self.dao_bulla_blind)),
-                ];
-                let public_inputs = vec![dao_bulla.0];
-                let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
-
-                let proving_key = &zk_info.proving_key;
-                let mint_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
-                    .expect("DAO::mint() proving error!");
-
-                // [x] 1. move proving key to zkbins table (and k value)
-                // [x] 2. do verification of zk proofs in main code
-                // [ ] 3. implement apply(update) function
-
-                // Return call data
-                let call_data = CallData { dao_bulla };
-                FuncCall {
-                    contract_id: "DAO".to_string(),
-                    func_id: "DAO::mint()".to_string(),
-                    call_data: Box::new(call_data),
-                    proofs: vec![mint_proof],
-                }
-            }
-        }
-
-        pub struct CallData {
-            dao_bulla: DaoBulla,
-        }
-
-        impl CallDataBase for CallData {
-            fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
-                vec![vec![self.dao_bulla.0]]
-            }
-
-            fn zk_proof_addrs(&self) -> Vec<String> {
-                vec!["dao-mint".to_string()]
-            }
-
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-        }
-
-        #[derive(Debug, Clone, thiserror::Error)]
-        pub enum Error {
-            #[error("Malformed packet")]
-            MalformedPacket,
-        }
-        type Result<T> = std::result::Result<T, Error>;
-
-        pub fn state_transition(
-            states: &StateRegistry,
-            func_call_index: usize,
-            parent_tx: &Transaction,
-        ) -> Result<Update> {
-            let func_call = &parent_tx.func_calls[func_call_index];
-            let call_data = func_call.call_data.as_any();
-
-            assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
-            let call_data = call_data.downcast_ref::<CallData>();
-
-            // This will be inside wasm so unwrap is fine.
-            let call_data = call_data.unwrap();
-
-            // Code goes here
-
-            Ok(Update { dao_bulla: call_data.dao_bulla.clone() })
-        }
-
-        pub struct Update {
-            dao_bulla: DaoBulla,
-        }
-
-        pub fn apply(states: &mut StateRegistry, update: Update) {
-            // Lookup dao_contract state from registry
-            let state = states.lookup::<super::State>(&"dao_contract".to_string()).unwrap();
-            // Add dao_bulla to state.dao_bullas
-            state.add_bulla(update.dao_bulla);
-        }
-    }
-}
-
 macro_rules! zip {
     ($x: expr) => ($x);
     ($x: expr, $($y: expr), +) => (
@@ -380,7 +155,7 @@ macro_rules! zip {
 }
 
 pub struct Transaction {
-    func_calls: Vec<FuncCall>,
+    pub func_calls: Vec<FuncCall>,
 }
 
 impl Transaction {
@@ -410,10 +185,10 @@ type ContractId = String;
 type FuncId = String;
 
 pub struct FuncCall {
-    contract_id: ContractId,
-    func_id: FuncId,
-    call_data: Box<dyn CallDataBase>,
-    proofs: Vec<Proof>,
+    pub contract_id: ContractId,
+    pub func_id: FuncId,
+    pub call_data: Box<dyn CallDataBase>,
+    pub proofs: Vec<Proof>,
 }
 
 pub trait CallDataBase {
@@ -443,7 +218,7 @@ impl StateRegistry {
         self.states.insert(contract_id, state);
     }
 
-    fn lookup<'a, S: 'static>(&'a mut self, contract_id: &ContractId) -> Option<&'a mut S> {
+    pub fn lookup<'a, S: 'static>(&'a mut self, contract_id: &ContractId) -> Option<&'a mut S> {
         self.states.get_mut(contract_id).and_then(|state| state.downcast_mut())
     }
 }
@@ -474,6 +249,17 @@ pub async fn demo() -> Result<()> {
     /////////////////////////////////////////////////
 
     /*
+    TODO: The following money_contract behaviors are still unimplemented:
+
+    [ ] money_contract/transfer/builder.rs.
+        The mint proof is currently part of its outputs and CallData::proofs is an empty vector.
+    [ ] CallDataBase
+        Not fully implemented for money_contract/mint/mod::CallData.
+    [ ] money_contract/state.rs
+        State transition function is totally unimplemented.
+
+    /////////////////////////////////////////////////
+
     // State for money contracts
     let cashier_signature_secret = SecretKey::random(&mut OsRng);
     let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
@@ -501,7 +287,8 @@ pub async fn demo() -> Result<()> {
 
     /////////////////////////////////////////////////
 
-    let dao_state = dao_contract::State::new();
+    let dao_state = State::new();
+    //let dao_state = State::new();
     states.register("dao_contract".to_string(), dao_state);
 
     // For this demo lets create 10 random preexisting DAO bullas
@@ -518,7 +305,7 @@ pub async fn demo() -> Result<()> {
     let dao_bulla_blind = pallas::Base::random(&mut OsRng);
 
     // Create DAO mint tx
-    let builder = dao_contract::mint::Builder::new(
+    let builder = Builder::new(
         dao_proposer_limit,
         dao_quorum,
         dao_approval_ratio,
@@ -536,8 +323,8 @@ pub async fn demo() -> Result<()> {
         if func_call.func_id == "DAO::mint()" {
             debug!("dao_contract::mint::state_transition()");
 
-            let update = dao_contract::mint::state_transition(&states, idx, &tx).unwrap();
-            dao_contract::mint::apply(&mut states, update);
+            let update = state_transition(&states, idx, &tx).unwrap();
+            apply(&mut states, update);
         }
     }
 

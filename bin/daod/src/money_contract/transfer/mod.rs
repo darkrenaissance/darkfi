@@ -1,4 +1,4 @@
-use std::io;
+use std::{any::Any, io};
 
 use log::error;
 use pasta_curves::group::Group;
@@ -12,7 +12,7 @@ use darkfi::{
         proof::VerifyingKey,
         schnorr,
         schnorr::SchnorrPublic,
-        types::{DrkTokenId, DrkValueBlind, DrkValueCommit},
+        types::{DrkCircuitField, DrkTokenId, DrkValueBlind, DrkValueCommit},
         util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
@@ -20,18 +20,35 @@ use darkfi::{
     Result, VerifyFailed, VerifyResult,
 };
 
+use crate::demo::CallDataBase;
+
 pub mod builder;
 pub mod partial;
 
 /// A DarkFi transaction
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct FuncCall {
+pub struct CallData {
     /// Clear inputs
     pub clear_inputs: Vec<ClearInput>,
     /// Anonymous inputs
     pub inputs: Vec<Input>,
     /// Anonymous outputs
     pub outputs: Vec<Output>,
+}
+
+impl CallDataBase for CallData {
+    // TODO: Unimplemented
+    fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
+        vec![]
+    }
+
+    fn zk_proof_addrs(&self) -> Vec<String> {
+        vec!["money-transfer".to_string()]
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 /// A transaction's clear input
@@ -73,7 +90,7 @@ pub struct Output {
     pub enc_note: EncryptedNote,
 }
 
-impl FuncCall {
+impl CallData {
     /// Verify the transaction
     pub fn verify(&self, mint_vk: &VerifyingKey, burn_vk: &VerifyingKey) -> VerifyResult<()> {
         //  must have minimum 1 clear or anon input, and 1 output
