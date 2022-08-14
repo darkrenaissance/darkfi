@@ -19,7 +19,7 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 
 //use halo2_proofs::arithmetic::CurveAffine;
 
-pub const LEAD_PUBLIC_INPUT_LEN : usize = 9;
+pub const LEAD_PUBLIC_INPUT_LEN : usize = 10;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
@@ -111,7 +111,7 @@ impl LeadCoin {
             po_sn,
 
             po_y,
-            //po_rho,
+            po_rho,
         ];
         public_inputs
     }

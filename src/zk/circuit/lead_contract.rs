@@ -637,13 +637,12 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_Y_COMMIT_BASE_OFFSET,
         )?;
 
-        /*
         layouter.constrain_instance(
             rho_commit_base.cell(),
             config.primary,
             LEAD_RHO_COMMIT_BASE_OFFSET,
         )?;
-        */
+
         Ok(())
     }
 }
