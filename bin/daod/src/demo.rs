@@ -25,7 +25,7 @@ use darkfi::{
         nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
         token_id::generate_id,
-        types::{DrkCircuitField, DrkSpendHook, DrkUserData},
+        types::{DrkCircuitField, DrkSpendHook, DrkUserData, DrkValue},
         OwnCoin, OwnCoins, Proof,
     },
     node::state::{ProgramState, StateUpdate},
@@ -362,8 +362,53 @@ pub async fn demo() -> Result<()> {
 
     // Wallet stuff
     // DAO reads the money received from the encrypted note
+    for (idx, func_call) in tx.func_calls.iter().enumerate() {
+        if func_call.func_id == "money::transfer()" {
+            let call_data = func_call.call_data.as_any();
+            assert_eq!(
+                (&*call_data).type_id(),
+                TypeId::of::<money_contract::transfer::validate::CallData>()
+            );
+            let call_data =
+                call_data.downcast_ref::<money_contract::transfer::validate::CallData>().unwrap();
+
+            assert_eq!(call_data.outputs.len(), 1);
+            let output = &call_data.outputs[0];
+            let enc_note = &output.enc_note;
+            // Try to decrypt the note
+            let note: money_contract::transfer::builder::Note =
+                enc_note.decrypt(&dao_keypair.secret).unwrap();
+
+            // Check the actual coin received is valid before accepting it
+
+            let coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
+            let coin = poseidon_hash::<8>([
+                *coords.x(),
+                *coords.y(),
+                DrkValue::from(note.value),
+                note.token_id,
+                note.serial,
+                note.spend_hook,
+                note.user_data,
+                note.coin_blind,
+            ]);
+            assert_eq!(coin, output.revealed.coin.0);
+
+            assert_eq!(note.spend_hook, hook_dao_exec);
+            assert_eq!(note.user_data, dao_bulla.0);
+
+            debug!("DAO received a coin worth {} xDRK", note.value);
+        }
+    }
 
     ///////////////////////////////////////////////////
 
+    //let x = pallas::Base::from(0);
+
     Ok(())
+}
+
+fn poseidon_hash<const N: usize>(messages: [pallas::Base; N]) -> pallas::Base {
+    poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<N>, 3, 2>::init()
+        .hash(messages)
 }
