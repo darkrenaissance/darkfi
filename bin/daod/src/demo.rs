@@ -402,6 +402,131 @@ pub async fn demo() -> Result<()> {
     }
 
     ///////////////////////////////////////////////////
+    //// Mint the governance token
+    //// Send it to three hodlers
+    ///////////////////////////////////////////////////
+
+    // Hodler 1
+    let keypair1 = Keypair::random(&mut OsRng);
+    // Hodler 2
+    let keypair2 = Keypair::random(&mut OsRng);
+    // Hodler 3: the tiebreaker
+    let keypair3 = Keypair::random(&mut OsRng);
+
+    let keypairs = vec![keypair1, keypair2, keypair3];
+
+    // We don't use this because money-transfer expects a cashier.
+    // let signature_secret = SecretKey::random(&mut OsRng);
+
+    // Spend hook and user data disabled
+    let spend_hook = DrkSpendHook::from(0);
+    let user_data = DrkUserData::from(0);
+
+    let output1 = money_contract::transfer::builder::BuilderOutputInfo {
+        value: 400000,
+        token_id: gdrk_token_id,
+        public: keypair1.public,
+        spend_hook,
+        user_data,
+    };
+
+    let output2 = money_contract::transfer::builder::BuilderOutputInfo {
+        value: 400000,
+        token_id: gdrk_token_id,
+        public: keypair2.public,
+        spend_hook,
+        user_data,
+    };
+
+    let output3 = money_contract::transfer::builder::BuilderOutputInfo {
+        value: 200000,
+        token_id: gdrk_token_id,
+        public: keypair3.public,
+        spend_hook,
+        user_data,
+    };
+
+    assert!(2 * 400000 + 200000 == gdrk_supply);
+
+    let builder = money_contract::transfer::builder::Builder {
+        clear_inputs: vec![money_contract::transfer::builder::BuilderClearInputInfo {
+            value: gdrk_supply,
+            token_id: gdrk_token_id,
+            signature_secret: cashier_signature_secret,
+        }],
+        inputs: vec![],
+        outputs: vec![output1, output2, output3],
+    };
+
+    let func_call = builder.build(&zk_bins)?;
+
+    let tx = Transaction { func_calls: vec![func_call] };
+
+    for (idx, func_call) in tx.func_calls.iter().enumerate() {
+        // So then the verifier will lookup the corresponding state_transition and apply
+        // functions based off the func_id
+        if func_call.func_id == "money::transfer()" {
+            debug!("money_contract::transfer::state_transition()");
+
+            let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
+                .expect("money_contract::state_transition() failed!");
+            money_contract::transfer::validate::apply(&mut states, update);
+        }
+    }
+
+    tx.zk_verify(&zk_bins);
+
+    // We need this to keep track of Notes
+    let mut notes: [Option<money_contract::transfer::builder::Note>; 3] = [None, None, None];
+
+    //// Wallet stuff
+    //// Holders read the money received from the encrypted note
+    for (i, key) in keypairs.iter().enumerate() {
+        for (idx, func_call) in tx.func_calls.iter().enumerate() {
+            if func_call.func_id == "money::transfer()" {
+                let call_data = func_call.call_data.as_any();
+                assert_eq!(
+                    (&*call_data).type_id(),
+                    TypeId::of::<money_contract::transfer::validate::CallData>()
+                );
+                let call_data = call_data
+                    .downcast_ref::<money_contract::transfer::validate::CallData>()
+                    .unwrap();
+
+                assert_eq!(call_data.outputs.len(), 3);
+
+                for output in &call_data.outputs {
+                    let enc_note = &output.enc_note;
+                    // Try to decrypt the note
+                    let note: darkfi::Result<money_contract::transfer::builder::Note> =
+                        enc_note.decrypt(&key.secret);
+
+                    match note {
+                        Ok(note) => {
+                            // Check the actual coin received is valid before accepting it
+                            let coords = key.public.0.to_affine().coordinates().unwrap();
+                            let coin = poseidon_hash::<8>([
+                                *coords.x(),
+                                *coords.y(),
+                                DrkValue::from(note.value),
+                                note.token_id,
+                                note.serial,
+                                note.spend_hook,
+                                note.user_data,
+                                note.coin_blind,
+                            ]);
+                            assert_eq!(coin, output.revealed.coin.0);
+
+                            debug!("Holder{} received a coin worth {} xDRK", i, note.value);
+
+                            notes[i] = Some(note);
+                        }
+                        Err(e) => continue,
+                    }
+                }
+            }
+        }
+    }
 
     //let x = pallas::Base::from(0);
 
