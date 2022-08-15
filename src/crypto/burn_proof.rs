@@ -62,11 +62,19 @@ impl BurnRevealedValues {
         let public_key = PublicKey::from_secret(secret);
         let coords = public_key.0.to_affine().coordinates().unwrap();
 
-        let messages =
-            [*coords.x(), *coords.y(), DrkValue::from(value), token_id, serial, coin_blind];
+        let messages = [
+            *coords.x(),
+            *coords.y(),
+            DrkValue::from(value),
+            token_id,
+            serial,
+            spend_hook,
+            user_data,
+            coin_blind,
+        ];
 
         let coin =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<8>, 3, 2>::init()
                 .hash(messages);
 
         let merkle_root = {
@@ -116,6 +124,7 @@ impl BurnRevealedValues {
             *token_coords.x(),
             *token_coords.y(),
             merkle_root,
+            user_data_enc,
             *sig_coords.x(),
             *sig_coords.y(),
         ]
@@ -169,6 +178,9 @@ pub fn create_burn_proof(
         token_blind: Value::known(token_blind),
         leaf_pos: Value::known(leaf_position as u32),
         merkle_path: Value::known(merkle_path.try_into().unwrap()),
+        spend_hook: Value::known(spend_hook),
+        user_data: Value::known(user_data),
+        user_data_blind: Value::known(user_data_blind),
         sig_secret: Value::known(signature_secret.0),
     };
 

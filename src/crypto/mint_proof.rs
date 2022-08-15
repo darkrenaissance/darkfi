@@ -36,6 +36,8 @@ impl MintRevealedValues {
         value_blind: DrkValueBlind,
         token_blind: DrkValueBlind,
         serial: DrkSerial,
+        spend_hook: DrkSpendHook,
+        user_data: DrkUserData,
         coin_blind: DrkCoinBlind,
         public_key: PublicKey,
     ) -> Self {
@@ -43,11 +45,19 @@ impl MintRevealedValues {
         let token_commit = pedersen_commitment_base(token_id, token_blind);
 
         let coords = public_key.0.to_affine().coordinates().unwrap();
-        let messages =
-            [*coords.x(), *coords.y(), DrkValue::from(value), token_id, serial, coin_blind];
+        let messages = [
+            *coords.x(),
+            *coords.y(),
+            DrkValue::from(value),
+            token_id,
+            serial,
+            spend_hook,
+            user_data,
+            coin_blind,
+        ];
 
         let coin =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<8>, 3, 2>::init()
                 .hash(messages);
 
         MintRevealedValues { value_commit, token_commit, coin: Coin(coin) }
@@ -88,6 +98,8 @@ pub fn create_mint_proof(
         value_blind,
         token_blind,
         serial,
+        spend_hook,
+        user_data,
         coin_blind,
         public_key,
     );
@@ -101,6 +113,8 @@ pub fn create_mint_proof(
         token: Value::known(token_id),
         serial: Value::known(serial),
         coin_blind: Value::known(coin_blind),
+        spend_hook: Value::known(spend_hook),
+        user_data: Value::known(user_data),
         value_blind: Value::known(value_blind),
         token_blind: Value::known(token_blind),
     };
