@@ -7,6 +7,20 @@ use darkfi::{Error, Result};
 
 use crate::primitives::{TaskEvent, TaskInfo};
 
+// Red
+const NO_TASK_SCALE: u8 = 50;
+const MIN_SCALE: usize = 90;
+const MAX_SCALE: usize = 255;
+const INCREASE_FACTOR: usize = 25;
+
+// Green
+const GREEN: u8 = 40;
+// Blue
+const BLUE: u8 = 50;
+
+/// Log drawdown gets all owners of tasks, stores a vec of stopped tasks for each owner
+/// in a hashmap, draw a heatmap of how many stopped tasks in each day of the specified
+/// month and owner.
 pub fn drawdown(date: String, tasks: Vec<TaskInfo>, owner: String) -> Result<()> {
     let mut ret = FxHashMap::default();
     let all_owners = owners(tasks.clone());
@@ -45,7 +59,7 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, owner: String) -> Result<()>
     let mut grid =
         Grid::new(GridOptions { direction: Direction::TopToBottom, filling: Filling::Spaces(1) });
 
-    let days_in_month = get_days_from_month(date) as u32;
+    let days_in_month = get_days_from_month(date)? as u32;
 
     if ret.contains_key(&owner) {
         for _ in 0..7 {
@@ -69,12 +83,12 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, owner: String) -> Result<()>
                 .collect();
 
             let red_scale = if date_tasks.is_empty() {
-                50
+                NO_TASK_SCALE
             } else {
-                ((date_tasks.len() * 25) + 90).clamp(90, 255) as u8
+                ((date_tasks.len() * INCREASE_FACTOR) + MIN_SCALE).clamp(MIN_SCALE, MAX_SCALE) as u8
             };
 
-            let cell = Cell::from("▀▀".truecolor(red_scale, 40, 50));
+            let cell = Cell::from("▀▀".truecolor(red_scale, GREEN, BLUE));
             grid.add(cell)
         }
     }
@@ -89,21 +103,25 @@ fn is_leap_year(year: i32) -> bool {
     return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
-pub fn to_naivedate(date: String) -> Result<NaiveDate> {
+fn helper_parse_func(date: String) -> Result<(u32, i32)> {
     if date.len() != 4 || date.parse::<u32>().is_err() {
         return Err(Error::MalformedPacket)
     }
     let (month, year) = (date[..2].parse::<u32>().unwrap(), date[2..].parse::<i32>().unwrap());
     let year = year + (Utc::today().year() / 100) * 100;
 
+    Ok((month, year))
+}
+
+pub fn to_naivedate(date: String) -> Result<NaiveDate> {
+    let (month, year) = helper_parse_func(date)?;
     Ok(NaiveDate::from_ymd(year, month, 1))
 }
 
-fn get_days_from_month(date: String) -> i64 {
-    let (month, year) = (date[..2].parse::<u32>().unwrap(), date[2..].parse::<i32>().unwrap());
-    let year = year + (Utc::today().year() / 100) * 100;
+fn get_days_from_month(date: String) -> Result<i64> {
+    let (month, year) = helper_parse_func(date)?;
 
-    NaiveDate::from_ymd(
+    Ok(NaiveDate::from_ymd(
         match month {
             12 => year + 1,
             _ => year,
@@ -115,7 +133,7 @@ fn get_days_from_month(date: String) -> i64 {
         1,
     )
     .signed_duration_since(NaiveDate::from_ymd(year, month, 1))
-    .num_days()
+    .num_days())
 }
 
 fn owners(tasks: Vec<TaskInfo>) -> Vec<String> {
