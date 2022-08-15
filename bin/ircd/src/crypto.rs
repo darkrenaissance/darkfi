@@ -1,9 +1,12 @@
 use crypto_box::aead::Aead;
+use fxhash::FxHashMap;
 use rand::rngs::OsRng;
+
+use crate::{privmsg::Privmsg, settings::ChannelInfo, MAXIMUM_LENGTH_OF_NICKNAME};
 
 /// Try decrypting a message given a NaCl box and a base58 string.
 /// The format we're using is nonce+ciphertext, where nonce is 24 bytes.
-pub fn try_decrypt_message(salt_box: &crypto_box::Box, ciphertext: &str) -> Option<String> {
+fn try_decrypt_message(salt_box: &crypto_box::Box, ciphertext: &str) -> Option<String> {
     let bytes = match bs58::decode(ciphertext).into_vec() {
         Ok(v) => v,
         Err(_) => return None,
@@ -40,4 +43,66 @@ pub fn encrypt_message(salt_box: &crypto_box::Box, plaintext: &str) -> String {
     concat.append(&mut ciphertext);
 
     bs58::encode(concat).into_string()
+}
+/// Decrypt PrivMsg target
+pub fn decrypt_target(
+    privmsg: &mut Privmsg,
+    configured_chans: FxHashMap<String, ChannelInfo>,
+    configured_contacts: FxHashMap<String, crypto_box::Box>,
+) {
+    for chan_name in configured_chans.keys() {
+        let chan_info = configured_chans.get(chan_name).unwrap();
+        if !chan_info.joined {
+            continue
+        }
+
+        let salt_box = chan_info.salt_box.clone();
+        if salt_box.is_some() {
+            let decrypted_target = try_decrypt_message(&salt_box.unwrap(), &privmsg.target);
+            if decrypted_target.is_none() {
+                continue
+            }
+
+            let target = decrypted_target.unwrap();
+            if chan_name.to_string() == target {
+                privmsg.target = target;
+            }
+        }
+    }
+
+    for contact in configured_contacts.keys() {
+        let salt_box = configured_contacts.get(contact).unwrap();
+        let decrypted_target = try_decrypt_message(&salt_box, &privmsg.target);
+        if decrypted_target.is_none() {
+            continue
+        }
+
+        let target = decrypted_target.unwrap();
+        if contact.to_string() == target {
+            privmsg.target = target;
+        }
+    }
+}
+
+/// Decrypt PrivMsg nickname and message
+pub fn decrypt_privmsg(salt_box: &crypto_box::Box, privmsg: &mut Privmsg) {
+    let decrypted_nick = try_decrypt_message(&salt_box.clone(), &privmsg.nickname);
+    let decrypted_msg = try_decrypt_message(&salt_box.clone(), &privmsg.message);
+
+    if decrypted_nick.is_none() | decrypted_msg.is_none() {
+        return
+    }
+
+    privmsg.nickname = decrypted_nick.unwrap();
+    if privmsg.nickname.len() > MAXIMUM_LENGTH_OF_NICKNAME {
+        privmsg.nickname = privmsg.nickname[..MAXIMUM_LENGTH_OF_NICKNAME].to_string();
+    }
+    privmsg.message = decrypted_msg.unwrap();
+}
+
+/// Encrypt PrivMsg
+pub fn encrypt_privmsg(salt_box: &crypto_box::Box, privmsg: &mut Privmsg) {
+    privmsg.nickname = encrypt_message(salt_box, &privmsg.nickname);
+    privmsg.target = encrypt_message(salt_box, &privmsg.target);
+    privmsg.message = encrypt_message(salt_box, &privmsg.message);
 }

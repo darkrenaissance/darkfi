@@ -9,7 +9,7 @@ use ringbuffer::{RingBufferExt, RingBufferWrite};
 use darkfi::{net::P2pPtr, system::SubscriberPtr, Error, Result};
 
 use crate::{
-    crypto::{encrypt_message, try_decrypt_message},
+    crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
     privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
     ChannelInfo, MAXIMUM_LENGTH_OF_MESSAGE, MAXIMUM_LENGTH_OF_NICKNAME,
 };
@@ -182,8 +182,17 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                     return Err(Error::MalformedPacket)
                 }
 
-                let mut message = line[substr_idx + 1..].to_string();
+                let message = line[substr_idx + 1..].to_string();
+
                 info!("(Plain) PRIVMSG {} :{}", target, message);
+
+                let random_id = OsRng.next_u64();
+                let mut privmsg = Privmsg {
+                    id: random_id,
+                    nickname: self.nickname.clone(),
+                    target: target.to_string().clone(),
+                    message,
+                };
 
                 if target.starts_with('#') {
                     if !self.configured_chans.contains_key(target) {
@@ -196,22 +205,19 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                         return Ok(())
                     }
 
-                    message = if let Some(salt_box) = &channel_info.salt_box {
-                        let encrypted = encrypt_message(salt_box, &message);
-                        info!("(Encrypted) PRIVMSG {} :{}", target, encrypted);
-                        encrypted
-                    } else {
-                        message.to_string()
-                    };
+                    if let Some(salt_box) = &channel_info.salt_box {
+                        encrypt_privmsg(salt_box, &mut privmsg);
+                        info!("(Encrypted) PRIVMSG: {:?}", privmsg);
+                    }
                 } else {
                     // If we have a configured secret for this nick, we encrypt the message.
                     if let Some(salt_box) = self.configured_contacts.get(target) {
-                        message = encrypt_message(salt_box, &message);
-                        info!("(Encrypted) PRIVMSG {} :{}", target, message);
+                        encrypt_privmsg(salt_box, &mut privmsg);
+                        info!("(Encrypted) PRIVMSG: {:?}", privmsg);
                     }
                 }
 
-                self.on_receive_privmsg(&message, target).await?;
+                self.on_receive_privmsg(privmsg).await?;
             }
             "CAP" => {
                 self.is_cap_end = false;
@@ -359,25 +365,16 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         Ok(())
     }
 
-    async fn on_receive_privmsg(&mut self, message: &str, target: &str) -> Result<()> {
-        let random_id = OsRng.next_u64();
-
-        let protocol_msg = Privmsg {
-            id: random_id,
-            nickname: self.nickname.clone(),
-            target: target.to_string(),
-            message: message.to_string(),
-        };
-
+    async fn on_receive_privmsg(&mut self, privmsg: Privmsg) -> Result<()> {
         {
-            (*self.seen_msg_ids.lock().await).push(random_id);
-            (*self.privmsgs_buffer.lock().await).push(protocol_msg.clone())
+            (*self.seen_msg_ids.lock().await).push(privmsg.id);
+            (*self.privmsgs_buffer.lock().await).push(privmsg.clone())
         }
 
-        self.senders.notify_with_exclude(protocol_msg.clone(), &[self.subscriber_id]).await;
+        self.senders.notify_with_exclude(privmsg.clone(), &[self.subscriber_id]).await;
 
-        debug!(target: "ircd", "PRIVMSG to be sent: {:?}", protocol_msg);
-        self.p2p.broadcast(protocol_msg).await?;
+        debug!(target: "ircd", "PRIVMSG to be sent: {:?}", privmsg);
+        self.p2p.broadcast(privmsg).await?;
 
         Ok(())
     }
@@ -423,6 +420,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         info!("Received msg from P2p network: {:?}", msg);
 
         let mut msg = msg.clone();
+        decrypt_target(&mut msg, self.configured_chans.clone(), self.configured_contacts.clone());
 
         if msg.target.starts_with('#') {
             // Try to potentially decrypt the incoming message.
@@ -435,16 +433,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                 return Ok(())
             }
 
-            let salt_box = chan_info.salt_box.clone();
-
-            if salt_box.is_some() {
-                let decrypted_msg = try_decrypt_message(&salt_box.unwrap(), &msg.message);
-
-                if decrypted_msg.is_none() {
-                    return Ok(())
-                }
-
-                msg.message = decrypted_msg.unwrap();
+            if let Some(salt_box) = &chan_info.salt_box {
+                decrypt_privmsg(salt_box, &mut msg);
                 info!("Decrypted received message: {:?}", msg);
             }
 
@@ -456,16 +446,11 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             self.reply(&msg.to_irc_msg()).await?;
             return Ok(())
         } else {
-            if self.is_cap_end &&
-                self.is_nick_init &&
-                (self.nickname == msg.target || self.nickname == msg.nickname)
-            {
+            if self.is_cap_end && self.is_nick_init && self.nickname == msg.target {
                 if self.configured_contacts.contains_key(&msg.target) {
                     let salt_box = self.configured_contacts.get(&msg.target).unwrap();
-                    if let Some(decrypted) = try_decrypt_message(&salt_box, &msg.message) {
-                        msg.message = decrypted;
-                        info!("Decrypted received message: {:?}", msg);
-                    }
+                    decrypt_privmsg(salt_box, &mut msg);
+                    info!("Decrypted received message: {:?}", msg);
                 }
 
                 self.reply(&msg.to_irc_msg()).await?;
