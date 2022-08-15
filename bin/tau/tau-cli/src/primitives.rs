@@ -77,6 +77,7 @@ pub struct TaskInfo {
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
 pub struct TaskEvent {
     pub action: String,
+    pub author: String,
     pub content: String,
     pub timestamp: Timestamp,
 }
@@ -91,6 +92,7 @@ impl Default for TaskEvent {
     fn default() -> Self {
         Self {
             action: State::Open.to_string(),
+            author: "".to_string(),
             content: "".to_string(),
             timestamp: Timestamp::current_time(),
         }

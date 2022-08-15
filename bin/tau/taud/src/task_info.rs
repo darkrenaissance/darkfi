@@ -22,13 +22,14 @@ use crate::{
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, Eq)]
 struct TaskEvent {
     action: String,
+    author: String,
     content: String,
     timestamp: Timestamp,
 }
 
 impl TaskEvent {
-    fn new(action: String, content: String) -> Self {
-        Self { action, content, timestamp: Timestamp::current_time() }
+    fn new(action: String, author: String, content: String) -> Self {
+        Self { action, author, content, timestamp: Timestamp::current_time() }
     }
 }
 
@@ -182,10 +183,10 @@ impl TaskInfo {
         self.desc = desc.into();
     }
 
-    pub fn set_assign(&mut self, assign: &[String]) {
+    pub fn set_assign(&mut self, assign: &[String], owner: &str) {
         debug!(target: "tau", "TaskInfo::set_assign()");
         self.assign = TaskAssigns(assign.to_owned());
-        self.set_event("assign", &assign.join(", "));
+        self.set_event("assign", owner, &assign.join(", "));
     }
 
     pub fn set_project(&mut self, project: &[String]) {
@@ -196,7 +197,7 @@ impl TaskInfo {
     pub fn set_comment(&mut self, c: Comment) {
         debug!(target: "tau", "TaskInfo::set_comment()");
         self.comments.0.push(c.clone());
-        self.set_event("comment", &c.author);
+        self.set_event("comment", &c.author, &c.content);
     }
 
     pub fn set_rank(&mut self, r: f32) {
@@ -209,20 +210,20 @@ impl TaskInfo {
         self.due = d;
     }
 
-    pub fn set_event(&mut self, action: &str, content: &str) {
+    pub fn set_event(&mut self, action: &str, owner: &str, content: &str) {
         debug!(target: "tau", "TaskInfo::set_event()");
         if !content.is_empty() {
-            self.events.0.push(TaskEvent::new(action.into(), content.into()));
+            self.events.0.push(TaskEvent::new(action.into(), owner.into(), content.into()));
         }
     }
 
-    pub fn set_state(&mut self, state: &str) {
+    pub fn set_state(&mut self, state: &str, owner: &str) {
         debug!(target: "tau", "TaskInfo::set_state()");
         if self.get_state() == state {
             return
         }
         self.state = state.to_string();
-        self.set_event("state", state);
+        self.set_event("state", owner, state);
     }
 }
 

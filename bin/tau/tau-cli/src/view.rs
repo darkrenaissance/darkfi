@@ -10,6 +10,7 @@ use darkfi::{
     util::time::{timestamp_to_date, DateFormat},
     Result,
 };
+use textwrap::fill;
 
 use crate::{
     filter::apply_filter,
@@ -123,7 +124,8 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
     table.set_titles(row!["Name", "Value"]);
     table.printstd();
 
-    let mut event_table = table!(["events", &events_as_string(taskinfo.events)]);
+    let (events, timestamps) = &events_as_string(taskinfo.events);
+    let mut event_table = table!([events, timestamps]);
     event_table.set_format(*FORMAT_NO_COLSEP);
     event_table.printstd();
 
@@ -139,24 +141,34 @@ pub fn comments_as_string(comments: Vec<Comment>) -> String {
     comments_str
 }
 
-pub fn events_as_string(events: Vec<TaskEvent>) -> String {
+pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
     let mut events_str = String::new();
+    let mut timestamps_str = String::new();
+    let long_comment_width = 50;
     for event in events {
+        writeln!(timestamps_str, "{}", event.timestamp).unwrap();
         match event.action.as_str() {
             "state" => {
-                writeln!(events_str, "State changed to {} at {}", event.content, event.timestamp)
-                    .unwrap()
+                writeln!(events_str, "- {} changed state to {}", event.author, event.content)
+                    .unwrap();
             }
             "assign" => {
-                writeln!(events_str, "Assigned to {} at {}", event.content, event.timestamp)
-                    .unwrap();
+                writeln!(events_str, "- {} assigned {}", event.author, event.content).unwrap();
             }
             "comment" => {
-                writeln!(events_str, "{} added a comment at {}", event.content, event.timestamp)
-                    .unwrap();
+                // wrap long comments
+                let ev_content = fill(
+                    &event.content,
+                    textwrap::Options::new(long_comment_width).subsequent_indent("  "),
+                );
+                // skip wrapped lines to align timestamp with the first line
+                for _ in 1..ev_content.lines().collect::<Vec<&str>>().len() {
+                    writeln!(timestamps_str, " ").unwrap();
+                }
+                writeln!(events_str, "- {} made a comment: {}", event.author, ev_content).unwrap();
             }
             _ => {}
         }
     }
-    events_str
+    (events_str, timestamps_str)
 }

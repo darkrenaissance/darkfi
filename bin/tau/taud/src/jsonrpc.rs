@@ -109,7 +109,7 @@ impl JsonRpcInterface {
             &self.dataset_path,
         )?;
         new_task.set_project(&task.project);
-        new_task.set_assign(&task.assign);
+        new_task.set_assign(&task.assign, &self.nickname);
 
         self.notify_queue_sender.send(new_task).await.map_err(Error::from)?;
         Ok(json!(true))
@@ -164,7 +164,7 @@ impl JsonRpcInterface {
         let mut task: TaskInfo = self.load_task_by_id(&params[0], ws)?;
 
         if states.contains(&state.as_str()) {
-            task.set_state(&state);
+            task.set_state(&state, &self.nickname);
         }
 
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
@@ -374,7 +374,7 @@ impl JsonRpcInterface {
             let assign = fields.get("assign").unwrap().clone();
             let assign: Vec<String> = serde_json::from_value(assign)?;
             if !assign.is_empty() {
-                task.set_assign(&assign);
+                task.set_assign(&assign, &self.nickname);
             }
         }
 
