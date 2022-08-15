@@ -1,12 +1,6 @@
 use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
 
-use super::{
-    partial::{Partial, PartialClearInput, PartialInput},
-    CallData, ClearInput, Input, Output,
-};
-use crate::demo::FuncCall;
-
 use darkfi::{
     crypto::{
         burn_proof::create_burn_proof,
@@ -20,6 +14,12 @@ use darkfi::{
     },
     util::serial::Encodable,
     Result,
+};
+
+use super::partial::{Partial, PartialClearInput, PartialInput};
+use crate::{
+    demo::FuncCall,
+    money_contract::transfer::validate::{CallData, ClearInput, Input, Output},
 };
 
 pub struct Builder {

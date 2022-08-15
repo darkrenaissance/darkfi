@@ -1,4 +1,3 @@
-use super::Output;
 use darkfi::{
     crypto::{
         keypair::PublicKey,
@@ -7,6 +6,8 @@ use darkfi::{
     },
     util::serial::{SerialDecodable, SerialEncodable},
 };
+
+use crate::money_contract::transfer::validate::Output;
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct Partial {
