@@ -34,7 +34,7 @@ pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'stati
     nickname: String,
     auto_channels: Vec<String>,
     pub configured_chans: FxHashMap<String, ChannelInfo>,
-    pub configured_contacts: FxHashMap<String, crypto_box::Box>,
+    pub configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
     capabilities: FxHashMap<String, bool>,
     // p2p
     p2p: P2pPtr,
@@ -51,7 +51,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         privmsgs_buffer: PrivmsgsBuffer,
         auto_channels: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
-        configured_contacts: FxHashMap<String, crypto_box::Box>,
+        configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
         p2p: P2pPtr,
         senders: SubscriberPtr<Privmsg>,
         subscriber_id: u64,

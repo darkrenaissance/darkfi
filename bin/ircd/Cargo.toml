@@ -24,7 +24,7 @@ async-executor = "1.4.1"
 easy-parallel = "3.2.0"
 
 # Crypto
-crypto_box = "0.7.2"
+crypto_box = "0.8.0"
 rand = "0.8.5"
 
 # Misc

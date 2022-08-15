@@ -1,3 +1,4 @@
+use crypto_box::SalsaBox;
 use fxhash::FxHashMap;
 use log::info;
 use serde::Deserialize;
@@ -68,7 +69,7 @@ pub struct ChannelInfo {
     /// Optional topic for the channel
     pub topic: Option<String>,
     /// Optional NaCl box for the channel, used for {en,de}cryption.
-    pub salt_box: Option<crypto_box::Box>,
+    pub salt_box: Option<SalsaBox>,
     /// Flag indicates whether the user has joined the channel or not
     pub joined: bool,
     /// All nicknames which are visible on the channel
@@ -81,11 +82,11 @@ impl ChannelInfo {
     }
 }
 
-fn salt_box_from_shared_secret(s: &str) -> Result<crypto_box::Box> {
+fn salt_box_from_shared_secret(s: &str) -> Result<SalsaBox> {
     let bytes: [u8; 32] = bs58::decode(s).into_vec()?.try_into().unwrap();
     let secret = crypto_box::SecretKey::from(bytes);
     let public = secret.public_key();
-    Ok(crypto_box::Box::new(&public, &secret))
+    Ok(SalsaBox::new(&public, &secret))
 }
 
 /// Parse a TOML string for any configured contact list and return
@@ -95,7 +96,7 @@ fn salt_box_from_shared_secret(s: &str) -> Result<crypto_box::Box> {
 /// [contact."7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"]
 /// nicks = ["sneed", "chuck"]
 /// ```
-pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, crypto_box::Box>> {
+pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, SalsaBox>> {
     let mut ret = FxHashMap::default();
 
     if let Value::Table(map) = toml::from_str(data)? {

@@ -7,7 +7,7 @@ use darkfi::Result;
 
 #[derive(Clone)]
 pub struct Workspace {
-    pub encryption: Option<crypto_box::Box>,
+    pub encryption: Option<crypto_box::SalsaBox>,
 }
 
 impl Workspace {
@@ -34,7 +34,7 @@ pub fn parse_workspaces(config_file: &PathBuf) -> Result<FxHashMap<String, Works
                     let bytes: [u8; 32] = bs58::decode(s).into_vec()?.try_into().unwrap();
                     let secret = crypto_box::SecretKey::from(bytes);
                     let public = secret.public_key();
-                    let msg_box = crypto_box::Box::new(&public, &secret);
+                    let msg_box = crypto_box::SalsaBox::new(&public, &secret);
                     workspace_info.encryption = Some(msg_box);
                     info!("Instantiated NaCl box for workspace {}", ws.0);
                 }

@@ -56,7 +56,7 @@ struct Ircd {
     // channels
     autojoin_chans: Vec<String>,
     configured_chans: FxHashMap<String, ChannelInfo>,
-    configured_contacts: FxHashMap<String, crypto_box::Box>,
+    configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
     // p2p
     p2p: net::P2pPtr,
     senders: SubscriberPtr<Privmsg>,
@@ -68,7 +68,7 @@ impl Ircd {
         privmsgs_buffer: PrivmsgsBuffer,
         autojoin_chans: Vec<String>,
         configured_chans: FxHashMap<String, ChannelInfo>,
-        configured_contacts: FxHashMap<String, crypto_box::Box>,
+        configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
         p2p: net::P2pPtr,
     ) -> Self {
         let senders = Subscriber::new();

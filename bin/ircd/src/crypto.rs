@@ -1,4 +1,7 @@
-use crypto_box::aead::Aead;
+use crypto_box::{
+    aead::{Aead, AeadCore},
+    SalsaBox,
+};
 use fxhash::FxHashMap;
 use rand::rngs::OsRng;
 
@@ -6,7 +9,7 @@ use crate::{privmsg::Privmsg, settings::ChannelInfo, MAXIMUM_LENGTH_OF_NICKNAME}
 
 /// Try decrypting a message given a NaCl box and a base58 string.
 /// The format we're using is nonce+ciphertext, where nonce is 24 bytes.
-fn try_decrypt_message(salt_box: &crypto_box::Box, ciphertext: &str) -> Option<String> {
+fn try_decrypt_message(salt_box: &SalsaBox, ciphertext: &str) -> Option<String> {
     let bytes = match bs58::decode(ciphertext).into_vec() {
         Ok(v) => v,
         Err(_) => return None,
@@ -34,8 +37,8 @@ fn try_decrypt_message(salt_box: &crypto_box::Box, ciphertext: &str) -> Option<S
 
 /// Encrypt a message given a NaCl box and a plaintext string.
 /// The format we're using is nonce+ciphertext, where nonce is 24 bytes.
-pub fn encrypt_message(salt_box: &crypto_box::Box, plaintext: &str) -> String {
-    let nonce = crypto_box::generate_nonce(&mut OsRng);
+pub fn encrypt_message(salt_box: &SalsaBox, plaintext: &str) -> String {
+    let nonce = SalsaBox::generate_nonce(&mut OsRng);
     let mut ciphertext = salt_box.encrypt(&nonce, plaintext.as_bytes()).unwrap();
 
     let mut concat = vec![];
@@ -48,7 +51,7 @@ pub fn encrypt_message(salt_box: &crypto_box::Box, plaintext: &str) -> String {
 pub fn decrypt_target(
     privmsg: &mut Privmsg,
     configured_chans: FxHashMap<String, ChannelInfo>,
-    configured_contacts: FxHashMap<String, crypto_box::Box>,
+    configured_contacts: FxHashMap<String, SalsaBox>,
 ) {
     for chan_name in configured_chans.keys() {
         let chan_info = configured_chans.get(chan_name).unwrap();
@@ -85,7 +88,7 @@ pub fn decrypt_target(
 }
 
 /// Decrypt PrivMsg nickname and message
-pub fn decrypt_privmsg(salt_box: &crypto_box::Box, privmsg: &mut Privmsg) {
+pub fn decrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut Privmsg) {
     let decrypted_nick = try_decrypt_message(&salt_box.clone(), &privmsg.nickname);
     let decrypted_msg = try_decrypt_message(&salt_box.clone(), &privmsg.message);
 
@@ -101,7 +104,7 @@ pub fn decrypt_privmsg(salt_box: &crypto_box::Box, privmsg: &mut Privmsg) {
 }
 
 /// Encrypt PrivMsg
-pub fn encrypt_privmsg(salt_box: &crypto_box::Box, privmsg: &mut Privmsg) {
+pub fn encrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut Privmsg) {
     privmsg.nickname = encrypt_message(salt_box, &privmsg.nickname);
     privmsg.target = encrypt_message(salt_box, &privmsg.target);
     privmsg.message = encrypt_message(salt_box, &privmsg.message);

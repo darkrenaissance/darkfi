@@ -2,7 +2,10 @@ use async_std::sync::{Arc, Mutex};
 use std::{env, fs::create_dir_all};
 
 use async_executor::Executor;
-use crypto_box::{aead::Aead, Box, SecretKey};
+use crypto_box::{
+    aead::{Aead, AeadCore},
+    SalsaBox, SecretKey,
+};
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{debug, error, info, warn};
@@ -47,12 +50,12 @@ pub struct EncryptedTask {
 fn encrypt_task(
     task: &TaskInfo,
     workspace: &String,
-    salsa_box: &Box,
+    salsa_box: &SalsaBox,
     rng: &mut crypto_box::rand_core::OsRng,
 ) -> TaudResult<EncryptedTask> {
     debug!("start encrypting task");
 
-    let nonce = crypto_box::generate_nonce(rng);
+    let nonce = SalsaBox::generate_nonce(rng);
     let payload = &serialize(task)[..];
     let payload = salsa_box.encrypt(&nonce, payload)?;
 
@@ -60,7 +63,7 @@ fn encrypt_task(
     Ok(EncryptedTask { workspace: workspace.to_string(), nonce, payload })
 }
 
-fn decrypt_task(encrypt_task: &EncryptedTask, salsa_box: &Box) -> TaudResult<TaskInfo> {
+fn decrypt_task(encrypt_task: &EncryptedTask, salsa_box: &SalsaBox) -> TaudResult<TaskInfo> {
     debug!("start decrypting task");
 
     let nonce = encrypt_task.nonce.as_slice();
