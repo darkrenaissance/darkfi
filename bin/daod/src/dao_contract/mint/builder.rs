@@ -12,8 +12,8 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
 use crate::{
-    dao_contract::mint::validate::CallData, demo::FuncCall, CallDataBase, ZkBinaryTable,
-    ZkContractInfo,
+    dao_contract::mint::validate::CallData, demo::FuncCall, CallDataBase, ZkContractInfo,
+    ZkContractTable,
 };
 
 pub struct Builder {
@@ -45,7 +45,7 @@ impl Builder {
     }
 
     /// Consumes self, and produces the function call
-    pub fn build(self, zk_bins: &ZkBinaryTable) -> FuncCall {
+    pub fn build(self, zk_bins: &ZkContractTable) -> FuncCall {
         // Dao bulla
         let dao_proposer_limit = pallas::Base::from(self.dao_proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao_quorum);

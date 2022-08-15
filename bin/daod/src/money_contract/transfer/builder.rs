@@ -20,7 +20,7 @@ use super::partial::{Partial, PartialClearInput, PartialInput};
 use crate::{
     demo::FuncCall,
     money_contract::transfer::validate::{CallData, ClearInput, Input, Output},
-    ZkBinaryTable, ZkContractInfo,
+    ZkContractInfo, ZkContractTable,
 };
 
 pub struct Builder {
@@ -71,7 +71,7 @@ impl Builder {
         total
     }
 
-    pub fn build(self, zk_bins: &ZkBinaryTable) -> Result<FuncCall> {
+    pub fn build(self, zk_bins: &ZkContractTable) -> Result<FuncCall> {
         assert!(self.clear_inputs.len() + self.inputs.len() > 0);
 
         let mut clear_inputs = vec![];

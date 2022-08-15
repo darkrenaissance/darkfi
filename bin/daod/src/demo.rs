@@ -66,12 +66,12 @@ pub enum ZkContractInfo {
     Native(ZkNativeContractInfo),
 }
 
-pub struct ZkBinaryTable {
+pub struct ZkContractTable {
     // Key will be a hash of zk binary contract on chain
     table: HashMap<String, ZkContractInfo>,
 }
 
-impl ZkBinaryTable {
+impl ZkContractTable {
     fn new() -> Self {
         Self { table: HashMap::new() }
     }
@@ -118,7 +118,7 @@ impl Transaction {
     /// Verify ZK contracts for the entire tx
     /// In real code, we could parallelize this for loop
     /// TODO: fix use of unwrap with Result type stuff
-    fn zk_verify(&self, zk_bins: &ZkBinaryTable) {
+    fn zk_verify(&self, zk_bins: &ZkContractTable) {
         for func_call in &self.func_calls {
             let proofs_public_vals = &func_call.call_data.zk_public_values();
             let proofs_keys = &func_call.call_data.zk_proof_addrs();
@@ -209,7 +209,7 @@ pub async fn demo() -> Result<()> {
     let mut states = StateRegistry::new();
 
     // Initialize ZK binary table
-    let mut zk_bins = ZkBinaryTable::new();
+    let mut zk_bins = ZkContractTable::new();
     let zk_dao_mint_bincode = include_bytes!("../proof/dao-mint.zk.bin");
     let zk_dao_mint_bin = ZkBinary::decode(zk_dao_mint_bincode)?;
     zk_bins.add_contract("dao-mint".to_string(), zk_dao_mint_bin, 13);

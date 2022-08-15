@@ -17,7 +17,7 @@ use darkfi::{
 mod dao_contract;
 mod demo;
 mod money_contract;
-pub use demo::{CallDataBase, StateRegistry, Transaction, ZkBinaryTable, ZkContractInfo};
+pub use demo::{CallDataBase, StateRegistry, Transaction, ZkContractInfo, ZkContractTable};
 
 use crate::demo::demo;
 
