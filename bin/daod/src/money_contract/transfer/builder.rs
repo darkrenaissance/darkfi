@@ -30,6 +30,8 @@ pub struct Note {
     pub serial: DrkSerial,
     pub value: u64,
     pub token_id: DrkTokenId,
+    pub spend_hook: DrkSpendHook,
+    pub user_data: DrkUserData,
     pub coin_blind: DrkCoinBlind,
     pub value_blind: DrkValueBlind,
     pub token_blind: DrkValueBlind,
@@ -52,12 +54,15 @@ pub struct BuilderInputInfo {
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
     pub note: Note,
+    pub user_data_blind: DrkUserDataBlind,
 }
 
 pub struct BuilderOutputInfo {
     pub value: u64,
     pub token_id: DrkTokenId,
     pub public: PublicKey,
+    pub spend_hook: DrkSpendHook,
+    pub user_data: DrkUserData,
 }
 
 impl Builder {
@@ -121,11 +126,6 @@ impl Builder {
             };
             let burn_pk = &zk_info.proving_key;
 
-            // TODO: this is disabled for now. We need to enable this.
-            let spend_hook = DrkSpendHook::from(0);
-            let user_data = DrkUserData::from(0);
-            let user_data_blind = DrkUserDataBlind::random(&mut OsRng);
-
             // Note from the previous output
             let note = input.note;
 
@@ -136,9 +136,9 @@ impl Builder {
                 value_blind,
                 token_blind,
                 note.serial,
-                spend_hook,
-                user_data,
-                user_data_blind,
+                note.spend_hook,
+                note.user_data,
+                input.user_data_blind,
                 note.coin_blind,
                 input.secret,
                 input.leaf_position,
@@ -178,10 +178,6 @@ impl Builder {
             };
             let mint_pk = &zk_info.proving_key;
 
-            // TODO: this is disabled for now. We need to enable this.
-            let spend_hook = DrkSpendHook::from(0);
-            let user_data = DrkUserData::from(0);
-
             let (mint_proof, revealed) = create_mint_proof(
                 mint_pk,
                 output.value,
@@ -189,8 +185,8 @@ impl Builder {
                 value_blind,
                 token_blind,
                 serial,
-                spend_hook,
-                user_data,
+                output.spend_hook,
+                output.user_data,
                 coin_blind,
                 output.public,
             )?;
@@ -201,6 +197,8 @@ impl Builder {
                 serial,
                 value: output.value,
                 token_id: output.token_id,
+                spend_hook: output.spend_hook,
+                user_data: output.user_data,
                 coin_blind,
                 value_blind,
                 token_blind,

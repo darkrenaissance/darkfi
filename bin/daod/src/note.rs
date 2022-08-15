@@ -5,7 +5,6 @@ use darkfi::{
     crypto::{
         diffie_hellman::{kdf_sapling, sapling_ka_agree},
         keypair::{PublicKey, SecretKey},
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
     },
     util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
@@ -59,7 +58,10 @@ impl EncryptedNote2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi::crypto::keypair::Keypair;
+    use darkfi::crypto::{
+        keypair::Keypair,
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+    };
     use group::ff::Field;
 
     #[test]

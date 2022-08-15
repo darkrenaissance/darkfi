@@ -25,7 +25,7 @@ use darkfi::{
         nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
         token_id::generate_id,
-        types::DrkCircuitField,
+        types::{DrkCircuitField, DrkSpendHook, DrkUserData},
         OwnCoin, OwnCoins, Proof,
     },
     node::state::{ProgramState, StateUpdate},
@@ -294,25 +294,50 @@ pub async fn demo() -> Result<()> {
 
     tx.zk_verify(&zk_bins);
 
+    // Wallet stuff
+    // It might just be easier to hash it ourselves from keypair and blind...
+    let dao_bulla = {
+        assert_eq!(tx.func_calls.len(), 1);
+        let func_call = &tx.func_calls[0];
+        let call_data = func_call.call_data.as_any();
+        assert_eq!((&*call_data).type_id(), TypeId::of::<dao_contract::mint::validate::CallData>());
+        let call_data = call_data.downcast_ref::<dao_contract::mint::validate::CallData>().unwrap();
+        call_data.dao_bulla.clone()
+    };
+
     ///////////////////////////////////////////////////
     //// Mint the initial supply of treasury token
     //// and send it all to the DAO directly
     ///////////////////////////////////////////////////
 
-    let token_id = pallas::Base::random(&mut OsRng);
-    let keypair = Keypair::random(&mut OsRng);
+    // Address of deployed contract in our example is hook_dao_exec
+    // This field is public, you can see it's being sent to a DAO
+    // but nothing else is visible.
+    //
+    // In the python code we wrote:
+    //
+    //   spend_hook = b"0xdao_ruleset"
+    //
+    let hook_dao_exec = DrkSpendHook::random(&mut OsRng);
+    let spend_hook = hook_dao_exec;
+    // The user_data can be a simple hash of the items passed into the ZK proof
+    // up to corresponding linked ZK proof to interpret however they need.
+    // In out case, it's the bulla for the DAO
+    let user_data = dao_bulla.0;
 
     let builder = money_contract::transfer::builder::Builder {
         clear_inputs: vec![money_contract::transfer::builder::BuilderClearInputInfo {
-            value: 110,
-            token_id,
+            value: xdrk_supply,
+            token_id: xdrk_token_id,
             signature_secret: cashier_signature_secret,
         }],
         inputs: vec![],
         outputs: vec![money_contract::transfer::builder::BuilderOutputInfo {
-            value: 110,
-            token_id,
-            public: keypair.public,
+            value: xdrk_supply,
+            token_id: xdrk_token_id,
+            public: dao_keypair.public,
+            spend_hook,
+            user_data,
         }],
     };
 
@@ -334,6 +359,9 @@ pub async fn demo() -> Result<()> {
     }
 
     tx.zk_verify(&zk_bins);
+
+    // Wallet stuff
+    // DAO reads the money received from the encrypted note
 
     ///////////////////////////////////////////////////
 
