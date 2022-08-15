@@ -7,7 +7,6 @@ use darkfi::{
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
         mint_proof::create_mint_proof,
-        note::Note,
         proof::ProvingKey,
         schnorr::SchnorrSecret,
         types::{
@@ -15,16 +14,26 @@ use darkfi::{
             DrkValueBlind,
         },
     },
-    util::serial::Encodable,
+    util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Result,
 };
 
 use super::partial::{Partial, PartialClearInput, PartialInput};
 use crate::{
-    demo::FuncCall,
+    demo::{FuncCall, ZkContractInfo, ZkContractTable},
     money_contract::transfer::validate::{CallData, ClearInput, Input, Output},
-    ZkContractInfo, ZkContractTable,
+    note,
 };
+
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct Note {
+    pub serial: DrkSerial,
+    pub value: u64,
+    pub token_id: DrkTokenId,
+    pub coin_blind: DrkCoinBlind,
+    pub value_blind: DrkValueBlind,
+    pub token_blind: DrkValueBlind,
+}
 
 pub struct Builder {
     pub clear_inputs: Vec<BuilderClearInputInfo>,
@@ -117,17 +126,20 @@ impl Builder {
             let user_data = DrkUserData::from(0);
             let user_data_blind = DrkUserDataBlind::random(&mut OsRng);
 
+            // Note from the previous output
+            let note = input.note;
+
             let (burn_proof, revealed) = create_burn_proof(
                 burn_pk,
-                input.note.value,
-                input.note.token_id,
+                note.value,
+                note.token_id,
                 value_blind,
                 token_blind,
-                input.note.serial,
+                note.serial,
                 spend_hook,
                 user_data,
                 user_data_blind,
-                input.note.coin_blind,
+                note.coin_blind,
                 input.secret,
                 input.leaf_position,
                 input.merkle_path,
@@ -192,10 +204,9 @@ impl Builder {
                 coin_blind,
                 value_blind,
                 token_blind,
-                memo: vec![],
             };
 
-            let encrypted_note = note.encrypt(&output.public)?;
+            let encrypted_note = note::encrypt(&note, &output.public)?;
 
             let output = Output { revealed, enc_note: encrypted_note };
             outputs.push(output);

@@ -15,7 +15,6 @@ use darkfi::{
         keypair::PublicKey,
         merkle_node::MerkleNode,
         mint_proof::verify_mint_proof,
-        note::EncryptedNote,
         nullifier::Nullifier,
         proof::VerifyingKey,
         schnorr,
@@ -35,6 +34,7 @@ use crate::{
         state::State,
         transfer::partial::{PartialClearInput, PartialInput},
     },
+    note::EncryptedNote2,
 };
 
 const TARGET: &str = "money_contract::transfer::validate::state_transition()";
@@ -48,7 +48,7 @@ pub struct Update {
     /// All coins in a transaction
     pub coins: Vec<Coin>,
     /// All encrypted notes in a transaction
-    pub enc_notes: Vec<EncryptedNote>,
+    pub enc_notes: Vec<EncryptedNote2>,
 }
 
 pub fn apply(states: &mut StateRegistry, mut update: Update) {
@@ -318,7 +318,7 @@ pub struct Output {
     /// Public inputs for the zero-knowledge proof
     pub revealed: MintRevealedValues,
     /// The encrypted note
-    pub enc_note: EncryptedNote,
+    pub enc_note: EncryptedNote2,
 }
 
 impl ClearInput {

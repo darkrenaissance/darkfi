@@ -17,8 +17,7 @@ use darkfi::{
 mod dao_contract;
 mod demo;
 mod money_contract;
-pub use demo::{CallDataBase, StateRegistry, Transaction, ZkContractInfo, ZkContractTable};
-
+mod note;
 use crate::demo::demo;
 
 async fn _start() -> Result<()> {

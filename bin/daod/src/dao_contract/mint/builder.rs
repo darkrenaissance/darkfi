@@ -12,8 +12,8 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
 use crate::{
-    dao_contract::mint::validate::CallData, demo::FuncCall, CallDataBase, ZkContractInfo,
-    ZkContractTable,
+    dao_contract::mint::validate::CallData,
+    demo::{CallDataBase, FuncCall, ZkContractInfo, ZkContractTable},
 };
 
 pub struct Builder {
