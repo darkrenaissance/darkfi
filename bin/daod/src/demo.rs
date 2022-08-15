@@ -44,13 +44,26 @@ use darkfi::{
 
 use crate::{dao_contract, money_contract};
 
+// TODO: reenable unused vars warning and fix it
+// TODO: strategize and cleanup Result/Error usage
+// TODO: fix up code doc
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-pub struct ZkContractInfo {
+pub struct ZkBinaryContractInfo {
     pub k_param: u32,
     pub bincode: ZkBinary,
     pub proving_key: ProvingKey,
     pub verifying_key: VerifyingKey,
+}
+pub struct ZkNativeContractInfo {
+    pub proving_key: ProvingKey,
+    pub verifying_key: VerifyingKey,
+}
+
+pub enum ZkContractInfo {
+    Binary(ZkBinaryContractInfo),
+    Native(ZkNativeContractInfo),
 }
 
 pub struct ZkBinaryTable {
@@ -68,8 +81,20 @@ impl ZkBinaryTable {
         let circuit = ZkCircuit::new(witnesses, bincode.clone());
         let proving_key = ProvingKey::build(k_param, &circuit);
         let verifying_key = VerifyingKey::build(k_param, &circuit);
-        let info = ZkContractInfo { k_param, bincode, proving_key, verifying_key };
+        let info = ZkContractInfo::Binary(ZkBinaryContractInfo {
+            k_param,
+            bincode,
+            proving_key,
+            verifying_key,
+        });
         self.table.insert(key, info);
+    }
+
+    fn add_native(&mut self, key: String, proving_key: ProvingKey, verifying_key: VerifyingKey) {
+        self.table.insert(
+            key,
+            ZkContractInfo::Native(ZkNativeContractInfo { proving_key, verifying_key }),
+        );
     }
 
     pub fn lookup(&self, key: &String) -> Option<&ZkContractInfo> {
@@ -90,9 +115,9 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    /// TODO: what should this return? plonk error?
     /// Verify ZK contracts for the entire tx
     /// In real code, we could parallelize this for loop
+    /// TODO: fix use of unwrap with Result type stuff
     fn zk_verify(&self, zk_bins: &ZkBinaryTable) {
         for func_call in &self.func_calls {
             let proofs_public_vals = &func_call.call_data.zk_public_values();
@@ -102,9 +127,16 @@ impl Transaction {
             for (key, (proof, public_vals)) in
                 zip!(proofs_keys, &func_call.proofs, proofs_public_vals)
             {
-                let zk_info = zk_bins.lookup(key).unwrap();
-                let verifying_key = &zk_info.verifying_key;
-                proof.verify(&verifying_key, public_vals).expect("verify DAO::mint() failed!");
+                match zk_bins.lookup(key).unwrap() {
+                    ZkContractInfo::Binary(info) => {
+                        let verifying_key = &info.verifying_key;
+                        proof.verify(&verifying_key, public_vals).expect("verify zk proof failed!");
+                    }
+                    ZkContractInfo::Native(info) => {
+                        let verifying_key = &info.verifying_key;
+                        proof.verify(&verifying_key, public_vals).expect("verify zk proof failed!");
+                    }
+                };
                 debug!("zk_verify({}) passed", key);
             }
         }
@@ -182,6 +214,24 @@ pub async fn demo() -> Result<()> {
     let zk_dao_mint_bin = ZkBinary::decode(zk_dao_mint_bincode)?;
     zk_bins.add_contract("dao-mint".to_string(), zk_dao_mint_bin, 13);
 
+    {
+        let start = Instant::now();
+        let mint_pk = ProvingKey::build(11, &MintContract::default());
+        debug!("Mint PK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let burn_pk = ProvingKey::build(11, &BurnContract::default());
+        debug!("Burn PK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let mint_vk = VerifyingKey::build(11, &MintContract::default());
+        debug!("Mint VK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let burn_vk = VerifyingKey::build(11, &BurnContract::default());
+        debug!("Burn VK: [{:?}]", start.elapsed());
+
+        zk_bins.add_native("money-transfer-mint".to_string(), mint_pk, mint_vk);
+        zk_bins.add_native("money-transfer-burn".to_string(), burn_pk, burn_vk);
+    }
+
     // State for money contracts
     let cashier_signature_secret = SecretKey::random(&mut OsRng);
     let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
@@ -190,19 +240,10 @@ pub async fn demo() -> Result<()> {
 
     ///////////////////////////////////////////////////
 
-    let start = Instant::now();
-    let mint_vk = VerifyingKey::build(11, &MintContract::default());
-    debug!("Mint VK: [{:?}]", start.elapsed());
-    let start = Instant::now();
-    let burn_vk = VerifyingKey::build(11, &BurnContract::default());
-    debug!("Burn VK: [{:?}]", start.elapsed());
-
     let money_state = Box::new(money_contract::state::State {
         tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
         merkle_roots: vec![],
         nullifiers: vec![],
-        mint_vk,
-        burn_vk,
         cashier_signature_public,
         faucet_signature_public,
     });
@@ -275,16 +316,7 @@ pub async fn demo() -> Result<()> {
         }],
     };
 
-    let start = Instant::now();
-    let mint_pk = ProvingKey::build(11, &MintContract::default());
-    debug!("Mint PK: [{:?}]", start.elapsed());
-    let start = Instant::now();
-    let burn_pk = ProvingKey::build(11, &BurnContract::default());
-    debug!("Burn PK: [{:?}]", start.elapsed());
-
-    let func_call = builder.build(&mint_pk, &burn_pk)?;
-
-    //tx.verify(&money_state.mint_vk, &money_state.burn_vk)?;
+    let func_call = builder.build(&zk_bins)?;
 
     let tx = Transaction { func_calls: vec![func_call] };
 
@@ -301,7 +333,7 @@ pub async fn demo() -> Result<()> {
         }
     }
 
-    //tx.zk_verify(&zk_bins);
+    tx.zk_verify(&zk_bins);
 
     ///////////////////////////////////////////////////
 

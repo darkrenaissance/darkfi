@@ -37,6 +37,8 @@ use crate::{
     },
 };
 
+const TARGET: &str = "money_contract::transfer::validate::state_transition()";
+
 /// A struct representing a state update.
 /// This gets applied on top of an existing state.
 #[derive(Clone)]
@@ -73,7 +75,7 @@ pub fn state_transition(
 ) -> Result<Update> {
     // Check the public keys in the clear inputs to see if they're coming
     // from a valid cashier or faucet.
-    debug!(target: "money_contract::mint::validate::state_transition", "Iterate clear_inputs");
+    debug!(target: TARGET, "Iterate clear_inputs");
     let func_call = &parent_tx.func_calls[func_call_index];
     let call_data = func_call.call_data.as_any();
 
@@ -92,7 +94,7 @@ pub fn state_transition(
         let pk = &input.signature_public;
         // TODO: this depends on the token ID
         if !state.is_valid_cashier_public_key(pk) && !state.is_valid_faucet_public_key(pk) {
-            error!(target: "money_contract::mint::validate::state_transition", "Invalid pubkey for clear input: {:?}", pk);
+            error!(target: TARGET, "Invalid pubkey for clear input: {:?}", pk);
             return Err(Error::VerifyFailed(VerifyFailed::InvalidCashierOrFaucetKey(i)))
         }
     }
@@ -100,15 +102,15 @@ pub fn state_transition(
     // Nullifiers in the transaction
     let mut nullifiers = Vec::with_capacity(call_data.inputs.len());
 
-    debug!(target: "money_contract::mint::validate::state_transition", "Iterate inputs");
+    debug!(target: TARGET, "Iterate inputs");
     for (i, input) in call_data.inputs.iter().enumerate() {
         let merkle = &input.revealed.merkle_root;
 
         // The Merkle root is used to know whether this is a coin that
         // existed in a previous state.
         if !state.is_valid_merkle(merkle) {
-            error!(target: "money_contract::mint::validate::state_transition", "Invalid Merkle root (input {})", i);
-            debug!(target: "money_contract::mint::validate::state_transition", "root: {:?}", merkle);
+            error!(target: TARGET, "Invalid Merkle root (input {})", i);
+            debug!(target: TARGET, "root: {:?}", merkle);
             return Err(Error::VerifyFailed(VerifyFailed::InvalidMerkle(i)))
         }
 
@@ -118,21 +120,21 @@ pub fn state_transition(
         if state.nullifier_exists(nullifier) ||
             (1..nullifiers.len()).any(|i| nullifiers[i..].contains(&nullifiers[i - 1]))
         {
-            error!(target: "money_contract::mint::validate::state_transition", "Duplicate nullifier found (input {})", i);
-            debug!(target: "money_contract::mint::validate::state_transition", "nullifier: {:?}", nullifier);
+            error!(target: TARGET, "Duplicate nullifier found (input {})", i);
+            debug!(target: TARGET, "nullifier: {:?}", nullifier);
             return Err(Error::VerifyFailed(VerifyFailed::NullifierExists(i)))
         }
 
         nullifiers.push(input.revealed.nullifier);
     }
 
-    debug!(target: "money_contract::mint::validate::state_transition", "Verifying zk proofs");
-    match call_data.verify(state.mint_vk(), state.burn_vk()) {
+    debug!(target: TARGET, "Verifying zk proofs");
+    match call_data.verify() {
         Ok(()) => {
-            debug!(target: "money_contract::mint::validate::state_transition", "Verified successfully")
+            debug!(target: TARGET, "Verified successfully")
         }
         Err(e) => {
-            error!(target: "money_contract::mint::validate::state_transition", "Failed verifying zk proofs: {}", e);
+            error!(target: TARGET, "Failed verifying zk proofs: {}", e);
             return Err(Error::VerifyFailed(VerifyFailed::ProofVerifyFailed(e.to_string())))
         }
     }
@@ -190,7 +192,7 @@ impl CallDataBase for CallData {
 }
 impl CallData {
     /// Verify the transaction
-    pub fn verify(&self, mint_vk: &VerifyingKey, burn_vk: &VerifyingKey) -> VerifyResult<()> {
+    pub fn verify(&self) -> VerifyResult<()> {
         //  must have minimum 1 clear or anon input, and 1 output
         if self.clear_inputs.len() + self.inputs.len() == 0 {
             error!("tx::verify(): Missing inputs");
@@ -208,27 +210,13 @@ impl CallData {
         for input in &self.clear_inputs {
             valcom_total += pedersen_commitment_u64(input.value, input.value_blind);
         }
-
         // Add values from the inputs
-        for (i, input) in self.inputs.iter().enumerate() {
-            match verify_burn_proof(burn_vk, &input.burn_proof, &input.revealed) {
-                Ok(()) => valcom_total += &input.revealed.value_commit,
-                Err(e) => {
-                    error!("tx::verify(): Failed to verify burn proof {}: {}", i, e);
-                    return Err(VerifyFailed::BurnProof(i))
-                }
-            }
+        for input in &self.inputs {
+            valcom_total += &input.revealed.value_commit;
         }
-
         // Subtract values from the outputs
-        for (i, output) in self.outputs.iter().enumerate() {
-            match verify_mint_proof(mint_vk, &output.mint_proof, &output.revealed) {
-                Ok(()) => valcom_total -= &output.revealed.value_commit,
-                Err(e) => {
-                    error!("tx::verify(): Failed to verify mint proof {}: {}", i, e);
-                    return Err(VerifyFailed::MintProof(i))
-                }
-            }
+        for output in &self.outputs {
+            valcom_total -= &output.revealed.value_commit;
         }
 
         // If the accumulator is not back in its initial state,
@@ -246,6 +234,7 @@ impl CallData {
 
         // Verify the available signatures
         let mut unsigned_tx_data = vec![];
+        // TODO: BUG!!! MUST INCLUDE PROOFS!!!
         self.encode_without_signature(&mut unsigned_tx_data)?;
 
         for (i, input) in self.clear_inputs.iter().enumerate() {
@@ -267,11 +256,15 @@ impl CallData {
         Ok(())
     }
 
-    pub fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    pub fn encode_without_signature<S: io::Write>(
+        &self,
+        mut s: S, /*proofs: &Vec<Proof>*/
+    ) -> Result<usize> {
         let mut len = 0;
         len += self.clear_inputs.encode_without_signature(&mut s)?;
         len += self.inputs.encode_without_signature(&mut s)?;
-        len += self.outputs.encode(s)?;
+        len += self.outputs.encode(&mut s)?;
+        //len += proofs.encode(s)?;
         Ok(len)
     }
 
@@ -313,8 +306,6 @@ pub struct ClearInput {
 /// A transaction's anonymous input
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Input {
-    /// Zero-knowledge proof for the input
-    pub burn_proof: Proof,
     /// Public inputs for the zero-knowledge proof
     pub revealed: BurnRevealedValues,
     /// Input's signature
@@ -324,8 +315,6 @@ pub struct Input {
 /// A transaction's anonymous output
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Output {
-    /// Zero-knowledge proof for the output
-    pub mint_proof: Proof,
     /// Public inputs for the zero-knowledge proof
     pub revealed: MintRevealedValues,
     /// The encrypted note
@@ -357,12 +346,11 @@ impl ClearInput {
 
 impl Input {
     pub fn from_partial(partial: PartialInput, signature: schnorr::Signature) -> Self {
-        Self { burn_proof: partial.burn_proof, revealed: partial.revealed, signature }
+        Self { revealed: partial.revealed, signature }
     }
 
     fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
-        len += self.burn_proof.encode(&mut s)?;
         len += self.revealed.encode(&mut s)?;
         Ok(len)
     }

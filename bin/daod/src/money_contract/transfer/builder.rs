@@ -20,6 +20,7 @@ use super::partial::{Partial, PartialClearInput, PartialInput};
 use crate::{
     demo::FuncCall,
     money_contract::transfer::validate::{CallData, ClearInput, Input, Output},
+    ZkBinaryTable, ZkContractInfo,
 };
 
 pub struct Builder {
@@ -70,7 +71,7 @@ impl Builder {
         total
     }
 
-    pub fn build(self, mint_pk: &ProvingKey, burn_pk: &ProvingKey) -> Result<FuncCall> {
+    pub fn build(self, zk_bins: &ZkBinaryTable) -> Result<FuncCall> {
         assert!(self.clear_inputs.len() + self.inputs.len() > 0);
 
         let mut clear_inputs = vec![];
@@ -89,6 +90,8 @@ impl Builder {
             clear_inputs.push(clear_input);
         }
 
+        let mut proofs = vec![];
+
         let mut inputs = vec![];
         let mut input_blinds = vec![];
         let mut signature_secrets = vec![];
@@ -98,7 +101,15 @@ impl Builder {
 
             let signature_secret = SecretKey::random(&mut OsRng);
 
-            let (proof, revealed) = create_burn_proof(
+            let zk_info = zk_bins.lookup(&"money-transfer-burn".to_string()).unwrap();
+            let zk_info = if let ZkContractInfo::Native(info) = zk_info {
+                info
+            } else {
+                panic!("Not native info")
+            };
+            let burn_pk = &zk_info.proving_key;
+
+            let (burn_proof, revealed) = create_burn_proof(
                 burn_pk,
                 input.note.value,
                 input.note.token_id,
@@ -111,11 +122,12 @@ impl Builder {
                 input.merkle_path,
                 signature_secret,
             )?;
+            proofs.push(burn_proof);
 
             // First we make the tx then sign after
             signature_secrets.push(signature_secret);
 
-            let input = PartialInput { burn_proof: proof, revealed };
+            let input = PartialInput { revealed };
             inputs.push(input);
         }
 
@@ -135,6 +147,14 @@ impl Builder {
             let serial = DrkSerial::random(&mut OsRng);
             let coin_blind = DrkCoinBlind::random(&mut OsRng);
 
+            let zk_info = zk_bins.lookup(&"money-transfer-mint".to_string()).unwrap();
+            let zk_info = if let ZkContractInfo::Native(info) = zk_info {
+                info
+            } else {
+                panic!("Not native info")
+            };
+            let mint_pk = &zk_info.proving_key;
+
             let (mint_proof, revealed) = create_mint_proof(
                 mint_pk,
                 output.value,
@@ -145,6 +165,7 @@ impl Builder {
                 coin_blind,
                 output.public,
             )?;
+            proofs.push(mint_proof);
 
             // Encrypted note
             let note = Note {
@@ -159,7 +180,7 @@ impl Builder {
 
             let encrypted_note = note.encrypt(&output.public)?;
 
-            let output = Output { mint_proof, revealed, enc_note: encrypted_note };
+            let output = Output { revealed, enc_note: encrypted_note };
             outputs.push(output);
         }
 
@@ -187,12 +208,11 @@ impl Builder {
 
         let call_data = CallData { clear_inputs, inputs, outputs: partial_tx.outputs };
 
-        // TODO: Proofs is an empty vector right now.
         Ok(FuncCall {
             contract_id: "money".to_string(),
             func_id: "money::transfer()".to_string(),
             call_data: Box::new(call_data),
-            proofs: vec![],
+            proofs,
         })
     }
 }

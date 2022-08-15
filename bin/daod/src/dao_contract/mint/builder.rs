@@ -11,7 +11,10 @@ use halo2_proofs::circuit::Value;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
-use crate::{dao_contract::mint::validate::CallData, demo::FuncCall, CallDataBase, ZkBinaryTable};
+use crate::{
+    dao_contract::mint::validate::CallData, demo::FuncCall, CallDataBase, ZkBinaryTable,
+    ZkContractInfo,
+};
 
 pub struct Builder {
     dao_proposer_limit: u64,
@@ -70,6 +73,11 @@ impl Builder {
 
         // Now create the mint proof
         let zk_info = zk_bins.lookup(&"dao-mint".to_string()).unwrap();
+        let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
+            info
+        } else {
+            panic!("Not binary info")
+        };
         let zk_bin = zk_info.bincode.clone();
         let prover_witnesses = vec![
             Witness::Base(Value::known(dao_proposer_limit)),

@@ -17,10 +17,6 @@ pub struct State {
     pub merkle_roots: Vec<MerkleNode>,
     /// Nullifiers prevent double spending
     pub nullifiers: Vec<Nullifier>,
-    /// Verifying key for the mint zk circuit.
-    pub mint_vk: VerifyingKey,
-    /// Verifying key for the burn zk circuit.
-    pub burn_vk: VerifyingKey,
 
     /// Public key of the cashier
     pub cashier_signature_public: PublicKey,
@@ -29,28 +25,20 @@ pub struct State {
     pub faucet_signature_public: PublicKey,
 }
 
-impl ProgramState for State {
-    fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
+impl State {
+    pub fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
         public == &self.cashier_signature_public
     }
 
-    fn is_valid_faucet_public_key(&self, public: &PublicKey) -> bool {
+    pub fn is_valid_faucet_public_key(&self, public: &PublicKey) -> bool {
         public == &self.faucet_signature_public
     }
 
-    fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
+    pub fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
         self.merkle_roots.iter().any(|m| m == merkle_root)
     }
 
-    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
+    pub fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
         self.nullifiers.iter().any(|n| n == nullifier)
-    }
-
-    fn mint_vk(&self) -> &VerifyingKey {
-        &self.mint_vk
-    }
-
-    fn burn_vk(&self) -> &VerifyingKey {
-        &self.burn_vk
     }
 }
