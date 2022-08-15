@@ -184,13 +184,13 @@ impl Builder {
             outputs.push(output);
         }
 
-        let partial_tx = Partial { clear_inputs, inputs, outputs };
+        let partial = Partial { clear_inputs, inputs, outputs, proofs };
 
         let mut unsigned_tx_data = vec![];
-        partial_tx.encode(&mut unsigned_tx_data)?;
+        partial.encode(&mut unsigned_tx_data)?;
 
         let mut clear_inputs = vec![];
-        for (input, info) in partial_tx.clear_inputs.into_iter().zip(self.clear_inputs) {
+        for (input, info) in partial.clear_inputs.into_iter().zip(self.clear_inputs) {
             let secret = info.signature_secret;
             let signature = secret.sign(&unsigned_tx_data[..]);
             let input = ClearInput::from_partial(input, signature);
@@ -199,20 +199,20 @@ impl Builder {
 
         let mut inputs = vec![];
         for (input, signature_secret) in
-            partial_tx.inputs.into_iter().zip(signature_secrets.into_iter())
+            partial.inputs.into_iter().zip(signature_secrets.into_iter())
         {
             let signature = signature_secret.sign(&unsigned_tx_data[..]);
             let input = Input::from_partial(input, signature);
             inputs.push(input);
         }
 
-        let call_data = CallData { clear_inputs, inputs, outputs: partial_tx.outputs };
+        let call_data = CallData { clear_inputs, inputs, outputs: partial.outputs };
 
         Ok(FuncCall {
             contract_id: "money".to_string(),
             func_id: "money::transfer()".to_string(),
             call_data: Box::new(call_data),
-            proofs,
+            proofs: partial.proofs,
         })
     }
 }

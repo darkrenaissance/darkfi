@@ -14,7 +14,8 @@ pub struct Partial {
     pub clear_inputs: Vec<PartialClearInput>,
     pub inputs: Vec<PartialInput>,
     pub outputs: Vec<Output>,
-    //pub proofs: Vec<Proof>,
+
+    pub proofs: Vec<Proof>,
 }
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
@@ -28,7 +29,5 @@ pub struct PartialClearInput {
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct PartialInput {
-    // TODO: BUG BUG FIXME!!!
-    //pub burn_proof: Proof,
     pub revealed: BurnRevealedValues,
 }

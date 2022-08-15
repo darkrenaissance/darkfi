@@ -129,7 +129,7 @@ pub fn state_transition(
     }
 
     debug!(target: TARGET, "Verifying zk proofs");
-    match call_data.verify() {
+    match call_data.verify(&func_call.proofs) {
         Ok(()) => {
             debug!(target: TARGET, "Verified successfully")
         }
@@ -192,7 +192,7 @@ impl CallDataBase for CallData {
 }
 impl CallData {
     /// Verify the transaction
-    pub fn verify(&self) -> VerifyResult<()> {
+    pub fn verify(&self, proofs: &Vec<Proof>) -> VerifyResult<()> {
         //  must have minimum 1 clear or anon input, and 1 output
         if self.clear_inputs.len() + self.inputs.len() == 0 {
             error!("tx::verify(): Missing inputs");
@@ -234,8 +234,7 @@ impl CallData {
 
         // Verify the available signatures
         let mut unsigned_tx_data = vec![];
-        // TODO: BUG!!! MUST INCLUDE PROOFS!!!
-        self.encode_without_signature(&mut unsigned_tx_data)?;
+        self.encode_without_signature(&mut unsigned_tx_data, proofs)?;
 
         for (i, input) in self.clear_inputs.iter().enumerate() {
             let public = &input.signature_public;
@@ -258,13 +257,14 @@ impl CallData {
 
     pub fn encode_without_signature<S: io::Write>(
         &self,
-        mut s: S, /*proofs: &Vec<Proof>*/
+        mut s: S,
+        proofs: &Vec<Proof>,
     ) -> Result<usize> {
         let mut len = 0;
         len += self.clear_inputs.encode_without_signature(&mut s)?;
         len += self.inputs.encode_without_signature(&mut s)?;
         len += self.outputs.encode(&mut s)?;
-        //len += proofs.encode(s)?;
+        len += proofs.encode(s)?;
         Ok(len)
     }
 
