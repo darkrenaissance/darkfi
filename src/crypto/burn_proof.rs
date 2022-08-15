@@ -16,7 +16,10 @@ use crate::{
     crypto::{
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
-        types::*,
+        types::{
+            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
+            DrkUserDataBlind, DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
+        },
     },
     util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::burn_contract::BurnContract,
@@ -29,6 +32,8 @@ pub struct BurnRevealedValues {
     pub token_commit: DrkValueCommit,
     pub nullifier: Nullifier,
     pub merkle_root: MerkleNode,
+    pub spend_hook: DrkSpendHook,
+    pub user_data_enc: DrkUserDataEnc,
     pub signature_public: PublicKey,
 }
 
@@ -44,6 +49,9 @@ impl BurnRevealedValues {
         secret: SecretKey,
         leaf_position: incrementalmerkletree::Position,
         merkle_path: Vec<MerkleNode>,
+        spend_hook: DrkSpendHook,
+        user_data: DrkUserData,
+        user_data_blind: DrkUserDataBlind,
         signature_secret: SecretKey,
     ) -> Self {
         let nullifier = [secret.0, serial];
@@ -75,6 +83,11 @@ impl BurnRevealedValues {
             current
         };
 
+        let messages = [user_data, user_data_blind];
+        let user_data_enc =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+                .hash(messages);
+
         let value_commit = pedersen_commitment_u64(value, value_blind);
         let token_commit = pedersen_commitment_base(token_id, token_blind);
 
@@ -83,6 +96,8 @@ impl BurnRevealedValues {
             token_commit,
             nullifier: Nullifier(nullifier),
             merkle_root,
+            spend_hook,
+            user_data_enc,
             signature_public: PublicKey::from_secret(signature_secret),
         }
     }
@@ -91,6 +106,7 @@ impl BurnRevealedValues {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
         let merkle_root = self.merkle_root.0;
+        let user_data_enc = self.user_data_enc;
         let sig_coords = self.signature_public.0.to_affine().coordinates().unwrap();
 
         vec![
@@ -116,6 +132,9 @@ pub fn create_burn_proof(
     value_blind: DrkValueBlind,
     token_blind: DrkValueBlind,
     serial: DrkSerial,
+    spend_hook: DrkSpendHook,
+    user_data: DrkUserData,
+    user_data_blind: DrkUserDataBlind,
     coin_blind: DrkCoinBlind,
     secret: SecretKey,
     leaf_position: incrementalmerkletree::Position,
@@ -132,6 +151,9 @@ pub fn create_burn_proof(
         secret,
         leaf_position,
         merkle_path.clone(),
+        spend_hook,
+        user_data,
+        user_data_blind,
         signature_secret,
     );
 

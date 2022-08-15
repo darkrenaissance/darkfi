@@ -19,7 +19,10 @@ use darkfi::{
         schnorr,
         schnorr::SchnorrSecret,
         token_id,
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+        types::{
+            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
+            DrkValueBlind,
+        },
         util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
@@ -186,6 +189,10 @@ async fn init_swap(
     let recv_coin_blind = DrkCoinBlind::random(&mut OsRng);
     let recv_serial = DrkSerial::random(&mut OsRng);
 
+    // Spend hook and user data disabled
+    let spend_hook = DrkSpendHook::from(0);
+    let user_data = DrkUserData::from(0);
+
     let pb = progress_bar("Building Mint proof for the receiving coin");
     let (mint_proof, mint_revealed) = create_mint_proof(
         &mint_pk,
@@ -194,6 +201,8 @@ async fn init_swap(
         recv_value_blind,
         recv_token_blind,
         recv_serial,
+        spend_hook,
+        user_data,
         recv_coin_blind,
         our_pubk,
     )?;
@@ -212,6 +221,11 @@ async fn init_swap(
         }
     };
 
+    // Spend hook and user data disabled
+    let spend_hook = DrkSpendHook::from(0);
+    let user_data = DrkUserData::from(0);
+    let user_data_blind = DrkUserDataBlind::random(&mut OsRng);
+
     let (burn_proof, burn_revealed) = create_burn_proof(
         &burn_pk,
         vp.0,
@@ -219,6 +233,9 @@ async fn init_swap(
         coin.note.value_blind,
         coin.note.token_blind,
         coin.note.serial,
+        spend_hook,
+        user_data,
+        user_data_blind,
         coin.note.coin_blind,
         coin.secret,
         coin.leaf_position,

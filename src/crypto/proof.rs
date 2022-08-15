@@ -119,7 +119,9 @@ mod tests {
         crypto::{
             keypair::PublicKey,
             mint_proof::create_mint_proof,
-            types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+            types::{
+                DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkValueBlind,
+            },
         },
         zk::circuit::MintContract,
     };
@@ -133,6 +135,8 @@ mod tests {
         let value_blind = DrkValueBlind::random(&mut OsRng);
         let token_blind = DrkValueBlind::random(&mut OsRng);
         let serial = DrkSerial::random(&mut OsRng);
+        let spend_hook = DrkSpendHook::random(&mut OsRng);
+        let user_data = DrkUserData::random(&mut OsRng);
         let coin_blind = DrkCoinBlind::random(&mut OsRng);
         let public_key = PublicKey::random(&mut OsRng);
 
@@ -144,6 +148,8 @@ mod tests {
             value_blind,
             token_blind,
             serial,
+            spend_hook,
+            user_data,
             coin_blind,
             public_key,
         )?;

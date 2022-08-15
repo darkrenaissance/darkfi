@@ -14,7 +14,10 @@ use crate::{
         note::Note,
         proof::ProvingKey,
         schnorr::SchnorrSecret,
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+        types::{
+            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
+            DrkValueBlind,
+        },
     },
     util::serial::Encodable,
     Result,
@@ -96,6 +99,11 @@ impl TransactionBuilder {
 
             let signature_secret = SecretKey::random(&mut OsRng);
 
+            // Disable composability for this old obselete API
+            let spend_hook = DrkSpendHook::from(0);
+            let user_data = DrkUserData::from(0);
+            let user_data_blind = DrkUserDataBlind::random(&mut OsRng);
+
             let (proof, revealed) = create_burn_proof(
                 burn_pk,
                 input.note.value,
@@ -103,6 +111,9 @@ impl TransactionBuilder {
                 value_blind,
                 token_blind,
                 input.note.serial,
+                spend_hook,
+                user_data,
+                user_data_blind,
                 input.note.coin_blind,
                 input.secret,
                 input.leaf_position,
@@ -133,6 +144,10 @@ impl TransactionBuilder {
             let serial = DrkSerial::random(&mut OsRng);
             let coin_blind = DrkCoinBlind::random(&mut OsRng);
 
+            // Disable composability for this old obselete API
+            let spend_hook = DrkSpendHook::from(0);
+            let user_data = DrkUserData::from(0);
+
             let (mint_proof, revealed) = create_mint_proof(
                 mint_pk,
                 output.value,
@@ -140,6 +155,8 @@ impl TransactionBuilder {
                 value_blind,
                 token_blind,
                 serial,
+                spend_hook,
+                user_data,
                 coin_blind,
                 output.public,
             )?;

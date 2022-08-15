@@ -12,8 +12,8 @@ use crate::{
         keypair::PublicKey,
         proof::{Proof, ProvingKey, VerifyingKey},
         types::{
-            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind,
-            DrkValueCommit,
+            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
+            DrkValue, DrkValueBlind, DrkValueCommit,
         },
         util::{pedersen_commitment_base, pedersen_commitment_u64},
     },
@@ -77,6 +77,8 @@ pub fn create_mint_proof(
     value_blind: DrkValueBlind,
     token_blind: DrkValueBlind,
     serial: DrkSerial,
+    spend_hook: DrkSpendHook,
+    user_data: DrkUserData,
     coin_blind: DrkCoinBlind,
     public_key: PublicKey,
 ) -> Result<(Proof, MintRevealedValues)> {

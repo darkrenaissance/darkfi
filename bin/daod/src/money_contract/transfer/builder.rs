@@ -10,7 +10,10 @@ use darkfi::{
         note::Note,
         proof::ProvingKey,
         schnorr::SchnorrSecret,
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+        types::{
+            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
+            DrkValueBlind,
+        },
     },
     util::serial::Encodable,
     Result,
@@ -109,6 +112,11 @@ impl Builder {
             };
             let burn_pk = &zk_info.proving_key;
 
+            // TODO: this is disabled for now. We need to enable this.
+            let spend_hook = DrkSpendHook::from(0);
+            let user_data = DrkUserData::from(0);
+            let user_data_blind = DrkUserDataBlind::random(&mut OsRng);
+
             let (burn_proof, revealed) = create_burn_proof(
                 burn_pk,
                 input.note.value,
@@ -116,6 +124,9 @@ impl Builder {
                 value_blind,
                 token_blind,
                 input.note.serial,
+                spend_hook,
+                user_data,
+                user_data_blind,
                 input.note.coin_blind,
                 input.secret,
                 input.leaf_position,
@@ -155,6 +166,10 @@ impl Builder {
             };
             let mint_pk = &zk_info.proving_key;
 
+            // TODO: this is disabled for now. We need to enable this.
+            let spend_hook = DrkSpendHook::from(0);
+            let user_data = DrkUserData::from(0);
+
             let (mint_proof, revealed) = create_mint_proof(
                 mint_pk,
                 output.value,
@@ -162,6 +177,8 @@ impl Builder {
                 value_blind,
                 token_blind,
                 serial,
+                spend_hook,
+                user_data,
                 coin_blind,
                 output.public,
             )?;

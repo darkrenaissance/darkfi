@@ -8,6 +8,11 @@ pub type DrkTokenId = pallas::Base;
 pub type DrkValue = pallas::Base;
 pub type DrkSerial = pallas::Base;
 
+pub type DrkSpendHook = pallas::Base;
+pub type DrkUserData = pallas::Base;
+pub type DrkUserDataBlind = pallas::Base;
+pub type DrkUserDataEnc = pallas::Base;
+
 pub type DrkCoinBlind = pallas::Base;
 pub type DrkValueBlind = pallas::Scalar;
 pub type DrkValueCommit = pallas::Point;
