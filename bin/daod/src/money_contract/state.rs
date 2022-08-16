@@ -33,11 +33,13 @@ impl WalletCache {
         Self { cache: Vec::new() }
     }
 
+    /// Must be called at the start to begin tracking received coins for this secret.
     pub fn track(&mut self, secret: SecretKey) {
         self.cache.push((secret, Vec::new()));
     }
 
     /// Get all coins received by this secret key
+    /// track() must be called on this secret before calling this or the function will panic.
     pub fn get_received(&mut self, secret: &SecretKey) -> Vec<OwnCoin> {
         for (other_secret, own_coins) in self.cache.iter_mut() {
             if *secret == *other_secret {
@@ -45,7 +47,7 @@ impl WalletCache {
                 return std::mem::replace(own_coins, Vec::new())
             }
         }
-        unreachable!();
+        panic!("you forget to track() this secret!");
     }
 
     pub fn try_decrypt_note(

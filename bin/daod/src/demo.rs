@@ -257,6 +257,7 @@ pub async fn demo() -> Result<()> {
     /////////////////////////////////////////////////////
     ////// Create the DAO bulla
     /////////////////////////////////////////////////////
+    debug!(target: "demo", "1. Creating DAO bulla");
 
     //// Wallet
 
@@ -308,6 +309,10 @@ pub async fn demo() -> Result<()> {
     //// Mint the initial supply of treasury token
     //// and send it all to the DAO directly
     ///////////////////////////////////////////////////
+    debug!(target: "demo", "2. Minting treasury token");
+
+    let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
+    state.wallet_cache.track(dao_keypair.secret);
 
     //// Wallet
 
@@ -399,6 +404,7 @@ pub async fn demo() -> Result<()> {
     //// Mint the governance token
     //// Send it to three hodlers
     ///////////////////////////////////////////////////
+    debug!(target: "demo", "3. Minting governance token");
 
     //// Wallet
 
@@ -534,6 +540,7 @@ pub async fn demo() -> Result<()> {
     // In order to make a valid vote, first the proposer must
     // meet a criteria for a minimum number of gov tokens
     ///////////////////////////////////////////////////
+    debug!(target: "demo", "4. Propose the vote");
 
     //// Wallet
 

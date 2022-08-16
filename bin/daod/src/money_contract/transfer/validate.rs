@@ -129,7 +129,7 @@ pub fn state_transition(
         nullifiers.push(input.revealed.nullifier);
     }
 
-    debug!(target: TARGET, "Verifying zk proofs");
+    debug!(target: TARGET, "Verifying call data");
     match call_data.verify(&func_call.proofs) {
         Ok(()) => {
             debug!(target: TARGET, "Verified successfully")
