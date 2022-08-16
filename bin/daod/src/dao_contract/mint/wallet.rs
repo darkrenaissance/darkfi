@@ -14,6 +14,7 @@ use rand::rngs::OsRng;
 use crate::{
     dao_contract::mint::validate::CallData,
     demo::{CallDataBase, FuncCall, ZkContractInfo, ZkContractTable},
+    util::poseidon_hash,
 };
 
 pub struct Builder {
@@ -55,7 +56,7 @@ impl Builder {
         let dao_public_x = *dao_pubkey_coords.x();
         let dao_public_y = *dao_pubkey_coords.x();
 
-        let messages = [
+        let dao_bulla = poseidon_hash::<8>([
             dao_proposer_limit,
             dao_quorum,
             dao_approval_ratio,
@@ -65,10 +66,7 @@ impl Builder {
             self.dao_bulla_blind,
             // @tmp-workaround
             self.dao_bulla_blind,
-        ];
-        let dao_bulla =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<8>, 3, 2>::init()
-                .hash(messages);
+        ]);
         let dao_bulla = DaoBulla(dao_bulla);
 
         // Now create the mint proof

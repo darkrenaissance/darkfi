@@ -3,6 +3,11 @@ use crate::{
     demo::{CallDataBase, StateRegistry, Transaction},
 };
 use darkfi::crypto::types::DrkCircuitField;
+use pasta_curves::{
+    arithmetic::CurveAffine,
+    group::{ff::Field, Curve},
+    pallas,
+};
 use std::any::{Any, TypeId};
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -12,15 +17,18 @@ pub enum Error {
 }
 type Result<T> = std::result::Result<T, Error>;
 
-pub struct CallData {}
+pub struct CallData {
+    // TODO: remove this! only tmp
+    pub dao_bulla: pallas::Base,
+}
 
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
-        vec![]
+        vec![vec![self.dao_bulla]]
     }
 
     fn zk_proof_addrs(&self) -> Vec<String> {
-        vec![]
+        vec!["dao-propose-main".to_string()]
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -42,7 +42,7 @@ use darkfi::{
     zkas::decoder::ZkBinary,
 };
 
-use crate::{dao_contract, money_contract};
+use crate::{dao_contract, money_contract, util::poseidon_hash};
 
 // TODO: reenable unused vars warning and fix it
 // TODO: strategize and cleanup Result/Error usage
@@ -210,10 +210,12 @@ pub async fn demo() -> Result<()> {
 
     // Initialize ZK binary table
     let mut zk_bins = ZkContractTable::new();
+    debug!(target: "demo", "Loading dao-mint.zk");
     let zk_dao_mint_bincode = include_bytes!("../proof/dao-mint.zk.bin");
     let zk_dao_mint_bin = ZkBinary::decode(zk_dao_mint_bincode)?;
     zk_bins.add_contract("dao-mint".to_string(), zk_dao_mint_bin, 13);
 
+    debug!(target: "demo", "Loading money-transfer contracts");
     {
         let start = Instant::now();
         let mint_pk = ProvingKey::build(11, &MintContract::default());
@@ -231,6 +233,10 @@ pub async fn demo() -> Result<()> {
         zk_bins.add_native("money-transfer-mint".to_string(), mint_pk, mint_vk);
         zk_bins.add_native("money-transfer-burn".to_string(), burn_pk, burn_vk);
     }
+    debug!(target: "demo", "Loading dao-propose-main.zk");
+    let zk_dao_propose_main_bincode = include_bytes!("../proof/dao-propose-main.zk.bin");
+    let zk_dao_propose_main_bin = ZkBinary::decode(zk_dao_propose_main_bincode)?;
+    zk_bins.add_contract("dao-propose-main".to_string(), zk_dao_propose_main_bin, 13);
 
     // State for money contracts
     let cashier_signature_secret = SecretKey::random(&mut OsRng);
@@ -257,7 +263,7 @@ pub async fn demo() -> Result<()> {
     /////////////////////////////////////////////////////
     ////// Create the DAO bulla
     /////////////////////////////////////////////////////
-    debug!(target: "demo", "1. Creating DAO bulla");
+    debug!(target: "demo", "Stage 1. Creating DAO bulla");
 
     //// Wallet
 
@@ -309,7 +315,7 @@ pub async fn demo() -> Result<()> {
     //// Mint the initial supply of treasury token
     //// and send it all to the DAO directly
     ///////////////////////////////////////////////////
-    debug!(target: "demo", "2. Minting treasury token");
+    debug!(target: "demo", "Stage 2. Minting treasury token");
 
     let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
     state.wallet_cache.track(dao_keypair.secret);
@@ -360,7 +366,7 @@ pub async fn demo() -> Result<()> {
             debug!("money_contract::transfer::state_transition()");
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
-                .expect("money_contract::state_transition() failed!");
+                .expect("money_contract::transfer::validate::state_transition() failed!");
             money_contract::transfer::validate::apply(&mut states, update);
         }
     }
@@ -404,7 +410,7 @@ pub async fn demo() -> Result<()> {
     //// Mint the governance token
     //// Send it to three hodlers
     ///////////////////////////////////////////////////
-    debug!(target: "demo", "3. Minting governance token");
+    debug!(target: "demo", "Stage 3. Minting governance token");
 
     //// Wallet
 
@@ -478,7 +484,7 @@ pub async fn demo() -> Result<()> {
             debug!("money_contract::transfer::state_transition()");
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
-                .expect("money_contract::state_transition() failed!");
+                .expect("money_contract::transfer::validate::state_transition() failed!");
             money_contract::transfer::validate::apply(&mut states, update);
         }
     }
@@ -540,7 +546,7 @@ pub async fn demo() -> Result<()> {
     // In order to make a valid vote, first the proposer must
     // meet a criteria for a minimum number of gov tokens
     ///////////////////////////////////////////////////
-    debug!(target: "demo", "4. Propose the vote");
+    debug!(target: "demo", "Stage 4. Propose the vote");
 
     //// Wallet
 
@@ -548,11 +554,22 @@ pub async fn demo() -> Result<()> {
 
     let user_keypair = Keypair::random(&mut OsRng);
 
+    let (leaf_position, merkle_path) = {
+        let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
+        let tree = &state.tree;
+        let leaf_position = gov_recv[0].leaf_position.clone();
+        let root = tree.root(0).unwrap();
+        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        (leaf_position, merkle_path)
+    };
+
     // TODO: is it possible for an invalid transfer() to be constructed on exec()?
     //       need to look into this
     let input = dao_contract::propose::wallet::Input {
         secret: gov_keypair_1.secret,
         note: gov_recv[0].note.clone(),
+        leaf_position,
+        merkle_path,
     };
 
     let builder = dao_contract::propose::wallet::Builder {
@@ -565,21 +582,34 @@ pub async fn demo() -> Result<()> {
             blind: pallas::Base::random(&mut OsRng),
         },
         dao: dao_contract::propose::wallet::DaoParams {
-            dao_proposer_limit,
-            dao_quorum,
-            dao_approval_ratio,
+            proposer_limit: dao_proposer_limit,
+            quorum: dao_quorum,
+            approval_ratio: dao_approval_ratio,
             gov_token_id: gdrk_token_id,
-            dao_public_key: dao_keypair.public,
-            dao_bulla_blind,
+            public_key: dao_keypair.public,
+            bulla_blind: dao_bulla_blind,
         },
     };
 
     let func_call = builder.build(&zk_bins);
 
-    Ok(())
-}
+    let tx = Transaction { func_calls: vec![func_call] };
 
-fn poseidon_hash<const N: usize>(messages: [pallas::Base; N]) -> pallas::Base {
-    poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<N>, 3, 2>::init()
-        .hash(messages)
+    //// Validator
+
+    for (idx, func_call) in tx.func_calls.iter().enumerate() {
+        if func_call.func_id == "DAO::propose()" {
+            debug!(target: "demo", "dao_contract::propose::state_transition()");
+
+            let update = dao_contract::propose::validate::state_transition(&states, idx, &tx)
+                .expect("dao_contract::propose::validate::state_transition() failed!");
+            dao_contract::propose::validate::apply(&mut states, update);
+        }
+    }
+
+    tx.zk_verify(&zk_bins);
+
+    //// Wallet
+
+    Ok(())
 }
