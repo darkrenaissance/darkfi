@@ -25,7 +25,7 @@ use crate::{
     note,
 };
 
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct Note {
     pub serial: DrkSerial,
     pub value: u64,
@@ -235,8 +235,8 @@ impl Builder {
         let call_data = CallData { clear_inputs, inputs, outputs: partial.outputs };
 
         Ok(FuncCall {
-            contract_id: "money".to_string(),
-            func_id: "money::transfer()".to_string(),
+            contract_id: "Money".to_string(),
+            func_id: "Money::transfer()".to_string(),
             call_data: Box::new(call_data),
             proofs: partial.proofs,
         })

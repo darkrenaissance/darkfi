@@ -240,19 +240,14 @@ pub async fn demo() -> Result<()> {
 
     ///////////////////////////////////////////////////
 
-    let money_state = Box::new(money_contract::state::State {
-        tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100),
-        merkle_roots: vec![],
-        nullifiers: vec![],
-        cashier_signature_public,
-        faucet_signature_public,
-    });
-    states.register("money_contract".to_string(), money_state);
+    let money_state =
+        money_contract::state::State::new(cashier_signature_public, faucet_signature_public);
+    states.register("Money".to_string(), money_state);
 
     /////////////////////////////////////////////////////
 
     let dao_state = dao_contract::State::new();
-    states.register("dao_contract".to_string(), dao_state);
+    states.register("DAO".to_string(), dao_state);
 
     // For this demo lets create 10 random preexisting DAO bullas
     for _ in 0..10 {
@@ -262,6 +257,8 @@ pub async fn demo() -> Result<()> {
     /////////////////////////////////////////////////////
     ////// Create the DAO bulla
     /////////////////////////////////////////////////////
+
+    //// Wallet
 
     //// Setup the DAO
     let dao_keypair = Keypair::random(&mut OsRng);
@@ -279,6 +276,8 @@ pub async fn demo() -> Result<()> {
     let func_call = builder.build(&zk_bins);
 
     let tx = Transaction { func_calls: vec![func_call] };
+
+    //// Validator
 
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
@@ -309,6 +308,8 @@ pub async fn demo() -> Result<()> {
     //// Mint the initial supply of treasury token
     //// and send it all to the DAO directly
     ///////////////////////////////////////////////////
+
+    //// Wallet
 
     // Address of deployed contract in our example is hook_dao_exec
     // This field is public, you can see it's being sent to a DAO
@@ -345,11 +346,12 @@ pub async fn demo() -> Result<()> {
 
     let tx = Transaction { func_calls: vec![func_call] };
 
-    //    let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret)?;
+    //// Validator
+
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
         // functions based off the func_id
-        if func_call.func_id == "money::transfer()" {
+        if func_call.func_id == "Money::transfer()" {
             debug!("money_contract::transfer::state_transition()");
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
@@ -360,60 +362,59 @@ pub async fn demo() -> Result<()> {
 
     tx.zk_verify(&zk_bins);
 
-    // Wallet stuff
+    //// Wallet
     // DAO reads the money received from the encrypted note
-    for (idx, func_call) in tx.func_calls.iter().enumerate() {
-        if func_call.func_id == "money::transfer()" {
-            let call_data = func_call.call_data.as_any();
-            assert_eq!(
-                (&*call_data).type_id(),
-                TypeId::of::<money_contract::transfer::validate::CallData>()
-            );
-            let call_data =
-                call_data.downcast_ref::<money_contract::transfer::validate::CallData>().unwrap();
 
-            assert_eq!(call_data.outputs.len(), 1);
-            let output = &call_data.outputs[0];
-            let enc_note = &output.enc_note;
-            // Try to decrypt the note
-            let note: money_contract::transfer::wallet::Note =
-                enc_note.decrypt(&dao_keypair.secret).unwrap();
+    let dao_recv = {
+        let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
+        let mut recv_coins = state.wallet_cache.get_received(&dao_keypair.secret);
+        assert_eq!(recv_coins.len(), 1);
+        let recv_coin = recv_coins.pop().unwrap();
+        let note = &recv_coin.note;
 
-            // Check the actual coin received is valid before accepting it
+        // Check the actual coin received is valid before accepting it
 
-            let coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
-            let coin = poseidon_hash::<8>([
-                *coords.x(),
-                *coords.y(),
-                DrkValue::from(note.value),
-                note.token_id,
-                note.serial,
-                note.spend_hook,
-                note.user_data,
-                note.coin_blind,
-            ]);
-            assert_eq!(coin, output.revealed.coin.0);
+        let coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
+        let coin = poseidon_hash::<8>([
+            *coords.x(),
+            *coords.y(),
+            DrkValue::from(note.value),
+            note.token_id,
+            note.serial,
+            note.spend_hook,
+            note.user_data,
+            note.coin_blind,
+        ]);
+        assert_eq!(coin, recv_coin.coin.0);
 
-            assert_eq!(note.spend_hook, hook_dao_exec);
-            assert_eq!(note.user_data, dao_bulla.0);
+        assert_eq!(note.spend_hook, hook_dao_exec);
+        assert_eq!(note.user_data, dao_bulla.0);
 
-            debug!("DAO received a coin worth {} xDRK", note.value);
-        }
-    }
+        debug!("DAO received a coin worth {} xDRK", note.value);
+
+        recv_coin
+    };
 
     ///////////////////////////////////////////////////
     //// Mint the governance token
     //// Send it to three hodlers
     ///////////////////////////////////////////////////
 
-    // Hodler 1
-    let keypair1 = Keypair::random(&mut OsRng);
-    // Hodler 2
-    let keypair2 = Keypair::random(&mut OsRng);
-    // Hodler 3: the tiebreaker
-    let keypair3 = Keypair::random(&mut OsRng);
+    //// Wallet
 
-    let keypairs = vec![keypair1, keypair2, keypair3];
+    // Hodler 1
+    let gov_keypair_1 = Keypair::random(&mut OsRng);
+    // Hodler 2
+    let gov_keypair_2 = Keypair::random(&mut OsRng);
+    // Hodler 3: the tiebreaker
+    let gov_keypair_3 = Keypair::random(&mut OsRng);
+
+    let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
+    state.wallet_cache.track(gov_keypair_1.secret);
+    state.wallet_cache.track(gov_keypair_2.secret);
+    state.wallet_cache.track(gov_keypair_3.secret);
+
+    let gov_keypairs = vec![gov_keypair_1, gov_keypair_2, gov_keypair_3];
 
     // We don't use this because money-transfer expects a cashier.
     // let signature_secret = SecretKey::random(&mut OsRng);
@@ -425,7 +426,7 @@ pub async fn demo() -> Result<()> {
     let output1 = money_contract::transfer::wallet::BuilderOutputInfo {
         value: 400000,
         token_id: gdrk_token_id,
-        public: keypair1.public,
+        public: gov_keypair_1.public,
         spend_hook,
         user_data,
     };
@@ -433,7 +434,7 @@ pub async fn demo() -> Result<()> {
     let output2 = money_contract::transfer::wallet::BuilderOutputInfo {
         value: 400000,
         token_id: gdrk_token_id,
-        public: keypair2.public,
+        public: gov_keypair_2.public,
         spend_hook,
         user_data,
     };
@@ -441,7 +442,7 @@ pub async fn demo() -> Result<()> {
     let output3 = money_contract::transfer::wallet::BuilderOutputInfo {
         value: 200000,
         token_id: gdrk_token_id,
-        public: keypair3.public,
+        public: gov_keypair_3.public,
         spend_hook,
         user_data,
     };
@@ -462,10 +463,12 @@ pub async fn demo() -> Result<()> {
 
     let tx = Transaction { func_calls: vec![func_call] };
 
+    //// Validator
+
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
         // functions based off the func_id
-        if func_call.func_id == "money::transfer()" {
+        if func_call.func_id == "Money::transfer()" {
             debug!("money_contract::transfer::state_transition()");
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
@@ -476,57 +479,44 @@ pub async fn demo() -> Result<()> {
 
     tx.zk_verify(&zk_bins);
 
-    // We need this to keep track of Notes
-    let mut notes: [Option<money_contract::transfer::wallet::Note>; 3] = [None, None, None];
+    //// Wallet
 
-    //// Wallet stuff
-    //// Holders read the money received from the encrypted note
-    for (i, key) in keypairs.iter().enumerate() {
-        for (idx, func_call) in tx.func_calls.iter().enumerate() {
-            if func_call.func_id == "money::transfer()" {
-                let call_data = func_call.call_data.as_any();
-                assert_eq!(
-                    (&*call_data).type_id(),
-                    TypeId::of::<money_contract::transfer::validate::CallData>()
-                );
-                let call_data = call_data
-                    .downcast_ref::<money_contract::transfer::validate::CallData>()
-                    .unwrap();
+    let mut gov_recv = vec![None, None, None];
+    // Check that each person received one coin
+    for (i, key) in gov_keypairs.iter().enumerate() {
+        let gov_recv_coin = {
+            let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
+            let mut recv_coins = state.wallet_cache.get_received(&key.secret);
+            assert_eq!(recv_coins.len(), 1);
+            let recv_coin = recv_coins.pop().unwrap();
+            let note = &recv_coin.note;
 
-                assert_eq!(call_data.outputs.len(), 3);
+            assert_eq!(note.token_id, gdrk_token_id);
+            // Normal payment
+            assert_eq!(note.spend_hook, pallas::Base::from(0));
+            assert_eq!(note.user_data, pallas::Base::from(0));
 
-                for output in &call_data.outputs {
-                    let enc_note = &output.enc_note;
-                    // Try to decrypt the note
-                    let note: darkfi::Result<money_contract::transfer::wallet::Note> =
-                        enc_note.decrypt(&key.secret);
+            let coords = key.public.0.to_affine().coordinates().unwrap();
+            let coin = poseidon_hash::<8>([
+                *coords.x(),
+                *coords.y(),
+                DrkValue::from(note.value),
+                note.token_id,
+                note.serial,
+                note.spend_hook,
+                note.user_data,
+                note.coin_blind,
+            ]);
+            assert_eq!(coin, recv_coin.coin.0);
 
-                    match note {
-                        Ok(note) => {
-                            // Check the actual coin received is valid before accepting it
-                            let coords = key.public.0.to_affine().coordinates().unwrap();
-                            let coin = poseidon_hash::<8>([
-                                *coords.x(),
-                                *coords.y(),
-                                DrkValue::from(note.value),
-                                note.token_id,
-                                note.serial,
-                                note.spend_hook,
-                                note.user_data,
-                                note.coin_blind,
-                            ]);
-                            assert_eq!(coin, output.revealed.coin.0);
+            debug!("Holder{} received a coin worth {} gDRK", i, note.value);
 
-                            debug!("Holder{} received a coin worth {} gDRK", i, note.value);
-
-                            notes[i] = Some(note);
-                        }
-                        Err(e) => continue,
-                    }
-                }
-            }
-        }
+            recv_coin
+        };
+        gov_recv[i] = Some(gov_recv_coin);
     }
+    // unwrap them for this demo
+    let gov_recv: Vec<_> = gov_recv.into_iter().map(|r| r.unwrap()).collect();
 
     ///////////////////////////////////////////////////
     // DAO rules:
@@ -545,7 +535,39 @@ pub async fn demo() -> Result<()> {
     // meet a criteria for a minimum number of gov tokens
     ///////////////////////////////////////////////////
 
+    //// Wallet
+
     // TODO: look into proposal expiry once time for voting has finished
+
+    let user_keypair = Keypair::random(&mut OsRng);
+
+    // TODO: is it possible for an invalid transfer() to be constructed on exec()?
+    //       need to look into this
+    let input = dao_contract::propose::wallet::Input {
+        secret: gov_keypair_1.secret,
+        note: gov_recv[0].note.clone(),
+    };
+
+    let builder = dao_contract::propose::wallet::Builder {
+        inputs: vec![input],
+        proposal: dao_contract::propose::wallet::Proposal {
+            dest: user_keypair.public,
+            amount: 1000,
+            serial: pallas::Base::random(&mut OsRng),
+            token_id: xdrk_token_id,
+            blind: pallas::Base::random(&mut OsRng),
+        },
+        dao: dao_contract::propose::wallet::DaoParams {
+            dao_proposer_limit,
+            dao_quorum,
+            dao_approval_ratio,
+            gov_token_id: gdrk_token_id,
+            dao_public_key: dao_keypair.public,
+            dao_bulla_blind,
+        },
+    };
+
+    let func_call = builder.build(&zk_bins);
 
     Ok(())
 }

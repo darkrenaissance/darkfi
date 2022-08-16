@@ -52,7 +52,7 @@ pub struct Update {
 }
 
 pub fn apply(states: &mut StateRegistry, mut update: Update) {
-    let state = states.lookup_mut::<State>(&"money_contract".to_string()).unwrap();
+    let state = states.lookup_mut::<State>(&"Money".to_string()).unwrap();
 
     // Extend our list of nullifiers with the ones from the update
     state.nullifiers.append(&mut update.nullifiers);
@@ -65,6 +65,8 @@ pub fn apply(states: &mut StateRegistry, mut update: Update) {
 
         // Keep track of all Merkle roots that have existed
         state.merkle_roots.push(state.tree.root(0).unwrap());
+
+        state.wallet_cache.try_decrypt_note(coin, enc_note, &mut state.tree);
     }
 }
 
@@ -85,9 +87,8 @@ pub fn state_transition(
     // This will be inside wasm so unwrap is fine.
     let call_data = call_data.unwrap();
 
-    let state = states
-        .lookup::<State>(&"money_contract".to_string())
-        .expect("Return type is not of type State");
+    let state =
+        states.lookup::<State>(&"Money".to_string()).expect("Return type is not of type State");
 
     // Code goes here
     for (i, input) in call_data.clear_inputs.iter().enumerate() {

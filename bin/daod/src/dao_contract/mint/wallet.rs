@@ -95,11 +95,6 @@ impl Builder {
         let mint_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::mint() proving error!");
 
-        // [x] 1. move proving key to zkbins table (and k value)
-        // [x] 2. do verification of zk proofs in main code
-        // [ ] 3. implement apply(update) function
-
-        // Return call data
         let call_data = CallData { dao_bulla };
         FuncCall {
             contract_id: "DAO".to_string(),
