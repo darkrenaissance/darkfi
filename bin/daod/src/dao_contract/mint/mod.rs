@@ -1,3 +1,4 @@
+pub mod validate;
 /// This is an anonymous contract function that mutates the internal DAO state.
 ///
 /// Corresponds to `mint(proposer_limit, quorum, approval_ratio, dao_pubkey, dao_blind)`
@@ -32,6 +33,4 @@
 /// );
 /// let tx = builder.build();
 /// ```
-pub mod builder;
-pub mod validate;
-pub use builder::Builder;
+pub mod wallet;

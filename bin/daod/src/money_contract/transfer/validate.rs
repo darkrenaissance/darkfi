@@ -32,7 +32,7 @@ use crate::{
     demo::{CallDataBase, StateRegistry, Transaction},
     money_contract::{
         state::State,
-        transfer::partial::{PartialClearInput, PartialInput},
+        transfer::wallet::partial::{PartialClearInput, PartialInput},
     },
     note::EncryptedNote2,
 };

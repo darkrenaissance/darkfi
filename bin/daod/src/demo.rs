@@ -268,7 +268,7 @@ pub async fn demo() -> Result<()> {
     let dao_bulla_blind = pallas::Base::random(&mut OsRng);
 
     // Create DAO mint tx
-    let builder = dao_contract::mint::Builder::new(
+    let builder = dao_contract::mint::wallet::Builder::new(
         dao_proposer_limit,
         dao_quorum,
         dao_approval_ratio,
@@ -325,14 +325,14 @@ pub async fn demo() -> Result<()> {
     // In out case, it's the bulla for the DAO
     let user_data = dao_bulla.0;
 
-    let builder = money_contract::transfer::builder::Builder {
-        clear_inputs: vec![money_contract::transfer::builder::BuilderClearInputInfo {
+    let builder = money_contract::transfer::wallet::Builder {
+        clear_inputs: vec![money_contract::transfer::wallet::BuilderClearInputInfo {
             value: xdrk_supply,
             token_id: xdrk_token_id,
             signature_secret: cashier_signature_secret,
         }],
         inputs: vec![],
-        outputs: vec![money_contract::transfer::builder::BuilderOutputInfo {
+        outputs: vec![money_contract::transfer::wallet::BuilderOutputInfo {
             value: xdrk_supply,
             token_id: xdrk_token_id,
             public: dao_keypair.public,
@@ -376,7 +376,7 @@ pub async fn demo() -> Result<()> {
             let output = &call_data.outputs[0];
             let enc_note = &output.enc_note;
             // Try to decrypt the note
-            let note: money_contract::transfer::builder::Note =
+            let note: money_contract::transfer::wallet::Note =
                 enc_note.decrypt(&dao_keypair.secret).unwrap();
 
             // Check the actual coin received is valid before accepting it
@@ -422,7 +422,7 @@ pub async fn demo() -> Result<()> {
     let spend_hook = DrkSpendHook::from(0);
     let user_data = DrkUserData::from(0);
 
-    let output1 = money_contract::transfer::builder::BuilderOutputInfo {
+    let output1 = money_contract::transfer::wallet::BuilderOutputInfo {
         value: 400000,
         token_id: gdrk_token_id,
         public: keypair1.public,
@@ -430,7 +430,7 @@ pub async fn demo() -> Result<()> {
         user_data,
     };
 
-    let output2 = money_contract::transfer::builder::BuilderOutputInfo {
+    let output2 = money_contract::transfer::wallet::BuilderOutputInfo {
         value: 400000,
         token_id: gdrk_token_id,
         public: keypair2.public,
@@ -438,7 +438,7 @@ pub async fn demo() -> Result<()> {
         user_data,
     };
 
-    let output3 = money_contract::transfer::builder::BuilderOutputInfo {
+    let output3 = money_contract::transfer::wallet::BuilderOutputInfo {
         value: 200000,
         token_id: gdrk_token_id,
         public: keypair3.public,
@@ -448,8 +448,8 @@ pub async fn demo() -> Result<()> {
 
     assert!(2 * 400000 + 200000 == gdrk_supply);
 
-    let builder = money_contract::transfer::builder::Builder {
-        clear_inputs: vec![money_contract::transfer::builder::BuilderClearInputInfo {
+    let builder = money_contract::transfer::wallet::Builder {
+        clear_inputs: vec![money_contract::transfer::wallet::BuilderClearInputInfo {
             value: gdrk_supply,
             token_id: gdrk_token_id,
             signature_secret: cashier_signature_secret,
@@ -477,7 +477,7 @@ pub async fn demo() -> Result<()> {
     tx.zk_verify(&zk_bins);
 
     // We need this to keep track of Notes
-    let mut notes: [Option<money_contract::transfer::builder::Note>; 3] = [None, None, None];
+    let mut notes: [Option<money_contract::transfer::wallet::Note>; 3] = [None, None, None];
 
     //// Wallet stuff
     //// Holders read the money received from the encrypted note
@@ -498,7 +498,7 @@ pub async fn demo() -> Result<()> {
                 for output in &call_data.outputs {
                     let enc_note = &output.enc_note;
                     // Try to decrypt the note
-                    let note: darkfi::Result<money_contract::transfer::builder::Note> =
+                    let note: darkfi::Result<money_contract::transfer::wallet::Note> =
                         enc_note.decrypt(&key.secret);
 
                     match note {
@@ -517,7 +517,7 @@ pub async fn demo() -> Result<()> {
                             ]);
                             assert_eq!(coin, output.revealed.coin.0);
 
-                            debug!("Holder{} received a coin worth {} xDRK", i, note.value);
+                            debug!("Holder{} received a coin worth {} gDRK", i, note.value);
 
                             notes[i] = Some(note);
                         }
@@ -528,7 +528,24 @@ pub async fn demo() -> Result<()> {
         }
     }
 
-    //let x = pallas::Base::from(0);
+    ///////////////////////////////////////////////////
+    // DAO rules:
+    // 1. gov token IDs must match on all inputs
+    // 2. proposals must be submitted by minimum amount
+    // 3. all votes >= quorum
+    // 4. outcome > approval_ratio
+    // 5. structure of outputs
+    //   output 0: value and address
+    //   output 1: change address
+    ///////////////////////////////////////////////////
+
+    ///////////////////////////////////////////////////
+    // Propose the vote
+    // In order to make a valid vote, first the proposer must
+    // meet a criteria for a minimum number of gov tokens
+    ///////////////////////////////////////////////////
+
+    // TODO: look into proposal expiry once time for voting has finished
 
     Ok(())
 }
