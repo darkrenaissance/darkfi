@@ -22,7 +22,7 @@ outbound_connections=5
 #peers=["tls://127.0.0.1:12003"]
 
 ## Seed nodes to connect to 
-seeds=["tls://tau0.dark.fi:12001", "tls://tau1.dark.fi:12001"]
+seeds=["tls://lilith0.dark.fi:23331", "tls://lilith1.dark.fi:23331"]
 
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0
