@@ -18,7 +18,6 @@ use darkfi::{
     Result,
 };
 
-use super::partial::{Partial, PartialClearInput, PartialInput};
 use crate::{
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
     money_contract::transfer::validate::{CallData, ClearInput, Input, Output},
@@ -67,7 +66,7 @@ pub struct BuilderOutputInfo {
 
 impl Builder {
     fn compute_remainder_blind(
-        clear_inputs: &[PartialClearInput],
+        clear_inputs: &[ClearInput],
         input_blinds: &[DrkValueBlind],
         output_blinds: &[DrkValueBlind],
     ) -> DrkValueBlind {
@@ -97,7 +96,7 @@ impl Builder {
             let signature_public = PublicKey::from_secret(input.signature_secret);
             let value_blind = DrkValueBlind::random(&mut OsRng);
 
-            let clear_input = PartialClearInput {
+            let clear_input = ClearInput {
                 value: input.value,
                 token_id: input.token_id,
                 value_blind,
@@ -150,7 +149,7 @@ impl Builder {
             // First we make the tx then sign after
             signature_secrets.push(signature_secret);
 
-            let input = PartialInput { revealed };
+            let input = Input { revealed };
             inputs.push(input);
         }
 
@@ -210,35 +209,33 @@ impl Builder {
             outputs.push(output);
         }
 
-        let partial = Partial { clear_inputs, inputs, outputs, proofs };
+        //let partial = Partial { clear_inputs, inputs, outputs, proofs };
 
         let mut unsigned_tx_data = vec![];
-        partial.encode(&mut unsigned_tx_data)?;
+        clear_inputs.encode(&mut unsigned_tx_data)?;
+        inputs.encode(&mut unsigned_tx_data)?;
+        outputs.encode(&mut unsigned_tx_data)?;
 
-        let mut clear_inputs = vec![];
-        for (input, info) in partial.clear_inputs.into_iter().zip(self.clear_inputs) {
-            let secret = info.signature_secret;
+        let mut clear_signatures = vec![];
+        for clear_input in self.clear_inputs {
+            let secret = clear_input.signature_secret;
             let signature = secret.sign(&unsigned_tx_data[..]);
-            let input = ClearInput::from_partial(input, signature);
-            clear_inputs.push(input);
+            clear_signatures.push(signature);
         }
 
-        let mut inputs = vec![];
-        for (input, signature_secret) in
-            partial.inputs.into_iter().zip(signature_secrets.into_iter())
-        {
+        let mut signatures = vec![];
+        for signature_secret in signature_secrets {
             let signature = signature_secret.sign(&unsigned_tx_data[..]);
-            let input = Input::from_partial(input, signature);
-            inputs.push(input);
+            signatures.push(signature);
         }
 
-        let call_data = CallData { clear_inputs, inputs, outputs: partial.outputs };
+        let call_data = CallData { clear_inputs, inputs, outputs, clear_signatures, signatures };
 
         Ok(FuncCall {
             contract_id: "Money".to_string(),
             func_id: "Money::transfer()".to_string(),
             call_data: Box::new(call_data),
-            proofs: partial.proofs,
+            proofs,
         })
     }
 }

@@ -30,10 +30,7 @@ use darkfi::{
 
 use crate::{
     demo::{CallDataBase, StateRegistry, Transaction},
-    money_contract::{
-        state::State,
-        transfer::wallet::partial::{PartialClearInput, PartialInput},
-    },
+    money_contract::state::State,
     note::EncryptedNote2,
 };
 
@@ -162,6 +159,10 @@ pub struct CallData {
     pub inputs: Vec<Input>,
     /// Anonymous outputs
     pub outputs: Vec<Output>,
+    /// Clear input signatures
+    pub clear_signatures: Vec<schnorr::Signature>,
+    /// Input signatures
+    pub signatures: Vec<schnorr::Signature>,
 }
 
 impl CallDataBase for CallData {
@@ -235,38 +236,29 @@ impl CallData {
 
         // Verify the available signatures
         let mut unsigned_tx_data = vec![];
-        self.encode_without_signature(&mut unsigned_tx_data, proofs)?;
+        self.clear_inputs.encode(&mut unsigned_tx_data)?;
+        self.inputs.encode(&mut unsigned_tx_data)?;
+        self.outputs.encode(&mut unsigned_tx_data)?;
 
-        for (i, input) in self.clear_inputs.iter().enumerate() {
+        for (i, (input, signature)) in
+            self.clear_inputs.iter().zip(self.clear_signatures.iter()).enumerate()
+        {
             let public = &input.signature_public;
-            if !public.verify(&unsigned_tx_data[..], &input.signature) {
+            if !public.verify(&unsigned_tx_data[..], signature) {
                 error!("tx::verify(): Failed to verify Clear Input signature {}", i);
                 return Err(VerifyFailed::ClearInputSignature(i))
             }
         }
 
-        for (i, input) in self.inputs.iter().enumerate() {
+        for (i, (input, signature)) in self.inputs.iter().zip(self.signatures.iter()).enumerate() {
             let public = &input.revealed.signature_public;
-            if !public.verify(&unsigned_tx_data[..], &input.signature) {
+            if !public.verify(&unsigned_tx_data[..], signature) {
                 error!("tx::verify(): Failed to verify Input signature {}", i);
                 return Err(VerifyFailed::InputSignature(i))
             }
         }
 
         Ok(())
-    }
-
-    pub fn encode_without_signature<S: io::Write>(
-        &self,
-        mut s: S,
-        proofs: &Vec<Proof>,
-    ) -> Result<usize> {
-        let mut len = 0;
-        len += self.clear_inputs.encode_without_signature(&mut s)?;
-        len += self.inputs.encode_without_signature(&mut s)?;
-        len += self.outputs.encode(&mut s)?;
-        len += proofs.encode(s)?;
-        Ok(len)
     }
 
     fn verify_token_commitments(&self) -> bool {
@@ -300,8 +292,6 @@ pub struct ClearInput {
     pub token_blind: DrkValueBlind,
     /// Public key for the signature
     pub signature_public: PublicKey,
-    ///  signature
-    pub signature: schnorr::Signature,
 }
 
 /// A transaction's anonymous input
@@ -309,8 +299,6 @@ pub struct ClearInput {
 pub struct Input {
     /// Public inputs for the zero-knowledge proof
     pub revealed: BurnRevealedValues,
-    /// Input's signature
-    pub signature: schnorr::Signature,
 }
 
 /// A transaction's anonymous output
@@ -321,63 +309,6 @@ pub struct Output {
     /// The encrypted note
     pub enc_note: EncryptedNote2,
 }
-
-impl ClearInput {
-    pub fn from_partial(partial: PartialClearInput, signature: schnorr::Signature) -> Self {
-        Self {
-            value: partial.value,
-            token_id: partial.token_id,
-            value_blind: partial.value_blind,
-            token_blind: partial.token_blind,
-            signature_public: partial.signature_public,
-            signature,
-        }
-    }
-
-    fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.value.encode(&mut s)?;
-        len += self.token_id.encode(&mut s)?;
-        len += self.value_blind.encode(&mut s)?;
-        len += self.token_blind.encode(&mut s)?;
-        len += self.signature_public.encode(s)?;
-        Ok(len)
-    }
-}
-
-impl Input {
-    pub fn from_partial(partial: PartialInput, signature: schnorr::Signature) -> Self {
-        Self { revealed: partial.revealed, signature }
-    }
-
-    fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.revealed.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-trait EncodableWithoutSignature {
-    fn encode_without_signature<S: io::Write>(&self, s: S) -> Result<usize>;
-}
-
-macro_rules! impl_vec_without_signature {
-    ($type: ty) => {
-        impl EncodableWithoutSignature for Vec<$type> {
-            #[inline]
-            fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
-                let mut len = 0;
-                len += VarInt(self.len() as u64).encode(&mut s)?;
-                for c in self.iter() {
-                    len += c.encode_without_signature(&mut s)?;
-                }
-                Ok(len)
-            }
-        }
-    };
-}
-impl_vec_without_signature!(ClearInput);
-impl_vec_without_signature!(Input);
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
@@ -429,6 +360,9 @@ pub enum VerifyFailed {
 
     #[error("Internal error: {0}")]
     InternalError(String),
+
+    #[error("DarkFi error: {0}")]
+    DarkFiError(String),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -436,6 +370,12 @@ type Result<T> = std::result::Result<T, Error>;
 impl From<Error> for VerifyFailed {
     fn from(err: Error) -> Self {
         Self::InternalError(err.to_string())
+    }
+}
+
+impl From<DarkFiError> for VerifyFailed {
+    fn from(err: DarkFiError) -> Self {
+        Self::DarkFiError(err.to_string())
     }
 }
 
