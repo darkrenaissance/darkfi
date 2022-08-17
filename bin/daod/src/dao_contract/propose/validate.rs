@@ -2,7 +2,14 @@ use crate::{
     dao_contract::{DaoBulla, State},
     demo::{CallDataBase, StateRegistry, Transaction},
 };
-use darkfi::crypto::{merkle_node::MerkleNode, types::DrkCircuitField};
+use darkfi::{
+    crypto::{
+        keypair::PublicKey, merkle_node::MerkleNode, schnorr, schnorr::SchnorrPublic,
+        types::DrkCircuitField, Proof,
+    },
+    util::serial::{Encodable, SerialDecodable, SerialEncodable, VarInt},
+    Error as DarkFiError,
+};
 use log::{debug, error};
 use pasta_curves::{
     arithmetic::CurveAffine,
@@ -11,20 +18,53 @@ use pasta_curves::{
 };
 use std::any::{Any, TypeId};
 
+use super::wallet::{Partial, PartialInput};
+
 const TARGET: &str = "dao_contract::propose::validate::state_transition()";
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     #[error("Invalid DAO merkle root")]
     InvalidDaoMerkleRoot,
+
+    #[error("Signature verification failed")]
+    SignatureVerifyFailed,
+
+    #[error("DarkFi error: {0}")]
+    DarkFiError(String),
 }
 type Result<T> = std::result::Result<T, Error>;
+
+impl From<DarkFiError> for Error {
+    fn from(err: DarkFiError) -> Self {
+        Self::DarkFiError(err.to_string())
+    }
+}
 
 pub struct CallData {
     pub dao_merkle_root: MerkleNode,
     pub token_commit: pallas::Base,
     // TODO: compute from sum of input commits
     pub total_funds_commit: pallas::Point,
+
+    pub inputs: Vec<Input>,
+}
+
+impl CallData {
+    fn encode_without_signature<S: std::io::Write>(
+        &self,
+        mut s: S,
+        proofs: &Vec<Proof>,
+    ) -> Result<usize> {
+        let mut len = 0;
+        len += self.dao_merkle_root.encode(&mut s)?;
+        len += self.token_commit.encode(&mut s)?;
+        //len += self.value_blind.encode(&mut s)?;
+        //len += self.token_blind.encode(&mut s)?;
+        len += self.inputs.encode_without_signature(&mut s)?;
+        len += proofs.encode(s)?;
+        Ok(len)
+    }
 }
 
 impl CallDataBase for CallData {
@@ -43,6 +83,48 @@ impl CallDataBase for CallData {
         self
     }
 }
+
+pub struct Input {
+    pub signature_public: PublicKey,
+    pub signature: schnorr::Signature,
+}
+
+impl Input {
+    pub fn from_partial(partial: PartialInput, signature: schnorr::Signature) -> Self {
+        Self { signature_public: partial.signature_public, signature }
+    }
+
+    fn encode_without_signature<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        //len += self.value.encode(&mut s)?;
+        //len += self.token_id.encode(&mut s)?;
+        //len += self.value_blind.encode(&mut s)?;
+        //len += self.token_blind.encode(&mut s)?;
+        len += self.signature_public.encode(s)?;
+        Ok(len)
+    }
+}
+
+trait EncodableWithoutSignature {
+    fn encode_without_signature<S: std::io::Write>(&self, s: S) -> Result<usize>;
+}
+
+macro_rules! impl_vec_without_signature {
+    ($type: ty) => {
+        impl EncodableWithoutSignature for Vec<$type> {
+            #[inline]
+            fn encode_without_signature<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
+                let mut len = 0;
+                len += VarInt(self.len() as u64).encode(&mut s)?;
+                for c in self.iter() {
+                    len += c.encode_without_signature(&mut s)?;
+                }
+                Ok(len)
+            }
+        }
+    };
+}
+impl_vec_without_signature!(Input);
 
 pub fn state_transition(
     states: &StateRegistry,
@@ -63,6 +145,17 @@ pub fn state_transition(
     // Is the DAO bulla generated in the ZK proof valid
     if !state.is_valid_dao_merkle(&call_data.dao_merkle_root) {
         return Err(Error::InvalidDaoMerkleRoot)
+    }
+
+    // Verify the available signatures
+    let mut unsigned_tx_data = vec![];
+    call_data.encode_without_signature(&mut unsigned_tx_data, &func_call.proofs)?;
+
+    for (i, input) in call_data.inputs.iter().enumerate() {
+        let public = &input.signature_public;
+        if !public.verify(&unsigned_tx_data[..], &input.signature) {
+            return Err(Error::SignatureVerifyFailed)
+        }
     }
 
     Ok(Update {})

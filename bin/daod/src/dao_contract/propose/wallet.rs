@@ -1,7 +1,7 @@
 use halo2_proofs::circuit::Value;
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{ff::Field, Curve},
+    group::{ff::Field, Curve, Group},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -26,13 +26,13 @@ use darkfi::{
 };
 
 use crate::{
-    dao_contract::propose::validate::CallData,
+    dao_contract::propose::validate::{CallData, Input},
     demo::{CallDataBase, FuncCall, StateRegistry, ZkContractInfo, ZkContractTable},
     money_contract,
     util::poseidon_hash,
 };
 
-pub struct Input {
+pub struct BuilderInput {
     pub secret: SecretKey,
     pub note: money_contract::transfer::wallet::Note,
     pub leaf_position: incrementalmerkletree::Position,
@@ -57,7 +57,7 @@ pub struct DaoParams {
 }
 
 pub struct Builder {
-    pub inputs: Vec<Input>,
+    pub inputs: Vec<BuilderInput>,
     pub proposal: Proposal,
     pub dao: DaoParams,
     pub dao_leaf_position: incrementalmerkletree::Position,
@@ -67,8 +67,56 @@ pub struct Builder {
 
 impl Builder {
     pub fn build(self, zk_bins: &ZkContractTable) -> FuncCall {
-        let total_funds = 110;
-        let total_funds_blind = pallas::Scalar::random(&mut OsRng);
+        let mut inputs = vec![];
+        let mut total_funds = 0;
+        let mut input_funds_blinds = vec![];
+        let mut signature_secrets = vec![];
+        for input in self.inputs {
+            let funds_blind = pallas::Scalar::random(&mut OsRng);
+            input_funds_blinds.push(funds_blind);
+
+            let signature_secret = SecretKey::random(&mut OsRng);
+
+            //let zk_info = zk_bins.lookup(&"money-transfer-burn".to_string()).unwrap();
+            //let zk_info = if let ZkContractInfo::Native(info) = zk_info {
+            //    info
+            //} else {
+            //    panic!("Not native info")
+            //};
+            //let burn_pk = &zk_info.proving_key;
+
+            //// Note from the previous output
+            //let note = input.note;
+
+            //let (burn_proof, revealed) = create_burn_proof(
+            //    burn_pk,
+            //    note.value,
+            //    note.token_id,
+            //    value_blind,
+            //    token_blind,
+            //    note.serial,
+            //    note.spend_hook,
+            //    note.user_data,
+            //    input.user_data_blind,
+            //    note.coin_blind,
+            //    input.secret,
+            //    input.leaf_position,
+            //    input.merkle_path,
+            //    signature_secret,
+            //)?;
+            //proofs.push(burn_proof);
+
+            // First we make the tx then sign after
+            signature_secrets.push(signature_secret);
+
+            let input = PartialInput { signature_public: PublicKey::from_secret(signature_secret) };
+            inputs.push(input);
+        }
+
+        let mut total_funds_blind = pallas::Scalar::from(0);
+        for blind in &input_funds_blinds {
+            total_funds_blind += blind;
+        }
         let total_funds_commit = pedersen_commitment_u64(total_funds, total_funds_blind);
         let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
         let total_funds_x = *total_funds_coords.x();
@@ -145,14 +193,59 @@ impl Builder {
         let main_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::propose() proving error!");
 
-        let call_data =
-            CallData { dao_merkle_root: self.dao_merkle_root, token_commit, total_funds_commit };
+        // Create the input signatures
+        let proofs = vec![main_proof];
+
+        let partial = Partial {
+            dao_merkle_root: self.dao_merkle_root,
+            token_commit,
+            total_funds_commit,
+            inputs,
+            proofs,
+        };
+
+        let mut unsigned_tx_data = vec![];
+        partial.encode(&mut unsigned_tx_data).expect("failed to encode data");
+
+        let mut inputs = vec![];
+        for (input, signature_secret) in
+            partial.inputs.into_iter().zip(signature_secrets.into_iter())
+        {
+            let signature = signature_secret.sign(&unsigned_tx_data[..]);
+            let input = Input::from_partial(input, signature);
+            inputs.push(input);
+        }
+
+        let call_data = CallData {
+            dao_merkle_root: self.dao_merkle_root,
+            token_commit,
+            total_funds_commit,
+            inputs: vec![],
+        };
 
         FuncCall {
             contract_id: "DAO".to_string(),
             func_id: "DAO::propose()".to_string(),
             call_data: Box::new(call_data),
-            proofs: vec![main_proof],
+            proofs: partial.proofs,
         }
     }
+}
+
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct Partial {
+    pub dao_merkle_root: MerkleNode,
+    pub token_commit: pallas::Base,
+    // TODO: compute from sum of input commits
+    pub total_funds_commit: pallas::Point,
+
+    pub inputs: Vec<PartialInput>,
+
+    pub proofs: Vec<Proof>,
+}
+
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct PartialInput {
+    /// Public key for the signature
+    pub signature_public: PublicKey,
 }

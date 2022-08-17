@@ -577,7 +577,7 @@ pub async fn demo() -> Result<()> {
 
     // TODO: is it possible for an invalid transfer() to be constructed on exec()?
     //       need to look into this
-    let input = dao_contract::propose::wallet::Input {
+    let input = dao_contract::propose::wallet::BuilderInput {
         secret: gov_keypair_1.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
