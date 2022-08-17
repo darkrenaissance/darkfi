@@ -18,8 +18,6 @@ use pasta_curves::{
 };
 use std::any::{Any, TypeId};
 
-use super::wallet::{Partial, PartialInput};
-
 const TARGET: &str = "dao_contract::propose::validate::state_transition()";
 
 #[derive(Debug, Clone, thiserror::Error)]
@@ -42,37 +40,25 @@ impl From<DarkFiError> for Error {
 }
 
 pub struct CallData {
-    pub dao_merkle_root: MerkleNode,
-    pub token_commit: pallas::Base,
-    // TODO: compute from sum of input commits
-    pub total_funds_commit: pallas::Point,
-
+    pub header: Header,
     pub inputs: Vec<Input>,
-}
-
-impl CallData {
-    fn encode_without_signature<S: std::io::Write>(
-        &self,
-        mut s: S,
-        proofs: &Vec<Proof>,
-    ) -> Result<usize> {
-        let mut len = 0;
-        len += self.dao_merkle_root.encode(&mut s)?;
-        len += self.token_commit.encode(&mut s)?;
-        //len += self.value_blind.encode(&mut s)?;
-        //len += self.token_blind.encode(&mut s)?;
-        len += self.inputs.encode_without_signature(&mut s)?;
-        len += proofs.encode(s)?;
-        Ok(len)
-    }
+    pub signatures: Vec<schnorr::Signature>,
 }
 
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
-        let total_funds_coords = self.total_funds_commit.to_affine().coordinates().unwrap();
+        let total_funds_coords = self.header.total_funds_commit.to_affine().coordinates().unwrap();
         let total_funds_x = *total_funds_coords.x();
         let total_funds_y = *total_funds_coords.y();
-        vec![vec![self.token_commit, self.dao_merkle_root.0, total_funds_x, total_funds_y]]
+        vec![
+            // dao-propose-main proof
+            vec![
+                self.header.token_commit,
+                self.header.dao_merkle_root.0,
+                total_funds_x,
+                total_funds_y,
+            ],
+        ]
     }
 
     fn zk_proof_addrs(&self) -> Vec<String> {
@@ -84,47 +70,18 @@ impl CallDataBase for CallData {
     }
 }
 
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct Header {
+    pub dao_merkle_root: MerkleNode,
+    pub token_commit: pallas::Base,
+    // TODO: compute from sum of input commits
+    pub total_funds_commit: pallas::Point,
+}
+
+#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct Input {
     pub signature_public: PublicKey,
-    pub signature: schnorr::Signature,
 }
-
-impl Input {
-    pub fn from_partial(partial: PartialInput, signature: schnorr::Signature) -> Self {
-        Self { signature_public: partial.signature_public, signature }
-    }
-
-    fn encode_without_signature<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        //len += self.value.encode(&mut s)?;
-        //len += self.token_id.encode(&mut s)?;
-        //len += self.value_blind.encode(&mut s)?;
-        //len += self.token_blind.encode(&mut s)?;
-        len += self.signature_public.encode(s)?;
-        Ok(len)
-    }
-}
-
-trait EncodableWithoutSignature {
-    fn encode_without_signature<S: std::io::Write>(&self, s: S) -> Result<usize>;
-}
-
-macro_rules! impl_vec_without_signature {
-    ($type: ty) => {
-        impl EncodableWithoutSignature for Vec<$type> {
-            #[inline]
-            fn encode_without_signature<S: std::io::Write>(&self, mut s: S) -> Result<usize> {
-                let mut len = 0;
-                len += VarInt(self.len() as u64).encode(&mut s)?;
-                for c in self.iter() {
-                    len += c.encode_without_signature(&mut s)?;
-                }
-                Ok(len)
-            }
-        }
-    };
-}
-impl_vec_without_signature!(Input);
 
 pub fn state_transition(
     states: &StateRegistry,
@@ -143,17 +100,21 @@ pub fn state_transition(
     let state = states.lookup::<State>(&"DAO".to_string()).unwrap();
 
     // Is the DAO bulla generated in the ZK proof valid
-    if !state.is_valid_dao_merkle(&call_data.dao_merkle_root) {
+    if !state.is_valid_dao_merkle(&call_data.header.dao_merkle_root) {
         return Err(Error::InvalidDaoMerkleRoot)
     }
 
     // Verify the available signatures
     let mut unsigned_tx_data = vec![];
-    call_data.encode_without_signature(&mut unsigned_tx_data, &func_call.proofs)?;
+    call_data.header.encode(&mut unsigned_tx_data).expect("failed to encode data");
+    call_data.inputs.encode(&mut unsigned_tx_data).expect("failed to encode inputs");
+    func_call.proofs.encode(&mut unsigned_tx_data).expect("failed to encode proofs");
 
-    for (i, input) in call_data.inputs.iter().enumerate() {
+    for (i, (input, signature)) in
+        call_data.inputs.iter().zip(call_data.signatures.iter()).enumerate()
+    {
         let public = &input.signature_public;
-        if !public.verify(&unsigned_tx_data[..], &input.signature) {
+        if !public.verify(&unsigned_tx_data[..], signature) {
             return Err(Error::SignatureVerifyFailed)
         }
     }

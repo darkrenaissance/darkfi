@@ -26,7 +26,7 @@ use darkfi::{
 };
 
 use crate::{
-    dao_contract::propose::validate::{CallData, Input},
+    dao_contract::propose::validate::{CallData, Header, Input},
     demo::{CallDataBase, FuncCall, StateRegistry, ZkContractInfo, ZkContractTable},
     money_contract,
     util::poseidon_hash,
@@ -109,7 +109,7 @@ impl Builder {
             // First we make the tx then sign after
             signature_secrets.push(signature_secret);
 
-            let input = PartialInput { signature_public: PublicKey::from_secret(signature_secret) };
+            let input = Input { signature_public: PublicKey::from_secret(signature_secret) };
             inputs.push(input);
         }
 
@@ -196,56 +196,27 @@ impl Builder {
         // Create the input signatures
         let proofs = vec![main_proof];
 
-        let partial = Partial {
-            dao_merkle_root: self.dao_merkle_root,
-            token_commit,
-            total_funds_commit,
-            inputs,
-            proofs,
-        };
+        let header =
+            Header { dao_merkle_root: self.dao_merkle_root, token_commit, total_funds_commit };
 
         let mut unsigned_tx_data = vec![];
-        partial.encode(&mut unsigned_tx_data).expect("failed to encode data");
+        header.encode(&mut unsigned_tx_data).expect("failed to encode data");
+        inputs.encode(&mut unsigned_tx_data).expect("failed to encode inputs");
+        proofs.encode(&mut unsigned_tx_data).expect("failed to encode proofs");
 
-        let mut inputs = vec![];
-        for (input, signature_secret) in
-            partial.inputs.into_iter().zip(signature_secrets.into_iter())
-        {
+        let mut signatures = vec![];
+        for signature_secret in &signature_secrets {
             let signature = signature_secret.sign(&unsigned_tx_data[..]);
-            let input = Input::from_partial(input, signature);
-            inputs.push(input);
+            signatures.push(signature);
         }
 
-        let call_data = CallData {
-            dao_merkle_root: self.dao_merkle_root,
-            token_commit,
-            total_funds_commit,
-            inputs: vec![],
-        };
+        let call_data = CallData { header, inputs: vec![], signatures: vec![] };
 
         FuncCall {
             contract_id: "DAO".to_string(),
             func_id: "DAO::propose()".to_string(),
             call_data: Box::new(call_data),
-            proofs: partial.proofs,
+            proofs,
         }
     }
-}
-
-#[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct Partial {
-    pub dao_merkle_root: MerkleNode,
-    pub token_commit: pallas::Base,
-    // TODO: compute from sum of input commits
-    pub total_funds_commit: pallas::Point,
-
-    pub inputs: Vec<PartialInput>,
-
-    pub proofs: Vec<Proof>,
-}
-
-#[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct PartialInput {
-    /// Public key for the signature
-    pub signature_public: PublicKey,
 }
