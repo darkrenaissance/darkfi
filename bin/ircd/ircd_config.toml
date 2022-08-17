@@ -17,13 +17,14 @@ autojoin = ["#dev", "#memes", "#philosophy", "#markets", "#math", "#random"]
 ## P2P net settings
 [net]
 ## P2P accept address
-#inbound="tls://127.0.0.1:11002" 
+#inbound="tls://0.0.0.0:11002" 
 
 ## Connection slots
 outbound_connections=5
 
 ## P2P external address
-#external_addr="tls://127.0.0.1:11002"
+## Put your IP or hostname here
+#external_addr="tls://XXX.XXX.XXX.XXX:11002"
 
 ## Peers to connect to
 #peers=["tls://127.0.0.1:11003"]
