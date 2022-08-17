@@ -301,6 +301,18 @@ pub async fn demo() -> Result<()> {
     tx.zk_verify(&zk_bins);
 
     // Wallet stuff
+
+    // In your wallet, wait until you see the tx confirmed before doing anything below
+    // So for example keep track of tx hash
+    //assert_eq!(tx.hash(), tx_hash);
+
+    // We need to witness() the value in our local merkle tree
+    // Must be called as soon as this DAO bulla is added to the state
+    let dao_leaf_position = {
+        let state = states.lookup_mut::<dao_contract::State>(&"DAO".to_string()).unwrap();
+        state.dao_tree.witness().unwrap()
+    };
+
     // It might just be easier to hash it ourselves from keypair and blind...
     let dao_bulla = {
         assert_eq!(tx.func_calls.len(), 1);
@@ -554,7 +566,7 @@ pub async fn demo() -> Result<()> {
 
     let user_keypair = Keypair::random(&mut OsRng);
 
-    let (leaf_position, merkle_path) = {
+    let (money_leaf_position, money_merkle_path) = {
         let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
         let tree = &state.tree;
         let leaf_position = gov_recv[0].leaf_position.clone();
@@ -568,8 +580,16 @@ pub async fn demo() -> Result<()> {
     let input = dao_contract::propose::wallet::Input {
         secret: gov_keypair_1.secret,
         note: gov_recv[0].note.clone(),
-        leaf_position,
-        merkle_path,
+        leaf_position: money_leaf_position,
+        merkle_path: money_merkle_path,
+    };
+
+    let (dao_merkle_path, dao_merkle_root) = {
+        let state = states.lookup::<dao_contract::State>(&"DAO".to_string()).unwrap();
+        let tree = &state.dao_tree;
+        let root = tree.root(0).unwrap();
+        let merkle_path = tree.authentication_path(dao_leaf_position, &root).unwrap();
+        (merkle_path, root)
     };
 
     let builder = dao_contract::propose::wallet::Builder {
@@ -589,6 +609,9 @@ pub async fn demo() -> Result<()> {
             public_key: dao_keypair.public,
             bulla_blind: dao_bulla_blind,
         },
+        dao_leaf_position,
+        dao_merkle_path,
+        dao_merkle_root,
     };
 
     let func_call = builder.build(&zk_bins);

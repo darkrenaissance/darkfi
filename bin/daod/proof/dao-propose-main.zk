@@ -2,6 +2,15 @@ constant "DaoProposeMain" {
 }
 
 contract "DaoProposeMain" {
+    # proposal params
+    #Base proposal_x,
+    #Base proposal_y,
+    #Base proposal_amount,
+    #Base proposal_serial,
+    #Base proposal_token_id,
+    #Base proposal_blind,
+
+    # DAO params
     Base dao_proposer_limit,
     Base dao_quorum,
     Base dao_approval_ratio,
@@ -9,10 +18,13 @@ contract "DaoProposeMain" {
     Base dao_public_x,
     Base dao_public_y,
     Base dao_bulla_blind,
+
+	Uint32 dao_leaf_pos,
+	MerklePath dao_path,
 }
 
 circuit "DaoProposeMain" {
-    bulla = poseidon_hash(
+    dao_bulla = poseidon_hash(
         dao_proposer_limit,
         dao_quorum,
         dao_approval_ratio,
@@ -23,6 +35,8 @@ circuit "DaoProposeMain" {
         # @tmp-workaround
         dao_bulla_blind,
     );
-    constrain_instance(bulla);
+	dao_root = calculate_merkle_root(dao_leaf_pos, dao_path, dao_bulla);
+	constrain_instance(dao_root);
+    # Proves this DAO is valid
 }
 
