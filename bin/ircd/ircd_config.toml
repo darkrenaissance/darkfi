@@ -21,13 +21,16 @@ outbound_connections=5
 
 ## P2P accept address
 #inbound="tls://0.0.0.0:11002" 
+# ipv6 version:
+#inbound="tls://:::11002" 
 
 ## P2P external address
 ## Put your IP or hostname here
 ## This is how people can reach you on the inbound port configured above
+## You can also put an ipv6 address :)
 #external_addr="tls://XXX.XXX.XXX.XXX:11002"
 
-## Peers to connect to
+## Manually configured peers to connect to
 #peers=["tls://127.0.0.1:11003"]
 
 ## Seed nodes to connect to 
@@ -44,11 +47,11 @@ seeds=["tls://irc0.dark.fi:11001", "tls://irc1.dark.fi:11001"]
 #channel_heartbeat_seconds=10
 
 ## Per-channel settings
-#[channel."#dev"]
+#[channel."#foo"]
 ## Create with `ircd --gen-secret`
 #secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 ## Topic to set for the channel
-#topic = "DarkFi Development HQ"
+#topic = "DarkFi Foo Stuff"
 
 ## Contacts list
 # Shared secrets that encrypt direct communication between two nicknames on
@@ -57,3 +60,4 @@ seeds=["tls://irc0.dark.fi:11001", "tls://irc1.dark.fi:11001"]
 # shared secret will be used for all the nicknames in the list.
 [contact."7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"]
 nicks = ["sneed", "chuck"]
+
