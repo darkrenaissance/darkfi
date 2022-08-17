@@ -22,11 +22,17 @@ type Result<T> = std::result::Result<T, Error>;
 
 pub struct CallData {
     pub dao_merkle_root: MerkleNode,
+    pub token_commit: pallas::Base,
+    // TODO: compute from sum of input commits
+    pub total_funds_commit: pallas::Point,
 }
 
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
-        vec![vec![self.dao_merkle_root.0]]
+        let total_funds_coords = self.total_funds_commit.to_affine().coordinates().unwrap();
+        let total_funds_x = *total_funds_coords.x();
+        let total_funds_y = *total_funds_coords.y();
+        vec![vec![self.token_commit, self.dao_merkle_root.0, total_funds_x, total_funds_y]]
     }
 
     fn zk_proof_addrs(&self) -> Vec<String> {

@@ -18,6 +18,7 @@ use darkfi::{
             DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
             DrkUserDataBlind, DrkValueBlind,
         },
+        util::{pedersen_commitment_base, pedersen_commitment_u64},
         Proof,
     },
     util::serial::{Encodable, SerialDecodable, SerialEncodable},
@@ -66,6 +67,17 @@ pub struct Builder {
 
 impl Builder {
     pub fn build(self, zk_bins: &ZkContractTable) -> FuncCall {
+        let total_funds = 110;
+        let total_funds_blind = pallas::Scalar::random(&mut OsRng);
+        let total_funds_commit = pedersen_commitment_u64(total_funds, total_funds_blind);
+        let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
+        let total_funds_x = *total_funds_coords.x();
+        let total_funds_y = *total_funds_coords.y();
+        let total_funds = pallas::Base::from(total_funds);
+
+        let gov_token_blind = pallas::Base::random(&mut OsRng);
+        let token_commit = poseidon_hash::<2>([self.dao.gov_token_id, gov_token_blind]);
+
         let proposal_dest_coords = self.proposal.dest.0.to_affine().coordinates().unwrap();
         let proposal_dest_x = *proposal_dest_coords.x();
         let proposal_dest_y = *proposal_dest_coords.y();
@@ -102,14 +114,18 @@ impl Builder {
         };
         let zk_bin = zk_info.bincode.clone();
         let prover_witnesses = vec![
+            // Proposers total number of gov tokens
+            Witness::Base(Value::known(total_funds)),
+            Witness::Scalar(Value::known(total_funds_blind)),
+            // Used for blinding exported gov token ID
+            Witness::Base(Value::known(gov_token_blind)),
             // proposal params
-            //Witness::Base(Value::known(proposal_dest_x)),
-            //Witness::Base(Value::known(proposal_dest_y)),
-            //Witness::Base(Value::known(proposal_amount)),
-            //Witness::Base(Value::known(self.proposal.serial)),
-            //Witness::Base(Value::known(self.proposal.token_id)),
-            //Witness::Base(Value::known(self.proposal.blind)),
-
+            Witness::Base(Value::known(proposal_dest_x)),
+            Witness::Base(Value::known(proposal_dest_y)),
+            Witness::Base(Value::known(proposal_amount)),
+            Witness::Base(Value::known(self.proposal.serial)),
+            Witness::Base(Value::known(self.proposal.token_id)),
+            Witness::Base(Value::known(self.proposal.blind)),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
@@ -121,14 +137,16 @@ impl Builder {
             Witness::Uint32(Value::known(dao_leaf_position.try_into().unwrap())),
             Witness::MerklePath(Value::known(self.dao_merkle_path.try_into().unwrap())),
         ];
-        let public_inputs = vec![self.dao_merkle_root.0];
+        let public_inputs =
+            vec![token_commit, self.dao_merkle_root.0, total_funds_x, total_funds_y];
         let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
 
         let proving_key = &zk_info.proving_key;
         let main_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::propose() proving error!");
 
-        let call_data = CallData { dao_merkle_root: self.dao_merkle_root };
+        let call_data =
+            CallData { dao_merkle_root: self.dao_merkle_root, token_commit, total_funds_commit };
 
         FuncCall {
             contract_id: "DAO".to_string(),
