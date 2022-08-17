@@ -60,6 +60,7 @@ struct Ircd {
     // p2p
     p2p: net::P2pPtr,
     senders: SubscriberPtr<Privmsg>,
+    password: String,
 }
 
 impl Ircd {
@@ -67,6 +68,7 @@ impl Ircd {
         seen_msg_ids: SeenMsgIds,
         privmsgs_buffer: PrivmsgsBuffer,
         autojoin_chans: Vec<String>,
+        password: String,
         configured_chans: FxHashMap<String, ChannelInfo>,
         configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
         p2p: net::P2pPtr,
@@ -76,6 +78,7 @@ impl Ircd {
             seen_msg_ids,
             privmsgs_buffer,
             autojoin_chans,
+            password,
             configured_chans,
             configured_contacts,
             p2p,
@@ -114,6 +117,7 @@ impl Ircd {
             self.seen_msg_ids.clone(),
             self.privmsgs_buffer.clone(),
             self.autojoin_chans.clone(),
+            self.password.clone(),
             self.configured_chans.clone(),
             self.configured_contacts.clone(),
             self.p2p.clone(),
@@ -173,6 +177,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         println!("{}", encoded.into_string());
         return Ok(())
     }
+
+    let password = settings.password.unwrap_or(String::default());
 
     // Pick up channel settings from the TOML configuration
     let cfg_path = get_config_path(settings.config, CONFIG_FILE)?;
@@ -271,6 +277,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                 seen_msg_ids.clone(),
                 privmsgs_buffer.clone(),
                 settings.autojoin.clone(),
+                password.clone(),
                 configured_chans.clone(),
                 configured_contacts.clone(),
                 p2p.clone(),

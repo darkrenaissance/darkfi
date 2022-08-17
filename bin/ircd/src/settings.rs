@@ -43,6 +43,10 @@ pub struct Args {
     #[structopt(long)]
     pub autojoin: Vec<String>,
 
+    /// Password
+    #[structopt(long)]
+    pub password: Option<String>,
+
     #[structopt(flatten)]
     pub net: SettingsOpt,
 

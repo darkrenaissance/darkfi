@@ -31,6 +31,7 @@ pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'stati
     is_user_init: bool,
     is_registered: bool,
     is_cap_end: bool,
+    is_pass_init: bool,
     nickname: String,
     auto_channels: Vec<String>,
     pub configured_chans: FxHashMap<String, ChannelInfo>,
@@ -40,6 +41,7 @@ pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'stati
     p2p: P2pPtr,
     senders: SubscriberPtr<Privmsg>,
     subscriber_id: u64,
+    password: String,
 }
 
 impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> {
@@ -50,6 +52,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         seen_msg_ids: SeenMsgIds,
         privmsgs_buffer: PrivmsgsBuffer,
         auto_channels: Vec<String>,
+        password: String,
         configured_chans: FxHashMap<String, ChannelInfo>,
         configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
         p2p: P2pPtr,
@@ -67,8 +70,10 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             is_user_init: false,
             is_registered: false,
             is_cap_end: true,
+            is_pass_init: false,
             nickname: "anon".to_string(),
             auto_channels,
+            password,
             configured_chans,
             configured_contacts,
             capabilities,
@@ -83,6 +88,10 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             return Err(Error::MalformedPacket)
         }
 
+        if self.password.is_empty() {
+            self.is_pass_init = true
+        }
+
         let mut tokens = line.split_ascii_whitespace();
         // Commands can begin with :garbage but we will reject clients doing
         // that for now to keep the protocol simple and focused.
@@ -91,10 +100,26 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         info!("IRC server received command: {}", command.to_uppercase());
 
         match command.to_uppercase().as_str() {
+            "PASS" => {
+                let password = tokens.next().ok_or(Error::MalformedPacket)?;
+                if self.password == password.to_string() {
+                    self.is_pass_init = true
+                } else {
+                    // Close the connection
+                    warn!("Password is not correct!");
+                    return Err(Error::NetworkServiceStopped)
+                }
+            }
             "USER" => {
                 // We can stuff any extra things like public keys in here.
                 // Ignore it for now.
-                self.is_user_init = true;
+                if self.is_pass_init {
+                    self.is_user_init = true;
+                } else {
+                    // Close the connection
+                    warn!("Password is required");
+                    return Err(Error::NetworkServiceStopped)
+                }
             }
             "NAMES" => {
                 let channels = tokens.next().ok_or(Error::MalformedPacket)?;
