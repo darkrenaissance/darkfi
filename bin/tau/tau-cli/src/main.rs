@@ -202,12 +202,13 @@ async fn main() -> Result<()> {
             }
         },
         None => {
+            let ws = tau.get_ws().await?;
             let task_ids = tau.get_ids().await?;
             let mut tasks = vec![];
             for id in task_ids {
                 tasks.push(tau.get_task_by_id(id).await?);
             }
-            print_task_list(tasks, args.filters)?;
+            print_task_list(tasks, ws, args.filters)?;
             Ok(())
         }
     }?;

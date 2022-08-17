@@ -58,6 +58,7 @@ impl RequestHandler for JsonRpcInterface {
             Some("set_comment") => self.set_comment(params).await,
             Some("get_task_by_id") => self.get_task_by_id(params).await,
             Some("switch_ws") => self.switch_ws(params).await,
+            Some("get_ws") => self.get_ws(params).await,
             Some("export") => self.export_to(params).await,
             Some("import") => self.import_from(params).await,
             Some("get_stop_tasks") => self.get_stop_tasks(params).await,
@@ -257,6 +258,17 @@ impl JsonRpcInterface {
         }
 
         Ok(json!(true))
+    }
+
+    // RPCAPI:
+    // Get workspace.
+    // --> {"jsonrpc": "2.0", "method": "get_ws", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "workspace", "id": 1}
+    async fn get_ws(&self, params: &[Value]) -> TaudResult<Value> {
+        debug!(target: "tau", "JsonRpc::switch_ws() params {:?}", params);
+        let ws = self.workspace.lock().await.clone();
+
+        Ok(json!(ws))
     }
 
     // RPCAPI:

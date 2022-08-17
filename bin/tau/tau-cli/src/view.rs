@@ -18,7 +18,7 @@ use crate::{
     TaskEvent,
 };
 
-pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()> {
+pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String, filters: Vec<String>) -> Result<()> {
     let mut tasks = tasks;
 
     let mut table = Table::new();
@@ -46,12 +46,6 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
     if let Some(last) = tasks.last() {
         min_rank = last.rank;
     }
-
-    let workspace = if tasks.first().is_some() {
-        format!("Workspace: {}", tasks.first().unwrap().workspace.clone())
-    } else {
-        format!("Workspace: ")
-    };
 
     for task in tasks {
         let state = State::from_str(&task.state.clone())?;
@@ -83,6 +77,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, filters: Vec<String>) -> Result<()>
         ]));
     }
 
+    let workspace = format!("Workspace: {}", ws);
     let mut ws_table = table!([workspace]);
     ws_table.set_format(
         FormatBuilder::new()

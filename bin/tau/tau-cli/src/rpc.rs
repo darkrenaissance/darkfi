@@ -88,6 +88,14 @@ impl Tau {
         Ok(())
     }
 
+    /// Get current workspace.
+    pub async fn get_ws(&self) -> Result<String> {
+        let req = JsonRequest::new("get_ws", json!([]));
+        let rep = self.rpc_client.request(req).await?;
+
+        Ok(serde_json::from_value(rep)?)
+    }
+
     /// Export tasks.
     pub async fn export_to(&self, path: String) -> Result<bool> {
         let req = JsonRequest::new("export", json!([path]));

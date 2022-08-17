@@ -18,7 +18,7 @@ mod dao_contract;
 mod demo;
 mod money_contract;
 mod note;
-mod util;
+// mod util;
 use crate::demo::demo;
 
 async fn _start() -> Result<()> {
