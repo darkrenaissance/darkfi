@@ -1,7 +1,5 @@
 #[derive(thiserror::Error, Debug)]
 pub enum DarkWikiError {
-    #[error("Add Operation failed")]
-    AddOperationFailed,
     #[error("Encryption error: `{0}`")]
     EncryptionError(String),
     #[error("Json serialization error: `{0}`")]

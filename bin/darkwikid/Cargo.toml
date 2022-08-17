@@ -1,12 +1,19 @@
 [package]
-name = "darkwiki"
-version = "0.1.0"
+name = "darkwikid"
+description = ""
+version = "0.3.0"
 edition = "2021"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
+homepage = "https://dark.fi"
+repository = "https://github.com/darkrenaissance/darkfi"
+keywords = []
+categories = []
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-darkfi = {path = "../../../", features = ["raft"]}
+darkfi = {path = "../../", features = ["raft", "net", "rpc"]}
 
 
 # Async
@@ -34,19 +41,8 @@ serde_json = "1.0.83"
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 unicode-segmentation = "1.9.0"
-crypto_box = {version = "0.7.2", features = ["std"]}
+crypto_box = {version = "0.8.0", features = ["std"]}
 hex = "0.4.3"
 bs58 = "0.4.0"
-
-
-[workspace]
-
-[[bin]]
-name = "darkwikid"
-path = "src/main.rs"
-
-[[bin]]
-name = "darkwikiupdate"
-path = "src/update_cli.rs"
 
 

@@ -4,13 +4,16 @@
 ## Sets Datastore Path
 #datastore="~/.config/darkfi/darkwiki"
 
+## Sets Docs Path
+# docs="~/darkwiki"
+
 ## Raft net settings
 [net]
 ## P2P accept address
 inbound="tcp://127.0.0.1:13001" 
 
 ## Connection slots
-#outbound_connections=5
+outbound_connections=2
 
 ## P2P external address
 external_addr="tls://127.0.0.1:13001"

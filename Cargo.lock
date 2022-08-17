@@ -1322,6 +1322,55 @@ dependencies = [
 ]
 
 [[package]]
+name = "darkwiki"
+version = "0.3.0"
+dependencies = [
+ "async-channel",
+ "async-std",
+ "async-trait",
+ "darkfi",
+ "futures",
+ "log",
+ "rand",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "smol",
+ "structopt",
+ "url",
+]
+
+[[package]]
+name = "darkwikid"
+version = "0.3.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "async-trait",
+ "bs58",
+ "chrono",
+ "crypto_box",
+ "ctrlc-async",
+ "darkfi",
+ "easy-parallel",
+ "futures",
+ "fxhash",
+ "hex",
+ "log",
+ "rand",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "thiserror",
+ "unicode-segmentation",
+ "url",
+]
+
+[[package]]
 name = "darling"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

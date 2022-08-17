@@ -20,6 +20,8 @@ name = "darkfi"
 members = [
 	"bin/zkas",
 	#"bin/cashierd",
+	"bin/darkwiki",
+	"bin/darkwikid",
 	"bin/darkfid",
 	"bin/darkotc",
 	"bin/drk",
