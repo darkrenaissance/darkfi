@@ -14,6 +14,10 @@
 ## List of channels to autojoin for new client connections
 autojoin = ["#dev", "#memes", "#philosophy", "#markets", "#math", "#random"]
 
+## Daemon specific password (optional, but once you configure it,
+## it is required from the client side)
+#password="CHANGE_ME"
+
 ## P2P net settings
 [net]
 ## Connection slots
