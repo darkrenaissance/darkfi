@@ -70,15 +70,16 @@ impl Builder {
     pub fn build(self, zk_bins: &ZkContractTable) -> FuncCall {
         let mut proofs = vec![];
 
-        let token_blind = pallas::Base::random(&mut OsRng);
+        let gov_token_blind = pallas::Base::random(&mut OsRng);
 
         let mut inputs = vec![];
         let mut total_funds = 0;
-        let mut input_funds_blinds = vec![];
+        let mut total_funds_blinds = pallas::Scalar::from(0);
         let mut signature_secrets = vec![];
         for input in self.inputs {
             let funds_blind = pallas::Scalar::random(&mut OsRng);
-            input_funds_blinds.push(funds_blind);
+            total_funds += input.note.value;
+            total_funds_blinds += funds_blind;
 
             let signature_secret = SecretKey::random(&mut OsRng);
             let signature_public = PublicKey::from_secret(signature_secret);
@@ -98,11 +99,13 @@ impl Builder {
             let prover_witnesses = vec![
                 Witness::Base(Value::known(input.secret.0)),
                 Witness::Base(Value::known(note.serial)),
+                Witness::Base(Value::known(pallas::Base::from(0))),
+                Witness::Base(Value::known(pallas::Base::from(0))),
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
                 Witness::Base(Value::known(note.token_id)),
                 Witness::Base(Value::known(note.coin_blind)),
                 Witness::Scalar(Value::known(funds_blind)),
-                Witness::Base(Value::known(token_blind)),
+                Witness::Base(Value::known(gov_token_blind)),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
                 Witness::Base(Value::known(signature_secret.0)),
@@ -136,7 +139,7 @@ impl Builder {
                 current
             };
 
-            let token_commit = poseidon_hash::<2>([note.token_id, token_blind]);
+            let token_commit = poseidon_hash::<2>([note.token_id, gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
             let value_commit = pedersen_commitment_u64(note.value, funds_blind);
@@ -159,8 +162,9 @@ impl Builder {
             let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
 
             let proving_key = &zk_info.proving_key;
-            let main_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
+            let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
                 .expect("DAO::propose() proving error!");
+            proofs.push(input_proof);
 
             // First we make the tx then sign after
             signature_secrets.push(signature_secret);
@@ -169,17 +173,12 @@ impl Builder {
             inputs.push(input);
         }
 
-        let mut total_funds_blind = pallas::Scalar::from(0);
-        for blind in &input_funds_blinds {
-            total_funds_blind += blind;
-        }
-        let total_funds_commit = pedersen_commitment_u64(total_funds, total_funds_blind);
+        let total_funds_commit = pedersen_commitment_u64(total_funds, total_funds_blinds);
         let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
         let total_funds_x = *total_funds_coords.x();
         let total_funds_y = *total_funds_coords.y();
         let total_funds = pallas::Base::from(total_funds);
 
-        let gov_token_blind = pallas::Base::random(&mut OsRng);
         let token_commit = poseidon_hash::<2>([self.dao.gov_token_id, gov_token_blind]);
 
         let proposal_dest_coords = self.proposal.dest.0.to_affine().coordinates().unwrap();
@@ -232,7 +231,7 @@ impl Builder {
         let prover_witnesses = vec![
             // Proposers total number of gov tokens
             Witness::Base(Value::known(total_funds)),
-            Witness::Scalar(Value::known(total_funds_blind)),
+            Witness::Scalar(Value::known(total_funds_blinds)),
             // Used for blinding exported gov token ID
             Witness::Base(Value::known(gov_token_blind)),
             // proposal params
@@ -267,12 +266,7 @@ impl Builder {
             .expect("DAO::propose() proving error!");
         proofs.push(main_proof);
 
-        let header = Header {
-            dao_merkle_root: self.dao_merkle_root,
-            proposal_bulla,
-            token_commit,
-            total_funds_commit,
-        };
+        let header = Header { dao_merkle_root: self.dao_merkle_root, proposal_bulla, token_commit };
 
         let mut unsigned_tx_data = vec![];
         header.encode(&mut unsigned_tx_data).expect("failed to encode data");
@@ -285,7 +279,7 @@ impl Builder {
             signatures.push(signature);
         }
 
-        let call_data = CallData { header, inputs: vec![], signatures: vec![] };
+        let call_data = CallData { header, inputs, signatures };
 
         FuncCall {
             contract_id: "DAO".to_string(),

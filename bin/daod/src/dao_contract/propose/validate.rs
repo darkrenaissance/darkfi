@@ -13,15 +13,20 @@ use darkfi::{
 use log::{debug, error};
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{ff::Field, Curve},
+    group::{ff::Field, Curve, Group},
     pallas,
 };
 use std::any::{Any, TypeId};
+
+use crate::money_contract::state::State as MoneyState;
 
 const TARGET: &str = "dao_contract::propose::validate::state_transition()";
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
+    #[error("Invalid input merkle root")]
+    InvalidInputMerkleRoot,
+
     #[error("Invalid DAO merkle root")]
     InvalidDaoMerkleRoot,
 
@@ -48,8 +53,11 @@ pub struct CallData {
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
         let mut zk_publics = Vec::new();
+        let mut total_funds_commit = pallas::Point::identity();
 
+        assert!(self.inputs.len() > 0, "inputs length cannot be zero");
         for input in &self.inputs {
+            total_funds_commit += input.value_commit;
             let value_coords = input.value_commit.to_affine().coordinates().unwrap();
             let value_commit_x = *value_coords.x();
             let value_commit_y = *value_coords.y();
@@ -68,7 +76,7 @@ impl CallDataBase for CallData {
             ]);
         }
 
-        let total_funds_coords = self.header.total_funds_commit.to_affine().coordinates().unwrap();
+        let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
         let total_funds_x = *total_funds_coords.x();
         let total_funds_y = *total_funds_coords.y();
         zk_publics.push(
@@ -104,8 +112,6 @@ pub struct Header {
     pub dao_merkle_root: MerkleNode,
     pub token_commit: pallas::Base,
     pub proposal_bulla: pallas::Base,
-    // TODO: compute from sum of input commits
-    pub total_funds_commit: pallas::Point,
 }
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
@@ -128,6 +134,14 @@ pub fn state_transition(
 
     // This will be inside wasm so unwrap is fine.
     let call_data = call_data.unwrap();
+
+    // Check the merkle roots for the input coins are valid
+    for input in &call_data.inputs {
+        let money_state = states.lookup::<MoneyState>(&"Money".to_string()).unwrap();
+        if !money_state.is_valid_merkle(&input.merkle_root) {
+            return Err(Error::InvalidInputMerkleRoot)
+        }
+    }
 
     let state = states.lookup::<State>(&"DAO".to_string()).unwrap();
 

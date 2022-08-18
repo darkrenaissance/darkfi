@@ -121,20 +121,34 @@ impl Transaction {
     fn zk_verify(&self, zk_bins: &ZkContractTable) {
         for func_call in &self.func_calls {
             let proofs_public_vals = &func_call.call_data.zk_public_values();
-            let proofs_keys = &func_call.call_data.zk_proof_addrs();
-            assert_eq!(proofs_public_vals.len(), proofs_keys.len());
-            assert_eq!(proofs_keys.len(), func_call.proofs.len());
-            for (key, (proof, public_vals)) in
-                zip!(proofs_keys, &func_call.proofs, proofs_public_vals)
+            let proofs_addrs = &func_call.call_data.zk_proof_addrs();
+            assert_eq!(
+                proofs_public_vals.len(),
+                proofs_addrs.len(),
+                "proof_public_vals.len()={} and proof_addrs.len()={} do not match",
+                proofs_public_vals.len(),
+                proofs_addrs.len(),
+            );
+            assert_eq!(
+                proofs_addrs.len(),
+                func_call.proofs.len(),
+                "proof_addrs.len()={} and func_call.proofs.len()={} do not match",
+                proofs_addrs.len(),
+                func_call.proofs.len()
+            );
+            for (i, (key, (proof, public_vals))) in
+                zip!(proofs_addrs, &func_call.proofs, proofs_public_vals).enumerate()
             {
                 match zk_bins.lookup(key).unwrap() {
                     ZkContractInfo::Binary(info) => {
                         let verifying_key = &info.verifying_key;
-                        proof.verify(&verifying_key, public_vals).expect("verify zk proof failed!");
+                        let verify_result = proof.verify(&verifying_key, public_vals);
+                        assert!(verify_result.is_ok(), "verify proof[{}]='{}' failed", i, key);
                     }
                     ZkContractInfo::Native(info) => {
                         let verifying_key = &info.verifying_key;
-                        proof.verify(&verifying_key, public_vals).expect("verify zk proof failed!");
+                        let verify_result = proof.verify(&verifying_key, public_vals);
+                        assert!(verify_result.is_ok(), "verify proof[{}]='{}' failed", i, key);
                     }
                 };
                 debug!("zk_verify({}) passed", key);
