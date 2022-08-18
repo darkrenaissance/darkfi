@@ -47,6 +47,7 @@ pub fn encrypt_message(salt_box: &SalsaBox, plaintext: &str) -> String {
 
     bs58::encode(concat).into_string()
 }
+
 /// Decrypt PrivMsg target
 pub fn decrypt_target(
     privmsg: &mut Privmsg,
@@ -69,6 +70,7 @@ pub fn decrypt_target(
             let target = decrypted_target.unwrap();
             if chan_name.to_string() == target {
                 privmsg.target = target;
+                return
             }
         }
     }
@@ -83,6 +85,7 @@ pub fn decrypt_target(
         let target = decrypted_target.unwrap();
         if contact.to_string() == target {
             privmsg.target = target;
+            return
         }
     }
 }
