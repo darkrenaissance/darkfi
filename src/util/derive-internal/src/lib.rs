@@ -1,7 +1,44 @@
 //! Derive (de)serialization for structs, see src/util/derive
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{Fields, Ident, Index, ItemStruct, WhereClause};
+use syn::{Fields, Ident, Index, ItemEnum, ItemStruct, WhereClause};
+
+pub fn enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2> {
+    let name = &input.ident;
+    let (_impl_generics, _ty_generics, where_clause) = input.generics.split_for_impl();
+    let mut where_clause = where_clause.map_or_else(
+        || WhereClause { where_token: Default::default(), predicates: Default::default() },
+        Clone::clone,
+    );
+
+    let mut body = TokenStream2::new();
+
+    let ln = quote! {
+        let mut len = 0;
+    };
+    body.extend(ln);
+
+    for var in input.variants.iter() {
+        match &var.fields {
+            Fields::Named(_) => {}
+            Fields::Unnamed(_) => {}
+            Fields::Unit => {}
+        }
+    }
+
+    let ret = quote! {
+        Ok(len)
+    };
+    body.extend(ret);
+
+    Ok(quote! {
+        impl #cratename::util::serial::Encodable for #name #where_clause {
+            fn encode<S: std::io::Write>(&self, mut s: S) -> #cratename::Result<usize> {
+                #body
+            }
+        }
+    })
+}
 
 pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStream2> {
     let name = &input.ident;
@@ -12,6 +49,7 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
     );
 
     let mut body = TokenStream2::new();
+
     match &input.fields {
         Fields::Named(fields) => {
             let ln = quote! {
