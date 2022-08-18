@@ -18,25 +18,37 @@ const GREEN: u8 = 40;
 // Blue
 const BLUE: u8 = 50;
 
-/// Log drawdown gets all owners of tasks, stores a vec of stopped tasks for each owner
-/// in a hashmap, draw a heatmap of how many stopped tasks in each day of the specified
-/// month and owner.
-pub fn drawdown(date: String, tasks: Vec<TaskInfo>, owner: String) -> Result<()> {
+/// Log drawdown gets all assignees of tasks, stores a vec of stopped tasks for each
+/// assignee in a hashmap, draw a heatmap of how many stopped tasks in each day of the
+/// specified month and assignee.
+pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) -> Result<()> {
     let mut ret = FxHashMap::default();
-    let all_owners = owners(tasks.clone());
+    let assignees = assignees(tasks.clone());
 
-    for owner in all_owners {
+    if assignee.is_none() {
+        println!("Assignees of this month's tasks are: {}", assignees.join(", "));
+        return Ok(())
+    }
+
+    let asgn = assignee.unwrap();
+
+    if !assignees.contains(&asgn) {
+        println!("We don't know who {} is", asgn);
+        return Ok(())
+    }
+
+    for assignee in assignees {
         let stopped_tasks = tasks
             .clone()
             .into_iter()
-            .filter(|t| t.state == "stop" && t.owner == owner)
+            .filter(|t| t.assign.contains(&asgn))
             .collect::<Vec<TaskInfo>>();
-        ret.insert(owner, stopped_tasks);
+        ret.insert(assignee, stopped_tasks);
     }
 
     let mut naivedate = to_naivedate(date.clone())?;
 
-    println!("log drawdown for {} in {}", owner, naivedate.format("%b %Y").to_string());
+    println!("log drawdown for {} in {}", asgn, naivedate.format("%b %Y").to_string());
 
     let fdow = if naivedate.month() == 2 && !is_leap_year(naivedate.year()) {
         ["   ", "1 ", "8 ", "15", "22", " "]
@@ -47,7 +59,7 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, owner: String) -> Result<()>
     // Print first day of each week horizontally.
     let mut dow_grid =
         Grid::new(GridOptions { direction: Direction::LeftToRight, filling: Filling::Spaces(1) });
-    if ret.contains_key(&owner) {
+    if ret.contains_key(&asgn) {
         for i in fdow {
             let cell = Cell::from(i);
             dow_grid.add(cell)
@@ -61,7 +73,7 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, owner: String) -> Result<()>
 
     let days_in_month = get_days_from_month(date)? as u32;
 
-    if ret.contains_key(&owner) {
+    if ret.contains_key(&asgn) {
         for _ in 0..7 {
             let dow = naivedate.weekday().to_string();
             let wcell = Cell::from(dow);
@@ -69,7 +81,7 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, owner: String) -> Result<()>
             naivedate = naivedate + Duration::days(1);
         }
         for day in 1..=days_in_month {
-            let owner_stopped_tasks = ret.get(&owner).unwrap().to_owned();
+            let owner_stopped_tasks = ret.get(&asgn).unwrap().to_owned();
             let date_tasks: Vec<TaskInfo> = owner_stopped_tasks
                 .into_iter()
                 .filter(|t| {
@@ -136,13 +148,22 @@ fn get_days_from_month(date: String) -> Result<i64> {
     .num_days())
 }
 
-fn owners(tasks: Vec<TaskInfo>) -> Vec<String> {
-    let mut owners = vec![];
+fn assignees(tasks: Vec<TaskInfo>) -> Vec<String> {
+    let mut assignees = vec![];
     for task in tasks {
-        if !owners.contains(&task.owner) {
-            owners.push(task.owner)
+        // if task is stopped with no assignee specified we give credit to the owner
+        if task.assign.is_empty() {
+            if !assignees.contains(&task.owner) {
+                assignees.push(task.owner)
+            }
+        } else {
+            for assignee in task.assign {
+                if !assignees.contains(&assignee) {
+                    assignees.push(assignee)
+                }
+            }
         }
     }
 
-    owners
+    assignees
 }

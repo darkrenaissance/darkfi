@@ -45,50 +45,65 @@ struct Args {
 
 #[derive(Subcommand)]
 enum TauSubcommand {
-    /// Add a new task
-    Add { values: Vec<String> },
-
-    /// Update/Edit an existing task by ID
-    Update {
-        /// Task ID
-        task_id: u64,
-        /// Values (ex: project:blockchain)
+    /// Add a new task.
+    Add {
+        /// Pairs of key:value (e.g. title desc:description assign:dark).
         values: Vec<String>,
     },
 
-    /// Set or Get task state
-    State {
-        /// Task ID
+    /// Update/Edit an existing task by ID.
+    Update {
+        /// Task ID.
         task_id: u64,
-        /// Set task state
+        /// Values (e.g. project:blockchain).
+        values: Vec<String>,
+    },
+
+    /// Set or Get task state.
+    State {
+        /// Task ID.
+        task_id: u64,
+        /// Set task state if provided (Get state otherwise).
         state: Option<String>,
     },
 
-    /// Set or Get comment for a task
+    /// Set or Get comment for a task.
     Comment {
-        /// Task ID
+        /// Task ID.
         task_id: u64,
-        /// Comment content
+        /// Set comment content if provided (Get comments otherwise).
         content: Vec<String>,
     },
 
-    /// Get task info by ID
+    /// Get task info by ID.
     Info { task_id: u64 },
 
-    /// Switch workspace
+    /// Switch workspace.
     Switch {
-        /// Tau workspace
+        /// Tau workspace.
         workspace: String,
     },
 
     /// Import tasks from a specified directory.
-    Import { path: Option<String> },
+    Import {
+        /// The parent directory from where you want to import tasks.
+        path: Option<String>,
+    },
 
     /// Export tasks to a specified directory.
-    Export { path: Option<String> },
+    Export {
+        /// The parent directory to where you want to export tasks.
+        path: Option<String>,
+    },
 
-    /// Drawdown.
-    Log { month: String, owner: String },
+    /// Log drawdown.
+    Log {
+        /// The month in which we want to draw a heatmap (e.g. 0822 for August 2022).
+        month: String,
+        /// The person of which we want to draw a heatmap
+        /// (if not provided we list all assignees).
+        assignee: Option<String>,
+    },
 }
 
 pub struct Tau {
@@ -193,10 +208,10 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            TauSubcommand::Log { month, owner } => {
+            TauSubcommand::Log { month, assignee } => {
                 let ts = to_naivedate(month.clone())?.and_hms(12, 0, 0).timestamp();
                 let tasks = tau.get_stop_tasks(ts).await?;
-                drawdown(month, tasks, owner)?;
+                drawdown(month, tasks, assignee)?;
 
                 Ok(())
             }
