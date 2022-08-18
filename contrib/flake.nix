@@ -48,7 +48,12 @@
           buildRustPackage ({
             version = "0.3.0";
             src = ../.;
-            cargoLock.lockFile = ../Cargo.lock;
+            cargoLock = {
+              lockFile = ../Cargo.lock;
+              outputHashes = {
+                "term_grid-0.2.0" = "sha256-wl4ZlFjY34xPuMpXdX1a/g9YUomKLIYp2U8r9/goti0=";
+              };
+            };
             nativeBuildInputs = myNativeBuildInputs;
             buildInputs = myBuildInputs;
             #RUST_BACKTRACE=1;
