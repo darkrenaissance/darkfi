@@ -652,5 +652,28 @@ pub async fn demo() -> Result<()> {
 
     //// Wallet
 
+    // Read received proposal
+    let proposal = {
+        assert_eq!(tx.func_calls.len(), 1);
+        let func_call = &tx.func_calls[0];
+        let call_data = func_call.call_data.as_any();
+        assert_eq!(
+            (&*call_data).type_id(),
+            TypeId::of::<dao_contract::propose::validate::CallData>()
+        );
+        let call_data =
+            call_data.downcast_ref::<dao_contract::propose::validate::CallData>().unwrap();
+
+        let header = &call_data.header;
+        let note: dao_contract::propose::wallet::Note =
+            header.enc_note.decrypt(&dao_keypair.secret).unwrap();
+        // Return the proposal info
+        note.proposal
+    };
+    debug!(target: "demo", "Proposal now active!");
+    debug!(target: "demo", "  destination: {:?}", proposal.dest);
+    debug!(target: "demo", "  amount: {}", proposal.amount);
+    debug!(target: "demo", "  token_id: {:?}", proposal.token_id);
+
     Ok(())
 }

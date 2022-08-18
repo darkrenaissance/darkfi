@@ -18,7 +18,7 @@ use pasta_curves::{
 };
 use std::any::{Any, TypeId};
 
-use crate::money_contract::state::State as MoneyState;
+use crate::{money_contract::state::State as MoneyState, note::EncryptedNote2};
 
 const TARGET: &str = "dao_contract::propose::validate::state_transition()";
 
@@ -112,6 +112,7 @@ pub struct Header {
     pub dao_merkle_root: MerkleNode,
     pub token_commit: pallas::Base,
     pub proposal_bulla: pallas::Base,
+    pub enc_note: EncryptedNote2,
 }
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]

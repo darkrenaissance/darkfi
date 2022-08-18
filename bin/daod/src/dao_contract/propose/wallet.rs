@@ -29,9 +29,14 @@ use darkfi::{
 use crate::{
     dao_contract::propose::validate::{CallData, Header, Input},
     demo::{CallDataBase, FuncCall, StateRegistry, ZkContractInfo, ZkContractTable},
-    money_contract,
+    money_contract, note,
     util::poseidon_hash,
 };
+
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct Note {
+    pub proposal: Proposal,
+}
 
 pub struct BuilderInput {
     pub secret: SecretKey,
@@ -40,6 +45,7 @@ pub struct BuilderInput {
     pub merkle_path: Vec<MerkleNode>,
 }
 
+#[derive(SerialEncodable, SerialDecodable)]
 pub struct Proposal {
     pub dest: PublicKey,
     pub amount: u64,
@@ -266,7 +272,14 @@ impl Builder {
             .expect("DAO::propose() proving error!");
         proofs.push(main_proof);
 
-        let header = Header { dao_merkle_root: self.dao_merkle_root, proposal_bulla, token_commit };
+        let note = Note { proposal: self.proposal };
+        let enc_note = note::encrypt(&note, &self.dao.public_key).unwrap();
+        let header = Header {
+            dao_merkle_root: self.dao_merkle_root,
+            proposal_bulla,
+            token_commit,
+            enc_note,
+        };
 
         let mut unsigned_tx_data = vec![];
         header.encode(&mut unsigned_tx_data).expect("failed to encode data");
