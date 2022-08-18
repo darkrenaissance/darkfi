@@ -35,7 +35,7 @@ pub fn apply(states: &mut StateRegistry, update: Update) {
     // Lookup dao_contract state from registry
     let state = states.lookup_mut::<State>(&"DAO".to_string()).unwrap();
     // Add dao_bulla to state.dao_bullas
-    state.add_bulla(update.dao_bulla);
+    state.add_dao_bulla(update.dao_bulla);
 }
 
 #[derive(Debug, Clone, thiserror::Error)]

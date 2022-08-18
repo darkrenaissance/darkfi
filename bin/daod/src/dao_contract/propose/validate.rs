@@ -47,22 +47,51 @@ pub struct CallData {
 
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
+        let mut zk_publics = Vec::new();
+
+        for input in &self.inputs {
+            let value_coords = input.value_commit.to_affine().coordinates().unwrap();
+            let value_commit_x = *value_coords.x();
+            let value_commit_y = *value_coords.y();
+
+            let sigpub_coords = input.signature_public.0.to_affine().coordinates().unwrap();
+            let sigpub_x = *sigpub_coords.x();
+            let sigpub_y = *sigpub_coords.y();
+
+            zk_publics.push(vec![
+                value_commit_x,
+                value_commit_y,
+                self.header.token_commit,
+                input.merkle_root.0,
+                sigpub_x,
+                sigpub_y,
+            ]);
+        }
+
         let total_funds_coords = self.header.total_funds_commit.to_affine().coordinates().unwrap();
         let total_funds_x = *total_funds_coords.x();
         let total_funds_y = *total_funds_coords.y();
-        vec![
+        zk_publics.push(
             // dao-propose-main proof
             vec![
                 self.header.token_commit,
                 self.header.dao_merkle_root.0,
+                self.header.proposal_bulla,
                 total_funds_x,
                 total_funds_y,
             ],
-        ]
+        );
+
+        zk_publics
     }
 
     fn zk_proof_addrs(&self) -> Vec<String> {
-        vec!["dao-propose-main".to_string()]
+        let mut zk_addrs = Vec::new();
+        for input in &self.inputs {
+            zk_addrs.push("dao-propose-burn".to_string());
+        }
+        zk_addrs.push("dao-propose-main".to_string());
+        zk_addrs
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -74,12 +103,15 @@ impl CallDataBase for CallData {
 pub struct Header {
     pub dao_merkle_root: MerkleNode,
     pub token_commit: pallas::Base,
+    pub proposal_bulla: pallas::Base,
     // TODO: compute from sum of input commits
     pub total_funds_commit: pallas::Point,
 }
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct Input {
+    pub value_commit: pallas::Point,
+    pub merkle_root: MerkleNode,
     pub signature_public: PublicKey,
 }
 
@@ -119,11 +151,17 @@ pub fn state_transition(
         }
     }
 
-    Ok(Update {})
+    // TODO: look at gov tokens avoid using already spent ones
+    // Need to spend original coin and generate 2 nullifiers?
+
+    Ok(Update { proposal_bulla: call_data.header.proposal_bulla })
 }
 
-pub struct Update {}
+pub struct Update {
+    pub proposal_bulla: pallas::Base,
+}
 
 pub fn apply(states: &mut StateRegistry, update: Update) {
     let state = states.lookup_mut::<State>(&"DAO".to_string()).unwrap();
+    state.add_proposal_bulla(update.proposal_bulla);
 }

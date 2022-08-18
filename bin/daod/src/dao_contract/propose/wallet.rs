@@ -1,4 +1,5 @@
 use halo2_proofs::circuit::Value;
+use incrementalmerkletree::Hashable;
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::Field, Curve, Group},
@@ -67,6 +68,10 @@ pub struct Builder {
 
 impl Builder {
     pub fn build(self, zk_bins: &ZkContractTable) -> FuncCall {
+        let mut proofs = vec![];
+
+        let token_blind = pallas::Base::random(&mut OsRng);
+
         let mut inputs = vec![];
         let mut total_funds = 0;
         let mut input_funds_blinds = vec![];
@@ -76,40 +81,91 @@ impl Builder {
             input_funds_blinds.push(funds_blind);
 
             let signature_secret = SecretKey::random(&mut OsRng);
+            let signature_public = PublicKey::from_secret(signature_secret);
 
-            //let zk_info = zk_bins.lookup(&"money-transfer-burn".to_string()).unwrap();
-            //let zk_info = if let ZkContractInfo::Native(info) = zk_info {
-            //    info
-            //} else {
-            //    panic!("Not native info")
-            //};
-            //let burn_pk = &zk_info.proving_key;
+            let zk_info = zk_bins.lookup(&"dao-propose-burn".to_string()).unwrap();
+            let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
+                info
+            } else {
+                panic!("Not binary info")
+            };
+            let zk_bin = zk_info.bincode.clone();
 
-            //// Note from the previous output
-            //let note = input.note;
+            // Note from the previous output
+            let note = input.note;
+            let leaf_pos: u64 = input.leaf_position.into();
 
-            //let (burn_proof, revealed) = create_burn_proof(
-            //    burn_pk,
-            //    note.value,
-            //    note.token_id,
-            //    value_blind,
-            //    token_blind,
-            //    note.serial,
-            //    note.spend_hook,
-            //    note.user_data,
-            //    input.user_data_blind,
-            //    note.coin_blind,
-            //    input.secret,
-            //    input.leaf_position,
-            //    input.merkle_path,
-            //    signature_secret,
-            //)?;
-            //proofs.push(burn_proof);
+            let prover_witnesses = vec![
+                Witness::Base(Value::known(input.secret.0)),
+                Witness::Base(Value::known(note.serial)),
+                Witness::Base(Value::known(pallas::Base::from(note.value))),
+                Witness::Base(Value::known(note.token_id)),
+                Witness::Base(Value::known(note.coin_blind)),
+                Witness::Scalar(Value::known(funds_blind)),
+                Witness::Base(Value::known(token_blind)),
+                Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
+                Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
+                Witness::Base(Value::known(signature_secret.0)),
+            ];
+
+            let public_key = PublicKey::from_secret(input.secret);
+            let coords = public_key.0.to_affine().coordinates().unwrap();
+
+            let coin = poseidon_hash::<8>([
+                *coords.x(),
+                *coords.y(),
+                pallas::Base::from(note.value),
+                note.token_id,
+                note.serial,
+                pallas::Base::from(0),
+                pallas::Base::from(0),
+                note.coin_blind,
+            ]);
+
+            let merkle_root = {
+                let position: u64 = input.leaf_position.into();
+                let mut current = MerkleNode(coin);
+                for (level, sibling) in input.merkle_path.iter().enumerate() {
+                    let level = level as u8;
+                    current = if position & (1 << level) == 0 {
+                        MerkleNode::combine(level.into(), &current, sibling)
+                    } else {
+                        MerkleNode::combine(level.into(), sibling, &current)
+                    };
+                }
+                current
+            };
+
+            let token_commit = poseidon_hash::<2>([note.token_id, token_blind]);
+            assert_eq!(self.dao.gov_token_id, note.token_id);
+
+            let value_commit = pedersen_commitment_u64(note.value, funds_blind);
+            let value_coords = value_commit.to_affine().coordinates().unwrap();
+            let value_commit_x = *value_coords.x();
+            let value_commit_y = *value_coords.y();
+
+            let sigpub_coords = signature_public.0.to_affine().coordinates().unwrap();
+            let sigpub_x = *sigpub_coords.x();
+            let sigpub_y = *sigpub_coords.y();
+
+            let public_inputs = vec![
+                value_commit_x,
+                value_commit_y,
+                token_commit,
+                merkle_root.0,
+                sigpub_x,
+                sigpub_y,
+            ];
+            let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
+
+            let proving_key = &zk_info.proving_key;
+            let main_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
+                .expect("DAO::propose() proving error!");
 
             // First we make the tx then sign after
             signature_secrets.push(signature_secret);
 
-            let input = Input { signature_public: PublicKey::from_secret(signature_secret) };
+            let input = Input { value_commit, merkle_root, signature_public };
             inputs.push(input);
         }
 
@@ -154,6 +210,18 @@ impl Builder {
 
         let dao_leaf_position: u64 = self.dao_leaf_position.into();
 
+        let proposal_bulla = poseidon_hash::<8>([
+            proposal_dest_x,
+            proposal_dest_y,
+            proposal_amount,
+            self.proposal.serial,
+            self.proposal.token_id,
+            dao_bulla,
+            self.proposal.blind,
+            // @tmp-workaround
+            self.proposal.blind,
+        ]);
+
         let zk_info = zk_bins.lookup(&"dao-propose-main".to_string()).unwrap();
         let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
             info
@@ -185,19 +253,26 @@ impl Builder {
             Witness::Uint32(Value::known(dao_leaf_position.try_into().unwrap())),
             Witness::MerklePath(Value::known(self.dao_merkle_path.try_into().unwrap())),
         ];
-        let public_inputs =
-            vec![token_commit, self.dao_merkle_root.0, total_funds_x, total_funds_y];
+        let public_inputs = vec![
+            token_commit,
+            self.dao_merkle_root.0,
+            proposal_bulla,
+            total_funds_x,
+            total_funds_y,
+        ];
         let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
 
         let proving_key = &zk_info.proving_key;
         let main_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::propose() proving error!");
+        proofs.push(main_proof);
 
-        // Create the input signatures
-        let proofs = vec![main_proof];
-
-        let header =
-            Header { dao_merkle_root: self.dao_merkle_root, token_commit, total_funds_commit };
+        let header = Header {
+            dao_merkle_root: self.dao_merkle_root,
+            proposal_bulla,
+            token_commit,
+            total_funds_commit,
+        };
 
         let mut unsigned_tx_data = vec![];
         header.encode(&mut unsigned_tx_data).expect("failed to encode data");

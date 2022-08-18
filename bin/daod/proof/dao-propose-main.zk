@@ -12,8 +12,8 @@ contract "DaoProposeMain" {
     Base gov_token_blind,
 
     # proposal params
-    Base proposal_x,
-    Base proposal_y,
+    Base proposal_dest_x,
+    Base proposal_dest_y,
     Base proposal_amount,
     Base proposal_serial,
     Base proposal_token_id,
@@ -51,6 +51,19 @@ circuit "DaoProposeMain" {
 	constrain_instance(dao_root);
     # Proves this DAO is valid
 
+    proposal_bulla = poseidon_hash(
+        proposal_dest_x,
+        proposal_dest_y,
+        proposal_amount,
+        proposal_serial,
+        proposal_token_id,
+        dao_bulla,
+        proposal_blind,
+        # @tmp-workaround
+        proposal_blind,
+    );
+    constrain_instance(proposal_bulla);
+
     # Rangeproof check for proposal amount
     # TODO: waiting on this opcode in zkas
     #
@@ -59,6 +72,7 @@ circuit "DaoProposeMain" {
     # Use this temporary workaround. ec_mul_short() does an internal rangeproof
     rangeproof = ec_mul_short(proposal_amount, VALUE_COMMIT_VALUE);
 
+    # This is the main check
     # TODO: check total_funds >= proposer_limit
     #
     #     greater_than_or_equal(total_funds, proposer_limit)

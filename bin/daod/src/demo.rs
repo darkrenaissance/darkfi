@@ -237,6 +237,10 @@ pub async fn demo() -> Result<()> {
     let zk_dao_propose_main_bincode = include_bytes!("../proof/dao-propose-main.zk.bin");
     let zk_dao_propose_main_bin = ZkBinary::decode(zk_dao_propose_main_bincode)?;
     zk_bins.add_contract("dao-propose-main".to_string(), zk_dao_propose_main_bin, 13);
+    debug!(target: "demo", "Loading dao-propose-burn.zk");
+    let zk_dao_propose_burn_bincode = include_bytes!("../proof/dao-propose-burn.zk.bin");
+    let zk_dao_propose_burn_bin = ZkBinary::decode(zk_dao_propose_burn_bincode)?;
+    zk_bins.add_contract("dao-propose-burn".to_string(), zk_dao_propose_burn_bin, 13);
 
     // State for money contracts
     let cashier_signature_secret = SecretKey::random(&mut OsRng);
