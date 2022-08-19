@@ -636,10 +636,6 @@ Expected `constant/contract/circuit`.",
                         parse_func!(Opcode::BaseSub);
                     }
 
-                    "greater_than" => {
-                        parse_func!(Opcode::GreaterThan);
-                    }
-
                     x => {
                         self.error.abort(
                             &format!("Unimplemented function call `{}`", x),
