@@ -40,7 +40,7 @@ outbound_connections=5
 #peers=["tls://127.0.0.1:11003"]
 
 ## Seed nodes to connect to 
-seeds=["tls://irc0.dark.fi:11001", "tls://irc1.dark.fi:11001"]
+seeds = ["tls://lilith0.dark.fi:25551", "tls://lilith1.dark.fi:25551"]
 
 ## Only used for debugging. Compromises privacy when set.
 #node_id = "foo"
@@ -66,4 +66,3 @@ seeds=["tls://irc0.dark.fi:11001", "tls://irc1.dark.fi:11001"]
 # shared secret will be used for all the nicknames in the list.
 [contact."7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"]
 nicks = ["sneed", "chuck"]
-
