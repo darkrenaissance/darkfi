@@ -53,8 +53,8 @@ impl Analyzer {
             // It's kinda ugly.
             if arg_types[0] == Type::BaseArray || arg_types[0] == Type::ScalarArray {
                 if statement.args.is_empty() {
-                    self.error.emit(
-                        format!(
+                    self.error.abort(
+                        &format!(
                             "Passed no arguments to `{:?}` call. Expected at least 1.",
                             statement.opcode
                         ),
@@ -72,8 +72,8 @@ impl Analyzer {
                         };
 
                         if arg_types[0] == Type::BaseArray && var_type != Type::Base {
-                            self.error.emit(
-                                format!(
+                            self.error.abort(
+                                &format!(
                                     "Incorrect argument type. Expected `{:?}`, got `{:?}`",
                                     arg_types[0],
                                     Type::Base,
@@ -84,8 +84,8 @@ impl Analyzer {
                         }
 
                         if arg_types[0] == Type::ScalarArray && var_type != Type::Scalar {
-                            self.error.emit(
-                                format!(
+                            self.error.abort(
+                                &format!(
                                     "Incorrect argument type. Expected `{:?}`, got `{:?}`",
                                     arg_types[0],
                                     Type::Scalar,
@@ -99,8 +99,8 @@ impl Analyzer {
                         arg.typ = var_type;
                         args.push(arg);
                     } else {
-                        self.error.emit(
-                            format!("Unknown argument reference `{}`.", i.name),
+                        self.error.abort(
+                            &format!("Unknown argument reference `{}`.", i.name),
                             i.line,
                             i.column,
                         );
@@ -108,8 +108,8 @@ impl Analyzer {
                 }
             } else {
                 if statement.args.len() != arg_types.len() {
-                    self.error.emit(
-                        format!(
+                    self.error.abort(
+                        &format!(
                             "Incorrent number of args to `{:?}` call. Expected {}, got {}",
                             statement.opcode,
                             arg_types.len(),
@@ -129,8 +129,8 @@ impl Analyzer {
                         };
 
                         if var_type != arg_types[idx] {
-                            self.error.emit(
-                                format!(
+                            self.error.abort(
+                                &format!(
                                     "Incorrect argument type. Expected `{:?}`, got `{:?}`",
                                     arg_types[idx], var_type,
                                 ),
@@ -143,8 +143,8 @@ impl Analyzer {
                         arg.typ = var_type;
                         args.push(arg);
                     } else {
-                        self.error.emit(
-                            format!("Unknown argument reference `{}`.", i.name),
+                        self.error.abort(
+                            &format!("Unknown argument reference `{}`.", i.name),
                             i.line,
                             i.column,
                         );
@@ -204,8 +204,8 @@ impl Analyzer {
                 if let Some(index) = stack.iter().position(|&r| r == &arg.name) {
                     println!("Found at stack index {}", index);
                 } else {
-                    self.error.emit(
-                        format!("Could not find `{}` on the stack", arg.name),
+                    self.error.abort(
+                        &format!("Could not find `{}` on the stack", arg.name),
                         arg.line,
                         arg.column,
                     );

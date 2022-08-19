@@ -79,8 +79,8 @@ impl Compiler {
                     continue
                 }
 
-                self.error.emit(
-                    format!("Failed finding a stack reference for `{}`", arg.name),
+                self.error.abort(
+                    &format!("Failed finding a stack reference for `{}`", arg.name),
                     arg.line,
                     arg.column,
                 );

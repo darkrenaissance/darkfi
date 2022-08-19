@@ -79,8 +79,8 @@ impl<'a> Lexer<'a> {
 
                 if in_string {
                     // TODO: Allow newlines in strings?
-                    self.error.emit(
-                        format!("Invalid ending in string `{}`", &strbuf),
+                    self.error.abort(
+                        &format!("Invalid ending in string `{}`", &strbuf),
                         lineno,
                         column,
                     );
@@ -146,7 +146,7 @@ impl<'a> Lexer<'a> {
 
             if c == '"' && !in_string {
                 if in_symbol {
-                    self.error.emit(format!("Illegal char `{}` for symbol", c), lineno, column);
+                    self.error.abort(&format!("Illegal char `{}` for symbol", c), lineno, column);
                 }
                 in_string = true;
                 continue
@@ -154,8 +154,8 @@ impl<'a> Lexer<'a> {
 
             if c == '"' && in_string {
                 if strbuf.is_empty() {
-                    self.error.emit(
-                        format!("Invalid ending in string `{}`", &strbuf),
+                    self.error.abort(
+                        &format!("Invalid ending in string `{}`", &strbuf),
                         lineno,
                         column,
                     );
@@ -238,12 +238,12 @@ impl<'a> Lexer<'a> {
                         tokens.push(Token::new("=".to_string(), TokenType::Assign, lineno, column));
                         continue
                     }
-                    _ => self.error.emit(format!("Invalid token `{}`", c), lineno, column - 1),
+                    _ => self.error.abort(&format!("Invalid token `{}`", c), lineno, column - 1),
                 }
                 continue
             }
 
-            self.error.emit(format!("Invalid token `{}`", c), lineno, column - 1);
+            self.error.abort(&format!("Invalid token `{}`", c), lineno, column - 1);
         }
 
         tokens

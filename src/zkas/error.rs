@@ -13,29 +13,61 @@ impl ErrorEmitter {
         Self { namespace: namespace.to_string(), file: file.to_string(), lines }
     }
 
-    pub fn emit(&self, msg: String, ln: usize, col: usize) {
+    fn fmt(&self, msg: String, ln: usize, col: usize) -> String {
         let err_msg = format!("{} (line {}, column {})", msg, ln, col);
-        let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
-        let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
-        let caret = format!("{:width$}^", "", width = pad);
-        let msg = format!("{}\n{}\n{}\n", err_msg, dbg_msg, caret);
-        self.abort(&msg);
+        let (dbg_msg, caret) = match ln {
+            0 => ("".to_string(), "".to_string()),
+            _ => {
+                let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
+                let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
+                let caret = format!("{:width$}^", "", width = pad);
+                (dbg_msg, caret)
+            }
+        };
+        format!("{}\n{}\n{}\n", err_msg, dbg_msg, caret)
     }
 
-    fn abort(&self, msg: &str) {
+    pub fn abort(&self, msg: &str, ln: usize, col: usize) {
+        let m = self.fmt(msg.to_string(), ln, col);
+        self.emit("error", &m);
+        process::exit(1);
+    }
+
+    pub fn warn(&self, msg: &str, ln: usize, col: usize) {
+        let m = self.fmt(msg.to_string(), ln, col);
+        self.emit("warning", &m);
+    }
+
+    pub fn emit(&self, typ: &str, msg: &str) {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        write!(
-            handle,
-            "{}{}{} error:{} {}",
-            style::Bold,
-            color::Fg(color::Red),
-            self.namespace,
-            style::Reset,
-            msg,
-        )
-        .unwrap();
+
+        match typ {
+            "error" => write!(
+                handle,
+                "{}{}{} error:{} {}",
+                style::Bold,
+                color::Fg(color::Red),
+                self.namespace,
+                style::Reset,
+                msg
+            )
+            .unwrap(),
+
+            "warning" => write!(
+                handle,
+                "{}{}{} warning:{} {}",
+                style::Bold,
+                color::Fg(color::Yellow),
+                self.namespace,
+                style::Reset,
+                msg
+            )
+            .unwrap(),
+
+            _ => unreachable!(),
+        };
+
         handle.flush().unwrap();
-        process::exit(1);
     }
 }
