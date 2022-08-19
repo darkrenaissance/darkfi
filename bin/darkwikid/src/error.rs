@@ -1,5 +1,7 @@
 #[derive(thiserror::Error, Debug)]
 pub enum DarkWikiError {
+    #[error("File/Doc not found")]
+    FileNotFound,
     #[error("Encryption error: `{0}`")]
     EncryptionError(String),
     #[error("Json serialization error: `{0}`")]
