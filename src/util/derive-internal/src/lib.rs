@@ -3,10 +3,11 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{Fields, Ident, Index, ItemEnum, ItemStruct, WhereClause};
 
+// TODO
 pub fn enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2> {
     let name = &input.ident;
     let (_impl_generics, _ty_generics, where_clause) = input.generics.split_for_impl();
-    let mut where_clause = where_clause.map_or_else(
+    let where_clause = where_clause.map_or_else(
         || WhereClause { where_token: Default::default(), predicates: Default::default() },
         Clone::clone,
     );

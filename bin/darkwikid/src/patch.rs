@@ -2,7 +2,10 @@ use std::{cmp::Ordering, io};
 
 use serde::{Deserialize, Serialize};
 
-use darkfi::util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt};
+use darkfi::util::{
+    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    Timestamp,
+};
 
 use crate::str_to_chars;
 
@@ -22,6 +25,7 @@ pub struct Patch {
     id: String,
     base: String,
     ops: OpMethods,
+    timestamp: Timestamp,
 }
 
 impl std::string::ToString for Patch {
@@ -69,6 +73,7 @@ impl Patch {
             ops: OpMethods(vec![]),
             base: String::new(),
             author: author.to_string(),
+            timestamp: Timestamp::current_time(),
         }
     }
 
