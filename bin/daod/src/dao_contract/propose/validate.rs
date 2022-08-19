@@ -1,7 +1,3 @@
-use crate::{
-    dao_contract::{DaoBulla, State},
-    demo::{CallDataBase, StateRegistry, Transaction},
-};
 use darkfi::{
     crypto::{
         keypair::PublicKey, merkle_node::MerkleNode, schnorr, schnorr::SchnorrPublic,
@@ -18,7 +14,12 @@ use pasta_curves::{
 };
 use std::any::{Any, TypeId};
 
-use crate::{money_contract::state::State as MoneyState, note::EncryptedNote2};
+use crate::{
+    dao_contract::{DaoBulla, State as DaoState},
+    demo::{CallDataBase, StateRegistry, Transaction},
+    money_contract::state::State as MoneyState,
+    note::EncryptedNote2,
+};
 
 const TARGET: &str = "dao_contract::propose::validate::state_transition()";
 
@@ -144,7 +145,7 @@ pub fn state_transition(
         }
     }
 
-    let state = states.lookup::<State>(&"DAO".to_string()).unwrap();
+    let state = states.lookup::<DaoState>(&"DAO".to_string()).unwrap();
 
     // Is the DAO bulla generated in the ZK proof valid
     if !state.is_valid_dao_merkle(&call_data.header.dao_merkle_root) {
@@ -177,6 +178,6 @@ pub struct Update {
 }
 
 pub fn apply(states: &mut StateRegistry, update: Update) {
-    let state = states.lookup_mut::<State>(&"DAO".to_string()).unwrap();
+    let state = states.lookup_mut::<DaoState>(&"DAO".to_string()).unwrap();
     state.add_proposal_bulla(update.proposal_bulla);
 }
