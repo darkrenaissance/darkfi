@@ -12,8 +12,8 @@ contract "DaoVoteMain" {
     Scalar total_value_blind,
 
     # Is the vote yes or no
-    Base vote_option
-    Scalar vote_option_blind
+    Base vote_option,
+    Scalar vote_option_blind,
 
     # Check the inputs and this proof are for the same token
     Base gov_token_blind,
@@ -36,8 +36,8 @@ circuit "DaoVoteMain" {
 	constrain_instance(total_vote_commit_y);
 
 	# Pedersen commitment for vote value
-	vcv = ec_mul_short(total_funds, VALUE_COMMIT_VALUE);
-	vcr = ec_mul(total_funds_blind, VALUE_COMMIT_RANDOM);
+	vcv = ec_mul_short(total_value, VALUE_COMMIT_VALUE);
+	vcr = ec_mul(total_value_blind, VALUE_COMMIT_RANDOM);
 	total_value_commit = ec_add(vcv, vcr);
 	# Since total_funds_commit is a curve point, we fetch its coordinates
 	# and constrain them:
