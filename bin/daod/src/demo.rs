@@ -675,5 +675,29 @@ pub async fn demo() -> Result<()> {
     debug!(target: "demo", "  amount: {}", proposal.amount);
     debug!(target: "demo", "  token_id: {:?}", proposal.token_id);
 
+    ///////////////////////////////////////////////////
+    // Proposal is accepted!
+    // Start the voting
+    ///////////////////////////////////////////////////
+
+    // Copying these schizo comments from python code:
+    // Lets the voting begin
+    // Voters have access to the proposal and dao data
+    //   vote_state = VoteState()
+    // We don't need to copy nullifier set because it is checked from gov_state
+    // in vote_state_transition() anyway
+    //
+    // TODO: what happens if voters don't unblind their vote
+    // Answer:
+    //   1. there is a time limit
+    //   2. both the MPC or users can unblind
+    //
+    // TODO: bug if I vote then send money, then we can double vote
+    // TODO: all timestamps missing
+    //       - timelock (future voting starts in 2 days)
+    // Fix: use nullifiers from money gov state only from
+    // beginning of gov period
+    // Cannot use nullifiers from before voting period
+
     Ok(())
 }
