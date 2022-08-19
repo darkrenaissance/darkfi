@@ -1,3 +1,5 @@
+use log::info;
+
 use crate::{
     util::serial::{serialize, Decodable, Encodable},
     Result,
@@ -13,6 +15,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let self_id = self.id();
 
         self.set_current_term(&(self.current_term()? + 1))?;
+        info!(target: "raft", "Set the node role as Candidate");
         self.role = Role::Candidate;
         self.set_voted_for(&Some(self_id.clone()))?;
         self.votes_received = vec![];
@@ -40,6 +43,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             drop(nodes);
 
             if self.votes_received.len() >= ((nodes_cloned.len() + 1) / 2) {
+                info!(target: "raft", "Set the node role as Leader");
                 self.role = Role::Leader;
                 self.current_leader = self.id();
                 for node in nodes_cloned.iter() {

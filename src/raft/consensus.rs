@@ -208,21 +208,30 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn broadcast_msg(&mut self, msg: &T, msg_id: Option<u64>) -> Result<()> {
-        if self.role == Role::Leader {
-            let msg = serialize(msg);
-            let log = Log { msg, term: self.current_term()? };
-            self.push_log(&log)?;
-
-            self.acked_length.insert(&self.id, self.logs_len());
-        } else {
-            let b_msg = BroadcastMsgRequest(serialize(msg));
-            self.send(
-                Some(self.current_leader.clone()),
-                &serialize(&b_msg),
-                NetMsgMethod::BroadcastRequest,
-                msg_id,
-            )
-            .await?;
+        loop {
+            match self.role {
+                Role::Leader => {
+                    let msg = serialize(msg);
+                    let log = Log { msg, term: self.current_term()? };
+                    self.push_log(&log)?;
+                    self.acked_length.insert(&self.id, self.logs_len());
+                    break
+                }
+                Role::Follower => {
+                    let b_msg = BroadcastMsgRequest(serialize(msg));
+                    self.send(
+                        Some(self.current_leader.clone()),
+                        &serialize(&b_msg),
+                        NetMsgMethod::BroadcastRequest,
+                        msg_id,
+                    )
+                    .await?;
+                    break
+                }
+                Role::Candidate => {
+                    util::sleep(2).await;
+                }
+            }
         }
 
         debug!(target: "raft", "Role: {:?} Id: {:?}, broadcast a msg id: {:?} ", self.role, self.id, msg_id);
