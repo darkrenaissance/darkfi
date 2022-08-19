@@ -92,14 +92,12 @@ fn get_from_index(local_path: &Path, title: &str) -> DarkWikiResult<String> {
 }
 
 fn save_to_index(local_path: &Path, id: &str, title: &str) -> DarkWikiResult<()> {
-    let mut index = load_json_file::<FxHashMap<String, String>>(&local_path.join("index"))?;
+    let mut index = load_json_file::<FxHashMap<String, String>>(&local_path.join("index"))
+        .unwrap_or(FxHashMap::default());
+
     index.insert(id.to_owned(), title.to_owned());
     save_json_file(&local_path.join("index"), &index)?;
     Ok(())
-}
-
-fn extract_title(content: &str) -> String {
-    str_to_chars(content).into_iter().skip_while(|&c| c == "#").take_while(|&c| c == "\n").collect()
 }
 
 fn lcs(a: &str, b: &str) -> Vec<OpMethod> {
@@ -183,12 +181,11 @@ fn on_receive_update(settings: &DarkWikiSettings) -> DarkWikiResult<Vec<Patch>> 
         };
 
         // load doc content
-        // TODO
         let edit = load_file(&docs_path.join(doc_title)).map_err(Error::from)?;
         let edit = edit.trim();
 
         // create new patch
-        let mut new_patch = Patch::new(&doc_id, &settings.author);
+        let mut new_patch = Patch::new(doc_title, &doc_id, &settings.author);
 
         // check for any changes found with local doc and darkwiki doc
         if let Ok(local_edit) = load_file(&local_path.join(&doc_id)) {
@@ -245,7 +242,7 @@ fn on_receive_update(settings: &DarkWikiSettings) -> DarkWikiResult<Vec<Patch>> 
         }
 
         let sync_patch_str = sync_patch.to_string();
-        let file_title = extract_title(&sync_patch_str);
+        let file_title = sync_patch.title();
         save_to_index(&local_path, file_id, &file_title)?;
 
         save_file(&docs_path.join(&file_title), &sync_patch_str)?;
