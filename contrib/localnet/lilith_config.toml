@@ -1,0 +1,31 @@
+## lilith configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+# Daemon published url, common for all enabled networks
+url = "tls://127.0.0.1"
+
+## Per-network settings
+[network."darkfid_sync"]
+port = 33032
+#seeds = []
+#peers = []
+
+[network."darkfid_consensus"]
+port = 33033
+#seeds = []
+#peers = []
+
+#[network."ircd"]
+#port = 25551
+#seeds = []
+#peers = []
+
+#[network."taud"]
+#port = 23331
+#seeds = []
+#peers = []

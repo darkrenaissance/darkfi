@@ -34,7 +34,7 @@ consensus_p2p_external = "tls://127.0.0.1:8441"
 #consensus_slots = 8
 
 # Connection slots for the consensus protocol
-consensus_p2p_seed = ["tls://127.0.0.1:8341"]
+consensus_p2p_seed = ["tls://127.0.0.1:33033"]
 
 # Seed nodes JSON-RPC listen URL for clock synchronization
 consensus_seed_rpc = ["tcp://127.0.0.1:8340"]
@@ -55,7 +55,7 @@ sync_p2p_external = "tls://127.0.0.1:8442"
 #sync_slots = 8
 
 # Seed nodes to connect to for the syncing protocol
-sync_p2p_seed = ["tls://127.0.0.1:8342"]
+sync_p2p_seed = ["tls://127.0.0.1:33032"]
 
 # Peers to connect to for the syncing protocol
 #sync_p2p_peer = []
