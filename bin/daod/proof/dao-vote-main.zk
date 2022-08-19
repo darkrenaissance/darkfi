@@ -1,0 +1,56 @@
+constant "DaoVoteMain" {
+	EcFixedPointShort VALUE_COMMIT_VALUE,
+	EcFixedPoint VALUE_COMMIT_RANDOM,
+
+	EcFixedPointShort VOTE_COMMIT_OPTION,
+	EcFixedPoint VOTE_COMMIT_RANDOM,
+}
+
+contract "DaoVoteMain" {
+    # Total amount of capital allocated to vote
+    Base total_value,
+    Scalar total_value_blind,
+
+    # Is the vote yes or no
+    Base vote_option
+    Scalar vote_option_blind
+
+    # Check the inputs and this proof are for the same token
+    Base gov_token_blind,
+    Base gov_token_id,
+}
+
+circuit "DaoVoteMain" {
+    token_commit = poseidon_hash(gov_token_id, gov_token_blind);
+	constrain_instance(token_commit);
+
+	# Pedersen commitment for vote option
+	vco = ec_mul_short(vote_option, VOTE_COMMIT_OPTION);
+	vcr = ec_mul(vote_option_blind, VOTE_COMMIT_RANDOM);
+	total_vote_commit = ec_add(vco, vcr);
+	# Since total_vote_commit is a curve point, we fetch its coordinates
+	# and constrain them:
+	total_vote_commit_x = ec_get_x(total_vote_commit);
+	total_vote_commit_y = ec_get_y(total_vote_commit);
+	constrain_instance(total_vote_commit_x);
+	constrain_instance(total_vote_commit_y);
+
+	# Pedersen commitment for vote value
+	vcv = ec_mul_short(total_funds, VALUE_COMMIT_VALUE);
+	vcr = ec_mul(total_funds_blind, VALUE_COMMIT_RANDOM);
+	total_value_commit = ec_add(vcv, vcr);
+	# Since total_funds_commit is a curve point, we fetch its coordinates
+	# and constrain them:
+	total_value_commit_x = ec_get_x(total_value_commit);
+	total_value_commit_y = ec_get_y(total_value_commit);
+	constrain_instance(total_value_commit_x);
+	constrain_instance(total_value_commit_y);
+
+    # This is the main check
+    # TODO: vote option should be 0 or 1
+    #
+    # assert!(vote_option == 0 OR vote_option == 1)
+    #
+}
+
+
