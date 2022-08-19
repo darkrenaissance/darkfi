@@ -51,6 +51,7 @@ fn main() {
             exit(1);
         }
     };
+    let source = source.replace("\t", "    ");
 
     let lexer = Lexer::new(filename, source.chars());
     let tokens = lexer.lex();
