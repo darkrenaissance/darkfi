@@ -6,13 +6,13 @@ use super::error::ErrorEmitter;
 pub enum TokenType {
     Symbol,
     String,
+    Number,
     LeftBrace,
     RightBrace,
     LeftParen,
     RightParen,
     Comma,
     Semicolon,
-    Colon,
     Assign,
 }
 
@@ -27,8 +27,8 @@ pub struct Token {
 }
 
 impl Token {
-    fn new(token: String, token_type: TokenType, line: usize, column: usize) -> Self {
-        Token { token, token_type, line, column }
+    fn new(token: &str, token_type: TokenType, line: usize, column: usize) -> Self {
+        Token { token: token.to_string(), token_type, line, column }
     }
 }
 
@@ -55,10 +55,12 @@ impl<'a> Lexer<'a> {
         // We use these as a buffer to keep strings and symbols
         let mut strbuf = String::new();
         let mut symbuf = String::new();
+        let mut numbuf = String::new();
 
         // We use these to keep state when iterating
         let mut in_comment = false;
         let mut in_string = false;
+        let mut in_number = false;
         let mut in_symbol = false;
 
         #[allow(clippy::explicit_counter_loop)]
@@ -69,7 +71,7 @@ impl<'a> Lexer<'a> {
                 if in_symbol {
                     in_symbol = false;
                     tokens.push(Token::new(
-                        symbuf.clone(),
+                        &symbuf,
                         TokenType::Symbol,
                         lineno,
                         column - symbuf.len(),
@@ -78,9 +80,16 @@ impl<'a> Lexer<'a> {
                 }
 
                 if in_string {
-                    // TODO: Allow newlines in strings?
                     self.error.abort(
-                        &format!("Invalid ending in string `{}`", &strbuf),
+                        &format!("Strings can not contain newlines: `{}`", &strbuf),
+                        lineno,
+                        column,
+                    );
+                }
+
+                if in_number {
+                    self.error.abort(
+                        &format!("Numbers can not contain newlines: `{}`", &numbuf),
                         lineno,
                         column,
                     );
@@ -96,7 +105,7 @@ impl<'a> Lexer<'a> {
                 if in_symbol {
                     in_symbol = false;
                     tokens.push(Token::new(
-                        symbuf.clone(),
+                        &symbuf,
                         TokenType::Symbol,
                         lineno,
                         column - symbuf.len(),
@@ -117,7 +126,7 @@ impl<'a> Lexer<'a> {
                 if in_symbol {
                     in_symbol = false;
                     tokens.push(Token::new(
-                        symbuf.clone(),
+                        &symbuf,
                         TokenType::Symbol,
                         lineno,
                         column - symbuf.len(),
@@ -125,7 +134,24 @@ impl<'a> Lexer<'a> {
                     symbuf = String::new();
                 }
 
+                if in_number {
+                    in_number = false;
+                    tokens.push(Token::new(
+                        &numbuf,
+                        TokenType::Number,
+                        lineno,
+                        column - numbuf.len(),
+                    ));
+                    numbuf = String::new();
+                }
+
                 continue
+            }
+
+            if in_number && !is_digit(c) {
+                in_number = false;
+                tokens.push(Token::new(&numbuf, TokenType::Number, lineno, column - numbuf.len()));
+                numbuf = String::new();
             }
 
             if !in_string && is_letter(c) {
@@ -139,8 +165,19 @@ impl<'a> Lexer<'a> {
                 continue
             }
 
+            if in_number && is_digit(c) {
+                numbuf.push(c);
+                continue
+            }
+
             if in_symbol && is_digit(c) {
                 symbuf.push(c);
+                continue
+            }
+
+            if !in_symbol && !in_string && !in_number && is_digit(c) {
+                in_number = true;
+                numbuf.push(c);
                 continue
             }
 
@@ -162,12 +199,7 @@ impl<'a> Lexer<'a> {
                 }
 
                 in_string = false;
-                tokens.push(Token::new(
-                    strbuf.clone(),
-                    TokenType::String,
-                    lineno,
-                    column - strbuf.len(),
-                ));
+                tokens.push(Token::new(&strbuf, TokenType::String, lineno, column - strbuf.len()));
                 strbuf = String::new();
                 continue
             }
@@ -176,7 +208,7 @@ impl<'a> Lexer<'a> {
                 if in_symbol {
                     in_symbol = false;
                     tokens.push(Token::new(
-                        symbuf.clone(),
+                        &symbuf,
                         TokenType::Symbol,
                         lineno,
                         column - symbuf.len(),
@@ -184,58 +216,44 @@ impl<'a> Lexer<'a> {
                     symbuf = String::new();
                 }
 
+                if in_number {
+                    in_number = false;
+                    tokens.push(Token::new(
+                        &numbuf,
+                        TokenType::Symbol,
+                        lineno,
+                        column - numbuf.len(),
+                    ));
+                    numbuf = String::new();
+                }
+
                 match c {
                     '{' => {
-                        tokens.push(Token::new(
-                            "{".to_string(),
-                            TokenType::LeftBrace,
-                            lineno,
-                            column,
-                        ));
+                        tokens.push(Token::new("{", TokenType::LeftBrace, lineno, column));
                         continue
                     }
                     '}' => {
-                        tokens.push(Token::new(
-                            "}".to_string(),
-                            TokenType::RightBrace,
-                            lineno,
-                            column,
-                        ));
+                        tokens.push(Token::new("}", TokenType::RightBrace, lineno, column));
                         continue
                     }
                     '(' => {
-                        tokens.push(Token::new(
-                            "(".to_string(),
-                            TokenType::LeftParen,
-                            lineno,
-                            column,
-                        ));
+                        tokens.push(Token::new("(", TokenType::LeftParen, lineno, column));
                         continue
                     }
                     ')' => {
-                        tokens.push(Token::new(
-                            ")".to_string(),
-                            TokenType::RightParen,
-                            lineno,
-                            column,
-                        ));
+                        tokens.push(Token::new(")", TokenType::RightParen, lineno, column));
                         continue
                     }
                     ',' => {
-                        tokens.push(Token::new(",".to_string(), TokenType::Comma, lineno, column));
+                        tokens.push(Token::new(",", TokenType::Comma, lineno, column));
                         continue
                     }
                     ';' => {
-                        tokens.push(Token::new(
-                            ";".to_string(),
-                            TokenType::Semicolon,
-                            lineno,
-                            column,
-                        ));
+                        tokens.push(Token::new(";", TokenType::Semicolon, lineno, column));
                         continue
                     }
                     '=' => {
-                        tokens.push(Token::new("=".to_string(), TokenType::Assign, lineno, column));
+                        tokens.push(Token::new("=", TokenType::Assign, lineno, column));
                         continue
                     }
                     _ => self.error.abort(&format!("Invalid token `{}`", c), lineno, column - 1),

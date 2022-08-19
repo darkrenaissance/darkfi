@@ -32,9 +32,9 @@ impl Parser {
 
     pub fn parse(self) -> (Constants, Witnesses, Statements) {
         // We use these to keep state when iterating
-        let mut declaring_constant = false;
-        let mut declaring_contract = false;
-        let mut declaring_circuit = false;
+        let (mut declaring_constant, mut declared_constant) = (false, false);
+        let (mut declaring_contract, mut declared_contract) = (false, false);
+        let (mut declaring_circuit, mut declared_circuit) = (false, false);
 
         let mut constant_tokens = vec![];
         let mut contract_tokens = vec![];
@@ -54,9 +54,12 @@ impl Parser {
             // Start by declaring a section
             if !declaring_constant && !declaring_contract && !declaring_circuit {
                 if t.token_type != TokenType::Symbol {
-                    // TODO: Revisit
-                    // TODO: Visit this again when we are allowing imports
-                    unimplemented!();
+                    self.error.abort(
+                        "Source file does not start with a section.
+Expected `constant/contract/circuit`.",
+                        0,
+                        0,
+                    );
                 }
 
                 // The sections we must be declaring in our source code
@@ -116,9 +119,11 @@ impl Parser {
 
             // Now go through the token vectors and work it through
             if declaring_constant {
+                if declared_constant {
+                    self.error.abort("Duplicate `constant` section found", 0, 0);
+                }
                 self.check_section_structure("constant", constant_tokens.clone());
 
-                // TODO: Do we need this?
                 if namespace_found && namespace != constant_tokens[0].token {
                     self.error.abort(
                         &format!(
@@ -159,12 +164,15 @@ impl Parser {
 
                 ast_inner.insert("constant".to_string(), constants_map);
                 declaring_constant = false;
+                declared_constant = true;
             }
 
             if declaring_contract {
+                if declared_contract {
+                    self.error.abort("Duplicate `contract` section found", 0, 0);
+                }
                 self.check_section_structure("contract", contract_tokens.clone());
 
-                // TODO: Do we need this?
                 if namespace_found && namespace != contract_tokens[0].token {
                     self.error.abort(
                         &format!(
@@ -205,9 +213,13 @@ impl Parser {
 
                 ast_inner.insert("contract".to_string(), contract_map);
                 declaring_contract = false;
+                declared_contract = true;
             }
 
             if declaring_circuit {
+                if declared_circuit {
+                    self.error.abort("Duplicate `circuit` section found", 0, 0);
+                }
                 self.check_section_structure("circuit", contract_tokens.clone());
 
                 if circuit_tokens[circuit_tokens.len() - 2].token_type != TokenType::Semicolon {
@@ -218,7 +230,6 @@ impl Parser {
                     );
                 }
 
-                // TODO: Do we need this?
                 if namespace_found && namespace != circuit_tokens[0].token {
                     self.error.abort(
                         &format!(
@@ -244,6 +255,7 @@ impl Parser {
                 }
 
                 declaring_circuit = false;
+                declared_circuit = true;
             }
         }
 
