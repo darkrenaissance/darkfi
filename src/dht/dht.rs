@@ -221,7 +221,7 @@ impl Dht {
     /// Auxilary function to sync lookup map with network
     pub async fn sync_lookup_map(&mut self) -> Result<()> {
         debug!("Starting lookup map sync...");
-
+        let seeds = self.p2p.settings().seeds.clone();
         let channels_map = self.p2p.channels().lock().await.clone();
         let values = channels_map.values();
         // Using len here because is_empty() uses unstable library feature
@@ -229,6 +229,12 @@ impl Dht {
         if values.len() != 0 {
             // Node iterates the channel peers to ask for their lookup map
             for channel in values {
+                // Filtering seed channel, as they don't have registered protocols
+                if seeds.contains(&channel.address()) {
+                    debug!("Seed channel, continuing..");
+                    continue
+                }
+
                 // Communication setup
                 let msg_subsystem = channel.get_message_subsystem();
                 msg_subsystem.add_dispatch::<LookupMapResponse>().await;
