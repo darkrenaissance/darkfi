@@ -29,7 +29,6 @@ async fn spawn_network(
     url.set_port(Some(info.port))?;
     let network_settings = net::Settings {
         inbound: Some(url.clone()),
-        external_addr: Some(url.clone()),
         seeds: info.seeds,
         peers: info.peers,
         outbound_connections: 0,
