@@ -346,6 +346,7 @@ pub async fn demo() -> Result<()> {
         let call_data = call_data.downcast_ref::<dao_contract::mint::validate::CallData>().unwrap();
         call_data.dao_bulla.clone()
     };
+    debug!(target: "demo", "Create DAO bulla: {:?}", dao_bulla.0);
 
     ///////////////////////////////////////////////////
     //// Mint the initial supply of treasury token
@@ -659,7 +660,7 @@ pub async fn demo() -> Result<()> {
     //// Wallet
 
     // Read received proposal
-    let proposal = {
+    let (proposal, proposal_bulla) = {
         assert_eq!(tx.func_calls.len(), 1);
         let func_call = &tx.func_calls[0];
         let call_data = func_call.call_data.as_any();
@@ -674,12 +675,14 @@ pub async fn demo() -> Result<()> {
         let note: dao_contract::propose::wallet::Note =
             header.enc_note.decrypt(&dao_keypair.secret).unwrap();
         // Return the proposal info
-        note.proposal
+        (note.proposal, call_data.header.proposal_bulla)
     };
     debug!(target: "demo", "Proposal now active!");
     debug!(target: "demo", "  destination: {:?}", proposal.dest);
     debug!(target: "demo", "  amount: {}", proposal.amount);
     debug!(target: "demo", "  token_id: {:?}", proposal.token_id);
+    debug!(target: "demo", "  dao_bulla: {:?}", dao_bulla.0);
+    debug!(target: "demo", "Proposal bulla: {:?}", proposal_bulla);
 
     ///////////////////////////////////////////////////
     // Proposal is accepted!
