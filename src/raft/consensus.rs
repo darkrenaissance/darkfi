@@ -229,7 +229,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                     break
                 }
                 Role::Candidate => {
-                    util::sleep(2).await;
+                    util::sleep(1).await;
                 }
             }
         }

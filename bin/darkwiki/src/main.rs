@@ -12,10 +12,15 @@ use darkfi::{
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(name = "darkwikiupdate")]
 struct Args {
+    #[structopt(long)]
+    /// Merge/Update without applying the changes
+    dry_run: bool,
+    #[structopt(long)]
+    /// Show all patches info
+    log: bool,
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
-
     #[structopt(short, long, default_value = "tcp://127.0.0.1:13055")]
     /// darkfid JSON-RPC endpoint
     endpoint: Url,
@@ -31,8 +36,14 @@ async fn main() -> Result<()> {
 
     let rpc_client = RpcClient::new(args.endpoint).await?;
 
-    let req = JsonRequest::new("update", json!([]));
-    rpc_client.request(req).await?;
+    let req = if args.dry_run {
+        JsonRequest::new("dry_run", json!([]))
+    } else if args.log {
+        JsonRequest::new("log", json!([]))
+    } else {
+        JsonRequest::new("update", json!([]))
+    };
 
+    rpc_client.request(req).await?;
     rpc_client.close().await
 }
