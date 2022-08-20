@@ -6,6 +6,7 @@ use pasta_curves::{
     pallas,
 };
 use rand::rngs::OsRng;
+use std::any::{Any, TypeId};
 
 use darkfi::{
     crypto::{
@@ -27,11 +28,30 @@ use darkfi::{
 };
 
 use crate::{
-    dao_contract::vote::validate::{CallData, Header, Input},
+    dao_contract::{
+        propose::wallet::Proposal,
+        vote::validate::{Header, Input},
+    },
     demo::{CallDataBase, FuncCall, StateRegistry, ZkContractInfo, ZkContractTable},
     money_contract, note,
     util::poseidon_hash,
 };
+
+use log::debug;
+
+struct CallData {}
+
+impl CallDataBase for CallData {
+    fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
+        vec![]
+    }
+    fn zk_proof_addrs(&self) -> Vec<String> {
+        vec![]
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct Note {
@@ -61,10 +81,12 @@ pub struct Builder {
     pub inputs: Vec<BuilderInput>,
     pub vote: Vote,
     pub vote_keypair: Keypair,
+    pub proposal: Proposal,
 }
 
 impl Builder {
     pub fn build(self, zk_bins: &ZkContractTable) -> FuncCall {
+        debug!(target: "dao_contract::vote::wallet::Builder", "build()");
         let mut proofs = vec![];
 
         let gov_token_blind = pallas::Base::random(&mut OsRng);
@@ -163,6 +185,7 @@ impl Builder {
 
             let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
             let proving_key = &zk_info.proving_key;
+            debug!(target: "dao_contract::vote::wallet::Builder", "input_proof Proof::create()");
             let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
                 .expect("DAO::vote() proving error!");
             proofs.push(input_proof);
@@ -201,48 +224,52 @@ impl Builder {
         };
         let zk_bin = zk_info.bincode.clone();
 
-        let prover_witnesses = vec![
-            // Total number of gov tokens allocated
-            Witness::Base(Value::known(value_base)),
-            Witness::Scalar(Value::known(total_value_blind)),
-            // Vote
-            Witness::Base(Value::known(vote)),
-            Witness::Scalar(Value::known(vote_blind)),
-            // TODO: gov token
-        ];
+        //let prover_witnesses = vec![
+        //    // Total number of gov tokens allocated
+        //    Witness::Base(Value::known(value_base)),
+        //    Witness::Scalar(Value::known(total_value_blind)),
+        //    // Vote
+        //    Witness::Base(Value::known(vote)),
+        //    Witness::Scalar(Value::known(vote_blind)),
+        //    // TODO: gov token
+        //    Witness::Base(Value::known(vote.token_id)),
+        //    Witness::Base(Value::known(vote.token_blind)),
+        //];
 
-        let public_inputs = vec![
-            //TODO: token_commit
-            total_value_x,
-            total_value_y,
-            vote_commit_x,
-            vote_commit_y,
-        ];
+        //let public_inputs = vec![
+        //    //TODO: token_commit
+        //    total_value_x,
+        //    total_value_y,
+        //    vote_commit_x,
+        //    vote_commit_y,
+        //];
 
-        let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
+        //let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
 
-        let proving_key = &zk_info.proving_key;
-        let main_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
-            .expect("DAO::vote() proving error!");
-        proofs.push(main_proof);
+        //let proving_key = &zk_info.proving_key;
+        //debug!(target: "dao_contract::vote::wallet::Builder", "main_proof Proof::create()");
+        //let main_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
+        //    .expect("DAO::vote() proving error!");
+        //proofs.push(main_proof);
 
-        let note = Note { vote: self.vote, value: total_value };
-        let enc_note = note::encrypt(&note, &self.vote_keypair.public).unwrap();
+        //let note = Note { vote: self.vote, value: total_value };
+        //let enc_note = note::encrypt(&note, &self.vote_keypair.public).unwrap();
 
-        let header = Header { enc_note };
+        //let header = Header { enc_note };
 
-        let mut unsigned_tx_data = vec![];
-        header.encode(&mut unsigned_tx_data).expect("failed to encode data");
-        inputs.encode(&mut unsigned_tx_data).expect("failed to encode inputs");
-        proofs.encode(&mut unsigned_tx_data).expect("failed to encode proofs");
+        //let mut unsigned_tx_data = vec![];
+        //header.encode(&mut unsigned_tx_data).expect("failed to encode data");
+        //inputs.encode(&mut unsigned_tx_data).expect("failed to encode inputs");
+        //proofs.encode(&mut unsigned_tx_data).expect("failed to encode proofs");
 
-        let mut signatures = vec![];
-        for signature_secret in &signature_secrets {
-            let signature = signature_secret.sign(&unsigned_tx_data[..]);
-            signatures.push(signature);
-        }
+        //let mut signatures = vec![];
+        //for signature_secret in &signature_secrets {
+        //    let signature = signature_secret.sign(&unsigned_tx_data[..]);
+        //    signatures.push(signature);
+        //}
 
-        let call_data = CallData { header, inputs, signatures };
+        //let call_data = CallData { header, inputs, signatures };
+        let call_data = CallData {};
 
         FuncCall {
             contract_id: "DAO".to_string(),

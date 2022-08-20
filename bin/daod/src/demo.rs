@@ -258,9 +258,11 @@ pub async fn demo() -> Result<()> {
     debug!(target: "demo", "Loading dao-vote-main.zk");
     let zk_dao_vote_main_bincode = include_bytes!("../proof/dao-vote-main.zk.bin");
     let zk_dao_vote_main_bin = ZkBinary::decode(zk_dao_vote_main_bincode)?;
+    zk_bins.add_contract("dao-vote-main".to_string(), zk_dao_vote_main_bin, 13);
     debug!(target: "demo", "Loading dao-vote-burn.zk");
     let zk_dao_vote_burn_bincode = include_bytes!("../proof/dao-vote-burn.zk.bin");
     let zk_dao_vote_burn_bin = ZkBinary::decode(zk_dao_vote_burn_bincode)?;
+    zk_bins.add_contract("dao-vote-burn".to_string(), zk_dao_vote_burn_bin, 13);
 
     // State for money contracts
     let cashier_signature_secret = SecretKey::random(&mut OsRng);
@@ -719,6 +721,7 @@ pub async fn demo() -> Result<()> {
         (leaf_position, merkle_path)
     };
 
+    debug!(target: "demo", "Stage 5. Creating inputs...");
     let input = dao_contract::vote::wallet::BuilderInput {
         secret: gov_keypair_2.secret,
         note: gov_recv[1].note.clone(),
@@ -733,6 +736,7 @@ pub async fn demo() -> Result<()> {
     // We create a new keypair to encrypt the vote.
     let vote_keypair = Keypair::random(&mut OsRng);
 
+    debug!(target: "demo", "Stage 5. Creating builder...");
     let builder = dao_contract::vote::wallet::Builder {
         inputs: vec![input],
         vote: dao_contract::vote::wallet::Vote {
@@ -741,7 +745,23 @@ pub async fn demo() -> Result<()> {
             vote_option_blind: pallas::Scalar::random(&mut OsRng),
         },
         vote_keypair,
+        proposal,
     };
+    debug!(target: "demo", "Stage 5. build()...");
+    let func_call = builder.build(&zk_bins);
 
+    let tx = Transaction { func_calls: vec![func_call] };
+
+    //// Validator
+
+    for (idx, func_call) in tx.func_calls.iter().enumerate() {
+        if func_call.func_id == "DAO::vote()" {
+            debug!(target: "demo", "dao_contract::vote::state_transition()");
+
+            //let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
+            //    .expect("dao_contract::vote::validate::state_transition() failed!");
+            //dao_contract::vote::validate::apply(&mut states, update);
+        }
+    }
     Ok(())
 }

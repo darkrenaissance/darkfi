@@ -5,31 +5,24 @@ constant "DaoVoteInput" {
 }
 
 contract "DaoVoteInput" {
-	Base value,
-	Scalar value_blind,
-
-	Base gov_token_id,
-	Base gov_token_blind,
-
+	Base secret,
 	Base serial,
-
 	Base spend_hook,
 	Base user_data,
-
+	Base value,
+	Base gov_token_id,
+	Base coin_blind,
+	Scalar value_blind,
+	Base gov_token_blind,
 	Uint32 leaf_pos,
 	MerklePath path,
-
-    Base all_coins,
-	Base coin_blind,
-
-	Base secret,
 	Base signature_secret,
 }
 
 circuit "DaoVoteInput" {
 	# Poseidon hash of the nullifier
-	nullifier = poseidon_hash(secret, serial);
-	constrain_instance(nullifier);
+	# nullifier = poseidon_hash(secret, serial);
+	# constrain_instance(nullifier);
 
 	# Pedersen commitment for coin's value
 	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);

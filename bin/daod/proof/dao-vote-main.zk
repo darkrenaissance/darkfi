@@ -1,9 +1,6 @@
 constant "DaoVoteMain" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
-
-	EcFixedPointShort VOTE_COMMIT_OPTION,
-	EcFixedPoint VOTE_COMMIT_RANDOM,
 }
 
 contract "DaoVoteMain" {
@@ -27,8 +24,8 @@ circuit "DaoVoteMain" {
 	# Pedersen commitment for vote option
     # Make the weighted vote
     wv = base_mul(vote_option, total_value);
-	vco = ec_mul_short(wv, VOTE_COMMIT_OPTION);
-	vcr = ec_mul(vote_option_blind, VOTE_COMMIT_RANDOM);
+	vco = ec_mul_short(wv, VALUE_COMMIT_VALUE);
+	vcr = ec_mul(vote_option_blind, VALUE_COMMIT_RANDOM);
 	total_vote_commit = ec_add(vco, vcr);
 	# Since total_vote_commit is a curve point, we fetch its coordinates
 	# and constrain them:
