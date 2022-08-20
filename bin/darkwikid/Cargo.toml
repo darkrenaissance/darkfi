@@ -34,6 +34,7 @@ thiserror = "1.0.32"
 ctrlc-async = {version= "3.2.2", default-features = false, features = ["async-std", "termination"]}
 url = "2.2.2"
 fxhash = "0.2.1"
+colored = "2.0.0"
 
 # Encoding and parsing
 serde = {version = "1.0.142", features = ["derive"]}

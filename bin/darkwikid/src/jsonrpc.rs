@@ -12,7 +12,8 @@ use darkfi::{
 };
 
 pub struct JsonRpcInterface {
-    update_notifier: async_channel::Sender<()>,
+    sender: async_channel::Sender<String>,
+    receiver: async_channel::Receiver<Vec<Vec<(String, String)>>>,
 }
 
 #[async_trait]
@@ -26,6 +27,8 @@ impl RequestHandler for JsonRpcInterface {
 
         let rep = match req.method.as_str() {
             Some("update") => self.update(req.id, params).await,
+            Some("dry_run") => self.dry_run(req.id, params).await,
+            Some("log") => self.log(req.id, params).await,
             Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         };
 
@@ -34,22 +37,58 @@ impl RequestHandler for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
-    pub fn new(update_notifier: async_channel::Sender<()>) -> Self {
-        Self { update_notifier }
+    pub fn new(
+        sender: async_channel::Sender<String>,
+        receiver: async_channel::Receiver<Vec<Vec<(String, String)>>>,
+    ) -> Self {
+        Self { sender, receiver }
     }
 
     // RPCAPI:
     // Update files in ~/darkwiki
     // --> {"jsonrpc": "2.0", "method": "update", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [[(String, String)]], "id": 1}
     async fn update(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let res = self.update_notifier.send(()).await.map_err(Error::from);
+        let res = self.sender.send("update".into()).await.map_err(Error::from);
 
         if let Err(e) = res {
             error!("Failed to update: {}", e);
             return JsonError::new(ErrorCode::InternalError, None, id).into()
         }
 
-        JsonResponse::new(json!(true), id).into()
+        let response = self.receiver.recv().await.unwrap();
+        JsonResponse::new(json!(response), id).into()
+    }
+
+    // RPCAPI:
+    // Update files in darkwiki (dry_run)
+    // --> {"jsonrpc": "2.0", "method": "dry_run", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [[(String, String)]], "id": 1}
+    async fn dry_run(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let res = self.sender.send("dry_run".into()).await.map_err(Error::from);
+
+        if let Err(e) = res {
+            error!("Failed to update(dry run): {}", e);
+            return JsonError::new(ErrorCode::InternalError, None, id).into()
+        }
+
+        let response = self.receiver.recv().await.unwrap();
+        JsonResponse::new(json!(response), id).into()
+    }
+
+    // RPCAPI:
+    // Show all patches
+    // --> {"jsonrpc": "2.0", "method": "log", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [[(String, String)]], "id": 1}
+    async fn log(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let res = self.sender.send("log".into()).await.map_err(Error::from);
+
+        if let Err(e) = res {
+            error!("Failed to show all patches: {}", e);
+            return JsonError::new(ErrorCode::InternalError, None, id).into()
+        }
+
+        let response = self.receiver.recv().await.unwrap();
+        JsonResponse::new(json!(response), id).into()
     }
 }

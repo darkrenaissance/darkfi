@@ -38,6 +38,8 @@ use error::DarkWikiResult;
 use jsonrpc::JsonRpcInterface;
 use patch::{OpMethod, Patch};
 
+type Patches = (Vec<Patch>, Vec<Patch>, Vec<Patch>, Vec<Patch>);
+
 pub const CONFIG_FILE: &str = "darkwiki.toml";
 pub const CONFIG_FILE_CONTENTS: &str = include_str!("../darkwiki.toml");
 
@@ -146,8 +148,11 @@ fn title_to_id(title: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-fn on_receive_update(settings: &DarkWikiSettings) -> DarkWikiResult<Vec<Patch>> {
+fn on_receive_update(settings: &DarkWikiSettings, dry: bool) -> DarkWikiResult<Patches> {
     let mut patches: Vec<Patch> = vec![];
+    let mut local_patches: Vec<Patch> = vec![];
+    let mut sync_patches: Vec<Patch> = vec![];
+    let mut merge_patches: Vec<Patch> = vec![];
 
     let local_path = settings.datastore_path.join("local");
     let sync_path = settings.datastore_path.join("sync");
@@ -187,12 +192,19 @@ fn on_receive_update(settings: &DarkWikiSettings) -> DarkWikiResult<Vec<Patch>> 
 
             new_patch.base = local_patch.to_string();
 
+            local_patches.push(new_patch.clone());
+
             // check if the same doc has received patch from the network
             if let Ok(sync_patch) = load_json_file::<Patch>(&sync_path.join(&doc_id)) {
                 if sync_patch.timestamp != local_patch.timestamp {
+                    sync_patches.push(sync_patch.clone());
+
                     let sync_patch_t = new_patch.transform(&sync_patch);
                     new_patch = new_patch.merge(&sync_patch_t);
-                    save_file(&docs_path.join(doc_title), &new_patch.to_string())?;
+                    if !dry {
+                        save_file(&docs_path.join(doc_title), &new_patch.to_string())?;
+                    }
+                    merge_patches.push(new_patch.clone());
                 }
             }
 
@@ -200,11 +212,14 @@ fn on_receive_update(settings: &DarkWikiSettings) -> DarkWikiResult<Vec<Patch>> 
             b_patch.base = "".to_string();
         } else {
             new_patch.base = edit.to_string();
+            local_patches.push(new_patch.clone());
             b_patch = new_patch.clone();
         };
 
-        save_json_file(&local_path.join(&doc_id), &new_patch)?;
-        save_json_file(&sync_path.join(doc_id), &new_patch)?;
+        if !dry {
+            save_json_file(&local_path.join(&doc_id), &new_patch)?;
+            save_json_file(&sync_path.join(doc_id), &new_patch)?;
+        }
         patches.push(b_patch);
     }
 
@@ -223,26 +238,56 @@ fn on_receive_update(settings: &DarkWikiSettings) -> DarkWikiResult<Vec<Patch>> 
             }
         }
 
-        save_file(&docs_path.join(&sync_patch.title), &sync_patch.to_string())?;
-        save_json_file(&local_path.join(file_id), &sync_patch)?;
+        if !dry {
+            save_file(&docs_path.join(&sync_patch.title), &sync_patch.to_string())?;
+            save_json_file(&local_path.join(file_id), &sync_patch)?;
+        }
+
+        sync_patches.push(sync_patch);
     }
 
-    Ok(patches)
+    Ok((patches, local_patches, sync_patches, merge_patches))
 }
 
 async fn start(
-    update_notifier_rv: async_channel::Receiver<()>,
+    rpc_rv: async_channel::Receiver<String>,
+    notify_sx: async_channel::Sender<Vec<Vec<(String, String)>>>,
     raft_sender: async_channel::Sender<Patch>,
     raft_receiver: async_channel::Receiver<Patch>,
     settings: DarkWikiSettings,
 ) -> DarkWikiResult<()> {
     loop {
         select! {
-            _ = update_notifier_rv.recv().fuse() => {
-                let patches = on_receive_update(&settings)?;
-                for patch in patches {
-                    info!("Send a patch to Raft {:?}", patch);
-                    raft_sender.send(patch).await.map_err(Error::from)?;
+            command = rpc_rv.recv().fuse() => {
+                let command = command.unwrap();
+                match command.as_str() {
+                    "update" | "dry_run" => {
+                        let dry = command.as_str() == "dry_run";
+                        let (patches, local, sync, merge) = on_receive_update(&settings, dry)?;
+
+                        if !dry {
+                            for patch in patches {
+                                info!("Send a patch to Raft {:?}", patch);
+                                raft_sender.send(patch.clone()).await.map_err(Error::from)?;
+                            }
+                        }
+
+                        let local: Vec<(String, String)> =
+                            local.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
+
+                        let sync: Vec<(String, String)> =
+                            sync.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
+
+                        let merge: Vec<(String, String)> =
+                            merge.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
+
+                        notify_sx.send(vec![local, sync, merge]).await.map_err(Error::from)?;
+                    }
+                    "log" => {
+                        // TODO
+                        notify_sx.send(vec![]).await.map_err(Error::from)?;
+                    }
+                    _ => {}
                 }
             }
             patch = raft_receiver.recv().fuse() => {
@@ -264,12 +309,13 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     create_dir_all(datastore_path.join("local"))?;
     create_dir_all(datastore_path.join("sync"))?;
 
-    let (update_notifier_sx, update_notifier_rv) = async_channel::unbounded::<()>();
+    let (rpc_sx, rpc_rv) = async_channel::unbounded::<String>();
+    let (notify_sx, notify_rv) = async_channel::unbounded::<Vec<Vec<(String, String)>>>();
 
     //
     // RPC
     //
-    let rpc_interface = Arc::new(JsonRpcInterface::new(update_notifier_sx));
+    let rpc_interface = Arc::new(JsonRpcInterface::new(rpc_sx, notify_rv));
     executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface)).detach();
 
     //
@@ -314,7 +360,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     let darkwiki_settings = DarkWikiSettings { author: settings.author, datastore_path, docs_path };
     executor
-        .spawn(start(update_notifier_rv, raft.sender(), raft.receiver(), darkwiki_settings))
+        .spawn(start(rpc_rv, notify_sx, raft.sender(), raft.receiver(), darkwiki_settings))
         .detach();
 
     //

@@ -1349,6 +1349,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "chrono",
+ "colored",
  "crypto_box",
  "ctrlc-async",
  "darkfi",

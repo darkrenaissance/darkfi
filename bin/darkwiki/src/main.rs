@@ -26,6 +26,16 @@ struct Args {
     endpoint: Url,
 }
 
+fn print_patches(value: &Vec<serde_json::Value>) {
+    for res in value {
+        let res = res.as_array().unwrap();
+        let (title, changes) = (res[0].as_str().unwrap(), res[1].as_str().unwrap());
+        println!("FILE: {}", title);
+        println!("{}", changes);
+        println!("----------------------------------");
+    }
+}
+
 #[async_std::main]
 async fn main() -> Result<()> {
     let args = Args::from_args();
@@ -44,6 +54,39 @@ async fn main() -> Result<()> {
         JsonRequest::new("update", json!([]))
     };
 
-    rpc_client.request(req).await?;
+    let result = rpc_client.request(req).await?;
+
+    if !args.log {
+        let result = result.as_array().unwrap();
+        let local_patches = result[0].as_array().unwrap();
+        let sync_patches = result[1].as_array().unwrap();
+        let merge_patches = result[2].as_array().unwrap();
+
+        if !local_patches.is_empty() {
+            println!("");
+            println!("PUBLISH LOCAL PATCHES:");
+            println!("");
+            print_patches(local_patches);
+        }
+
+        if !sync_patches.is_empty() {
+            println!("");
+            println!("RECEIVED PATCHES:");
+            println!("");
+            print_patches(sync_patches);
+        }
+
+        if !merge_patches.is_empty() {
+            println!("");
+            println!("MERGE:");
+            println!("");
+            print_patches(merge_patches);
+        }
+    }
+
+    if args.log {
+        todo!("TODO");
+    }
+
     rpc_client.close().await
 }

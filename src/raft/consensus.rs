@@ -167,14 +167,12 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
 
             // send pending messages
-            if !self.pending_msgs.is_empty() {
-                if self.role != Role::Candidate {
-                    let pending_msgs = self.pending_msgs.clone();
-                    for m in &pending_msgs {
-                        result = self.broadcast_msg(m, None).await;
-                    }
-                    self.pending_msgs = vec![];
+            if !self.pending_msgs.is_empty() && self.role != Role::Candidate {
+                let pending_msgs = self.pending_msgs.clone();
+                for m in &pending_msgs {
+                    result = self.broadcast_msg(m, None).await;
                 }
+                self.pending_msgs = vec![];
             }
 
             match result {

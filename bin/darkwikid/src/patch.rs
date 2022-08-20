@@ -1,5 +1,6 @@
 use std::{cmp::Ordering, io};
 
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
 use darkfi::util::{
@@ -31,39 +32,36 @@ pub struct Patch {
 
 impl std::string::ToString for Patch {
     fn to_string(&self) -> String {
-        let mut st = vec![];
-        let mut index: usize = 0;
+        if self.ops.0.is_empty() {
+            return self.base.clone()
+        }
 
+        let mut st = vec![];
         st.extend(str_to_chars(&self.base));
+        let st = &mut st.iter();
+
+        let mut new_st: Vec<&str> = vec![];
+
         for op in self.ops.0.iter() {
             match op {
                 OpMethod::Retain(n) => {
-                    index += *n as usize;
+                    for c in st.take(*n as usize) {
+                        new_st.push(c);
+                    }
                 }
                 OpMethod::Delete(n) => {
-                    if (index + (*n as usize)) > st.len() {
-                        if index < st.len() {
-                            st.drain(index..st.len());
-                        }
-                    } else {
-                        st.drain(index..(index + *n as usize));
+                    for _ in 0..*n {
+                        st.next();
                     }
                 }
                 OpMethod::Insert(insert) => {
                     let chars = str_to_chars(insert);
-                    for c in chars {
-                        if index > st.len() {
-                            st.push(c);
-                        } else {
-                            st.insert(index, c);
-                            index += 1;
-                        }
-                    }
+                    new_st.extend(chars);
                 }
             }
         }
 
-        st.join("")
+        new_st.join("")
     }
 }
 
@@ -157,14 +155,19 @@ impl Patch {
         let mut op1 = ops1.next();
         let mut op2 = ops2.next();
         loop {
-            if op2.is_none() {
-                break
-            }
-
-            if op1.is_none() {
-                new_patch.add_op(op2.as_ref().unwrap());
-                op2 = ops2.next();
-                continue
+            match (&op1, &op2) {
+                (None, None) => break,
+                (None, Some(op)) => {
+                    new_patch.add_op(op);
+                    op2 = ops2.next();
+                    continue
+                }
+                (Some(op), None) => {
+                    new_patch.add_op(op);
+                    op1 = ops1.next();
+                    continue
+                }
+                _ => {}
             }
 
             match (op1.as_ref().unwrap(), op2.as_ref().unwrap()) {
@@ -257,14 +260,19 @@ impl Patch {
         let mut op2 = ops2.next();
 
         loop {
-            if op2.is_none() {
-                break
-            }
-
-            if op1.is_none() {
-                new_patch.add_op(op2.as_ref().unwrap());
-                op2 = ops2.next();
-                continue
+            match (&op1, &op2) {
+                (None, None) => break,
+                (None, Some(op)) => {
+                    new_patch.add_op(op);
+                    op2 = ops2.next();
+                    continue
+                }
+                (Some(op), None) => {
+                    new_patch.add_op(op);
+                    op1 = ops1.next();
+                    continue
+                }
+                _ => {}
             }
 
             match (op1.as_ref().unwrap(), op2.as_ref().unwrap()) {
@@ -355,6 +363,44 @@ impl Patch {
         }
 
         new_patch
+    }
+
+    pub fn colorize(&self) -> String {
+        if self.ops.0.is_empty() {
+            return format!("{}", self.base.green())
+        }
+
+        let mut st = vec![];
+        st.extend(str_to_chars(&self.base));
+        let st = &mut st.iter();
+
+        let mut colorized_str: Vec<String> = vec![];
+
+        for op in self.ops.0.iter() {
+            match op {
+                OpMethod::Retain(n) => {
+                    for c in st.take(*n as usize) {
+                        colorized_str.push(c.to_string());
+                    }
+                }
+                OpMethod::Delete(n) => {
+                    let mut deleted_part = vec![];
+                    for _ in 0..*n {
+                        let s = st.next();
+                        if let Some(s) = s {
+                            deleted_part.push(s.to_string());
+                        }
+                    }
+                    colorized_str.push(format!("{}", deleted_part.join("").red()));
+                }
+                OpMethod::Insert(insert) => {
+                    let chars = str_to_chars(insert);
+                    colorized_str.push(format!("{}", chars.join("").green()));
+                }
+            }
+        }
+
+        colorized_str.join("")
     }
 }
 
