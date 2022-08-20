@@ -25,9 +25,9 @@ circuit "DaoVoteMain" {
 	constrain_instance(token_commit);
 
 	# Pedersen commitment for vote option
-    # vote_option * total_value
-
-	vco = ec_mul_short(vote_option, VOTE_COMMIT_OPTION);
+    # Make the weighted vote
+    wv = base_mul(vote_option, total_value);
+	vco = ec_mul_short(wv, VOTE_COMMIT_OPTION);
 	vcr = ec_mul(vote_option_blind, VOTE_COMMIT_RANDOM);
 	total_vote_commit = ec_add(vco, vcr);
 	# Since total_vote_commit is a curve point, we fetch its coordinates
