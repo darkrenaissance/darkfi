@@ -81,8 +81,7 @@ impl SeedSyncSession {
 
         // Seed process complete
         if self.p2p().hosts().is_empty().await {
-            error!("Hosts pool still empty after seeding");
-            return Err(Error::NetworkOperationFailed)
+            warn!("Hosts pool still empty after seeding");
         }
 
         debug!(target: "net", "SeedSyncSession::start() [END]");
