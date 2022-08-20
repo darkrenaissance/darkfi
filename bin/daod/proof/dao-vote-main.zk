@@ -51,7 +51,7 @@ circuit "DaoVoteMain" {
     # This is the main check
     # TODO: vote option should be 0 or 1
     #
-    # assert!(vote_option == 0 OR vote_option == 1)
+    # assert!(vote_option == 0 || vote_option == 1)
     #
 }
 

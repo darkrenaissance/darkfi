@@ -255,7 +255,6 @@ pub async fn demo() -> Result<()> {
     let zk_dao_propose_burn_bincode = include_bytes!("../proof/dao-propose-burn.zk.bin");
     let zk_dao_propose_burn_bin = ZkBinary::decode(zk_dao_propose_burn_bincode)?;
     zk_bins.add_contract("dao-propose-burn".to_string(), zk_dao_propose_burn_bin, 13);
-
     debug!(target: "demo", "Loading dao-vote-main.zk");
     let zk_dao_vote_main_bincode = include_bytes!("../proof/dao-vote-main.zk.bin");
     let zk_dao_vote_main_bin = ZkBinary::decode(zk_dao_vote_main_bincode)?;
@@ -705,6 +704,41 @@ pub async fn demo() -> Result<()> {
     // Fix: use nullifiers from money gov state only from
     // beginning of gov period
     // Cannot use nullifiers from before voting period
+
+    debug!(target: "demo", "Stage 5. Start voting");
+
+    let (money_leaf_position, money_merkle_path) = {
+        let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
+        let tree = &state.tree;
+        let leaf_position = gov_recv[0].leaf_position.clone();
+        let root = tree.root(0).unwrap();
+        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        (leaf_position, merkle_path)
+    };
+
+    let input = dao_contract::vote::wallet::BuilderInput {
+        secret: gov_keypair_2.secret,
+        note: gov_recv[1].note.clone(),
+        leaf_position: money_leaf_position,
+        merkle_path: money_merkle_path,
+    };
+
+    let vote_option: bool = true;
+
+    assert!(vote_option == true || vote_option == false);
+
+    // We create a new keypair to encrypt the vote.
+    let vote_keypair = Keypair::random(&mut OsRng);
+
+    let builder = dao_contract::vote::wallet::Builder {
+        inputs: vec![input],
+        vote: dao_contract::vote::wallet::Vote {
+            value_blind: pallas::Scalar::random(&mut OsRng),
+            vote_option,
+            vote_option_blind: pallas::Scalar::random(&mut OsRng),
+        },
+        vote_keypair,
+    };
 
     Ok(())
 }

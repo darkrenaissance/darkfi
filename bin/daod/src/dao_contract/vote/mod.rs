@@ -1,2 +1,2 @@
-//pub mod validate;
-//pub mod wallet;
+pub mod validate;
+pub mod wallet;
