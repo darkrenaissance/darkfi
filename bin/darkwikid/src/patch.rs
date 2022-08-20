@@ -21,12 +21,12 @@ pub struct OpMethods(pub Vec<OpMethod>);
 
 #[derive(PartialEq, Eq, SerialEncodable, SerialDecodable, Serialize, Deserialize, Clone, Debug)]
 pub struct Patch {
-    title: String,
-    author: String,
-    id: String,
-    base: String,
+    pub title: String,
+    pub author: String,
+    pub id: String,
+    pub base: String,
+    pub timestamp: Timestamp,
     ops: OpMethods,
-    timestamp: Timestamp,
 }
 
 impl std::string::ToString for Patch {
@@ -129,28 +129,12 @@ impl Patch {
         self.add_op(&OpMethod::Delete(n));
     }
 
-    pub fn set_base(&mut self, base: &str) {
-        self.base = base.to_owned();
-    }
-
     pub fn set_ops(&mut self, ops: OpMethods) {
         self.ops = ops;
     }
 
     pub fn extend_ops(&mut self, ops: OpMethods) {
         self.ops.0.extend(ops.0);
-    }
-
-    pub fn base_empty(&self) -> bool {
-        self.base.is_empty()
-    }
-
-    pub fn id(&self) -> String {
-        self.id.clone()
-    }
-
-    pub fn title(&self) -> String {
-        self.title.clone()
     }
 
     pub fn ops(&self) -> OpMethods {
@@ -165,7 +149,7 @@ impl Patch {
     // TODO need more work to get better performance with iterators
     pub fn transform(&self, other: &Self) -> Self {
         let mut new_patch = Self::new(&self.title, &self.id, &self.author);
-        new_patch.set_base(&self.base);
+        new_patch.base = self.base.clone();
 
         let mut ops1 = self.ops.0.iter().cloned();
         let mut ops2 = other.ops.0.iter().cloned();
@@ -267,7 +251,7 @@ impl Patch {
         let mut ops2 = other.ops.0.iter().cloned();
 
         let mut new_patch = Self::new(&self.title, &self.id, &self.author);
-        new_patch.set_base(&self.base);
+        new_patch.base = self.base.clone();
 
         let mut op1 = ops1.next();
         let mut op2 = ops2.next();
@@ -439,7 +423,7 @@ mod tests {
     #[test]
     fn test_to_string() {
         let mut patch = Patch::new("", &gen_id(30), "");
-        patch.set_base("text example\n hello");
+        patch.base = "text example\n hello".to_string();
         patch.retain(14);
         patch.delete(5);
         patch.insert("hey");
@@ -451,7 +435,7 @@ mod tests {
     fn test_merge() {
         let mut patch_init = Patch::new("", &gen_id(30), "");
         let base = "text example\n hello";
-        patch_init.set_base(base);
+        patch_init.base = base.to_string();
 
         let mut patch1 = patch_init.clone();
         patch1.retain(14);
@@ -489,7 +473,7 @@ mod tests {
     fn test_transform() {
         let mut patch_init = Patch::new("", &gen_id(30), "");
         let base = "text example\n hello";
-        patch_init.set_base(base);
+        patch_init.base = base.to_string();
 
         let mut patch1 = patch_init.clone();
         patch1.retain(14);

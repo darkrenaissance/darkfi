@@ -1,8 +1,7 @@
 use async_std::sync::{Arc, Mutex};
 use std::{
     fs::{create_dir_all, read_dir},
-    mem::discriminant,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use async_executor::Executor;
@@ -10,6 +9,7 @@ use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{error, info, warn};
 use serde::Deserialize;
+use sha2::Digest;
 use smol::future;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -25,7 +25,6 @@ use darkfi::{
         cli::{get_log_config, get_log_level, spawn_config},
         expand_path,
         file::{load_file, load_json_file, save_file, save_json_file},
-        gen_id,
         path::get_config_path,
     },
     Error, Result,
@@ -35,7 +34,7 @@ mod error;
 mod jsonrpc;
 mod patch;
 
-use error::{DarkWikiError, DarkWikiResult};
+use error::DarkWikiResult;
 use jsonrpc::JsonRpcInterface;
 use patch::{OpMethod, Patch};
 
@@ -79,27 +78,6 @@ fn str_to_chars(s: &str) -> Vec<&str> {
     s.graphemes(true).collect::<Vec<&str>>()
 }
 
-fn get_from_index(local_path: &Path, title: &str) -> DarkWikiResult<String> {
-    let index = load_json_file::<FxHashMap<String, String>>(&local_path.join("index"))?;
-
-    for (i, t) in index {
-        if t == title {
-            return Ok(i)
-        }
-    }
-
-    Err(DarkWikiError::FileNotFound)
-}
-
-fn save_to_index(local_path: &Path, id: &str, title: &str) -> DarkWikiResult<()> {
-    let mut index = load_json_file::<FxHashMap<String, String>>(&local_path.join("index"))
-        .unwrap_or(FxHashMap::default());
-
-    index.insert(id.to_owned(), title.to_owned());
-    save_json_file(&local_path.join("index"), &index)?;
-    Ok(())
-}
-
 fn lcs(a: &str, b: &str) -> Vec<OpMethod> {
     let a: Vec<_> = str_to_chars(a);
     let b: Vec<_> = str_to_chars(b);
@@ -135,26 +113,37 @@ fn lcs(a: &str, b: &str) -> Vec<OpMethod> {
 }
 
 fn on_receive_patch(received_patch: &Patch, settings: &DarkWikiSettings) -> DarkWikiResult<()> {
-    let sync_id_path = settings.datastore_path.join("sync").join(&received_patch.id());
-    let local_id_path = settings.datastore_path.join("local").join(&received_patch.id());
+    let sync_id_path = settings.datastore_path.join("sync").join(&received_patch.id);
+    let local_id_path = settings.datastore_path.join("local").join(&received_patch.id);
 
     if let Ok(mut sync_patch) = load_json_file::<Patch>(&sync_id_path) {
-        if let Ok(local_edit) = load_file(&local_id_path) {
-            let local_edit = local_edit.trim();
+        if sync_patch.timestamp == received_patch.timestamp {
+            return Ok(())
+        }
 
-            if local_edit == sync_patch.to_string() {
+        if let Ok(local_patch) = load_json_file::<Patch>(&local_id_path) {
+            if local_patch.timestamp == sync_patch.timestamp {
+                sync_patch.base = local_patch.to_string();
                 sync_patch.set_ops(received_patch.ops());
             } else {
                 sync_patch.extend_ops(received_patch.ops());
             }
         }
 
+        sync_patch.timestamp = received_patch.timestamp;
+        sync_patch.author = received_patch.author.clone();
         save_json_file::<Patch>(&sync_id_path, &sync_patch)?;
-    } else if !received_patch.base_empty() {
+    } else if !received_patch.base.is_empty() {
         save_json_file::<Patch>(&sync_id_path, received_patch)?;
     }
 
     Ok(())
+}
+
+fn title_to_id(title: &str) -> String {
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(title);
+    hex::encode(hasher.finalize())
 }
 
 fn on_receive_update(settings: &DarkWikiSettings) -> DarkWikiResult<Vec<Patch>> {
@@ -171,59 +160,52 @@ fn on_receive_update(settings: &DarkWikiSettings) -> DarkWikiResult<Vec<Patch>> 
         let doc_title = doc.as_ref().unwrap().file_name();
         let doc_title = doc_title.to_str().unwrap();
 
-        let doc_id = match get_from_index(&local_path, doc_title) {
-            Ok(id) => id,
-            Err(_) => {
-                let id = gen_id(30);
-                save_to_index(&local_path, &id, doc_title)?;
-                id
-            }
-        };
-
         // load doc content
         let edit = load_file(&docs_path.join(doc_title)).map_err(Error::from)?;
         let edit = edit.trim();
 
+        let doc_id = title_to_id(doc_title);
+
         // create new patch
         let mut new_patch = Patch::new(doc_title, &doc_id, &settings.author);
+        let mut b_patch;
 
         // check for any changes found with local doc and darkwiki doc
-        if let Ok(local_edit) = load_file(&local_path.join(&doc_id)) {
-            let local_edit = local_edit.trim();
-
-            // check the differences with LCS algorithm
-            let lcs_ops = lcs(local_edit, edit);
-
-            let retains_len = lcs_ops
-                .iter()
-                .filter(|&o| discriminant(&OpMethod::Retain(0)) == discriminant(o))
-                .count();
-
-            // if all the ops in lcs_ops are Reatin then no changes found
-            if retains_len == lcs_ops.len() {
+        if let Ok(local_patch) = load_json_file::<Patch>(&local_path.join(&doc_id)) {
+            // no changes found
+            if local_patch.to_string() == edit {
                 continue
             }
+
+            // check the differences with LCS algorithm
+            let lcs_ops = lcs(&local_patch.to_string(), edit);
 
             // add the change ops to the new patch
             for op in lcs_ops {
                 new_patch.add_op(&op);
             }
 
+            new_patch.base = local_patch.to_string();
+
             // check if the same doc has received patch from the network
             if let Ok(sync_patch) = load_json_file::<Patch>(&sync_path.join(&doc_id)) {
-                if sync_patch.to_string() != local_edit {
+                if sync_patch.timestamp != local_patch.timestamp {
                     let sync_patch_t = new_patch.transform(&sync_patch);
                     new_patch = new_patch.merge(&sync_patch_t);
                     save_file(&docs_path.join(doc_title), &new_patch.to_string())?;
                 }
             }
+
+            b_patch = new_patch.clone();
+            b_patch.base = "".to_string();
         } else {
-            new_patch.set_base(edit);
+            new_patch.base = edit.to_string();
+            b_patch = new_patch.clone();
         };
 
-        save_file(&local_path.join(&doc_id), &new_patch.to_string())?;
+        save_json_file(&local_path.join(&doc_id), &new_patch)?;
         save_json_file(&sync_path.join(doc_id), &new_patch)?;
-        patches.push(new_patch);
+        patches.push(b_patch);
     }
 
     // check if a new patch received
@@ -235,18 +217,14 @@ fn on_receive_update(settings: &DarkWikiSettings) -> DarkWikiResult<Vec<Patch>> 
         let file_path = sync_path.join(&file_id);
         let sync_patch: Patch = load_json_file(&file_path)?;
 
-        if let Ok(local_edit) = load_file(&local_path.join(&file_id)) {
-            if local_edit.trim() == sync_patch.to_string() {
+        if let Ok(local_patch) = load_json_file::<Patch>(&local_path.join(&file_id)) {
+            if local_patch.timestamp == sync_patch.timestamp {
                 continue
             }
         }
 
-        let sync_patch_str = sync_patch.to_string();
-        let file_title = sync_patch.title();
-        save_to_index(&local_path, file_id, &file_title)?;
-
-        save_file(&docs_path.join(&file_title), &sync_patch_str)?;
-        save_file(&local_path.join(file_id), &sync_patch_str)?;
+        save_file(&docs_path.join(&sync_patch.title), &sync_patch.to_string())?;
+        save_json_file(&local_path.join(file_id), &sync_patch)?;
     }
 
     Ok(patches)
