@@ -31,6 +31,8 @@ impl PrivmsgsBuffer {
             if privmsg.timestamp > last_msg.timestamp {
                 self.0.push(privmsg.clone());
             }
+        } else {
+            self.0.push(privmsg.clone());
         }
     }
 
