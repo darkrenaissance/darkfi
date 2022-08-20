@@ -4,13 +4,13 @@ use futures::{io::WriteHalf, AsyncRead, AsyncWrite, AsyncWriteExt};
 use fxhash::FxHashMap;
 use log::{debug, info, warn};
 use rand::{rngs::OsRng, RngCore};
-use ringbuffer::{RingBufferExt, RingBufferWrite};
+use ringbuffer::RingBufferWrite;
 
-use darkfi::{net::P2pPtr, system::SubscriberPtr, Error, Result};
+use darkfi::{net::P2pPtr, system::SubscriberPtr, util::Timestamp, Error, Result};
 
 use crate::{
     crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
-    privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
+    privmsg::{ArcPrivmsgsBuffer, Privmsg, SeenMsgIds},
     ChannelInfo, MAXIMUM_LENGTH_OF_MESSAGE, MAXIMUM_LENGTH_OF_NICKNAME,
 };
 
@@ -25,7 +25,7 @@ pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'stati
     peer_address: SocketAddr,
     // msg ids
     seen_msg_ids: SeenMsgIds,
-    privmsgs_buffer: PrivmsgsBuffer,
+    privmsgs_buffer: ArcPrivmsgsBuffer,
     // user & channels
     is_nick_init: bool,
     is_user_init: bool,
@@ -50,7 +50,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         write_stream: WriteHalf<C>,
         peer_address: SocketAddr,
         seen_msg_ids: SeenMsgIds,
-        privmsgs_buffer: PrivmsgsBuffer,
+        privmsgs_buffer: ArcPrivmsgsBuffer,
         auto_channels: Vec<String>,
         password: String,
         configured_chans: FxHashMap<String, ChannelInfo>,
@@ -217,6 +217,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                     nickname: self.nickname.clone(),
                     target: target.to_string().clone(),
                     message,
+                    timestamp: Timestamp::current_time(),
                 };
 
                 if target.starts_with('#') {
@@ -393,7 +394,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
     async fn on_receive_privmsg(&mut self, privmsg: Privmsg) -> Result<()> {
         {
             (*self.seen_msg_ids.lock().await).push(privmsg.id);
-            (*self.privmsgs_buffer.lock().await).push(privmsg.clone())
+            (*self.privmsgs_buffer.lock().await).push(&privmsg)
         }
 
         self.senders.notify_with_exclude(privmsg.clone(), &[self.subscriber_id]).await;

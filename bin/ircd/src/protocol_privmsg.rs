@@ -7,7 +7,7 @@ use ringbuffer::{RingBufferExt, RingBufferWrite};
 
 use darkfi::{net, Result};
 
-use crate::privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds};
+use crate::privmsg::{ArcPrivmsgsBuffer, Privmsg, SeenMsgIds};
 
 pub struct ProtocolPrivmsg {
     jobsman: net::ProtocolJobsManagerPtr,
@@ -15,7 +15,7 @@ pub struct ProtocolPrivmsg {
     msg_sub: net::MessageSubscription<Privmsg>,
     p2p: net::P2pPtr,
     msg_ids: SeenMsgIds,
-    msgs: PrivmsgsBuffer,
+    msgs: ArcPrivmsgsBuffer,
     channel: net::ChannelPtr,
 }
 
@@ -25,7 +25,7 @@ impl ProtocolPrivmsg {
         notify_queue_sender: async_channel::Sender<Privmsg>,
         p2p: net::P2pPtr,
         msg_ids: SeenMsgIds,
-        msgs: PrivmsgsBuffer,
+        msgs: ArcPrivmsgsBuffer,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Privmsg>().await;
@@ -70,7 +70,7 @@ impl ProtocolPrivmsg {
             }
 
             // add the msg to the buffer
-            self.msgs.lock().await.push(msg.clone());
+            self.msgs.lock().await.push(&msg);
 
             self.notify_queue_sender.send(msg.clone()).await?;
 

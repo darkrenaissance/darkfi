@@ -34,7 +34,7 @@ pub mod server;
 pub mod settings;
 
 use crate::{
-    privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
+    privmsg::{ArcPrivmsgsBuffer, Privmsg, PrivmsgsBuffer, SeenMsgIds},
     protocol_privmsg::ProtocolPrivmsg,
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
@@ -45,14 +45,14 @@ use crate::{
 };
 
 const SIZE_OF_MSG_IDSS_BUFFER: usize = 65536;
-const SIZE_OF_MSGS_BUFFER: usize = 4096;
+pub const SIZE_OF_MSGS_BUFFER: usize = 4096;
 pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
 pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 32;
 
 struct Ircd {
     // msgs
     seen_msg_ids: SeenMsgIds,
-    privmsgs_buffer: PrivmsgsBuffer,
+    privmsgs_buffer: ArcPrivmsgsBuffer,
     // channels
     autojoin_chans: Vec<String>,
     configured_chans: FxHashMap<String, ChannelInfo>,
@@ -66,7 +66,7 @@ struct Ircd {
 impl Ircd {
     fn new(
         seen_msg_ids: SeenMsgIds,
-        privmsgs_buffer: PrivmsgsBuffer,
+        privmsgs_buffer: ArcPrivmsgsBuffer,
         autojoin_chans: Vec<String>,
         password: String,
         configured_chans: FxHashMap<String, ChannelInfo>,
@@ -168,8 +168,7 @@ async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let seen_msg_ids =
         Arc::new(Mutex::new(ringbuffer::AllocRingBuffer::with_capacity(SIZE_OF_MSG_IDSS_BUFFER)));
-    let privmsgs_buffer: PrivmsgsBuffer =
-        Arc::new(Mutex::new(ringbuffer::AllocRingBuffer::with_capacity(SIZE_OF_MSGS_BUFFER)));
+    let privmsgs_buffer = PrivmsgsBuffer::new();
 
     if settings.gen_secret {
         let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
