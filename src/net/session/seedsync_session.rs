@@ -11,7 +11,7 @@ use log::*;
 use serde_json::json;
 use url::Url;
 
-use crate::{Error, Result};
+use crate::Result;
 
 use super::{
     super::{Connector, P2p},
