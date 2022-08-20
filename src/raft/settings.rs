@@ -26,7 +26,7 @@ impl Default for RaftSettings {
     fn default() -> Self {
         Self {
             heartbeat_timeout: 500,
-            timeout: 6000,
+            timeout: 3000,
             prun_messages_duration: 120,
             prun_nodes_ids_duration: 120,
             node_id_timeout: 16,

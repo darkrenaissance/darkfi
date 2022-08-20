@@ -15,8 +15,12 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let self_id = self.id();
 
         self.set_current_term(&(self.current_term()? + 1))?;
-        info!(target: "raft", "Set the node role as Candidate");
-        self.role = Role::Candidate;
+
+        if self.role != Role::Candidate {
+            info!(target: "raft", "Set the node role as Candidate");
+            self.role = Role::Candidate;
+        }
+
         self.set_voted_for(&Some(self_id.clone()))?;
         self.votes_received = vec![];
         self.votes_received.push(self_id.clone());

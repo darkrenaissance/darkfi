@@ -62,6 +62,8 @@ pub struct Raft<T> {
     seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
 
     settings: RaftSettings,
+
+    pending_msgs: Vec<T>,
 }
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
@@ -108,6 +110,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             datastore,
             seen_msgs,
             settings,
+            pending_msgs: vec![],
         })
     }
 
@@ -147,7 +150,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             };
             let timeout = Duration::from_millis(timeout);
 
-            let result: Result<()>;
+            let mut result: Result<()>;
 
             select! {
                 m =  p2p_recv_channel.recv().fuse() => result = self.handle_method(m?).await,
@@ -161,6 +164,17 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                     };
                 },
                 _ = stop_signal.recv().fuse() => break,
+            }
+
+            // send pending messages
+            if !self.pending_msgs.is_empty() {
+                if self.role != Role::Candidate {
+                    let pending_msgs = self.pending_msgs.clone();
+                    for m in &pending_msgs {
+                        result = self.broadcast_msg(m, None).await;
+                    }
+                    self.pending_msgs = vec![];
+                }
             }
 
             match result {
@@ -208,29 +222,26 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     async fn broadcast_msg(&mut self, msg: &T, msg_id: Option<u64>) -> Result<()> {
-        loop {
-            match self.role {
-                Role::Leader => {
-                    let msg = serialize(msg);
-                    let log = Log { msg, term: self.current_term()? };
-                    self.push_log(&log)?;
-                    self.acked_length.insert(&self.id, self.logs_len());
-                    break
-                }
-                Role::Follower => {
-                    let b_msg = BroadcastMsgRequest(serialize(msg));
-                    self.send(
-                        Some(self.current_leader.clone()),
-                        &serialize(&b_msg),
-                        NetMsgMethod::BroadcastRequest,
-                        msg_id,
-                    )
-                    .await?;
-                    break
-                }
-                Role::Candidate => {
-                    util::sleep(1).await;
-                }
+        match self.role {
+            Role::Leader => {
+                let msg = serialize(msg);
+                let log = Log { msg, term: self.current_term()? };
+                self.push_log(&log)?;
+                self.acked_length.insert(&self.id, self.logs_len());
+            }
+            Role::Follower => {
+                let b_msg = BroadcastMsgRequest(serialize(msg));
+                self.send(
+                    Some(self.current_leader.clone()),
+                    &serialize(&b_msg),
+                    NetMsgMethod::BroadcastRequest,
+                    msg_id,
+                )
+                .await?;
+            }
+            Role::Candidate => {
+                warn!("The role is Candidate, add the msg to pending_msgs");
+                self.pending_msgs.push(msg.clone());
             }
         }
 
