@@ -177,7 +177,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         return Ok(())
     }
 
-    let password = settings.password.unwrap_or(String::default());
+    let password = settings.password.unwrap_or_default();
 
     // Pick up channel settings from the TOML configuration
     let cfg_path = get_config_path(settings.config, CONFIG_FILE)?;

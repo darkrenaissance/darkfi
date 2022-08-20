@@ -102,7 +102,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         match command.to_uppercase().as_str() {
             "PASS" => {
                 let password = tokens.next().ok_or(Error::MalformedPacket)?;
-                if self.password == password.to_string() {
+                if self.password == *password {
                     self.is_pass_init = true
                 } else {
                     // Close the connection
@@ -215,7 +215,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                 let mut privmsg = Privmsg {
                     id: random_id,
                     nickname: self.nickname.clone(),
-                    target: target.to_string().clone(),
+                    target: target.to_string(),
                     message,
                     timestamp: Timestamp::current_time(),
                 };
@@ -471,16 +471,14 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
             self.reply(&msg.to_irc_msg()).await?;
             return Ok(())
-        } else {
-            if self.is_cap_end && self.is_nick_init && self.nickname == msg.target {
-                if self.configured_contacts.contains_key(&msg.target) {
-                    let salt_box = self.configured_contacts.get(&msg.target).unwrap();
-                    decrypt_privmsg(salt_box, &mut msg);
-                    info!("Decrypted received message: {:?}", msg);
-                }
-
-                self.reply(&msg.to_irc_msg()).await?;
+        } else if self.is_cap_end && self.is_nick_init && self.nickname == msg.target {
+            if self.configured_contacts.contains_key(&msg.target) {
+                let salt_box = self.configured_contacts.get(&msg.target).unwrap();
+                decrypt_privmsg(salt_box, &mut msg);
+                info!("Decrypted received message: {:?}", msg);
             }
+
+            self.reply(&msg.to_irc_msg()).await?;
         }
 
         Ok(())

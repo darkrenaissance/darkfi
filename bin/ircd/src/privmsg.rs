@@ -35,7 +35,7 @@ impl PrivmsgsBuffer {
     }
 
     pub fn to_vec(&self) -> Vec<Privmsg> {
-        self.0.to_vec().clone()
+        self.0.to_vec()
     }
 }
 

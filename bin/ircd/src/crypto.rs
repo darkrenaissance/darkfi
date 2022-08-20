@@ -61,14 +61,15 @@ pub fn decrypt_target(
         }
 
         let salt_box = chan_info.salt_box.clone();
-        if salt_box.is_some() {
-            let decrypted_target = try_decrypt_message(&salt_box.unwrap(), &privmsg.target);
+
+        if let Some(salt_box) = salt_box {
+            let decrypted_target = try_decrypt_message(&salt_box, &privmsg.target);
             if decrypted_target.is_none() {
                 continue
             }
 
             let target = decrypted_target.unwrap();
-            if chan_name.to_string() == target {
+            if *chan_name == target {
                 privmsg.target = target;
                 return
             }
@@ -77,13 +78,13 @@ pub fn decrypt_target(
 
     for contact in configured_contacts.keys() {
         let salt_box = configured_contacts.get(contact).unwrap();
-        let decrypted_target = try_decrypt_message(&salt_box, &privmsg.target);
+        let decrypted_target = try_decrypt_message(salt_box, &privmsg.target);
         if decrypted_target.is_none() {
             continue
         }
 
         let target = decrypted_target.unwrap();
-        if contact.to_string() == target {
+        if *contact == target {
             privmsg.target = target;
             return
         }
