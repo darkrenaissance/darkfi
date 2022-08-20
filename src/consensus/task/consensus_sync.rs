@@ -1,4 +1,4 @@
-use log::{debug, info, warn};
+use log::{info, warn};
 
 use crate::{
     consensus::{
@@ -12,7 +12,6 @@ use crate::{
 /// async task used for consensus state syncing.
 pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Result<()> {
     info!("Starting consensus state sync...");
-    let seeds = p2p.settings().seeds.clone();
     let channels_map = p2p.channels().lock().await;
     let values = channels_map.values();
     // Using len here because is_empty() uses unstable library feature
@@ -20,12 +19,6 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     if values.len() != 0 {
         // Node iterates the channel peers to ask for their consensus state
         for channel in values {
-            // Filtering seed channel, as they don't have registered protocols
-            if seeds.contains(&channel.address()) {
-                debug!("Seed channel, continuing..");
-                continue
-            }
-
             // Communication setup
             let msg_subsystem = channel.get_message_subsystem();
             msg_subsystem.add_dispatch::<ConsensusResponse>().await;
