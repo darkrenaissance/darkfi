@@ -7,10 +7,13 @@
 ## Sets Docs Path
 # docs="~/darkwiki"
 
+## Sets Author name 
+# author="name"
+
 ## Raft net settings
 [net]
 ## P2P accept address
-inbound="tcp://127.0.0.1:13001" 
+inbound="tls://127.0.0.1:13001" 
 
 ## Connection slots
 outbound_connections=2
