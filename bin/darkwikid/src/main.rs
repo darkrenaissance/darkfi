@@ -173,7 +173,6 @@ fn on_receive_update(settings: &DarkWikiSettings, dry: bool) -> DarkWikiResult<P
 
         // create new patch
         let mut new_patch = Patch::new(doc_title, &doc_id, &settings.author);
-        let mut b_patch;
 
         // check for any changes found with local doc and darkwiki doc
         if let Ok(local_patch) = load_json_file::<Patch>(&local_path.join(&doc_id)) {
@@ -194,6 +193,10 @@ fn on_receive_update(settings: &DarkWikiSettings, dry: bool) -> DarkWikiResult<P
 
             local_patches.push(new_patch.clone());
 
+            let mut b_patch = new_patch.clone();
+            b_patch.base = "".to_string();
+            patches.push(b_patch);
+
             // check if the same doc has received patch from the network
             if let Ok(sync_patch) = load_json_file::<Patch>(&sync_path.join(&doc_id)) {
                 if sync_patch.timestamp != local_patch.timestamp {
@@ -207,20 +210,16 @@ fn on_receive_update(settings: &DarkWikiSettings, dry: bool) -> DarkWikiResult<P
                     merge_patches.push(new_patch.clone());
                 }
             }
-
-            b_patch = new_patch.clone();
-            b_patch.base = "".to_string();
         } else {
             new_patch.base = edit.to_string();
             local_patches.push(new_patch.clone());
-            b_patch = new_patch.clone();
+            patches.push(new_patch.clone());
         };
 
         if !dry {
             save_json_file(&local_path.join(&doc_id), &new_patch)?;
             save_json_file(&sync_path.join(doc_id), &new_patch)?;
         }
-        patches.push(b_patch);
     }
 
     // check if a new patch received
@@ -243,7 +242,9 @@ fn on_receive_update(settings: &DarkWikiSettings, dry: bool) -> DarkWikiResult<P
             save_json_file(&local_path.join(file_id), &sync_patch)?;
         }
 
-        sync_patches.push(sync_patch);
+        if !sync_patches.contains(&sync_patch) {
+            sync_patches.push(sync_patch);
+        }
     }
 
     Ok((patches, local_patches, sync_patches, merge_patches))
