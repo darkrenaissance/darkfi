@@ -161,10 +161,10 @@ async fn start(args: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     // Waiting Exit signal
     //
     let (signal, shutdown) = async_channel::bounded::<()>(1);
-    ctrlc_async::set_async_handler(async move {
+    ctrlc::set_handler(move || {
         warn!("Catch exit signal");
         // cleaning up tasks running in the background
-        if let Err(e) = signal.send(()).await {
+        if let Err(e) = async_std::task::block_on(signal.send(())) {
             error!("Error on sending exit signal: {}", e);
         }
     })

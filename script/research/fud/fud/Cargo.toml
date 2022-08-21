@@ -14,7 +14,7 @@ async-executor = "1.4.1"
 async-std = "1.12.0"
 async-trait = "0.1.57"
 blake3 = "1.3.1"
-ctrlc-async = {version = "3.2.2", default-features = false, features = ["async-std", "termination"]}
+ctrlc = { version = "3.2.3", features = ["termination"] }
 darkfi = {path = "../../../../", features = ["dht"]}
 easy-parallel = "3.2.0"
 futures-lite = "1.12.0"
