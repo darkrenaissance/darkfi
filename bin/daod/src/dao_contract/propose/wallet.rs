@@ -45,7 +45,7 @@ pub struct BuilderInput {
     pub merkle_path: Vec<MerkleNode>,
 }
 
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(SerialEncodable, SerialDecodable, Clone)]
 pub struct Proposal {
     pub dest: PublicKey,
     pub amount: u64,
@@ -54,6 +54,7 @@ pub struct Proposal {
     pub blind: pallas::Base,
 }
 
+#[derive(Clone)]
 pub struct DaoParams {
     pub proposer_limit: u64,
     pub quorum: u64,

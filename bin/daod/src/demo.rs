@@ -6,7 +6,7 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{ff::Field, Curve},
+    group::{ff::Field, Curve, Group},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -26,6 +26,7 @@ use darkfi::{
         proof::{ProvingKey, VerifyingKey},
         token_id::generate_id,
         types::{DrkCircuitField, DrkSpendHook, DrkUserData, DrkValue},
+        util::pedersen_commitment_u64,
         OwnCoin, OwnCoins, Proof,
     },
     node::state::{ProgramState, StateUpdate},
@@ -43,6 +44,11 @@ use darkfi::{
 };
 
 use crate::{dao_contract, money_contract, util::poseidon_hash};
+
+// TODO: Anonymity leaks in this proof of concept:
+//
+// * Vote updates are linked to the proposal_bulla
+// * Nullifier of vote will link vote with the coin when it's spent
 
 // TODO: reenable unused vars warning and fix it
 // TODO: strategize and cleanup Result/Error usage
@@ -619,6 +625,15 @@ pub async fn demo() -> Result<()> {
         (merkle_path, root)
     };
 
+    let dao_params = dao_contract::propose::wallet::DaoParams {
+        proposer_limit: dao_proposer_limit,
+        quorum: dao_quorum,
+        approval_ratio: dao_approval_ratio,
+        gov_token_id: gdrk_token_id,
+        public_key: dao_keypair.public,
+        bulla_blind: dao_bulla_blind,
+    };
+
     let builder = dao_contract::propose::wallet::Builder {
         inputs: vec![input],
         proposal: dao_contract::propose::wallet::Proposal {
@@ -628,14 +643,7 @@ pub async fn demo() -> Result<()> {
             token_id: xdrk_token_id,
             blind: pallas::Base::random(&mut OsRng),
         },
-        dao: dao_contract::propose::wallet::DaoParams {
-            proposer_limit: dao_proposer_limit,
-            quorum: dao_quorum,
-            approval_ratio: dao_approval_ratio,
-            gov_token_id: gdrk_token_id,
-            public_key: dao_keypair.public,
-            bulla_blind: dao_bulla_blind,
-        },
+        dao: dao_params.clone(),
         dao_leaf_position,
         dao_merkle_path,
         dao_merkle_root,
@@ -712,6 +720,11 @@ pub async fn demo() -> Result<()> {
 
     debug!(target: "demo", "Stage 5. Start voting");
 
+    // We save updates here for testing.
+    let mut updates = Vec::new();
+
+    // User 1: YES
+
     let (money_leaf_position, money_merkle_path) = {
         let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
         let tree = &state.tree;
@@ -721,10 +734,9 @@ pub async fn demo() -> Result<()> {
         (leaf_position, merkle_path)
     };
 
-    debug!(target: "demo", "Stage 5. Creating inputs...");
     let input = dao_contract::vote::wallet::BuilderInput {
-        secret: gov_keypair_2.secret,
-        note: gov_recv[1].note.clone(),
+        secret: gov_keypair_1.secret,
+        note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
         merkle_path: money_merkle_path,
     };
@@ -734,20 +746,19 @@ pub async fn demo() -> Result<()> {
     assert!(vote_option == true || vote_option == false);
 
     // We create a new keypair to encrypt the vote.
-    let vote_keypair = Keypair::random(&mut OsRng);
+    let vote_keypair_1 = Keypair::random(&mut OsRng);
 
-    debug!(target: "demo", "Stage 5. Creating builder...");
     let builder = dao_contract::vote::wallet::Builder {
         inputs: vec![input],
         vote: dao_contract::vote::wallet::Vote {
-            value_blind: pallas::Scalar::random(&mut OsRng),
             vote_option,
             vote_option_blind: pallas::Scalar::random(&mut OsRng),
         },
-        vote_keypair,
-        proposal,
+        vote_keypair: vote_keypair_1,
+        proposal: proposal.clone(),
+        dao: dao_params.clone(),
     };
-    debug!(target: "demo", "Stage 5. build()...");
+    debug!(target: "demo", "build()...");
     let func_call = builder.build(&zk_bins);
 
     let tx = Transaction { func_calls: vec![func_call] };
@@ -758,10 +769,241 @@ pub async fn demo() -> Result<()> {
         if func_call.func_id == "DAO::vote()" {
             debug!(target: "demo", "dao_contract::vote::state_transition()");
 
-            //let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
-            //    .expect("dao_contract::vote::validate::state_transition() failed!");
-            //dao_contract::vote::validate::apply(&mut states, update);
+            let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
+                .expect("dao_contract::vote::validate::state_transition() failed!");
+            dao_contract::vote::validate::apply(&mut states, update.clone());
+            updates.push(update);
         }
     }
+
+    tx.zk_verify(&zk_bins);
+
+    //// Wallet
+
+    // Secret vote info. Needs to be revealed at some point.
+    // TODO: look into verifiable encryption for notes
+    // TODO: look into timelock puzzle as a possibility
+    let vote_note_1 = {
+        assert_eq!(tx.func_calls.len(), 1);
+        let func_call = &tx.func_calls[0];
+        let call_data = func_call.call_data.as_any();
+        assert_eq!((&*call_data).type_id(), TypeId::of::<dao_contract::vote::validate::CallData>());
+        let call_data = call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
+
+        let header = &call_data.header;
+        let note: dao_contract::vote::wallet::Note =
+            header.enc_note.decrypt(&vote_keypair_1.secret).unwrap();
+        note
+    };
+    debug!(target: "demo", "User 1 voted!");
+    debug!(target: "demo", "  vote_option: {}", vote_note_1.vote.vote_option);
+    debug!(target: "demo", "  value: {}", vote_note_1.value);
+
+    // User 2: NO
+
+    let (money_leaf_position, money_merkle_path) = {
+        let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
+        let tree = &state.tree;
+        let leaf_position = gov_recv[1].leaf_position.clone();
+        let root = tree.root(0).unwrap();
+        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        (leaf_position, merkle_path)
+    };
+
+    let input = dao_contract::vote::wallet::BuilderInput {
+        secret: gov_keypair_2.secret,
+        note: gov_recv[1].note.clone(),
+        leaf_position: money_leaf_position,
+        merkle_path: money_merkle_path,
+    };
+
+    let vote_option: bool = false;
+
+    assert!(vote_option == true || vote_option == false);
+
+    // We create a new keypair to encrypt the vote.
+    let vote_keypair_2 = Keypair::random(&mut OsRng);
+
+    let builder = dao_contract::vote::wallet::Builder {
+        inputs: vec![input],
+        vote: dao_contract::vote::wallet::Vote {
+            vote_option,
+            vote_option_blind: pallas::Scalar::random(&mut OsRng),
+        },
+        vote_keypair: vote_keypair_2,
+        proposal: proposal.clone(),
+        dao: dao_params.clone(),
+    };
+    debug!(target: "demo", "build()...");
+    let func_call = builder.build(&zk_bins);
+
+    let tx = Transaction { func_calls: vec![func_call] };
+
+    //// Validator
+
+    for (idx, func_call) in tx.func_calls.iter().enumerate() {
+        if func_call.func_id == "DAO::vote()" {
+            debug!(target: "demo", "dao_contract::vote::state_transition()");
+
+            let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
+                .expect("dao_contract::vote::validate::state_transition() failed!");
+            dao_contract::vote::validate::apply(&mut states, update.clone());
+            updates.push(update);
+        }
+    }
+
+    tx.zk_verify(&zk_bins);
+
+    //// Wallet
+
+    // Secret vote info. Needs to be revealed at some point.
+    // TODO: look into verifiable encryption for notes
+    // TODO: look into timelock puzzle as a possibility
+    let vote_note_2 = {
+        assert_eq!(tx.func_calls.len(), 1);
+        let func_call = &tx.func_calls[0];
+        let call_data = func_call.call_data.as_any();
+        assert_eq!((&*call_data).type_id(), TypeId::of::<dao_contract::vote::validate::CallData>());
+        let call_data = call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
+
+        let header = &call_data.header;
+        let note: dao_contract::vote::wallet::Note =
+            header.enc_note.decrypt(&vote_keypair_2.secret).unwrap();
+        note
+    };
+    debug!(target: "demo", "User 2 voted!");
+    debug!(target: "demo", "  vote_option: {}", vote_note_2.vote.vote_option);
+    debug!(target: "demo", "  value: {}", vote_note_2.value);
+
+    // User 3: YES
+
+    let (money_leaf_position, money_merkle_path) = {
+        let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
+        let tree = &state.tree;
+        let leaf_position = gov_recv[2].leaf_position.clone();
+        let root = tree.root(0).unwrap();
+        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        (leaf_position, merkle_path)
+    };
+
+    let input = dao_contract::vote::wallet::BuilderInput {
+        secret: gov_keypair_3.secret,
+        note: gov_recv[2].note.clone(),
+        leaf_position: money_leaf_position,
+        merkle_path: money_merkle_path,
+    };
+
+    let vote_option: bool = true;
+
+    assert!(vote_option == true || vote_option == false);
+
+    // We create a new keypair to encrypt the vote.
+    let vote_keypair_3 = Keypair::random(&mut OsRng);
+
+    let builder = dao_contract::vote::wallet::Builder {
+        inputs: vec![input],
+        vote: dao_contract::vote::wallet::Vote {
+            vote_option,
+            vote_option_blind: pallas::Scalar::random(&mut OsRng),
+        },
+        vote_keypair: vote_keypair_3,
+        proposal: proposal.clone(),
+        dao: dao_params.clone(),
+    };
+    debug!(target: "demo", "build()...");
+    let func_call = builder.build(&zk_bins);
+
+    let tx = Transaction { func_calls: vec![func_call] };
+
+    //// Validator
+
+    for (idx, func_call) in tx.func_calls.iter().enumerate() {
+        if func_call.func_id == "DAO::vote()" {
+            debug!(target: "demo", "dao_contract::vote::state_transition()");
+
+            let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
+                .expect("dao_contract::vote::validate::state_transition() failed!");
+            dao_contract::vote::validate::apply(&mut states, update.clone());
+            updates.push(update);
+        }
+    }
+
+    tx.zk_verify(&zk_bins);
+
+    //// Wallet
+
+    // Secret vote info. Needs to be revealed at some point.
+    // TODO: look into verifiable encryption for notes
+    // TODO: look into timelock puzzle as a possibility
+    let vote_note_3 = {
+        assert_eq!(tx.func_calls.len(), 1);
+        let func_call = &tx.func_calls[0];
+        let call_data = func_call.call_data.as_any();
+        assert_eq!((&*call_data).type_id(), TypeId::of::<dao_contract::vote::validate::CallData>());
+        let call_data = call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
+
+        let header = &call_data.header;
+        let note: dao_contract::vote::wallet::Note =
+            header.enc_note.decrypt(&vote_keypair_3.secret).unwrap();
+        note
+    };
+    debug!(target: "demo", "User 3 voted!");
+    debug!(target: "demo", "  vote_option: {}", vote_note_3.vote.vote_option);
+    debug!(target: "demo", "  value: {}", vote_note_3.value);
+
+    // Every votes produces a semi-homomorphic encryption of their vote.
+    // Which is either yes or no
+    // We copy the state tree for the governance token so coins can be used
+    // to vote on other proposals at the same time.
+    // With their vote, they produce a ZK proof + nullifier
+    // The votes are unblinded by MPC to a selected party at the end of the
+    // voting period.
+    // (that's if we want votes to be hidden during voting)
+
+    let mut win_votes = 0;
+    let mut total_votes = 0;
+    let mut total_vote_blinds = pallas::Scalar::from(0);
+    let mut total_value_blinds = pallas::Scalar::from(0);
+    let mut total_value_commit = pallas::Point::identity();
+    let mut total_vote_commit = pallas::Point::identity();
+
+    assert!(updates.len() == 3);
+
+    for (i, (note, update)) in
+        [vote_note_1, vote_note_2, vote_note_3].iter().zip(updates).enumerate()
+    {
+        let value_commit = pedersen_commitment_u64(note.value, note.value_blind);
+        assert!(update.value_commit == value_commit);
+
+        total_value_commit += value_commit;
+        total_value_blinds += note.value_blind;
+
+        let vote_commit = pedersen_commitment_u64(
+            note.vote.vote_option as u64 * note.value,
+            note.vote.vote_option_blind,
+        );
+
+        assert!(update.vote_commit == vote_commit);
+
+        total_vote_commit += vote_commit;
+        total_vote_blinds += note.vote.vote_option_blind;
+
+        let vote_option = note.vote.vote_option;
+
+        if vote_option {
+            win_votes += note.value;
+        }
+        total_votes += note.value;
+
+        let vote_result: String = if vote_option { "yes".to_string() } else { "no".to_string() };
+
+        debug!("Voter {} voted {}", i, vote_result);
+    }
+
+    debug!("Outcome = {} / {}", win_votes, total_votes);
+
+    assert!(total_value_commit == pedersen_commitment_u64(total_votes, total_value_blinds));
+    assert!(total_vote_commit == pedersen_commitment_u64(win_votes, total_vote_blinds));
+
     Ok(())
 }

@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Nullifier(pub(crate) pallas::Base);
+pub struct Nullifier(pub pallas::Base);
 
 impl Nullifier {
     pub fn new(secret: SecretKey, serial: pallas::Base) -> Self {

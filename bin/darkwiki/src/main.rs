@@ -12,18 +12,39 @@ use darkfi::{
 #[derive(Clone, Debug, StructOpt)]
 #[structopt(name = "darkwikiupdate")]
 struct Args {
-    #[structopt(long)]
-    /// Merge/Update without applying the changes
-    dry_run: bool,
-    #[structopt(long)]
-    /// Show all patches info
-    log: bool,
+    #[structopt(subcommand)]
+    sub_command: ArgsSubCommand,
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
     #[structopt(short, long, default_value = "tcp://127.0.0.1:13055")]
     /// darkfid JSON-RPC endpoint
     endpoint: Url,
+}
+
+#[derive(Debug, Clone, PartialEq, StructOpt)]
+enum ArgsSubCommand {
+    /// Publish local patches and merging received patches
+    Update {
+        #[structopt(long, short)]
+        /// Run without applying the changes
+        dry_run: bool,
+        /// Names of files to update (Note: Will update all the documents if left empty)
+        values: Vec<String>,
+    },
+    /// Show the history of patches  
+    Log {
+        /// Names of files to log (Note: Will show all the log if left empty)
+        values: Vec<String>,
+    },
+    /// Undo the local changes
+    Restore {
+        #[structopt(long, short)]
+        /// Run without applying the changes
+        dry_run: bool,
+        /// Names of files to restore (Note: Will restore all the documents if left empty)
+        values: Vec<String>,
+    },
 }
 
 fn print_patches(value: &Vec<serde_json::Value>) {
@@ -46,46 +67,53 @@ async fn main() -> Result<()> {
 
     let rpc_client = RpcClient::new(args.endpoint).await?;
 
-    let req = if args.dry_run {
-        JsonRequest::new("dry_run", json!([]))
-    } else if args.log {
-        JsonRequest::new("log", json!([]))
-    } else {
-        JsonRequest::new("update", json!([]))
-    };
+    match args.sub_command {
+        ArgsSubCommand::Update { dry_run, values } => {
+            let req = JsonRequest::new("update", json!([dry_run, values]));
 
-    let result = rpc_client.request(req).await?;
+            let result = rpc_client.request(req).await?;
 
-    if !args.log {
-        let result = result.as_array().unwrap();
-        let local_patches = result[0].as_array().unwrap();
-        let sync_patches = result[1].as_array().unwrap();
-        let merge_patches = result[2].as_array().unwrap();
+            let result = result.as_array().unwrap();
+            let local_patches = result[0].as_array().unwrap();
+            let sync_patches = result[1].as_array().unwrap();
+            let merge_patches = result[2].as_array().unwrap();
 
-        if !local_patches.is_empty() {
-            println!("");
-            println!("PUBLISH LOCAL PATCHES:");
-            println!("");
-            print_patches(local_patches);
+            if !local_patches.is_empty() {
+                println!();
+                println!("PUBLISH LOCAL PATCHES:");
+                println!();
+                print_patches(local_patches);
+            }
+
+            if !sync_patches.is_empty() {
+                println!();
+                println!("RECEIVED PATCHES:");
+                println!();
+                print_patches(sync_patches);
+            }
+
+            if !merge_patches.is_empty() {
+                println!();
+                println!("MERGE:");
+                println!();
+                print_patches(merge_patches);
+            }
         }
+        ArgsSubCommand::Restore { dry_run, values } => {
+            let req = JsonRequest::new("restore", json!([dry_run, values]));
+            let result = rpc_client.request(req).await?;
 
-        if !sync_patches.is_empty() {
-            println!("");
-            println!("RECEIVED PATCHES:");
-            println!("");
-            print_patches(sync_patches);
+            let result = result.as_array().unwrap();
+            let patches = result[0].as_array().unwrap();
+
+            if !patches.is_empty() {
+                println!();
+                println!("AFTER RESTORE:");
+                println!();
+                print_patches(patches);
+            }
         }
-
-        if !merge_patches.is_empty() {
-            println!("");
-            println!("MERGE:");
-            println!("");
-            print_patches(merge_patches);
-        }
-    }
-
-    if args.log {
-        todo!("TODO");
+        _ => unimplemented!(),
     }
 
     rpc_client.close().await

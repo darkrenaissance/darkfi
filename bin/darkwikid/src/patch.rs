@@ -554,6 +554,29 @@ mod tests {
     }
 
     #[test]
+    fn test_transform2() {
+        let mut patch_init = Patch::new("", &gen_id(30), "");
+        let base = "#hello\n hello";
+        patch_init.base = base.to_string();
+
+        let mut patch1 = patch_init.clone();
+        patch1.retain(13);
+        patch1.insert(" world");
+
+        let mut patch2 = patch_init.clone();
+        patch2.retain(1);
+        patch2.delete(5);
+        patch2.insert("this is the title");
+        patch2.retain(7);
+        patch2.insert("\n this is the content");
+
+        let patch3 = patch1.transform(&patch2);
+        let patch4 = patch1.merge(&patch3);
+
+        assert_eq!(patch4.to_string(), "#this is the title\n hello world\n this is the content");
+    }
+
+    #[test]
     fn test_serialize() {
         // serialize & deserialize OpMethod
         let op_method = OpMethod::Delete(3);
