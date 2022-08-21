@@ -114,190 +114,250 @@ fn lcs(a: &str, b: &str) -> Vec<OpMethod> {
     result
 }
 
-fn on_receive_patch(received_patch: &Patch, settings: &DarkWikiSettings) -> DarkWikiResult<()> {
-    let sync_id_path = settings.datastore_path.join("sync").join(&received_patch.id);
-    let local_id_path = settings.datastore_path.join("local").join(&received_patch.id);
-
-    if let Ok(mut sync_patch) = load_json_file::<Patch>(&sync_id_path) {
-        if sync_patch.timestamp == received_patch.timestamp {
-            return Ok(())
-        }
-
-        if let Ok(local_patch) = load_json_file::<Patch>(&local_id_path) {
-            if local_patch.timestamp == sync_patch.timestamp {
-                sync_patch.base = local_patch.to_string();
-                sync_patch.set_ops(received_patch.ops());
-            } else {
-                sync_patch.extend_ops(received_patch.ops());
-            }
-        }
-
-        sync_patch.timestamp = received_patch.timestamp;
-        sync_patch.author = received_patch.author.clone();
-        save_json_file::<Patch>(&sync_id_path, &sync_patch)?;
-    } else if !received_patch.base.is_empty() {
-        save_json_file::<Patch>(&sync_id_path, received_patch)?;
-    }
-
-    Ok(())
-}
-
 fn title_to_id(title: &str) -> String {
     let mut hasher = sha2::Sha256::new();
     hasher.update(title);
     hex::encode(hasher.finalize())
 }
 
-fn on_receive_update(settings: &DarkWikiSettings, dry: bool) -> DarkWikiResult<Patches> {
-    let mut patches: Vec<Patch> = vec![];
-    let mut local_patches: Vec<Patch> = vec![];
-    let mut sync_patches: Vec<Patch> = vec![];
-    let mut merge_patches: Vec<Patch> = vec![];
-
-    let local_path = settings.datastore_path.join("local");
-    let sync_path = settings.datastore_path.join("sync");
-    let docs_path = settings.docs_path.clone();
-
-    // save and compare docs in darkwiki and local dirs
-    // then merged with sync patches if any received
-    let docs = read_dir(&docs_path).map_err(Error::from)?;
-    for doc in docs {
-        let doc_title = doc.as_ref().unwrap().file_name();
-        let doc_title = doc_title.to_str().unwrap();
-
-        // load doc content
-        let edit = load_file(&docs_path.join(doc_title)).map_err(Error::from)?;
-        let edit = edit.trim();
-
-        let doc_id = title_to_id(doc_title);
-
-        // create new patch
-        let mut new_patch = Patch::new(doc_title, &doc_id, &settings.author);
-
-        // check for any changes found with local doc and darkwiki doc
-        if let Ok(local_patch) = load_json_file::<Patch>(&local_path.join(&doc_id)) {
-            // no changes found
-            if local_patch.to_string() == edit {
-                continue
-            }
-
-            // check the differences with LCS algorithm
-            let lcs_ops = lcs(&local_patch.to_string(), edit);
-
-            // add the change ops to the new patch
-            for op in lcs_ops {
-                new_patch.add_op(&op);
-            }
-
-            new_patch.base = local_patch.to_string();
-
-            local_patches.push(new_patch.clone());
-
-            let mut b_patch = new_patch.clone();
-            b_patch.base = "".to_string();
-            patches.push(b_patch);
-
-            // check if the same doc has received patch from the network
-            if let Ok(sync_patch) = load_json_file::<Patch>(&sync_path.join(&doc_id)) {
-                if sync_patch.timestamp != local_patch.timestamp {
-                    sync_patches.push(sync_patch.clone());
-
-                    let sync_patch_t = new_patch.transform(&sync_patch);
-                    new_patch = new_patch.merge(&sync_patch_t);
-                    if !dry {
-                        save_file(&docs_path.join(doc_title), &new_patch.to_string())?;
-                    }
-                    merge_patches.push(new_patch.clone());
-                }
-            }
-        } else {
-            new_patch.base = edit.to_string();
-            local_patches.push(new_patch.clone());
-            patches.push(new_patch.clone());
-        };
-
-        if !dry {
-            save_json_file(&local_path.join(&doc_id), &new_patch)?;
-            save_json_file(&sync_path.join(doc_id), &new_patch)?;
-        }
-    }
-
-    // check if a new patch received
-    // and save the new changes in both local and darkwiki dirs
-    let sync_files = read_dir(&sync_path).map_err(Error::from)?;
-    for file in sync_files {
-        let file_id = file.as_ref().unwrap().file_name();
-        let file_id = file_id.to_str().unwrap();
-        let file_path = sync_path.join(&file_id);
-        let sync_patch: Patch = load_json_file(&file_path)?;
-
-        if let Ok(local_patch) = load_json_file::<Patch>(&local_path.join(&file_id)) {
-            if local_patch.timestamp == sync_patch.timestamp {
-                continue
-            }
-        }
-
-        if !dry {
-            save_file(&docs_path.join(&sync_patch.title), &sync_patch.to_string())?;
-            save_json_file(&local_path.join(file_id), &sync_patch)?;
-        }
-
-        if !sync_patches.contains(&sync_patch) {
-            sync_patches.push(sync_patch);
-        }
-    }
-
-    Ok((patches, local_patches, sync_patches, merge_patches))
+struct Darkwiki {
+    settings: DarkWikiSettings,
+    rpc: (
+        async_channel::Sender<Vec<Vec<(String, String)>>>,
+        async_channel::Receiver<(String, bool, Vec<String>)>,
+    ),
+    raft: (async_channel::Sender<Patch>, async_channel::Receiver<Patch>),
 }
 
-async fn start(
-    rpc_rv: async_channel::Receiver<String>,
-    notify_sx: async_channel::Sender<Vec<Vec<(String, String)>>>,
-    raft_sender: async_channel::Sender<Patch>,
-    raft_receiver: async_channel::Receiver<Patch>,
-    settings: DarkWikiSettings,
-) -> DarkWikiResult<()> {
-    loop {
-        select! {
-            command = rpc_rv.recv().fuse() => {
-                let command = command.unwrap();
-                match command.as_str() {
-                    "update" | "dry_run" => {
-                        let dry = command.as_str() == "dry_run";
-                        let (patches, local, sync, merge) = on_receive_update(&settings, dry)?;
-
-                        if !dry {
-                            for patch in patches {
-                                info!("Send a patch to Raft {:?}", patch);
-                                raft_sender.send(patch.clone()).await.map_err(Error::from)?;
-                            }
-                        }
-
-                        let local: Vec<(String, String)> =
-                            local.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
-
-                        let sync: Vec<(String, String)> =
-                            sync.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
-
-                        let merge: Vec<(String, String)> =
-                            merge.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
-
-                        notify_sx.send(vec![local, sync, merge]).await.map_err(Error::from)?;
+impl Darkwiki {
+    async fn start(&self) -> DarkWikiResult<()> {
+        loop {
+            select! {
+                val = self.rpc.1.recv().fuse() => {
+                    let (cmd, dry, files) = val.map_err(Error::from)?;
+                    match cmd.as_str() {
+                        "update" => {
+                            self.on_receive_update(dry, files).await?;
+                        },
+                        "restore" => {
+                            self.on_receive_restore(dry, files).await?;
+                        },
+                        _ => {}
                     }
-                    "log" => {
-                        // TODO
-                        notify_sx.send(vec![]).await.map_err(Error::from)?;
-                    }
-                    _ => {}
+                }
+                patch = self.raft.1.recv().fuse() => {
+                    let patch = patch.map_err(Error::from)?;
+                    info!("Receive new patch from Raft {:?}", patch);
+                    self.on_receive_patch(&patch)?;
+                }
+
+            }
+        }
+    }
+
+    fn on_receive_patch(&self, received_patch: &Patch) -> DarkWikiResult<()> {
+        let sync_id_path = self.settings.datastore_path.join("sync").join(&received_patch.id);
+        let local_id_path = self.settings.datastore_path.join("local").join(&received_patch.id);
+
+        if let Ok(mut sync_patch) = load_json_file::<Patch>(&sync_id_path) {
+            if sync_patch.timestamp == received_patch.timestamp {
+                return Ok(())
+            }
+
+            if let Ok(local_patch) = load_json_file::<Patch>(&local_id_path) {
+                if local_patch.timestamp == sync_patch.timestamp {
+                    sync_patch.base = local_patch.to_string();
+                    sync_patch.set_ops(received_patch.ops());
+                } else {
+                    sync_patch.extend_ops(received_patch.ops());
                 }
             }
-            patch = raft_receiver.recv().fuse() => {
-                let patch = patch.map_err(Error::from)?;
-                info!("Receive new patch from Raft {:?}", patch);
-                on_receive_patch(&patch, &settings)?;
+
+            sync_patch.timestamp = received_patch.timestamp;
+            sync_patch.author = received_patch.author.clone();
+            save_json_file::<Patch>(&sync_id_path, &sync_patch)?;
+        } else if !received_patch.base.is_empty() {
+            save_json_file::<Patch>(&sync_id_path, received_patch)?;
+        }
+
+        Ok(())
+    }
+
+    async fn on_receive_update(&self, dry: bool, files: Vec<String>) -> DarkWikiResult<()> {
+        let (patches, local, sync, merge) = self.update(dry, files)?;
+
+        if !dry {
+            for patch in patches {
+                info!("Send a patch to Raft {:?}", patch);
+                self.raft.0.send(patch.clone()).await.map_err(Error::from)?;
+            }
+        }
+
+        let local: Vec<(String, String)> =
+            local.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
+
+        let sync: Vec<(String, String)> =
+            sync.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
+
+        let merge: Vec<(String, String)> =
+            merge.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
+
+        self.rpc.0.send(vec![local, sync, merge]).await.map_err(Error::from)?;
+
+        Ok(())
+    }
+
+    async fn on_receive_restore(&self, dry: bool, files_name: Vec<String>) -> DarkWikiResult<()> {
+        let patches = self.restore(dry, files_name)?;
+        let patches: Vec<(String, String)> =
+            patches.iter().map(|p| (p.title.to_owned(), p.to_string())).collect();
+
+        self.rpc.0.send(vec![patches]).await.map_err(Error::from)?;
+
+        Ok(())
+    }
+
+    fn restore(&self, dry: bool, files_name: Vec<String>) -> DarkWikiResult<Vec<Patch>> {
+        let local_path = self.settings.datastore_path.join("local");
+        let docs_path = self.settings.docs_path.clone();
+        let local_files = read_dir(&local_path).map_err(Error::from)?;
+
+        let mut patches = vec![];
+
+        for file in local_files {
+            let file_id = file.as_ref().unwrap().file_name();
+            let file_id = file_id.to_str().unwrap();
+            let file_path = local_path.join(&file_id);
+            let local_patch: Patch = load_json_file(&file_path)?;
+
+            if !files_name.is_empty() && !files_name.contains(&local_patch.title.to_string()) {
+                continue
             }
 
+            if let Ok(doc) = load_file(&docs_path.join(&local_patch.title)) {
+                if local_patch.to_string() == doc {
+                    continue
+                }
+            }
+
+            if !dry {
+                save_file(&docs_path.join(&local_patch.title), &local_patch.to_string())?;
+            }
+
+            patches.push(local_patch);
         }
+
+        Ok(patches)
+    }
+
+    fn update(&self, dry: bool, files_name: Vec<String>) -> DarkWikiResult<Patches> {
+        let mut patches: Vec<Patch> = vec![];
+        let mut local_patches: Vec<Patch> = vec![];
+        let mut sync_patches: Vec<Patch> = vec![];
+        let mut merge_patches: Vec<Patch> = vec![];
+
+        let local_path = self.settings.datastore_path.join("local");
+        let sync_path = self.settings.datastore_path.join("sync");
+        let docs_path = self.settings.docs_path.clone();
+
+        // save and compare docs in darkwiki and local dirs
+        // then merged with sync patches if any received
+        let docs = read_dir(&docs_path).map_err(Error::from)?;
+        for doc in docs {
+            let doc_title = doc.as_ref().unwrap().file_name();
+            let doc_title = doc_title.to_str().unwrap();
+
+            if !files_name.is_empty() && !files_name.contains(&doc_title.to_string()) {
+                continue
+            }
+
+            // load doc content
+            let edit = load_file(&docs_path.join(doc_title)).map_err(Error::from)?;
+            let edit = edit.trim();
+
+            let doc_id = title_to_id(doc_title);
+
+            // create new patch
+            let mut new_patch = Patch::new(doc_title, &doc_id, &self.settings.author);
+
+            // check for any changes found with local doc and darkwiki doc
+            if let Ok(local_patch) = load_json_file::<Patch>(&local_path.join(&doc_id)) {
+                // no changes found
+                if local_patch.to_string() == edit {
+                    continue
+                }
+
+                // check the differences with LCS algorithm
+                let lcs_ops = lcs(&local_patch.to_string(), edit);
+
+                // add the change ops to the new patch
+                for op in lcs_ops {
+                    new_patch.add_op(&op);
+                }
+
+                new_patch.base = local_patch.to_string();
+
+                local_patches.push(new_patch.clone());
+
+                let mut b_patch = new_patch.clone();
+                b_patch.base = "".to_string();
+                patches.push(b_patch);
+
+                // check if the same doc has received patch from the network
+                if let Ok(sync_patch) = load_json_file::<Patch>(&sync_path.join(&doc_id)) {
+                    if sync_patch.timestamp != local_patch.timestamp {
+                        sync_patches.push(sync_patch.clone());
+
+                        let sync_patch_t = new_patch.transform(&sync_patch);
+                        new_patch = new_patch.merge(&sync_patch_t);
+                        if !dry {
+                            save_file(&docs_path.join(doc_title), &new_patch.to_string())?;
+                        }
+                        merge_patches.push(new_patch.clone());
+                    }
+                }
+            } else {
+                new_patch.base = edit.to_string();
+                local_patches.push(new_patch.clone());
+                patches.push(new_patch.clone());
+            };
+
+            if !dry {
+                save_json_file(&local_path.join(&doc_id), &new_patch)?;
+                save_json_file(&sync_path.join(doc_id), &new_patch)?;
+            }
+        }
+
+        // check if a new patch received
+        // and save the new changes in both local and darkwiki dirs
+        let sync_files = read_dir(&sync_path).map_err(Error::from)?;
+        for file in sync_files {
+            let file_id = file.as_ref().unwrap().file_name();
+            let file_id = file_id.to_str().unwrap();
+            let file_path = sync_path.join(&file_id);
+            let sync_patch: Patch = load_json_file(&file_path)?;
+
+            if let Ok(local_patch) = load_json_file::<Patch>(&local_path.join(&file_id)) {
+                if local_patch.timestamp == sync_patch.timestamp {
+                    continue
+                }
+            }
+
+            if !files_name.is_empty() && !files_name.contains(&sync_patch.title.to_string()) {
+                continue
+            }
+
+            if !dry {
+                save_file(&docs_path.join(&sync_patch.title), &sync_patch.to_string())?;
+                save_json_file(&local_path.join(file_id), &sync_patch)?;
+            }
+
+            if !sync_patches.contains(&sync_patch) {
+                sync_patches.push(sync_patch);
+            }
+        }
+
+        Ok((patches, local_patches, sync_patches, merge_patches))
     }
 }
 
@@ -310,7 +370,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     create_dir_all(datastore_path.join("local"))?;
     create_dir_all(datastore_path.join("sync"))?;
 
-    let (rpc_sx, rpc_rv) = async_channel::unbounded::<String>();
+    let (rpc_sx, rpc_rv) = async_channel::unbounded::<(String, bool, Vec<String>)>();
     let (notify_sx, notify_rv) = async_channel::unbounded::<Vec<Vec<(String, String)>>>();
 
     //
@@ -359,9 +419,20 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // Darkwiki start
     //
-    let darkwiki_settings = DarkWikiSettings { author: settings.author, datastore_path, docs_path };
+
+    let raft_sx = raft.sender();
+    let raft_rv = raft.receiver();
     executor
-        .spawn(start(rpc_rv, notify_sx, raft.sender(), raft.receiver(), darkwiki_settings))
+        .spawn(async move {
+            let darkwiki_settings =
+                DarkWikiSettings { author: settings.author, datastore_path, docs_path };
+            let darkwiki = Darkwiki {
+                settings: darkwiki_settings,
+                raft: (raft_sx, raft_rv),
+                rpc: (notify_sx, rpc_rv),
+            };
+            darkwiki.start().await.unwrap_or(());
+        })
         .detach();
 
     //
