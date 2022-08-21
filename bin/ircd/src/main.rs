@@ -318,10 +318,10 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     // Run once receive exit signal
     let (signal, shutdown) = async_channel::bounded::<()>(1);
-    ctrlc_async::set_async_handler(async move {
+    ctrlc::set_handler(move || {
         warn!(target: "ircd", "ircd start Exit Signal");
         // cleaning up tasks running in the background
-        signal.send(()).await.unwrap();
+        async_std::task::block_on(signal.send(())).unwrap();
     })
     .unwrap();
 

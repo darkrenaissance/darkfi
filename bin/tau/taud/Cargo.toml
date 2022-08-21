@@ -28,7 +28,7 @@ simplelog = "0.12.0"
 rand = "0.8.5"
 chrono = "0.4.19"
 thiserror = "1.0.32"
-ctrlc-async = {version= "3.2.2", default-features = false, features = ["async-std", "termination"]}
+ctrlc = { version = "3.2.3", features = ["termination"] }
 url = "2.2.2"
 fxhash = "0.2.1"
 

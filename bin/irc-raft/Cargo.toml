@@ -29,7 +29,7 @@ clap = {version = "3.2.16", features = ["derive"]}
 log = "0.4.17"
 simplelog = "0.12.0"
 fxhash = "0.2.1"
-ctrlc-async = {version= "3.2.2", default-features = false, features = ["async-std", "termination"]}
+ctrlc = { version = "3.2.3", features = ["termination"] }
 url = "2.2.2"
 
 # Encoding and parsing
