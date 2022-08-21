@@ -171,6 +171,8 @@ impl Darkwiki {
                 } else {
                     sync_patch.extend_ops(received_patch.ops());
                 }
+            } else {
+                sync_patch.extend_ops(received_patch.ops());
             }
 
             sync_patch.timestamp = received_patch.timestamp;
