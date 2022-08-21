@@ -45,7 +45,7 @@ pub struct BuilderInput {
     pub merkle_path: Vec<MerkleNode>,
 }
 
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(SerialEncodable, SerialDecodable, Clone)]
 pub struct Proposal {
     pub dest: PublicKey,
     pub amount: u64,

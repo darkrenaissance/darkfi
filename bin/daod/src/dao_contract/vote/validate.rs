@@ -208,11 +208,12 @@ pub fn state_transition(
     })
 }
 
+#[derive(Clone)]
 pub struct Update {
     proposal_bulla: pallas::Base,
     vote_nulls: Vec<Nullifier>,
-    vote_commit: pallas::Point,
-    value_commit: pallas::Point,
+    pub vote_commit: pallas::Point,
+    pub value_commit: pallas::Point,
 }
 
 pub fn apply(states: &mut StateRegistry, mut update: Update) {

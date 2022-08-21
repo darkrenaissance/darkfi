@@ -77,7 +77,6 @@ impl Builder {
         let mut proofs = vec![];
 
         let gov_token_blind = pallas::Base::random(&mut OsRng);
-        let vote_blind = pallas::Scalar::random(&mut OsRng);
 
         let mut inputs = vec![];
         let mut value = 0;
@@ -237,7 +236,8 @@ impl Builder {
 
         let weighted_vote = vote * value;
 
-        let vote_commit = pedersen_commitment_u64(weighted_vote, vote_blind);
+        let vote_commit = pedersen_commitment_u64(weighted_vote, self.vote.vote_option_blind);
+        debug!(target: "demo::dao_contract::vote::wallet::Builder", "vote commit: {:?}", vote_commit);
         let vote_coords = vote_commit.to_affine().coordinates().unwrap();
         let vote_commit_x = *vote_coords.x();
         let vote_commit_y = *vote_coords.y();
@@ -275,7 +275,7 @@ impl Builder {
             Witness::Base(Value::known(self.dao.bulla_blind)),
             // Vote
             Witness::Base(Value::known(vote)),
-            Witness::Scalar(Value::known(vote_blind)),
+            Witness::Scalar(Value::known(self.vote.vote_option_blind)),
             // Total number of gov tokens allocated
             Witness::Base(Value::known(value_base)),
             Witness::Scalar(Value::known(value_blind)),
