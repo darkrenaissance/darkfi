@@ -45,6 +45,11 @@ use darkfi::{
 
 use crate::{dao_contract, money_contract, util::poseidon_hash};
 
+// TODO: Anonymity leaks in this proof of concept:
+//
+// * Vote updates are linked to the proposal_bulla
+// * Nullifier of vote will link vote with the coin when it's spent
+
 // TODO: reenable unused vars warning and fix it
 // TODO: strategize and cleanup Result/Error usage
 // TODO: fix up code doc
