@@ -619,6 +619,15 @@ pub async fn demo() -> Result<()> {
         (merkle_path, root)
     };
 
+    let dao_params = dao_contract::propose::wallet::DaoParams {
+        proposer_limit: dao_proposer_limit,
+        quorum: dao_quorum,
+        approval_ratio: dao_approval_ratio,
+        gov_token_id: gdrk_token_id,
+        public_key: dao_keypair.public,
+        bulla_blind: dao_bulla_blind,
+    };
+
     let builder = dao_contract::propose::wallet::Builder {
         inputs: vec![input],
         proposal: dao_contract::propose::wallet::Proposal {
@@ -628,14 +637,7 @@ pub async fn demo() -> Result<()> {
             token_id: xdrk_token_id,
             blind: pallas::Base::random(&mut OsRng),
         },
-        dao: dao_contract::propose::wallet::DaoParams {
-            proposer_limit: dao_proposer_limit,
-            quorum: dao_quorum,
-            approval_ratio: dao_approval_ratio,
-            gov_token_id: gdrk_token_id,
-            public_key: dao_keypair.public,
-            bulla_blind: dao_bulla_blind,
-        },
+        dao: dao_params.clone(),
         dao_leaf_position,
         dao_merkle_path,
         dao_merkle_root,
@@ -715,13 +717,13 @@ pub async fn demo() -> Result<()> {
     let (money_leaf_position, money_merkle_path) = {
         let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
         let tree = &state.tree;
-        let leaf_position = gov_recv[0].leaf_position.clone();
+        let leaf_position = gov_recv[1].leaf_position.clone();
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
         (leaf_position, merkle_path)
     };
 
-    debug!(target: "demo", "Stage 5. Creating inputs...");
+    debug!(target: "demo", "Creating inputs...");
     let input = dao_contract::vote::wallet::BuilderInput {
         secret: gov_keypair_2.secret,
         note: gov_recv[1].note.clone(),
@@ -734,20 +736,20 @@ pub async fn demo() -> Result<()> {
     assert!(vote_option == true || vote_option == false);
 
     // We create a new keypair to encrypt the vote.
-    let vote_keypair = Keypair::random(&mut OsRng);
+    let vote_keypair_1 = Keypair::random(&mut OsRng);
 
-    debug!(target: "demo", "Stage 5. Creating builder...");
+    debug!(target: "demo", "Creating builder...");
     let builder = dao_contract::vote::wallet::Builder {
         inputs: vec![input],
         vote: dao_contract::vote::wallet::Vote {
-            value_blind: pallas::Scalar::random(&mut OsRng),
             vote_option,
             vote_option_blind: pallas::Scalar::random(&mut OsRng),
         },
-        vote_keypair,
+        vote_keypair: vote_keypair_1,
         proposal,
+        dao: dao_params.clone(),
     };
-    debug!(target: "demo", "Stage 5. build()...");
+    debug!(target: "demo", "build()...");
     let func_call = builder.build(&zk_bins);
 
     let tx = Transaction { func_calls: vec![func_call] };
@@ -758,10 +760,34 @@ pub async fn demo() -> Result<()> {
         if func_call.func_id == "DAO::vote()" {
             debug!(target: "demo", "dao_contract::vote::state_transition()");
 
-            //let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
-            //    .expect("dao_contract::vote::validate::state_transition() failed!");
-            //dao_contract::vote::validate::apply(&mut states, update);
+            let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
+                .expect("dao_contract::vote::validate::state_transition() failed!");
+            dao_contract::vote::validate::apply(&mut states, update);
         }
     }
+
+    tx.zk_verify(&zk_bins);
+
+    //// Wallet
+
+    // Secret vote info. Needs to be revealed at some point.
+    // TODO: look into verifiable encryption for notes
+    // TODO: look into timelock puzzle as a possibility
+    let vote_note_1 = {
+        assert_eq!(tx.func_calls.len(), 1);
+        let func_call = &tx.func_calls[0];
+        let call_data = func_call.call_data.as_any();
+        assert_eq!((&*call_data).type_id(), TypeId::of::<dao_contract::vote::validate::CallData>());
+        let call_data = call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
+
+        let header = &call_data.header;
+        let note: dao_contract::vote::wallet::Note =
+            header.enc_note.decrypt(&vote_keypair_1.secret).unwrap();
+        note
+    };
+    debug!(target: "demo", "User 1 voted!");
+    debug!(target: "demo", "  vote_option: {}", vote_note_1.vote.vote_option);
+    debug!(target: "demo", "  value: {}", vote_note_1.value);
+
     Ok(())
 }

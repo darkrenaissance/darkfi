@@ -54,6 +54,7 @@ pub struct Proposal {
     pub blind: pallas::Base,
 }
 
+#[derive(Clone)]
 pub struct DaoParams {
     pub proposer_limit: u64,
     pub quorum: u64,
