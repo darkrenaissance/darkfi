@@ -33,7 +33,7 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) ->
     let asgn = assignee.unwrap();
 
     if !assignees.contains(&asgn) {
-        println!("We don't know who {} is", asgn);
+        eprintln!("Assignee {} not found, run \"tau log -h\" for more information.", asgn);
         return Ok(())
     }
 
@@ -41,7 +41,13 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) ->
         let stopped_tasks = tasks
             .clone()
             .into_iter()
-            .filter(|t| t.assign.contains(&asgn))
+            .filter(|task| {
+                if task.assign.is_empty() {
+                    task.owner == asgn
+                } else {
+                    task.assign.contains(&asgn)
+                }
+            })
             .collect::<Vec<TaskInfo>>();
         ret.insert(assignee, stopped_tasks);
     }
