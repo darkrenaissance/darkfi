@@ -41,7 +41,7 @@ pub struct Dht {
     /// Network lookup map, containing nodes that holds each key
     pub lookup: FxHashMap<blake3::Hash, HashSet<blake3::Hash>>,
     /// P2P network pointer
-    p2p: P2pPtr,
+    pub p2p: P2pPtr,
     /// Channel to receive responses from P2P
     p2p_recv_channel: async_channel::Receiver<KeyResponse>,
     /// Stop signal channel to terminate background processes

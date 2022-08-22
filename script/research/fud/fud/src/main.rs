@@ -320,6 +320,15 @@ impl Fud {
             }
         }
     }
+
+    // RPCAPI:
+    // Retrieves P2P network information.
+    // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
+    async fn get_info(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let resp = self.dht.read().await.p2p.get_info().await;
+        JsonResponse::new(resp, id).into()
+    }
 }
 
 #[async_trait]
@@ -335,6 +344,7 @@ impl RequestHandler for Fud {
             Some("list") => return self.list(req.id, params).await,
             Some("sync") => return self.sync(req.id, params).await,
             Some("get") => return self.get(req.id, params).await,
+            Some("get_info") => return self.get_info(req.id, params).await,
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
