@@ -207,17 +207,25 @@ impl DataParser {
     ) -> DnetViewResult<()> {
         if node.is_offline == true {
             let node_obj = SelectableObject::Node(node.clone());
-            self.model.selectables.lock().await.insert(node.id.clone(), node_obj);
+            self.model.selectables.lock().await.insert(node.id.clone(), node_obj.clone());
         } else {
             let node_obj = SelectableObject::Node(node.clone());
-            self.model.selectables.lock().await.insert(node.id.clone(), node_obj);
+            self.model.selectables.lock().await.insert(node.id.clone(), node_obj.clone());
             for session in sessions {
                 if !session.is_empty {
                     let session_obj = SelectableObject::Session(session.clone());
-                    self.model.selectables.lock().await.insert(session.clone().id, session_obj);
+                    self.model
+                        .selectables
+                        .lock()
+                        .await
+                        .insert(session.clone().id, session_obj.clone());
                     for connect in session.children {
                         let connect_obj = SelectableObject::Connect(connect.clone());
-                        self.model.selectables.lock().await.insert(connect.clone().id, connect_obj);
+                        self.model
+                            .selectables
+                            .lock()
+                            .await
+                            .insert(connect.clone().id, connect_obj.clone());
                     }
                 }
             }

@@ -6,7 +6,7 @@ use darkfi::util::{
     join_config_path,
 };
 use easy_parallel::Parallel;
-use log::{debug, info};
+use log::info;
 use simplelog::*;
 use smol::Executor;
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
@@ -54,6 +54,7 @@ impl DnetView {
             self.view.update(
                 self.model.msg_map.lock().await.clone(),
                 self.model.selectables.lock().await.clone(),
+                //self.model.selectables2.lock().await.clone(),
             );
 
             //debug!(target: "dnetview::render_view()", "ID MENU: {:?}", self.view.id_menu.ids);
@@ -105,7 +106,7 @@ impl DnetView {
 
 #[async_std::main]
 async fn main() -> DnetViewResult<()> {
-    debug!(target: "dnetview", "main() START");
+    //debug!(target: "dnetview", "main() START");
     let options = ProgramOptions::load()?;
 
     let verbosity_level = options.app.occurrences_of("verbose");

@@ -1,12 +1,11 @@
 use fxhash::FxHashMap;
-use tui::widgets::ListState;
 
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
 
@@ -17,7 +16,7 @@ use crate::{
     model::{NodeInfo, SelectableObject},
 };
 
-use log::debug;
+//use log::debug;
 
 type MsgLog = Vec<(NanoTimestamp, String, String)>;
 type MsgMap = FxHashMap<String, MsgLog>;
@@ -27,6 +26,7 @@ pub struct View {
     pub id_menu: IdMenu,
     pub msg_list: MsgList,
     pub selectables: FxHashMap<String, SelectableObject>,
+    pub ordered_list: Vec<String>,
 }
 
 impl<'a> View {
@@ -35,8 +35,9 @@ impl<'a> View {
         let msg_list = MsgList::new(msg_map.clone(), 0);
         let selectables = FxHashMap::default();
         let id_menu = IdMenu::new(Vec::new());
+        let ordered_list = Vec::new();
 
-        View { id_menu, msg_list, selectables }
+        View { id_menu, msg_list, selectables, ordered_list }
     }
 
     pub fn update(&mut self, msg_map: MsgMap, selectables: FxHashMap<String, SelectableObject>) {
@@ -44,6 +45,7 @@ impl<'a> View {
         self.update_msg_list(msg_map);
         self.update_id_menu(selectables);
         self.update_msg_index();
+        self.make_ordered_list();
     }
 
     fn update_id_menu(&mut self, selectables: FxHashMap<String, SelectableObject>) {
@@ -60,12 +62,46 @@ impl<'a> View {
         }
     }
 
+    fn make_ordered_list(&mut self) {
+        for obj in self.selectables.values() {
+            match obj {
+                SelectableObject::Node(node) => match node.is_offline {
+                    true => {
+                        if !self.ordered_list.iter().any(|i| i == &node.id) {
+                            self.ordered_list.push(node.id.clone());
+                        }
+                    }
+                    false => {
+                        if !self.ordered_list.iter().any(|i| i == &node.id) {
+                            self.ordered_list.push(node.id.clone());
+                        }
+                        for session in &node.children {
+                            if !session.is_empty {
+                                if !self.ordered_list.iter().any(|i| i == &session.id) {
+                                    self.ordered_list.push(session.id.clone());
+                                }
+                                for connection in &session.children {
+                                    if !self.ordered_list.iter().any(|i| i == &connection.id) {
+                                        self.ordered_list.push(connection.id.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                _ => {}
+            }
+        }
+
+        //debug!(target: "dnetview", "render_ids()::ordered_list: {:?}", self.ordered_list);
+    }
+
     // TODO: this function is dynamically resizing the msgs index
     // according to what set of msgs is selected.
     // it's ugly. would prefer something more simple
     fn update_msg_index(&mut self) {
         match self.id_menu.state.selected() {
-            Some(i) => match self.id_menu.ids.get(i) {
+            Some(i) => match self.ordered_list.get(i) {
                 Some(i) => match self.msg_list.msg_map.get(i) {
                     Some(i) => {
                         self.msg_list.index = i.len();
@@ -96,28 +132,29 @@ impl<'a> View {
             .split(f.size());
 
         self.render_ids(f, slice.clone())?;
-        if self.id_menu.ids.is_empty() {
+        if self.ordered_list.is_empty() {
             // we have not received any data
             Ok(())
         } else {
             // get the id at the current index
             match self.id_menu.state.selected() {
-                Some(i) => match self.id_menu.ids.get(i) {
-                    Some(i) => {
-                        let id = i.clone();
-                        self.render_info(f, slice, id)?;
-                        Ok(())
+                Some(i) => {
+                    //debug!(target: "dnetview", "render()::selected index: {}", i);
+                    match self.ordered_list.get(i) {
+                        Some(i) => {
+                            let id = i.clone();
+                            self.render_info(f, slice, id)?;
+                            Ok(())
+                        }
+                        None => Err(DnetViewError::NoIdAtIndex),
                     }
-                    None => Err(DnetViewError::NoIdAtIndex),
-                },
+                }
                 // nothing is selected right now
                 None => Ok(()),
             }
         }
     }
 
-    // either the Vec<String> needs to be reordered according to the order of nodes: Vec<Spans>
-    // or Vec<Spans> needs to be reordered according to Vec<String>
     fn render_ids<B: Backend>(
         &mut self,
         f: &mut Frame<'_, B>,
@@ -128,11 +165,11 @@ impl<'a> View {
 
         for obj in self.selectables.values() {
             match obj {
-                SelectableObject::Node(info) => match info.is_offline {
+                SelectableObject::Node(node) => match node.is_offline {
                     true => {
                         let style = Style::default().fg(Color::Blue).add_modifier(Modifier::ITALIC);
                         let mut name = String::new();
-                        name.push_str(&info.name);
+                        name.push_str(&node.name);
                         name.push_str("(Offline)");
                         let name_span = Span::styled(name, style);
                         let lines = vec![Spans::from(name_span)];
@@ -140,11 +177,11 @@ impl<'a> View {
                         nodes.push(names);
                     }
                     false => {
-                        let name_span = Span::raw(&info.name);
+                        let name_span = Span::raw(&node.name);
                         let lines = vec![Spans::from(name_span)];
                         let names = ListItem::new(lines);
                         nodes.push(names);
-                        for session in &info.children {
+                        for session in &node.children {
                             if !session.is_empty {
                                 let name = Span::styled(format!("    {}", session.name), style);
                                 let lines = vec![Spans::from(name)];
@@ -240,11 +277,11 @@ impl<'a> View {
             return Ok(())
         } else {
             let info = self.selectables.get(&selected);
-            debug!(target: "dnetview", "render_info()::selected {}", selected);
+            //debug!(target: "dnetview", "render_info()::selected {}", selected);
 
             match info {
                 Some(SelectableObject::Node(node)) => {
-                    debug!(target: "dnetview", "render_info()::SelectableObject::Node");
+                    //debug!(target: "dnetview", "render_info()::SelectableObject::Node");
                     match &node.external_addr {
                         Some(addr) => {
                             let node_info = Span::styled(format!("External addr: {}", addr), style);
@@ -261,7 +298,7 @@ impl<'a> View {
                     )));
                 }
                 Some(SelectableObject::Session(session)) => {
-                    debug!(target: "dnetview", "render_info()::SelectableObject::Session");
+                    //debug!(target: "dnetview", "render_info()::SelectableObject::Session");
                     if session.accept_addr.is_some() {
                         let session_info = Span::styled(
                             format!("Accept addr: {}", session.accept_addr.as_ref().unwrap()),
@@ -271,7 +308,7 @@ impl<'a> View {
                     }
                 }
                 Some(SelectableObject::Connect(connect)) => {
-                    debug!(target: "dnetview", "render_info()::SelectableObject::Connect");
+                    //debug!(target: "dnetview", "render_info()::SelectableObject::Connect");
                     let text = self.parse_msg_list(connect.id.clone())?;
                     f.render_stateful_widget(text, slice[1], &mut self.msg_list.state);
                 }

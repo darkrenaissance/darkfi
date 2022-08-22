@@ -1,6 +1,6 @@
 use async_std::sync::{Arc, Mutex};
 
-use fxhash::{FxHashMap, FxHashSet};
+use fxhash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 use darkfi::util::NanoTimestamp;
