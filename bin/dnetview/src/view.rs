@@ -17,7 +17,7 @@ use crate::{
     model::{NodeInfo, SelectableObject},
 };
 
-//use log::debug;
+use log::debug;
 
 type MsgLog = Vec<(NanoTimestamp, String, String)>;
 type MsgMap = FxHashMap<String, MsgLog>;
@@ -39,22 +39,17 @@ impl<'a> View {
         View { id_menu, msg_list, selectables }
     }
 
-    pub fn update(
-        &mut self,
-        ids: Vec<String>,
-        msg_map: MsgMap,
-        selectables: FxHashMap<String, SelectableObject>,
-    ) {
-        self.update_selectable(selectables);
+    pub fn update(&mut self, msg_map: MsgMap, selectables: FxHashMap<String, SelectableObject>) {
+        self.update_selectable(selectables.clone());
         self.update_msg_list(msg_map);
-        self.update_id_menu(ids);
+        self.update_id_menu(selectables);
         self.update_msg_index();
     }
 
-    fn update_id_menu(&mut self, ids: Vec<String>) {
-        for id in ids {
-            if !self.id_menu.ids.iter().any(|i| i == &id) {
-                self.id_menu.ids.push(id);
+    fn update_id_menu(&mut self, selectables: FxHashMap<String, SelectableObject>) {
+        for id in selectables.keys() {
+            if !self.id_menu.ids.iter().any(|i| i == id) {
+                self.id_menu.ids.push(id.to_string());
             }
         }
     }
@@ -121,6 +116,8 @@ impl<'a> View {
         }
     }
 
+    // either the Vec<String> needs to be reordered according to the order of nodes: Vec<Spans>
+    // or Vec<Spans> needs to be reordered according to Vec<String>
     fn render_ids<B: Backend>(
         &mut self,
         f: &mut Frame<'_, B>,
@@ -243,9 +240,11 @@ impl<'a> View {
             return Ok(())
         } else {
             let info = self.selectables.get(&selected);
+            debug!(target: "dnetview", "render_info()::selected {}", selected);
 
             match info {
                 Some(SelectableObject::Node(node)) => {
+                    debug!(target: "dnetview", "render_info()::SelectableObject::Node");
                     match &node.external_addr {
                         Some(addr) => {
                             let node_info = Span::styled(format!("External addr: {}", addr), style);
@@ -262,6 +261,7 @@ impl<'a> View {
                     )));
                 }
                 Some(SelectableObject::Session(session)) => {
+                    debug!(target: "dnetview", "render_info()::SelectableObject::Session");
                     if session.accept_addr.is_some() {
                         let session_info = Span::styled(
                             format!("Accept addr: {}", session.accept_addr.as_ref().unwrap()),
@@ -271,6 +271,7 @@ impl<'a> View {
                     }
                 }
                 Some(SelectableObject::Connect(connect)) => {
+                    debug!(target: "dnetview", "render_info()::SelectableObject::Connect");
                     let text = self.parse_msg_list(connect.id.clone())?;
                     f.render_stateful_widget(text, slice[1], &mut self.msg_list.state);
                 }
@@ -298,6 +299,7 @@ impl IdMenu {
     pub fn new(ids: Vec<String>) -> IdMenu {
         IdMenu { state: ListState::default(), ids }
     }
+
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {

@@ -25,8 +25,6 @@ pub enum SelectableObject {
 
 #[derive(Debug)]
 pub struct Model {
-    pub unique_ids: Mutex<FxHashSet<String>>,
-    pub id_vec: Mutex<Vec<String>>,
     pub msg_map: MsgMap,
     pub msg_log: Mutex<MsgLog>,
     pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
@@ -34,12 +32,10 @@ pub struct Model {
 
 impl Model {
     pub fn new() -> Arc<Self> {
-        let unique_ids = Mutex::new(FxHashSet::default());
-        let id_vec = Mutex::new(Vec::new());
         let selectables = Mutex::new(FxHashMap::default());
         let msg_map = Mutex::new(FxHashMap::default());
         let msg_log = Mutex::new(Vec::new());
-        Arc::new(Model { unique_ids, id_vec, msg_map, msg_log, selectables })
+        Arc::new(Model { msg_map, msg_log, selectables })
     }
 }
 

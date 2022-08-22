@@ -52,12 +52,12 @@ impl DnetView {
 
         loop {
             self.view.update(
-                self.model.id_vec.lock().await.clone(),
                 self.model.msg_map.lock().await.clone(),
                 self.model.selectables.lock().await.clone(),
             );
 
-            debug!(target: "dnetview::render_view()", "ID LIST: {:?}", self.view.id_menu.ids);
+            //debug!(target: "dnetview::render_view()", "ID MENU: {:?}", self.view.id_menu.ids);
+            //debug!(target: "dnetview::render_view()", "SELECTABLES ID LIST: {:?}", self.model.selectables.lock().await.keys());
 
             let mut err: Option<DnetViewError> = None;
 
