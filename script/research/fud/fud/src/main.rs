@@ -320,6 +320,14 @@ impl Fud {
             }
         }
     }
+    
+    // RPCAPI:
+    // Replies to a ping method.
+    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
+    async fn pong(&self, id: Value, _params: &[Value]) -> JsonResult {
+        JsonResponse::new(json!("pong"), id).into()
+    }
 
     // RPCAPI:
     // Retrieves P2P network information.
@@ -344,6 +352,7 @@ impl RequestHandler for Fud {
             Some("list") => return self.list(req.id, params).await,
             Some("sync") => return self.sync(req.id, params).await,
             Some("get") => return self.get(req.id, params).await,
+            Some("ping") => return self.pong(req.id, params).await,
             Some("get_info") => return self.get_info(req.id, params).await,
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
