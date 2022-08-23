@@ -30,7 +30,6 @@ use darkfi::{
     Result,
 };
 
-mod error;
 mod jsonrpc;
 mod patch;
 
