@@ -55,9 +55,6 @@ pub struct Args {
     /// Sets a custom config file
     #[structopt(long)]
     pub config: Option<String>,
-    /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.config/darkfi/darkwiki")]
-    pub datastore: String,
     /// Sets Docs Path
     #[structopt(long, default_value = "~/darkwiki")]
     pub docs: String,
@@ -167,13 +164,16 @@ fn get_docs_paths(files: &mut Vec<PathBuf>, path: &Path, parent: Option<&Path>) 
     let docs = docs.filter(|d| d.is_ok()).map(|d| d.unwrap().path()).collect::<Vec<PathBuf>>();
 
     for doc in docs {
-        if let Some(file_name) = doc.file_name() {
-            let file_name = PathBuf::from(file_name);
+        if let Some(f) = doc.file_name() {
+            let file_name = PathBuf::from(f);
             let file_name =
                 if let Some(parent) = parent { parent.join(file_name) } else { file_name };
             if doc.is_file() {
                 files.push(file_name);
             } else if doc.is_dir() {
+                if f == ".log" {
+                    continue
+                }
                 get_docs_paths(files, &doc, Some(&file_name))?;
             }
         }
@@ -508,8 +508,13 @@ impl Darkwiki {
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
-    let datastore_path = expand_path(&settings.datastore)?;
     let docs_path = expand_path(&settings.docs)?;
+    let datastore_path = expand_path(docs_path.join(".log").to_str().unwrap())?;
+
+    create_dir_all(docs_path.clone())?;
+    create_dir_all(datastore_path.clone())?;
+    create_dir_all(datastore_path.join("local"))?;
+    create_dir_all(datastore_path.join("sync"))?;
 
     if settings.keygen {
         info!("Generating a new secret key");
@@ -527,10 +532,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let secret = crypto_box::SecretKey::from(bytes);
     let public = secret.public_key();
     let salsa_box = crypto_box::SalsaBox::new(&public, &secret);
-
-    create_dir_all(docs_path.clone())?;
-    create_dir_all(datastore_path.join("local"))?;
-    create_dir_all(datastore_path.join("sync"))?;
 
     let (rpc_sx, rpc_rv) = async_channel::unbounded::<(String, bool, Vec<String>)>();
     let (notify_sx, notify_rv) = async_channel::unbounded::<Vec<Vec<(String, String)>>>();
