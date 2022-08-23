@@ -23,6 +23,7 @@
   - [vanityaddr](misc/vanityaddr.md)
   - [ircd](misc/ircd.md)
   - [tau](misc/tau.md)
+  - [darkwiki](misc/darkwiki.md)
   - [dnetview](misc/dnetview.md)
 - [Learn](learn/learn.md)
   - [Research](learn/research.md)
