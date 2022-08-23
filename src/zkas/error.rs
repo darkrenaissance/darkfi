@@ -14,14 +14,17 @@ impl ErrorEmitter {
     }
 
     fn fmt(&self, msg: String, ln: usize, col: usize) -> String {
-        let err_msg = format!("{} (line {}, column {})", msg, ln, col);
-        let (dbg_msg, caret) = match ln {
-            0 => ("".to_string(), "".to_string()),
+        let (err_msg, dbg_msg, caret) = match ln {
+            0 => {
+                let err_msg = format!("{}", msg);
+                (err_msg, "".to_string(), "".to_string())
+            }
             _ => {
+                let err_msg = format!("{} (line {}, column {})", msg, ln, col);
                 let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
                 let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
                 let caret = format!("{:width$}^", "", width = pad);
-                (dbg_msg, caret)
+                (err_msg, dbg_msg, caret)
             }
         };
         format!("{}\n{}\n{}\n", err_msg, dbg_msg, caret)
