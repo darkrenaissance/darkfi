@@ -3,7 +3,6 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
-use url::Url;
 
 use crate::{util::async_util, Result};
 
@@ -102,10 +101,10 @@ impl ProtocolAddress {
         }
     }
 
-    async fn send_addrs(self: Arc<Self>, addrs: Vec<Url>) -> Result<()> {
+    async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolAddress::send_addrs() [START]");
         loop {
-            let addrs = addrs.clone();
+            let addrs = self.settings.external_addr.clone();
             let addr_msg = message::AddrsMessage { addrs };
             self.channel.clone().send(addr_msg).await?;
             async_util::sleep(SEND_ADDR_SLEEP_SECONDS).await;
@@ -123,15 +122,9 @@ impl ProtocolBase for ProtocolAddress {
 
         // if it's an outbound session + has an external address
         // send our address
-        if type_id == SESSION_OUTBOUND && self.settings.external_addr.is_some() {
+        if type_id == SESSION_OUTBOUND && !self.settings.external_addr.is_empty() {
             self.jobsman.clone().start(executor.clone());
-            self.jobsman
-                .clone()
-                .spawn(
-                    self.clone().send_addrs(vec![self.settings.external_addr.clone().unwrap()]),
-                    executor.clone(),
-                )
-                .await;
+            self.jobsman.clone().spawn(self.clone().send_my_addrs(), executor.clone()).await;
         }
 
         debug!(target: "net", "ProtocolAddress::start() [START]");

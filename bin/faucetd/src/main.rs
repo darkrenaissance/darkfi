@@ -77,12 +77,12 @@ struct Args {
     rpc_listen: Url,
 
     #[structopt(long)]
-    /// P2P accept address for the syncing protocol
-    sync_p2p_accept: Option<Url>,
+    /// P2P accept addresses for the syncing protocol
+    sync_p2p_accept: Vec<Url>,
 
     #[structopt(long)]
-    /// P2P external address for the syncing protocol
-    sync_p2p_external: Option<Url>,
+    /// P2P external addresses for the syncing protocol
+    sync_p2p_external: Vec<Url>,
 
     #[structopt(long, default_value = "8")]
     /// Connection slots for the syncing protocol

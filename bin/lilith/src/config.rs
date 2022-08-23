@@ -16,9 +16,9 @@ pub struct Args {
     /// Configuration file to use
     pub config: Option<String>,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1")]
-    /// Daemon published url, common for all enabled networks
-    pub url: Url,
+    #[structopt(long)]
+    /// Daemon published urls, common for all enabled networks (repeatable flag)
+    pub urls: Vec<Url>,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -40,8 +40,8 @@ pub struct NetInfo {
 /// a map containing said configurations.
 ///
 /// ```toml
-/// [network."darkfid"]
-/// port = 7650
+/// [network."darkfid_sync"]
+/// port = 33032
 /// seeds = []
 /// peers = []
 /// ```

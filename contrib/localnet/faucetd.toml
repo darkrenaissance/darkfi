@@ -21,11 +21,11 @@ database = "faucetd/blockchain"
 # JSON-RPC listen URL
 rpc_listen = "tls://127.0.0.1:8640"
 
-# P2P accept address for the syncing protocol
-sync_p2p_accept = "tls://127.0.0.1:8642"
+# P2P accept addresses for the syncing protocol
+sync_p2p_accept = ["tls://127.0.0.1:8642"]
 
-# P2P external address for the syncing protocol
-sync_p2p_external = "tls://127.0.0.1:8642"
+# P2P external addresses for the syncing protocol
+sync_p2p_external = ["tls://127.0.0.1:8642"]
 
 # Connection slots for the syncing protocol
 #sync_slots = 8

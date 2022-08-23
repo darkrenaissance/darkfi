@@ -4,7 +4,6 @@ set -e
 # Start a tmux session with a lilith node and two fud nodes.
 
 tmux new-session -d
-tmux new-session -d
 tmux send-keys "../../../../lilith -c lilith_config.toml" Enter
 sleep 2
 tmux split-window -v

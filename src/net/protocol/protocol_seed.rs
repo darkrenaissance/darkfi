@@ -37,19 +37,19 @@ impl ProtocolSeed {
         Arc::new(Self { channel, hosts, settings, addr_sub })
     }
 
-    /// Sends own external address over a channel. Imports own external address
-    /// from settings, then adds that address to an address message and
+    /// Sends own external addresses over a channel. Imports own external addresses
+    /// from settings, then adds that addresses to an address message and
     /// sends it out over the channel.
     pub async fn send_self_address(&self) -> Result<()> {
-        match self.settings.external_addr.clone() {
-            Some(addr) => {
-                debug!(target: "net", "ProtocolSeed::send_own_address() addr={}", addr);
-                let addr = message::AddrsMessage { addrs: vec![addr] };
-                Ok(self.channel.clone().send(addr).await?)
-            }
-            // Do nothing if external address is not configured
-            None => Ok(()),
+        // Do nothing if external address is not configured
+        if self.settings.external_addr.is_empty() {
+            return Ok(())
         }
+
+        let addrs = self.settings.external_addr.clone();
+        debug!(target: "net", "ProtocolSeed::send_own_address() addrs={:?}", addrs);
+        let addrs = message::AddrsMessage { addrs };
+        Ok(self.channel.clone().send(addrs).await?)
     }
 }
 

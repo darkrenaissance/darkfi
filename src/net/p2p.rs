@@ -109,15 +109,14 @@ impl P2p {
     }
 
     pub async fn get_info(&self) -> serde_json::Value {
-        let external_addr = self
-            .settings
-            .external_addr
-            .as_ref()
-            .map(|addr| serde_json::Value::from(addr.to_string()))
-            .unwrap_or(serde_json::Value::Null);
+        // Building ext_addr_vec string
+        let mut ext_addr_vec = vec![];
+        for ext_addr in &self.settings.external_addr {
+            ext_addr_vec.push(ext_addr.as_ref().to_string());
+        }
 
         json!({
-            "external_addr": external_addr,
+            "external_addr": format!("{:?}", ext_addr_vec),
             "session_manual": self.session_manual().await.get_info().await,
             "session_inbound": self.session_inbound().await.get_info().await,
             "session_outbound": self.session_outbound().await.get_info().await,

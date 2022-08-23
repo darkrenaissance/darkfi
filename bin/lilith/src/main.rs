@@ -23,12 +23,17 @@ const CONFIG_FILE_CONTENTS: &str = include_str!("../lilith_config.toml");
 async fn spawn_network(
     name: &str,
     info: NetInfo,
-    mut url: Url,
+    urls: Vec<Url>,
     ex: Arc<Executor<'_>>,
 ) -> Result<()> {
-    url.set_port(Some(info.port))?;
+    let mut full_urls = Vec::new();
+    for url in &urls {
+        let mut url = url.clone();
+        url.set_port(Some(info.port))?;
+        full_urls.push(url);
+    }
     let network_settings = net::Settings {
-        inbound: Some(url.clone()),
+        inbound: full_urls.clone(),
         seeds: info.seeds,
         peers: info.peers,
         outbound_connections: 0,
@@ -37,7 +42,12 @@ async fn spawn_network(
 
     let p2p = net::P2p::new(network_settings).await;
 
-    info!("Starting seed network node for {} at: {}", name, url);
+    // Building ext_addr_vec string
+    let mut urls_vec = vec![];
+    for url in &full_urls {
+        urls_vec.push(url.as_ref().to_string());
+    }
+    info!("Starting seed network node for {} at: {:?}", name, urls_vec);
     p2p.clone().start(ex.clone()).await?;
     let _ex = ex.clone();
     ex.spawn(async move {
@@ -72,9 +82,17 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         return Ok(())
     }
 
+    // Setting urls
+    let mut urls = args.urls.clone();
+    if urls.is_empty() {
+        info!("Urls are not provided, will use: tcp://127.0.0.1");
+        let url = Url::parse("tcp://127.0.0.1")?;
+        urls.push(url);
+    }
+
     // Spawn configured networks
     for (name, info) in &configured_nets {
-        if let Err(e) = spawn_network(name, info.clone(), args.url.clone(), ex.clone()).await {
+        if let Err(e) = spawn_network(name, info.clone(), urls.clone(), ex.clone()).await {
             error!("Failed starting {} P2P network seed: {}", name, e);
         }
     }

@@ -9,14 +9,14 @@
 
 ## Raft net settings
 [net]
-## P2P accept address
-#inbound="tcp://127.0.0.1:12002" 
+## P2P accept addresses
+#inbound=["tcp://127.0.0.1:12002"]
 
 ## Connection slots
 outbound_connections=5
 
-## P2P external address
-#external_addr="tls://127.0.0.1:12002"
+## P2P external addresses
+#external_addr=["tls://127.0.0.1:12002"]
 
 ## Peers to connect to
 #peers=["tls://127.0.0.1:12003"]

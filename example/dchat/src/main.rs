@@ -145,8 +145,8 @@ fn alice() -> Result<AppSettings> {
     let ext_addr = Url::parse("tcp://127.0.0.1:51554").unwrap();
 
     let net = Settings {
-        inbound: Some(inbound),
-        external_addr: Some(ext_addr),
+        inbound: vec![inbound],
+        external_addr: vec![ext_addr],
         seeds: vec![seed],
         ..Default::default()
     };
@@ -168,7 +168,7 @@ fn bob() -> Result<AppSettings> {
     let seed = Url::parse("tcp://127.0.0.1:50515").unwrap();
 
     let net = Settings {
-        inbound: None,
+        inbound: vec![],
         outbound_connections: 5,
         seeds: vec![seed],
         ..Default::default()

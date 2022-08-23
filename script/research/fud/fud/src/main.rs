@@ -52,12 +52,12 @@ struct Args {
     rpc_listen: Url,
 
     #[structopt(long)]
-    /// P2P accept address
-    p2p_accept: Option<Url>,
+    /// P2P accept addresses (repeatable flag)
+    p2p_accept: Vec<Url>,
 
     #[structopt(long)]
-    /// P2P external address
-    p2p_external: Option<Url>,
+    /// P2P external addresses (repeatable flag)
+    p2p_external: Vec<Url>,
 
     #[structopt(long, default_value = "8")]
     /// Connection slots

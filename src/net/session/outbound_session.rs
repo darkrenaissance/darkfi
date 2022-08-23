@@ -3,7 +3,7 @@ use std::fmt;
 
 use async_executor::Executor;
 use async_trait::async_trait;
-use log::{info, warn};
+use log::{debug, info};
 use rand::seq::SliceRandom;
 use serde_json::json;
 use url::Url;
@@ -224,20 +224,22 @@ impl OutboundSession {
                 return Ok(addr)
             }
 
-            warn!(target: "net", "Hosts address pool is empty. Retrying connect slot #{}", slot_number);
+            debug!(target: "net", "Hosts address pool is empty. Retrying connect slot #{}", slot_number);
 
             async_util::sleep(p2p.settings().outbound_retry_seconds).await;
         }
     }
 
-    /// Checks whether an address is our own inbound address to avoid connecting
+    /// Checks whether an address is in our own inbound addresses to avoid connecting
     /// to ourselves.
-    fn is_self_inbound(addr: &Url, inbound_addr: &Option<Url>) -> bool {
-        match inbound_addr {
-            Some(inbound_addr) => inbound_addr == addr,
-            // No inbound listening address configured
-            None => false,
+    fn is_self_inbound(addr: &Url, inbound_addr: &Vec<Url>) -> bool {
+        for ext_addr in inbound_addr {
+            if ext_addr == addr {
+                return true
+            }
         }
+        // No inbound listening address configured
+        false
     }
 }
 

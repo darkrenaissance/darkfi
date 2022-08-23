@@ -11,7 +11,7 @@ pub type SettingsPtr = Arc<Settings>;
 /// Default settings for the network. Can be manually configured.
 #[derive(Clone, Debug)]
 pub struct Settings {
-    pub inbound: Option<Url>,
+    pub inbound: Vec<Url>,
     pub outbound_connections: u32,
     pub manual_attempt_limit: u32,
     pub seed_query_timeout_seconds: u32,
@@ -19,7 +19,7 @@ pub struct Settings {
     pub channel_handshake_seconds: u32,
     pub channel_heartbeat_seconds: u32,
     pub outbound_retry_seconds: u64,
-    pub external_addr: Option<Url>,
+    pub external_addr: Vec<Url>,
     pub peers: Vec<Url>,
     pub seeds: Vec<Url>,
     pub node_id: String,
@@ -28,7 +28,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            inbound: None,
+            inbound: Vec::new(),
             outbound_connections: 0,
             manual_attempt_limit: 0,
             seed_query_timeout_seconds: 8,
@@ -36,7 +36,7 @@ impl Default for Settings {
             channel_handshake_seconds: 4,
             channel_heartbeat_seconds: 10,
             outbound_retry_seconds: 20,
-            external_addr: None,
+            external_addr: Vec::new(),
             peers: Vec::new(),
             seeds: Vec::new(),
             node_id: String::new(),
@@ -49,16 +49,18 @@ impl Default for Settings {
 #[structopt()]
 pub struct SettingsOpt {
     /// P2P accept address
+    #[serde(default)]
     #[structopt(long = "accept")]
-    pub inbound: Option<Url>,
+    pub inbound: Vec<Url>,
 
     /// Connection slots
     #[structopt(long = "slots")]
     pub outbound_connections: Option<u32>,
 
     /// P2P external address
+    #[serde(default)]
     #[structopt(long)]
-    pub external_addr: Option<Url>,
+    pub external_addr: Vec<Url>,
 
     /// Peer nodes to connect to
     #[serde(default)]

@@ -13,10 +13,10 @@ folder = "fud1"
 rpc_listen = "tls://127.0.0.1:13340"
 
 # P2P accept address
-p2p_accept = "tls://127.0.0.1:13341"
+p2p_accept = ["tls://127.0.0.1:13341"]
 
 # P2P external address
-p2p_external = "tls://127.0.0.1:13341"
+p2p_external = ["tls://127.0.0.1:13341"]
 
 # Connection slots
 #slots = 8

@@ -24,11 +24,11 @@ rpc_listen = "tcp://127.0.0.1:8540"
 # Participate in the consensus protocol
 consensus = false
 
-# P2P accept address for the consensus protocol
-#consensus_p2p_accept = "tls://127.0.0.1:8541"
+# P2P accept addresses for the consensus protocol
+#consensus_p2p_accept = ["tls://127.0.0.1:8541"]
 
-# P2P external address for the consensus protocol
-#consensus_p2p_external = "tls://127.0.0.1:8541"
+# P2P external addressesfor the consensus protocol
+#consensus_p2p_external = ["tls://127.0.0.1:8541"]
 
 # Connection slots for the consensus protocol
 #consensus_slots = 8
@@ -39,11 +39,11 @@ consensus = false
 # Peers to connect to for the consensus protocol
 #consensus_p2p_peer = []
 
-# P2P accept address for the syncing protocol
-sync_p2p_accept = "tls://127.0.0.1:8542"
+# P2P accept addresses for the syncing protocol
+sync_p2p_accept = ["tls://127.0.0.1:8542"]
 
-# P2P external address for the syncing protocol
-sync_p2p_external = "tls://127.0.0.1:8542"
+# P2P external addresses for the syncing protocol
+sync_p2p_external = ["tls://127.0.0.1:8542"]
 
 # Connection slots for the syncing protocol
 #sync_slots = 8

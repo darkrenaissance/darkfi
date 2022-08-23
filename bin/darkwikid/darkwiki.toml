@@ -12,14 +12,14 @@ secret = "86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"
 
 ## Raft net settings
 [net]
-## P2P accept address
-inbound="tls://127.0.0.1:13001"
+## P2P accept addresses
+inbound=["tls://127.0.0.1:13001"]
 
 ## Connection slots
 outbound_connections=5
 
-## P2P external address
-external_addr="tls://127.0.0.1:13001"
+## P2P external addresses
+external_addr=["tls://127.0.0.1:13001"]
 
 ## Peers to connect to
 #peers=["tls://127.0.0.1:13003"]

@@ -23,18 +23,18 @@ autojoin = ["#dev", "#memes", "#philosophy", "#markets", "#math", "#random"]
 ## Connection slots
 outbound_connections=5
 
-## P2P accept address
-#inbound="tls://0.0.0.0:11002" 
+## P2P accept addresses
+#inbound=["tls://0.0.0.0:11002"]
 # ipv6 version:
-#inbound="tls://[::]:11002" 
+#inbound=["tls://[::]:11002"]
 
-## P2P external address
-## Put your IP or hostname here
+## P2P external addresses
+## Put your IPs or hostnames here
 ## This is how people can reach you on the inbound port configured above
 ## You can also put an ipv6 address :)
-#external_addr="tls://XXX.XXX.XXX.XXX:11002"
+#external_addr=["tls://XXX.XXX.XXX.XXX:11002"]
 # ipv6 version:
-#external_addr="tls://[ipv6 address here]:11002"
+#external_addr=["tls://[ipv6 address here]:11002"]
 
 ## Manually configured peers to connect to
 #peers=["tls://127.0.0.1:11003"]

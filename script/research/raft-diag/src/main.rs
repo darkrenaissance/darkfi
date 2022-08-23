@@ -28,7 +28,7 @@ pub struct Args {
     pub rpc_listen: Url,
     /// Inbound listen URL
     #[structopt(long = "inbound")]
-    pub inbound_url: Option<Url>,
+    pub inbound_url: Vec<Url>,
     /// Seed Urls
     #[structopt(long = "seeds")]
     pub seed_urls: Vec<Url>,
