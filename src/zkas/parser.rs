@@ -534,6 +534,43 @@ impl Parser {
     fn parse_ast_circuit(&self, statements: Vec<Vec<Token>>) -> Vec<Statement> {
         let mut ret = vec![];
 
+        // In here, we want to support nested function calls, e.g.:
+        //
+        //      constrain_instance(ec_get_x(token_commit));
+        //
+        // The inner call's result would still get pushed on the stack,
+        // but it will not be accessible in any other scope.
+
+        // In certain opcodes, we also support literal types, and the
+        // opcodes can return a variable type after running the operation.
+        // e.g.
+        //            one = witness_base(1);
+        //           zero = witness_base(0);
+        //
+        // The literal type is used only in the function call's scope, but
+        // the result is then accessible on the stack to be used by further
+        // computation.
+
+        // The statement layouts/syntax in the language are as follows:
+        //
+        // C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
+        // | |          |                   |       |
+        // V V          V                   V       V
+        // variable    opcode              arg     arg
+        // assign
+        //
+        //                    constrain_instance(C);
+        //                       |               |
+        //                       V               V
+        //                     opcode           arg
+        //
+        //                                              inner opcode arg
+        //                                               |
+        //                  constrain_instance(ec_get_x(foo));
+        //                        |                 |
+        //                        V                 V
+        //                     opcode          arg as opcode
+
         ret
     }
 }
