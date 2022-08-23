@@ -1,4 +1,4 @@
-rkwiki
+# Darkwiki
 
 Collaborative wiki using peer-to-peer network and raft consensus.
 
@@ -46,7 +46,7 @@ Collaborative wiki using peer-to-peer network and raft consensus.
 % darkwiki update --dry-run
 ```
 
-5 - Both `restore` and `update` commands are accepting pass the files names instead of updating/restoring all the documents in ~/darkwiki
+5 - Both `restore` and `update` commands are accepting passing the files names instead of updating/restoring all the documents in ~/darkwiki
 
 ```shell
 % darkwiki update file1.md file2.md 
