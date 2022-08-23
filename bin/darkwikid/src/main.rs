@@ -1,6 +1,6 @@
 use async_std::sync::{Arc, Mutex};
 use std::{
-    fs::{create_dir_all, read_dir},
+    fs::{create_dir_all, read_dir, remove_file},
     path::{Path, PathBuf},
 };
 
@@ -138,6 +138,20 @@ fn get_docs_paths(files: &mut Vec<PathBuf>, path: &Path, parent: Option<&Path>) 
     Ok(())
 }
 
+fn is_delete_patch(patch: &Patch) -> bool {
+    if patch.ops().0.len() != 1 {
+        return false
+    }
+
+    if let OpMethod::Delete(d) = patch.ops().0[0] {
+        if patch.base.len() as u64 == d {
+            return true
+        }
+    }
+
+    return false
+}
+
 struct Darkwiki {
     settings: DarkWikiSettings,
     rpc: (
@@ -246,7 +260,6 @@ impl Darkwiki {
         let local_files = read_dir(&local_path)?;
         for file in local_files {
             let file_id = file?.file_name();
-            let file_id = file_id.to_str().unwrap();
             let file_path = local_path.join(&file_id);
             let local_patch: Patch = load_json_file(&file_path)?;
 
@@ -330,15 +343,20 @@ impl Darkwiki {
 
                 // check if the same doc has received patch from the network
                 if let Ok(sync_patch) = load_json_file::<Patch>(&sync_path.join(&doc_id)) {
-                    if sync_patch.timestamp != local_patch.timestamp {
-                        sync_patches.push(sync_patch.clone());
+                    if !is_delete_patch(&sync_patch) {
+                        if sync_patch.timestamp != local_patch.timestamp {
+                            sync_patches.push(sync_patch.clone());
 
-                        let sync_patch_t = new_patch.transform(&sync_patch);
-                        new_patch = new_patch.merge(&sync_patch_t);
-                        if !dry {
-                            self.save_doc(doc_path, &new_patch.to_string())?;
+                            let sync_patch_t = new_patch.transform(&sync_patch);
+                            new_patch = new_patch.merge(&sync_patch_t);
+                            if !dry {
+                                self.save_doc(doc_path, &new_patch.to_string())?;
+                            }
+                            merge_patches.push(new_patch.clone());
                         }
-                        merge_patches.push(new_patch.clone());
+                    } else {
+                        merge_patches.push(sync_patch);
+                        patches = vec![];
                     }
                 }
             } else {
@@ -358,9 +376,22 @@ impl Darkwiki {
         let sync_files = read_dir(&sync_path)?;
         for file in sync_files {
             let file_id = file?.file_name();
-            let file_id = file_id.to_str().unwrap();
             let file_path = sync_path.join(&file_id);
             let sync_patch: Patch = load_json_file(&file_path)?;
+
+            if is_delete_patch(&sync_patch) {
+                if local_path.join(&sync_patch.id).exists() {
+                    sync_patches.push(sync_patch.clone());
+                }
+
+                if !dry {
+                    remove_file(docs_path.join(&sync_patch.path)).unwrap_or(());
+                    remove_file(local_path.join(&sync_patch.id)).unwrap_or(());
+                    remove_file(file_path).unwrap_or(());
+                }
+
+                continue
+            }
 
             if let Ok(local_patch) = load_json_file::<Patch>(&local_path.join(&file_id)) {
                 if local_patch.timestamp == sync_patch.timestamp {
@@ -379,6 +410,32 @@ impl Darkwiki {
 
             if !sync_patches.contains(&sync_patch) {
                 sync_patches.push(sync_patch);
+            }
+        }
+
+        // check if any doc remove from ~/darkwiki
+        let local_files = read_dir(&local_path)?;
+        for file in local_files {
+            let file_id = file?.file_name();
+            let file_path = local_path.join(&file_id);
+            let local_patch: Patch = load_json_file(&file_path)?;
+
+            if !files_name.is_empty() && !files_name.contains(&local_patch.path.to_string()) {
+                continue
+            }
+
+            if !docs_path.join(&local_patch.path).exists() {
+                let mut new_patch =
+                    Patch::new(&local_patch.path, &local_patch.id, &self.settings.author);
+                new_patch.add_op(&OpMethod::Delete(local_patch.to_string().len() as u64));
+                patches.push(new_patch.clone());
+
+                new_patch.base = local_patch.base;
+                local_patches.push(new_patch);
+
+                if !dry {
+                    remove_file(file_path).unwrap_or(());
+                }
             }
         }
 
