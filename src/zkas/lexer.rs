@@ -2,7 +2,17 @@ use std::str::Chars;
 
 use super::error::ErrorEmitter;
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+const SPECIAL_CHARS: [char; 7] = ['{', '}', '(', ')', ',', ';', '='];
+
+fn is_letter(ch: char) -> bool {
+    ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
+}
+
+fn is_digit(ch: char) -> bool {
+    ('0'..='9').contains(&ch)
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum TokenType {
     Symbol,
     String,
@@ -16,9 +26,7 @@ pub enum TokenType {
     Assign,
 }
 
-const SPECIAL_CHARS: [char; 7] = ['{', '}', '(', ')', ',', ';', '='];
-
-#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Token {
     pub token: String,
     pub token_type: TokenType,
@@ -28,7 +36,7 @@ pub struct Token {
 
 impl Token {
     fn new(token: &str, token_type: TokenType, line: usize, column: usize) -> Self {
-        Token { token: token.to_string(), token_type, line, column }
+        Self { token: token.to_string(), token_type, line, column }
     }
 }
 
@@ -47,21 +55,42 @@ impl<'a> Lexer<'a> {
         Self { source, error }
     }
 
-    pub fn lex(self) -> Vec<Token> {
+    pub fn lex(&self) -> Vec<Token> {
         let mut tokens = vec![];
         let mut lineno = 1;
         let mut column = 0;
 
-        // We use these as a buffer to keep strings and symbols
-        let mut strbuf = String::new();
-        let mut symbuf = String::new();
-        let mut numbuf = String::new();
+        // We use this as a buffer to store a single token, which is then
+        // reset after a token is pushed to the returning vec.
+        let mut buf = String::new();
 
-        // We use these to keep state when iterating
+        // We use these to keep state when iterating.
         let mut in_comment = false;
         let mut in_string = false;
         let mut in_number = false;
         let mut in_symbol = false;
+
+        macro_rules! new_symbol {
+            () => {
+                tokens.push(Token::new(&buf, TokenType::Symbol, lineno, column - buf.len()));
+                in_symbol = false;
+                buf = String::new();
+            };
+        }
+        macro_rules! new_string {
+            () => {
+                tokens.push(Token::new(&buf, TokenType::String, lineno, column - buf.len()));
+                in_string = false;
+                buf = String::new();
+            };
+        }
+        macro_rules! new_number {
+            () => {
+                tokens.push(Token::new(&buf, TokenType::Number, lineno, column - buf.len()));
+                in_number = false;
+                buf = String::new();
+            };
+        }
 
         #[allow(clippy::explicit_counter_loop)]
         for c in self.source.clone() {
@@ -69,30 +98,15 @@ impl<'a> Lexer<'a> {
 
             if c == '\n' {
                 if in_symbol {
-                    in_symbol = false;
-                    tokens.push(Token::new(
-                        &symbuf,
-                        TokenType::Symbol,
-                        lineno,
-                        column - symbuf.len(),
-                    ));
-                    symbuf = String::new();
+                    new_symbol!();
                 }
 
                 if in_string {
-                    self.error.abort(
-                        &format!("Strings can not contain newlines: `{}`", &strbuf),
-                        lineno,
-                        column,
-                    );
+                    self.error.abort("Strings can't contain newlines", lineno, column);
                 }
 
                 if in_number {
-                    self.error.abort(
-                        &format!("Numbers can not contain newlines: `{}`", &numbuf),
-                        lineno,
-                        column,
-                    );
+                    self.error.abort("Numbers can't contain newlines", lineno, column);
                 }
 
                 in_comment = false;
@@ -103,18 +117,15 @@ impl<'a> Lexer<'a> {
 
             if c == '#' || in_comment {
                 if in_symbol {
-                    in_symbol = false;
-                    tokens.push(Token::new(
-                        &symbuf,
-                        TokenType::Symbol,
-                        lineno,
-                        column - symbuf.len(),
-                    ));
-                    symbuf = String::new();
+                    new_symbol!();
+                }
+
+                if in_number {
+                    new_number!();
                 }
 
                 if in_string {
-                    strbuf.push(c);
+                    buf.push(c);
                     continue
                 }
 
@@ -124,107 +135,74 @@ impl<'a> Lexer<'a> {
 
             if c.is_whitespace() {
                 if in_symbol {
-                    in_symbol = false;
-                    tokens.push(Token::new(
-                        &symbuf,
-                        TokenType::Symbol,
-                        lineno,
-                        column - symbuf.len(),
-                    ));
-                    symbuf = String::new();
+                    new_symbol!();
                 }
 
                 if in_number {
-                    in_number = false;
-                    tokens.push(Token::new(
-                        &numbuf,
-                        TokenType::Number,
-                        lineno,
-                        column - numbuf.len(),
-                    ));
-                    numbuf = String::new();
+                    new_number!();
                 }
 
+                if in_string {
+                    // TODO: Perhaps forbid whitespace.
+                    buf.push(c);
+                }
+
+                continue
+            }
+
+            // Main cases, in_comment is already checked above.
+            if !in_number && !in_symbol && !in_string && is_digit(c) {
+                in_number = true;
+                buf.push(c);
                 continue
             }
 
             if in_number && !is_digit(c) {
-                in_number = false;
-                tokens.push(Token::new(&numbuf, TokenType::Number, lineno, column - numbuf.len()));
-                numbuf = String::new();
-            }
-
-            if !in_string && is_letter(c) {
-                in_symbol = true;
-                symbuf.push(c);
-                continue
-            }
-
-            if in_string && (is_letter(c) || is_digit(c)) {
-                strbuf.push(c);
-                continue
+                new_number!();
             }
 
             if in_number && is_digit(c) {
-                numbuf.push(c);
+                buf.push(c);
                 continue
             }
 
-            if in_symbol && is_digit(c) {
-                symbuf.push(c);
+            if !in_number && !in_symbol && !in_string && is_letter(c) {
+                in_symbol = true;
+                buf.push(c);
                 continue
             }
 
-            if !in_symbol && !in_string && !in_number && is_digit(c) {
-                in_number = true;
-                numbuf.push(c);
-                continue
-            }
-
-            if c == '"' && !in_string {
-                if in_symbol {
-                    self.error.abort(&format!("Illegal char `{}` for symbol", c), lineno, column);
-                }
+            if !in_number && !in_symbol && !in_string && c == '"' {
+                // " I need to fix my Rust vis lexer
                 in_string = true;
                 continue
             }
 
-            if c == '"' && in_string {
-                if strbuf.is_empty() {
-                    self.error.abort(
-                        &format!("Invalid ending in string `{}`", &strbuf),
-                        lineno,
-                        column,
-                    );
-                }
+            if (in_symbol || in_string) && (is_letter(c) || is_digit(c)) {
+                buf.push(c);
+                continue
+            }
 
-                in_string = false;
-                tokens.push(Token::new(&strbuf, TokenType::String, lineno, column - strbuf.len()));
-                strbuf = String::new();
+            if in_string && c == '"' {
+                // " I need to fix my vis lexer
+                if buf.is_empty() {
+                    self.error.abort("String cannot be empty", lineno, column);
+                }
+                new_string!();
                 continue
             }
 
             if SPECIAL_CHARS.contains(&c) {
                 if in_symbol {
-                    in_symbol = false;
-                    tokens.push(Token::new(
-                        &symbuf,
-                        TokenType::Symbol,
-                        lineno,
-                        column - symbuf.len(),
-                    ));
-                    symbuf = String::new();
+                    new_symbol!();
                 }
 
                 if in_number {
-                    in_number = false;
-                    tokens.push(Token::new(
-                        &numbuf,
-                        TokenType::Symbol,
-                        lineno,
-                        column - numbuf.len(),
-                    ));
-                    numbuf = String::new();
+                    new_number!();
+                }
+
+                if in_string {
+                    // TODO: Perhaps forbid these chars inside strings.
                 }
 
                 match c {
@@ -266,12 +244,4 @@ impl<'a> Lexer<'a> {
 
         tokens
     }
-}
-
-fn is_letter(ch: char) -> bool {
-    ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
-}
-
-fn is_digit(ch: char) -> bool {
-    ('0'..'9').contains(&ch)
 }
