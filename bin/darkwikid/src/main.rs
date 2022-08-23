@@ -37,9 +37,11 @@ use darkfi::{
 };
 
 mod jsonrpc;
+mod lcs;
 mod patch;
 
 use jsonrpc::JsonRpcInterface;
+use lcs::Lcs;
 use patch::{OpMethod, Patch};
 
 type Patches = (Vec<Patch>, Vec<Patch>, Vec<Patch>, Vec<Patch>);
@@ -117,40 +119,6 @@ pub struct DarkWikiSettings {
 
 fn str_to_chars(s: &str) -> Vec<&str> {
     s.graphemes(true).collect::<Vec<&str>>()
-}
-
-fn lcs(a: &str, b: &str) -> Vec<OpMethod> {
-    let a: Vec<_> = str_to_chars(a);
-    let b: Vec<_> = str_to_chars(b);
-    let (na, nb) = (a.len(), b.len());
-
-    let mut lengths = vec![vec![0; nb + 1]; na + 1];
-
-    for (i, ci) in a.iter().enumerate() {
-        for (j, cj) in b.iter().enumerate() {
-            lengths[i + 1][j + 1] =
-                if ci == cj { lengths[i][j] + 1 } else { lengths[i][j + 1].max(lengths[i + 1][j]) }
-        }
-    }
-
-    let mut result = Vec::new();
-    let (mut i, mut j) = (na, nb);
-    while i > 0 && j > 0 {
-        if a[i - 1] == b[j - 1] {
-            result.push(OpMethod::Retain((1) as _));
-            i -= 1;
-            j -= 1;
-        } else if lengths[i - 1][j] > lengths[i][j - 1] {
-            result.push(OpMethod::Delete((1) as _));
-            i -= 1;
-        } else {
-            result.push(OpMethod::Insert(b[j - 1].to_string()));
-            j -= 1;
-        }
-    }
-
-    result.reverse();
-    result
 }
 
 fn path_to_id(path: &str) -> String {
@@ -383,7 +351,9 @@ impl Darkwiki {
                 }
 
                 // check the differences with LCS algorithm
-                let lcs_ops = lcs(&local_patch.to_string(), edit);
+                let local_patch_str = local_patch.to_string();
+                let lcs = Lcs::new(&local_patch_str, edit);
+                let lcs_ops = lcs.ops();
 
                 // add the change ops to the new patch
                 for op in lcs_ops {
