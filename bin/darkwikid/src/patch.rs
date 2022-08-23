@@ -22,7 +22,7 @@ pub struct OpMethods(pub Vec<OpMethod>);
 
 #[derive(PartialEq, Eq, SerialEncodable, SerialDecodable, Serialize, Deserialize, Clone, Debug)]
 pub struct Patch {
-    pub title: String,
+    pub path: String,
     pub author: String,
     pub id: String,
     pub base: String,
@@ -66,9 +66,9 @@ impl std::string::ToString for Patch {
 }
 
 impl Patch {
-    pub fn new(title: &str, id: &str, author: &str) -> Self {
+    pub fn new(path: &str, id: &str, author: &str) -> Self {
         Self {
-            title: title.to_string(),
+            path: path.to_string(),
             id: id.to_string(),
             ops: OpMethods(vec![]),
             base: String::new(),
@@ -146,7 +146,7 @@ impl Patch {
     //
     // TODO need more work to get better performance with iterators
     pub fn transform(&self, other: &Self) -> Self {
-        let mut new_patch = Self::new(&self.title, &self.id, &self.author);
+        let mut new_patch = Self::new(&self.path, &self.id, &self.author);
         new_patch.base = self.base.clone();
 
         let mut ops1 = self.ops.0.iter().cloned();
@@ -253,7 +253,7 @@ impl Patch {
         let mut ops1 = ops1.iter().cloned();
         let mut ops2 = other.ops.0.iter().cloned();
 
-        let mut new_patch = Self::new(&self.title, &self.id, &self.author);
+        let mut new_patch = Self::new(&self.path, &self.id, &self.author);
         new_patch.base = self.base.clone();
 
         let mut op1 = ops1.next();

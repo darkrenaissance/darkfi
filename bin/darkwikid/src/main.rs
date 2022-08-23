@@ -1,7 +1,7 @@
 use async_std::sync::{Arc, Mutex};
 use std::{
     fs::{create_dir_all, read_dir},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use async_executor::Executor;
@@ -27,14 +27,13 @@ use darkfi::{
         file::{load_file, load_json_file, save_file, save_json_file},
         path::get_config_path,
     },
-    Error, Result,
+    Result,
 };
 
 mod error;
 mod jsonrpc;
 mod patch;
 
-use error::DarkWikiResult;
 use jsonrpc::JsonRpcInterface;
 use patch::{OpMethod, Patch};
 
@@ -114,10 +113,30 @@ fn lcs(a: &str, b: &str) -> Vec<OpMethod> {
     result
 }
 
-fn title_to_id(title: &str) -> String {
+fn path_to_id(path: &str) -> String {
     let mut hasher = sha2::Sha256::new();
-    hasher.update(title);
+    hasher.update(path);
     hex::encode(hasher.finalize())
+}
+
+fn get_docs_paths(files: &mut Vec<PathBuf>, path: &Path, parent: Option<&Path>) -> Result<()> {
+    let docs = read_dir(&path)?;
+    let docs = docs.filter(|d| d.is_ok()).map(|d| d.unwrap().path()).collect::<Vec<PathBuf>>();
+
+    for doc in docs {
+        if let Some(file_name) = doc.file_name() {
+            let file_name = PathBuf::from(file_name);
+            let file_name =
+                if let Some(parent) = parent { parent.join(file_name) } else { file_name };
+            if doc.is_file() {
+                files.push(file_name);
+            } else if doc.is_dir() {
+                get_docs_paths(files, &doc, Some(&file_name))?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 struct Darkwiki {
@@ -130,11 +149,11 @@ struct Darkwiki {
 }
 
 impl Darkwiki {
-    async fn start(&self) -> DarkWikiResult<()> {
+    async fn start(&self) -> Result<()> {
         loop {
             select! {
                 val = self.rpc.1.recv().fuse() => {
-                    let (cmd, dry, files) = val.map_err(Error::from)?;
+                    let (cmd, dry, files) = val?;
                     match cmd.as_str() {
                         "update" => {
                             self.on_receive_update(dry, files).await?;
@@ -146,7 +165,7 @@ impl Darkwiki {
                     }
                 }
                 patch = self.raft.1.recv().fuse() => {
-                    let patch = patch.map_err(Error::from)?;
+                    let patch = patch?;
                     info!("Receive new patch from Raft {:?}", patch);
                     self.on_receive_patch(&patch)?;
                 }
@@ -155,7 +174,7 @@ impl Darkwiki {
         }
     }
 
-    fn on_receive_patch(&self, received_patch: &Patch) -> DarkWikiResult<()> {
+    fn on_receive_patch(&self, received_patch: &Patch) -> Result<()> {
         let sync_id_path = self.settings.datastore_path.join("sync").join(&received_patch.id);
         let local_id_path = self.settings.datastore_path.join("local").join(&received_patch.id);
 
@@ -185,65 +204,65 @@ impl Darkwiki {
         Ok(())
     }
 
-    async fn on_receive_update(&self, dry: bool, files: Vec<String>) -> DarkWikiResult<()> {
+    async fn on_receive_update(&self, dry: bool, files: Vec<String>) -> Result<()> {
         let (patches, local, sync, merge) = self.update(dry, files)?;
 
         if !dry {
             for patch in patches {
                 info!("Send a patch to Raft {:?}", patch);
-                self.raft.0.send(patch.clone()).await.map_err(Error::from)?;
+                self.raft.0.send(patch.clone()).await?;
             }
         }
 
         let local: Vec<(String, String)> =
-            local.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
+            local.iter().map(|p| (p.path.to_owned(), p.colorize())).collect();
 
         let sync: Vec<(String, String)> =
-            sync.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
+            sync.iter().map(|p| (p.path.to_owned(), p.colorize())).collect();
 
         let merge: Vec<(String, String)> =
-            merge.iter().map(|p| (p.title.to_owned(), p.colorize())).collect();
+            merge.iter().map(|p| (p.path.to_owned(), p.colorize())).collect();
 
-        self.rpc.0.send(vec![local, sync, merge]).await.map_err(Error::from)?;
+        self.rpc.0.send(vec![local, sync, merge]).await?;
 
         Ok(())
     }
 
-    async fn on_receive_restore(&self, dry: bool, files_name: Vec<String>) -> DarkWikiResult<()> {
+    async fn on_receive_restore(&self, dry: bool, files_name: Vec<String>) -> Result<()> {
         let patches = self.restore(dry, files_name)?;
         let patches: Vec<(String, String)> =
-            patches.iter().map(|p| (p.title.to_owned(), p.to_string())).collect();
+            patches.iter().map(|p| (p.path.to_owned(), p.to_string())).collect();
 
-        self.rpc.0.send(vec![patches]).await.map_err(Error::from)?;
+        self.rpc.0.send(vec![patches]).await?;
 
         Ok(())
     }
 
-    fn restore(&self, dry: bool, files_name: Vec<String>) -> DarkWikiResult<Vec<Patch>> {
+    fn restore(&self, dry: bool, files_name: Vec<String>) -> Result<Vec<Patch>> {
         let local_path = self.settings.datastore_path.join("local");
         let docs_path = self.settings.docs_path.clone();
-        let local_files = read_dir(&local_path).map_err(Error::from)?;
 
         let mut patches = vec![];
 
+        let local_files = read_dir(&local_path)?;
         for file in local_files {
-            let file_id = file.as_ref().unwrap().file_name();
+            let file_id = file?.file_name();
             let file_id = file_id.to_str().unwrap();
             let file_path = local_path.join(&file_id);
             let local_patch: Patch = load_json_file(&file_path)?;
 
-            if !files_name.is_empty() && !files_name.contains(&local_patch.title.to_string()) {
+            if !files_name.is_empty() && !files_name.contains(&local_patch.path.to_string()) {
                 continue
             }
 
-            if let Ok(doc) = load_file(&docs_path.join(&local_patch.title)) {
+            if let Ok(doc) = load_file(&docs_path.join(&local_patch.path)) {
                 if local_patch.to_string() == doc {
                     continue
                 }
             }
 
             if !dry {
-                save_file(&docs_path.join(&local_patch.title), &local_patch.to_string())?;
+                self.save_doc(&local_patch.path, &local_patch.to_string())?;
             }
 
             patches.push(local_patch);
@@ -252,7 +271,7 @@ impl Darkwiki {
         Ok(patches)
     }
 
-    fn update(&self, dry: bool, files_name: Vec<String>) -> DarkWikiResult<Patches> {
+    fn update(&self, dry: bool, files_name: Vec<String>) -> Result<Patches> {
         let mut patches: Vec<Patch> = vec![];
         let mut local_patches: Vec<Patch> = vec![];
         let mut sync_patches: Vec<Patch> = vec![];
@@ -264,23 +283,28 @@ impl Darkwiki {
 
         // save and compare docs in darkwiki and local dirs
         // then merged with sync patches if any received
-        let docs = read_dir(&docs_path).map_err(Error::from)?;
+        let mut docs = vec![];
+        get_docs_paths(&mut docs, &docs_path, None)?;
         for doc in docs {
-            let doc_title = doc.as_ref().unwrap().file_name();
-            let doc_title = doc_title.to_str().unwrap();
+            let doc_path = doc.to_str().unwrap();
 
-            if !files_name.is_empty() && !files_name.contains(&doc_title.to_string()) {
+            if !files_name.is_empty() && !files_name.contains(&doc_path.to_string()) {
                 continue
             }
 
             // load doc content
-            let edit = load_file(&docs_path.join(doc_title)).map_err(Error::from)?;
+            let edit = load_file(&docs_path.join(doc_path))?;
+
+            if edit.is_empty() {
+                continue
+            }
+
             let edit = edit.trim();
 
-            let doc_id = title_to_id(doc_title);
+            let doc_id = path_to_id(doc_path);
 
             // create new patch
-            let mut new_patch = Patch::new(doc_title, &doc_id, &self.settings.author);
+            let mut new_patch = Patch::new(doc_path, &doc_id, &self.settings.author);
 
             // check for any changes found with local doc and darkwiki doc
             if let Ok(local_patch) = load_json_file::<Patch>(&local_path.join(&doc_id)) {
@@ -313,7 +337,7 @@ impl Darkwiki {
                         let sync_patch_t = new_patch.transform(&sync_patch);
                         new_patch = new_patch.merge(&sync_patch_t);
                         if !dry {
-                            save_file(&docs_path.join(doc_title), &new_patch.to_string())?;
+                            self.save_doc(doc_path, &new_patch.to_string())?;
                         }
                         merge_patches.push(new_patch.clone());
                     }
@@ -332,9 +356,9 @@ impl Darkwiki {
 
         // check if a new patch received
         // and save the new changes in both local and darkwiki dirs
-        let sync_files = read_dir(&sync_path).map_err(Error::from)?;
+        let sync_files = read_dir(&sync_path)?;
         for file in sync_files {
-            let file_id = file.as_ref().unwrap().file_name();
+            let file_id = file?.file_name();
             let file_id = file_id.to_str().unwrap();
             let file_path = sync_path.join(&file_id);
             let sync_patch: Patch = load_json_file(&file_path)?;
@@ -345,12 +369,12 @@ impl Darkwiki {
                 }
             }
 
-            if !files_name.is_empty() && !files_name.contains(&sync_patch.title.to_string()) {
+            if !files_name.is_empty() && !files_name.contains(&sync_patch.path.to_string()) {
                 continue
             }
 
             if !dry {
-                save_file(&docs_path.join(&sync_patch.title), &sync_patch.to_string())?;
+                self.save_doc(&sync_patch.path, &sync_patch.to_string())?;
                 save_json_file(&local_path.join(file_id), &sync_patch)?;
             }
 
@@ -360,6 +384,16 @@ impl Darkwiki {
         }
 
         Ok((patches, local_patches, sync_patches, merge_patches))
+    }
+
+    fn save_doc(&self, path: &str, edit: &str) -> Result<()> {
+        let path = self.settings.docs_path.join(path);
+        if let Some(p) = path.parent() {
+            if !p.exists() && !p.to_str().unwrap().is_empty() {
+                create_dir_all(p)?;
+            }
+        }
+        save_file(&path, edit)
     }
 }
 
