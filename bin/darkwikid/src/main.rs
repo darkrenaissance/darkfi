@@ -169,7 +169,11 @@ fn get_docs_paths(files: &mut Vec<PathBuf>, path: &Path, parent: Option<&Path>) 
             let file_name =
                 if let Some(parent) = parent { parent.join(file_name) } else { file_name };
             if doc.is_file() {
-                files.push(file_name);
+                if let Some(ext) = doc.extension() {
+                    if ext == "md" {
+                        files.push(file_name);
+                    }
+                }
             } else if doc.is_dir() {
                 if f == ".log" {
                     continue
