@@ -1,9 +1,6 @@
 ## JSON-RPC listen URL
 #rpc_listen="tcp://127.0.0.1:13055"
 
-## Sets Datastore Path
-#datastore="~/.config/darkfi/darkwiki"
-
 ## Sets Docs Path
 # docs="~/darkwiki"
 
@@ -19,7 +16,7 @@ secret = "86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"
 inbound="tls://127.0.0.1:13001"
 
 ## Connection slots
-outbound_connections=2
+outbound_connections=5
 
 ## P2P external address
 external_addr="tls://127.0.0.1:13001"
