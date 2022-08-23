@@ -7,13 +7,16 @@
 ## Sets Docs Path
 # docs="~/darkwiki"
 
-## Sets Author name 
+## Sets Author name
 # author="name"
+
+## Secret Key To Encrypt/Decrypt Patches
+secret = "86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"
 
 ## Raft net settings
 [net]
 ## P2P accept address
-inbound="tls://127.0.0.1:13001" 
+inbound="tls://127.0.0.1:13001"
 
 ## Connection slots
 outbound_connections=2
@@ -24,7 +27,7 @@ external_addr="tls://127.0.0.1:13001"
 ## Peers to connect to
 #peers=["tls://127.0.0.1:13003"]
 
-## Seed nodes to connect to 
+## Seed nodes to connect to
 #seeds=[]
 
 ## these are the default configuration for the p2p network

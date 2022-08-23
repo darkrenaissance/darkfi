@@ -1337,6 +1337,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
+ "bs58",
  "chrono",
  "colored",
  "crypto_box",

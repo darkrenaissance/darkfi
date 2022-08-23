@@ -5,6 +5,11 @@ use std::{
 };
 
 use async_executor::Executor;
+use crypto_box::{
+    aead::{Aead, AeadCore},
+    rand_core::OsRng,
+    SalsaBox, SecretKey,
+};
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{error, info, warn};
@@ -26,8 +31,9 @@ use darkfi::{
         expand_path,
         file::{load_file, load_json_file, save_file, save_json_file},
         path::get_config_path,
+        serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
     },
-    Result,
+    Error, Result,
 };
 
 mod jsonrpc;
@@ -58,14 +64,52 @@ pub struct Args {
     /// Sets Author Name for Patch
     #[structopt(long, default_value = "NONE")]
     pub author: String,
-    /// JSON-RPC listen URL
+    /// Secret Key To Encrypt/Decrypt Patches
+    #[structopt(long, default_value = "")]
+    pub secret: String,
+    /// Generate A New Secret Key
+    #[structopt(long)]
+    pub keygen: bool,
+    /// JSON-RPC Listen URL
     #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:13055")]
     pub rpc_listen: Url,
     #[structopt(flatten)]
     pub net: SettingsOpt,
-    /// Increase verbosity
+    /// Increase Verbosity
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
+}
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct EncryptedPatch {
+    nonce: Vec<u8>,
+    payload: Vec<u8>,
+}
+
+fn encrypt_patch(
+    patch: &Patch,
+    salsa_box: &SalsaBox,
+    rng: &mut crypto_box::rand_core::OsRng,
+) -> Result<EncryptedPatch> {
+    let nonce = SalsaBox::generate_nonce(rng);
+    let payload = &serialize(patch)[..];
+    let payload = salsa_box
+        .encrypt(&nonce, payload)
+        .map_err(|_| Error::ParseFailed("Encrypting Patch failed"))?;
+
+    let nonce = nonce.to_vec();
+    Ok(EncryptedPatch { nonce, payload })
+}
+
+fn decrypt_patch(encrypt_patch: &EncryptedPatch, salsa_box: &SalsaBox) -> Result<Patch> {
+    let nonce = encrypt_patch.nonce.as_slice();
+    let decrypted_patch = salsa_box
+        .decrypt(nonce.into(), &encrypt_patch.payload[..])
+        .map_err(|_| Error::ParseFailed("Decrypting Patch failed"))?;
+
+    let patch = deserialize(&decrypted_patch)?;
+
+    Ok(patch)
 }
 
 pub struct DarkWikiSettings {
@@ -115,7 +159,7 @@ fn lcs(a: &str, b: &str) -> Vec<OpMethod> {
 fn path_to_id(path: &str) -> String {
     let mut hasher = sha2::Sha256::new();
     hasher.update(path);
-    hex::encode(hasher.finalize())
+    bs58::encode(hex::encode(hasher.finalize())).into_string()
 }
 
 fn get_docs_paths(files: &mut Vec<PathBuf>, path: &Path, parent: Option<&Path>) -> Result<()> {
@@ -158,18 +202,20 @@ struct Darkwiki {
         async_channel::Sender<Vec<Vec<(String, String)>>>,
         async_channel::Receiver<(String, bool, Vec<String>)>,
     ),
-    raft: (async_channel::Sender<Patch>, async_channel::Receiver<Patch>),
+    raft: (async_channel::Sender<EncryptedPatch>, async_channel::Receiver<EncryptedPatch>),
+    salsa_box: SalsaBox,
 }
 
 impl Darkwiki {
     async fn start(&self) -> Result<()> {
+        let mut rng = crypto_box::rand_core::OsRng;
         loop {
             select! {
                 val = self.rpc.1.recv().fuse() => {
                     let (cmd, dry, files) = val?;
                     match cmd.as_str() {
                         "update" => {
-                            self.on_receive_update(dry, files).await?;
+                            self.on_receive_update(dry, files, &mut rng).await?;
                         },
                         "restore" => {
                             self.on_receive_restore(dry, files).await?;
@@ -178,16 +224,17 @@ impl Darkwiki {
                     }
                 }
                 patch = self.raft.1.recv().fuse() => {
-                    let patch = patch?;
-                    info!("Receive new patch from Raft {:?}", patch);
-                    self.on_receive_patch(&patch)?;
+                    self.on_receive_patch(&patch?)?;
                 }
 
             }
         }
     }
 
-    fn on_receive_patch(&self, received_patch: &Patch) -> Result<()> {
+    fn on_receive_patch(&self, received_patch: &EncryptedPatch) -> Result<()> {
+        let received_patch = decrypt_patch(received_patch, &self.salsa_box)?;
+
+        info!("Receive a {:?}", received_patch);
         let sync_id_path = self.settings.datastore_path.join("sync").join(&received_patch.id);
         let local_id_path = self.settings.datastore_path.join("local").join(&received_patch.id);
 
@@ -208,22 +255,28 @@ impl Darkwiki {
             }
 
             sync_patch.timestamp = received_patch.timestamp;
-            sync_patch.author = received_patch.author.clone();
+            sync_patch.author = received_patch.author;
             save_json_file::<Patch>(&sync_id_path, &sync_patch)?;
         } else if !received_patch.base.is_empty() {
-            save_json_file::<Patch>(&sync_id_path, received_patch)?;
+            save_json_file::<Patch>(&sync_id_path, &received_patch)?;
         }
 
         Ok(())
     }
 
-    async fn on_receive_update(&self, dry: bool, files: Vec<String>) -> Result<()> {
+    async fn on_receive_update(
+        &self,
+        dry: bool,
+        files: Vec<String>,
+        rng: &mut OsRng,
+    ) -> Result<()> {
         let (patches, local, sync, merge) = self.update(dry, files)?;
 
         if !dry {
             for patch in patches {
-                info!("Send a patch to Raft {:?}", patch);
-                self.raft.0.send(patch.clone()).await?;
+                info!("Send a {:?}", patch);
+                let encrypt_patch = encrypt_patch(&patch, &self.salsa_box, rng)?;
+                self.raft.0.send(encrypt_patch).await?;
             }
         }
 
@@ -413,7 +466,7 @@ impl Darkwiki {
             }
         }
 
-        // check if any doc remove from ~/darkwiki
+        // check if any doc removed from ~/darkwiki
         let local_files = read_dir(&local_path)?;
         for file in local_files {
             let file_id = file?.file_name();
@@ -458,6 +511,23 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let datastore_path = expand_path(&settings.datastore)?;
     let docs_path = expand_path(&settings.docs)?;
 
+    if settings.keygen {
+        info!("Generating a new secret key");
+        let mut rng = crypto_box::rand_core::OsRng;
+        let secret_key = SecretKey::generate(&mut rng);
+        let encoded = bs58::encode(secret_key.as_bytes());
+        println!("Secret key: {}", encoded.into_string());
+        return Ok(())
+    }
+
+    let bytes: [u8; 32] = bs58::decode(settings.secret)
+        .into_vec()?
+        .try_into()
+        .map_err(|_| Error::ParseFailed("Parse secret key failed"))?;
+    let secret = crypto_box::SecretKey::from(bytes);
+    let public = secret.public_key();
+    let salsa_box = crypto_box::SalsaBox::new(&public, &secret);
+
     create_dir_all(docs_path.clone())?;
     create_dir_all(datastore_path.join("local"))?;
     create_dir_all(datastore_path.join("sync"))?;
@@ -480,7 +550,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let datastore_raft = datastore_path.join("darkwiki.db");
     let raft_settings = RaftSettings { datastore_path: datastore_raft, ..RaftSettings::default() };
 
-    let mut raft = Raft::<Patch>::new(raft_settings, seen_net_msgs.clone())?;
+    let mut raft = Raft::<EncryptedPatch>::new(raft_settings, seen_net_msgs.clone())?;
 
     //
     // P2p setup
@@ -522,6 +592,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                 settings: darkwiki_settings,
                 raft: (raft_sx, raft_rv),
                 rpc: (notify_sx, rpc_rv),
+                salsa_box,
             };
             darkwiki.start().await.unwrap_or(());
         })
