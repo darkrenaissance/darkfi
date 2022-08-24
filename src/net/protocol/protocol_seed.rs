@@ -41,7 +41,7 @@ impl ProtocolSeed {
     /// from settings, then adds that addresses to an address message and
     /// sends it out over the channel.
     pub async fn send_self_address(&self) -> Result<()> {
-        // Do nothing if external address is not configured
+        // Do nothing if external addresses are not configured
         if self.settings.external_addr.is_empty() {
             return Ok(())
         }

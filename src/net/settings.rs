@@ -48,7 +48,7 @@ impl Default for Settings {
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[structopt()]
 pub struct SettingsOpt {
-    /// P2P accept address
+    /// P2P accept addresses
     #[serde(default)]
     #[structopt(long = "accept")]
     pub inbound: Vec<Url>,
@@ -57,7 +57,7 @@ pub struct SettingsOpt {
     #[structopt(long = "slots")]
     pub outbound_connections: Option<u32>,
 
-    /// P2P external address
+    /// P2P external addresses
     #[serde(default)]
     #[structopt(long)]
     pub external_addr: Vec<Url>,

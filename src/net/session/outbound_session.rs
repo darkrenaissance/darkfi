@@ -217,7 +217,7 @@ impl OutboundSession {
                     continue
                 }
 
-                if Self::is_self_inbound(&addr, &self_inbound_addr) {
+                if self_inbound_addr.contains(&addr) {
                     continue
                 }
 
@@ -228,18 +228,6 @@ impl OutboundSession {
 
             async_util::sleep(p2p.settings().outbound_retry_seconds).await;
         }
-    }
-
-    /// Checks whether an address is in our own inbound addresses to avoid connecting
-    /// to ourselves.
-    fn is_self_inbound(addr: &Url, inbound_addr: &Vec<Url>) -> bool {
-        for ext_addr in inbound_addr {
-            if ext_addr == addr {
-                return true
-            }
-        }
-        // No inbound listening address configured
-        false
     }
 }
 

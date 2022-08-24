@@ -63,7 +63,7 @@ impl InboundSession {
             return Ok(())
         }
 
-        // Activate mutex lock on connection slots.
+        // Activate mutex lock on accept tasks.
         let mut accept_tasks = self.accept_tasks.lock().await;
 
         for (index, accept_addr) in self.p2p().settings().inbound.iter().enumerate() {
@@ -85,6 +85,7 @@ impl InboundSession {
 
         Ok(())
     }
+
     /// Stops the inbound session.
     pub async fn stop(&self) {
         self.acceptor.stop().await;
@@ -94,6 +95,7 @@ impl InboundSession {
             accept_task.stop().await;
         }
     }
+
     /// Start accepting connections for inbound session.
     async fn start_accept_session(
         self: Arc<Self>,
