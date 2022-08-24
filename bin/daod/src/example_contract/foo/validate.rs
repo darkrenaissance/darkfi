@@ -65,7 +65,7 @@ pub fn state_transition(
     // This will be inside wasm so unwrap is fine.
     let call_data = call_data.unwrap();
 
-    let example_state = states.lookup::<State>(&"EXAMPLE".to_string()).unwrap();
+    let example_state = states.lookup::<State>(&"Example".to_string()).unwrap();
 
     if example_state.public_exists(&call_data.header.public_c) {
         return Err(Error::ValueExists)
@@ -80,6 +80,6 @@ pub struct Update {
 }
 
 pub fn apply(states: &mut StateRegistry, update: Update) {
-    let example_state = states.lookup_mut::<State>(&"EXAMPLE".to_string()).unwrap();
+    let example_state = states.lookup_mut::<State>(&"Example".to_string()).unwrap();
     example_state.add_public_value(update.public_value);
 }

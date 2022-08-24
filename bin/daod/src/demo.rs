@@ -227,7 +227,7 @@ pub async fn example() -> Result<()> {
     zk_bins.add_contract("example-foo".to_string(), zk_example_foo_bin, 13);
 
     let example_state = example_contract::state::State::new();
-    states.register("EXAMPLE".to_string(), example_state);
+    states.register("Example".to_string(), example_state);
 
     let foo = example_contract::foo::wallet::Foo { a: 5, b: 10 };
 
@@ -236,7 +236,7 @@ pub async fn example() -> Result<()> {
     let tx = Transaction { func_calls: vec![func_call] };
 
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
-        if func_call.func_id == "EXAMPLE::foo()" {
+        if func_call.func_id == "Example::foo()" {
             debug!("example_contract::foo::state_transition()");
 
             let update = example_contract::foo::validate::state_transition(&states, idx, &tx)
