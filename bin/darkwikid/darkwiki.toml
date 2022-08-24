@@ -8,24 +8,24 @@
 # author="name"
 
 ## Secret Key To Encrypt/Decrypt Patches
-secret = "86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"
+#secret = "86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"
 
 ## Raft net settings
 [net]
 ## P2P accept addresses
-inbound = ["tls://127.0.0.1:24331"]
+#inbound = ["tls://127.0.0.1:24331"]
 
 ## Connection slots
 outbound_connections=5
 
 ## P2P external addresses
-external_addr = ["tls://127.0.0.1:24331"]
+#external_addr = ["tls://127.0.0.1:24331"]
 
 ## Peers to connect to
 #peers = ["tls://127.0.0.1:24331"]
 
 ## Seed nodes to connect to
-seeds = ["tls://lilith0.dark.fi:24331", "tls://lilith0.dark.fi:24331"]
+seeds = ["tls://wiki0.dark.fi:24331", "tls://wiki1.dark.fi:24331"]
 
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0
