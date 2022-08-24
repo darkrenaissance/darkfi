@@ -70,7 +70,7 @@ pub struct Args {
     #[structopt(long)]
     pub keygen: bool,
     /// JSON-RPC Listen URL
-    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:13055")]
+    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:24330")]
     pub rpc_listen: Url,
     #[structopt(flatten)]
     pub net: SettingsOpt,

@@ -17,7 +17,7 @@ struct Args {
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:13055")]
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:24330")]
     /// darkfid JSON-RPC endpoint
     endpoint: Url,
 }

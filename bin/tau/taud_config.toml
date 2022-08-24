@@ -1,5 +1,5 @@
 ## JSON-RPC listen URL
-#rpc_listen="tcp://127.0.0.1:12055"
+#rpc_listen="tcp://127.0.0.1:23330"
 
 ## Sets Datastore Path
 #datastore="~/.config/darkfi/tau"
@@ -10,16 +10,16 @@
 ## Raft net settings
 [net]
 ## P2P accept addresses
-#inbound=["tcp://127.0.0.1:12002"]
+#inbound = ["tcp://127.0.0.1:23331"]
 
 ## Connection slots
 outbound_connections=5
 
 ## P2P external addresses
-#external_addr=["tls://127.0.0.1:12002"]
+#external_addr = ["tls://127.0.0.1:23331"]
 
 ## Peers to connect to
-#peers=["tls://127.0.0.1:12003"]
+#peers = ["tls://127.0.0.1:23331"]
 
 ## Seed nodes to connect to 
 seeds=["tls://lilith0.dark.fi:23331", "tls://lilith1.dark.fi:23331"]
@@ -35,6 +35,7 @@ seeds=["tls://lilith0.dark.fi:23331", "tls://lilith1.dark.fi:23331"]
 [workspace."darkfi"]
 ## Create with `taud --key-gen`
 secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+
 [workspace."general"]
 ## Create with `taud --key-gen`
 secret = "6ZkvojUcSRML7wSGc3AMmM5meyyEXLoykT23cyUUB6GM"

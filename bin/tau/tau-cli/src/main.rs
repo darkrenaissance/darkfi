@@ -32,7 +32,7 @@ struct Args {
     /// Increase verbosity (-vvv supported)
     verbose: u8,
 
-    #[clap(short, long, default_value = "tcp://127.0.0.1:12055")]
+    #[clap(short, long, default_value = "tcp://127.0.0.1:23330")]
     /// taud JSON-RPC endpoint
     endpoint: Url,
 

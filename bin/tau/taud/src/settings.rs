@@ -17,7 +17,7 @@ pub struct Args {
     #[structopt(long)]
     pub config: Option<String>,
     /// JSON-RPC listen URL
-    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:12055")]
+    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:23330")]
     pub rpc_listen: Url,
     /// Sets Datastore Path
     #[structopt(long, default_value = "~/.config/darkfi/tau")]
