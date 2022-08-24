@@ -118,8 +118,6 @@ impl State {
         self.proposal_votes.get_mut(&HashableBase(proposal_bulla))
     }
 
-    //pub fn add_proposal_vote(&mut self,
-
     pub fn is_valid_dao_merkle(&self, root: &MerkleNode) -> bool {
         self.dao_roots.iter().any(|m| m == root)
     }
