@@ -24,8 +24,8 @@ addresses from the seed node and disconnects straight after receiving them.
 
 	in config file:
 
-		## P2P accept address
-		inbound="127.0.0.1:11001" 
+		## P2P accept addresses
+		inbound=["127.0.0.1:11001"] 
 
 Note that the above config doesn't specify an external address since the
 seed node shouldn't be advertised in the list of connectable nodes. The seed
@@ -37,15 +37,15 @@ new nodes to discover other nodes in the network during the bootstrapping phase.
 This is a node accepting inbound connections on the network but which is not
 making any outbound connections.
 
-The external address is important and must be correct.
+The external addresses are important and must be correct.
 
 	in config file:
 		
-		## P2P accept address
-		inbound="127.0.0.1:11002" 
+		## P2P accept addresses
+		inbound=["127.0.0.1:11002"]
 		
-		## P2P external address
-		external_addr="127.0.0.1:11002"
+		## P2P external addresses
+		external_addr=["127.0.0.1:11002"]
 
 		## Seed nodes to connect to 
 		seeds=["127.0.0.1:11001"]
