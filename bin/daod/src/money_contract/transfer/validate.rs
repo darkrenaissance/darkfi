@@ -1,30 +1,23 @@
-use std::{
-    any::{Any, TypeId},
-    io,
-};
+use std::any::{Any, TypeId};
 
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use incrementalmerkletree::Tree;
 use log::{debug, error};
 
 use pasta_curves::group::Group;
 
 use darkfi::{
     crypto::{
-        burn_proof::verify_burn_proof,
         coin::Coin,
         keypair::PublicKey,
         merkle_node::MerkleNode,
-        mint_proof::verify_mint_proof,
         nullifier::Nullifier,
-        proof::VerifyingKey,
         schnorr,
         schnorr::SchnorrPublic,
         types::{DrkCircuitField, DrkTokenId, DrkValueBlind, DrkValueCommit},
         util::{pedersen_commitment_base, pedersen_commitment_u64},
-        BurnRevealedValues, MintRevealedValues, Proof,
+        BurnRevealedValues, MintRevealedValues,
     },
-    node::state::ProgramState,
-    util::serial::{Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
 
@@ -127,7 +120,7 @@ pub fn state_transition(
     }
 
     debug!(target: TARGET, "Verifying call data");
-    match call_data.verify(&func_call.proofs) {
+    match call_data.verify() {
         Ok(()) => {
             debug!(target: TARGET, "Verified successfully")
         }
@@ -183,7 +176,7 @@ impl CallDataBase for CallData {
 }
 impl CallData {
     /// Verify the transaction
-    pub fn verify(&self, proofs: &Vec<Proof>) -> VerifyResult<()> {
+    pub fn verify(&self) -> VerifyResult<()> {
         //  must have minimum 1 clear or anon input, and 1 output
         if self.clear_inputs.len() + self.inputs.len() == 0 {
             error!("tx::verify(): Missing inputs");
@@ -337,12 +330,6 @@ pub enum VerifyFailed {
 
     #[error("Money in does not match money out (value commitments)")]
     MissingFunds,
-
-    #[error("Mint proof verification failure for input {0}")]
-    MintProof(usize),
-
-    #[error("Burn proof verification failure for input {0}")]
-    BurnProof(usize),
 
     #[error("Failed verifying zk proofs: {0}")]
     ProofVerifyFailed(String),

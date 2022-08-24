@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 // mint()
 pub mod mint;
 // propose()

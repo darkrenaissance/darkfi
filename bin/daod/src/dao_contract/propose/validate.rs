@@ -1,27 +1,28 @@
 use darkfi::{
     crypto::{
         keypair::PublicKey, merkle_node::MerkleNode, schnorr, schnorr::SchnorrPublic,
-        types::DrkCircuitField, Proof,
+        types::DrkCircuitField,
     },
-    util::serial::{Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
-use log::{debug, error};
+use log::error;
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{ff::Field, Curve, Group},
+    group::{Curve, Group},
     pallas,
 };
 use std::any::{Any, TypeId};
 
 use crate::{
-    dao_contract::{DaoBulla, State as DaoState},
+    dao_contract::State as DaoState,
     demo::{CallDataBase, StateRegistry, Transaction},
     money_contract::state::State as MoneyState,
     note::EncryptedNote2,
 };
 
-const TARGET: &str = "dao_contract::propose::validate::state_transition()";
+// used for debugging
+// const TARGET: &str = "dao_contract::propose::validate::state_transition()";
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
@@ -152,7 +153,7 @@ pub fn state_transition(
     call_data.inputs.encode(&mut unsigned_tx_data).expect("failed to encode inputs");
     func_call.proofs.encode(&mut unsigned_tx_data).expect("failed to encode proofs");
 
-    for (i, (input, signature)) in
+    for (_i, (input, signature)) in
         call_data.inputs.iter().zip(call_data.signatures.iter()).enumerate()
     {
         let public = &input.signature_public;

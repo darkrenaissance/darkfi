@@ -1,4 +1,3 @@
-use pasta_curves::pallas;
 use std::any::{Any, TypeId};
 
 use darkfi::crypto::types::DrkCircuitField;
@@ -9,7 +8,7 @@ use crate::{
 };
 
 pub fn state_transition(
-    states: &StateRegistry,
+    _states: &StateRegistry,
     func_call_index: usize,
     parent_tx: &Transaction,
 ) -> Result<Update> {
@@ -21,8 +20,6 @@ pub fn state_transition(
 
     // This will be inside wasm so unwrap is fine.
     let call_data = call_data.unwrap();
-
-    // Code goes here
 
     Ok(Update { dao_bulla: call_data.dao_bulla.clone() })
 }
@@ -39,10 +36,8 @@ pub fn apply(states: &mut StateRegistry, update: Update) {
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
-pub enum Error {
-    #[error("Malformed packet")]
-    MalformedPacket,
-}
+pub enum Error {}
+
 type Result<T> = std::result::Result<T, Error>;
 
 pub struct CallData {

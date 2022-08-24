@@ -1,21 +1,21 @@
 use darkfi::{
     crypto::{
         keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier, schnorr,
-        schnorr::SchnorrPublic, types::DrkCircuitField, Proof,
+        schnorr::SchnorrPublic, types::DrkCircuitField,
     },
-    util::serial::{Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
-use log::{debug, error};
+use log::error;
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{ff::Field, Curve, Group},
+    group::{Curve, Group},
     pallas,
 };
 use std::any::{Any, TypeId};
 
 use crate::{
-    dao_contract::{DaoBulla, State as DaoState},
+    dao_contract::State as DaoState,
     demo::{CallDataBase, StateRegistry, Transaction},
     money_contract::state::State as MoneyState,
     note::EncryptedNote2,
@@ -34,9 +34,6 @@ pub enum Error {
 
     #[error("Invalid input merkle root")]
     InvalidInputMerkleRoot,
-
-    #[error("Invalid DAO merkle root")]
-    InvalidDaoMerkleRoot,
 
     #[error("Signature verification failed")]
     SignatureVerifyFailed,
@@ -185,7 +182,7 @@ pub fn state_transition(
 
     //debug!("unsigned_tx_data: {:?}", unsigned_tx_data);
 
-    for (i, (input, signature)) in
+    for (_i, (input, signature)) in
         call_data.inputs.iter().zip(call_data.signatures.iter()).enumerate()
     {
         let public = &input.signature_public;

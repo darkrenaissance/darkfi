@@ -2,24 +2,17 @@ use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{ff::Field, Curve, Group},
+    group::{ff::Field, Curve},
     pallas,
 };
 use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
-        burn_proof::create_burn_proof,
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
-        mint_proof::create_mint_proof,
-        proof::ProvingKey,
         schnorr::SchnorrSecret,
-        types::{
-            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
-            DrkUserDataBlind, DrkValueBlind,
-        },
-        util::{pedersen_commitment_base, pedersen_commitment_u64},
+        util::pedersen_commitment_u64,
         Proof,
     },
     util::serial::{Encodable, SerialDecodable, SerialEncodable},
@@ -28,7 +21,7 @@ use darkfi::{
 
 use crate::{
     dao_contract::propose::validate::{CallData, Header, Input},
-    demo::{CallDataBase, FuncCall, StateRegistry, ZkContractInfo, ZkContractTable},
+    demo::{FuncCall, ZkContractInfo, ZkContractTable},
     money_contract, note,
     util::poseidon_hash,
 };

@@ -1,19 +1,16 @@
-use std::any::Any;
-
 use crate::dao_contract::state::DaoBulla;
 
 use darkfi::{
-    crypto::{keypair::PublicKey, types::DrkCircuitField, Proof},
+    crypto::{keypair::PublicKey, Proof},
     zk::vm::{Witness, ZkCircuit},
 };
-use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
 use crate::{
     dao_contract::mint::validate::CallData,
-    demo::{CallDataBase, FuncCall, ZkContractInfo, ZkContractTable},
+    demo::{FuncCall, ZkContractInfo, ZkContractTable},
     util::poseidon_hash,
 };
 

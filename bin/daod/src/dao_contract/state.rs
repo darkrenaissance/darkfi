@@ -1,34 +1,11 @@
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{
-        ff::{Field, PrimeField},
-        Curve, Group, GroupEncoding,
-    },
+    group::{ff::PrimeField, Group},
     pallas,
 };
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    hash::{Hash, Hasher},
-};
+use std::{any::Any, collections::HashMap, hash::Hasher};
 
-use darkfi::{
-    crypto::{
-        constants::MERKLE_DEPTH,
-        keypair::{Keypair, PublicKey, SecretKey},
-        merkle_node::MerkleNode,
-        nullifier::Nullifier,
-        proof::VerifyingKey,
-    },
-    node::state::{ProgramState, StateUpdate},
-};
-
-use crate::{
-    dao_contract::mint::validate::CallData,
-    demo::{StateRegistry, Transaction},
-    Result,
-};
+use darkfi::crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode, nullifier::Nullifier};
 
 #[derive(Clone)]
 pub struct DaoBulla(pub pallas::Base);
@@ -122,7 +99,8 @@ impl State {
         self.dao_roots.iter().any(|m| m == root)
     }
 
-    pub fn is_valid_proposal_merkle(&self, root: &MerkleNode) -> bool {
+    // TODO: This never gets called.
+    pub fn _is_valid_proposal_merkle(&self, root: &MerkleNode) -> bool {
         self.proposal_roots.iter().any(|m| m == root)
     }
 }

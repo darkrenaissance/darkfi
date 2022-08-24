@@ -1,15 +1,11 @@
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 
-use darkfi::{
-    crypto::{
-        coin::Coin,
-        constants::MERKLE_DEPTH,
-        keypair::{Keypair, PublicKey, SecretKey},
-        merkle_node::MerkleNode,
-        nullifier::Nullifier,
-        proof::VerifyingKey,
-    },
-    node::state::{ProgramState, StateUpdate},
+use darkfi::crypto::{
+    coin::Coin,
+    constants::MERKLE_DEPTH,
+    keypair::{PublicKey, SecretKey},
+    merkle_node::MerkleNode,
+    nullifier::Nullifier,
 };
 
 use super::transfer;

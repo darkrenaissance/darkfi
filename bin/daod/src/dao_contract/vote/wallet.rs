@@ -1,39 +1,30 @@
-use halo2_proofs::circuit::Value;
-use incrementalmerkletree::Hashable;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::Field, Curve, Group},
-    pallas,
-};
-use rand::rngs::OsRng;
-use std::any::{Any, TypeId};
-
 use darkfi::{
     crypto::{
-        burn_proof::create_burn_proof,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
-        mint_proof::create_mint_proof,
         nullifier::Nullifier,
-        proof::ProvingKey,
         schnorr::SchnorrSecret,
-        types::{
-            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
-            DrkUserDataBlind, DrkValueBlind,
-        },
-        util::{pedersen_commitment_base, pedersen_commitment_u64},
+        util::pedersen_commitment_u64,
         Proof,
     },
     util::serial::{Encodable, SerialDecodable, SerialEncodable},
     zk::vm::{Witness, ZkCircuit},
 };
+use halo2_proofs::circuit::Value;
+use incrementalmerkletree::Hashable;
+use pasta_curves::{
+    arithmetic::CurveAffine,
+    group::{ff::Field, Curve},
+    pallas,
+};
+use rand::rngs::OsRng;
 
 use crate::{
     dao_contract::{
         propose::wallet::{DaoParams, Proposal},
         vote::validate::{CallData, Header, Input},
     },
-    demo::{CallDataBase, FuncCall, StateRegistry, ZkContractInfo, ZkContractTable},
+    demo::{FuncCall, ZkContractInfo, ZkContractTable},
     money_contract, note,
     util::poseidon_hash,
 };

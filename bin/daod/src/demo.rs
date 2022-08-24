@@ -1,8 +1,4 @@
-#![allow(unused)]
-
-use halo2_gadgets::poseidon::primitives as poseidon;
-use halo2_proofs::circuit::Value;
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use incrementalmerkletree::Tree;
 use log::debug;
 use pasta_curves::{
     arithmetic::CurveAffine,
@@ -18,26 +14,15 @@ use std::{
 
 use darkfi::{
     crypto::{
-        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
-        merkle_node::MerkleNode,
-        note::{EncryptedNote, Note},
-        nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
-        token_id::generate_id,
         types::{DrkCircuitField, DrkSpendHook, DrkUserData, DrkValue},
         util::pedersen_commitment_u64,
-        OwnCoin, OwnCoins, Proof,
+        Proof,
     },
-    node::state::{ProgramState, StateUpdate},
-    tx::builder::{
-        TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
-        TransactionBuilderOutputInfo,
-    },
-    util::NetworkName,
     zk::{
         circuit::{BurnContract, MintContract},
-        vm::{Witness, ZkCircuit},
+        vm::ZkCircuit,
         vm_stack::empty_witnesses,
     },
     zkas::decoder::ZkBinary,
@@ -50,7 +35,6 @@ use crate::{dao_contract, example_contract, money_contract, util::poseidon_hash}
 // * Vote updates are linked to the proposal_bulla
 // * Nullifier of vote will link vote with the coin when it's spent
 
-// TODO: reenable unused vars warning and fix it
 // TODO: strategize and cleanup Result/Error usage
 // TODO: fix up code doc
 
@@ -313,11 +297,6 @@ pub async fn demo() -> Result<()> {
     let dao_state = dao_contract::State::new();
     states.register("DAO".to_string(), dao_state);
 
-    // For this demo lets create 10 random preexisting DAO bullas
-    for _ in 0..10 {
-        let bulla = pallas::Base::random(&mut OsRng);
-    }
-
     /////////////////////////////////////////////////////
     ////// Create the DAO bulla
     /////////////////////////////////////////////////////
@@ -447,35 +426,31 @@ pub async fn demo() -> Result<()> {
     //// Wallet
     // DAO reads the money received from the encrypted note
 
-    let dao_recv = {
-        let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
-        let mut recv_coins = state.wallet_cache.get_received(&dao_keypair.secret);
-        assert_eq!(recv_coins.len(), 1);
-        let recv_coin = recv_coins.pop().unwrap();
-        let note = &recv_coin.note;
+    let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
+    let mut recv_coins = state.wallet_cache.get_received(&dao_keypair.secret);
+    assert_eq!(recv_coins.len(), 1);
+    let recv_coin = recv_coins.pop().unwrap();
+    let note = &recv_coin.note;
 
-        // Check the actual coin received is valid before accepting it
+    // Check the actual coin received is valid before accepting it
 
-        let coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
-        let coin = poseidon_hash::<8>([
-            *coords.x(),
-            *coords.y(),
-            DrkValue::from(note.value),
-            note.token_id,
-            note.serial,
-            note.spend_hook,
-            note.user_data,
-            note.coin_blind,
-        ]);
-        assert_eq!(coin, recv_coin.coin.0);
+    let coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
+    let coin = poseidon_hash::<8>([
+        *coords.x(),
+        *coords.y(),
+        DrkValue::from(note.value),
+        note.token_id,
+        note.serial,
+        note.spend_hook,
+        note.user_data,
+        note.coin_blind,
+    ]);
+    assert_eq!(coin, recv_coin.coin.0);
 
-        assert_eq!(note.spend_hook, hook_dao_exec);
-        assert_eq!(note.user_data, dao_bulla.0);
+    assert_eq!(note.spend_hook, hook_dao_exec);
+    assert_eq!(note.user_data, dao_bulla.0);
 
-        debug!("DAO received a coin worth {} xDRK", note.value);
-
-        recv_coin
-    };
+    debug!("DAO received a coin worth {} xDRK", note.value);
 
     ///////////////////////////////////////////////////
     //// Mint the governance token

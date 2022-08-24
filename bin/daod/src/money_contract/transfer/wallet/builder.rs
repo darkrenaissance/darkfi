@@ -7,7 +7,6 @@ use darkfi::{
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
         mint_proof::create_mint_proof,
-        proof::ProvingKey,
         schnorr::SchnorrSecret,
         types::{
             DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
