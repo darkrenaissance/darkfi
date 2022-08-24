@@ -51,7 +51,7 @@ async fn spawn_network(
     p2p.clone().start(ex.clone()).await?;
     let _ex = ex.clone();
     ex.spawn(async move {
-        if let Err(e) = p2p.run(_ex).await {
+        if let Err(e) = p2p.run(_ex, None).await {
             error!("Failed starting P2P network seed: {}", e);
         }
     })

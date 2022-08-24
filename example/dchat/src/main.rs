@@ -103,7 +103,7 @@ impl Dchat {
 
         self.register_protocol(self.recv_msgs.clone()).await?;
         self.p2p.clone().start(ex.clone()).await?;
-        ex2.spawn(self.p2p.clone().run(ex.clone())).detach();
+        ex2.spawn(self.p2p.clone().run(ex.clone(), None)).detach();
 
         self.menu().await?;
 

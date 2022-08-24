@@ -395,15 +395,19 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone())).detach();
 
     info!("Starting sync P2P network");
+    let (init_send, init_recv) = async_channel::bounded::<()>(1);
     sync_p2p.clone().unwrap().start(ex.clone()).await?;
     let _ex = ex.clone();
     let _sync_p2p = sync_p2p.clone();
     ex.spawn(async move {
-        if let Err(e) = _sync_p2p.unwrap().run(_ex).await {
+        if let Err(e) = _sync_p2p.unwrap().run(_ex, Some(init_send)).await {
             error!("Failed starting sync P2P network: {}", e);
         }
     })
     .detach();
+
+    init_recv.recv().await?;
+    info!("Sync P2P network initialized!");
 
     match block_sync_task(sync_p2p.clone().unwrap(), state.clone()).await {
         Ok(()) => *darkfid.synced.lock().await = true,
@@ -413,15 +417,19 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // Consensus protocol
     if args.consensus && *darkfid.synced.lock().await {
         info!("Starting consensus P2P network");
+        let (init_send, init_recv) = async_channel::bounded::<()>(1);
         consensus_p2p.clone().unwrap().start(ex.clone()).await?;
         let _ex = ex.clone();
         let _consensus_p2p = consensus_p2p.clone();
         ex.spawn(async move {
-            if let Err(e) = _consensus_p2p.unwrap().run(_ex).await {
+            if let Err(e) = _consensus_p2p.unwrap().run(_ex, Some(init_send)).await {
                 error!("Failed starting consensus P2P network: {}", e);
             }
         })
         .detach();
+
+        init_recv.recv().await?;
+        info!("Consensus P2P network initialized!");
 
         info!("Starting consensus protocol task");
         ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state)).detach();

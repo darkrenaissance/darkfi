@@ -102,6 +102,12 @@ impl Fud {
         let entries = fs::read_dir(&self.folder).unwrap();
         {
             let mut lock = self.dht.write().await;
+
+            // Sync lookup map with network
+            if let Err(e) = lock.sync_lookup_map().await {
+                error!("Failed to sync lookup map: {}", e);
+            }
+
             for entry in entries {
                 let e = entry.unwrap();
                 let name = String::from(e.file_name().to_str().unwrap());
@@ -195,11 +201,6 @@ impl Fud {
             let mut lock = self.dht.write().await;
             let records = lock.map.clone();
             let mut entries_hashes = HashSet::new();
-
-            // Sync lookup map with network
-            if let Err(e) = lock.sync_lookup_map().await {
-                error!("Failed to sync lookup map: {}", e);
-            }
 
             // We iterate files for new records
             for entry in entries {
@@ -320,7 +321,7 @@ impl Fud {
             }
         }
     }
-    
+
     // RPCAPI:
     // Replies to a ping method.
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
@@ -395,15 +396,19 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     ex.spawn(listen_and_serve(args.rpc_listen, fud.clone())).detach();
 
     info!("Starting sync P2P network");
+    let (init_send, init_recv) = async_channel::bounded::<()>(1);
     p2p.clone().start(ex.clone()).await?;
     let _ex = ex.clone();
     let _p2p = p2p.clone();
     ex.spawn(async move {
-        if let Err(e) = _p2p.run(_ex).await {
+        if let Err(e) = _p2p.run(_ex, Some(init_send)).await {
             error!("Failed starting P2P network: {}", e);
         }
     })
     .detach();
+
+    init_recv.recv().await?;
+    info!("P2P network initialized!");
 
     fud.init().await?;
 

@@ -551,7 +551,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     p2p.clone().start(executor.clone()).await?;
 
-    executor.spawn(p2p.clone().run(executor.clone())).detach();
+    executor.spawn(p2p.clone().run(executor.clone(), None)).detach();
 
     //
     // Darkwiki start
