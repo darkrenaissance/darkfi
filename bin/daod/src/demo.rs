@@ -43,7 +43,7 @@ use darkfi::{
     zkas::decoder::ZkBinary,
 };
 
-use crate::{dao_contract, money_contract, util::poseidon_hash};
+use crate::{dao_contract, example_contract, money_contract, util::poseidon_hash};
 
 // TODO: Anonymity leaks in this proof of concept:
 //

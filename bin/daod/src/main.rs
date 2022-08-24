@@ -15,10 +15,13 @@ use darkfi::{
 };
 
 mod dao_contract;
-mod demo;
+mod example_contract;
 mod money_contract;
+
+mod demo;
 mod note;
 mod util;
+
 use crate::demo::demo;
 
 async fn _start() -> Result<()> {
