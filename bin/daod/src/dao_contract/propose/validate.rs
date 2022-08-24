@@ -52,7 +52,7 @@ pub struct CallData {
 }
 
 impl CallDataBase for CallData {
-    fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
+    fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
         let mut zk_publics = Vec::new();
         let mut total_funds_commit = pallas::Point::identity();
 
@@ -67,21 +67,24 @@ impl CallDataBase for CallData {
             let sigpub_x = *sigpub_coords.x();
             let sigpub_y = *sigpub_coords.y();
 
-            zk_publics.push(vec![
-                value_commit_x,
-                value_commit_y,
-                self.header.token_commit,
-                input.merkle_root.0,
-                sigpub_x,
-                sigpub_y,
-            ]);
+            zk_publics.push((
+                "dao-propose-burn".to_string(),
+                vec![
+                    value_commit_x,
+                    value_commit_y,
+                    self.header.token_commit,
+                    input.merkle_root.0,
+                    sigpub_x,
+                    sigpub_y,
+                ],
+            ));
         }
 
         let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
         let total_funds_x = *total_funds_coords.x();
         let total_funds_y = *total_funds_coords.y();
-        zk_publics.push(
-            // dao-propose-main proof
+        zk_publics.push((
+            "dao-propose-main".to_string(),
             vec![
                 self.header.token_commit,
                 self.header.dao_merkle_root.0,
@@ -89,18 +92,9 @@ impl CallDataBase for CallData {
                 total_funds_x,
                 total_funds_y,
             ],
-        );
+        ));
 
         zk_publics
-    }
-
-    fn zk_proof_addrs(&self) -> Vec<String> {
-        let mut zk_addrs = Vec::new();
-        for input in &self.inputs {
-            zk_addrs.push("dao-propose-burn".to_string());
-        }
-        zk_addrs.push("dao-propose-main".to_string());
-        zk_addrs
     }
 
     fn as_any(&self) -> &dyn Any {

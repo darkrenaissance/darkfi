@@ -59,7 +59,7 @@ pub struct CallData {
 }
 
 impl CallDataBase for CallData {
-    fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
+    fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
         let mut zk_publics = Vec::new();
         let mut total_value_commit = pallas::Point::identity();
 
@@ -74,16 +74,18 @@ impl CallDataBase for CallData {
             let sigpub_x = *sigpub_coords.x();
             let sigpub_y = *sigpub_coords.y();
 
-            // dao-vote-burn proof
-            zk_publics.push(vec![
-                input.nullifier.0,
-                value_commit_x,
-                value_commit_y,
-                self.header.token_commit,
-                input.merkle_root.0,
-                sigpub_x,
-                sigpub_y,
-            ]);
+            zk_publics.push((
+                "dao-vote-burn".to_string(),
+                vec![
+                    input.nullifier.0,
+                    value_commit_x,
+                    value_commit_y,
+                    self.header.token_commit,
+                    input.merkle_root.0,
+                    sigpub_x,
+                    sigpub_y,
+                ],
+            ));
         }
 
         let vote_commit_coords = self.header.vote_commit.to_affine().coordinates().unwrap();
@@ -93,8 +95,9 @@ impl CallDataBase for CallData {
         let value_commit_coords = total_value_commit.to_affine().coordinates().unwrap();
         let value_commit_x = *value_commit_coords.x();
         let value_commit_y = *value_commit_coords.y();
-        zk_publics.push(
-            // dao-vote-main proof
+
+        zk_publics.push((
+            "dao-vote-main".to_string(),
             vec![
                 self.header.token_commit,
                 self.header.proposal_bulla,
@@ -103,18 +106,9 @@ impl CallDataBase for CallData {
                 value_commit_x,
                 value_commit_y,
             ],
-        );
+        ));
 
         zk_publics
-    }
-
-    fn zk_proof_addrs(&self) -> Vec<String> {
-        let mut zk_addrs = Vec::new();
-        for input in &self.inputs {
-            zk_addrs.push("dao-vote-burn".to_string());
-        }
-        zk_addrs.push("dao-vote-main".to_string());
-        zk_addrs
     }
 
     fn as_any(&self) -> &dyn Any {

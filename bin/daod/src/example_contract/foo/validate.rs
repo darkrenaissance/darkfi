@@ -35,12 +35,10 @@ pub struct CallData {
 }
 
 impl CallDataBase for CallData {
-    fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
-        vec![vec![self.header.public_c]]
+    fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
+        vec![("example-foo".to_string(), vec![self.header.public_c])]
     }
-    fn zk_proof_addrs(&self) -> Vec<String> {
-        vec!["example-foo".to_string()]
-    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

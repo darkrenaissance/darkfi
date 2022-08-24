@@ -166,26 +166,15 @@ pub struct CallData {
 }
 
 impl CallDataBase for CallData {
-    fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>> {
+    fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
         let mut public_values = Vec::new();
         for input in &self.inputs {
-            public_values.push(input.revealed.make_outputs());
+            public_values.push(("money-transfer-burn".to_string(), input.revealed.make_outputs()));
         }
         for output in &self.outputs {
-            public_values.push(output.revealed.make_outputs());
+            public_values.push(("money-transfer-mint".to_string(), output.revealed.make_outputs()));
         }
         public_values
-    }
-
-    fn zk_proof_addrs(&self) -> Vec<String> {
-        let mut result = Vec::new();
-        for _ in &self.inputs {
-            result.push("money-transfer-burn".to_string());
-        }
-        for _ in &self.outputs {
-            result.push("money-transfer-mint".to_string());
-        }
-        result
     }
 
     fn as_any(&self) -> &dyn Any {

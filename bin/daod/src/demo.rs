@@ -108,14 +108,6 @@ impl ZkContractTable {
     }
 }
 
-macro_rules! zip {
-    ($x: expr) => ($x);
-    ($x: expr, $($y: expr), +) => (
-        $x.iter().zip(
-            zip!($($y), +))
-    )
-}
-
 pub struct Transaction {
     pub func_calls: Vec<FuncCall>,
 }
@@ -127,24 +119,18 @@ impl Transaction {
     fn zk_verify(&self, zk_bins: &ZkContractTable) {
         for func_call in &self.func_calls {
             let proofs_public_vals = &func_call.call_data.zk_public_values();
-            let proofs_addrs = &func_call.call_data.zk_proof_addrs();
+
             assert_eq!(
                 proofs_public_vals.len(),
-                proofs_addrs.len(),
-                "proof_public_vals.len()={} and proof_addrs.len()={} do not match",
-                proofs_public_vals.len(),
-                proofs_addrs.len(),
-            );
-            assert_eq!(
-                proofs_addrs.len(),
                 func_call.proofs.len(),
-                "proof_addrs.len()={} and func_call.proofs.len()={} do not match",
-                proofs_addrs.len(),
+                "proof_public_vals.len()={} and func_call.proofs.len()={} do not match",
+                proofs_public_vals.len(),
                 func_call.proofs.len()
             );
-            for (i, (key, (proof, public_vals))) in
-                zip!(proofs_addrs, &func_call.proofs, proofs_public_vals).enumerate()
+            for (i, (proof, (key, public_vals))) in
+                func_call.proofs.iter().zip(proofs_public_vals.iter()).enumerate()
             {
+                debug!(target: "demo", "Tranaction::zk_verify i: {}, key: {}", i, key);
                 match zk_bins.lookup(key).unwrap() {
                     ZkContractInfo::Binary(info) => {
                         let verifying_key = &info.verifying_key;
@@ -177,10 +163,7 @@ pub struct FuncCall {
 pub trait CallDataBase {
     // Public values for verifying the proofs
     // Needed so we can convert internal types so they can be used in Proof::verify()
-    fn zk_public_values(&self) -> Vec<Vec<DrkCircuitField>>;
-
-    // The zk contract ID needed to lookup in the table
-    fn zk_proof_addrs(&self) -> Vec<String>;
+    fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)>;
 
     // For upcasting to CallData itself so it can be read in state_transition()
     fn as_any(&self) -> &dyn Any;
