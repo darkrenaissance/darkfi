@@ -102,12 +102,12 @@ impl Fud {
         let entries = fs::read_dir(&self.folder).unwrap();
         {
             let mut lock = self.dht.write().await;
-            
+
             // Sync lookup map with network
             if let Err(e) = lock.sync_lookup_map().await {
                 error!("Failed to sync lookup map: {}", e);
             }
-            
+
             for entry in entries {
                 let e = entry.unwrap();
                 let name = String::from(e.file_name().to_str().unwrap());
@@ -201,7 +201,7 @@ impl Fud {
             let mut lock = self.dht.write().await;
             let records = lock.map.clone();
             let mut entries_hashes = HashSet::new();
-            
+
             // We iterate files for new records
             for entry in entries {
                 let e = entry.unwrap();
@@ -321,7 +321,7 @@ impl Fud {
             }
         }
     }
-    
+
     // RPCAPI:
     // Replies to a ping method.
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
@@ -405,7 +405,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     })
     .detach();
-    
+
+    info!("Waiting for P2P outbound connections");
     p2p.wait_for_outbound().await?;
 
     fud.init().await?;

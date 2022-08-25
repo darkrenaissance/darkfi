@@ -405,6 +405,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     })
     .detach();
 
+    info!("Waiting for sync P2P outbound connections");
+    sync_p2p.clone().unwrap().wait_for_outbound().await?;
+
     match block_sync_task(sync_p2p.clone().unwrap(), state.clone()).await {
         Ok(()) => *darkfid.synced.lock().await = true,
         Err(e) => error!("Failed syncing blockchain: {}", e),
@@ -422,6 +425,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             }
         })
         .detach();
+
+        info!("Waiting for consensus P2P outbound connections");
+        consensus_p2p.clone().unwrap().wait_for_outbound().await?;
 
         info!("Starting consensus protocol task");
         ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state)).detach();

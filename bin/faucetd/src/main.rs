@@ -409,7 +409,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     })
     .detach();
 
-    match block_sync_task(sync_p2p.clone(), state.clone()).await {
+    info!("Waiting for sync P2P outbound connections");
+    sync_p2p.clone().wait_for_outbound().await?;
+
+    match block_sync_task(sync_p2p, state.clone()).await {
         Ok(()) => *faucetd.synced.lock().await = true,
         Err(e) => error!("Failed syncing blockchain: {}", e),
     }
