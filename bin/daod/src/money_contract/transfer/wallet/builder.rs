@@ -53,6 +53,7 @@ pub struct BuilderInputInfo {
     pub secret: SecretKey,
     pub note: Note,
     pub user_data_blind: DrkUserDataBlind,
+    pub value_blind: DrkValueBlind,
 }
 
 pub struct BuilderOutputInfo {
@@ -113,7 +114,7 @@ impl Builder {
         let mut input_blinds = vec![];
         let mut signature_secrets = vec![];
         for input in self.inputs {
-            let value_blind = DrkValueBlind::random(&mut OsRng);
+            let value_blind = input.value_blind;
             input_blinds.push(value_blind);
 
             let signature_secret = SecretKey::random(&mut OsRng);

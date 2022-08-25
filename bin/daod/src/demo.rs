@@ -288,6 +288,9 @@ pub async fn demo() -> Result<()> {
     let zk_dao_vote_burn_bincode = include_bytes!("../proof/dao-vote-burn.zk.bin");
     let zk_dao_vote_burn_bin = ZkBinary::decode(zk_dao_vote_burn_bincode)?;
     zk_bins.add_contract("dao-vote-burn".to_string(), zk_dao_vote_burn_bin, 13);
+    let zk_dao_exec_bincode = include_bytes!("../proof/dao-exec.zk.bin");
+    let zk_dao_exec_bin = ZkBinary::decode(zk_dao_exec_bincode)?;
+    zk_bins.add_contract("dao-exec".to_string(), zk_dao_exec_bin, 13);
 
     // State for money contracts
     let cashier_signature_secret = SecretKey::random(&mut OsRng);
@@ -652,15 +655,17 @@ pub async fn demo() -> Result<()> {
         bulla_blind: dao_bulla_blind,
     };
 
+    let proposal = dao_contract::propose::wallet::Proposal {
+        dest: user_keypair.public,
+        amount: 1000,
+        serial: pallas::Base::random(&mut OsRng),
+        token_id: xdrk_token_id,
+        blind: pallas::Base::random(&mut OsRng),
+    };
+
     let builder = dao_contract::propose::wallet::Builder {
         inputs: vec![input],
-        proposal: dao_contract::propose::wallet::Proposal {
-            dest: user_keypair.public,
-            amount: 1000,
-            serial: pallas::Base::random(&mut OsRng),
-            token_id: xdrk_token_id,
-            blind: pallas::Base::random(&mut OsRng),
-        },
+        proposal: proposal.clone(),
         dao: dao_params.clone(),
         dao_leaf_position,
         dao_merkle_path,
@@ -1036,6 +1041,8 @@ pub async fn demo() -> Result<()> {
     let user_coin_blind = pallas::Base::random(&mut OsRng);
     let dao_serial = pallas::Base::random(&mut OsRng);
     let dao_coin_blind = pallas::Base::random(&mut OsRng);
+    let input_value = treasury_note.value;
+    let input_value_blind = pallas::Scalar::random(&mut OsRng);
 
     let (treasury_leaf_position, treasury_merkle_path) = {
         let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
@@ -1054,6 +1061,7 @@ pub async fn demo() -> Result<()> {
             secret: dao_keypair.secret,
             note: treasury_note,
             user_data_blind,
+            value_blind: input_value_blind,
         }],
         outputs: vec![
             // Sending money
@@ -1081,9 +1089,20 @@ pub async fn demo() -> Result<()> {
 
     let transfer_func_call = builder.build(&zk_bins)?;
 
-    let foo = dao_contract::exec::wallet::Foo { a: 5, b: 10 };
-
-    let builder = dao_contract::exec::wallet::Builder { foo };
+    let builder = dao_contract::exec::wallet::Builder {
+        proposal,
+        dao: dao_params,
+        win_votes,
+        total_votes,
+        win_votes_blind: total_vote_blinds,
+        total_votes_blind: total_value_blinds,
+        user_serial,
+        user_coin_blind,
+        dao_serial,
+        dao_coin_blind,
+        input_value,
+        input_value_blind,
+    };
     let exec_func_call = builder.build(&zk_bins);
 
     let tx = Transaction { func_calls: vec![transfer_func_call, exec_func_call] };
