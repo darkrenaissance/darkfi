@@ -336,8 +336,6 @@ impl Darkwiki {
                 continue
             }
 
-            let edit = edit.trim();
-
             let doc_id = path_to_id(doc_path);
 
             // create new patch
@@ -352,7 +350,7 @@ impl Darkwiki {
 
                 // check the differences with LCS algorithm
                 let local_patch_str = local_patch.to_string();
-                let lcs = Lcs::new(&local_patch_str, edit);
+                let lcs = Lcs::new(&local_patch_str, &edit);
                 let lcs_ops = lcs.ops();
 
                 // add the change ops to the new patch
