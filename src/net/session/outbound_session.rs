@@ -78,7 +78,10 @@ pub struct OutboundSession {
     p2p: Weak<P2p>,
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
     slot_info: Mutex<Vec<OutboundInfo>>,
+    /// Subscriber used to signal channels processing
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
+    /// Flag to toggle channel_subscriber notifications
+    notify: Mutex<bool>,
 }
 
 impl OutboundSession {
@@ -89,6 +92,7 @@ impl OutboundSession {
             connect_slots: Mutex::new(Vec::new()),
             slot_info: Mutex::new(Vec::new()),
             channel_subscriber: Subscriber::new(),
+            notify: Mutex::new(false),
         })
     }
 
@@ -175,7 +179,9 @@ impl OutboundSession {
                     }
 
                     // Notify that channel processing has been finished
-                    self.channel_subscriber.notify(Ok(channel)).await;
+                    if *self.notify.lock().await {
+                        self.channel_subscriber.notify(Ok(channel)).await;
+                    }
 
                     // Wait for channel to close
                     stop_sub.unwrap().receive().await;
@@ -190,7 +196,9 @@ impl OutboundSession {
                     }
 
                     // Notify that channel processing has been finished
-                    self.channel_subscriber.notify(Err(err)).await;
+                    if *self.notify.lock().await {
+                        self.channel_subscriber.notify(Err(err)).await;
+                    }
                 }
             }
         }
@@ -241,6 +249,16 @@ impl OutboundSession {
     /// Subscribe to a channel.
     pub async fn subscribe_channel(&self) -> Subscription<Result<ChannelPtr>> {
         self.channel_subscriber.clone().subscribe().await
+    }
+
+    /// Enable channel_subscriber notifications.
+    pub async fn enable_notify(self: Arc<Self>) {
+        *self.notify.lock().await = true;
+    }
+
+    /// Disable channel_subscriber notifications.
+    pub async fn disable_notify(self: Arc<Self>) {
+        *self.notify.lock().await = false;
     }
 }
 

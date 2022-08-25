@@ -195,6 +195,9 @@ impl P2p {
             let self_inbound_addr = self.settings().external_addr.clone();
             let addrs = self.hosts().load_all().await;
 
+            // Enable outbound channel subscriber notifications
+            self.session_outbound().await.clone().enable_notify().await;
+
             // Retrieve outbound channel subscriber ptr
             let outbound_sub =
                 self.session_outbound.lock().await.as_ref().unwrap().subscribe_channel().await;
@@ -213,6 +216,9 @@ impl P2p {
                     );
                 }
             }
+
+            // Disable outbound channel subscriber notifications
+            self.session_outbound().await.disable_notify().await;
         }
 
         debug!(target: "net", "P2p::wait_for_outbound() [END]");
