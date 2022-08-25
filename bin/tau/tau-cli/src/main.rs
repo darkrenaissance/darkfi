@@ -46,8 +46,29 @@ struct Args {
 #[derive(Subcommand)]
 enum TauSubcommand {
     /// Add a new task.
+    ///
+    /// Quick start:
+    ///   Adding a new task named "New task":
+    ///     tau add New task
+    ///   New task with description:
+    ///     tau add Add more info to tau desc:"some awesome description"
+    ///   New task with project and assignee:
+    ///     tau add Third task project:p2p assign:rusty
+    ///   Add a task with due date September 12th and rank of 4.6:
+    ///     tau add Task no. Four due:1209 rank:4.6
+    ///
+    /// Notice that if the command does not have "desc" key it will open
+    /// an Editor so you can write the description there.
+    ///
+    /// Also note that "project" and "assign" keys can have multiple
+    /// comma-separated values.
+    ///
+    /// All keys example:
+    ///     tau add Improve CLI desc:"Description here" project:tau,ircd assign:dave,rusty due:0210 rank:2.2
+    ///
+    #[clap(verbatim_doc_comment)]
     Add {
-        /// Pairs of key:value (e.g. title desc:description assign:dark).
+        /// Pairs of key:value (e.g. desc:description assign:dark).
         values: Vec<String>,
     },
 
