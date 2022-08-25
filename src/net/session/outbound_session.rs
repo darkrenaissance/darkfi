@@ -9,7 +9,7 @@ use serde_json::json;
 use url::Url;
 
 use crate::{
-    system::{StoppableTask, StoppableTaskPtr},
+    system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     util::async_util,
     Error, Result,
 };
@@ -78,6 +78,7 @@ pub struct OutboundSession {
     p2p: Weak<P2p>,
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
     slot_info: Mutex<Vec<OutboundInfo>>,
+    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
 }
 
 impl OutboundSession {
@@ -87,6 +88,7 @@ impl OutboundSession {
             p2p,
             connect_slots: Mutex::new(Vec::new()),
             slot_info: Mutex::new(Vec::new()),
+            channel_subscriber: Subscriber::new(),
         })
     }
 
@@ -172,6 +174,9 @@ impl OutboundSession {
                         info.state = OutboundState::Connected;
                     }
 
+                    // Notify that channel processing has been finished
+                    self.channel_subscriber.notify(Ok(channel)).await;
+
                     // Wait for channel to close
                     stop_sub.unwrap().receive().await;
                 }
@@ -183,6 +188,9 @@ impl OutboundSession {
                         info.channel = None;
                         info.state = OutboundState::Open;
                     }
+
+                    // Notify that channel processing has been finished
+                    self.channel_subscriber.notify(Err(err)).await;
                 }
             }
         }
@@ -228,6 +236,11 @@ impl OutboundSession {
 
             async_util::sleep(p2p.settings().outbound_retry_seconds).await;
         }
+    }
+
+    /// Subscribe to a channel.
+    pub async fn subscribe_channel(&self) -> Subscription<Result<ChannelPtr>> {
+        self.channel_subscriber.clone().subscribe().await
     }
 }
 

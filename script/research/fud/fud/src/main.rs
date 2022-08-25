@@ -102,6 +102,12 @@ impl Fud {
         let entries = fs::read_dir(&self.folder).unwrap();
         {
             let mut lock = self.dht.write().await;
+            
+            // Sync lookup map with network
+            if let Err(e) = lock.sync_lookup_map().await {
+                error!("Failed to sync lookup map: {}", e);
+            }
+            
             for entry in entries {
                 let e = entry.unwrap();
                 let name = String::from(e.file_name().to_str().unwrap());
@@ -195,12 +201,7 @@ impl Fud {
             let mut lock = self.dht.write().await;
             let records = lock.map.clone();
             let mut entries_hashes = HashSet::new();
-
-            // Sync lookup map with network
-            if let Err(e) = lock.sync_lookup_map().await {
-                error!("Failed to sync lookup map: {}", e);
-            }
-
+            
             // We iterate files for new records
             for entry in entries {
                 let e = entry.unwrap();
@@ -404,6 +405,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     })
     .detach();
+    
+    p2p.wait_for_outbound().await?;
 
     fud.init().await?;
 

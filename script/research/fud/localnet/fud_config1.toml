@@ -22,7 +22,7 @@ p2p_external = ["tls://127.0.0.1:13341"]
 #slots = 8
 
 # Seed nodes to connect to
-seeds = ["tls://127.0.0.1:13337"]
+seeds = ["tcp://127.0.0.1:13337"]
 
 # Peers to connect to
 #peers = []

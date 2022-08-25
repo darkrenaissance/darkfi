@@ -182,6 +182,43 @@ impl P2p {
         Ok(())
     }
 
+    /// Wait for outbound connections to be established.
+    pub async fn wait_for_outbound(self: Arc<Self>) -> Result<()> {
+        debug!(target: "net", "P2p::wait_for_outbound() [BEGIN]");
+        // To verify that the network needs initialization, we check if we have seeds or peers configured,
+        // and have configured outbound slots.
+        if !(self.settings.seeds.is_empty() && self.settings.peers.is_empty()) &&
+            self.settings.outbound_connections > 0
+        {
+            debug!(target: "net", "P2p::wait_for_outbound(): seeds are configured, waiting for outbound initialization...");
+
+            let self_inbound_addr = self.settings().external_addr.clone();
+            let addrs = self.hosts().load_all().await;
+
+            // Retrieve outbound channel subscriber ptr
+            let outbound_sub =
+                self.session_outbound.lock().await.as_ref().unwrap().subscribe_channel().await;
+
+            // Wait for the result for each of the addresses, excluding our own inbound addresses
+            for addr in addrs {
+                if self_inbound_addr.contains(&addr) {
+                    continue
+                }
+
+                // Wait for address to be processed
+                if let Err(e) = outbound_sub.receive().await {
+                    debug!(
+                        "P2p::wait_for_outbound(): Outbound connection failed [{}]: {}",
+                        &addr, e
+                    );
+                }
+            }
+        }
+
+        debug!(target: "net", "P2p::wait_for_outbound() [END]");
+        Ok(())
+    }
+
     pub async fn stop(&self) {
         self.stop_subscriber.notify(()).await
     }
@@ -265,6 +302,7 @@ impl P2p {
         self.stop_subscriber.clone().subscribe().await
     }
 
+    /// Retrieve channels
     pub fn channels(&self) -> &ConnectedChannels {
         &self.channels
     }
