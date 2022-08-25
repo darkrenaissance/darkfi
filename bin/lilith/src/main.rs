@@ -9,6 +9,7 @@ use darkfi::{
     async_daemonize, net,
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
+        expand_path,
         path::get_config_path,
     },
     Result,

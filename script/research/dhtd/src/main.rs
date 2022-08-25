@@ -24,6 +24,7 @@ use darkfi::{
         cli::{get_log_config, get_log_level, spawn_config},
         path::get_config_path,
         serial::serialize,
+        expand_path,
     },
     Result,
 };
