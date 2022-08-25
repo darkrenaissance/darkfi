@@ -140,10 +140,18 @@ pub fn comments_as_string(comments: Vec<Comment>) -> String {
 pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
     let mut events_str = String::new();
     let mut timestamps_str = String::new();
-    let long_comment_width = 50;
+    let width = 50;
     for event in events {
         writeln!(timestamps_str, "{}", event.timestamp).unwrap();
         match event.action.as_str() {
+            "title" => {
+                writeln!(events_str, "- {} changed title to {}", event.author, event.content)
+                    .unwrap();
+            }
+            "rank" => {
+                writeln!(events_str, "- {} changed rank to {}", event.author, event.content)
+                    .unwrap();
+            }
             "state" => {
                 writeln!(events_str, "- {} changed state to {}", event.author, event.content)
                     .unwrap();
@@ -151,17 +159,39 @@ pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
             "assign" => {
                 writeln!(events_str, "- {} assigned {}", event.author, event.content).unwrap();
             }
+            "project" => {
+                writeln!(events_str, "- {} changed project to {}", event.author, event.content)
+                    .unwrap();
+            }
+            "due" => {
+                writeln!(
+                    events_str,
+                    "- {} changed due date to {}",
+                    event.author,
+                    timestamp_to_date(event.content.parse::<i64>().unwrap_or(0), DateFormat::Date)
+                )
+                .unwrap();
+            }
             "comment" => {
                 // wrap long comments
-                let ev_content = fill(
-                    &event.content,
-                    textwrap::Options::new(long_comment_width).subsequent_indent("  "),
-                );
+                let ev_content =
+                    fill(&event.content, textwrap::Options::new(width).subsequent_indent("  "));
                 // skip wrapped lines to align timestamp with the first line
                 for _ in 1..ev_content.lines().collect::<Vec<&str>>().len() {
                     writeln!(timestamps_str, " ").unwrap();
                 }
                 writeln!(events_str, "- {} made a comment: {}", event.author, ev_content).unwrap();
+            }
+            "desc" => {
+                // wrap long description
+                let ev_content =
+                    fill(&event.content, textwrap::Options::new(width).subsequent_indent("  "));
+                // skip wrapped lines to align timestamp with the first line
+                for _ in 1..ev_content.lines().collect::<Vec<&str>>().len() {
+                    writeln!(timestamps_str, " ").unwrap();
+                }
+                writeln!(events_str, "- {} changed description to: {}", event.author, ev_content)
+                    .unwrap();
             }
             _ => {}
         }

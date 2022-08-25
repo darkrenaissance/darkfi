@@ -183,10 +183,9 @@ impl TaskInfo {
         self.desc = desc.into();
     }
 
-    pub fn set_assign(&mut self, assign: &[String], owner: &str) {
+    pub fn set_assign(&mut self, assign: &[String]) {
         debug!(target: "tau", "TaskInfo::set_assign()");
         self.assign = TaskAssigns(assign.to_owned());
-        self.set_event("assign", owner, &assign.join(", "));
     }
 
     pub fn set_project(&mut self, project: &[String]) {
@@ -197,7 +196,6 @@ impl TaskInfo {
     pub fn set_comment(&mut self, c: Comment) {
         debug!(target: "tau", "TaskInfo::set_comment()");
         self.comments.0.push(c.clone());
-        self.set_event("comment", &c.author, &c.content);
     }
 
     pub fn set_rank(&mut self, r: Option<f32>) {
@@ -217,13 +215,12 @@ impl TaskInfo {
         }
     }
 
-    pub fn set_state(&mut self, state: &str, owner: &str) {
+    pub fn set_state(&mut self, state: &str) {
         debug!(target: "tau", "TaskInfo::set_state()");
         if self.get_state() == state {
             return
         }
         self.state = state.to_string();
-        self.set_event("state", owner, state);
     }
 }
 
