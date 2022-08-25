@@ -157,18 +157,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let (broadcast_snd, broadcast_rcv) = async_channel::unbounded::<TaskInfo>();
 
     //
-    // RPC
-    //
-    let rpc_interface = Arc::new(JsonRpcInterface::new(
-        datastore_path.clone(),
-        broadcast_snd,
-        nickname.unwrap(),
-        workspace,
-        configured_ws.clone(),
-    ));
-    executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface)).detach();
-
-    //
     // Raft
     //
     let net_settings = settings.net;
@@ -188,7 +176,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
             raft.sender(),
             raft.receiver(),
             datastore_path.clone(),
-            configured_ws,
+            configured_ws.clone(),
             rng,
         ))
         .detach();
@@ -218,6 +206,19 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     p2p.clone().start(executor.clone()).await?;
 
     executor.spawn(p2p.clone().run(executor.clone(), None)).detach();
+
+    //
+    // RPC interface
+    //
+    let rpc_interface = Arc::new(JsonRpcInterface::new(
+        datastore_path.clone(),
+        broadcast_snd,
+        nickname.unwrap(),
+        workspace,
+        configured_ws,
+        p2p.clone(),
+    ));
+    executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface)).detach();
 
     //
     // Waiting Exit signal

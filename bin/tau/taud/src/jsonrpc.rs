@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use darkfi::{
+    net,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         server::RequestHandler,
@@ -29,6 +30,7 @@ pub struct JsonRpcInterface {
     nickname: String,
     workspace: Arc<Mutex<String>>,
     configured_ws: FxHashMap<String, Workspace>,
+    p2p: net::P2pPtr,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -62,6 +64,8 @@ impl RequestHandler for JsonRpcInterface {
             Some("export") => self.export_to(params).await,
             Some("import") => self.import_from(params).await,
             Some("get_stop_tasks") => self.get_stop_tasks(params).await,
+            Some("ping") => self.pong(params).await,
+            Some("get_info") => self.get_info(params).await,
             Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         };
 
@@ -76,8 +80,26 @@ impl JsonRpcInterface {
         nickname: String,
         workspace: Arc<Mutex<String>>,
         configured_ws: FxHashMap<String, Workspace>,
+        p2p: net::P2pPtr,
     ) -> Self {
-        Self { dataset_path, nickname, workspace, configured_ws, notify_queue_sender }
+        Self { dataset_path, nickname, workspace, configured_ws, notify_queue_sender, p2p }
+    }
+
+    // RPCAPI:
+    // Replies to a ping method.
+    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
+    async fn pong(&self, _params: &[Value]) -> TaudResult<Value> {
+        Ok(json!("pong"))
+    }
+
+    // RPCAPI:
+    // Retrieves P2P network information.
+    // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
+    async fn get_info(&self, _params: &[Value]) -> TaudResult<Value> {
+        let resp = self.p2p.get_info().await;
+        Ok(resp)
     }
 
     // RPCAPI:
