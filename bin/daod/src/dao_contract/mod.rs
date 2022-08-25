@@ -4,6 +4,8 @@ pub mod mint;
 pub mod propose;
 // vote{}
 pub mod vote;
+// exec{}
+pub mod exec;
 
 pub mod state;
 

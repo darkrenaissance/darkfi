@@ -59,6 +59,8 @@ pub struct BuilderOutputInfo {
     pub value: u64,
     pub token_id: DrkTokenId,
     pub public: PublicKey,
+    pub serial: DrkSerial,
+    pub coin_blind: DrkCoinBlind,
     pub spend_hook: DrkSpendHook,
     pub user_data: DrkUserData,
 }
@@ -165,8 +167,8 @@ impl Builder {
             };
             output_blinds.push(value_blind);
 
-            let serial = DrkSerial::random(&mut OsRng);
-            let coin_blind = DrkCoinBlind::random(&mut OsRng);
+            let serial = output.serial;
+            let coin_blind = output.coin_blind;
 
             let zk_info = zk_bins.lookup(&"money-transfer-mint".to_string()).unwrap();
             let zk_info = if let ZkContractInfo::Native(info) = zk_info {

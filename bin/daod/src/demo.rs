@@ -114,7 +114,6 @@ impl Transaction {
             for (i, (proof, (key, public_vals))) in
                 func_call.proofs.iter().zip(proofs_public_vals.iter()).enumerate()
             {
-                debug!(target: "demo", "Tranaction::zk_verify i: {}, key: {}", i, key);
                 match zk_bins.lookup(key).unwrap() {
                     ZkContractInfo::Binary(info) => {
                         let verifying_key = &info.verifying_key;
@@ -127,7 +126,7 @@ impl Transaction {
                         assert!(verify_result.is_ok(), "verify proof[{}]='{}' failed", i, key);
                     }
                 };
-                debug!("zk_verify({}) passed", key);
+                debug!(target: "demo", "zk_verify({}) passed [i={}]", key, i);
             }
         }
     }
@@ -178,6 +177,10 @@ impl StateRegistry {
     }
 }
 
+pub trait UpdateBase {
+    fn apply(self: Box<Self>, states: &mut StateRegistry);
+}
+
 ///////////////////////////////////////////////////
 ///// Example contract
 ///////////////////////////////////////////////////
@@ -196,16 +199,21 @@ pub async fn example() -> Result<()> {
     let example_state = example_contract::state::State::new();
     states.register("Example".to_string(), example_state);
 
+    //// Wallet
+
     let foo = example_contract::foo::wallet::Foo { a: 5, b: 10 };
 
     let builder = example_contract::foo::wallet::Builder { foo };
     let func_call = builder.build(&zk_bins);
     let tx = Transaction { func_calls: vec![func_call] };
 
+    //// Validator
+
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         if func_call.func_id == "Example::foo()" {
             debug!("example_contract::foo::state_transition()");
 
+            // TODO: separate this 2 things
             let update = example_contract::foo::validate::state_transition(&states, idx, &tx)
                 .expect("example_contract::foo::validate::state_transition() failed!");
             example_contract::foo::validate::apply(&mut states, update);
@@ -216,6 +224,7 @@ pub async fn example() -> Result<()> {
 
     Ok(())
 }
+
 pub async fn demo() -> Result<()> {
     // Example smart contract
     //// TODO: this will be moved to a different file
@@ -398,6 +407,8 @@ pub async fn demo() -> Result<()> {
             value: xdrk_supply,
             token_id: xdrk_token_id,
             public: dao_keypair.public,
+            serial: pallas::Base::random(&mut OsRng),
+            coin_blind: pallas::Base::random(&mut OsRng),
             spend_hook,
             user_data,
         }],
@@ -417,7 +428,7 @@ pub async fn demo() -> Result<()> {
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
                 .expect("money_contract::transfer::validate::state_transition() failed!");
-            money_contract::transfer::validate::apply(&mut states, update);
+            update.apply(&mut states);
         }
     }
 
@@ -429,8 +440,8 @@ pub async fn demo() -> Result<()> {
     let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
     let mut recv_coins = state.wallet_cache.get_received(&dao_keypair.secret);
     assert_eq!(recv_coins.len(), 1);
-    let recv_coin = recv_coins.pop().unwrap();
-    let note = &recv_coin.note;
+    let dao_recv_coin = recv_coins.pop().unwrap();
+    let treasury_note = dao_recv_coin.note;
 
     // Check the actual coin received is valid before accepting it
 
@@ -438,19 +449,19 @@ pub async fn demo() -> Result<()> {
     let coin = poseidon_hash::<8>([
         *coords.x(),
         *coords.y(),
-        DrkValue::from(note.value),
-        note.token_id,
-        note.serial,
-        note.spend_hook,
-        note.user_data,
-        note.coin_blind,
+        DrkValue::from(treasury_note.value),
+        treasury_note.token_id,
+        treasury_note.serial,
+        treasury_note.spend_hook,
+        treasury_note.user_data,
+        treasury_note.coin_blind,
     ]);
-    assert_eq!(coin, recv_coin.coin.0);
+    assert_eq!(coin, dao_recv_coin.coin.0);
 
-    assert_eq!(note.spend_hook, hook_dao_exec);
-    assert_eq!(note.user_data, dao_bulla.0);
+    assert_eq!(treasury_note.spend_hook, hook_dao_exec);
+    assert_eq!(treasury_note.user_data, dao_bulla.0);
 
-    debug!("DAO received a coin worth {} xDRK", note.value);
+    debug!("DAO received a coin worth {} xDRK", treasury_note.value);
 
     ///////////////////////////////////////////////////
     //// Mint the governance token
@@ -485,6 +496,8 @@ pub async fn demo() -> Result<()> {
         value: 400000,
         token_id: gdrk_token_id,
         public: gov_keypair_1.public,
+        serial: pallas::Base::random(&mut OsRng),
+        coin_blind: pallas::Base::random(&mut OsRng),
         spend_hook,
         user_data,
     };
@@ -493,6 +506,8 @@ pub async fn demo() -> Result<()> {
         value: 400000,
         token_id: gdrk_token_id,
         public: gov_keypair_2.public,
+        serial: pallas::Base::random(&mut OsRng),
+        coin_blind: pallas::Base::random(&mut OsRng),
         spend_hook,
         user_data,
     };
@@ -501,6 +516,8 @@ pub async fn demo() -> Result<()> {
         value: 200000,
         token_id: gdrk_token_id,
         public: gov_keypair_3.public,
+        serial: pallas::Base::random(&mut OsRng),
+        coin_blind: pallas::Base::random(&mut OsRng),
         spend_hook,
         user_data,
     };
@@ -531,7 +548,7 @@ pub async fn demo() -> Result<()> {
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
                 .expect("money_contract::transfer::validate::state_transition() failed!");
-            money_contract::transfer::validate::apply(&mut states, update);
+            update.apply(&mut states);
         }
     }
 
@@ -1005,6 +1022,125 @@ pub async fn demo() -> Result<()> {
 
     assert!(total_value_commit == pedersen_commitment_u64(total_votes, total_value_blinds));
     assert!(total_vote_commit == pedersen_commitment_u64(win_votes, total_vote_blinds));
+
+    ///////////////////////////////////////////////////
+    // Execute the vote
+    ///////////////////////////////////////////////////
+
+    //// Wallet
+
+    // Used to export user_data from this coin so it can be accessed by DAO::exec()
+    let user_data_blind = pallas::Base::random(&mut OsRng);
+
+    let user_serial = pallas::Base::random(&mut OsRng);
+    let user_coin_blind = pallas::Base::random(&mut OsRng);
+    let dao_serial = pallas::Base::random(&mut OsRng);
+    let dao_coin_blind = pallas::Base::random(&mut OsRng);
+
+    let (treasury_leaf_position, treasury_merkle_path) = {
+        let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
+        let tree = &state.tree;
+        let leaf_position = dao_recv_coin.leaf_position.clone();
+        let root = tree.root(0).unwrap();
+        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        (leaf_position, merkle_path)
+    };
+
+    let builder = money_contract::transfer::wallet::Builder {
+        clear_inputs: vec![],
+        inputs: vec![money_contract::transfer::wallet::BuilderInputInfo {
+            leaf_position: treasury_leaf_position,
+            merkle_path: treasury_merkle_path,
+            secret: dao_keypair.secret,
+            note: treasury_note,
+            user_data_blind,
+        }],
+        outputs: vec![
+            // Sending money
+            money_contract::transfer::wallet::BuilderOutputInfo {
+                value: 1000,
+                token_id: xdrk_token_id,
+                public: user_keypair.public,
+                serial: user_serial,
+                coin_blind: user_coin_blind,
+                spend_hook: pallas::Base::from(0),
+                user_data: pallas::Base::from(0),
+            },
+            // Change back to DAO
+            money_contract::transfer::wallet::BuilderOutputInfo {
+                value: xdrk_supply - 1000,
+                token_id: xdrk_token_id,
+                public: dao_keypair.public,
+                serial: dao_serial,
+                coin_blind: dao_coin_blind,
+                spend_hook: hook_dao_exec,
+                user_data: dao_bulla.0,
+            },
+        ],
+    };
+
+    let transfer_func_call = builder.build(&zk_bins)?;
+
+    let foo = dao_contract::exec::wallet::Foo { a: 5, b: 10 };
+
+    let builder = dao_contract::exec::wallet::Builder { foo };
+    let exec_func_call = builder.build(&zk_bins);
+
+    let tx = Transaction { func_calls: vec![transfer_func_call, exec_func_call] };
+
+    {
+        // Now the spend_hook field specifies the function DAO::exec()
+        // so Money::transfer() must also be combined with DAO::exec()
+
+        assert_eq!(tx.func_calls.len(), 2);
+        let transfer_func_call = &tx.func_calls[0];
+        let transfer_call_data = transfer_func_call.call_data.as_any();
+
+        assert_eq!(
+            (&*transfer_call_data).type_id(),
+            TypeId::of::<money_contract::transfer::validate::CallData>()
+        );
+        let transfer_call_data =
+            transfer_call_data.downcast_ref::<money_contract::transfer::validate::CallData>();
+        let transfer_call_data = transfer_call_data.unwrap();
+        // At least one input has this field value which means DAO::exec() is invoked.
+        assert_eq!(transfer_call_data.inputs.len(), 1);
+        let input = &transfer_call_data.inputs[0];
+        assert_eq!(input.revealed.spend_hook, hook_dao_exec);
+        let user_data_enc = poseidon_hash::<2>([dao_bulla.0, user_data_blind]);
+        assert_eq!(input.revealed.user_data_enc, user_data_enc);
+    }
+
+    //// Validator
+
+    let mut updates = vec![];
+    // Validate all function calls in the tx
+    for (idx, func_call) in tx.func_calls.iter().enumerate() {
+        if func_call.func_id == "DAO::exec()" {
+            debug!("dao_contract::exec::state_transition()");
+
+            let update = dao_contract::exec::validate::state_transition(&states, idx, &tx)
+                .expect("dao_contract::exec::validate::state_transition() failed!");
+            updates.push(update);
+        } else if func_call.func_id == "Money::transfer()" {
+            debug!("money_contract::transfer::state_transition()");
+
+            let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
+                .expect("money_contract::transfer::validate::state_transition() failed!");
+            updates.push(update);
+        }
+    }
+
+    // Atomically apply all changes
+    for update in updates {
+        update.apply(&mut states);
+    }
+
+    // Other stuff
+    tx.zk_verify(&zk_bins);
+    // TODO: signature verification
+
+    //// Wallet
 
     Ok(())
 }

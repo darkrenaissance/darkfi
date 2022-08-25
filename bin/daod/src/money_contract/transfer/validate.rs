@@ -3,7 +3,7 @@ use std::any::{Any, TypeId};
 use incrementalmerkletree::Tree;
 use log::{debug, error};
 
-use pasta_curves::group::Group;
+use pasta_curves::{group::Group, pallas};
 
 use darkfi::{
     crypto::{
@@ -22,7 +22,7 @@ use darkfi::{
 };
 
 use crate::{
-    demo::{CallDataBase, StateRegistry, Transaction},
+    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
     money_contract::state::State,
     note::EncryptedNote2,
 };
@@ -41,22 +41,24 @@ pub struct Update {
     pub enc_notes: Vec<EncryptedNote2>,
 }
 
-pub fn apply(states: &mut StateRegistry, mut update: Update) {
-    let state = states.lookup_mut::<State>(&"Money".to_string()).unwrap();
+impl UpdateBase for Update {
+    fn apply(mut self: Box<Self>, states: &mut StateRegistry) {
+        let state = states.lookup_mut::<State>(&"Money".to_string()).unwrap();
 
-    // Extend our list of nullifiers with the ones from the update
-    state.nullifiers.append(&mut update.nullifiers);
+        // Extend our list of nullifiers with the ones from the update
+        state.nullifiers.append(&mut self.nullifiers);
 
-    //// Update merkle tree and witnesses
-    for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
-        // Add the new coins to the Merkle tree
-        let node = MerkleNode(coin.0);
-        state.tree.append(&node);
+        //// Update merkle tree and witnesses
+        for (coin, enc_note) in self.coins.into_iter().zip(self.enc_notes.into_iter()) {
+            // Add the new coins to the Merkle tree
+            let node = MerkleNode(coin.0);
+            state.tree.append(&node);
 
-        // Keep track of all Merkle roots that have existed
-        state.merkle_roots.push(state.tree.root(0).unwrap());
+            // Keep track of all Merkle roots that have existed
+            state.merkle_roots.push(state.tree.root(0).unwrap());
 
-        state.wallet_cache.try_decrypt_note(coin, enc_note, &mut state.tree);
+            state.wallet_cache.try_decrypt_note(coin, enc_note, &mut state.tree);
+        }
     }
 }
 
@@ -64,7 +66,7 @@ pub fn state_transition(
     states: &StateRegistry,
     func_call_index: usize,
     parent_tx: &Transaction,
-) -> Result<Update> {
+) -> Result<Box<dyn UpdateBase>> {
     // Check the public keys in the clear inputs to see if they're coming
     // from a valid cashier or faucet.
     debug!(target: TARGET, "Iterate clear_inputs");
@@ -105,6 +107,32 @@ pub fn state_transition(
             return Err(Error::VerifyFailed(VerifyFailed::InvalidMerkle(i)))
         }
 
+        // Check the spend_hook is satisfied
+        // The spend_hook says a coin must invoke another contract function when being spent
+        // If the value is set, then we check the function call exists
+        let spend_hook = &input.revealed.spend_hook;
+        if spend_hook != &pallas::Base::from(0) {
+            // spend_hook is set so we enforce the rules
+            let mut is_found = false;
+            for (i, func_call) in parent_tx.func_calls.iter().enumerate() {
+                // Skip current func_call
+                if i == func_call_index {
+                    continue
+                }
+
+                // TODO: we need to change these to pallas::Base
+                // temporary workaround for now
+                // if func_call.func_id == spend_hook ...
+                if func_call.func_id == "DAO::exec()" {
+                    is_found = true;
+                    break
+                }
+            }
+            if !is_found {
+                return Err(Error::VerifyFailed(VerifyFailed::SpendHookNotSatisfied))
+            }
+        }
+
         // The nullifiers should not already exist.
         // It is the double-spend protection.
         let nullifier = &input.revealed.nullifier;
@@ -140,7 +168,7 @@ pub fn state_transition(
         enc_notes.push(output.enc_note.clone());
     }
 
-    Ok(Update { nullifiers, coins, enc_notes })
+    Ok(Box::new(Update { nullifiers, coins, enc_notes }))
 }
 
 /// A DarkFi transaction
@@ -315,6 +343,9 @@ pub enum VerifyFailed {
 
     #[error("Invalid Merkle root for input {0}")]
     InvalidMerkle(usize),
+
+    #[error("Spend hook invoking function is not attached")]
+    SpendHookNotSatisfied,
 
     #[error("Nullifier already exists for input {0}")]
     NullifierExists(usize),
