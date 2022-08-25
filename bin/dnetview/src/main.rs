@@ -136,8 +136,8 @@ async fn main() -> DnetViewResult<()> {
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();
 
-    let mut dnetview = DnetView::new(model.clone(), view.clone());
-    let parser = DataParser::new(model.clone(), config);
+    let mut dnetview = DnetView::new(model.clone(), view);
+    let parser = DataParser::new(model, config);
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();

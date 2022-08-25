@@ -326,6 +326,6 @@ impl Darkfid {
             }
         }
 
-        return server_error(RpcError::DecryptionFailed, id)
+        server_error(RpcError::DecryptionFailed, id)
     }
 }

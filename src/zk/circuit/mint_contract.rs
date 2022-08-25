@@ -276,7 +276,7 @@ impl Circuit<pallas::Base> for MintContract {
             let value = ScalarFixedShort::new(
                 ecc_chip.clone(),
                 layouter.namespace(|| "value"),
-                (value, one.clone()),
+                (value, one),
             )?;
             value_commit_v.mul(layouter.namespace(|| "[value] ValueCommitV"), value)?
         };

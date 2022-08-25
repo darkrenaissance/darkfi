@@ -165,11 +165,12 @@ fn is_delete_patch(patch: &Patch) -> bool {
         }
     }
 
-    return false
+    false
 }
 
 struct Darkwiki {
     settings: DarkWikiSettings,
+    #[allow(clippy::type_complexity)]
     rpc: (
         async_channel::Sender<Vec<Vec<(String, String)>>>,
         async_channel::Receiver<(String, bool, Vec<String>)>,

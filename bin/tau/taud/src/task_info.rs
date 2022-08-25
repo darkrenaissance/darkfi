@@ -195,7 +195,7 @@ impl TaskInfo {
 
     pub fn set_comment(&mut self, c: Comment) {
         debug!(target: "tau", "TaskInfo::set_comment()");
-        self.comments.0.push(c.clone());
+        self.comments.0.push(c);
     }
 
     pub fn set_rank(&mut self, r: Option<f32>) {

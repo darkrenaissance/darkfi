@@ -205,7 +205,7 @@ impl DataParser {
         sessions: Vec<SessionInfo>,
         node: NodeInfo,
     ) -> DnetViewResult<()> {
-        if node.is_offline == true {
+        if node.is_offline {
             let node_obj = SelectableObject::Node(node.clone());
             self.model.selectables.lock().await.insert(node.id.clone(), node_obj.clone());
         } else {

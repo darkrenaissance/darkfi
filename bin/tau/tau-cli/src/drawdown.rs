@@ -54,7 +54,7 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) ->
 
     let mut naivedate = to_naivedate(date.clone())?;
 
-    println!("log drawdown for {} in {}", asgn, naivedate.format("%b %Y").to_string());
+    println!("log drawdown for {} in {}", asgn, naivedate.format("%b %Y"));
 
     let fdow = if naivedate.month() == 2 && !is_leap_year(naivedate.year()) {
         ["   ", "1 ", "8 ", "15", "22", " "]
@@ -84,7 +84,7 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) ->
             let dow = naivedate.weekday().to_string();
             let wcell = Cell::from(dow);
             grid.add(wcell);
-            naivedate = naivedate + Duration::days(1);
+            naivedate += Duration::days(1);
         }
         for day in 1..=days_in_month {
             let owner_stopped_tasks = ret.get(&asgn).unwrap().to_owned();
@@ -118,7 +118,7 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) ->
 }
 
 fn is_leap_year(year: i32) -> bool {
-    return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
 fn helper_parse_func(date: String) -> Result<(u32, i32)> {

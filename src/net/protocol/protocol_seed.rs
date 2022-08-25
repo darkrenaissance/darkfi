@@ -49,7 +49,7 @@ impl ProtocolSeed {
         let addrs = self.settings.external_addr.clone();
         debug!(target: "net", "ProtocolSeed::send_own_address() addrs={:?}", addrs);
         let addrs = message::AddrsMessage { addrs };
-        Ok(self.channel.clone().send(addrs).await?)
+        self.channel.clone().send(addrs).await
     }
 }
 

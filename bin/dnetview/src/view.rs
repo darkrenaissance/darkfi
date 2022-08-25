@@ -29,15 +29,21 @@ pub struct View {
     pub ordered_list: Vec<String>,
 }
 
+impl Default for View {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> View {
-    pub fn new() -> View {
+    pub fn new() -> Self {
         let msg_map = FxHashMap::default();
-        let msg_list = MsgList::new(msg_map.clone(), 0);
+        let msg_list = MsgList::new(msg_map, 0);
         let selectables = FxHashMap::default();
         let id_menu = IdMenu::new(Vec::new());
         let ordered_list = Vec::new();
 
-        View { id_menu, msg_list, selectables, ordered_list }
+        Self { id_menu, msg_list, selectables, ordered_list }
     }
 
     pub fn update(&mut self, msg_map: MsgMap, selectables: FxHashMap<String, SelectableObject>) {
@@ -64,35 +70,30 @@ impl<'a> View {
 
     fn make_ordered_list(&mut self) {
         for obj in self.selectables.values() {
-            match obj {
-                SelectableObject::Node(node) => match node.is_offline {
-                    true => {
-                        if !self.ordered_list.iter().any(|i| i == &node.id) {
-                            self.ordered_list.push(node.id.clone());
-                        }
+            if let SelectableObject::Node(node) = obj {
+                if node.is_offline {
+                    if !self.ordered_list.iter().any(|i| i == &node.id) {
+                        self.ordered_list.push(node.id.clone());
                     }
-                    false => {
-                        if !self.ordered_list.iter().any(|i| i == &node.id) {
-                            self.ordered_list.push(node.id.clone());
-                        }
-                        for session in &node.children {
-                            if !session.is_empty {
-                                if !self.ordered_list.iter().any(|i| i == &session.id) {
-                                    self.ordered_list.push(session.id.clone());
-                                }
-                                for connection in &session.children {
-                                    if !self.ordered_list.iter().any(|i| i == &connection.id) {
-                                        self.ordered_list.push(connection.id.clone());
-                                    }
+                } else {
+                    if !self.ordered_list.iter().any(|i| i == &node.id) {
+                        self.ordered_list.push(node.id.clone());
+                    }
+                    for session in &node.children {
+                        if !session.is_empty {
+                            if !self.ordered_list.iter().any(|i| i == &session.id) {
+                                self.ordered_list.push(session.id.clone());
+                            }
+                            for connection in &session.children {
+                                if !self.ordered_list.iter().any(|i| i == &connection.id) {
+                                    self.ordered_list.push(connection.id.clone());
                                 }
                             }
                         }
                     }
-                },
-                _ => {}
+                }
             }
         }
-
         //debug!(target: "dnetview", "render_ids()::ordered_list: {:?}", self.ordered_list);
     }
 
@@ -164,63 +165,59 @@ impl<'a> View {
         let mut nodes = Vec::new();
 
         for obj in self.selectables.values() {
-            match obj {
-                SelectableObject::Node(node) => match node.is_offline {
-                    true => {
-                        let style = Style::default().fg(Color::Blue).add_modifier(Modifier::ITALIC);
-                        let mut name = String::new();
-                        name.push_str(&node.name);
-                        name.push_str("(Offline)");
-                        let name_span = Span::styled(name, style);
-                        let lines = vec![Spans::from(name_span)];
-                        let names = ListItem::new(lines);
-                        nodes.push(names);
-                    }
-                    false => {
-                        let name_span = Span::raw(&node.name);
-                        let lines = vec![Spans::from(name_span)];
-                        let names = ListItem::new(lines);
-                        nodes.push(names);
-                        for session in &node.children {
-                            if !session.is_empty {
-                                let name = Span::styled(format!("    {}", session.name), style);
-                                let lines = vec![Spans::from(name)];
+            if let SelectableObject::Node(node) = obj {
+                if node.is_offline {
+                    let style = Style::default().fg(Color::Blue).add_modifier(Modifier::ITALIC);
+                    let mut name = String::new();
+                    name.push_str(&node.name);
+                    name.push_str("(Offline)");
+                    let name_span = Span::styled(name, style);
+                    let lines = vec![Spans::from(name_span)];
+                    let names = ListItem::new(lines);
+                    nodes.push(names);
+                } else {
+                    let name_span = Span::raw(&node.name);
+                    let lines = vec![Spans::from(name_span)];
+                    let names = ListItem::new(lines);
+                    nodes.push(names);
+                    for session in &node.children {
+                        if !session.is_empty {
+                            let name = Span::styled(format!("    {}", session.name), style);
+                            let lines = vec![Spans::from(name)];
+                            let names = ListItem::new(lines);
+                            nodes.push(names);
+                            for connection in &session.children {
+                                let mut info = Vec::new();
+                                match connection.addr.as_str() {
+                                    "Null" => {
+                                        let style = Style::default()
+                                            .fg(Color::Blue)
+                                            .add_modifier(Modifier::ITALIC);
+                                        let name = Span::styled(
+                                            format!("        {} ", connection.addr),
+                                            style,
+                                        );
+                                        info.push(name);
+                                    }
+                                    addr => {
+                                        let name = Span::styled(
+                                            format!(
+                                                "        {} ({})",
+                                                addr, connection.remote_node_id
+                                            ),
+                                            style,
+                                        );
+                                        info.push(name);
+                                    }
+                                }
+
+                                let lines = vec![Spans::from(info)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
-                                for connection in &session.children {
-                                    let mut info = Vec::new();
-                                    match connection.addr.as_str() {
-                                        "Null" => {
-                                            let style = Style::default()
-                                                .fg(Color::Blue)
-                                                .add_modifier(Modifier::ITALIC);
-                                            let name = Span::styled(
-                                                format!("        {} ", connection.addr),
-                                                style,
-                                            );
-                                            info.push(name);
-                                        }
-                                        addr => {
-                                            let name = Span::styled(
-                                                format!(
-                                                    "        {} ({})",
-                                                    addr, connection.remote_node_id
-                                                ),
-                                                style,
-                                            );
-                                            info.push(name);
-                                        }
-                                    }
-
-                                    let lines = vec![Spans::from(info)];
-                                    let names = ListItem::new(lines);
-                                    nodes.push(names);
-                                }
                             }
                         }
                     }
-                },
-                _ => {}
+                }
             }
         }
         let nodes =

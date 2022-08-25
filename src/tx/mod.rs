@@ -81,7 +81,7 @@ impl Transaction {
             error!("tx::verify(): Missing inputs");
             return Err(VerifyFailed::LackingInputs)
         }
-        if self.outputs.len() == 0 {
+        if self.outputs.is_empty() {
             error!("tx::verify(): Missing outputs");
             return Err(VerifyFailed::LackingOutputs)
         }

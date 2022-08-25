@@ -603,7 +603,7 @@ async fn main() -> Result<()> {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
 
-            inspect_partial(&buf.trim())
+            inspect_partial(buf.trim())
         }
         Subcmd::Join { data0, data1 } => {
             let d0 = std::fs::read_to_string(data0)?;
@@ -622,7 +622,7 @@ async fn main() -> Result<()> {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
 
-            let tx = sign_tx(args.endpoint, &buf.trim()).await?;
+            let tx = sign_tx(args.endpoint, buf.trim()).await?;
 
             println!("{}", bs58::encode(&serialize(&tx)).into_string());
             eprintln!("Successfully signed transaction");

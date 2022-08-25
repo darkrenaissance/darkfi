@@ -85,7 +85,7 @@ impl Protocol {
                     continue
                 }
 
-                dht.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
+                dht.seen.insert(req_copy.id, Utc::now().timestamp());
             }
 
             let daemon = self.dht.read().await.id;
@@ -138,7 +138,7 @@ impl Protocol {
                     continue
                 }
 
-                dht.seen.insert(resp_copy.id.clone(), Utc::now().timestamp());
+                dht.seen.insert(resp_copy.id, Utc::now().timestamp());
             }
 
             if self.dht.read().await.id != resp_copy.to {
@@ -183,20 +183,12 @@ impl Protocol {
                     continue
                 }
 
-                dht.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
+                dht.seen.insert(req_copy.id, Utc::now().timestamp());
             }
 
             let result = match req_copy.req_type {
-                0 => self
-                    .dht
-                    .write()
-                    .await
-                    .lookup_insert(req_copy.key.clone(), req_copy.daemon.clone()),
-                _ => self
-                    .dht
-                    .write()
-                    .await
-                    .lookup_remove(req_copy.key.clone(), req_copy.daemon.clone()),
+                0 => self.dht.write().await.lookup_insert(req_copy.key, req_copy.daemon),
+                _ => self.dht.write().await.lookup_remove(req_copy.key, req_copy.daemon),
             };
 
             if let Err(e) = result {
@@ -232,7 +224,7 @@ impl Protocol {
                     continue
                 }
 
-                dht.seen.insert(req.id.clone(), Utc::now().timestamp());
+                dht.seen.insert(req.id, Utc::now().timestamp());
             }
 
             // Extra validations can be added here.

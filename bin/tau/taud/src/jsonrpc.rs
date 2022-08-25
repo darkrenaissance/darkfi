@@ -385,8 +385,7 @@ impl JsonRpcInterface {
             let description = fields.get("desc");
             if let Some(description) = description {
                 let description: Option<String> = serde_json::from_value(description.clone())?;
-                if description.is_some() {
-                    let desc = description.unwrap();
+                if let Some(desc) = description {
                     task.set_desc(&desc);
                     task.set_event("desc", &self.nickname, &desc);
                 }
@@ -397,9 +396,9 @@ impl JsonRpcInterface {
             let rank_opt = fields.get("rank");
             if let Some(rank) = rank_opt {
                 let rank: Option<f32> = serde_json::from_value(rank.clone())?;
-                if rank.is_some() {
-                    task.set_rank(rank);
-                    task.set_event("rank", &self.nickname, &rank.unwrap().to_string());
+                if let Some(rank) = rank {
+                    task.set_rank(Some(rank));
+                    task.set_event("rank", &self.nickname, &rank.to_string());
                 }
             }
         }
@@ -409,8 +408,8 @@ impl JsonRpcInterface {
             let due: Option<Option<Timestamp>> = serde_json::from_value(due)?;
             if let Some(d) = due {
                 task.set_due(d);
-                if d.is_some() {
-                    task.set_event("due", &self.nickname, &d.unwrap().0.to_string());
+                if let Some(d) = d {
+                    task.set_event("due", &self.nickname, &d.0.to_string());
                 }
             }
         }

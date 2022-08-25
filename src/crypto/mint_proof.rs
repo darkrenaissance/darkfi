@@ -30,6 +30,7 @@ pub struct MintRevealedValues {
 }
 
 impl MintRevealedValues {
+    #[allow(clippy::too_many_arguments)]
     pub fn compute(
         value: u64,
         token_id: DrkTokenId,
@@ -74,8 +75,6 @@ impl MintRevealedValues {
             *token_coords.x(),
             *token_coords.y(),
         ]
-        .try_into()
-        .unwrap()
     }
 }
 

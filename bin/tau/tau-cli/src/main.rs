@@ -204,7 +204,7 @@ async fn main() -> Result<()> {
             }
 
             TauSubcommand::Export { path } => {
-                let path = path.unwrap_or(DEFAULT_PATH.into());
+                let path = path.unwrap_or_else(|| DEFAULT_PATH.into());
                 let res = tau.export_to(path.clone()).await?;
 
                 if res {
@@ -217,7 +217,7 @@ async fn main() -> Result<()> {
             }
 
             TauSubcommand::Import { path } => {
-                let path = path.unwrap_or(DEFAULT_PATH.into());
+                let path = path.unwrap_or_else(|| DEFAULT_PATH.into());
                 let res = tau.import_from(path.clone()).await?;
 
                 if res {

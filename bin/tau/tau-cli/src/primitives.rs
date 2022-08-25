@@ -123,7 +123,7 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
     for val in values {
         let field: Vec<&str> = val.split(':').collect();
         if field.len() == 1 {
-            title.push_str(field[0].into());
+            title.push_str(field[0]);
             title.push(' ');
             continue
         }

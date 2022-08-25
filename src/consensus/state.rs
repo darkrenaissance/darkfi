@@ -975,7 +975,7 @@ impl ValidatorState {
     pub async fn receive_sync_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         let mut new_blocks = vec![];
         for block in blocks {
-            match self.blockchain.has_block(&block) {
+            match self.blockchain.has_block(block) {
                 Ok(v) => {
                     if v {
                         debug!("receive_sync_blocks(): Existing block received");

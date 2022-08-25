@@ -128,8 +128,6 @@ impl BurnRevealedValues {
             *sig_coords.x(),
             *sig_coords.y(),
         ]
-        .try_into()
-        .unwrap()
     }
 }
 

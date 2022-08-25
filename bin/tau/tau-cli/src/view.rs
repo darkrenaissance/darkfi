@@ -177,7 +177,7 @@ pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
                 let ev_content =
                     fill(&event.content, textwrap::Options::new(width).subsequent_indent("  "));
                 // skip wrapped lines to align timestamp with the first line
-                for _ in 1..ev_content.lines().collect::<Vec<&str>>().len() {
+                for _ in 1..ev_content.lines().count() {
                     writeln!(timestamps_str, " ").unwrap();
                 }
                 writeln!(events_str, "- {} made a comment: {}", event.author, ev_content).unwrap();
@@ -187,7 +187,7 @@ pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
                 let ev_content =
                     fill(&event.content, textwrap::Options::new(width).subsequent_indent("  "));
                 // skip wrapped lines to align timestamp with the first line
-                for _ in 1..ev_content.lines().collect::<Vec<&str>>().len() {
+                for _ in 1..ev_content.lines().count() {
                     writeln!(timestamps_str, " ").unwrap();
                 }
                 writeln!(events_str, "- {} changed description to: {}", event.author, ev_content)

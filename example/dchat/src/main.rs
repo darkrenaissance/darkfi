@@ -193,7 +193,7 @@ async fn main() -> Result<()> {
 
     let settings = settings?.clone();
 
-    let p2p = net::P2p::new(settings.net.into()).await;
+    let p2p = net::P2p::new(settings.net).await;
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
