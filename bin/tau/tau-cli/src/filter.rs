@@ -45,9 +45,9 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
                 let value = kv[2].parse::<f32>().unwrap_or(0.0);
                 tasks.retain(|task| {
                     if filter.contains("lt") {
-                        task.rank < value
+                        task.rank < Some(value)
                     } else if filter.contains("gt") {
-                        task.rank > value
+                        task.rank > Some(value)
                     } else {
                         true
                     }

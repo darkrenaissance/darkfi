@@ -106,7 +106,7 @@ impl JsonRpcInterface {
             &task.desc,
             &self.nickname,
             task.due,
-            task.rank.unwrap_or(0.0),
+            task.rank,
             &self.dataset_path,
         )?;
         new_task.set_project(&task.project);
@@ -368,9 +368,7 @@ impl JsonRpcInterface {
             let rank_opt = fields.get("rank");
             if let Some(rank) = rank_opt {
                 let rank: Option<f32> = serde_json::from_value(rank.clone())?;
-                if let Some(r) = rank {
-                    task.set_rank(r);
-                }
+                task.set_rank(rank);
             }
         }
 

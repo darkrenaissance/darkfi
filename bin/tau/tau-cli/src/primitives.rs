@@ -67,7 +67,7 @@ pub struct TaskInfo {
     pub assign: Vec<String>,
     pub project: Vec<String>,
     pub due: Option<i64>,
-    pub rank: f32,
+    pub rank: Option<f32>,
     pub created_at: i64,
     pub state: String,
     pub events: Vec<TaskEvent>,
@@ -123,7 +123,8 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
     for val in values {
         let field: Vec<&str> = val.split(':').collect();
         if field.len() == 1 {
-            title = field[0].into();
+            title.push_str(field[0].into());
+            title.push(' ');
             continue
         }
 
@@ -151,6 +152,6 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
             rank = Some(field[1].parse::<f32>()?);
         }
     }
-
+    let title = title.trim().into();
     Ok(BaseTask { title, desc, project, assign, due, rank })
 }

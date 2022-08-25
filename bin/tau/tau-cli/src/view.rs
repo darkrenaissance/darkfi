@@ -36,8 +36,8 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String, filters: Vec<String>) -
 
     tasks.sort_by(|a, b| b.rank.partial_cmp(&a.rank).unwrap());
 
-    let mut min_rank = 0.0;
-    let mut max_rank = 0.0;
+    let mut min_rank = None;
+    let mut max_rank = None;
 
     if let Some(first) = tasks.first() {
         max_rank = first.rank;
@@ -58,7 +58,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String, filters: Vec<String>) -
             ("", "", "", "")
         };
 
-        let rank = task.rank.to_string();
+        let rank = if let Some(r) = task.rank { r.to_string() } else { "".to_string() };
 
         table.add_row(Row::new(vec![
             Cell::new(&task.id.to_string()).style_spec(gen_style),
@@ -94,6 +94,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String, filters: Vec<String>) -
 pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
     let due = timestamp_to_date(taskinfo.due.unwrap_or(0), DateFormat::Date);
     let created_at = timestamp_to_date(taskinfo.created_at, DateFormat::DateTime);
+    let rank = if let Some(r) = taskinfo.rank { r.to_string() } else { "".to_string() };
 
     let mut table = table!(
         [Bd => "ref_id", &taskinfo.ref_id],
@@ -105,7 +106,7 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
         [Bd =>"assign", taskinfo.assign.join(", ")],
         ["project", taskinfo.project.join(", ")],
         [Bd =>"due", due],
-        ["rank", &taskinfo.rank.to_string()],
+        ["rank", rank],
         [Bd =>"created_at", created_at],
         ["current_state", &taskinfo.state]);
 
