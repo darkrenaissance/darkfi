@@ -9,7 +9,6 @@ use url::Url;
 
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
-    util::async_util,
     Result,
 };
 
@@ -154,11 +153,7 @@ impl P2p {
 
     /// Runs the network. Starts inbound, outbound and manual sessions.
     /// Waits for a stop signal and stops the network if received.
-    pub async fn run(
-        self: Arc<Self>,
-        executor: Arc<Executor<'_>>,
-        init_signal: Option<async_channel::Sender<()>>,
-    ) -> Result<()> {
+    pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::run() [BEGIN]");
 
         *self.state.lock().await = P2pState::Run;
@@ -172,34 +167,7 @@ impl P2p {
         inbound.clone().start(executor.clone()).await?;
 
         let outbound = self.session_outbound().await;
-
-        // Check if caller should be signalled
-        match init_signal {
-            Some(send_signal) => {
-                // Start normal initialization with signalling
-                let (init_send, init_recv) = async_channel::bounded::<()>(1);
-                outbound.clone().start(executor.clone(), Some(init_send)).await?;
-                // To verify that the network needs initialization, we check if we have seeds or peers configured.
-                if !(self.settings.seeds.is_empty() && self.settings.peers.is_empty()) {
-                    // Then we retrieve pending channels to check if they have been filled by the seed.
-                    // If pending channels are empty, we sleep for 2 seconds to mitigate any network delays.
-                    if self.pending().await.is_empty() {
-                        debug!(target: "net", "P2p::run() sleeping waiting for hosts by seed.");
-                        async_util::sleep(2).await;
-                    }
-
-                    // We check again to see if we have any pending connections.
-                    if !self.pending().await.is_empty() {
-                        // We wait for outbound connections to finish initilizing.
-                        init_recv.recv().await?;
-                    }
-                }
-
-                // Signal caller that network has been initialized
-                send_signal.send(()).await?;
-            }
-            None => outbound.clone().start(executor.clone(), None).await?,
-        }
+        outbound.clone().start(executor.clone()).await?;
 
         let stop_sub = self.subscribe_stop().await;
         // Wait for stop signal
@@ -297,18 +265,7 @@ impl P2p {
         self.stop_subscriber.clone().subscribe().await
     }
 
-    /// Retrieve channels
     pub fn channels(&self) -> &ConnectedChannels {
         &self.channels
-    }
-
-    /// Retrieve pending channels, without our own external addresses
-    pub async fn pending(&self) -> FxHashSet<Url> {
-        let self_inbound_addr = self.settings().external_addr.clone();
-        let mut pending = self.pending.lock().await.clone();
-        for addr in self_inbound_addr {
-            pending.remove(&addr);
-        }
-        pending
     }
 }

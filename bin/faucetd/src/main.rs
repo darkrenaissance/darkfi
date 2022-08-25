@@ -399,19 +399,15 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     ex.spawn(listen_and_serve(args.rpc_listen, faucetd.clone())).detach();
 
     info!("Starting sync P2P network");
-    let (init_send, init_recv) = async_channel::bounded::<()>(1);
     sync_p2p.clone().start(ex.clone()).await?;
     let _ex = ex.clone();
     let _sync_p2p = sync_p2p.clone();
     ex.spawn(async move {
-        if let Err(e) = _sync_p2p.run(_ex, Some(init_send)).await {
+        if let Err(e) = _sync_p2p.run(_ex).await {
             error!("Failed starting sync P2P network: {}", e);
         }
     })
     .detach();
-
-    init_recv.recv().await?;
-    info!("Sync P2P network initialized!");
 
     match block_sync_task(sync_p2p.clone(), state.clone()).await {
         Ok(()) => *faucetd.synced.lock().await = true,

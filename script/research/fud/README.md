@@ -45,7 +45,21 @@ Run fud as follows:
 13:23:04 [INFO] Entry: seedd_config.toml
 13:23:04 [INFO] Starting 8 outbound connection slots.
 13:23:04 [INFO] Entry: lt.py
+13:23:04 [WARN] Hosts address pool is empty. Retrying connect slot #0
+13:23:04 [WARN] Hosts address pool is empty. Retrying connect slot #1
+13:23:04 [WARN] Hosts address pool is empty. Retrying connect slot #2
+13:23:04 [WARN] Hosts address pool is empty. Retrying connect slot #3
+13:23:04 [WARN] Hosts address pool is empty. Retrying connect slot #6
+13:23:04 [WARN] Hosts address pool is empty. Retrying connect slot #4
+13:23:04 [WARN] Hosts address pool is empty. Retrying connect slot #5
+13:23:04 [WARN] Hosts address pool is empty. Retrying connect slot #7
 13:23:07 [INFO] Caught termination signal, cleaning up and exiting...
+```
+
+After daemon has been initialized, execute network syncing as follows:
+```
+% fu sync
+13:25:46 [INFO] Daemon synced successfully!
 ```
 
 fu

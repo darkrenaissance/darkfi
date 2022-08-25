@@ -288,7 +288,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     let _ex = ex.clone();
     let _p2p = p2p.clone();
     ex.spawn(async move {
-        if let Err(e) = _p2p.run(_ex, None).await {
+        if let Err(e) = _p2p.run(_ex).await {
             error!("Failed starting P2P network: {}", e);
         }
     })

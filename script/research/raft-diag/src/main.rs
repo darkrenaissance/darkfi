@@ -153,7 +153,7 @@ async fn start(args: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         })
         .await;
 
-    p2p.clone().start(executor.clone(), None).await?;
+    p2p.clone().start(executor.clone()).await?;
 
     executor.spawn(p2p.clone().run(executor.clone())).detach();
 

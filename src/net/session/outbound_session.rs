@@ -91,11 +91,7 @@ impl OutboundSession {
     }
 
     /// Start the outbound session. Runs the channel connect loop.
-    pub async fn start(
-        self: Arc<Self>,
-        executor: Arc<Executor<'_>>,
-        init_signal: Option<async_channel::Sender<()>>,
-    ) -> Result<()> {
+    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         let slots_count = self.p2p().settings().outbound_connections;
         info!(target: "net", "Starting {} outbound connection slots.", slots_count);
         // Activate mutex lock on connection slots.
@@ -107,7 +103,7 @@ impl OutboundSession {
             let task = StoppableTask::new();
 
             task.clone().start(
-                self.clone().channel_connect_loop(i, executor.clone(), init_signal.clone()),
+                self.clone().channel_connect_loop(i, executor.clone()),
                 // Ignore stop handler
                 |_| async {},
                 Error::NetworkServiceStopped,
@@ -138,7 +134,6 @@ impl OutboundSession {
         self: Arc<Self>,
         slot_number: u32,
         executor: Arc<Executor<'_>>,
-        init_signal: Option<async_channel::Sender<()>>,
     ) -> Result<()> {
         let parent = Arc::downgrade(&self);
 
@@ -177,8 +172,6 @@ impl OutboundSession {
                         info.state = OutboundState::Connected;
                     }
 
-                    async_util::notify_caller(init_signal.clone());
-
                     // Wait for channel to close
                     stop_sub.unwrap().receive().await;
                 }
@@ -190,8 +183,6 @@ impl OutboundSession {
                         info.channel = None;
                         info.state = OutboundState::Open;
                     }
-
-                    async_util::notify_caller(init_signal.clone());
                 }
             }
         }
