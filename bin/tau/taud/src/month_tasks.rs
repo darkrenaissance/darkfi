@@ -208,7 +208,7 @@ mod tests {
             "test_desc",
             "NICKNAME",
             None,
-            0.0,
+            Some(0.0),
             &dataset_path,
         )?;
 
@@ -256,7 +256,7 @@ mod tests {
             "test_desc",
             "NICKNAME",
             None,
-            0.0,
+            Some(0.0),
             &dataset_path,
         )?;
 
