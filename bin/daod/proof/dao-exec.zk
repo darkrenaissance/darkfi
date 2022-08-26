@@ -50,5 +50,20 @@ circuit "DaoExec" {
         proposal_blind,
     );
     constrain_instance(proposal_bulla);
+
+    # Create coin 0
+    # Create coin 1
+    # Check values of coin 0 + coin 1 == input value
+    # Check value of coin 0 == proposal_amount
+    # Check public key matches too
+    # Create the input value commit
+    # Create the value commits
+
+    # Check total_votes >= dao_quorum
+    # Check win_votes / total_votes >= approval_ratio
+
+    # NOTE: there is a vulnerability here where someone can create the exec
+    # transaction with a bad note so it cannot be decrypted by the receiver
+    # TODO: research verifiable encryption inside ZK
 }
 

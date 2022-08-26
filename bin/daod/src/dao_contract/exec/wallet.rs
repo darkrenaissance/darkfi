@@ -113,7 +113,7 @@ impl Builder {
         debug!(target: "example_contract::foo::wallet::Builder", "input_proof Proof::create()");
         let proving_key = &zk_info.proving_key;
         let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
-            .expect("Example::foo() proving error!)");
+            .expect("DAO::exec() proving error!)");
         proofs.push(input_proof);
 
         let call_data = CallData { proposal: proposal_bulla };
