@@ -66,6 +66,16 @@ circuit "DaoExec" {
     );
     constrain_instance(proposal_bulla);
 
+    # Create coin0 = hash(...) and make public
+    # Create coin1 = hash(...) and make public
+
+    # Create pedersen commits for win_votes, and total_votes
+    # and make public
+
+    # Create pedersen commit for input_value and make public
+    
+    ####
+
     # Create coin 0
     # Create coin 1
     # Check values of coin 0 + coin 1 == input value
