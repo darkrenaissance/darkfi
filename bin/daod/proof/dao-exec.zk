@@ -36,7 +36,6 @@ contract "DaoExec" {
     Scalar input_value_blind,
 
     # misc
-    # TODO: make these public so we know they're the correct values
     Base dao_spend_hook,
     Base user_spend_hook,
     Base user_data,
@@ -89,8 +88,7 @@ circuit "DaoExec" {
        dao_public_x,
        dao_public_y,
        change,
-       # TODO: should be proposal_token_id
-       gov_token_id,
+       proposal_token_id,
        dao_serial,
        dao_spend_hook,
        proposal_bulla,
@@ -132,6 +130,10 @@ circuit "DaoExec" {
 	input_value_y = ec_get_y(input_value_commit);
 	constrain_instance(input_value_x);
 	constrain_instance(input_value_y);
+
+    constrain_instance(dao_spend_hook);
+    constrain_instance(user_spend_hook);
+    constrain_instance(user_data);
 
     # total_votes >= dao_quorum
     # TODO: waiting on this opcode in zkas

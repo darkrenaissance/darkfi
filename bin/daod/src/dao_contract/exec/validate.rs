@@ -40,6 +40,9 @@ pub struct CallData {
     pub total_votes_commit_y: pallas::Base,
     pub input_value_commit_x: pallas::Base,
     pub input_value_commit_y: pallas::Base,
+    pub dao_spend_hook: pallas::Base,
+    pub user_spend_hook: pallas::Base,
+    pub user_data: pallas::Base,
 }
 
 impl CallDataBase for CallData {
@@ -56,6 +59,9 @@ impl CallDataBase for CallData {
                 self.total_votes_commit_y,
                 self.input_value_commit_x,
                 self.input_value_commit_y,
+                self.dao_spend_hook,
+                self.user_spend_hook,
+                self.user_data,
             ],
         )]
     }

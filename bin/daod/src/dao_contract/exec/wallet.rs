@@ -101,7 +101,7 @@ impl Builder {
             dao_public_x,
             dao_public_y,
             change,
-            self.dao.gov_token_id,
+            self.proposal.token_id,
             self.dao_serial,
             self.hook_dao_exec,
             proposal_bulla,
@@ -176,6 +176,9 @@ impl Builder {
             total_votes_commit_y,
             input_value_commit_x,
             input_value_commit_y,
+            self.hook_dao_exec,
+            user_spend_hook,
+            user_data,
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
@@ -195,6 +198,9 @@ impl Builder {
             total_votes_commit_y,
             input_value_commit_x,
             input_value_commit_y,
+            dao_spend_hook: self.hook_dao_exec,
+            user_spend_hook,
+            user_data,
         };
 
         FuncCall {
