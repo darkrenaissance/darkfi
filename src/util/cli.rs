@@ -167,7 +167,10 @@ macro_rules! async_daemonize {
 
             let log_file_path = match std::env::var("DARKFI_LOG") {
                 Ok(p) => p,
-                Err(_) => "~/.local/darkfi.log".into(),
+                Err(_) => {
+                    std::fs::create_dir_all(expand_path("~/.local")?)?;
+                    "~/.local/darkfi.log".into()
+                }
             };
 
             let log_file_path = expand_path(&log_file_path)?;
