@@ -35,6 +35,10 @@ contract "DaoExec" {
     Base input_value,
     Scalar input_value_blind,
 
+    # misc
+    Base dao_spend_hook,
+    Base user_spend_hook,
+    Base user_data,
 }
 
 circuit "DaoExec" {
@@ -66,8 +70,31 @@ circuit "DaoExec" {
     );
     constrain_instance(proposal_bulla);
 
-    # Create coin0 = hash(...) and make public
-    # Create coin1 = hash(...) and make public
+    coin_0 = poseidon_hash(
+       proposal_dest_x,
+       proposal_dest_y,
+       proposal_amount,
+       proposal_token_id,
+       proposal_serial,
+       user_spend_hook,
+       user_data,
+       proposal_blind,
+    );
+    constrain_instance(coin_0);
+
+    change = base_sub(input_value, proposal_amount);
+
+    coin_1 = poseidon_hash(
+       dao_public_x,
+       dao_public_y,
+       change,
+       gov_token_id,
+       dao_serial,
+       dao_spend_hook,
+       proposal_bulla,
+       dao_coin_blind,
+    );
+    constrain_instance(coin_1);
 
     # Create pedersen commits for win_votes, and total_votes
     # and make public

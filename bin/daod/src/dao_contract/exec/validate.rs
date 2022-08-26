@@ -32,12 +32,13 @@ impl From<DarkFiError> for Error {
 
 pub struct CallData {
     pub proposal: pallas::Base,
+    pub coin_0: pallas::Base,
+    pub coin_1: pallas::Base,
 }
 
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
-        //vec![("example-foo".to_string(), vec![self.header.public_c])]
-        vec![("dao-exec".to_string(), vec![self.proposal])]
+        vec![("dao-exec".to_string(), vec![self.proposal, self.coin_0, self.coin_1])]
     }
 
     fn as_any(&self) -> &dyn Any {

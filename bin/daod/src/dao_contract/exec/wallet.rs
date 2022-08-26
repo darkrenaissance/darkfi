@@ -35,6 +35,7 @@ pub struct Builder {
     pub dao_coin_blind: pallas::Base,
     pub input_value: u64,
     pub input_value_blind: pallas::Scalar,
+    pub hook_dao_exec: pallas::Base,
 }
 
 impl Builder {
@@ -55,6 +56,11 @@ impl Builder {
         let dao_pubkey_coords = self.dao.public_key.0.to_affine().coordinates().unwrap();
         let dao_public_x = *dao_pubkey_coords.x();
         let dao_public_y = *dao_pubkey_coords.x();
+
+        let user_spend_hook = pallas::Base::from(0);
+        let user_data = pallas::Base::from(0);
+        let input_value = pallas::Base::from(self.input_value);
+        let change = input_value - proposal_amount;
 
         let dao_bulla = poseidon_hash::<8>([
             dao_proposer_limit,
@@ -78,6 +84,28 @@ impl Builder {
             self.proposal.blind,
             // @tmp-workaround
             self.proposal.blind,
+        ]);
+
+        let coin_0 = poseidon_hash::<8>([
+            proposal_dest_x,
+            proposal_dest_y,
+            proposal_amount,
+            self.proposal.token_id,
+            self.proposal.serial,
+            user_spend_hook,
+            user_data,
+            self.proposal.blind,
+        ]);
+
+        let coin_1 = poseidon_hash::<8>([
+            dao_public_x,
+            dao_public_y,
+            change,
+            self.dao.gov_token_id,
+            self.dao_serial,
+            self.hook_dao_exec,
+            proposal_bulla,
+            self.dao_coin_blind,
         ]);
 
         let zk_info = zk_bins.lookup(&"dao-exec".to_string()).unwrap();
@@ -115,11 +143,15 @@ impl Builder {
             Witness::Base(Value::known(self.user_coin_blind)),
             Witness::Base(Value::known(self.dao_serial)),
             Witness::Base(Value::known(self.dao_coin_blind)),
-            Witness::Base(Value::known(pallas::Base::from(self.input_value))),
+            Witness::Base(Value::known(input_value)),
             Witness::Scalar(Value::known(self.input_value_blind)),
+            // misc
+            Witness::Base(Value::known(self.hook_dao_exec)),
+            Witness::Base(Value::known(user_spend_hook)),
+            Witness::Base(Value::known(user_data)),
         ];
 
-        let public_inputs = vec![proposal_bulla];
+        let public_inputs = vec![proposal_bulla, coin_0, coin_1];
 
         let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
         debug!(target: "example_contract::foo::wallet::Builder", "input_proof Proof::create()");
@@ -128,7 +160,7 @@ impl Builder {
             .expect("DAO::exec() proving error!)");
         proofs.push(input_proof);
 
-        let call_data = CallData { proposal: proposal_bulla };
+        let call_data = CallData { proposal: proposal_bulla, coin_0, coin_1 };
 
         FuncCall {
             contract_id: "DAO".to_string(),

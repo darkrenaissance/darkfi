@@ -1017,7 +1017,6 @@ pub async fn demo() -> Result<()> {
             win_votes += note.value;
         }
         total_votes += note.value;
-
         let vote_result: String = if vote_option { "yes".to_string() } else { "no".to_string() };
 
         debug!("Voter {} voted {}", i, vote_result);
@@ -1102,6 +1101,7 @@ pub async fn demo() -> Result<()> {
         dao_coin_blind,
         input_value,
         input_value_blind,
+        hook_dao_exec,
     };
     let exec_func_call = builder.build(&zk_bins);
 
