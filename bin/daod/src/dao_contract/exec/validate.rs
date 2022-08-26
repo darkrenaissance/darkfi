@@ -34,11 +34,30 @@ pub struct CallData {
     pub proposal: pallas::Base,
     pub coin_0: pallas::Base,
     pub coin_1: pallas::Base,
+    pub win_votes_commit_x: pallas::Base,
+    pub win_votes_commit_y: pallas::Base,
+    pub total_votes_commit_x: pallas::Base,
+    pub total_votes_commit_y: pallas::Base,
+    pub input_value_commit_x: pallas::Base,
+    pub input_value_commit_y: pallas::Base,
 }
 
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
-        vec![("dao-exec".to_string(), vec![self.proposal, self.coin_0, self.coin_1])]
+        vec![(
+            "dao-exec".to_string(),
+            vec![
+                self.proposal,
+                self.coin_0,
+                self.coin_1,
+                self.win_votes_commit_x,
+                self.win_votes_commit_y,
+                self.total_votes_commit_x,
+                self.total_votes_commit_y,
+                self.input_value_commit_x,
+                self.input_value_commit_y,
+            ],
+        )]
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -96,6 +96,36 @@ circuit "DaoExec" {
     );
     constrain_instance(coin_1);
 
+    win_votes_v = ec_mul_short(win_votes, VALUE_COMMIT_VALUE);
+    win_votes_r = ec_mul(win_votes_blind, VALUE_COMMIT_RANDOM);
+    win_votes_commit = ec_add(win_votes_v, win_votes_r);
+
+    # get curve points and constrain
+	win_votes_commit_x = ec_get_x(win_votes_commit);
+	win_votes_commit_y = ec_get_y(win_votes_commit);
+	constrain_instance(win_votes_commit_x);
+	constrain_instance(win_votes_commit_y);
+
+    total_votes_v = ec_mul_short(total_votes, VALUE_COMMIT_VALUE);
+    total_votes_r = ec_mul(total_votes_blind, VALUE_COMMIT_RANDOM);
+    total_votes_commit = ec_add(total_votes_v, total_votes_r);
+
+    # get curve points and constrain
+	total_votes_commit_x = ec_get_x(total_votes_commit);
+	total_votes_commit_y = ec_get_y(total_votes_commit);
+	constrain_instance(total_votes_commit_x);
+	constrain_instance(total_votes_commit_y);
+
+    input_value_v = ec_mul_short(input_value, VALUE_COMMIT_VALUE);
+    input_value_r = ec_mul(input_value_blind, VALUE_COMMIT_RANDOM);
+    input_value_commit = ec_add(input_value_v, input_value_r);
+
+    # get curve points and constrain
+	input_value_x = ec_get_x(input_value_commit);
+	input_value_y = ec_get_y(input_value_commit);
+	constrain_instance(input_value_x);
+	constrain_instance(input_value_y);
+
     # Create pedersen commits for win_votes, and total_votes
     # and make public
 

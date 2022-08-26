@@ -9,7 +9,7 @@ use pasta_curves::{
 };
 
 use darkfi::{
-    crypto::Proof,
+    crypto::{util::pedersen_commitment_u64, Proof},
     zk::vm::{Witness, ZkCircuit},
 };
 
@@ -108,6 +108,21 @@ impl Builder {
             self.dao_coin_blind,
         ]);
 
+        let win_votes_commit = pedersen_commitment_u64(self.win_votes, self.win_votes_blind);
+        let win_votes_coords = win_votes_commit.to_affine().coordinates().unwrap();
+        let win_votes_commit_x = *win_votes_coords.x();
+        let win_votes_commit_y = *win_votes_coords.y();
+
+        let total_votes_commit = pedersen_commitment_u64(self.total_votes, self.total_votes_blind);
+        let total_votes_coords = total_votes_commit.to_affine().coordinates().unwrap();
+        let total_votes_commit_x = *total_votes_coords.x();
+        let total_votes_commit_y = *total_votes_coords.y();
+
+        let input_value_commit = pedersen_commitment_u64(self.input_value, self.input_value_blind);
+        let input_value_coords = input_value_commit.to_affine().coordinates().unwrap();
+        let input_value_commit_x = *input_value_coords.x();
+        let input_value_commit_y = *input_value_coords.y();
+
         let zk_info = zk_bins.lookup(&"dao-exec".to_string()).unwrap();
         let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
             info
@@ -151,7 +166,17 @@ impl Builder {
             Witness::Base(Value::known(user_data)),
         ];
 
-        let public_inputs = vec![proposal_bulla, coin_0, coin_1];
+        let public_inputs = vec![
+            proposal_bulla,
+            coin_0,
+            coin_1,
+            win_votes_commit_x,
+            win_votes_commit_y,
+            total_votes_commit_x,
+            total_votes_commit_y,
+            input_value_commit_x,
+            input_value_commit_y,
+        ];
 
         let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
         debug!(target: "example_contract::foo::wallet::Builder", "input_proof Proof::create()");
@@ -160,7 +185,17 @@ impl Builder {
             .expect("DAO::exec() proving error!)");
         proofs.push(input_proof);
 
-        let call_data = CallData { proposal: proposal_bulla, coin_0, coin_1 };
+        let call_data = CallData {
+            proposal: proposal_bulla,
+            coin_0,
+            coin_1,
+            win_votes_commit_x,
+            win_votes_commit_y,
+            total_votes_commit_x,
+            total_votes_commit_y,
+            input_value_commit_x,
+            input_value_commit_y,
+        };
 
         FuncCall {
             contract_id: "DAO".to_string(),
