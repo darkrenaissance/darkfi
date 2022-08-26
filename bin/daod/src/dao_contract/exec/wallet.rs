@@ -105,6 +105,18 @@ impl Builder {
             Witness::Base(Value::known(dao_public_x)),
             Witness::Base(Value::known(dao_public_y)),
             Witness::Base(Value::known(self.dao.bulla_blind)),
+            // votes
+            Witness::Base(Value::known(pallas::Base::from(self.win_votes))),
+            Witness::Base(Value::known(pallas::Base::from(self.total_votes))),
+            Witness::Scalar(Value::known(self.win_votes_blind)),
+            Witness::Scalar(Value::known(self.total_votes_blind)),
+            // outputs + inputs
+            Witness::Base(Value::known(self.user_serial)),
+            Witness::Base(Value::known(self.user_coin_blind)),
+            Witness::Base(Value::known(self.dao_serial)),
+            Witness::Base(Value::known(self.dao_coin_blind)),
+            Witness::Base(Value::known(pallas::Base::from(self.input_value))),
+            Witness::Scalar(Value::known(self.input_value_blind)),
         ];
 
         let public_inputs = vec![proposal_bulla];

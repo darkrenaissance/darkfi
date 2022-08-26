@@ -20,6 +20,21 @@ contract "DaoExec" {
     Base dao_public_x,
     Base dao_public_y,
     Base dao_bulla_blind,
+
+    # votes
+    Base win_votes,
+    Base total_votes,
+    Scalar win_votes_blind,
+    Scalar total_votes_blind,
+    
+    # outputs + inputs
+    Base user_serial,
+    Base user_coin_blind,
+    Base dao_serial,
+    Base dao_coin_blind,
+    Base input_value,
+    Scalar input_value_blind,
+
 }
 
 circuit "DaoExec" {
