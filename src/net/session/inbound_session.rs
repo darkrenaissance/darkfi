@@ -30,7 +30,7 @@ impl InboundInfo {
 /// Defines inbound connections session.
 pub struct InboundSession {
     p2p: Weak<P2p>,
-    acceptor: AcceptorPtr,
+    acceptors: Mutex<Vec<AcceptorPtr>>,
     accept_tasks: Mutex<Vec<StoppableTaskPtr>>,
     connect_infos: Mutex<Vec<FxHashMap<Url, InboundInfo>>>,
 }
@@ -38,20 +38,12 @@ pub struct InboundSession {
 impl InboundSession {
     /// Create a new inbound session.
     pub async fn new(p2p: Weak<P2p>) -> Arc<Self> {
-        let acceptor = Acceptor::new(Mutex::new(None));
-
-        let self_ = Arc::new(Self {
+        Arc::new(Self {
             p2p,
-            acceptor,
+            acceptors: Mutex::new(Vec::new()),
             accept_tasks: Mutex::new(Vec::new()),
             connect_infos: Mutex::new(Vec::new()),
-        });
-
-        let parent = Arc::downgrade(&self_);
-
-        *self_.acceptor.session.lock().await = Some(Arc::new(parent));
-
-        self_
+        })
     }
 
     /// Starts the inbound session. Begins by accepting connections and fails if
@@ -88,7 +80,10 @@ impl InboundSession {
 
     /// Stops the inbound session.
     pub async fn stop(&self) {
-        self.acceptor.stop().await;
+        let acceptors = &*self.acceptors.lock().await;
+        for acceptor in acceptors {
+            acceptor.stop().await;
+        }
 
         let accept_tasks = &*self.accept_tasks.lock().await;
         for accept_task in accept_tasks {
@@ -104,10 +99,19 @@ impl InboundSession {
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         info!(target: "net", "#{} starting inbound session on {}", index, accept_addr);
-        let result = self.acceptor.clone().start(accept_addr, executor).await;
+        // Generate a new acceptor for this inbound session
+        let acceptor = Acceptor::new(Mutex::new(None));
+        let parent = Arc::downgrade(&self);
+        *acceptor.session.lock().await = Some(Arc::new(parent));
+
+        // Start listener
+        let result = acceptor.clone().start(accept_addr, executor).await;
         if let Err(err) = result.clone() {
             error!(target: "net", "#{} error starting listener: {}", index, err);
         }
+
+        self.acceptors.lock().await.push(acceptor);
+
         result
     }
 
@@ -118,7 +122,7 @@ impl InboundSession {
         index: usize,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let channel_sub = self.acceptor.clone().subscribe().await;
+        let channel_sub = self.acceptors.lock().await[index].clone().subscribe().await;
         loop {
             let channel = channel_sub.receive().await?;
             // Spawn a detached task to process the channel
