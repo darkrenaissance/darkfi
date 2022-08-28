@@ -39,9 +39,9 @@ use group::ff::PrimeField;
 pub struct SlotWorkspace
 {
     pub st : blake3::Hash,
-    pub e: u64,
-    pub sl: u64,
-    pub txs: Vec<Transaction>,
+    pub e: u64, // epoch index
+    pub sl: u64, // absolute slot index
+    pub txs: Vec<Transaction>, // unpublished block transactions
     pub metadata: Metadata,
     pub is_leader: bool,
     pub proof: Proof,
@@ -331,6 +331,11 @@ impl Stakeholder
         debug!("[new epoch] 4 {}", self);
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, self.get_eta());
+        //TODO calculate total stake
+        // create coin with absolute slot/epoch.
+        let num_slots = self.workspace.sl;
+        // total stake;
+        let sigma = num_slots*reward;
         epoch.create_coins(); // set epoch interal fields working space with competing coins
         self.epoch = epoch.clone();
     }

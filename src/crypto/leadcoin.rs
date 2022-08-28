@@ -42,6 +42,7 @@ pub struct LeadCoin {
     // election seeds
     pub y_mu: Option<pallas::Base>, // leader election nonce derived from eta at onset of epoch
     pub rho_mu: Option<pallas::Base>, // leader election nonce derived from eta at onset of epoch
+    pub sigma_scalar: Option<pallas::Base>,
 }
 
 impl LeadCoin {
@@ -136,6 +137,7 @@ impl LeadCoin {
             mau_rho: Value::known(mod_r_p(self.rho_mu.unwrap())),
             mau_y: Value::known(mod_r_p(self.y_mu.unwrap())),
             root_cm: Value::known(self.root_cm.unwrap()),
+            sigma_scalar: Value::known(self.sigma_scalar.unwrap()),
         };
         contract
     }

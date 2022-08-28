@@ -130,6 +130,7 @@ pub struct LeadContract {
     pub mau_rho: Value<pallas::Scalar>,
     pub mau_y: Value<pallas::Scalar>,
     pub root_cm: Value<pallas::Scalar>,
+    pub sigma_scalar: Value<pallas::Base>,
     //pub eta : Option<u32>,
     //pub rho : Option<u32>,
     //pub h : Option<u32>, // hash of this data
@@ -338,11 +339,11 @@ impl Circuit<pallas::Base> for LeadContract {
             self.root_sk
         )?;
 
-        /// scalar used for fine-tuning the leader election frequency
-        let scalar = self.load_private(
+        /// sigma scalar is 2^254/(total network stake + epsilon)
+        let sigma_scalar = self.load_private(
             layouter.namespace(|| "load scalar "),
             config.advices[0],
-            Value::known(pallas::Base::from(1024)),
+            self.sigma_scalar,
         )?;
 
         /// leadership coefficient used for fine-tunning leader election frequency
@@ -563,9 +564,9 @@ impl Circuit<pallas::Base> for LeadContract {
         };
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let rho_commit_base = rho_commit.inner().x();
-
-        let ord = ar_chip.mul(layouter.namespace(|| ""), &scalar, &c)?;
-        let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &ord, &coin_value.clone())?;
+        // stakeholder absolute stake + 1 (epsilon)
+        let stake_plus = ar_chip.add(layouter.namespace(|| ""), &one, coin_value.clone())?;
+        let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &sigma_scalar, &stake_plus)?;
 
         let y : Value<pallas::Base> = y_commit_base.value().cloned();
         let T : Value<pallas::Base> = target.value().cloned();
