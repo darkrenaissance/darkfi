@@ -384,7 +384,7 @@ pub async fn demo() -> Result<()> {
 
     //// Wallet
 
-    // Address of deployed contract in our example is hook_dao_exec
+    // Address of deployed contract in our example is dao_contract::exec::FUNC_ID
     // This field is public, you can see it's being sent to a DAO
     // but nothing else is visible.
     //
@@ -392,8 +392,7 @@ pub async fn demo() -> Result<()> {
     //
     //   spend_hook = b"0xdao_ruleset"
     //
-    let hook_dao_exec = DrkSpendHook::random(&mut OsRng);
-    let spend_hook = hook_dao_exec;
+    let spend_hook = *dao_contract::exec::FUNC_ID;
     // The user_data can be a simple hash of the items passed into the ZK proof
     // up to corresponding linked ZK proof to interpret however they need.
     // In out case, it's the bulla for the DAO
@@ -461,7 +460,7 @@ pub async fn demo() -> Result<()> {
     ]);
     assert_eq!(coin, dao_recv_coin.coin.0);
 
-    assert_eq!(treasury_note.spend_hook, hook_dao_exec);
+    assert_eq!(treasury_note.spend_hook, *dao_contract::exec::FUNC_ID);
     assert_eq!(treasury_note.user_data, dao_bulla.0);
 
     debug!("DAO received a coin worth {} xDRK", treasury_note.value);
@@ -1080,7 +1079,7 @@ pub async fn demo() -> Result<()> {
                 public: dao_keypair.public,
                 serial: dao_serial,
                 coin_blind: dao_coin_blind,
-                spend_hook: hook_dao_exec,
+                spend_hook: *dao_contract::exec::FUNC_ID,
                 user_data: dao_bulla.0,
             },
         ],
@@ -1101,7 +1100,7 @@ pub async fn demo() -> Result<()> {
         dao_coin_blind,
         input_value,
         input_value_blind,
-        hook_dao_exec,
+        hook_dao_exec: *dao_contract::exec::FUNC_ID,
     };
     let exec_func_call = builder.build(&zk_bins);
 
@@ -1125,7 +1124,7 @@ pub async fn demo() -> Result<()> {
         // At least one input has this field value which means DAO::exec() is invoked.
         assert_eq!(transfer_call_data.inputs.len(), 1);
         let input = &transfer_call_data.inputs[0];
-        assert_eq!(input.revealed.spend_hook, hook_dao_exec);
+        assert_eq!(input.revealed.spend_hook, *dao_contract::exec::FUNC_ID);
         let user_data_enc = poseidon_hash::<2>([dao_bulla.0, user_data_blind]);
         assert_eq!(input.revealed.user_data_enc, user_data_enc);
     }
