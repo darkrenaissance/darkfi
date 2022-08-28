@@ -2,11 +2,7 @@ use log::debug;
 use rand::rngs::OsRng;
 
 use halo2_proofs::circuit::Value;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::Field, Curve},
-    pallas,
-};
+use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 
 use darkfi::{
     crypto::{util::pedersen_commitment_u64, Proof},
@@ -192,15 +188,9 @@ impl Builder {
             proposal: proposal_bulla,
             coin_0,
             coin_1,
-            win_votes_commit_x,
-            win_votes_commit_y,
-            total_votes_commit_x,
-            total_votes_commit_y,
-            input_value_commit_x,
-            input_value_commit_y,
-            dao_spend_hook: self.hook_dao_exec,
-            user_spend_hook,
-            user_data,
+            win_votes_commit,
+            total_votes_commit,
+            input_value_commit,
         };
 
         FuncCall {

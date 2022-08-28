@@ -1,17 +1,10 @@
-use pasta_curves::pallas;
+use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 
-use darkfi::{
-    crypto::types::DrkCircuitField,
-    util::serial::{SerialDecodable, SerialEncodable},
-    Error as DarkFiError,
-};
+use darkfi::{crypto::types::DrkCircuitField, Error as DarkFiError};
 
 use std::any::{Any, TypeId};
 
-use crate::{
-    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
-    example_contract::state::State,
-};
+use crate::demo::{CallDataBase, StateRegistry, Transaction, UpdateBase};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -34,36 +27,37 @@ pub struct CallData {
     pub proposal: pallas::Base,
     pub coin_0: pallas::Base,
     pub coin_1: pallas::Base,
-    // TODO: don't store the x, y like this
-    // store the actual point
-    pub win_votes_commit_x: pallas::Base,
-    pub win_votes_commit_y: pallas::Base,
-    pub total_votes_commit_x: pallas::Base,
-    pub total_votes_commit_y: pallas::Base,
-    pub input_value_commit_x: pallas::Base,
-    pub input_value_commit_y: pallas::Base,
-    /////
-
-    // Delete these values
-    pub dao_spend_hook: pallas::Base,
-    pub user_spend_hook: pallas::Base,
-    pub user_data: pallas::Base,
+    pub win_votes_commit: pallas::Point,
+    pub total_votes_commit: pallas::Point,
+    pub input_value_commit: pallas::Point,
 }
 
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
+        let win_votes_coords = self.win_votes_commit.to_affine().coordinates().unwrap();
+        let win_votes_commit_x = *win_votes_coords.x();
+        let win_votes_commit_y = *win_votes_coords.y();
+
+        let total_votes_coords = self.total_votes_commit.to_affine().coordinates().unwrap();
+        let total_votes_commit_x = *total_votes_coords.x();
+        let total_votes_commit_y = *total_votes_coords.y();
+
+        let input_value_coords = self.input_value_commit.to_affine().coordinates().unwrap();
+        let input_value_commit_x = *input_value_coords.x();
+        let input_value_commit_y = *input_value_coords.y();
+
         vec![(
             "dao-exec".to_string(),
             vec![
                 self.proposal,
                 self.coin_0,
                 self.coin_1,
-                self.win_votes_commit_x,
-                self.win_votes_commit_y,
-                self.total_votes_commit_x,
-                self.total_votes_commit_y,
-                self.input_value_commit_x,
-                self.input_value_commit_y,
+                win_votes_commit_x,
+                win_votes_commit_y,
+                total_votes_commit_x,
+                total_votes_commit_y,
+                input_value_commit_x,
+                input_value_commit_y,
                 *super::FUNC_ID,
                 pallas::Base::from(0),
                 pallas::Base::from(0),
