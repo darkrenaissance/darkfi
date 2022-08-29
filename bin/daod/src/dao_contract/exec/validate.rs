@@ -123,17 +123,18 @@ pub fn state_transition(
     }
 
     // 3. First item should be a Money::transfer() calldata
-    // TODO: check func_id == money_contract::transfer::FUNC_ID
+    if parent_tx.func_calls[0].func_id != "Money::transfer()" {
+        return Err(Error::InvalidCallData)
+    }
+
     let money_transfer_call_data = parent_tx.func_calls[0].call_data.as_any();
     let money_transfer_call_data =
         money_transfer_call_data.downcast_ref::<money_contract::transfer::validate::CallData>();
     let money_transfer_call_data = money_transfer_call_data.unwrap();
-    if money_transfer_call_data.type_id() !=
+    assert_eq!(
+        money_transfer_call_data.type_id(),
         TypeId::of::<money_contract::transfer::validate::CallData>()
-    {
-        return Err(Error::InvalidCallData)
-    }
-    // TODO: then add those checks above here as an assert
+    );
 
     // 4. Money::transfer() has exactly 2 outputs
     if money_transfer_call_data.outputs.len() != 2 {
@@ -168,7 +169,10 @@ pub fn state_transition(
     if proposal_votes.vote_commits != call_data.win_votes_commit {
         return Err(Error::InvalidVoteCommit)
     }
-    // TODO: also check total_vote_commit
+    // 5. also check total_vote_commit
+    if proposal_votes.value_commits != call_data.total_votes_commit {
+        return Err(Error::InvalidVoteCommit)
+    }
 
     Ok(Box::new(Update { proposal: call_data.proposal }))
 }
