@@ -22,7 +22,7 @@ impl ErrorEmitter {
             _ => {
                 let err_msg = format!("{} (line {}, column {})", msg, ln, col);
                 let dbg_msg = format!("{}:{}:{}: {}", self.file, ln, col, self.lines[ln - 1]);
-                let pad = dbg_msg.split(": ").next().unwrap().len() + col + 2;
+                let pad = dbg_msg.split(": ").next().unwrap().len() + col + 1;
                 let caret = format!("{:width$}^", "", width = pad);
                 (err_msg, dbg_msg, caret)
             }
