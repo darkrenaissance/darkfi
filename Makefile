@@ -24,7 +24,8 @@ BINDEPS = \
 # ZK proofs to compile with zkas
 PROOFS = \
 	$(shell find bin/daod/proof -type f -name '*.zk') \
-	$(shell find proof -type f -name '*.zk')
+	$(shell find proof -type f -name '*.zk') \
+	example/simple.zk
 
 PROOFS_BIN = $(PROOFS:=.bin)
 
