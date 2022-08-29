@@ -289,7 +289,7 @@ pub enum Error {
     ConfigInvalid,
 
     #[error("Failed decoding bincode: {0}")]
-    ZkasDecoderError(&'static str),
+    ZkasDecoderError(String),
 
     #[cfg(feature = "regex")]
     #[error(transparent)]

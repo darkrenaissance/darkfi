@@ -1,3 +1,21 @@
+/// Stack types in bincode & vm
+#[derive(Clone, Debug)]
+#[repr(u8)]
+pub enum StackType {
+    Var = 0x00,
+    Lit = 0x01,
+}
+
+impl StackType {
+    pub fn from_repr(b: u8) -> Option<Self> {
+        match b {
+            0x00 => Some(Self::Var),
+            0x01 => Some(Self::Lit),
+            _ => None,
+        }
+    }
+}
+
 /// Varable types supported by the zkas VM
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[repr(u8)]
@@ -39,6 +57,25 @@ pub enum VarType {
     Uint64 = 0x31,
 }
 
+impl VarType {
+    pub fn from_repr(b: u8) -> Option<Self> {
+        match b {
+            0x01 => Some(Self::EcPoint),
+            0x02 => Some(Self::EcFixedPoint),
+            0x03 => Some(Self::EcFixedPointShort),
+            0x04 => Some(Self::EcFixedPointBase),
+            0x10 => Some(Self::Base),
+            0x11 => Some(Self::BaseArray),
+            0x12 => Some(Self::Scalar),
+            0x13 => Some(Self::ScalarArray),
+            0x20 => Some(Self::MerklePath),
+            0x30 => Some(Self::Uint32),
+            0x31 => Some(Self::Uint64),
+            _ => None,
+        }
+    }
+}
+
 /// Literal types supported by the zkas VM
 #[derive(Copy, Clone, PartialEq, Debug)]
 #[repr(u8)]
@@ -51,6 +88,13 @@ pub enum LitType {
 }
 
 impl LitType {
+    pub fn from_repr(b: u8) -> Option<Self> {
+        match b {
+            0x01 => Some(Self::Uint64),
+            _ => None,
+        }
+    }
+
     pub fn to_vartype(&self) -> VarType {
         match self {
             Self::Dummy => VarType::Dummy,

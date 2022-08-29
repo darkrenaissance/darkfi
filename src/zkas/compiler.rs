@@ -3,7 +3,7 @@ use std::str::Chars;
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Witness},
     error::ErrorEmitter,
-    types::Type,
+    types::StackType,
 };
 use crate::util::serial::{serialize, VarInt};
 
@@ -69,6 +69,7 @@ impl Compiler {
 
         // In the .contract section, we write all our witness types, on the stack
         // they're in order of appearance.
+        bincode.extend_from_slice(b".contract");
         for i in &self.witnesses {
             tmp_stack.push(i.name.as_str());
             bincode.push(i.typ as u8);
@@ -90,7 +91,7 @@ impl Compiler {
                 match arg {
                     Arg::Var(arg) => {
                         if let Some(found) = Compiler::lookup_stack(&tmp_stack, &arg.name) {
-                            bincode.push(Type::Var as u8);
+                            bincode.push(StackType::Var as u8);
                             bincode.extend_from_slice(&serialize(&VarInt(found as u64)));
                             continue
                         }
@@ -103,7 +104,7 @@ impl Compiler {
                     }
                     Arg::Lit(lit) => {
                         if let Some(found) = Compiler::lookup_literal(&self.literals, &lit.name) {
-                            bincode.push(Type::Lit as u8);
+                            bincode.push(StackType::Lit as u8);
                             bincode.extend_from_slice(&serialize(&VarInt(found as u64)));
                             continue
                         }

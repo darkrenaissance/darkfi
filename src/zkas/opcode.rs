@@ -79,6 +79,28 @@ impl Opcode {
         }
     }
 
+    pub fn from_repr(b: u8) -> Option<Self> {
+        match b {
+            0x01 => Some(Self::EcAdd),
+            0x02 => Some(Self::EcMul),
+            0x03 => Some(Self::EcMulBase),
+            0x04 => Some(Self::EcMulShort),
+            0x08 => Some(Self::EcGetX),
+            0x09 => Some(Self::EcGetY),
+            0x10 => Some(Self::PoseidonHash),
+            0x20 => Some(Self::MerkleRoot),
+            0x30 => Some(Self::BaseAdd),
+            0x31 => Some(Self::BaseMul),
+            0x32 => Some(Self::BaseSub),
+            0x40 => Some(Self::WitnessBase),
+            0x50 => Some(Self::RangeCheck),
+            0x51 => Some(Self::LessThan),
+            0xf0 => Some(Self::ConstrainInstance),
+            0xff => Some(Self::DebugPrint),
+            _ => None,
+        }
+    }
+
     /// Return a tuple of vectors of types that are accepted by a specific opcode.
     /// `r.0` is the return type(s), and `r.1` is the argument type(s).
     pub fn arg_types(&self) -> (Vec<VarType>, Vec<VarType>) {
