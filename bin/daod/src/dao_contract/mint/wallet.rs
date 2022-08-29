@@ -50,16 +50,14 @@ impl Builder {
         let dao_approval_ratio = pallas::Base::from(self.dao_approval_ratio);
 
         let dao_pubkey_coords = self.dao_pubkey.0.to_affine().coordinates().unwrap();
-        let dao_public_x = *dao_pubkey_coords.x();
-        let dao_public_y = *dao_pubkey_coords.x();
 
         let dao_bulla = poseidon_hash::<8>([
             dao_proposer_limit,
             dao_quorum,
             dao_approval_ratio,
             self.gov_token_id,
-            dao_public_x,
-            dao_public_y,
+            *dao_pubkey_coords.x(),
+            *dao_pubkey_coords.y(),
             self.dao_bulla_blind,
             // @tmp-workaround
             self.dao_bulla_blind,
@@ -79,8 +77,8 @@ impl Builder {
             Witness::Base(Value::known(dao_quorum)),
             Witness::Base(Value::known(dao_approval_ratio)),
             Witness::Base(Value::known(self.gov_token_id)),
-            Witness::Base(Value::known(dao_public_x)),
-            Witness::Base(Value::known(dao_public_y)),
+            Witness::Base(Value::known(*dao_pubkey_coords.x())),
+            Witness::Base(Value::known(*dao_pubkey_coords.y())),
             Witness::Base(Value::known(self.dao_bulla_blind)),
         ];
         let public_inputs = vec![dao_bulla.0];

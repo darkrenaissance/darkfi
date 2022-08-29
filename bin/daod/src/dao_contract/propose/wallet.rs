@@ -26,6 +26,8 @@ use crate::{
     util::poseidon_hash,
 };
 
+use log::debug;
+
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct Note {
     pub proposal: Proposal,
@@ -152,12 +154,12 @@ impl Builder {
             let sigpub_y = *sigpub_coords.y();
 
             let public_inputs = vec![
-                value_commit_x,
-                value_commit_y,
+                *value_coords.x(),
+                *value_coords.y(),
                 token_commit,
                 merkle_root.0,
-                sigpub_x,
-                sigpub_y,
+                *sigpub_coords.x(),
+                *sigpub_coords.y(),
             ];
             let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
 
@@ -175,8 +177,6 @@ impl Builder {
 
         let total_funds_commit = pedersen_commitment_u64(total_funds, total_funds_blinds);
         let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
-        let total_funds_x = *total_funds_coords.x();
-        let total_funds_y = *total_funds_coords.y();
         let total_funds = pallas::Base::from(total_funds);
 
         let token_commit = poseidon_hash::<2>([self.dao.gov_token_id, gov_token_blind]);
@@ -192,16 +192,14 @@ impl Builder {
         let dao_approval_ratio = pallas::Base::from(self.dao.approval_ratio);
 
         let dao_pubkey_coords = self.dao.public_key.0.to_affine().coordinates().unwrap();
-        let dao_public_x = *dao_pubkey_coords.x();
-        let dao_public_y = *dao_pubkey_coords.x();
 
         let dao_bulla = poseidon_hash::<8>([
             dao_proposer_limit,
             dao_quorum,
             dao_approval_ratio,
             self.dao.gov_token_id,
-            dao_public_x,
-            dao_public_y,
+            *dao_pubkey_coords.x(),
+            *dao_pubkey_coords.y(),
             self.dao.bulla_blind,
             // @tmp-workaround
             self.dao.bulla_blind,
@@ -246,8 +244,8 @@ impl Builder {
             Witness::Base(Value::known(dao_quorum)),
             Witness::Base(Value::known(dao_approval_ratio)),
             Witness::Base(Value::known(self.dao.gov_token_id)),
-            Witness::Base(Value::known(dao_public_x)),
-            Witness::Base(Value::known(dao_public_y)),
+            Witness::Base(Value::known(*dao_pubkey_coords.x())),
+            Witness::Base(Value::known(*dao_pubkey_coords.y())),
             Witness::Base(Value::known(self.dao.bulla_blind)),
             Witness::Uint32(Value::known(dao_leaf_position.try_into().unwrap())),
             Witness::MerklePath(Value::known(self.dao_merkle_path.try_into().unwrap())),
@@ -256,8 +254,8 @@ impl Builder {
             token_commit,
             self.dao_merkle_root.0,
             proposal_bulla,
-            total_funds_x,
-            total_funds_y,
+            *total_funds_coords.x(),
+            *total_funds_coords.y(),
         ];
         let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
 

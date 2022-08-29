@@ -185,8 +185,6 @@ impl Builder {
         let token_commit = poseidon_hash::<2>([self.dao.gov_token_id, gov_token_blind]);
 
         let proposal_dest_coords = self.proposal.dest.0.to_affine().coordinates().unwrap();
-        let proposal_dest_x = *proposal_dest_coords.x();
-        let proposal_dest_y = *proposal_dest_coords.y();
 
         let proposal_amount = pallas::Base::from(self.proposal.amount);
 
@@ -195,24 +193,24 @@ impl Builder {
         let dao_approval_ratio = pallas::Base::from(self.dao.approval_ratio);
 
         let dao_pubkey_coords = self.dao.public_key.0.to_affine().coordinates().unwrap();
-        let dao_public_x = *dao_pubkey_coords.x();
-        let dao_public_y = *dao_pubkey_coords.x();
 
         let dao_bulla = poseidon_hash::<8>([
             dao_proposer_limit,
             dao_quorum,
             dao_approval_ratio,
             self.dao.gov_token_id,
-            dao_public_x,
-            dao_public_y,
+            *dao_pubkey_coords.x(),
+            *dao_pubkey_coords.y(),
             self.dao.bulla_blind,
             // @tmp-workaround
             self.dao.bulla_blind,
         ]);
 
         let proposal_bulla = poseidon_hash::<8>([
-            proposal_dest_x,
-            proposal_dest_y,
+            *proposal_dest_coords.x(),
+            *proposal_dest_coords.y(),
+            //proposal_dest_x,
+            //proposal_dest_y,
             proposal_amount,
             self.proposal.serial,
             self.proposal.token_id,
@@ -230,14 +228,10 @@ impl Builder {
         let vote_commit = pedersen_commitment_u64(weighted_vote, self.vote.vote_option_blind);
         debug!(target: "demo::dao_contract::vote::wallet::Builder", "vote commit: {:?}", vote_commit);
         let vote_coords = vote_commit.to_affine().coordinates().unwrap();
-        let vote_commit_x = *vote_coords.x();
-        let vote_commit_y = *vote_coords.y();
         let vote = pallas::Base::from(vote);
 
         let value_commit = pedersen_commitment_u64(value, value_blind);
         let value_coords = value_commit.to_affine().coordinates().unwrap();
-        let value_commit_x = *value_coords.x();
-        let value_commit_y = *value_coords.y();
         let value_base = pallas::Base::from(value);
 
         let zk_info = zk_bins.lookup(&"dao-vote-main".to_string()).unwrap();
@@ -250,8 +244,8 @@ impl Builder {
 
         let prover_witnesses = vec![
             // proposal params
-            Witness::Base(Value::known(proposal_dest_x)),
-            Witness::Base(Value::known(proposal_dest_y)),
+            Witness::Base(Value::known(*proposal_dest_coords.x())),
+            Witness::Base(Value::known(*proposal_dest_coords.y())),
             Witness::Base(Value::known(proposal_amount)),
             Witness::Base(Value::known(self.proposal.serial)),
             Witness::Base(Value::known(self.proposal.token_id)),
@@ -261,8 +255,8 @@ impl Builder {
             Witness::Base(Value::known(dao_quorum)),
             Witness::Base(Value::known(dao_approval_ratio)),
             Witness::Base(Value::known(self.dao.gov_token_id)),
-            Witness::Base(Value::known(dao_public_x)),
-            Witness::Base(Value::known(dao_public_y)),
+            Witness::Base(Value::known(*dao_pubkey_coords.x())),
+            Witness::Base(Value::known(*dao_pubkey_coords.y())),
             Witness::Base(Value::known(self.dao.bulla_blind)),
             // Vote
             Witness::Base(Value::known(vote)),
@@ -277,10 +271,10 @@ impl Builder {
         let public_inputs = vec![
             token_commit,
             proposal_bulla,
-            vote_commit_x,
-            vote_commit_y,
-            value_commit_x,
-            value_commit_y,
+            *vote_coords.x(),
+            *vote_coords.y(),
+            *value_coords.x(),
+            *value_coords.y(),
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, zk_bin);

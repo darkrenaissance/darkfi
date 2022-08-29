@@ -9,4 +9,4 @@ pub mod exec;
 
 pub mod state;
 
-pub use state::{DaoBulla, State};
+pub use state::{DaoBulla, HashableBase, State};

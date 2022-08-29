@@ -61,37 +61,31 @@ impl CallDataBase for CallData {
         for input in &self.inputs {
             total_funds_commit += input.value_commit;
             let value_coords = input.value_commit.to_affine().coordinates().unwrap();
-            let value_commit_x = *value_coords.x();
-            let value_commit_y = *value_coords.y();
 
             let sigpub_coords = input.signature_public.0.to_affine().coordinates().unwrap();
-            let sigpub_x = *sigpub_coords.x();
-            let sigpub_y = *sigpub_coords.y();
 
             zk_publics.push((
                 "dao-propose-burn".to_string(),
                 vec![
-                    value_commit_x,
-                    value_commit_y,
+                    *value_coords.x(),
+                    *value_coords.y(),
                     self.header.token_commit,
                     input.merkle_root.0,
-                    sigpub_x,
-                    sigpub_y,
+                    *sigpub_coords.x(),
+                    *sigpub_coords.y(),
                 ],
             ));
         }
 
         let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
-        let total_funds_x = *total_funds_coords.x();
-        let total_funds_y = *total_funds_coords.y();
         zk_publics.push((
             "dao-propose-main".to_string(),
             vec![
                 self.header.token_commit,
                 self.header.dao_merkle_root.0,
                 self.header.proposal_bulla,
-                total_funds_x,
-                total_funds_y,
+                *total_funds_coords.x(),
+                *total_funds_coords.y(),
             ],
         ));
 

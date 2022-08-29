@@ -13,7 +13,7 @@ pub struct DaoBulla(pub pallas::Base);
 type MerkleTree = BridgeTree<MerkleNode, MERKLE_DEPTH>;
 
 #[derive(Eq, PartialEq)]
-pub struct HashableBase(pallas::Base);
+pub struct HashableBase(pub pallas::Base);
 
 impl std::hash::Hash for HashableBase {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -47,7 +47,7 @@ pub struct State {
     //proposal_bullas: Vec<pallas::Base>,
     pub proposal_tree: MerkleTree,
     pub proposal_roots: Vec<MerkleNode>,
-    proposal_votes: HashMap<HashableBase, ProposalVotes>,
+    pub proposal_votes: HashMap<HashableBase, ProposalVotes>,
 }
 
 impl State {

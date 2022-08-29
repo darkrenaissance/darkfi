@@ -64,44 +64,36 @@ impl CallDataBase for CallData {
         for input in &self.inputs {
             total_value_commit += input.value_commit;
             let value_coords = input.value_commit.to_affine().coordinates().unwrap();
-            let value_commit_x = *value_coords.x();
-            let value_commit_y = *value_coords.y();
 
             let sigpub_coords = input.signature_public.0.to_affine().coordinates().unwrap();
-            let sigpub_x = *sigpub_coords.x();
-            let sigpub_y = *sigpub_coords.y();
 
             zk_publics.push((
                 "dao-vote-burn".to_string(),
                 vec![
                     input.nullifier.0,
-                    value_commit_x,
-                    value_commit_y,
+                    *value_coords.x(),
+                    *value_coords.y(),
                     self.header.token_commit,
                     input.merkle_root.0,
-                    sigpub_x,
-                    sigpub_y,
+                    *sigpub_coords.x(),
+                    *sigpub_coords.y(),
                 ],
             ));
         }
 
         let vote_commit_coords = self.header.vote_commit.to_affine().coordinates().unwrap();
-        let vote_commit_x = *vote_commit_coords.x();
-        let vote_commit_y = *vote_commit_coords.y();
 
         let value_commit_coords = total_value_commit.to_affine().coordinates().unwrap();
-        let value_commit_x = *value_commit_coords.x();
-        let value_commit_y = *value_commit_coords.y();
 
         zk_publics.push((
             "dao-vote-main".to_string(),
             vec![
                 self.header.token_commit,
                 self.header.proposal_bulla,
-                vote_commit_x,
-                vote_commit_y,
-                value_commit_x,
-                value_commit_y,
+                *vote_commit_coords.x(),
+                *vote_commit_coords.y(),
+                *value_commit_coords.x(),
+                *value_commit_coords.y(),
             ],
         ));
 
