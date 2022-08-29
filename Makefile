@@ -44,20 +44,20 @@ $(BINS): token_lists $(BINDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
 
-check: token_lists
+check: token_lists zkas $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --release --feature-powerset --all
 
-fix: token_lists
+fix: token_lists zkas $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --fix --allow-dirty --all
 
-clippy: token_lists
+clippy: token_lists zkas $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --all
 
 rustdoc: token_lists
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --workspace --all-features \
 		--no-deps --document-private-items
 
-test: token_lists $(PROOFS_BIN) test-tx
+test: token_lists zkas $(PROOFS_BIN) test-tx
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all
 
 test-tx:
