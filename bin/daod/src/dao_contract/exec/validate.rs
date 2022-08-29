@@ -123,6 +123,7 @@ pub fn state_transition(
     }
 
     // 3. First item should be a Money::transfer() calldata
+    // TODO: check func_id == money_contract::transfer::FUNC_ID
     let money_transfer_call_data = parent_tx.func_calls[0].call_data.as_any();
     let money_transfer_call_data =
         money_transfer_call_data.downcast_ref::<money_contract::transfer::validate::CallData>();
@@ -132,6 +133,7 @@ pub fn state_transition(
     {
         return Err(Error::InvalidCallData)
     }
+    // TODO: then add those checks above here as an assert
 
     // 4. Money::transfer() has exactly 2 outputs
     if money_transfer_call_data.outputs.len() != 2 {
@@ -147,9 +149,8 @@ pub fn state_transition(
         return Err(Error::InvalidOutput)
     }
 
-    let mut input_value_commits = pallas::Point::identity();
-
     // 2. sum of Money::transfer() calldata input_value_commits == our input value commit
+    let mut input_value_commits = pallas::Point::identity();
     for input in &money_transfer_call_data.inputs {
         input_value_commits += input.revealed.value_commit;
     }
@@ -167,6 +168,7 @@ pub fn state_transition(
     if proposal_votes.vote_commits != call_data.win_votes_commit {
         return Err(Error::InvalidVoteCommit)
     }
+    // TODO: also check total_vote_commit
 
     Ok(Box::new(Update { proposal: call_data.proposal }))
 }
