@@ -129,11 +129,11 @@ impl Opcode {
                 (vec![VarType::Base], vec![VarType::Uint32, VarType::MerklePath, VarType::Base])
             }
 
-            Opcode::BaseAdd => (vec![VarType::Base], vec![VarType::Base]),
+            Opcode::BaseAdd => (vec![VarType::Base], vec![VarType::Base, VarType::Base]),
 
-            Opcode::BaseMul => (vec![VarType::Base], vec![VarType::Base]),
+            Opcode::BaseMul => (vec![VarType::Base], vec![VarType::Base, VarType::Base]),
 
-            Opcode::BaseSub => (vec![VarType::Base], vec![VarType::Base]),
+            Opcode::BaseSub => (vec![VarType::Base], vec![VarType::Base, VarType::Base]),
 
             Opcode::WitnessBase => (vec![VarType::Base], vec![VarType::Uint64]),
 

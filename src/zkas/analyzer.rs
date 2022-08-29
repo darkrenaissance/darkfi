@@ -6,7 +6,7 @@ use std::{
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Var, Variable, Witness},
     error::ErrorEmitter,
-    VarType,
+    Opcode, VarType,
 };
 
 pub struct Analyzer {
@@ -73,6 +73,29 @@ impl Analyzer {
                 }
             }
 
+            // Edge-cases for some opcodes
+            match &statement.opcode {
+                Opcode::RangeCheck => {
+                    if let Arg::Lit(arg0) = &statement.rhs[0] {
+                        if &arg0.name != "64" && &arg0.name != "253" {
+                            self.error.abort(
+                                "Supported range checks are only 64 and 253 bits.",
+                                arg0.line,
+                                arg0.column,
+                            );
+                        }
+                    } else {
+                        self.error.abort(
+                            "Invalid argument for range_check opcode.",
+                            statement.line,
+                            0,
+                        );
+                    }
+                }
+
+                _ => {}
+            }
+
             for (idx, arg) in statement.rhs.iter().enumerate() {
                 // In case an argument is a function call, we will first
                 // convert it to another statement that will get executed
@@ -137,8 +160,6 @@ impl Analyzer {
                             v.line,
                             v.column,
                         );
-                    } else {
-                        panic!();
                     }
 
                     // Replace the statement function call with the variable from
@@ -146,7 +167,7 @@ impl Analyzer {
                     stmt.rhs[idx] = Arg::Var(v.clone());
 
                     let mut rhs_inner = vec![];
-                    for i in &func.rhs {
+                    for (inner_idx, i) in func.rhs.iter().enumerate() {
                         if let Arg::Var(v) = i {
                             if let Some(var_ref) = self.lookup_var(&v.name) {
                                 let (var_type, ln, col) = match var_ref {
@@ -155,11 +176,11 @@ impl Analyzer {
                                     Var::Variable(c) => (c.typ, c.line, c.column),
                                 };
 
-                                if var_type != f_arg_types[idx] {
+                                if var_type != f_arg_types[inner_idx] {
                                     self.error.abort(
                                         &format!(
                                             "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
-                                            f_arg_types[idx], var_type
+                                            f_arg_types[inner_idx], var_type
                                         ),
                                         ln,
                                         col,
