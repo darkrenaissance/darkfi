@@ -7,7 +7,7 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-proc-macro-crate = "1.2.0"
+proc-macro-crate = "1.2.1"
 proc-macro2 = "1.0.43"
 syn = {version = "1.0.99", features = ["full", "fold"]}
 

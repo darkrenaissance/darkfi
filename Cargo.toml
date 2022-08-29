@@ -45,16 +45,16 @@ members = [
 
 [dependencies]
 # Hard dependencies
-libc = "0.2.127"
+libc = "0.2.132"
 log = "0.4.17"
 thiserror = "1.0.32"
 
 # async-runtime
 smol = {version = "1.2.5", optional = true}
-futures = {version = "0.3.21", optional = true}
+futures = {version = "0.3.24", optional = true}
 async-std = {version = "1.12.0", features = ["attributes"], optional = true}
 async-trait = {version = "0.1.57", optional = true}
-async-channel = {version = "1.6.1", optional = true}
+async-channel = {version = "1.7.1", optional = true}
 async-executor = {version = "1.4.1", optional = true}
 
 # async-net
@@ -62,8 +62,8 @@ async-native-tls = {version = "0.4.0", optional = true}
 native-tls = {version = "0.2.10", optional = true}
 
 # Networking
-socket2 = {version = "0.4.4", optional = true}
-futures-rustls = {version = "0.22.1", features = ["dangerous_configuration"], optional = true}
+socket2 = {version = "0.4.6", optional = true}
+futures-rustls = {version = "0.22.2", features = ["dangerous_configuration"], optional = true}
 
 # TLS cert utilities
 ed25519-compact = {version = "1.0.11", features = ["pem"], optional = true}
@@ -76,8 +76,8 @@ bs58 = {version = "0.4.0", optional = true}
 toml = {version = "0.5.9", optional = true}
 bytes = {version = "1.2.1", optional = true}
 bincode = {version = "2.0.0-rc.1", features = ["serde"], optional = true}
-serde_json = {version = "1.0.83", optional = true}
-serde = {version = "1.0.142", features = ["derive"], optional = true}
+serde_json = {version = "1.0.85", optional = true}
+serde = {version = "1.0.144", features = ["derive"], optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
 
@@ -92,7 +92,7 @@ indexmap = {version = "1.9.1", optional = true}
 itertools = {version = "0.10.3", optional = true}
 darkfi-derive = {path = "src/util/derive", optional = true}
 darkfi-derive-internal = {path = "src/util/derive-internal", optional = true}
-chrono = {version = "0.4.19", optional = true}
+chrono = {version = "0.4.22", optional = true}
 regex = {version = "1.6.0", optional = true}
 
 # Misc
@@ -137,13 +137,13 @@ libsqlite3-sys = {version = "0.24.1", features = ["bundled-sqlcipher"],  optiona
 sled = {version = "0.34.7", optional = true}
 
 [dev-dependencies]
-clap = {version = "3.2.16", features = ["derive"]}
+clap = {version = "3.2.18", features = ["derive"]}
 halo2_proofs = {version = "0.2.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
 halo2_gadgets = {version = "0.2.0", features = ["dev-graph", "test-dependencies"]}
 #halo2_proofs = {git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
 #halo2_gadgets = {git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4", features = ["dev-graph", "test-dependencies"]}
 
-plotters = "0.3.2"
+plotters = "0.3.3"
 
 [features]
 async-runtime = [

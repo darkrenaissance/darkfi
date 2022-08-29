@@ -11,7 +11,7 @@ darkfi = {path = "../../", features = ["net", "rpc"]}
 async-std = "1.12.0"
 async-trait = "0.1.57"
 async-executor = "1.4.1"
-async-channel = "1.6.1"
+async-channel = "1.7.1"
 easy-parallel = "3.2.0"
 smol = "1.2.5"
 num_cpus = "1.13.1"
@@ -22,8 +22,8 @@ simplelog = "0.12.0"
 url = "2.2.2"
 
 # Encoding and parsing
-serde_json = "1.0.83"
-serde = {version = "1.0.142", features = ["derive"]}
+serde_json = "1.0.85"
+serde = {version = "1.0.144", features = ["derive"]}
 toml = "0.5.9"
 
 
