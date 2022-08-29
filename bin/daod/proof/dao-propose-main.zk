@@ -47,7 +47,7 @@ circuit "DaoProposeMain" {
         # @tmp-workaround
         dao_bulla_blind,
     );
-	dao_root = calculate_merkle_root(dao_leaf_pos, dao_path, dao_bulla);
+	dao_root = merkle_root(dao_leaf_pos, dao_path, dao_bulla);
 	constrain_instance(dao_root);
     # Proves this DAO is valid
 

@@ -1,7 +1,7 @@
 constant "Vote" {
-	EcFixedPoint VALUE_COMMIT_VALUE,
+	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
-	EcFixedPoint NULLIFIER_K,
+	EcFixedPointBase NULLIFIER_K,
 }
 
 contract "Vote" {
@@ -27,7 +27,7 @@ circuit "Vote" {
 	pk_hash = poseidon_hash(public_x, public_y);
 
 	# Merkle root
-	root = calculate_merkle_root(leaf_pos, path, pk_hash);
+	root = merkle_root(leaf_pos, path, pk_hash);
 	constrain_instance(root);
 
 	# Pedersen commitment for vote

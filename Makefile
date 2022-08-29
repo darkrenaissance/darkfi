@@ -21,7 +21,17 @@ BINDEPS = \
 	$(shell find script/sql -type f) \
 	$(shell find contrib/token -type f)
 
-all: $(BINS)
+# ZK proofs to compile with zkas
+PROOFS = \
+	$(shell find bin/daod/proof -type f -name '*.zk') \
+	$(shell find proof -type f -name '*.zk')
+
+PROOFS_BIN = $(PROOFS:=.bin)
+
+all: $(PROOFS_BIN) $(BINS)
+
+$(PROOFS_BIN): zkas $(PROOFS)
+	./zkas $(basename $@) -o $@
 
 token_lists:
 	$(MAKE) -C contrib/token all
@@ -43,14 +53,7 @@ rustdoc: token_lists
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --workspace --all-features \
 		--no-deps --document-private-items
 
-# zkas source files which we want to compile for tests
-VM_SRC = proof/arithmetic.zk proof/mint.zk proof/burn.zk example/simple.zk
-VM_BIN = $(VM_SRC:=.bin)
-
-$(VM_BIN): zkas $(VM_SRC)
-	./zkas $(basename $@) -o $@
-
-test: token_lists $(VM_BIN) test-tx
+test: token_lists $(PROOFS_BIN) test-tx
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all
 
 test-tx:

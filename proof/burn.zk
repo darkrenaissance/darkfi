@@ -51,7 +51,7 @@ circuit "Burn" {
 	C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
 
 	# Merkle root
-	root = calculate_merkle_root(leaf_pos, path, C);
+	root = merkle_root(leaf_pos, path, C);
 	constrain_instance(root);
 
 	# Finally, we derive a public key for the signature and
