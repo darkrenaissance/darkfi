@@ -1,4 +1,7 @@
-use std::str::Chars;
+use std::{
+    io::{stdin, stdout, Read, Write},
+    str::Chars,
+};
 
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Var, Variable, Witness},
@@ -312,9 +315,9 @@ impl Analyzer {
         self.statements = statements;
         self.stack = stack;
 
-        println!("=================STATEMENTS===============\n{:#?}", self.statements);
-        println!("===================STACK==================\n{:#?}", self.stack);
-        println!("==================LITERALS================\n{:#?}", self.literals);
+        //println!("=================STATEMENTS===============\n{:#?}", self.statements);
+        //println!("===================STACK==================\n{:#?}", self.stack);
+        //println!("==================LITERALS================\n{:#?}", self.literals);
     }
 
     fn lookup_var(&self, name: &str) -> Option<Var> {
@@ -361,5 +364,82 @@ impl Analyzer {
         }
 
         None
+    }
+
+    pub fn analyze_semantic(&mut self) {
+        let mut stack = vec![];
+
+        println!("Loading constants...\n-----");
+        for i in &self.constants {
+            println!("Adding `{}` to stack", i.name);
+            stack.push(&i.name);
+            Analyzer::pause();
+        }
+        println!("Stack:\n{:#?}\n-----", stack);
+        println!("Loading witnesses...\n-----");
+        for i in &self.witnesses {
+            println!("Adding `{}` to stack", i.name);
+            stack.push(&i.name);
+            Analyzer::pause();
+        }
+        println!("Stack:\n{:#?}\n-----", stack);
+        println!("Loading circuit...");
+        for i in &self.statements {
+            let mut argnames = vec![];
+            for arg in &i.rhs {
+                if let Arg::Var(arg) = arg {
+                    argnames.push(arg.name.clone());
+                } else if let Arg::Lit(lit) = arg {
+                    argnames.push(lit.name.clone());
+                } else {
+                    unreachable!()
+                }
+            }
+            println!("Executing: {:?}({:?})", i.opcode, argnames);
+
+            Analyzer::pause();
+
+            for arg in &i.rhs {
+                if let Arg::Var(arg) = arg {
+                    print!("Looking up `{}` on the stack... ", arg.name);
+                    if let Some(index) = stack.iter().position(|&r| r == &arg.name) {
+                        println!("Found at stack index {}", index);
+                    } else {
+                        self.error.abort(
+                            &format!("Could not find `{}` on the stack", arg.name),
+                            arg.line,
+                            arg.column,
+                        );
+                    }
+                } else if let Arg::Lit(lit) = arg {
+                    println!("Using literal `{}`", lit.name);
+                } else {
+                    println!("{:#?}", arg);
+                    unreachable!();
+                }
+
+                Analyzer::pause();
+            }
+            match i.typ {
+                StatementType::Assign => {
+                    println!("Pushing result as `{}` to stack", &i.lhs.as_ref().unwrap().name);
+                    stack.push(&i.lhs.as_ref().unwrap().name);
+                    println!("Stack:\n{:#?}\n-----", stack);
+                }
+                StatementType::Call => {
+                    println!("-----");
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    fn pause() {
+        let msg = b"[Press Enter to continue]\r";
+        let mut stdout = stdout();
+        let _ = stdout.write(msg).unwrap();
+        stdout.flush().unwrap();
+        let _ = stdin().read(&mut [0]).unwrap();
+        write!(stdout, "{}{}\r", termion::cursor::Up(1), termion::clear::CurrentLine).unwrap();
     }
 }
