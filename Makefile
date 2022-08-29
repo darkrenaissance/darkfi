@@ -10,7 +10,7 @@ CARGO = cargo
 #RUSTFLAGS = -C target-cpu=native
 
 # Binaries to be built
-BINS = zkas drk darkfid tau taud ircd dnetview darkotc
+BINS = drk darkfid tau taud ircd dnetview darkotc
 
 # Common dependencies which should force the binaries to be rebuilt
 BINDEPS = \
@@ -28,9 +28,13 @@ PROOFS = \
 
 PROOFS_BIN = $(PROOFS:=.bin)
 
-all: $(PROOFS_BIN) $(BINS)
+all: zkas $(PROOFS_BIN) $(BINS)
 
-$(PROOFS_BIN): zkas $(PROOFS)
+zkas:
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
+	cp -f target/release/$@ $@
+
+$(PROOFS_BIN): $(PROOFS)
 	./zkas $(basename $@) -o $@
 
 token_lists:
