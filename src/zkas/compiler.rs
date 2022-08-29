@@ -142,7 +142,7 @@ impl Compiler {
 
     fn lookup_literal(literals: &[Literal], name: &str) -> Option<usize> {
         for (idx, n) in literals.iter().enumerate() {
-            if &n.name == &name {
+            if n.name == name {
                 return Some(idx)
             }
         }

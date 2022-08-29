@@ -74,6 +74,7 @@ impl Analyzer {
             }
 
             // Edge-cases for some opcodes
+            #[allow(clippy::single_match)]
             match &statement.opcode {
                 Opcode::RangeCheck => {
                     if let Arg::Lit(arg0) = &statement.rhs[0] {

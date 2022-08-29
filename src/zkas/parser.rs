@@ -170,7 +170,7 @@ impl Parser {
                     constants_map.insert(name.token.clone(), (name.clone(), typ.clone()));
                 }
 
-                if let Some(_) = constant_inner.next() {
+                if constant_inner.next().is_some() {
                     self.error.abort("Internal error, leftovers in 'constant' iterator", 0, 0);
                 }
 
@@ -211,7 +211,7 @@ impl Parser {
                     witnesses_map.insert(name.token.clone(), (name.clone(), typ.clone()));
                 }
 
-                if let Some(_) = contract_inner.next() {
+                if contract_inner.next().is_some() {
                     self.error.abort("Internal error, leftovers in 'contract' iterator", 0, 0);
                 }
 
@@ -672,7 +672,7 @@ impl Parser {
                 let func_name = token.token.as_str();
 
                 // TODO: MAKE SURE IT'S A SYMBOL
-                if let Some(op) = Opcode::from_name(&func_name) {
+                if let Some(op) = Opcode::from_name(func_name) {
                     let rhs = self.parse_function_call(token, &mut iter);
                     stmt.opcode = op;
                     stmt.rhs = rhs;
@@ -777,7 +777,7 @@ impl Parser {
 
                     TokenType::Number => {
                         // Check if we can actually convert this into a number.
-                        match u64::from_str_radix(&arg.token, 10) {
+                        match arg.token.parse::<u64>() {
                             Ok(_) => {}
                             Err(e) => {
                                 self.error.abort(

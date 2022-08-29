@@ -97,6 +97,7 @@ pub struct ZkCircuit {
 impl ZkCircuit {
     pub fn new(witnesses: Vec<Witness>, circuit_code: ZkBinary) -> Self {
         let constants = circuit_code.constants.iter().map(|x| x.1.clone()).collect();
+        #[allow(clippy::map_clone)]
         let literals = circuit_code.literals.iter().map(|x| x.clone()).collect();
         Self { constants, witnesses, literals, opcodes: circuit_code.opcodes }
     }
@@ -341,7 +342,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // N.B. Only uint64 is supported right now.
         for literal in &self.literals {
             match literal.0 {
-                LitType::Uint64 => match u64::from_str_radix(&literal.1, 10) {
+                LitType::Uint64 => match literal.1.parse::<u64>() {
                     Ok(v) => litstack.push(v),
                     Err(e) => {
                         error!("Failed converting u64 literal: {}", e);

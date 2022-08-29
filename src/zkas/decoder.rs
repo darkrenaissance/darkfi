@@ -155,6 +155,7 @@ impl ZkBinary {
         Ok(witnesses)
     }
 
+    #[allow(clippy::type_complexity)]
     fn parse_circuit(bytes: &[u8]) -> Result<Vec<(Opcode, Vec<(StackType, usize)>)>> {
         let mut opcodes = vec![];
 
