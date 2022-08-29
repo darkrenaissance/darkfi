@@ -7,6 +7,9 @@
 ## uncommenting, or by using the command-line.
 
 # Daemon published url, common for all enabled networks
+#urls = ["tcp://127.0.0.1"]
+
+# Daemon published url, common for all enabled networks
 url = ["tcp://127.0.0.1"]
 
 ## Per-network settings

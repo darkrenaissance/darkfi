@@ -12,6 +12,10 @@ use darkfi::{cli_desc, Result};
 #[serde(default)]
 #[structopt(name = "lilith", about = cli_desc!())]
 pub struct Args {
+    #[structopt(long, default_value = "tcp://127.0.0.1:18927")]
+    /// JSON-RPC listen URL
+    pub rpc_listen: Url,
+
     #[structopt(short, long)]
     /// Configuration file to use
     pub config: Option<String>,
