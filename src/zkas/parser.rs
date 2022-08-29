@@ -1,13 +1,13 @@
-use std::str::Chars;
+use std::{iter::Peekable, str::Chars};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
 
 use super::{
-    ast::{Constant, Statement, Witness},
+    ast::{Arg, Constant, Literal, Statement, StatementType, Variable, Witness},
     error::ErrorEmitter,
     lexer::{Token, TokenType},
-    LitType, VarType,
+    LitType, Opcode, VarType,
 };
 
 /// zkas language builtin keywords.
@@ -532,25 +532,6 @@ impl Parser {
     }
 
     fn parse_ast_circuit(&self, statements: Vec<Vec<Token>>) -> Vec<Statement> {
-        let mut ret = vec![];
-
-        // In here, we want to support nested function calls, e.g.:
-        //
-        //      constrain_instance(ec_get_x(token_commit));
-        //
-        // The inner call's result would still get pushed on the stack,
-        // but it will not be accessible in any other scope.
-
-        // In certain opcodes, we also support literal types, and the
-        // opcodes can return a variable type after running the operation.
-        // e.g.
-        //            one = witness_base(1);
-        //           zero = witness_base(0);
-        //
-        // The literal type is used only in the function call's scope, but
-        // the result is then accessible on the stack to be used by further
-        // computation.
-
         // The statement layouts/syntax in the language are as follows:
         //
         // C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
@@ -570,6 +551,282 @@ impl Parser {
         //                        |                 |
         //                        V                 V
         //                     opcode          arg as opcode
+        //
+        // In the latter, we want to support nested function calls, e.g.:
+        //
+        //          constrain_instance(ec_get_x(token_commit));
+        //
+        // The inner call's result would still get pushed on the stack,
+        // but it will not be accessible in any other scope.
+        //
+        // In certain opcodes, we also support literal types, and the
+        // opcodes can return a variable type after running the operation.
+        // e.g.
+        //            one = witness_base(1);
+        //           zero = witness_base(0);
+        //
+        // The literal type is used only in the function call's scope, but
+        // the result is then accessible on the stack to be used by further
+        // computation.
+        //
+        // Regarding multiple return values from opcodes, this is perhaps
+        // not necessary for the current language scope, as this is a low
+        // level representation. Note that it could be relatively easy to
+        // modify the parsing logic to support that here. For now we'll
+        // defer it, and if at some point we decide that the language is
+        // too expressive and noisy, we'll consider having multiple return
+        // types. It also very much depends on the type of functions/opcodes
+        // that we want to support.
+
+        // Vec of statements to return from this entire parsing operation.
+        let mut ret = vec![];
+
+        // Here, our statements tokens have been parsed and delimited by
+        // semicolons (;) in the source file. This iterator contains each
+        // of those statements as an array of tokens we then consume and
+        // build the AST further.
+        for statement in statements {
+            if statement.is_empty() {
+                continue
+            }
+
+            let (mut left_paren, mut right_paren) = (0, 0);
+            for i in &statement {
+                match i.token.as_str() {
+                    "(" => left_paren += 1,
+                    ")" => right_paren += 1,
+                    _ => {}
+                }
+            }
+
+            if left_paren != right_paren || (left_paren == 0 || right_paren == 0) {
+                self.error.abort(
+                    "Incorrect number of left and right parenthesis for statement.",
+                    statement[0].line,
+                    statement[0].column,
+                );
+            }
+
+            // Peekable iterator so we can see tokens in advance
+            // without consuming the iterator.
+            let mut iter = statement.iter().peekable();
+
+            // Dummy statement that we'll hopefully fill now.
+            let mut stmt = Statement::default();
+
+            let mut parsing = false;
+            while let Some(token) = iter.next() {
+                if !parsing {
+                    // TODO: MAKE SURE IT'S A SYMBOL
+
+                    // This logic must be changed if we want to support
+                    // multiple return values.
+                    if let Some(next_token) = iter.peek() {
+                        if next_token.token_type == TokenType::Assign {
+                            stmt.line = token.line;
+                            stmt.typ = StatementType::Assign;
+                            stmt.rhs = vec![];
+                            stmt.lhs = Some(Variable {
+                                name: token.token.clone(),
+                                typ: VarType::Dummy,
+                                line: token.line,
+                                column: token.column,
+                            });
+
+                            // Skip over the `=` token.
+                            iter.next();
+                            parsing = true;
+                            continue
+                        }
+
+                        if next_token.token_type == TokenType::LeftParen {
+                            stmt.line = token.line;
+                            stmt.typ = StatementType::Call;
+                            stmt.rhs = vec![];
+                            stmt.lhs = None;
+                            parsing = true;
+                        }
+
+                        if !parsing {
+                            self.error.abort(
+                                &format!("Illegal token `{}`.", next_token.token),
+                                next_token.line,
+                                next_token.column,
+                            );
+                        }
+                    }
+                }
+
+                // If parsing == true, we now know if we're making a variable
+                // assignment or a function call without a return value.
+                // Let's dig deeper to see what the statement's call is, and
+                // what it contains as arguments. With this we'll fill `rhs`.
+                // The arguments could be literal types, other variables, or
+                // even nested function calls.
+                // For now, we don't care if the params are valid, as this is
+                // the job of the semantic analyzer which comes after the
+                // parsing module.
+
+                // The assumption here is that the current token is a function
+                // call, so we check if it's legit and start digging.
+                let func_name = token.token.as_str();
+
+                // TODO: MAKE SURE IT'S A SYMBOL
+                if let Some(op) = Opcode::from_name(&func_name) {
+                    let rhs = self.parse_function_call(token, &mut iter);
+                    stmt.opcode = op;
+                    stmt.rhs = rhs;
+                } else {
+                    self.error.abort(
+                        &format!("Unimplemented opcode `{}`.", func_name),
+                        token.line,
+                        token.column,
+                    );
+                }
+
+                ret.push(stmt);
+                stmt = Statement::default();
+            }
+        }
+
+        ret
+    }
+
+    fn parse_function_call(
+        &self,
+        token: &Token,
+        iter: &mut Peekable<std::slice::Iter<'_, Token>>,
+    ) -> Vec<Arg> {
+        if let Some(next_token) = iter.peek() {
+            if next_token.token_type != TokenType::LeftParen {
+                self.error.abort(
+                    "Invalid function call opening. Must start with a '('.",
+                    next_token.line,
+                    next_token.column,
+                );
+            }
+            // Skip the opening parenthesis
+            iter.next();
+        } else {
+            self.error.abort("Premature ending of statement.", token.line, token.column);
+        }
+
+        let mut ret = vec![];
+
+        // The next element in the iter now hopefully contains an opcode
+        // argument. If it's another opcode, we'll recurse into this
+        // function's logic.
+        // Otherwise, we look for variable and literal types.
+        while let Some(arg) = iter.next() {
+            // ============================
+            // Parse a nested function call
+            // ============================
+            if let Some(op_inner) = Opcode::from_name(&arg.token) {
+                if let Some(paren) = iter.peek() {
+                    if paren.token_type != TokenType::LeftParen {
+                        self.error.abort(
+                            "Invalid function call opening. Must start with a '('.",
+                            paren.line,
+                            paren.column,
+                        );
+                    }
+
+                    // Recurse this function to get the params of the nested one.
+                    let args = self.parse_function_call(arg, iter);
+
+                    // Then we assign a "fake" variable that serves as a stack
+                    // reference.
+                    let var = Variable {
+                        name: format!("_op_inner_{}_{}", arg.line, arg.column),
+                        typ: VarType::Dummy,
+                        line: arg.line,
+                        column: arg.column,
+                    };
+
+                    let arg = Arg::Func(Statement {
+                        typ: StatementType::Assign,
+                        opcode: op_inner,
+                        lhs: Some(var),
+                        rhs: args,
+                        line: arg.line,
+                    });
+
+                    ret.push(arg);
+                    continue
+                }
+
+                self.error.abort(
+                    "Missing tokens in statement, there's a syntax error here.",
+                    arg.line,
+                    arg.column,
+                );
+            }
+
+            // ==========================================
+            // Parse normal argument, not a function call
+            // ==========================================
+            if let Some(sep) = iter.next() {
+                // See if we have a variable or a literal type.
+                match arg.token_type {
+                    TokenType::Symbol => ret.push(Arg::Var(Variable {
+                        name: arg.token.clone(),
+                        typ: VarType::Dummy,
+                        line: arg.line,
+                        column: arg.column,
+                    })),
+
+                    TokenType::Number => {
+                        // Check if we can actually convert this into a number.
+                        match u64::from_str_radix(&arg.token, 10) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                self.error.abort(
+                                    &format!("Failed to convert literal into u64: {}", e),
+                                    arg.line,
+                                    arg.column,
+                                );
+                            }
+                        };
+
+                        ret.push(Arg::Lit(Literal {
+                            name: arg.token.clone(),
+                            typ: LitType::Uint64,
+                            line: arg.line,
+                            column: arg.column,
+                        }))
+                    }
+
+                    TokenType::RightParen => {
+                        if let Some(comma) = iter.peek() {
+                            if comma.token_type == TokenType::Comma {
+                                iter.next();
+                            }
+                        }
+                        break
+                    }
+
+                    x => unimplemented!("{:#?}", x),
+                };
+
+                if sep.token_type == TokenType::RightParen {
+                    if let Some(comma) = iter.peek() {
+                        if comma.token_type == TokenType::Comma {
+                            iter.next();
+                        }
+                    }
+                    // Reached end of args
+                    break
+                }
+
+                if sep.token_type != TokenType::Comma {
+                    self.error.abort(
+                        "Argument separator is not a comma (`,`)",
+                        sep.line,
+                        sep.column,
+                    );
+                }
+            }
+        }
 
         ret
     }
