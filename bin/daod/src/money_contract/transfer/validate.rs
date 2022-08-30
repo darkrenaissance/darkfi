@@ -60,6 +60,9 @@ impl UpdateBase for Update {
             state.wallet_cache.try_decrypt_note(coin, enc_note, &mut state.tree);
         }
     }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 pub fn state_transition(

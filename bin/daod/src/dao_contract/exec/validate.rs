@@ -183,10 +183,13 @@ pub struct Update {
 }
 
 impl UpdateBase for Update {
-    fn apply(mut self: Box<Self>, states: &mut StateRegistry) {
+    fn apply(self: Box<Self>, states: &mut StateRegistry) {
         let mut state = states
             .lookup_mut::<dao_contract::State>(&"DAO".to_string())
             .expect("Return type is not of type State");
         state.proposal_votes.remove(&HashableBase(self.proposal)).unwrap();
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

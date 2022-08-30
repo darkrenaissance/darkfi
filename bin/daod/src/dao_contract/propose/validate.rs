@@ -16,7 +16,7 @@ use std::any::{Any, TypeId};
 
 use crate::{
     dao_contract::State as DaoState,
-    demo::{CallDataBase, StateRegistry, Transaction},
+    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
     money_contract::state::State as MoneyState,
     note::EncryptedNote2,
 };
@@ -116,7 +116,7 @@ pub fn state_transition(
     states: &StateRegistry,
     func_call_index: usize,
     parent_tx: &Transaction,
-) -> Result<Update> {
+) -> Result<Box<dyn UpdateBase>> {
     let func_call = &parent_tx.func_calls[func_call_index];
     let call_data = func_call.call_data.as_any();
 
@@ -159,14 +159,20 @@ pub fn state_transition(
     // TODO: look at gov tokens avoid using already spent ones
     // Need to spend original coin and generate 2 nullifiers?
 
-    Ok(Update { proposal_bulla: call_data.header.proposal_bulla })
+    Ok(Box::new(Update { proposal_bulla: call_data.header.proposal_bulla }))
 }
 
+#[derive(Clone)]
 pub struct Update {
     pub proposal_bulla: pallas::Base,
 }
 
-pub fn apply(states: &mut StateRegistry, update: Update) {
-    let state = states.lookup_mut::<DaoState>(&"DAO".to_string()).unwrap();
-    state.add_proposal_bulla(update.proposal_bulla);
+impl UpdateBase for Update {
+    fn apply(self: Box<Self>, states: &mut StateRegistry) {
+        let state = states.lookup_mut::<DaoState>(&"DAO".to_string()).unwrap();
+        state.add_proposal_bulla(self.proposal_bulla);
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }

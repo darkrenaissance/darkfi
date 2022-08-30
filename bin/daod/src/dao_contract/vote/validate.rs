@@ -16,7 +16,7 @@ use std::any::{Any, TypeId};
 
 use crate::{
     dao_contract::State as DaoState,
-    demo::{CallDataBase, StateRegistry, Transaction},
+    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
     money_contract::state::State as MoneyState,
     note::EncryptedNote2,
 };
@@ -125,7 +125,7 @@ pub fn state_transition(
     states: &StateRegistry,
     func_call_index: usize,
     parent_tx: &Transaction,
-) -> Result<Update> {
+) -> Result<Box<dyn UpdateBase>> {
     let func_call = &parent_tx.func_calls[func_call_index];
     let call_data = func_call.call_data.as_any();
 
@@ -183,12 +183,12 @@ pub fn state_transition(
         }
     }
 
-    Ok(Update {
+    Ok(Box::new(Update {
         proposal_bulla: call_data.header.proposal_bulla,
         vote_nulls,
         vote_commit: call_data.header.vote_commit,
         value_commit: total_value_commit,
-    })
+    }))
 }
 
 #[derive(Clone)]
@@ -199,10 +199,15 @@ pub struct Update {
     pub value_commit: pallas::Point,
 }
 
-pub fn apply(states: &mut StateRegistry, mut update: Update) {
-    let state = states.lookup_mut::<DaoState>(&"DAO".to_string()).unwrap();
-    let votes_info = state.lookup_proposal_votes_mut(update.proposal_bulla).unwrap();
-    votes_info.vote_commits += update.vote_commit;
-    votes_info.value_commits += update.value_commit;
-    votes_info.vote_nulls.append(&mut update.vote_nulls);
+impl UpdateBase for Update {
+    fn apply(mut self: Box<Self>, states: &mut StateRegistry) {
+        let state = states.lookup_mut::<DaoState>(&"DAO".to_string()).unwrap();
+        let votes_info = state.lookup_proposal_votes_mut(self.proposal_bulla).unwrap();
+        votes_info.vote_commits += self.vote_commit;
+        votes_info.value_commits += self.value_commit;
+        votes_info.vote_nulls.append(&mut self.vote_nulls);
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }

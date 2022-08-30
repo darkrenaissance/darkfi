@@ -179,6 +179,9 @@ impl StateRegistry {
 
 pub trait UpdateBase {
     fn apply(self: Box<Self>, states: &mut StateRegistry);
+
+    // For upcasting to Update
+    fn as_any(&self) -> &dyn Any;
 }
 
 ///////////////////////////////////////////////////
@@ -209,15 +212,21 @@ pub async fn example() -> Result<()> {
 
     //// Validator
 
+    let mut updates = vec![];
+    // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         if func_call.func_id == "Example::foo()" {
             debug!("example_contract::foo::state_transition()");
 
-            // TODO: separate this 2 things
             let update = example_contract::foo::validate::state_transition(&states, idx, &tx)
                 .expect("example_contract::foo::validate::state_transition() failed!");
-            example_contract::foo::validate::apply(&mut states, update);
+            updates.push(update);
         }
+    }
+
+    // Atomically apply all changes
+    for update in updates {
+        update.apply(&mut states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -335,6 +344,8 @@ pub async fn demo() -> Result<()> {
 
     //// Validator
 
+    let mut updates = vec![];
+    // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
         // functions based off the func_id
@@ -343,8 +354,13 @@ pub async fn demo() -> Result<()> {
 
             let update = dao_contract::mint::validate::state_transition(&states, idx, &tx)
                 .expect("dao_contract::mint::validate::state_transition() failed!");
-            dao_contract::mint::validate::apply(&mut states, update);
+            updates.push(update);
         }
+    }
+
+    // Atomically apply all changes
+    for update in updates {
+        update.apply(&mut states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -422,6 +438,8 @@ pub async fn demo() -> Result<()> {
 
     //// Validator
 
+    let mut updates = vec![];
+    // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
         // functions based off the func_id
@@ -430,8 +448,13 @@ pub async fn demo() -> Result<()> {
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
                 .expect("money_contract::transfer::validate::state_transition() failed!");
-            update.apply(&mut states);
+            updates.push(update);
         }
+    }
+
+    // Atomically apply all changes
+    for update in updates {
+        update.apply(&mut states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -542,6 +565,8 @@ pub async fn demo() -> Result<()> {
 
     //// Validator
 
+    let mut updates = vec![];
+    // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
         // functions based off the func_id
@@ -550,8 +575,13 @@ pub async fn demo() -> Result<()> {
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
                 .expect("money_contract::transfer::validate::state_transition() failed!");
-            update.apply(&mut states);
+            updates.push(update);
         }
+    }
+
+    // Atomically apply all changes
+    for update in updates {
+        update.apply(&mut states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -677,14 +707,21 @@ pub async fn demo() -> Result<()> {
 
     //// Validator
 
+    let mut updates = vec![];
+    // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         if func_call.func_id == "DAO::propose()" {
             debug!(target: "demo", "dao_contract::propose::state_transition()");
 
             let update = dao_contract::propose::validate::state_transition(&states, idx, &tx)
                 .expect("dao_contract::propose::validate::state_transition() failed!");
-            dao_contract::propose::validate::apply(&mut states, update);
+            updates.push(update);
         }
+    }
+
+    // Atomically apply all changes
+    for update in updates {
+        update.apply(&mut states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -742,8 +779,8 @@ pub async fn demo() -> Result<()> {
 
     debug!(target: "demo", "Stage 5. Start voting");
 
-    // We save updates here for testing.
-    let mut updates = Vec::new();
+    // We were previously saving updates here for testing
+    // let mut updates = vec![];
 
     // User 1: YES
 
@@ -787,15 +824,21 @@ pub async fn demo() -> Result<()> {
 
     //// Validator
 
+    let mut updates = vec![];
+    // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         if func_call.func_id == "DAO::vote()" {
             debug!(target: "demo", "dao_contract::vote::state_transition()");
 
             let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
                 .expect("dao_contract::vote::validate::state_transition() failed!");
-            dao_contract::vote::validate::apply(&mut states, update.clone());
             updates.push(update);
         }
+    }
+
+    // Atomically apply all changes
+    for update in updates {
+        update.apply(&mut states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -863,15 +906,21 @@ pub async fn demo() -> Result<()> {
 
     //// Validator
 
+    let mut updates = vec![];
+    // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         if func_call.func_id == "DAO::vote()" {
             debug!(target: "demo", "dao_contract::vote::state_transition()");
 
             let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
                 .expect("dao_contract::vote::validate::state_transition() failed!");
-            dao_contract::vote::validate::apply(&mut states, update.clone());
             updates.push(update);
         }
+    }
+
+    // Atomically apply all changes
+    for update in updates {
+        update.apply(&mut states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -939,15 +988,21 @@ pub async fn demo() -> Result<()> {
 
     //// Validator
 
+    let mut updates = vec![];
+    // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         if func_call.func_id == "DAO::vote()" {
             debug!(target: "demo", "dao_contract::vote::state_transition()");
 
             let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
                 .expect("dao_contract::vote::validate::state_transition() failed!");
-            dao_contract::vote::validate::apply(&mut states, update.clone());
             updates.push(update);
         }
+    }
+
+    // Atomically apply all changes
+    for update in updates {
+        update.apply(&mut states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -989,13 +1044,16 @@ pub async fn demo() -> Result<()> {
     let mut total_value_commit = pallas::Point::identity();
     let mut total_vote_commit = pallas::Point::identity();
 
-    assert!(updates.len() == 3);
+    //assert!(updates.len() == 3);
 
-    for (i, (note, update)) in
-        [vote_note_1, vote_note_2, vote_note_3].iter().zip(updates).enumerate()
+    for (i, note /* update*/) in [vote_note_1, vote_note_2, vote_note_3]
+        .iter() /*.zip(updates)*/
+        .enumerate()
     {
         let value_commit = pedersen_commitment_u64(note.value, note.value_blind);
-        assert!(update.value_commit == value_commit);
+        //let update = update.as_any().downcast_ref::<dao_contract::vote::validate::Update>();
+        //let update = update.unwrap();
+        //assert!(update.value_commit == value_commit);
 
         total_value_commit += value_commit;
         total_value_blinds += note.value_blind;
@@ -1005,7 +1063,7 @@ pub async fn demo() -> Result<()> {
             note.vote.vote_option_blind,
         );
 
-        assert!(update.vote_commit == vote_commit);
+        //assert!(update.vote_commit == vote_commit);
 
         total_vote_commit += vote_commit;
         total_vote_blinds += note.vote.vote_option_blind;

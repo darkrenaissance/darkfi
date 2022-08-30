@@ -9,7 +9,7 @@ use darkfi::{
 use std::any::{Any, TypeId};
 
 use crate::{
-    demo::{CallDataBase, StateRegistry, Transaction},
+    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
     example_contract::state::State,
 };
 
@@ -53,7 +53,7 @@ pub fn state_transition(
     states: &StateRegistry,
     func_call_index: usize,
     parent_tx: &Transaction,
-) -> Result<Update> {
+) -> Result<Box<dyn UpdateBase>> {
     let func_call = &parent_tx.func_calls[func_call_index];
     let call_data = func_call.call_data.as_any();
 
@@ -69,7 +69,7 @@ pub fn state_transition(
         return Err(Error::ValueExists)
     }
 
-    Ok(Update { public_value: call_data.header.public_c })
+    Ok(Box::new(Update { public_value: call_data.header.public_c }))
 }
 
 #[derive(Clone)]
@@ -77,7 +77,12 @@ pub struct Update {
     public_value: pallas::Base,
 }
 
-pub fn apply(states: &mut StateRegistry, update: Update) {
-    let example_state = states.lookup_mut::<State>(&"Example".to_string()).unwrap();
-    example_state.add_public_value(update.public_value);
+impl UpdateBase for Update {
+    fn apply(self: Box<Self>, states: &mut StateRegistry) {
+        let example_state = states.lookup_mut::<State>(&"Example".to_string()).unwrap();
+        example_state.add_public_value(self.public_value);
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }

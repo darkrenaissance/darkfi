@@ -4,14 +4,14 @@ use darkfi::crypto::types::DrkCircuitField;
 
 use crate::{
     dao_contract::{DaoBulla, State},
-    demo::{CallDataBase, StateRegistry, Transaction},
+    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 
 pub fn state_transition(
     _states: &StateRegistry,
     func_call_index: usize,
     parent_tx: &Transaction,
-) -> Result<Update> {
+) -> Result<Box<dyn UpdateBase>> {
     let func_call = &parent_tx.func_calls[func_call_index];
     let call_data = func_call.call_data.as_any();
 
@@ -21,18 +21,24 @@ pub fn state_transition(
     // This will be inside wasm so unwrap is fine.
     let call_data = call_data.unwrap();
 
-    Ok(Update { dao_bulla: call_data.dao_bulla.clone() })
+    Ok(Box::new(Update { dao_bulla: call_data.dao_bulla.clone() }))
 }
 
+#[derive(Clone)]
 pub struct Update {
     pub dao_bulla: DaoBulla,
 }
 
-pub fn apply(states: &mut StateRegistry, update: Update) {
-    // Lookup dao_contract state from registry
-    let state = states.lookup_mut::<State>(&"DAO".to_string()).unwrap();
-    // Add dao_bulla to state.dao_bullas
-    state.add_dao_bulla(update.dao_bulla);
+impl UpdateBase for Update {
+    fn apply(self: Box<Self>, states: &mut StateRegistry) {
+        // Lookup dao_contract state from registry
+        let state = states.lookup_mut::<State>(&"DAO".to_string()).unwrap();
+        // Add dao_bulla to state.dao_bullas
+        state.add_dao_bulla(self.dao_bulla);
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 #[derive(Debug, Clone, thiserror::Error)]
