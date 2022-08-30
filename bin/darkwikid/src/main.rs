@@ -1,6 +1,7 @@
 use async_std::sync::{Arc, Mutex};
 use std::{
-    fs::{create_dir_all, read_dir, remove_file},
+    fs::{create_dir_all, read_dir, remove_dir_all, remove_file},
+    io::stdin,
     path::{Path, PathBuf},
 };
 
@@ -69,6 +70,10 @@ pub struct Args {
     /// Generate A New Secret Key
     #[structopt(long)]
     pub keygen: bool,
+    ///  Clean all the local data in docs path
+    /// (BE CAREFULL) Check the docs path in the config file before running this
+    #[structopt(long)]
+    pub refresh: bool,
     /// JSON-RPC Listen URL
     #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:24330")]
     pub rpc_listen: Url,
@@ -484,6 +489,24 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let docs_path = expand_path(&settings.docs)?;
     let datastore_path = expand_path(docs_path.join(".log").to_str().unwrap())?;
 
+    if settings.refresh {
+        println!("Removing local docs in: {:?} (yes/no)? ", docs_path);
+        let mut confirm = String::new();
+        stdin().read_line(&mut confirm).ok().expect("Failed to read line");
+
+        let confirm = confirm.to_lowercase();
+        let confirm = confirm.trim();
+
+        if confirm == "yes" || confirm == "y" {
+            remove_dir_all(docs_path).unwrap_or(());
+            println!("Local docs get removed");
+        } else {
+            error!("Unexpected Value: {}", confirm);
+        }
+
+        return Ok(())
+    }
+
     create_dir_all(docs_path.clone())?;
     create_dir_all(datastore_path.clone())?;
     create_dir_all(datastore_path.join("local"))?;
@@ -552,10 +575,11 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     executor.spawn(p2p.clone().run(executor.clone())).detach();
 
+    p2p.clone().wait_for_outbound().await?;
+
     //
     // Darkwiki start
     //
-
     let raft_sx = raft.sender();
     let raft_rv = raft.receiver();
     executor

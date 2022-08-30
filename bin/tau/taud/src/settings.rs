@@ -20,7 +20,7 @@ pub struct Args {
     #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:23330")]
     pub rpc_listen: Url,
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.config/darkfi/tau")]
+    #[structopt(long, default_value = "~/.tau")]
     pub datastore: String,
     #[structopt(flatten)]
     pub net: SettingsOpt,
@@ -30,6 +30,10 @@ pub struct Args {
     /// Generate a new secret key
     #[structopt(long)]
     pub key_gen: bool,
+    ///  Clean all the local data in datastore path
+    /// (BE CAREFULL) Check the datastore path in the config file before running this
+    #[structopt(long)]
+    pub refresh: bool,
     /// Current display name    
     #[structopt(long)]
     pub nickname: Option<String>,

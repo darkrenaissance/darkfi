@@ -2,7 +2,7 @@
 #rpc_listen="tcp://127.0.0.1:23330"
 
 ## Sets Datastore Path
-#datastore="~/.config/darkfi/tau"
+#datastore="~/.tau"
 
 ## Current display name    
 #nickname="NICKNAME"
@@ -32,10 +32,7 @@ seeds=["tls://lilith0.dark.fi:23331", "tls://lilith1.dark.fi:23331"]
 #channel_heartbeat_seconds=10
 
 ## Per-workspace settings
-[workspace."darkfi"]
+#[workspace."darkfi"]
 ## Create with `taud --key-gen`
-secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+#secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 
-[workspace."general"]
-## Create with `taud --key-gen`
-secret = "6ZkvojUcSRML7wSGc3AMmM5meyyEXLoykT23cyUUB6GM"

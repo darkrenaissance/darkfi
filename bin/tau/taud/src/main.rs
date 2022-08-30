@@ -1,5 +1,9 @@
 use async_std::sync::{Arc, Mutex};
-use std::{env, fs::create_dir_all};
+use std::{
+    env,
+    fs::{create_dir_all, remove_dir_all},
+    io::stdin,
+};
 
 use async_executor::Executor;
 use crypto_box::{
@@ -103,7 +107,7 @@ async fn start_sync_loop(
                     if let Some(salsa_box) = &ws_info.encryption {
                         let task = decrypt_task(&recv, salsa_box);
                         if let Err(e) = task {
-                            warn!("unable to decrypt the task: {}", e);
+                            info!("unable to decrypt the task: {}", e);
                             continue
                         }
 
@@ -142,19 +146,40 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         return Ok(())
     }
 
+    if settings.refresh {
+        println!("Removing local data in: {:?} (yes/no)? ", datastore_path);
+        let mut confirm = String::new();
+        stdin().read_line(&mut confirm).ok().expect("Failed to read line");
+
+        let confirm = confirm.to_lowercase();
+        let confirm = confirm.trim();
+
+        if confirm == "yes" || confirm == "y" {
+            remove_dir_all(datastore_path).unwrap_or(());
+            println!("Local data get removed");
+        } else {
+            error!("Unexpected Value: {}", confirm);
+        }
+
+        return Ok(())
+    }
+
+    // mkdir datastore_path if not exists
+    create_dir_all(datastore_path.clone())?;
+    create_dir_all(datastore_path.join("month"))?;
+    create_dir_all(datastore_path.join("task"))?;
+
     // Pick up workspace settings from the TOML configuration
     let cfg_path = get_config_path(settings.config, CONFIG_FILE)?;
     let configured_ws = parse_workspaces(&cfg_path)?;
 
-    // mkdir datastore_path if not exists
-    create_dir_all(datastore_path.join("month"))?;
-    create_dir_all(datastore_path.join("task"))?;
-
     // start at the first configured workspace
-    let key = configured_ws.keys().next().ok_or(Error::ConfigInvalid)?;
-    let workspace = Arc::new(Mutex::new(key.to_owned()));
-
-    let (broadcast_snd, broadcast_rcv) = async_channel::unbounded::<TaskInfo>();
+    let workspace = if let Some(key) = configured_ws.keys().next() {
+        Arc::new(Mutex::new(key.to_owned()))
+    } else {
+        error!("Please provide at least one workspace in the config file: {:?}", cfg_path);
+        return Ok(())
+    };
 
     //
     // Raft
@@ -166,20 +191,11 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let raft_settings = RaftSettings { datastore_path: datastore_raft, ..RaftSettings::default() };
 
     let mut raft = Raft::<EncryptedTask>::new(raft_settings, seen_net_msgs.clone())?;
+    let raft_id = raft.id();
 
     let commits_received: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
 
-    executor
-        .spawn(start_sync_loop(
-            commits_received.clone(),
-            broadcast_rcv,
-            raft.sender(),
-            raft.receiver(),
-            datastore_path.clone(),
-            configured_ws.clone(),
-            rng,
-        ))
-        .detach();
+    let (broadcast_snd, broadcast_rcv) = async_channel::unbounded::<TaskInfo>();
 
     //
     // P2p setup
@@ -188,24 +204,24 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let p2p = net::P2p::new(net_settings.into()).await;
     let p2p = p2p.clone();
-
     let registry = p2p.protocol_registry();
 
-    let raft_node_id = raft.id();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
-            let raft_node_id = raft_node_id.clone();
+            let raft_id = raft_id.clone();
             let sender = p2p_send_channel.clone();
             let seen_net_msgs_cloned = seen_net_msgs.clone();
             async move {
-                ProtocolRaft::init(raft_node_id, channel, sender, p2p, seen_net_msgs_cloned).await
+                ProtocolRaft::init(raft_id, channel, sender, p2p, seen_net_msgs_cloned).await
             }
         })
-        .await;
+    .await;
 
     p2p.clone().start(executor.clone()).await?;
 
     executor.spawn(p2p.clone().run(executor.clone())).detach();
+
+    p2p.clone().wait_for_outbound().await?;
 
     //
     // RPC interface
@@ -215,7 +231,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         broadcast_snd,
         nickname.unwrap(),
         workspace,
-        configured_ws,
+        configured_ws.clone(),
         p2p.clone(),
     ));
     executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface)).detach();
@@ -232,6 +248,18 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         }
     })
     .unwrap();
+
+    executor
+        .spawn(start_sync_loop(
+            commits_received.clone(),
+            broadcast_rcv,
+            raft.sender(),
+            raft.receiver(),
+            datastore_path,
+            configured_ws,
+            rng,
+        ))
+        .detach();
 
     raft.run(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
 
