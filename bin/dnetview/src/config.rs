@@ -2,13 +2,20 @@ use serde::{Deserialize, Serialize};
 
 pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../dnetview_config.toml");
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct DnvConfig {
-    pub nodes: Vec<IrcNode>,
+    pub nodes: Vec<Node>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct IrcNode {
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Node {
     pub name: String,
     pub rpc_url: String,
+    pub node_type: NodeType,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum NodeType {
+    LILITH,
+    NORMAL,
 }

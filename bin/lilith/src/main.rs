@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use futures_lite::future;
 use log::{error, info};
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use structopt_toml::StructOptToml;
 use url::Url;
 
@@ -42,10 +41,26 @@ impl Spawn {
     async fn addresses(&self) -> Vec<String> {
         self.p2p.hosts().load_all().await.iter().map(|addr| addr.to_string()).collect()
     }
+
+    pub async fn info(&self) -> serde_json::Value {
+        // Building addr_vec string
+        let mut addr_vec = vec![];
+        for addr in &self.p2p.settings().inbound {
+            addr_vec.push(addr.as_ref().to_string());
+        }
+
+        json!({
+            "name": self.name.clone(),
+            "urls": addr_vec,
+            "hosts": self.addresses().await,
+        })
+    }
 }
 
 /// Struct representing the daemon.
 pub struct Lilith {
+    /// Configured urls
+    urls: Vec<Url>,
     /// Spawned networks
     spawns: Vec<Spawn>,
 }
@@ -56,11 +71,24 @@ impl Lilith {
     // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "{spawns}", "id": 42}
     async fn spawns(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut spawns: HashMap<String, Vec<String>> = HashMap::default();
-        for spawn in &self.spawns {
-            spawns.insert(spawn.name.clone(), spawn.addresses().await);
+        // Building urls string
+        let mut urls_vec = vec![];
+        for url in &self.urls {
+            urls_vec.push(url.as_ref().to_string());
         }
-        JsonResponse::new(json!(spawns), id).into()
+
+        // Gathering spawns info
+        let mut spawns = vec![];
+        for spawn in &self.spawns {
+            spawns.push(spawn.info().await);
+        }
+
+        // Generating json
+        let json = json!({
+            "urls": urls_vec,
+            "spawns": spawns,
+        });
+        JsonResponse::new(json, id).into()
     }
 
     // RPCAPI:
@@ -171,7 +199,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     }
 
-    let lilith = Lilith { spawns };
+    let lilith = Lilith { urls, spawns };
     let lilith = Arc::new(lilith);
 
     // JSON-RPC server

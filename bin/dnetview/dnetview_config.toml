@@ -6,12 +6,15 @@
 [[nodes]]
 name = "Node 1"
 rpc_url = "tcp://127.0.0.1:8000"
+node_type = "NORMAL"
 
 [[nodes]]
 name = "Node 2"
 rpc_url = "tcp://127.0.0.1:7777"
+node_type = "NORMAL"
 
 [[nodes]]
 name = "Node 3"
 rpc_url = "tcp://127.0.0.1:1234"
+node_type = "NORMAL"
 

@@ -70,28 +70,37 @@ impl<'a> View {
 
     fn make_ordered_list(&mut self) {
         for obj in self.selectables.values() {
-            if let SelectableObject::Node(node) = obj {
-                if node.is_offline {
+            match obj {
+                SelectableObject::Node(node) => {
                     if !self.ordered_list.iter().any(|i| i == &node.id) {
                         self.ordered_list.push(node.id.clone());
                     }
-                } else {
-                    if !self.ordered_list.iter().any(|i| i == &node.id) {
-                        self.ordered_list.push(node.id.clone());
-                    }
-                    for session in &node.children {
-                        if !session.is_empty {
-                            if !self.ordered_list.iter().any(|i| i == &session.id) {
-                                self.ordered_list.push(session.id.clone());
-                            }
-                            for connection in &session.children {
-                                if !self.ordered_list.iter().any(|i| i == &connection.id) {
-                                    self.ordered_list.push(connection.id.clone());
+                    if !node.is_offline {
+                        for session in &node.children {
+                            if !session.is_empty {
+                                if !self.ordered_list.iter().any(|i| i == &session.id) {
+                                    self.ordered_list.push(session.id.clone());
+                                }
+                                for connection in &session.children {
+                                    if !self.ordered_list.iter().any(|i| i == &connection.id) {
+                                        self.ordered_list.push(connection.id.clone());
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                SelectableObject::Lilith(lilith) => {
+                    if !self.ordered_list.iter().any(|i| i == &lilith.id) {
+                        self.ordered_list.push(lilith.id.clone());
+                    }
+                    for network in &lilith.networks {
+                        if !self.ordered_list.iter().any(|i| i == &network.id) {
+                            self.ordered_list.push(network.id.clone());
+                        }
+                    }
+                }
+                _ => (),
             }
         }
         //debug!(target: "dnetview", "render_ids()::ordered_list: {:?}", self.ordered_list);
@@ -165,59 +174,74 @@ impl<'a> View {
         let mut nodes = Vec::new();
 
         for obj in self.selectables.values() {
-            if let SelectableObject::Node(node) = obj {
-                if node.is_offline {
-                    let style = Style::default().fg(Color::Blue).add_modifier(Modifier::ITALIC);
-                    let mut name = String::new();
-                    name.push_str(&node.name);
-                    name.push_str("(Offline)");
-                    let name_span = Span::styled(name, style);
-                    let lines = vec![Spans::from(name_span)];
-                    let names = ListItem::new(lines);
-                    nodes.push(names);
-                } else {
-                    let name_span = Span::raw(&node.name);
-                    let lines = vec![Spans::from(name_span)];
-                    let names = ListItem::new(lines);
-                    nodes.push(names);
-                    for session in &node.children {
-                        if !session.is_empty {
-                            let name = Span::styled(format!("    {}", session.name), style);
-                            let lines = vec![Spans::from(name)];
-                            let names = ListItem::new(lines);
-                            nodes.push(names);
-                            for connection in &session.children {
-                                let mut info = Vec::new();
-                                match connection.addr.as_str() {
-                                    "Null" => {
-                                        let style = Style::default()
-                                            .fg(Color::Blue)
-                                            .add_modifier(Modifier::ITALIC);
-                                        let name = Span::styled(
-                                            format!("        {} ", connection.addr),
-                                            style,
-                                        );
-                                        info.push(name);
-                                    }
-                                    addr => {
-                                        let name = Span::styled(
-                                            format!(
-                                                "        {} ({})",
-                                                addr, connection.remote_node_id
-                                            ),
-                                            style,
-                                        );
-                                        info.push(name);
-                                    }
-                                }
-
-                                let lines = vec![Spans::from(info)];
+            match obj {
+                SelectableObject::Node(node) => {
+                    if node.is_offline {
+                        let style = Style::default().fg(Color::Blue).add_modifier(Modifier::ITALIC);
+                        let mut name = String::new();
+                        name.push_str(&node.name);
+                        name.push_str("(Offline)");
+                        let name_span = Span::styled(name, style);
+                        let lines = vec![Spans::from(name_span)];
+                        let names = ListItem::new(lines);
+                        nodes.push(names);
+                    } else {
+                        let name_span = Span::raw(&node.name);
+                        let lines = vec![Spans::from(name_span)];
+                        let names = ListItem::new(lines);
+                        nodes.push(names);
+                        for session in &node.children {
+                            if !session.is_empty {
+                                let name = Span::styled(format!("    {}", session.name), style);
+                                let lines = vec![Spans::from(name)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
+                                for connection in &session.children {
+                                    let mut info = Vec::new();
+                                    match connection.addr.as_str() {
+                                        "Null" => {
+                                            let style = Style::default()
+                                                .fg(Color::Blue)
+                                                .add_modifier(Modifier::ITALIC);
+                                            let name = Span::styled(
+                                                format!("        {} ", connection.addr),
+                                                style,
+                                            );
+                                            info.push(name);
+                                        }
+                                        addr => {
+                                            let name = Span::styled(
+                                                format!(
+                                                    "        {} ({})",
+                                                    addr, connection.remote_node_id
+                                                ),
+                                                style,
+                                            );
+                                            info.push(name);
+                                        }
+                                    }
+
+                                    let lines = vec![Spans::from(info)];
+                                    let names = ListItem::new(lines);
+                                    nodes.push(names);
+                                }
                             }
                         }
                     }
                 }
+                SelectableObject::Lilith(lilith) => {
+                    let name_span = Span::raw(&lilith.name);
+                    let lines = vec![Spans::from(name_span)];
+                    let names = ListItem::new(lines);
+                    nodes.push(names);
+                    for network in &lilith.networks {
+                        let name = Span::styled(format!("    {}", network.name), style);
+                        let lines = vec![Spans::from(name)];
+                        let names = ListItem::new(lines);
+                        nodes.push(names);
+                    }
+                }
+                _ => (),
             }
         }
         let nodes =
@@ -279,6 +303,7 @@ impl<'a> View {
             match info {
                 Some(SelectableObject::Node(node)) => {
                     //debug!(target: "dnetview", "render_info()::SelectableObject::Node");
+                    lines.push(Spans::from(Span::styled("Type: Normal", style)));
                     match &node.external_addr {
                         Some(addr) => {
                             let node_info = Span::styled(format!("External addr: {}", addr), style);
@@ -308,6 +333,23 @@ impl<'a> View {
                     //debug!(target: "dnetview", "render_info()::SelectableObject::Connect");
                     let text = self.parse_msg_list(connect.id.clone())?;
                     f.render_stateful_widget(text, slice[1], &mut self.msg_list.state);
+                }
+                Some(SelectableObject::Lilith(lilith)) => {
+                    lines.push(Spans::from(Span::styled("Type: Lilith", style)));
+                    lines.push(Spans::from(Span::styled("URLs:", style)));
+                    for url in &lilith.urls {
+                        lines.push(Spans::from(Span::styled(format!("   {}", url), style)));
+                    }
+                }
+                Some(SelectableObject::Network(network)) => {
+                    lines.push(Spans::from(Span::styled("URLs:", style)));
+                    for url in &network.urls {
+                        lines.push(Spans::from(Span::styled(format!("   {}", url), style)));
+                    }
+                    lines.push(Spans::from(Span::styled("Hosts:", style)));
+                    for node in &network.nodes {
+                        lines.push(Spans::from(Span::styled(format!("   {}", node), style)));
+                    }
                 }
                 None => return Err(DnetViewError::NotSelectableObject),
             }

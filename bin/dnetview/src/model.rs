@@ -19,6 +19,8 @@ pub enum Session {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub enum SelectableObject {
     Node(NodeInfo),
+    Lilith(LilithInfo),
+    Network(NetworkInfo),
     Session(SessionInfo),
     Connect(ConnectInfo),
 }
@@ -57,8 +59,8 @@ impl NodeInfo {
         children: Vec<SessionInfo>,
         external_addr: Option<String>,
         is_offline: bool,
-    ) -> NodeInfo {
-        NodeInfo { id, name, state, children, external_addr, is_offline }
+    ) -> Self {
+        Self { id, name, state, children, external_addr, is_offline }
     }
 }
 
@@ -80,8 +82,8 @@ impl SessionInfo {
         parent: String,
         children: Vec<ConnectInfo>,
         accept_addr: Option<String>,
-    ) -> SessionInfo {
-        SessionInfo { id, name, is_empty, parent, children, accept_addr }
+    ) -> Self {
+        Self { id, name, is_empty, parent, children, accept_addr }
     }
 }
 
@@ -110,17 +112,35 @@ impl ConnectInfo {
         last_msg: String,
         last_status: String,
         remote_node_id: String,
-    ) -> ConnectInfo {
-        ConnectInfo {
-            id,
-            addr,
-            state,
-            parent,
-            msg_log,
-            is_empty,
-            last_msg,
-            last_status,
-            remote_node_id,
-        }
+    ) -> Self {
+        Self { id, addr, state, parent, msg_log, is_empty, last_msg, last_status, remote_node_id }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
+pub struct LilithInfo {
+    pub id: String,
+    pub name: String,
+    pub urls: Vec<String>,
+    pub networks: Vec<NetworkInfo>,
+}
+
+impl LilithInfo {
+    pub fn new(id: String, name: String, urls: Vec<String>, networks: Vec<NetworkInfo>) -> Self {
+        Self { id, name, urls, networks }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
+pub struct NetworkInfo {
+    pub id: String,
+    pub name: String,
+    pub urls: Vec<String>,
+    pub nodes: Vec<String>,
+}
+
+impl NetworkInfo {
+    pub fn new(id: String, name: String, urls: Vec<String>, nodes: Vec<String>) -> Self {
+        Self { id, name, urls, nodes }
     }
 }

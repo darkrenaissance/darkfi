@@ -9,9 +9,12 @@ use url::Url;
 use darkfi::util::NanoTimestamp;
 
 use crate::{
-    config::DnvConfig,
+    config::{DnvConfig, Node, NodeType},
     error::{DnetViewError, DnetViewResult},
-    model::{ConnectInfo, Model, NodeInfo, SelectableObject, Session, SessionInfo},
+    model::{
+        ConnectInfo, LilithInfo, Model, NetworkInfo, NodeInfo, SelectableObject, Session,
+        SessionInfo,
+    },
     rpc::RpcConnect,
     util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
 };
@@ -29,57 +32,74 @@ impl DataParser {
     pub async fn start_connect_slots(self: Arc<Self>, ex: Arc<Executor<'_>>) -> DnetViewResult<()> {
         debug!(target: "dnetview", "start_connect_slots() START");
         for node in &self.config.nodes {
-            let self2 = self.clone();
             debug!(target: "dnetview", "attempting to spawn...");
-            ex.clone().spawn(self2.try_connect(node.name.clone(), node.rpc_url.clone())).detach();
+            ex.clone().spawn(self.clone().try_connect(node.clone())).detach();
         }
         Ok(())
     }
 
-    async fn try_connect(
-        self: Arc<Self>,
-        node_name: String,
-        rpc_url: String,
-    ) -> DnetViewResult<()> {
+    async fn try_connect(self: Arc<Self>, node: Node) -> DnetViewResult<()> {
         debug!(target: "dnetview", "try_connect() START");
         loop {
-            info!("Attempting to poll {}, RPC URL: {}", node_name, rpc_url);
-            match RpcConnect::new(Url::parse(&rpc_url)?, node_name.clone()).await {
+            info!("Attempting to poll {}, RPC URL: {}", node.name, node.rpc_url);
+            // Parse node config and execute poll.
+            // On any failure, sleep and retry.
+            match RpcConnect::new(Url::parse(&node.rpc_url)?, node.name.clone()).await {
                 Ok(client) => {
-                    self.poll(client).await?;
-                }
-                Err(e) => {
-                    error!("{}", e);
-                    self.parse_offline(node_name.clone()).await?;
-                    crate::util::sleep(2000).await;
-                }
-            }
-        }
-    }
-
-    async fn poll(&self, client: RpcConnect) -> DnetViewResult<()> {
-        loop {
-            match client.ping().await {
-                // TODO
-                Ok(_reply) => {}
-                Err(_e) => {}
-            }
-            match client.get_info().await {
-                Ok(reply) => {
-                    if reply.as_object().is_some() && !reply.as_object().unwrap().is_empty() {
-                        self.parse_data(reply.as_object().unwrap(), &client).await?;
-                    } else {
-                        return Err(DnetViewError::EmptyRpcReply)
+                    if let Err(e) = self.poll(&node, client).await {
+                        error!("Poll execution error: {:?}", e);
                     }
                 }
                 Err(e) => {
-                    error!("{:?}", e);
-                    self.parse_offline(client.name.clone()).await?;
+                    error!("RPC client creation error: {:?}", e);
                 }
             }
+            self.parse_offline(node.name.clone()).await?;
             crate::util::sleep(2000).await;
         }
     }
+
+    async fn poll(&self, node: &Node, client: RpcConnect) -> DnetViewResult<()> {
+        loop {
+            // Ping the node to verify if its online.
+            if let Err(e) = client.ping().await {
+                return Err(DnetViewError::Darkfi(e))
+            }
+
+            // Retrieve node info, based on its type
+            let response = match &node.node_type {
+                NodeType::LILITH => client.lilith_spawns().await,
+                NodeType::NORMAL => client.get_info().await,
+            };
+
+            // Parse response
+            match response {
+                Ok(reply) => {
+                    if !reply.as_object().is_some() || reply.as_object().unwrap().is_empty() {
+                        return Err(DnetViewError::EmptyRpcReply)
+                    }
+
+                    match &node.node_type {
+                        NodeType::LILITH => {
+                            self.parse_lilith_data(
+                                reply.as_object().unwrap().clone(),
+                                node.name.clone(),
+                            )
+                            .await?
+                        }
+                        NodeType::NORMAL => {
+                            self.parse_data(reply.as_object().unwrap(), node.name.clone()).await?
+                        }
+                    };
+                }
+                Err(e) => return Err(e),
+            }
+
+            // Sleep until next poll
+            crate::util::sleep(2000).await;
+        }
+    }
+
     async fn parse_offline(&self, node_name: String) -> DnetViewResult<()> {
         let name = "Offline".to_string();
         let session_type = Session::Offline;
@@ -113,26 +133,19 @@ impl DataParser {
 
         let accept_addr = None;
         let session_info =
-            SessionInfo::new(session_id, name, is_empty, parent.clone(), connects, accept_addr);
+            SessionInfo::new(session_id, name, is_empty, parent, connects, accept_addr);
         sessions.push(session_info);
 
-        let node = NodeInfo::new(
-            node_id.clone(),
-            node_name.to_string(),
-            state.clone(),
-            sessions.clone(),
-            None,
-            true,
-        );
+        let node = NodeInfo::new(node_id, node_name, state, sessions.clone(), None, true);
 
-        self.update_selectables(sessions, node.clone()).await?;
+        self.update_selectables(sessions, node).await?;
         Ok(())
     }
 
     async fn parse_data(
         &self,
         reply: &serde_json::Map<String, Value>,
-        client: &RpcConnect,
+        node_name: String,
     ) -> DnetViewResult<()> {
         let addr = &reply.get("external_addr");
         let inbound = &reply["session_inbound"];
@@ -142,8 +155,7 @@ impl DataParser {
 
         let mut sessions: Vec<SessionInfo> = Vec::new();
 
-        let node_name = &client.name;
-        let node_id = make_node_id(node_name)?;
+        let node_id = make_node_id(&node_name)?;
 
         let ext_addr = self.parse_external_addr(addr).await?;
         let in_session = self.parse_inbound(inbound, &node_id).await?;
@@ -155,19 +167,52 @@ impl DataParser {
         //sessions.push(man_session.clone());
 
         let node = NodeInfo::new(
-            node_id.clone(),
-            node_name.to_string(),
+            node_id,
+            node_name,
             state.as_str().unwrap().to_string(),
             sessions.clone(),
             ext_addr,
             false,
         );
 
-        self.update_selectables(sessions.clone(), node.clone()).await?;
-        self.update_msgs(sessions.clone()).await?;
+        self.update_selectables(sessions.clone(), node).await?;
+        self.update_msgs(sessions).await?;
 
         //debug!("IDS: {:?}", self.model.ids.lock().await);
         //debug!("INFOS: {:?}", self.model.nodes.lock().await);
+
+        Ok(())
+    }
+
+    async fn parse_lilith_data(
+        &self,
+        reply: serde_json::Map<String, Value>,
+        name: String,
+    ) -> DnetViewResult<()> {
+        let urls: Vec<String> = serde_json::from_value(reply.get("urls").unwrap().clone()).unwrap();
+        let spawns: Vec<serde_json::Map<String, Value>> =
+            serde_json::from_value(reply.get("spawns").unwrap().clone()).unwrap();
+
+        let mut networks = vec![];
+        for spawn in spawns {
+            let name = spawn.get("name").unwrap().as_str().unwrap().to_string();
+            let id = make_node_id(&name)?;
+            let urls: Vec<String> =
+                serde_json::from_value(spawn.get("urls").unwrap().clone()).unwrap();
+            let nodes: Vec<String> =
+                serde_json::from_value(spawn.get("hosts").unwrap().clone()).unwrap();
+            let network = NetworkInfo::new(id, name, urls, nodes);
+            networks.push(network);
+        }
+        let id = make_node_id(&name)?;
+        let lilith = LilithInfo::new(id.clone(), name, urls, networks);
+        let lilith_obj = SelectableObject::Lilith(lilith.clone());
+
+        self.model.selectables.lock().await.insert(id, lilith_obj);
+        for network in lilith.networks {
+            let network_obj = SelectableObject::Network(network.clone());
+            self.model.selectables.lock().await.insert(network.id, network_obj);
+        }
 
         Ok(())
     }
