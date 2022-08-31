@@ -189,7 +189,7 @@ impl UpdateBase for Update {
             .expect("Return type is not of type State");
         state.proposal_votes.remove(&HashableBase(self.proposal)).unwrap();
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    //fn as_any(&self) -> &dyn Any {
+    //    self
+    //}
 }

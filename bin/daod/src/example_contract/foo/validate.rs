@@ -82,7 +82,7 @@ impl UpdateBase for Update {
         let example_state = states.lookup_mut::<State>(&"Example".to_string()).unwrap();
         example_state.add_public_value(self.public_value);
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    //fn as_any(&self) -> &dyn Any {
+    //    self
+    //}
 }

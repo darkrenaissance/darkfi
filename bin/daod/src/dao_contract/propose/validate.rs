@@ -172,7 +172,7 @@ impl UpdateBase for Update {
         let state = states.lookup_mut::<DaoState>(&"DAO".to_string()).unwrap();
         state.add_proposal_bulla(self.proposal_bulla);
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    //fn as_any(&self) -> &dyn Any {
+    //    self
+    //}
 }

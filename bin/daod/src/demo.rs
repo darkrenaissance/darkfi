@@ -180,8 +180,8 @@ impl StateRegistry {
 pub trait UpdateBase {
     fn apply(self: Box<Self>, states: &mut StateRegistry);
 
-    // For upcasting to Update
-    fn as_any(&self) -> &dyn Any;
+    // For upcasting to Update. Used for testing.
+    // fn as_any(&self) -> &dyn Any;
 }
 
 ///////////////////////////////////////////////////
@@ -1044,6 +1044,9 @@ pub async fn demo() -> Result<()> {
     let mut total_value_commit = pallas::Point::identity();
     let mut total_vote_commit = pallas::Point::identity();
 
+    // We were previously saving votes to a Vec<Update> for testing.
+    // However since Update is now UpdateBase it gets moved into update.apply().
+    // So we need to think of another way to run these tests.
     //assert!(updates.len() == 3);
 
     for (i, note /* update*/) in [vote_note_1, vote_note_2, vote_note_3]

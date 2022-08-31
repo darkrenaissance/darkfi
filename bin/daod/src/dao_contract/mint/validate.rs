@@ -36,9 +36,9 @@ impl UpdateBase for Update {
         // Add dao_bulla to state.dao_bullas
         state.add_dao_bulla(self.dao_bulla);
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    //fn as_any(&self) -> &dyn Any {
+    //    self
+    //}
 }
 
 #[derive(Debug, Clone, thiserror::Error)]

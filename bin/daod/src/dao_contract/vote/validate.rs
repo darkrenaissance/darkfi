@@ -207,7 +207,7 @@ impl UpdateBase for Update {
         votes_info.value_commits += self.value_commit;
         votes_info.vote_nulls.append(&mut self.vote_nulls);
     }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+    //fn as_any(&self) -> &dyn Any {
+    //    self
+    //}
 }
