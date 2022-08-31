@@ -1,7 +1,7 @@
 use crate::dao_contract::state::DaoBulla;
 
 use darkfi::{
-    crypto::{keypair::PublicKey, Proof},
+    crypto::{keypair::PublicKey, util::poseidon_hash, Proof},
     zk::vm::{Witness, ZkCircuit},
 };
 use halo2_proofs::circuit::Value;
@@ -11,7 +11,6 @@ use rand::rngs::OsRng;
 use crate::{
     dao_contract::mint::validate::CallData,
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
-    util::poseidon_hash,
 };
 
 pub struct Builder {

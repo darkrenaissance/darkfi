@@ -1,5 +1,5 @@
 use blake2b_simd::Params;
-use halo2_gadgets::ecc::chip::FixedPoint;
+use halo2_gadgets::{ecc::chip::FixedPoint, poseidon::primitives as poseidon};
 use pasta_curves::{
     arithmetic::{CurveExt, FieldExt},
     group::ff::PrimeField,
@@ -43,6 +43,12 @@ pub fn pedersen_commitment_u64(value: u64, blind: DrkValueBlind) -> DrkValueComm
     let R = hasher(&VALUE_COMMITMENT_R_BYTES);
 
     V * mod_r_p(DrkValue::from(value)) + R * blind
+}
+
+/// Simplified wrapper for poseidon hash function.
+pub fn poseidon_hash<const N: usize>(messages: [pallas::Base; N]) -> pallas::Base {
+    poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<N>, 3, 2>::init()
+        .hash(messages)
 }
 
 /// Converts from pallas::Base to pallas::Scalar (aka $x \pmod{r_\mathbb{P}}$).

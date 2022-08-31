@@ -1,6 +1,5 @@
 use std::time::Instant;
 
-use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve};
@@ -15,7 +14,7 @@ use crate::{
             DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
             DrkValue, DrkValueBlind, DrkValueCommit,
         },
-        util::{pedersen_commitment_base, pedersen_commitment_u64},
+        util::{pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
     },
     util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::mint_contract::MintContract,
@@ -46,7 +45,8 @@ impl MintRevealedValues {
         let token_commit = pedersen_commitment_base(token_id, token_blind);
 
         let coords = public_key.0.to_affine().coordinates().unwrap();
-        let messages = [
+
+        let coin = poseidon_hash::<8>([
             *coords.x(),
             *coords.y(),
             DrkValue::from(value),
@@ -55,11 +55,7 @@ impl MintRevealedValues {
             spend_hook,
             user_data,
             coin_blind,
-        ];
-
-        let coin =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<8>, 3, 2>::init()
-                .hash(messages);
+        ]);
 
         MintRevealedValues { value_commit, token_commit, coin: Coin(coin) }
     }

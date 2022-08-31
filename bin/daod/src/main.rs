@@ -20,7 +20,6 @@ mod money_contract;
 
 mod demo;
 mod note;
-mod util;
 
 use crate::demo::demo;
 

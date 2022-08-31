@@ -5,7 +5,10 @@ use halo2_proofs::circuit::Value;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 
 use darkfi::{
-    crypto::{util::pedersen_commitment_u64, Proof},
+    crypto::{
+        util::{pedersen_commitment_u64, poseidon_hash},
+        Proof,
+    },
     zk::vm::{Witness, ZkCircuit},
 };
 
@@ -15,7 +18,6 @@ use crate::{
         propose::wallet::{DaoParams, Proposal},
     },
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
-    util::poseidon_hash,
 };
 
 pub struct Builder {

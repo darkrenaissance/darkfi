@@ -17,7 +17,7 @@ use darkfi::{
         keypair::{Keypair, PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
         types::{DrkCircuitField, DrkSpendHook, DrkUserData, DrkValue},
-        util::pedersen_commitment_u64,
+        util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
     zk::{
@@ -28,7 +28,7 @@ use darkfi::{
     zkas::decoder::ZkBinary,
 };
 
-use crate::{dao_contract, example_contract, money_contract, util::poseidon_hash};
+use crate::{dao_contract, example_contract, money_contract};
 
 // TODO: Anonymity leaks in this proof of concept:
 //

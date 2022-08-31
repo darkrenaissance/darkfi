@@ -12,7 +12,7 @@ use darkfi::{
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
         schnorr::SchnorrSecret,
-        util::pedersen_commitment_u64,
+        util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
     util::serial::{Encodable, SerialDecodable, SerialEncodable},
@@ -23,7 +23,6 @@ use crate::{
     dao_contract::propose::validate::{CallData, Header, Input},
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
     money_contract, note,
-    util::poseidon_hash,
 };
 
 use log::debug;

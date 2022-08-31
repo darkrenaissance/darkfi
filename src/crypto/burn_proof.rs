@@ -1,11 +1,9 @@
-use std::time::Instant;
-
-use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use rand::rngs::OsRng;
+use std::time::Instant;
 
 use super::{
     nullifier::Nullifier,
@@ -20,6 +18,7 @@ use crate::{
             DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
             DrkUserDataBlind, DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
         },
+        util::poseidon_hash,
     },
     util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::burn_contract::BurnContract,
@@ -54,15 +53,12 @@ impl BurnRevealedValues {
         user_data_blind: DrkUserDataBlind,
         signature_secret: SecretKey,
     ) -> Self {
-        let nullifier = [secret.0, serial];
-        let nullifier =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(nullifier);
+        let nullifier = poseidon_hash::<2>([secret.0, serial]);
 
         let public_key = PublicKey::from_secret(secret);
         let coords = public_key.0.to_affine().coordinates().unwrap();
 
-        let messages = [
+        let coin = poseidon_hash::<8>([
             *coords.x(),
             *coords.y(),
             DrkValue::from(value),
@@ -71,11 +67,7 @@ impl BurnRevealedValues {
             spend_hook,
             user_data,
             coin_blind,
-        ];
-
-        let coin =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<8>, 3, 2>::init()
-                .hash(messages);
+        ]);
 
         let merkle_root = {
             let position: u64 = leaf_position.into();
@@ -91,10 +83,7 @@ impl BurnRevealedValues {
             current
         };
 
-        let messages = [user_data, user_data_blind];
-        let user_data_enc =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(messages);
+        let user_data_enc = poseidon_hash::<2>([user_data, user_data_blind]);
 
         let value_commit = pedersen_commitment_u64(value, value_blind);
         let token_commit = pedersen_commitment_base(token_id, token_blind);
