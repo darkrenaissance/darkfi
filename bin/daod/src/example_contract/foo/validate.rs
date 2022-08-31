@@ -31,7 +31,7 @@ impl From<DarkFiError> for Error {
 }
 
 pub struct CallData {
-    pub header: Header,
+    pub public_value: pallas::Base,
 }
 
 impl CallDataBase for CallData {
@@ -42,11 +42,6 @@ impl CallDataBase for CallData {
     fn as_any(&self) -> &dyn Any {
         self
     }
-}
-
-#[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct Header {
-    pub public_c: pallas::Base,
 }
 
 pub fn state_transition(

@@ -56,9 +56,7 @@ impl Builder {
             .expect("Example::foo() proving error!)");
         proofs.push(input_proof);
 
-        let header = Header { public_c: c };
-
-        let call_data = CallData { header };
+        let call_data = CallData { public_value: c };
 
         FuncCall {
             contract_id: "Example".to_string(),
