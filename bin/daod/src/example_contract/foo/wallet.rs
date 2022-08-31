@@ -5,13 +5,13 @@ use halo2_proofs::circuit::Value;
 use pasta_curves::pallas;
 
 use darkfi::{
-    crypto::Proof,
+    crypto::{keypair::SecretKey, Proof},
     zk::vm::{Witness, ZkCircuit},
 };
 
 use crate::{
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
-    example_contract::foo::validate::{CallData, Header},
+    example_contract::foo::validate::CallData,
 };
 
 pub struct Foo {
@@ -21,6 +21,7 @@ pub struct Foo {
 
 pub struct Builder {
     pub foo: Foo,
+    pub signature_secret: SecretKey,
 }
 
 impl Builder {
@@ -56,9 +57,7 @@ impl Builder {
             .expect("Example::foo() proving error!)");
         proofs.push(input_proof);
 
-        let header = Header { public_c: c };
-
-        let call_data = CallData { header };
+        let call_data = CallData { public_value: c };
 
         FuncCall {
             contract_id: "Example".to_string(),

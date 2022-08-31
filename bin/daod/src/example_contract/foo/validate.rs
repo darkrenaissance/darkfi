@@ -1,7 +1,7 @@
 use pasta_curves::pallas;
 
 use darkfi::{
-    crypto::types::DrkCircuitField,
+    crypto::{keypair::PublicKey, types::DrkCircuitField},
     util::serial::{SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
@@ -31,22 +31,18 @@ impl From<DarkFiError> for Error {
 }
 
 pub struct CallData {
-    pub header: Header,
+    pub public_value: pallas::Base,
+    //pub signature_public: PublicKey,
 }
 
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
-        vec![("example-foo".to_string(), vec![self.header.public_c])]
+        vec![("example-foo".to_string(), vec![self.public_value])]
     }
 
     fn as_any(&self) -> &dyn Any {
         self
     }
-}
-
-#[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct Header {
-    pub public_c: pallas::Base,
 }
 
 pub fn state_transition(
@@ -65,11 +61,11 @@ pub fn state_transition(
 
     let example_state = states.lookup::<State>(&"Example".to_string()).unwrap();
 
-    if example_state.public_exists(&call_data.header.public_c) {
+    if example_state.public_exists(&call_data.public_value) {
         return Err(Error::ValueExists)
     }
 
-    Ok(Box::new(Update { public_value: call_data.header.public_c }))
+    Ok(Box::new(Update { public_value: call_data.public_value }))
 }
 
 #[derive(Clone)]
