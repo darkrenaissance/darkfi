@@ -511,6 +511,11 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             return Err(Error::ChannelStopped)
         }
 
+        if line == "\n" || line == "\r\n" {
+            warn!("Closing connection.");
+            return Err(Error::ChannelStopped)
+        }
+
         if &line[(line.len() - 2)..] == "\r\n" {
             // Remove CRLF
             line.pop();
@@ -518,11 +523,6 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         } else if &line[(line.len() - 1)..] == "\n" {
             line.pop();
         } else {
-            warn!("Closing connection.");
-            return Err(Error::ChannelStopped)
-        }
-
-        if line == "\n" {
             warn!("Closing connection.");
             return Err(Error::ChannelStopped)
         }
