@@ -1,24 +1,22 @@
-use std::{fmt::Write, str::FromStr};
+use std::{cmp::Ordering, fmt::Write, str::FromStr};
 
 use prettytable::{
-    cell,
     format::{consts::FORMAT_NO_COLSEP, FormatBuilder, LinePosition, LineSeparator},
     row, table, Cell, Row, Table,
 };
+use textwrap::fill;
 
 use darkfi::{
     util::time::{timestamp_to_date, DateFormat},
     Result,
 };
-use textwrap::fill;
 
 use crate::{
-    filter::apply_filter,
     primitives::{Comment, State, TaskInfo},
     TaskEvent,
 };
 
-pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String, filters: Vec<String>) -> Result<()> {
+pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
     let mut tasks = tasks;
 
     let mut table = Table::new();
@@ -30,11 +28,18 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String, filters: Vec<String>) -
     );
     table.set_titles(row!["ID", "Title", "Project", "Assigned", "Due", "Rank"]);
 
-    for filter in filters {
-        apply_filter(&mut tasks, &filter);
-    }
+    // group tasks by state.
+    tasks.sort_by_key(|task| task.state.clone());
 
-    tasks.sort_by(|a, b| b.rank.partial_cmp(&a.rank).unwrap());
+    // sort tasks by there rank only if they are not stopped.
+    tasks.sort_by(|a, b| {
+        if a.state != "stop" && b.state != "stop" {
+            b.rank.partial_cmp(&a.rank).unwrap()
+        } else {
+            // because sort_by does not reorder equal elements
+            Ordering::Equal
+        }
+    });
 
     let mut min_rank = None;
     let mut max_rank = None;
@@ -54,6 +59,8 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String, filters: Vec<String>) -
             ("bFg", "Fc", "Fg", "Fg")
         } else if state.is_pause() {
             ("iFYBd", "iFYBd", "iFYBd", "iFYBd")
+        } else if state.is_stop() {
+            ("Fr", "Fr", "Fr", "Fr")
         } else {
             ("", "", "", "")
         };

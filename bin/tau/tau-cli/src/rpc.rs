@@ -71,7 +71,7 @@ impl Tau {
     }
 
     /// Get month's stopped tasks.
-    pub async fn get_stop_tasks(&self, month: i64) -> Result<Vec<TaskInfo>> {
+    pub async fn get_stop_tasks(&self, month: Option<i64>) -> Result<Vec<TaskInfo>> {
         let req = JsonRequest::new("get_stop_tasks", json!([month]));
         let rep = self.rpc_client.request(req).await?;
 

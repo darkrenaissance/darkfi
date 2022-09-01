@@ -238,21 +238,18 @@ impl JsonRpcInterface {
 
     // RPCAPI:
     // Get all tasks.
-    // --> {"jsonrpc": "2.0", "method": "get_all_tasks", "params": [task_id], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "get_stop_tasks", "params": [task_id], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
     async fn get_stop_tasks(&self, params: &[Value]) -> TaudResult<Value> {
-        debug!(target: "tau", "JsonRpc::get_all_tasks() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::get_stop_tasks() params {:?}", params);
 
         if params.len() != 1 {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
         }
-        if !params[0].is_i64() {
-            return Err(TaudError::InvalidData("Invalid month".into()))
-        }
-        let month = Timestamp(params[0].as_i64().unwrap());
+        let month = params[0].as_i64().map(Timestamp);
         let ws = self.workspace.lock().await.clone();
 
-        let tasks = MonthTasks::load_stop_tasks(&self.dataset_path, ws, &month)?;
+        let tasks = MonthTasks::load_stop_tasks(&self.dataset_path, ws, month.as_ref())?;
 
         Ok(json!(tasks))
     }

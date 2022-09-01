@@ -161,9 +161,9 @@ impl MonthTasks {
     pub fn load_stop_tasks(
         dataset_path: &Path,
         ws: String,
-        date: &Timestamp,
+        date: Option<&Timestamp>,
     ) -> TaudResult<Vec<TaskInfo>> {
-        let mt = Self::load_or_create(Some(date), dataset_path)?;
+        let mt = Self::load_or_create(date, dataset_path)?;
         Ok(mt
             .objects(dataset_path)?
             .into_iter()

@@ -1,4 +1,4 @@
-use std::{process::exit, str::FromStr};
+use std::process::exit;
 
 use clap::{Parser, Subcommand};
 use log::{error, info};
@@ -19,6 +19,7 @@ mod util;
 mod view;
 
 use drawdown::{drawdown, to_naivedate};
+use filter::{apply_filter, get_ids, no_filter_warn};
 use primitives::{task_from_cli, State, TaskEvent};
 use util::{desc_in_editor, due_as_timestamp};
 use view::{comments_as_string, print_task_info, print_task_list};
@@ -27,6 +28,7 @@ const DEFAULT_PATH: &str = "~/tau_exported_tasks";
 
 #[derive(Parser)]
 #[clap(name = "tau", version)]
+#[clap(subcommand_precedence_over_arg = true)]
 struct Args {
     #[clap(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -72,32 +74,35 @@ enum TauSubcommand {
         values: Vec<String>,
     },
 
-    /// Update/Edit an existing task by ID.
-    Update {
-        /// Task ID.
-        task_id: u64,
+    /// Modify/Edit an existing task.
+    Modify {
         /// Values (e.g. project:blockchain).
         values: Vec<String>,
     },
 
-    /// Set or Get task state.
-    State {
-        /// Task ID.
-        task_id: u64,
-        /// Set task state if provided (Get state otherwise).
-        state: Option<String>,
-    },
+    /// List tasks.
+    List,
 
-    /// Set or Get comment for a task.
+    /// Start task(s).
+    Start,
+
+    /// Open task(s).
+    Open,
+
+    /// Pause task(s).
+    Pause,
+
+    /// Stop task(s).
+    Stop,
+
+    /// Set or Get comment for task(s).
     Comment {
-        /// Task ID.
-        task_id: u64,
         /// Set comment content if provided (Get comments otherwise).
         content: Vec<String>,
     },
 
-    /// Get task info by ID.
-    Info { task_id: u64 },
+    /// Get all data about selected task(s).
+    Info,
 
     /// Switch workspace.
     Switch {
@@ -120,7 +125,7 @@ enum TauSubcommand {
     /// Log drawdown.
     Log {
         /// The month in which we want to draw a heatmap (e.g. 0822 for August 2022).
-        month: String,
+        month: Option<String>,
         /// The person of which we want to draw a heatmap
         /// (if not provided we list all assignees).
         assignee: Option<String>,
@@ -142,6 +147,28 @@ async fn main() -> Result<()> {
     let rpc_client = RpcClient::new(args.endpoint).await?;
     let tau = Tau { rpc_client };
 
+    let mut filters = args.filters.clone();
+
+    // If IDs are provided in filter we use them to get the tasks from the daemon
+    // then remove IDs from filter so we can do apply_filter() normally.
+    // If not provided we use get_ids() to get them from the daemon.
+    let ids = get_ids(&mut filters)?;
+    let task_ids = if ids.is_empty() { tau.get_ids().await? } else { ids };
+
+    let mut tasks =
+        if filters.contains(&"state:stop".to_string()) || filters.contains(&"all".to_string()) {
+            tau.get_stop_tasks(None).await?
+        } else {
+            vec![]
+        };
+    for id in task_ids {
+        tasks.push(tau.get_task_by_id(id).await?);
+    }
+
+    for filter in filters {
+        apply_filter(&mut tasks, &filter);
+    }
+
     // Parse subcommands
     match args.command {
         Some(sc) => match sc {
@@ -159,49 +186,85 @@ async fn main() -> Result<()> {
                 return tau.add(task).await
             }
 
-            TauSubcommand::Update { task_id, values } => {
-                let task = task_from_cli(values)?;
-                tau.update(task_id, task).await
-            }
-
-            TauSubcommand::State { task_id, state } => match state {
-                Some(state) => {
-                    let state = state.trim().to_lowercase();
-                    if let Ok(st) = State::from_str(&state) {
-                        tau.set_state(task_id, &st).await
-                    } else {
-                        error!("State can only be one of the following: open start stop pause",);
-                        Ok(())
-                    }
+            TauSubcommand::Modify { values } => {
+                if args.filters.is_empty() {
+                    no_filter_warn()
                 }
-                None => {
-                    let task = tau.get_task_by_id(task_id).await?;
-                    let state = State::from_str(&task.state)?;
-                    println!("Task {}: {}", task_id, state);
-                    Ok(())
+                let base_task = task_from_cli(values)?;
+                for task in tasks {
+                    tau.update(task.id.into(), base_task.clone()).await?;
                 }
-            },
-
-            TauSubcommand::Comment { task_id, content } => {
-                if content.is_empty() {
-                    let task = tau.get_task_by_id(task_id).await?;
-                    let comments = comments_as_string(task.comments);
-                    println!("Comments {}:\n{}", task_id, comments);
-                    Ok(())
-                } else {
-                    tau.set_comment(task_id, &content.join(" ")).await
-                }
-            }
-
-            TauSubcommand::Info { task_id } => {
-                let task = tau.get_task_by_id(task_id).await?;
-                print_task_info(task)
-            }
-
-            TauSubcommand::Switch { workspace } => {
-                tau.switch_ws(workspace).await?;
                 Ok(())
             }
+
+            TauSubcommand::Start => {
+                if args.filters.is_empty() {
+                    no_filter_warn()
+                }
+                let state = State::Start;
+                for task in tasks {
+                    tau.set_state(task.id.into(), &state).await?;
+                }
+                Ok(())
+            }
+
+            TauSubcommand::Open => {
+                if args.filters.is_empty() {
+                    no_filter_warn()
+                }
+                let state = State::Open;
+                for task in tasks {
+                    tau.set_state(task.id.into(), &state).await?;
+                }
+                Ok(())
+            }
+
+            TauSubcommand::Pause => {
+                if args.filters.is_empty() {
+                    no_filter_warn()
+                }
+                let state = State::Pause;
+                for task in tasks {
+                    tau.set_state(task.id.into(), &state).await?;
+                }
+                Ok(())
+            }
+
+            TauSubcommand::Stop => {
+                if args.filters.is_empty() {
+                    no_filter_warn()
+                }
+                let state = State::Stop;
+                for task in tasks {
+                    tau.set_state(task.id.into(), &state).await?;
+                }
+                Ok(())
+            }
+
+            TauSubcommand::Comment { content } => {
+                if args.filters.is_empty() {
+                    no_filter_warn()
+                }
+                for task in tasks {
+                    if content.is_empty() {
+                        let task = tau.get_task_by_id(task.id.into()).await?;
+                        let comments = comments_as_string(task.comments);
+                        println!("Comments {}:\n{}", task.id, comments);
+                    } else {
+                        tau.set_comment(task.id.into(), &content.join(" ")).await?;
+                    }
+                }
+                Ok(())
+            }
+
+            TauSubcommand::Info => {
+                for task in tasks {
+                    let task = tau.get_task_by_id(task.id.into()).await?;
+                    print_task_info(task)?;
+                }
+                Ok(())
+            }
+            TauSubcommand::Switch { workspace } => tau.switch_ws(workspace).await,
 
             TauSubcommand::Export { path } => {
                 let path = path.unwrap_or_else(|| DEFAULT_PATH.into());
@@ -230,22 +293,30 @@ async fn main() -> Result<()> {
             }
 
             TauSubcommand::Log { month, assignee } => {
-                let ts = to_naivedate(month.clone())?.and_hms(12, 0, 0).timestamp();
-                let tasks = tau.get_stop_tasks(ts).await?;
-                drawdown(month, tasks, assignee)?;
+                match month {
+                    Some(date) => {
+                        let ts = to_naivedate(date.clone())?.and_hms(12, 0, 0).timestamp();
+                        let tasks = tau.get_stop_tasks(Some(ts)).await?;
+                        drawdown(date, tasks, assignee)?;
+                    }
+                    None => {
+                        let ws = tau.get_ws().await?;
+                        let tasks = tau.get_stop_tasks(None).await?;
+                        print_task_list(tasks, ws)?;
+                    }
+                }
 
                 Ok(())
+            }
+
+            TauSubcommand::List => {
+                let ws = tau.get_ws().await?;
+                print_task_list(tasks, ws)
             }
         },
         None => {
             let ws = tau.get_ws().await?;
-            let task_ids = tau.get_ids().await?;
-            let mut tasks = vec![];
-            for id in task_ids {
-                tasks.push(tau.get_task_by_id(id).await?);
-            }
-            print_task_list(tasks, ws, args.filters)?;
-            Ok(())
+            print_task_list(tasks, ws)
         }
     }?;
 

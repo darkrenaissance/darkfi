@@ -18,6 +18,9 @@ impl State {
     pub const fn is_pause(&self) -> bool {
         matches!(*self, Self::Pause)
     }
+    pub const fn is_stop(&self) -> bool {
+        matches!(*self, Self::Stop)
+    }
 }
 
 impl fmt::Display for State {
@@ -46,7 +49,7 @@ impl FromStr for State {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BaseTask {
     pub title: String,
     pub desc: Option<String>,
@@ -56,7 +59,7 @@ pub struct BaseTask {
     pub rank: Option<f32>,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TaskInfo {
     pub ref_id: String,
     pub workspace: String,
@@ -74,7 +77,7 @@ pub struct TaskInfo {
     pub comments: Vec<Comment>,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TaskEvent {
     pub action: String,
     pub author: String,
@@ -99,7 +102,7 @@ impl Default for TaskEvent {
     }
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Comment {
     content: String,
     author: String,
