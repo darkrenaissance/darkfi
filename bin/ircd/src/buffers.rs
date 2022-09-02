@@ -5,7 +5,7 @@ use chrono::Utc;
 
 use crate::Privmsg;
 
-pub const SIZE_OF_MSGS_BUFFER: usize = 8191;
+pub const SIZE_OF_MSGS_BUFFER: usize = 4095;
 pub const LIFETIME_FOR_ORPHAN: i64 = 600;
 
 #[derive(Clone)]
@@ -32,6 +32,10 @@ impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
 
     pub fn len(&self) -> usize {
         self.items.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
     }
 
     pub fn as_slice(&mut self) -> &mut [T] {
@@ -102,7 +106,7 @@ impl PrivmsgsBuffer {
     }
 
     fn term_exist(&self, term: u64) -> bool {
-        self.buffer.items.iter().find(|p| p.term == term).is_some()
+        self.buffer.items.iter().any(|p| p.term == term)
     }
 
     fn sort(&mut self) {
@@ -219,10 +223,10 @@ mod tests {
         assert_eq!(pms.orphans.len(), 0);
 
         //
-        // Fill the buffer with random generated terms in range 4000..9001
+        // Fill the buffer with random generated terms in range 4000..7001
         // Since the buffer max size is SIZE_OF_MSGS_BUFFER it has to remove the old msges
         //
-        let mut terms: Vec<u64> = (4001..9001).collect();
+        let mut terms: Vec<u64> = (4001..7001).collect();
         terms.shuffle(&mut thread_rng());
 
         for term in terms {
@@ -233,15 +237,15 @@ mod tests {
         pms.update();
 
         assert_eq!(pms.buffer.len(), SIZE_OF_MSGS_BUFFER);
-        assert_eq!(pms.last_term(), 9000);
+        assert_eq!(pms.last_term(), 7000);
         assert_eq!(pms.orphans.len(), 0);
 
         //
-        // Fill the buffer with random generated terms in range 9001..11001
+        // Fill the buffer with random generated terms in range 7001..10001
         // This will occasionally update the buffer
         // At the end, the messages in the buffer have to be in correct order
         //
-        let mut terms: Vec<u64> = (9001..11001).collect();
+        let mut terms: Vec<u64> = (7001..10001).collect();
         terms.shuffle(&mut thread_rng());
 
         for term in terms {
@@ -255,7 +259,7 @@ mod tests {
         pms.update();
 
         assert_eq!(pms.buffer.len(), SIZE_OF_MSGS_BUFFER);
-        assert_eq!(pms.last_term(), 11000);
+        assert_eq!(pms.last_term(), 10000);
         assert_eq!(pms.orphans.len(), 0);
     }
 }

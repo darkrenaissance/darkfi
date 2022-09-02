@@ -15,7 +15,7 @@ const RPL_ENDOFNAMES: u32 = 366;
 impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> {
     pub(super) fn on_quit(&self) -> Result<()> {
         // Close the connection
-        return Err(Error::NetworkServiceStopped)
+        Err(Error::NetworkServiceStopped)
     }
 
     pub(super) async fn on_receive_user(&mut self) -> Result<()> {
@@ -32,7 +32,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
     }
 
     pub(super) async fn on_receive_pass(&mut self, password: &str) -> Result<()> {
-        if &self.password == password {
+        if self.password == password {
             self.is_pass_init = true
         } else {
             // Close the connection
@@ -164,7 +164,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
     pub(super) async fn on_receive_names(&mut self, channels: Vec<String>) -> Result<()> {
         for chan in channels.iter() {
-            if !chan.starts_with("#") {
+            if !chan.starts_with('#') {
                 continue
             }
             if self.configured_chans.contains_key(chan) {
@@ -246,7 +246,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
     pub(super) async fn on_receive_join(&mut self, channels: Vec<String>) -> Result<()> {
         for chan in channels.iter() {
-            if !chan.starts_with("#") {
+            if !chan.starts_with('#') {
                 continue
             }
             if !self.configured_chans.contains_key(chan) {

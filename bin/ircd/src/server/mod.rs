@@ -244,5 +244,5 @@ fn parse_line(line: &str) -> Result<(String, String)> {
     // that for now to keep the protocol simple and focused.
     let command = tokens.next().ok_or(Error::MalformedPacket)?.to_uppercase();
     let value = tokens.next().ok_or(Error::MalformedPacket)?;
-    Ok((command.to_owned(), value.to_owned()))
+    Ok((command, value.to_owned()))
 }
