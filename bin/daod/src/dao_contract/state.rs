@@ -5,9 +5,12 @@ use pasta_curves::{
 };
 use std::{any::Any, collections::HashMap, hash::Hasher};
 
-use darkfi::crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode, nullifier::Nullifier};
+use darkfi::{
+    crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode, nullifier::Nullifier},
+    util::serial::{Encodable, SerialDecodable, SerialEncodable},
+};
 
-#[derive(Clone)]
+#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoBulla(pub pallas::Base);
 
 type MerkleTree = BridgeTree<MerkleNode, MERKLE_DEPTH>;

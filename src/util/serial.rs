@@ -581,6 +581,15 @@ impl Decodable for Box<[u8]> {
     }
 }
 
+impl<T: Encodable> Encodable for Box<T> {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        let t: &T = &**self;
+        len += t.encode(&mut s)?;
+        Ok(len)
+    }
+}
+
 impl Encodable for blake3::Hash {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         s.write_slice(self.as_bytes())?;

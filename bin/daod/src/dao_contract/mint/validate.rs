@@ -1,6 +1,9 @@
 use std::any::{Any, TypeId};
 
-use darkfi::crypto::{keypair::PublicKey, types::DrkCircuitField};
+use darkfi::{
+    crypto::{keypair::PublicKey, types::DrkCircuitField},
+    util::serial::{Encodable, SerialDecodable, SerialEncodable},
+};
 
 use crate::{
     dao_contract::{DaoBulla, State},
@@ -43,6 +46,7 @@ pub enum Error {}
 
 type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct CallData {
     pub dao_bulla: DaoBulla,
 }

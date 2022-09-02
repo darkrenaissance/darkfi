@@ -166,11 +166,23 @@ fn sign(signature_secrets: Vec<SecretKey>) -> Vec<Signature> {
 type ContractId = String;
 type FuncId = String;
 
+//#[derive(Clone, SerialEncodable)]
 pub struct FuncCall {
     pub contract_id: ContractId,
     pub func_id: FuncId,
     pub call_data: Box<dyn CallDataBase>,
     pub proofs: Vec<Proof>,
+}
+
+pub trait TestTrait: Encodable {
+    fn foo(&self);
+}
+
+#[derive(Clone, SerialEncodable)]
+pub struct TestStruct {
+    // Bang!
+    // This usage of Encodable fails. Note: Encodable is implemented for Box<T>.
+    //pub test: Box<dyn TestTrait>,
 }
 
 pub trait CallDataBase {

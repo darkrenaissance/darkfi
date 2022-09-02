@@ -49,6 +49,7 @@ impl From<DarkFiError> for Error {
     }
 }
 
+#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct CallData {
     pub header: Header,
     pub inputs: Vec<Input>,

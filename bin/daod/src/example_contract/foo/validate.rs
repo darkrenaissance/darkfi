@@ -30,6 +30,7 @@ impl From<DarkFiError> for Error {
     }
 }
 
+#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct CallData {
     pub public_value: pallas::Base,
     pub signature_public: PublicKey,

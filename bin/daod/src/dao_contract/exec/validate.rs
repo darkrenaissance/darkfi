@@ -6,6 +6,7 @@ use pasta_curves::{
 
 use darkfi::{
     crypto::{coin::Coin, keypair::PublicKey, types::DrkCircuitField},
+    util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
 
@@ -56,6 +57,7 @@ impl From<DarkFiError> for Error {
     }
 }
 
+#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct CallData {
     pub proposal: pallas::Base,
     pub coin_0: pallas::Base,
