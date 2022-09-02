@@ -63,4 +63,11 @@ impl CallDataBase for CallData {
     fn signature_public_keys(&self) -> Vec<PublicKey> {
         vec![]
     }
+
+    fn encode_bytes(
+        &self,
+        mut writer: &mut dyn std::io::Write,
+    ) -> std::result::Result<usize, darkfi::Error> {
+        self.encode(&mut writer)
+    }
 }

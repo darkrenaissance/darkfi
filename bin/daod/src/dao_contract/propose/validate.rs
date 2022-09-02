@@ -103,6 +103,13 @@ impl CallDataBase for CallData {
         }
         signature_public_keys
     }
+
+    fn encode_bytes(
+        &self,
+        mut writer: &mut dyn std::io::Write,
+    ) -> std::result::Result<usize, darkfi::Error> {
+        self.encode(&mut writer)
+    }
 }
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]

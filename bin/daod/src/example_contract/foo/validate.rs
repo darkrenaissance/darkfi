@@ -2,7 +2,7 @@ use pasta_curves::pallas;
 
 use darkfi::{
     crypto::{keypair::PublicKey, types::DrkCircuitField},
-    util::serial::{SerialDecodable, SerialEncodable},
+    util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
 
@@ -47,6 +47,13 @@ impl CallDataBase for CallData {
 
     fn signature_public_keys(&self) -> Vec<PublicKey> {
         vec![self.signature_public]
+    }
+
+    fn encode_bytes(
+        &self,
+        mut writer: &mut dyn std::io::Write,
+    ) -> std::result::Result<usize, darkfi::Error> {
+        self.encode(&mut writer)
     }
 }
 

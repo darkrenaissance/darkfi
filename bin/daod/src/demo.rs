@@ -21,6 +21,7 @@ use darkfi::{
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
+    error as DarkFiError,
     util::serial::{Encodable, SerialDecodable, SerialEncodable},
     zk::{
         circuit::{BurnContract, MintContract},
@@ -94,7 +95,6 @@ impl ZkContractTable {
     }
 }
 
-//#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct Transaction {
     pub func_calls: Vec<FuncCall>,
     pub signatures: Vec<Signature>,
@@ -140,6 +140,7 @@ impl Transaction {
         for (i, (func_call, signature)) in
             self.func_calls.iter().zip(self.signatures.clone()).enumerate()
         {
+            func_call.encode(&mut unsigned_tx_data).expect("failed to encode data");
             let signature_pub_keys = func_call.call_data.signature_public_keys();
             for signature_pub_key in signature_pub_keys {
                 let verify_result = signature_pub_key.verify(&unsigned_tx_data[..], &signature);
@@ -150,12 +151,13 @@ impl Transaction {
     }
 }
 
-fn sign(signature_secrets: Vec<SecretKey>) -> Vec<Signature> {
+fn sign(signature_secrets: Vec<SecretKey>, func_calls: &Vec<FuncCall>) -> Vec<Signature> {
     let mut signatures = vec![];
     let mut unsigned_tx_data = vec![];
-    // TODO:
-    //tx.encode(&mut unsigned_tx_data).expect("failed to encode data");
-    for (i, signature_secret) in signature_secrets.iter().enumerate() {
+    for (i, (signature_secret, func_call)) in
+        signature_secrets.iter().zip(func_calls.iter()).enumerate()
+    {
+        func_call.encode(&mut unsigned_tx_data).expect("failed to encode data");
         let signature = signature_secret.sign(&unsigned_tx_data[..]);
         signatures.push(signature);
     }
@@ -166,7 +168,6 @@ fn sign(signature_secrets: Vec<SecretKey>) -> Vec<Signature> {
 type ContractId = String;
 type FuncId = String;
 
-//#[derive(Clone, SerialEncodable)]
 pub struct FuncCall {
     pub contract_id: ContractId,
     pub func_id: FuncId,
@@ -174,15 +175,15 @@ pub struct FuncCall {
     pub proofs: Vec<Proof>,
 }
 
-pub trait TestTrait: Encodable {
-    fn foo(&self);
-}
-
-#[derive(Clone, SerialEncodable)]
-pub struct TestStruct {
-    // Bang!
-    // This usage of Encodable fails. Note: Encodable is implemented for Box<T>.
-    //pub test: Box<dyn TestTrait>,
+impl Encodable for FuncCall {
+    fn encode<W: std::io::Write>(&self, mut w: W) -> std::result::Result<usize, darkfi::Error> {
+        let mut len = 0;
+        len += self.contract_id.encode(&mut w)?;
+        len += self.func_id.encode(&mut w)?;
+        len += self.proofs.encode(&mut w)?;
+        len += self.call_data.encode_bytes(&mut w)?;
+        Ok(len)
+    }
 }
 
 pub trait CallDataBase {
@@ -195,6 +196,11 @@ pub trait CallDataBase {
 
     // Public keys we will use to verify transaction signatures.
     fn signature_public_keys(&self) -> Vec<PublicKey>;
+
+    fn encode_bytes(
+        &self,
+        writer: &mut dyn std::io::Write,
+    ) -> std::result::Result<usize, darkfi::Error>;
 }
 
 type GenericContractState = Box<dyn Any>;
@@ -251,9 +257,10 @@ pub async fn example() -> Result<()> {
 
     let builder = example_contract::foo::wallet::Builder { foo, signature_secret };
     let func_call = builder.build(&zk_bins);
+    let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret]);
-    let tx = Transaction { func_calls: vec![func_call], signatures };
+    let signatures = sign(vec![signature_secret], &func_calls);
+    let tx = Transaction { func_calls, signatures };
 
     //// Validator
 
@@ -387,9 +394,10 @@ pub async fn demo() -> Result<()> {
         signature_secret,
     );
     let func_call = builder.build(&zk_bins);
+    let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret]);
-    let tx = Transaction { func_calls: vec![func_call], signatures };
+    let signatures = sign(vec![signature_secret], &func_calls);
+    let tx = Transaction { func_calls, signatures };
 
     //// Validator
 
@@ -482,9 +490,10 @@ pub async fn demo() -> Result<()> {
     };
 
     let func_call = builder.build(&zk_bins)?;
+    let func_calls = vec![func_call];
 
-    let signatures = sign(vec![cashier_signature_secret]);
-    let tx = Transaction { func_calls: vec![func_call], signatures };
+    let signatures = sign(vec![cashier_signature_secret], &func_calls);
+    let tx = Transaction { func_calls, signatures };
 
     //// Validator
 
@@ -608,9 +617,10 @@ pub async fn demo() -> Result<()> {
     };
 
     let func_call = builder.build(&zk_bins)?;
+    let func_calls = vec![func_call];
 
-    let signatures = sign(vec![cashier_signature_secret]);
-    let tx = Transaction { func_calls: vec![func_call], signatures };
+    let signatures = sign(vec![cashier_signature_secret], &func_calls);
+    let tx = Transaction { func_calls, signatures };
 
     //// Validator
 
@@ -754,9 +764,10 @@ pub async fn demo() -> Result<()> {
     };
 
     let func_call = builder.build(&zk_bins);
+    let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret]);
-    let tx = Transaction { func_calls: vec![func_call], signatures };
+    let signatures = sign(vec![signature_secret], &func_calls);
+    let tx = Transaction { func_calls, signatures };
 
     //// Validator
 
@@ -875,9 +886,10 @@ pub async fn demo() -> Result<()> {
     };
     debug!(target: "demo", "build()...");
     let func_call = builder.build(&zk_bins);
+    let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret]);
-    let tx = Transaction { func_calls: vec![func_call], signatures };
+    let signatures = sign(vec![signature_secret], &func_calls);
+    let tx = Transaction { func_calls, signatures };
 
     //// Validator
 
@@ -961,9 +973,10 @@ pub async fn demo() -> Result<()> {
     };
     debug!(target: "demo", "build()...");
     let func_call = builder.build(&zk_bins);
+    let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret]);
-    let tx = Transaction { func_calls: vec![func_call], signatures };
+    let signatures = sign(vec![signature_secret], &func_calls);
+    let tx = Transaction { func_calls, signatures };
 
     //// Validator
 
@@ -1047,9 +1060,10 @@ pub async fn demo() -> Result<()> {
     };
     debug!(target: "demo", "build()...");
     let func_call = builder.build(&zk_bins);
+    let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret]);
-    let tx = Transaction { func_calls: vec![func_call], signatures };
+    let signatures = sign(vec![signature_secret], &func_calls);
+    let tx = Transaction { func_calls, signatures };
 
     //// Validator
 
@@ -1236,9 +1250,10 @@ pub async fn demo() -> Result<()> {
         signature_secret: exec_signature_secret,
     };
     let exec_func_call = builder.build(&zk_bins);
+    let func_calls = vec![transfer_func_call, exec_func_call];
 
-    let signatures = sign(vec![tx_signature_secret, exec_signature_secret]);
-    let tx = Transaction { func_calls: vec![transfer_func_call, exec_func_call], signatures };
+    let signatures = sign(vec![tx_signature_secret, exec_signature_secret], &func_calls);
+    let tx = Transaction { func_calls, signatures };
 
     {
         // Now the spend_hook field specifies the function DAO::exec()
