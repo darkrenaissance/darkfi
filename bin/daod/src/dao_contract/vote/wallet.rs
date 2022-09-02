@@ -72,7 +72,6 @@ impl Builder {
         let mut inputs = vec![];
         let mut value = 0;
         let mut value_blind = pallas::Scalar::from(0);
-        let mut signature_publics = vec![];
 
         for input in self.inputs {
             let input_value_blind = pallas::Scalar::random(&mut OsRng);
@@ -81,7 +80,6 @@ impl Builder {
             value_blind += input_value_blind;
 
             let signature_public = PublicKey::from_secret(input.signature_secret);
-            signature_publics.push(signature_public);
 
             let zk_info = zk_bins.lookup(&"dao-vote-burn".to_string()).unwrap();
 
@@ -287,7 +285,7 @@ impl Builder {
 
         let header = Header { token_commit, proposal_bulla, vote_commit, enc_note };
 
-        let call_data = CallData { header, inputs, signature_publics };
+        let call_data = CallData { header, inputs };
 
         FuncCall {
             contract_id: "DAO".to_string(),

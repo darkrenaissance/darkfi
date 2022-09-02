@@ -78,15 +78,13 @@ impl Builder {
         let mut inputs = vec![];
         let mut total_funds = 0;
         let mut total_funds_blinds = pallas::Scalar::from(0);
-        //let mut signature_secrets = vec![];
-        let mut signature_publics = vec![];
+
         for input in self.inputs {
             let funds_blind = pallas::Scalar::random(&mut OsRng);
             total_funds += input.note.value;
             total_funds_blinds += funds_blind;
 
             let signature_public = PublicKey::from_secret(input.signature_secret);
-            signature_publics.push(signature_public);
 
             let zk_info = zk_bins.lookup(&"dao-propose-burn".to_string()).unwrap();
             let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
@@ -272,7 +270,7 @@ impl Builder {
             enc_note,
         };
 
-        let call_data = CallData { header, inputs, signature_publics };
+        let call_data = CallData { header, inputs };
 
         FuncCall {
             contract_id: "DAO".to_string(),

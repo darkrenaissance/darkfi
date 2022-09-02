@@ -180,8 +180,6 @@ pub struct CallData {
     pub inputs: Vec<Input>,
     /// Anonymous outputs
     pub outputs: Vec<Output>,
-    /// Signature public keys
-    pub signature_publics: Vec<PublicKey>,
 }
 
 impl CallDataBase for CallData {
@@ -202,8 +200,8 @@ impl CallDataBase for CallData {
 
     fn signature_public_keys(&self) -> Vec<PublicKey> {
         let mut signature_public_keys = Vec::new();
-        for pub_key in self.signature_publics.clone() {
-            signature_public_keys.push(pub_key);
+        for input in self.clear_inputs.clone() {
+            signature_public_keys.push(input.signature_public);
         }
         signature_public_keys
     }

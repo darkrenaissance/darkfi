@@ -112,14 +112,12 @@ impl Builder {
         let mut proofs = vec![];
         let mut inputs = vec![];
         let mut input_blinds = vec![];
-        let mut signature_publics = vec![];
 
         for input in self.inputs {
             let value_blind = input.value_blind;
             input_blinds.push(value_blind);
 
             let signature_public = PublicKey::from_secret(input.signature_secret);
-            signature_publics.push(signature_public);
 
             let zk_info = zk_bins.lookup(&"money-transfer-burn".to_string()).unwrap();
             let zk_info = if let ZkContractInfo::Native(info) = zk_info {
@@ -209,7 +207,7 @@ impl Builder {
             outputs.push(output);
         }
 
-        let call_data = CallData { clear_inputs, inputs, outputs, signature_publics };
+        let call_data = CallData { clear_inputs, inputs, outputs };
 
         Ok(FuncCall {
             contract_id: "Money".to_string(),
