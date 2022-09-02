@@ -110,6 +110,10 @@ struct Args {
     consensus_seed_rpc: Vec<Url>,
 
     #[structopt(long)]
+    /// Prefered transports of outbound connections for the consensus protocol (repeatable flag)
+    consensus_p2p_transports: Vec<String>,
+
+    #[structopt(long)]
     /// P2P accept addresses for the syncing protocol (repeatable flag)
     sync_p2p_accept: Vec<Url>,
 
@@ -128,6 +132,10 @@ struct Args {
     #[structopt(long)]
     /// Connect to seed for the syncing protocol (repeatable flag)
     sync_p2p_seed: Vec<Url>,
+
+    #[structopt(long)]
+    /// Prefered transports of outbound connections for the syncing protocol (repeatable flag)
+    sync_p2p_transports: Vec<String>,
 
     #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
@@ -298,6 +306,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             external_addr: args.sync_p2p_external,
             peers: args.sync_p2p_peer.clone(),
             seeds: args.sync_p2p_seed.clone(),
+            outbound_transports: net::settings::get_outbound_transports(args.sync_p2p_transports),
             ..Default::default()
         };
 
@@ -339,6 +348,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
                 external_addr: args.consensus_p2p_external,
                 peers: args.consensus_p2p_peer.clone(),
                 seeds: args.consensus_p2p_seed.clone(),
+                outbound_transports: net::settings::get_outbound_transports(
+                    args.consensus_p2p_transports,
+                ),
                 ..Default::default()
             };
             let p2p = net::P2p::new(consensus_network_settings).await;

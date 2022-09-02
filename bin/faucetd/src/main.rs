@@ -97,6 +97,10 @@ struct Args {
     sync_p2p_peer: Vec<Url>,
 
     #[structopt(long)]
+    /// Prefered transports of outbound connections for the syncing protocol (repeatable flag)
+    sync_p2p_transports: Vec<String>,
+
+    #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
     cashier_pub: Vec<String>,
 
@@ -360,6 +364,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         external_addr: args.sync_p2p_external,
         peers: args.sync_p2p_peer.clone(),
         seeds: args.sync_p2p_seed.clone(),
+        outbound_transports: net::settings::get_outbound_transports(args.sync_p2p_transports),
         ..Default::default()
     };
 

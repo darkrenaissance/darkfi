@@ -26,3 +26,6 @@ seeds = ["tcp://127.0.0.1:13337"]
 
 # Peers to connect to
 #peers = []
+
+# Prefered transports for outbound connections
+#transports = ["tls", "tcp"]

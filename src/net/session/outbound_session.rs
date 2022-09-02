@@ -3,12 +3,13 @@ use std::fmt;
 
 use async_executor::Executor;
 use async_trait::async_trait;
-use log::{debug, info};
+use log::{debug, info, warn};
 use rand::seq::SliceRandom;
 use serde_json::json;
 use url::Url;
 
 use crate::{
+    net::TransportName,
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     util::async_util,
     Error, Result,
@@ -145,61 +146,78 @@ impl OutboundSession {
 
         let connector = Connector::new(self.p2p().settings(), Arc::new(parent));
 
+        // Retrieve preferent outbound transports
+        let outbound_transports = &self.p2p().settings().outbound_transports;
+
         loop {
             let addr = self.load_address(slot_number).await?;
-            info!(target: "net", "#{} connecting to outbound [{}]", slot_number, addr);
+            info!(target: "net", "#{} processing outbound [{}]", slot_number, addr);
             {
                 let info = &mut self.slot_info.lock().await[slot_number as usize];
                 info.addr = Some(addr.clone());
                 info.state = OutboundState::Pending;
             }
 
-            match connector.connect(addr.clone()).await {
-                Ok(channel) => {
-                    // Blacklist goes here
+            // Check that addr transport is in configured outbound transport
+            let addr_transport = TransportName::try_from(addr.clone())?;
+            let transports = if outbound_transports.contains(&addr_transport) {
+                vec![addr_transport]
+            } else {
+                warn!(target: "net", "#{} address {} transport is not in accepted outbound transports, will try with: {:?}", slot_number, addr, outbound_transports);
+                outbound_transports.clone()
+            };
 
-                    info!(target: "net", "#{} connected to outbound [{}]", slot_number, addr);
+            for transport in transports {
+                // Replace addr transport
+                let mut transport_addr = addr.clone();
+                transport_addr.set_scheme(&transport.to_scheme())?;
+                info!(target: "net", "#{} connecting to outbound [{}]", slot_number, transport_addr);
+                match connector.connect(transport_addr.clone()).await {
+                    Ok(channel) => {
+                        // Blacklist goes here
+                        info!(target: "net", "#{} connected to outbound [{}]", slot_number, transport_addr);
 
-                    let stop_sub = channel.subscribe_stop().await;
+                        let stop_sub = channel.subscribe_stop().await;
+                        if stop_sub.is_err() {
+                            continue
+                        }
 
-                    if stop_sub.is_err() {
-                        continue
+                        self.clone().register_channel(channel.clone(), executor.clone()).await?;
+
+                        // Channel is now connected but not yet setup
+
+                        // Remove pending lock since register_channel will add the channel to p2p
+                        self.p2p().remove_pending(&addr).await;
+                        {
+                            let info = &mut self.slot_info.lock().await[slot_number as usize];
+                            info.channel = Some(channel.clone());
+                            info.state = OutboundState::Connected;
+                        }
+
+                        // Notify that channel processing has been finished
+                        if *self.notify.lock().await {
+                            self.channel_subscriber.notify(Ok(channel)).await;
+                        }
+
+                        // Wait for channel to close
+                        stop_sub.unwrap().receive().await;
                     }
-
-                    self.clone().register_channel(channel.clone(), executor.clone()).await?;
-
-                    // Channel is now connected but not yet setup
-
-                    // Remove pending lock since register_channel will add the channel to p2p
-                    self.p2p().remove_pending(&addr).await;
-                    {
-                        let info = &mut self.slot_info.lock().await[slot_number as usize];
-                        info.channel = Some(channel.clone());
-                        info.state = OutboundState::Connected;
+                    Err(err) => {
+                        info!(target: "net", "Unable to connect to outbound [{}]: {}", &transport_addr, err);
                     }
-
-                    // Notify that channel processing has been finished
-                    if *self.notify.lock().await {
-                        self.channel_subscriber.notify(Ok(channel)).await;
-                    }
-
-                    // Wait for channel to close
-                    stop_sub.unwrap().receive().await;
                 }
-                Err(err) => {
-                    info!(target: "net", "Unable to connect to outbound [{}]: {}", &addr, err);
-                    {
-                        let info = &mut self.slot_info.lock().await[slot_number as usize];
-                        info.addr = None;
-                        info.channel = None;
-                        info.state = OutboundState::Open;
-                    }
+            }
 
-                    // Notify that channel processing has been finished
-                    if *self.notify.lock().await {
-                        self.channel_subscriber.notify(Err(err)).await;
-                    }
-                }
+            {
+                let info = &mut self.slot_info.lock().await[slot_number as usize];
+                info.addr = None;
+                info.channel = None;
+                info.state = OutboundState::Open;
+            }
+
+            // Notify that channel processing has been finished (failed)
+            if *self.notify.lock().await {
+                self.channel_subscriber.notify(Err(Error::ConnectFailed)).await;
             }
         }
     }

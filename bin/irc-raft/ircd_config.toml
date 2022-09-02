@@ -27,6 +27,9 @@ outbound_connections=5
 ## Seed nodes to connect to 
 seeds=["tls://irc0.dark.fi:11001", "tls://irc1.dark.fi:11001"]
 
+# Prefered transports for outbound connections
+#transports = ["tls", "tcp"]
+
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0
 #seed_query_timeout_seconds=8

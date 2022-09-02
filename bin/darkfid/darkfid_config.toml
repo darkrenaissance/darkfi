@@ -45,6 +45,9 @@
 # Peers JSON-RPC listen URL for clock synchronization
 #consensus_peer_rpc = []
 
+# Prefered transports of outbound connections for the consensus protocol
+#consensus_p2p_transports = ["tls", "tcp"]
+
 # P2P accept addresses for the syncing protocol
 #sync_p2p_accept = ["tls://127.0.0.1:8342"]
 
@@ -59,6 +62,9 @@
 
 # Peers to connect to for the syncing protocol
 #sync_p2p_peer = []
+
+# Prefered transports of outbound connections for the syncing protocol
+#sync_p2p_transports = ["tls", "tcp"]
 
 # Whitelisted cashier addresses
 #cashier_pub = []

@@ -71,6 +71,10 @@ struct Args {
     /// Connect to peer (repeatable flag)
     peers: Vec<Url>,
 
+    #[structopt(long)]
+    /// Prefered transports for outbound connections (repeatable flag)
+    transports: Vec<String>,
+
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
@@ -378,6 +382,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         external_addr: args.p2p_external,
         peers: args.peers.clone(),
         seeds: args.seeds.clone(),
+        outbound_transports: net::settings::get_outbound_transports(args.transports),
         ..Default::default()
     };
 

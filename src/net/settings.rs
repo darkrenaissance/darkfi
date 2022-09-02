@@ -5,6 +5,8 @@ use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use url::Url;
 
+use crate::net::TransportName;
+
 /// Atomic pointer to network settings.
 pub type SettingsPtr = Arc<Settings>;
 
@@ -23,6 +25,7 @@ pub struct Settings {
     pub peers: Vec<Url>,
     pub seeds: Vec<Url>,
     pub node_id: String,
+    pub outbound_transports: Vec<TransportName>,
 }
 
 impl Default for Settings {
@@ -40,6 +43,7 @@ impl Default for Settings {
             peers: Vec::new(),
             seeds: Vec::new(),
             node_id: String::new(),
+            outbound_transports: get_outbound_transports(vec![]),
         }
     }
 }
@@ -88,6 +92,11 @@ pub struct SettingsOpt {
     #[serde(default)]
     #[structopt(skip)]
     pub node_id: String,
+
+    /// Prefered transports for outbound connections
+    #[serde(default)]
+    #[structopt(long = "transports")]
+    pub outbound_transports: Vec<String>,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -105,6 +114,26 @@ impl From<SettingsOpt> for Settings {
             peers: settings_opt.peers,
             seeds: settings_opt.seeds,
             node_id: settings_opt.node_id,
+            outbound_transports: get_outbound_transports(settings_opt.outbound_transports),
         }
     }
+}
+
+/// Auxiliary function to convert outbound transport Vec<String>
+/// to Vec<TransportName>, using defaults if empty.
+pub fn get_outbound_transports(opt_outbound_transports: Vec<String>) -> Vec<TransportName> {
+    let mut outbound_transports = vec![];
+    for transport in opt_outbound_transports {
+        let transport_name = TransportName::try_from(transport.as_str()).unwrap();
+        outbound_transports.push(transport_name);
+    }
+
+    if outbound_transports.is_empty() {
+        let tls = TransportName::Tcp(Some("tls".into()));
+        outbound_transports.push(tls);
+        let tcp = TransportName::Tcp(None);
+        outbound_transports.push(tcp);
+    }
+
+    outbound_transports
 }

@@ -26,3 +26,6 @@ seeds = ["tls://lilith0.dark.fi:13337", "tls://lilith1.dark.fi:13337"]
 
 # Peers to connect to
 #peers = []
+
+# Prefered transports for outbound connections
+#transports = ["tls", "tcp"]
