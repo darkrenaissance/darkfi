@@ -206,7 +206,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
         info!("(Plain) PRIVMSG {} :{}", target, message);
 
-        let mut privmsg = Privmsg::new(self.nickname.clone(), target.to_string(), message, 0);
+        let mut privmsg = Privmsg::new(&self.nickname, target, &message, 0);
 
         if target.starts_with('#') {
             if !self.configured_chans.contains_key(target) {
@@ -274,9 +274,9 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
             // Send messages in buffer
             if !self.capabilities.get("no-history").unwrap() {
-                for msg in self.privmsgs_buffer.lock().await.to_vec() {
+                for msg in self.privmsgs_buffer.lock().await.iter() {
                     if msg.target == *chan {
-                        self.senders.notify_by_id(msg, self.subscriber_id).await;
+                        self.senders.notify_by_id(msg.clone(), self.subscriber_id).await;
                     }
                 }
             }

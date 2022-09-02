@@ -186,14 +186,17 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             }
 
             // Send dm messages in buffer
-            for msg in self.privmsgs_buffer.lock().await.to_vec() {
+            let mut privmsgs_buffer = self.privmsgs_buffer.lock().await;
+            privmsgs_buffer.update();
+            for msg in privmsgs_buffer.iter() {
                 let is_dm = msg.target == self.nickname ||
                     (msg.nickname == self.nickname && !msg.target.starts_with('#'));
 
                 if is_dm {
-                    self.senders.notify_by_id(msg, self.subscriber_id).await;
+                    self.senders.notify_by_id(msg.clone(), self.subscriber_id).await;
                 }
             }
+            drop(privmsgs_buffer);
         }
         Ok(())
     }

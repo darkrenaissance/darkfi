@@ -18,10 +18,17 @@ pub struct Privmsg {
 }
 
 impl Privmsg {
-    pub fn new(nickname: String, target: String, message: String, term: u64) -> Self {
+    pub fn new(nickname: &str, target: &str, message: &str, term: u64) -> Self {
         let id = OsRng.next_u64();
         let timestamp = Timestamp::current_time();
-        Self { id, nickname, target, message, timestamp, term }
+        Self {
+            id,
+            nickname: nickname.to_string(),
+            target: target.to_string(),
+            message: message.to_string(),
+            timestamp,
+            term,
+        }
     }
 }
 

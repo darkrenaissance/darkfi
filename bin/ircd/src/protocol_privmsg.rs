@@ -51,12 +51,12 @@ impl ProtocolPrivmsg {
         let exclude_list = vec![self.channel.address()];
 
         // once a channel get started
-        let msgs_buffer = self.msgs.lock().await;
-        let msgs = msgs_buffer.to_vec();
-        drop(msgs_buffer);
-        for m in msgs {
+        let mut msgs_buffer = self.msgs.lock().await;
+        msgs_buffer.update();
+        for m in msgs_buffer.iter() {
             self.channel.send(m.clone()).await?;
         }
+        drop(msgs_buffer);
 
         loop {
             let msg = self.msg_sub.receive().await?;
