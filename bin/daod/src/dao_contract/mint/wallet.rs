@@ -1,7 +1,11 @@
 use crate::dao_contract::state::DaoBulla;
 
 use darkfi::{
-    crypto::{keypair::PublicKey, util::poseidon_hash, Proof},
+    crypto::{
+        keypair::{PublicKey, SecretKey},
+        util::poseidon_hash,
+        Proof,
+    },
     zk::vm::{Witness, ZkCircuit},
 };
 use halo2_proofs::circuit::Value;
@@ -20,6 +24,7 @@ pub struct Builder {
     gov_token_id: pallas::Base,
     dao_pubkey: PublicKey,
     dao_bulla_blind: pallas::Base,
+    signature_secret: SecretKey,
 }
 
 impl Builder {
@@ -30,6 +35,7 @@ impl Builder {
         gov_token_id: pallas::Base,
         dao_pubkey: PublicKey,
         dao_bulla_blind: pallas::Base,
+        signature_secret: SecretKey,
     ) -> Self {
         Self {
             dao_proposer_limit,
@@ -38,6 +44,7 @@ impl Builder {
             gov_token_id,
             dao_pubkey,
             dao_bulla_blind,
+            signature_secret,
         }
     }
 

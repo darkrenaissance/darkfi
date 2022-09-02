@@ -6,6 +6,7 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 
 use darkfi::{
     crypto::{
+        keypair::{PublicKey, SecretKey},
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
@@ -34,6 +35,7 @@ pub struct Builder {
     pub input_value: u64,
     pub input_value_blind: pallas::Scalar,
     pub hook_dao_exec: pallas::Base,
+    pub signature_secret: SecretKey,
 }
 
 impl Builder {

@@ -54,6 +54,7 @@ pub struct BuilderInputInfo {
     pub note: Note,
     pub user_data_blind: DrkUserDataBlind,
     pub value_blind: DrkValueBlind,
+    pub signature_secret: SecretKey,
 }
 
 pub struct BuilderOutputInfo {
@@ -109,15 +110,16 @@ impl Builder {
         }
 
         let mut proofs = vec![];
-
         let mut inputs = vec![];
         let mut input_blinds = vec![];
-        let mut signature_secrets = vec![];
+        let mut signature_publics = vec![];
+
         for input in self.inputs {
             let value_blind = input.value_blind;
             input_blinds.push(value_blind);
 
-            let signature_secret = SecretKey::random(&mut OsRng);
+            let signature_public = PublicKey::from_secret(input.signature_secret);
+            signature_publics.push(signature_public);
 
             let zk_info = zk_bins.lookup(&"money-transfer-burn".to_string()).unwrap();
             let zk_info = if let ZkContractInfo::Native(info) = zk_info {
@@ -128,7 +130,7 @@ impl Builder {
             let burn_pk = &zk_info.proving_key;
 
             // Note from the previous output
-            let note = input.note;
+            let note = input.note.clone();
 
             let (burn_proof, revealed) = create_burn_proof(
                 burn_pk,
@@ -143,13 +145,10 @@ impl Builder {
                 note.coin_blind,
                 input.secret,
                 input.leaf_position,
-                input.merkle_path,
-                signature_secret,
+                input.merkle_path.clone(),
+                input.signature_secret,
             )?;
             proofs.push(burn_proof);
-
-            // First we make the tx then sign after
-            signature_secrets.push(signature_secret);
 
             let input = Input { revealed };
             inputs.push(input);
@@ -193,7 +192,6 @@ impl Builder {
             )?;
             proofs.push(mint_proof);
 
-            // Encrypted note
             let note = Note {
                 serial,
                 value: output.value,
@@ -211,27 +209,7 @@ impl Builder {
             outputs.push(output);
         }
 
-        //let partial = Partial { clear_inputs, inputs, outputs, proofs };
-
-        let mut unsigned_tx_data = vec![];
-        clear_inputs.encode(&mut unsigned_tx_data)?;
-        inputs.encode(&mut unsigned_tx_data)?;
-        outputs.encode(&mut unsigned_tx_data)?;
-
-        let mut clear_signatures = vec![];
-        for clear_input in self.clear_inputs {
-            let secret = clear_input.signature_secret;
-            let signature = secret.sign(&unsigned_tx_data[..]);
-            clear_signatures.push(signature);
-        }
-
-        let mut signatures = vec![];
-        for signature_secret in signature_secrets {
-            let signature = signature_secret.sign(&unsigned_tx_data[..]);
-            signatures.push(signature);
-        }
-
-        let call_data = CallData { clear_inputs, inputs, outputs, clear_signatures, signatures };
+        let call_data = CallData { clear_inputs, inputs, outputs, signature_publics };
 
         Ok(FuncCall {
             contract_id: "Money".to_string(),

@@ -10,7 +10,7 @@
 #rpc_listen = "tcp://127.0.0.1:18927"
 
 # Daemon published url, common for all enabled networks
-url = ["tcp://127.0.0.1"]
+url = ["tls://127.0.0.1"]
 
 ## Per-network settings
 #[network."darkfid_sync"]

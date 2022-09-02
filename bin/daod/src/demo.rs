@@ -16,10 +16,12 @@ use darkfi::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
+        schnorr::{SchnorrPublic, SchnorrSecret, Signature},
         types::{DrkCircuitField, DrkSpendHook, DrkUserData, DrkValue},
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
+    util::serial::{Encodable, SerialDecodable, SerialEncodable},
     zk::{
         circuit::{BurnContract, MintContract},
         vm::ZkCircuit,
@@ -92,8 +94,10 @@ impl ZkContractTable {
     }
 }
 
+//#[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct Transaction {
     pub func_calls: Vec<FuncCall>,
+    pub signatures: Vec<Signature>,
 }
 
 impl Transaction {
@@ -130,6 +134,32 @@ impl Transaction {
             }
         }
     }
+
+    fn verify_sigs(&self) {
+        let mut unsigned_tx_data = vec![];
+        for (i, (func_call, signature)) in
+            self.func_calls.iter().zip(self.signatures.clone()).enumerate()
+        {
+            let signature_pub_keys = func_call.call_data.signature_public_keys();
+            for signature_pub_key in signature_pub_keys {
+                let verify_result = signature_pub_key.verify(&unsigned_tx_data[..], &signature);
+                assert!(verify_result, "verify sigs[{}] failed", i);
+            }
+            debug!(target: "demo", "verify_sigs({}) passed", i);
+        }
+    }
+}
+
+fn sign(signature_secrets: Vec<SecretKey>) -> Vec<Signature> {
+    let mut signatures = vec![];
+    let mut unsigned_tx_data = vec![];
+    // TODO:
+    //tx.encode(&mut unsigned_tx_data).expect("failed to encode data");
+    for (i, signature_secret) in signature_secrets.iter().enumerate() {
+        let signature = signature_secret.sign(&unsigned_tx_data[..]);
+        signatures.push(signature);
+    }
+    signatures
 }
 
 // These would normally be a hash or sth
@@ -150,6 +180,9 @@ pub trait CallDataBase {
 
     // For upcasting to CallData itself so it can be read in state_transition()
     fn as_any(&self) -> &dyn Any;
+
+    // Public keys we will use to verify transaction signatures.
+    fn signature_public_keys(&self) -> Vec<PublicKey>;
 }
 
 type GenericContractState = Box<dyn Any>;
@@ -179,9 +212,6 @@ impl StateRegistry {
 
 pub trait UpdateBase {
     fn apply(self: Box<Self>, states: &mut StateRegistry);
-
-    // For upcasting to Update. Used for testing.
-    // fn as_any(&self) -> &dyn Any;
 }
 
 ///////////////////////////////////////////////////
@@ -205,10 +235,13 @@ pub async fn example() -> Result<()> {
     //// Wallet
 
     let foo = example_contract::foo::wallet::Foo { a: 5, b: 10 };
+    let signature_secret = SecretKey::random(&mut OsRng);
 
-    let builder = example_contract::foo::wallet::Builder { foo };
+    let builder = example_contract::foo::wallet::Builder { foo, signature_secret };
     let func_call = builder.build(&zk_bins);
-    let tx = Transaction { func_calls: vec![func_call] };
+
+    let signatures = sign(vec![signature_secret]);
+    let tx = Transaction { func_calls: vec![func_call], signatures };
 
     //// Validator
 
@@ -230,6 +263,7 @@ pub async fn example() -> Result<()> {
     }
 
     tx.zk_verify(&zk_bins);
+    tx.verify_sigs();
 
     Ok(())
 }
@@ -329,6 +363,7 @@ pub async fn demo() -> Result<()> {
     let dao_keypair = Keypair::random(&mut OsRng);
     let dao_bulla_blind = pallas::Base::random(&mut OsRng);
 
+    let signature_secret = SecretKey::random(&mut OsRng);
     // Create DAO mint tx
     let builder = dao_contract::mint::wallet::Builder::new(
         dao_proposer_limit,
@@ -337,10 +372,12 @@ pub async fn demo() -> Result<()> {
         gdrk_token_id,
         dao_keypair.public,
         dao_bulla_blind,
+        signature_secret,
     );
     let func_call = builder.build(&zk_bins);
 
-    let tx = Transaction { func_calls: vec![func_call] };
+    let signatures = sign(vec![signature_secret]);
+    let tx = Transaction { func_calls: vec![func_call], signatures };
 
     //// Validator
 
@@ -434,7 +471,8 @@ pub async fn demo() -> Result<()> {
 
     let func_call = builder.build(&zk_bins)?;
 
-    let tx = Transaction { func_calls: vec![func_call] };
+    let signatures = sign(vec![cashier_signature_secret]);
+    let tx = Transaction { func_calls: vec![func_call], signatures };
 
     //// Validator
 
@@ -458,6 +496,7 @@ pub async fn demo() -> Result<()> {
     }
 
     tx.zk_verify(&zk_bins);
+    tx.verify_sigs();
 
     //// Wallet
     // DAO reads the money received from the encrypted note
@@ -510,9 +549,6 @@ pub async fn demo() -> Result<()> {
 
     let gov_keypairs = vec![gov_keypair_1, gov_keypair_2, gov_keypair_3];
 
-    // We don't use this because money-transfer expects a cashier.
-    // let signature_secret = SecretKey::random(&mut OsRng);
-
     // Spend hook and user data disabled
     let spend_hook = DrkSpendHook::from(0);
     let user_data = DrkUserData::from(0);
@@ -561,7 +597,8 @@ pub async fn demo() -> Result<()> {
 
     let func_call = builder.build(&zk_bins)?;
 
-    let tx = Transaction { func_calls: vec![func_call] };
+    let signatures = sign(vec![cashier_signature_secret]);
+    let tx = Transaction { func_calls: vec![func_call], signatures };
 
     //// Validator
 
@@ -585,6 +622,7 @@ pub async fn demo() -> Result<()> {
     }
 
     tx.zk_verify(&zk_bins);
+    tx.verify_sigs();
 
     //// Wallet
 
@@ -660,11 +698,13 @@ pub async fn demo() -> Result<()> {
 
     // TODO: is it possible for an invalid transfer() to be constructed on exec()?
     //       need to look into this
+    let signature_secret = SecretKey::random(&mut OsRng);
     let input = dao_contract::propose::wallet::BuilderInput {
         secret: gov_keypair_1.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
         merkle_path: money_merkle_path,
+        signature_secret,
     };
 
     let (dao_merkle_path, dao_merkle_root) = {
@@ -703,7 +743,8 @@ pub async fn demo() -> Result<()> {
 
     let func_call = builder.build(&zk_bins);
 
-    let tx = Transaction { func_calls: vec![func_call] };
+    let signatures = sign(vec![signature_secret]);
+    let tx = Transaction { func_calls: vec![func_call], signatures };
 
     //// Validator
 
@@ -725,6 +766,7 @@ pub async fn demo() -> Result<()> {
     }
 
     tx.zk_verify(&zk_bins);
+    tx.verify_sigs();
 
     //// Wallet
 
@@ -793,11 +835,13 @@ pub async fn demo() -> Result<()> {
         (leaf_position, merkle_path)
     };
 
+    let signature_secret = SecretKey::random(&mut OsRng);
     let input = dao_contract::vote::wallet::BuilderInput {
         secret: gov_keypair_1.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
         merkle_path: money_merkle_path,
+        signature_secret,
     };
 
     let vote_option: bool = true;
@@ -820,7 +864,8 @@ pub async fn demo() -> Result<()> {
     debug!(target: "demo", "build()...");
     let func_call = builder.build(&zk_bins);
 
-    let tx = Transaction { func_calls: vec![func_call] };
+    let signatures = sign(vec![signature_secret]);
+    let tx = Transaction { func_calls: vec![func_call], signatures };
 
     //// Validator
 
@@ -842,6 +887,7 @@ pub async fn demo() -> Result<()> {
     }
 
     tx.zk_verify(&zk_bins);
+    tx.verify_sigs();
 
     //// Wallet
 
@@ -875,11 +921,13 @@ pub async fn demo() -> Result<()> {
         (leaf_position, merkle_path)
     };
 
+    let signature_secret = SecretKey::random(&mut OsRng);
     let input = dao_contract::vote::wallet::BuilderInput {
         secret: gov_keypair_2.secret,
         note: gov_recv[1].note.clone(),
         leaf_position: money_leaf_position,
         merkle_path: money_merkle_path,
+        signature_secret,
     };
 
     let vote_option: bool = false;
@@ -902,7 +950,8 @@ pub async fn demo() -> Result<()> {
     debug!(target: "demo", "build()...");
     let func_call = builder.build(&zk_bins);
 
-    let tx = Transaction { func_calls: vec![func_call] };
+    let signatures = sign(vec![signature_secret]);
+    let tx = Transaction { func_calls: vec![func_call], signatures };
 
     //// Validator
 
@@ -924,6 +973,7 @@ pub async fn demo() -> Result<()> {
     }
 
     tx.zk_verify(&zk_bins);
+    tx.verify_sigs();
 
     //// Wallet
 
@@ -957,11 +1007,13 @@ pub async fn demo() -> Result<()> {
         (leaf_position, merkle_path)
     };
 
+    let signature_secret = SecretKey::random(&mut OsRng);
     let input = dao_contract::vote::wallet::BuilderInput {
         secret: gov_keypair_3.secret,
         note: gov_recv[2].note.clone(),
         leaf_position: money_leaf_position,
         merkle_path: money_merkle_path,
+        signature_secret,
     };
 
     let vote_option: bool = true;
@@ -984,7 +1036,8 @@ pub async fn demo() -> Result<()> {
     debug!(target: "demo", "build()...");
     let func_call = builder.build(&zk_bins);
 
-    let tx = Transaction { func_calls: vec![func_call] };
+    let signatures = sign(vec![signature_secret]);
+    let tx = Transaction { func_calls: vec![func_call], signatures };
 
     //// Validator
 
@@ -1006,6 +1059,7 @@ pub async fn demo() -> Result<()> {
     }
 
     tx.zk_verify(&zk_bins);
+    tx.verify_sigs();
 
     //// Wallet
 
@@ -1102,6 +1156,8 @@ pub async fn demo() -> Result<()> {
     let dao_coin_blind = pallas::Base::random(&mut OsRng);
     let input_value = treasury_note.value;
     let input_value_blind = pallas::Scalar::random(&mut OsRng);
+    let tx_signature_secret = SecretKey::random(&mut OsRng);
+    let exec_signature_secret = SecretKey::random(&mut OsRng);
 
     let (treasury_leaf_position, treasury_merkle_path) = {
         let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
@@ -1112,16 +1168,19 @@ pub async fn demo() -> Result<()> {
         (leaf_position, merkle_path)
     };
 
+    let input = money_contract::transfer::wallet::BuilderInputInfo {
+        leaf_position: treasury_leaf_position,
+        merkle_path: treasury_merkle_path,
+        secret: dao_keypair.secret,
+        note: treasury_note,
+        user_data_blind,
+        value_blind: input_value_blind,
+        signature_secret: tx_signature_secret,
+    };
+
     let builder = money_contract::transfer::wallet::Builder {
         clear_inputs: vec![],
-        inputs: vec![money_contract::transfer::wallet::BuilderInputInfo {
-            leaf_position: treasury_leaf_position,
-            merkle_path: treasury_merkle_path,
-            secret: dao_keypair.secret,
-            note: treasury_note,
-            user_data_blind,
-            value_blind: input_value_blind,
-        }],
+        inputs: vec![input],
         outputs: vec![
             // Sending money
             money_contract::transfer::wallet::BuilderOutputInfo {
@@ -1162,10 +1221,12 @@ pub async fn demo() -> Result<()> {
         input_value,
         input_value_blind,
         hook_dao_exec: *dao_contract::exec::FUNC_ID,
+        signature_secret: exec_signature_secret,
     };
     let exec_func_call = builder.build(&zk_bins);
 
-    let tx = Transaction { func_calls: vec![transfer_func_call, exec_func_call] };
+    let signatures = sign(vec![tx_signature_secret, exec_signature_secret]);
+    let tx = Transaction { func_calls: vec![transfer_func_call, exec_func_call], signatures };
 
     {
         // Now the spend_hook field specifies the function DAO::exec()
@@ -1217,7 +1278,7 @@ pub async fn demo() -> Result<()> {
 
     // Other stuff
     tx.zk_verify(&zk_bins);
-    // TODO: signature verification
+    tx.verify_sigs();
 
     //// Wallet
 

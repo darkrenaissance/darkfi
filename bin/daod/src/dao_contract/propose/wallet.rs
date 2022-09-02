@@ -37,6 +37,7 @@ pub struct BuilderInput {
     pub note: money_contract::transfer::wallet::Note,
     pub leaf_position: incrementalmerkletree::Position,
     pub merkle_path: Vec<MerkleNode>,
+    pub signature_secret: SecretKey,
 }
 
 #[derive(SerialEncodable, SerialDecodable, Clone)]
@@ -65,6 +66,7 @@ pub struct Builder {
     pub dao_leaf_position: incrementalmerkletree::Position,
     pub dao_merkle_path: Vec<MerkleNode>,
     pub dao_merkle_root: MerkleNode,
+    //pub signature_secrets: Vec<SecretKey>,
 }
 
 impl Builder {
@@ -76,14 +78,15 @@ impl Builder {
         let mut inputs = vec![];
         let mut total_funds = 0;
         let mut total_funds_blinds = pallas::Scalar::from(0);
-        let mut signature_secrets = vec![];
+        //let mut signature_secrets = vec![];
+        let mut signature_publics = vec![];
         for input in self.inputs {
             let funds_blind = pallas::Scalar::random(&mut OsRng);
             total_funds += input.note.value;
             total_funds_blinds += funds_blind;
 
-            let signature_secret = SecretKey::random(&mut OsRng);
-            let signature_public = PublicKey::from_secret(signature_secret);
+            let signature_public = PublicKey::from_secret(input.signature_secret);
+            signature_publics.push(signature_public);
 
             let zk_info = zk_bins.lookup(&"dao-propose-burn".to_string()).unwrap();
             let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
@@ -109,7 +112,7 @@ impl Builder {
                 Witness::Base(Value::known(gov_token_blind)),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
-                Witness::Base(Value::known(signature_secret.0)),
+                Witness::Base(Value::known(input.signature_secret.0)),
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
@@ -166,9 +169,6 @@ impl Builder {
             let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
                 .expect("DAO::propose() proving error!");
             proofs.push(input_proof);
-
-            // First we make the tx then sign after
-            signature_secrets.push(signature_secret);
 
             let input = Input { value_commit, merkle_root, signature_public };
             inputs.push(input);
@@ -272,18 +272,7 @@ impl Builder {
             enc_note,
         };
 
-        let mut unsigned_tx_data = vec![];
-        header.encode(&mut unsigned_tx_data).expect("failed to encode data");
-        inputs.encode(&mut unsigned_tx_data).expect("failed to encode inputs");
-        proofs.encode(&mut unsigned_tx_data).expect("failed to encode proofs");
-
-        let mut signatures = vec![];
-        for signature_secret in &signature_secrets {
-            let signature = signature_secret.sign(&unsigned_tx_data[..]);
-            signatures.push(signature);
-        }
-
-        let call_data = CallData { header, inputs, signatures };
+        let call_data = CallData { header, inputs, signature_publics };
 
         FuncCall {
             contract_id: "DAO".to_string(),

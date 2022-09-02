@@ -52,7 +52,7 @@ impl From<DarkFiError> for Error {
 pub struct CallData {
     pub header: Header,
     pub inputs: Vec<Input>,
-    pub signatures: Vec<schnorr::Signature>,
+    pub signature_publics: Vec<PublicKey>,
 }
 
 impl CallDataBase for CallData {
@@ -102,6 +102,14 @@ impl CallDataBase for CallData {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn signature_public_keys(&self) -> Vec<PublicKey> {
+        let mut signature_public_keys = vec![];
+        for pub_key in self.signature_publics.clone() {
+            signature_public_keys.push(pub_key);
+        }
+        signature_public_keys
     }
 }
 
@@ -166,23 +174,6 @@ pub fn state_transition(
         vote_nulls.push(input.nullifier);
     }
 
-    // Verify the available signatures
-    let mut unsigned_tx_data = vec![];
-    call_data.header.encode(&mut unsigned_tx_data).expect("failed to encode data");
-    call_data.inputs.encode(&mut unsigned_tx_data).expect("failed to encode inputs");
-    func_call.proofs.encode(&mut unsigned_tx_data).expect("failed to encode proofs");
-
-    //debug!("unsigned_tx_data: {:?}", unsigned_tx_data);
-
-    for (_i, (input, signature)) in
-        call_data.inputs.iter().zip(call_data.signatures.iter()).enumerate()
-    {
-        let public = &input.signature_public;
-        if !public.verify(&unsigned_tx_data[..], signature) {
-            return Err(Error::SignatureVerifyFailed)
-        }
-    }
-
     Ok(Box::new(Update {
         proposal_bulla: call_data.header.proposal_bulla,
         vote_nulls,
@@ -207,7 +198,4 @@ impl UpdateBase for Update {
         votes_info.value_commits += self.value_commit;
         votes_info.vote_nulls.append(&mut self.vote_nulls);
     }
-    //fn as_any(&self) -> &dyn Any {
-    //    self
-    //}
 }

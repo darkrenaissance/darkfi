@@ -5,7 +5,7 @@ use pasta_curves::{
 };
 
 use darkfi::{
-    crypto::{coin::Coin, types::DrkCircuitField},
+    crypto::{coin::Coin, keypair::PublicKey, types::DrkCircuitField},
     Error as DarkFiError,
 };
 
@@ -94,6 +94,10 @@ impl CallDataBase for CallData {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn signature_public_keys(&self) -> Vec<PublicKey> {
+        vec![]
     }
 }
 
@@ -189,7 +193,4 @@ impl UpdateBase for Update {
             .expect("Return type is not of type State");
         state.proposal_votes.remove(&HashableBase(self.proposal)).unwrap();
     }
-    //fn as_any(&self) -> &dyn Any {
-    //    self
-    //}
 }

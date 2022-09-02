@@ -32,7 +32,7 @@ impl From<DarkFiError> for Error {
 
 pub struct CallData {
     pub public_value: pallas::Base,
-    //pub signature_public: PublicKey,
+    pub signature_public: PublicKey,
 }
 
 impl CallDataBase for CallData {
@@ -42,6 +42,10 @@ impl CallDataBase for CallData {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn signature_public_keys(&self) -> Vec<PublicKey> {
+        vec![self.signature_public]
     }
 }
 
@@ -78,7 +82,4 @@ impl UpdateBase for Update {
         let example_state = states.lookup_mut::<State>(&"Example".to_string()).unwrap();
         example_state.add_public_value(self.public_value);
     }
-    //fn as_any(&self) -> &dyn Any {
-    //    self
-    //}
 }

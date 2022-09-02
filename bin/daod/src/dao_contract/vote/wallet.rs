@@ -49,6 +49,7 @@ pub struct BuilderInput {
     pub note: money_contract::transfer::wallet::Note,
     pub leaf_position: incrementalmerkletree::Position,
     pub merkle_path: Vec<MerkleNode>,
+    pub signature_secret: SecretKey,
 }
 
 // TODO: should be token locking voting?
@@ -71,7 +72,7 @@ impl Builder {
         let mut inputs = vec![];
         let mut value = 0;
         let mut value_blind = pallas::Scalar::from(0);
-        let mut signature_secrets = vec![];
+        let mut signature_publics = vec![];
 
         for input in self.inputs {
             let input_value_blind = pallas::Scalar::random(&mut OsRng);
@@ -79,8 +80,8 @@ impl Builder {
             value += input.note.value;
             value_blind += input_value_blind;
 
-            let signature_secret = SecretKey::random(&mut OsRng);
-            let signature_public = PublicKey::from_secret(signature_secret);
+            let signature_public = PublicKey::from_secret(input.signature_secret);
+            signature_publics.push(signature_public);
 
             let zk_info = zk_bins.lookup(&"dao-vote-burn".to_string()).unwrap();
 
@@ -107,7 +108,7 @@ impl Builder {
                 Witness::Base(Value::known(gov_token_blind)),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
-                Witness::Base(Value::known(signature_secret.0)),
+                Witness::Base(Value::known(input.signature_secret.0)),
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
@@ -168,9 +169,6 @@ impl Builder {
             let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
                 .expect("DAO::vote() proving error!");
             proofs.push(input_proof);
-
-            // First we make the tx then sign after
-            signature_secrets.push(signature_secret);
 
             let input = Input {
                 nullifier: Nullifier(nullifier),
@@ -289,25 +287,7 @@ impl Builder {
 
         let header = Header { token_commit, proposal_bulla, vote_commit, enc_note };
 
-        let mut unsigned_tx_data = vec![];
-        header.encode(&mut unsigned_tx_data).expect("failed to encode data");
-        inputs.encode(&mut unsigned_tx_data).expect("failed to encode inputs");
-        proofs.encode(&mut unsigned_tx_data).expect("failed to encode proofs");
-
-        //debug!("unsigned_tx_data: {:?}", unsigned_tx_data);
-
-        let mut signatures = vec![];
-        assert_eq!(
-            signature_secrets.len(),
-            inputs.len(),
-            "non matching signature_secrets and inputs length!"
-        );
-        for signature_secret in &signature_secrets {
-            let signature = signature_secret.sign(&unsigned_tx_data[..]);
-            signatures.push(signature);
-        }
-
-        let call_data = CallData { header, inputs, signatures };
+        let call_data = CallData { header, inputs, signature_publics };
 
         FuncCall {
             contract_id: "DAO".to_string(),

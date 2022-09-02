@@ -60,9 +60,6 @@ impl UpdateBase for Update {
             state.wallet_cache.try_decrypt_note(coin, enc_note, &mut state.tree);
         }
     }
-    //fn as_any(&self) -> &dyn Any {
-    //    self
-    //}
 }
 
 pub fn state_transition(
@@ -183,10 +180,8 @@ pub struct CallData {
     pub inputs: Vec<Input>,
     /// Anonymous outputs
     pub outputs: Vec<Output>,
-    /// Clear input signatures
-    pub clear_signatures: Vec<schnorr::Signature>,
-    /// Input signatures
-    pub signatures: Vec<schnorr::Signature>,
+    /// Signature public keys
+    pub signature_publics: Vec<PublicKey>,
 }
 
 impl CallDataBase for CallData {
@@ -203,6 +198,14 @@ impl CallDataBase for CallData {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn signature_public_keys(&self) -> Vec<PublicKey> {
+        let mut signature_public_keys = Vec::new();
+        for pub_key in self.signature_publics.clone() {
+            signature_public_keys.push(pub_key);
+        }
+        signature_public_keys
     }
 }
 impl CallData {
@@ -245,30 +248,6 @@ impl CallData {
         if !self.verify_token_commitments() {
             error!("tx::verify(): Token ID mismatch");
             return Err(VerifyFailed::TokenMismatch)
-        }
-
-        // Verify the available signatures
-        let mut unsigned_tx_data = vec![];
-        self.clear_inputs.encode(&mut unsigned_tx_data)?;
-        self.inputs.encode(&mut unsigned_tx_data)?;
-        self.outputs.encode(&mut unsigned_tx_data)?;
-
-        for (i, (input, signature)) in
-            self.clear_inputs.iter().zip(self.clear_signatures.iter()).enumerate()
-        {
-            let public = &input.signature_public;
-            if !public.verify(&unsigned_tx_data[..], signature) {
-                error!("tx::verify(): Failed to verify Clear Input signature {}", i);
-                return Err(VerifyFailed::ClearInputSignature(i))
-            }
-        }
-
-        for (i, (input, signature)) in self.inputs.iter().zip(self.signatures.iter()).enumerate() {
-            let public = &input.revealed.signature_public;
-            if !public.verify(&unsigned_tx_data[..], signature) {
-                error!("tx::verify(): Failed to verify Input signature {}", i);
-                return Err(VerifyFailed::InputSignature(i))
-            }
         }
 
         Ok(())

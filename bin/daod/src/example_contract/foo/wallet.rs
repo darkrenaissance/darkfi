@@ -5,7 +5,10 @@ use halo2_proofs::circuit::Value;
 use pasta_curves::pallas;
 
 use darkfi::{
-    crypto::{keypair::SecretKey, Proof},
+    crypto::{
+        keypair::{PublicKey, SecretKey},
+        Proof,
+    },
     zk::vm::{Witness, ZkCircuit},
 };
 
@@ -57,7 +60,9 @@ impl Builder {
             .expect("Example::foo() proving error!)");
         proofs.push(input_proof);
 
-        let call_data = CallData { public_value: c };
+        let signature_public = PublicKey::from_secret(self.signature_secret);
+
+        let call_data = CallData { public_value: c, signature_public };
 
         FuncCall {
             contract_id: "Example".to_string(),

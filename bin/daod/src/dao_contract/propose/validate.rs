@@ -49,7 +49,7 @@ impl From<DarkFiError> for Error {
 pub struct CallData {
     pub header: Header,
     pub inputs: Vec<Input>,
-    pub signatures: Vec<schnorr::Signature>,
+    pub signature_publics: Vec<PublicKey>,
 }
 
 impl CallDataBase for CallData {
@@ -94,6 +94,14 @@ impl CallDataBase for CallData {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn signature_public_keys(&self) -> Vec<PublicKey> {
+        let mut signature_public_keys = vec![];
+        for pub_key in self.signature_publics.clone() {
+            signature_public_keys.push(pub_key);
+        }
+        signature_public_keys
     }
 }
 
@@ -141,21 +149,6 @@ pub fn state_transition(
         return Err(Error::InvalidDaoMerkleRoot)
     }
 
-    // Verify the available signatures
-    let mut unsigned_tx_data = vec![];
-    call_data.header.encode(&mut unsigned_tx_data).expect("failed to encode data");
-    call_data.inputs.encode(&mut unsigned_tx_data).expect("failed to encode inputs");
-    func_call.proofs.encode(&mut unsigned_tx_data).expect("failed to encode proofs");
-
-    for (_i, (input, signature)) in
-        call_data.inputs.iter().zip(call_data.signatures.iter()).enumerate()
-    {
-        let public = &input.signature_public;
-        if !public.verify(&unsigned_tx_data[..], signature) {
-            return Err(Error::SignatureVerifyFailed)
-        }
-    }
-
     // TODO: look at gov tokens avoid using already spent ones
     // Need to spend original coin and generate 2 nullifiers?
 
@@ -172,7 +165,4 @@ impl UpdateBase for Update {
         let state = states.lookup_mut::<DaoState>(&"DAO".to_string()).unwrap();
         state.add_proposal_bulla(self.proposal_bulla);
     }
-    //fn as_any(&self) -> &dyn Any {
-    //    self
-    //}
 }
