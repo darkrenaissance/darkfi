@@ -1,6 +1,5 @@
 use futures::{AsyncRead, AsyncWrite};
 use log::{debug, info, warn};
-use ringbuffer::RingBufferWrite;
 
 use darkfi::{Error, Result};
 

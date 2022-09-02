@@ -28,6 +28,7 @@ use darkfi::{
     Error, Result,
 };
 
+pub mod buffers;
 pub mod crypto;
 pub mod privmsg;
 pub mod protocol_privmsg;
@@ -36,7 +37,8 @@ pub mod server;
 pub mod settings;
 
 use crate::{
-    privmsg::{ArcPrivmsgsBuffer, Privmsg, PrivmsgsBuffer, SeenMsgIds},
+    buffers::{ArcPrivmsgsBuffer, PrivmsgsBuffer, RingBuffer, SeenMsgIds},
+    privmsg::Privmsg,
     protocol_privmsg::ProtocolPrivmsg,
     rpc::JsonRpcInterface,
     server::IrcServerConnection,
@@ -180,8 +182,7 @@ impl Ircd {
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
-    let seen_msg_ids =
-        Arc::new(Mutex::new(ringbuffer::AllocRingBuffer::with_capacity(SIZE_OF_MSG_IDSS_BUFFER)));
+    let seen_msg_ids = Arc::new(Mutex::new(RingBuffer::new(SIZE_OF_MSG_IDSS_BUFFER)));
     let privmsgs_buffer = PrivmsgsBuffer::new();
 
     if settings.gen_secret {

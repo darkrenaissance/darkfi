@@ -3,11 +3,13 @@ use async_std::sync::Arc;
 use async_executor::Executor;
 use async_trait::async_trait;
 use log::debug;
-use ringbuffer::{RingBufferExt, RingBufferWrite};
 
 use darkfi::{net, Result};
 
-use crate::privmsg::{ArcPrivmsgsBuffer, Privmsg, SeenMsgIds};
+use crate::{
+    buffers::{ArcPrivmsgsBuffer, SeenMsgIds},
+    Privmsg,
+};
 
 pub struct ProtocolPrivmsg {
     jobsman: net::ProtocolJobsManagerPtr,
