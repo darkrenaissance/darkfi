@@ -2,13 +2,15 @@ use async_std::sync::{Arc, Mutex};
 use std::fmt;
 
 use async_executor::Executor;
+use futures::{select, FutureExt};
 use fxhash::{FxHashMap, FxHashSet};
-use log::debug;
+use log::{debug, warn};
 use serde_json::json;
 use url::Url;
 
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
+    util::sleep,
     Result,
 };
 
@@ -183,7 +185,7 @@ impl P2p {
     }
 
     /// Wait for outbound connections to be established.
-    pub async fn wait_for_outbound(self: Arc<Self>) -> Result<()> {
+    pub async fn wait_for_outbound(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::wait_for_outbound() [BEGIN]");
         // To verify that the network needs initialization, we check if we have seeds or peers configured,
         // and have configured outbound slots.
@@ -202,18 +204,44 @@ impl P2p {
             let outbound_sub =
                 self.session_outbound.lock().await.as_ref().unwrap().subscribe_channel().await;
 
+            // Retrieve sto subscriber
+            let stop_sub = self.subscribe_stop().await;
+
+            // Retrieve timeout config
+            let timeout = self.settings().connect_timeout_seconds as u64;
+
             // Wait for the result for each of the addresses, excluding our own inbound addresses
             for addr in addrs {
                 if self_inbound_addr.contains(&addr) {
                     continue
                 }
 
-                // Wait for address to be processed
-                if let Err(e) = outbound_sub.receive().await {
-                    debug!(
-                        "P2p::wait_for_outbound(): Outbound connection failed [{}]: {}",
-                        &addr, e
-                    );
+                // Wait for address to be processed.
+                // We use a timeout to eliminate the following cases:
+                //  1. Network timeout
+                //  2. Thread reaching the receiver after peer has signal it
+                let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
+                executor
+                    .spawn(async move {
+                        sleep(timeout).await;
+                        timeout_s.send(()).await.unwrap_or(());
+                    })
+                    .detach();
+
+                select! {
+                    msg = outbound_sub.receive().fuse() => {
+                            if let Err(e) = msg {
+                                warn!(
+                                    "P2p::wait_for_outbound(): Outbound connection failed [{}]: {}",
+                                    &addr, e
+                                );
+                            }
+                    },
+                    _ = stop_sub.receive().fuse() => debug!("P2p::wait_for_outbound(): stop signal received!"),
+                    _ = timeout_r.recv().fuse() => {
+                        warn!("P2p::wait_for_outbound(): Timeout on outbound connection: {}", &addr);
+                        continue
+                    },
                 }
             }
 

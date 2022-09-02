@@ -5,7 +5,7 @@ use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{debug, error, warn};
 use rand::Rng;
-use std::{collections::HashSet, time::Duration};
+use std::collections::HashSet;
 
 use crate::{
     net,
@@ -21,7 +21,6 @@ use super::{
 };
 
 // Constants configuration
-const REQUEST_TIMEOUT: u64 = 2400;
 const SEEN_DURATION: i64 = 120;
 
 /// Atomic pointer to DHT state
@@ -265,14 +264,18 @@ impl Dht {
 
 // Auxilary function to wait for a key response from the P2P network.
 pub async fn waiting_for_response(dht: DhtPtr) -> Result<Option<KeyResponse>> {
-    let (p2p_recv_channel, stop_signal) = {
+    let (p2p_recv_channel, stop_signal, timeout) = {
         let _dht = dht.read().await;
-        (_dht.p2p_recv_channel.clone(), _dht.stop_signal.clone())
+        (
+            _dht.p2p_recv_channel.clone(),
+            _dht.stop_signal.clone(),
+            _dht.p2p.settings().connect_timeout_seconds as u64,
+        )
     };
     let ex = Arc::new(async_executor::Executor::new());
     let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
     ex.spawn(async move {
-        sleep(Duration::from_millis(REQUEST_TIMEOUT).as_secs()).await;
+        sleep(timeout).await;
         timeout_s.send(()).await.unwrap_or(());
     })
     .detach();

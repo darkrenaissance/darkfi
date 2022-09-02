@@ -410,7 +410,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     .detach();
 
     info!("Waiting for sync P2P outbound connections");
-    sync_p2p.clone().wait_for_outbound().await?;
+    sync_p2p.clone().wait_for_outbound(ex).await?;
 
     match block_sync_task(sync_p2p, state.clone()).await {
         Ok(()) => *faucetd.synced.lock().await = true,

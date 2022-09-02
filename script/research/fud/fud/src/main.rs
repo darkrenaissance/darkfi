@@ -407,7 +407,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     .detach();
 
     info!("Waiting for P2P outbound connections");
-    p2p.wait_for_outbound().await?;
+    p2p.wait_for_outbound(ex).await?;
 
     fud.init().await?;
 
