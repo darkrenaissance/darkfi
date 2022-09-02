@@ -291,10 +291,6 @@ pub enum Error {
     #[error("Failed decoding bincode: {0}")]
     ZkasDecoderError(String),
 
-    #[cfg(feature = "regex")]
-    #[error(transparent)]
-    RegexError(#[from] regex::Error),
-
     #[cfg(feature = "util")]
     #[error("System clock is not correct!")]
     InvalidClock,

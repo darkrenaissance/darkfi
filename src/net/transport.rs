@@ -1,7 +1,6 @@
 use std::{net::SocketAddr, time::Duration};
 
 use async_trait::async_trait;
-// TODO remove *
 use futures::prelude::*;
 use futures_rustls::{TlsAcceptor, TlsStream};
 use url::Url;
@@ -26,7 +25,7 @@ pub(crate) fn socket_addr_to_url(addr: SocketAddr, scheme: &str) -> Result<Url> 
     Ok(url)
 }
 
-/// Used as wrapper for stream used by  Transport trait
+/// Used as wrapper for stream used by Transport trait
 pub trait TransportStream: AsyncWrite + AsyncRead + Unpin + Send + Sync {}
 
 /// Used as wrapper for listener used by Transport trait

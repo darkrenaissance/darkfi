@@ -1219,7 +1219,6 @@ dependencies = [
  "plotters",
  "rand",
  "rcgen",
- "regex",
  "rustls-pemfile",
  "serde",
  "serde_json",
