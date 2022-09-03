@@ -92,8 +92,8 @@ straight after receiving them.
 
 The first time you run the program, a config file will be created in
 `~/.config/darkfi` if your are using Linux or in 
-`~/Library/Application Support/darkfi/` on MacOS. You must specify an
-inbound accept address in your config file to configure a seed node:
+`~/Library/Application Support/darkfi/` on MacOS. 
+You must specify an inbound accept address in your config file to configure a seed node:
 
 ```toml
 ## P2P accept addresses
