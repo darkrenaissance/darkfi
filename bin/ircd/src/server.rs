@@ -11,6 +11,7 @@ use darkfi::{net::P2pPtr, system::SubscriberPtr, util::Timestamp, Error, Result}
 use crate::{
     crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
     privmsg::{ArcPrivmsgsBuffer, Privmsg, SeenMsgIds},
+    settings::ContactInfo,
     ChannelInfo, MAXIMUM_LENGTH_OF_MESSAGE, MAXIMUM_LENGTH_OF_NICKNAME,
 };
 
@@ -35,7 +36,7 @@ pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'stati
     nickname: String,
     auto_channels: Vec<String>,
     pub configured_chans: FxHashMap<String, ChannelInfo>,
-    pub configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
+    pub configured_contacts: FxHashMap<String, ContactInfo>,
     capabilities: FxHashMap<String, bool>,
     // p2p
     p2p: P2pPtr,
@@ -54,7 +55,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         auto_channels: Vec<String>,
         password: String,
         configured_chans: FxHashMap<String, ChannelInfo>,
-        configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
+        configured_contacts: FxHashMap<String, ContactInfo>,
         p2p: P2pPtr,
         senders: SubscriberPtr<Privmsg>,
         subscriber_id: u64,
@@ -236,8 +237,12 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                         info!("(Encrypted) PRIVMSG: {:?}", privmsg);
                     }
                 } else {
-                    // If we have a configured secret for this nick, we encrypt the message.
-                    if let Some(salt_box) = self.configured_contacts.get(target) {
+                    if !self.configured_contacts.contains_key(target) {
+                        return Ok(())
+                    }
+
+                    let contact_info = self.configured_contacts.get(target).unwrap();
+                    if let Some(salt_box) = &contact_info.salt_box {
                         encrypt_privmsg(salt_box, &mut privmsg);
                         info!("(Encrypted) PRIVMSG: {:?}", privmsg);
                     }
@@ -344,10 +349,10 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                 return Ok(())
             }
 
+            println!("sending dms in the buffer");
             for msg in self.privmsgs_buffer.lock().await.to_vec() {
-                if msg.target == self.nickname ||
-                    (msg.nickname == self.nickname && !msg.target.starts_with('#'))
-                {
+                if !msg.target.starts_with('#') {
+                    println!("if statement is ok in dms buffer thing");
                     self.senders.notify_by_id(msg, self.subscriber_id).await;
                 }
             }
@@ -446,7 +451,14 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         info!("Received msg from P2p network: {:?}", msg);
 
         let mut msg = msg.clone();
-        decrypt_target(&mut msg, self.configured_chans.clone(), self.configured_contacts.clone());
+
+        let mut contact = String::new();
+        decrypt_target(
+            &mut contact,
+            &mut msg,
+            self.configured_chans.clone(),
+            self.configured_contacts.clone(),
+        );
 
         if msg.target.starts_with('#') {
             // Try to potentially decrypt the incoming message.
@@ -471,14 +483,21 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
             self.reply(&msg.to_irc_msg()).await?;
             return Ok(())
-        } else if self.is_cap_end && self.is_nick_init && self.nickname == msg.target {
-            if self.configured_contacts.contains_key(&msg.target) {
-                let salt_box = self.configured_contacts.get(&msg.target).unwrap();
+        } else if self.is_cap_end && self.is_nick_init {
+            if !self.configured_contacts.contains_key(&contact) {
+                return Ok(())
+            }
+
+            let contact_info = self.configured_contacts.get(&contact).unwrap();
+            if let Some(salt_box) = &contact_info.salt_box {
                 decrypt_privmsg(salt_box, &mut msg);
+                // This is for /query
+                msg.nickname = contact;
                 info!("Decrypted received message: {:?}", msg);
             }
 
             self.reply(&msg.to_irc_msg()).await?;
+            return Ok(())
         }
 
         Ok(())

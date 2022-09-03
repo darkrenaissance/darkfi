@@ -65,10 +65,16 @@ seeds = ["tls://lilith0.dark.fi:25551", "tls://lilith1.dark.fi:25551"]
 [channel."#dev"]
 topic = "DarkFi Development HQ"
 
-## Contacts list
-# Shared secrets that encrypt direct communication between two nicknames on
-# the network.
-# These are in the form of secret:[nick0,nick1], which means that the same
-# shared secret will be used for all the nicknames in the list.
-[contact."7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"]
-nicks = ["sneed", "chuck"]
+### Contacts list
+## private key used to decrypt direct messages to you along with
+## contact_pubkey.
+## !!SHOULD NEVER SHARE THIS!!
+#[private_key."955Dfa83pU7RCevT2rMrGfhza4kcy6FShSNE6AdR4Q7A"]
+
+## Shared Pubkey that encrypt direct communication between two nicknames
+## on the network.
+## These are in the form of [Contact_nick, My_nick, Contact_pubkey]
+## contact nickname (this is not the irc nickname)
+#[contact."narodnik"]
+## contact public key
+#contact_pubkey = "C9vC6HNDfGQofWCapZfQK5MkV1JR8Cct839RDUCqbDGK"

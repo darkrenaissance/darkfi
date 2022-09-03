@@ -39,6 +39,14 @@ pub struct Args {
     #[structopt(long)]
     pub gen_secret: bool,
 
+    /// Generate a new NaCl keypair and exit
+    #[structopt(long)]
+    pub gen_keypair: bool,
+
+    /// Path to save keypair in
+    #[structopt(short)]
+    pub output: Option<String>,
+
     /// Autojoin channels
     #[structopt(long)]
     pub autojoin: Vec<String>,
@@ -53,6 +61,18 @@ pub struct Args {
     /// Increase verbosity
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
+}
+
+#[derive(Clone)]
+pub struct ContactInfo {
+    /// Optional NaCl box for the channel, used for {en,de}cryption.
+    pub salt_box: Option<SalsaBox>,
+}
+
+impl ContactInfo {
+    pub fn new() -> Result<Self> {
+        Ok(Self { salt_box: None })
+    }
 }
 
 /// This struct holds information about preconfigured channels.
@@ -93,34 +113,55 @@ fn salt_box_from_shared_secret(s: &str) -> Result<SalsaBox> {
     Ok(SalsaBox::new(&public, &secret))
 }
 
+fn parse_priv_key(data: &str) -> Result<String> {
+    let mut pk = String::new();
+    if let Value::Table(map) = toml::from_str(data)? {
+        if map.contains_key("private_key") && map["private_key"].is_table() {
+            for prv_key in map["private_key"].as_table().unwrap() {
+                pk = prv_key.0.into();
+            }
+        }
+    };
+
+    Ok(pk)
+}
+
 /// Parse a TOML string for any configured contact list and return
 /// a map containing said configurations.
 ///
 /// ```toml
-/// [contact."7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"]
-/// nicks = ["sneed", "chuck"]
+/// [contact."nick"]
+/// contact_pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 /// ```
-pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, SalsaBox>> {
+pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, ContactInfo>> {
     let mut ret = FxHashMap::default();
 
     if let Value::Table(map) = toml::from_str(data)? {
         if map.contains_key("contact") && map["contact"].is_table() {
-            for contact in map["contact"].as_table().unwrap() {
-                // (secret, nicks = [nick0, nick1])
-                if contact.1.as_table().unwrap().contains_key("nicks") {
-                    if let Some(nicks) = contact.1["nicks"].as_array() {
-                        let salt_box = salt_box_from_shared_secret(contact.0.as_str())?;
-                        for nick in nicks {
-                            if let Some(n) = nick.as_str() {
-                                info!("Instantiated salt box for {}", n);
-                                ret.insert(n.to_string(), salt_box.clone());
-                            }
-                        }
+            for cnt in map["contact"].as_table().unwrap() {
+                info!("Found configuration for contact {}", cnt.0);
+
+                let mut contact_info = ContactInfo::new()?;
+
+                if cnt.1.as_table().unwrap().contains_key("contact_pubkey") {
+                    // Build the NaCl box
+                    if let Some(p) = cnt.1["contact_pubkey"].as_str() {
+                        let bytes: [u8; 32] = bs58::decode(p).into_vec()?.try_into().unwrap();
+                        let public = crypto_box::PublicKey::from(bytes);
+
+                        let bytes: [u8; 32] =
+                            bs58::decode(parse_priv_key(data)?).into_vec()?.try_into().unwrap();
+                        let secret = crypto_box::SecretKey::from(bytes);
+
+                        contact_info.salt_box = Some(SalsaBox::new(&public, &secret));
+
+                        ret.insert(cnt.0.to_string(), contact_info);
+                        info!("Instantiated NaCl box for contact {}", cnt.0);
                     }
                 }
             }
         }
-    }
+    };
 
     Ok(ret)
 }

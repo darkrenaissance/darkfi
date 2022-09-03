@@ -2,7 +2,8 @@ use async_std::{
     net::TcpListener,
     sync::{Arc, Mutex},
 };
-use std::{fs::File, net::SocketAddr};
+use settings::ContactInfo;
+use std::{fmt, fs::File, net::SocketAddr};
 
 use async_channel::Receiver;
 use async_executor::Executor;
@@ -21,6 +22,7 @@ use darkfi::{
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
         expand_path,
+        file::save_json_file,
         path::get_config_path,
     },
     Error, Result,
@@ -49,6 +51,18 @@ pub const SIZE_OF_MSGS_BUFFER: usize = 4096;
 pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
 pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 32;
 
+#[derive(serde::Serialize)]
+struct KeyPair {
+    private_key: String,
+    public_key: String,
+}
+
+impl fmt::Display for KeyPair {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Public key: {}\nPrivate key: {}", self.public_key, self.private_key)
+    }
+}
+
 struct Ircd {
     // msgs
     seen_msg_ids: SeenMsgIds,
@@ -56,7 +70,7 @@ struct Ircd {
     // channels
     autojoin_chans: Vec<String>,
     configured_chans: FxHashMap<String, ChannelInfo>,
-    configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
+    configured_contacts: FxHashMap<String, ContactInfo>,
     // p2p
     p2p: net::P2pPtr,
     senders: SubscriberPtr<Privmsg>,
@@ -70,7 +84,7 @@ impl Ircd {
         autojoin_chans: Vec<String>,
         password: String,
         configured_chans: FxHashMap<String, ChannelInfo>,
-        configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
+        configured_contacts: FxHashMap<String, ContactInfo>,
         p2p: net::P2pPtr,
     ) -> Self {
         let senders = Subscriber::new();
@@ -174,6 +188,24 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
         let encoded = bs58::encode(secret_key.as_bytes());
         println!("{}", encoded.into_string());
+        return Ok(())
+    }
+
+    if settings.gen_keypair {
+        let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
+        let pub_key = secret_key.public_key();
+        let prv_encoded = bs58::encode(secret_key.as_bytes()).into_string();
+        let pub_encoded = bs58::encode(pub_key.as_bytes()).into_string();
+
+        let kp = KeyPair { private_key: prv_encoded, public_key: pub_encoded };
+
+        if settings.output.is_some() {
+            let datastore = expand_path(&settings.output.unwrap())?;
+            save_json_file(&datastore, &kp)?;
+        } else {
+            println!("Generated KeyPair:\n{}", kp);
+        }
+
         return Ok(())
     }
 

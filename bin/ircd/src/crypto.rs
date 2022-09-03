@@ -5,7 +5,11 @@ use crypto_box::{
 use fxhash::FxHashMap;
 use rand::rngs::OsRng;
 
-use crate::{privmsg::Privmsg, settings::ChannelInfo, MAXIMUM_LENGTH_OF_NICKNAME};
+use crate::{
+    privmsg::Privmsg,
+    settings::{ChannelInfo, ContactInfo},
+    MAXIMUM_LENGTH_OF_NICKNAME,
+};
 
 /// Try decrypting a message given a NaCl box and a base58 string.
 /// The format we're using is nonce+ciphertext, where nonce is 24 bytes.
@@ -50,9 +54,10 @@ pub fn encrypt_message(salt_box: &SalsaBox, plaintext: &str) -> String {
 
 /// Decrypt PrivMsg target
 pub fn decrypt_target(
+    contact: &mut String,
     privmsg: &mut Privmsg,
     configured_chans: FxHashMap<String, ChannelInfo>,
-    configured_contacts: FxHashMap<String, SalsaBox>,
+    configured_contacts: FxHashMap<String, ContactInfo>,
 ) {
     for chan_name in configured_chans.keys() {
         let chan_info = configured_chans.get(chan_name).unwrap();
@@ -76,16 +81,19 @@ pub fn decrypt_target(
         }
     }
 
-    for contact in configured_contacts.keys() {
-        let salt_box = configured_contacts.get(contact).unwrap();
-        let decrypted_target = try_decrypt_message(salt_box, &privmsg.target);
-        if decrypted_target.is_none() {
-            continue
-        }
+    for cnt_name in configured_contacts.keys() {
+        let cnt_info = configured_contacts.get(cnt_name).unwrap();
 
-        let target = decrypted_target.unwrap();
-        if *contact == target {
+        let salt_box = cnt_info.salt_box.clone();
+        if let Some(salt_box) = salt_box {
+            let decrypted_target = try_decrypt_message(&salt_box, &privmsg.target);
+            if decrypted_target.is_none() {
+                continue
+            }
+
+            let target = decrypted_target.unwrap();
             privmsg.target = target;
+            *contact = cnt_name.into();
             return
         }
     }
