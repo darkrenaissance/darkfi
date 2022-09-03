@@ -68,7 +68,7 @@ following commands (there is an assumption that `irc_listen` in the
 `ircd` config file is set to `127.0.0.1:11066`):
 
 ```
-/server add darkfi localhost/11066 -autoconnect
+/server add darkfi localhost/6667 -autoconnect
 /save
 /quit
 ```
@@ -91,8 +91,9 @@ which requests a list of addresses from the seed node and disconnects
 straight after receiving them.
 
 The first time you run the program, a config file will be created in
-.config/darkfi. You must specify an inbound accept address in your
-config file to configure a seed node:
+`~/.config/darkfi` if your are using Linux or in 
+`~/Library/Application Support/darkfi/` on MacOS. 
+You must specify an inbound accept address in your config file to configure a seed node:
 
 ```toml
 ## P2P accept addresses
