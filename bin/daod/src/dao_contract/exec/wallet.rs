@@ -6,7 +6,7 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 
 use darkfi::{
     crypto::{
-        keypair::{PublicKey, SecretKey},
+        keypair::SecretKey,
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },

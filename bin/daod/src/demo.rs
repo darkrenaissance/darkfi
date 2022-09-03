@@ -21,8 +21,7 @@ use darkfi::{
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
-    error as DarkFiError,
-    util::serial::{Encodable, SerialDecodable, SerialEncodable},
+    util::serial::Encodable,
     zk::{
         circuit::{BurnContract, MintContract},
         vm::ZkCircuit,
@@ -154,7 +153,7 @@ impl Transaction {
 fn sign(signature_secrets: Vec<SecretKey>, func_calls: &Vec<FuncCall>) -> Vec<Signature> {
     let mut signatures = vec![];
     let mut unsigned_tx_data = vec![];
-    for (i, (signature_secret, func_call)) in
+    for (_i, (signature_secret, func_call)) in
         signature_secrets.iter().zip(func_calls.iter()).enumerate()
     {
         func_call.encode(&mut unsigned_tx_data).expect("failed to encode data");

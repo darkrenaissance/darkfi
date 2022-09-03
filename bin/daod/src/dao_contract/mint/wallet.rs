@@ -24,7 +24,7 @@ pub struct Builder {
     gov_token_id: pallas::Base,
     dao_pubkey: PublicKey,
     dao_bulla_blind: pallas::Base,
-    signature_secret: SecretKey,
+    _signature_secret: SecretKey,
 }
 
 impl Builder {
@@ -35,7 +35,7 @@ impl Builder {
         gov_token_id: pallas::Base,
         dao_pubkey: PublicKey,
         dao_bulla_blind: pallas::Base,
-        signature_secret: SecretKey,
+        _signature_secret: SecretKey,
     ) -> Self {
         Self {
             dao_proposer_limit,
@@ -44,7 +44,7 @@ impl Builder {
             gov_token_id,
             dao_pubkey,
             dao_bulla_blind,
-            signature_secret,
+            _signature_secret,
         }
     }
 

@@ -7,7 +7,7 @@ use std::{any::Any, collections::HashMap, hash::Hasher};
 
 use darkfi::{
     crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode, nullifier::Nullifier},
-    util::serial::{Encodable, SerialDecodable, SerialEncodable},
+    util::serial::{SerialDecodable, SerialEncodable},
 };
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]

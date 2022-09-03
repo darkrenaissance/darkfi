@@ -11,8 +11,6 @@ use darkfi::{
         keypair::PublicKey,
         merkle_node::MerkleNode,
         nullifier::Nullifier,
-        schnorr,
-        schnorr::SchnorrPublic,
         types::{DrkCircuitField, DrkTokenId, DrkValueBlind, DrkValueCommit},
         util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues,
@@ -336,12 +334,6 @@ pub enum VerifyFailed {
 
     #[error("Nullifier already exists for input {0}")]
     NullifierExists(usize),
-
-    #[error("Invalid signature for input {0}")]
-    InputSignature(usize),
-
-    #[error("Invalid signature for clear input {0}")]
-    ClearInputSignature(usize),
 
     #[error("Token commitments in inputs or outputs to not match")]
     TokenMismatch,

@@ -3,11 +3,10 @@ use darkfi::{
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         nullifier::Nullifier,
-        schnorr::SchnorrSecret,
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
-    util::serial::{Encodable, SerialDecodable, SerialEncodable},
+    util::serial::{SerialDecodable, SerialEncodable},
     zk::vm::{Witness, ZkCircuit},
 };
 use halo2_proofs::circuit::Value;

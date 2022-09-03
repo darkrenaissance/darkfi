@@ -23,9 +23,6 @@ type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
-    #[error("ValueExists")]
-    ValueExists,
-
     #[error("DarkFi error: {0}")]
     DarkFiError(String),
 
@@ -197,7 +194,7 @@ pub struct Update {
 
 impl UpdateBase for Update {
     fn apply(self: Box<Self>, states: &mut StateRegistry) {
-        let mut state = states
+        let state = states
             .lookup_mut::<dao_contract::State>(&"DAO".to_string())
             .expect("Return type is not of type State");
         state.proposal_votes.remove(&HashableBase(self.proposal)).unwrap();

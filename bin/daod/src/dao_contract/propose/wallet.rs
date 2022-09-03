@@ -11,11 +11,10 @@ use darkfi::{
     crypto::{
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
-        schnorr::SchnorrSecret,
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
-    util::serial::{Encodable, SerialDecodable, SerialEncodable},
+    util::serial::{SerialDecodable, SerialEncodable},
     zk::vm::{Witness, ZkCircuit},
 };
 
@@ -24,8 +23,6 @@ use crate::{
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
     money_contract, note,
 };
-
-use log::debug;
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct Note {
@@ -146,12 +143,8 @@ impl Builder {
 
             let value_commit = pedersen_commitment_u64(note.value, funds_blind);
             let value_coords = value_commit.to_affine().coordinates().unwrap();
-            let value_commit_x = *value_coords.x();
-            let value_commit_y = *value_coords.y();
 
             let sigpub_coords = signature_public.0.to_affine().coordinates().unwrap();
-            let sigpub_x = *sigpub_coords.x();
-            let sigpub_y = *sigpub_coords.y();
 
             let public_inputs = vec![
                 *value_coords.x(),

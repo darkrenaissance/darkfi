@@ -1,8 +1,5 @@
 use darkfi::{
-    crypto::{
-        keypair::PublicKey, merkle_node::MerkleNode, schnorr, schnorr::SchnorrPublic,
-        types::DrkCircuitField,
-    },
+    crypto::{keypair::PublicKey, merkle_node::MerkleNode, types::DrkCircuitField},
     util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
@@ -31,9 +28,6 @@ pub enum Error {
 
     #[error("Invalid DAO merkle root")]
     InvalidDaoMerkleRoot,
-
-    #[error("Signature verification failed")]
-    SignatureVerifyFailed,
 
     #[error("DarkFi error: {0}")]
     DarkFiError(String),

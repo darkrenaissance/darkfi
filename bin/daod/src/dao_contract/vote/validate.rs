@@ -1,7 +1,6 @@
 use darkfi::{
     crypto::{
-        keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier, schnorr,
-        schnorr::SchnorrPublic, types::DrkCircuitField,
+        keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier, types::DrkCircuitField,
     },
     util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
@@ -34,9 +33,6 @@ pub enum Error {
 
     #[error("Invalid input merkle root")]
     InvalidInputMerkleRoot,
-
-    #[error("Signature verification failed")]
-    SignatureVerifyFailed,
 
     #[error("DarkFi error: {0}")]
     DarkFiError(String),

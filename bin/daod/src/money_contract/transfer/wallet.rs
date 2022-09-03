@@ -7,13 +7,12 @@ use darkfi::{
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
         mint_proof::create_mint_proof,
-        schnorr::SchnorrSecret,
         types::{
             DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
             DrkValueBlind,
         },
     },
-    util::serial::{Encodable, SerialDecodable, SerialEncodable},
+    util::serial::{SerialDecodable, SerialEncodable},
     Result,
 };
 
@@ -116,8 +115,6 @@ impl Builder {
         for input in self.inputs {
             let value_blind = input.value_blind;
             input_blinds.push(value_blind);
-
-            let signature_public = PublicKey::from_secret(input.signature_secret);
 
             let zk_info = zk_bins.lookup(&"money-transfer-burn".to_string()).unwrap();
             let zk_info = if let ZkContractInfo::Native(info) = zk_info {
