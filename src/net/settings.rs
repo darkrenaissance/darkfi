@@ -25,6 +25,7 @@ pub struct Settings {
     pub peers: Vec<Url>,
     pub seeds: Vec<Url>,
     pub node_id: String,
+    pub app_version: String,
     pub outbound_transports: Vec<TransportName>,
 }
 
@@ -43,6 +44,7 @@ impl Default for Settings {
             peers: Vec::new(),
             seeds: Vec::new(),
             node_id: String::new(),
+            app_version: String::new(),
             outbound_transports: get_outbound_transports(vec![]),
         }
     }
@@ -93,6 +95,10 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub node_id: String,
 
+    #[serde(default)]
+    #[structopt(skip)]
+    pub app_version: String,
+
     /// Prefered transports for outbound connections
     #[serde(default)]
     #[structopt(long = "transports")]
@@ -114,6 +120,7 @@ impl From<SettingsOpt> for Settings {
             peers: settings_opt.peers,
             seeds: settings_opt.seeds,
             node_id: settings_opt.node_id,
+            app_version: settings_opt.app_version,
             outbound_transports: get_outbound_transports(settings_opt.outbound_transports),
         }
     }

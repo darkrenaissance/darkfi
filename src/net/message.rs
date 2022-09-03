@@ -43,21 +43,12 @@ pub struct VersionMessage {
     pub node_id: String,
 }
 
-/// Requests app information of outbound connection.
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct AppMessage {
-    pub version: String,
-}
-
-/// Sends app information to inbound connection. Response to AppMessage.
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct AppAckMessage {
-    pub version: String,
-}
-
 /// Sends version information to inbound connection. Response to VersionMessage.
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct VerackMessage {}
+pub struct VerackMessage {
+    // app version
+    pub app: String,
+}
 
 impl Message for PingMessage {
     fn name() -> &'static str {
@@ -86,18 +77,6 @@ impl Message for AddrsMessage {
 impl Message for VersionMessage {
     fn name() -> &'static str {
         "version"
-    }
-}
-
-impl Message for AppMessage {
-    fn name() -> &'static str {
-        "app"
-    }
-}
-
-impl Message for AppAckMessage {
-    fn name() -> &'static str {
-        "appack"
     }
 }
 
