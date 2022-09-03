@@ -68,6 +68,8 @@ topic = "DarkFi Development HQ"
 ### Contacts list
 ## private key used to decrypt direct messages to you along with
 ## contact_pubkey.
+## Generate keypair using 'ircd --gen-keypair' 
+## or to save to a file 'ircd --gen-keypair -o ~/some_dir/filename'
 ## !!SHOULD NEVER SHARE THIS!!
 #[private_key."955Dfa83pU7RCevT2rMrGfhza4kcy6FShSNE6AdR4Q7A"]
 
