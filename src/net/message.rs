@@ -1,11 +1,9 @@
-use std::io;
-
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use log::debug;
 use url::Url;
 
 use crate::{
-    util::serial::{Decodable, Encodable, VarInt},
+    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Error, Result,
 };
 
@@ -17,30 +15,48 @@ pub trait Message: 'static + Encodable + Decodable + Send + Sync {
 }
 
 /// Outbound keep-alive message.
+#[derive(SerialEncodable, SerialDecodable)]
 pub struct PingMessage {
     pub nonce: u32,
 }
 
 /// Inbound keep-alive message.
+#[derive(SerialEncodable, SerialDecodable)]
 pub struct PongMessage {
     pub nonce: u32,
 }
 
 /// Requests address of outbound connection.
+#[derive(SerialEncodable, SerialDecodable)]
 pub struct GetAddrsMessage {}
 
 /// Sends address information to inbound connection. Response to GetAddrs
 /// message.
+#[derive(SerialEncodable, SerialDecodable)]
 pub struct AddrsMessage {
     pub addrs: Vec<Url>,
 }
 
 /// Requests version information of outbound connection.
+#[derive(SerialEncodable, SerialDecodable)]
 pub struct VersionMessage {
     pub node_id: String,
 }
 
+/// Requests app information of outbound connection.
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct AppMessage {
+    pub version: String,
+}
+
+/// Sends app information to inbound connection. Response to AppMessage.
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct AppAckMessage {
+    pub version: String,
+}
+
 /// Sends version information to inbound connection. Response to VersionMessage.
+#[derive(SerialEncodable, SerialDecodable)]
 pub struct VerackMessage {}
 
 impl Message for PingMessage {
@@ -73,90 +89,21 @@ impl Message for VersionMessage {
     }
 }
 
+impl Message for AppMessage {
+    fn name() -> &'static str {
+        "app"
+    }
+}
+
+impl Message for AppAckMessage {
+    fn name() -> &'static str {
+        "appack"
+    }
+}
+
 impl Message for VerackMessage {
     fn name() -> &'static str {
         "verack"
-    }
-}
-
-impl Encodable for PingMessage {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.nonce.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for PingMessage {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self { nonce: Decodable::decode(&mut d)? })
-    }
-}
-
-impl Encodable for PongMessage {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.nonce.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for PongMessage {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self { nonce: Decodable::decode(&mut d)? })
-    }
-}
-
-impl Encodable for GetAddrsMessage {
-    fn encode<S: io::Write>(&self, mut _s: S) -> Result<usize> {
-        let len = 0;
-        Ok(len)
-    }
-}
-
-impl Decodable for GetAddrsMessage {
-    fn decode<D: io::Read>(mut _d: D) -> Result<Self> {
-        Ok(Self {})
-    }
-}
-
-impl Encodable for AddrsMessage {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.addrs.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for AddrsMessage {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self { addrs: Decodable::decode(&mut d)? })
-    }
-}
-
-impl Encodable for VersionMessage {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.node_id.encode(&mut s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for VersionMessage {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self { node_id: Decodable::decode(&mut d)? })
-    }
-}
-
-impl Encodable for VerackMessage {
-    fn encode<S: io::Write>(&self, _s: S) -> Result<usize> {
-        Ok(0)
-    }
-}
-
-impl Decodable for VerackMessage {
-    fn decode<D: io::Read>(_d: D) -> Result<Self> {
-        Ok(Self {})
     }
 }
 
