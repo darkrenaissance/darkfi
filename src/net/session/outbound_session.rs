@@ -242,7 +242,12 @@ impl OutboundSession {
             addrs.shuffle(&mut rand::thread_rng());
 
             for addr in addrs {
-                if p2p.exists(&addr).await {
+                if p2p.exists(&addr).await? {
+                    continue
+                }
+
+                // Check if address is in peers list
+                if p2p.settings().peers.contains(&addr) {
                     continue
                 }
 
