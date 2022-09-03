@@ -17,37 +17,27 @@ use crate::{
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 
+#[derive(Clone)]
+pub struct DaoParams {
+    pub proposer_limit: u64,
+    pub quorum: u64,
+    pub approval_ratio: u64,
+    pub gov_token_id: pallas::Base,
+    pub public_key: PublicKey,
+    pub bulla_blind: pallas::Base,
+}
+
 pub struct Builder {
-    dao_proposer_limit: u64,
-    dao_quorum: u64,
-    dao_approval_ratio: u64,
-    gov_token_id: pallas::Base,
-    dao_pubkey: PublicKey,
-    dao_bulla_blind: pallas::Base,
-    _signature_secret: SecretKey,
+    pub dao_proposer_limit: u64,
+    pub dao_quorum: u64,
+    pub dao_approval_ratio: u64,
+    pub gov_token_id: pallas::Base,
+    pub dao_pubkey: PublicKey,
+    pub dao_bulla_blind: pallas::Base,
+    pub _signature_secret: SecretKey,
 }
 
 impl Builder {
-    pub fn new(
-        dao_proposer_limit: u64,
-        dao_quorum: u64,
-        dao_approval_ratio: u64,
-        gov_token_id: pallas::Base,
-        dao_pubkey: PublicKey,
-        dao_bulla_blind: pallas::Base,
-        _signature_secret: SecretKey,
-    ) -> Self {
-        Self {
-            dao_proposer_limit,
-            dao_quorum,
-            dao_approval_ratio,
-            gov_token_id,
-            dao_pubkey,
-            dao_bulla_blind,
-            _signature_secret,
-        }
-    }
-
     /// Consumes self, and produces the function call
     pub fn build(self, zk_bins: &ZkContractTable) -> FuncCall {
         // Dao bulla

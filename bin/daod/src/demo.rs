@@ -383,15 +383,15 @@ pub async fn demo() -> Result<()> {
 
     let signature_secret = SecretKey::random(&mut OsRng);
     // Create DAO mint tx
-    let builder = dao_contract::mint::wallet::Builder::new(
+    let builder = dao_contract::mint::wallet::Builder {
         dao_proposer_limit,
         dao_quorum,
         dao_approval_ratio,
-        gdrk_token_id,
-        dao_keypair.public,
+        gov_token_id: gdrk_token_id,
+        dao_pubkey: dao_keypair.public,
         dao_bulla_blind,
-        signature_secret,
-    );
+        _signature_secret: signature_secret,
+    };
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
@@ -736,7 +736,7 @@ pub async fn demo() -> Result<()> {
         (merkle_path, root)
     };
 
-    let dao_params = dao_contract::propose::wallet::DaoParams {
+    let dao_params = dao_contract::mint::wallet::DaoParams {
         proposer_limit: dao_proposer_limit,
         quorum: dao_quorum,
         approval_ratio: dao_approval_ratio,

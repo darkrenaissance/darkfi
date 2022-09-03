@@ -19,7 +19,10 @@ use darkfi::{
 };
 
 use crate::{
-    dao_contract::propose::validate::{CallData, Header, Input},
+    dao_contract::{
+        mint::wallet::DaoParams,
+        propose::validate::{CallData, Header, Input},
+    },
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
     money_contract, note,
 };
@@ -46,16 +49,6 @@ pub struct Proposal {
     pub blind: pallas::Base,
 }
 
-#[derive(Clone)]
-pub struct DaoParams {
-    pub proposer_limit: u64,
-    pub quorum: u64,
-    pub approval_ratio: u64,
-    pub gov_token_id: pallas::Base,
-    pub public_key: PublicKey,
-    pub bulla_blind: pallas::Base,
-}
-
 pub struct Builder {
     pub inputs: Vec<BuilderInput>,
     pub proposal: Proposal,
@@ -63,7 +56,6 @@ pub struct Builder {
     pub dao_leaf_position: incrementalmerkletree::Position,
     pub dao_merkle_path: Vec<MerkleNode>,
     pub dao_merkle_root: MerkleNode,
-    //pub signature_secrets: Vec<SecretKey>,
 }
 
 impl Builder {

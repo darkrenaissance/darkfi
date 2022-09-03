@@ -20,7 +20,8 @@ use rand::rngs::OsRng;
 
 use crate::{
     dao_contract::{
-        propose::wallet::{DaoParams, Proposal},
+        mint::wallet::DaoParams,
+        propose::wallet::Proposal,
         vote::validate::{CallData, Header, Input},
     },
     demo::{FuncCall, ZkContractInfo, ZkContractTable},

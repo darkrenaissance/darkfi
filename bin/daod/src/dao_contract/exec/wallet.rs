@@ -14,10 +14,7 @@ use darkfi::{
 };
 
 use crate::{
-    dao_contract::{
-        exec::validate::CallData,
-        propose::wallet::{DaoParams, Proposal},
-    },
+    dao_contract::{exec::validate::CallData, mint::wallet::DaoParams, propose::wallet::Proposal},
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 
