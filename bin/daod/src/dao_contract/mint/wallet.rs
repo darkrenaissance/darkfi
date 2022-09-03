@@ -13,7 +13,7 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
 use crate::{
-    dao_contract::mint::validate::CallData,
+    dao_contract::{mint::validate::CallData, CONTRACT_ID},
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 
@@ -86,8 +86,8 @@ impl Builder {
 
         let call_data = CallData { dao_bulla };
         FuncCall {
-            contract_id: "DAO".to_string(),
-            func_id: "DAO::mint()".to_string(),
+            contract_id: *CONTRACT_ID,
+            func_id: *super::FUNC_ID,
             call_data: Box::new(call_data),
             proofs: vec![mint_proof],
         }

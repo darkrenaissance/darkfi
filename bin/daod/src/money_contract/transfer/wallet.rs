@@ -18,7 +18,10 @@ use darkfi::{
 
 use crate::{
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
-    money_contract::transfer::validate::{CallData, ClearInput, Input, Output},
+    money_contract::{
+        transfer::validate::{CallData, ClearInput, Input, Output},
+        CONTRACT_ID,
+    },
     note,
 };
 
@@ -207,8 +210,8 @@ impl Builder {
         let call_data = CallData { clear_inputs, inputs, outputs };
 
         Ok(FuncCall {
-            contract_id: "Money".to_string(),
-            func_id: "Money::transfer()".to_string(),
+            contract_id: *CONTRACT_ID,
+            func_id: *super::FUNC_ID,
             call_data: Box::new(call_data),
             proofs,
         })

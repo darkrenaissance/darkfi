@@ -6,7 +6,7 @@ use darkfi::{
 };
 
 use crate::{
-    dao_contract::{DaoBulla, State},
+    dao_contract::{DaoBulla, State, CONTRACT_ID},
     demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 
@@ -35,7 +35,7 @@ pub struct Update {
 impl UpdateBase for Update {
     fn apply(self: Box<Self>, states: &mut StateRegistry) {
         // Lookup dao_contract state from registry
-        let state = states.lookup_mut::<State>(&"DAO".to_string()).unwrap();
+        let state = states.lookup_mut::<State>(*CONTRACT_ID).unwrap();
         // Add dao_bulla to state.dao_bullas
         state.add_dao_bulla(self.dao_bulla);
     }

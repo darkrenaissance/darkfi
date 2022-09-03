@@ -22,6 +22,7 @@ use crate::{
     dao_contract::{
         mint::wallet::DaoParams,
         propose::validate::{CallData, Header, Input},
+        CONTRACT_ID,
     },
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
     money_contract, note,
@@ -258,8 +259,8 @@ impl Builder {
         let call_data = CallData { header, inputs };
 
         FuncCall {
-            contract_id: "DAO".to_string(),
-            func_id: "DAO::propose()".to_string(),
+            contract_id: *CONTRACT_ID,
+            func_id: *super::FUNC_ID,
             call_data: Box::new(call_data),
             proofs,
         }

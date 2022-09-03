@@ -14,7 +14,7 @@ use darkfi::{
 
 use crate::{
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
-    example_contract::foo::validate::CallData,
+    example_contract::{foo::validate::CallData, CONTRACT_ID},
 };
 
 pub struct Foo {
@@ -65,8 +65,8 @@ impl Builder {
         let call_data = CallData { public_value: c, signature_public };
 
         FuncCall {
-            contract_id: "Example".to_string(),
-            func_id: "Example::foo()".to_string(),
+            contract_id: *CONTRACT_ID,
+            func_id: *super::FUNC_ID,
             call_data: Box::new(call_data),
             proofs,
         }

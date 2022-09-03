@@ -2,13 +2,17 @@ use incrementalmerkletree::Tree;
 use log::debug;
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{ff::Field, Curve, Group},
+    group::{
+        ff::{Field, PrimeField},
+        Curve, Group,
+    },
     pallas,
 };
 use rand::rngs::OsRng;
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
+    hash::Hasher,
     time::Instant,
 };
 
@@ -41,6 +45,16 @@ use crate::{dao_contract, example_contract, money_contract};
 // TODO: fix up code doc
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+#[derive(Eq, PartialEq)]
+pub struct HashableBase(pub pallas::Base);
+
+impl std::hash::Hash for HashableBase {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let bytes = self.0.to_repr();
+        bytes.hash(state);
+    }
+}
 
 pub struct ZkBinaryContractInfo {
     pub k_param: u32,
@@ -163,9 +177,8 @@ fn sign(signature_secrets: Vec<SecretKey>, func_calls: &Vec<FuncCall>) -> Vec<Si
     signatures
 }
 
-// These would normally be a hash or sth
-type ContractId = String;
-type FuncId = String;
+type ContractId = pallas::Base;
+type FuncId = pallas::Base;
 
 pub struct FuncCall {
     pub contract_id: ContractId,
@@ -205,7 +218,7 @@ pub trait CallDataBase {
 type GenericContractState = Box<dyn Any>;
 
 pub struct StateRegistry {
-    pub states: HashMap<ContractId, GenericContractState>,
+    pub states: HashMap<HashableBase, GenericContractState>,
 }
 
 impl StateRegistry {
@@ -215,15 +228,15 @@ impl StateRegistry {
 
     fn register(&mut self, contract_id: ContractId, state: GenericContractState) {
         debug!(target: "StateRegistry::register()", "contract_id: {:?}", contract_id);
-        self.states.insert(contract_id, state);
+        self.states.insert(HashableBase(contract_id), state);
     }
 
-    pub fn lookup_mut<'a, S: 'static>(&'a mut self, contract_id: &ContractId) -> Option<&'a mut S> {
-        self.states.get_mut(contract_id).and_then(|state| state.downcast_mut())
+    pub fn lookup_mut<'a, S: 'static>(&'a mut self, contract_id: ContractId) -> Option<&'a mut S> {
+        self.states.get_mut(&HashableBase(contract_id)).and_then(|state| state.downcast_mut())
     }
 
-    pub fn lookup<'a, S: 'static>(&'a self, contract_id: &ContractId) -> Option<&'a S> {
-        self.states.get(contract_id).and_then(|state| state.downcast_ref())
+    pub fn lookup<'a, S: 'static>(&'a self, contract_id: ContractId) -> Option<&'a S> {
+        self.states.get(&HashableBase(contract_id)).and_then(|state| state.downcast_ref())
     }
 }
 
@@ -247,7 +260,7 @@ pub async fn example() -> Result<()> {
     zk_bins.add_contract("example-foo".to_string(), zk_example_foo_bin, 13);
 
     let example_state = example_contract::state::State::new();
-    states.register("Example".to_string(), example_state);
+    states.register(*example_contract::CONTRACT_ID, example_state);
 
     //// Wallet
 
@@ -266,7 +279,7 @@ pub async fn example() -> Result<()> {
     let mut updates = vec![];
     // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
-        if func_call.func_id == "Example::foo()" {
+        if func_call.func_id == *example_contract::foo::FUNC_ID {
             debug!("example_contract::foo::state_transition()");
 
             let update = example_contract::foo::validate::state_transition(&states, idx, &tx)
@@ -363,12 +376,12 @@ pub async fn demo() -> Result<()> {
 
     let money_state =
         money_contract::state::State::new(cashier_signature_public, faucet_signature_public);
-    states.register("Money".to_string(), money_state);
+    states.register(*money_contract::CONTRACT_ID, money_state);
 
     /////////////////////////////////////////////////////
 
     let dao_state = dao_contract::State::new();
-    states.register("DAO".to_string(), dao_state);
+    states.register(*dao_contract::CONTRACT_ID, dao_state);
 
     /////////////////////////////////////////////////////
     ////// Create the DAO bulla
@@ -405,7 +418,7 @@ pub async fn demo() -> Result<()> {
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
         // functions based off the func_id
-        if func_call.func_id == "DAO::mint()" {
+        if func_call.func_id == *dao_contract::mint::FUNC_ID {
             debug!("dao_contract::mint::state_transition()");
 
             let update = dao_contract::mint::validate::state_transition(&states, idx, &tx)
@@ -430,7 +443,7 @@ pub async fn demo() -> Result<()> {
     // We need to witness() the value in our local merkle tree
     // Must be called as soon as this DAO bulla is added to the state
     let dao_leaf_position = {
-        let state = states.lookup_mut::<dao_contract::State>(&"DAO".to_string()).unwrap();
+        let state = states.lookup_mut::<dao_contract::State>(*dao_contract::CONTRACT_ID).unwrap();
         state.dao_tree.witness().unwrap()
     };
 
@@ -451,7 +464,7 @@ pub async fn demo() -> Result<()> {
     ///////////////////////////////////////////////////
     debug!(target: "demo", "Stage 2. Minting treasury token");
 
-    let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
+    let state = states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
     state.wallet_cache.track(dao_keypair.secret);
 
     //// Wallet
@@ -501,7 +514,7 @@ pub async fn demo() -> Result<()> {
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
         // functions based off the func_id
-        if func_call.func_id == "Money::transfer()" {
+        if func_call.func_id == *money_contract::transfer::FUNC_ID {
             debug!("money_contract::transfer::state_transition()");
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
@@ -521,7 +534,7 @@ pub async fn demo() -> Result<()> {
     //// Wallet
     // DAO reads the money received from the encrypted note
 
-    let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
+    let state = states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
     let mut recv_coins = state.wallet_cache.get_received(&dao_keypair.secret);
     assert_eq!(recv_coins.len(), 1);
     let dao_recv_coin = recv_coins.pop().unwrap();
@@ -562,7 +575,7 @@ pub async fn demo() -> Result<()> {
     // Hodler 3: the tiebreaker
     let gov_keypair_3 = Keypair::random(&mut OsRng);
 
-    let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
+    let state = states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
     state.wallet_cache.track(gov_keypair_1.secret);
     state.wallet_cache.track(gov_keypair_2.secret);
     state.wallet_cache.track(gov_keypair_3.secret);
@@ -628,7 +641,7 @@ pub async fn demo() -> Result<()> {
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
         // functions based off the func_id
-        if func_call.func_id == "Money::transfer()" {
+        if func_call.func_id == *money_contract::transfer::FUNC_ID {
             debug!("money_contract::transfer::state_transition()");
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)
@@ -651,7 +664,8 @@ pub async fn demo() -> Result<()> {
     // Check that each person received one coin
     for (i, key) in gov_keypairs.iter().enumerate() {
         let gov_recv_coin = {
-            let state = states.lookup_mut::<money_contract::State>(&"Money".to_string()).unwrap();
+            let state =
+                states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
             let mut recv_coins = state.wallet_cache.get_received(&key.secret);
             assert_eq!(recv_coins.len(), 1);
             let recv_coin = recv_coins.pop().unwrap();
@@ -709,7 +723,7 @@ pub async fn demo() -> Result<()> {
     let user_keypair = Keypair::random(&mut OsRng);
 
     let (money_leaf_position, money_merkle_path) = {
-        let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
+        let state = states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
         let tree = &state.tree;
         let leaf_position = gov_recv[0].leaf_position.clone();
         let root = tree.root(0).unwrap();
@@ -729,7 +743,7 @@ pub async fn demo() -> Result<()> {
     };
 
     let (dao_merkle_path, dao_merkle_root) = {
-        let state = states.lookup::<dao_contract::State>(&"DAO".to_string()).unwrap();
+        let state = states.lookup::<dao_contract::State>(*dao_contract::CONTRACT_ID).unwrap();
         let tree = &state.dao_tree;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(dao_leaf_position, &root).unwrap();
@@ -773,7 +787,7 @@ pub async fn demo() -> Result<()> {
     let mut updates = vec![];
     // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
-        if func_call.func_id == "DAO::propose()" {
+        if func_call.func_id == *dao_contract::propose::FUNC_ID {
             debug!(target: "demo", "dao_contract::propose::state_transition()");
 
             let update = dao_contract::propose::validate::state_transition(&states, idx, &tx)
@@ -849,7 +863,7 @@ pub async fn demo() -> Result<()> {
     // User 1: YES
 
     let (money_leaf_position, money_merkle_path) = {
-        let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
+        let state = states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
         let tree = &state.tree;
         let leaf_position = gov_recv[0].leaf_position.clone();
         let root = tree.root(0).unwrap();
@@ -895,7 +909,7 @@ pub async fn demo() -> Result<()> {
     let mut updates = vec![];
     // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
-        if func_call.func_id == "DAO::vote()" {
+        if func_call.func_id == *dao_contract::vote::FUNC_ID {
             debug!(target: "demo", "dao_contract::vote::state_transition()");
 
             let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
@@ -936,7 +950,7 @@ pub async fn demo() -> Result<()> {
     // User 2: NO
 
     let (money_leaf_position, money_merkle_path) = {
-        let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
+        let state = states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
         let tree = &state.tree;
         let leaf_position = gov_recv[1].leaf_position.clone();
         let root = tree.root(0).unwrap();
@@ -982,7 +996,7 @@ pub async fn demo() -> Result<()> {
     let mut updates = vec![];
     // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
-        if func_call.func_id == "DAO::vote()" {
+        if func_call.func_id == *dao_contract::vote::FUNC_ID {
             debug!(target: "demo", "dao_contract::vote::state_transition()");
 
             let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
@@ -1023,7 +1037,7 @@ pub async fn demo() -> Result<()> {
     // User 3: YES
 
     let (money_leaf_position, money_merkle_path) = {
-        let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
+        let state = states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
         let tree = &state.tree;
         let leaf_position = gov_recv[2].leaf_position.clone();
         let root = tree.root(0).unwrap();
@@ -1069,7 +1083,7 @@ pub async fn demo() -> Result<()> {
     let mut updates = vec![];
     // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
-        if func_call.func_id == "DAO::vote()" {
+        if func_call.func_id == *dao_contract::vote::FUNC_ID {
             debug!(target: "demo", "dao_contract::vote::state_transition()");
 
             let update = dao_contract::vote::validate::state_transition(&states, idx, &tx)
@@ -1185,7 +1199,7 @@ pub async fn demo() -> Result<()> {
     let exec_signature_secret = SecretKey::random(&mut OsRng);
 
     let (treasury_leaf_position, treasury_merkle_path) = {
-        let state = states.lookup::<money_contract::State>(&"Money".to_string()).unwrap();
+        let state = states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
         let tree = &state.tree;
         let leaf_position = dao_recv_coin.leaf_position.clone();
         let root = tree.root(0).unwrap();
@@ -1282,13 +1296,13 @@ pub async fn demo() -> Result<()> {
     let mut updates = vec![];
     // Validate all function calls in the tx
     for (idx, func_call) in tx.func_calls.iter().enumerate() {
-        if func_call.func_id == "DAO::exec()" {
+        if func_call.func_id == *dao_contract::exec::FUNC_ID {
             debug!("dao_contract::exec::state_transition()");
 
             let update = dao_contract::exec::validate::state_transition(&states, idx, &tx)
                 .expect("dao_contract::exec::validate::state_transition() failed!");
             updates.push(update);
-        } else if func_call.func_id == "Money::transfer()" {
+        } else if func_call.func_id == *money_contract::transfer::FUNC_ID {
             debug!("money_contract::transfer::state_transition()");
 
             let update = money_contract::transfer::validate::state_transition(&states, idx, &tx)

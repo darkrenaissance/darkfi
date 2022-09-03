@@ -1,10 +1,8 @@
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use pasta_curves::{
-    group::{ff::PrimeField, Group},
-    pallas,
-};
-use std::{any::Any, collections::HashMap, hash::Hasher};
+use pasta_curves::{group::Group, pallas};
+use std::{any::Any, collections::HashMap};
 
+use crate::demo::HashableBase;
 use darkfi::{
     crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode, nullifier::Nullifier},
     util::serial::{SerialDecodable, SerialEncodable},
@@ -14,16 +12,6 @@ use darkfi::{
 pub struct DaoBulla(pub pallas::Base);
 
 type MerkleTree = BridgeTree<MerkleNode, MERKLE_DEPTH>;
-
-#[derive(Eq, PartialEq)]
-pub struct HashableBase(pub pallas::Base);
-
-impl std::hash::Hash for HashableBase {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let bytes = self.0.to_repr();
-        bytes.hash(state);
-    }
-}
 
 pub struct ProposalVotes {
     // TODO: might be more logical to have 'yes_vote_commits' and 'no_vote_commits'

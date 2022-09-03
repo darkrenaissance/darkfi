@@ -1,3 +1,7 @@
+use lazy_static::lazy_static;
+use pasta_curves::{group::ff::Field, pallas};
+use rand::rngs::OsRng;
+
 pub mod validate;
 /// This is an anonymous contract function that mutates the internal DAO state.
 ///
@@ -34,3 +38,7 @@ pub mod validate;
 /// let tx = builder.build();
 /// ```
 pub mod wallet;
+
+lazy_static! {
+    pub static ref FUNC_ID: pallas::Base = pallas::Base::random(&mut OsRng);
+}

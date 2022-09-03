@@ -14,7 +14,9 @@ use darkfi::{
 };
 
 use crate::{
-    dao_contract::{exec::validate::CallData, mint::wallet::DaoParams, propose::wallet::Proposal},
+    dao_contract::{
+        exec::validate::CallData, mint::wallet::DaoParams, propose::wallet::Proposal, CONTRACT_ID,
+    },
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 
@@ -186,8 +188,8 @@ impl Builder {
         };
 
         FuncCall {
-            contract_id: "DAO".to_string(),
-            func_id: "DAO::exec()".to_string(),
+            contract_id: *CONTRACT_ID,
+            func_id: *super::FUNC_ID,
             call_data: Box::new(call_data),
             proofs,
         }

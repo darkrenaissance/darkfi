@@ -14,8 +14,10 @@ use pasta_curves::{
 use std::any::{Any, TypeId};
 
 use crate::{
+    dao_contract,
     dao_contract::State as DaoState,
     demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
+    money_contract,
     money_contract::state::State as MoneyState,
     note::EncryptedNote2,
 };
@@ -146,7 +148,7 @@ pub fn state_transition(
     // This will be inside wasm so unwrap is fine.
     let call_data = call_data.unwrap();
 
-    let dao_state = states.lookup::<DaoState>(&"DAO".to_string()).unwrap();
+    let dao_state = states.lookup::<DaoState>(*dao_contract::CONTRACT_ID).unwrap();
 
     // Check proposal_bulla exists
     let votes_info = dao_state.lookup_proposal_votes(call_data.header.proposal_bulla);
@@ -159,7 +161,7 @@ pub fn state_transition(
     let mut vote_nulls = Vec::new();
     let mut total_value_commit = pallas::Point::identity();
     for input in &call_data.inputs {
-        let money_state = states.lookup::<MoneyState>(&"Money".to_string()).unwrap();
+        let money_state = states.lookup::<MoneyState>(*money_contract::CONTRACT_ID).unwrap();
         if !money_state.is_valid_merkle(&input.merkle_root) {
             return Err(Error::InvalidInputMerkleRoot)
         }
@@ -195,7 +197,7 @@ pub struct Update {
 
 impl UpdateBase for Update {
     fn apply(mut self: Box<Self>, states: &mut StateRegistry) {
-        let state = states.lookup_mut::<DaoState>(&"DAO".to_string()).unwrap();
+        let state = states.lookup_mut::<DaoState>(*dao_contract::CONTRACT_ID).unwrap();
         let votes_info = state.lookup_proposal_votes_mut(self.proposal_bulla).unwrap();
         votes_info.vote_commits += self.vote_commit;
         votes_info.value_commits += self.value_commit;

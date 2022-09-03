@@ -20,8 +20,9 @@ use darkfi::{
 };
 
 use crate::{
+    dao_contract,
     demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
-    money_contract::state::State,
+    money_contract::{state::State, CONTRACT_ID},
     note::EncryptedNote2,
 };
 
@@ -41,7 +42,7 @@ pub struct Update {
 
 impl UpdateBase for Update {
     fn apply(mut self: Box<Self>, states: &mut StateRegistry) {
-        let state = states.lookup_mut::<State>(&"Money".to_string()).unwrap();
+        let state = states.lookup_mut::<State>(*CONTRACT_ID).unwrap();
 
         // Extend our list of nullifiers with the ones from the update
         state.nullifiers.append(&mut self.nullifiers);
@@ -77,8 +78,7 @@ pub fn state_transition(
     // This will be inside wasm so unwrap is fine.
     let call_data = call_data.unwrap();
 
-    let state =
-        states.lookup::<State>(&"Money".to_string()).expect("Return type is not of type State");
+    let state = states.lookup::<State>(*CONTRACT_ID).expect("Return type is not of type State");
 
     // Code goes here
     for (i, input) in call_data.clear_inputs.iter().enumerate() {
@@ -121,7 +121,7 @@ pub fn state_transition(
                 // TODO: we need to change these to pallas::Base
                 // temporary workaround for now
                 // if func_call.func_id == spend_hook ...
-                if func_call.func_id == "DAO::exec()" {
+                if func_call.func_id == *dao_contract::exec::FUNC_ID {
                     is_found = true;
                     break
                 }

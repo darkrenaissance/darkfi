@@ -10,7 +10,7 @@ use std::any::{Any, TypeId};
 
 use crate::{
     demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
-    example_contract::state::State,
+    example_contract::{state::State, CONTRACT_ID},
 };
 
 type Result<T> = std::result::Result<T, Error>;
@@ -71,7 +71,7 @@ pub fn state_transition(
     // This will be inside wasm so unwrap is fine.
     let call_data = call_data.unwrap();
 
-    let example_state = states.lookup::<State>(&"Example".to_string()).unwrap();
+    let example_state = states.lookup::<State>(*CONTRACT_ID).unwrap();
 
     if example_state.public_exists(&call_data.public_value) {
         return Err(Error::ValueExists)
@@ -87,7 +87,7 @@ pub struct Update {
 
 impl UpdateBase for Update {
     fn apply(self: Box<Self>, states: &mut StateRegistry) {
-        let example_state = states.lookup_mut::<State>(&"Example".to_string()).unwrap();
+        let example_state = states.lookup_mut::<State>(*CONTRACT_ID).unwrap();
         example_state.add_public_value(self.public_value);
     }
 }

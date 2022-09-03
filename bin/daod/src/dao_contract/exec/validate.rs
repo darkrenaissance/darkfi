@@ -14,8 +14,8 @@ use std::any::{Any, TypeId};
 
 use crate::{
     dao_contract,
-    dao_contract::HashableBase,
-    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
+    dao_contract::CONTRACT_ID,
+    demo::{CallDataBase, HashableBase, StateRegistry, Transaction, UpdateBase},
     money_contract,
 };
 
@@ -133,7 +133,7 @@ pub fn state_transition(
     }
 
     // 3. First item should be a Money::transfer() calldata
-    if parent_tx.func_calls[0].func_id != "Money::transfer()" {
+    if parent_tx.func_calls[0].func_id != *money_contract::transfer::FUNC_ID {
         return Err(Error::InvalidCallData)
     }
 
@@ -171,7 +171,7 @@ pub fn state_transition(
 
     // 3. get the ProposalVote from DAO::State
     let state = states
-        .lookup::<dao_contract::State>(&"DAO".to_string())
+        .lookup::<dao_contract::State>(*CONTRACT_ID)
         .expect("Return type is not of type State");
     let proposal_votes = state.proposal_votes.get(&HashableBase(call_data.proposal)).unwrap();
 
@@ -195,7 +195,7 @@ pub struct Update {
 impl UpdateBase for Update {
     fn apply(self: Box<Self>, states: &mut StateRegistry) {
         let state = states
-            .lookup_mut::<dao_contract::State>(&"DAO".to_string())
+            .lookup_mut::<dao_contract::State>(*CONTRACT_ID)
             .expect("Return type is not of type State");
         state.proposal_votes.remove(&HashableBase(self.proposal)).unwrap();
     }
