@@ -4,7 +4,6 @@ use async_executor::Executor;
 use async_trait::async_trait;
 use chrono::Utc;
 use log::debug;
-use rand::{rngs::OsRng, RngCore};
 use ripemd::{Digest, Ripemd160};
 
 use darkfi::{
@@ -28,13 +27,11 @@ const UNREAD_MSG_EXPIRE_TIME: i64 = 259200;
 #[derive(SerialDecodable, SerialEncodable, Clone)]
 struct Inv {
     invs: Vec<InvObject>,
-    id: u64,
 }
 
 impl Inv {
     fn new(invs: Vec<InvObject>) -> Self {
-        let id = OsRng.next_u64();
-        Self { invs, id }
+        Self { invs }
     }
 }
 
