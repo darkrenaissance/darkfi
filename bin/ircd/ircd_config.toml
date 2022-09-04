@@ -66,17 +66,19 @@ seeds = ["tls://lilith0.dark.fi:25551", "tls://lilith1.dark.fi:25551"]
 topic = "DarkFi Development HQ"
 
 ### Contacts list
-## private key used to decrypt direct messages to you along with
-## contact_pubkey.
+## Private key used to decrypt direct messages to you along with
+## contact_pubkey. (configured only once)
 ## Generate keypair using 'ircd --gen-keypair' 
 ## or to save to a file 'ircd --gen-keypair -o ~/some_dir/filename'
 ## !!SHOULD NEVER SHARE THIS!!
 #[private_key."955Dfa83pU7RCevT2rMrGfhza4kcy6FShSNE6AdR4Q7A"]
 
-## Shared Pubkey that encrypt direct communication between two nicknames
+## Shared Public key that encrypt direct communication between two nicknames
 ## on the network.
-## These are in the form of [Contact_nick, My_nick, Contact_pubkey]
-## contact nickname (this is not the irc nickname)
+## These are in the form of [Contact_nick, Contact_pubkey]
+## Per-contact settings
+## contact nickname (this is not irc nickname, and could be anything you want)
+## irc msgs should be pointed to this nickname.
 #[contact."narodnik"]
 ## contact public key
 #contact_pubkey = "C9vC6HNDfGQofWCapZfQK5MkV1JR8Cct839RDUCqbDGK"
