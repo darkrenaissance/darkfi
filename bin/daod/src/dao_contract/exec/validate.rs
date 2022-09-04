@@ -59,18 +59,20 @@ pub struct CallData {
     pub proposal: pallas::Base,
     pub coin_0: pallas::Base,
     pub coin_1: pallas::Base,
-    pub win_votes_commit: pallas::Point,
-    pub total_votes_commit: pallas::Point,
+    pub weighted_votes_commit: pallas::Point,
+    pub all_vote_values_commit: pallas::Point,
     pub input_value_commit: pallas::Point,
 }
 
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
-        let win_votes_coords = self.win_votes_commit.to_affine().coordinates().unwrap();
+        let weighted_votes_commit_coords =
+            self.weighted_votes_commit.to_affine().coordinates().unwrap();
 
-        let total_votes_coords = self.total_votes_commit.to_affine().coordinates().unwrap();
+        let all_vote_values_commit_coords =
+            self.all_vote_values_commit.to_affine().coordinates().unwrap();
 
-        let input_value_coords = self.input_value_commit.to_affine().coordinates().unwrap();
+        let input_value_commit_coords = self.input_value_commit.to_affine().coordinates().unwrap();
 
         vec![(
             "dao-exec".to_string(),
@@ -78,12 +80,12 @@ impl CallDataBase for CallData {
                 self.proposal,
                 self.coin_0,
                 self.coin_1,
-                *win_votes_coords.x(),
-                *win_votes_coords.y(),
-                *total_votes_coords.x(),
-                *total_votes_coords.y(),
-                *input_value_coords.x(),
-                *input_value_coords.y(),
+                *weighted_votes_commit_coords.x(),
+                *weighted_votes_commit_coords.y(),
+                *all_vote_values_commit_coords.x(),
+                *all_vote_values_commit_coords.y(),
+                *input_value_commit_coords.x(),
+                *input_value_commit_coords.y(),
                 *super::FUNC_ID,
                 pallas::Base::from(0),
                 pallas::Base::from(0),
@@ -176,11 +178,11 @@ pub fn state_transition(
     let proposal_votes = state.proposal_votes.get(&HashableBase(call_data.proposal)).unwrap();
 
     // 4. check win/total_vote_commit is the same as in ProposalVote
-    if proposal_votes.vote_commits != call_data.win_votes_commit {
+    if proposal_votes.weighted_vote_commits != call_data.weighted_votes_commit {
         return Err(Error::InvalidVoteCommit)
     }
     // 5. also check total_vote_commit
-    if proposal_votes.value_commits != call_data.total_votes_commit {
+    if proposal_votes.all_vote_value_commits != call_data.all_vote_values_commit {
         return Err(Error::InvalidVoteCommit)
     }
 

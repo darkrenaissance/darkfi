@@ -23,10 +23,10 @@ use crate::{
 pub struct Builder {
     pub proposal: Proposal,
     pub dao: DaoParams,
-    pub win_votes: u64,
-    pub total_votes: u64,
-    pub win_votes_blind: pallas::Scalar,
-    pub total_votes_blind: pallas::Scalar,
+    pub yes_vote_values: u64,
+    pub all_vote_values: u64,
+    pub all_vote_blinds: pallas::Scalar,
+    pub all_vote_value_blinds: pallas::Scalar,
     pub user_serial: pallas::Base,
     pub user_coin_blind: pallas::Base,
     pub dao_serial: pallas::Base,
@@ -104,14 +104,17 @@ impl Builder {
             self.dao_coin_blind,
         ]);
 
-        let win_votes_commit = pedersen_commitment_u64(self.win_votes, self.win_votes_blind);
-        let win_votes_coords = win_votes_commit.to_affine().coordinates().unwrap();
+        let weighted_votes_commit =
+            pedersen_commitment_u64(self.yes_vote_values, self.all_vote_blinds);
+        let weighted_votes_commit_coords = weighted_votes_commit.to_affine().coordinates().unwrap();
 
-        let total_votes_commit = pedersen_commitment_u64(self.total_votes, self.total_votes_blind);
-        let total_votes_coords = total_votes_commit.to_affine().coordinates().unwrap();
+        let all_vote_values_commit =
+            pedersen_commitment_u64(self.all_vote_values, self.all_vote_value_blinds);
+        let all_vote_values_commit_coords =
+            all_vote_values_commit.to_affine().coordinates().unwrap();
 
         let input_value_commit = pedersen_commitment_u64(self.input_value, self.input_value_blind);
-        let input_value_coords = input_value_commit.to_affine().coordinates().unwrap();
+        let input_value_commit_coords = input_value_commit.to_affine().coordinates().unwrap();
 
         let zk_info = zk_bins.lookup(&"dao-exec".to_string()).unwrap();
         let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
@@ -139,10 +142,10 @@ impl Builder {
             Witness::Base(Value::known(*dao_pubkey_coords.y())),
             Witness::Base(Value::known(self.dao.bulla_blind)),
             // votes
-            Witness::Base(Value::known(pallas::Base::from(self.win_votes))),
-            Witness::Base(Value::known(pallas::Base::from(self.total_votes))),
-            Witness::Scalar(Value::known(self.win_votes_blind)),
-            Witness::Scalar(Value::known(self.total_votes_blind)),
+            Witness::Base(Value::known(pallas::Base::from(self.yes_vote_values))),
+            Witness::Base(Value::known(pallas::Base::from(self.all_vote_values))),
+            Witness::Scalar(Value::known(self.all_vote_blinds)),
+            Witness::Scalar(Value::known(self.all_vote_value_blinds)),
             // outputs + inputs
             Witness::Base(Value::known(self.user_serial)),
             Witness::Base(Value::known(self.user_coin_blind)),
@@ -160,12 +163,12 @@ impl Builder {
             proposal_bulla,
             coin_0,
             coin_1,
-            *win_votes_coords.x(),
-            *win_votes_coords.y(),
-            *total_votes_coords.x(),
-            *total_votes_coords.y(),
-            *input_value_coords.x(),
-            *input_value_coords.y(),
+            *weighted_votes_commit_coords.x(),
+            *weighted_votes_commit_coords.y(),
+            *all_vote_values_commit_coords.x(),
+            *all_vote_values_commit_coords.y(),
+            *input_value_commit_coords.x(),
+            *input_value_commit_coords.y(),
             self.hook_dao_exec,
             user_spend_hook,
             user_data,
@@ -182,8 +185,8 @@ impl Builder {
             proposal: proposal_bulla,
             coin_0,
             coin_1,
-            win_votes_commit,
-            total_votes_commit,
+            weighted_votes_commit,
+            all_vote_values_commit,
             input_value_commit,
         };
 

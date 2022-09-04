@@ -1130,12 +1130,12 @@ pub async fn demo() -> Result<()> {
     // voting period.
     // (that's if we want votes to be hidden during voting)
 
-    let mut win_votes = 0;
-    let mut total_votes = 0;
-    let mut total_vote_blinds = pallas::Scalar::from(0);
-    let mut total_value_blinds = pallas::Scalar::from(0);
-    let mut total_value_commit = pallas::Point::identity();
-    let mut total_vote_commit = pallas::Point::identity();
+    let mut yes_vote_values = 0;
+    let mut all_vote_values = 0;
+    let mut all_vote_blinds = pallas::Scalar::from(0);
+    let mut all_vote_value_blinds = pallas::Scalar::from(0);
+    let mut all_vote_value_commits = pallas::Point::identity();
+    let mut weighted_vote_commits = pallas::Point::identity();
 
     // We were previously saving votes to a Vec<Update> for testing.
     // However since Update is now UpdateBase it gets moved into update.apply().
@@ -1146,39 +1146,37 @@ pub async fn demo() -> Result<()> {
         .iter() /*.zip(updates)*/
         .enumerate()
     {
-        let value_commit = pedersen_commitment_u64(note.value, note.value_blind);
-        //let update = update.as_any().downcast_ref::<dao_contract::vote::validate::Update>();
-        //let update = update.unwrap();
-        //assert!(update.value_commit == value_commit);
+        let all_vote_value_commit = pedersen_commitment_u64(note.value, note.value_blind);
+        //assert!(update.value_commit == all_vote_value_commit);
+        all_vote_value_commits += all_vote_value_commit;
+        all_vote_value_blinds += note.value_blind;
 
-        total_value_commit += value_commit;
-        total_value_blinds += note.value_blind;
-
-        let vote_commit = pedersen_commitment_u64(
+        let weighted_vote_commit = pedersen_commitment_u64(
             note.vote.vote_option as u64 * note.value,
             note.vote.vote_option_blind,
         );
+        //assert!(update.weighted_vote_commit == weighted_vote_commit);
 
-        //assert!(update.vote_commit == vote_commit);
-
-        total_vote_commit += vote_commit;
-        total_vote_blinds += note.vote.vote_option_blind;
+        weighted_vote_commits += weighted_vote_commit;
+        all_vote_blinds += note.vote.vote_option_blind;
 
         let vote_option = note.vote.vote_option;
 
         if vote_option {
-            win_votes += note.value;
+            yes_vote_values += note.value;
         }
-        total_votes += note.value;
+        all_vote_values += note.value;
         let vote_result: String = if vote_option { "yes".to_string() } else { "no".to_string() };
 
         debug!("Voter {} voted {}", i, vote_result);
     }
 
-    debug!("Outcome = {} / {}", win_votes, total_votes);
+    debug!("Outcome = {} / {}", yes_vote_values, all_vote_values);
 
-    assert!(total_value_commit == pedersen_commitment_u64(total_votes, total_value_blinds));
-    assert!(total_vote_commit == pedersen_commitment_u64(win_votes, total_vote_blinds));
+    assert!(
+        all_vote_value_commits == pedersen_commitment_u64(all_vote_values, all_vote_value_blinds)
+    );
+    assert!(weighted_vote_commits == pedersen_commitment_u64(yes_vote_values, all_vote_blinds));
 
     ///////////////////////////////////////////////////
     // Execute the vote
@@ -1249,10 +1247,12 @@ pub async fn demo() -> Result<()> {
     let builder = dao_contract::exec::wallet::Builder {
         proposal,
         dao: dao_params,
-        win_votes,
-        total_votes,
-        win_votes_blind: total_vote_blinds,
-        total_votes_blind: total_value_blinds,
+        yes_vote_values,
+        all_vote_values,
+        //win_votes_blind: total_vote_blinds,
+        all_vote_blinds,
+        //total_votes_blind: total_value_blinds,
+        all_vote_value_blinds,
         user_serial,
         user_coin_blind,
         dao_serial,

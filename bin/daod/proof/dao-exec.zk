@@ -22,10 +22,10 @@ contract "DaoExec" {
     Base dao_bulla_blind,
 
     # votes
-    Base win_votes,
-    Base total_votes,
-    Scalar win_votes_blind,
-    Scalar total_votes_blind,
+    Base yes_vote_values,
+    Base all_vote_values,
+    Scalar all_vote_blinds,
+    Scalar all_vote_value_blinds,
     
     # outputs + inputs
     Base user_serial,
@@ -98,26 +98,25 @@ circuit "DaoExec" {
 
     # Create pedersen commits for win_votes, and total_votes
     # and make public
-
-    win_votes_v = ec_mul_short(win_votes, VALUE_COMMIT_VALUE);
-    win_votes_r = ec_mul(win_votes_blind, VALUE_COMMIT_RANDOM);
-    win_votes_commit = ec_add(win_votes_v, win_votes_r);
-
-    # get curve points and constrain
-	win_votes_commit_x = ec_get_x(win_votes_commit);
-	win_votes_commit_y = ec_get_y(win_votes_commit);
-	constrain_instance(win_votes_commit_x);
-	constrain_instance(win_votes_commit_y);
-
-    total_votes_v = ec_mul_short(total_votes, VALUE_COMMIT_VALUE);
-    total_votes_r = ec_mul(total_votes_blind, VALUE_COMMIT_RANDOM);
-    total_votes_commit = ec_add(total_votes_v, total_votes_r);
+    yes_vote_values_c = ec_mul_short(yes_vote_values, VALUE_COMMIT_VALUE);
+    all_vote_blinds_c = ec_mul(all_vote_blinds, VALUE_COMMIT_RANDOM);
+    weighted_votes_commit = ec_add(yes_vote_values_c, all_vote_blinds_c);
 
     # get curve points and constrain
-	total_votes_commit_x = ec_get_x(total_votes_commit);
-	total_votes_commit_y = ec_get_y(total_votes_commit);
-	constrain_instance(total_votes_commit_x);
-	constrain_instance(total_votes_commit_y);
+	weighted_votes_commit_x = ec_get_x(weighted_votes_commit);
+	weighted_votes_commit_y = ec_get_y(weighted_votes_commit);
+	constrain_instance(weighted_votes_commit_x);
+	constrain_instance(weighted_votes_commit_y);
+
+    all_vote_values_c = ec_mul_short(all_vote_values, VALUE_COMMIT_VALUE);
+    all_vote_value_blinds_c = ec_mul(all_vote_value_blinds, VALUE_COMMIT_RANDOM);
+    all_vote_values_commit = ec_add(all_vote_values_c, all_vote_value_blinds_c);
+
+    # get curve points and constrain
+	all_vote_values_commit_x = ec_get_x(all_vote_values_commit);
+	all_vote_values_commit_y = ec_get_y(all_vote_values_commit);
+	constrain_instance(all_vote_values_commit_x);
+	constrain_instance(all_vote_values_commit_y);
 
     # Create pedersen commit for input_value and make public
     

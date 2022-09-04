@@ -79,7 +79,8 @@ impl CallDataBase for CallData {
             ));
         }
 
-        let vote_commit_coords = self.header.vote_commit.to_affine().coordinates().unwrap();
+        let weighted_vote_commit_coords =
+            self.header.weighted_vote_commit.to_affine().coordinates().unwrap();
 
         let value_commit_coords = total_value_commit.to_affine().coordinates().unwrap();
 
@@ -88,8 +89,8 @@ impl CallDataBase for CallData {
             vec![
                 self.header.token_commit,
                 self.header.proposal_bulla,
-                *vote_commit_coords.x(),
-                *vote_commit_coords.y(),
+                *weighted_vote_commit_coords.x(),
+                *weighted_vote_commit_coords.y(),
                 *value_commit_coords.x(),
                 *value_commit_coords.y(),
             ],
@@ -122,7 +123,7 @@ impl CallDataBase for CallData {
 pub struct Header {
     pub token_commit: pallas::Base,
     pub proposal_bulla: pallas::Base,
-    pub vote_commit: pallas::Point,
+    pub weighted_vote_commit: pallas::Point,
     pub enc_note: EncryptedNote2,
 }
 
@@ -182,7 +183,7 @@ pub fn state_transition(
     Ok(Box::new(Update {
         proposal_bulla: call_data.header.proposal_bulla,
         vote_nulls,
-        vote_commit: call_data.header.vote_commit,
+        weighted_vote_commit: call_data.header.weighted_vote_commit,
         value_commit: total_value_commit,
     }))
 }
@@ -191,7 +192,7 @@ pub fn state_transition(
 pub struct Update {
     proposal_bulla: pallas::Base,
     vote_nulls: Vec<Nullifier>,
-    pub vote_commit: pallas::Point,
+    pub weighted_vote_commit: pallas::Point,
     pub value_commit: pallas::Point,
 }
 
@@ -199,8 +200,8 @@ impl UpdateBase for Update {
     fn apply(mut self: Box<Self>, states: &mut StateRegistry) {
         let state = states.lookup_mut::<DaoState>(*dao_contract::CONTRACT_ID).unwrap();
         let votes_info = state.lookup_proposal_votes_mut(self.proposal_bulla).unwrap();
-        votes_info.vote_commits += self.vote_commit;
-        votes_info.value_commits += self.value_commit;
+        votes_info.weighted_vote_commits += self.weighted_vote_commit;
+        votes_info.all_vote_value_commits += self.value_commit;
         votes_info.vote_nulls.append(&mut self.vote_nulls);
     }
 }

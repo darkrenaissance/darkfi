@@ -221,9 +221,10 @@ impl Builder {
 
         let weighted_vote = vote * value;
 
-        let vote_commit = pedersen_commitment_u64(weighted_vote, self.vote.vote_option_blind);
-        debug!(target: "demo::dao_contract::vote::wallet::Builder", "vote commit: {:?}", vote_commit);
-        let vote_coords = vote_commit.to_affine().coordinates().unwrap();
+        let weighted_vote_commit =
+            pedersen_commitment_u64(weighted_vote, self.vote.vote_option_blind);
+        debug!(target: "demo::dao_contract::vote::wallet::Builder", "weighted vote commit: {:?}", weighted_vote_commit);
+        let vote_coords = weighted_vote_commit.to_affine().coordinates().unwrap();
         let vote = pallas::Base::from(vote);
 
         let value_commit = pedersen_commitment_u64(value, value_blind);
@@ -284,7 +285,7 @@ impl Builder {
         let note = Note { vote: self.vote, value, value_blind };
         let enc_note = note::encrypt(&note, &self.vote_keypair.public).unwrap();
 
-        let header = Header { token_commit, proposal_bulla, vote_commit, enc_note };
+        let header = Header { token_commit, proposal_bulla, weighted_vote_commit, enc_note };
 
         let call_data = CallData { header, inputs };
 
