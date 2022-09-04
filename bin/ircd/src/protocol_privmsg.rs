@@ -141,8 +141,7 @@ impl ProtocolPrivmsg {
             drop(msg_ids);
 
             if msg.read_confirms > MAX_CONFIRM {
-                self.add_to_msgs(&msg).await;
-                self.notify.send(msg.clone()).await?;
+                self.add_to_msgs(&msg).await?;
             } else {
                 let hash = self.add_to_unread_msgs(&msg).await;
                 self.channel.send(Inv::new(vec![InvObject(hash)])).await;
@@ -178,7 +177,7 @@ impl ProtocolPrivmsg {
         key
     }
 
-    async fn update_unread_msgs(&self) {
+    async fn update_unread_msgs(&self) -> Result<()> {
         let mut msgs = self.unread_msgs.lock().await;
         for (hash, msg) in msgs.clone() {
             if msg.timestamp + UNREAD_MSG_EXPIRE_TIME < Utc::now().timestamp() {
@@ -186,18 +185,23 @@ impl ProtocolPrivmsg {
                 continue
             }
             if msg.read_confirms > MAX_CONFIRM {
-                self.add_to_msgs(&msg);
+                self.add_to_msgs(&msg).await?;
                 msgs.remove(&hash);
             }
         }
+        Ok(())
     }
 
-    async fn add_to_msgs(&self, msg: &Privmsg) {
+    async fn add_to_msgs(&self, msg: &Privmsg) -> Result<()> {
         self.msgs.lock().await.push(msg);
+        self.notify.send(msg.clone()).await?;
+        Ok(())
     }
 
     async fn resend_loop(&self) -> Result<()> {
         sleep(SLEEP_TIME_FOR_RESEND).await;
+
+        self.update_unread_msgs();
 
         for msg in self.unread_msgs.lock().await.values() {
             self.channel.send(msg.clone()).await;
