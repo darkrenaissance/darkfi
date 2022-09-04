@@ -1,9 +1,7 @@
+use chrono::Utc;
 use rand::{rngs::OsRng, RngCore};
 
-use darkfi::util::{
-    serial::{SerialDecodable, SerialEncodable},
-    Timestamp,
-};
+use darkfi::util::serial::{SerialDecodable, SerialEncodable};
 
 pub type PrivmsgId = u64;
 
@@ -16,14 +14,14 @@ pub struct Privmsg {
     pub nickname: String,
     pub target: String,
     pub message: String,
-    pub timestamp: Timestamp,
+    pub timestamp: i64,
     pub term: u64,
 }
 
 impl Privmsg {
     pub fn new(nickname: &str, target: &str, message: &str, term: u64) -> Self {
         let id = OsRng.next_u64();
-        let timestamp = Timestamp::current_time();
+        let timestamp = Utc::now().timestamp();
         Self {
             id,
             nickname: nickname.to_string(),

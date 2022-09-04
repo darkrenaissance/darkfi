@@ -210,9 +210,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
         info!("(Plain) PRIVMSG {} :{}", target, message);
 
-        let mut privmsgs_buffer = self.privmsgs_buffer.lock().await;
-        privmsgs_buffer.update();
-        let last_term = privmsgs_buffer.last_term();
+        let privmsgs_buffer = self.privmsgs_buffer.lock().await;
+        let last_term = privmsgs_buffer.last_term() + 1;
         drop(privmsgs_buffer);
 
         let mut privmsg = Privmsg::new(&self.nickname, target, &message, last_term);
