@@ -18,7 +18,7 @@ mod command;
 pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     // server stream
     write_stream: WriteHalf<C>,
-    peer_address: SocketAddr,
+    pub peer_address: SocketAddr,
     // msg ids
     seen_msg_ids: SeenMsgIds,
     privmsgs_buffer: ArcPrivmsgsBuffer,

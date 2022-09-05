@@ -126,6 +126,7 @@ fn parse_priv_key(data: &str) -> Result<String> {
     Ok(pk)
 }
 
+
 /// Parse a TOML string for any configured contact list and return
 /// a map containing said configurations.
 ///
@@ -166,6 +167,7 @@ pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, Contact
     Ok(ret)
 }
 
+/// TODO CLEAN UP
 /// Parse a TOML string for any configured channels and return
 /// a map containing said configurations.
 ///
