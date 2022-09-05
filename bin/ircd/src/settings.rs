@@ -138,7 +138,6 @@ fn parse_priv_key(data: &str) -> Result<String> {
     Ok(pk)
 }
 
-
 /// Parse a TOML string for any configured contact list and return
 /// a map containing said configurations.
 ///
