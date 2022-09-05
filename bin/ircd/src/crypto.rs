@@ -9,6 +9,8 @@ use crate::{
     privmsg::Privmsg,
     settings::{ChannelInfo, ContactInfo},
     MAXIMUM_LENGTH_OF_NICKNAME,
+    privmsg::{Privmsg, MAXIMUM_LENGTH_OF_NICKNAME},
+    settings::ChannelInfo,
 };
 
 /// Try decrypting a message given a NaCl box and a base58 string.

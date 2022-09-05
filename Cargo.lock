@@ -78,12 +78,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1485d4d2cc45e7b201ee3767015c96faa5904387c9d87c6efdd0fb511f12d305"
 
 [[package]]
-name = "array-init"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfb6d71005dc22a708c7496eee5c8dc0300ee47355de6256c3b35b12b5fef596"
-
-[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2337,6 +2331,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "bs58",
+ "chrono",
  "clap 3.2.18",
  "crypto_box",
  "ctrlc",
@@ -2347,7 +2342,6 @@ dependencies = [
  "fxhash",
  "log",
  "rand",
- "ringbuffer",
  "rustls-pemfile",
  "serde",
  "serde_json",
@@ -3355,15 +3349,6 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
-]
-
-[[package]]
-name = "ringbuffer"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0aa778d993bd10cc64483ec8c75ce3755bd48f42886943e23d6588bc0943678d"
-dependencies = [
- "array-init",
 ]
 
 [[package]]

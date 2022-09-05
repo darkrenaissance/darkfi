@@ -6,6 +6,7 @@ use chrono::Utc;
 use crate::Privmsg;
 
 pub const SIZE_OF_MSGS_BUFFER: usize = 4095;
+pub const SIZE_OF_MSG_IDSS_BUFFER: usize = 65536;
 pub const LIFETIME_FOR_ORPHAN: i64 = 600;
 
 #[derive(Clone)]

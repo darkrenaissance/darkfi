@@ -37,7 +37,7 @@ pub mod server;
 pub mod settings;
 
 use crate::{
-    buffers::{ArcPrivmsgsBuffer, PrivmsgsBuffer, RingBuffer, SeenMsgIds},
+    buffers::{ArcPrivmsgsBuffer, PrivmsgsBuffer, RingBuffer, SeenMsgIds, SIZE_OF_MSG_IDSS_BUFFER},
     privmsg::Privmsg,
     protocol_privmsg::ProtocolPrivmsg,
     rpc::JsonRpcInterface,
@@ -48,7 +48,6 @@ use crate::{
     },
 };
 
-const SIZE_OF_MSG_IDSS_BUFFER: usize = 65536;
 pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
 pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 32;
 

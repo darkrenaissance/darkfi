@@ -3,7 +3,11 @@ use log::{debug, info, warn};
 
 use darkfi::{Error, Result};
 
-use crate::{crypto::encrypt_privmsg, privmsg::Privmsg, ChannelInfo, MAXIMUM_LENGTH_OF_NICKNAME};
+use crate::{
+    crypto::encrypt_privmsg,
+    privmsg::{Privmsg, MAXIMUM_LENGTH_OF_NICKNAME},
+    ChannelInfo,
+};
 
 use super::IrcServerConnection;
 
@@ -206,7 +210,12 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
         info!("(Plain) PRIVMSG {} :{}", target, message);
 
-        let mut privmsg = Privmsg::new(&self.nickname, target, &message, 0);
+        let mut privmsgs_buffer = self.privmsgs_buffer.lock().await;
+        privmsgs_buffer.update();
+        let last_term = privmsgs_buffer.last_term();
+        drop(privmsgs_buffer);
+
+        let mut privmsg = Privmsg::new(&self.nickname, target, &message, last_term);
 
         if target.starts_with('#') {
             if !self.configured_chans.contains_key(target) {

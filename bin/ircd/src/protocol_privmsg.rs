@@ -13,7 +13,7 @@ use crate::{
 
 pub struct ProtocolPrivmsg {
     jobsman: net::ProtocolJobsManagerPtr,
-    notify_queue_sender: async_channel::Sender<Privmsg>,
+    notify: async_channel::Sender<Privmsg>,
     msg_sub: net::MessageSubscription<Privmsg>,
     p2p: net::P2pPtr,
     msg_ids: SeenMsgIds,
@@ -24,7 +24,7 @@ pub struct ProtocolPrivmsg {
 impl ProtocolPrivmsg {
     pub async fn init(
         channel: net::ChannelPtr,
-        notify_queue_sender: async_channel::Sender<Privmsg>,
+        notify: async_channel::Sender<Privmsg>,
         p2p: net::P2pPtr,
         msg_ids: SeenMsgIds,
         msgs: ArcPrivmsgsBuffer,
@@ -36,7 +36,7 @@ impl ProtocolPrivmsg {
             channel.subscribe_msg::<Privmsg>().await.expect("Missing Privmsg dispatcher!");
 
         Arc::new(Self {
-            notify_queue_sender,
+            notify,
             msg_sub,
             jobsman: net::ProtocolJobsManager::new("ProtocolPrivmsg", channel.clone()),
             p2p,
@@ -62,19 +62,20 @@ impl ProtocolPrivmsg {
             let msg = self.msg_sub.receive().await?;
             let msg = (*msg).to_owned();
 
-            {
-                let msg_ids = &mut self.msg_ids.lock().await;
-                if msg_ids.contains(&msg.id) {
-                    continue
-                }
-
-                msg_ids.push(msg.id);
+            let mut msg_ids = self.msg_ids.lock().await;
+            if msg_ids.contains(&msg.id) {
+                continue
             }
+            msg_ids.push(msg.id);
+            drop(msg_ids);
 
             // add the msg to the buffer
-            self.msgs.lock().await.push(&msg);
+            let mut msgs = self.msgs.lock().await;
+            msgs.push(&msg);
+            msgs.update();
+            drop(msgs);
 
-            self.notify_queue_sender.send(msg.clone()).await?;
+            self.notify.send(msg.clone()).await?;
 
             self.p2p.broadcast_with_exclude(msg, &exclude_list).await?;
         }

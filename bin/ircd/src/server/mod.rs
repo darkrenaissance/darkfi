@@ -9,7 +9,8 @@ use darkfi::{net::P2pPtr, system::SubscriberPtr, Error, Result};
 use crate::{
     buffers::{ArcPrivmsgsBuffer, SeenMsgIds},
     crypto::{decrypt_privmsg, decrypt_target},
-    ChannelInfo, Privmsg, MAXIMUM_LENGTH_OF_MESSAGE,
+    privmsg::MAXIMUM_LENGTH_OF_MESSAGE,
+    ChannelInfo, Privmsg,
 };
 
 mod command;
