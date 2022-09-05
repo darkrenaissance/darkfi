@@ -43,7 +43,7 @@ impl Default for Settings {
             external_addr: Vec::new(),
             peers: Vec::new(),
             seeds: Vec::new(),
-            node_id: String::new(),
+            node_id: option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string(),
             app_version: String::new(),
             outbound_transports: get_outbound_transports(vec![]),
         }
