@@ -61,6 +61,7 @@ impl IrcServer {
     pub async fn start(&self, executor: Arc<Executor<'_>>) -> Result<()> {
         let (listener, acceptor) = self.setup_listener().await?;
         info!("[IRC SERVER] listening on {}", self.settings.irc_listen);
+
         loop {
             let (stream, peer_addr) = match listener.accept().await {
                 Ok((s, a)) => (s, a),
@@ -106,32 +107,23 @@ impl IrcServer {
         // New subscription
         let p2p_subscription = self.p2p_notifiers.clone().subscribe().await;
 
-        let privmsgs_buffer = self.privmsgs_buffer.clone();
-        let seen_msg_ids = self.seen_msg_ids.clone();
-        let auto_channels = self.auto_channels.clone();
-        let password = self.password.clone();
-        let configured_chans = self.configured_chans.clone();
-        let configured_contacts = self.configured_contacts.clone();
-        let p2p = self.p2p.clone();
-        let p2p_notifiers = self.p2p_notifiers.clone();
+        // New irc connection
+        let mut client = IrcClient::new(
+            writer,
+            peer_addr,
+            self.privmsgs_buffer.clone(),
+            self.seen_msg_ids.clone(),
+            self.password.clone(),
+            self.auto_channels.clone(),
+            self.configured_chans.clone(),
+            self.configured_contacts.clone(),
+            self.p2p.clone(),
+            self.p2p_notifiers.clone(),
+            p2p_subscription,
+        );
 
         executor
             .spawn(async move {
-                // New irc connection
-                let mut client = IrcClient::new(
-                    writer,
-                    peer_addr,
-                    privmsgs_buffer,
-                    seen_msg_ids,
-                    password,
-                    auto_channels,
-                    configured_chans,
-                    configured_contacts,
-                    p2p,
-                    p2p_notifiers,
-                    p2p_subscription,
-                );
-
                 client.listen(reader).await;
             })
             .detach();

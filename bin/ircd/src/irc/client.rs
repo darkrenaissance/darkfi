@@ -109,7 +109,11 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                     }
                 }
                 err = reader.read_line(&mut line).fuse() => {
-                    if let Err(e) = self.process_line(err, line).await {
+                    if let Err(e) = err {
+                        error!("[CLIENT {}] Read line error: {}", self.address, e);
+                        break
+                    }
+                    if let Err(e) = self.process_line(line).await {
                         error!("[CLIENT {}] Process line failed: {}",  self.address, e);
                         break
                     }
@@ -174,16 +178,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         Ok(())
     }
 
-    pub async fn process_line(
-        &mut self,
-        err: std::result::Result<usize, std::io::Error>,
-        line: String,
-    ) -> Result<()> {
-        if let Err(e) = err {
-            warn!("[CLIENT {}] Read line error: {}", self.address, e);
-            return Err(Error::ChannelStopped)
-        }
-
+    pub async fn process_line(&mut self, line: String) -> Result<()> {
         let irc_msg = match clean_input_line(line) {
             Ok(msg) => msg,
             Err(e) => {
@@ -278,7 +273,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             self.is_user_init = true;
         } else {
             // Close the connection
-            warn!("[IRC SERVER] Password is required");
+            warn!("[CLIENT {}] Password is required", self.address);
             return self.on_quit()
         }
         Ok(())
@@ -289,7 +284,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             self.is_pass_init = true
         } else {
             // Close the connection
-            warn!("[IRC SERVER] Password is not correct!");
+            warn!("[CLIENT {}] Password is not correct!", self.address);
             return self.on_quit()
         }
         Ok(())
@@ -515,7 +510,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             .notify_with_exclude(privmsg.clone(), &[self.subscription.get_id()])
             .await;
 
-        debug!(target: "ircd", "PRIVMSG to be sent: {:?}", privmsg);
+        info!("[P2P] Broadcast: {:?}", privmsg.to_string().trim());
         self.p2p.broadcast(privmsg).await?;
 
         Ok(())
