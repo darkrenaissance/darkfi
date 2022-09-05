@@ -121,7 +121,11 @@ fn parse_priv_key(data: &str) -> Result<String> {
         _ => return Ok(pk),
     };
 
-    if !map.contains_key("private_key") && !map["private_key"].is_table() {
+    if !map.contains_key("private_key") {
+        return Ok(pk)
+    }
+
+    if !map["private_key"].is_table() {
         return Ok(pk)
     }
 
@@ -150,7 +154,11 @@ pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, Contact
         _ => return Ok(ret),
     };
 
-    if !map.contains_key("contact") && !map["contact"].is_table() {
+    if !map.contains_key("contact") {
+        return Ok(ret)
+    }
+
+    if !map["contact"].is_table() {
         return Ok(ret)
     }
 
@@ -198,7 +206,11 @@ pub fn parse_configured_channels(data: &str) -> Result<FxHashMap<String, Channel
         _ => return Ok(ret),
     };
 
-    if !map.contains_key("channel") && !map["channel"].is_table() {
+    if !map.contains_key("channel") {
+        return Ok(ret)
+    }
+
+    if !map["channel"].is_table() {
         return Ok(ret)
     }
 

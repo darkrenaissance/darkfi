@@ -80,7 +80,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
     }
 
     pub async fn process_msg_from_p2p(&mut self, msg: &Privmsg) -> Result<()> {
-        info!("Received msg from P2p network: {:?}", msg);
+        info!("[P2P] Received: {}", msg.to_string().trim());
 
         let mut msg = msg.clone();
         let mut contact = String::new();
@@ -123,7 +123,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                 decrypt_privmsg(salt_box, &mut msg);
                 // This is for /query
                 msg.nickname = contact;
-                info!("Decrypted received message: {:?}", msg);
+                info!("[P2P] Decrypted received message: {:?}", msg);
             }
 
             self.reply(&msg.to_string()).await?;
@@ -138,15 +138,22 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         line: String,
     ) -> Result<()> {
         if let Err(e) = err {
-            warn!("Read line error {}: {}", self.peer_address, e);
+            warn!("[CLIENT {}] Read line error: {}", self.peer_address, e);
             return Err(Error::ChannelStopped)
         }
 
-        info!("Received msg from IRC client: {:?}", line);
-        let irc_msg = clean_input_line(line, &self.peer_address)?;
+        let irc_msg = match clean_input_line(line) {
+            Ok(msg) => msg,
+            Err(e) => {
+                warn!("[CLIENT {}] Connection error: {}", self.peer_address, e);
+                return Err(Error::ChannelStopped)
+            }
+        };
+
+        info!("[CLIENT {}] Msg: {}", self.peer_address, irc_msg);
 
         if let Err(e) = self.update(irc_msg).await {
-            warn!("Connection error: {} for {}", e, self.peer_address);
+            warn!("[CLIENT {}] Connection error: {}", self.peer_address, e);
             return Err(Error::ChannelStopped)
         }
         Ok(())
@@ -163,7 +170,6 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
         let (command, value) = parse_line(&line)?;
         let (command, value) = (command.as_str(), value.as_str());
-        info!("IRC server received command: {}", command);
 
         match command {
             "PASS" => self.on_receive_pass(value).await?,
@@ -177,7 +183,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             "PRIVMSG" => self.on_receive_privmsg(&line, value).await?,
             "CAP" => self.on_receive_cap(&line, &value.to_uppercase()).await?,
             "QUIT" => self.on_quit()?,
-            _ => warn!("Unimplemented `{}` command", command),
+            _ => warn!("[CLIENT {}] Unimplemented `{}` command", self.peer_address, command),
         }
 
         self.registre().await?;
@@ -223,15 +229,12 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 // Helper functions
 //
 
-fn clean_input_line(mut line: String, peer_address: &SocketAddr) -> Result<String> {
+fn clean_input_line(mut line: String) -> Result<String> {
     if line.is_empty() {
-        warn!("Received empty line from {}. ", peer_address);
-        warn!("Closing connection.");
         return Err(Error::ChannelStopped)
     }
 
     if line == "\n" || line == "\r\n" {
-        warn!("Closing connection.");
         return Err(Error::ChannelStopped)
     }
 
@@ -242,7 +245,6 @@ fn clean_input_line(mut line: String, peer_address: &SocketAddr) -> Result<Strin
     } else if &line[(line.len() - 1)..] == "\n" {
         line.pop();
     } else {
-        warn!("Closing connection.");
         return Err(Error::ChannelStopped)
     }
 

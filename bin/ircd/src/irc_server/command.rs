@@ -29,7 +29,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             self.is_user_init = true;
         } else {
             // Close the connection
-            warn!("Password is required");
+            warn!("[IRC SERVER] Password is required");
             return self.on_quit()
         }
         Ok(())
@@ -40,7 +40,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             self.is_pass_init = true
         } else {
             // Close the connection
-            warn!("Password is not correct!");
+            warn!("[IRC SERVER] Password is not correct!");
             return self.on_quit()
         }
         Ok(())
@@ -222,7 +222,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
         let message = line[substr_idx + 1..].to_string();
 
-        info!("(Plain) PRIVMSG {} :{}", target, message);
+        info!("[CLIENT {}] (Plain) PRIVMSG {} :{}", self.peer_address, target, message,);
 
         let privmsgs_buffer = self.privmsgs_buffer.lock().await;
         let last_term = privmsgs_buffer.last_term() + 1;
@@ -243,7 +243,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
             if let Some(salt_box) = &channel_info.salt_box {
                 encrypt_privmsg(salt_box, &mut privmsg);
-                info!("(Encrypted) PRIVMSG: {:?}", privmsg);
+                info!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.peer_address, privmsg);
             }
         } else {
             if !self.configured_contacts.contains_key(target) {
@@ -253,7 +253,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
             let contact_info = self.configured_contacts.get(target).unwrap();
             if let Some(salt_box) = &contact_info.salt_box {
                 encrypt_privmsg(salt_box, &mut privmsg);
-                info!("(Encrypted) PRIVMSG: {:?}", privmsg);
+                info!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.peer_address, privmsg);
             }
         }
 

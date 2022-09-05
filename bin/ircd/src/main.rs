@@ -108,12 +108,12 @@ async fn setup_listener(settings: Args) -> Result<(TcpListener, Option<TlsAccept
 
 async fn start_listening(ircd: Ircd, executor: Arc<Executor<'_>>, settings: Args) -> Result<()> {
     let (listener, acceptor) = setup_listener(settings.clone()).await?;
-    info!("IRC listening on {}", settings.irc_listen);
+    info!("[IRC SERVER] listening on {}", settings.irc_listen);
     loop {
         let (stream, peer_addr) = match listener.accept().await {
             Ok((s, a)) => (s, a),
             Err(e) => {
-                error!("failed accepting new connections: {}", e);
+                error!("[IRC SERVER] Failed accepting new connections: {}", e);
                 continue
             }
         };
@@ -122,7 +122,7 @@ async fn start_listening(ircd: Ircd, executor: Arc<Executor<'_>>, settings: Args
             let stream = match acceptor.accept(stream).await {
                 Ok(s) => s,
                 Err(e) => {
-                    error!("Failed accepting TLS connection: {}", e);
+                    error!("[IRC SERVER] Failed accepting TLS connection: {}", e);
                     continue
                 }
             };
@@ -132,11 +132,11 @@ async fn start_listening(ircd: Ircd, executor: Arc<Executor<'_>>, settings: Args
         };
 
         if let Err(e) = result {
-            error!("Failed processing connection {}: {}", peer_addr, e);
+            error!("[IRC SERVER] Failed processing connection {}: {}", peer_addr, e);
             continue
         };
 
-        info!("IRC Accepted new client: {}", peer_addr);
+        info!("[IRC SERVER] Accept new connection: {}", peer_addr);
     }
 }
 
@@ -245,9 +245,8 @@ impl Ircd {
             }
         }
 
-        warn!("Close connection for clinet {}", conn.peer_address);
+        warn!("Close connection for: {}", conn.peer_address);
         receiver.unsubscribe().await;
-
         Ok(())
     }
 }
@@ -255,6 +254,7 @@ impl Ircd {
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let seen_msg_ids = Arc::new(Mutex::new(RingBuffer::new(SIZE_OF_MSG_IDSS_BUFFER)));
+    let seen_inv_ids = Arc::new(Mutex::new(RingBuffer::new(SIZE_OF_MSG_IDSS_BUFFER)));
     let privmsgs_buffer = PrivmsgsBuffer::new();
     let unread_msgs = Arc::new(Mutex::new(FxHashMap::default()));
 
@@ -304,12 +304,14 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let registry = p2p.protocol_registry();
 
     let seen_msg_ids_cloned = seen_msg_ids.clone();
+    let seen_inv_ids_cloned = seen_inv_ids.clone();
     let privmsgs_buffer_cloned = privmsgs_buffer.clone();
     let unread_msgs_cloned = unread_msgs.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let sender = p2p_send_channel.clone();
             let seen_msg_ids_cloned = seen_msg_ids_cloned.clone();
+            let seen_inv_ids_cloned = seen_inv_ids_cloned.clone();
             let privmsgs_buffer_cloned = privmsgs_buffer_cloned.clone();
             let unread_msgs_cloned = unread_msgs_cloned.clone();
             async move {
@@ -318,6 +320,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                     sender,
                     p2p,
                     seen_msg_ids_cloned,
+                    seen_inv_ids_cloned,
                     privmsgs_buffer_cloned,
                     unread_msgs_cloned,
                 )

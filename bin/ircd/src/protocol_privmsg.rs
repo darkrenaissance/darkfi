@@ -4,6 +4,7 @@ use async_executor::Executor;
 use async_trait::async_trait;
 use chrono::Utc;
 use log::debug;
+use rand::{rngs::OsRng, RngCore};
 use ripemd::{Digest, Ripemd160};
 
 use darkfi::{
@@ -24,18 +25,20 @@ const MAX_CONFIRM: u8 = 4;
 const SLEEP_TIME_FOR_RESEND: u64 = 1200;
 const UNREAD_MSG_EXPIRE_TIME: i64 = 259200;
 
-#[derive(SerialDecodable, SerialEncodable, Clone)]
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct Inv {
+    id: u64,
     invs: Vec<InvObject>,
 }
 
 impl Inv {
     fn new(invs: Vec<InvObject>) -> Self {
-        Self { invs }
+        let id = OsRng.next_u64();
+        Self { id, invs }
     }
 }
 
-#[derive(SerialDecodable, SerialEncodable, Clone)]
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct GetData {
     invs: Vec<InvObject>,
 }
@@ -46,7 +49,7 @@ impl GetData {
     }
 }
 
-#[derive(SerialDecodable, SerialEncodable, Clone)]
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct InvObject(String);
 
 pub struct ProtocolPrivmsg {
@@ -57,6 +60,7 @@ pub struct ProtocolPrivmsg {
     getdata_sub: net::MessageSubscription<GetData>,
     p2p: net::P2pPtr,
     msg_ids: SeenIds,
+    inv_ids: SeenIds,
     msgs: ArcPrivmsgsBuffer,
     unread_msgs: UnreadMsgs,
     channel: net::ChannelPtr,
@@ -68,28 +72,32 @@ impl ProtocolPrivmsg {
         notify: async_channel::Sender<Privmsg>,
         p2p: net::P2pPtr,
         msg_ids: SeenIds,
+        inv_ids: SeenIds,
         msgs: ArcPrivmsgsBuffer,
         unread_msgs: UnreadMsgs,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Privmsg>().await;
+        message_subsytem.add_dispatch::<Inv>().await;
+        message_subsytem.add_dispatch::<GetData>().await;
 
         let msg_sub =
-            channel.subscribe_msg::<Privmsg>().await.expect("Missing Privmsg dispatcher!");
-
-        let inv_sub = channel.subscribe_msg::<Inv>().await.expect("Missing Inv dispatcher!");
+            channel.clone().subscribe_msg::<Privmsg>().await.expect("Missing Privmsg dispatcher!");
 
         let getdata_sub =
-            channel.subscribe_msg::<GetData>().await.expect("Missing Inv dispatcher!");
+            channel.clone().subscribe_msg::<GetData>().await.expect("Missing GetData dispatcher!");
+
+        let inv_sub = channel.subscribe_msg::<Inv>().await.expect("Missing Inv dispatcher!");
 
         Arc::new(Self {
             notify,
             msg_sub,
             inv_sub,
+            getdata_sub,
             jobsman: net::ProtocolJobsManager::new("ProtocolPrivmsg", channel.clone()),
             p2p,
             msg_ids,
-            getdata_sub,
+            inv_ids,
             msgs,
             unread_msgs,
             channel,
@@ -98,9 +106,17 @@ impl ProtocolPrivmsg {
 
     async fn handle_receive_inv(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_inv() [START]");
+        let exclude_list = vec![self.channel.address()];
         loop {
             let inv = self.inv_sub.receive().await?;
             let inv = (*inv).to_owned();
+
+            let mut inv_ids = self.inv_ids.lock().await;
+            if inv_ids.contains(&inv.id) {
+                continue
+            }
+            inv_ids.push(inv.id);
+            drop(inv_ids);
 
             let mut inv_requested = vec![];
             for inv_object in inv.invs.iter() {
@@ -117,6 +133,8 @@ impl ProtocolPrivmsg {
             }
 
             self.update_unread_msgs().await?;
+
+            self.p2p.broadcast_with_exclude(inv, &exclude_list).await?;
         }
     }
 
@@ -125,7 +143,7 @@ impl ProtocolPrivmsg {
         let exclude_list = vec![self.channel.address()];
         loop {
             let msg = self.msg_sub.receive().await?;
-            let msg = (*msg).to_owned();
+            let mut msg = (*msg).to_owned();
 
             let mut msg_ids = self.msg_ids.lock().await;
             if msg_ids.contains(&msg.id) {
@@ -134,13 +152,15 @@ impl ProtocolPrivmsg {
             msg_ids.push(msg.id);
             drop(msg_ids);
 
-            if msg.read_confirms > MAX_CONFIRM {
+            if msg.read_confirms >= MAX_CONFIRM {
                 self.add_to_msgs(&msg).await?;
             } else {
+                msg.read_confirms += 1;
                 let hash = self.add_to_unread_msgs(&msg).await;
-                self.channel.send(Inv::new(vec![InvObject(hash)])).await?;
+                self.p2p.broadcast(Inv::new(vec![InvObject(hash)])).await?;
             }
 
+            self.update_unread_msgs().await?;
             self.p2p.broadcast_with_exclude(msg, &exclude_list).await?;
         }
     }
@@ -176,7 +196,7 @@ impl ProtocolPrivmsg {
                 msgs.remove(&hash);
                 continue
             }
-            if msg.read_confirms > MAX_CONFIRM {
+            if msg.read_confirms >= MAX_CONFIRM {
                 self.add_to_msgs(&msg).await?;
                 msgs.remove(&hash);
             }
