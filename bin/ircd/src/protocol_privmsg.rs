@@ -195,13 +195,13 @@ impl ProtocolPrivmsg {
         Ok(())
     }
 
-    async fn resend_loop(&self) -> Result<()> {
+    async fn resend_loop(self: Arc<Self>) -> Result<()> {
         sleep(SLEEP_TIME_FOR_RESEND).await;
 
-        self.update_unread_msgs();
+        self.update_unread_msgs().await?;
 
         for msg in self.unread_msgs.lock().await.values() {
-            self.channel.send(msg.clone()).await;
+            self.channel.send(msg.clone()).await?;
         }
         Ok(())
     }

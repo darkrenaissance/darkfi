@@ -6,7 +6,7 @@ use fxhash::FxHashMap;
 use rand::rngs::OsRng;
 
 use crate::{
-    privmsg::Privmsg,
+    privmsg::{Privmsg, MAXIMUM_LENGTH_OF_NICKNAME},
     settings::{ChannelInfo, ContactInfo},
     MAXIMUM_LENGTH_OF_NICKNAME,
     privmsg::{Privmsg, MAXIMUM_LENGTH_OF_NICKNAME},

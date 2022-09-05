@@ -7,10 +7,10 @@ use log::{debug, info, warn};
 use darkfi::{net::P2pPtr, system::SubscriberPtr, Error, Result};
 
 use crate::{
-    buffers::{ArcPrivmsgsBuffer, SeenMsgIds},
+    buffers::{ArcPrivmsgsBuffer, SeenIds},
     crypto::{decrypt_privmsg, decrypt_target},
     privmsg::MAXIMUM_LENGTH_OF_MESSAGE,
-    ChannelInfo, Privmsg,
+    ChannelInfo, ContactInfo, Privmsg,
 };
 
 mod command;
@@ -20,7 +20,7 @@ pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'stati
     write_stream: WriteHalf<C>,
     pub peer_address: SocketAddr,
     // msg ids
-    seen_msg_ids: SeenMsgIds,
+    seen_msg_ids: SeenIds,
     privmsgs_buffer: ArcPrivmsgsBuffer,
     // user & channels
     is_nick_init: bool,
@@ -31,7 +31,7 @@ pub struct IrcServerConnection<C: AsyncRead + AsyncWrite + Send + Unpin + 'stati
     nickname: String,
     auto_channels: Vec<String>,
     pub configured_chans: FxHashMap<String, ChannelInfo>,
-    pub configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
+    pub configured_contacts: FxHashMap<String, ContactInfo>,
     capabilities: FxHashMap<String, bool>,
     // p2p
     p2p: P2pPtr,
@@ -45,12 +45,12 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
     pub fn new(
         write_stream: WriteHalf<C>,
         peer_address: SocketAddr,
-        seen_msg_ids: SeenMsgIds,
+        seen_msg_ids: SeenIds,
         privmsgs_buffer: ArcPrivmsgsBuffer,
         auto_channels: Vec<String>,
         password: String,
         configured_chans: FxHashMap<String, ChannelInfo>,
-        configured_contacts: FxHashMap<String, crypto_box::SalsaBox>,
+        configured_contacts: FxHashMap<String, ContactInfo>,
         p2p: P2pPtr,
         senders: SubscriberPtr<Privmsg>,
         subscriber_id: u64,
@@ -83,8 +83,13 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
         info!("Received msg from P2p network: {:?}", msg);
 
         let mut msg = msg.clone();
-        decrypt_target(&mut msg, self.configured_chans.clone(), self.configured_contacts.clone());
-
+        let mut contact = String::new();
+        decrypt_target(
+            &mut contact,
+            &mut msg,
+            self.configured_chans.clone(),
+            self.configured_contacts.clone(),
+        );
         if msg.target.starts_with('#') {
             // Try to potentially decrypt the incoming message.
             if !self.configured_chans.contains_key(&msg.target) {
@@ -108,10 +113,16 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
             self.reply(&msg.to_string()).await?;
             return Ok(())
-        } else if self.is_cap_end && self.is_nick_init && self.nickname == msg.target {
-            if self.configured_contacts.contains_key(&msg.target) {
-                let salt_box = self.configured_contacts.get(&msg.target).unwrap();
+        } else if self.is_cap_end && self.is_nick_init {
+            if !self.configured_contacts.contains_key(&contact) {
+                return Ok(())
+            }
+
+            let contact_info = self.configured_contacts.get(&contact).unwrap();
+            if let Some(salt_box) = &contact_info.salt_box {
                 decrypt_privmsg(salt_box, &mut msg);
+                // This is for /query
+                msg.nickname = contact;
                 info!("Decrypted received message: {:?}", msg);
             }
 

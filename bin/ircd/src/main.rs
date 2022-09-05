@@ -2,7 +2,6 @@ use async_std::{
     net::TcpListener,
     sync::{Arc, Mutex},
 };
-use settings::ContactInfo;
 use std::{fmt, fs::File, net::SocketAddr};
 
 use async_channel::Receiver;
@@ -40,14 +39,14 @@ pub mod rpc;
 pub mod settings;
 
 use crate::{
-    buffers::{ArcPrivmsgsBuffer, PrivmsgsBuffer, RingBuffer, SeenMsgIds, SIZE_OF_MSG_IDSS_BUFFER},
+    buffers::{ArcPrivmsgsBuffer, PrivmsgsBuffer, RingBuffer, SeenIds, SIZE_OF_MSG_IDSS_BUFFER},
     irc_server::IrcServerConnection,
     privmsg::Privmsg,
     protocol_privmsg::ProtocolPrivmsg,
     rpc::JsonRpcInterface,
     settings::{
-        parse_configured_channels, parse_configured_contacts, Args, ChannelInfo, CONFIG_FILE,
-        CONFIG_FILE_CONTENTS,
+        parse_configured_channels, parse_configured_contacts, Args, ChannelInfo, ContactInfo,
+        CONFIG_FILE, CONFIG_FILE_CONTENTS,
     },
 };
 
@@ -143,7 +142,7 @@ async fn start_listening(ircd: Ircd, executor: Arc<Executor<'_>>, settings: Args
 
 struct Ircd {
     // msgs
-    seen_msg_ids: SeenMsgIds,
+    seen_msg_ids: SeenIds,
     privmsgs_buffer: ArcPrivmsgsBuffer,
     // channels
     autojoin_chans: Vec<String>,
@@ -157,7 +156,7 @@ struct Ircd {
 
 impl Ircd {
     fn new(
-        seen_msg_ids: SeenMsgIds,
+        seen_msg_ids: SeenIds,
         privmsgs_buffer: ArcPrivmsgsBuffer,
         autojoin_chans: Vec<String>,
         password: String,

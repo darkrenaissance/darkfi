@@ -232,8 +232,12 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
                 info!("(Encrypted) PRIVMSG: {:?}", privmsg);
             }
         } else {
-            // If we have a configured secret for this nick, we encrypt the message.
-            if let Some(salt_box) = self.configured_contacts.get(target) {
+            if !self.configured_contacts.contains_key(target) {
+                return Ok(())
+            }
+
+            let contact_info = self.configured_contacts.get(target).unwrap();
+            if let Some(salt_box) = &contact_info.salt_box {
                 encrypt_privmsg(salt_box, &mut privmsg);
                 info!("(Encrypted) PRIVMSG: {:?}", privmsg);
             }
