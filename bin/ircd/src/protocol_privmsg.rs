@@ -98,8 +98,6 @@ impl ProtocolPrivmsg {
 
     async fn handle_receive_inv(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_inv() [START]");
-        let exclude_list = vec![self.channel.address()];
-
         loop {
             let inv = self.inv_sub.receive().await?;
             let inv = (*inv).to_owned();
@@ -115,17 +113,16 @@ impl ProtocolPrivmsg {
             }
 
             if !inv_requested.is_empty() {
-                self.channel.send(GetData::new(inv_requested)).await;
+                self.channel.send(GetData::new(inv_requested)).await?;
             }
 
-            self.update_unread_msgs().await;
+            self.update_unread_msgs().await?;
         }
     }
 
     async fn handle_receive_msg(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_msg() [START]");
         let exclude_list = vec![self.channel.address()];
-
         loop {
             let msg = self.msg_sub.receive().await?;
             let msg = (*msg).to_owned();
@@ -141,7 +138,7 @@ impl ProtocolPrivmsg {
                 self.add_to_msgs(&msg).await?;
             } else {
                 let hash = self.add_to_unread_msgs(&msg).await;
-                self.channel.send(Inv::new(vec![InvObject(hash)])).await;
+                self.channel.send(Inv::new(vec![InvObject(hash)])).await?;
             }
 
             self.p2p.broadcast_with_exclude(msg, &exclude_list).await?;
@@ -150,8 +147,6 @@ impl ProtocolPrivmsg {
 
     async fn handle_receive_getdata(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_getdata() [START]");
-        let exclude_list = vec![self.channel.address()];
-
         loop {
             let getdata = self.getdata_sub.receive().await?;
             let getdata = (*getdata).to_owned();

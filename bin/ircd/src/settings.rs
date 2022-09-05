@@ -115,13 +115,21 @@ fn salt_box_from_shared_secret(s: &str) -> Result<SalsaBox> {
 
 fn parse_priv_key(data: &str) -> Result<String> {
     let mut pk = String::new();
-    if let Value::Table(map) = toml::from_str(data)? {
-        if map.contains_key("private_key") && map["private_key"].is_table() {
-            for prv_key in map["private_key"].as_table().unwrap() {
-                pk = prv_key.0.into();
-            }
-        }
+
+    let map = match toml::from_str(data)? {
+        Value::Table(m) => m,
+        _ => return Ok(pk),
     };
+
+    if !map.contains_key("private_key") && !map["private_key"].is_table() {
+        return Ok(pk)
+    }
+
+    let private_keys = map["private_key"].as_table().unwrap();
+
+    for prv_key in private_keys {
+        pk = prv_key.0.into();
+    }
 
     Ok(pk)
 }
@@ -137,37 +145,43 @@ fn parse_priv_key(data: &str) -> Result<String> {
 pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, ContactInfo>> {
     let mut ret = FxHashMap::default();
 
-    if let Value::Table(map) = toml::from_str(data)? {
-        if map.contains_key("contact") && map["contact"].is_table() {
-            for cnt in map["contact"].as_table().unwrap() {
-                info!("Found configuration for contact {}", cnt.0);
-
-                let mut contact_info = ContactInfo::new()?;
-
-                if cnt.1.as_table().unwrap().contains_key("contact_pubkey") {
-                    // Build the NaCl box
-                    if let Some(p) = cnt.1["contact_pubkey"].as_str() {
-                        let bytes: [u8; 32] = bs58::decode(p).into_vec()?.try_into().unwrap();
-                        let public = crypto_box::PublicKey::from(bytes);
-
-                        let bytes: [u8; 32] =
-                            bs58::decode(parse_priv_key(data)?).into_vec()?.try_into().unwrap();
-                        let secret = crypto_box::SecretKey::from(bytes);
-
-                        contact_info.salt_box = Some(SalsaBox::new(&public, &secret));
-
-                        ret.insert(cnt.0.to_string(), contact_info);
-                        info!("Instantiated NaCl box for contact {}", cnt.0);
-                    }
-                }
-            }
-        }
+    let map = match toml::from_str(data)? {
+        Value::Table(m) => m,
+        _ => return Ok(ret),
     };
 
+    if !map.contains_key("contact") && !map["contact"].is_table() {
+        return Ok(ret)
+    }
+
+    let contacts = map["contact"].as_table().unwrap();
+
+    for cnt in contacts {
+        info!("Found configuration for contact {}", cnt.0);
+
+        let mut contact_info = ContactInfo::new()?;
+
+        if !cnt.1.is_table() && !cnt.1.as_table().unwrap().contains_key("contact_pubkey") {
+            continue
+        }
+
+        // Build the NaCl box
+        //// public_key
+        let pubkey = cnt.1["contact_pubkey"].as_str().unwrap();
+        let bytes: [u8; 32] = bs58::decode(pubkey).into_vec()?.try_into().unwrap();
+        let public = crypto_box::PublicKey::from(bytes);
+
+        //// private_key
+        let bytes: [u8; 32] = bs58::decode(parse_priv_key(data)?).into_vec()?.try_into().unwrap();
+        let secret = crypto_box::SecretKey::from(bytes);
+
+        contact_info.salt_box = Some(SalsaBox::new(&public, &secret));
+        ret.insert(cnt.0.to_string(), contact_info);
+        info!("Instantiated NaCl box for contact {}", cnt.0);
+    }
     Ok(ret)
 }
 
-/// TODO CLEAN UP
 /// Parse a TOML string for any configured channels and return
 /// a map containing said configurations.
 ///
@@ -179,31 +193,36 @@ pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, Contact
 pub fn parse_configured_channels(data: &str) -> Result<FxHashMap<String, ChannelInfo>> {
     let mut ret = FxHashMap::default();
 
-    if let Value::Table(map) = toml::from_str(data)? {
-        if map.contains_key("channel") && map["channel"].is_table() {
-            for chan in map["channel"].as_table().unwrap() {
-                info!("Found configuration for channel {}", chan.0);
-                let mut channel_info = ChannelInfo::new()?;
+    let map = match toml::from_str(data)? {
+        Value::Table(m) => m,
+        _ => return Ok(ret),
+    };
 
-                if chan.1.as_table().unwrap().contains_key("topic") {
-                    let topic = chan.1["topic"].as_str().unwrap().to_string();
-                    info!("Found topic for channel {}: {}", chan.0, topic);
-                    channel_info.topic = Some(topic);
-                }
+    if !map.contains_key("channel") && !map["channel"].is_table() {
+        return Ok(ret)
+    }
 
-                if chan.1.as_table().unwrap().contains_key("secret") {
-                    // Build the NaCl box
-                    if let Some(s) = chan.1["secret"].as_str() {
-                        let salt_box = salt_box_from_shared_secret(s)?;
-                        channel_info.salt_box = Some(salt_box);
-                        info!("Instantiated NaCl box for channel {}", chan.0);
-                    }
-                }
+    for chan in map["channel"].as_table().unwrap() {
+        info!("Found configuration for channel {}", chan.0);
+        let mut channel_info = ChannelInfo::new()?;
 
-                ret.insert(chan.0.to_string(), channel_info);
+        if chan.1.as_table().unwrap().contains_key("topic") {
+            let topic = chan.1["topic"].as_str().unwrap().to_string();
+            info!("Found topic for channel {}: {}", chan.0, topic);
+            channel_info.topic = Some(topic);
+        }
+
+        if chan.1.as_table().unwrap().contains_key("secret") {
+            // Build the NaCl box
+            if let Some(s) = chan.1["secret"].as_str() {
+                let salt_box = salt_box_from_shared_secret(s)?;
+                channel_info.salt_box = Some(salt_box);
+                info!("Instantiated NaCl box for channel {}", chan.0);
             }
         }
-    };
+
+        ret.insert(chan.0.to_string(), channel_info);
+    }
 
     Ok(ret)
 }

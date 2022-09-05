@@ -108,60 +108,74 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcServerConnection<C> 
 
         let capabilities_keys: Vec<String> = self.capabilities.keys().cloned().collect();
 
-        if subcommand == "LS" {
-            let cap_ls_reply = format!(
-                ":{}!anon@dark.fi CAP * LS :{}\r\n",
-                self.nickname,
-                capabilities_keys.join(" ")
-            );
-            self.reply(&cap_ls_reply).await?;
-        }
-
-        if subcommand == "REQ" {
-            let substr_idx = line.find(':').ok_or(Error::MalformedPacket)?;
-
-            if substr_idx >= line.len() {
-                return Err(Error::MalformedPacket)
+        match subcommand {
+            "LS" => {
+                let cap_ls_reply = format!(
+                    ":{}!anon@dark.fi CAP * LS :{}\r\n",
+                    self.nickname,
+                    capabilities_keys.join(" ")
+                );
+                self.reply(&cap_ls_reply).await?;
             }
 
-            let cap: Vec<&str> = line[substr_idx + 1..].split(' ').collect();
+            "REQ" => {
+                let substr_idx = line.find(':').ok_or(Error::MalformedPacket)?;
 
-            let mut ack_list = vec![];
-            let mut nak_list = vec![];
-
-            for c in cap {
-                if self.capabilities.contains_key(c) {
-                    self.capabilities.insert(c.to_string(), true);
-                    ack_list.push(c);
-                } else {
-                    nak_list.push(c);
+                if substr_idx >= line.len() {
+                    return Err(Error::MalformedPacket)
                 }
+
+                let cap: Vec<&str> = line[substr_idx + 1..].split(' ').collect();
+
+                let mut ack_list = vec![];
+                let mut nak_list = vec![];
+
+                for c in cap {
+                    if self.capabilities.contains_key(c) {
+                        self.capabilities.insert(c.to_string(), true);
+                        ack_list.push(c);
+                    } else {
+                        nak_list.push(c);
+                    }
+                }
+
+                let cap_ack_reply = format!(
+                    ":{}!anon@dark.fi CAP * ACK :{}\r\n",
+                    self.nickname,
+                    ack_list.join(" ")
+                );
+
+                let cap_nak_reply = format!(
+                    ":{}!anon@dark.fi CAP * NAK :{}\r\n",
+                    self.nickname,
+                    nak_list.join(" ")
+                );
+
+                self.reply(&cap_ack_reply).await?;
+                self.reply(&cap_nak_reply).await?;
             }
 
-            let cap_ack_reply =
-                format!(":{}!anon@dark.fi CAP * ACK :{}\r\n", self.nickname, ack_list.join(" "));
+            "LIST" => {
+                let enabled_capabilities: Vec<String> = self
+                    .capabilities
+                    .clone()
+                    .into_iter()
+                    .filter(|(_, v)| *v)
+                    .map(|(k, _)| k)
+                    .collect();
 
-            let cap_nak_reply =
-                format!(":{}!anon@dark.fi CAP * NAK :{}\r\n", self.nickname, nak_list.join(" "));
+                let cap_list_reply = format!(
+                    ":{}!anon@dark.fi CAP * LIST :{}\r\n",
+                    self.nickname,
+                    enabled_capabilities.join(" ")
+                );
+                self.reply(&cap_list_reply).await?;
+            }
 
-            self.reply(&cap_ack_reply).await?;
-            self.reply(&cap_nak_reply).await?;
-        }
-
-        if subcommand == "LIST" {
-            let enabled_capabilities: Vec<String> =
-                self.capabilities.clone().into_iter().filter(|(_, v)| *v).map(|(k, _)| k).collect();
-
-            let cap_list_reply = format!(
-                ":{}!anon@dark.fi CAP * LIST :{}\r\n",
-                self.nickname,
-                enabled_capabilities.join(" ")
-            );
-            self.reply(&cap_list_reply).await?;
-        }
-
-        if subcommand == "END" {
-            self.is_cap_end = true;
+            "END" => {
+                self.is_cap_end = true;
+            }
+            _ => {}
         }
         Ok(())
     }
