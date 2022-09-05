@@ -66,6 +66,8 @@ impl fmt::Display for KeyPair {
     }
 }
 
+pub type UnreadMsgs = Arc<Mutex<FxHashMap<String, Privmsg>>>;
+
 async fn setup_listener(settings: Args) -> Result<(TcpListener, Option<TlsAcceptor>)> {
 
     let listenaddr = settings.irc_listen.socket_addrs(|| None)?[0];
@@ -255,6 +257,7 @@ async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let seen_msg_ids = Arc::new(Mutex::new(RingBuffer::new(SIZE_OF_MSG_IDSS_BUFFER)));
     let privmsgs_buffer = PrivmsgsBuffer::new();
+    let unread_msgs = Arc::new(Mutex::new(FxHashMap::default()));
 
     if settings.gen_secret {
         let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
@@ -302,11 +305,13 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let seen_msg_ids_cloned = seen_msg_ids.clone();
     let privmsgs_buffer_cloned = privmsgs_buffer.clone();
+    let unread_msgs_cloned = unread_msgs.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let sender = p2p_send_channel.clone();
             let seen_msg_ids_cloned = seen_msg_ids_cloned.clone();
             let privmsgs_buffer_cloned = privmsgs_buffer_cloned.clone();
+            let unread_msgs_cloned = unread_msgs_cloned.clone();
             async move {
                 ProtocolPrivmsg::init(
                     channel,
@@ -314,6 +319,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                     p2p,
                     seen_msg_ids_cloned,
                     privmsgs_buffer_cloned,
+                    unread_msgs_cloned,
                 )
                 .await
             }

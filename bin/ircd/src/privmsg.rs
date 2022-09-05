@@ -16,12 +16,14 @@ pub struct Privmsg {
     pub message: String,
     pub timestamp: i64,
     pub term: u64,
+    pub read_confirms: u8,
 }
 
 impl Privmsg {
     pub fn new(nickname: &str, target: &str, message: &str, term: u64) -> Self {
         let id = OsRng.next_u64();
         let timestamp = Utc::now().timestamp();
+        let read_confirms = 0;
         Self {
             id,
             nickname: nickname.to_string(),
@@ -29,6 +31,7 @@ impl Privmsg {
             message: message.to_string(),
             timestamp,
             term,
+            read_confirms,
         }
     }
 }

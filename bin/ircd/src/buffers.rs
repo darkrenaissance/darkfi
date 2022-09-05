@@ -56,7 +56,7 @@ impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
     }
 }
 
-pub type SeenMsgIds = Arc<Mutex<RingBuffer<u64>>>;
+pub type SeenIds = Arc<Mutex<RingBuffer<u64>>>;
 
 pub type ArcPrivmsgsBuffer = Arc<Mutex<PrivmsgsBuffer>>;
 
