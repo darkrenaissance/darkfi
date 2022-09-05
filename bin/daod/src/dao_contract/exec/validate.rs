@@ -59,18 +59,16 @@ pub struct CallData {
     pub proposal: pallas::Base,
     pub coin_0: pallas::Base,
     pub coin_1: pallas::Base,
-    pub weighted_votes_commit: pallas::Point,
-    pub all_vote_values_commit: pallas::Point,
+    pub yes_votes_commit: pallas::Point,
+    pub all_votes_commit: pallas::Point,
     pub input_value_commit: pallas::Point,
 }
 
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
-        let weighted_votes_commit_coords =
-            self.weighted_votes_commit.to_affine().coordinates().unwrap();
+        let yes_votes_commit_coords = self.yes_votes_commit.to_affine().coordinates().unwrap();
 
-        let all_vote_values_commit_coords =
-            self.all_vote_values_commit.to_affine().coordinates().unwrap();
+        let all_votes_commit_coords = self.all_votes_commit.to_affine().coordinates().unwrap();
 
         let input_value_commit_coords = self.input_value_commit.to_affine().coordinates().unwrap();
 
@@ -80,10 +78,10 @@ impl CallDataBase for CallData {
                 self.proposal,
                 self.coin_0,
                 self.coin_1,
-                *weighted_votes_commit_coords.x(),
-                *weighted_votes_commit_coords.y(),
-                *all_vote_values_commit_coords.x(),
-                *all_vote_values_commit_coords.y(),
+                *yes_votes_commit_coords.x(),
+                *yes_votes_commit_coords.y(),
+                *all_votes_commit_coords.x(),
+                *all_votes_commit_coords.y(),
                 *input_value_commit_coords.x(),
                 *input_value_commit_coords.y(),
                 *super::FUNC_ID,
@@ -177,12 +175,12 @@ pub fn state_transition(
         .expect("Return type is not of type State");
     let proposal_votes = state.proposal_votes.get(&HashableBase(call_data.proposal)).unwrap();
 
-    // 4. check win/total_vote_commit is the same as in ProposalVote
-    if proposal_votes.weighted_vote_commits != call_data.weighted_votes_commit {
+    // 4. check yes_votes_commit is the same as in ProposalVote
+    if proposal_votes.yes_votes_commit != call_data.yes_votes_commit {
         return Err(Error::InvalidVoteCommit)
     }
-    // 5. also check total_vote_commit
-    if proposal_votes.all_vote_value_commits != call_data.all_vote_values_commit {
+    // 5. also check all_votes_commit
+    if proposal_votes.all_votes_commit != call_data.all_votes_commit {
         return Err(Error::InvalidVoteCommit)
     }
 

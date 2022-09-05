@@ -56,12 +56,12 @@ pub struct CallData {
 impl CallDataBase for CallData {
     fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)> {
         let mut zk_publics = Vec::new();
-        let mut total_value_commit = pallas::Point::identity();
+        let mut all_votes_commit = pallas::Point::identity();
 
         assert!(self.inputs.len() > 0, "inputs length cannot be zero");
         for input in &self.inputs {
-            total_value_commit += input.value_commit;
-            let value_coords = input.value_commit.to_affine().coordinates().unwrap();
+            all_votes_commit += input.vote_commit;
+            let value_coords = input.vote_commit.to_affine().coordinates().unwrap();
 
             let sigpub_coords = input.signature_public.0.to_affine().coordinates().unwrap();
 
@@ -79,20 +79,19 @@ impl CallDataBase for CallData {
             ));
         }
 
-        let weighted_vote_commit_coords =
-            self.header.weighted_vote_commit.to_affine().coordinates().unwrap();
+        let yes_vote_commit_coords = self.header.yes_vote_commit.to_affine().coordinates().unwrap();
 
-        let value_commit_coords = total_value_commit.to_affine().coordinates().unwrap();
+        let vote_commit_coords = all_votes_commit.to_affine().coordinates().unwrap();
 
         zk_publics.push((
             "dao-vote-main".to_string(),
             vec![
                 self.header.token_commit,
                 self.header.proposal_bulla,
-                *weighted_vote_commit_coords.x(),
-                *weighted_vote_commit_coords.y(),
-                *value_commit_coords.x(),
-                *value_commit_coords.y(),
+                *yes_vote_commit_coords.x(),
+                *yes_vote_commit_coords.y(),
+                *vote_commit_coords.x(),
+                *vote_commit_coords.y(),
             ],
         ));
 
@@ -123,14 +122,14 @@ impl CallDataBase for CallData {
 pub struct Header {
     pub token_commit: pallas::Base,
     pub proposal_bulla: pallas::Base,
-    pub weighted_vote_commit: pallas::Point,
+    pub yes_vote_commit: pallas::Point,
     pub enc_note: EncryptedNote2,
 }
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct Input {
     pub nullifier: Nullifier,
-    pub value_commit: pallas::Point,
+    pub vote_commit: pallas::Point,
     pub merkle_root: MerkleNode,
     pub signature_public: PublicKey,
 }
@@ -160,7 +159,7 @@ pub fn state_transition(
 
     // Check the merkle roots for the input coins are valid
     let mut vote_nulls = Vec::new();
-    let mut total_value_commit = pallas::Point::identity();
+    let mut all_vote_commit = pallas::Point::identity();
     for input in &call_data.inputs {
         let money_state = states.lookup::<MoneyState>(*money_contract::CONTRACT_ID).unwrap();
         if !money_state.is_valid_merkle(&input.merkle_root) {
@@ -175,7 +174,7 @@ pub fn state_transition(
             return Err(Error::DoubleVote)
         }
 
-        total_value_commit += input.value_commit;
+        all_vote_commit += input.vote_commit;
 
         vote_nulls.push(input.nullifier);
     }
@@ -183,8 +182,8 @@ pub fn state_transition(
     Ok(Box::new(Update {
         proposal_bulla: call_data.header.proposal_bulla,
         vote_nulls,
-        weighted_vote_commit: call_data.header.weighted_vote_commit,
-        value_commit: total_value_commit,
+        yes_vote_commit: call_data.header.yes_vote_commit,
+        all_vote_commit,
     }))
 }
 
@@ -192,16 +191,16 @@ pub fn state_transition(
 pub struct Update {
     proposal_bulla: pallas::Base,
     vote_nulls: Vec<Nullifier>,
-    pub weighted_vote_commit: pallas::Point,
-    pub value_commit: pallas::Point,
+    pub yes_vote_commit: pallas::Point,
+    pub all_vote_commit: pallas::Point,
 }
 
 impl UpdateBase for Update {
     fn apply(mut self: Box<Self>, states: &mut StateRegistry) {
         let state = states.lookup_mut::<DaoState>(*dao_contract::CONTRACT_ID).unwrap();
         let votes_info = state.lookup_proposal_votes_mut(self.proposal_bulla).unwrap();
-        votes_info.weighted_vote_commits += self.weighted_vote_commit;
-        votes_info.all_vote_value_commits += self.value_commit;
+        votes_info.yes_votes_commit += self.yes_vote_commit;
+        votes_info.all_votes_commit += self.all_vote_commit;
         votes_info.vote_nulls.append(&mut self.vote_nulls);
     }
 }

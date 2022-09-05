@@ -14,11 +14,11 @@ pub struct DaoBulla(pub pallas::Base);
 type MerkleTree = BridgeTree<MerkleNode, MERKLE_DEPTH>;
 
 pub struct ProposalVotes {
-    // TODO: might be more logical to have 'yes_vote_commits' and 'no_vote_commits'
-    /// Weighted vote commits
-    pub weighted_vote_commits: pallas::Point,
+    // TODO: might be more logical to have 'yes_votes_commit' and 'no_votes_commit'
+    /// Weighted vote commit
+    pub yes_votes_commit: pallas::Point,
     /// All value staked in the vote
-    pub all_vote_value_commits: pallas::Point,
+    pub all_votes_commit: pallas::Point,
     /// Vote nullifiers
     pub vote_nulls: Vec<Nullifier>,
 }
@@ -69,8 +69,8 @@ impl State {
         self.proposal_votes.insert(
             HashableBase(bulla),
             ProposalVotes {
-                weighted_vote_commits: pallas::Point::identity(),
-                all_vote_value_commits: pallas::Point::identity(),
+                yes_votes_commit: pallas::Point::identity(),
+                all_votes_commit: pallas::Point::identity(),
                 vote_nulls: Vec::new(),
             },
         );

@@ -34,12 +34,11 @@ use log::debug;
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct Note {
     pub vote: Vote,
-    pub value: u64,
-    pub value_blind: pallas::Scalar,
+    pub vote_value: u64,
+    pub vote_value_blind: pallas::Scalar,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
-// All info needed for vote and value commits
 pub struct Vote {
     pub vote_option: bool,
     pub vote_option_blind: pallas::Scalar,
@@ -71,14 +70,14 @@ impl Builder {
         let gov_token_blind = pallas::Base::random(&mut OsRng);
 
         let mut inputs = vec![];
-        let mut value = 0;
-        let mut value_blind = pallas::Scalar::from(0);
+        let mut vote_value = 0;
+        let mut vote_value_blind = pallas::Scalar::from(0);
 
         for input in self.inputs {
-            let input_value_blind = pallas::Scalar::random(&mut OsRng);
+            let value_blind = pallas::Scalar::random(&mut OsRng);
 
-            value += input.note.value;
-            value_blind += input_value_blind;
+            vote_value += input.note.value;
+            vote_value_blind += value_blind;
 
             let signature_public = PublicKey::from_secret(input.signature_secret);
 
@@ -103,7 +102,7 @@ impl Builder {
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
                 Witness::Base(Value::known(note.token_id)),
                 Witness::Base(Value::known(note.coin_blind)),
-                Witness::Scalar(Value::known(input_value_blind)),
+                Witness::Scalar(Value::known(vote_value_blind)),
                 Witness::Base(Value::known(gov_token_blind)),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
@@ -143,23 +142,19 @@ impl Builder {
 
             let nullifier = poseidon_hash::<2>([input.secret.0, note.serial]);
 
-            let value_commit = pedersen_commitment_u64(note.value, value_blind);
-            let value_coords = value_commit.to_affine().coordinates().unwrap();
-            let value_commit_x = *value_coords.x();
-            let value_commit_y = *value_coords.y();
+            let vote_commit = pedersen_commitment_u64(note.value, vote_value_blind);
+            let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
 
             let sigpub_coords = signature_public.0.to_affine().coordinates().unwrap();
-            let sigpub_x = *sigpub_coords.x();
-            let sigpub_y = *sigpub_coords.y();
 
             let public_inputs = vec![
                 nullifier,
-                value_commit_x,
-                value_commit_y,
+                *vote_commit_coords.x(),
+                *vote_commit_coords.y(),
                 token_commit,
                 merkle_root.0,
-                sigpub_x,
-                sigpub_y,
+                *sigpub_coords.x(),
+                *sigpub_coords.y(),
             ];
 
             let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
@@ -171,7 +166,7 @@ impl Builder {
 
             let input = Input {
                 nullifier: Nullifier(nullifier),
-                value_commit,
+                vote_commit,
                 merkle_root,
                 signature_public,
             };
@@ -205,8 +200,6 @@ impl Builder {
         let proposal_bulla = poseidon_hash::<8>([
             *proposal_dest_coords.x(),
             *proposal_dest_coords.y(),
-            //proposal_dest_x,
-            //proposal_dest_y,
             proposal_amount,
             self.proposal.serial,
             self.proposal.token_id,
@@ -216,20 +209,15 @@ impl Builder {
             self.proposal.blind,
         ]);
 
-        let vote = self.vote.vote_option as u64;
-        assert!(vote == 0 || vote == 1);
+        let vote_option = self.vote.vote_option as u64;
+        assert!(vote_option == 0 || vote_option == 1);
 
-        let weighted_vote = vote * value;
+        let yes_vote_commit =
+            pedersen_commitment_u64(vote_option * vote_value, self.vote.vote_option_blind);
+        let yes_vote_commit_coords = yes_vote_commit.to_affine().coordinates().unwrap();
 
-        let weighted_vote_commit =
-            pedersen_commitment_u64(weighted_vote, self.vote.vote_option_blind);
-        debug!(target: "demo::dao_contract::vote::wallet::Builder", "weighted vote commit: {:?}", weighted_vote_commit);
-        let vote_coords = weighted_vote_commit.to_affine().coordinates().unwrap();
-        let vote = pallas::Base::from(vote);
-
-        let value_commit = pedersen_commitment_u64(value, value_blind);
-        let value_coords = value_commit.to_affine().coordinates().unwrap();
-        let value_base = pallas::Base::from(value);
+        let all_vote_commit = pedersen_commitment_u64(vote_value, vote_value_blind);
+        let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
         let zk_info = zk_bins.lookup(&"dao-vote-main".to_string()).unwrap();
         let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
@@ -256,11 +244,11 @@ impl Builder {
             Witness::Base(Value::known(*dao_pubkey_coords.y())),
             Witness::Base(Value::known(self.dao.bulla_blind)),
             // Vote
-            Witness::Base(Value::known(vote)),
+            Witness::Base(Value::known(pallas::Base::from(vote_option))),
             Witness::Scalar(Value::known(self.vote.vote_option_blind)),
             // Total number of gov tokens allocated
-            Witness::Base(Value::known(value_base)),
-            Witness::Scalar(Value::known(value_blind)),
+            Witness::Base(Value::known(pallas::Base::from(vote_value))),
+            Witness::Scalar(Value::known(vote_value_blind)),
             // gov token
             Witness::Base(Value::known(gov_token_blind)),
         ];
@@ -268,10 +256,11 @@ impl Builder {
         let public_inputs = vec![
             token_commit,
             proposal_bulla,
-            *vote_coords.x(),
-            *vote_coords.y(),
-            *value_coords.x(),
-            *value_coords.y(),
+            // this should be a value commit??
+            *yes_vote_commit_coords.x(),
+            *yes_vote_commit_coords.y(),
+            *all_vote_commit_coords.x(),
+            *all_vote_commit_coords.y(),
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
@@ -282,10 +271,10 @@ impl Builder {
             .expect("DAO::vote() proving error!");
         proofs.push(main_proof);
 
-        let note = Note { vote: self.vote, value, value_blind };
+        let note = Note { vote: self.vote, vote_value, vote_value_blind };
         let enc_note = note::encrypt(&note, &self.vote_keypair.public).unwrap();
 
-        let header = Header { token_commit, proposal_bulla, weighted_vote_commit, enc_note };
+        let header = Header { token_commit, proposal_bulla, yes_vote_commit, enc_note };
 
         let call_data = CallData { header, inputs };
 
