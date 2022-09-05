@@ -1,5 +1,6 @@
 use async_std::sync::{Arc, Mutex};
 
+use rand::{rngs::OsRng, RngCore};
 use ringbuffer::{AllocRingBuffer, RingBufferExt, RingBufferWrite};
 
 use darkfi::util::{
@@ -48,14 +49,19 @@ pub struct Privmsg {
     pub target: String,
     pub message: String,
     pub timestamp: Timestamp,
+    pub term: u64,
 }
 
 impl Privmsg {
-    pub fn to_irc_msg(&self) -> String {
-        let irc_msg = format!(
-            ":{}!anon@dark.fi PRIVMSG {} :{}\r\n",
-            self.nickname, self.target, self.message
-        );
-        irc_msg
+    pub fn new(nickname: String, target: String, message: String, term: u64) -> Self {
+        let id = OsRng.next_u64();
+        let timestamp = Timestamp::current_time();
+        Self { id, nickname, target, message, timestamp, term }
+    }
+}
+
+impl std::string::ToString for Privmsg {
+    fn to_string(&self) -> String {
+        format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n", self.nickname, self.target, self.message)
     }
 }
