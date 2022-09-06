@@ -66,6 +66,9 @@
 # Prefered transports of outbound connections for the syncing protocol
 #sync_p2p_transports = ["tls", "tcp"]
 
+# Enable localnet hosts
+#localnet = true
+
 # Whitelisted cashier addresses
 #cashier_pub = []
 

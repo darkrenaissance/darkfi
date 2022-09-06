@@ -66,6 +66,9 @@ sync_p2p_seed = ["tcp://127.0.0.1:33032"]
 # Prefered transports of outbound connections for the syncing protocol
 #sync_p2p_transports = ["tls", "tcp"]
 
+# Enable localnet hosts
+localnet = true
+
 # Whitelisted faucet public key
 faucet_pub = ["1z3JuN456MieHtpoF4cr5a1ntFF87L8Z3m2E5ACppFodFcjnLS"]
 

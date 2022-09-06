@@ -29,3 +29,6 @@ seeds = ["tls://lilith0.dark.fi:13337", "tls://lilith1.dark.fi:13337"]
 
 # Prefered transports for outbound connections
 #transports = ["tls", "tcp"]
+
+# Enable localnet hosts
+#localnet = true

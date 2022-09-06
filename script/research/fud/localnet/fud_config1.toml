@@ -29,3 +29,6 @@ seeds = ["tcp://127.0.0.1:13337"]
 
 # Prefered transports for outbound connections
 #transports = ["tls", "tcp"]
+
+# Enable localnet hosts
+localnet = true

@@ -17,11 +17,13 @@ urls = ["tcp://127.0.0.1"]
 port = 33032
 #seeds = []
 #peers = []
+localnet = true
 
 [network."darkfid_consensus"]
 port = 33033
 #seeds = []
 #peers = []
+localnet = true
 
 #[network."ircd"]
 #port = 25551

@@ -74,6 +74,10 @@ struct Args {
     #[structopt(long)]
     /// Prefered transports for outbound connections (repeatable flag)
     transports: Vec<String>,
+    
+    #[structopt(long)]
+    /// Enable localnet hosts
+    localnet: bool,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -383,6 +387,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         peers: args.peers.clone(),
         seeds: args.seeds.clone(),
         outbound_transports: net::settings::get_outbound_transports(args.transports),
+        localnet: args.localnet,
         ..Default::default()
     };
 

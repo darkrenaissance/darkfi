@@ -27,6 +27,7 @@ pub struct Settings {
     pub node_id: String,
     pub app_version: String,
     pub outbound_transports: Vec<TransportName>,
+    pub localnet: bool,
 }
 
 impl Default for Settings {
@@ -46,6 +47,7 @@ impl Default for Settings {
             node_id: String::new(),
             app_version: option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string(),
             outbound_transports: get_outbound_transports(vec![]),
+            localnet: false,
         }
     }
 }
@@ -103,6 +105,11 @@ pub struct SettingsOpt {
     #[serde(default)]
     #[structopt(long = "transports")]
     pub outbound_transports: Vec<String>,
+
+    /// Enable localnet hosts
+    #[serde(default)]
+    #[structopt(long)]
+    pub localnet: bool,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -122,6 +129,7 @@ impl From<SettingsOpt> for Settings {
             node_id: settings_opt.node_id,
             app_version: settings_opt.app_version,
             outbound_transports: get_outbound_transports(settings_opt.outbound_transports),
+            localnet: settings_opt.localnet,
         }
     }
 }

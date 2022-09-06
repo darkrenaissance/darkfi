@@ -15,6 +15,7 @@ use super::{
 };
 
 const SEND_ADDR_SLEEP_SECONDS: u64 = 900;
+const LOCALNET: [&'static str; 5] = ["localhost", "0.0.0.0", "[::]", "127.0.0.1", "[::1]"];
 
 /// Defines address and get-address messages.
 pub struct ProtocolAddress {
@@ -59,21 +60,33 @@ impl ProtocolAddress {
 
     /// Handles receiving the address message. Loops to continually recieve
     /// address messages on the address subsciption. Adds the recieved
-    /// addresses to the list of hosts.
+    /// addresses to the list of hosts, after filtering localnet hosts,
+    /// if configured to do so.
     async fn handle_receive_addrs(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_addrs() [START]");
         loop {
             let addrs_msg = self.addrs_sub.receive().await?;
-
-            debug!(
-            target: "net",
-            "ProtocolAddress::handle_receive_addrs() received {} addrs",
-            addrs_msg.addrs.len()
-            );
+            debug!(target: "net", "ProtocolAddress::handle_receive_addrs() received {} addrs", addrs_msg.addrs.len());
+            let mut filtered = vec![];
             for (i, addr) in addrs_msg.addrs.iter().enumerate() {
                 debug!(target: "net", "  addr[{}]: {}", i, addr);
+                if !self.settings.localnet {
+                    match addr.host_str() {
+                        Some(host_str) => {
+                            if LOCALNET.contains(&host_str) {
+                                debug!(target: "net", "  localnet host({}) detected, ignoring", host_str);
+                                continue
+                            }
+                        }
+                        None => {
+                            debug!(target: "net", "  empty host({}) detected, ignoring...", addr);
+                            continue
+                        }
+                    }
+                }
+                filtered.push(addr.clone());
             }
-            self.hosts.store(addrs_msg.addrs.clone()).await;
+            self.hosts.store(filtered).await;
         }
     }
 
@@ -89,11 +102,7 @@ impl ProtocolAddress {
 
             // Loads the list of hosts.
             let addrs = self.hosts.load_all().await;
-            debug!(
-            target: "net",
-            "ProtocolAddress::handle_receive_get_addrs() sending {} addrs",
-            addrs.len()
-            );
+            debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() sending {} addrs", addrs.len());
             // Creates an address messages containing host address.
             let addrs_msg = message::AddrsMessage { addrs };
             // Sends the address message across the channel.

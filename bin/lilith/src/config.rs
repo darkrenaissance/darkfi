@@ -38,6 +38,8 @@ pub struct NetInfo {
     pub seeds: Vec<Url>,
     /// Connect to peers (repeatable flag)
     pub peers: Vec<Url>,
+    /// Enable localnet hosts
+    pub localnet: bool,
 }
 
 /// Parse a TOML string for any configured network and return
@@ -91,7 +93,13 @@ pub fn parse_configured_networks(data: &str) -> Result<FxHashMap<String, NetInfo
                     }
                 }
 
-                let net_info = NetInfo { port, seeds, peers };
+                let localnet = if table.contains_key("localnet") {
+                    table["localnet"].as_bool().unwrap()
+                } else {
+                    false
+                };
+
+                let net_info = NetInfo { port, seeds, peers, localnet };
                 ret.insert(name, net_info);
             }
         }

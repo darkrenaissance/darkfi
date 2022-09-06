@@ -138,6 +138,10 @@ struct Args {
     sync_p2p_transports: Vec<String>,
 
     #[structopt(long)]
+    /// Enable localnet hosts
+    localnet: bool,
+
+    #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
     cashier_pub: Vec<String>,
 
@@ -307,6 +311,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             peers: args.sync_p2p_peer.clone(),
             seeds: args.sync_p2p_seed.clone(),
             outbound_transports: net::settings::get_outbound_transports(args.sync_p2p_transports),
+            localnet: args.localnet,
             ..Default::default()
         };
 
@@ -351,6 +356,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
                 outbound_transports: net::settings::get_outbound_transports(
                     args.consensus_p2p_transports,
                 ),
+                localnet: args.localnet,
                 ..Default::default()
             };
             let p2p = net::P2p::new(consensus_network_settings).await;
