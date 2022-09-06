@@ -1,16 +1,24 @@
 use clap::{IntoApp, Parser, Subcommand};
-use serde_json::{json, Value};
 use url::Url;
 
-use darkfi::{
-    rpc::{client::RpcClient, jsonrpc::JsonRequest},
-    Result,
-};
+use darkfi::{rpc::client::RpcClient, Result};
+
+mod rpc;
 
 #[derive(Subcommand)]
 pub enum CliDaoSubCommands {
-    /// Say hello to the RPC
-    Hello {},
+    /// Initialize DAO
+    Init {},
+    /// Create DAO
+    Create {},
+    /// Airdrop tokens
+    Airdrop {},
+    /// Propose
+    Propose {},
+    /// Vote
+    Vote {},
+    /// Execute
+    Exec {},
 }
 
 /// DAO cli
@@ -24,25 +32,42 @@ pub struct CliDao {
     #[clap(subcommand)]
     pub command: Option<CliDaoSubCommands>,
 }
+
 pub struct Rpc {
     client: RpcClient,
-}
-
-impl Rpc {
-    // --> {"jsonrpc": "2.0", "method": "say_hello", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "hello world", "id": 42}
-    async fn say_hello(&self) -> Result<Value> {
-        let req = JsonRequest::new("say_hello", json!([]));
-        self.client.request(req).await
-    }
 }
 
 async fn start(options: CliDao) -> Result<()> {
     let rpc_addr = "tcp://127.0.0.1:7777";
     let client = Rpc { client: RpcClient::new(Url::parse(rpc_addr)?).await? };
     match options.command {
-        Some(CliDaoSubCommands::Hello {}) => {
-            let reply = client.say_hello().await?;
+        Some(CliDaoSubCommands::Init {}) => {
+            let reply = client.init().await?;
+            println!("Server replied: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::Create {}) => {
+            let reply = client.create().await?;
+            println!("Server replied: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::Airdrop {}) => {
+            let reply = client.airdrop().await?;
+            println!("Server replied: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::Propose {}) => {
+            let reply = client.propose().await?;
+            println!("Server replied: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::Vote {}) => {
+            let reply = client.vote().await?;
+            println!("Server replied: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::Exec {}) => {
+            let reply = client.exec().await?;
             println!("Server replied: {}", &reply.to_string());
             return Ok(())
         }
