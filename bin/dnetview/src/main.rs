@@ -1,9 +1,11 @@
 use async_std::sync::Arc;
 use std::{fs::File, io, io::Read, path::PathBuf};
 
+use clap::Parser;
 use darkfi::util::{
     cli::{get_log_config, get_log_level, spawn_config, Config},
-    join_config_path,
+    expand_path,
+    path::get_config_path,
 };
 use easy_parallel::Parallel;
 use log::info;
@@ -24,10 +26,10 @@ pub mod util;
 pub mod view;
 
 use crate::{
-    config::{DnvConfig, CONFIG_FILE_CONTENTS},
+    config::{DnvConfig, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     error::{DnetViewError, DnetViewResult},
     model::Model,
-    options::ProgramOptions,
+    options::Args,
     parser::DataParser,
     view::View,
 };
@@ -107,19 +109,21 @@ impl DnetView {
 #[async_std::main]
 async fn main() -> DnetViewResult<()> {
     //debug!(target: "dnetview", "main() START");
-    let options = ProgramOptions::load()?;
+    let args = Args::parse();
 
-    let verbosity_level = options.app.occurrences_of("verbose");
-
-    let log_level = get_log_level(verbosity_level);
+    let log_level = get_log_level(args.verbose.into());
     let log_config = get_log_config();
 
-    let file = File::create(&*options.log_path).unwrap();
+    let log_file_path = PathBuf::from(expand_path(&args.log_path)?);
+    if let Some(parent) = log_file_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    };
+
+    let file = File::create(log_file_path)?;
     WriteLogger::init(log_level, log_config, file)?;
     info!("Log level: {}", log_level);
 
-    let config_path = join_config_path(&PathBuf::from("dnetview_config.toml"))?;
-
+    let config_path = get_config_path(args.config, CONFIG_FILE)?;
     spawn_config(&config_path, CONFIG_FILE_CONTENTS)?;
 
     let config = Config::<DnvConfig>::load(config_path)?;

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+pub const CONFIG_FILE: &str = "dnetview_config.toml";
 pub const CONFIG_FILE_CONTENTS: &[u8] = include_bytes!("../dnetview_config.toml");
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

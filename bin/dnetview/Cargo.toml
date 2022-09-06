@@ -1,7 +1,12 @@
 [package]
 name = "dnetview"
+description = "P2P network monitoring TUI utility"
 version = "0.3.0"
 edition = "2021"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
+homepage = "https://dark.fi"
+repository = "https://github.com/darkrenaissance/darkfi"
 
 [dependencies.darkfi]
 path = "../../"
@@ -19,7 +24,7 @@ easy-parallel = "3.2.0"
 async-channel = "1.7.1"
 
 # Misc
-clap = "3.2.18"
+clap = {version = "3.2.18", features = ["derive"]}
 rand = "0.8.5"
 simplelog = "0.12.0"
 log = "0.4.17"
