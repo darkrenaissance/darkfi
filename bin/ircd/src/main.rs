@@ -86,7 +86,12 @@ impl Ircd {
         )
         .await?;
 
-        irc_server.start(executor).await?;
+        let executor_cloned = executor.clone();
+        executor
+            .spawn(async move {
+                irc_server.start(executor_cloned.clone()).await.unwrap();
+            })
+            .detach();
         Ok(())
     }
 }
