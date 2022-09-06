@@ -64,8 +64,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
             futures::select! {
                 msg = self.subscription.receive().fuse() => {
-                    if let Err(e) = self.process_msg_from_p2p(&msg).await {
-                        error!("[CLIENT {}] Process msg from p2p: {}",  self.address, e);
+                    if let Err(e) = self.process_msg(&msg).await {
+                        error!("[CLIENT {}] Process msg: {}",  self.address, e);
                         break
                     }
                 }
@@ -86,7 +86,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         self.subscription.unsubscribe().await;
     }
 
-    pub async fn process_msg_from_p2p(&mut self, msg: &Privmsg) -> Result<()> {
+    pub async fn process_msg(&mut self, msg: &Privmsg) -> Result<()> {
         info!("[P2P] Received: {}", msg.to_string().trim());
 
         let mut msg = msg.clone();
@@ -213,16 +213,10 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
 
             // Send dm messages in buffer
-            let privmsgs_buffer = self.buffers.privmsgs.lock().await;
-            for msg in privmsgs_buffer.iter() {
-                let is_dm = msg.target == self.irc_config.nickname ||
-                    (msg.nickname == self.irc_config.nickname && !msg.target.starts_with('#'));
-
-                if is_dm {
-                    self.notify_clients.notify_by_id(msg.clone(), self.subscription.get_id()).await;
-                }
+            let privmsgs = self.buffers.privmsgs.lock().await.clone();
+            for msg in privmsgs.iter() {
+                self.process_msg(msg).await?;
             }
-            drop(privmsgs_buffer);
         }
         Ok(())
     }
@@ -520,19 +514,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 self.reply(&j).await?;
                 self.reply(&t).await?;
             }
-
-            // Send messages in buffer
-            if !self.irc_config.capabilities.get("no-history").unwrap() {
-                for msg in self.buffers.privmsgs.lock().await.iter() {
-                    if msg.target == *chan {
-                        self.notify_clients
-                            .notify_by_id(msg.clone(), self.subscription.get_id())
-                            .await;
-                    }
-                }
-            }
         }
-        self.on_receive_names(channels).await?;
         Ok(())
     }
 }

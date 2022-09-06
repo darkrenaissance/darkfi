@@ -100,6 +100,7 @@ impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct PrivmsgsBuffer {
     buffer: RingBuffer<Privmsg>,
     orphans: RingBuffer<Orphan>,

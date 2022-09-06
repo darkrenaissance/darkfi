@@ -77,17 +77,6 @@ impl<T: Clone> Subscriber<T> {
         }
     }
 
-    pub async fn notify_by_id(&self, message_result: T, id: u64) {
-        if let Some(sub) = (*self.subs.lock().await).get(&id) {
-            match sub.send(message_result.clone()).await {
-                Ok(()) => {}
-                Err(err) => {
-                    warn!("Error returned sending message in notify_by_id() call! {}", err);
-                }
-            }
-        }
-    }
-
     pub async fn notify_with_exclude(&self, message_result: T, exclude_list: &[SubscriptionId]) {
         for (id, sub) in (*self.subs.lock().await).iter() {
             if exclude_list.contains(id) {
