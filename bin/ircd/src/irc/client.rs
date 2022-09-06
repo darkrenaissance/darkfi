@@ -121,7 +121,6 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
 
             self.reply(&msg.to_string()).await?;
-            return Ok(())
         } else if self.irc_config.is_cap_end && self.irc_config.is_nick_init {
             if !self.irc_config.configured_contacts.contains_key(&contact) {
                 return Ok(())
@@ -202,7 +201,12 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             self.reply(&register_reply).await?;
             self.irc_config.is_registered = true;
 
+            // join all channels
             self.on_receive_join(self.irc_config.auto_channels.clone()).await?;
+            self.on_receive_join(self.irc_config.configured_chans.keys().cloned().collect())
+                .await?;
+            self.on_receive_join(self.irc_config.configured_contacts.keys().cloned().collect())
+                .await?;
 
             if *self.irc_config.capabilities.get("no-history").unwrap() {
                 return Ok(())
