@@ -52,13 +52,13 @@ impl fmt::Display for KeyPair {
 }
 
 struct Ircd {
-    p2p_notifiers: SubscriberPtr<Privmsg>,
+    notify_clients: SubscriberPtr<Privmsg>,
 }
 
 impl Ircd {
     fn new() -> Self {
-        let p2p_notifiers = Subscriber::new();
-        Self { p2p_notifiers }
+        let notify_clients = Subscriber::new();
+        Self { notify_clients }
     }
 
     async fn start(
@@ -69,11 +69,11 @@ impl Ircd {
         p2p_receiver: Receiver<Privmsg>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        let p2p_notifiers = self.p2p_notifiers.clone();
+        let notify_clients = self.notify_clients.clone();
         executor
             .spawn(async move {
                 while let Ok(msg) = p2p_receiver.recv().await {
-                    p2p_notifiers.notify(msg).await;
+                    notify_clients.notify(msg).await;
                 }
             })
             .detach();
@@ -82,7 +82,7 @@ impl Ircd {
             settings.clone(),
             buffers.clone(),
             p2p.clone(),
-            self.p2p_notifiers.clone(),
+            self.notify_clients.clone(),
         )
         .await?;
 

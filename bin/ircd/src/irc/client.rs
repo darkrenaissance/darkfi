@@ -40,7 +40,7 @@ pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
 
     // p2p
     p2p: P2pPtr,
-    p2p_notifiers: SubscriberPtr<Privmsg>,
+    notify_clients: SubscriberPtr<Privmsg>,
     subscription: Subscription<Privmsg>,
 }
 
@@ -51,10 +51,10 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         buffers: Buffers,
         irc_config: IrcConfig,
         p2p: P2pPtr,
-        p2p_notifiers: SubscriberPtr<Privmsg>,
+        notify_clients: SubscriberPtr<Privmsg>,
         subscription: Subscription<Privmsg>,
     ) -> Self {
-        Self { write_stream, address, buffers, irc_config, p2p, p2p_notifiers, subscription }
+        Self { write_stream, address, buffers, irc_config, p2p, notify_clients, subscription }
     }
 
     /// Start listening for messages came from p2p network or irc client
@@ -215,7 +215,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                     (msg.nickname == self.irc_config.nickname && !msg.target.starts_with('#'));
 
                 if is_dm {
-                    self.p2p_notifiers.notify_by_id(msg.clone(), self.subscription.get_id()).await;
+                    self.notify_clients.notify_by_id(msg.clone(), self.subscription.get_id()).await;
                 }
             }
             drop(privmsgs_buffer);
@@ -479,7 +479,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             (*self.buffers.unread_msgs.lock().await).insert(&privmsg);
         }
 
-        self.p2p_notifiers
+        self.notify_clients
             .notify_with_exclude(privmsg.clone(), &[self.subscription.get_id()])
             .await;
 
@@ -521,7 +521,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             if !self.irc_config.capabilities.get("no-history").unwrap() {
                 for msg in self.buffers.privmsgs.lock().await.iter() {
                     if msg.target == *chan {
-                        self.p2p_notifiers
+                        self.notify_clients
                             .notify_by_id(msg.clone(), self.subscription.get_id())
                             .await;
                     }

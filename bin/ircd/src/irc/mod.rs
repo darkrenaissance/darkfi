@@ -82,7 +82,7 @@ pub struct IrcServer {
     irc_config: IrcConfig,
     buffers: Buffers,
     p2p: P2pPtr,
-    p2p_notifiers: SubscriberPtr<Privmsg>,
+    notify_clients: SubscriberPtr<Privmsg>,
 }
 
 impl IrcServer {
@@ -90,10 +90,10 @@ impl IrcServer {
         settings: Args,
         buffers: Buffers,
         p2p: P2pPtr,
-        p2p_notifiers: SubscriberPtr<Privmsg>,
+        notify_clients: SubscriberPtr<Privmsg>,
     ) -> Result<Self> {
         let irc_config = IrcConfig::new(&settings)?;
-        Ok(Self { settings, irc_config, buffers, p2p, p2p_notifiers })
+        Ok(Self { settings, irc_config, buffers, p2p, notify_clients })
     }
 
     /// Start listening to new irc clients connecting to the irc server address
@@ -145,7 +145,7 @@ impl IrcServer {
         let reader = BufReader::new(reader);
 
         // New subscription
-        let p2p_subscription = self.p2p_notifiers.clone().subscribe().await;
+        let client_subscription = self.notify_clients.clone().subscribe().await;
 
         // New irc connection
         let mut client = IrcClient::new(
@@ -154,8 +154,8 @@ impl IrcServer {
             self.buffers.clone(),
             self.irc_config.clone(),
             self.p2p.clone(),
-            self.p2p_notifiers.clone(),
-            p2p_subscription,
+            self.notify_clients.clone(),
+            client_subscription,
         );
 
         executor
