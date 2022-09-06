@@ -476,7 +476,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
         {
             (*self.buffers.seen_ids.lock().await).push(privmsg.id);
-            (*self.buffers.unread_msgs.lock().await).insert(&privmsg);
+            (*self.buffers.privmsgs.lock().await).push(&privmsg);
         }
 
         self.notify_clients
