@@ -17,7 +17,7 @@ async-channel = "1.7.1"
 async-executor = "1.4.1"
 
 # Misc
-clap = {version = "3.2.18", features = ["derive"]}
+clap = {version = "3.2.20", features = ["derive"]}
 log = "0.4.17"
 num_cpus = "1.13.1"
 simplelog = "0.12.0"

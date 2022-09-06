@@ -13,7 +13,7 @@ categories = ["command-line-utilities"]
 [dependencies]
 async-std = {version = "1.12.0", features = ["attributes"]}
 chrono = "0.4.22"
-clap = {version = "3.2.18", features = ["derive"]}
+clap = {version = "3.2.20", features = ["derive"]}
 colored = "2.0.0"
 darkfi = { path = "../../../", features = ["rpc"]}
 fxhash = "0.2.1"

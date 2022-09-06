@@ -39,7 +39,8 @@ impl Serialize for BridgeTreeWrapper {
 
 pub fn bridge_tree_usage(prefix: &str, tree: BridgeTree<MerkleNode, MERKLE_DEPTH>) {
     let wrapper = BridgeTreeWrapper { tree };
-    let encoded: Vec<u8> = bincode::serialize(&wrapper).unwrap();
+    let encoded: Vec<u8> =
+        bincode::serde::encode_to_vec(&wrapper, bincode::config::legacy()).unwrap();
     let size = ::std::mem::size_of_val(&*encoded);
     println!("  {} size: {:?} Bytes", prefix, size);
 }
