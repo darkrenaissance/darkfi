@@ -205,8 +205,6 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             self.on_receive_join(self.irc_config.auto_channels.clone()).await?;
             self.on_receive_join(self.irc_config.configured_chans.keys().cloned().collect())
                 .await?;
-            self.on_receive_join(self.irc_config.configured_contacts.keys().cloned().collect())
-                .await?;
 
             if *self.irc_config.capabilities.get("no-history").unwrap() {
                 return Ok(())
