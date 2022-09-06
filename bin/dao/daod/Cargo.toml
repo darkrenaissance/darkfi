@@ -4,7 +4,7 @@ version = "0.3.0"
 edition = "2021"
 
 [dependencies.darkfi]
-path = "../../"
+path = "../../../"
 features = ["rpc", "crypto", "tx", "node"]
 
 [dependencies]

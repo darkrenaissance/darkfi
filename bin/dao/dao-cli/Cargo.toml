@@ -1,10 +1,10 @@
 [package]
-name = "dao-cli"
+name = "dao"
 version = "0.3.0"
 edition = "2021"
 
 [dependencies.darkfi]
-path = "../../"
+path = "../../../"
 features = ["rpc"]
 
 [dependencies]
