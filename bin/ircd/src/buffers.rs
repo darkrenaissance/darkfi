@@ -2,12 +2,56 @@ use async_std::sync::{Arc, Mutex};
 use std::{cmp::Ordering, collections::VecDeque};
 
 use chrono::Utc;
+use fxhash::FxHashMap;
+use ripemd::{Digest, Ripemd160};
 
 use crate::Privmsg;
 
 pub const SIZE_OF_MSGS_BUFFER: usize = 4095;
 pub const SIZE_OF_MSG_IDSS_BUFFER: usize = 65536;
 pub const LIFETIME_FOR_ORPHAN: i64 = 600;
+
+pub type InvSeenIds = Arc<Mutex<RingBuffer<u64>>>;
+pub type SeenIds = Mutex<RingBuffer<u64>>;
+pub type MutexPrivmsgsBuffer = Mutex<PrivmsgsBuffer>;
+pub type UnreadMsgs = Mutex<UMsgs>;
+pub type Buffers = Arc<Msgs>;
+
+pub struct Msgs {
+    pub privmsgs: MutexPrivmsgsBuffer,
+    pub unread_msgs: UnreadMsgs,
+    pub seen_ids: SeenIds,
+}
+
+pub fn create_buffers() -> Buffers {
+    let seen_ids = Mutex::new(RingBuffer::new(SIZE_OF_MSG_IDSS_BUFFER));
+    let privmsgs = PrivmsgsBuffer::new();
+    let unread_msgs = Mutex::new(UMsgs::new());
+    Arc::new(Msgs { privmsgs, unread_msgs, seen_ids })
+}
+
+#[derive(Clone)]
+pub struct UMsgs(pub FxHashMap<String, Privmsg>);
+
+impl UMsgs {
+    pub fn new() -> Self {
+        Self(FxHashMap::default())
+    }
+
+    pub fn insert(&mut self, msg: &Privmsg) -> String {
+        let mut hasher = Ripemd160::new();
+        hasher.update(msg.to_string());
+        let key = hex::encode(hasher.finalize());
+        self.0.insert(key.clone(), msg.clone());
+        key
+    }
+}
+
+impl Default for UMsgs {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Clone)]
 pub struct RingBuffer<T> {
@@ -56,21 +100,17 @@ impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
     }
 }
 
-pub type SeenIds = Arc<Mutex<RingBuffer<u64>>>;
-
-pub type ArcPrivmsgsBuffer = Arc<Mutex<PrivmsgsBuffer>>;
-
 pub struct PrivmsgsBuffer {
     buffer: RingBuffer<Privmsg>,
     orphans: RingBuffer<Orphan>,
 }
 
 impl PrivmsgsBuffer {
-    pub fn new() -> ArcPrivmsgsBuffer {
-        Arc::new(Mutex::new(Self {
+    pub fn new() -> MutexPrivmsgsBuffer {
+        Mutex::new(Self {
             buffer: RingBuffer::new(SIZE_OF_MSGS_BUFFER),
             orphans: RingBuffer::new(SIZE_OF_MSGS_BUFFER),
-        }))
+        })
     }
 
     pub fn push(&mut self, privmsg: &Privmsg) {

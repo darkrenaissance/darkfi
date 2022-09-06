@@ -4,7 +4,7 @@ use futures::{
     io::{BufReader, ReadHalf, WriteHalf},
     AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, FutureExt,
 };
-use fxhash::FxHashMap;
+
 use log::{debug, error, info, warn};
 
 use darkfi::{
@@ -14,11 +14,13 @@ use darkfi::{
 };
 
 use crate::{
-    buffers::{ArcPrivmsgsBuffer, SeenIds},
+    buffers::Buffers,
     crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
     privmsg::{MAXIMUM_LENGTH_OF_MESSAGE, MAXIMUM_LENGTH_OF_NICKNAME},
-    ChannelInfo, ContactInfo, Privmsg,
+    ChannelInfo, Privmsg,
 };
+
+use super::IrcConfig;
 
 const RPL_NOTOPIC: u32 = 331;
 const RPL_TOPIC: u32 = 332;
@@ -31,25 +33,10 @@ pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     pub address: SocketAddr,
 
     // msgs buffer
-    privmsgs_buffer: ArcPrivmsgsBuffer,
-    seen_msg_ids: SeenIds,
+    buffers: Buffers,
 
-    // init bool
-    is_nick_init: bool,
-    is_user_init: bool,
-    is_registered: bool,
-    is_cap_end: bool,
-    is_pass_init: bool,
-
-    // user config
-    nickname: String,
-    password: String,
-    capabilities: FxHashMap<String, bool>,
-
-    // channels and contacts
-    auto_channels: Vec<String>,
-    pub configured_chans: FxHashMap<String, ChannelInfo>,
-    pub configured_contacts: FxHashMap<String, ContactInfo>,
+    // irc config
+    irc_config: IrcConfig,
 
     // p2p
     p2p: P2pPtr,
@@ -58,42 +45,16 @@ pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
 }
 
 impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         write_stream: WriteHalf<C>,
         address: SocketAddr,
-        privmsgs_buffer: ArcPrivmsgsBuffer,
-        seen_msg_ids: SeenIds,
-        password: String,
-        auto_channels: Vec<String>,
-        configured_chans: FxHashMap<String, ChannelInfo>,
-        configured_contacts: FxHashMap<String, ContactInfo>,
+        buffers: Buffers,
+        irc_config: IrcConfig,
         p2p: P2pPtr,
         p2p_notifiers: SubscriberPtr<Privmsg>,
         subscription: Subscription<Privmsg>,
     ) -> Self {
-        let mut capabilities = FxHashMap::default();
-        capabilities.insert("no-history".to_string(), false);
-        Self {
-            write_stream,
-            address,
-            privmsgs_buffer,
-            seen_msg_ids,
-            is_nick_init: false,
-            is_user_init: false,
-            is_registered: false,
-            is_cap_end: true,
-            is_pass_init: false,
-            nickname: "anon".to_string(),
-            password,
-            auto_channels,
-            configured_chans,
-            configured_contacts,
-            capabilities,
-            p2p,
-            p2p_notifiers,
-            subscription,
-        }
+        Self { write_stream, address, buffers, irc_config, p2p, p2p_notifiers, subscription }
     }
 
     /// Start listening for messages came from p2p network or irc client
@@ -130,19 +91,21 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
         let mut msg = msg.clone();
         let mut contact = String::new();
+
         decrypt_target(
             &mut contact,
             &mut msg,
-            self.configured_chans.clone(),
-            self.configured_contacts.clone(),
+            self.irc_config.configured_chans.clone(),
+            self.irc_config.configured_contacts.clone(),
         );
+
         if msg.target.starts_with('#') {
             // Try to potentially decrypt the incoming message.
-            if !self.configured_chans.contains_key(&msg.target) {
+            if !self.irc_config.configured_chans.contains_key(&msg.target) {
                 return Ok(())
             }
 
-            let chan_info = self.configured_chans.get_mut(&msg.target).unwrap();
+            let chan_info = self.irc_config.configured_chans.get_mut(&msg.target).unwrap();
             if !chan_info.joined {
                 return Ok(())
             }
@@ -159,12 +122,12 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
             self.reply(&msg.to_string()).await?;
             return Ok(())
-        } else if self.is_cap_end && self.is_nick_init {
-            if !self.configured_contacts.contains_key(&contact) {
+        } else if self.irc_config.is_cap_end && self.irc_config.is_nick_init {
+            if !self.irc_config.configured_contacts.contains_key(&contact) {
                 return Ok(())
             }
 
-            let contact_info = self.configured_contacts.get(&contact).unwrap();
+            let contact_info = self.irc_config.configured_contacts.get(&contact).unwrap();
             if let Some(salt_box) = &contact_info.salt_box {
                 decrypt_privmsg(salt_box, &mut msg);
                 // This is for /query
@@ -201,8 +164,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             return Err(Error::MalformedPacket)
         }
 
-        if self.password.is_empty() {
-            self.is_pass_init = true
+        if self.irc_config.password.is_empty() {
+            self.irc_config.is_pass_init = true
         }
 
         let (command, value) = parse_line(&line)?;
@@ -228,23 +191,28 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn registre(&mut self) -> Result<()> {
-        if !self.is_registered && self.is_cap_end && self.is_nick_init && self.is_user_init {
+        if !self.irc_config.is_registered &&
+            self.irc_config.is_cap_end &&
+            self.irc_config.is_nick_init &&
+            self.irc_config.is_user_init
+        {
             debug!("Initializing peer connection");
-            let register_reply = format!(":darkfi 001 {} :Let there be dark\r\n", self.nickname);
+            let register_reply =
+                format!(":darkfi 001 {} :Let there be dark\r\n", self.irc_config.nickname);
             self.reply(&register_reply).await?;
-            self.is_registered = true;
+            self.irc_config.is_registered = true;
 
-            self.on_receive_join(self.auto_channels.clone()).await?;
+            self.on_receive_join(self.irc_config.auto_channels.clone()).await?;
 
-            if *self.capabilities.get("no-history").unwrap() {
+            if *self.irc_config.capabilities.get("no-history").unwrap() {
                 return Ok(())
             }
 
             // Send dm messages in buffer
-            let privmsgs_buffer = self.privmsgs_buffer.lock().await;
+            let privmsgs_buffer = self.buffers.privmsgs.lock().await;
             for msg in privmsgs_buffer.iter() {
-                let is_dm = msg.target == self.nickname ||
-                    (msg.nickname == self.nickname && !msg.target.starts_with('#'));
+                let is_dm = msg.target == self.irc_config.nickname ||
+                    (msg.nickname == self.irc_config.nickname && !msg.target.starts_with('#'));
 
                 if is_dm {
                     self.p2p_notifiers.notify_by_id(msg.clone(), self.subscription.get_id()).await;
@@ -269,8 +237,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     async fn on_receive_user(&mut self) -> Result<()> {
         // We can stuff any extra things like public keys in here.
         // Ignore it for now.
-        if self.is_pass_init {
-            self.is_user_init = true;
+        if self.irc_config.is_pass_init {
+            self.irc_config.is_user_init = true;
         } else {
             // Close the connection
             warn!("[CLIENT {}] Password is required", self.address);
@@ -280,8 +248,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn on_receive_pass(&mut self, password: &str) -> Result<()> {
-        if self.password == password {
-            self.is_pass_init = true
+        if self.irc_config.password == password {
+            self.irc_config.is_pass_init = true
         } else {
             // Close the connection
             warn!("[CLIENT {}] Password is not correct!", self.address);
@@ -295,19 +263,21 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             return Ok(())
         }
 
-        self.is_nick_init = true;
-        let old_nick = std::mem::replace(&mut self.nickname, nickname.to_string());
+        self.irc_config.is_nick_init = true;
+        let old_nick = std::mem::replace(&mut self.irc_config.nickname, nickname.to_string());
 
-        let nick_reply = format!(":{}!anon@dark.fi NICK {}\r\n", old_nick, self.nickname);
+        let nick_reply =
+            format!(":{}!anon@dark.fi NICK {}\r\n", old_nick, self.irc_config.nickname);
         self.reply(&nick_reply).await
     }
 
     async fn on_receive_part(&mut self, channels: Vec<String>) -> Result<()> {
         for chan in channels.iter() {
-            let part_reply = format!(":{}!anon@dark.fi PART {}\r\n", self.nickname, chan);
+            let part_reply =
+                format!(":{}!anon@dark.fi PART {}\r\n", self.irc_config.nickname, chan);
             self.reply(&part_reply).await?;
-            if self.configured_chans.contains_key(chan) {
-                let chan_info = self.configured_chans.get_mut(chan).unwrap();
+            if self.irc_config.configured_chans.contains_key(chan) {
+                let chan_info = self.irc_config.configured_chans.get_mut(chan).unwrap();
                 chan_info.joined = false;
             }
         }
@@ -322,20 +292,22 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
 
             let topic = &line[substr_idx + 1..];
-            let chan_info = self.configured_chans.get_mut(channel).unwrap();
+            let chan_info = self.irc_config.configured_chans.get_mut(channel).unwrap();
             chan_info.topic = Some(topic.to_string());
 
-            let topic_reply =
-                format!(":{}!anon@dark.fi TOPIC {} :{}\r\n", self.nickname, channel, topic);
+            let topic_reply = format!(
+                ":{}!anon@dark.fi TOPIC {} :{}\r\n",
+                self.irc_config.nickname, channel, topic
+            );
             self.reply(&topic_reply).await?;
         } else {
             // Client is asking or the topic
-            let chan_info = self.configured_chans.get(channel).unwrap();
+            let chan_info = self.irc_config.configured_chans.get(channel).unwrap();
             let topic_reply = if let Some(topic) = &chan_info.topic {
-                format!("{} {} {} :{}\r\n", RPL_TOPIC, self.nickname, channel, topic)
+                format!("{} {} {} :{}\r\n", RPL_TOPIC, self.irc_config.nickname, channel, topic)
             } else {
                 const TOPIC: &str = "No topic is set";
-                format!("{} {} {} :{}\r\n", RPL_NOTOPIC, self.nickname, channel, TOPIC)
+                format!("{} {} {} :{}\r\n", RPL_NOTOPIC, self.irc_config.nickname, channel, TOPIC)
             };
             self.reply(&topic_reply).await?;
         }
@@ -348,15 +320,15 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn on_receive_cap(&mut self, line: &str, subcommand: &str) -> Result<()> {
-        self.is_cap_end = false;
+        self.irc_config.is_cap_end = false;
 
-        let capabilities_keys: Vec<String> = self.capabilities.keys().cloned().collect();
+        let capabilities_keys: Vec<String> = self.irc_config.capabilities.keys().cloned().collect();
 
         match subcommand {
             "LS" => {
                 let cap_ls_reply = format!(
                     ":{}!anon@dark.fi CAP * LS :{}\r\n",
-                    self.nickname,
+                    self.irc_config.nickname,
                     capabilities_keys.join(" ")
                 );
                 self.reply(&cap_ls_reply).await?;
@@ -375,8 +347,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 let mut nak_list = vec![];
 
                 for c in cap {
-                    if self.capabilities.contains_key(c) {
-                        self.capabilities.insert(c.to_string(), true);
+                    if self.irc_config.capabilities.contains_key(c) {
+                        self.irc_config.capabilities.insert(c.to_string(), true);
                         ack_list.push(c);
                     } else {
                         nak_list.push(c);
@@ -385,13 +357,13 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
                 let cap_ack_reply = format!(
                     ":{}!anon@dark.fi CAP * ACK :{}\r\n",
-                    self.nickname,
+                    self.irc_config.nickname,
                     ack_list.join(" ")
                 );
 
                 let cap_nak_reply = format!(
                     ":{}!anon@dark.fi CAP * NAK :{}\r\n",
-                    self.nickname,
+                    self.irc_config.nickname,
                     nak_list.join(" ")
                 );
 
@@ -401,6 +373,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
             "LIST" => {
                 let enabled_capabilities: Vec<String> = self
+                    .irc_config
                     .capabilities
                     .clone()
                     .into_iter()
@@ -410,14 +383,14 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
                 let cap_list_reply = format!(
                     ":{}!anon@dark.fi CAP * LIST :{}\r\n",
-                    self.nickname,
+                    self.irc_config.nickname,
                     enabled_capabilities.join(" ")
                 );
                 self.reply(&cap_list_reply).await?;
             }
 
             "END" => {
-                self.is_cap_end = true;
+                self.irc_config.is_cap_end = true;
             }
             _ => {}
         }
@@ -429,8 +402,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             if !chan.starts_with('#') {
                 continue
             }
-            if self.configured_chans.contains_key(chan) {
-                let chan_info = self.configured_chans.get(chan).unwrap();
+            if self.irc_config.configured_chans.contains_key(chan) {
+                let chan_info = self.irc_config.configured_chans.get(chan).unwrap();
 
                 if chan_info.names.is_empty() {
                     return Ok(())
@@ -438,7 +411,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
                 let names_reply = format!(
                     ":{}!anon@dark.fi {} = {} : {}\r\n",
-                    self.nickname,
+                    self.irc_config.nickname,
                     RPL_NAMEREPLY,
                     chan,
                     chan_info.names.join(" ")
@@ -448,7 +421,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
                 let end_of_names = format!(
                     ":DarkFi {:03} {} {} :End of NAMES list\r\n",
-                    RPL_ENDOFNAMES, self.nickname, chan
+                    RPL_ENDOFNAMES, self.irc_config.nickname, chan
                 );
 
                 self.reply(&end_of_names).await?;
@@ -468,18 +441,18 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
         info!("[CLIENT {}] (Plain) PRIVMSG {} :{}", self.address, target, message,);
 
-        let privmsgs_buffer = self.privmsgs_buffer.lock().await;
+        let privmsgs_buffer = self.buffers.privmsgs.lock().await;
         let last_term = privmsgs_buffer.last_term() + 1;
         drop(privmsgs_buffer);
 
-        let mut privmsg = Privmsg::new(&self.nickname, target, &message, last_term);
+        let mut privmsg = Privmsg::new(&self.irc_config.nickname, target, &message, last_term);
 
         if target.starts_with('#') {
-            if !self.configured_chans.contains_key(target) {
+            if !self.irc_config.configured_chans.contains_key(target) {
                 return Ok(())
             }
 
-            let channel_info = self.configured_chans.get(target).unwrap();
+            let channel_info = self.irc_config.configured_chans.get(target).unwrap();
 
             if !channel_info.joined {
                 return Ok(())
@@ -490,11 +463,11 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 info!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.address, privmsg);
             }
         } else {
-            if !self.configured_contacts.contains_key(target) {
+            if !self.irc_config.configured_contacts.contains_key(target) {
                 return Ok(())
             }
 
-            let contact_info = self.configured_contacts.get(target).unwrap();
+            let contact_info = self.irc_config.configured_contacts.get(target).unwrap();
             if let Some(salt_box) = &contact_info.salt_box {
                 encrypt_privmsg(salt_box, &mut privmsg);
                 info!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.address, privmsg);
@@ -502,8 +475,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         }
 
         {
-            (*self.seen_msg_ids.lock().await).push(privmsg.id);
-            (*self.privmsgs_buffer.lock().await).push(&privmsg)
+            (*self.buffers.seen_ids.lock().await).push(privmsg.id);
+            (*self.buffers.unread_msgs.lock().await).insert(&privmsg);
         }
 
         self.p2p_notifiers
@@ -521,13 +494,13 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             if !chan.starts_with('#') {
                 continue
             }
-            if !self.configured_chans.contains_key(chan) {
+            if !self.irc_config.configured_chans.contains_key(chan) {
                 let mut chan_info = ChannelInfo::new()?;
                 chan_info.topic = Some("n/a".to_string());
-                self.configured_chans.insert(chan.to_string(), chan_info);
+                self.irc_config.configured_chans.insert(chan.to_string(), chan_info);
             }
 
-            let chan_info = self.configured_chans.get_mut(chan).unwrap();
+            let chan_info = self.irc_config.configured_chans.get_mut(chan).unwrap();
             if chan_info.joined {
                 return Ok(())
             }
@@ -538,15 +511,15 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             chan_info.topic = Some(topic.to_string());
 
             {
-                let j = format!(":{}!anon@dark.fi JOIN {}\r\n", self.nickname, chan);
+                let j = format!(":{}!anon@dark.fi JOIN {}\r\n", self.irc_config.nickname, chan);
                 let t = format!(":DarkFi TOPIC {} :{}\r\n", chan, topic);
                 self.reply(&j).await?;
                 self.reply(&t).await?;
             }
 
             // Send messages in buffer
-            if !self.capabilities.get("no-history").unwrap() {
-                for msg in self.privmsgs_buffer.lock().await.iter() {
+            if !self.irc_config.capabilities.get("no-history").unwrap() {
+                for msg in self.buffers.privmsgs.lock().await.iter() {
                     if msg.target == *chan {
                         self.p2p_notifiers
                             .notify_by_id(msg.clone(), self.subscription.get_id())

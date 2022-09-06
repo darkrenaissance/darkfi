@@ -7,26 +7,80 @@ use futures_rustls::{rustls, TlsAcceptor};
 use fxhash::FxHashMap;
 use log::{error, info};
 
-use darkfi::{net::P2pPtr, system::SubscriberPtr, util::expand_path, Error, Result};
+use darkfi::{
+    net::P2pPtr,
+    system::SubscriberPtr,
+    util::{expand_path, path::get_config_path},
+    Error, Result,
+};
 
 use crate::{
-    buffers::{ArcPrivmsgsBuffer, SeenIds},
-    settings::Args,
-    ChannelInfo, ContactInfo, Privmsg,
+    buffers::Buffers,
+    settings::{
+        parse_configured_channels, parse_configured_contacts, Args, ChannelInfo, ContactInfo,
+        CONFIG_FILE,
+    },
+    Privmsg,
 };
 
 mod client;
 
 pub use client::IrcClient;
 
+#[derive(Clone)]
+pub struct IrcConfig {
+    // init bool
+    pub is_nick_init: bool,
+    pub is_user_init: bool,
+    pub is_registered: bool,
+    pub is_cap_end: bool,
+    pub is_pass_init: bool,
+
+    // user config
+    pub nickname: String,
+    pub password: String,
+    pub capabilities: FxHashMap<String, bool>,
+
+    // channels and contacts
+    pub auto_channels: Vec<String>,
+    pub configured_chans: FxHashMap<String, ChannelInfo>,
+    pub configured_contacts: FxHashMap<String, ContactInfo>,
+}
+
+impl IrcConfig {
+    pub fn new(settings: &Args) -> Result<Self> {
+        let password = settings.password.as_ref().unwrap_or(&String::new()).clone();
+
+        let auto_channels = settings.autojoin.clone();
+
+        // Pick up channel settings from the TOML configuration
+        let cfg_path = get_config_path(settings.config.clone(), CONFIG_FILE)?;
+        let toml_contents = std::fs::read_to_string(cfg_path)?;
+        let configured_chans = parse_configured_channels(&toml_contents)?;
+        let configured_contacts = parse_configured_contacts(&toml_contents)?;
+
+        let mut capabilities = FxHashMap::default();
+        capabilities.insert("no-history".to_string(), false);
+        Ok(Self {
+            is_nick_init: false,
+            is_user_init: false,
+            is_registered: false,
+            is_cap_end: true,
+            is_pass_init: false,
+            nickname: "anon".to_string(),
+            password,
+            auto_channels,
+            configured_chans,
+            configured_contacts,
+            capabilities,
+        })
+    }
+}
+
 pub struct IrcServer {
     settings: Args,
-    privmsgs_buffer: ArcPrivmsgsBuffer,
-    seen_msg_ids: SeenIds,
-    auto_channels: Vec<String>,
-    password: String,
-    configured_chans: FxHashMap<String, ChannelInfo>,
-    configured_contacts: FxHashMap<String, ContactInfo>,
+    irc_config: IrcConfig,
+    buffers: Buffers,
     p2p: P2pPtr,
     p2p_notifiers: SubscriberPtr<Privmsg>,
 }
@@ -34,26 +88,12 @@ pub struct IrcServer {
 impl IrcServer {
     pub async fn new(
         settings: Args,
-        privmsgs_buffer: ArcPrivmsgsBuffer,
-        seen_msg_ids: SeenIds,
-        auto_channels: Vec<String>,
-        password: String,
-        configured_chans: FxHashMap<String, ChannelInfo>,
-        configured_contacts: FxHashMap<String, ContactInfo>,
+        buffers: Buffers,
         p2p: P2pPtr,
         p2p_notifiers: SubscriberPtr<Privmsg>,
     ) -> Result<Self> {
-        Ok(Self {
-            settings,
-            privmsgs_buffer,
-            seen_msg_ids,
-            auto_channels,
-            password,
-            configured_chans,
-            configured_contacts,
-            p2p,
-            p2p_notifiers,
-        })
+        let irc_config = IrcConfig::new(&settings)?;
+        Ok(Self { settings, irc_config, buffers, p2p, p2p_notifiers })
     }
 
     /// Start listening to new irc clients connecting to the irc server address
@@ -111,12 +151,8 @@ impl IrcServer {
         let mut client = IrcClient::new(
             writer,
             peer_addr,
-            self.privmsgs_buffer.clone(),
-            self.seen_msg_ids.clone(),
-            self.password.clone(),
-            self.auto_channels.clone(),
-            self.configured_chans.clone(),
-            self.configured_contacts.clone(),
+            self.buffers.clone(),
+            self.irc_config.clone(),
             self.p2p.clone(),
             self.p2p_notifiers.clone(),
             p2p_subscription,

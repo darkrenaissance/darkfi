@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use chrono::Utc;
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
-use ripemd::{Digest, Ripemd160};
 
 use darkfi::{
     net,
@@ -17,8 +16,8 @@ use darkfi::{
 };
 
 use crate::{
-    buffers::{ArcPrivmsgsBuffer, SeenIds},
-    Privmsg, UnreadMsgs,
+    buffers::{Buffers, InvSeenIds},
+    Privmsg,
 };
 
 const MAX_CONFIRM: u8 = 4;
@@ -59,11 +58,9 @@ pub struct ProtocolPrivmsg {
     inv_sub: net::MessageSubscription<Inv>,
     getdata_sub: net::MessageSubscription<GetData>,
     p2p: net::P2pPtr,
-    msg_ids: SeenIds,
-    inv_ids: SeenIds,
-    msgs: ArcPrivmsgsBuffer,
-    unread_msgs: UnreadMsgs,
     channel: net::ChannelPtr,
+    inv_ids: InvSeenIds,
+    buffers: Buffers,
 }
 
 impl ProtocolPrivmsg {
@@ -71,10 +68,8 @@ impl ProtocolPrivmsg {
         channel: net::ChannelPtr,
         notify: async_channel::Sender<Privmsg>,
         p2p: net::P2pPtr,
-        msg_ids: SeenIds,
-        inv_ids: SeenIds,
-        msgs: ArcPrivmsgsBuffer,
-        unread_msgs: UnreadMsgs,
+        inv_ids: InvSeenIds,
+        buffers: Buffers,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Privmsg>().await;
@@ -96,11 +91,9 @@ impl ProtocolPrivmsg {
             getdata_sub,
             jobsman: net::ProtocolJobsManager::new("ProtocolPrivmsg", channel.clone()),
             p2p,
-            msg_ids,
-            inv_ids,
-            msgs,
-            unread_msgs,
             channel,
+            inv_ids,
+            buffers,
         })
     }
 
@@ -120,7 +113,7 @@ impl ProtocolPrivmsg {
 
             let mut inv_requested = vec![];
             for inv_object in inv.invs.iter() {
-                let mut msgs = self.unread_msgs.lock().await;
+                let msgs = &mut self.buffers.unread_msgs.lock().await.0;
                 if let Some(msg) = msgs.get_mut(&inv_object.0) {
                     msg.read_confirms += 1;
                 } else {
@@ -145,7 +138,7 @@ impl ProtocolPrivmsg {
             let msg = self.msg_sub.receive().await?;
             let mut msg = (*msg).to_owned();
 
-            let mut msg_ids = self.msg_ids.lock().await;
+            let mut msg_ids = self.buffers.seen_ids.lock().await;
             if msg_ids.contains(&msg.id) {
                 continue
             }
@@ -171,7 +164,7 @@ impl ProtocolPrivmsg {
             let getdata = self.getdata_sub.receive().await?;
             let getdata = (*getdata).to_owned();
 
-            let msgs = self.unread_msgs.lock().await;
+            let msgs = &self.buffers.unread_msgs.lock().await.0;
             for inv in getdata.invs {
                 if let Some(msg) = msgs.get(&inv.0) {
                     self.channel.send(msg.clone()).await?;
@@ -181,16 +174,11 @@ impl ProtocolPrivmsg {
     }
 
     async fn add_to_unread_msgs(&self, msg: &Privmsg) -> String {
-        let mut msgs = self.unread_msgs.lock().await;
-        let mut hasher = Ripemd160::new();
-        hasher.update(msg.to_string());
-        let key = hex::encode(hasher.finalize());
-        msgs.insert(key.clone(), msg.clone());
-        key
+        self.buffers.unread_msgs.lock().await.insert(msg)
     }
 
     async fn update_unread_msgs(&self) -> Result<()> {
-        let mut msgs = self.unread_msgs.lock().await;
+        let msgs = &mut self.buffers.unread_msgs.lock().await.0;
         for (hash, msg) in msgs.clone() {
             if msg.timestamp + UNREAD_MSG_EXPIRE_TIME < Utc::now().timestamp() {
                 msgs.remove(&hash);
@@ -205,7 +193,7 @@ impl ProtocolPrivmsg {
     }
 
     async fn add_to_msgs(&self, msg: &Privmsg) -> Result<()> {
-        self.msgs.lock().await.push(msg);
+        self.buffers.privmsgs.lock().await.push(msg);
         self.notify.send(msg.clone()).await?;
         Ok(())
     }
@@ -215,7 +203,7 @@ impl ProtocolPrivmsg {
 
         self.update_unread_msgs().await?;
 
-        for msg in self.unread_msgs.lock().await.values() {
+        for msg in self.buffers.unread_msgs.lock().await.0.values() {
             self.channel.send(msg.clone()).await?;
         }
         Ok(())
@@ -229,7 +217,7 @@ impl net::ProtocolBase for ProtocolPrivmsg {
     /// waits for pong reply. Waits for ping and replies with a pong.
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         // once a channel get started
-        let msgs_buffer = self.msgs.lock().await;
+        let msgs_buffer = self.buffers.privmsgs.lock().await;
         for m in msgs_buffer.iter() {
             self.channel.send(m.clone()).await?;
         }
