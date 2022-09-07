@@ -145,6 +145,10 @@ impl PrivmsgsBuffer {
         self.buffer.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn last_term(&self) -> u64 {
         match self.buffer.len() {
             0 => 0,

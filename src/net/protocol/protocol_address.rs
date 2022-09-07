@@ -15,7 +15,7 @@ use super::{
 };
 
 const SEND_ADDR_SLEEP_SECONDS: u64 = 900;
-const LOCALNET: [&'static str; 5] = ["localhost", "0.0.0.0", "[::]", "127.0.0.1", "[::1]"];
+const LOCALNET: [&str; 5] = ["localhost", "0.0.0.0", "[::]", "127.0.0.1", "[::1]"];
 
 /// Defines address and get-address messages.
 pub struct ProtocolAddress {

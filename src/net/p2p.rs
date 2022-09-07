@@ -253,7 +253,7 @@ impl P2p {
 
     // Wait for the process for each of the provided addresses, excluding our own inbound addresses
     async fn outbound_addr_loop(
-        self_inbound_addr: &Vec<Url>,
+        self_inbound_addr: &[Url],
         timeout: u64,
         stop_sub: Subscription<()>,
         addrs: &Vec<Url>,
