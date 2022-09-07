@@ -50,8 +50,9 @@ enum ArgsSubCommand {
 fn print_patches(value: &Vec<serde_json::Value>) {
     for res in value {
         let res = res.as_array().unwrap();
-        let (title, changes) = (res[0].as_str().unwrap(), res[1].as_str().unwrap());
-        println!("FILE: {}", title);
+        let res: Vec<&str> = res.iter().map(|r| r.as_str().unwrap()).collect();
+        let (title, workspace, changes) = (res[0], res[1], res[2]);
+        println!("WORKSPACE: {} FILE: {}", workspace, title);
         println!("{}", changes);
         println!("----------------------------------");
     }

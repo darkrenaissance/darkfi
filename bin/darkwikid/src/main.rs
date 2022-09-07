@@ -65,11 +65,11 @@ pub struct Args {
     #[structopt(long, default_value = "NONE")]
     pub author: String,
     /// Secret Key To Encrypt/Decrypt Patches
-    #[structopt(long, default_value = "")]
-    pub secret: String,
+    #[structopt(long)]
+    pub workspaces: Vec<String>,
     /// Generate A New Secret Key
     #[structopt(long)]
-    pub keygen: bool,
+    pub generate: bool,
     ///  Clean all the local data in docs path
     /// (BE CAREFULL) Check the docs path in the config file before running this
     #[structopt(long)]
@@ -88,6 +88,28 @@ pub struct Args {
 pub struct EncryptedPatch {
     nonce: Vec<u8>,
     payload: Vec<u8>,
+}
+
+fn get_workspaces(settings: &Args, docs_path: &Path) -> Result<FxHashMap<String, SalsaBox>> {
+    let mut workspaces = FxHashMap::default();
+
+    for workspace in settings.workspaces.iter() {
+        let workspace: Vec<&str> = workspace.split(':').collect();
+        let (workspace, secret) = (workspace[0], workspace[1]);
+
+        let bytes: [u8; 32] = bs58::decode(secret)
+            .into_vec()?
+            .try_into()
+            .map_err(|_| Error::ParseFailed("Parse secret key failed"))?;
+
+        let secret = crypto_box::SecretKey::from(bytes);
+        let public = secret.public_key();
+        let salsa_box = crypto_box::SalsaBox::new(&public, &secret);
+        workspaces.insert(workspace.to_string(), salsa_box);
+        create_dir_all(docs_path.join(workspace))?;
+    }
+
+    Ok(workspaces)
 }
 
 fn encrypt_patch(
@@ -126,9 +148,9 @@ fn str_to_chars(s: &str) -> Vec<&str> {
     s.graphemes(true).collect::<Vec<&str>>()
 }
 
-fn path_to_id(path: &str) -> String {
+fn path_to_id(path: &str, workspace: &str) -> String {
     let mut hasher = sha2::Sha256::new();
-    hasher.update(path);
+    hasher.update(&format!("{}{}", path, workspace));
     bs58::encode(hex::encode(hasher.finalize())).into_string()
 }
 
@@ -177,11 +199,11 @@ struct Darkwiki {
     settings: DarkWikiSettings,
     #[allow(clippy::type_complexity)]
     rpc: (
-        async_channel::Sender<Vec<Vec<(String, String)>>>,
+        async_channel::Sender<Vec<Vec<Patch>>>,
         async_channel::Receiver<(String, bool, Vec<String>)>,
     ),
     raft: (async_channel::Sender<EncryptedPatch>, async_channel::Receiver<EncryptedPatch>),
-    salsa_box: SalsaBox,
+    workspaces: FxHashMap<String, SalsaBox>,
 }
 
 impl Darkwiki {
@@ -202,17 +224,19 @@ impl Darkwiki {
                     }
                 }
                 patch = self.raft.1.recv().fuse() => {
-                    self.on_receive_patch(&patch?)?;
+                    for (workspace, salsa_box) in self.workspaces.iter() {
+                        if let Ok(patch) = decrypt_patch(&patch.clone()?, &salsa_box) {
+                            info!("[{}] Receive a {:?}", workspace, patch);
+                            self.on_receive_patch(&patch)?;
+                        }
+                    }
                 }
 
             }
         }
     }
 
-    fn on_receive_patch(&self, received_patch: &EncryptedPatch) -> Result<()> {
-        let received_patch = decrypt_patch(received_patch, &self.salsa_box)?;
-
-        info!("Receive a {:?}", received_patch);
+    fn on_receive_patch(&self, received_patch: &Patch) -> Result<()> {
         let sync_id_path = self.settings.datastore_path.join("sync").join(&received_patch.id);
         let local_id_path = self.settings.datastore_path.join("local").join(&received_patch.id);
 
@@ -233,7 +257,7 @@ impl Darkwiki {
             }
 
             sync_patch.timestamp = received_patch.timestamp;
-            sync_patch.author = received_patch.author;
+            sync_patch.author = received_patch.author.clone();
             save_json_file::<Patch>(&sync_id_path, &sync_patch)?;
         } else if !received_patch.base.is_empty() {
             save_json_file::<Patch>(&sync_id_path, &received_patch)?;
@@ -248,24 +272,30 @@ impl Darkwiki {
         files: Vec<String>,
         rng: &mut OsRng,
     ) -> Result<()> {
-        let (patches, local, sync, merge) = self.update(dry, files)?;
+        let mut local: Vec<Patch> = vec![];
+        let mut sync: Vec<Patch> = vec![];
+        let mut merge: Vec<Patch> = vec![];
 
-        if !dry {
-            for patch in patches {
-                info!("Send a {:?}", patch);
-                let encrypt_patch = encrypt_patch(&patch, &self.salsa_box, rng)?;
-                self.raft.0.send(encrypt_patch).await?;
+        for (workspace, salsa_box) in self.workspaces.iter() {
+            let (patches, l, s, m) = self.update(
+                dry,
+                &self.settings.docs_path.join(workspace),
+                files.clone(),
+                workspace,
+            )?;
+
+            local.extend(l);
+            sync.extend(s);
+            merge.extend(m);
+
+            if !dry {
+                for patch in patches {
+                    info!("Send a {:?}", patch);
+                    let encrypt_patch = encrypt_patch(&patch, &salsa_box, rng)?;
+                    self.raft.0.send(encrypt_patch).await?;
+                }
             }
         }
-
-        let local: Vec<(String, String)> =
-            local.iter().map(|p| (p.path.to_owned(), p.colorize())).collect();
-
-        let sync: Vec<(String, String)> =
-            sync.iter().map(|p| (p.path.to_owned(), p.colorize())).collect();
-
-        let merge: Vec<(String, String)> =
-            merge.iter().map(|p| (p.path.to_owned(), p.colorize())).collect();
 
         self.rpc.0.send(vec![local, sync, merge]).await?;
 
@@ -273,18 +303,31 @@ impl Darkwiki {
     }
 
     async fn on_receive_restore(&self, dry: bool, files_name: Vec<String>) -> Result<()> {
-        let patches = self.restore(dry, files_name)?;
-        let patches: Vec<(String, String)> =
-            patches.iter().map(|p| (p.path.to_owned(), p.to_string())).collect();
+        let mut patches: Vec<Patch> = vec![];
+
+        for (workspace, _) in self.workspaces.iter() {
+            let ps = self.restore(
+                dry,
+                &self.settings.docs_path.join(workspace),
+                &files_name,
+                workspace,
+            )?;
+            patches.extend(ps);
+        }
 
         self.rpc.0.send(vec![patches]).await?;
 
         Ok(())
     }
 
-    fn restore(&self, dry: bool, files_name: Vec<String>) -> Result<Vec<Patch>> {
+    fn restore(
+        &self,
+        dry: bool,
+        docs_path: &Path,
+        files_name: &[String],
+        workspace: &str,
+    ) -> Result<Vec<Patch>> {
         let local_path = self.settings.datastore_path.join("local");
-        let docs_path = self.settings.docs_path.clone();
 
         let mut patches = vec![];
 
@@ -293,6 +336,10 @@ impl Darkwiki {
             let file_id = file?.file_name();
             let file_path = local_path.join(&file_id);
             let local_patch: Patch = load_json_file(&file_path)?;
+
+            if local_patch.workspace != workspace {
+                continue
+            }
 
             if !files_name.is_empty() && !files_name.contains(&local_patch.path.to_string()) {
                 continue
@@ -305,7 +352,7 @@ impl Darkwiki {
             }
 
             if !dry {
-                self.save_doc(&local_patch.path, &local_patch.to_string())?;
+                self.save_doc(&local_patch.path, &local_patch.to_string(), workspace)?;
             }
 
             patches.push(local_patch);
@@ -314,7 +361,13 @@ impl Darkwiki {
         Ok(patches)
     }
 
-    fn update(&self, dry: bool, files_name: Vec<String>) -> Result<Patches> {
+    fn update(
+        &self,
+        dry: bool,
+        docs_path: &Path,
+        files_name: Vec<String>,
+        workspace: &str,
+    ) -> Result<Patches> {
         let mut patches: Vec<Patch> = vec![];
         let mut local_patches: Vec<Patch> = vec![];
         let mut sync_patches: Vec<Patch> = vec![];
@@ -322,7 +375,6 @@ impl Darkwiki {
 
         let local_path = self.settings.datastore_path.join("local");
         let sync_path = self.settings.datastore_path.join("sync");
-        let docs_path = self.settings.docs_path.clone();
 
         // save and compare docs in darkwiki and local dirs
         // then merged with sync patches if any received
@@ -342,10 +394,10 @@ impl Darkwiki {
                 continue
             }
 
-            let doc_id = path_to_id(doc_path);
+            let doc_id = path_to_id(doc_path, workspace);
 
             // create new patch
-            let mut new_patch = Patch::new(doc_path, &doc_id, &self.settings.author);
+            let mut new_patch = Patch::new(doc_path, &doc_id, &self.settings.author, workspace);
 
             // check for any changes found with local doc and darkwiki doc
             if let Ok(local_patch) = load_json_file::<Patch>(&local_path.join(&doc_id)) {
@@ -381,7 +433,7 @@ impl Darkwiki {
                             let sync_patch_t = new_patch.transform(&sync_patch);
                             new_patch = new_patch.merge(&sync_patch_t);
                             if !dry {
-                                self.save_doc(doc_path, &new_patch.to_string())?;
+                                self.save_doc(doc_path, &new_patch.to_string(), workspace)?;
                             }
                             merge_patches.push(new_patch.clone());
                         }
@@ -410,6 +462,10 @@ impl Darkwiki {
             let file_path = sync_path.join(&file_id);
             let sync_patch: Patch = load_json_file(&file_path)?;
 
+            if sync_patch.workspace != workspace {
+                continue
+            }
+
             if is_delete_patch(&sync_patch) {
                 if local_path.join(&sync_patch.id).exists() {
                     sync_patches.push(sync_patch.clone());
@@ -435,7 +491,7 @@ impl Darkwiki {
             }
 
             if !dry {
-                self.save_doc(&sync_patch.path, &sync_patch.to_string())?;
+                self.save_doc(&sync_patch.path, &sync_patch.to_string(), workspace)?;
                 save_json_file(&local_path.join(file_id), &sync_patch)?;
             }
 
@@ -451,13 +507,21 @@ impl Darkwiki {
             let file_path = local_path.join(&file_id);
             let local_patch: Patch = load_json_file(&file_path)?;
 
+            if local_patch.workspace != workspace {
+                continue
+            }
+
             if !files_name.is_empty() && !files_name.contains(&local_patch.path.to_string()) {
                 continue
             }
 
             if !docs_path.join(&local_patch.path).exists() {
-                let mut new_patch =
-                    Patch::new(&local_patch.path, &local_patch.id, &self.settings.author);
+                let mut new_patch = Patch::new(
+                    &local_patch.path,
+                    &local_patch.id,
+                    &self.settings.author,
+                    &local_patch.workspace,
+                );
                 new_patch.add_op(&OpMethod::Delete(local_patch.to_string().len() as u64));
                 patches.push(new_patch.clone());
 
@@ -473,8 +537,8 @@ impl Darkwiki {
         Ok((patches, local_patches, sync_patches, merge_patches))
     }
 
-    fn save_doc(&self, path: &str, edit: &str) -> Result<()> {
-        let path = self.settings.docs_path.join(path);
+    fn save_doc(&self, path: &str, edit: &str, workspace: &str) -> Result<()> {
+        let path = self.settings.docs_path.join(workspace).join(path);
         if let Some(p) = path.parent() {
             if !p.exists() && !p.to_str().unwrap().is_empty() {
                 create_dir_all(p)?;
@@ -512,25 +576,43 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     create_dir_all(datastore_path.join("local"))?;
     create_dir_all(datastore_path.join("sync"))?;
 
-    if settings.keygen {
-        info!("Generating a new secret key");
-        let mut rng = crypto_box::rand_core::OsRng;
-        let secret_key = SecretKey::generate(&mut rng);
-        let encoded = bs58::encode(secret_key.as_bytes());
-        println!("Secret key: {}", encoded.into_string());
+    if settings.generate {
+        println!("Generating a new workspace");
+
+        loop {
+            println!("Name for the new workspace: ");
+            let mut workspace = String::new();
+            stdin().read_line(&mut workspace).ok().expect("Failed to read line");
+            let workspace = workspace.to_lowercase();
+            let workspace = workspace.trim();
+            if workspace.is_empty() && workspace.len() < 3 {
+                error!("Wrong workspace try again");
+                continue
+            }
+            let mut rng = crypto_box::rand_core::OsRng;
+            let secret_key = SecretKey::generate(&mut rng);
+            let encoded = bs58::encode(secret_key.as_bytes());
+
+            create_dir_all(docs_path.join(workspace))?;
+
+            println!("workspace: {}:{}", workspace, encoded.into_string());
+            println!("Please add it to the config file.");
+            break
+        }
+
         return Ok(())
     }
 
-    let bytes: [u8; 32] = bs58::decode(settings.secret)
-        .into_vec()?
-        .try_into()
-        .map_err(|_| Error::ParseFailed("Parse secret key failed"))?;
-    let secret = crypto_box::SecretKey::from(bytes);
-    let public = secret.public_key();
-    let salsa_box = crypto_box::SalsaBox::new(&public, &secret);
+    let workspaces = get_workspaces(&settings, &docs_path)?;
+
+    if workspaces.is_empty() {
+        error!("Please add at least on workspace to the config file.");
+        println!("Run `$ darkwikid --generate` to generate new workspace.");
+        return Ok(())
+    }
 
     let (rpc_sx, rpc_rv) = async_channel::unbounded::<(String, bool, Vec<String>)>();
-    let (notify_sx, notify_rv) = async_channel::unbounded::<Vec<Vec<(String, String)>>>();
+    let (notify_sx, notify_rv) = async_channel::unbounded::<Vec<Vec<Patch>>>();
 
     //
     // RPC
@@ -588,7 +670,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                 settings: darkwiki_settings,
                 raft: (raft_sx, raft_rv),
                 rpc: (notify_sx, rpc_rv),
-                salsa_box,
+                workspaces,
             };
             darkwiki.start().await.unwrap_or(());
         })

@@ -27,6 +27,7 @@ pub struct Patch {
     pub id: String,
     pub base: String,
     pub timestamp: Timestamp,
+    pub workspace: String,
     ops: OpMethods,
 }
 
@@ -66,12 +67,13 @@ impl std::string::ToString for Patch {
 }
 
 impl Patch {
-    pub fn new(path: &str, id: &str, author: &str) -> Self {
+    pub fn new(path: &str, id: &str, author: &str, workspace: &str) -> Self {
         Self {
             path: path.to_string(),
             id: id.to_string(),
             ops: OpMethods(vec![]),
             base: String::new(),
+            workspace: workspace.to_string(),
             author: author.to_string(),
             timestamp: Timestamp::current_time(),
         }
@@ -146,7 +148,7 @@ impl Patch {
     //
     // TODO need more work to get better performance with iterators
     pub fn transform(&self, other: &Self) -> Self {
-        let mut new_patch = Self::new(&self.path, &self.id, &self.author);
+        let mut new_patch = Self::new(&self.path, &self.id, &self.author, "");
         new_patch.base = self.base.clone();
 
         let mut ops1 = self.ops.0.iter().cloned();
@@ -253,7 +255,7 @@ impl Patch {
         let mut ops1 = ops1.iter().cloned();
         let mut ops2 = other.ops.0.iter().cloned();
 
-        let mut new_patch = Self::new(&self.path, &self.id, &self.author);
+        let mut new_patch = Self::new(&self.path, &self.id, &self.author, "");
         new_patch.base = self.base.clone();
 
         let mut op1 = ops1.next();
@@ -468,7 +470,7 @@ mod tests {
 
     #[test]
     fn test_to_string() {
-        let mut patch = Patch::new("", &gen_id(30), "");
+        let mut patch = Patch::new("", &gen_id(30), "", "");
         patch.base = "text example\n hello".to_string();
         patch.retain(14);
         patch.delete(5);
@@ -479,7 +481,7 @@ mod tests {
 
     #[test]
     fn test_merge() {
-        let mut patch_init = Patch::new("", &gen_id(30), "");
+        let mut patch_init = Patch::new("", &gen_id(30), "", "");
         let base = "text example\n hello";
         patch_init.base = base.to_string();
 
@@ -517,7 +519,7 @@ mod tests {
 
     #[test]
     fn test_transform() {
-        let mut patch_init = Patch::new("", &gen_id(30), "");
+        let mut patch_init = Patch::new("", &gen_id(30), "", "");
         let base = "text example\n hello";
         patch_init.base = base.to_string();
 
@@ -555,7 +557,7 @@ mod tests {
 
     #[test]
     fn test_transform2() {
-        let mut patch_init = Patch::new("", &gen_id(30), "");
+        let mut patch_init = Patch::new("", &gen_id(30), "", "");
         let base = "#hello\n hello";
         patch_init.base = base.to_string();
 
@@ -587,7 +589,7 @@ mod tests {
         assert_eq!(op_method, op_method_deser);
 
         // serialize & deserialize Patch
-        let mut patch = Patch::new("", &gen_id(30), "");
+        let mut patch = Patch::new("", &gen_id(30), "", "");
         patch.insert("hello");
         patch.delete(2);
 
