@@ -5,9 +5,10 @@
 [![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-informational?logo=minutemailer&logoColor=white&style=flat-square)](https://dark.fi/manifesto.html)
 [![Book - mdbook](https://img.shields.io/badge/Book-mdbook-orange?logo=gitbook&logoColor=white&style=flat-square)](https://darkrenaissance.github.io/darkfi)
 
-## Connect to darkfi IRC
+## Connect to DarkFi IRC
 
-Follow [installation instructions](https://darkrenaissance.github.io/darkfi/misc/ircd.html#installation) for the p2p IRC daemon.
+Follow the [installation instructions](https://darkrenaissance.github.io/darkfi/misc/ircd.html#installation)
+for the P2P IRC daemon.
 
 ## Build
 
@@ -30,8 +31,8 @@ The following dependencies are also required:
 | freetype2 libs               | libfreetype6-dev |
 | expat xml lib                | libexpat1-dev    |
 
-Users of Debian-based systems (e.g. Ubuntu) can simply run the following 
-to install the required dependencies:
+Users of Debian-based systems (e.g. Ubuntu) can simply run the
+following to install the required dependencies:
 
 ```shell
 # apt-get update
@@ -40,20 +41,21 @@ to install the required dependencies:
     libexpat1-dev
 ```
 
-Alternatively, users can chose one of the automated scripts 
-under `contrib` folder by executing:
+Alternatively, users can try using the automated script under `contrib`
+folder by executing:
 
 ```shell
-% bash contrib/*_setup.sh
+% sh contrib/dependency_setup.sh
 ```
 
-The following setup script are provided:
-* **mac_setup.sh**: installation using brew (brew will be installed if not present).
-* **void_setup.sh**: Xbps dependencies for Void Linux.
+The script will try to recognize which system you are running,
+and install dependencies accordingly. In case it does not find your
+package manager, please consider adding support for it into the script
+and sending a patch.
 
-To build the necessary binaries, we can just clone the repo, and use the 
-provided Makefile to build the project. This will download the trusted 
-setup params, and compile the source code.
+To build the necessary binaries, we can just clone the repo, and use
+the provided Makefile to build the project. This will download the
+trusted setup params, and compile the source code.
 
 ```shell
 % git clone https://github.com/darkrenaissance/darkfi
