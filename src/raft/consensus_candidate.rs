@@ -1,3 +1,4 @@
+use chrono::Utc;
 use log::info;
 
 use crate::{
@@ -12,6 +13,16 @@ use super::{
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
     pub(super) async fn send_vote_request(&mut self) -> Result<()> {
+        if self.role == Role::Leader {
+            return Ok(())
+        }
+
+        let last_heartbeat_duration = Utc::now().timestamp() - self.last_heartbeat;
+
+        if last_heartbeat_duration < self.settings.timeout as i64 {
+            return Ok(())
+        }
+
         let self_id = self.id();
 
         self.set_current_term(&(self.current_term()? + 1))?;

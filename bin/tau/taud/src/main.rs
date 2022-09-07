@@ -221,8 +221,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     executor.spawn(p2p.clone().run(executor.clone())).detach();
 
-    p2p.clone().wait_for_outbound(executor.clone()).await?;
-
     //
     // RPC interface
     //
