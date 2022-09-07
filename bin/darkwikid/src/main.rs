@@ -492,7 +492,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     if settings.refresh {
         println!("Removing local docs in: {:?} (yes/no)? ", docs_path);
         let mut confirm = String::new();
-        stdin().read_line(&mut confirm).ok().expect("Failed to read line");
+        stdin().read_line(&mut confirm).expect("Failed to read line");
 
         let confirm = confirm.to_lowercase();
         let confirm = confirm.trim();
