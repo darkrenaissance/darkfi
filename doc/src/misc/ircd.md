@@ -65,7 +65,7 @@ on how to install it on your computer.
 Once installed, we can configure a new server which will represent our
 `ircd` instance. First, start weechat, and in its window - run the
 following commands (there is an assumption that `irc_listen` in the
-`ircd` config file is set to `127.0.0.1:11066`):
+`ircd` config file is set to `127.0.0.1:6667`):
 
 ```
 /server add darkfi localhost/6667 -autoconnect
