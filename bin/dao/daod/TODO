@@ -14,13 +14,6 @@ we are basically transforming demo.rs into a sequence of commands: create(), min
         * cargo run --example dao
         * and it should compile and work
 
-priority: mid
-
-* figure out where to put example()
-        * we have contract/example_contract 
-        * the contract code can stay put, but where should we run it? the code
-        * example() which shows the usage is also useful to have.
-
 priority: low
 
 * the things in util.rs are not all utils
