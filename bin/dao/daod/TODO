@@ -6,21 +6,15 @@ priority: immediate
 * split demo() into smaller functions that correspond with rpc requests
         * see comments on main.rs
         * these are super basic/ dumb right now, we will start small and gradually improve
-
-* make main() into an async daemon
-        * rpc interface must detach in the background so we can run other
-        methods
-        * can use darkfi::util::cli::async_daemonize to be standard with
-        other binaries, but it's not essential for this demo as we do
-        not need a config or options rn.
-
-priority: mid
+we are basically transforming demo.rs into a sequence of commands: create(), mint(), airdrop(), propose(), vote(), exec()
 
 * move schema.rs to darkfi/example
         * rename it to dao.rs
         * we want to be able to run it like how we run example/tx.rs
         * cargo run --example dao
         * and it should compile and work
+
+priority: mid
 
 * figure out where to put example()
         * we have contract/example_contract 
