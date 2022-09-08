@@ -23,7 +23,7 @@ syn keyword zkasInstruction
     \ ec_get_x ec_get_y
     \ base_add base_mul base_sub
     \ poseidon_hash merkle_root constrain_instance
-    \ range_check less_than witness_base
+    \ range_check less_than bool_check witness_base
 
 syn region zkasString start='"' end='"' contained
 
