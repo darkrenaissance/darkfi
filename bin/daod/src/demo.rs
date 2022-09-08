@@ -433,6 +433,7 @@ pub async fn demo() -> Result<()> {
     }
 
     tx.zk_verify(&zk_bins);
+    tx.verify_sigs();
 
     // Wallet stuff
 

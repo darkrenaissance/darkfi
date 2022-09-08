@@ -21,6 +21,7 @@ pub struct OwnCoin {
 
 pub struct WalletCache {
     // Normally this would be a HashMap, but SecretKey is not Hash-able
+    // TODO: This can be HashableBase
     cache: Vec<(SecretKey, Vec<OwnCoin>)>,
 }
 
