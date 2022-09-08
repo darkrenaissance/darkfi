@@ -13,8 +13,8 @@ use darkfi::{
 };
 
 use crate::{
+    contract::example_contract::{foo::validate::CallData, CONTRACT_ID},
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
-    example_contract::{foo::validate::CallData, CONTRACT_ID},
 };
 
 pub struct Foo {

@@ -3,18 +3,15 @@ use std::sync::Arc;
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 use url::Url;
 
+use daod::contract::{dao_contract, example_contract, money_contract};
 use darkfi::{rpc::server::listen_and_serve, Result};
 
-mod dao_contract;
-mod example_contract;
-mod money_contract;
-mod rpc;
-
-mod demo;
+//mod demo;
 mod note;
 
-use crate::rpc::JsonRpcInterface;
-// use crate::demo::demo;
+extern crate daod;
+
+use daod::rpc::JsonRpcInterface;
 
 async fn start() -> Result<()> {
     let rpc_addr = Url::parse("tcp://127.0.0.1:7777")?;
@@ -34,6 +31,6 @@ async fn main() -> Result<()> {
     )?;
 
     start().await?;
-    // demo().await.unwrap();
+    //demo().await.unwrap();
     Ok(())
 }

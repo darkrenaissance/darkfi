@@ -9,8 +9,8 @@ use darkfi::{
 use std::any::{Any, TypeId};
 
 use crate::{
+    contract::example_contract::{state::State, CONTRACT_ID},
     demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
-    example_contract::{state::State, CONTRACT_ID},
 };
 
 type Result<T> = std::result::Result<T, Error>;

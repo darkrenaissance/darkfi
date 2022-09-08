@@ -17,11 +17,11 @@ use darkfi::{
 };
 
 use crate::{
-    demo::{FuncCall, ZkContractInfo, ZkContractTable},
-    money_contract::{
+    contract::money_contract::{
         transfer::validate::{CallData, ClearInput, Input, Output},
         CONTRACT_ID,
     },
+    demo::{FuncCall, ZkContractInfo, ZkContractTable},
     note,
 };
 

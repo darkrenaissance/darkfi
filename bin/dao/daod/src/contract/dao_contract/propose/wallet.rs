@@ -19,13 +19,16 @@ use darkfi::{
 };
 
 use crate::{
-    dao_contract::{
-        mint::wallet::DaoParams,
-        propose::validate::{CallData, Header, Input},
-        CONTRACT_ID,
+    contract::{
+        dao_contract::{
+            mint::wallet::DaoParams,
+            propose::validate::{CallData, Header, Input},
+            CONTRACT_ID,
+        },
+        money_contract,
     },
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
-    money_contract, note,
+    note,
 };
 
 #[derive(SerialEncodable, SerialDecodable)]

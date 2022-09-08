@@ -6,7 +6,7 @@ use darkfi::{
 };
 
 use crate::{
-    dao_contract::{DaoBulla, State, CONTRACT_ID},
+    contract::dao_contract::{DaoBulla, State, CONTRACT_ID},
     demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 

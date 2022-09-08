@@ -13,10 +13,8 @@ use darkfi::{
 use std::any::{Any, TypeId};
 
 use crate::{
-    dao_contract,
-    dao_contract::CONTRACT_ID,
+    contract::{dao_contract, dao_contract::CONTRACT_ID, money_contract},
     demo::{CallDataBase, HashableBase, StateRegistry, Transaction, UpdateBase},
-    money_contract,
 };
 
 type Result<T> = std::result::Result<T, Error>;

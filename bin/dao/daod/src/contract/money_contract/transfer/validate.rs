@@ -20,9 +20,11 @@ use darkfi::{
 };
 
 use crate::{
-    dao_contract,
+    contract::{
+        dao_contract,
+        money_contract::{state::State, CONTRACT_ID},
+    },
     demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
-    money_contract::{state::State, CONTRACT_ID},
     note::EncryptedNote2,
 };
 

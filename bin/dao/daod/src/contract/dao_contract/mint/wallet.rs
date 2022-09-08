@@ -1,5 +1,3 @@
-use crate::dao_contract::state::DaoBulla;
-
 use darkfi::{
     crypto::{
         keypair::{PublicKey, SecretKey},
@@ -13,7 +11,7 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
 use crate::{
-    dao_contract::{mint::validate::CallData, CONTRACT_ID},
+    contract::dao_contract::{mint::validate::CallData, state::DaoBulla, CONTRACT_ID},
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 

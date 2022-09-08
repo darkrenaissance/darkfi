@@ -14,11 +14,11 @@ use pasta_curves::{
 use std::any::{Any, TypeId};
 
 use crate::{
-    dao_contract,
-    dao_contract::State as DaoState,
+    contract::{
+        dao_contract, dao_contract::State as DaoState, money_contract,
+        money_contract::state::State as MoneyState,
+    },
     demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
-    money_contract,
-    money_contract::state::State as MoneyState,
     note::EncryptedNote2,
 };
 
