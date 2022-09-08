@@ -1,42 +1,19 @@
-use incrementalmerkletree::Tree;
 use log::debug;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{
-        ff::{Field, PrimeField},
-        Curve, Group,
-    },
-    pallas,
-};
-use rand::rngs::OsRng;
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    hash::Hasher,
-    time::Instant,
-};
+use pasta_curves::{group::ff::PrimeField, pallas};
+use std::{any::Any, collections::HashMap, hash::Hasher};
 
 use darkfi::{
     crypto::{
-        keypair::{Keypair, PublicKey, SecretKey},
+        keypair::{PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
-        types::{DrkCircuitField, DrkSpendHook, DrkUserData, DrkValue},
-        util::{pedersen_commitment_u64, poseidon_hash},
+        types::DrkCircuitField,
         Proof,
     },
     util::serial::Encodable,
-    zk::{
-        circuit::{BurnContract, MintContract},
-        vm::ZkCircuit,
-        vm_stack::empty_witnesses,
-    },
+    zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::decoder::ZkBinary,
 };
-use std::sync::Arc;
-
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
-use url::Url;
 
 #[derive(Eq, PartialEq)]
 pub struct HashableBase(pub pallas::Base);

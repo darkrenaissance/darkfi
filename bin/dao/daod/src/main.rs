@@ -2,35 +2,20 @@ use incrementalmerkletree::Tree;
 use log::debug;
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{
-        ff::{Field, PrimeField},
-        Curve, Group,
-    },
+    group::{ff::Field, Curve, Group},
     pallas,
 };
 use rand::rngs::OsRng;
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    hash::Hasher,
-    time::Instant,
-};
+use std::{any::TypeId, time::Instant};
 
 use darkfi::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
-        schnorr::{SchnorrPublic, SchnorrSecret, Signature},
-        types::{DrkCircuitField, DrkSpendHook, DrkUserData, DrkValue},
+        types::{DrkSpendHook, DrkUserData, DrkValue},
         util::{pedersen_commitment_u64, poseidon_hash},
-        Proof,
     },
-    util::serial::Encodable,
-    zk::{
-        circuit::{BurnContract, MintContract},
-        vm::ZkCircuit,
-        vm_stack::empty_witnesses,
-    },
+    zk::circuit::{BurnContract, MintContract},
     zkas::decoder::ZkBinary,
 };
 use std::sync::Arc;
@@ -39,8 +24,8 @@ use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
 use url::Url;
 
 use daod::{
-    contract::{dao_contract, example_contract, money_contract},
-    util::{sign, CallDataBase, StateRegistry, Transaction, ZkContractTable},
+    contract::{dao_contract, money_contract},
+    util::{sign, StateRegistry, Transaction, ZkContractTable},
 };
 use darkfi::{rpc::server::listen_and_serve, Result};
 
