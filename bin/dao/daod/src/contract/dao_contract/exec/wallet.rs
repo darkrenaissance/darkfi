@@ -17,7 +17,7 @@ use crate::{
     contract::dao_contract::{
         exec::validate::CallData, mint::wallet::DaoParams, propose::wallet::Proposal, CONTRACT_ID,
     },
-    demo::{FuncCall, ZkContractInfo, ZkContractTable},
+    util::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 
 pub struct Builder {

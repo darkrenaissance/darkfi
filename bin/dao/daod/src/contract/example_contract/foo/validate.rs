@@ -10,7 +10,7 @@ use std::any::{Any, TypeId};
 
 use crate::{
     contract::example_contract::{state::State, CONTRACT_ID},
-    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
+    util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 
 type Result<T> = std::result::Result<T, Error>;

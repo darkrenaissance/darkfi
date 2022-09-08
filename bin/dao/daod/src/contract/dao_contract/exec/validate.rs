@@ -14,7 +14,7 @@ use std::any::{Any, TypeId};
 
 use crate::{
     contract::{dao_contract, dao_contract::CONTRACT_ID, money_contract},
-    demo::{CallDataBase, HashableBase, StateRegistry, Transaction, UpdateBase},
+    util::{CallDataBase, HashableBase, StateRegistry, Transaction, UpdateBase},
 };
 
 type Result<T> = std::result::Result<T, Error>;

@@ -24,8 +24,8 @@ use crate::{
         dao_contract,
         money_contract::{state::State, CONTRACT_ID},
     },
-    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
     note::EncryptedNote2,
+    util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 
 const TARGET: &str = "money_contract::transfer::validate::state_transition()";

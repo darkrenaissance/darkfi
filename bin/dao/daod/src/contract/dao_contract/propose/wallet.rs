@@ -27,8 +27,8 @@ use crate::{
         },
         money_contract,
     },
-    demo::{FuncCall, ZkContractInfo, ZkContractTable},
     note,
+    util::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 
 #[derive(SerialEncodable, SerialDecodable)]

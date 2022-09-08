@@ -7,7 +7,7 @@ use darkfi::{
 
 use crate::{
     contract::dao_contract::{DaoBulla, State, CONTRACT_ID},
-    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
+    util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 
 pub fn state_transition(

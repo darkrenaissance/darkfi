@@ -18,8 +18,8 @@ use crate::{
         dao_contract, dao_contract::State as DaoState, money_contract,
         money_contract::state::State as MoneyState,
     },
-    demo::{CallDataBase, StateRegistry, Transaction, UpdateBase},
     note::EncryptedNote2,
+    util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 
 #[derive(Debug, Clone, thiserror::Error)]

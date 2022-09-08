@@ -12,7 +12,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     contract::dao_contract::{mint::validate::CallData, state::DaoBulla, CONTRACT_ID},
-    demo::{FuncCall, ZkContractInfo, ZkContractTable},
+    util::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 
 #[derive(Clone)]

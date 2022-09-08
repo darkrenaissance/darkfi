@@ -14,7 +14,7 @@ use darkfi::{
 
 use crate::{
     contract::example_contract::{foo::validate::CallData, CONTRACT_ID},
-    demo::{FuncCall, ZkContractInfo, ZkContractTable},
+    util::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 
 pub struct Foo {

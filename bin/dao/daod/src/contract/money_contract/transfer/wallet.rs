@@ -21,8 +21,8 @@ use crate::{
         transfer::validate::{CallData, ClearInput, Input, Output},
         CONTRACT_ID,
     },
-    demo::{FuncCall, ZkContractInfo, ZkContractTable},
     note,
+    util::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
