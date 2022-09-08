@@ -65,12 +65,8 @@ circuit "DaoProposeMain" {
     constrain_instance(proposal_bulla);
 
     # Rangeproof check for proposal amount
-    # TODO: waiting on this opcode in zkas
-    #
-    #     greater_than_zero(amount)
-    #
-    # Use this temporary workaround. ec_mul_short() does an internal rangeproof
-    rangeproof = ec_mul_short(proposal_amount, VALUE_COMMIT_VALUE);
+    zero = witness_base(0);
+    less_than(zero, proposal_amount);
 
     # This is the main check
     # TODO: check total_funds >= proposer_limit
