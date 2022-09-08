@@ -63,6 +63,10 @@ async fn demo() -> Result<()> {
     //// TODO: this will be moved to a different file
     //example().await?;
 
+    /////////////////////////////////////////////////
+    //// TODO: move to init()
+    /////////////////////////////////////////////////
+
     // Money parameters
     let xdrk_supply = 1_000_000;
     let xdrk_token_id = pallas::Base::random(&mut OsRng);
@@ -142,6 +146,10 @@ async fn demo() -> Result<()> {
     let dao_state = dao_contract::State::new();
     states.register(*dao_contract::CONTRACT_ID, dao_state);
 
+    /////////////////////////////////////////////////
+    //// TODO: move to create()
+    /////////////////////////////////////////////////
+
     /////////////////////////////////////////////////////
     ////// Create the DAO bulla
     /////////////////////////////////////////////////////
@@ -217,6 +225,10 @@ async fn demo() -> Result<()> {
         call_data.dao_bulla.clone()
     };
     debug!(target: "demo", "Create DAO bulla: {:?}", dao_bulla.0);
+
+    /////////////////////////////////////////////////
+    //// TODO: move to mint()
+    /////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////
     //// Mint the initial supply of treasury token
@@ -319,6 +331,10 @@ async fn demo() -> Result<()> {
     assert_eq!(treasury_note.user_data, dao_bulla.0);
 
     debug!("DAO received a coin worth {} xDRK", treasury_note.value);
+
+    /////////////////////////////////////////////////
+    //// TODO: move to airdrop()
+    /////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////
     //// Mint the governance token
@@ -469,6 +485,10 @@ async fn demo() -> Result<()> {
     //   output 1: change address
     ///////////////////////////////////////////////////
 
+    /////////////////////////////////////////////////
+    //// TODO: move to propose()
+    /////////////////////////////////////////////////
+
     ///////////////////////////////////////////////////
     // Propose the vote
     // In order to make a valid vote, first the proposer must
@@ -617,6 +637,10 @@ async fn demo() -> Result<()> {
     // Fix: use nullifiers from money gov state only from
     // beginning of gov period
     // Cannot use nullifiers from before voting period
+
+    /////////////////////////////////////////////////
+    //// TODO: move to vote()
+    /////////////////////////////////////////////////
 
     debug!(target: "demo", "Stage 5. Start voting");
 
@@ -940,6 +964,10 @@ async fn demo() -> Result<()> {
 
     assert!(all_votes_commit == pedersen_commitment_u64(all_votes_value, all_votes_blind));
     assert!(yes_votes_commit == pedersen_commitment_u64(yes_votes_value, yes_votes_blind));
+
+    /////////////////////////////////////////////////
+    //// TODO: move to exec()
+    /////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////
     // Execute the vote
