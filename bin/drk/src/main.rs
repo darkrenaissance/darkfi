@@ -1,7 +1,7 @@
 use std::{process::exit, str::FromStr, time::Instant};
 
 use clap::{Parser, Subcommand};
-use prettytable::{cell, format, row, Table};
+use prettytable::{format, row, Table};
 
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};

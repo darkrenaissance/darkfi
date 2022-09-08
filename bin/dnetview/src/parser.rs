@@ -75,7 +75,7 @@ impl DataParser {
             // Parse response
             match response {
                 Ok(reply) => {
-                    if !reply.as_object().is_some() || reply.as_object().unwrap().is_empty() {
+                    if reply.as_object().is_none() || reply.as_object().unwrap().is_empty() {
                         return Err(DnetViewError::EmptyRpcReply)
                     }
 

@@ -1,3 +1,4 @@
+use chrono::Utc;
 use log::info;
 
 use crate::{
@@ -12,7 +13,15 @@ use super::{
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
     pub(super) async fn send_vote_request(&mut self) -> Result<()> {
-        let self_id = self.id();
+        if self.role == Role::Leader {
+            return Ok(())
+        }
+
+        let last_heartbeat_duration = Utc::now().timestamp() - self.last_heartbeat;
+
+        if last_heartbeat_duration < self.settings.timeout as i64 {
+            return Ok(())
+        }
 
         self.set_current_term(&(self.current_term()? + 1))?;
 
@@ -21,14 +30,13 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             self.role = Role::Candidate;
         }
 
-        self.set_voted_for(&Some(self_id.clone()))?;
-        self.votes_received = vec![];
-        self.votes_received.push(self_id.clone());
+        self.set_voted_for(&Some(self.id()))?;
+        self.votes_received = vec![self.id()];
 
         self.reset_last_term()?;
 
         let request = VoteRequest {
-            node_id: self_id,
+            node_id: self.id(),
             current_term: self.current_term()?,
             log_length: self.logs_len(),
             last_term: self.last_term,
@@ -40,6 +48,10 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
     pub(super) async fn receive_vote_response(&mut self, vr: VoteResponse) -> Result<()> {
         if self.role == Role::Candidate && vr.current_term == self.current_term()? && vr.ok {
+            if self.votes_received.contains(&vr.node_id) {
+                return Ok(())
+            }
+
             self.votes_received.push(vr.node_id);
 
             let nodes = self.nodes.lock().await;

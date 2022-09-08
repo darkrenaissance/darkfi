@@ -7,8 +7,8 @@
 ## Sets Author name
 # author="name"
 
-## Secret Key To Encrypt/Decrypt Patches
-#secret = "86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"
+## Workspaces 
+# workspaces = ["darkfi:86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"]
 
 ## Raft net settings
 [net]

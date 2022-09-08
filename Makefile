@@ -54,14 +54,14 @@ fix: token_lists zkas $(PROOFS_BIN)
 clippy: token_lists zkas $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --all
 
-rustdoc: token_lists
+rustdoc: token_lists zkas
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --workspace --all-features \
 		--no-deps --document-private-items
 
 test: token_lists zkas $(PROOFS_BIN) test-tx
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all
 
-test-tx:
+test-tx: zkas
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) run --release --features=node,zkas --example tx
 
 clean:

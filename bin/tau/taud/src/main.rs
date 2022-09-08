@@ -149,7 +149,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     if settings.refresh {
         println!("Removing local data in: {:?} (yes/no)? ", datastore_path);
         let mut confirm = String::new();
-        stdin().read_line(&mut confirm).ok().expect("Failed to read line");
+        stdin().read_line(&mut confirm).expect("Failed to read line");
 
         let confirm = confirm.to_lowercase();
         let confirm = confirm.trim();
@@ -220,8 +220,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     p2p.clone().start(executor.clone()).await?;
 
     executor.spawn(p2p.clone().run(executor.clone())).detach();
-
-    p2p.clone().wait_for_outbound(executor.clone()).await?;
 
     //
     // RPC interface

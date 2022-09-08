@@ -1,5 +1,5 @@
 use async_std::sync::Arc;
-use std::{fs::File, io, io::Read, path::PathBuf};
+use std::{fs::File, io, io::Read};
 
 use clap::Parser;
 use darkfi::util::{
@@ -114,7 +114,7 @@ async fn main() -> DnetViewResult<()> {
     let log_level = get_log_level(args.verbose.into());
     let log_config = get_log_config();
 
-    let log_file_path = PathBuf::from(expand_path(&args.log_path)?);
+    let log_file_path = expand_path(&args.log_path)?;
     if let Some(parent) = log_file_path.parent() {
         std::fs::create_dir_all(parent)?;
     };

@@ -11,9 +11,11 @@ use darkfi::{
     Error,
 };
 
+use crate::Patch;
+
 pub struct JsonRpcInterface {
     sender: async_channel::Sender<(String, bool, Vec<String>)>,
-    receiver: async_channel::Receiver<Vec<Vec<(String, String)>>>,
+    receiver: async_channel::Receiver<Vec<Vec<Patch>>>,
 }
 
 #[async_trait]
@@ -36,10 +38,25 @@ impl RequestHandler for JsonRpcInterface {
     }
 }
 
+fn patch_to_tuple(p: &Patch, colorize: bool) -> (String, String, String) {
+    (p.path.to_owned(), p.workspace.to_owned(), if colorize { p.colorize() } else { p.to_string() })
+}
+
+fn printable_patches(
+    patches: Vec<Vec<Patch>>,
+    colorize: bool,
+) -> Vec<Vec<(String, String, String)>> {
+    let mut response = vec![];
+    for ps in patches {
+        response.push(ps.iter().map(|p| patch_to_tuple(p, colorize)).collect())
+    }
+    response
+}
+
 impl JsonRpcInterface {
     pub fn new(
         sender: async_channel::Sender<(String, bool, Vec<String>)>,
-        receiver: async_channel::Receiver<Vec<Vec<(String, String)>>>,
+        receiver: async_channel::Receiver<Vec<Vec<Patch>>>,
     ) -> Self {
         Self { sender, receiver }
     }
@@ -60,6 +77,7 @@ impl JsonRpcInterface {
         }
 
         let response = self.receiver.recv().await.unwrap();
+        let response = printable_patches(response, true);
         JsonResponse::new(json!(response), id).into()
     }
 
@@ -80,6 +98,7 @@ impl JsonRpcInterface {
         }
 
         let response = self.receiver.recv().await.unwrap();
+        let response = printable_patches(response, false);
         JsonResponse::new(json!(response), id).into()
     }
 

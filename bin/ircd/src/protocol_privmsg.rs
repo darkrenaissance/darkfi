@@ -113,7 +113,7 @@ impl ProtocolPrivmsg {
 
             let mut inv_requested = vec![];
             for inv_object in inv.invs.iter() {
-                let msgs = &mut self.buffers.unread_msgs.lock().await.0;
+                let msgs = &mut self.buffers.unread_msgs.lock().await.msgs;
                 if let Some(msg) = msgs.get_mut(&inv_object.0) {
                     msg.read_confirms += 1;
                 } else {
@@ -164,7 +164,7 @@ impl ProtocolPrivmsg {
             let getdata = self.getdata_sub.receive().await?;
             let getdata = (*getdata).to_owned();
 
-            let msgs = &self.buffers.unread_msgs.lock().await.0;
+            let msgs = &self.buffers.unread_msgs.lock().await.msgs;
             for inv in getdata.invs {
                 if let Some(msg) = msgs.get(&inv.0) {
                     self.channel.send(msg.clone()).await?;
@@ -178,7 +178,7 @@ impl ProtocolPrivmsg {
     }
 
     async fn update_unread_msgs(&self) -> Result<()> {
-        let msgs = &mut self.buffers.unread_msgs.lock().await.0;
+        let msgs = &mut self.buffers.unread_msgs.lock().await.msgs;
         for (hash, msg) in msgs.clone() {
             if msg.timestamp + UNREAD_MSG_EXPIRE_TIME < Utc::now().timestamp() {
                 msgs.remove(&hash);
@@ -203,7 +203,7 @@ impl ProtocolPrivmsg {
 
         self.update_unread_msgs().await?;
 
-        for msg in self.buffers.unread_msgs.lock().await.0.values() {
+        for msg in self.buffers.unread_msgs.lock().await.msgs.values() {
             self.channel.send(msg.clone()).await?;
         }
         Ok(())

@@ -219,8 +219,8 @@ impl ProgramState for State {
         if let Ok(mr) = self.merkle_roots.contains(merkle_root) {
             return mr
         }
-        // FIXME: An error here means a db issue
-        false
+
+        panic!("RootStore db corruption, could not check merkle_roots.contains()");
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
@@ -228,8 +228,8 @@ impl ProgramState for State {
         if let Ok(nf) = self.nullifiers.contains(nullifier) {
             return nf
         }
-        // FIXME: An error here means a db issue
-        false
+
+        panic!("NullifierStore db corruption, could not check nullifiers.contains()");
     }
 
     fn mint_vk(&self) -> &VerifyingKey {

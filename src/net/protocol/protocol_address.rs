@@ -15,7 +15,7 @@ use super::{
 };
 
 const SEND_ADDR_SLEEP_SECONDS: u64 = 900;
-const LOCALNET: [&'static str; 5] = ["localhost", "0.0.0.0", "[::]", "127.0.0.1", "[::1]"];
+const LOCALNET: [&str; 5] = ["localhost", "0.0.0.0", "[::]", "127.0.0.1", "[::1]"];
 
 /// Defines address and get-address messages.
 pub struct ProtocolAddress {
@@ -67,10 +67,9 @@ impl ProtocolAddress {
         loop {
             let addrs_msg = self.addrs_sub.receive().await?;
             debug!(target: "net", "ProtocolAddress::handle_receive_addrs() received {} addrs", addrs_msg.addrs.len());
-            let mut filtered = vec![];
-            for (i, addr) in addrs_msg.addrs.iter().enumerate() {
-                debug!(target: "net", "  addr[{}]: {}", i, addr);
-                if !self.settings.localnet {
+            let addrs = if !self.settings.localnet {
+                let mut filtered = vec![];
+                for addr in &addrs_msg.addrs {
                     match addr.host_str() {
                         Some(host_str) => {
                             if LOCALNET.contains(&host_str) {
@@ -83,10 +82,13 @@ impl ProtocolAddress {
                             continue
                         }
                     }
+                    filtered.push(addr.clone());
                 }
-                filtered.push(addr.clone());
-            }
-            self.hosts.store(filtered).await;
+                filtered
+            } else {
+                addrs_msg.addrs.clone()
+            };
+            self.hosts.store(addrs).await;
         }
     }
 

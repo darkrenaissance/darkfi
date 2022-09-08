@@ -1,6 +1,6 @@
 use crypto_box::SalsaBox;
 use fxhash::FxHashMap;
-use log::info;
+use log::{info, warn};
 use serde::Deserialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -135,6 +135,7 @@ fn parse_priv_key(data: &str) -> Result<String> {
         pk = prv_key.0.into();
     }
 
+    info!("Found secret key in config, noted it down.");
     Ok(pk)
 }
 
@@ -148,9 +149,12 @@ fn parse_priv_key(data: &str) -> Result<String> {
 pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, ContactInfo>> {
     let mut ret = FxHashMap::default();
 
-    let map = match toml::from_str(data)? {
-        Value::Table(m) => m,
-        _ => return Ok(ret),
+    let map = match toml::from_str(data) {
+        Ok(Value::Table(m)) => m,
+        _ => {
+            warn!("Invalid TOML string passed as argument to parse_configured_contacts()");
+            return Ok(ret)
+        }
     };
 
     if !map.contains_key("contact") {
@@ -158,34 +162,82 @@ pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, Contact
     }
 
     if !map["contact"].is_table() {
+        warn!("TOML configuration contains a \"contact\" field, but it is not a table.");
         return Ok(ret)
     }
 
     let contacts = map["contact"].as_table().unwrap();
 
+    // Our secret key for NaCl boxes.
+    let found_priv = match parse_priv_key(data) {
+        Ok(v) => v,
+        Err(_) => {
+            info!("Did not found private key in config, skipping contact configuration.");
+            return Ok(ret)
+        }
+    };
+
+    let bytes: [u8; 32] = match bs58::decode(found_priv).into_vec() {
+        Ok(v) => {
+            if v.len() != 32 {
+                warn!("Decoded base58 secret key string is not 32 bytes");
+                warn!("Skipping private contact configuration");
+                return Ok(ret)
+            }
+            v.try_into().unwrap()
+        }
+        Err(e) => {
+            warn!("Failed to decode base58 secret key from string: {}", e);
+            warn!("Skipping private contact configuration");
+            return Ok(ret)
+        }
+    };
+
+    let secret = crypto_box::SecretKey::from(bytes);
+
     for cnt in contacts {
         info!("Found configuration for contact {}", cnt.0);
-
         let mut contact_info = ContactInfo::new()?;
 
-        if !cnt.1.is_table() && !cnt.1.as_table().unwrap().contains_key("contact_pubkey") {
+        if !cnt.1.is_table() {
+            warn!("Config for contact {} isn't a TOML table", cnt.0);
+            continue
+        }
+
+        let table = cnt.1.as_table().unwrap();
+        if table.is_empty() {
+            warn!("Configuration for contact {} is empty.", cnt.0);
             continue
         }
 
         // Build the NaCl box
-        //// public_key
-        let pubkey = cnt.1["contact_pubkey"].as_str().unwrap();
-        let bytes: [u8; 32] = bs58::decode(pubkey).into_vec()?.try_into().unwrap();
+        if !table.contains_key("contact_pubkey") || !table["contact_pubkey"].is_str() {
+            warn!("Contact {} doesn't have `contact_pubkey` set or is not a string.", cnt.0);
+            continue
+        }
+
+        let pub_str = table["contact_pubkey"].as_str().unwrap();
+        let bytes: [u8; 32] = match bs58::decode(pub_str).into_vec() {
+            Ok(v) => {
+                if v.len() != 32 {
+                    warn!("Decoded base58 string is not 32 bytes");
+                    continue
+                }
+
+                v.try_into().unwrap()
+            }
+            Err(e) => {
+                warn!("Failed to decode base58 pubkey from string: {}", e);
+                continue
+            }
+        };
+
         let public = crypto_box::PublicKey::from(bytes);
-
-        //// private_key
-        let bytes: [u8; 32] = bs58::decode(parse_priv_key(data)?).into_vec()?.try_into().unwrap();
-        let secret = crypto_box::SecretKey::from(bytes);
-
         contact_info.salt_box = Some(SalsaBox::new(&public, &secret));
         ret.insert(cnt.0.to_string(), contact_info);
         info!("Instantiated NaCl box for contact {}", cnt.0);
     }
+
     Ok(ret)
 }
 

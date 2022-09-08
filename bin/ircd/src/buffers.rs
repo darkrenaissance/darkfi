@@ -1,8 +1,10 @@
 use async_std::sync::{Arc, Mutex};
-use std::{cmp::Ordering, collections::VecDeque};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, VecDeque},
+};
 
 use chrono::Utc;
-use fxhash::FxHashMap;
 use ripemd::{Digest, Ripemd160};
 
 use crate::Privmsg;
@@ -31,19 +33,32 @@ pub fn create_buffers() -> Buffers {
 }
 
 #[derive(Clone)]
-pub struct UMsgs(pub FxHashMap<String, Privmsg>);
+pub struct UMsgs {
+    pub msgs: BTreeMap<String, Privmsg>,
+    capacity: usize,
+}
 
 impl UMsgs {
     pub fn new() -> Self {
-        Self(FxHashMap::default())
+        Self { msgs: BTreeMap::new(), capacity: SIZE_OF_MSGS_BUFFER }
     }
 
     pub fn insert(&mut self, msg: &Privmsg) -> String {
         let mut hasher = Ripemd160::new();
         hasher.update(msg.to_string());
         let key = hex::encode(hasher.finalize());
-        self.0.insert(key.clone(), msg.clone());
+
+        if self.msgs.len() == self.capacity {
+            self.pop_front();
+        }
+
+        self.msgs.insert(key.clone(), msg.clone());
         key
+    }
+
+    fn pop_front(&mut self) {
+        let first_key = self.msgs.iter().next_back().unwrap().0.clone();
+        self.msgs.remove(&first_key);
     }
 }
 
@@ -124,6 +139,14 @@ impl PrivmsgsBuffer {
 
     pub fn iter(&self) -> impl Iterator<Item = &Privmsg> + DoubleEndedIterator {
         self.buffer.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.buffer.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn last_term(&self) -> u64 {
