@@ -5,13 +5,6 @@ use darkfi::{rpc::jsonrpc::JsonRequest, Result};
 use crate::Rpc;
 
 impl Rpc {
-    // --> {"jsonrpc": "2.0", "method": "init", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "initializing...", "id": 42}
-    pub async fn init(&self) -> Result<Value> {
-        let req = JsonRequest::new("init", json!([]));
-        self.client.request(req).await
-    }
-
     // --> {"jsonrpc": "2.0", "method": "create", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "creating dao...", "id": 42}
     pub async fn create(&self) -> Result<Value> {

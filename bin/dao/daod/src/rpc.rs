@@ -19,7 +19,6 @@ impl RequestHandler for JsonRpcInterface {
         debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
-            Some("init") => return self.init(req.id, req.params).await,
             Some("create") => return self.create_dao(req.id, req.params).await,
             Some("airdrop") => return self.airdrop_tokens(req.id, req.params).await,
             Some("propose") => return self.create_proposal(req.id, req.params).await,
@@ -31,11 +30,6 @@ impl RequestHandler for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
-    // --> {"method": "init", "params": []}
-    // <-- {"result": "initializeing..."}
-    async fn init(&self, id: Value, _params: Value) -> JsonResult {
-        JsonResponse::new(json!("initializeing..."), id).into()
-    }
     // --> {"method": "create", "params": []}
     // <-- {"result": "creating dao..."}
     async fn create_dao(&self, id: Value, _params: Value) -> JsonResult {

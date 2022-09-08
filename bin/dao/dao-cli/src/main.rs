@@ -7,8 +7,6 @@ mod rpc;
 
 #[derive(Subcommand)]
 pub enum CliDaoSubCommands {
-    /// Initialize DAO
-    Init {},
     /// Create DAO
     Create {},
     /// Airdrop tokens
@@ -41,11 +39,6 @@ async fn start(options: CliDao) -> Result<()> {
     let rpc_addr = "tcp://127.0.0.1:7777";
     let client = Rpc { client: RpcClient::new(Url::parse(rpc_addr)?).await? };
     match options.command {
-        Some(CliDaoSubCommands::Init {}) => {
-            let reply = client.init().await?;
-            println!("Server replied: {}", &reply.to_string());
-            return Ok(())
-        }
         Some(CliDaoSubCommands::Create {}) => {
             let reply = client.create().await?;
             println!("Server replied: {}", &reply.to_string());
