@@ -22,7 +22,7 @@ outbound_connections=5
 #peers = ["tls://127.0.0.1:23331"]
 
 ## Seed nodes to connect to 
-seeds=["tls://lilith0.dark.fi:23331", "tls://lilith1.dark.fi:23331"]
+seeds=["tls://tau0.dark.fi:23331", "tls://tau1.dark.fi:23331"]
 
 # Prefered transports for outbound connections
 #transports = ["tls", "tcp"]
