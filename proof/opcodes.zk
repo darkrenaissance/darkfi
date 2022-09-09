@@ -45,4 +45,6 @@ circuit "Opcodes" {
 	public = ec_mul_base(secret, NULLIFIER_K);
 	constrain_instance(ec_get_x(public));
 	constrain_instance(ec_get_y(public));
+
+	bool_check(one);
 }

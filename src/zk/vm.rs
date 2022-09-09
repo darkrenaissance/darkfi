@@ -31,6 +31,7 @@ use super::{
         arithmetic::{ArithChip, ArithConfig, ArithInstruction},
         less_than::{LessThanChip, LessThanConfig},
         native_range_check::{NativeRangeCheckChip, NativeRangeCheckConfig},
+        small_range_check::{SmallRangeCheckChip, SmallRangeCheckConfig},
     },
 };
 use crate::{
@@ -59,6 +60,7 @@ pub struct VmConfig {
     native_64_range_check_config: NativeRangeCheckConfig<3, 64, 22>,
     native_253_range_check_config: NativeRangeCheckConfig<3, 253, 85>,
     lessthan_config: LessThanConfig<3, 253, 85>,
+    boolcheck_config: SmallRangeCheckConfig,
 }
 
 impl VmConfig {
@@ -232,6 +234,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
             k_values_table_253,
         );
 
+        // Configuration for boolean checks, it uses the small_range_check
+        // chip with a range of 2, which enforces one bit, i.e. 0 or 1.
+        let boolcheck_config = SmallRangeCheckChip::configure(meta, advices[9], 2);
+
         VmConfig {
             primary,
             advices,
@@ -245,6 +251,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             native_64_range_check_config,
             native_253_range_check_config,
             lessthan_config,
+            boolcheck_config,
         }
     }
 
@@ -299,6 +306,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Construct the Arithmetic chip.
         let arith_chip = config.arithmetic_chip();
+
+        // Construct the boolean check chip.
+        let boolcheck_chip = SmallRangeCheckChip::construct(config.boolcheck_config.clone());
 
         // ==========================
         // Constants setup
@@ -695,6 +705,16 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         0,
                         true,
                     )?;
+                }
+
+                Opcode::BoolCheck => {
+                    debug!("Executing `BoolCheck{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let w = stack[args[0].1].clone().into();
+
+                    boolcheck_chip
+                        .small_range_check(layouter.namespace(|| "copy boolean check"), w)?;
                 }
 
                 Opcode::ConstrainInstance => {

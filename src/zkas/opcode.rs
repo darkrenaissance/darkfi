@@ -49,6 +49,9 @@ pub enum Opcode {
     /// Compare two Base field elements and see if a is less than b
     LessThan = 0x51,
 
+    /// Check if a field element fits in a boolean (Either 0 or 1)
+    BoolCheck = 0x52,
+
     /// Constrain a Base field element to a circuit's public input
     ConstrainInstance = 0xf0,
 
@@ -73,6 +76,7 @@ impl Opcode {
             "witness_base" => Some(Self::WitnessBase),
             "range_check" => Some(Self::RangeCheck),
             "less_than" => Some(Self::LessThan),
+            "bool_check" => Some(Self::BoolCheck),
             "constrain_instance" => Some(Self::ConstrainInstance),
             "debug" => Some(Self::DebugPrint),
             _ => None,
@@ -95,6 +99,7 @@ impl Opcode {
             0x40 => Some(Self::WitnessBase),
             0x50 => Some(Self::RangeCheck),
             0x51 => Some(Self::LessThan),
+            0x52 => Some(Self::BoolCheck),
             0xf0 => Some(Self::ConstrainInstance),
             0xff => Some(Self::DebugPrint),
             _ => None,
@@ -140,6 +145,8 @@ impl Opcode {
             Opcode::RangeCheck => (vec![], vec![VarType::Uint64, VarType::Base]),
 
             Opcode::LessThan => (vec![], vec![VarType::Base, VarType::Base]),
+
+            Opcode::BoolCheck => (vec![], vec![VarType::Base]),
 
             Opcode::ConstrainInstance => (vec![], vec![VarType::Base]),
 
