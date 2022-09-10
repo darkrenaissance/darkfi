@@ -322,11 +322,19 @@ impl<'a> View {
                 Some(SelectableObject::Session(session)) => {
                     //debug!(target: "dnetview", "render_info()::SelectableObject::Session");
                     if session.accept_addr.is_some() {
-                        let session_info = Span::styled(
+                        let accept_addr = Span::styled(
                             format!("Accept addr: {}", session.accept_addr.as_ref().unwrap()),
                             style,
                         );
-                        lines.push(Spans::from(session_info));
+                        lines.push(Spans::from(accept_addr));
+                    }
+                    if session.hosts.is_some() {
+                        let hosts = Span::styled(format!("Hosts:"), style);
+                        lines.push(Spans::from(hosts));
+                        for host in session.hosts.as_ref().unwrap() {
+                            let host = Span::styled(format!("      {}", host), style);
+                            lines.push(Spans::from(host));
+                        }
                     }
                 }
                 Some(SelectableObject::Connect(connect)) => {
