@@ -1,12 +1,15 @@
-use incrementalmerkletree::Tree;
+use std::{any::TypeId, sync::Arc, time::Instant};
+
+use incrementalmerkletree::{Position, Tree};
 use log::debug;
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::Field, Curve, Group},
-    pallas,
+    pallas, Fp, Fq,
 };
 use rand::rngs::OsRng;
-use std::{any::TypeId, time::Instant};
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use url::Url;
 
 use darkfi::{
     crypto::{
@@ -15,54 +18,30 @@ use darkfi::{
         types::{DrkSpendHook, DrkUserData, DrkValue},
         util::{pedersen_commitment_u64, poseidon_hash},
     },
+    rpc::server::listen_and_serve,
     zk::circuit::{BurnContract, MintContract},
     zkas::decoder::ZkBinary,
+    Result,
 };
-use std::sync::Arc;
 
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
-use url::Url;
-
-use daod::{
-    contract::{dao_contract, money_contract},
-    util::{sign, StateRegistry, Transaction, ZkContractTable},
-};
-use darkfi::{rpc::server::listen_and_serve, Result};
-
-//mod demo;
 mod note;
 
 extern crate daod;
 
-use daod::rpc::JsonRpcInterface;
+use daod::{
+    contract::{
+        dao_contract::{self, mint::wallet::DaoParams, propose::wallet::Proposal, DaoBulla},
+        money_contract::{self, state::OwnCoin, transfer::Note},
+    },
+    rpc::JsonRpcInterface,
+    util::{sign, StateRegistry, Transaction, ZkContractTable},
+};
 
 async fn start() -> Result<()> {
     let rpc_addr = Url::parse("tcp://127.0.0.1:7777")?;
     let rpc_interface = Arc::new(JsonRpcInterface {});
 
-    listen_and_serve(rpc_addr, rpc_interface).await?;
-    Ok(())
-}
-
-#[async_std::main]
-async fn main() -> Result<()> {
-    TermLogger::init(
-        LevelFilter::Debug,
-        simplelog::Config::default(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
-
-    //start().await?;
-    demo().await?;
-    Ok(())
-}
-
-async fn demo() -> Result<()> {
-    // Example smart contract
-    //// TODO: this will be moved to a different file
-    //example().await?;
-
+    // init()
     /////////////////////////////////////////////////
     //// TODO: move to init()
     /////////////////////////////////////////////////
@@ -146,6 +125,100 @@ async fn demo() -> Result<()> {
     let dao_state = dao_contract::State::new();
     states.register(*dao_contract::CONTRACT_ID, dao_state);
 
+    /////////////////////////////////////////////////////
+
+    let (dao_keypair, dao_bulla, dao_leaf_position, dao_bulla_blind) = create(
+        &mut states,
+        &mut zk_bins,
+        dao_proposer_limit,
+        dao_quorum,
+        dao_approval_ratio,
+        gdrk_token_id,
+    )?;
+
+    let (dao_recv_coin, treasury_note) = mint(
+        &mut states,
+        &mut zk_bins,
+        dao_keypair,
+        xdrk_supply,
+        xdrk_token_id,
+        cashier_signature_secret,
+        dao_bulla.clone(),
+    )?;
+
+    let (gov_recv, gov_keypairs) =
+        airdrop(&mut states, &mut zk_bins, gdrk_token_id, gdrk_supply, cashier_signature_secret)?;
+
+    let (proposal, dao_params, proposal_bulla, user_keypair) = propose(
+        &mut states,
+        &mut zk_bins,
+        dao_proposer_limit,
+        dao_quorum,
+        dao_approval_ratio,
+        dao_keypair,
+        &gov_recv,
+        gov_keypairs.clone(),
+        gdrk_token_id,
+        dao_leaf_position,
+        dao_bulla.clone(),
+        dao_bulla_blind,
+        xdrk_token_id,
+    )?;
+
+    let (yes_votes_value, yes_votes_blind, all_votes_value, all_votes_blind) = vote(
+        &mut states,
+        &mut zk_bins,
+        gov_recv,
+        gov_keypairs,
+        proposal.clone(),
+        dao_params.clone(),
+    )?;
+
+    exec(
+        &mut states,
+        &mut zk_bins,
+        dao_recv_coin,
+        treasury_note,
+        dao_keypair,
+        user_keypair,
+        proposal,
+        xdrk_supply,
+        xdrk_token_id,
+        proposal_bulla,
+        dao_params,
+        dao_bulla,
+        yes_votes_value,
+        yes_votes_blind,
+        all_votes_value,
+        all_votes_blind,
+    )?;
+
+    listen_and_serve(rpc_addr, rpc_interface).await?;
+    Ok(())
+}
+
+#[async_std::main]
+async fn main() -> Result<()> {
+    TermLogger::init(
+        LevelFilter::Debug,
+        simplelog::Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )?;
+
+    start().await?;
+    // demo().await?;
+    Ok(())
+}
+
+fn create(
+    states: &mut StateRegistry,
+    zk_bins: &mut ZkContractTable,
+    dao_proposer_limit: u64,
+    dao_quorum: u64,
+    dao_approval_ratio: u64,
+    gdrk_token_id: Fp,
+) -> Result<(Keypair, DaoBulla, Position, Fp)> {
     /////////////////////////////////////////////////
     //// TODO: move to create()
     /////////////////////////////////////////////////
@@ -196,7 +269,7 @@ async fn demo() -> Result<()> {
 
     // Atomically apply all changes
     for update in updates {
-        update.apply(&mut states);
+        update.apply(states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -226,6 +299,18 @@ async fn demo() -> Result<()> {
     };
     debug!(target: "demo", "Create DAO bulla: {:?}", dao_bulla.0);
 
+    Ok((dao_keypair, dao_bulla, dao_leaf_position, dao_bulla_blind))
+}
+
+fn mint(
+    states: &mut StateRegistry,
+    zk_bins: &mut ZkContractTable,
+    dao_keypair: Keypair,
+    xdrk_supply: u64,
+    xdrk_token_id: Fp,
+    cashier_signature_secret: SecretKey,
+    dao_bulla: DaoBulla,
+) -> Result<(OwnCoin, Note)> {
     /////////////////////////////////////////////////
     //// TODO: move to mint()
     /////////////////////////////////////////////////
@@ -297,7 +382,7 @@ async fn demo() -> Result<()> {
 
     // Atomically apply all changes
     for update in updates {
-        update.apply(&mut states);
+        update.apply(states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -310,7 +395,7 @@ async fn demo() -> Result<()> {
     let mut recv_coins = state.wallet_cache.get_received(&dao_keypair.secret);
     assert_eq!(recv_coins.len(), 1);
     let dao_recv_coin = recv_coins.pop().unwrap();
-    let treasury_note = dao_recv_coin.note;
+    let treasury_note = dao_recv_coin.note.clone();
 
     // Check the actual coin received is valid before accepting it
 
@@ -332,6 +417,16 @@ async fn demo() -> Result<()> {
 
     debug!("DAO received a coin worth {} xDRK", treasury_note.value);
 
+    Ok((dao_recv_coin, treasury_note))
+}
+
+fn airdrop(
+    states: &mut StateRegistry,
+    zk_bins: &mut ZkContractTable,
+    gdrk_token_id: Fp,
+    gdrk_supply: u64,
+    cashier_signature_secret: SecretKey,
+) -> Result<(Vec<OwnCoin>, Vec<Keypair>)> {
     /////////////////////////////////////////////////
     //// TODO: move to airdrop()
     /////////////////////////////////////////////////
@@ -365,7 +460,7 @@ async fn demo() -> Result<()> {
     let output1 = money_contract::transfer::wallet::BuilderOutputInfo {
         value: 400000,
         token_id: gdrk_token_id,
-        public: gov_keypair_1.public,
+        public: gov_keypairs[0].public,
         serial: pallas::Base::random(&mut OsRng),
         coin_blind: pallas::Base::random(&mut OsRng),
         spend_hook,
@@ -375,7 +470,7 @@ async fn demo() -> Result<()> {
     let output2 = money_contract::transfer::wallet::BuilderOutputInfo {
         value: 400000,
         token_id: gdrk_token_id,
-        public: gov_keypair_2.public,
+        public: gov_keypairs[1].public,
         serial: pallas::Base::random(&mut OsRng),
         coin_blind: pallas::Base::random(&mut OsRng),
         spend_hook,
@@ -385,7 +480,7 @@ async fn demo() -> Result<()> {
     let output3 = money_contract::transfer::wallet::BuilderOutputInfo {
         value: 200000,
         token_id: gdrk_token_id,
-        public: gov_keypair_3.public,
+        public: gov_keypairs[2].public,
         serial: pallas::Base::random(&mut OsRng),
         coin_blind: pallas::Base::random(&mut OsRng),
         spend_hook,
@@ -428,7 +523,7 @@ async fn demo() -> Result<()> {
 
     // Atomically apply all changes
     for update in updates {
-        update.apply(&mut states);
+        update.apply(states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -474,6 +569,24 @@ async fn demo() -> Result<()> {
     // unwrap them for this demo
     let gov_recv: Vec<_> = gov_recv.into_iter().map(|r| r.unwrap()).collect();
 
+    Ok((gov_recv, gov_keypairs))
+}
+
+fn propose(
+    states: &mut StateRegistry,
+    zk_bins: &mut ZkContractTable,
+    dao_proposer_limit: u64,
+    dao_quorum: u64,
+    dao_approval_ratio: u64,
+    dao_keypair: Keypair,
+    gov_recv: &Vec<OwnCoin>,
+    gov_keypairs: Vec<Keypair>,
+    gdrk_token_id: Fp,
+    dao_leaf_position: Position,
+    dao_bulla: DaoBulla,
+    dao_bulla_blind: Fp,
+    xdrk_token_id: Fp,
+) -> Result<(Proposal, DaoParams, Fp, Keypair)> {
     ///////////////////////////////////////////////////
     // DAO rules:
     // 1. gov token IDs must match on all inputs
@@ -515,7 +628,7 @@ async fn demo() -> Result<()> {
     //       need to look into this
     let signature_secret = SecretKey::random(&mut OsRng);
     let input = dao_contract::propose::wallet::BuilderInput {
-        secret: gov_keypair_1.secret,
+        secret: gov_keypairs[0].secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
         merkle_path: money_merkle_path,
@@ -578,7 +691,7 @@ async fn demo() -> Result<()> {
 
     // Atomically apply all changes
     for update in updates {
-        update.apply(&mut states);
+        update.apply(states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -614,6 +727,17 @@ async fn demo() -> Result<()> {
     debug!(target: "demo", "  dao_bulla: {:?}", dao_bulla.0);
     debug!(target: "demo", "Proposal bulla: {:?}", proposal_bulla);
 
+    Ok((proposal, dao_params, proposal_bulla, user_keypair))
+}
+
+fn vote(
+    states: &mut StateRegistry,
+    zk_bins: &mut ZkContractTable,
+    gov_recv: Vec<OwnCoin>,
+    gov_keypairs: Vec<Keypair>,
+    proposal: Proposal,
+    dao_params: DaoParams,
+) -> Result<(u64, Fq, u64, Fq)> {
     ///////////////////////////////////////////////////
     // Proposal is accepted!
     // Start the voting
@@ -660,7 +784,7 @@ async fn demo() -> Result<()> {
 
     let signature_secret = SecretKey::random(&mut OsRng);
     let input = dao_contract::vote::wallet::BuilderInput {
-        secret: gov_keypair_1.secret,
+        secret: gov_keypairs[0].secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
         merkle_path: money_merkle_path,
@@ -708,7 +832,7 @@ async fn demo() -> Result<()> {
 
     // Atomically apply all changes
     for update in updates {
-        update.apply(&mut states);
+        update.apply(states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -748,7 +872,7 @@ async fn demo() -> Result<()> {
 
     let signature_secret = SecretKey::random(&mut OsRng);
     let input = dao_contract::vote::wallet::BuilderInput {
-        secret: gov_keypair_2.secret,
+        secret: gov_keypairs[1].secret,
         note: gov_recv[1].note.clone(),
         leaf_position: money_leaf_position,
         merkle_path: money_merkle_path,
@@ -795,7 +919,7 @@ async fn demo() -> Result<()> {
 
     // Atomically apply all changes
     for update in updates {
-        update.apply(&mut states);
+        update.apply(states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -835,7 +959,7 @@ async fn demo() -> Result<()> {
 
     let signature_secret = SecretKey::random(&mut OsRng);
     let input = dao_contract::vote::wallet::BuilderInput {
-        secret: gov_keypair_3.secret,
+        secret: gov_keypairs[2].secret,
         note: gov_recv[2].note.clone(),
         leaf_position: money_leaf_position,
         merkle_path: money_merkle_path,
@@ -882,7 +1006,7 @@ async fn demo() -> Result<()> {
 
     // Atomically apply all changes
     for update in updates {
-        update.apply(&mut states);
+        update.apply(states);
     }
 
     tx.zk_verify(&zk_bins);
@@ -965,6 +1089,27 @@ async fn demo() -> Result<()> {
     assert!(all_votes_commit == pedersen_commitment_u64(all_votes_value, all_votes_blind));
     assert!(yes_votes_commit == pedersen_commitment_u64(yes_votes_value, yes_votes_blind));
 
+    Ok((yes_votes_value, yes_votes_blind, all_votes_value, all_votes_blind))
+}
+
+fn exec(
+    states: &mut StateRegistry,
+    zk_bins: &mut ZkContractTable,
+    dao_recv_coin: OwnCoin,
+    treasury_note: Note,
+    dao_keypair: Keypair,
+    user_keypair: Keypair,
+    proposal: Proposal,
+    xdrk_supply: u64,
+    xdrk_token_id: Fp,
+    proposal_bulla: Fp,
+    dao_params: DaoParams,
+    dao_bulla: DaoBulla,
+    yes_votes_value: u64,
+    yes_votes_blind: Fq,
+    all_votes_value: u64,
+    all_votes_blind: Fq,
+) -> Result<()> {
     /////////////////////////////////////////////////
     //// TODO: move to exec()
     /////////////////////////////////////////////////
@@ -1102,7 +1247,7 @@ async fn demo() -> Result<()> {
 
     // Atomically apply all changes
     for update in updates {
-        update.apply(&mut states);
+        update.apply(states);
     }
 
     // Other stuff
