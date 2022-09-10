@@ -69,10 +69,10 @@ circuit "DaoProposeMain" {
     less_than(zero, proposal_amount);
 
     # This is the main check
-    # TODO: check total_funds >= proposer_limit
-    #
-    #     greater_than_or_equal(total_funds, proposer_limit)
-    #
+    # We check that dao_proposer_limit <= total_funds
+    one = witness_base(1);
+    total_funds_1 = base_add(total_funds, one);
+    less_than(dao_proposer_limit, total_funds_1);
 
 	# Pedersen commitment for coin's value
 	vcv = ec_mul_short(total_funds, VALUE_COMMIT_VALUE);

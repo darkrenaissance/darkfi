@@ -315,6 +315,7 @@ pub async fn demo() -> Result<()> {
     // DAO parameters
     let dao_proposer_limit = 110;
     let dao_quorum = 110;
+    // TODO: should be 2:1
     let dao_approval_ratio = 2;
 
     // Lookup table for smart contract states

@@ -91,11 +91,8 @@ circuit "DaoVoteMain" {
 	constrain_instance(all_votes_commit_x);
 	constrain_instance(all_votes_commit_y);
 
-    # This is the main check
-    # TODO: vote option should be 0 or 1
-    #
-    # assert!(vote_option == 0 || vote_option == 1)
-    #
+    # Vote option should be 0 or 1
+    bool_check(vote_option);
 }
 
 

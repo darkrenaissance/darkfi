@@ -134,11 +134,10 @@ circuit "DaoExec" {
     constrain_instance(user_spend_hook);
     constrain_instance(user_data);
 
-    # total_votes >= dao_quorum
-    # TODO: waiting on this opcode in zkas
-    #
-    #     greater_than_or_equal(total_votes, dao_quorum)
-    #
+    # Check that dao_quorum is less than or equal to all_votes_value
+    one = witness_base(1);
+    all_votes_value_1 = base_add(all_votes_value, one);
+    less_than(dao_quorum, all_votes_value_1);
 
     # win_votes / total_votes >= approval_ratio_quot / approval_ratio_base
     #
