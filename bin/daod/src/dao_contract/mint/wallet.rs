@@ -21,7 +21,8 @@ use crate::{
 pub struct DaoParams {
     pub proposer_limit: u64,
     pub quorum: u64,
-    pub approval_ratio: u64,
+    pub approval_ratio_quot: u64,
+    pub approval_ratio_base: u64,
     pub gov_token_id: pallas::Base,
     pub public_key: PublicKey,
     pub bulla_blind: pallas::Base,
@@ -30,7 +31,8 @@ pub struct DaoParams {
 pub struct Builder {
     pub dao_proposer_limit: u64,
     pub dao_quorum: u64,
-    pub dao_approval_ratio: u64,
+    pub dao_approval_ratio_quot: u64,
+    pub dao_approval_ratio_base: u64,
     pub gov_token_id: pallas::Base,
     pub dao_pubkey: PublicKey,
     pub dao_bulla_blind: pallas::Base,
@@ -43,19 +45,19 @@ impl Builder {
         // Dao bulla
         let dao_proposer_limit = pallas::Base::from(self.dao_proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao_quorum);
-        let dao_approval_ratio = pallas::Base::from(self.dao_approval_ratio);
+        let dao_approval_ratio_quot = pallas::Base::from(self.dao_approval_ratio_quot);
+        let dao_approval_ratio_base = pallas::Base::from(self.dao_approval_ratio_base);
 
         let dao_pubkey_coords = self.dao_pubkey.0.to_affine().coordinates().unwrap();
 
         let dao_bulla = poseidon_hash::<8>([
             dao_proposer_limit,
             dao_quorum,
-            dao_approval_ratio,
+            dao_approval_ratio_quot,
+            dao_approval_ratio_base,
             self.gov_token_id,
             *dao_pubkey_coords.x(),
             *dao_pubkey_coords.y(),
-            self.dao_bulla_blind,
-            // @tmp-workaround
             self.dao_bulla_blind,
         ]);
         let dao_bulla = DaoBulla(dao_bulla);
@@ -71,7 +73,8 @@ impl Builder {
         let prover_witnesses = vec![
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
-            Witness::Base(Value::known(dao_approval_ratio)),
+            Witness::Base(Value::known(dao_approval_ratio_quot)),
+            Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.gov_token_id)),
             Witness::Base(Value::known(*dao_pubkey_coords.x())),
             Witness::Base(Value::known(*dao_pubkey_coords.y())),

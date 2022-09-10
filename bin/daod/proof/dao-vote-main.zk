@@ -15,7 +15,8 @@ contract "DaoVoteMain" {
     # DAO params
     Base dao_proposer_limit,
     Base dao_quorum,
-    Base dao_approval_ratio,
+    Base dao_approval_ratio_quot,
+    Base dao_approval_ratio_base,
     Base gov_token_id,
     Base dao_public_x,
     Base dao_public_y,
@@ -40,12 +41,11 @@ circuit "DaoVoteMain" {
     dao_bulla = poseidon_hash(
         dao_proposer_limit,
         dao_quorum,
-        dao_approval_ratio,
+        dao_approval_ratio_quot,
+        dao_approval_ratio_base,
         gov_token_id,
         dao_public_x,
         dao_public_y,
-        dao_bulla_blind,
-        # @tmp-workaround
         dao_bulla_blind,
     );
     # Proposal bulla is valid means DAO bulla is also valid
