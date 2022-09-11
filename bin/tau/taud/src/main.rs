@@ -156,7 +156,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
         if confirm == "yes" || confirm == "y" {
             remove_dir_all(datastore_path).unwrap_or(());
-            println!("Local data get removed");
+            println!("Local data removed successfully.");
         } else {
             error!("Unexpected Value: {}", confirm);
         }

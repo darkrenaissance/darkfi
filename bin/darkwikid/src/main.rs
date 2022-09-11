@@ -563,7 +563,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
         if confirm == "yes" || confirm == "y" {
             remove_dir_all(docs_path).unwrap_or(());
-            println!("Local docs get removed");
+            println!("Local data removed successfully.");
         } else {
             error!("Unexpected Value: {}", confirm);
         }
