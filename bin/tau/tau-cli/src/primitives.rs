@@ -163,5 +163,6 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
         }
     }
 
+    let title = title.trim().into();
     Ok(BaseTask { title, tags, desc, project, assign, due, rank })
 }
