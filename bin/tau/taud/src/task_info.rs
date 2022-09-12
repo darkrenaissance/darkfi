@@ -189,9 +189,8 @@ impl TaskInfo {
 
     pub fn set_tags(&mut self, tags: &[String]) {
         debug!(target: "tau", "TaskInfo::set_tags()");
-        println!("tags: {:?}", tags);
         for tag in tags.iter() {
-            if tag.starts_with('+') {
+            if tag.starts_with('+') && !self.tags.0.contains(tag) {
                 self.tags.0.push(tag.to_string());
             }
             if tag.starts_with('-') {

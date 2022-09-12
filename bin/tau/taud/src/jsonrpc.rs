@@ -432,15 +432,11 @@ impl JsonRpcInterface {
         }
 
         if fields.contains_key("tags") {
-            println!("fields: {:?}", fields);
             let tags = fields.get("tags").unwrap().clone();
-            println!("tags: {:?}", tags);
-
             let tags: Vec<String> = serde_json::from_value(tags)?;
-            println!("vec tags: {:?}", tags);
             if !tags.is_empty() {
                 task.set_tags(&tags);
-                // task.set_event("project", &self.nickname, &tags.join(", "));
+                task.set_event("tags", &self.nickname, &tags.join(", "));
             }
         }
 

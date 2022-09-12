@@ -177,6 +177,10 @@ pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
                 writeln!(events_str, "- {} changed project to {}", event.author, event.content)
                     .unwrap();
             }
+            "tags" => {
+                writeln!(events_str, "- {} changed tags to {}", event.author, event.content)
+                    .unwrap();
+            }
             "due" => {
                 writeln!(
                     events_str,
