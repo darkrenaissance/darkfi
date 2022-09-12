@@ -76,6 +76,7 @@ enum TauSubcommand {
 
     /// Modify/Edit an existing task.
     Modify {
+        #[clap(allow_hyphen_values = true)]
         /// Values (e.g. project:blockchain).
         values: Vec<String>,
     },

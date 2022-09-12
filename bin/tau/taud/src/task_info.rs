@@ -58,6 +58,8 @@ pub struct TaskComments(Vec<Comment>);
 pub struct TaskProjects(Vec<String>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskAssigns(Vec<String>);
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskTags(Vec<String>);
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct TaskInfo {
@@ -65,6 +67,7 @@ pub struct TaskInfo {
     pub(crate) workspace: String,
     id: u32,
     title: String,
+    tags: TaskTags,
     desc: String,
     owner: String,
     assign: TaskAssigns,
@@ -113,6 +116,7 @@ impl TaskInfo {
             title: title.into(),
             desc: desc.into(),
             owner: owner.into(),
+            tags: TaskTags(vec![]),
             assign: TaskAssigns(vec![]),
             project: TaskProjects(vec![]),
             due,
@@ -181,6 +185,20 @@ impl TaskInfo {
     pub fn set_desc(&mut self, desc: &str) {
         debug!(target: "tau", "TaskInfo::set_desc()");
         self.desc = desc.into();
+    }
+
+    pub fn set_tags(&mut self, tags: &[String]) {
+        debug!(target: "tau", "TaskInfo::set_tags()");
+        println!("tags: {:?}", tags);
+        for tag in tags.iter() {
+            if tag.starts_with('+') {
+                self.tags.0.push(tag.to_string());
+            }
+            if tag.starts_with('-') {
+                let t = tag.replace('-', "+");
+                self.tags.0.retain(|tag| tag != &t);
+            }
+        }
     }
 
     pub fn set_assign(&mut self, assign: &[String]) {
@@ -265,6 +283,18 @@ impl Encodable for TaskAssigns {
 }
 
 impl Decodable for TaskAssigns {
+    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
+        Ok(Self(decode_vec(d)?))
+    }
+}
+
+impl Encodable for TaskTags {
+    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
+        encode_vec(&self.0, s)
+    }
+}
+
+impl Decodable for TaskTags {
     fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
         Ok(Self(decode_vec(d)?))
     }

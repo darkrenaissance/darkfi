@@ -36,6 +36,7 @@ pub struct JsonRpcInterface {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct BaseTaskInfo {
     title: String,
+    tags: Vec<String>,
     desc: String,
     assign: Vec<String>,
     project: Vec<String>,
@@ -133,6 +134,7 @@ impl JsonRpcInterface {
         )?;
         new_task.set_project(&task.project);
         new_task.set_assign(&task.assign);
+        new_task.set_tags(&task.tags);
 
         self.notify_queue_sender.send(new_task).await.map_err(Error::from)?;
         Ok(json!(true))
@@ -426,6 +428,19 @@ impl JsonRpcInterface {
             if !project.is_empty() {
                 task.set_project(&project);
                 task.set_event("project", &self.nickname, &project.join(", "));
+            }
+        }
+
+        if fields.contains_key("tags") {
+            println!("fields: {:?}", fields);
+            let tags = fields.get("tags").unwrap().clone();
+            println!("tags: {:?}", tags);
+
+            let tags: Vec<String> = serde_json::from_value(tags)?;
+            println!("vec tags: {:?}", tags);
+            if !tags.is_empty() {
+                task.set_tags(&tags);
+                // task.set_event("project", &self.nickname, &tags.join(", "));
             }
         }
 
