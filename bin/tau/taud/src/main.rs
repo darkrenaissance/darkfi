@@ -184,7 +184,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // Raft
     //
-    let net_settings = settings.net;
     let seen_net_msgs = Arc::new(Mutex::new(FxHashMap::default()));
 
     let datastore_raft = datastore_path.join("tau.db");
@@ -200,6 +199,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // P2p setup
     //
+    let mut net_settings = settings.net.clone();
+    net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
     let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<NetMsg>();
 
     let p2p = net::P2p::new(net_settings.into()).await;

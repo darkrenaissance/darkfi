@@ -25,7 +25,7 @@ pub struct Settings {
     pub peers: Vec<Url>,
     pub seeds: Vec<Url>,
     pub node_id: String,
-    pub app_version: String,
+    pub app_version: Option<String>,
     pub outbound_transports: Vec<TransportName>,
     pub localnet: bool,
 }
@@ -45,7 +45,7 @@ impl Default for Settings {
             peers: Vec::new(),
             seeds: Vec::new(),
             node_id: String::new(),
-            app_version: option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string(),
+            app_version: Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string()),
             outbound_transports: get_outbound_transports(vec![]),
             localnet: false,
         }
@@ -99,7 +99,7 @@ pub struct SettingsOpt {
 
     #[serde(default)]
     #[structopt(skip)]
-    pub app_version: String,
+    pub app_version: Option<String>,
 
     /// Prefered transports for outbound connections
     #[serde(default)]
