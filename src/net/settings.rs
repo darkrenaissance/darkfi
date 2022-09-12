@@ -45,7 +45,7 @@ impl Default for Settings {
             peers: Vec::new(),
             seeds: Vec::new(),
             node_id: String::new(),
-            app_version: Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string()),
+            app_version: option_env!("CARGO_PKG_VERSION"),
             outbound_transports: get_outbound_transports(vec![]),
             localnet: false,
         }
