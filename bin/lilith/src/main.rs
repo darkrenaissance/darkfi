@@ -1,8 +1,11 @@
+use std::path::Path;
+
 use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
 use futures_lite::future;
-use log::{error, info};
+use fxhash::{FxHashMap, FxHashSet};
+use log::{error, info, warn};
 use serde_json::{json, Value};
 use structopt_toml::StructOptToml;
 use url::Url;
@@ -20,6 +23,7 @@ use darkfi::{
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
         expand_path,
+        file::{load_file, save_file},
         path::get_config_path,
     },
     Result,
@@ -32,9 +36,9 @@ const CONFIG_FILE: &str = "lilith_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../lilith_config.toml");
 
 /// Struct representing a spawned p2p network.
-pub struct Spawn {
-    pub name: String,
-    pub p2p: P2pPtr,
+struct Spawn {
+    name: String,
+    p2p: P2pPtr,
 }
 
 impl Spawn {
@@ -58,7 +62,7 @@ impl Spawn {
 }
 
 /// Struct representing the daemon.
-pub struct Lilith {
+struct Lilith {
     /// Configured urls
     urls: Vec<Url>,
     /// Spawned networks
@@ -66,6 +70,16 @@ pub struct Lilith {
 }
 
 impl Lilith {
+    async fn spawns_hosts(&self) -> FxHashMap<String, Vec<String>> {
+        // Building urls string
+        let mut spawns = FxHashMap::default();
+        for spawn in &self.spawns {
+            spawns.insert(spawn.name.clone(), spawn.addresses().await);
+        }
+
+        spawns
+    }
+
     // RPCAPI:
     // Returns all spawned networks names with their node addresses.
     // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
@@ -121,6 +135,7 @@ async fn spawn_network(
     name: &str,
     info: NetInfo,
     urls: Vec<Url>,
+    saved_hosts: Option<&FxHashSet<Url>>,
     ex: Arc<Executor<'_>>,
 ) -> Result<Spawn> {
     let mut full_urls = Vec::new();
@@ -141,6 +156,19 @@ async fn spawn_network(
 
     let p2p = net::P2p::new(network_settings).await;
 
+    // Setting saved hosts
+    match saved_hosts {
+        Some(hosts) => {
+            // Converting hashet to vec
+            let mut vec = vec![];
+            for url in hosts {
+                vec.push(url.clone());
+            }
+            p2p.hosts().store(vec).await;
+        }
+        None => info!("No saved hosts found for {}", name),
+    }
+
     // Building ext_addr_vec string
     let mut urls_vec = vec![];
     for url in &full_urls {
@@ -160,6 +188,51 @@ async fn spawn_network(
     let spawn = Spawn { name: name.to_string(), p2p };
 
     Ok(spawn)
+}
+
+/// Retrieve saved hosts for provided networks
+fn load_hosts(path: &Path, networks: &Vec<String>) -> Result<FxHashMap<String, FxHashSet<Url>>> {
+    let mut saved_hosts = FxHashMap::default();
+    info!("Retrieving saved hosts from: {:?}", path);
+    let contents = load_file(path);
+    if let Err(e) = contents {
+        warn!("Failed retrieving saved hosts: {}", e);
+        return Ok(saved_hosts)
+    }
+
+    for line in contents.unwrap().lines() {
+        let data: Vec<&str> = line.split('\t').collect();
+        if networks.contains(&data[0].to_string()) {
+            let mut hosts = match saved_hosts.get(data[0]) {
+                Some(hosts) => hosts.clone(),
+                None => FxHashSet::default(),
+            };
+            hosts.insert(Url::parse(data[1])?);
+            saved_hosts.insert(data[0].to_string(), hosts);
+        }
+    }
+
+    Ok(saved_hosts)
+}
+
+/// Save spawns current hosts
+fn save_hosts(path: &Path, spawns: FxHashMap<String, Vec<String>>) -> Result<()> {
+    let mut string = "".to_string();
+    for (name, urls) in spawns {
+        for url in urls {
+            string.push_str(&name);
+            string.push('\t');
+            string.push_str(&url);
+            string.push('\n');
+        }
+    }
+
+    if !string.eq("") {
+        info!("Saving current hosts of spawnned networks to: {:?}", path);
+        save_file(path, &string)?;
+    }
+
+    Ok(())
 }
 
 async_daemonize!(realmain);
@@ -192,10 +265,16 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         urls.push(url);
     }
 
+    // Retrieve saved hosts for configured networks
+    let full_path = expand_path(&args.hosts_file)?;
+    let saved_hosts = load_hosts(&full_path, &configured_nets.keys().cloned().collect())?;
+
     // Spawn configured networks
     let mut spawns = vec![];
     for (name, info) in &configured_nets {
-        match spawn_network(name, info.clone(), urls.clone(), ex.clone()).await {
+        match spawn_network(name, info.clone(), urls.clone(), saved_hosts.get(name), ex.clone())
+            .await
+        {
             Ok(spawn) => spawns.push(spawn),
             Err(e) => error!("Failed starting {} P2P network seed: {}", name, e),
         }
@@ -206,12 +285,15 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    ex.spawn(listen_and_serve(args.rpc_listen, lilith)).detach();
+    ex.spawn(listen_and_serve(args.rpc_listen, lilith.clone())).detach();
 
     // Wait for SIGINT
     shutdown.recv().await?;
     print!("\r");
     info!("Caught termination signal, cleaning up and exiting...");
+
+    // Save spawns current hosts
+    save_hosts(&full_path, lilith.spawns_hosts().await)?;
 
     Ok(())
 }

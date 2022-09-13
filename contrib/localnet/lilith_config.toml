@@ -12,6 +12,9 @@
 # Daemon published urls, common for all enabled networks
 urls = ["tcp://127.0.0.1"]
 
+# Hosts .tsv file to use
+hosts_file="lilith_hosts.tsv"
+
 ## Per-network settings
 [network."darkfid_sync"]
 port = 33032

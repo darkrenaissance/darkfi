@@ -24,6 +24,10 @@ pub struct Args {
     /// Daemon published urls, common for all enabled networks (repeatable flag)
     pub urls: Vec<Url>,
 
+    #[structopt(long, default_value = "~/.config/darkfi/lilith_hosts.tsv")]
+    /// Hosts .tsv file to use
+    pub hosts_file: String,
+
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     pub verbose: u8,
