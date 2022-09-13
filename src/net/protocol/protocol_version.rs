@@ -97,7 +97,7 @@ impl ProtocolVersion {
                     debug!(target: "net", "ProtocolVersion::send_version() [Recieved version: {}]", verack_msg.app);
                     if app_version != &verack_msg.app {
                         error!(
-                            "Wrong app version from [{:?}]. Disconnecting from channel.",
+                            "Wrong app version from [{}]. Disconnecting from channel.",
                             self.channel.address()
                         );
                         self.channel.stop().await;
