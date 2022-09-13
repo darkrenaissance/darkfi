@@ -138,7 +138,7 @@ pub fn state_transition(
     states: &StateRegistry,
     func_call_index: usize,
     parent_tx: &Transaction,
-) -> Result<Box<dyn UpdateBase>> {
+) -> Result<Box<dyn UpdateBase + Send>> {
     let func_call = &parent_tx.func_calls[func_call_index];
     let call_data = func_call.call_data.as_any();
 

@@ -12,6 +12,13 @@ impl Rpc {
         self.client.request(req).await
     }
 
+    // --> {"jsonrpc": "2.0", "method": "mint", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "minting tokens...", "id": 42}
+    pub async fn mint(&self) -> Result<Value> {
+        let req = JsonRequest::new("mint", json!([]));
+        self.client.request(req).await
+    }
+
     // --> {"jsonrpc": "2.0", "method": "airdrop", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "airdropping tokens...", "id": 42}
     pub async fn airdrop(&self) -> Result<Value> {

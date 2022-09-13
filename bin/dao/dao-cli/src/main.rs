@@ -9,6 +9,8 @@ mod rpc;
 pub enum CliDaoSubCommands {
     /// Create DAO
     Create {},
+    /// Mint tokens
+    Mint {},
     /// Airdrop tokens
     Airdrop {},
     /// Propose
@@ -41,6 +43,11 @@ async fn start(options: CliDao) -> Result<()> {
     match options.command {
         Some(CliDaoSubCommands::Create {}) => {
             let reply = client.create().await?;
+            println!("Server replied: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::Mint {}) => {
+            let reply = client.mint().await?;
             println!("Server replied: {}", &reply.to_string());
             return Ok(())
         }

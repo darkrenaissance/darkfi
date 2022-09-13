@@ -67,7 +67,7 @@ pub fn state_transition(
     states: &StateRegistry,
     func_call_index: usize,
     parent_tx: &Transaction,
-) -> Result<Box<dyn UpdateBase>> {
+) -> Result<Box<dyn UpdateBase + Send>> {
     // Check the public keys in the clear inputs to see if they're coming
     // from a valid cashier or faucet.
     debug!(target: TARGET, "Iterate clear_inputs");

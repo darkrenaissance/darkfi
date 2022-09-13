@@ -42,7 +42,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Box<dyn Any> {
+    pub fn new() -> Box<dyn Any + Send> {
         Box::new(Self {
             dao_bullas: Vec::new(),
             dao_tree: MerkleTree::new(100),

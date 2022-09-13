@@ -157,7 +157,7 @@ type FuncId = pallas::Base;
 pub struct FuncCall {
     pub contract_id: ContractId,
     pub func_id: FuncId,
-    pub call_data: Box<dyn CallDataBase>,
+    pub call_data: Box<dyn CallDataBase + Send + Sync>,
     pub proofs: Vec<Proof>,
 }
 
@@ -189,7 +189,7 @@ pub trait CallDataBase {
     ) -> std::result::Result<usize, darkfi::Error>;
 }
 
-type GenericContractState = Box<dyn Any>;
+type GenericContractState = Box<dyn Any + Send>;
 
 pub struct StateRegistry {
     pub states: HashMap<HashableBase, GenericContractState>,
