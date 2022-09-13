@@ -11,6 +11,7 @@ use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize, net,
+    net::P2pPtr,
     rpc::server::listen_and_serve,
     system::{Subscriber, SubscriberPtr},
     util::{
@@ -18,6 +19,7 @@ use darkfi::{
         expand_path,
         file::save_json_file,
         path::get_config_path,
+        sleep,
     },
     Result,
 };
@@ -34,10 +36,13 @@ use crate::{
     buffers::{create_buffers, Buffers, RingBuffer, SIZE_OF_MSG_IDSS_BUFFER},
     irc::IrcServer,
     privmsg::Privmsg,
-    protocol_privmsg::ProtocolPrivmsg,
+    protocol_privmsg::{LastTerm, ProtocolPrivmsg},
     rpc::JsonRpcInterface,
     settings::{Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
+
+const TIMEOUT_FOR_RESEND: u64 = 240;
+const SEND_LAST_TERM_MSG: u64 = 4;
 
 #[derive(serde::Serialize)]
 struct KeyPair {
@@ -48,6 +53,25 @@ struct KeyPair {
 impl fmt::Display for KeyPair {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Public key: {}\nPrivate key: {}", self.public_key, self.private_key)
+    }
+}
+
+async fn resend_unread_msgs(p2p: P2pPtr, buffers: Buffers) -> Result<()> {
+    loop {
+        sleep(TIMEOUT_FOR_RESEND).await;
+
+        for msg in buffers.unread_msgs.lock().await.msgs.values() {
+            p2p.broadcast(msg.clone()).await?;
+        }
+    }
+}
+
+async fn send_last_term(p2p: P2pPtr, buffers: Buffers) -> Result<()> {
+    loop {
+        sleep(SEND_LAST_TERM_MSG).await;
+
+        let term = buffers.privmsgs.lock().await.last_term();
+        p2p.broadcast(LastTerm { term }).await?;
     }
 }
 
@@ -129,8 +153,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // P2p setup
     //
-    let mut net_settings = settings.net.clone();
-    net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
+    let net_settings = settings.net.clone();
     let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<Privmsg>();
 
     let p2p = net::P2p::new(net_settings.into()).await;
@@ -156,6 +179,12 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let executor_cloned = executor.clone();
     executor_cloned.spawn(p2p.clone().run(executor.clone())).detach();
+
+    //
+    // Sync tasks
+    //
+    executor.spawn(resend_unread_msgs(p2p.clone(), buffers.clone())).detach();
+    executor.spawn(send_last_term(p2p.clone(), buffers.clone())).detach();
 
     //
     // RPC interface

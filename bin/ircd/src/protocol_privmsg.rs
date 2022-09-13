@@ -1,4 +1,5 @@
 use async_std::sync::Arc;
+use std::cmp::Ordering;
 
 use async_executor::Executor;
 use async_trait::async_trait;
@@ -8,10 +9,7 @@ use rand::{rngs::OsRng, RngCore};
 
 use darkfi::{
     net,
-    util::{
-        serial::{SerialDecodable, SerialEncodable},
-        sleep,
-    },
+    util::serial::{SerialDecodable, SerialEncodable},
     Result,
 };
 
@@ -21,13 +19,17 @@ use crate::{
 };
 
 const MAX_CONFIRM: u8 = 4;
-const SLEEP_TIME_FOR_RESEND: u64 = 1200;
-const UNREAD_MSG_EXPIRE_TIME: i64 = 259200;
+const UNREAD_MSG_EXPIRE_TIME: i64 = 18000;
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct Inv {
     id: u64,
     invs: Vec<InvObject>,
+}
+
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
+pub struct LastTerm {
+    pub term: u64,
 }
 
 impl Inv {
@@ -57,6 +59,7 @@ pub struct ProtocolPrivmsg {
     msg_sub: net::MessageSubscription<Privmsg>,
     inv_sub: net::MessageSubscription<Inv>,
     getdata_sub: net::MessageSubscription<GetData>,
+    last_term_sub: net::MessageSubscription<LastTerm>,
     p2p: net::P2pPtr,
     channel: net::ChannelPtr,
     inv_ids: InvSeenIds,
@@ -79,16 +82,23 @@ impl ProtocolPrivmsg {
         let msg_sub =
             channel.clone().subscribe_msg::<Privmsg>().await.expect("Missing Privmsg dispatcher!");
 
+        let inv_sub = channel.subscribe_msg::<Inv>().await.expect("Missing Inv dispatcher!");
+
         let getdata_sub =
             channel.clone().subscribe_msg::<GetData>().await.expect("Missing GetData dispatcher!");
 
-        let inv_sub = channel.subscribe_msg::<Inv>().await.expect("Missing Inv dispatcher!");
+        let last_term_sub = channel
+            .clone()
+            .subscribe_msg::<LastTerm>()
+            .await
+            .expect("Missing LastTerm dispatcher!");
 
         Arc::new(Self {
             notify,
             msg_sub,
             inv_sub,
             getdata_sub,
+            last_term_sub,
             jobsman: net::ProtocolJobsManager::new("ProtocolPrivmsg", channel.clone()),
             p2p,
             channel,
@@ -158,6 +168,28 @@ impl ProtocolPrivmsg {
         }
     }
 
+    async fn handle_receive_last_term(self: Arc<Self>) -> Result<()> {
+        debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_last_term() [START]");
+        loop {
+            let last_term = self.last_term_sub.receive().await?;
+            let last_term = last_term.term;
+
+            self.update_unread_msgs().await?;
+
+            let privmsgs = self.buffers.privmsgs.lock().await;
+            let self_last_term = privmsgs.last_term();
+
+            match self_last_term.cmp(&last_term) {
+                Ordering::Less => {
+                    for msg in privmsgs.fetch_msgs(last_term) {
+                        self.channel.send(msg).await?;
+                    }
+                }
+                Ordering::Greater | Ordering::Equal => continue,
+            }
+        }
+    }
+
     async fn handle_receive_getdata(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_getdata() [START]");
         loop {
@@ -197,17 +229,6 @@ impl ProtocolPrivmsg {
         self.notify.send(msg.clone()).await?;
         Ok(())
     }
-
-    async fn resend_loop(self: Arc<Self>) -> Result<()> {
-        sleep(SLEEP_TIME_FOR_RESEND).await;
-
-        self.update_unread_msgs().await?;
-
-        for msg in self.buffers.unread_msgs.lock().await.msgs.values() {
-            self.channel.send(msg.clone()).await?;
-        }
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -228,7 +249,7 @@ impl net::ProtocolBase for ProtocolPrivmsg {
         self.jobsman.clone().spawn(self.clone().handle_receive_msg(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_inv(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_getdata(), executor.clone()).await;
-        self.jobsman.clone().spawn(self.clone().resend_loop(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_last_term(), executor.clone()).await;
         debug!(target: "ircd", "ProtocolPrivmsg::start() [END]");
         Ok(())
     }
@@ -253,5 +274,11 @@ impl net::Message for Inv {
 impl net::Message for GetData {
     fn name() -> &'static str {
         "getdata"
+    }
+}
+
+impl net::Message for LastTerm {
+    fn name() -> &'static str {
+        "last_term"
     }
 }

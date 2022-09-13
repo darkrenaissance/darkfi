@@ -12,6 +12,7 @@ use crate::Privmsg;
 pub const SIZE_OF_MSGS_BUFFER: usize = 4095;
 pub const SIZE_OF_MSG_IDSS_BUFFER: usize = 65536;
 pub const LIFETIME_FOR_ORPHAN: i64 = 600;
+pub const TERM_MAX_TIME_DIFFERENCE: i64 = 180;
 
 pub type InvSeenIds = Arc<Mutex<RingBuffer<u64>>>;
 pub type SeenIds = Mutex<RingBuffer<u64>>;
@@ -131,7 +132,16 @@ impl PrivmsgsBuffer {
 
     pub fn push(&mut self, privmsg: &Privmsg) {
         match privmsg.term.cmp(&(self.last_term() + 1)) {
-            Ordering::Equal | Ordering::Less => self.buffer.push(privmsg.clone()),
+            Ordering::Equal => self.buffer.push(privmsg.clone()),
+            Ordering::Less => {
+                if let Some(msg) = self.get_msg_by_term(privmsg.term) {
+                    if (msg.timestamp - privmsg.timestamp) <= TERM_MAX_TIME_DIFFERENCE {
+                        self.buffer.push(privmsg.clone());
+                    }
+                } else {
+                    self.buffer.push(privmsg.clone());
+                }
+            }
             Ordering::Greater => self.orphans.push(Orphan::new(privmsg)),
         }
         self.update();
@@ -139,6 +149,10 @@ impl PrivmsgsBuffer {
 
     pub fn iter(&self) -> impl Iterator<Item = &Privmsg> + DoubleEndedIterator {
         self.buffer.iter()
+    }
+
+    pub fn get_msg_by_term(&self, term: u64) -> Option<Privmsg> {
+        self.buffer.iter().find(|p| p.term == term).cloned()
     }
 
     pub fn len(&self) -> usize {
@@ -154,6 +168,10 @@ impl PrivmsgsBuffer {
             0 => 0,
             n => self.buffer.items[n - 1].term,
         }
+    }
+
+    pub fn fetch_msgs(&self, term: u64) -> Vec<Privmsg> {
+        self.buffer.iter().take_while(|p| p.term >= term).cloned().collect()
     }
 
     fn update(&mut self) {
@@ -190,8 +208,18 @@ impl PrivmsgsBuffer {
             }
 
             match privmsg.term.cmp(&(self.last_term() + 1)) {
-                Ordering::Equal | Ordering::Less => {
+                Ordering::Equal => {
                     self.buffer.push(privmsg.clone());
+                    self.orphans.remove(orphan);
+                }
+                Ordering::Less => {
+                    if let Some(msg) = self.get_msg_by_term(privmsg.term) {
+                        if (msg.timestamp - privmsg.timestamp) <= TERM_MAX_TIME_DIFFERENCE {
+                            self.buffer.push(privmsg.clone());
+                        }
+                    } else {
+                        self.buffer.push(privmsg.clone());
+                    }
                     self.orphans.remove(orphan);
                 }
                 Ordering::Greater => {}
