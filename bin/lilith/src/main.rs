@@ -191,13 +191,13 @@ async fn spawn_network(
 }
 
 /// Retrieve saved hosts for provided networks
-fn load_hosts(path: &Path, networks: &Vec<String>) -> Result<FxHashMap<String, FxHashSet<Url>>> {
+fn load_hosts(path: &Path, networks: &Vec<String>) -> FxHashMap<String, FxHashSet<Url>> {
     let mut saved_hosts = FxHashMap::default();
     info!("Retrieving saved hosts from: {:?}", path);
     let contents = load_file(path);
     if let Err(e) = contents {
         warn!("Failed retrieving saved hosts: {}", e);
-        return Ok(saved_hosts)
+        return saved_hosts
     }
 
     for line in contents.unwrap().lines() {
@@ -207,16 +207,23 @@ fn load_hosts(path: &Path, networks: &Vec<String>) -> Result<FxHashMap<String, F
                 Some(hosts) => hosts.clone(),
                 None => FxHashSet::default(),
             };
-            hosts.insert(Url::parse(data[1])?);
+            let url = match Url::parse(data[1]) {
+                Ok(u) => u,
+                Err(e) => {
+                    warn!("Skipping malformed url: {} ({})", data[1], e);
+                    continue
+                }
+            };
+            hosts.insert(url);
             saved_hosts.insert(data[0].to_string(), hosts);
         }
     }
 
-    Ok(saved_hosts)
+    saved_hosts
 }
 
 /// Save spawns current hosts
-fn save_hosts(path: &Path, spawns: FxHashMap<String, Vec<String>>) -> Result<()> {
+fn save_hosts(path: &Path, spawns: FxHashMap<String, Vec<String>>) {
     let mut string = "".to_string();
     for (name, urls) in spawns {
         for url in urls {
@@ -229,10 +236,10 @@ fn save_hosts(path: &Path, spawns: FxHashMap<String, Vec<String>>) -> Result<()>
 
     if !string.eq("") {
         info!("Saving current hosts of spawnned networks to: {:?}", path);
-        save_file(path, &string)?;
+        if let Err(e) = save_file(path, &string) {
+            error!("Failed saving hosts: {}", e);
+        }
     }
-
-    Ok(())
 }
 
 async_daemonize!(realmain);
@@ -267,7 +274,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // Retrieve saved hosts for configured networks
     let full_path = expand_path(&args.hosts_file)?;
-    let saved_hosts = load_hosts(&full_path, &configured_nets.keys().cloned().collect())?;
+    let saved_hosts = load_hosts(&full_path, &configured_nets.keys().cloned().collect());
 
     // Spawn configured networks
     let mut spawns = vec![];
@@ -293,7 +300,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     info!("Caught termination signal, cleaning up and exiting...");
 
     // Save spawns current hosts
-    save_hosts(&full_path, lilith.spawns_hosts().await)?;
+    save_hosts(&full_path, lilith.spawns_hosts().await);
 
     Ok(())
 }
