@@ -6,7 +6,9 @@ use smol::Executor;
 
 use crate::{Error, Result};
 
-use super::super::{message, message_subscriber::MessageSubscription, ChannelPtr, SettingsPtr};
+use super::super::{
+    message, message_subscriber::MessageSubscription, ChannelPtr, HostsPtr, SettingsPtr,
+};
 
 /// Implements the protocol version handshake sent out by nodes at the beginning
 /// of a connection.
@@ -15,13 +17,14 @@ pub struct ProtocolVersion {
     version_sub: MessageSubscription<message::VersionMessage>,
     verack_sub: MessageSubscription<message::VerackMessage>,
     settings: SettingsPtr,
+    hosts: HostsPtr,
 }
 
 impl ProtocolVersion {
     /// Create a new version protocol. Makes a version and version
     /// acknowledgement subscription, then adds them to a version protocol
     /// instance.
-    pub async fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
+    pub async fn new(channel: ChannelPtr, settings: SettingsPtr, hosts: HostsPtr) -> Arc<Self> {
         // Creates a version subscription.
         let version_sub = channel
             .clone()
@@ -36,7 +39,7 @@ impl ProtocolVersion {
             .await
             .expect("Missing verack dispatcher!");
 
-        Arc::new(Self { channel, version_sub, verack_sub, settings })
+        Arc::new(Self { channel, version_sub, verack_sub, settings, hosts })
     }
 
     /// Start version information exchange. Start the timer. Send version info
@@ -100,6 +103,8 @@ impl ProtocolVersion {
                             "Wrong app version from [{}]. Disconnecting from channel.",
                             self.channel.address()
                         );
+
+                        self.hosts.remove(&self.channel.address()).await;
                         self.channel.stop().await;
                         return Err(Error::ChannelStopped)
                     }

@@ -113,7 +113,9 @@ pub trait Session: Sync {
             p2p.protocol_registry().attach(self.type_id(), channel.clone(), p2p.clone()).await;
 
         // Perform the handshake protocol
-        let protocol_version = ProtocolVersion::new(channel.clone(), self.p2p().settings()).await;
+        let protocol_version =
+            ProtocolVersion::new(channel.clone(), p2p.settings().clone(), p2p.hosts().clone())
+                .await;
         let handshake_task =
             self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 

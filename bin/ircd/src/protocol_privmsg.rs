@@ -77,7 +77,7 @@ impl ProtocolPrivmsg {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Privmsg>().await;
         message_subsytem.add_dispatch::<Inv>().await;
-        message_subsytem.add_dispatch::<GetData>().await; 
+        message_subsytem.add_dispatch::<GetData>().await;
         message_subsytem.add_dispatch::<LastTerm>().await;
 
         let msg_sub =
