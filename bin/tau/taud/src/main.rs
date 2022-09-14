@@ -3,6 +3,7 @@ use std::{
     env,
     fs::{create_dir_all, remove_dir_all},
     io::stdin,
+    path::Path,
 };
 
 use async_executor::Executor;
@@ -41,19 +42,37 @@ use crate::{
     jsonrpc::JsonRpcInterface,
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     task_info::TaskInfo,
-    util::{parse_workspaces, Workspace},
 };
+
+fn get_workspaces(settings: &Args) -> Result<FxHashMap<String, SalsaBox>> {
+    let mut workspaces = FxHashMap::default();
+
+    for workspace in settings.workspaces.iter() {
+        let workspace: Vec<&str> = workspace.split(':').collect();
+        let (workspace, secret) = (workspace[0], workspace[1]);
+
+        let bytes: [u8; 32] = bs58::decode(secret)
+            .into_vec()?
+            .try_into()
+            .map_err(|_| Error::ParseFailed("Parse secret key failed"))?;
+
+        let secret = crypto_box::SecretKey::from(bytes);
+        let public = secret.public_key();
+        let salsa_box = crypto_box::SalsaBox::new(&public, &secret);
+        workspaces.insert(workspace.to_string(), salsa_box);
+    }
+
+    Ok(workspaces)
+}
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct EncryptedTask {
-    workspace: String,
     nonce: Vec<u8>,
     payload: Vec<u8>,
 }
 
 fn encrypt_task(
     task: &TaskInfo,
-    workspace: &String,
     salsa_box: &SalsaBox,
     rng: &mut crypto_box::rand_core::OsRng,
 ) -> TaudResult<EncryptedTask> {
@@ -64,7 +83,7 @@ fn encrypt_task(
     let payload = salsa_box.encrypt(&nonce, payload)?;
 
     let nonce = nonce.to_vec();
-    Ok(EncryptedTask { workspace: workspace.to_string(), nonce, payload })
+    Ok(EncryptedTask { nonce, payload })
 }
 
 fn decrypt_task(encrypt_task: &EncryptedTask, salsa_box: &SalsaBox) -> TaudResult<TaskInfo> {
@@ -79,49 +98,51 @@ fn decrypt_task(encrypt_task: &EncryptedTask, salsa_box: &SalsaBox) -> TaudResul
 }
 
 async fn start_sync_loop(
-    commits_received: Arc<Mutex<Vec<String>>>,
     broadcast_rcv: async_channel::Receiver<TaskInfo>,
     raft_msgs_sender: async_channel::Sender<EncryptedTask>,
     commits_recv: async_channel::Receiver<EncryptedTask>,
     datastore_path: std::path::PathBuf,
-    configured_ws: FxHashMap<String, Workspace>,
+    workspaces: FxHashMap<String, SalsaBox>,
     mut rng: crypto_box::rand_core::OsRng,
 ) -> TaudResult<()> {
     loop {
         select! {
             task = broadcast_rcv.recv().fuse() => {
                 let tk = task.map_err(Error::from)?;
-                if configured_ws.contains_key(&tk.workspace) {
-                    let ws_info = configured_ws.get(&tk.workspace).unwrap();
-                    if let Some(salsa_box) = &ws_info.encryption {
-                        let encrypted_task = encrypt_task(&tk, &tk.workspace, salsa_box, &mut rng)?;
-                        info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
-                        raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
-                    }
+                if workspaces.contains_key(&tk.workspace) {
+                    let salsa_box = workspaces.get(&tk.workspace).unwrap();
+                    let encrypted_task = encrypt_task(&tk, salsa_box, &mut rng)?;
+                    info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
+                    raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
                 }
             }
             task = commits_recv.recv().fuse() => {
-                let recv = task.map_err(Error::from)?;
-                if configured_ws.contains_key(&recv.workspace) {
-                    let ws_info = configured_ws.get(&recv.workspace).unwrap();
-                    if let Some(salsa_box) = &ws_info.encryption {
-                        let task = decrypt_task(&recv, salsa_box);
-                        if let Err(e) = task {
-                            info!("unable to decrypt the task: {}", e);
-                            continue
-                        }
-
-                        let task = task.unwrap();
-                        if !commits_received.lock().await.contains(&task.ref_id) {
-                            commits_received.lock().await.push(task.ref_id.clone());
-                        }
-                        info!(target: "tau", "Save the task: ref: {}", task.ref_id);
-                        task.save(&datastore_path)?;
-                    }
-                }
+                let task = task.map_err(Error::from)?;
+                on_receive_task(&task,&datastore_path, &workspaces)
+                    .await?;
             }
         }
     }
+}
+
+async fn on_receive_task(
+    task: &EncryptedTask,
+    datastore_path: &Path,
+    workspaces: &FxHashMap<String, SalsaBox>,
+) -> TaudResult<()> {
+    for (workspace, salsa_box) in workspaces.iter() {
+        let task = decrypt_task(&task, &salsa_box);
+        if let Err(e) = task {
+            info!("unable to decrypt the task: {}", e);
+            continue
+        }
+
+        let mut task = task.unwrap();
+        info!(target: "tau", "Save the task: ref: {}", task.ref_id);
+        task.workspace = workspace.clone();
+        task.save(&datastore_path)?;
+    }
+    Ok(())
 }
 
 async_daemonize!(realmain);
@@ -129,22 +150,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let datastore_path = expand_path(&settings.datastore)?;
 
     let nickname =
-        if settings.nickname.is_some() { settings.nickname } else { env::var("USER").ok() };
-
-    if nickname.is_none() {
-        error!("Provide a nickname in config file");
-        return Ok(())
-    }
-
-    let mut rng = crypto_box::rand_core::OsRng;
-
-    if settings.key_gen {
-        info!(target: "tau", "Generating a new secret key");
-        let secret_key = SecretKey::generate(&mut rng);
-        let encoded = bs58::encode(secret_key.as_bytes());
-        println!("Secret key: {}", encoded.into_string());
-        return Ok(())
-    }
+        if settings.nickname.is_some() { settings.nickname.clone() } else { env::var("USER").ok() };
 
     if settings.refresh {
         println!("Removing local data in: {:?} (yes/no)? ", datastore_path);
@@ -164,22 +170,50 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         return Ok(())
     }
 
+    if nickname.is_none() {
+        error!("Provide a nickname in config file");
+        return Ok(())
+    }
+
     // mkdir datastore_path if not exists
     create_dir_all(datastore_path.clone())?;
     create_dir_all(datastore_path.join("month"))?;
     create_dir_all(datastore_path.join("task"))?;
 
-    // Pick up workspace settings from the TOML configuration
-    let cfg_path = get_config_path(settings.config, CONFIG_FILE)?;
-    let configured_ws = parse_workspaces(&cfg_path)?;
+    let rng = crypto_box::rand_core::OsRng;
 
-    // start at the first configured workspace
-    let workspace = if let Some(key) = configured_ws.keys().next() {
-        Arc::new(Mutex::new(key.to_owned()))
-    } else {
-        error!("Please provide at least one workspace in the config file: {:?}", cfg_path);
+    if settings.generate {
+        println!("Generating a new workspace");
+
+        loop {
+            println!("Name for the new workspace: ");
+            let mut workspace = String::new();
+            stdin().read_line(&mut workspace).ok().expect("Failed to read line");
+            let workspace = workspace.to_lowercase();
+            let workspace = workspace.trim();
+            if workspace.is_empty() && workspace.len() < 3 {
+                error!("Wrong workspace try again");
+                continue
+            }
+            let mut rng = crypto_box::rand_core::OsRng;
+            let secret_key = SecretKey::generate(&mut rng);
+            let encoded = bs58::encode(secret_key.as_bytes());
+
+            println!("workspace: {}:{}", workspace, encoded.into_string());
+            println!("Please add it to the config file.");
+            break
+        }
+
         return Ok(())
-    };
+    }
+
+    let workspaces = get_workspaces(&settings)?;
+
+    if workspaces.is_empty() {
+        error!("Please add at least on workspace to the config file.");
+        println!("Run `$ taud --generate` to generate new workspace.");
+        return Ok(())
+    }
 
     //
     // Raft
@@ -191,8 +225,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let mut raft = Raft::<EncryptedTask>::new(raft_settings, seen_net_msgs.clone())?;
     let raft_id = raft.id();
-
-    let commits_received: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
 
     let (broadcast_snd, broadcast_rcv) = async_channel::unbounded::<TaskInfo>();
 
@@ -229,8 +261,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         datastore_path.clone(),
         broadcast_snd,
         nickname.unwrap(),
-        workspace,
-        configured_ws.clone(),
+        workspaces.clone(),
         p2p.clone(),
     ));
     executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface)).detach();
@@ -250,12 +281,11 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     executor
         .spawn(start_sync_loop(
-            commits_received.clone(),
             broadcast_rcv,
             raft.sender(),
             raft.receiver(),
             datastore_path,
-            configured_ws,
+            workspaces,
             rng,
         ))
         .detach();

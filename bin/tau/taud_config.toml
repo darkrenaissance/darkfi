@@ -4,8 +4,11 @@
 ## Sets Datastore Path
 #datastore="~/.tau"
 
-## Current display name    
+## Current display name
 #nickname="NICKNAME"
+
+## Workspaces
+# workspaces = ["darkfi:86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"]
 
 ## Raft net settings
 [net]
@@ -21,7 +24,7 @@ outbound_connections=5
 ## Peers to connect to
 #peers = ["tls://127.0.0.1:23331"]
 
-## Seed nodes to connect to 
+## Seed nodes to connect to
 seeds=["tls://tau0.dark.fi:23331", "tls://tau1.dark.fi:23331"]
 
 # Prefered transports for outbound connections
@@ -34,8 +37,4 @@ seeds=["tls://tau0.dark.fi:23331", "tls://tau1.dark.fi:23331"]
 #channel_handshake_seconds=4
 #channel_heartbeat_seconds=10
 
-## Per-workspace settings
-#[workspace."darkfi"]
-## Create with `taud --key-gen`
-#secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 
