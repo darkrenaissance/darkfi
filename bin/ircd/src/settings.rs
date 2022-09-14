@@ -9,8 +9,33 @@ use url::Url;
 
 use darkfi::{net::settings::SettingsOpt, Result};
 
+// Location for config file
 pub const CONFIG_FILE: &str = "ircd_config.toml";
 pub const CONFIG_FILE_CONTENTS: &str = include_str!("../ircd_config.toml");
+
+// Buffers and ordering configuration
+pub const SIZE_OF_MSGS_BUFFER: usize = 4095;
+pub const SIZE_OF_IDSS_BUFFER: usize = 16384;
+pub const LIFETIME_FOR_ORPHAN: i64 = 600;
+pub const TERM_MAX_TIME_DIFFERENCE: i64 = 180;
+pub const BROADCAST_LAST_TERM_MSG: u64 = 4;
+
+// Msg config
+pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
+pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 32;
+
+// Protocol config
+pub const MAX_CONFIRM: u8 = 4;
+pub const UNREAD_MSG_EXPIRE_TIME: i64 = 18000;
+pub const TIMEOUT_FOR_RESEND_UNREAD_MSGS: u64 = 240;
+
+// IRC Client
+pub enum RPL {
+    NoTopic = 331,
+    Topic = 332,
+    NameReply = 353,
+    EndOfNames = 366,
+}
 
 /// ircd cli
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]

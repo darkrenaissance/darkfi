@@ -7,66 +7,21 @@ use std::{
 use chrono::Utc;
 use ripemd::{Digest, Ripemd160};
 
-use crate::Privmsg;
+use crate::{settings, Privmsg};
 
-pub const SIZE_OF_MSGS_BUFFER: usize = 4095;
-pub const SIZE_OF_MSG_IDSS_BUFFER: usize = 65536;
-pub const LIFETIME_FOR_ORPHAN: i64 = 600;
-pub const TERM_MAX_TIME_DIFFERENCE: i64 = 180;
-
-pub type InvSeenIds = Arc<Mutex<RingBuffer<u64>>>;
-pub type SeenIds = Mutex<RingBuffer<u64>>;
-pub type MutexPrivmsgsBuffer = Mutex<PrivmsgsBuffer>;
-pub type UnreadMsgs = Mutex<UMsgs>;
 pub type Buffers = Arc<Msgs>;
 
 pub struct Msgs {
-    pub privmsgs: MutexPrivmsgsBuffer,
-    pub unread_msgs: UnreadMsgs,
+    pub privmsgs: PrivmsgsBuffer,
+    pub unread_msgs: UMsgs,
     pub seen_ids: SeenIds,
 }
 
 pub fn create_buffers() -> Buffers {
-    let seen_ids = Mutex::new(RingBuffer::new(SIZE_OF_MSG_IDSS_BUFFER));
+    let seen_ids = SeenIds::new();
     let privmsgs = PrivmsgsBuffer::new();
-    let unread_msgs = Mutex::new(UMsgs::new());
+    let unread_msgs = UMsgs::new();
     Arc::new(Msgs { privmsgs, unread_msgs, seen_ids })
-}
-
-#[derive(Clone)]
-pub struct UMsgs {
-    pub msgs: BTreeMap<String, Privmsg>,
-    capacity: usize,
-}
-
-impl UMsgs {
-    pub fn new() -> Self {
-        Self { msgs: BTreeMap::new(), capacity: SIZE_OF_MSGS_BUFFER }
-    }
-
-    pub fn insert(&mut self, msg: &Privmsg) -> String {
-        let mut hasher = Ripemd160::new();
-        hasher.update(msg.to_string());
-        let key = hex::encode(hasher.finalize());
-
-        if self.msgs.len() == self.capacity {
-            self.pop_front();
-        }
-
-        self.msgs.insert(key.clone(), msg.clone());
-        key
-    }
-
-    fn pop_front(&mut self) {
-        let first_key = self.msgs.iter().next_back().unwrap().0.clone();
-        self.msgs.remove(&first_key);
-    }
-}
-
-impl Default for UMsgs {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[derive(Clone)]
@@ -116,18 +71,61 @@ impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
     }
 }
 
-#[derive(Clone)]
 pub struct PrivmsgsBuffer {
+    msgs: Mutex<OrderingAlgo>,
+}
+
+impl PrivmsgsBuffer {
+    pub fn new() -> Self {
+        Self { msgs: Mutex::new(OrderingAlgo::new()) }
+    }
+
+    pub async fn push(&self, privmsg: &Privmsg) {
+        self.msgs.lock().await.push(privmsg);
+    }
+
+    pub async fn load(&self) -> Vec<Privmsg> {
+        self.msgs.lock().await.load()
+    }
+
+    pub async fn get_msg_by_term(&self, term: u64) -> Option<Privmsg> {
+        self.msgs.lock().await.get_msg_by_term(term)
+    }
+
+    pub async fn len(&self) -> usize {
+        self.msgs.lock().await.len()
+    }
+
+    pub async fn is_empty(&self) -> bool {
+        self.msgs.lock().await.is_empty()
+    }
+
+    pub async fn last_term(&self) -> u64 {
+        self.msgs.lock().await.last_term()
+    }
+
+    pub async fn fetch_msgs(&self, term: u64) -> Vec<Privmsg> {
+        self.msgs.lock().await.fetch_msgs(term)
+    }
+}
+
+pub struct OrderingAlgo {
     buffer: RingBuffer<Privmsg>,
     orphans: RingBuffer<Orphan>,
 }
 
-impl PrivmsgsBuffer {
-    pub fn new() -> MutexPrivmsgsBuffer {
-        Mutex::new(Self {
-            buffer: RingBuffer::new(SIZE_OF_MSGS_BUFFER),
-            orphans: RingBuffer::new(SIZE_OF_MSGS_BUFFER),
-        })
+impl Default for OrderingAlgo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OrderingAlgo {
+    pub fn new() -> Self {
+        Self {
+            buffer: RingBuffer::new(settings::SIZE_OF_MSGS_BUFFER),
+            orphans: RingBuffer::new(settings::SIZE_OF_MSGS_BUFFER),
+        }
     }
 
     pub fn push(&mut self, privmsg: &Privmsg) {
@@ -135,7 +133,7 @@ impl PrivmsgsBuffer {
             Ordering::Equal => self.buffer.push(privmsg.clone()),
             Ordering::Less => {
                 if let Some(msg) = self.get_msg_by_term(privmsg.term) {
-                    if (msg.timestamp - privmsg.timestamp) <= TERM_MAX_TIME_DIFFERENCE {
+                    if (msg.timestamp - privmsg.timestamp) <= settings::TERM_MAX_TIME_DIFFERENCE {
                         self.buffer.push(privmsg.clone());
                     }
                 } else {
@@ -147,8 +145,8 @@ impl PrivmsgsBuffer {
         self.update();
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Privmsg> + DoubleEndedIterator {
-        self.buffer.iter()
+    pub fn load(&self) -> Vec<Privmsg> {
+        self.buffer.iter().cloned().collect::<Vec<Privmsg>>()
     }
 
     pub fn get_msg_by_term(&self, term: u64) -> Option<Privmsg> {
@@ -160,7 +158,7 @@ impl PrivmsgsBuffer {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.buffer.is_empty()
     }
 
     pub fn last_term(&self) -> u64 {
@@ -194,15 +192,15 @@ impl PrivmsgsBuffer {
         });
     }
 
-    fn oprhan_is_valid(&mut self, orphan: &Orphan) -> bool {
-        (orphan.timestamp + LIFETIME_FOR_ORPHAN) > Utc::now().timestamp()
+    fn oprhan_is_valid(orphan: &Orphan) -> bool {
+        (orphan.timestamp + settings::LIFETIME_FOR_ORPHAN) > Utc::now().timestamp()
     }
 
     fn update_orphans(&mut self) {
         for orphan in self.orphans.clone().iter() {
             let privmsg = orphan.msg.clone();
 
-            if !self.oprhan_is_valid(orphan) {
+            if !Self::oprhan_is_valid(orphan) {
                 self.orphans.remove(orphan);
                 continue
             }
@@ -214,7 +212,8 @@ impl PrivmsgsBuffer {
                 }
                 Ordering::Less => {
                     if let Some(msg) = self.get_msg_by_term(privmsg.term) {
-                        if (msg.timestamp - privmsg.timestamp) <= TERM_MAX_TIME_DIFFERENCE {
+                        if (msg.timestamp - privmsg.timestamp) <= settings::TERM_MAX_TIME_DIFFERENCE
+                        {
                             self.buffer.push(privmsg.clone());
                         }
                     } else {
@@ -237,6 +236,90 @@ struct Orphan {
 impl Orphan {
     fn new(privmsg: &Privmsg) -> Self {
         Self { msg: privmsg.clone(), timestamp: Utc::now().timestamp() }
+    }
+}
+
+pub struct SeenIds {
+    ids: Mutex<RingBuffer<u64>>,
+}
+
+impl Default for SeenIds {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SeenIds {
+    pub fn new() -> Self {
+        Self { ids: Mutex::new(RingBuffer::new(settings::SIZE_OF_IDSS_BUFFER)) }
+    }
+
+    pub async fn push(&self, id: u64) -> bool {
+        let ids = &mut self.ids.lock().await;
+        if !ids.contains(&id) {
+            ids.push(id);
+            return true
+        }
+        false
+    }
+}
+
+pub struct UMsgs {
+    msgs: Mutex<BTreeMap<String, Privmsg>>,
+}
+
+impl Default for UMsgs {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UMsgs {
+    pub fn new() -> Self {
+        Self { msgs: Mutex::new(BTreeMap::new()) }
+    }
+
+    pub async fn len(&self) -> usize {
+        self.msgs.lock().await.len()
+    }
+
+    pub async fn contains(&self, key: &str) -> bool {
+        self.msgs.lock().await.contains_key(key)
+    }
+
+    pub async fn remove(&self, key: &str) -> Option<Privmsg> {
+        self.msgs.lock().await.remove(key)
+    }
+
+    pub async fn get(&self, key: &str) -> Option<Privmsg> {
+        self.msgs.lock().await.get(key).cloned()
+    }
+
+    pub async fn load(&self) -> BTreeMap<String, Privmsg> {
+        self.msgs.lock().await.clone()
+    }
+
+    pub async fn inc_read_confirms(&self, key: &str) -> bool {
+        if let Some(msg) = self.msgs.lock().await.get_mut(key) {
+            msg.read_confirms += 1;
+            return true
+        }
+        false
+    }
+
+    pub async fn insert(&self, msg: &Privmsg) -> String {
+        let mut hasher = Ripemd160::new();
+        hasher.update(msg.to_string() + &msg.term.to_string());
+        let key = hex::encode(hasher.finalize());
+
+        let msgs = &mut self.msgs.lock().await;
+        if msgs.len() == settings::SIZE_OF_MSGS_BUFFER {
+            let first_key = msgs.iter().next_back().unwrap().0.clone();
+            msgs.remove(&first_key);
+        }
+
+        msgs.insert(key.clone(), msg.clone());
+        key
     }
 }
 
@@ -266,12 +349,9 @@ mod tests {
         assert_eq!(b.iter().last().unwrap(), &"h9");
     }
 
-    #[test]
-    fn test_privmsgs_buffer() {
-        let mut pms = PrivmsgsBuffer {
-            buffer: RingBuffer::new(SIZE_OF_MSGS_BUFFER),
-            orphans: RingBuffer::new(SIZE_OF_MSGS_BUFFER),
-        };
+    #[async_std::test]
+    async fn test_privmsgs_buffer() {
+        let pms = PrivmsgsBuffer::new();
 
         //
         // Fill the buffer with random generated terms in range 0..3001
@@ -281,12 +361,11 @@ mod tests {
 
         for term in terms {
             let privmsg = Privmsg::new("nick", "#dev", &format!("message_{}", term), term);
-            pms.push(&privmsg);
+            pms.push(&privmsg).await;
         }
 
-        assert_eq!(pms.buffer.len(), 3000);
-        assert_eq!(pms.last_term(), 3000);
-        assert_eq!(pms.orphans.len(), 0);
+        assert_eq!(pms.len().await, 3000);
+        assert_eq!(pms.last_term().await, 3000);
 
         //
         // Fill the buffer with random generated terms in range 2000..4001
@@ -298,12 +377,11 @@ mod tests {
 
         for term in terms {
             let privmsg = Privmsg::new("nick", "#dev", &format!("message_{}", term), term);
-            pms.push(&privmsg);
+            pms.push(&privmsg).await;
         }
 
-        assert_eq!(pms.buffer.len(), SIZE_OF_MSGS_BUFFER);
-        assert_eq!(pms.last_term(), 4000);
-        assert_eq!(pms.orphans.len(), 0);
+        assert_eq!(pms.len().await, settings::SIZE_OF_MSGS_BUFFER);
+        assert_eq!(pms.last_term().await, 4000);
 
         //
         // Fill the buffer with random generated terms in range 4000..7001
@@ -314,11 +392,44 @@ mod tests {
 
         for term in terms {
             let privmsg = Privmsg::new("nick", "#dev", &format!("message_{}", term), term);
-            pms.push(&privmsg);
+            pms.push(&privmsg).await;
         }
 
-        assert_eq!(pms.buffer.len(), SIZE_OF_MSGS_BUFFER);
-        assert_eq!(pms.last_term(), 7000);
-        assert_eq!(pms.orphans.len(), 0);
+        assert_eq!(pms.len().await, settings::SIZE_OF_MSGS_BUFFER);
+        assert_eq!(pms.last_term().await, 7000);
+    }
+
+    #[async_std::test]
+    async fn test_seen_ids() {
+        let seen_ids = SeenIds::default();
+        assert!(seen_ids.push(3000).await);
+        assert!(seen_ids.push(3001).await);
+        assert!(!seen_ids.push(3000).await);
+    }
+
+    #[async_std::test]
+    async fn test_unread_msgs() {
+        let unread_msgs = UMsgs::default();
+
+        let p = Privmsg::new("nick", "#dev", &format!("message_{}", 0), 0);
+        let p_k = unread_msgs.insert(&p).await;
+
+        let p2 = Privmsg::new("nick", "#dev", &format!("message_{}", 0), 1);
+        let p2_k = unread_msgs.insert(&p2).await;
+
+        let p3 = Privmsg::new("nick", "#dev", &format!("message_{}", 0), 2);
+        let p3_k = unread_msgs.insert(&p3).await;
+
+        assert_eq!(unread_msgs.len().await, 3);
+
+        assert_eq!(unread_msgs.get(&p_k).await, Some(p.clone()));
+        assert_eq!(unread_msgs.get(&p2_k).await, Some(p2));
+        assert_eq!(unread_msgs.get(&p3_k).await, Some(p3));
+
+        assert!(unread_msgs.inc_read_confirms(&p_k).await);
+        assert!(!unread_msgs.inc_read_confirms("NONE KEY").await);
+
+        assert_ne!(unread_msgs.get(&p_k).await, Some(p));
+        assert_eq!(unread_msgs.get(&p_k).await.unwrap().read_confirms, 1);
     }
 }

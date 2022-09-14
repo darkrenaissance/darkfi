@@ -13,13 +13,7 @@ use darkfi::{
     Result,
 };
 
-use crate::{
-    buffers::{Buffers, InvSeenIds},
-    Privmsg,
-};
-
-const MAX_CONFIRM: u8 = 4;
-const UNREAD_MSG_EXPIRE_TIME: i64 = 18000;
+use crate::{buffers::Buffers, settings, Privmsg};
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct Inv {
@@ -62,7 +56,6 @@ pub struct ProtocolPrivmsg {
     last_term_sub: net::MessageSubscription<LastTerm>,
     p2p: net::P2pPtr,
     channel: net::ChannelPtr,
-    inv_ids: InvSeenIds,
     buffers: Buffers,
 }
 
@@ -71,7 +64,6 @@ impl ProtocolPrivmsg {
         channel: net::ChannelPtr,
         notify: async_channel::Sender<Privmsg>,
         p2p: net::P2pPtr,
-        inv_ids: InvSeenIds,
         buffers: Buffers,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
@@ -103,7 +95,6 @@ impl ProtocolPrivmsg {
             jobsman: net::ProtocolJobsManager::new("ProtocolPrivmsg", channel.clone()),
             p2p,
             channel,
-            inv_ids,
             buffers,
         })
     }
@@ -115,19 +106,13 @@ impl ProtocolPrivmsg {
             let inv = self.inv_sub.receive().await?;
             let inv = (*inv).to_owned();
 
-            let mut inv_ids = self.inv_ids.lock().await;
-            if inv_ids.contains(&inv.id) {
+            if !self.buffers.seen_ids.push(inv.id).await {
                 continue
             }
-            inv_ids.push(inv.id);
-            drop(inv_ids);
 
             let mut inv_requested = vec![];
             for inv_object in inv.invs.iter() {
-                let msgs = &mut self.buffers.unread_msgs.lock().await.msgs;
-                if let Some(msg) = msgs.get_mut(&inv_object.0) {
-                    msg.read_confirms += 1;
-                } else {
+                if !self.buffers.unread_msgs.inc_read_confirms(&inv_object.0).await {
                     inv_requested.push(inv_object.clone());
                 }
             }
@@ -149,14 +134,11 @@ impl ProtocolPrivmsg {
             let msg = self.msg_sub.receive().await?;
             let mut msg = (*msg).to_owned();
 
-            let mut msg_ids = self.buffers.seen_ids.lock().await;
-            if msg_ids.contains(&msg.id) {
+            if !self.buffers.seen_ids.push(msg.id).await {
                 continue
             }
-            msg_ids.push(msg.id);
-            drop(msg_ids);
 
-            if msg.read_confirms >= MAX_CONFIRM {
+            if msg.read_confirms >= settings::MAX_CONFIRM {
                 self.add_to_msgs(&msg).await?;
             } else {
                 msg.read_confirms += 1;
@@ -177,12 +159,9 @@ impl ProtocolPrivmsg {
 
             self.update_unread_msgs().await?;
 
-            let privmsgs = self.buffers.privmsgs.lock().await;
-            let self_last_term = privmsgs.last_term();
-
-            match self_last_term.cmp(&last_term) {
+            match self.buffers.privmsgs.last_term().await.cmp(&last_term) {
                 Ordering::Less => {
-                    for msg in privmsgs.fetch_msgs(last_term) {
+                    for msg in self.buffers.privmsgs.fetch_msgs(last_term).await {
                         self.channel.send(msg).await?;
                     }
                 }
@@ -197,9 +176,8 @@ impl ProtocolPrivmsg {
             let getdata = self.getdata_sub.receive().await?;
             let getdata = (*getdata).to_owned();
 
-            let msgs = &self.buffers.unread_msgs.lock().await.msgs;
             for inv in getdata.invs {
-                if let Some(msg) = msgs.get(&inv.0) {
+                if let Some(msg) = self.buffers.unread_msgs.get(&inv.0).await {
                     self.channel.send(msg.clone()).await?;
                 }
             }
@@ -207,26 +185,25 @@ impl ProtocolPrivmsg {
     }
 
     async fn add_to_unread_msgs(&self, msg: &Privmsg) -> String {
-        self.buffers.unread_msgs.lock().await.insert(msg)
+        self.buffers.unread_msgs.insert(msg).await
     }
 
     async fn update_unread_msgs(&self) -> Result<()> {
-        let msgs = &mut self.buffers.unread_msgs.lock().await.msgs;
-        for (hash, msg) in msgs.clone() {
-            if msg.timestamp + UNREAD_MSG_EXPIRE_TIME < Utc::now().timestamp() {
-                msgs.remove(&hash);
+        for (hash, msg) in self.buffers.unread_msgs.load().await {
+            if msg.timestamp + settings::UNREAD_MSG_EXPIRE_TIME < Utc::now().timestamp() {
+                self.buffers.unread_msgs.remove(&hash).await;
                 continue
             }
-            if msg.read_confirms >= MAX_CONFIRM {
+            if msg.read_confirms >= settings::MAX_CONFIRM {
                 self.add_to_msgs(&msg).await?;
-                msgs.remove(&hash);
+                self.buffers.unread_msgs.remove(&hash).await;
             }
         }
         Ok(())
     }
 
     async fn add_to_msgs(&self, msg: &Privmsg) -> Result<()> {
-        self.buffers.privmsgs.lock().await.push(msg);
+        self.buffers.privmsgs.push(msg).await;
         self.notify.send(msg.clone()).await?;
         Ok(())
     }
@@ -239,11 +216,9 @@ impl net::ProtocolBase for ProtocolPrivmsg {
     /// waits for pong reply. Waits for ping and replies with a pong.
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         // once a channel get started
-        let msgs_buffer = self.buffers.privmsgs.lock().await;
-        for m in msgs_buffer.iter() {
-            self.channel.send(m.clone()).await?;
+        for m in self.buffers.privmsgs.load().await {
+            self.channel.send(m).await?;
         }
-        drop(msgs_buffer);
 
         debug!(target: "ircd", "ProtocolPrivmsg::start() [START]");
         self.jobsman.clone().start(executor.clone());
