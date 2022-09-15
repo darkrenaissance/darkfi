@@ -168,8 +168,13 @@ macro_rules! async_daemonize {
             let log_file_path = match std::env::var("DARKFI_LOG") {
                 Ok(p) => p,
                 Err(_) => {
+                    let bin_name = if let Some(bin_name) = option_env!("CARGO_BIN_NAME") {
+                        bin_name
+                    } else {
+                        "darkfi"
+                    };
                     std::fs::create_dir_all(expand_path("~/.local")?)?;
-                    "~/.local/darkfi.log".into()
+                    format!("~/.local/{}.log", bin_name)
                 }
             };
 
