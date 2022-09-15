@@ -1296,7 +1296,7 @@ dependencies = [
 
 [[package]]
 name = "darkwiki"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-channel",
  "async-std",
@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "darkwikid"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-channel",
  "async-executor",
@@ -3986,7 +3986,7 @@ checksum = "c02424087780c9b71cc96799eaeddff35af2bc513278cda5c99fc1f5d026d3c1"
 
 [[package]]
 name = "tau"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "chrono",
@@ -4006,7 +4006,7 @@ dependencies = [
 
 [[package]]
 name = "taud"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-channel",
  "async-executor",

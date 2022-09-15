@@ -20,8 +20,6 @@ name = "darkfi"
 members = [
 	"bin/zkas",
 	#"bin/cashierd",
-	"bin/darkwiki",
-	"bin/darkwikid",
 	"bin/darkfid",
 	"bin/darkotc",
 	"bin/drk",
@@ -33,6 +31,8 @@ members = [
 	"bin/dao-cli",
 	"bin/tau/taud",
 	"bin/tau/tau-cli",
+	"bin/darkwiki/darkwikid",
+	"bin/darkwiki/darkwiki-cli",
 	"bin/vanityaddr",
 	"bin/lilith",
 
