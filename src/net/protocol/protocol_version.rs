@@ -98,7 +98,13 @@ impl ProtocolVersion {
                 Some(app_version) => {
                     debug!(target: "net", "ProtocolVersion::send_version() [App version: {}]", app_version);
                     debug!(target: "net", "ProtocolVersion::send_version() [Recieved version: {}]", verack_msg.app);
-                    if app_version != &verack_msg.app {
+                    // Version format: MAJOR.MINOR.PATCH
+                    let app_versions: Vec<&str> = app_version.split('.').collect();
+                    let verack_msg_versions: Vec<&str> = verack_msg.app.split('.').collect();
+                    // Ignore PATCH version
+                    if app_versions[0] != verack_msg_versions[0] ||
+                        app_versions[1] != verack_msg_versions[1]
+                    {
                         error!(
                             "Wrong app version from [{}]. Disconnecting from channel.",
                             self.channel.address()
