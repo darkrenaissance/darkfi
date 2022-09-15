@@ -10,10 +10,17 @@ use pasta_curves::vesta;
 use rand::RngCore;
 
 use crate::{
-    crypto::types::*,
+    crypto::types::DrkCircuitField,
     util::serial::{encode_with_size, Decodable, Encodable, ReadExt, VarInt},
     Result,
 };
+
+// TODO: this API needs rework. It's not very good.
+// keygen_pk() takes a VerifyingKey by value,
+// yet ProvingKey also provides get_vk() -> &VerifyingKey
+//
+// Maybe we should just use the native halo2 types instead of wrapping them.
+// We can avoid double creating the vk when we call VerifyingKey::build(), ProvingKey::build()
 
 #[derive(Clone, Debug)]
 pub struct VerifyingKey {
@@ -44,7 +51,7 @@ impl ProvingKey {
     }
 }
 
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct Proof(Vec<u8>);
 
 impl AsRef<[u8]> for Proof {
@@ -109,7 +116,13 @@ impl Decodable for Proof {
 mod tests {
     use super::*;
     use crate::{
-        crypto::{keypair::PublicKey, mint_proof::create_mint_proof},
+        crypto::{
+            keypair::PublicKey,
+            mint_proof::create_mint_proof,
+            types::{
+                DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkValueBlind,
+            },
+        },
         zk::circuit::MintContract,
     };
     use group::ff::Field;
@@ -122,6 +135,8 @@ mod tests {
         let value_blind = DrkValueBlind::random(&mut OsRng);
         let token_blind = DrkValueBlind::random(&mut OsRng);
         let serial = DrkSerial::random(&mut OsRng);
+        let spend_hook = DrkSpendHook::random(&mut OsRng);
+        let user_data = DrkUserData::random(&mut OsRng);
         let coin_blind = DrkCoinBlind::random(&mut OsRng);
         let public_key = PublicKey::random(&mut OsRng);
 
@@ -133,6 +148,8 @@ mod tests {
             value_blind,
             token_blind,
             serial,
+            spend_hook,
+            user_data,
             coin_blind,
             public_key,
         )?;

@@ -39,9 +39,10 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
     };
 
     // Node signals the network that it will start participating
+    let public = state.read().await.public;
     let address = state.read().await.address;
     let cur_slot = state.read().await.current_slot();
-    let participant = Participant::new(address, cur_slot);
+    let participant = Participant::new(public, address, cur_slot);
     state.write().await.append_participant(participant.clone());
 
     match consensus_p2p.broadcast(participant).await {
@@ -88,8 +89,9 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
             }
         };
 
-        info!("consensus: Node is the slot leader: Proposed block: {:?}", proposal);
-        let vote = state.write().await.receive_proposal(&proposal);
+        info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
+        debug!("consensus: Full proposal: {:?}", proposal);
+        let vote = state.write().await.receive_proposal(&proposal).await;
         let vote = match vote {
             Ok(v) => {
                 if v.is_none() {

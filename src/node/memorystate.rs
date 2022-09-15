@@ -3,11 +3,9 @@ use log::debug;
 
 use super::state::{ProgramState, State, StateUpdate};
 use crate::crypto::{
-    constants::MERKLE_DEPTH_ORCHARD, keypair::PublicKey, merkle_node::MerkleNode,
-    nullifier::Nullifier, proof::VerifyingKey,
+    constants::MERKLE_DEPTH, keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier,
+    proof::VerifyingKey,
 };
-
-const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 /// In-memory state extension for state transition validations
 #[derive(Clone)]
@@ -32,11 +30,11 @@ impl ProgramState for MemoryState {
     }
 
     fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
-        self.canon.is_valid_merkle(merkle_root) || self.merkle_roots.contains(merkle_root)
+        self.merkle_roots.contains(merkle_root) || self.canon.is_valid_merkle(merkle_root)
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        self.canon.nullifier_exists(nullifier) || self.nullifiers.contains(nullifier)
+        self.nullifiers.contains(nullifier) || self.canon.nullifier_exists(nullifier)
     }
 
     fn mint_vk(&self) -> &VerifyingKey {

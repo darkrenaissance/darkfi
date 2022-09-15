@@ -164,3 +164,159 @@ impl ArithInstruction<pallas::Base> for ArithChip {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        crypto::{
+            proof::{ProvingKey, VerifyingKey},
+            Proof,
+        },
+        zk::assign_free_advice,
+        Result,
+    };
+    use halo2_proofs::{
+        circuit::{floor_planner, Value},
+        dev::{CircuitLayout, MockProver},
+        plonk::{Circuit, Instance as InstanceColumn},
+    };
+    use rand::rngs::OsRng;
+    use std::time::Instant;
+
+    #[derive(Clone)]
+    struct ArithCircuitConfig {
+        primary: Column<InstanceColumn>,
+        advices: [Column<Advice>; 3],
+        arith_config: ArithConfig,
+    }
+
+    impl ArithCircuitConfig {
+        fn arithmetic_chip(&self) -> ArithChip {
+            ArithChip::construct(self.arith_config.clone())
+        }
+    }
+
+    #[derive(Default)]
+    struct ArithCircuit {
+        pub one: Value<pallas::Base>,
+        pub minus_one: Value<pallas::Base>,
+        pub factor: Value<pallas::Base>,
+    }
+
+    impl Circuit<pallas::Base> for ArithCircuit {
+        type Config = ArithCircuitConfig;
+        type FloorPlanner = floor_planner::V1;
+
+        fn without_witnesses(&self) -> Self {
+            Self::default()
+        }
+
+        fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+            let advices = [meta.advice_column(), meta.advice_column(), meta.advice_column()];
+
+            let primary = meta.instance_column();
+            meta.enable_equality(primary);
+
+            for advice in advices.iter() {
+                meta.enable_equality(*advice);
+            }
+
+            let arith_config = ArithChip::configure(meta, advices[0], advices[1], advices[2]);
+
+            ArithCircuitConfig { primary, advices, arith_config }
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<pallas::Base>,
+        ) -> std::result::Result<(), plonk::Error> {
+            let arith_chip = config.arithmetic_chip();
+
+            let one = assign_free_advice(
+                layouter.namespace(|| "Load base one"),
+                config.advices[0],
+                self.one,
+            )?;
+
+            let minus_one = assign_free_advice(
+                layouter.namespace(|| "Load minus one"),
+                config.advices[1],
+                self.minus_one,
+            )?;
+
+            let factor = assign_free_advice(
+                layouter.namespace(|| "Load factor"),
+                config.advices[2],
+                self.factor,
+            )?;
+
+            let diff =
+                arith_chip.sub(layouter.namespace(|| "one - minus_one"), &one, &minus_one)?;
+            layouter.constrain_instance(diff.cell(), config.primary, 0)?;
+
+            let zero =
+                arith_chip.add(layouter.namespace(|| "one + minus_one"), &one, &minus_one)?;
+            layouter.constrain_instance(zero.cell(), config.primary, 1)?;
+
+            let min1_min1 = arith_chip.add(
+                layouter.namespace(|| "minus_one + minus_one"),
+                &minus_one,
+                &minus_one,
+            )?;
+            layouter.constrain_instance(min1_min1.cell(), config.primary, 2)?;
+
+            let product =
+                arith_chip.mul(layouter.namespace(|| "minus_one * factor"), &minus_one, &factor)?;
+            layouter.constrain_instance(product.cell(), config.primary, 3)?;
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn arithmetic_circuit_assert() -> Result<()> {
+        let one = pallas::Base::one();
+        let minus_one = -pallas::Base::one();
+        let factor = pallas::Base::from(644211);
+
+        let public_inputs =
+            vec![one - minus_one, pallas::Base::zero(), minus_one + minus_one, minus_one * factor];
+
+        let circuit = ArithCircuit {
+            one: Value::known(one),
+            minus_one: Value::known(minus_one),
+            factor: Value::known(factor),
+        };
+
+        use plotters::prelude::*;
+        let root = BitMapBackend::new("target/arithmetic_circuit_layout.png", (3840, 2160))
+            .into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root.titled("Arithmetic Circuit Layout", ("sans-serif", 60)).unwrap();
+        CircuitLayout::default().render(4, &circuit, &root).unwrap();
+
+        let prover = MockProver::run(4, &circuit, vec![public_inputs.clone()])?;
+        prover.assert_satisfied();
+
+        let now = Instant::now();
+        let proving_key = ProvingKey::build(4, &circuit);
+        println!("ProvingKey built [{:?}]", now.elapsed());
+        let now = Instant::now();
+        let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
+        println!("Proof created [{:?}]", now.elapsed());
+
+        let circuit = ArithCircuit::default();
+        let now = Instant::now();
+        let verifying_key = VerifyingKey::build(4, &circuit);
+        println!("VerifyingKey built [{:?}]", now.elapsed());
+        let now = Instant::now();
+        proof.verify(&verifying_key, &public_inputs)?;
+        println!("Proof verified [{:?}]", now.elapsed());
+
+        println!("Proof size [{} kB]", proof.as_ref().len() as f64 / 1024.0);
+
+        Ok(())
+    }
+}

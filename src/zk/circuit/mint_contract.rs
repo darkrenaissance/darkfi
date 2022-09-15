@@ -66,6 +66,10 @@ pub struct MintContract {
     pub serial: Value<pallas::Base>,
     /// Random blinding factor for coin
     pub coin_blind: Value<pallas::Base>,
+    /// Allows composing this ZK proof to invoke other contracts
+    pub spend_hook: Value<pallas::Base>,
+    /// Data passed from this coin to the invoked contract
+    pub user_data: Value<pallas::Base>,
     /// Random blinding factor for value commitment
     pub value_blind: Value<pallas::Scalar>,
     /// Random blinding factor for the token ID
@@ -201,6 +205,18 @@ impl Circuit<pallas::Base> for MintContract {
             self.serial,
         )?;
 
+        let spend_hook = assign_free_advice(
+            layouter.namespace(|| "load spend_hook"),
+            config.advices[6],
+            self.spend_hook,
+        )?;
+
+        let user_data = assign_free_advice(
+            layouter.namespace(|| "load user_data"),
+            config.advices[6],
+            self.user_data,
+        )?;
+
         let coin_blind = assign_free_advice(
             layouter.namespace(|| "load coin_blind"),
             config.advices[6],
@@ -211,13 +227,22 @@ impl Circuit<pallas::Base> for MintContract {
         // Coin hash
         // =========
         let coin = {
-            let poseidon_message = [pub_x, pub_y, value.clone(), token.clone(), serial, coin_blind];
+            let poseidon_message = [
+                pub_x,
+                pub_y,
+                value.clone(),
+                token.clone(),
+                serial,
+                spend_hook,
+                user_data,
+                coin_blind,
+            ];
 
             let poseidon_hasher = PoseidonHash::<
                 _,
                 _,
                 poseidon::P128Pow5T3,
-                poseidon::ConstantLength<6>,
+                poseidon::ConstantLength<8>,
                 3,
                 2,
             >::init(
@@ -251,7 +276,7 @@ impl Circuit<pallas::Base> for MintContract {
             let value = ScalarFixedShort::new(
                 ecc_chip.clone(),
                 layouter.namespace(|| "value"),
-                (value, one.clone()),
+                (value, one),
             )?;
             value_commit_v.mul(layouter.namespace(|| "[value] ValueCommitV"), value)?
         };
@@ -361,10 +386,21 @@ mod tests {
         let coin_blind = pallas::Base::random(&mut OsRng);
         let public_key = PublicKey::random(&mut OsRng);
         let coords = public_key.0.to_affine().coordinates().unwrap();
+        let spend_hook = pallas::Base::random(&mut OsRng);
+        let user_data = pallas::Base::random(&mut OsRng);
 
-        let msg =
-            [*coords.x(), *coords.y(), pallas::Base::from(value), token_id, serial, coin_blind];
-        let coin = poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(msg);
+
+        let msg = [
+            *coords.x(),
+            *coords.y(),
+            pallas::Base::from(value),
+            token_id,
+            serial,
+            spend_hook,
+            user_data,
+            coin_blind,
+        ];
+        let coin = poseidon::Hash::<_, P128Pow5T3, ConstantLength<8>, 3, 2>::init().hash(msg);
 
         let value_commit = pedersen_commitment_u64(value, value_blind);
         let value_coords = value_commit.to_affine().coordinates().unwrap();
@@ -382,12 +418,15 @@ mod tests {
             token: Value::known(token_id),
             serial: Value::known(serial),
             coin_blind: Value::known(coin_blind),
+            spend_hook: Value::known(spend_hook),
+            user_data: Value::known(user_data),
             value_blind: Value::known(value_blind),
             token_blind: Value::known(token_blind),
         };
 
         use plotters::prelude::*;
-        let root = BitMapBackend::new("mint_circuit_layout.png", (3840, 2160)).into_drawing_area();
+        let root =
+            BitMapBackend::new("target/mint_circuit_layout.png", (3840, 2160)).into_drawing_area();
         root.fill(&WHITE).unwrap();
         let root = root.titled("Mint Circuit Layout", ("sans-serif", 60)).unwrap();
         CircuitLayout::default().render(11, &circuit, &root).unwrap();

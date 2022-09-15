@@ -169,8 +169,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let net_settings = settings.net;
     let datastore_raft = datastore_path.join("ircd.db");
     let mut raft = Raft::<Privmsg>::new(net_settings.inbound.clone(), datastore_raft)?;
-    let raft_sender = raft.get_broadcast();
-    let raft_receiver = raft.get_commits();
+    let raft_sender = raft.get_msgs_channel();
+    let raft_receiver = raft.get_commits_channel();
 
     // P2p setup
     let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<NetMsg>();
@@ -222,7 +222,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
                 Ok((s, a)) => (s, a),
                 Err(e) => {
                     error!("Failed listening for connections: {}", e);
-                    return Err(Error::ServiceStopped)
+                    return Err(Error::NetworkServiceStopped)
                 }
             };
 
@@ -244,13 +244,13 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     // Run once receive exit signal
     let (signal, shutdown) = async_channel::bounded::<()>(1);
-    ctrlc_async::set_async_handler(async move {
+    ctrlc::set_handler(move || {
         warn!(target: "ircd", "ircd start Exit Signal");
         // cleaning up tasks running in the background
-        signal.send(()).await.unwrap();
-        rpc_task.cancel().await;
-        irc_task.cancel().await;
-        p2p_run_task.cancel().await;
+        async_std::task::block_on(signal.send(())).unwrap();
+        async_std::task::block_on(rpc_task.cancel());
+        async_std::task::block_on(irc_task.cancel());
+        async_std::task::block_on(p2p_run_task.cancel());
     })
     .unwrap();
 

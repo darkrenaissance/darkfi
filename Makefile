@@ -10,7 +10,8 @@ CARGO = cargo
 #RUSTFLAGS = -C target-cpu=native
 
 # Binaries to be built
-BINS = zkas drk darkfid tau taud ircd dnetview darkotc
+
+BINS = drk darkfid tau taud ircd dnetview darkotc darkwikid darkwiki
 
 # Common dependencies which should force the binaries to be rebuilt
 BINDEPS = \
@@ -21,7 +22,22 @@ BINDEPS = \
 	$(shell find script/sql -type f) \
 	$(shell find contrib/token -type f)
 
-all: $(BINS)
+# ZK proofs to compile with zkas
+PROOFS = \
+	$(shell find bin/daod/proof -type f -name '*.zk') \
+	$(shell find proof -type f -name '*.zk') \
+	example/simple.zk
+
+PROOFS_BIN = $(PROOFS:=.bin)
+
+all: zkas $(PROOFS_BIN) $(BINS)
+
+zkas: $(BINDEPS)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
+	cp -f target/release/$@ $@
+
+$(PROOFS_BIN): $(PROOFS)
+	./zkas $(basename $@) -o $@
 
 token_lists:
 	$(MAKE) -C contrib/token all
@@ -30,30 +46,23 @@ $(BINS): token_lists $(BINDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
 
-check: token_lists
+check: token_lists zkas $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --release --feature-powerset --all
 
-fix: token_lists
+fix: token_lists zkas $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --fix --allow-dirty --all
 
-clippy: token_lists
+clippy: token_lists zkas $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --all
 
-rustdoc: token_lists
+rustdoc: token_lists zkas
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --workspace --all-features \
 		--no-deps --document-private-items
 
-# zkas source files which we want to compile for tests
-VM_SRC = proof/arithmetic.zk proof/mint.zk proof/burn.zk example/simple.zk
-VM_BIN = $(VM_SRC:=.bin)
-
-$(VM_BIN): zkas $(VM_SRC)
-	./zkas $(basename $@) -o $@
-
-test: token_lists $(VM_BIN) test-tx
+test: token_lists zkas $(PROOFS_BIN) test-tx
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all
 
-test-tx:
+test-tx: zkas
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) run --release --features=node,zkas --example tx
 
 clean:

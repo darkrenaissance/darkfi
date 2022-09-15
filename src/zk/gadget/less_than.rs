@@ -130,6 +130,8 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         Ok(())
     }
 
+
+    /*
     pub fn witness_less_than2(
         &self,
         mut layouter: impl Layouter<pallas::Base>,
@@ -152,7 +154,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
 
         Ok(a_offset)
     }
-
+    */
 
     pub fn copy_less_than(
         &self,

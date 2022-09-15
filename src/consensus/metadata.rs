@@ -5,6 +5,8 @@ use crate::{
         time::Timestamp,
     },
     crypto::{
+        address::Address,
+        schnorr::Signature,
         types::*,
         proof::{
             Proof,
@@ -19,6 +21,8 @@ use crate::{
 
 use log::error;
 
+
+/*
 /// This struct represents additional [`Block`](super::Block) information used by
 /// the consensus protocol
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
@@ -43,7 +47,7 @@ impl Metadata {
         Self { timestamp, om: OuroborosMetadata::new(eta, lead_proof) }
     }
 }
-
+*/
 
 /// wrapper over the Proof, for possiblity any metadata necessary in the future.
 #[derive(Debug, Clone, PartialEq,  SerialEncodable, SerialDecodable)]

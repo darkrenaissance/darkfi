@@ -8,9 +8,7 @@ use clap::Parser as ClapParser;
 
 use darkfi::{
     cli_desc,
-    zkas::{
-        analyzer::Analyzer, compiler::Compiler, decoder::ZkBinary, lexer::Lexer, parser::Parser,
-    },
+    zkas::{Analyzer, Compiler, Lexer, Parser, ZkBinary},
 };
 
 #[derive(clap::Parser)]
@@ -52,12 +50,23 @@ fn main() {
         }
     };
 
+    // Clean up tabs, and convert CRLF to LF.
+    let source = source.replace('\t', "    ").replace("\r\n", "\n");
+
+    // The lexer goes over the input file and separates its content into
+    // tokens that get fed into a parser.
     let lexer = Lexer::new(filename, source.chars());
     let tokens = lexer.lex();
 
+    // The parser goes over the tokens provided by the lexer and builds
+    // the initial AST, not caring much about the semantics, just enforcing
+    // syntax and general structure.
     let parser = Parser::new(filename, source.chars(), tokens);
     let (constants, witnesses, statements) = parser.parse();
 
+    // The analyzer goes through the initial AST provided by the parser and
+    // converts return and variable types to their correct forms, and also
+    // checks that the semantics of the ZK script are correct.
     let mut analyzer = Analyzer::new(filename, source.chars(), constants, witnesses, statements);
     analyzer.analyze_types();
 
@@ -79,6 +88,7 @@ fn main() {
         analyzer.constants,
         analyzer.witnesses,
         analyzer.statements,
+        analyzer.literals,
         !args.strip,
     );
 
@@ -97,12 +107,9 @@ fn main() {
         }
     };
 
-    match file.write_all(&bincode) {
-        Ok(_) => {}
-        Err(e) => {
-            eprintln!("Error: Failed to write bincode to \"{}\". {}", output, e);
-            exit(1);
-        }
+    if let Err(e) = file.write_all(&bincode) {
+        eprintln!("Error: Failed to write bincode to \"{}\". {}", output, e);
+        exit(1);
     };
 
     println!("Wrote output to {}", &output);

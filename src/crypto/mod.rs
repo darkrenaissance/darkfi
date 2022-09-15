@@ -24,9 +24,10 @@ pub use proof::Proof;
 pub mod lead_proof;
 pub mod leadcoin;
 
+use crate::util::serial::{SerialDecodable, SerialEncodable};
 use keypair::SecretKey;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct OwnCoin {
     pub coin: coin::Coin,
     pub note: note::Note,

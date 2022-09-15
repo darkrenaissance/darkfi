@@ -2,6 +2,7 @@ use async_std::sync::Mutex;
 use std::sync::Arc;
 
 use fxhash::FxHashMap;
+use log::warn;
 use rand::Rng;
 
 pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
@@ -15,6 +16,10 @@ pub struct Subscription<T> {
 }
 
 impl<T: Clone> Subscription<T> {
+    pub fn get_id(&self) -> SubscriptionId {
+        self.id
+    }
+
     pub async fn receive(&self) -> T {
         let message_result = self.recv_queue.recv().await;
 
@@ -66,7 +71,21 @@ impl<T: Clone> Subscriber<T> {
             match sub.send(message_result.clone()).await {
                 Ok(()) => {}
                 Err(err) => {
-                    panic!("Error returned sending message in notify() call! {}", err);
+                    warn!("Error returned sending message in notify() call! {}", err);
+                }
+            }
+        }
+    }
+
+    pub async fn notify_with_exclude(&self, message_result: T, exclude_list: &[SubscriptionId]) {
+        for (id, sub) in (*self.subs.lock().await).iter() {
+            if exclude_list.contains(id) {
+                continue
+            }
+            match sub.send(message_result.clone()).await {
+                Ok(()) => {}
+                Err(err) => {
+                    warn!("Error returned sending message in notify_with_exclude() call! {}", err);
                 }
             }
         }

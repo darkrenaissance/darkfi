@@ -2,9 +2,10 @@ use std::{convert::TryFrom, io, str::FromStr};
 
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
+    arithmetic::CurveAffine,
     group::{
         ff::{Field, PrimeField},
-        Group, GroupEncoding,
+        Curve, Group, GroupEncoding,
     },
     pallas,
 };
@@ -16,7 +17,7 @@ use crate::{
     Error, Result,
 };
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[cfg(feature = "serde")]
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct Keypair {
@@ -36,7 +37,7 @@ impl Keypair {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, SerialDecodable, SerialEncodable)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, SerialDecodable, SerialEncodable)]
 pub struct SecretKey(pub pallas::Base);
 
 impl SecretKey {
@@ -57,7 +58,7 @@ impl SecretKey {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, SerialDecodable, SerialEncodable)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, SerialDecodable, SerialEncodable)]
 pub struct PublicKey(pub pallas::Point);
 
 impl PublicKey {
@@ -81,6 +82,14 @@ impl PublicKey {
             Some(k) => Ok(Self(k)),
             None => Err(Error::PublicKeyFromBytes),
         }
+    }
+
+    pub fn x(&self) -> pallas::Base {
+        *self.0.to_affine().coordinates().unwrap().x()
+    }
+
+    pub fn y(&self) -> pallas::Base {
+        *self.0.to_affine().coordinates().unwrap().y()
     }
 }
 

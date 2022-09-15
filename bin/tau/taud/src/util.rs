@@ -1,14 +1,3 @@
-use std::{fs::File, io::BufReader, path::Path};
-
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use serde::{de::DeserializeOwned, Serialize};
-
-use darkfi::Result;
-
-pub fn random_ref_id() -> String {
-    thread_rng().sample_iter(&Alphanumeric).take(30).map(char::from).collect()
-}
-
 pub fn find_free_id(task_ids: &[u32]) -> u32 {
     for i in 1.. {
         if !task_ids.contains(&i) {
@@ -18,24 +7,11 @@ pub fn find_free_id(task_ids: &[u32]) -> u32 {
     1
 }
 
-pub fn load<T: DeserializeOwned>(path: &Path) -> Result<T> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-
-    let value: T = serde_json::from_reader(reader)?;
-    Ok(value)
-}
-
-pub fn save<T: Serialize>(path: &Path, value: &T) -> Result<()> {
-    let file = File::create(path)?;
-    serde_json::to_writer_pretty(file, value)?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use darkfi::Result;
     #[test]
     fn find_free_id_test() -> Result<()> {
         let mut ids: Vec<u32> = vec![1, 3, 8, 9, 10, 3];

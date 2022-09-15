@@ -22,16 +22,15 @@ use crate::{
         util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
-    impl_vec,
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::serial::{Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result, VerifyFailed, VerifyResult,
 };
 
 pub mod builder;
-mod partial;
+pub mod partial;
 
 /// A DarkFi transaction
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Transaction {
     /// Clear inputs
     pub clear_inputs: Vec<TransactionClearInput>,
@@ -42,7 +41,7 @@ pub struct Transaction {
 }
 
 /// A transaction's clear input
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TransactionClearInput {
     /// Input's value (amount)
     pub value: u64,
@@ -54,12 +53,12 @@ pub struct TransactionClearInput {
     pub token_blind: DrkValueBlind,
     /// Public key for the signature
     pub signature_public: PublicKey,
-    /// Input's signature
+    /// Transaction signature
     pub signature: schnorr::Signature,
 }
 
 /// A transaction's anonymous input
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TransactionInput {
     /// Zero-knowledge proof for the input
     pub burn_proof: Proof,
@@ -70,7 +69,7 @@ pub struct TransactionInput {
 }
 
 /// A transaction's anonymous output
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TransactionOutput {
     /// Zero-knowledge proof for the output
     pub mint_proof: Proof,
@@ -83,6 +82,16 @@ pub struct TransactionOutput {
 impl Transaction {
     /// Verify the transaction
     pub fn verify(&self, mint_vk: &VerifyingKey, burn_vk: &VerifyingKey) -> VerifyResult<()> {
+        // Transaction must have minimum 1 clear or anon input, and 1 output
+        if self.clear_inputs.len() + self.inputs.len() == 0 {
+            error!("tx::verify(): Missing inputs");
+            return Err(VerifyFailed::LackingInputs)
+        }
+        if self.outputs.is_empty() {
+            error!("tx::verify(): Missing outputs");
+            return Err(VerifyFailed::LackingOutputs)
+        }
+
         // Accumulator for the value commitments
         let mut valcom_total = DrkValueCommit::identity();
 
@@ -149,7 +158,7 @@ impl Transaction {
         Ok(())
     }
 
-    fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    pub fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.clear_inputs.encode_without_signature(&mut s)?;
         len += self.inputs.encode_without_signature(&mut s)?;
@@ -202,7 +211,7 @@ impl TransactionClearInput {
 }
 
 impl TransactionInput {
-    fn from_partial(
+    pub fn from_partial(
         partial: partial::PartialTransactionInput,
         signature: schnorr::Signature,
     ) -> Self {
@@ -236,10 +245,5 @@ macro_rules! impl_vec_without_signature {
         }
     };
 }
-
 impl_vec_without_signature!(TransactionClearInput);
 impl_vec_without_signature!(TransactionInput);
-impl_vec!(TransactionClearInput);
-impl_vec!(TransactionInput);
-impl_vec!(TransactionOutput);
-impl_vec!(Transaction);

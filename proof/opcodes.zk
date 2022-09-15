@@ -1,0 +1,50 @@
+constant "Opcodes" {
+	EcFixedPointShort VALUE_COMMIT_VALUE,
+	EcFixedPoint VALUE_COMMIT_RANDOM,
+	EcFixedPointBase NULLIFIER_K,
+}
+
+contract "Opcodes" {
+	Base value,
+	Scalar value_blind,
+
+	Base blind,
+
+	Base a,
+	Base b,
+
+	Base secret,
+
+	Uint32 leaf_pos,
+	MerklePath path,
+}
+
+circuit "Opcodes" {
+	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
+	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+	value_commit = ec_add(vcv, vcr);
+	value_commit_x = ec_get_x(value_commit);
+	value_commit_y = ec_get_y(value_commit);
+	constrain_instance(ec_get_x(value_commit));
+	constrain_instance(ec_get_y(value_commit));
+
+	one = witness_base(1);
+	c = poseidon_hash(one, blind);
+	constrain_instance(c);
+
+	d = poseidon_hash(one, blind, ec_get_x(value_commit), ec_get_y(value_commit));
+	constrain_instance(d);
+
+	range_check(64, a);
+	range_check(253, b);
+	less_than(a, b);
+
+	root = merkle_root(leaf_pos, path, c);
+	constrain_instance(root);
+
+	public = ec_mul_base(secret, NULLIFIER_K);
+	constrain_instance(ec_get_x(public));
+	constrain_instance(ec_get_y(public));
+
+	bool_check(one);
+}

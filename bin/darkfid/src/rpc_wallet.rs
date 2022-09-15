@@ -1,6 +1,6 @@
 use fxhash::FxHashMap;
-use log::{error, warn};
-use num_bigint::BigUint;
+use incrementalmerkletree::Tree;
+use log::error;
 use pasta_curves::group::ff::PrimeField;
 use serde_json::{json, Value};
 
@@ -8,12 +8,14 @@ use darkfi::{
     crypto::{
         address::Address,
         keypair::{Keypair, PublicKey, SecretKey},
+        token_id,
     },
+    node::State,
     rpc::jsonrpc::{
-        ErrorCode::{InternalError, InvalidParams},
+        ErrorCode::{InternalError, InvalidParams, ParseError},
         JsonError, JsonResponse, JsonResult,
     },
-    util::{decode_base10, encode_base10, NetworkName},
+    util::serial::{deserialize, serialize},
 };
 
 use super::Darkfid;
@@ -37,9 +39,9 @@ impl Darkfid {
     // RPCAPI:
     // Fetches public keys by given indexes from the wallet and returns it in an
     // encoded format. `-1` is supported to fetch all available keys.
-    // --> {"jsonrpc": "2.0", "method": "wallet.get_key", "params": [1, 2], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "wallet.get_addrs", "params": [1, 2], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["foo", "bar"], "id": 1}
-    pub async fn get_key(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn get_addrs(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -191,10 +193,10 @@ impl Darkfid {
     }
 
     // RPCAPI:
-    // Queries the wallet for known balances.
-    // Returns a map of balances, indexed by `network`, and token ID.
+    // Queries the wallet for known tokens with active balances.
+    // Returns a map of balances, indexed by the token ID.
     // --> {"jsonrpc": "2.0", "method": "wallet.get_balances", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": [{"btc": [100, "Bitcoin"]}, {...}], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [{"1Foobar...": 100}, {...}]", "id": 1}
     pub async fn get_balances(&self, id: Value, _params: &[Value]) -> JsonResult {
         let balances = match self.client.get_balances().await {
             Ok(v) => v,
@@ -204,52 +206,126 @@ impl Darkfid {
             }
         };
 
-        // k: ticker/drk_addr, v: (amount, network, net_addr, drk_addr)
-        let mut ret: FxHashMap<String, (String, String, String, String)> = FxHashMap::default();
+        // k: token_id, v: [amount]
+        let mut ret: FxHashMap<String, u64> = FxHashMap::default();
 
         for balance in balances.list {
-            let drk_addr = bs58::encode(balance.token_id.to_repr()).into_string();
-            let mut amount = BigUint::from(balance.value);
+            let token_id = bs58::encode(balance.token_id.to_repr()).into_string();
+            let mut amount = balance.value;
 
-            let (net_name, net_addr) =
-                if let Some((net, tok)) = self.client.tokenlist.by_addr.get(&drk_addr) {
-                    (net, tok.net_address.clone())
-                } else {
-                    warn!("Could not find network name and token info for {}", drk_addr);
-                    (&NetworkName::DarkFi, "unknown".to_string())
-                };
-
-            let mut ticker = None;
-            for (k, v) in self.client.tokenlist.by_net[net_name].0.iter() {
-                if v.net_address == net_addr {
-                    ticker = Some(k.clone());
-                    break
-                }
+            if let Some(prev) = ret.get(&token_id) {
+                amount += prev;
             }
 
-            if ticker.is_none() {
-                ticker = Some(drk_addr.clone())
-            }
-
-            let ticker = ticker.unwrap();
-
-            if let Some(prev) = ret.get(&ticker) {
-                // TODO: We shouldn't be hardcoding everything to 8 decimals.
-                let prev_amnt = match decode_base10(&prev.0, 8, false) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("Failed to decode_base10(): {}", e);
-                        return JsonError::new(InternalError, None, id).into()
-                    }
-                };
-
-                amount += prev_amnt;
-            }
-
-            let amount = encode_base10(amount, 8);
-            ret.insert(ticker, (amount, net_name.to_string(), net_addr, drk_addr));
+            ret.insert(token_id, amount);
         }
 
         JsonResponse::new(json!(ret), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the wallet for a coin containing given parameters (value, token_id, unspent),
+    // and returns the entire row with the coin's data:
+    //
+    // --> {"jsonrpc": "2.0", "method": "wallet.get_coins_valtok", "params": [1234, "F00b4r...", true], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["coin", "data", ...], "id": 1}
+    pub async fn get_coins_valtok(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 3 ||
+            !params[0].is_u64() ||
+            !params[1].is_string() ||
+            !params[2].is_boolean()
+        {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let value = params[0].as_u64().unwrap();
+        let unspent = params[2].as_bool().unwrap();
+        let token_id = match token_id::parse_b58(params[1].as_str().unwrap()) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Failed parsing token_id from base58 string: {}", e);
+                return JsonError::new(ParseError, None, id).into()
+            }
+        };
+
+        let coins = match self.client.get_coins_valtok(value, token_id, unspent).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Failed fetching coins by valtok from wallet: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        let ret: Vec<String> =
+            coins.iter().map(|x| bs58::encode(serialize(x)).into_string()).collect();
+        JsonResponse::new(json!(ret), id).into()
+    }
+
+    // RPCAPI:
+    // Query the state merkle tree for the merkle path of a given leaf position.
+    // --> {"jsonrpc": "2.0", "method": "wallet.get_merkle_path", "params": [3], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["f091uf1...", "081ff0h10w1h0...", ...], "id": 1}
+    pub async fn get_merkle_path(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_u64() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let leaf_pos: incrementalmerkletree::Position =
+            ((params[0].as_u64().unwrap() as u64) as usize).into();
+
+        let validator_state = self.validator_state.read().await;
+        let state = validator_state.state_machine.lock().await;
+        let root = state.tree.root(0).unwrap();
+        let merkle_path = state.tree.authentication_path(leaf_pos, &root).unwrap();
+        drop(state);
+        drop(validator_state);
+
+        let ret: Vec<String> =
+            merkle_path.iter().map(|x| bs58::encode(serialize(x)).into_string()).collect();
+        JsonResponse::new(json!(ret), id).into()
+    }
+
+    // RPCAPI:
+    // Try to decrypt a given encrypted note with the secret keys
+    // found in the wallet.
+    // --> {"jsonrpc": "2.0", "method": "wallet.decrypt_note", params": [ciphertext], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "base58_encoded_plain_note", "id": 1}
+    pub async fn decrypt_note(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let bytes = match bs58::decode(params[0].as_str().unwrap()).into_vec() {
+            Ok(v) => v,
+            Err(e) => {
+                error!("decrypt_note(): Failed decoding base58 string: {}", e);
+                return JsonError::new(ParseError, None, id).into()
+            }
+        };
+
+        let enc_note = match deserialize(&bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("decrypt_note(): Failed deserializing bytes into EncryptedNote: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        let keypairs = match self.client.get_keypairs().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("decrypt_note(): Failed fetching keypairs: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        for kp in keypairs {
+            if let Some(note) = State::try_decrypt_note(&enc_note, kp.secret) {
+                let s = bs58::encode(&serialize(&note)).into_string();
+                return JsonResponse::new(json!(s), id).into()
+            }
+        }
+
+        server_error(RpcError::DecryptionFailed, id)
     }
 }

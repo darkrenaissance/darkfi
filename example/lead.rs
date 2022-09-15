@@ -32,6 +32,7 @@ use darkfi::{
     zk::circuit::lead_contract::LeadContract,
 };
 
+
 fn main() {
     let k: u32 = 13;
     //

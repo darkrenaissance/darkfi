@@ -1,28 +1,34 @@
 ## JSON-RPC listen URL
-#rpc_listen="tcp://127.0.0.1:11055"
+#rpc_listen="tcp://127.0.0.1:23330"
 
 ## Sets Datastore Path
-#datastore="~/.config/darkfi/tau"
+#datastore="~/.tau"
 
-## Current display name    
+## Current display name
 #nickname="NICKNAME"
+
+## Workspaces
+# workspaces = ["darkfi:86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"]
 
 ## Raft net settings
 [net]
-## P2P accept address
-#inbound="tcp://127.0.0.1:11002" 
+## P2P accept addresses
+#inbound = ["tcp://127.0.0.1:23331"]
 
 ## Connection slots
-#outbound_connections=0 
+outbound_connections=5
 
-## P2P external address
-#external_addr="tls://127.0.0.1:11002"
+## P2P external addresses
+#external_addr = ["tls://127.0.0.1:23331"]
 
 ## Peers to connect to
-#peers=["tls://127.0.0.1:11003"]
+#peers = ["tls://127.0.0.1:23331"]
 
-## Seed nodes to connect to 
-#seeds=["tls://127.0.0.1:11001"]
+## Seed nodes to connect to
+seeds=["tls://tau0.dark.fi:23331", "tls://tau1.dark.fi:23331"]
+
+# Prefered transports for outbound connections
+#transports = ["tls", "tcp"]
 
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0
@@ -30,3 +36,5 @@
 #connect_timeout_seconds=10
 #channel_handshake_seconds=4
 #channel_heartbeat_seconds=10
+
+

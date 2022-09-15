@@ -3,6 +3,7 @@
 *.zk.bin
 *_circuit_layout.png
 .vscode/
+.DS_Store
 
 /target/*
 /tmp/*
@@ -11,6 +12,7 @@
 /dao-cli
 /daod
 /darkfid
+/darkotc
 /dnetview
 /drk
 /faucetd
@@ -19,3 +21,6 @@
 /taud
 /vanityaddr
 /zkas
+/lilith
+/darkwiki
+/darkwikid

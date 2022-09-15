@@ -16,14 +16,14 @@ pub mod crypto;
 #[cfg(feature = "crypto")]
 pub mod zk;
 
+#[cfg(feature = "dht")]
+pub mod dht;
+
 #[cfg(feature = "net")]
 pub mod net;
 
 #[cfg(feature = "node")]
 pub mod node;
-
-#[cfg(feature = "wasm-runtime")]
-pub mod runtime;
 
 #[cfg(feature = "raft")]
 pub mod raft;
@@ -42,6 +42,9 @@ pub mod util;
 
 #[cfg(feature = "wallet")]
 pub mod wallet;
+
+#[cfg(feature = "wasm-runtime")]
+pub mod runtime;
 
 #[cfg(feature = "zkas")]
 pub mod zkas;

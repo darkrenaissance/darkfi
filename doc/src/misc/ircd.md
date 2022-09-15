@@ -17,6 +17,10 @@ between hosts.
 % sudo make install BINS=ircd
 ```
 
+Follow the instructions in the
+[README](https://darkrenaissance.github.io/darkfi/index.html) to ensure
+you have all the necessary dependenices.
+
 ## Usage (DarkFi Network)
 
 Upon installing `ircd` as described above, the preconfigured defaults
@@ -61,54 +65,22 @@ on how to install it on your computer.
 Once installed, we can configure a new server which will represent our
 `ircd` instance. First, start weechat, and in its window - run the
 following commands (there is an assumption that `irc_listen` in the
-`ircd` config file is set to `127.0.0.1:11066`):
+`ircd` config file is set to `127.0.0.1:6667`):
 
 ```
-/server add darkfi localhost/11066 -autoconnect
+/server add darkfi localhost/6667 -autoconnect
 /save
 /quit
 ```
 
 This will set up the server, save the settings, and exit weechat.
-We can now proceed with installing the `mallumo` weechat script, which
-is used for E2E encryption in private messages on this IRC network.
-
-#### E2E encryption with mallumo
-
-`mallumo` is a Python plugin for Weechat that can be used to
-enable end-to-end encryption for private messages between you and
-other users of the DarkFi IRC network. The verbose installation
-and configuration instructions can be found in the [mallumo git
-repository](https://github.com/darkrenaissance/mallumo).
-
-Briefly, make sure you install python3 and
-[`pynacl`](https://github.com/pyca/pynacl/) (can usually be done with
-your distribution's package manager or `pip`).
-
-Then find where weechat has put its configuration files. It is usually
-`~/.weechat` or `~/.local/share/weechat` (here we will assume the
-latter). Go to the directory, clone the repo, and make a couple of
-symlinks:
-
-```shell
-% cd ~/.local/share/weechat
-% mkdir -p src
-% git clone https://github.com/darkrenaissance/mallumo src/mallumo
-% cd python
-% ln -s `realpath ../src/mallumo/mallumo` mallumo
-% ln -s `realpath ../src/mallumo/mallumo/__init__.py` autoload/mallumo.py
-```
-
-Refer to
-[darkrenaissance/mallumo](https://github.com/darkrenaissance/mallumo)
-and its README for usage instructions.
-
-After this has been set up, the next time you start `ircd` and then
-`weechat`, you will be connected to the DarkFi IRC network and be
-able to chat with other participants.
-
+You are now ready to begin using the chat. Simply start weechat
+and everything should work.
 
 ## Usage (Local Deployment)
+
+These steps below are only for developers who wish to make a testing
+deployment. The previous sections are sufficient to join the chat.
 
 ### Seed Node
 
@@ -119,12 +91,13 @@ which requests a list of addresses from the seed node and disconnects
 straight after receiving them.
 
 The first time you run the program, a config file will be created in
-.config/darkfi. You must specify an inbound accept address in your
-config file to configure a seed node:
+`~/.config/darkfi` if your are using Linux or in 
+`~/Library/Application Support/darkfi/` on MacOS. 
+You must specify an inbound accept address in your config file to configure a seed node:
 
 ```toml
-## P2P accept address
-inbound="127.0.0.1:11001" 
+## P2P accept addresses
+inbound=["127.0.0.1:11001"]
 ```
 
 Note that the above config doesn't specify an external address since
@@ -138,17 +111,17 @@ the network during the bootstrapping phase.
 This is a node accepting inbound connections on the network but which
 is not making any outbound connections.
 
-The external address is important and must be correct.
+The external addresses are important and must be correct.
 
 To run an inbound node, your config file must contain the following
 info:
 		
 ```toml
-## P2P accept address
-inbound="127.0.0.1:11002" 
+## P2P accept addresses
+inbound=["127.0.0.1:11002"]
 
-## P2P external address
-external_addr="127.0.0.1:11002"
+## P2P external addresses
+external_addr=["127.0.0.1:11002"]
 
 ## Seed nodes to connect to 
 seeds=["127.0.0.1:11001"]

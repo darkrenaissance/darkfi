@@ -1,9 +1,8 @@
 use std::time::Instant;
 
-use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
 use log::debug;
-use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use rand::rngs::OsRng;
 
 use crate::{
@@ -11,15 +10,17 @@ use crate::{
         coin::Coin,
         keypair::PublicKey,
         proof::{Proof, ProvingKey, VerifyingKey},
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValue, DrkValueBlind, DrkValueCommit},
-        util::{pedersen_commitment_base, pedersen_commitment_u64},
+        types::{
+            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkValue, DrkValueBlind, DrkValueCommit,
+        },
+        util::{pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
     },
     util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::mint_contract::MintContract,
     Result,
 };
 
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct MintRevealedValues {
     pub value_commit: DrkValueCommit,
     pub token_commit: DrkValueCommit,
@@ -27,12 +28,15 @@ pub struct MintRevealedValues {
 }
 
 impl MintRevealedValues {
+    #[allow(clippy::too_many_arguments)]
     pub fn compute(
         value: u64,
         token_id: DrkTokenId,
         value_blind: DrkValueBlind,
         token_blind: DrkValueBlind,
         serial: DrkSerial,
+        spend_hook: DrkSpendHook,
+        user_data: DrkUserData,
         coin_blind: DrkCoinBlind,
         public_key: PublicKey,
     ) -> Self {
@@ -40,17 +44,22 @@ impl MintRevealedValues {
         let token_commit = pedersen_commitment_base(token_id, token_blind);
 
         let coords = public_key.0.to_affine().coordinates().unwrap();
-        let messages =
-            [*coords.x(), *coords.y(), DrkValue::from(value), token_id, serial, coin_blind];
 
-        let coin =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
-                .hash(messages);
+        let coin = poseidon_hash::<8>([
+            *coords.x(),
+            *coords.y(),
+            DrkValue::from(value),
+            token_id,
+            serial,
+            spend_hook,
+            user_data,
+            coin_blind,
+        ]);
 
         MintRevealedValues { value_commit, token_commit, coin: Coin(coin) }
     }
 
-    pub fn make_outputs(&self) -> [pallas::Base; 5] {
+    pub fn make_outputs(&self) -> Vec<DrkCircuitField> {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
 
@@ -61,8 +70,6 @@ impl MintRevealedValues {
             *token_coords.x(),
             *token_coords.y(),
         ]
-        .try_into()
-        .unwrap()
     }
 }
 
@@ -74,6 +81,8 @@ pub fn create_mint_proof(
     value_blind: DrkValueBlind,
     token_blind: DrkValueBlind,
     serial: DrkSerial,
+    spend_hook: DrkSpendHook,
+    user_data: DrkUserData,
     coin_blind: DrkCoinBlind,
     public_key: PublicKey,
 ) -> Result<(Proof, MintRevealedValues)> {
@@ -83,6 +92,8 @@ pub fn create_mint_proof(
         value_blind,
         token_blind,
         serial,
+        spend_hook,
+        user_data,
         coin_blind,
         public_key,
     );
@@ -96,6 +107,8 @@ pub fn create_mint_proof(
         token: Value::known(token_id),
         serial: Value::known(serial),
         coin_blind: Value::known(coin_blind),
+        spend_hook: Value::known(spend_hook),
+        user_data: Value::known(user_data),
         value_blind: Value::known(value_blind),
         token_blind: Value::known(token_blind),
     };

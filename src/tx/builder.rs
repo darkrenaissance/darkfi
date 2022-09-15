@@ -14,7 +14,10 @@ use crate::{
         note::Note,
         proof::ProvingKey,
         schnorr::SchnorrSecret,
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+        types::{
+            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
+            DrkValueBlind,
+        },
     },
     util::serial::Encodable,
     Result,
@@ -69,6 +72,8 @@ impl TransactionBuilder {
     }
 
     pub fn build(self, mint_pk: &ProvingKey, burn_pk: &ProvingKey) -> Result<Transaction> {
+        assert!(self.clear_inputs.len() + self.inputs.len() > 0);
+
         let mut clear_inputs = vec![];
         let token_blind = DrkValueBlind::random(&mut OsRng);
         for input in &self.clear_inputs {
@@ -89,19 +94,26 @@ impl TransactionBuilder {
         let mut input_blinds = vec![];
         let mut signature_secrets = vec![];
         for input in self.inputs {
-            // FIXME: BUG - looks like we are reusing the value_blind from the output
-            // This must be a completely new random value or the value_commit will be the same.
-            input_blinds.push(input.note.value_blind);
+            let value_blind = DrkValueBlind::random(&mut OsRng);
+            input_blinds.push(value_blind);
 
             let signature_secret = SecretKey::random(&mut OsRng);
+
+            // Disable composability for this old obselete API
+            let spend_hook = DrkSpendHook::from(0);
+            let user_data = DrkUserData::from(0);
+            let user_data_blind = DrkUserDataBlind::random(&mut OsRng);
 
             let (proof, revealed) = create_burn_proof(
                 burn_pk,
                 input.note.value,
                 input.note.token_id,
-                input.note.value_blind,
+                value_blind,
                 token_blind,
                 input.note.serial,
+                spend_hook,
+                user_data,
+                user_data_blind,
                 input.note.coin_blind,
                 input.secret,
                 input.leaf_position,
@@ -118,6 +130,8 @@ impl TransactionBuilder {
 
         let mut outputs = vec![];
         let mut output_blinds = vec![];
+        // This value_blind calc assumes there will always be at least a single output
+        assert!(!self.outputs.is_empty());
 
         for (i, output) in self.outputs.iter().enumerate() {
             let value_blind = if i == self.outputs.len() - 1 {
@@ -130,6 +144,10 @@ impl TransactionBuilder {
             let serial = DrkSerial::random(&mut OsRng);
             let coin_blind = DrkCoinBlind::random(&mut OsRng);
 
+            // Disable composability for this old obselete API
+            let spend_hook = DrkSpendHook::from(0);
+            let user_data = DrkUserData::from(0);
+
             let (mint_proof, revealed) = create_mint_proof(
                 mint_pk,
                 output.value,
@@ -137,12 +155,13 @@ impl TransactionBuilder {
                 value_blind,
                 token_blind,
                 serial,
+                spend_hook,
+                user_data,
                 coin_blind,
                 output.public,
             )?;
 
             // Encrypted note
-
             let note = Note {
                 serial,
                 value: output.value,
@@ -150,6 +169,7 @@ impl TransactionBuilder {
                 coin_blind,
                 value_blind,
                 token_blind,
+                memo: vec![],
             };
 
             let encrypted_note = note.encrypt(&output.public)?;

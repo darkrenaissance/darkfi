@@ -6,7 +6,8 @@ LISTS = \
 	darkfi_token_list \
 	bitcoin_token_list \
 	erc20_token_list \
-	solana_token_list
+	solana_token_list \
+	monero_token_list
 
 LISTS_JSON = $(LISTS:=.json)
 LISTS_MIN  = $(LISTS:=.min.json)
@@ -23,6 +24,9 @@ darkfi_token_list.json:
 	git checkout -- $@
 
 bitcoin_token_list.json:
+	git checkout -- $@
+
+monero_token_list.json:
 	git checkout -- $@
 
 erc20_token_list.json:

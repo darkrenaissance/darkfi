@@ -12,7 +12,7 @@ const SLED_OUROBOROS_METADATA_TREE: &[u8] = b"_ouroboros_metadata";
 
 /// The `StreamletMetadataStore` is a `sled` tree storing all the blockchain's
 /// blocks' metadata used by the Streamlet consensus protocol, where the key
-/// is the block's hash, and the value is the serialized metadata.
+/// is the block's headers' hash, and the value is the serialized metadata.
 #[derive(Clone)]
 pub struct StreamletMetadataStore(sled::Tree);
 
@@ -25,7 +25,6 @@ impl StreamletMetadataStore {
         // In case the store is empty, initialize it with the genesis block.
         if store.0.is_empty() {
             let genesis_block = Block::genesis_block(genesis_ts, genesis_data);
-            let genesis_hash = blake3::hash(&serialize(&genesis_block));
 
             let metadata = StreamletMetadata {
                 votes: vec![],
@@ -34,7 +33,7 @@ impl StreamletMetadataStore {
                 participants: vec![],
             };
 
-            store.insert(&[genesis_hash], &[metadata])?;
+            store.insert(&[genesis_block.header], &[metadata])?;
         }
 
         Ok(store)

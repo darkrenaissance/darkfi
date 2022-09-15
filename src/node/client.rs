@@ -2,17 +2,17 @@ use async_std::sync::{Arc, Mutex};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info};
+use pasta_curves::group::ff::PrimeField;
 
 use super::state::{state_transition, State};
 use crate::{
     crypto::{
         address::Address,
         coin::Coin,
-        constants::MERKLE_DEPTH_ORCHARD,
+        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey},
         merkle_node::MerkleNode,
         proof::ProvingKey,
-        token_list::DrkTokenList,
         types::DrkTokenId,
         OwnCoin,
     },
@@ -29,20 +29,17 @@ use crate::{
     ClientFailed, ClientResult, Result,
 };
 
-const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
-
 /// The Client structure, used for transaction operations.
 /// This includes, receiving, broadcasting, and building.
 pub struct Client {
     pub main_keypair: Mutex<Keypair>,
     pub wallet: WalletPtr,
-    pub tokenlist: Arc<DrkTokenList>,
     mint_pk: Lazy<ProvingKey>,
     burn_pk: Lazy<ProvingKey>,
 }
 
 impl Client {
-    pub async fn new(wallet: WalletPtr, tokenlist: Arc<DrkTokenList>) -> Result<Self> {
+    pub async fn new(wallet: WalletPtr) -> Result<Self> {
         // Initialize or load the wallet
         wallet.init_db().await?;
 
@@ -59,7 +56,6 @@ impl Client {
         Ok(Self {
             main_keypair: Mutex::new(main_keypair),
             wallet,
-            tokenlist,
             mint_pk: Lazy::new(),
             burn_pk: Lazy::new(),
         })
@@ -106,7 +102,7 @@ impl Client {
                     leaf_position,
                     merkle_path,
                     secret: own_coin.secret,
-                    note: own_coin.note,
+                    note: own_coin.note.clone(),
                 };
 
                 inputs.push(input);
@@ -160,8 +156,11 @@ impl Client {
         clear_input: bool,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<Transaction> {
-        // TODO: Token id debug
-        debug!("send(): Sending {}", amount);
+        debug!(
+            "send(): Sending {} {} tokens",
+            amount,
+            bs58::encode(token_id.to_repr()).into_string()
+        );
 
         if amount == 0 {
             return Err(ClientFailed::InvalidAmount(0))
@@ -195,6 +194,10 @@ impl Client {
         self.wallet.confirm_spend_coin(coin).await
     }
 
+    pub async fn revert_spend_coin(&self, coin: &Coin) -> Result<()> {
+        self.wallet.revert_spend_coin(coin).await
+    }
+
     pub async fn get_keypairs(&self) -> Result<Vec<Keypair>> {
         self.wallet.get_keypairs().await
     }
@@ -220,13 +223,22 @@ impl Client {
         self.wallet.get_balances().await
     }
 
+    pub async fn get_coins_valtok(
+        &self,
+        value: u64,
+        token_id: DrkTokenId,
+        unspent: bool,
+    ) -> Result<Vec<OwnCoin>> {
+        self.wallet.get_coins_valtok(value, token_id, unspent).await
+    }
+
     pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
         self.wallet.get_tree().await
     }
 
     fn build_mint_pk() -> ProvingKey {
         debug!("Building proving key for MintContract");
-        ProvingKey::build(8, &MintContract::default())
+        ProvingKey::build(11, &MintContract::default())
     }
 
     fn build_burn_pk() -> ProvingKey {

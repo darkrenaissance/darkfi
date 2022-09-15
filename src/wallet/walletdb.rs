@@ -3,7 +3,7 @@ use std::{fs::create_dir_all, path::Path, str::FromStr, time::Duration};
 use async_std::sync::Arc;
 use group::ff::PrimeField;
 use incrementalmerkletree::bridgetree::BridgeTree;
-use log::{debug, error, info, warn, LevelFilter};
+use log::{debug, error, info, LevelFilter};
 use rand::rngs::OsRng;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode},
@@ -14,25 +14,21 @@ use crate::{
     crypto::{
         address::Address,
         coin::Coin,
-        constants::MERKLE_DEPTH_ORCHARD,
+        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::Note,
         nullifier::Nullifier,
-        token_list::DrkTokenList,
         types::DrkTokenId,
         OwnCoin, OwnCoins,
     },
     util::{
         expand_path,
         serial::{deserialize, serialize},
-        NetworkName,
     },
     Error::{WalletEmptyPassword, WalletTreeExists},
     Result,
 };
-
-const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 pub type WalletPtr = Arc<WalletDb>;
 
@@ -272,9 +268,10 @@ impl WalletDb {
             let coin_blind = deserialize(row.get("coin_blind"))?;
             let value_blind = deserialize(row.get("valcom_blind"))?;
             let value = deserialize(row.get("value"))?;
-            let token_id = deserialize(row.get("drk_address"))?;
+            let token_id = deserialize(row.get("token_id"))?;
             let token_blind = deserialize(row.get("token_blind"))?;
-            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind };
+            let memo = deserialize(row.get("memo"))?;
+            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind, memo };
 
             let secret = deserialize(row.get("secret"))?;
             let nullifier = deserialize(row.get("nullifier"))?;
@@ -288,11 +285,67 @@ impl WalletDb {
         Ok(own_coins)
     }
 
-    pub async fn put_own_coin(
+    pub async fn get_coins_valtok(
         &self,
-        own_coin: OwnCoin,
-        tokenlist: Arc<DrkTokenList>,
-    ) -> Result<()> {
+        value: u64,
+        token_id: DrkTokenId,
+        unspent: bool,
+    ) -> Result<Vec<OwnCoin>> {
+        debug!(
+            "Querying for coins with value {} and token_id {}",
+            value,
+            bs58::encode(token_id.to_repr()).into_string()
+        );
+
+        let mut conn = self.conn.acquire().await?;
+        let rows = match unspent {
+            true => {
+                sqlx::query(
+                    "SELECT * FROM coins WHERE is_spent = ?1 AND value = ?2 AND token_id = ?3;",
+                )
+                .bind(0)
+                .bind(serialize(&value))
+                .bind(serialize(&token_id))
+                .fetch_all(&mut conn)
+                .await?
+            }
+            false => {
+                sqlx::query("SELECT * FROM coins WHERE value = ?1 AND token_id = ?2;")
+                    .bind(serialize(&value))
+                    .bind(serialize(&token_id))
+                    .fetch_all(&mut conn)
+                    .await?
+            }
+        };
+
+        let mut coins = vec![];
+
+        for row in rows {
+            let coin = deserialize(row.get("coin"))?;
+
+            // Note
+            let serial = deserialize(row.get("serial"))?;
+            let coin_blind = deserialize(row.get("coin_blind"))?;
+            let value_blind = deserialize(row.get("valcom_blind"))?;
+            let value = deserialize(row.get("value"))?;
+            let token_id = deserialize(row.get("token_id"))?;
+            let token_blind = deserialize(row.get("token_blind"))?;
+            let memo = deserialize(row.get("memo"))?;
+            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind, memo };
+
+            let secret = deserialize(row.get("secret"))?;
+            let nullifier = deserialize(row.get("nullifier"))?;
+            let leaf_position = deserialize(row.get("leaf_position"))?;
+
+            let oc = OwnCoin { coin, note, secret, nullifier, leaf_position };
+
+            coins.push(oc);
+        }
+
+        Ok(coins)
+    }
+
+    pub async fn put_own_coin(&self, own_coin: OwnCoin) -> Result<()> {
         debug!("Putting own coin into wallet database");
 
         let coin = serialize(&own_coin.coin.to_bytes());
@@ -301,32 +354,20 @@ impl WalletDb {
         let value_blind = serialize(&own_coin.note.value_blind);
         let token_blind = serialize(&own_coin.note.token_blind);
         let value = serialize(&own_coin.note.value);
-        let drk_address = serialize(&own_coin.note.token_id);
+        let token_id = serialize(&own_coin.note.token_id);
         let secret = serialize(&own_coin.secret);
         let nullifier = serialize(&own_coin.nullifier);
         let leaf_position = serialize(&own_coin.leaf_position);
+        let memo = serialize(&own_coin.note.memo);
         let is_spent: u8 = 0;
-
-        let token_id_enc = bs58::encode(&own_coin.note.token_id.to_repr()).into_string();
-
-        let (network, net_address) =
-            if let Some((network, token_info)) = tokenlist.by_addr.get(&token_id_enc) {
-                (network, token_info.net_address.clone())
-            } else {
-                warn!("Could not find network and token info in parsed token list");
-                (&NetworkName::DarkFi, "unknown".to_string())
-            };
-
-        let network = serialize(network);
 
         let mut conn = self.conn.acquire().await?;
         sqlx::query(
             "INSERT OR REPLACE INTO coins
             (coin, serial, coin_blind, valcom_blind, token_blind, value,
-             network, drk_address, net_address,
-             secret, is_spent, nullifier, leaf_position)
+             token_id, secret, is_spent, nullifier, leaf_position, memo)
             VALUES
-             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);",
+             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);",
         )
         .bind(coin)
         .bind(serial)
@@ -334,13 +375,12 @@ impl WalletDb {
         .bind(value_blind)
         .bind(token_blind)
         .bind(value)
-        .bind(network)
-        .bind(drk_address) // token_id
-        .bind(net_address)
+        .bind(token_id)
         .bind(secret)
         .bind(is_spent)
         .bind(nullifier)
         .bind(leaf_position)
+        .bind(memo)
         .execute(&mut conn)
         .await?;
 
@@ -369,23 +409,37 @@ impl WalletDb {
         Ok(())
     }
 
+    pub async fn revert_spend_coin(&self, coin: &Coin) -> Result<()> {
+        debug!("Revert spend coin");
+        let is_spent = 0;
+        let coin = serialize(coin);
+
+        let mut conn = self.conn.acquire().await?;
+        sqlx::query("UPDATE coins SET is_spent = ?1 WHERE coin = ?2;")
+            .bind(is_spent)
+            .bind(coin)
+            .execute(&mut conn)
+            .await?;
+
+        Ok(())
+    }
+
     pub async fn get_balances(&self) -> Result<Balances> {
         debug!("Getting tokens and balances");
         let is_spent = 0;
 
         let mut conn = self.conn.acquire().await?;
-        let rows =
-            sqlx::query("SELECT value, drk_address, nullifier FROM coins WHERE is_spent = ?1;")
-                .bind(is_spent)
-                .fetch_all(&mut conn)
-                .await?;
+        let rows = sqlx::query("SELECT value, token_id, nullifier FROM coins WHERE is_spent = ?1;")
+            .bind(is_spent)
+            .fetch_all(&mut conn)
+            .await?;
 
         debug!("Found {} rows", rows.len());
 
         let mut list = vec![];
         for row in rows {
             let value = deserialize(row.get("value"))?;
-            let token_id = deserialize(row.get("drk_address"))?;
+            let token_id = deserialize(row.get("token_id"))?;
             let nullifier = deserialize(row.get("nullifier"))?;
             list.push(Balance { token_id, value, nullifier });
         }
@@ -398,14 +452,14 @@ impl WalletDb {
         let is_spent = 0;
 
         let mut conn = self.conn.acquire().await?;
-        let rows = sqlx::query("SELECT drk_address FROM coins WHERE is_spent = ?1;")
+        let rows = sqlx::query("SELECT token_id FROM coins WHERE is_spent = ?1;")
             .bind(is_spent)
             .fetch_all(&mut conn)
             .await?;
 
         let mut token_ids = vec![];
         for row in rows {
-            let token_id = deserialize(row.get("drk_address"))?;
+            let token_id = deserialize(row.get("token_id"))?;
             token_ids.push(token_id);
         }
 
@@ -420,7 +474,7 @@ impl WalletDb {
 
         let mut conn = self.conn.acquire().await?;
 
-        let id_check = sqlx::query("SELECT * FROM coins WHERE drk_address = ?1 AND is_spent = ?2;")
+        let id_check = sqlx::query("SELECT * FROM coins WHERE token_id = ?1 AND is_spent = ?2;")
             .bind(id)
             .bind(is_spent)
             .fetch_optional(&mut conn)
@@ -460,6 +514,7 @@ mod tests {
             coin_blind: DrkCoinBlind::random(&mut OsRng),
             value_blind: DrkValueBlind::random(&mut OsRng),
             token_blind: DrkValueBlind::random(&mut OsRng),
+            memo: vec![],
         };
 
         let coin = Coin(pallas::Base::random(&mut OsRng));
@@ -473,13 +528,6 @@ mod tests {
     async fn test_walletdb() -> Result<()> {
         let wallet = WalletDb::new("sqlite::memory:", WPASS).await?;
         let keypair = Keypair::random(&mut OsRng);
-
-        let tokenlist = Arc::new(DrkTokenList::new(&[
-            ("drk", include_bytes!("../../contrib/token/darkfi_token_list.min.json")),
-            ("btc", include_bytes!("../../contrib/token/bitcoin_token_list.min.json")),
-            ("eth", include_bytes!("../../contrib/token/erc20_token_list.min.json")),
-            ("sol", include_bytes!("../../contrib/token/solana_token_list.min.json")),
-        ])?);
 
         // init_db()
         wallet.init_db().await?;
@@ -498,19 +546,19 @@ mod tests {
         let c3 = dummy_coin(&keypair.secret, 11, &token_id);
 
         // put_own_coin()
-        wallet.put_own_coin(c0, tokenlist.clone()).await?;
+        wallet.put_own_coin(c0.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c0.coin));
         tree1.witness();
 
-        wallet.put_own_coin(c1, tokenlist.clone()).await?;
+        wallet.put_own_coin(c1.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c1.coin));
         tree1.witness();
 
-        wallet.put_own_coin(c2, tokenlist.clone()).await?;
+        wallet.put_own_coin(c2.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c2.coin));
         tree1.witness();
 
-        wallet.put_own_coin(c3, tokenlist).await?;
+        wallet.put_own_coin(c3.clone()).await?;
         tree1.append(&MerkleNode::from_coin(&c3.coin));
         tree1.witness();
 

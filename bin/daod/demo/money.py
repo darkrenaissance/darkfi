@@ -319,10 +319,6 @@ class MintProof:
             self.token_id, self.token_blind, self.ec
         )
 
-        revealed.dest_commit = ff_hash(
-            self.ec.p, self.public[0], self.public[1]
-        )
-
         return revealed
 
     def verify(self, public):
@@ -331,6 +327,5 @@ class MintProof:
             revealed.coin == public.coin,
             revealed.value_commit == public.value_commit,
             revealed.token_commit == public.token_commit,
-            revealed.dest_commit == public.dest_commit
         ])
 

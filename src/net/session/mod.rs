@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use log::debug;
@@ -8,17 +8,34 @@ use crate::Result;
 
 use super::{p2p::P2pPtr, protocol::ProtocolVersion, ChannelPtr};
 
-/// Seed connections session. Manages the creation of seed sessions. Used on
-/// first time connecting to the network. The seed node stores a list of other
-/// nodes in the network.
-pub mod seed_session;
+/// Seed sync session creates a connection to the seed nodes specified in settings.
+/// A new seed sync session is created every time we call p2p::start(). The seed
+/// sync session loops through all the configured seeds and tries to connect to
+/// them using a Connector. Seed sync either connects successfully,
+/// fails with an error or times out.
+///
+/// If a seed node connects successfully, it runs a version exchange protocol,
+/// stores the channel in the p2p list of channels, and disconnects, removing
+/// the channel from the channel list.
+///
+/// The channel is registered using Session trait method, register_channel().
+/// This invokes the Protocol Registry method attach(). Usually this returns a
+/// list of protocols that we loop through and start. In this case, attach()
+/// uses the bitflag selector to identify seed sessions and exclude them.
+///
+/// The version exchange occurs inside register_channel(). We create a handshake
+/// task that runs the version exchange with the function
+/// perform_handshake_protocols(). This runs the version exchange protocol,
+/// stores the channel in the p2p list of channels, and subscribes to a stop
+/// signal.
+pub mod seedsync_session;
 
 pub mod manual_session;
 
 /// Inbound connections session. Manages the creation of inbound sessions. Used
 /// to create an inbound session and start and stop the session.
 ///
-/// Class consists of 3 pointers: a weak pointer to the peer-to-peer class, an
+/// Class consists of 3 pointers: a weak pointer to the p2p parent class, an
 /// acceptor pointer, and a stoppable task pointer. Using a weak pointer to P2P
 /// allows us to avoid circular dependencies.
 pub mod inbound_session;
@@ -26,7 +43,7 @@ pub mod inbound_session;
 /// Outbound connections session. Manages the creation of outbound sessions.
 /// Used to create an outbound session and stop and start the session.
 ///
-/// Class consists of a weak pointer to the peer-to-peer interface and a vector
+/// Class consists of a weak pointer to the p2p interface and a vector
 /// of outbound connection slots. Using a weak pointer to p2p allows us to avoid
 /// circular dependencies. The vector of slots is wrapped in a mutex lock. This
 /// is switched on everytime we instantiate a connection slot and insures that
@@ -44,7 +61,9 @@ pub const SESSION_ALL: SessionBitflag = 0b1111;
 pub use inbound_session::InboundSession;
 pub use manual_session::ManualSession;
 pub use outbound_session::OutboundSession;
-pub use seed_session::SeedSession;
+pub use seedsync_session::SeedSyncSession;
+
+pub type SessionWeakPtr = Arc<Weak<dyn Session + Send + Sync + 'static>>;
 
 /// Removes channel from the list of connected channels when a stop signal is
 /// received.
@@ -74,8 +93,12 @@ async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
 pub trait Session: Sync {
     /// Registers a new channel with the session. Performs a network handshake
     /// and starts the channel.
+    // if we need to pass Self as an Arc we can do so like this:
+    // pub trait MyTrait: Send + Sync {
+    //      async fn foo(&self, self_: Arc<dyn MyTrait>) {}
+    // }
     async fn register_channel(
-        self: Arc<Self>,
+        &self,
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
@@ -87,10 +110,12 @@ pub trait Session: Sync {
         // They are currently in sleep mode.
         let p2p = self.p2p();
         let protocols =
-            p2p.protocol_registry().attach(self.selector_id(), channel.clone(), p2p.clone()).await;
+            p2p.protocol_registry().attach(self.type_id(), channel.clone(), p2p.clone()).await;
 
         // Perform the handshake protocol
-        let protocol_version = ProtocolVersion::new(channel.clone(), self.p2p().settings()).await;
+        let protocol_version =
+            ProtocolVersion::new(channel.clone(), p2p.settings().clone(), p2p.hosts().clone())
+                .await;
         let handshake_task =
             self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 
@@ -144,5 +169,5 @@ pub trait Session: Sync {
     /// Returns a pointer to the p2p network interface.
     fn p2p(&self) -> P2pPtr;
 
-    fn selector_id(&self) -> u32;
+    fn type_id(&self) -> u32;
 }

@@ -7,7 +7,7 @@ use crate::{
     Result,
 };
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Coin(pub pallas::Base);
 
 impl Coin {

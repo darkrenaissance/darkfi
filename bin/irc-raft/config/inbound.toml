@@ -9,14 +9,14 @@ datastore="~/.config/ircd-inbound"
 
 ## Raft net settings
 [net]
-## P2P accept address
-inbound="127.0.0.1:11002" 
+## P2P accept addresses
+inbound=["127.0.0.1:11002"]
 
 ## Connection slots
 #outbound_connections=5
 
-## P2P external address
-external_addr="127.0.0.1:11004"
+## P2P external addresses
+external_addr=["127.0.0.1:11004"]
 
 ## Peers to connect to
 #peers=["127.0.0.1:11003"]

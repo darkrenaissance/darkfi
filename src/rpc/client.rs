@@ -47,7 +47,7 @@ impl RpcClient {
         // sending to a closed channel.
         if let Err(e) = self.send.send(json!(value)).await {
             error!("JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
-            return Err(Error::OperationFailed)
+            return Err(Error::NetworkOperationFailed)
         }
 
         // If the connection is closed, the receiver will get an error for
@@ -55,7 +55,7 @@ impl RpcClient {
         let reply = self.recv.recv().await;
         if reply.is_err() {
             error!("JSON-RPC client unable to recv from {} (channels closed)", self.url);
-            return Err(Error::OperationFailed)
+            return Err(Error::NetworkOperationFailed)
         }
 
         match reply? {

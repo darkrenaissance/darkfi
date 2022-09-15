@@ -19,7 +19,7 @@ use crate::{
 use super::{
     message,
     message_subscriber::{MessageSubscription, MessageSubsystem},
-    TransportStream,
+    Session, SessionBitflag, SessionWeakPtr, TransportStream,
 };
 
 /// Atomic pointer to async channel.
@@ -27,6 +27,7 @@ pub type ChannelPtr = Arc<Channel>;
 
 struct ChannelInfo {
     random_id: u32,
+    remote_node_id: String,
     last_msg: String,
     last_status: String,
     // Message log which is cleared on querying get_info
@@ -37,6 +38,7 @@ impl ChannelInfo {
     fn new() -> Self {
         Self {
             random_id: rand::thread_rng().gen(),
+            remote_node_id: String::new(),
             last_msg: String::new(),
             last_status: String::new(),
             log: Mutex::new(Vec::new()),
@@ -46,6 +48,7 @@ impl ChannelInfo {
     async fn get_info(&self) -> serde_json::Value {
         let result = json!({
             "random_id": self.random_id,
+            "remote_node_id": self.remote_node_id,
             "last_msg": self.last_msg,
             "last_status": self.last_status,
             "log": self.log.lock().await.clone(),
@@ -65,13 +68,18 @@ pub struct Channel {
     receive_task: StoppableTaskPtr,
     stopped: Mutex<bool>,
     info: Mutex<ChannelInfo>,
+    session: SessionWeakPtr,
 }
 
 impl Channel {
     /// Sets up a new channel. Creates a reader and writer TCP stream and
     /// summons the message subscriber subsystem. Performs a network
     /// handshake on the subsystem dispatchers.
-    pub async fn new(stream: Box<dyn TransportStream>, address: Url) -> Arc<Self> {
+    pub async fn new(
+        stream: Box<dyn TransportStream>,
+        address: Url,
+        session: SessionWeakPtr,
+    ) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
@@ -88,6 +96,7 @@ impl Channel {
             receive_task: StoppableTask::new(),
             stopped: Mutex::new(false),
             info: Mutex::new(ChannelInfo::new()),
+            session,
         })
     }
 
@@ -103,7 +112,7 @@ impl Channel {
         self.receive_task.clone().start(
             self.clone().main_receive_loop(),
             |result| self2.handle_stop(result),
-            Error::ServiceStopped,
+            Error::NetworkServiceStopped,
             executor,
         );
         debug!(target: "net", "Channel::start() [END, address={}]", self.address());
@@ -114,10 +123,8 @@ impl Channel {
     /// the channel has been closed.
     pub async fn stop(&self) {
         debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
-        let mut stopped = *self.stopped.lock().await;
-        if !stopped {
-            stopped = true;
-            drop(stopped);
+        if !(*self.stopped.lock().await) {
+            *self.stopped.lock().await = true;
 
             self.stop_subscriber.notify(Error::ChannelStopped).await;
             self.receive_task.stop().await;
@@ -232,6 +239,13 @@ impl Channel {
         self.address.clone()
     }
 
+    pub async fn remote_node_id(&self) -> String {
+        self.info.lock().await.remote_node_id.clone()
+    }
+    pub async fn set_remote_node_id(&self, remote_node_id: String) {
+        self.info.lock().await.remote_node_id = remote_node_id;
+    }
+
     /// End of file error. Triggered when unexpected end of file occurs.
     fn is_eof_error(err: Error) -> bool {
         match err {
@@ -272,10 +286,10 @@ impl Channel {
                     if Self::is_eof_error(err.clone()) {
                         info!("Inbound connection {} disconnected", self.address());
                     } else {
-                        error!("Read error on channel: {}", err);
+                        error!("Read error on channel {}: {}", self.address(), err);
                     }
                     debug!(target: "net",
-                     "Channel::receive_loop() stopping channel {:?}",
+                     "Channel::receive_loop() stopping channel {}",
                      self.address()
                     );
                     self.stop().await;
@@ -308,5 +322,14 @@ impl Channel {
             }
         }
         debug!(target: "net", "Channel::handle_stop() [END, address={}]", self.address());
+    }
+
+    fn session(&self) -> Arc<dyn Session> {
+        self.session.upgrade().unwrap()
+    }
+
+    pub fn session_type_id(&self) -> SessionBitflag {
+        let session = self.session();
+        session.type_id()
     }
 }

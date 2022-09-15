@@ -1,5 +1,7 @@
 use blake2b_simd::Params;
-use halo2_gadgets::ecc::chip::FixedPoint;
+
+use halo2_gadgets::{ecc::chip::FixedPoint, poseidon::primitives as poseidon};
+
 use pasta_curves::{
     arithmetic::{CurveExt, FieldExt},
     group::ff::PrimeField,
@@ -45,12 +47,14 @@ pub fn pedersen_commitment_u64(value: u64, blind: DrkValueBlind) -> DrkValueComm
     V * mod_r_p(DrkValue::from(value)) + R * blind
 }
 
+
 /*
 #[allow(non_snake_case)]
 pub fn pedersen_commitment_base(value: pallas::Base, blind: DrkValueBlind) -> DrkValueCommit {
     let hasher = DrkValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
     let V = hasher(&VALUE_COMMITMENT_V_BYTES);
     let R = hasher(&VALUE_COMMITMENT_R_BYTES);
+
 
     V * mod_r_p(value) + R * blind
 }

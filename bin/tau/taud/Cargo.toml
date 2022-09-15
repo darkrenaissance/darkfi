@@ -1,33 +1,43 @@
 [package]
 name = "taud"
-version = "0.3.0"
+description = "Encrypted tasks management app using peer-to-peer network and raft consensus."
+version = "0.4.0"
 edition = "2021"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
+homepage = "https://dark.fi"
+repository = "https://github.com/darkrenaissance/darkfi"
+keywords = []
+categories = []
 
 [dependencies]
 darkfi = { path = "../../../", features = ["rpc", "raft", "net"]}
 
 # Async
 smol = "1.2.5"
-async-std = {version = "1.11.0", features = ["attributes"]}
-async-trait = "0.1.53"
-async-channel = "1.6.1"
+async-std = {version = "1.12.0", features = ["attributes"]}
+async-trait = "0.1.57"
+async-channel = "1.7.1"
 async-executor = "1.4.1"
 easy-parallel = "3.2.0"
-futures = "0.3.21"
+futures = "0.3.24"
 
 # Misc
 log = "0.4.17"
 simplelog = "0.12.0"
 rand = "0.8.5"
-chrono = "0.4.19"
-thiserror = "1.0.31"
-ctrlc-async = {version= "3.2.2", default-features = false, features = ["async-std", "termination"]}
+chrono = "0.4.22"
+thiserror = "1.0.34"
+ctrlc = { version = "3.2.3", features = ["termination"] }
 url = "2.2.2"
+fxhash = "0.2.1"
 
 # Encoding and parsing
-serde = {version = "1.0.137", features = ["derive"]}
-serde_json = "1.0.81"
+serde = {version = "1.0.144", features = ["derive"]}
+serde_json = "1.0.85"
 structopt = "0.3.26"
-structopt-toml = "0.5.0"
-crypto_box = {version = "0.7.2", features = ["std"]}
+structopt-toml = "0.5.1"
+crypto_box = {version = "0.8.1", features = ["std"]}
 hex = "0.4.3"
+bs58 = "0.4.0"
+toml = "0.5.9"

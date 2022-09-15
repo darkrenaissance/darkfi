@@ -2,19 +2,17 @@ use async_std::sync::Arc;
 
 use async_executor::Executor;
 use async_trait::async_trait;
-use log::{debug, error, warn};
+use log::{debug, error};
 use url::Url;
 
 use crate::{
-    consensus::{ValidatorState, ValidatorStatePtr},
+    consensus::ValidatorStatePtr,
     net,
     net::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
-    node::MemoryState,
     tx::Transaction,
-    util::serial::serialize,
     Result,
 };
 
@@ -67,38 +65,11 @@ impl ProtocolTx {
             };
 
             let tx_copy = (*tx).clone();
-            let tx_hash = blake3::hash(&serialize(&tx_copy));
-
-            let tx_in_txstore =
-                match self.state.read().await.blockchain.transactions.contains(&tx_hash) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!("handle_receive_tx(): Failed querying txstore: {}", e);
-                        continue
-                    }
-                };
-
-            if self.state.read().await.unconfirmed_txs.contains(&tx_copy) || tx_in_txstore {
-                debug!("ProtocolTx::handle_receive_tx(): We have already seen this tx.");
-                continue
-            }
-
-            debug!("ProtocolTx::handle_receive_tx(): Starting state transition validation");
-            let canon_state_clone = self.state.read().await.state_machine.lock().await.clone();
-            let mem_state = MemoryState::new(canon_state_clone);
-            match ValidatorState::validate_state_transitions(mem_state, &[tx_copy.clone()]) {
-                Ok(_) => debug!("ProtocolTx::handle_receive_tx(): State transition valid"),
-                Err(e) => {
-                    warn!("ProtocolTx::handle_receive_tx(): State transition fail: {}", e);
-                    continue
-                }
-            }
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.
-            if self.state.write().await.append_tx(tx_copy.clone()) {
+            if self.state.write().await.append_tx(tx_copy.clone()).await {
                 if let Err(e) = self.p2p.broadcast_with_exclude(tx_copy, &exclude_list).await {
                     error!("handle_receive_tx(): p2p broadcast fail: {}", e);
-                    continue
                 };
             }
         }

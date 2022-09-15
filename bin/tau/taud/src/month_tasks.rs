@@ -7,29 +7,36 @@ use chrono::{TimeZone, Utc};
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use darkfi::util::Timestamp;
+use darkfi::util::{
+    file::{load_json_file, save_json_file},
+    Timestamp,
+};
 
 use crate::{
     error::{TaudError, TaudResult},
     task_info::TaskInfo,
-    util::{load, save},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MonthTasks {
     created_at: Timestamp,
-    task_tks: Vec<String>,
+    active_tks: Vec<String>,
+    deactive_tks: Vec<String>,
 }
 
 impl MonthTasks {
-    pub fn new(task_tks: &[String]) -> Self {
-        Self { created_at: Timestamp::current_time(), task_tks: task_tks.to_owned() }
+    pub fn new(active_tks: &[String], deactive_tks: &[String]) -> Self {
+        Self {
+            created_at: Timestamp::current_time(),
+            active_tks: active_tks.to_owned(),
+            deactive_tks: deactive_tks.to_owned(),
+        }
     }
 
     pub fn add(&mut self, ref_id: &str) {
         debug!(target: "tau", "MonthTasks::add()");
-        if !self.task_tks.contains(&ref_id.into()) {
-            self.task_tks.push(ref_id.into());
+        if !self.active_tks.contains(&ref_id.into()) {
+            self.active_tks.push(ref_id.into());
         }
     }
 
@@ -37,7 +44,11 @@ impl MonthTasks {
         debug!(target: "tau", "MonthTasks::objects()");
         let mut tks: Vec<TaskInfo> = vec![];
 
-        for ref_id in self.task_tks.iter() {
+        for ref_id in self.active_tks.iter() {
+            tks.push(TaskInfo::load(ref_id, dataset_path)?);
+        }
+
+        for ref_id in self.deactive_tks.iter() {
             tks.push(TaskInfo::load(ref_id, dataset_path)?);
         }
 
@@ -46,8 +57,12 @@ impl MonthTasks {
 
     pub fn remove(&mut self, ref_id: &str) {
         debug!(target: "tau", "MonthTasks::remove()");
-        if let Some(index) = self.task_tks.iter().position(|t| *t == ref_id) {
-            self.task_tks.remove(index);
+        if self.active_tks.contains(&ref_id.to_string()) {
+            if let Some(index) = self.active_tks.iter().position(|t| *t == ref_id) {
+                self.deactive_tks.push(self.active_tks.remove(index));
+            }
+        } else {
+            self.deactive_tks.push(ref_id.to_owned());
         }
     }
 
@@ -63,7 +78,7 @@ impl MonthTasks {
 
     pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
         debug!(target: "tau", "MonthTasks::save()");
-        save::<Self>(&Self::get_path(&self.created_at, dataset_path), self)
+        save_json_file::<Self>(&Self::get_path(&self.created_at, dataset_path), self)
             .map_err(TaudError::Darkfi)
     }
 
@@ -82,7 +97,7 @@ impl MonthTasks {
     fn create(date: &Timestamp, dataset_path: &Path) -> TaudResult<Self> {
         debug!(target: "tau", "MonthTasks::create()");
 
-        let mut mt = Self::new(&[]);
+        let mut mt = Self::new(&[], &[]);
         mt.set_date(date);
         mt.save(dataset_path)?;
         Ok(mt)
@@ -94,7 +109,7 @@ impl MonthTasks {
         // if a date is given we load that date's month tasks
         // if not, we load tasks from all months
         match date {
-            Some(date) => match load::<Self>(&Self::get_path(date, dataset_path)) {
+            Some(date) => match load_json_file::<Self>(&Self::get_path(date, dataset_path)) {
                 Ok(mt) => Ok(mt),
                 Err(_) => Self::create(date, dataset_path),
             },
@@ -104,14 +119,19 @@ impl MonthTasks {
                     Err(_) => vec![],
                 };
 
-                let mut loaded_mt = Self::new(&[]);
+                let mut loaded_mt = Self::new(&[], &[]);
 
                 for path in path_all {
-                    let mt = load::<Self>(&path)?;
+                    let mt = load_json_file::<Self>(&path)?;
                     loaded_mt.created_at = mt.created_at;
-                    for tks in mt.task_tks {
-                        if !loaded_mt.task_tks.contains(&tks) {
-                            loaded_mt.task_tks.push(tks)
+                    for tks in mt.active_tks {
+                        if !loaded_mt.active_tks.contains(&tks) {
+                            loaded_mt.active_tks.push(tks)
+                        }
+                    }
+                    for dtks in mt.deactive_tks {
+                        if !loaded_mt.deactive_tks.contains(&dtks) {
+                            loaded_mt.deactive_tks.push(dtks)
                         }
                     }
                 }
@@ -120,9 +140,35 @@ impl MonthTasks {
         }
     }
 
-    pub fn load_current_open_tasks(dataset_path: &Path) -> TaudResult<Vec<TaskInfo>> {
+    pub fn load_current_tasks(
+        dataset_path: &Path,
+        ws: String,
+        all: bool,
+    ) -> TaudResult<Vec<TaskInfo>> {
         let mt = Self::load_or_create(None, dataset_path)?;
-        Ok(mt.objects(dataset_path)?.into_iter().filter(|t| t.get_state() != "stop").collect())
+
+        if all {
+            Ok(mt.objects(dataset_path)?.into_iter().filter(|t| t.workspace == ws).collect())
+        } else {
+            Ok(mt
+                .objects(dataset_path)?
+                .into_iter()
+                .filter(|t| t.get_state() != "stop" && t.workspace == ws)
+                .collect())
+        }
+    }
+
+    pub fn load_stop_tasks(
+        dataset_path: &Path,
+        ws: String,
+        date: Option<&Timestamp>,
+    ) -> TaudResult<Vec<TaskInfo>> {
+        let mt = Self::load_or_create(date, dataset_path)?;
+        Ok(mt
+            .objects(dataset_path)?
+            .into_iter()
+            .filter(|t| t.get_state() == "stop" && t.workspace == ws)
+            .collect())
     }
 }
 
@@ -156,8 +202,15 @@ mod tests {
         // load and save TaskInfo
         ///////////////////////
 
-        let mut task =
-            TaskInfo::new("test_title", "test_desc", "NICKNAME", None, 0.0, &dataset_path)?;
+        let mut task = TaskInfo::new(
+            "darkfi".to_string(),
+            "test_title",
+            "test_desc",
+            "NICKNAME",
+            None,
+            Some(0.0),
+            &dataset_path,
+        )?;
 
         task.save(&dataset_path)?;
 
@@ -178,7 +231,7 @@ mod tests {
 
         let task_tks = vec![];
 
-        let mut mt = MonthTasks::new(&task_tks);
+        let mut mt = MonthTasks::new(&task_tks, &[]);
 
         mt.save(&dataset_path)?;
 
@@ -197,14 +250,21 @@ mod tests {
         // activate task
         ///////////////////////
 
-        let task =
-            TaskInfo::new("test_title_3", "test_desc", "NICKNAME", None, 0.0, &dataset_path)?;
+        let task = TaskInfo::new(
+            "darkfi".to_string(),
+            "test_title_3",
+            "test_desc",
+            "NICKNAME",
+            None,
+            Some(0.0),
+            &dataset_path,
+        )?;
 
         task.save(&dataset_path)?;
 
         let mt_load = MonthTasks::load_or_create(Some(&Timestamp::current_time()), &dataset_path)?;
 
-        assert!(mt_load.task_tks.contains(&task.ref_id));
+        assert!(mt_load.active_tks.contains(&task.ref_id));
 
         remove_dir_all(TEST_DATA_PATH).ok();
 

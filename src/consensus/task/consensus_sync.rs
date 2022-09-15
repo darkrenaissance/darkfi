@@ -37,6 +37,8 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
             }
             // Node stores response data.
             state.write().await.consensus = response.consensus.clone();
+
+            break
         }
     } else {
         warn!("Node is not connected to other nodes, resetting consensus state.");

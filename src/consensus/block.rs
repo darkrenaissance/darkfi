@@ -1,37 +1,94 @@
-use std::io;
+use std::fmt;
 
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
+use rand::rngs::OsRng;
 
-use super::{Metadata, StreamletMetadata, OuroborosMetadata, BLOCK_VERSION, TransactionLeadProof};
+use super::{Metadata, StreamletMetadata, OuroborosMetadata, BLOCK_INFO_MAGIC_BYTES, BLOCK_MAGIC_BYTES,BLOCK_VERSION, TransactionLeadProof};
+
 use crate::{
-    crypto::{address::Address, keypair::PublicKey, schnorr::Signature},
-    impl_vec, net,
+    crypto::{
+        address::Address, constants::MERKLE_DEPTH, keypair::Keypair, merkle_node::MerkleNode,
+        schnorr::SchnorrSecret,
+    },
+    net,
     tx::Transaction,
     util::{
-        serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+        serial::{serialize, SerialDecodable, SerialEncodable},
         time::Timestamp,
     },
-
     Result,
 };
 
-/// This struct represents a tuple of the form (`v`, `st`, `e`, `sl`, `txs`, `metadata`).
-/// The transactions here are stored as hashes, which serve as pointers to
-/// the actual transaction data in the blockchain database.
+/// This struct represents a tuple of the form (version, state, epoch, slot, timestamp, merkle_root).
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
+pub struct Header {
+    /// Block version
+    pub version: u8,
+    /// Previous block hash
+    pub state: blake3::Hash,
+    /// Epoch
+    pub epoch: u64,
+    /// Slot UID
+    pub slot: u64,
+    /// Block creation timestamp
+    pub timestamp: Timestamp,
+    /// Root of the transaction hashes merkle tree
+    pub root: MerkleNode,
+}
+
+impl Default for Header {
+    fn default() -> Self {
+        Header::new(blake3::Hash(""),
+                    0,
+                    0,
+                    Timestamp::current_time(),
+                    pallas::Base::Zero())
+        )
+    }
+}
+
+impl Header {
+    pub fn new(
+        state: blake3::Hash,
+        epoch: u64,
+        slot: u64,
+        timestamp: Timestamp,
+        root: MerkleNode,
+    ) -> Self {
+        let version = *BLOCK_VERSION;
+        Self { version, state, epoch, slot, timestamp, root }
+    }
+
+    /// Generate the genesis block.
+    pub fn genesis_header(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
+        let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        let root = tree.root(0).unwrap();
+
+        Self::new(genesis_data, 0, 0, genesis_ts, root)
+    }
+
+    /// Calculate the header hash
+    pub fn headerhash(&self) -> blake3::Hash {
+        blake3::hash(&serialize(self))
+    }
+}
+
+/// This struct represents a tuple of the form (`magic`, `header`, `counter`, `txs`, `metadata`).
+/// The header and transactions are stored as hashes, serving as pointers to
+/// the actual data in the sled database.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Block {
-    /// Block version
-    pub v: u8,
-    /// Previous block hash
-    pub st: blake3::Hash,
-    /// Epoch
-    pub e: u64,
-    /// Slot uid
-    pub sl: u64,
-    /// Transaction hashes
+    /// Block magic bytes
+    pub magic: [u8; 4],
+    /// Block header
+    header: Header,
+    /// Trasaction hashes
     pub txs: Vec<blake3::Hash>,
-    /// Additional block information
-    pub metadata: Metadata,
+    /// ouroboros block information,
+    pub om: OuroborosMetadata,
+    /// streamlet
+    pub sm: StreamletMetadata,
 }
 
 impl net::Message for Block {
@@ -46,25 +103,24 @@ impl Block {
         e: u64,
         sl: u64,
         txs: Vec<blake3::Hash>,
-        metadata: Metadata,
+        root: MerkleNode,
+        ouroborosMetadata: OuroborosMetadata,
     ) -> Self {
-        let v = *BLOCK_VERSION;
-        Self { v, st, e, sl, txs, metadata }
+        let magic = *BLOCK_MAGIC_BYTES;
+        let ts = Timestamp::curent_time();
+        let header = Header::new(st, e, sl, ts, root);
+        Self { magic, header txs, ouroborosMetadata }
     }
 
     /// Generate the genesis block.
     pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
-        let eta : [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
-        let empty_lead_proof = TransactionLeadProof::default();
-        let metadata =
-            Metadata::new(genesis_ts, eta, empty_lead_proof);
-
-        Self::new(genesis_data, 0, 0, vec![], metadata)
-    }
-
-    /// Calculate the block hash
-    pub fn blockhash(&self) -> blake3::Hash {
-        blake3::hash(&serialize(self))
+        let magic = *BLOCK_MAGIC_BYTES;
+        //let eta : [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
+        //let empty_lead_proof = TransactionLeadProof::default();
+        let header = Header::genesis_header(genesis_ts, genesis_data);
+        let om = OuroborosMetadata::default();
+        let sm = StreamletMetadata::default();
+        Self::new(magic, header.headerhash(), vec![], om, sm)
     }
 }
 
@@ -72,8 +128,8 @@ impl Block {
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct BlockOrder {
     /// Slot UID
-    pub sl: u64,
-    /// Blockhash of that slot
+    pub slot: u64,
+    /// Block headerhash of that slot
     pub block: blake3::Hash,
 }
 
@@ -86,31 +142,26 @@ impl net::Message for BlockOrder {
 /// Structure representing full block data.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockInfo {
-    /// Block version
-    pub v: u8,
-    /// Previous block hash
-    pub st: blake3::Hash,
-    /// Epoch
-    pub e: u64,
-    /// Slot uid
-    pub sl: u64,
+    /// BlockInfo magic bytes
+    pub magic: [u8; 4],
+    /// Block header data
+    pub header: Header,
     /// Transactions payload
     pub txs: Vec<Transaction>,
-    /// Additional proposal information
-    pub metadata: Metadata,
-    // Proposal information used by Streamlet consensus
+    /// ouroboros metadata
+    pub om: OuroborosMetadata,
+    /// Proposal information used by Streamlet consensus
     pub sm: StreamletMetadata,
 }
 
 impl Default for BlockInfo {
     fn default() -> Self {
+        let magic = *BLOCK_MAGIC_BYTES;
         Self {
-            v: 0,
-            st: blake3::hash(b""),
-            e: 0,
-            sl: 0,
+            magic: magic,
+            header: Header::default(),
             txs: vec![],
-            metadata: Metadata::default(),
+            om: OuroborosMetadata::default(),
             sm: StreamletMetadata::default(),
         }
     }
@@ -122,18 +173,15 @@ impl net::Message for BlockInfo {
     }
 }
 
-
 impl BlockInfo {
     pub fn new(
-        st: blake3::Hash,
-        e: u64,
-        sl: u64,
+        header: Header,
         txs: Vec<Transaction>,
-        metadata: Metadata,
+        om: OuroborosMetadata,
         sm: StreamletMetadata
     ) -> Self {
-        let v = *BLOCK_VERSION;
-        Self { v, st, e, sl, txs, metadata, sm}
+        let magic = *BLOCK_MAGIC_BYTES;
+        Self e{magic, header, txs, om, sm}
     }
 
     /// Calculate the block hash
@@ -146,11 +194,22 @@ impl BlockInfo {
 impl From<BlockInfo> for Block {
     fn from(b: BlockInfo) -> Self {
         let txids = b.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
-        Self { v: b.v, st: b.st, e: b.e, sl: b.sl, txs: txids, metadata: b.metadata }
+        Self { magic: b.magic,
+               header: b.header,
+               txs: txids,
+               om: b.om,
+               sm: b.sm,
+        }
     }
 }
 
-impl_vec!(BlockInfo);
+
+impl net::Message for BlockInfo {
+    fn name() -> &'static str {
+        "blockinfo"
+    }
+}
+
 
 /// Auxiliary structure used for blockchain syncing
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -168,12 +227,6 @@ impl net::Message for BlockResponse {
 /// This struct represents a block proposal, used for consensus.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockProposal {
-    /// Leader public key
-    pub public_key: PublicKey,
-    /// Block signature
-    pub signature: Signature,
-    /// Leader address
-    pub address: Address,
     /// Block data
     pub block: BlockInfo,
 }
@@ -181,58 +234,32 @@ pub struct BlockProposal {
 impl BlockProposal {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        public_key: PublicKey,
-        signature: Signature,
-        address: Address,
-        st: blake3::Hash,
-        e: u64,
-        sl: u64,
+        header: Header,
         txs: Vec<Transaction>,
-        metadata: Metadata,
+        om: OuroborosMetadata,
         sm: StreamletMetadata,
     ) -> Self {
-        let block = BlockInfo::new(st, e, sl, txs, metadata, sm);
-        Self { public_key, signature, address, block }
-    }
-
-    /// Produce proposal hash using `st`, `e`, `sl`, `txs`, and `metadata`.
-    pub fn hash(&self) -> blake3::Hash {
-        Self::to_proposal_hash(
-            self.block.st,
-            self.block.e,
-            self.block.sl,
-            &self.block.txs,
-            &self.block.metadata,
-        )
-    }
-
-    /// Generate a proposal hash using provided `st`, `e`, `sl`, `txs`, and `metadata`.
-    pub fn to_proposal_hash(
-        st: blake3::Hash,
-        e: u64,
-        sl: u64,
-        transactions: &[Transaction],
-        metadata: &Metadata,
-    ) -> blake3::Hash {
-        let mut txs = Vec::with_capacity(transactions.len());
-        for tx in transactions {
-            txs.push(blake3::hash(&serialize(tx)));
-        }
-
-        blake3::hash(&serialize(&Block::new(st, e, sl, txs, metadata.clone())))
+        let block = BlockInfo::new(header, txs, om, sm);
+        Self { block }
     }
 }
 
 impl PartialEq for BlockProposal {
     fn eq(&self, other: &Self) -> bool {
-        self.public_key == other.public_key &&
-            self.signature == other.signature &&
-            self.address == other.address &&
-            self.block.st == other.block.st &&
-            self.block.e == other.block.e &&
-            self.block.sl == other.block.sl &&
-            self.block.txs == other.block.txs &&
-            self.block.metadata == other.block.metadata
+        self.block.header == other.block.header &&
+            self.block.txs == other.block.txs
+    }
+}
+
+impl fmt::Display for BlockProposal {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_fmt(format_args!(
+            "BlockProposal {{ hash: {}, epoch: {}, slot: {}, txs: {} }}",
+            self.block.header.headerhash(),
+            self.block.header.epoch,
+            self.block.header.slot,
+            self.block.txs.len()
+        ))
     }
 }
 
@@ -241,8 +268,6 @@ impl net::Message for BlockProposal {
         "proposal"
     }
 }
-
-impl_vec!(BlockProposal);
 
 impl From<BlockProposal> for BlockInfo {
     fn from(block: BlockProposal) -> BlockInfo {
@@ -267,13 +292,15 @@ impl ProposalChain {
     /// excluding the genesis block proposal.
     /// Additional validity rules can be applied.
     pub fn check_proposal(&self, proposal: &BlockProposal, previous: &BlockProposal) -> bool {
-        if proposal.block.st == self.genesis_block {
+        if proposal.block.header.state == self.genesis_block {
             debug!("check_proposal(): Genesis block proposal provided.");
             return false
         }
 
-        let prev_hash = previous.hash();
-        if proposal.block.st != prev_hash || proposal.block.sl <= previous.block.sl {
+        let prev_hash = previous.block.header.headerhash();
+        if proposal.block.header.state != prev_hash ||
+            proposal.block.header.slot <= previous.block.header.slot
+        {
             debug!("check_proposal(): Provided proposal is invalid.");
             return false
         }
@@ -311,5 +338,3 @@ impl ProposalChain {
         true
     }
 }
-
-impl_vec!(ProposalChain);

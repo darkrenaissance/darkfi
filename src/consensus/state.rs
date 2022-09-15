@@ -7,18 +7,21 @@ use std::{
 
 use async_std::sync::{Arc, Mutex, RwLock};
 use chrono::{NaiveDateTime, Utc};
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, Metadata, Participant, ProposalChain, StreamletMetadata, Vote, TransactionLeadProof,
+    Block, BlockInfo, BlockProposal, OuroborosMetadata, Participant, ProposalChain, StreamletMetadata, Vote, TransactionLeadProof, Header,
 };
 use crate::{
     blockchain::Blockchain,
     crypto::{
         address::Address,
+        constants::MERKLE_DEPTH,
         keypair::{PublicKey, SecretKey},
+        merkle_node::MerkleNode,
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
     net,
@@ -175,13 +178,32 @@ impl ValidatorState {
         Ok(state)
     }
 
-    /// The node retrieves a transaction and appends it to the unconfirmed
-    /// transactions list. Additional validity rules must be defined by the
-    /// protocol for transactions.
-    pub fn append_tx(&mut self, tx: Transaction) -> bool {
-        if self.unconfirmed_txs.contains(&tx) {
-            debug!("append_tx(): We already have this tx");
+    /// The node retrieves a transaction, validates its state transition,
+    /// and appends it to the unconfirmed transactions list.
+    pub async fn append_tx(&mut self, tx: Transaction) -> bool {
+        let tx_hash = blake3::hash(&serialize(&tx));
+        let tx_in_txstore = match self.blockchain.transactions.contains(&tx_hash) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("append_tx(): Failed querying txstore: {}", e);
+                return false
+            }
+        };
+
+        if self.unconfirmed_txs.contains(&tx) || tx_in_txstore {
+            debug!("append_tx(): We have already seen this tx.");
             return false
+        }
+
+        debug!("append_tx(): Starting state transition validation");
+        let canon_state_clone = self.state_machine.lock().await.clone();
+        let mem_state = MemoryState::new(canon_state_clone);
+        match self.validate_state_transitions(mem_state, &[tx.clone()]) {
+            Ok(_) => debug!("append_tx(): State transition valid"),
+            Err(e) => {
+                warn!("append_tx(): State transition fail: {}", e);
+                return false
+            }
         }
 
         debug!("append_tx(): Appended tx to mempool");
@@ -206,8 +228,8 @@ impl ValidatorState {
         let mut slot = 0;
         for chain in &self.consensus.proposals {
             for proposal in &chain.proposals {
-                if proposal.block.sl > slot {
-                    slot = proposal.block.sl;
+                if proposal.block.header.slot > slot {
+                    slot = proposal.block.header.slot;
                 }
             }
         }
@@ -218,8 +240,8 @@ impl ValidatorState {
             return Ok(slot)
         }
 
-        let (last_sl, _) = self.blockchain.last()?;
-        Ok(last_sl)
+        let (last_slot, _) = self.blockchain.last()?;
+        Ok(last_slot)
     }
 
     /// Calculates seconds until next slot starting time.
@@ -244,7 +266,7 @@ impl ValidatorState {
     /// Find slot leader, using a simple hash method.
     /// Leader calculation is based on how many nodes are participating
     /// in the network.
-    pub fn slot_leader(&mut self) -> Address {
+    pub fn slot_leader(&mut self) -> Participant {
         let slot = self.current_slot();
         // DefaultHasher is used to hash the slot number
         // because it produces a number string which then can be modulated by the len.
@@ -254,13 +276,13 @@ impl ValidatorState {
         let pos = hasher.finish() % (self.consensus.participants.len() as u64);
         // Since BTreeMap orders by key in asceding order, each node will have
         // the same key in calculated position.
-        self.consensus.participants.iter().nth(pos as usize).unwrap().1.address
+        self.consensus.participants.iter().nth(pos as usize).unwrap().1.clone()
     }
 
     /// Check if we're the current slot leader
     pub fn is_slot_leader(&mut self) -> bool {
         let address = self.address;
-        address == self.slot_leader()
+        address == self.slot_leader().address
     }
 
     /// Generate a block proposal for the current slot, containing all
@@ -271,36 +293,24 @@ impl ValidatorState {
         let (prev_hash, index) = self.longest_notarized_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
 
-        let eta : [u8;32] = *blake3::hash(b"let there be dark!").as_bytes();
-        let empty_lead_proof = TransactionLeadProof::default();
-        let metadata = Metadata::new(
-            Timestamp::current_time(),
-            // empty seed
-            eta,
-            empty_lead_proof,
-        );
+        let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        for tx in &unproposed_txs {
+            for output in &tx.outputs {
+                tree.append(&MerkleNode::from_coin(&output.revealed.coin));
+                tree.witness();
+            }
+        }
+        let root = tree.root(0).unwrap();
+        let header = Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
+
+        // are the signature, and address used?
+        //let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
+        //let metadata = Metadata::new(String::from("proof"), String::from("r"), signed_proposal, self.address);
+
+        let om = OuroborosMetadata::new(eta, lead_proof);
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
-        let prop = BlockProposal::to_proposal_hash(
-            prev_hash,
-            self.slot_epoch(slot),
-            slot,
-            &unproposed_txs,
-            &metadata,
-        );
-        let signed_proposal = self.secret.sign(&prop.as_bytes()[..]);
-
-        Ok(Some(BlockProposal::new(
-            self.public,
-            signed_proposal,
-            self.address,
-            prev_hash,
-            self.slot_epoch(slot),
-            slot,
-            unproposed_txs,
-            metadata,
-            sm,
-        )))
+        Ok(Some(BlockProposal::new(header, unproposed_txs, om, sm)))
     }
 
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
@@ -346,7 +356,7 @@ impl ValidatorState {
         }
 
         let hash = match longest_notarized_chain {
-            Some(chain) => chain.proposals.last().unwrap().hash(),
+            Some(chain) => chain.proposals.last().unwrap().block.header.headerhash(),
             None => self.blockchain.last()?.1,
         };
 
@@ -355,7 +365,7 @@ impl ValidatorState {
 
     /// Receive the proposed block, verify its sender (slot leader),
     /// and proceed with voting on it.
-    pub fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
+    pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
         // Node hasn't started participating
         match self.participating {
             Some(start) => {
@@ -370,42 +380,34 @@ impl ValidatorState {
         self.refresh_participants()?;
 
         let leader = self.slot_leader();
-        if leader != proposal.address {
+        if leader.address != proposal.block.metadata.address {
             warn!(
                 "Received proposal not from slot leader ({}), but from ({})",
-                leader,
-                proposal.address.to_string()
+                leader.address, proposal.block.metadata.address
             );
             return Ok(None)
         }
 
-        if !proposal.public_key.verify(
-            BlockProposal::to_proposal_hash(
-                proposal.block.st,
-                proposal.block.e,
-                proposal.block.sl,
-                &proposal.block.txs,
-                &proposal.block.metadata,
-            )
-            .as_bytes(),
-            &proposal.signature,
+        if !leader.public_key.verify(
+            proposal.block.header.headerhash().as_bytes(),
+            &proposal.block.metadata.signature,
         ) {
-            warn!("Proposer ({}) signature could not be verified", proposal.address.to_string());
+            warn!("Proposer ({}) signature could not be verified", proposal.block.metadata.address);
             return Ok(None)
         }
 
-        self.vote(proposal)
+        self.vote(proposal).await
     }
 
     /// Given a proposal, the node finds which blockchain it extends.
     /// If the proposal extends the canonical blockchain, a new fork chain
     /// is created. The node votes on the proposal only if it extends the
-    /// longest notarized fork chain it has seen.
-    pub fn vote(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
+    /// longest notarized fork chain it has seen and its state transition is valid.
+    pub async fn vote(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
         let mut proposal = proposal.clone();
 
         // Generate proposal hash
-        let proposal_hash = proposal.hash();
+        let proposal_hash = proposal.block.header.headerhash();
 
         // Add orphan votes
         let mut orphans = Vec::new();
@@ -443,14 +445,22 @@ impl ValidatorState {
             return Ok(None)
         }
 
+        debug!("vote(): Starting state transition validation");
+        let canon_state_clone = self.state_machine.lock().await.clone();
+        let mem_state = MemoryState::new(canon_state_clone);
+
+        match self.validate_state_transitions(mem_state, &proposal.block.txs) {
+            Ok(_) => {
+                debug!("vote(): State transition valid")
+            }
+            Err(e) => {
+                warn!("vote(): State transition fail: {}", e);
+                return Ok(None)
+            }
+        }
+
         let signed_hash = self.secret.sign(&serialize(&proposal_hash));
-        Ok(Some(Vote::new(
-            self.public,
-            signed_hash,
-            proposal_hash,
-            proposal.block.sl,
-            self.address,
-        )))
+        Ok(Some(Vote::new(signed_hash, proposal_hash, proposal.block.header.slot, self.address)))
     }
 
     /// Verify if the provided chain is notarized excluding the last block.
@@ -469,17 +479,23 @@ impl ValidatorState {
         let mut fork = None;
         for (index, chain) in self.consensus.proposals.iter().enumerate() {
             let last = chain.proposals.last().unwrap();
-            let hash = last.hash();
-            if proposal.block.st == hash && proposal.block.sl > last.block.sl {
+            let hash = last.block.header.headerhash();
+            if proposal.block.header.state == hash &&
+                proposal.block.header.slot > last.block.header.slot
+            {
                 return Ok(index as i64)
             }
 
-            if proposal.block.st == last.block.st && proposal.block.sl == last.block.sl {
+            if proposal.block.header.state == last.block.header.state &&
+                proposal.block.header.slot == last.block.header.slot
+            {
                 debug!("find_extended_chain_index(): Proposal already received");
                 return Ok(-2)
             }
 
-            if proposal.block.st == last.block.st && proposal.block.sl > last.block.sl {
+            if proposal.block.header.state == last.block.header.state &&
+                proposal.block.header.slot > last.block.header.slot
+            {
                 fork = Some(chain.clone());
             }
         }
@@ -497,8 +513,8 @@ impl ValidatorState {
             None => (),
         }
 
-        let (last_sl, last_block) = self.blockchain.last()?;
-        if proposal.block.st != last_block || proposal.block.sl <= last_sl {
+        let (last_slot, last_block) = self.blockchain.last()?;
+        if proposal.block.header.state != last_block || proposal.block.header.slot <= last_slot {
             debug!("find_extended_chain_index(): Proposal doesn't extend any known chain");
             return Ok(-2)
         }
@@ -528,19 +544,6 @@ impl ValidatorState {
             None => return Ok((false, None)),
         }
 
-        let mut encoded_proposal = vec![];
-
-        if let Err(e) = vote.proposal.encode(&mut encoded_proposal) {
-            error!("consensus: Proposal encoding failed: {:?}", e);
-            return Ok((false, None))
-        };
-
-        let va = vote.address.to_string();
-        if !vote.public_key.verify(&encoded_proposal, &vote.vote) {
-            warn!("consensus: Voter ({}), signature couldn't be verified", va);
-            return Ok((false, None))
-        }
-
         // Node refreshes participants records
         self.refresh_participants()?;
         let node_count = self.consensus.participants.len();
@@ -549,19 +552,32 @@ impl ValidatorState {
         match self.consensus.participants.get(&vote.address) {
             Some(participant) => {
                 let mut participant = participant.clone();
+                let va = vote.address;
                 if current_slot <= participant.joined {
                     warn!("consensus: Voter ({}) joined after current slot.", va);
+                    return Ok((false, None))
+                }
+
+                let mut encoded_proposal = vec![];
+
+                if let Err(e) = vote.proposal.encode(&mut encoded_proposal) {
+                    error!("consensus: Proposal encoding failed: {:?}", e);
+                    return Ok((false, None))
+                };
+
+                if !participant.public_key.verify(&encoded_proposal, &vote.vote) {
+                    warn!("consensus: Voter ({}), signature couldn't be verified", va);
                     return Ok((false, None))
                 }
 
                 // Updating participant vote
                 match participant.voted {
                     Some(voted) => {
-                        if vote.sl > voted {
-                            participant.voted = Some(vote.sl);
+                        if vote.slot > voted {
+                            participant.voted = Some(vote.slot);
                         }
                     }
-                    None => participant.voted = Some(vote.sl),
+                    None => participant.voted = Some(vote.slot),
                 }
 
                 // Invalidating quarantine
@@ -570,7 +586,7 @@ impl ValidatorState {
                 self.consensus.participants.insert(participant.address, participant);
             }
             None => {
-                warn!("consensus: Voter ({}) is not a participant!", vote.address.to_string());
+                warn!("consensus: Voter ({}) is not a participant!", vote.address);
                 return Ok((false, None))
             }
         }
@@ -625,7 +641,7 @@ impl ValidatorState {
     ) -> Result<Option<(&mut BlockProposal, i64)>> {
         for (index, chain) in &mut self.consensus.proposals.iter_mut().enumerate() {
             for proposal in chain.proposals.iter_mut().rev() {
-                let proposal_hash = proposal.hash();
+                let proposal_hash = proposal.block.header.headerhash();
                 if vote_proposal == &proposal_hash {
                     return Ok(Some((proposal, index as i64)))
                 }
@@ -705,18 +721,18 @@ impl ValidatorState {
             debug!(target: "consensus", "Applying state transition for finalized block");
             let canon_state_clone = self.state_machine.lock().await.clone();
             let mem_st = MemoryState::new(canon_state_clone);
-            let state_updates = ValidatorState::validate_state_transitions(mem_st, &proposal.txs)?;
+            let state_updates = self.validate_state_transitions(mem_st, &proposal.txs)?;
             self.update_canon_state(state_updates, None).await?;
             self.remove_txs(proposal.txs.clone())?;
         }
 
         let last_block = *blockhashes.last().unwrap();
-        let last_sl = finalized.last().unwrap().sl;
+        let last_slot = finalized.last().unwrap().header.slot;
 
         let mut dropped = vec![];
         for chain in self.consensus.proposals.iter() {
             let first = chain.proposals.first().unwrap();
-            if first.block.st != last_block || first.block.sl <= last_sl {
+            if first.block.header.state != last_block || first.block.header.slot <= last_slot {
                 dropped.push(chain.clone());
             }
         }
@@ -728,7 +744,7 @@ impl ValidatorState {
         // Remove orphan votes
         let mut orphans = vec![];
         for vote in self.consensus.orphan_votes.iter() {
-            if vote.sl <= last_sl {
+            if vote.slot <= last_slot {
                 orphans.push(vote.clone());
             }
         }
@@ -799,7 +815,7 @@ impl ValidatorState {
 
         debug!(
             "refresh_participants(): Node {:?} checking slots: previous - {:?}, last - {:?}, previous from last - {:?}",
-            self.address.to_string(), previous_slot, last_slot, previous_from_last_slot
+            self.address, previous_slot, last_slot, previous_from_last_slot
         );
 
         let leader = self.slot_leader();
@@ -809,7 +825,7 @@ impl ValidatorState {
                     if (current - slot) > QUARANTINE_DURATION {
                         warn!(
                             "refresh_participants(): Removing participant: {:?} (joined {:?}, voted {:?})",
-                            participant.address.to_string(),
+                            participant.address,
                             participant.joined,
                             participant.voted
                         );
@@ -819,10 +835,10 @@ impl ValidatorState {
                 None => {
                     // Slot leader is always quarantined, to cover the case they become inactive the slot before
                     // becoming the leader. This can be used for slashing in the future.
-                    if participant.address == leader {
+                    if participant.address == leader.address {
                         debug!(
                             "refresh_participants(): Quaranteening leader: {:?} (joined {:?}, voted {:?})",
-                            participant.address.to_string(),
+                            participant.address,
                             participant.joined,
                             participant.voted
                         );
@@ -834,7 +850,7 @@ impl ValidatorState {
                             if slot < last_slot {
                                 warn!(
                                     "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
-                                    participant.address.to_string(),
+                                    participant.address,
                                     participant.joined,
                                     participant.voted
                                 );
@@ -848,7 +864,7 @@ impl ValidatorState {
                             {
                                 warn!(
                                     "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
-                                    participant.address.to_string(),
+                                    participant.address,
                                     participant.joined,
                                     participant.voted
                                 );
@@ -866,7 +882,7 @@ impl ValidatorState {
 
         if self.consensus.participants.is_empty() {
             // If no nodes are active, node becomes a single node network.
-            let participant = Participant::new(self.address, self.current_slot());
+            let participant = Participant::new(self.public, self.address, self.current_slot());
             self.consensus.participants.insert(participant.address, participant);
         }
 
@@ -898,9 +914,94 @@ impl ValidatorState {
     // State transition functions
     // ==========================
 
+    /// Validate and append to canonical state received blocks.
+    pub async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
+        // Verify state transitions for all blocks and their respective transactions.
+        debug!("receive_blocks(): Starting state transition validations");
+        let mut canon_updates = vec![];
+        let canon_state_clone = self.state_machine.lock().await.clone();
+        let mut mem_state = MemoryState::new(canon_state_clone);
+        for block in blocks {
+            let mut state_updates =
+                self.validate_state_transitions(mem_state.clone(), &block.txs)?;
+
+            for update in &state_updates {
+                mem_state.apply(update.clone());
+            }
+
+            canon_updates.append(&mut state_updates);
+        }
+        debug!("receive_blocks(): All state transitions passed");
+
+        debug!("receive_blocks(): Updating canon state");
+        self.update_canon_state(canon_updates, None).await?;
+
+        debug!("receive_blocks(): Appending blocks to ledger");
+        self.blockchain.add(blocks)?;
+
+        Ok(())
+    }
+
+    /// Validate and append to canonical state received finalized block.
+    /// Returns boolean flag indicating already existing block.
+    pub async fn receive_finalized_block(&mut self, block: BlockInfo) -> Result<bool> {
+        match self.blockchain.has_block(&block) {
+            Ok(v) => {
+                if v {
+                    debug!("receive_finalized_block(): Existing block received");
+                    return Ok(false)
+                }
+            }
+            Err(e) => {
+                error!("receive_finalized_block(): failed checking for has_block(): {}", e);
+                return Ok(false)
+            }
+        };
+
+        debug!("receive_finalized_block(): Executing state transitions");
+        self.receive_blocks(&[block.clone()]).await?;
+
+        debug!("receive_finalized_block(): Removing block transactions from unconfirmed_txs");
+        self.remove_txs(block.txs.clone())?;
+
+        Ok(true)
+    }
+
+    /// Validate and append to canonical state received finalized blocks from block sync task.
+    /// Already existing blocks are ignored.
+    pub async fn receive_sync_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
+        let mut new_blocks = vec![];
+        for block in blocks {
+            match self.blockchain.has_block(block) {
+                Ok(v) => {
+                    if v {
+                        debug!("receive_sync_blocks(): Existing block received");
+                        continue
+                    }
+                    new_blocks.push(block.clone());
+                }
+                Err(e) => {
+                    error!("receive_sync_blocks(): failed checking for has_block(): {}", e);
+                    continue
+                }
+            };
+        }
+
+        if new_blocks.is_empty() {
+            debug!("receive_sync_blocks(): no new blocks to append");
+            return Ok(())
+        }
+
+        debug!("receive_sync_blocks(): Executing state transitions");
+        self.receive_blocks(&new_blocks[..]).await?;
+
+        Ok(())
+    }
+
     /// Validate state transitions for given transactions and state and
     /// return a vector of [`StateUpdate`]
     pub fn validate_state_transitions(
+        &self,
         state: MemoryState,
         txs: &[Transaction],
     ) -> Result<Vec<StateUpdate>> {
@@ -935,13 +1036,7 @@ impl ValidatorState {
         let mut state = self.state_machine.lock().await;
         for update in updates {
             state
-                .apply(
-                    update,
-                    secret_keys.clone(),
-                    notify.clone(),
-                    self.client.wallet.clone(),
-                    self.client.tokenlist.clone(),
-                )
+                .apply(update, secret_keys.clone(), notify.clone(), self.client.wallet.clone())
                 .await?;
         }
         drop(state);

@@ -1,4 +1,3 @@
-use async_std::sync::Arc;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error};
@@ -7,13 +6,12 @@ use crate::{
     blockchain::{nfstore::NullifierStore, rootstore::RootStore},
     crypto::{
         coin::Coin,
-        constants::MERKLE_DEPTH_ORCHARD,
+        constants::MERKLE_DEPTH,
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::VerifyingKey,
-        token_list::DrkTokenList,
         OwnCoin,
     },
     tx::Transaction,
@@ -21,8 +19,6 @@ use crate::{
     zk::circuit::{BurnContract, MintContract},
     Result, VerifyFailed, VerifyResult,
 };
-
-const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 /// Trait implementing the state functions used by the state transition.
 pub trait ProgramState {
@@ -144,7 +140,6 @@ impl State {
         secret_keys: Vec<SecretKey>,
         notify: Option<async_channel::Sender<(PublicKey, u64)>>,
         wallet: WalletPtr,
-        tokenlist: Arc<DrkTokenList>,
     ) -> Result<()> {
         debug!(target: "state_apply", "Extend nullifier set");
         debug!("Existing nullifiers: {:#?}", self.nullifiers.get_all()?);
@@ -169,15 +164,20 @@ impl State {
                     debug!(target: "state_apply", "Received a coin: amount {}", note.value);
                     let leaf_position = self.tree.witness().unwrap();
                     let nullifier = Nullifier::new(*secret, note.serial);
-                    let own_coin =
-                        OwnCoin { coin, note, secret: *secret, nullifier, leaf_position };
+                    let own_coin = OwnCoin {
+                        coin,
+                        note: note.clone(),
+                        secret: *secret,
+                        nullifier,
+                        leaf_position,
+                    };
 
-                    // FIXME: BUG check values inside the note are correct
+                    // TODO: FIXME: BUG check values inside the note are correct
                     // We need to hash them all and check them against the coin
                     // for them to be accepted.
                     // Don't trust - verify.
 
-                    wallet.put_own_coin(own_coin, tokenlist.clone()).await?;
+                    wallet.put_own_coin(own_coin).await?;
 
                     if let Some(ch) = notify.clone() {
                         debug!(target: "state_apply", "Send a notification");
@@ -195,7 +195,7 @@ impl State {
         Ok(())
     }
 
-    fn try_decrypt_note(ciphertext: &EncryptedNote, secret: SecretKey) -> Option<Note> {
+    pub fn try_decrypt_note(ciphertext: &EncryptedNote, secret: SecretKey) -> Option<Note> {
         match ciphertext.decrypt(&secret) {
             Ok(note) => Some(note),
             Err(_) => None,
@@ -219,8 +219,8 @@ impl ProgramState for State {
         if let Ok(mr) = self.merkle_roots.contains(merkle_root) {
             return mr
         }
-        // FIXME: An error here means a db issue
-        false
+
+        panic!("RootStore db corruption, could not check merkle_roots.contains()");
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
@@ -228,8 +228,8 @@ impl ProgramState for State {
         if let Ok(nf) = self.nullifiers.contains(nullifier) {
             return nf
         }
-        // FIXME: An error here means a db issue
-        false
+
+        panic!("NullifierStore db corruption, could not check nullifiers.contains()");
     }
 
     fn mint_vk(&self) -> &VerifyingKey {
@@ -243,7 +243,7 @@ impl ProgramState for State {
 
 fn build_mint_vk() -> VerifyingKey {
     debug!("Building verifying key for MintContract");
-    VerifyingKey::build(8, &MintContract::default())
+    VerifyingKey::build(11, &MintContract::default())
 }
 
 fn build_burn_vk() -> VerifyingKey {

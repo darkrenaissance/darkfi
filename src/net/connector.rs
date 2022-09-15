@@ -7,18 +7,20 @@ use url::Url;
 use crate::{Error, Result};
 
 use super::{
-    Channel, ChannelPtr, SettingsPtr, TcpTransport, TorTransport, Transport, TransportName,
+    Channel, ChannelPtr, SessionWeakPtr, SettingsPtr, TcpTransport, TorTransport, Transport,
+    TransportName,
 };
 
 /// Create outbound socket connections.
 pub struct Connector {
     settings: SettingsPtr,
+    pub session: SessionWeakPtr,
 }
 
 impl Connector {
     /// Create a new connector with default network settings.
-    pub fn new(settings: SettingsPtr) -> Self {
-        Self { settings }
+    pub fn new(settings: SettingsPtr, session: SessionWeakPtr) -> Self {
+        Self { settings, session }
     }
 
     /// Establish an outbound connection.
@@ -53,10 +55,14 @@ impl Connector {
                 }
 
                 let channel = match $upgrade {
-                    None => Channel::new(Box::new(stream?), connect_url.clone()).await,
+                    // session
+                    None => {
+                        Channel::new(Box::new(stream?), connect_url.clone(), self.session.clone())
+                            .await
+                    }
                     Some(u) if u == "tls" => {
                         let stream = $transport.upgrade_dialer(stream?)?.await;
-                        Channel::new(Box::new(stream?), connect_url).await
+                        Channel::new(Box::new(stream?), connect_url, self.session.clone()).await
                     }
                     Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
                 };

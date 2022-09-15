@@ -1,10 +1,58 @@
-use darkfi::{util::Timestamp, Result};
+use std::{fmt, str::FromStr};
+
+use darkfi::{util::Timestamp, Error, Result};
 
 use crate::due_as_timestamp;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub enum State {
+    Open,
+    Start,
+    Pause,
+    Stop,
+}
+
+impl State {
+    pub const fn is_start(&self) -> bool {
+        matches!(*self, Self::Start)
+    }
+    pub const fn is_pause(&self) -> bool {
+        matches!(*self, Self::Pause)
+    }
+    pub const fn is_stop(&self) -> bool {
+        matches!(*self, Self::Stop)
+    }
+}
+
+impl fmt::Display for State {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            State::Open => write!(f, "open"),
+            State::Start => write!(f, "start"),
+            State::Stop => write!(f, "stop"),
+            State::Pause => write!(f, "pause"),
+        }
+    }
+}
+
+impl FromStr for State {
+    type Err = Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let result = match s.to_lowercase().as_str() {
+            "open" => State::Open,
+            "stop" => State::Stop,
+            "start" => State::Start,
+            "pause" => State::Pause,
+            _ => return Err(Error::ParseFailed("unable to parse state")),
+        };
+        Ok(result)
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BaseTask {
     pub title: String,
+    pub tags: Vec<String>,
     pub desc: Option<String>,
     pub assign: Vec<String>,
     pub project: Vec<String>,
@@ -12,25 +60,30 @@ pub struct BaseTask {
     pub rank: Option<f32>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TaskInfo {
     pub ref_id: String,
+    pub workspace: String,
     pub id: u32,
     pub title: String,
+    pub tags: Vec<String>,
     pub desc: String,
     pub owner: String,
     pub assign: Vec<String>,
     pub project: Vec<String>,
     pub due: Option<i64>,
-    pub rank: f32,
+    pub rank: Option<f32>,
     pub created_at: i64,
+    pub state: String,
     pub events: Vec<TaskEvent>,
     pub comments: Vec<Comment>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TaskEvent {
     pub action: String,
+    pub author: String,
+    pub content: String,
     pub timestamp: Timestamp,
 }
 
@@ -42,11 +95,16 @@ impl std::fmt::Display for TaskEvent {
 
 impl Default for TaskEvent {
     fn default() -> Self {
-        Self { action: "open".into(), timestamp: Timestamp::current_time() }
+        Self {
+            action: State::Open.to_string(),
+            author: "".to_string(),
+            content: "".to_string(),
+            timestamp: Timestamp::current_time(),
+        }
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Comment {
     content: String,
     author: String,
@@ -61,6 +119,7 @@ impl std::fmt::Display for Comment {
 
 pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
     let mut title = String::new();
+    let mut tags = vec![];
     let mut desc = None;
     let mut project = vec![];
     let mut assign = vec![];
@@ -70,7 +129,12 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
     for val in values {
         let field: Vec<&str> = val.split(':').collect();
         if field.len() == 1 {
-            title = field[0].into();
+            if field[0].starts_with('+') || field[0].starts_with('-') {
+                tags.push(field[0].into());
+                continue
+            }
+            title.push_str(field[0]);
+            title.push(' ');
             continue
         }
 
@@ -99,5 +163,6 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
         }
     }
 
-    Ok(BaseTask { title, desc, project, assign, due, rank })
+    let title = title.trim().into();
+    Ok(BaseTask { title, tags, desc, project, assign, due, rank })
 }

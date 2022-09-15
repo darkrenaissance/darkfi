@@ -25,14 +25,6 @@ pub enum Error {
     #[error(transparent)]
     ParseFloatError(#[from] std::num::ParseFloatError),
 
-    #[cfg(feature = "num-bigint")]
-    #[error(transparent)]
-    ParseBigIntError(#[from] num_bigint::ParseBigIntError),
-
-    #[cfg(feature = "num-bigint")]
-    #[error(transparent)]
-    TryFromBigIntError(#[from] num_bigint::TryFromBigIntError<num_bigint::BigUint>),
-
     #[cfg(feature = "url")]
     #[error(transparent)]
     UrlParseError(#[from] url::ParseError),
@@ -118,8 +110,8 @@ pub enum Error {
     #[error("Channel timed out")]
     ChannelTimeout,
 
-    #[error("Service stopped")]
-    ServiceStopped,
+    #[error("Network service stopped")]
+    NetworkServiceStopped,
 
     #[error("Create listener bound to {0} failed")]
     BindFailed(String),
@@ -130,8 +122,8 @@ pub enum Error {
     #[error("Accept a new tls connection from the listener {0} failed")]
     AcceptTlsConnectionFailed(String),
 
-    #[error("Operation failed")]
-    OperationFailed,
+    #[error("Network operation failed")]
+    NetworkOperationFailed,
 
     #[error("Malformed packet")]
     MalformedPacket,
@@ -152,6 +144,12 @@ pub enum Error {
     #[cfg(feature = "async-native-tls")]
     #[error("async_native_tls error: {0}")]
     AsyncNativeTlsError(String),
+
+    #[error("Tor error: {0}")]
+    TorError(String),
+
+    #[error("Node is not connected to other nodes.")]
+    NetworkNotConnected,
 
     // =============
     // Crypto errors
@@ -181,6 +179,10 @@ pub enum Error {
     #[error("Invalid DarkFi address")]
     InvalidAddress,
 
+    #[cfg(feature = "futures-rustls")]
+    #[error(transparent)]
+    RustlsError(#[from] futures_rustls::rustls::Error),
+
     // =======================
     // Protocol-related errors
     // =======================
@@ -199,12 +201,6 @@ pub enum Error {
     #[error("JSON-RPC error: {0}")]
     JsonRpcError(String),
 
-    #[error("Cashier error: {0}")]
-    CashierError(String),
-
-    #[error("Tor error: {0}")]
-    TorError(String),
-
     // ===============
     // Database errors
     // ===============
@@ -218,6 +214,9 @@ pub enum Error {
 
     #[error("Transaction {0} not found in database")]
     TransactionNotFound(String),
+
+    #[error("Header {0} not found in database")]
+    HeaderNotFound(String),
 
     #[error("Block {0} not found in database")]
     BlockNotFound(String),
@@ -290,11 +289,7 @@ pub enum Error {
     ConfigInvalid,
 
     #[error("Failed decoding bincode: {0}")]
-    ZkasDecoderError(&'static str),
-
-    #[cfg(feature = "regex")]
-    #[error(transparent)]
-    RegexError(#[from] regex::Error),
+    ZkasDecoderError(String),
 
     #[cfg(feature = "util")]
     #[error("System clock is not correct!")]
@@ -314,16 +309,30 @@ pub enum Error {
 
     #[error(transparent)]
     ClientFailed(#[from] ClientFailed),
+
     //=============
     // clock
-    //
+    //=============
     #[error("clock out of sync with peers: {0}")]
     ClockOutOfSync(String),
+
+    // ==============
+    // DHT errors
+    // ==============
+    #[error("Did not find key")]
+    UnknownKey,
+
 }
 
 /// Transaction verification errors
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum VerifyFailed {
+    #[error("Transaction has no inputs")]
+    LackingInputs,
+
+    #[error("Transaction has no outputs")]
+    LackingOutputs,
+
     #[error("Invalid cashier/faucet public key for clear input {0}")]
     InvalidCashierOrFaucetKey(usize),
 

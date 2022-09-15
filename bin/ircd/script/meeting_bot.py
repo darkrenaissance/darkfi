@@ -3,16 +3,24 @@ import asyncio
 
 async def start():
     host = "127.0.0.1"
-    port = 11066
+    port = 6667
     channel = "#dev"
-    nickname = "meeting"
+    nickname = "meeting_bot"
 
     print(f"Start a connection {host}:{port}")
     reader, writer = await asyncio.open_connection(host, port)
 
+    print("Send CAP msg")
+    cap_msg = f"CAP REQ : no-history \r\n"
+    writer.write(cap_msg.encode('utf8'))
+
     print("Send NICK msg")
     nick_msg = f"NICK {nickname} \r\n"
     writer.write(nick_msg.encode('utf8'))
+
+    print("Send CAP END msg")
+    cap_end_msg = f"CAP END \r\n"
+    writer.write(cap_end_msg.encode('utf8'))
 
     print(f"Send JOIN msg: {channel}")
     join_msg = f"JOIN {channel} \r\n"
@@ -20,13 +28,13 @@ async def start():
 
     topics = []
 
+    print("Start...")
     while True:
-        msg = await reader.read(350)
+        msg = await reader.read(1024)
         msg = msg.decode('utf8').strip()
 
         if not msg:
-            print("Error: Receive empty msg")
-            break
+            continue
 
         command = msg.split(" ")[1]
 
@@ -39,15 +47,15 @@ async def start():
 
             reply = None
 
-            if msg_title == "#m_start":
+            if msg_title == "!start":
                 reply = f"PRIVMSG {channel} :meeting started \r\n"
-                msg_title = "#m_list"
+                msg_title = "!list"
 
-            if msg_title == "#m_end":
+            if msg_title == "!end":
                 reply = f"PRIVMSG {channel} :meeting end \r\n"
                 topics = []
 
-            if msg_title == "#m_topic":
+            if msg_title == "!topic":
                 topic = msg.split(" ", 4)
                 if len(topic) != 5:
                     continue
@@ -55,17 +63,20 @@ async def start():
                 topics.append(topic)
                 reply = f"PRIVMSG {channel} :add topic: {topic} \r\n"
 
-            if msg_title == "#m_list":
-                tp = " ".join(
-                    [f"{i}-{topic}" for i, topic in enumerate(topics, 1)])
+            if msg_title == "!list":
+                rep = f"PRIVMSG {channel} :topics: \r\n"
+                writer.write(rep.encode('utf8'))
 
-                reply = f"PRIVMSG {channel} :topics: {tp} \r\n"
+                for i, topic in enumerate(topics, 1):
+                    rep = f"PRIVMSG {channel} :{i}-{topic} \r\n"
+                    writer.write(rep.encode('utf8'))
+                await writer.drain()
 
-            if msg_title == "#m_next":
+            if msg_title == "!next":
                 if len(topics) == 0:
                     reply = f"PRIVMSG {channel} :no topics \r\n"
                 else:
-                    tp = topics.pop(0) 
+                    tp = topics.pop(0)
                     reply = f"PRIVMSG {channel} :current topic: {tp} \r\n"
 
             if reply != None:

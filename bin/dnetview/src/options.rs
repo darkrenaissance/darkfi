@@ -1,43 +1,17 @@
-use clap::{Arg, ArgMatches, Command};
+use darkfi::cli_desc;
 
-use darkfi::Result;
+#[derive(clap::Parser)]
+#[clap(name = "dnetview", about = cli_desc!(), version)]
+pub struct Args {
+    #[clap(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    pub verbose: u8,
 
-pub struct ProgramOptions {
-    pub log_path: Box<std::path::PathBuf>,
-    pub app: ArgMatches,
-}
+    /// Logfile path
+    #[clap(default_value = "~/.local/darkfi/dnetview.log")]
+    pub log_path: String,
 
-impl ProgramOptions {
-    pub fn load() -> Result<ProgramOptions> {
-        let app = Command::new("dnetview")
-            .version("0.1.0")
-            .author("lunar_mining")
-            .about("dnetview")
-            .arg(
-                Arg::new("LOG_PATH")
-                    .long("log")
-                    .value_name("LOG_PATH")
-                    .help("Logfile path")
-                    .takes_value(true),
-            )
-            .arg(
-                Arg::new("verbose")
-                    .short('v')
-                    .long("verbose")
-                    .multiple_occurrences(true)
-                    .help("Sets the level of verbosity"),
-            )
-            .get_matches();
-
-        let log_path = Box::new(
-            if let Some(log_path) = app.value_of("LOG_PATH") {
-                std::path::Path::new(log_path)
-            } else {
-                std::path::Path::new("/tmp/dnetview.log")
-            }
-            .to_path_buf(),
-        );
-
-        Ok(ProgramOptions { log_path, app })
-    }
+    /// Sets a custom config file
+    #[clap(short, long)]
+    pub config: Option<String>,
 }

@@ -5,37 +5,49 @@ use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use url::Url;
 
+use crate::net::TransportName;
+
 /// Atomic pointer to network settings.
 pub type SettingsPtr = Arc<Settings>;
 
-/// Defines the network settings.
+/// Default settings for the network. Can be manually configured.
 #[derive(Clone, Debug)]
 pub struct Settings {
-    pub inbound: Option<Url>,
+    pub inbound: Vec<Url>,
     pub outbound_connections: u32,
     pub manual_attempt_limit: u32,
     pub seed_query_timeout_seconds: u32,
     pub connect_timeout_seconds: u32,
     pub channel_handshake_seconds: u32,
     pub channel_heartbeat_seconds: u32,
-    pub external_addr: Option<Url>,
+    pub outbound_retry_seconds: u64,
+    pub external_addr: Vec<Url>,
     pub peers: Vec<Url>,
     pub seeds: Vec<Url>,
+    pub node_id: String,
+    pub app_version: Option<String>,
+    pub outbound_transports: Vec<TransportName>,
+    pub localnet: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            inbound: None,
+            inbound: Vec::new(),
             outbound_connections: 0,
             manual_attempt_limit: 0,
             seed_query_timeout_seconds: 8,
             connect_timeout_seconds: 10,
             channel_handshake_seconds: 4,
             channel_heartbeat_seconds: 10,
-            external_addr: None,
+            outbound_retry_seconds: 20,
+            external_addr: Vec::new(),
             peers: Vec::new(),
             seeds: Vec::new(),
+            node_id: String::new(),
+            app_version: Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string()),
+            outbound_transports: get_outbound_transports(vec![]),
+            localnet: false,
         }
     }
 }
@@ -44,17 +56,19 @@ impl Default for Settings {
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[structopt()]
 pub struct SettingsOpt {
-    /// P2P accept address
+    /// P2P accept addresses
+    #[serde(default)]
     #[structopt(long = "accept")]
-    pub inbound: Option<Url>,
+    pub inbound: Vec<Url>,
 
     /// Connection slots
     #[structopt(long = "slots")]
     pub outbound_connections: Option<u32>,
 
-    /// P2P external address
+    /// P2P external addresses
+    #[serde(default)]
     #[structopt(long)]
-    pub external_addr: Option<Url>,
+    pub external_addr: Vec<Url>,
 
     /// Peer nodes to connect to
     #[serde(default)]
@@ -76,6 +90,26 @@ pub struct SettingsOpt {
     pub channel_handshake_seconds: Option<u32>,
     #[structopt(skip)]
     pub channel_heartbeat_seconds: Option<u32>,
+    #[structopt(skip)]
+    pub outbound_retry_seconds: Option<u64>,
+
+    #[serde(default)]
+    #[structopt(skip)]
+    pub node_id: String,
+
+    #[serde(default)]
+    #[structopt(skip)]
+    pub app_version: Option<String>,
+
+    /// Prefered transports for outbound connections
+    #[serde(default)]
+    #[structopt(long = "transports")]
+    pub outbound_transports: Vec<String>,
+
+    /// Enable localnet hosts
+    #[serde(default)]
+    #[structopt(long)]
+    pub localnet: bool,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -88,9 +122,33 @@ impl From<SettingsOpt> for Settings {
             connect_timeout_seconds: settings_opt.connect_timeout_seconds.unwrap_or(10),
             channel_handshake_seconds: settings_opt.channel_handshake_seconds.unwrap_or(4),
             channel_heartbeat_seconds: settings_opt.channel_heartbeat_seconds.unwrap_or(10),
+            outbound_retry_seconds: settings_opt.outbound_retry_seconds.unwrap_or(1200),
             external_addr: settings_opt.external_addr,
             peers: settings_opt.peers,
             seeds: settings_opt.seeds,
+            node_id: settings_opt.node_id,
+            app_version: settings_opt.app_version,
+            outbound_transports: get_outbound_transports(settings_opt.outbound_transports),
+            localnet: settings_opt.localnet,
         }
     }
+}
+
+/// Auxiliary function to convert outbound transport Vec<String>
+/// to Vec<TransportName>, using defaults if empty.
+pub fn get_outbound_transports(opt_outbound_transports: Vec<String>) -> Vec<TransportName> {
+    let mut outbound_transports = vec![];
+    for transport in opt_outbound_transports {
+        let transport_name = TransportName::try_from(transport.as_str()).unwrap();
+        outbound_transports.push(transport_name);
+    }
+
+    if outbound_transports.is_empty() {
+        let tls = TransportName::Tcp(Some("tls".into()));
+        outbound_transports.push(tls);
+        let tcp = TransportName::Tcp(None);
+        outbound_transports.push(tcp);
+    }
+
+    outbound_transports
 }

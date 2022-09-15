@@ -1,18 +1,18 @@
 
 # Use: docker build . -t darkfi:debian -f ./contrib/docker/Dockerfile.debian
 #   optionally with: --build-arg BUILD_OS_VER=slim-buster --build-arg RUN_OS_VER=buster-slim --build-arg RUST_VER=1.60
+#   rust nightly with: BUILD_OS_VER=bullseye-slim RUN_OS_VER=bullseye-slim RUST_VER=nightly REPOSITORY=rustlang/rust
 
-ARG RUST_VER=1.61  # 1.60
+ARG RUST_VER=1.62  # 1.60 1.61
 ARG BUILD_OS_VER=slim-bullseye  # slim-buster
 ARG RUN_OS_VER=bullseye-slim    # buster-slim
+ARG REPOSITORY=rust             # rustlang/rust
 
-FROM rust:${RUST_VER}-${BUILD_OS_VER} as builder
+FROM ${REPOSITORY}:${RUST_VER}-${BUILD_OS_VER} as builder
 
-RUN apt-get -y update
-
-RUN apt-get install -y build-essential cmake jq wget pkg-config \
-    clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
-    libexpat1-dev curl gcc make libssl-dev
+RUN apt-get update && apt-get install -y build-essential cmake jq wget \
+  pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
+  libexpat1-dev curl gcc make libssl-dev fonts-lato
 
 RUN mkdir /opt/darkfi
 
@@ -28,6 +28,9 @@ RUN bash -c 'make -j test &&  make -j all'
 
 # 2. stage
 FROM debian:${RUN_OS_VER}
+
+RUN apt-get -y update && apt-get install -y openssl fonts-lato \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/darkfi/darkfid /opt/darkfi/
 COPY --from=builder /opt/darkfi/dnetview /opt/darkfi/
