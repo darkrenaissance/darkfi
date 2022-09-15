@@ -101,15 +101,21 @@ impl ProtocolVersion {
                     // Version format: MAJOR.MINOR.PATCH
                     let app_versions: Vec<&str> = app_version.split('.').collect();
                     let verack_msg_versions: Vec<&str> = verack_msg.app.split('.').collect();
+                    // Check for malformed versions
+                    if app_versions.len() != 3 || verack_msg_versions.len() != 3 {
+                        error!("ProtocolVersion::send_version() [Malformed version detected. Disconnecting from channel.]");
+                        self.hosts.remove(&self.channel.address()).await;
+                        self.channel.stop().await;
+                        return Err(Error::ChannelStopped)
+                    }
                     // Ignore PATCH version
                     if app_versions[0] != verack_msg_versions[0] ||
                         app_versions[1] != verack_msg_versions[1]
                     {
                         error!(
-                            "Wrong app version from [{}]. Disconnecting from channel.",
+                            "ProtocolVersion::send_version() [Wrong app version from ({}). Disconnecting from channel.]",
                             self.channel.address()
                         );
-
                         self.hosts.remove(&self.channel.address()).await;
                         self.channel.stop().await;
                         return Err(Error::ChannelStopped)
