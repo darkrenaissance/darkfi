@@ -565,7 +565,7 @@ impl Circuit<pallas::Base> for LeadContract {
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let rho_commit_base = rho_commit.inner().x();
         // stakeholder absolute stake + 1 (epsilon)
-        let stake_plus = ar_chip.add(layouter.namespace(|| ""), &one, coin_value.clone())?;
+        let stake_plus = ar_chip.add(layouter.namespace(|| ""), &one, &coin_value.clone())?;
         let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &sigma_scalar, &stake_plus)?;
 
         let y : Value<pallas::Base> = y_commit_base.value().cloned();

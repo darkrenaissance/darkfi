@@ -335,8 +335,12 @@ impl Stakeholder
         // create coin with absolute slot/epoch.
         let num_slots = self.workspace.sl;
         // total stake;
-        let sigma = num_slots*reward;
-        epoch.create_coins(); // set epoch interal fields working space with competing coins
+        // TODO sigma scalar for tunning target function
+        // it's value is dependent on the tekonomics,
+        // set to one untill then.
+        let reward = pallas::Base::one();
+        let sigma : pallas::Base = pallas::Base::from(num_slots)*reward;
+        epoch.create_coins(sigma); // set epoch interal fields working space with competing coins
         self.epoch = epoch.clone();
     }
 

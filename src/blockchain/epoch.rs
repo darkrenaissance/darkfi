@@ -158,7 +158,7 @@ impl Epoch {
         (root_sks, path_sks)
     }
     //note! the strategy here is single competing coin per slot.
-    pub fn create_coins(& mut self) -> Vec<LeadCoin> {
+    pub fn create_coins(& mut self, sigma : pallas::Base) -> Vec<LeadCoin> {
         let mut rng = thread_rng();
         let mut seeds: Vec<u64> = vec![];
         for _i in 0..self.len.unwrap() {
@@ -255,6 +255,7 @@ impl Epoch {
                 c2_blind: Some(c_cm2_blind),
                 y_mu: Some(y_mu),
                 rho_mu: Some(rho_mu),
+                sigma_scalar: Some(sigma),
             };
             coins.push(coin);
         }

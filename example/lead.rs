@@ -67,7 +67,9 @@ fn main() {
         eta: eta,
         coins: vec![],
     };
-    let coins: Vec<LeadCoin> = epoch.create_coins();
+    // sigma is nubmer of slots * reward (assuming reward is 1 for simplicity)
+    let sigma = pallas::Base::from(10);
+    let coins: Vec<LeadCoin> = epoch.create_coins(sigma);
     let coin_idx = 0;
     let coin = coins[coin_idx];
     let contract = coin.create_contract();

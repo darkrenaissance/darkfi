@@ -55,7 +55,6 @@ impl LeadCoin {
 
         let po_cm = self.cm.unwrap().to_affine().coordinates().unwrap();
         let po_cm2 = self.cm2.unwrap().to_affine().coordinates().unwrap();
-
         let po_pk = self.pk.unwrap();
         let po_sn = self.sn.unwrap();
 
