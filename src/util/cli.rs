@@ -173,8 +173,8 @@ macro_rules! async_daemonize {
                     } else {
                         "darkfi"
                     };
-                    std::fs::create_dir_all(expand_path("~/.local")?)?;
-                    format!("~/.local/{}.log", bin_name)
+                    std::fs::create_dir_all(expand_path("~/.local/darkfi")?)?;
+                    format!("~/.local/darkfi/{}.log", bin_name)
                 }
             };
 
