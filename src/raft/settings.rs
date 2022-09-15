@@ -24,7 +24,7 @@ impl Default for RaftSettings {
             heartbeat_timeout: 500,
             timeout: 6,
             id_timeout: 12,
-            prun_duration: 240,
+            prun_duration: 30,
             datastore_path: PathBuf::from(""),
         }
     }
