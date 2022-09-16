@@ -87,7 +87,8 @@ impl DaoDemo {
         let dao_params = dao_contract::mint::wallet::DaoParams {
             proposer_limit: 0,
             quorum: 0,
-            approval_ratio: 0,
+            approval_ratio_quot: 0,
+            approval_ratio_base: 0,
             gov_token_id: gdrk_token_id,
             public_key: dao_keypair.public,
             bulla_blind: dao_bulla_blind,
@@ -228,7 +229,8 @@ impl DaoDemo {
         // DAO parameters
         let dao_proposer_limit = 110;
         let dao_quorum = 110;
-        let dao_approval_ratio = 2;
+        let dao_approval_ratio_quot = 1;
+        let dao_approval_ratio_base = 2;
 
         debug!(target: "demo", "Stage 1. Creating DAO bulla");
 
@@ -243,7 +245,8 @@ impl DaoDemo {
         let builder = dao_contract::mint::wallet::Builder {
             dao_proposer_limit,
             dao_quorum,
-            dao_approval_ratio,
+            dao_approval_ratio_quot,
+            dao_approval_ratio_base,
             gov_token_id: self.gdrk_token_id,
             dao_pubkey: dao_keypair.public,
             dao_bulla_blind,
@@ -657,7 +660,8 @@ impl DaoDemo {
         // DAO parameters
         let dao_proposer_limit = 110;
         let dao_quorum = 110;
-        let dao_approval_ratio = 2;
+        let dao_approval_ratio_quot = 1;
+        let dao_approval_ratio_base = 2;
 
         debug!(target: "demo", "Stage 4. Propose the vote");
 
@@ -702,7 +706,8 @@ impl DaoDemo {
             dao_contract::mint::wallet::DaoParams {
                 proposer_limit: dao_proposer_limit,
                 quorum: dao_quorum,
-                approval_ratio: dao_approval_ratio,
+                approval_ratio_base: dao_approval_ratio_base,
+                approval_ratio_quot: dao_approval_ratio_quot,
                 gov_token_id: self.gdrk_token_id,
                 public_key: self.dao_keypair.public,
                 bulla_blind: self.dao_bulla_blind,
