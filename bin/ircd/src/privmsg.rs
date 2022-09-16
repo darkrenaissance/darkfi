@@ -5,9 +5,6 @@ use darkfi::util::serial::{SerialDecodable, SerialEncodable};
 
 pub type PrivmsgId = u64;
 
-pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
-pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 32;
-
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable, Eq, PartialEq)]
 pub struct Privmsg {
     pub id: PrivmsgId,

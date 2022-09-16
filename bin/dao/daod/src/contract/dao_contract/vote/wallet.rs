@@ -184,19 +184,19 @@ impl Builder {
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
-        let dao_approval_ratio = pallas::Base::from(self.dao.approval_ratio);
+        let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
+        let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
 
         let dao_pubkey_coords = self.dao.public_key.0.to_affine().coordinates().unwrap();
 
         let dao_bulla = poseidon_hash::<8>([
             dao_proposer_limit,
             dao_quorum,
-            dao_approval_ratio,
+            dao_approval_ratio_quot,
+            dao_approval_ratio_base,
             self.dao.gov_token_id,
             *dao_pubkey_coords.x(),
             *dao_pubkey_coords.y(),
-            self.dao.bulla_blind,
-            // @tmp-workaround
             self.dao.bulla_blind,
         ]);
 
@@ -241,7 +241,8 @@ impl Builder {
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
-            Witness::Base(Value::known(dao_approval_ratio)),
+            Witness::Base(Value::known(dao_approval_ratio_quot)),
+            Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.dao.gov_token_id)),
             Witness::Base(Value::known(*dao_pubkey_coords.x())),
             Witness::Base(Value::known(*dao_pubkey_coords.y())),

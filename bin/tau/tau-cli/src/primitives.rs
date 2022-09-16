@@ -52,6 +52,7 @@ impl FromStr for State {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BaseTask {
     pub title: String,
+    pub tags: Vec<String>,
     pub desc: Option<String>,
     pub assign: Vec<String>,
     pub project: Vec<String>,
@@ -65,6 +66,7 @@ pub struct TaskInfo {
     pub workspace: String,
     pub id: u32,
     pub title: String,
+    pub tags: Vec<String>,
     pub desc: String,
     pub owner: String,
     pub assign: Vec<String>,
@@ -117,6 +119,7 @@ impl std::fmt::Display for Comment {
 
 pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
     let mut title = String::new();
+    let mut tags = vec![];
     let mut desc = None;
     let mut project = vec![];
     let mut assign = vec![];
@@ -126,6 +129,10 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
     for val in values {
         let field: Vec<&str> = val.split(':').collect();
         if field.len() == 1 {
+            if field[0].starts_with('+') || field[0].starts_with('-') {
+                tags.push(field[0].into());
+                continue
+            }
             title.push_str(field[0]);
             title.push(' ');
             continue
@@ -155,6 +162,7 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
             rank = Some(field[1].parse::<f32>()?);
         }
     }
+
     let title = title.trim().into();
-    Ok(BaseTask { title, desc, project, assign, due, rank })
+    Ok(BaseTask { title, tags, desc, project, assign, due, rank })
 }

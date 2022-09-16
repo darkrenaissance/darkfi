@@ -1,4 +1,4 @@
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Arc;
 use std::fmt;
 
 use async_channel::Receiver;
@@ -11,6 +11,7 @@ use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize, net,
+    net::P2pPtr,
     rpc::server::listen_and_serve,
     system::{Subscriber, SubscriberPtr},
     util::{
@@ -18,6 +19,7 @@ use darkfi::{
         expand_path,
         file::save_json_file,
         path::get_config_path,
+        sleep,
     },
     Result,
 };
@@ -31,10 +33,10 @@ pub mod rpc;
 pub mod settings;
 
 use crate::{
-    buffers::{create_buffers, Buffers, RingBuffer, SIZE_OF_MSG_IDSS_BUFFER},
+    buffers::{create_buffers, Buffers},
     irc::IrcServer,
     privmsg::Privmsg,
-    protocol_privmsg::ProtocolPrivmsg,
+    protocol_privmsg::{LastTerm, ProtocolPrivmsg},
     rpc::JsonRpcInterface,
     settings::{Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
@@ -48,6 +50,25 @@ struct KeyPair {
 impl fmt::Display for KeyPair {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Public key: {}\nPrivate key: {}", self.public_key, self.private_key)
+    }
+}
+
+async fn resend_unread_msgs(p2p: P2pPtr, buffers: Buffers) -> Result<()> {
+    loop {
+        sleep(settings::TIMEOUT_FOR_RESEND_UNREAD_MSGS).await;
+
+        for msg in buffers.unread_msgs.load().await.values() {
+            p2p.broadcast(msg.clone()).await?;
+        }
+    }
+}
+
+async fn send_last_term(p2p: P2pPtr, buffers: Buffers) -> Result<()> {
+    loop {
+        sleep(settings::BROADCAST_LAST_TERM_MSG).await;
+
+        let term = buffers.privmsgs.last_term().await;
+        p2p.broadcast(LastTerm { term }).await?;
     }
 }
 
@@ -98,7 +119,6 @@ impl Ircd {
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
-    let seen_inv_ids = Arc::new(Mutex::new(RingBuffer::new(SIZE_OF_MSG_IDSS_BUFFER)));
     let buffers = create_buffers();
 
     if settings.gen_secret {
@@ -130,7 +150,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     // P2p setup
     //
     let mut net_settings = settings.net.clone();
-    net_settings.app_version = option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string();
+    net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
     let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<Privmsg>();
 
     let p2p = net::P2p::new(net_settings.into()).await;
@@ -139,16 +159,11 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let registry = p2p.protocol_registry();
 
     let buffers_cloned = buffers.clone();
-    let seen_inv_ids_cloned = seen_inv_ids.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let sender = p2p_send_channel.clone();
-            let seen_inv_ids_cloned = seen_inv_ids_cloned.clone();
             let buffers_cloned = buffers_cloned.clone();
-            async move {
-                ProtocolPrivmsg::init(channel, sender, p2p, seen_inv_ids_cloned, buffers_cloned)
-                    .await
-            }
+            async move { ProtocolPrivmsg::init(channel, sender, p2p, buffers_cloned).await }
         })
         .await;
 
@@ -156,6 +171,12 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let executor_cloned = executor.clone();
     executor_cloned.spawn(p2p.clone().run(executor.clone())).detach();
+
+    //
+    // Sync tasks
+    //
+    executor.spawn(resend_unread_msgs(p2p.clone(), buffers.clone())).detach();
+    executor.spawn(send_last_term(p2p.clone(), buffers.clone())).detach();
 
     //
     // RPC interface

@@ -72,6 +72,7 @@ pub struct SessionInfo {
     pub is_empty: bool,
     pub children: Vec<ConnectInfo>,
     pub accept_addr: Option<String>,
+    pub hosts: Option<Vec<String>>,
 }
 
 impl SessionInfo {
@@ -82,8 +83,9 @@ impl SessionInfo {
         parent: String,
         children: Vec<ConnectInfo>,
         accept_addr: Option<String>,
+        hosts: Option<Vec<String>>,
     ) -> Self {
-        Self { id, name, is_empty, parent, children, accept_addr }
+        Self { id, name, is_empty, parent, children, accept_addr, hosts }
     }
 }
 

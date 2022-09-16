@@ -58,6 +58,8 @@ pub struct TaskComments(Vec<Comment>);
 pub struct TaskProjects(Vec<String>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskAssigns(Vec<String>);
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskTags(Vec<String>);
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct TaskInfo {
@@ -65,6 +67,7 @@ pub struct TaskInfo {
     pub(crate) workspace: String,
     id: u32,
     title: String,
+    tags: TaskTags,
     desc: String,
     owner: String,
     assign: TaskAssigns,
@@ -113,6 +116,7 @@ impl TaskInfo {
             title: title.into(),
             desc: desc.into(),
             owner: owner.into(),
+            tags: TaskTags(vec![]),
             assign: TaskAssigns(vec![]),
             project: TaskProjects(vec![]),
             due,
@@ -176,42 +180,77 @@ impl TaskInfo {
     pub fn set_title(&mut self, title: &str) {
         debug!(target: "tau", "TaskInfo::set_title()");
         self.title = title.into();
+        self.set_event("title", &title);
     }
 
     pub fn set_desc(&mut self, desc: &str) {
         debug!(target: "tau", "TaskInfo::set_desc()");
         self.desc = desc.into();
+        self.set_event("desc", &desc);
     }
 
-    pub fn set_assign(&mut self, assign: &[String]) {
+    pub fn set_tags(&mut self, tags: &[String]) {
+        debug!(target: "tau", "TaskInfo::set_tags()");
+        for tag in tags.iter() {
+            if tag.starts_with('+') && !self.tags.0.contains(tag) {
+                self.tags.0.push(tag.to_string());
+            }
+            if tag.starts_with('-') {
+                let t = tag.replace('-', "+");
+                self.tags.0.retain(|tag| tag != &t);
+            }
+        }
+        self.set_event("tags", &tags.join(", "));
+    }
+
+    pub fn set_assign(&mut self, assigns: &[String]) {
         debug!(target: "tau", "TaskInfo::set_assign()");
-        self.assign = TaskAssigns(assign.to_owned());
+        self.assign = TaskAssigns(assigns.to_owned());
+        self.set_event("assign", &assigns.join(", "));
     }
 
-    pub fn set_project(&mut self, project: &[String]) {
+    pub fn set_project(&mut self, projects: &[String]) {
         debug!(target: "tau", "TaskInfo::set_project()");
-        self.project = TaskProjects(project.to_owned());
+        self.project = TaskProjects(projects.to_owned());
+        self.set_event("project", &projects.join(", "));
     }
 
     pub fn set_comment(&mut self, c: Comment) {
         debug!(target: "tau", "TaskInfo::set_comment()");
-        self.comments.0.push(c);
+        self.comments.0.push(c.clone());
+        self.set_event("comment", &c.content);
     }
 
     pub fn set_rank(&mut self, r: Option<f32>) {
         debug!(target: "tau", "TaskInfo::set_rank()");
         self.rank = r;
+        match r {
+            Some(v) => {
+                self.set_event("rank", &v.to_string());
+            }
+            None => {
+                self.set_event("rank", "None");
+            }
+        }
     }
 
     pub fn set_due(&mut self, d: Option<Timestamp>) {
         debug!(target: "tau", "TaskInfo::set_due()");
         self.due = d;
+        match d {
+            Some(v) => {
+                self.set_event("due", &v.to_string());
+            }
+            None => {
+                self.set_event("due", "None");
+            }
+        }
     }
 
-    pub fn set_event(&mut self, action: &str, owner: &str, content: &str) {
+    pub fn set_event(&mut self, action: &str, content: &str) {
         debug!(target: "tau", "TaskInfo::set_event()");
         if !content.is_empty() {
-            self.events.0.push(TaskEvent::new(action.into(), owner.into(), content.into()));
+            self.events.0.push(TaskEvent::new(action.into(), self.owner.clone(), content.into()));
         }
     }
 
@@ -221,6 +260,7 @@ impl TaskInfo {
             return
         }
         self.state = state.to_string();
+        self.set_event("state", &state);
     }
 }
 
@@ -265,6 +305,18 @@ impl Encodable for TaskAssigns {
 }
 
 impl Decodable for TaskAssigns {
+    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
+        Ok(Self(decode_vec(d)?))
+    }
+}
+
+impl Encodable for TaskTags {
+    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
+        encode_vec(&self.0, s)
+    }
+}
+
+impl Decodable for TaskTags {
     fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
         Ok(Self(decode_vec(d)?))
     }

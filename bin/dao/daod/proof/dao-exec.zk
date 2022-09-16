@@ -15,7 +15,8 @@ contract "DaoExec" {
     # DAO params
     Base dao_proposer_limit,
     Base dao_quorum,
-    Base dao_approval_ratio,
+    Base dao_approval_ratio_quot,
+    Base dao_approval_ratio_base,
     Base gov_token_id,
     Base dao_public_x,
     Base dao_public_y,
@@ -45,12 +46,11 @@ circuit "DaoExec" {
     dao_bulla = poseidon_hash(
         dao_proposer_limit,
         dao_quorum,
-        dao_approval_ratio,
+        dao_approval_ratio_quot,
+        dao_approval_ratio_base,
         gov_token_id,
         dao_public_x,
         dao_public_y,
-        dao_bulla_blind,
-        # @tmp-workaround
         dao_bulla_blind,
     );
     # Proposal bulla is valid means DAO bulla is also valid
@@ -134,25 +134,23 @@ circuit "DaoExec" {
     constrain_instance(user_spend_hook);
     constrain_instance(user_data);
 
-    # total_votes >= dao_quorum
-    # TODO: waiting on this opcode in zkas
-    #
-    #     greater_than_or_equal(total_votes, dao_quorum)
-    #
+    # Check that dao_quorum is less than or equal to all_votes_value
+    one = witness_base(1);
+    all_votes_value_1 = base_add(all_votes_value, one);
+    less_than(dao_quorum, all_votes_value_1);
 
-    # win_votes / total_votes >= approval_ratio_quot / approval_ratio_base
+    # approval_ratio_quot / approval_ratio_base <= yes_votes / all_votes
     #
     # The above is also equivalent to this:
     #
-    # win_votes * approval_ratio_base >= total_votes * approval_ratio_quot
-    #
-    # TODO: waiting on this opcode in zkas
-    #
-    #     lhs = base_mul(win_votes, approval_ratio_base);
-    #     rhs = base_mul(total_votes, approval_ratio_quot);
-    #     greater_than_or_equal(lhs, rhs);
-    #
+    # all_votes * approval_ratio_quot <= yes_votes * approval_ratio_base
 
+    rhs = base_mul(all_votes_value, dao_approval_ratio_quot);
+    lhs = base_mul(yes_votes_value, dao_approval_ratio_base);
+
+    lhs_1 = base_add(lhs, one);
+    less_than(rhs, lhs_1);
+    
     ####
 
     # Create coin 0

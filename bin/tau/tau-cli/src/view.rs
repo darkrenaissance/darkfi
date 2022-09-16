@@ -26,7 +26,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
             .separators(&[LinePosition::Title], LineSeparator::new('-', ' ', ' ', ' '))
             .build(),
     );
-    table.set_titles(row!["ID", "Title", "Project", "Assigned", "Due", "Rank"]);
+    table.set_titles(row!["ID", "Title", "Tags", "Project", "Assigned", "Due", "Rank"]);
 
     // group tasks by state.
     tasks.sort_by_key(|task| task.state.clone());
@@ -66,10 +66,16 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
         };
 
         let rank = if let Some(r) = task.rank { r.to_string() } else { "".to_string() };
+        let mut print_tags = vec![];
+        for tag in &task.tags {
+            let t = tag.replace('+', "");
+            print_tags.push(t)
+        }
 
         table.add_row(Row::new(vec![
             Cell::new(&task.id.to_string()).style_spec(gen_style),
             Cell::new(&task.title).style_spec(gen_style),
+            Cell::new(&print_tags.join(", ")).style_spec(gen_style),
             Cell::new(&task.project.join(", ")).style_spec(gen_style),
             Cell::new(&task.assign.join(", ")).style_spec(gen_style),
             Cell::new(&timestamp_to_date(task.due.unwrap_or(0), DateFormat::Date))
@@ -109,13 +115,14 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
         [Bd =>"id", &taskinfo.id.to_string()],
         ["owner", &taskinfo.owner],
         [Bd =>"title", &taskinfo.title],
-        ["desc", &taskinfo.desc.to_string()],
-        [Bd =>"assign", taskinfo.assign.join(", ")],
-        ["project", taskinfo.project.join(", ")],
-        [Bd =>"due", due],
-        ["rank", rank],
-        [Bd =>"created_at", created_at],
-        ["current_state", &taskinfo.state]);
+        ["tags", &taskinfo.tags.join(", ")],
+        [Bd =>"desc", &taskinfo.desc.to_string()],
+        ["assign", taskinfo.assign.join(", ")],
+        [Bd =>"project", taskinfo.project.join(", ")],
+        ["due", due],
+        [Bd =>"rank", rank],
+        ["created_at", created_at],
+        [Bd =>"current_state", &taskinfo.state]);
 
     table.set_format(
         FormatBuilder::new()
@@ -168,6 +175,10 @@ pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
             }
             "project" => {
                 writeln!(events_str, "- {} changed project to {}", event.author, event.content)
+                    .unwrap();
+            }
+            "tags" => {
+                writeln!(events_str, "- {} changed tags to {}", event.author, event.content)
                     .unwrap();
             }
             "due" => {

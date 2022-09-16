@@ -43,7 +43,8 @@ local instruction = token('instruction', word_match{
   'ec_get_x', 'ec_get_y',
   'base_add', 'base_mul', 'base_sub', 'greater_than',
   'poseidon_hash', 'merkle_root', 'constrain_instance',
-  'range_check', 'less_than', 'witness_base',
+  'range_check', 'less_than', 'bool_check',
+  'witness_base',
 })
 
 -- Identifiers.

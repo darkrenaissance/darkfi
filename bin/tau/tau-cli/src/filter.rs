@@ -35,6 +35,9 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
         }
 
         // Filter by month
+        _ if filter.starts_with('+') => tasks.retain(|task| task.tags.contains(&filter.into())),
+
+        // Filter by month
         _ if filter.contains("month:") => {
             let kv: Vec<&str> = filter.split(':').collect();
             if kv.len() == 2 {

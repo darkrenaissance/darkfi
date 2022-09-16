@@ -27,9 +27,12 @@ pub struct Args {
     /// Increase verbosity
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
-    /// Generate a new secret key
+    /// Generate a new workspace
     #[structopt(long)]
-    pub key_gen: bool,
+    pub generate: bool,
+    /// Secret Key To Encrypt/Decrypt tasks
+    #[structopt(long)]
+    pub workspaces: Vec<String>,
     ///  Clean all the local data in datastore path
     /// (BE CAREFULL) Check the datastore path in the config file before running this
     #[structopt(long)]

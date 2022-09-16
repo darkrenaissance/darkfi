@@ -5,7 +5,7 @@ use async_executor::Executor;
 use async_trait::async_trait;
 use log::{debug, info, warn};
 use rand::seq::SliceRandom;
-use serde_json::json;
+use serde_json::{json, Value};
 use url::Url;
 
 use crate::{
@@ -293,8 +293,13 @@ impl Session for OutboundSession {
             slots.push(info.get_info().await);
         }
 
+        let hosts = self.p2p().hosts().load_all().await;
+        let addrs: Vec<Value> =
+            hosts.iter().map(|addr| serde_json::Value::String(addr.to_string())).collect();
+
         json!({
             "slots": slots,
+            "hosts": serde_json::Value::Array(addrs),
         })
     }
 

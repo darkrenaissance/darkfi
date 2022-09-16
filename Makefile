@@ -31,7 +31,7 @@ PROOFS_BIN = $(PROOFS:=.bin)
 
 all: zkas $(PROOFS_BIN) $(BINS)
 
-zkas:
+zkas: $(BINDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
 

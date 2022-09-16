@@ -133,7 +133,7 @@ impl DataParser {
 
         let accept_addr = None;
         let session_info =
-            SessionInfo::new(session_id, name, is_empty, parent, connects, accept_addr);
+            SessionInfo::new(session_id, name, is_empty, parent, connects, accept_addr, None);
         sessions.push(session_info);
 
         let node = NodeInfo::new(node_id, node_name, state, sessions.clone(), None, true);
@@ -405,12 +405,12 @@ impl DataParser {
                 if accept_vec.is_empty() {
                     let accept_addr = None;
                     let session_info =
-                        SessionInfo::new(id, name, is_empty, parent, connects, accept_addr);
+                        SessionInfo::new(id, name, is_empty, parent, connects, accept_addr, None);
                     Ok(session_info)
                 } else {
                     let accept_addr = Some(accept_vec[0].clone());
                     let session_info =
-                        SessionInfo::new(id, name, is_empty, parent, connects, accept_addr);
+                        SessionInfo::new(id, name, is_empty, parent, connects, accept_addr, None);
                     Ok(session_info)
                 }
             }
@@ -455,8 +455,15 @@ impl DataParser {
         let parent = connect_id;
         let is_empty = is_empty_session(&connects);
         let accept_addr = None;
-        let session_info =
-            SessionInfo::new(session_id, name, is_empty, parent, connects.clone(), accept_addr);
+        let session_info = SessionInfo::new(
+            session_id,
+            name,
+            is_empty,
+            parent,
+            connects.clone(),
+            accept_addr,
+            None,
+        );
 
         Ok(session_info)
     }
@@ -473,6 +480,8 @@ impl DataParser {
         let mut connects: Vec<ConnectInfo> = Vec::new();
         let slots = &outbound["slots"];
         let mut slot_count = 0;
+
+        let hosts = &outbound["hosts"];
 
         match slots.as_array() {
             Some(slots) => {
@@ -549,9 +558,24 @@ impl DataParser {
                 let is_empty = is_empty_session(&connects);
 
                 let accept_addr = None;
-                let session_info =
-                    SessionInfo::new(id, name, is_empty, parent, connects, accept_addr);
-                Ok(session_info)
+
+                match hosts.as_array() {
+                    Some(hosts) => {
+                        let hosts: Vec<String> =
+                            hosts.iter().map(|addr| addr.as_str().unwrap().to_string()).collect();
+                        let session_info = SessionInfo::new(
+                            id,
+                            name,
+                            is_empty,
+                            parent,
+                            connects,
+                            accept_addr,
+                            Some(hosts),
+                        );
+                        Ok(session_info)
+                    }
+                    None => Err(DnetViewError::ValueIsNotObject),
+                }
             }
             None => Err(DnetViewError::ValueIsNotObject),
         }

@@ -1,7 +1,8 @@
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::Mutex;
 use std::{fs::create_dir_all, path::PathBuf};
 
 use async_trait::async_trait;
+use crypto_box::SalsaBox;
 use fxhash::FxHashMap;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
@@ -21,21 +22,21 @@ use crate::{
     error::{to_json_result, TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
-    util::Workspace,
 };
 
 pub struct JsonRpcInterface {
     dataset_path: PathBuf,
     notify_queue_sender: async_channel::Sender<TaskInfo>,
     nickname: String,
-    workspace: Arc<Mutex<String>>,
-    configured_ws: FxHashMap<String, Workspace>,
+    workspace: Mutex<String>,
+    workspaces: FxHashMap<String, SalsaBox>,
     p2p: net::P2pPtr,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct BaseTaskInfo {
     title: String,
+    tags: Vec<String>,
     desc: String,
     assign: Vec<String>,
     project: Vec<String>,
@@ -78,11 +79,11 @@ impl JsonRpcInterface {
         dataset_path: PathBuf,
         notify_queue_sender: async_channel::Sender<TaskInfo>,
         nickname: String,
-        workspace: Arc<Mutex<String>>,
-        configured_ws: FxHashMap<String, Workspace>,
+        workspaces: FxHashMap<String, SalsaBox>,
         p2p: net::P2pPtr,
     ) -> Self {
-        Self { dataset_path, nickname, workspace, configured_ws, notify_queue_sender, p2p }
+        let workspace = Mutex::new(workspaces.iter().last().unwrap().0.clone());
+        Self { dataset_path, nickname, workspace, workspaces, notify_queue_sender, p2p }
     }
 
     // RPCAPI:
@@ -121,9 +122,8 @@ impl JsonRpcInterface {
         debug!(target: "tau", "JsonRpc::add() params {:?}", params);
 
         let task: BaseTaskInfo = serde_json::from_value(params[0].clone())?;
-        let ws = self.workspace.lock().await.clone();
         let mut new_task: TaskInfo = TaskInfo::new(
-            ws,
+            self.workspace.lock().await.clone(),
             &task.title,
             &task.desc,
             &self.nickname,
@@ -133,6 +133,7 @@ impl JsonRpcInterface {
         )?;
         new_task.set_project(&task.project);
         new_task.set_assign(&task.assign);
+        new_task.set_tags(&task.tags);
 
         self.notify_queue_sender.send(new_task).await.map_err(Error::from)?;
         Ok(json!(true))
@@ -144,9 +145,12 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
     async fn get_ids(&self, params: &[Value]) -> TaudResult<Value> {
         debug!(target: "tau", "JsonRpc::get_ids() params {:?}", params);
+
         let ws = self.workspace.lock().await.clone();
         let tasks = MonthTasks::load_current_tasks(&self.dataset_path, ws, false)?;
+
         let task_ids: Vec<u32> = tasks.iter().map(|task| task.get_id()).collect();
+
         Ok(json!(task_ids))
     }
 
@@ -160,10 +164,12 @@ impl JsonRpcInterface {
         if params.len() != 2 {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
-        let ws = self.workspace.lock().await.clone();
 
+        let ws = self.workspace.lock().await.clone();
         let task = self.check_params_for_update(&params[0], &params[1], ws)?;
+
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
+
         Ok(json!(true))
     }
 
@@ -188,7 +194,6 @@ impl JsonRpcInterface {
 
         if states.contains(&state.as_str()) {
             task.set_state(&state);
-            task.set_event("state", &self.nickname, &state);
         }
 
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
@@ -208,11 +213,11 @@ impl JsonRpcInterface {
         }
 
         let comment_content: String = serde_json::from_value(params[1].clone())?;
-        let ws = self.workspace.lock().await.clone();
 
+        let ws = self.workspace.lock().await.clone();
         let mut task: TaskInfo = self.load_task_by_id(&params[0], ws)?;
+
         task.set_comment(Comment::new(&comment_content, &self.nickname));
-        task.set_event("comment", &self.nickname, &comment_content);
 
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
@@ -229,8 +234,8 @@ impl JsonRpcInterface {
         if params.len() != 1 {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
         }
-        let ws = self.workspace.lock().await.clone();
 
+        let ws = self.workspace.lock().await.clone();
         let task: TaskInfo = self.load_task_by_id(&params[0], ws)?;
 
         Ok(json!(task))
@@ -272,7 +277,7 @@ impl JsonRpcInterface {
         let ws = params[0].as_str().unwrap().to_string();
         let mut s = self.workspace.lock().await;
 
-        if self.configured_ws.contains_key(&ws) {
+        if self.workspaces.contains_key(&ws) {
             *s = ws
         } else {
             warn!("Workspace \"{}\" is not configured", ws);
@@ -288,7 +293,6 @@ impl JsonRpcInterface {
     async fn get_ws(&self, params: &[Value]) -> TaudResult<Value> {
         debug!(target: "tau", "JsonRpc::switch_ws() params {:?}", params);
         let ws = self.workspace.lock().await.clone();
-
         Ok(json!(ws))
     }
 
@@ -307,12 +311,12 @@ impl JsonRpcInterface {
             return Err(TaudError::InvalidData("Invalid path".into()))
         }
 
-        let ws = self.workspace.lock().await.clone();
-        let path = expand_path(params[0].as_str().unwrap())?.join("exported_tasks");
         // mkdir datastore_path if not exists
+        let path = expand_path(params[0].as_str().unwrap())?.join("exported_tasks");
         create_dir_all(path.join("month")).map_err(Error::from)?;
         create_dir_all(path.join("task")).map_err(Error::from)?;
 
+        let ws = self.workspace.lock().await.clone();
         let tasks = MonthTasks::load_current_tasks(&self.dataset_path, ws, true)?;
 
         for task in tasks {
@@ -337,8 +341,8 @@ impl JsonRpcInterface {
             return Err(TaudError::InvalidData("Invalid path".into()))
         }
 
-        let ws = self.workspace.lock().await.clone();
         let path = expand_path(params[0].as_str().unwrap())?.join("exported_tasks");
+        let ws = self.workspace.lock().await.clone();
         let tasks = MonthTasks::load_current_tasks(&path, ws, true)?;
 
         for task in tasks {
@@ -374,7 +378,6 @@ impl JsonRpcInterface {
             let title: String = serde_json::from_value(title)?;
             if !title.is_empty() {
                 task.set_title(&title);
-                task.set_event("title", &self.nickname, &title);
             }
         }
 
@@ -384,7 +387,6 @@ impl JsonRpcInterface {
                 let description: Option<String> = serde_json::from_value(description.clone())?;
                 if let Some(desc) = description {
                     task.set_desc(&desc);
-                    task.set_event("desc", &self.nickname, &desc);
                 }
             }
         }
@@ -395,7 +397,6 @@ impl JsonRpcInterface {
                 let rank: Option<f32> = serde_json::from_value(rank.clone())?;
                 if let Some(rank) = rank {
                     task.set_rank(Some(rank));
-                    task.set_event("rank", &self.nickname, &rank.to_string());
                 }
             }
         }
@@ -405,9 +406,6 @@ impl JsonRpcInterface {
             let due: Option<Option<Timestamp>> = serde_json::from_value(due)?;
             if let Some(d) = due {
                 task.set_due(d);
-                if let Some(d) = d {
-                    task.set_event("due", &self.nickname, &d.0.to_string());
-                }
             }
         }
 
@@ -416,7 +414,6 @@ impl JsonRpcInterface {
             let assign: Vec<String> = serde_json::from_value(assign)?;
             if !assign.is_empty() {
                 task.set_assign(&assign);
-                task.set_event("assign", &self.nickname, &assign.join(", "));
             }
         }
 
@@ -425,7 +422,14 @@ impl JsonRpcInterface {
             let project: Vec<String> = serde_json::from_value(project)?;
             if !project.is_empty() {
                 task.set_project(&project);
-                task.set_event("project", &self.nickname, &project.join(", "));
+            }
+        }
+
+        if fields.contains_key("tags") {
+            let tags = fields.get("tags").unwrap().clone();
+            let tags: Vec<String> = serde_json::from_value(tags)?;
+            if !tags.is_empty() {
+                task.set_tags(&tags);
             }
         }
 

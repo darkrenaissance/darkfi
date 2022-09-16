@@ -16,16 +16,12 @@ use darkfi::{
 use crate::{
     buffers::Buffers,
     crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
-    privmsg::{MAXIMUM_LENGTH_OF_MESSAGE, MAXIMUM_LENGTH_OF_NICKNAME},
+    settings,
+    settings::RPL,
     ChannelInfo, Privmsg,
 };
 
 use super::IrcConfig;
-
-const RPL_NOTOPIC: u32 = 331;
-const RPL_TOPIC: u32 = 332;
-const RPL_NAMEREPLY: u32 = 353;
-const RPL_ENDOFNAMES: u32 = 366;
 
 pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     // network stream
@@ -159,7 +155,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn update(&mut self, line: String) -> Result<()> {
-        if line.len() > MAXIMUM_LENGTH_OF_MESSAGE {
+        if line.len() > settings::MAXIMUM_LENGTH_OF_MESSAGE {
             return Err(Error::MalformedPacket)
         }
 
@@ -211,9 +207,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
 
             // Send dm messages in buffer
-            let privmsgs = self.buffers.privmsgs.lock().await.clone();
-            for msg in privmsgs.iter() {
-                self.process_msg(msg).await?;
+            for msg in self.buffers.privmsgs.load().await {
+                self.process_msg(&msg).await?;
             }
         }
         Ok(())
@@ -255,7 +250,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn on_receive_nick(&mut self, nickname: &str) -> Result<()> {
-        if nickname.len() > MAXIMUM_LENGTH_OF_NICKNAME {
+        if nickname.len() > settings::MAXIMUM_LENGTH_OF_NICKNAME {
             return Ok(())
         }
 
@@ -300,10 +295,22 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             // Client is asking or the topic
             let chan_info = self.irc_config.configured_chans.get(channel).unwrap();
             let topic_reply = if let Some(topic) = &chan_info.topic {
-                format!("{} {} {} :{}\r\n", RPL_TOPIC, self.irc_config.nickname, channel, topic)
+                format!(
+                    "{} {} {} :{}\r\n",
+                    RPL::Topic as u32,
+                    self.irc_config.nickname,
+                    channel,
+                    topic
+                )
             } else {
                 const TOPIC: &str = "No topic is set";
-                format!("{} {} {} :{}\r\n", RPL_NOTOPIC, self.irc_config.nickname, channel, TOPIC)
+                format!(
+                    "{} {} {} :{}\r\n",
+                    RPL::NoTopic as u32,
+                    self.irc_config.nickname,
+                    channel,
+                    TOPIC
+                )
             };
             self.reply(&topic_reply).await?;
         }
@@ -408,7 +415,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 let names_reply = format!(
                     ":{}!anon@dark.fi {} = {} : {}\r\n",
                     self.irc_config.nickname,
-                    RPL_NAMEREPLY,
+                    RPL::NameReply as u32,
                     chan,
                     chan_info.names.join(" ")
                 );
@@ -417,7 +424,9 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
                 let end_of_names = format!(
                     ":DarkFi {:03} {} {} :End of NAMES list\r\n",
-                    RPL_ENDOFNAMES, self.irc_config.nickname, chan
+                    RPL::EndOfNames as u32,
+                    self.irc_config.nickname,
+                    chan
                 );
 
                 self.reply(&end_of_names).await?;
@@ -437,9 +446,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
         info!("[CLIENT {}] (Plain) PRIVMSG {} :{}", self.address, target, message,);
 
-        let privmsgs_buffer = self.buffers.privmsgs.lock().await;
-        let last_term = privmsgs_buffer.last_term() + 1;
-        drop(privmsgs_buffer);
+        let last_term = self.buffers.privmsgs.last_term().await + 1;
 
         let mut privmsg = Privmsg::new(&self.irc_config.nickname, target, &message, last_term);
 
@@ -470,10 +477,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
         }
 
-        {
-            (*self.buffers.seen_ids.lock().await).push(privmsg.id);
-            (*self.buffers.privmsgs.lock().await).push(&privmsg);
-        }
+        self.buffers.seen_ids.push(privmsg.id).await;
+        self.buffers.privmsgs.push(&privmsg).await;
 
         self.notify_clients
             .notify_with_exclude(privmsg.clone(), &[self.subscription.get_id()])

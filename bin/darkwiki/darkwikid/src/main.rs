@@ -48,7 +48,7 @@ use patch::{OpMethod, Patch};
 type Patches = (Vec<Patch>, Vec<Patch>, Vec<Patch>, Vec<Patch>);
 
 pub const CONFIG_FILE: &str = "darkwiki.toml";
-pub const CONFIG_FILE_CONTENTS: &str = include_str!("../darkwiki.toml");
+pub const CONFIG_FILE_CONTENTS: &str = include_str!("../../darkwiki.toml");
 
 /// darkwikid cli
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
@@ -225,8 +225,9 @@ impl Darkwiki {
                 }
                 patch = self.raft.1.recv().fuse() => {
                     for (workspace, salsa_box) in self.workspaces.iter() {
-                        if let Ok(patch) = decrypt_patch(&patch.clone()?, &salsa_box) {
+                        if let Ok(mut patch) = decrypt_patch(&patch.clone()?, &salsa_box) {
                             info!("[{}] Receive a {:?}", workspace, patch);
+                            patch.workspace = workspace.clone();
                             self.on_receive_patch(&patch)?;
                         }
                     }
@@ -563,7 +564,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
         if confirm == "yes" || confirm == "y" {
             remove_dir_all(docs_path).unwrap_or(());
-            println!("Local docs get removed");
+            println!("Local data removed successfully.");
         } else {
             error!("Unexpected Value: {}", confirm);
         }
@@ -623,7 +624,6 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // Raft
     //
-    let net_settings = settings.net;
     let seen_net_msgs = Arc::new(Mutex::new(FxHashMap::default()));
 
     let datastore_raft = datastore_path.join("darkwiki.db");
@@ -634,6 +634,8 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // P2p setup
     //
+    let mut net_settings = settings.net.clone();
+    net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
     let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<NetMsg>();
 
     let p2p = net::P2p::new(net_settings.into()).await;
