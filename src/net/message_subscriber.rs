@@ -143,7 +143,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
                 self._trigger_all(message).await
             }
             Err(err) => {
-                error!("Unable to decode data. Dropping...: {}", err);
+                debug!("Unable to decode data. Dropping...: {}", err);
             }
         }
     }
