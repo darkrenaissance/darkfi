@@ -25,32 +25,6 @@ use crate::{
 use log::error;
 
 
-/*
-/// This struct represents additional [`Block`](super::Block) information used by
-/// the consensus protocol
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct Metadata {
-    /// Block creation timestamp
-    pub timestamp: Timestamp,
-    /// Block information used by the Ouroboros Praos consensus
-    pub om: OuroborosMetadata,
-}
-
-impl Default for Metadata {
-    fn default() -> Self {
-        Self {
-            timestamp: Timestamp::current_time(),
-            om: OuroborosMetadata::default(),
-        }
-    }
-}
-
-impl Metadata {
-    pub fn new(timestamp: Timestamp, eta: [u8;32], lead_proof: TransactionLeadProof) -> Self {
-        Self { timestamp, om: OuroborosMetadata::new(eta, lead_proof) }
-    }
-}
- */
 
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct StakeholderMetadata {
