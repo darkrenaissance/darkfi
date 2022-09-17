@@ -148,6 +148,7 @@ impl ProtocolPrivmsg {
             }
 
             self.update_unread_msgs().await?;
+
             self.p2p.broadcast_with_exclude(msg, &exclude_list).await?;
         }
     }
@@ -205,8 +206,9 @@ impl ProtocolPrivmsg {
                 continue
             }
             if msg.read_confirms >= settings::MAX_CONFIRM {
-                self.add_to_msgs(&msg).await?;
-                self.buffers.unread_msgs.remove(&hash).await;
+                if let Some(msg) = self.buffers.unread_msgs.remove(&hash).await {
+                    self.add_to_msgs(&msg).await?;
+                }
             }
         }
         Ok(())
