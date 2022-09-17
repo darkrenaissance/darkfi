@@ -1,5 +1,10 @@
+use lazy_static::lazy_static;
 use log::debug;
-use pasta_curves::{group::ff::PrimeField, pallas};
+use pasta_curves::{
+    group::ff::{Field, PrimeField},
+    pallas,
+};
+use rand::rngs::OsRng;
 use std::{any::Any, collections::HashMap, hash::Hasher};
 
 use darkfi::{
@@ -14,6 +19,16 @@ use darkfi::{
     zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::decoder::ZkBinary,
 };
+
+// TODO: base58 encoding/ decoding
+
+lazy_static! {
+    pub static ref XDRK_ID: pallas::Base = pallas::Base::random(&mut OsRng);
+}
+
+lazy_static! {
+    pub static ref GDRK_ID: pallas::Base = pallas::Base::random(&mut OsRng);
+}
 
 #[derive(Eq, PartialEq)]
 pub struct HashableBase(pub pallas::Base);

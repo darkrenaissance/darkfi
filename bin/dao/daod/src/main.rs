@@ -14,6 +14,7 @@ use url::Url;
 use darkfi::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
+        merkle_node::MerkleNode,
         proof::{ProvingKey, VerifyingKey},
         types::{DrkSpendHook, DrkUserData, DrkValue},
         util::{pedersen_commitment_u64, poseidon_hash},
@@ -35,276 +36,77 @@ use crate::{
         money_contract::{self, state::OwnCoin, transfer::Note},
     },
     rpc::JsonRpcInterface,
-    util::{sign, StateRegistry, Transaction, ZkContractTable},
+    util::{sign, FuncCall, StateRegistry, Transaction, ZkContractTable, GDRK_ID, XDRK_ID},
 };
 
-pub struct DaoDemo {
+/////////////////////////////////////////////////////////////////////////////////////////
+// TODO: restructure to this architecture.
+// Note: to make a Proposal, you need the dao_leaf_position
+// to make a Vote, you need the dao decryption key
+// Everyone has a unique money_wallet and a copy of the dao_wallet in their Client.
+//
+// pub struct Cashier {
+//      cashier_wallet: CashierWallet,
+//      zk_bins, ...
+//      states ...
+// }
+//
+// impl Cashier {
+//      init() ...
+//      mint_treasury()...
+//      airdrop() ...
+// }
+//
+// pub struct Dao {
+//      dao_params: DaoParams,
+//      dao_wallet: DaoWallet,
+// }
+//
+// pub struct Client {
+//      dao: Dao,
+//      money_wallet: MoneyWallet,
+// }
+//
+// fn start() {
+//      cashier::init();
+//
+//      match input {
+//          dao_create() => Dao::new()
+//          wallet_create() => Client::new(money_wallet::new(), dao)
+//      }
+// }
+
+pub struct Client {
+    dao_wallet: DaoWallet,
+    money_wallet: MoneyWallet,
     states: StateRegistry,
     zk_bins: ZkContractTable,
-    dao_keypair: Keypair,
-    dao_bulla: DaoBulla,
-    dao_leaf_position: Position,
-    dao_bulla_blind: Fp,
-    cashier_signature_secret: SecretKey,
-    xdrk_token_id: Fp,
-    gdrk_token_id: Fp,
-    gov_recv: Vec<OwnCoin>,
-    gov_keypairs: Vec<Keypair>,
-    proposal: Proposal,
-    dao_params: DaoParams,
-    treasury_note: Note,
-    dao_recv_coin: OwnCoin,
-    user_keypair: Keypair,
-    proposal_bulla: Fp,
-    yes_votes_value: u64,
-    all_votes_value: u64,
-    yes_votes_blind: Fq,
-    all_votes_blind: Fq,
 }
 
-impl DaoDemo {
-    pub fn new() -> Self {
-        let states = StateRegistry::new();
-        let zk_bins = ZkContractTable::new();
-        let dao_keypair = Keypair::random(&mut OsRng);
-        let dao_bulla = pallas::Base::random(&mut OsRng);
-        let dao_bulla_blind = pallas::Base::random(&mut OsRng);
-        let dao_leaf_position = Position::zero();
-        let xdrk_token_id = pallas::Base::random(&mut OsRng);
-        let gdrk_token_id = pallas::Base::random(&mut OsRng);
-        let cashier_signature_secret = SecretKey::random(&mut OsRng);
-        let gov_recv = vec![];
-        let gov_keypairs = vec![];
-        // randomly filled
-        let proposal = dao_contract::propose::wallet::Proposal {
-            dest: PublicKey::random(&mut OsRng),
-            amount: 1000,
-            serial: pallas::Base::random(&mut OsRng),
-            token_id: xdrk_token_id,
-            blind: pallas::Base::random(&mut OsRng),
-        };
-        // randomly filled
-        let dao_params = dao_contract::mint::wallet::DaoParams {
-            proposer_limit: 0,
-            quorum: 0,
-            approval_ratio_quot: 0,
-            approval_ratio_base: 0,
-            gov_token_id: gdrk_token_id,
-            public_key: dao_keypair.public,
-            bulla_blind: dao_bulla_blind,
-        };
-        // randomly filled
-        let treasury_note = Note {
-            serial: Fp::zero(),
-            value: 0,
-            token_id: Fp::zero(),
-            spend_hook: Fp::zero(),
-            user_data: Fp::zero(),
-            coin_blind: Fp::zero(),
-            value_blind: Fq::zero(),
-            token_blind: Fq::zero(),
-        };
-        let dao_recv_coin = OwnCoin {
-            coin: darkfi::crypto::coin::Coin(pallas::Base::zero()),
-            note: treasury_note.clone(),
-            leaf_position: Position::zero(),
-        };
-        let user_keypair = Keypair::random(&mut OsRng);
-        let proposal_bulla = pallas::Base::random(&mut OsRng);
-        let yes_votes_value = 0;
-        let all_votes_value = 0;
-        let yes_votes_blind = Fq::zero();
-        let all_votes_blind = Fq::zero();
-        Self {
-            states,
-            zk_bins,
-            dao_keypair,
-            dao_bulla: contract::dao_contract::state::DaoBulla(dao_bulla),
-            dao_bulla_blind,
-            dao_leaf_position,
-            xdrk_token_id,
-            gdrk_token_id,
-            cashier_signature_secret,
-            gov_recv,
-            gov_keypairs,
-            proposal,
-            dao_params,
-            treasury_note,
-            dao_recv_coin,
-            user_keypair,
-            proposal_bulla,
-            yes_votes_value,
-            all_votes_value,
-            yes_votes_blind,
-            all_votes_blind,
-        }
-    }
-
-    fn init(&mut self) -> Result<()> {
-        {
-            let zk_bins = &mut self.zk_bins;
-
-            debug!(target: "demo", "Loading dao-mint.zk");
-            let zk_dao_mint_bincode = include_bytes!("../proof/dao-mint.zk.bin");
-            let zk_dao_mint_bin = ZkBinary::decode(zk_dao_mint_bincode)?;
-            zk_bins.add_contract("dao-mint".to_string(), zk_dao_mint_bin, 13);
-
-            debug!(target: "demo", "Loading money-transfer contracts");
-            {
-                let start = Instant::now();
-                let mint_pk = ProvingKey::build(11, &MintContract::default());
-                debug!("Mint PK: [{:?}]", start.elapsed());
-                let start = Instant::now();
-                let burn_pk = ProvingKey::build(11, &BurnContract::default());
-                debug!("Burn PK: [{:?}]", start.elapsed());
-                let start = Instant::now();
-                let mint_vk = VerifyingKey::build(11, &MintContract::default());
-                debug!("Mint VK: [{:?}]", start.elapsed());
-                let start = Instant::now();
-                let burn_vk = VerifyingKey::build(11, &BurnContract::default());
-                debug!("Burn VK: [{:?}]", start.elapsed());
-
-                zk_bins.add_native("money-transfer-mint".to_string(), mint_pk, mint_vk);
-                zk_bins.add_native("money-transfer-burn".to_string(), burn_pk, burn_vk);
-            }
-            debug!(target: "demo", "Loading dao-propose-main.zk");
-            let zk_dao_propose_main_bincode = include_bytes!("../proof/dao-propose-main.zk.bin");
-            let zk_dao_propose_main_bin = ZkBinary::decode(zk_dao_propose_main_bincode)?;
-            zk_bins.add_contract("dao-propose-main".to_string(), zk_dao_propose_main_bin, 13);
-            debug!(target: "demo", "Loading dao-propose-burn.zk");
-            let zk_dao_propose_burn_bincode = include_bytes!("../proof/dao-propose-burn.zk.bin");
-            let zk_dao_propose_burn_bin = ZkBinary::decode(zk_dao_propose_burn_bincode)?;
-            zk_bins.add_contract("dao-propose-burn".to_string(), zk_dao_propose_burn_bin, 13);
-            debug!(target: "demo", "Loading dao-vote-main.zk");
-            let zk_dao_vote_main_bincode = include_bytes!("../proof/dao-vote-main.zk.bin");
-            let zk_dao_vote_main_bin = ZkBinary::decode(zk_dao_vote_main_bincode)?;
-            zk_bins.add_contract("dao-vote-main".to_string(), zk_dao_vote_main_bin, 13);
-            debug!(target: "demo", "Loading dao-vote-burn.zk");
-            let zk_dao_vote_burn_bincode = include_bytes!("../proof/dao-vote-burn.zk.bin");
-            let zk_dao_vote_burn_bin = ZkBinary::decode(zk_dao_vote_burn_bincode)?;
-            zk_bins.add_contract("dao-vote-burn".to_string(), zk_dao_vote_burn_bin, 13);
-            let zk_dao_exec_bincode = include_bytes!("../proof/dao-exec.zk.bin");
-            let zk_dao_exec_bin = ZkBinary::decode(zk_dao_exec_bincode)?;
-            zk_bins.add_contract("dao-exec".to_string(), zk_dao_exec_bin, 13);
-        }
-
-        // State for money contracts
-        let cashier_signature_secret = self.cashier_signature_secret;
-        let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
-        let faucet_signature_secret = SecretKey::random(&mut OsRng);
-        let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
-
-        ///////////////////////////////////////////////////
-        {
-            let states = &mut self.states;
-            let money_state = money_contract::state::State::new(
-                cashier_signature_public,
-                faucet_signature_public,
-            );
-            states.register(*money_contract::CONTRACT_ID, money_state);
-        }
-
-        /////////////////////////////////////////////////////
-
-        {
-            let states = &mut self.states;
-            let dao_state = dao_contract::State::new();
-            states.register(*dao_contract::CONTRACT_ID, dao_state);
-        }
-
-        /////////////////////////////////////////////////////
-
-        Ok(())
-    }
-
-    fn create(&mut self) -> Result<()> {
-        /////////////////////////////////////////////////
-        //// create()
-        /////////////////////////////////////////////////
-
-        /////////////////////////////////////////////////////
-        ////// Create the DAO bulla
-        /////////////////////////////////////////////////////
-
-        // DAO parameters
-        let dao_proposer_limit = 110;
-        let dao_quorum = 110;
-        let dao_approval_ratio_quot = 1;
-        let dao_approval_ratio_base = 2;
-
-        debug!(target: "demo", "Stage 1. Creating DAO bulla");
-
-        //// Wallet
-
-        //// Setup the DAO
-        let dao_keypair = Keypair::random(&mut OsRng);
-        let dao_bulla_blind = pallas::Base::random(&mut OsRng);
-
-        let signature_secret = SecretKey::random(&mut OsRng);
-        // Create DAO mint tx
-        let builder = dao_contract::mint::wallet::Builder {
+impl Client {
+    // TODO: user passes DAO approval ratio: 1/2
+    // we parse that into dao_approval_ratio_base and dao_approval_ratio_quot
+    fn create_dao(
+        &mut self,
+        dao_proposer_limit: u64,
+        dao_quorum: u64,
+        dao_approval_ratio_quot: u64,
+        dao_approval_ratio_base: u64,
+        token_id: pallas::Base,
+    ) -> pallas::Base {
+        let tx = self.dao_wallet.build_mint_tx(
             dao_proposer_limit,
             dao_quorum,
             dao_approval_ratio_quot,
             dao_approval_ratio_base,
-            gov_token_id: self.gdrk_token_id,
-            dao_pubkey: dao_keypair.public,
-            dao_bulla_blind,
-            _signature_secret: signature_secret,
-        };
-        let func_call = builder.build(&self.zk_bins);
-        let func_calls = vec![func_call];
+            token_id,
+            &self.zk_bins,
+        );
 
-        let signatures = sign(vec![signature_secret], &func_calls);
-        let tx = Transaction { func_calls, signatures };
+        self.validate(&tx);
 
-        //// Validator
+        self.dao_wallet.balances(&mut self.states);
 
-        let mut updates = vec![];
-        {
-            let states = &mut self.states;
-
-            // Validate all function calls in the tx
-            for (idx, func_call) in tx.func_calls.iter().enumerate() {
-                // So then the verifier will lookup the corresponding state_transition and apply
-                // functions based off the func_id
-                if func_call.func_id == *dao_contract::mint::FUNC_ID {
-                    debug!("dao_contract::mint::state_transition()");
-
-                    let update = dao_contract::mint::validate::state_transition(states, idx, &tx)
-                        .expect("dao_contract::mint::validate::state_transition() failed!");
-                    updates.push(update);
-                }
-            }
-        }
-
-        {
-            let states = &mut self.states;
-            // Atomically apply all changes
-            for update in updates {
-                update.apply(states);
-            }
-        }
-
-        tx.zk_verify(&self.zk_bins);
-        tx.verify_sigs();
-
-        // Wallet stuff
-
-        // In your wallet, wait until you see the tx confirmed before doing anything below
-        // So for example keep track of tx hash
-        //assert_eq!(tx.hash(), tx_hash);
-
-        // We need to witness() the value in our local merkle tree
-        // Must be called as soon as this DAO bulla is added to the state
-        let dao_leaf_position = {
-            let states = &mut self.states;
-            let state =
-                states.lookup_mut::<dao_contract::State>(*dao_contract::CONTRACT_ID).unwrap();
-            state.dao_tree.witness().unwrap()
-        };
-
-        // It might just be easier to hash it ourselves from keypair and blind...
         let dao_bulla = {
             assert_eq!(tx.func_calls.len(), 1);
             let func_call = &tx.func_calls[0];
@@ -317,949 +119,430 @@ impl DaoDemo {
                 call_data.downcast_ref::<dao_contract::mint::validate::CallData>().unwrap();
             call_data.dao_bulla.clone()
         };
+
         debug!(target: "demo", "Create DAO bulla: {:?}", dao_bulla.0);
 
-        {
-            self.dao_bulla = dao_bulla;
-            self.dao_keypair = dao_keypair;
-            self.dao_leaf_position = dao_leaf_position;
-            self.dao_bulla_blind = dao_bulla_blind;
-        }
+        dao_bulla.0
+    }
+
+    fn init(&mut self) -> Result<()> {
+        debug!(target: "demo", "Loading dao-mint.zk");
+        let zk_dao_mint_bincode = include_bytes!("../proof/dao-mint.zk.bin");
+        let zk_dao_mint_bin = ZkBinary::decode(zk_dao_mint_bincode)?;
+        self.zk_bins.add_contract("dao-mint".to_string(), zk_dao_mint_bin, 13);
+
+        debug!(target: "demo", "Loading money-transfer contracts");
+        let start = Instant::now();
+        let mint_pk = ProvingKey::build(11, &MintContract::default());
+        debug!("Mint PK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let burn_pk = ProvingKey::build(11, &BurnContract::default());
+        debug!("Burn PK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let mint_vk = VerifyingKey::build(11, &MintContract::default());
+        debug!("Mint VK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let burn_vk = VerifyingKey::build(11, &BurnContract::default());
+        debug!("Burn VK: [{:?}]", start.elapsed());
+
+        self.zk_bins.add_native("money-transfer-mint".to_string(), mint_pk, mint_vk);
+        self.zk_bins.add_native("money-transfer-burn".to_string(), burn_pk, burn_vk);
+        debug!(target: "demo", "Loading dao-propose-main.zk");
+        let zk_dao_propose_main_bincode = include_bytes!("../proof/dao-propose-main.zk.bin");
+        let zk_dao_propose_main_bin = ZkBinary::decode(zk_dao_propose_main_bincode)?;
+        self.zk_bins.add_contract("dao-propose-main".to_string(), zk_dao_propose_main_bin, 13);
+        debug!(target: "demo", "Loading dao-propose-burn.zk");
+        let zk_dao_propose_burn_bincode = include_bytes!("../proof/dao-propose-burn.zk.bin");
+        let zk_dao_propose_burn_bin = ZkBinary::decode(zk_dao_propose_burn_bincode)?;
+        self.zk_bins.add_contract("dao-propose-burn".to_string(), zk_dao_propose_burn_bin, 13);
+        debug!(target: "demo", "Loading dao-vote-main.zk");
+        let zk_dao_vote_main_bincode = include_bytes!("../proof/dao-vote-main.zk.bin");
+        let zk_dao_vote_main_bin = ZkBinary::decode(zk_dao_vote_main_bincode)?;
+        self.zk_bins.add_contract("dao-vote-main".to_string(), zk_dao_vote_main_bin, 13);
+        debug!(target: "demo", "Loading dao-vote-burn.zk");
+        let zk_dao_vote_burn_bincode = include_bytes!("../proof/dao-vote-burn.zk.bin");
+        let zk_dao_vote_burn_bin = ZkBinary::decode(zk_dao_vote_burn_bincode)?;
+        self.zk_bins.add_contract("dao-vote-burn".to_string(), zk_dao_vote_burn_bin, 13);
+        let zk_dao_exec_bincode = include_bytes!("../proof/dao-exec.zk.bin");
+        let zk_dao_exec_bin = ZkBinary::decode(zk_dao_exec_bincode)?;
+        self.zk_bins.add_contract("dao-exec".to_string(), zk_dao_exec_bin, 13);
+
+        // State for money contracts
+        // TODO: we need the cashier value elsewhere.
+        let cashier_signature_secret = SecretKey::random(&mut OsRng);
+        let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
+        let faucet_signature_secret = SecretKey::random(&mut OsRng);
+        let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
+
+        ///////////////////////////////////////////////////
+        let money_state =
+            money_contract::state::State::new(cashier_signature_public, faucet_signature_public);
+        self.states.register(*money_contract::CONTRACT_ID, money_state);
+        /////////////////////////////////////////////////////
+        let dao_state = dao_contract::State::new();
+        self.states.register(*dao_contract::CONTRACT_ID, dao_state);
+        /////////////////////////////////////////////////////
 
         Ok(())
     }
 
-    fn mint(&mut self) -> Result<()> {
-        /////////////////////////////////////////////////
-        //// mint()
-        /////////////////////////////////////////////////
-
-        ///////////////////////////////////////////////////
-        //// Mint the initial supply of treasury token
-        //// and send it all to the DAO directly
-        ///////////////////////////////////////////////////
-
-        // Money parameters
-        let xdrk_supply = 1_000_000;
-
-        debug!(target: "demo", "Stage 2. Minting treasury token");
-        {
-            let dao_keypair = self.dao_keypair;
-            let state = self
-                .states
-                .lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID)
-                .unwrap();
-            state.wallet_cache.track(dao_keypair.secret);
-        }
-
-        //// Wallet
-
-        // Address of deployed contract in our example is dao_contract::exec::FUNC_ID
-        // This field is public, you can see it's being sent to a DAO
-        // but nothing else is visible.
-        //
-        // In the python code we wrote:
-        //
-        //   spend_hook = b"0xdao_ruleset"
-        //
+    // TODO: user passes "gDRK", we match with gDRK tokenID
+    fn mint_treasury(
+        &mut self,
+        token_id: pallas::Base,
+        token_supply: u64,
+        dao_bulla: pallas::Base,
+        recipient: PublicKey,
+    ) -> Result<()> {
         let spend_hook = *dao_contract::exec::FUNC_ID;
-        // The user_data can be a simple hash of the items passed into the ZK proof
-        // up to corresponding linked ZK proof to interpret however they need.
-        // In out case, it's the bulla for the DAO
-        let user_data = self.dao_bulla.0;
-        let builder = {
-            money_contract::transfer::wallet::Builder {
-                clear_inputs: vec![money_contract::transfer::wallet::BuilderClearInputInfo {
-                    value: xdrk_supply,
-                    token_id: self.xdrk_token_id,
-                    signature_secret: self.cashier_signature_secret,
-                }],
-                inputs: vec![],
-                outputs: vec![money_contract::transfer::wallet::BuilderOutputInfo {
-                    value: xdrk_supply,
-                    token_id: self.xdrk_token_id,
-                    public: self.dao_keypair.public,
-                    serial: pallas::Base::random(&mut OsRng),
-                    coin_blind: pallas::Base::random(&mut OsRng),
-                    spend_hook,
-                    user_data,
-                }],
-            }
-        };
-        let func_call = builder.build(&self.zk_bins)?;
-        let func_calls = vec![func_call];
 
-        let signatures = sign(vec![self.cashier_signature_secret], &func_calls);
-        let tx = Transaction { func_calls, signatures };
+        let user_data = dao_bulla;
+        let value = token_supply;
+        let tx = self.money_wallet.build_transfer_tx(
+            value,
+            token_id,
+            spend_hook,
+            user_data,
+            recipient,
+            &self.zk_bins,
+        )?;
 
-        //// Validator
-        let mut updates = vec![];
-        {
-            // Validate all function calls in the tx
-            for (idx, func_call) in tx.func_calls.iter().enumerate() {
-                // So then the verifier will lookup the corresponding state_transition and apply
-                // functions based off the func_id
-                if func_call.func_id == *money_contract::transfer::FUNC_ID {
-                    debug!("money_contract::transfer::state_transition()");
+        self.validate(&tx);
 
-                    let update = money_contract::transfer::validate::state_transition(
-                        &self.states,
-                        idx,
-                        &tx,
-                    )
-                    .expect("money_contract::transfer::validate::state_transition() failed!");
-                    updates.push(update);
-                }
-            }
-        }
-        {
-            // Atomically apply all changes
-            for update in updates {
-                update.apply(&mut self.states);
-            }
-        }
+        let own_coin = self.dao_wallet.balances(&mut self.states)?;
 
-        tx.zk_verify(&self.zk_bins);
-        tx.verify_sigs();
-
-        //// Wallet
-        // DAO reads the money received from the encrypted note
-
-        let state =
-            self.states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
-
-        let mut recv_coins = state.wallet_cache.get_received(&self.dao_keypair.secret);
-
-        assert_eq!(recv_coins.len(), 1);
-        let dao_recv_coin = recv_coins.pop().unwrap();
-        let treasury_note = dao_recv_coin.note.clone();
-
-        let coords = self.dao_keypair.public.0.to_affine().coordinates().unwrap();
-        let coin = poseidon_hash::<8>([
-            *coords.x(),
-            *coords.y(),
-            DrkValue::from(treasury_note.value),
-            treasury_note.token_id,
-            treasury_note.serial,
-            treasury_note.spend_hook,
-            treasury_note.user_data,
-            treasury_note.coin_blind,
-        ]);
-        assert_eq!(coin, dao_recv_coin.coin.0);
-
-        assert_eq!(treasury_note.spend_hook, *dao_contract::exec::FUNC_ID);
-        assert_eq!(treasury_note.user_data, self.dao_bulla.0);
-
-        // Check the actual coin received is valid before accepting it
-
-        debug!("DAO received a coin worth {} xDRK", treasury_note.value);
-
-        {
-            self.treasury_note = treasury_note;
-            self.dao_recv_coin = dao_recv_coin;
-        }
+        // TODO: return own_coin.note.value to CLI
 
         Ok(())
     }
 
-    fn airdrop(&mut self) -> Result<()> {
-        /////////////////////////////////////////////////
-        //// airdrop()
-        /////////////////////////////////////////////////
-
-        ///////////////////////////////////////////////////
-        //// Mint the governance token
-        //// Send it to three hodlers
-        ///////////////////////////////////////////////////
-
-        // Governance token parameters
-        let gdrk_supply = 1_000_000;
-
-        debug!(target: "demo", "Stage 3. Minting governance token");
-
-        //// Wallet
-
-        // Hodler 1
-        let gov_keypair_1 = Keypair::random(&mut OsRng);
-        // Hodler 2
-        let gov_keypair_2 = Keypair::random(&mut OsRng);
-        // Hodler 3: the tiebreaker
-        let gov_keypair_3 = Keypair::random(&mut OsRng);
-        {
-            let state = self
-                .states
-                .lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID)
-                .unwrap();
-            state.wallet_cache.track(gov_keypair_1.secret);
-            state.wallet_cache.track(gov_keypair_2.secret);
-            state.wallet_cache.track(gov_keypair_3.secret);
-        }
-
-        let gov_keypairs = vec![gov_keypair_1, gov_keypair_2, gov_keypair_3];
-
+    fn airdrop(&mut self, value: u64, token_id: pallas::Base, recipient: PublicKey) -> Result<()> {
         // Spend hook and user data disabled
         let spend_hook = DrkSpendHook::from(0);
         let user_data = DrkUserData::from(0);
 
-        let output1 = money_contract::transfer::wallet::BuilderOutputInfo {
-            value: 400000,
-            token_id: self.gdrk_token_id,
-            public: gov_keypairs[0].public,
-            serial: pallas::Base::random(&mut OsRng),
-            coin_blind: pallas::Base::random(&mut OsRng),
+        let tx = self.money_wallet.build_transfer_tx(
+            value,
+            token_id,
             spend_hook,
             user_data,
-        };
+            recipient,
+            &self.zk_bins,
+        )?;
 
-        let output2 = money_contract::transfer::wallet::BuilderOutputInfo {
-            value: 400000,
-            token_id: self.gdrk_token_id,
-            public: gov_keypairs[1].public,
-            serial: pallas::Base::random(&mut OsRng),
-            coin_blind: pallas::Base::random(&mut OsRng),
-            spend_hook,
-            user_data,
-        };
+        self.validate(&tx);
 
-        let output3 = money_contract::transfer::wallet::BuilderOutputInfo {
-            value: 200000,
-            token_id: self.gdrk_token_id,
-            public: gov_keypairs[2].public,
-            serial: pallas::Base::random(&mut OsRng),
-            coin_blind: pallas::Base::random(&mut OsRng),
-            spend_hook,
-            user_data,
-        };
+        let own_coin = self.money_wallet.balances(&mut self.states)?;
 
-        assert!(2 * 400000 + 200000 == gdrk_supply);
-
-        let builder = {
-            money_contract::transfer::wallet::Builder {
-                clear_inputs: vec![money_contract::transfer::wallet::BuilderClearInputInfo {
-                    value: gdrk_supply,
-                    token_id: self.gdrk_token_id,
-                    signature_secret: self.cashier_signature_secret,
-                }],
-                inputs: vec![],
-                outputs: vec![output1, output2, output3],
-            }
-        };
-
-        let func_call = builder.build(&self.zk_bins)?;
-        let func_calls = vec![func_call];
-
-        let signatures = sign(vec![self.cashier_signature_secret], &func_calls);
-        let tx = Transaction { func_calls, signatures };
-
-        //// Validator
-
-        let mut updates = vec![];
-        {
-            let states = &self.states;
-            // Validate all function calls in the tx
-            for (idx, func_call) in tx.func_calls.iter().enumerate() {
-                // So then the verifier will lookup the corresponding state_transition and apply
-                // functions based off the func_id
-                if func_call.func_id == *money_contract::transfer::FUNC_ID {
-                    debug!("money_contract::transfer::state_transition()");
-
-                    let update =
-                        money_contract::transfer::validate::state_transition(states, idx, &tx)
-                            .expect(
-                                "money_contract::transfer::validate::state_transition() failed!",
-                            );
-                    updates.push(update);
-                }
-            }
-        }
-
-        {
-            // Atomically apply all changes
-            for update in updates {
-                update.apply(&mut self.states);
-            }
-        }
-
-        tx.zk_verify(&self.zk_bins);
-        tx.verify_sigs();
-
-        //// Wallet
-
-        let mut gov_recv = vec![None, None, None];
-        {
-            // Check that each person received one coin
-            for (i, key) in gov_keypairs.iter().enumerate() {
-                let gov_recv_coin = {
-                    let states = &mut self.states;
-                    let state = states
-                        .lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID)
-                        .unwrap();
-                    let mut recv_coins = state.wallet_cache.get_received(&key.secret);
-                    assert_eq!(recv_coins.len(), 1);
-                    let recv_coin = recv_coins.pop().unwrap();
-                    let note = &recv_coin.note;
-
-                    assert_eq!(note.token_id, self.gdrk_token_id);
-                    // Normal payment
-                    assert_eq!(note.spend_hook, pallas::Base::from(0));
-                    assert_eq!(note.user_data, pallas::Base::from(0));
-
-                    let coords = key.public.0.to_affine().coordinates().unwrap();
-                    let coin = poseidon_hash::<8>([
-                        *coords.x(),
-                        *coords.y(),
-                        DrkValue::from(note.value),
-                        note.token_id,
-                        note.serial,
-                        note.spend_hook,
-                        note.user_data,
-                        note.coin_blind,
-                    ]);
-                    assert_eq!(coin, recv_coin.coin.0);
-
-                    debug!("Holder{} received a coin worth {} gDRK", i, note.value);
-
-                    recv_coin
-                };
-                gov_recv[i] = Some(gov_recv_coin);
-            }
-        }
-        // unwrap them for this demo
-        let gov_recv: Vec<_> = gov_recv.into_iter().map(|r| r.unwrap()).collect();
-
-        {
-            self.gov_recv = gov_recv;
-            self.gov_keypairs = gov_keypairs;
-        }
+        // TODO: return own_coin.note.value to CLI
 
         Ok(())
     }
 
-    fn propose(&mut self) -> Result<()> {
-        ///////////////////////////////////////////////////
-        // DAO rules:
-        // 1. gov token IDs must match on all inputs
-        // 2. proposals must be submitted by minimum amount
-        // 3. all votes >= quorum
-        // 4. outcome > approval_ratio
-        // 5. structure of outputs
-        //   output 0: value and address
-        //   output 1: change address
-        ///////////////////////////////////////////////////
-
-        /////////////////////////////////////////////////
-        //// propose()
-        /////////////////////////////////////////////////
-
-        ///////////////////////////////////////////////////
-        // Propose the vote
-        // In order to make a valid vote, first the proposer must
-        // meet a criteria for a minimum number of gov tokens
-        ///////////////////////////////////////////////////
-
-        // DAO parameters
-        let dao_proposer_limit = 110;
-        let dao_quorum = 110;
-        let dao_approval_ratio_quot = 1;
-        let dao_approval_ratio_base = 2;
-
-        debug!(target: "demo", "Stage 4. Propose the vote");
-
-        //// Wallet
-
-        // TODO: look into proposal expiry once time for voting has finished
-
-        let (money_leaf_position, money_merkle_path) = {
-            let states = &self.states;
-            let state =
-                states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
-            let tree = &state.tree;
-            let leaf_position = self.gov_recv[0].leaf_position;
-            let root = tree.root(0).unwrap();
-            let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
-            (leaf_position, merkle_path)
-        };
-
-        // TODO: is it possible for an invalid transfer() to be constructed on exec()?
-        //       need to look into this
-        let signature_secret = SecretKey::random(&mut OsRng);
-        let input = {
-            dao_contract::propose::wallet::BuilderInput {
-                secret: self.gov_keypairs[0].secret,
-                note: self.gov_recv[0].note.clone(),
-                leaf_position: money_leaf_position,
-                merkle_path: money_merkle_path,
-                signature_secret,
-            }
-        };
-
-        let (dao_merkle_path, dao_merkle_root) = {
-            let states = &self.states;
-            let state = states.lookup::<dao_contract::State>(*dao_contract::CONTRACT_ID).unwrap();
-            let tree = &state.dao_tree;
-            let root = tree.root(0).unwrap();
-            let merkle_path = tree.authentication_path(self.dao_leaf_position, &root).unwrap();
-            (merkle_path, root)
-        };
-
-        let dao_params = {
-            dao_contract::mint::wallet::DaoParams {
-                proposer_limit: dao_proposer_limit,
-                quorum: dao_quorum,
-                approval_ratio_base: dao_approval_ratio_base,
-                approval_ratio_quot: dao_approval_ratio_quot,
-                gov_token_id: self.gdrk_token_id,
-                public_key: self.dao_keypair.public,
-                bulla_blind: self.dao_bulla_blind,
-            }
-        };
-
-        let proposal = {
-            dao_contract::propose::wallet::Proposal {
-                dest: self.user_keypair.public,
-                amount: 1000,
-                serial: pallas::Base::random(&mut OsRng),
-                token_id: self.xdrk_token_id,
-                blind: pallas::Base::random(&mut OsRng),
-            }
-        };
-
-        let builder = dao_contract::propose::wallet::Builder {
-            inputs: vec![input],
-            proposal,
-            dao: dao_params.clone(),
-            dao_leaf_position: self.dao_leaf_position,
-            dao_merkle_path,
-            dao_merkle_root,
-        };
-
-        let func_call = builder.build(&self.zk_bins);
-        let func_calls = vec![func_call];
-
-        let signatures = sign(vec![signature_secret], &func_calls);
-        let tx = Transaction { func_calls, signatures };
-
-        //// Validator
-
+    fn validate(&mut self, tx: &Transaction) -> Result<()> {
         let mut updates = vec![];
-        {
-            let states = &self.states;
-            // Validate all function calls in the tx
-            for (idx, func_call) in tx.func_calls.iter().enumerate() {
-                if func_call.func_id == *dao_contract::propose::FUNC_ID {
-                    debug!(target: "demo", "dao_contract::propose::state_transition()");
 
-                    let update =
-                        dao_contract::propose::validate::state_transition(states, idx, &tx)
-                            .expect("dao_contract::propose::validate::state_transition() failed!");
-                    updates.push(update);
-                }
+        let states = &self.states;
+        // Validate all function calls in the tx
+        for (idx, func_call) in tx.func_calls.iter().enumerate() {
+            // So then the verifier will lookup the corresponding state_transition and apply
+            // functions based off the func_id
+
+            if func_call.func_id == *money_contract::transfer::FUNC_ID {
+                debug!("money_contract::transfer::state_transition()");
+                let update = money_contract::transfer::validate::state_transition(states, idx, &tx)
+                    .expect("money_contract::transfer::validate::state_transition() failed!");
+                updates.push(update);
+            } else if func_call.func_id == *dao_contract::mint::FUNC_ID {
+                debug!("dao_contract::mint::state_transition()");
+                let update = dao_contract::mint::validate::state_transition(states, idx, &tx)
+                    .expect("dao_contract::mint::validate::state_transition() failed!");
+                updates.push(update);
+            } else if func_call.func_id == *dao_contract::propose::FUNC_ID {
+                debug!(target: "demo", "dao_contract::propose::state_transition()");
+                let update = dao_contract::propose::validate::state_transition(states, idx, &tx)
+                    .expect("dao_contract::propose::validate::state_transition() failed!");
+                updates.push(update);
+            } else if func_call.func_id == *dao_contract::vote::FUNC_ID {
+                debug!(target: "demo", "dao_contract::vote::state_transition()");
+                let update = dao_contract::vote::validate::state_transition(states, idx, &tx)
+                    .expect("dao_contract::vote::validate::state_transition() failed!");
+                updates.push(update);
+            } else if func_call.func_id == *dao_contract::exec::FUNC_ID {
+                debug!("dao_contract::exec::state_transition()");
+                let update = dao_contract::exec::validate::state_transition(states, idx, &tx)
+                    .expect("dao_contract::exec::validate::state_transition() failed!");
+                updates.push(update);
             }
         }
 
-        {
-            // Atomically apply all changes
-            for update in updates {
-                update.apply(&mut self.states);
-            }
+        // Atomically apply all changes
+        for update in updates {
+            update.apply(&mut self.states);
         }
 
         tx.zk_verify(&self.zk_bins);
         tx.verify_sigs();
 
-        //// Wallet
+        Ok(())
+    }
 
-        // Read received proposal
+    fn propose(
+        &mut self,
+        params: DaoParams,
+        recipient: PublicKey,
+        token_id: pallas::Base,
+        amount: u64,
+    ) -> Result<()> {
+        let dao_leaf_position = self.dao_wallet.witness(&mut self.states)?;
+
+        let tx = self.money_wallet.build_propose_tx(
+            &mut self.states,
+            &self.zk_bins,
+            params,
+            recipient,
+            token_id,
+            amount,
+            dao_leaf_position,
+        )?;
+
+        self.validate(&tx)?;
+
+        self.dao_wallet.read_proposal(&tx)?;
+
+        Ok(())
+    }
+
+    // TODO: User must have the values Proposal and DaoParams in order to cast a vote.
+    // These should be encoded to base58 and printed to command-line when a DAO is made (DaoParams)
+    // and a Proposal is made (Proposal). Then the user loads a base58 string into the vote request.
+    fn vote(&mut self, vote_option: bool, proposal: Proposal, dao_params: DaoParams) -> Result<()> {
+        let dao_keypair = self.dao_wallet.get_vote_decryption_key();
+
+        let tx = self.money_wallet.build_vote_tx(
+            vote_option,
+            &mut self.states,
+            &self.zk_bins,
+            dao_keypair,
+            proposal,
+            dao_params,
+        )?;
+
+        self.validate(&tx)?;
+
+        self.dao_wallet.read_vote(&tx)?;
+
+        Ok(())
+    }
+
+    // TODO: user must pass in a base58 encoded string of the Proposal, proposal_bulla and
+    // DaoParams
+    fn exec(
+        &mut self,
+        proposal: Proposal,
+        proposal_bulla: pallas::Base,
+        dao_params: DaoParams,
+    ) -> Result<()> {
+        self.dao_wallet.build_exec_tx(
+            &mut self.states,
+            &self.zk_bins,
+            proposal,
+            proposal_bulla,
+            dao_params,
+        )?;
+        Ok(())
+    }
+}
+
+// DAO private values. This class is purely concerned with the DAO treasury.
+// TODO: we must call track() for keypairs before we can query the balance.
+pub struct DaoWallet {
+    keypair: Keypair,
+    vote_keypair: Keypair,
+    signature: SecretKey,
+    params: DaoParams,
+    vote_notes: Vec<dao_contract::vote::wallet::Note>,
+}
+
+impl DaoWallet {
+    fn read_proposal(&self, tx: &Transaction) -> Result<()> {
         let (proposal, proposal_bulla) = {
-            assert_eq!(tx.func_calls.len(), 1);
             let func_call = &tx.func_calls[0];
             let call_data = func_call.call_data.as_any();
-            assert_eq!(
-                (&*call_data).type_id(),
-                TypeId::of::<dao_contract::propose::validate::CallData>()
-            );
             let call_data =
                 call_data.downcast_ref::<dao_contract::propose::validate::CallData>().unwrap();
 
             let header = &call_data.header;
             let note: dao_contract::propose::wallet::Note =
-                header.enc_note.decrypt(&self.dao_keypair.secret).unwrap();
-
-            // TODO: check it belongs to DAO bulla
+                header.enc_note.decrypt(&self.keypair.secret).unwrap();
 
             // Return the proposal info
             (note.proposal, call_data.header.proposal_bulla)
         };
+        // TODO: this should print from the CLI rather than use debug statements.
         debug!(target: "demo", "Proposal now active!");
         debug!(target: "demo", "  destination: {:?}", proposal.dest);
         debug!(target: "demo", "  amount: {}", proposal.amount);
         debug!(target: "demo", "  token_id: {:?}", proposal.token_id);
-        debug!(target: "demo", "  dao_bulla: {:?}", self.dao_bulla.0);
         debug!(target: "demo", "Proposal bulla: {:?}", proposal_bulla);
 
-        {
-            self.proposal = proposal;
-            self.dao_params = dao_params;
-            self.proposal_bulla = proposal_bulla;
-        }
+        Ok(())
+
+        // TODO: encode Proposal as base58 and return to cli
+    }
+
+    // We decrypt the votes in a transaction and add it to the wallet.
+    fn read_vote(&mut self, tx: &Transaction) -> Result<()> {
+        let vote_note = {
+            let func_call = &tx.func_calls[0];
+            let call_data = func_call.call_data.as_any();
+            let call_data =
+                call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
+
+            let header = &call_data.header;
+            let note: dao_contract::vote::wallet::Note =
+                header.enc_note.decrypt(&self.vote_keypair.secret).unwrap();
+            note
+        };
+
+        self.vote_notes.push(vote_note);
+
+        // TODO: this should print from the CLI rather than use debug statements.
+        // TODO: maybe this its own method? get votes
+        //debug!(target: "demo", "User voted!");
+        //debug!(target: "demo", "  vote_option: {}", vote_note.vote.vote_option);
+        //debug!(target: "demo", "  value: {}", vote_note.vote_value);
 
         Ok(())
     }
 
-    fn vote(&mut self) -> Result<()> {
-        ///////////////////////////////////////////////////
-        // Proposal is accepted!
-        // Start the voting
-        ///////////////////////////////////////////////////
+    // We need to encrypt votes to the DAO secret key for this demo, which requires users
+    // to have access to a secret key operated by the DAO. We create a specific key for decrypting
+    // votes which is different to the key that operates the treasury.
+    fn get_vote_decryption_key(&self) -> Keypair {
+        self.vote_keypair
+    }
+
+    fn track(&self, states: &mut StateRegistry) -> Result<()> {
+        let state =
+            states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+        state.wallet_cache.track(self.keypair.secret);
 
-        // Copying these schizo comments from python code:
-        // Lets the voting begin
-        // Voters have access to the proposal and dao data
-        //   vote_state = VoteState()
-        // We don't need to copy nullifier set because it is checked from gov_state
-        // in vote_state_transition() anyway
-        //
-        // TODO: what happens if voters don't unblind their vote
-        // Answer:
-        //   1. there is a time limit
-        //   2. both the MPC or users can unblind
-        //
-        // TODO: bug if I vote then send money, then we can double vote
-        // TODO: all timestamps missing
-        //       - timelock (future voting starts in 2 days)
-        // Fix: use nullifiers from money gov state only from
-        // beginning of gov period
-        // Cannot use nullifiers from before voting period
-
-        /////////////////////////////////////////////////
-        //// vote()
-        /////////////////////////////////////////////////
-
-        debug!(target: "demo", "Stage 5. Start voting");
-
-        // We were previously saving updates here for testing
-        // let mut updates = vec![];
-
-        // User 1: YES
-
-        let (money_leaf_position, money_merkle_path) = {
-            let states = &self.states;
-            let state =
-                states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
-            let tree = &state.tree;
-            let leaf_position = self.gov_recv[0].leaf_position;
-            let root = tree.root(0).unwrap();
-            let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
-            (leaf_position, merkle_path)
-        };
-
-        let signature_secret = SecretKey::random(&mut OsRng);
-        let input = {
-            dao_contract::vote::wallet::BuilderInput {
-                secret: self.gov_keypairs[0].secret,
-                note: self.gov_recv[0].note.clone(),
-                leaf_position: money_leaf_position,
-                merkle_path: money_merkle_path,
-                signature_secret,
-            }
-        };
-
-        let vote_option: bool = true;
-
-        assert!(vote_option == true || vote_option == false);
-
-        // We create a new keypair to encrypt the vote.
-        // For the demo MVP, you can just use the dao_keypair secret
-        let vote_keypair_1 = Keypair::random(&mut OsRng);
-
-        let builder = {
-            dao_contract::vote::wallet::Builder {
-                inputs: vec![input],
-                vote: dao_contract::vote::wallet::Vote {
-                    vote_option,
-                    vote_option_blind: pallas::Scalar::random(&mut OsRng),
-                },
-                vote_keypair: vote_keypair_1,
-                proposal: self.proposal.clone(),
-                dao: self.dao_params.clone(),
-            }
-        };
-        debug!(target: "demo", "build()...");
-        let func_call = builder.build(&self.zk_bins);
-        let func_calls = vec![func_call];
-
-        let signatures = sign(vec![signature_secret], &func_calls);
-        let tx = Transaction { func_calls, signatures };
-
-        //// Validator
-
-        let mut updates = vec![];
-        {
-            let states = &self.states;
-            // Validate all function calls in the tx
-            for (idx, func_call) in tx.func_calls.iter().enumerate() {
-                if func_call.func_id == *dao_contract::vote::FUNC_ID {
-                    debug!(target: "demo", "dao_contract::vote::state_transition()");
-
-                    let update = dao_contract::vote::validate::state_transition(states, idx, &tx)
-                        .expect("dao_contract::vote::validate::state_transition() failed!");
-                    updates.push(update);
-                }
-            }
-        }
-
-        {
-            let states = &mut self.states;
-            // Atomically apply all changes
-            for update in updates {
-                update.apply(states);
-            }
-        }
-
-        tx.zk_verify(&self.zk_bins);
-        tx.verify_sigs();
-
-        //// Wallet
-
-        // Secret vote info. Needs to be revealed at some point.
-        // TODO: look into verifiable encryption for notes
-        // TODO: look into timelock puzzle as a possibility
-        let vote_note_1 = {
-            assert_eq!(tx.func_calls.len(), 1);
-            let func_call = &tx.func_calls[0];
-            let call_data = func_call.call_data.as_any();
-            assert_eq!(
-                (&*call_data).type_id(),
-                TypeId::of::<dao_contract::vote::validate::CallData>()
-            );
-            let call_data =
-                call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
-
-            let header = &call_data.header;
-            let note: dao_contract::vote::wallet::Note =
-                header.enc_note.decrypt(&vote_keypair_1.secret).unwrap();
-            note
-        };
-        debug!(target: "demo", "User 1 voted!");
-        debug!(target: "demo", "  vote_option: {}", vote_note_1.vote.vote_option);
-        debug!(target: "demo", "  value: {}", vote_note_1.vote_value);
-
-        // User 2: NO
-
-        let (money_leaf_position, money_merkle_path) = {
-            let states = &self.states;
-            let state =
-                states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
-            let tree = &state.tree;
-            let leaf_position = self.gov_recv[1].leaf_position;
-            let root = tree.root(0).unwrap();
-            let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
-            (leaf_position, merkle_path)
-        };
-
-        let signature_secret = SecretKey::random(&mut OsRng);
-        let input = {
-            dao_contract::vote::wallet::BuilderInput {
-                secret: self.gov_keypairs[1].secret,
-                note: self.gov_recv[1].note.clone(),
-                leaf_position: money_leaf_position,
-                merkle_path: money_merkle_path,
-                signature_secret,
-            }
-        };
-
-        let vote_option: bool = false;
-
-        assert!(vote_option == true || vote_option == false);
-
-        // We create a new keypair to encrypt the vote.
-        let vote_keypair_2 = Keypair::random(&mut OsRng);
-
-        let builder = {
-            dao_contract::vote::wallet::Builder {
-                inputs: vec![input],
-                vote: dao_contract::vote::wallet::Vote {
-                    vote_option,
-                    vote_option_blind: pallas::Scalar::random(&mut OsRng),
-                },
-                vote_keypair: vote_keypair_2,
-                proposal: self.proposal.clone(),
-                dao: self.dao_params.clone(),
-            }
-        };
-        debug!(target: "demo", "build()...");
-        let func_call = builder.build(&self.zk_bins);
-        let func_calls = vec![func_call];
-
-        let signatures = sign(vec![signature_secret], &func_calls);
-        let tx = Transaction { func_calls, signatures };
-
-        //// Validator
-
-        let mut updates = vec![];
-        {
-            let states = &self.states;
-            // Validate all function calls in the tx
-            for (idx, func_call) in tx.func_calls.iter().enumerate() {
-                if func_call.func_id == *dao_contract::vote::FUNC_ID {
-                    debug!(target: "demo", "dao_contract::vote::state_transition()");
-
-                    let update = dao_contract::vote::validate::state_transition(states, idx, &tx)
-                        .expect("dao_contract::vote::validate::state_transition() failed!");
-                    updates.push(update);
-                }
-            }
-        }
-
-        {
-            // Atomically apply all changes
-            for update in updates {
-                update.apply(&mut self.states);
-            }
-        }
-
-        tx.zk_verify(&self.zk_bins);
-        tx.verify_sigs();
-
-        //// Wallet
-
-        // Secret vote info. Needs to be revealed at some point.
-        // TODO: look into verifiable encryption for notes
-        // TODO: look into timelock puzzle as a possibility
-        let vote_note_2 = {
-            assert_eq!(tx.func_calls.len(), 1);
-            let func_call = &tx.func_calls[0];
-            let call_data = func_call.call_data.as_any();
-            assert_eq!(
-                (&*call_data).type_id(),
-                TypeId::of::<dao_contract::vote::validate::CallData>()
-            );
-            let call_data =
-                call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
-
-            let header = &call_data.header;
-            let note: dao_contract::vote::wallet::Note =
-                header.enc_note.decrypt(&vote_keypair_2.secret).unwrap();
-            note
-        };
-        debug!(target: "demo", "User 2 voted!");
-        debug!(target: "demo", "  vote_option: {}", vote_note_2.vote.vote_option);
-        debug!(target: "demo", "  value: {}", vote_note_2.vote_value);
-
-        // User 3: YES
-
-        let (money_leaf_position, money_merkle_path) = {
-            let states = &self.states;
-            let state =
-                states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
-            let tree = &state.tree;
-            let leaf_position = self.gov_recv[2].leaf_position;
-            let root = tree.root(0).unwrap();
-            let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
-            (leaf_position, merkle_path)
-        };
-
-        let signature_secret = SecretKey::random(&mut OsRng);
-        let input = {
-            dao_contract::vote::wallet::BuilderInput {
-                secret: self.gov_keypairs[2].secret,
-                note: self.gov_recv[2].note.clone(),
-                leaf_position: money_leaf_position,
-                merkle_path: money_merkle_path,
-                signature_secret,
-            }
-        };
-
-        let vote_option: bool = true;
-
-        assert!(vote_option == true || vote_option == false);
-
-        // We create a new keypair to encrypt the vote.
-        let vote_keypair_3 = Keypair::random(&mut OsRng);
-
-        let builder = {
-            dao_contract::vote::wallet::Builder {
-                inputs: vec![input],
-                vote: dao_contract::vote::wallet::Vote {
-                    vote_option,
-                    vote_option_blind: pallas::Scalar::random(&mut OsRng),
-                },
-                vote_keypair: vote_keypair_3,
-                proposal: self.proposal.clone(),
-                dao: self.dao_params.clone(),
-            }
-        };
-        debug!(target: "demo", "build()...");
-        let func_call = builder.build(&self.zk_bins);
-        let func_calls = vec![func_call];
-
-        let signatures = sign(vec![signature_secret], &func_calls);
-        let tx = Transaction { func_calls, signatures };
-
-        //// Validator
-
-        let mut updates = vec![];
-        {
-            let states = &self.states;
-            // Validate all function calls in the tx
-            for (idx, func_call) in tx.func_calls.iter().enumerate() {
-                if func_call.func_id == *dao_contract::vote::FUNC_ID {
-                    debug!(target: "demo", "dao_contract::vote::state_transition()");
-
-                    let update = dao_contract::vote::validate::state_transition(states, idx, &tx)
-                        .expect("dao_contract::vote::validate::state_transition() failed!");
-                    updates.push(update);
-                }
-            }
-        }
-
-        {
-            // Atomically apply all changes
-            for update in updates {
-                update.apply(&mut self.states);
-            }
-        }
-
-        tx.zk_verify(&self.zk_bins);
-        tx.verify_sigs();
-
-        //// Wallet
-
-        // Secret vote info. Needs to be revealed at some point.
-        // TODO: look into verifiable encryption for notes
-        // TODO: look into timelock puzzle as a possibility
-        let vote_note_3 = {
-            assert_eq!(tx.func_calls.len(), 1);
-            let func_call = &tx.func_calls[0];
-            let call_data = func_call.call_data.as_any();
-            assert_eq!(
-                (&*call_data).type_id(),
-                TypeId::of::<dao_contract::vote::validate::CallData>()
-            );
-            let call_data =
-                call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
-
-            let header = &call_data.header;
-            let note: dao_contract::vote::wallet::Note =
-                header.enc_note.decrypt(&vote_keypair_3.secret).unwrap();
-            note
-        };
-        debug!(target: "demo", "User 3 voted!");
-        debug!(target: "demo", "  vote_option: {}", vote_note_3.vote.vote_option);
-        debug!(target: "demo", "  value: {}", vote_note_3.vote_value);
-
-        // Every votes produces a semi-homomorphic encryption of their vote.
-        // Which is either yes or no
-        // We copy the state tree for the governance token so coins can be used
-        // to vote on other proposals at the same time.
-        // With their vote, they produce a ZK proof + nullifier
-        // The votes are unblinded by MPC to a selected party at the end of the
-        // voting period.
-        // (that's if we want votes to be hidden during voting)
-
-        let mut yes_votes_value = 0;
-        let mut yes_votes_blind = pallas::Scalar::from(0);
-        let mut yes_votes_commit = pallas::Point::identity();
-
-        let mut all_votes_value = 0;
-        let mut all_votes_blind = pallas::Scalar::from(0);
-        let mut all_votes_commit = pallas::Point::identity();
-
-        // We were previously saving votes to a Vec<Update> for testing.
-        // However since Update is now UpdateBase it gets moved into update.apply().
-        // So we need to think of another way to run these tests.
-        //assert!(updates.len() == 3);
-
-        for (i, note /* update*/) in [vote_note_1, vote_note_2, vote_note_3]
-            .iter() /*.zip(updates)*/
-            .enumerate()
-        {
-            let vote_commit = pedersen_commitment_u64(note.vote_value, note.vote_value_blind);
-            //assert!(update.value_commit == all_vote_value_commit);
-            all_votes_commit += vote_commit;
-            all_votes_blind += note.vote_value_blind;
-
-            let yes_vote_commit = pedersen_commitment_u64(
-                note.vote.vote_option as u64 * note.vote_value,
-                note.vote.vote_option_blind,
-            );
-            //assert!(update.yes_vote_commit == yes_vote_commit);
-
-            yes_votes_commit += yes_vote_commit;
-            yes_votes_blind += note.vote.vote_option_blind;
-
-            let vote_option = note.vote.vote_option;
-
-            if vote_option {
-                yes_votes_value += note.vote_value;
-            }
-            all_votes_value += note.vote_value;
-            let vote_result: String =
-                if vote_option { "yes".to_string() } else { "no".to_string() };
-
-            debug!("Voter {} voted {}", i, vote_result);
-        }
-
-        debug!("Outcome = {} / {}", yes_votes_value, all_votes_value);
-
-        assert!(all_votes_commit == pedersen_commitment_u64(all_votes_value, all_votes_blind));
-        assert!(yes_votes_commit == pedersen_commitment_u64(yes_votes_value, yes_votes_blind));
-
-        {
-            self.yes_votes_value = yes_votes_value;
-            self.yes_votes_blind = yes_votes_blind;
-            self.all_votes_value = all_votes_value;
-            self.all_votes_blind = all_votes_blind;
-        }
         Ok(())
     }
 
-    fn exec(&mut self) -> Result<()> {
-        /////////////////////////////////////////////////
-        //// exec()
-        /////////////////////////////////////////////////
+    fn witness(&self, states: &mut StateRegistry) -> Result<Position> {
+        let state = states.lookup_mut::<dao_contract::State>(*dao_contract::CONTRACT_ID).unwrap();
+        let path = state.dao_tree.witness();
+        // TODO: error handling
+        //if path.is_some() {
+        return Ok(path.unwrap())
+        //}
+    }
 
-        ///////////////////////////////////////////////////
-        // Execute the vote
-        ///////////////////////////////////////////////////
+    fn balances(&self, states: &mut StateRegistry) -> Result<OwnCoin> {
+        let state =
+            states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
 
-        // Money parameters
-        let xdrk_supply = 1_000_000;
+        let mut recv_coins = state.wallet_cache.get_received(&self.keypair.secret);
 
-        //// Wallet
+        let dao_recv_coin = recv_coins.pop().unwrap();
+        let treasury_note = dao_recv_coin.note.clone();
 
-        // Used to export user_data from this coin so it can be accessed by DAO::exec()
-        let user_data_blind = pallas::Base::random(&mut OsRng);
+        debug!("DAO received a coin worth {} xDRK", treasury_note.value);
 
+        Ok(dao_recv_coin)
+    }
+
+    // TODO: encode this to base58 and display in cli
+    fn params(&self) -> Result<&DaoParams> {
+        Ok(&self.params)
+    }
+
+    fn build_mint_tx(
+        &self,
+        dao_proposer_limit: u64,
+        dao_quorum: u64,
+        dao_approval_ratio_quot: u64,
+        dao_approval_ratio_base: u64,
+        token_id: pallas::Base,
+        zk_bins: &ZkContractTable,
+    ) -> Transaction {
+        // TODO: store this?
+        let dao_bulla_blind = pallas::Base::random(&mut OsRng);
+
+        let builder = dao_contract::mint::wallet::Builder {
+            dao_proposer_limit,
+            dao_quorum,
+            dao_approval_ratio_quot,
+            dao_approval_ratio_base,
+            gov_token_id: *GDRK_ID,
+            dao_pubkey: self.keypair.public,
+            dao_bulla_blind,
+            _signature_secret: self.signature,
+        };
+        let func_call = builder.build(zk_bins);
+        let func_calls = vec![func_call];
+
+        // TODO: this should be a cashier key?
+        let signatures = sign(vec![self.signature], &func_calls);
+        let tx = Transaction { func_calls, signatures };
+        tx
+    }
+
+    // We use this to prove ownership of treasury tokens.
+    // Right now this method is duplicated on both wallets but doesn't need to be.
+    // TODO: clean up the architecture.
+    fn coin_path(
+        &self,
+        states: &StateRegistry,
+        own_coin: &OwnCoin,
+    ) -> Result<(Position, Vec<MerkleNode>)> {
+        let (money_leaf_position, money_merkle_path) = {
+            let state =
+                states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+            let tree = &state.tree;
+            let leaf_position = own_coin.leaf_position.clone();
+            let root = tree.root(0).unwrap();
+            let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+            (leaf_position, merkle_path)
+        };
+
+        Ok((money_leaf_position, money_merkle_path))
+    }
+
+    fn build_exec_tx(
+        &self,
+        states: &mut StateRegistry,
+        zk_bins: &ZkContractTable,
+        proposal: Proposal,
+        proposal_bulla: pallas::Base,
+        dao_params: DaoParams,
+    ) -> Result<Transaction> {
+        let own_coin = self.balances(states)?;
+
+        let (treasury_leaf_position, treasury_merkle_path) = self.coin_path(states, &own_coin)?;
+
+        let input_value = own_coin.note.value;
+
+        // TODO: not sure what this is doing
         let user_serial = pallas::Base::random(&mut OsRng);
         let user_coin_blind = pallas::Base::random(&mut OsRng);
+        let user_data_blind = pallas::Base::random(&mut OsRng);
+        let input_value_blind = pallas::Scalar::random(&mut OsRng);
         let dao_serial = pallas::Base::random(&mut OsRng);
         let dao_coin_blind = pallas::Base::random(&mut OsRng);
-        let input_value = self.treasury_note.value;
-        let input_value_blind = pallas::Scalar::random(&mut OsRng);
-        let tx_signature_secret = SecretKey::random(&mut OsRng);
-        let exec_signature_secret = SecretKey::random(&mut OsRng);
-
-        let (treasury_leaf_position, treasury_merkle_path) = {
-            let states = &self.states;
-            let state =
-                states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
-            let tree = &state.tree;
-            let leaf_position = self.dao_recv_coin.leaf_position;
-            let root = tree.root(0).unwrap();
-            let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
-            (leaf_position, merkle_path)
-        };
 
         let input = {
             money_contract::transfer::wallet::BuilderInputInfo {
                 leaf_position: treasury_leaf_position,
                 merkle_path: treasury_merkle_path,
-                secret: self.dao_keypair.secret,
-                note: self.treasury_note.clone(),
+                secret: self.keypair.secret,
+                note: own_coin.note.clone(),
                 user_data_blind,
                 value_blind: input_value_blind,
-                signature_secret: tx_signature_secret,
+                // TODO: in schema, we create random signatures here. why?
+                signature_secret: self.signature,
             }
         };
 
@@ -1270,128 +553,306 @@ impl DaoDemo {
                 outputs: vec![
                     // Sending money
                     money_contract::transfer::wallet::BuilderOutputInfo {
-                        value: 1000,
-                        token_id: self.xdrk_token_id,
-                        public: self.user_keypair.public,
-                        serial: self.proposal.serial,
-                        coin_blind: self.proposal.blind,
+                        value: proposal.amount,
+                        token_id: proposal.token_id,
+                        public: proposal.dest,
+                        serial: proposal.serial,
+                        coin_blind: proposal.blind,
                         spend_hook: pallas::Base::from(0),
                         user_data: pallas::Base::from(0),
                     },
                     // Change back to DAO
                     money_contract::transfer::wallet::BuilderOutputInfo {
-                        value: xdrk_supply - 1000,
-                        token_id: self.xdrk_token_id,
-                        public: self.dao_keypair.public,
+                        value: own_coin.note.value - proposal.amount,
+                        token_id: own_coin.note.token_id,
+                        public: self.keypair.public,
+                        // ?
                         serial: dao_serial,
                         coin_blind: dao_coin_blind,
                         spend_hook: *dao_contract::exec::FUNC_ID,
-                        user_data: self.proposal_bulla,
+                        user_data: proposal_bulla,
                     },
                 ],
             }
         };
 
-        let transfer_func_call = builder.build(&self.zk_bins)?;
+        let transfer_func_call = builder.build(zk_bins)?;
+
+        let mut yes_votes_value = 0;
+        let mut yes_votes_blind = pallas::Scalar::from(0);
+
+        let mut all_votes_value = 0;
+        let mut all_votes_blind = pallas::Scalar::from(0);
+
+        for note in &self.vote_notes {
+            if note.vote.vote_option {
+                // this is a yes vote
+                yes_votes_value += note.vote_value;
+                yes_votes_blind += note.vote_value_blind;
+            }
+            all_votes_value += note.vote_value;
+            all_votes_blind += note.vote_value_blind;
+        }
 
         let builder = {
             dao_contract::exec::wallet::Builder {
-                proposal: self.proposal.clone(),
-                dao: self.dao_params.clone(),
-                yes_votes_value: self.yes_votes_value,
-                all_votes_value: self.all_votes_value,
-                yes_votes_blind: self.yes_votes_blind,
-                all_votes_blind: self.all_votes_blind,
+                proposal: proposal.clone(),
+                dao: dao_params.clone(),
+                yes_votes_value,
+                all_votes_value,
+                yes_votes_blind,
+                all_votes_blind,
                 user_serial,
                 user_coin_blind,
                 dao_serial,
                 dao_coin_blind,
-                input_value,
+                input_value: proposal.amount,
                 input_value_blind,
                 hook_dao_exec: *dao_contract::exec::FUNC_ID,
-                signature_secret: exec_signature_secret,
+                signature_secret: self.signature,
             }
         };
-        let exec_func_call = builder.build(&self.zk_bins);
+
+        let exec_func_call = builder.build(zk_bins);
         let func_calls = vec![transfer_func_call, exec_func_call];
 
-        let signatures = sign(vec![tx_signature_secret, exec_signature_secret], &func_calls);
-        let tx = Transaction { func_calls, signatures };
+        // TODO: we sign both transactions with the same sig, is this wrong?
+        let signatures = sign(vec![self.signature, self.signature], &func_calls);
+        Ok(Transaction { func_calls, signatures })
+    }
+}
+// Money private values.
+pub struct MoneyWallet {
+    keypair: Keypair,
+    signature: SecretKey,
+}
 
-        {
-            // Now the spend_hook field specifies the function DAO::exec()
-            // so Money::transfer() must also be combined with DAO::exec()
+impl MoneyWallet {
+    fn track(&self, states: &mut StateRegistry) -> Result<()> {
+        let state =
+            states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+        state.wallet_cache.track(self.keypair.secret);
 
-            assert_eq!(tx.func_calls.len(), 2);
-            let transfer_func_call = &tx.func_calls[0];
-            let transfer_call_data = transfer_func_call.call_data.as_any();
+        Ok(())
+    }
 
-            assert_eq!(
-                (&*transfer_call_data).type_id(),
-                TypeId::of::<money_contract::transfer::validate::CallData>()
-            );
-            let transfer_call_data =
-                transfer_call_data.downcast_ref::<money_contract::transfer::validate::CallData>();
-            let transfer_call_data = transfer_call_data.unwrap();
-            // At least one input has this field value which means DAO::exec() is invoked.
-            assert_eq!(transfer_call_data.inputs.len(), 1);
-            let input = &transfer_call_data.inputs[0];
-            assert_eq!(input.revealed.spend_hook, *dao_contract::exec::FUNC_ID);
-            let user_data_enc = poseidon_hash::<2>([self.dao_bulla.0, user_data_blind]);
-            assert_eq!(input.revealed.user_data_enc, user_data_enc);
-        }
+    fn balances(&self, states: &mut StateRegistry) -> Result<OwnCoin> {
+        let state =
+            states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
 
-        //// Validator
+        let mut recv_coins = state.wallet_cache.get_received(&self.keypair.secret);
 
-        let mut updates = vec![];
-        {
-            let states = &self.states;
-            // Validate all function calls in the tx
-            for (idx, func_call) in tx.func_calls.iter().enumerate() {
-                if func_call.func_id == *dao_contract::exec::FUNC_ID {
-                    debug!("dao_contract::exec::state_transition()");
+        let recv_coin = recv_coins.pop().unwrap();
+        let note = recv_coin.note.clone();
 
-                    let update = dao_contract::exec::validate::state_transition(states, idx, &tx)
-                        .expect("dao_contract::exec::validate::state_transition() failed!");
-                    updates.push(update);
-                } else if func_call.func_id == *money_contract::transfer::FUNC_ID {
-                    debug!("money_contract::transfer::state_transition()");
+        debug!("User received a coin worth {} gDRK", note.value);
 
-                    let update =
-                        money_contract::transfer::validate::state_transition(states, idx, &tx)
-                            .expect(
-                                "money_contract::transfer::validate::state_transition() failed!",
-                            );
-                    updates.push(update);
-                }
+        Ok(recv_coin)
+    }
+
+    // We use this to prove ownership of governance tokens.
+    fn coin_path(
+        &self,
+        states: &StateRegistry,
+        own_coin: &OwnCoin,
+    ) -> Result<(Position, Vec<MerkleNode>)> {
+        let (money_leaf_position, money_merkle_path) = {
+            let state =
+                states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+            let tree = &state.tree;
+            let leaf_position = own_coin.leaf_position.clone();
+            let root = tree.root(0).unwrap();
+            let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+            (leaf_position, merkle_path)
+        };
+
+        Ok((money_leaf_position, money_merkle_path))
+    }
+
+    fn build_transfer_tx(
+        &self,
+        value: u64,
+        token_id: pallas::Base,
+        spend_hook: pallas::Base,
+        user_data: pallas::Base,
+        recipient: PublicKey,
+        zk_bins: &ZkContractTable,
+    ) -> Result<Transaction> {
+        let builder = {
+            money_contract::transfer::wallet::Builder {
+                clear_inputs: vec![money_contract::transfer::wallet::BuilderClearInputInfo {
+                    value,
+                    token_id,
+                    signature_secret: self.signature,
+                }],
+                inputs: vec![],
+                outputs: vec![money_contract::transfer::wallet::BuilderOutputInfo {
+                    value,
+                    token_id,
+                    public: recipient,
+                    serial: pallas::Base::random(&mut OsRng),
+                    coin_blind: pallas::Base::random(&mut OsRng),
+                    spend_hook,
+                    user_data,
+                }],
             }
-        }
+        };
+        let func_call = builder.build(zk_bins)?;
+        let func_calls = vec![func_call];
 
-        {
-            // Atomically apply all changes
-            for update in updates {
-                update.apply(&mut self.states);
+        let signatures = sign(vec![self.signature], &func_calls);
+        Ok(Transaction { func_calls, signatures })
+    }
+
+    fn build_propose_tx(
+        &mut self,
+        states: &mut StateRegistry,
+        zk_bins: &ZkContractTable,
+        params: DaoParams,
+        recipient: PublicKey,
+        token_id: pallas::Base,
+        amount: u64,
+        dao_leaf_position: Position,
+    ) -> Result<Transaction> {
+        let own_coin = self.balances(states)?;
+
+        let (money_leaf_position, money_merkle_path) = self.coin_path(&states, &own_coin)?;
+
+        let signature_secret = SecretKey::random(&mut OsRng);
+
+        let input = {
+            dao_contract::propose::wallet::BuilderInput {
+                secret: self.keypair.secret,
+                note: own_coin.note.clone(),
+                leaf_position: money_leaf_position,
+                merkle_path: money_merkle_path,
+                signature_secret,
             }
-        }
+        };
 
-        // Other stuff
-        tx.zk_verify(&self.zk_bins);
-        tx.verify_sigs();
+        let (dao_merkle_path, dao_merkle_root) = {
+            let state = states.lookup::<dao_contract::State>(*dao_contract::CONTRACT_ID).unwrap();
+            let tree = &state.dao_tree;
+            let root = tree.root(0).unwrap();
+            let merkle_path = tree.authentication_path(dao_leaf_position, &root).unwrap();
+            (merkle_path, root)
+        };
 
-        //// Wallet
+        let proposal = {
+            dao_contract::propose::wallet::Proposal {
+                dest: recipient,
+                amount,
+                serial: pallas::Base::random(&mut OsRng),
+                token_id,
+                blind: pallas::Base::random(&mut OsRng),
+            }
+        };
 
+        let builder = dao_contract::propose::wallet::Builder {
+            inputs: vec![input],
+            proposal,
+            dao: params.clone(),
+            dao_leaf_position,
+            dao_merkle_path,
+            dao_merkle_root,
+        };
+
+        let func_call = builder.build(zk_bins);
+        let func_calls = vec![func_call];
+
+        let signatures = sign(vec![signature_secret], &func_calls);
+        Ok(Transaction { func_calls, signatures })
+    }
+
+    fn build_vote_tx(
+        &mut self,
+        vote_option: bool,
+        states: &mut StateRegistry,
+        zk_bins: &ZkContractTable,
+        dao_key: Keypair,
+        proposal: Proposal,
+        dao_params: DaoParams,
+    ) -> Result<Transaction> {
+        let own_coin = self.balances(states)?;
+
+        let (money_leaf_position, money_merkle_path) = self.coin_path(states, &own_coin)?;
+
+        let input = {
+            dao_contract::vote::wallet::BuilderInput {
+                secret: self.keypair.secret,
+                note: own_coin.note.clone(),
+                leaf_position: money_leaf_position,
+                merkle_path: money_merkle_path,
+                signature_secret: self.signature,
+            }
+        };
+
+        let builder = {
+            dao_contract::vote::wallet::Builder {
+                inputs: vec![input],
+                vote: dao_contract::vote::wallet::Vote {
+                    vote_option,
+                    vote_option_blind: pallas::Scalar::random(&mut OsRng),
+                },
+                vote_keypair: self.keypair,
+                proposal: proposal.clone(),
+                dao: dao_params.clone(),
+            }
+        };
+        let func_call = builder.build(zk_bins);
+        let func_calls = vec![func_call];
+
+        let signatures = sign(vec![self.signature], &func_calls);
+        Ok(Transaction { func_calls, signatures })
+    }
+}
+
+pub struct DaoDemo {}
+
+impl DaoDemo {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    fn init(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn create(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn mint(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn airdrop(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn propose(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn vote(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn exec(&mut self) -> Result<()> {
         Ok(())
     }
 }
 
 async fn start() -> Result<()> {
+    // daod
+    //
     let rpc_addr = Url::parse("tcp://127.0.0.1:7777")?;
-    let mut dao_demo = DaoDemo::new();
+    let mut demo = DaoDemo::new();
     /////////////////////////////////////////////////
     //// init()
     /////////////////////////////////////////////////
-    dao_demo.init()?;
-    let client = JsonRpcInterface::new(dao_demo);
+    demo.init()?;
+    let client = JsonRpcInterface::new(demo);
 
     let rpc_interface = Arc::new(client);
 

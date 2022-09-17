@@ -14,7 +14,7 @@ use darkfi::rpc::{
 use crate::DaoDemo;
 
 pub struct JsonRpcInterface {
-    dao_demo: Arc<Mutex<DaoDemo>>,
+    demo: Arc<Mutex<DaoDemo>>,
 }
 
 #[async_trait]
@@ -41,51 +41,53 @@ impl RequestHandler for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
-    pub fn new(dao_demo: DaoDemo) -> Self {
-        let dao_demo = Arc::new(Mutex::new(dao_demo));
-        Self { dao_demo }
+    pub fn new(demo: DaoDemo) -> Self {
+        let demo = Arc::new(Mutex::new(demo));
+        Self { demo }
     }
 
+    // TODO: add 3 params: dao_proposer_limit, dao_quorum, dao_approval_ratio
+    //
     // --> {"method": "create", "params": []}
     // <-- {"result": "creating dao..."}
     async fn create_dao(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut dao_demo = self.dao_demo.lock().await;
-        dao_demo.create().unwrap();
+        let mut demo = self.demo.lock().await;
+        demo.create().unwrap();
         JsonResponse::new(json!("dao created"), id).into()
     }
     // --> {"method": "mint_tokens", "params": []}
     // <-- {"result": "minting tokens..."}
     async fn mint_tokens(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut dao_demo = self.dao_demo.lock().await;
-        dao_demo.mint().unwrap();
+        let mut demo = self.demo.lock().await;
+        demo.mint().unwrap();
         JsonResponse::new(json!("tokens minted"), id).into()
     }
     // --> {"method": "airdrop_tokens", "params": []}
     // <-- {"result": "airdropping tokens..."}
     async fn airdrop_tokens(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut dao_demo = self.dao_demo.lock().await;
-        dao_demo.airdrop().unwrap();
+        let mut demo = self.demo.lock().await;
+        demo.airdrop().unwrap();
         JsonResponse::new(json!("tokens airdropped"), id).into()
     }
     // --> {"method": "create_proposal", "params": []}
     // <-- {"result": "creating proposal..."}
     async fn create_proposal(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut dao_demo = self.dao_demo.lock().await;
-        dao_demo.propose().unwrap();
+        let mut demo = self.demo.lock().await;
+        demo.propose().unwrap();
         JsonResponse::new(json!("proposal created"), id).into()
     }
     // --> {"method": "vote", "params": []}
     // <-- {"result": "voting..."}
     async fn vote(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut dao_demo = self.dao_demo.lock().await;
-        dao_demo.vote().unwrap();
+        let mut demo = self.demo.lock().await;
+        demo.vote().unwrap();
         JsonResponse::new(json!("voted"), id).into()
     }
     // --> {"method": "execute", "params": []}
     // <-- {"result": "executing..."}
     async fn execute(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut dao_demo = self.dao_demo.lock().await;
-        dao_demo.exec().unwrap();
+        let mut demo = self.demo.lock().await;
+        demo.exec().unwrap();
         JsonResponse::new(json!("executed"), id).into()
     }
 }
