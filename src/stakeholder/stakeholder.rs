@@ -4,13 +4,14 @@ use async_std::sync::Arc;
 use log::debug;
 use std::fmt;
 
+use rand::rngs::OsRng;
 use std::time::Duration;
 use std::thread;
 
 use crate::zk::circuit::LeadContract;
 
 use crate::{
-    consensus::{Block, BlockInfo,Metadata,StreamletMetadata,TransactionLeadProof},
+    consensus::{Block, BlockInfo,OuroborosMetadata, StakeholderMetadata,StreamletMetadata,TransactionLeadProof, Header},
     util::{
         time::Timestamp,
         clock::{Clock,Ticks},
@@ -20,6 +21,10 @@ use crate::{
     crypto::{
         proof::{Proof, ProvingKey, VerifyingKey,  },
         leadcoin::{LeadCoin},
+        schnorr::{Signature,SchnorrSecret, SchnorrPublic},
+        keypair::{Keypair},
+        merkle_node::MerkleNode,
+        address::Address,
     },
     blockchain::{Blockchain,Epoch,EpochConsensus},
     net::{P2p,Settings, SettingsPtr, Channel, ChannelPtr, Hosts, HostsPtr,MessageSubscription},
@@ -42,7 +47,9 @@ pub struct SlotWorkspace
     pub e: u64, // epoch index
     pub sl: u64, // absolute slot index
     pub txs: Vec<Transaction>, // unpublished block transactions
-    pub metadata: Metadata,
+    pub root: MerkleNode, /// merkle root of txs
+    pub m: StakeholderMetadata,
+    pub om: OuroborosMetadata,
     pub is_leader: bool,
     pub proof: Proof,
     pub block: BlockInfo,
@@ -54,8 +61,10 @@ impl Default for SlotWorkspace {
               e: 0,
               sl: 0,
               txs: vec![],
+              root: MerkleNode(pallas::Base::zero()),
               is_leader: false,
-              metadata: Metadata::default(),
+              m: StakeholderMetadata::default(),
+              om: OuroborosMetadata::default(),
               proof: Proof::default(),
               block: BlockInfo::default(),
         }
@@ -66,7 +75,12 @@ impl SlotWorkspace {
 
     pub fn new_block(&self) -> (BlockInfo, blake3::Hash) {
         let sm = StreamletMetadata::new(vec!());
-        let block = BlockInfo::new(self.st, self.e, self.sl, self.txs.clone(), self.metadata.clone(), sm);
+        let header = Header::new(self.st, self.e, self.sl, Timestamp::current_time(), self.root);
+        let block = BlockInfo::new(header,
+                                   self.txs.clone(),
+                                   self.m.clone(),
+                                   self.om.clone(),
+                                   sm);
         let hash = block.blockhash();
         (block, hash)
     }
@@ -75,8 +89,16 @@ impl SlotWorkspace {
         self.txs.push(tx);
     }
 
-    pub fn set_metadata(& mut self, md : Metadata) {
-        self.metadata = md;
+    pub fn set_root(&mut self, root: MerkleNode) {
+        self.root = root;
+    }
+
+    pub fn set_stakeholdermetadata(& mut self, meta : StakeholderMetadata) {
+        self.m = meta;
+    }
+
+    pub fn set_ouroborosmetadata(&mut self, meta: OuroborosMetadata) {
+        self.om = meta;
     }
 
     pub fn set_sl(&mut self, sl: u64) {
@@ -86,7 +108,6 @@ impl SlotWorkspace {
     pub fn set_st(&mut self, st: blake3::Hash) {
         self.st = st;
     }
-
 
     pub fn set_e(&mut self, e: u64) {
         self.e = e;
@@ -101,7 +122,6 @@ impl SlotWorkspace {
     }
 }
 
-
 pub struct Stakeholder
 {
     pub blockchain: Blockchain, // stakeholder view of the blockchain
@@ -115,6 +135,7 @@ pub struct Stakeholder
     pub playing: bool,
     pub workspace : SlotWorkspace,
     pub id: u8,
+    pub keypair: Keypair,
     //pub subscription: Subscription<Result<ChannelPtr>>,
     //pub chanptr : ChannelPtr,
     //pub msgsub : MessageSubscription::<BlockInfo>,
@@ -147,6 +168,7 @@ impl Stakeholder
 
         //
         let clock = Clock::new(Some(consensus.get_epoch_len()), Some(consensus.get_slot_len()), Some(consensus.get_tick_len()), settings.peers);
+        let keypair = Keypair::random(&mut OsRng);
         debug!("stakeholder constructed...");
         Ok(Self{blockchain: bc,
                 net: p2p,
@@ -160,10 +182,21 @@ impl Stakeholder
                 playing: true,
                 workspace: workspace,
                 id: id,
+                keypair: keypair
                 //subscription: subscription,
                 //chanptr: chanptr,
                 //msgsub: msg_sub,
         })
+    }
+
+    /// wrapper on Schnorr signature
+    pub fn sign(&self, message : &[u8]) -> Signature {
+        self.keypair.secret.sign(message)
+    }
+
+    /// wrapper on schnorr public verify
+    pub fn verify(&self, message: &[u8], signature: &Signature) -> bool {
+        self.keypair.public.verify(message, signature)
     }
 
     pub fn get_provkingkey(&self) -> ProvingKey {
@@ -300,7 +333,8 @@ impl Stakeholder
                         //add the block to the blockchain
                         self.add_block(block_info.clone());
                         let block : Block = Block::from(block_info.clone());
-                        // publish the block.
+                        // publish the block
+                        //TODO (fix) before publishing the workspace tx root need to be set.
                         self.net.broadcast(block);
                     } else {
                         //
@@ -375,10 +409,13 @@ impl Stakeholder
         self.workspace.set_proof(proof.clone());
         //
         if is_leader {
-            let metadata = Metadata::new(Timestamp::current_time(),
-                                         self.get_eta().to_repr(),
-                                         TransactionLeadProof::from(proof.clone()));
-            self.workspace.set_metadata(metadata);
+            let addr = Address::from(self.keypair.public);
+            let sign = self.sign(proof.as_ref());
+            let stakeholder_meta = StakeholderMetadata::new(sign, addr);
+            let ouroboros_meta = OuroborosMetadata::new(self.get_eta().to_repr(),
+                                                        TransactionLeadProof::from(proof.clone()));
+            self.workspace.set_stakeholdermetadata(stakeholder_meta);
+            self.workspace.set_ouroborosmetadata(ouroboros_meta);
         }
     }
 }

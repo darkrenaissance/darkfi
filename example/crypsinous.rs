@@ -20,32 +20,34 @@ async fn main()
     let n = 3;
     /// initialize n stakeholders
     let alice_settings = Settings {
-        inbound: Some(Url::parse("tls://127.0.0.1:12002").unwrap()),
+        inbound: vec!(Url::parse("tls://127.0.0.1:12002").unwrap()),
         outbound_connections: 4,
         manual_attempt_limit: 0,
         seed_query_timeout_seconds: 8,
         connect_timeout_seconds: 10,
         channel_handshake_seconds: 4,
         channel_heartbeat_seconds: 10,
-        external_addr: Some(Url::parse("tls://127.0.0.1:12002").unwrap()),
+        external_addr: vec!(Url::parse("tls://127.0.0.1:12002").unwrap()),
         peers: [Url::parse("tls://127.0.0.1:12003").unwrap()].to_vec(),
         seeds: [Url::parse("tls://irc0.dark.fi:11001").unwrap(),
                 Url::parse("tls://irc1.dark.fi:11001").unwrap()
         ].to_vec(),
+        ..Default::default()
     };
     let bob_settings = Settings {
-        inbound: Some(Url::parse("tls://127.0.0.1:12003").unwrap()),
+        inbound: vec!(Url::parse("tls://127.0.0.1:12003").unwrap()),
         outbound_connections: 4,
         manual_attempt_limit: 0,
         seed_query_timeout_seconds: 8,
         connect_timeout_seconds: 10,
         channel_handshake_seconds: 4,
         channel_heartbeat_seconds: 10,
-        external_addr: Some(Url::parse("tls://127.0.0.1:12003").unwrap()),
+        external_addr: vec!(Url::parse("tls://127.0.0.1:12003").unwrap()),
         peers: [Url::parse("tls://127.0.0.1:12002").unwrap()].to_vec(),
         seeds: [Url::parse("tls://irc0.dark.fi:11001").unwrap(),
                 Url::parse("tls://irc1.dark.fi:11001").unwrap()
         ].to_vec(),
+        ..Default::default()
     };
     let k : u32 = 13; //proof's number of rows
     let mut handles = vec!();

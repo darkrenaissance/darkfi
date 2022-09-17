@@ -24,6 +24,7 @@ use crate::{
         merkle_node::MerkleNode,
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
+    consensus::{StakeholderMetadata},
     net,
     node::{
         state::{state_transition, ProgramState, StateUpdate},
@@ -303,14 +304,11 @@ impl ValidatorState {
         let root = tree.root(0).unwrap();
         let header = Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
-
-        // are the signature, and address used?
-        //let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
-        //let metadata = Metadata::new(String::from("proof"), String::from("r"), signed_proposal, self.address);
-
-        let om = OuroborosMetadata::new(eta, lead_proof);
+        let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
+        let m = StakeholderMetadata::new(signed_proposal, self.address);
+        let om = OuroborosMetadata::default();
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
-        Ok(Some(BlockProposal::new(header, unproposed_txs, om, sm)))
+        Ok(Some(BlockProposal::new(header, unproposed_txs, m, om, sm)))
     }
 
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
@@ -380,19 +378,19 @@ impl ValidatorState {
         self.refresh_participants()?;
 
         let leader = self.slot_leader();
-        if leader.address != proposal.block.metadata.address {
+        if leader.address != proposal.block.m.address {
             warn!(
                 "Received proposal not from slot leader ({}), but from ({})",
-                leader.address, proposal.block.metadata.address
+                leader.address, proposal.block.m.address
             );
             return Ok(None)
         }
 
         if !leader.public_key.verify(
             proposal.block.header.headerhash().as_bytes(),
-            &proposal.block.metadata.signature,
+            &proposal.block.m.signature,
         ) {
-            warn!("Proposer ({}) signature could not be verified", proposal.block.metadata.address);
+            warn!("Proposer ({}) signature could not be verified", proposal.block.m.address);
             return Ok(None)
         }
 

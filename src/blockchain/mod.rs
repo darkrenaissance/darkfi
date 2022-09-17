@@ -4,7 +4,6 @@ use std::error;
 
 use crate::{
     consensus::{Block, BlockInfo, StreamletMetadata},
-    impl_vec,
     util::{
         serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
         time::Timestamp,
@@ -94,14 +93,16 @@ impl Blockchain {
             ret.push(headerhash[0]);
 
             // Store block
-            let _block = Block::new(headerhash[0], tx_hashes, block.metadata.clone());
-            self.blocks.insert(&[_block])?;
+            //let _block = Block::new(headerhash[0], tx_hashes, block.m.clone());
+            //self.blocks.insert(&[_block])?;
+            let blk : Block = Block::from(block.clone());
+            self.blocks.insert(&[blk])?;
 
             // Store block order
             self.order.insert(&[block.header.slot], &[headerhash[0]])?;
 
             // Store ouroboros metadata
-            self.ouroboros_metadata.insert(&[blockhash[0]], &[block.metadata.om.clone()])?;
+            self.ouroboros_metadata.insert(&[headerhash[0]], &[block.om.clone()])?;
 
             // Store streamlet metadata
             self.streamlet_metadata.insert(&[headerhash[0]], &[block.sm.clone()])?;
@@ -139,12 +140,11 @@ impl Blockchain {
         for (i, header) in headers.iter().enumerate() {
             let header = header.clone().unwrap();
             let block = blocks[i].clone().unwrap();
-            let sm = metadata[i].clone().unwrap();
 
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(header, txs, block.metadata.clone(), sm);
+            let info = BlockInfo::new(header, txs, block.m.clone(), block.om, block.sm);
             ret.push(info);
         }
 

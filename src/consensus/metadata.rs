@@ -1,4 +1,6 @@
 use super::{Participant, Vote};
+use rand::rngs::OsRng;
+
 use crate::{
     util::{
         serial::{SerialDecodable, SerialEncodable},
@@ -15,6 +17,7 @@ use crate::{
         },
         lead_proof,
         leadcoin::LeadCoin,
+        keypair::Keypair,
     },
     Result, VerifyFailed, VerifyResult,
 };
@@ -47,7 +50,36 @@ impl Metadata {
         Self { timestamp, om: OuroborosMetadata::new(eta, lead_proof) }
     }
 }
-*/
+ */
+
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct StakeholderMetadata {
+    /// Block owner signature
+    pub signature: Signature,
+    /// Block owner address
+    pub address: Address,
+}
+
+impl Default for StakeholderMetadata {
+    fn default() -> Self {
+        let keypair = Keypair::random(&mut OsRng);
+        let address = Address::from(keypair.public);
+        let sign = Signature::dummy();
+        Self {
+            signature: sign,
+            address: address,
+        }
+    }
+}
+
+impl StakeholderMetadata {
+    pub fn new(signature: Signature, address: Address) -> Self {
+        Self {
+            signature,
+            address
+        }
+    }
+}
 
 /// wrapper over the Proof, for possiblity any metadata necessary in the future.
 #[derive(Debug, Clone, PartialEq,  SerialEncodable, SerialDecodable)]
