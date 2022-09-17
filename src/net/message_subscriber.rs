@@ -3,7 +3,7 @@ use std::{any::Any, io, io::Cursor, sync::Arc};
 
 use async_trait::async_trait;
 use fxhash::FxHashMap;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use rand::Rng;
 
 use crate::{
