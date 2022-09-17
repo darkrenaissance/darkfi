@@ -4,7 +4,7 @@ use std::fmt;
 use async_executor::Executor;
 use futures::{select, try_join, FutureExt};
 use fxhash::{FxHashMap, FxHashSet};
-use log::{debug, warn};
+use log::{debug, error, warn};
 use serde_json::json;
 use url::Url;
 
@@ -305,7 +305,13 @@ impl P2p {
     /// Broadcasts a message across all channels.
     pub async fn broadcast<M: Message + Clone>(&self, message: M) -> Result<()> {
         for channel in self.channels.lock().await.values() {
-            channel.send(message.clone()).await?;
+            if let Err(e) = channel.send(message.clone()).await {
+                error!(
+                    "P2p::broadcast(): Broadcasting message to {} failed: {}",
+                    channel.address(),
+                    e
+                );
+            }
         }
         Ok(())
     }

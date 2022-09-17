@@ -16,7 +16,7 @@
 #inbound = ["tcp://127.0.0.1:23331"]
 
 ## Connection slots
-outbound_connections=5
+outbound_connections=8
 
 ## P2P external addresses
 #external_addr = ["tls://127.0.0.1:23331"]
@@ -25,7 +25,7 @@ outbound_connections=5
 #peers = ["tls://127.0.0.1:23331"]
 
 ## Seed nodes to connect to
-seeds=["tls://tau0.dark.fi:23331", "tls://tau1.dark.fi:23331"]
+seeds=["tls://lilith0.dark.fi:23331", "tls://lilith1.dark.fi:23331"]
 
 # Prefered transports for outbound connections
 #transports = ["tls", "tcp"]

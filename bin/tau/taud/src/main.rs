@@ -210,7 +210,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let workspaces = get_workspaces(&settings)?;
 
     if workspaces.is_empty() {
-        error!("Please add at least on workspace to the config file.");
+        error!("Please add at least one workspace to the config file.");
         println!("Run `$ taud --generate` to generate new workspace.");
         return Ok(())
     }

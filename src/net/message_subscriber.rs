@@ -3,7 +3,7 @@ use std::{any::Any, io, io::Cursor, sync::Arc};
 
 use async_trait::async_trait;
 use fxhash::FxHashMap;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use rand::Rng;
 
 use crate::{
@@ -143,7 +143,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
                 self._trigger_all(message).await
             }
             Err(err) => {
-                error!("Unable to decode data. Dropping...: {}", err);
+                debug!("Unable to decode data. Dropping...: {}", err);
             }
         }
     }

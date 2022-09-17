@@ -309,7 +309,7 @@ impl UMsgs {
 
     pub async fn insert(&self, msg: &Privmsg) -> String {
         let mut hasher = Ripemd160::new();
-        hasher.update(msg.to_string() + &msg.term.to_string());
+        hasher.update(msg.to_string() + &msg.term.to_string() + &msg.timestamp.to_string());
         let key = hex::encode(hasher.finalize());
 
         let msgs = &mut self.msgs.lock().await;

@@ -48,7 +48,7 @@ use patch::{OpMethod, Patch};
 type Patches = (Vec<Patch>, Vec<Patch>, Vec<Patch>, Vec<Patch>);
 
 pub const CONFIG_FILE: &str = "darkwiki.toml";
-pub const CONFIG_FILE_CONTENTS: &str = include_str!("../darkwiki.toml");
+pub const CONFIG_FILE_CONTENTS: &str = include_str!("../../darkwiki.toml");
 
 /// darkwikid cli
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
@@ -225,8 +225,9 @@ impl Darkwiki {
                 }
                 patch = self.raft.1.recv().fuse() => {
                     for (workspace, salsa_box) in self.workspaces.iter() {
-                        if let Ok(patch) = decrypt_patch(&patch.clone()?, &salsa_box) {
+                        if let Ok(mut patch) = decrypt_patch(&patch.clone()?, &salsa_box) {
                             info!("[{}] Receive a {:?}", workspace, patch);
+                            patch.workspace = workspace.clone();
                             self.on_receive_patch(&patch)?;
                         }
                     }

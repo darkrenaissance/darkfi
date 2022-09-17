@@ -83,7 +83,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     pub async fn process_msg(&mut self, msg: &Privmsg) -> Result<()> {
-        info!("[P2P] Received: {}", msg.to_string().trim());
+        info!("[P2P] Received: {:?}", msg);
 
         let mut msg = msg.clone();
         let mut contact = String::new();
@@ -484,7 +484,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             .notify_with_exclude(privmsg.clone(), &[self.subscription.get_id()])
             .await;
 
-        info!("[P2P] Broadcast: {:?}", privmsg.to_string().trim());
+        info!("[P2P] Broadcast: {:?}", privmsg);
         self.p2p.broadcast(privmsg).await?;
 
         Ok(())
