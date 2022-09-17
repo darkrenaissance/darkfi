@@ -15,7 +15,7 @@ pub const CONFIG_FILE_CONTENTS: &str = include_str!("../ircd_config.toml");
 
 // Buffers and ordering configuration
 pub const SIZE_OF_MSGS_BUFFER: usize = 4095;
-pub const SIZE_OF_IDSS_BUFFER: usize = 16384;
+pub const SIZE_OF_IDSS_BUFFER: usize = 65536;
 pub const LIFETIME_FOR_ORPHAN: i64 = 600;
 pub const TERM_MAX_TIME_DIFFERENCE: i64 = 180;
 pub const BROADCAST_LAST_TERM_MSG: u64 = 4;

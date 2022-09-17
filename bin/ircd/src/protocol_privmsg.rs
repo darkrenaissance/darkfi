@@ -36,11 +36,12 @@ impl Inv {
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct GetData {
     invs: Vec<InvObject>,
+    term: Option<u64>,
 }
 
 impl GetData {
-    fn new(invs: Vec<InvObject>) -> Self {
-        Self { invs }
+    fn new(invs: Vec<InvObject>, term: Option<u64>) -> Self {
+        Self { invs, term }
     }
 }
 
@@ -118,7 +119,7 @@ impl ProtocolPrivmsg {
             }
 
             if !inv_requested.is_empty() {
-                self.channel.send(GetData::new(inv_requested)).await?;
+                self.channel.send(GetData::new(inv_requested, None)).await?;
             }
 
             self.update_unread_msgs().await?;
@@ -160,12 +161,15 @@ impl ProtocolPrivmsg {
             self.update_unread_msgs().await?;
 
             match self.buffers.privmsgs.last_term().await.cmp(&last_term) {
-                Ordering::Less => {
+                Ordering::Greater => {
                     for msg in self.buffers.privmsgs.fetch_msgs(last_term).await {
                         self.channel.send(msg).await?;
                     }
                 }
-                Ordering::Greater | Ordering::Equal => continue,
+                Ordering::Less => {
+                    self.channel.send(GetData::new(vec![], Some(last_term))).await?;
+                }
+                Ordering::Equal => continue,
             }
         }
     }
@@ -179,6 +183,12 @@ impl ProtocolPrivmsg {
             for inv in getdata.invs {
                 if let Some(msg) = self.buffers.unread_msgs.get(&inv.0).await {
                     self.channel.send(msg.clone()).await?;
+                }
+            }
+
+            if let Some(term) = getdata.term {
+                for msg in self.buffers.privmsgs.fetch_msgs(term).await {
+                    self.channel.send(msg).await?;
                 }
             }
         }
