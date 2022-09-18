@@ -1,7 +1,7 @@
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointBaseField, FixedPointShort, ScalarFixed, ScalarFixedShort,
+        FixedPoint, FixedPointBaseField,  ScalarFixed,
     },
     poseidon::{primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig},
     sinsemilla::{
@@ -15,14 +15,14 @@ use halo2_gadgets::{
 };
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, TableColumn, Instance as InstanceColumn,},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn,},
 };
 use pasta_curves::{pallas, Fp};
 use crate::crypto::{
     constants::{
         sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
         util::gen_const_array,
-        OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD, NullifierK,
+        OrchardFixedBases, OrchardFixedBasesFull, MERKLE_DEPTH_ORCHARD, NullifierK,
     },
     merkle_node::MerkleNode,
 };
@@ -35,9 +35,7 @@ use crate::zk::gadget::{
     native_range_check::{NativeRangeCheckChip},
 };
 
-use pasta_curves::group::{ff::PrimeField, GroupEncoding};
 
-const WORD_BITS: u32 = 24;
 const WINDOW_SIZE: usize = 3;
 const NUM_OF_BITS: usize = 254;
 const NUM_OF_WINDOWS: usize = 85;

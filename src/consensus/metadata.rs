@@ -4,7 +4,6 @@ use rand::rngs::OsRng;
 use crate::{
     util::{
         serial::{SerialDecodable, SerialEncodable},
-        time::Timestamp,
     },
     crypto::{
         address::Address,
@@ -19,12 +18,8 @@ use crate::{
         leadcoin::LeadCoin,
         keypair::Keypair,
     },
-    Result, VerifyFailed, VerifyResult,
+    VerifyResult,
 };
-
-use log::error;
-
-
 
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct StakeholderMetadata {

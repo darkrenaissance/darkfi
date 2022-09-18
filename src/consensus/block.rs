@@ -1,15 +1,12 @@
 use std::fmt;
-
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
-use rand::rngs::OsRng;
 use pasta_curves::pallas;
-use super::{StakeholderMetadata, StreamletMetadata, OuroborosMetadata, BLOCK_INFO_MAGIC_BYTES, BLOCK_MAGIC_BYTES,BLOCK_VERSION, TransactionLeadProof};
+use super::{StakeholderMetadata, StreamletMetadata, OuroborosMetadata, BLOCK_MAGIC_BYTES,BLOCK_VERSION};
 
 use crate::{
     crypto::{
-        address::Address, constants::MERKLE_DEPTH, keypair::Keypair, merkle_node::MerkleNode,
-        schnorr::SchnorrSecret,
+        constants::MERKLE_DEPTH, merkle_node::MerkleNode,
     },
     net,
     tx::Transaction,
@@ -17,7 +14,6 @@ use crate::{
         serial::{serialize, SerialDecodable, SerialEncodable},
         time::Timestamp,
     },
-    Result,
 };
 
 /// This struct represents a tuple of the form (version, state, epoch, slot, timestamp, merkle_root).

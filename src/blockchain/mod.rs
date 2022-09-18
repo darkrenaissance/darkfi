@@ -1,11 +1,8 @@
 use log::debug;
 
-use std::error;
-
 use crate::{
-    consensus::{Block, BlockInfo, StreamletMetadata},
+    consensus::{Block, BlockInfo},
     util::{
-        serial::{Decodable, Encodable, ReadExt, VarInt, WriteExt},
         time::Timestamp,
     },
     Result,

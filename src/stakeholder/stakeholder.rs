@@ -1,5 +1,4 @@
 use async_executor::Executor;
-use async_trait::async_trait;
 use async_std::sync::Arc;
 use log::debug;
 use std::fmt;
@@ -17,7 +16,7 @@ use crate::{
         clock::{Clock,Ticks},
         expand_path,
     },
-    system::{Subscriber, SubscriberPtr, Subscription},
+    system::{Subscription},
     crypto::{
         proof::{Proof, ProvingKey, VerifyingKey,  },
         leadcoin::{LeadCoin},
@@ -27,9 +26,9 @@ use crate::{
         address::Address,
     },
     blockchain::{Blockchain,Epoch,EpochConsensus},
-    net::{P2p,Settings, SettingsPtr, Channel, ChannelPtr, Hosts, HostsPtr,MessageSubscription},
+    net::{P2p,Settings, SettingsPtr, ChannelPtr, MessageSubscription},
     tx::{Transaction},
-    Result,Error,
+    Result,
 };
 
 use url::Url;

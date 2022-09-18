@@ -1,13 +1,10 @@
 use std::time::Instant;
 
 
-use halo2_proofs::circuit::Value;
 use log::{
-    debug,
     error
 };
 
-use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
 use crate::{
@@ -15,13 +12,10 @@ use crate::{
         types::*,
         leadcoin::LeadCoin,
         proof::{Proof, ProvingKey, VerifyingKey},
-        util::mod_r_p,
     },
-    zk::circuit::lead_contract::LeadContract,
     Result, VerifyResult, VerifyFailed,
 };
 
-use rand::{thread_rng, Rng};
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_lead_proof(pk: &ProvingKey, coin: LeadCoin) -> Result<Proof> {

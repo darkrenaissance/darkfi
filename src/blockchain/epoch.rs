@@ -1,4 +1,4 @@
-use halo2_proofs::{arithmetic::Field, dev::MockProver, circuit::Value};
+use halo2_proofs::{arithmetic::Field};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use halo2_gadgets::{
     poseidon::{primitives as poseidon},
@@ -19,7 +19,7 @@ use crate::{
         constants::MERKLE_DEPTH_ORCHARD,
         leadcoin::LeadCoin,
         lead_proof,
-        proof::{Proof, ProvingKey, VerifyingKey},
+        proof::{Proof, ProvingKey},
         merkle_node::MerkleNode,
         util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
         types::DrkValueBlind,

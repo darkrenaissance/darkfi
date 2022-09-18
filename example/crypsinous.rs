@@ -69,7 +69,7 @@ async fn main()
         ).unwrap();
 
         let handle = thread::spawn(move || {
-            block_on(stakeholder.background(Some(10)));
+            block_on(stakeholder.background(Some(5)));
         });
         handles.push(handle);
     }

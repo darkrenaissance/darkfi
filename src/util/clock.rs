@@ -2,12 +2,9 @@ use url::Url;
 use log::debug;
 use std::time::Duration;
 use std::thread;
-use async_trait::async_trait;
 use crate::{
-    util::{time,Timestamp, NanoTimestamp},
-    error,
+    util::{Timestamp},
     Result,
-    error::Error
 };
 
 pub enum Ticks {
