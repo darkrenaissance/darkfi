@@ -1140,6 +1140,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
+ "bs58",
  "crypto_api_chachapoly",
  "darkfi",
  "easy-parallel",

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_std::sync::Mutex;
 use async_trait::async_trait;
 use log::debug;
+use pasta_curves::group::ff::PrimeField;
 
 use serde_json::{json, Value};
 
@@ -11,10 +12,10 @@ use darkfi::rpc::{
     server::RequestHandler,
 };
 
-use crate::Demo;
+use crate::{util::GDRK_ID, Client};
 
 pub struct JsonRpcInterface {
-    demo: Arc<Mutex<Demo>>,
+    client: Arc<Mutex<Client>>,
 }
 
 #[async_trait]
@@ -42,40 +43,56 @@ impl RequestHandler for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
-    pub fn new(demo: Demo) -> Self {
-        let demo = Arc::new(Mutex::new(demo));
-        Self { demo }
+    pub fn new(client: Client) -> Self {
+        let client = Arc::new(Mutex::new(client));
+        Self { client }
     }
 
-    // TODO: add 3 params: dao_proposer_limit, dao_quorum, dao_approval_ratio
     // --> {"method": "create", "params": []}
     // <-- {"result": "creating dao..."}
-    async fn create_dao(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut demo = self.demo.lock().await;
-        // TODO: pass in DaoParams from CLI
-        //let dao_bulla = demo.client.create_dao();
+    async fn create_dao(&self, id: Value, params: &[Value]) -> JsonResult {
+        // TODO: error handling
+        let dao_proposer_limit = params[0].as_u64().unwrap();
+        let dao_quorum = params[1].as_u64().unwrap();
+        let dao_approval_ratio_quot = params[2].as_u64().unwrap();
+        let dao_approval_ratio_base = params[3].as_u64().unwrap();
+
+        let mut client = self.client.lock().await;
+
+        let dao_bulla = client
+            .create_dao(
+                dao_proposer_limit,
+                dao_quorum,
+                dao_approval_ratio_quot,
+                dao_approval_ratio_base,
+                *GDRK_ID,
+            )
+            .unwrap();
         // TODO: return dao_bulla to command line
-        JsonResponse::new(json!("dao created"), id).into()
+        // Encode as base58.
+
+        let bulla: String = bs58::encode(dao_bulla.to_repr()).into_string();
+        JsonResponse::new(json!(bulla), id).into()
     }
     // --> {"method": "mint_treasury", "params": []}
     // <-- {"result": "minting treasury..."}
     async fn mint_treasury(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut demo = self.demo.lock().await;
-        let zk_bins = &demo.zk_bins;
+        let mut client = self.client.lock().await;
+        let zk_bins = &client.zk_bins;
         // TODO: pass DAO params + zk_bins into mint_treasury
-        // let tx = demo.cashier.mint_treasury();
-        // demo.client.validate(tx);
-        // demo.client.wallet.balances();
+        //let tx = client.cashier.mint_treasury();
+        // client.client.validate(tx);
+        // client.client.wallet.balances();
         JsonResponse::new(json!("tokens minted"), id).into()
     }
 
     // Create a new wallet for governance tokens.
     // TODO: must pass a string identifier like alice, bob, charlie
     async fn keygen(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut demo = self.demo.lock().await;
+        let mut client = self.client.lock().await;
         // TODO: pass string id
-        //demo.client.new_money_wallet(alice);
-        //let wallet = demo.client.money_wallets.get(alice) {
+        //client.client.new_money_wallet(alice);
+        //let wallet = client.client.money_wallets.get(alice) {
         //      Some(wallet) => wallet.keypair.public
         //}
         // TODO: return 'Alice: public key' to CLI
@@ -85,15 +102,15 @@ impl JsonRpcInterface {
     // <-- {"result": "airdropping tokens..."}
     // TODO: pass a string 'alice'
     async fn airdrop_tokens(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut demo = self.demo.lock().await;
-        let zk_bins = &demo.zk_bins;
-        //let keypair_public = demo.client.money_wallets.get(alice) {
+        let mut client = self.client.lock().await;
+        let zk_bins = &client.zk_bins;
+        //let keypair_public = client.client.money_wallets.get(alice) {
         //      Some(wallet) => wallet.keypair.public
         //};
-        //let transaction = demo.cashier.airdrop(keypair_public, zk_bins);
-        // demo.client.validate(tx);
+        //let transaction = client.cashier.airdrop(keypair_public, zk_bins);
+        // client.client.validate(tx);
         //
-        // demo.client.money_wallets.get(alice) {
+        // client.client.money_wallets.get(alice) {
         //      Some(wallet) => wallet.balances()
         // }
         // TODO: return wallet balance to command line
@@ -103,9 +120,9 @@ impl JsonRpcInterface {
     // <-- {"result": "creating proposal..."}
     // TODO: pass string 'alice' and dao bulla
     async fn create_proposal(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut demo = self.demo.lock().await;
-        // let dao_params = self.demo.client.dao_wallet.params.get(bulla);
-        //self.demo.client.dao_wallet.propose(dao_params).unwrap();
+        let mut client = self.client.lock().await;
+        // let dao_params = self.client.client.dao_wallet.params.get(bulla);
+        //self.client.client.dao_wallet.propose(dao_params).unwrap();
         // TODO: return proposal data and Proposal to CLI
         JsonResponse::new(json!("proposal created"), id).into()
     }
@@ -114,16 +131,16 @@ impl JsonRpcInterface {
     // TODO: pass string 'alice', dao bulla, and Proposal
     // TODO: must pass yes or no, convert to bool
     async fn vote(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut demo = self.demo.lock().await;
-        // let dao_params = self.demo.client.dao_wallet.params.get(bulla);
-        // let dao_key = self.demo.client.dao_wallet.keypair.private;
+        let mut client = self.client.lock().await;
+        // let dao_params = self.client.client.dao_wallet.params.get(bulla);
+        // let dao_key = self.client.client.dao_wallet.keypair.private;
         //
-        // demo.client.money_wallets.get(alice) {
+        // client.client.money_wallets.get(alice) {
         //      Some(wallet) => {
         //      wallet.vote(dao_params)
         //      let tx = wallet.vote(dao_params, vote_option, proposal)
-        //      demo.client.validate(tx);
-        //      demo.client.dao_wallet.read_vote(tx);
+        //      client.client.validate(tx);
+        //      client.client.dao_wallet.read_vote(tx);
         //      }
         // }
         //
@@ -132,9 +149,9 @@ impl JsonRpcInterface {
     // --> {"method": "execute", "params": []}
     // <-- {"result": "executing..."}
     async fn execute(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut demo = self.demo.lock().await;
-        // demo.client.dao_wallet.build_exec_tx(proposal, proposal_bulla)
-        //demo.exec().unwrap();
+        let mut client = self.client.lock().await;
+        // client.client.dao_wallet.build_exec_tx(proposal, proposal_bulla)
+        //client.exec().unwrap();
         JsonResponse::new(json!("executed"), id).into()
     }
 }

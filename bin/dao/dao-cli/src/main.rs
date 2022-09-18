@@ -8,7 +8,19 @@ mod rpc;
 #[derive(Subcommand)]
 pub enum CliDaoSubCommands {
     /// Create DAO
-    Create {},
+    Create {
+        /// Minium number of governance tokens a user must have to propose a vote.
+        dao_proposer_limit: u64,
+
+        /// Minimum number of governance tokens staked on a proposal for it to pass.
+        dao_quorum: u64,
+
+        /// Quotient value of minimum vote ratio of yes:no votes required for a proposal to pass.
+        dao_approval_ratio_quot: u64,
+
+        /// Base value of minimum vote ratio of yes:no votes required for a proposal to pass.
+        dao_approval_ratio_base: u64,
+    },
     /// Mint tokens
     Mint {},
     /// Airdrop tokens
@@ -41,8 +53,20 @@ async fn start(options: CliDao) -> Result<()> {
     let rpc_addr = "tcp://127.0.0.1:7777";
     let client = Rpc { client: RpcClient::new(Url::parse(rpc_addr)?).await? };
     match options.command {
-        Some(CliDaoSubCommands::Create {}) => {
-            let reply = client.create().await?;
+        Some(CliDaoSubCommands::Create {
+            dao_proposer_limit,
+            dao_quorum,
+            dao_approval_ratio_base,
+            dao_approval_ratio_quot,
+        }) => {
+            let reply = client
+                .create(
+                    dao_proposer_limit,
+                    dao_quorum,
+                    dao_approval_ratio_quot,
+                    dao_approval_ratio_base,
+                )
+                .await?;
             println!("Server replied: {}", &reply.to_string());
             return Ok(())
         }

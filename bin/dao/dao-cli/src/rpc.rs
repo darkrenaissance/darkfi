@@ -7,8 +7,22 @@ use crate::Rpc;
 impl Rpc {
     // --> {"jsonrpc": "2.0", "method": "create", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "creating dao...", "id": 42}
-    pub async fn create(&self) -> Result<Value> {
-        let req = JsonRequest::new("create", json!([]));
+    pub async fn create(
+        &self,
+        dao_proposer_limit: u64,
+        dao_quorum: u64,
+        dao_approval_ratio_quot: u64,
+        dao_approval_ratio_base: u64,
+    ) -> Result<Value> {
+        let req = JsonRequest::new(
+            "create",
+            json!([
+                dao_proposer_limit,
+                dao_quorum,
+                dao_approval_ratio_quot,
+                dao_approval_ratio_base,
+            ]),
+        );
         self.client.request(req).await
     }
 

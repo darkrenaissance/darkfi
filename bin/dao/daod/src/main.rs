@@ -42,17 +42,84 @@ use crate::{
 };
 
 pub struct Client {
+    cashier: Cashier,
     dao_wallet: DaoWallet,
     money_wallets: HashMap<String, MoneyWallet>,
+    states: StateRegistry,
+    zk_bins: ZkContractTable,
 }
 
 impl Client {
     fn new() -> Self {
         let dao_wallet = DaoWallet::new();
-
         let money_wallets = HashMap::default();
+        let cashier = Cashier::new();
 
-        Self { dao_wallet, money_wallets }
+        // Lookup table for smart contract states
+        let mut states = StateRegistry::new();
+
+        // Initialize ZK binary table
+        let mut zk_bins = ZkContractTable::new();
+
+        Self { cashier, dao_wallet, money_wallets, states, zk_bins }
+    }
+
+    fn init(&mut self) -> Result<()> {
+        // We use these to initialize the money state.
+        let faucet_signature_secret = SecretKey::random(&mut OsRng);
+        let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
+
+        debug!(target: "demo", "Loading dao-mint.zk");
+        let zk_dao_mint_bincode = include_bytes!("../proof/dao-mint.zk.bin");
+        let zk_dao_mint_bin = ZkBinary::decode(zk_dao_mint_bincode)?;
+        self.zk_bins.add_contract("dao-mint".to_string(), zk_dao_mint_bin, 13);
+
+        debug!(target: "demo", "Loading money-transfer contracts");
+        let start = Instant::now();
+        let mint_pk = ProvingKey::build(11, &MintContract::default());
+        debug!("Mint PK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let burn_pk = ProvingKey::build(11, &BurnContract::default());
+        debug!("Burn PK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let mint_vk = VerifyingKey::build(11, &MintContract::default());
+        debug!("Mint VK: [{:?}]", start.elapsed());
+        let start = Instant::now();
+        let burn_vk = VerifyingKey::build(11, &BurnContract::default());
+        debug!("Burn VK: [{:?}]", start.elapsed());
+
+        self.zk_bins.add_native("money-transfer-mint".to_string(), mint_pk, mint_vk);
+        self.zk_bins.add_native("money-transfer-burn".to_string(), burn_pk, burn_vk);
+        debug!(target: "demo", "Loading dao-propose-main.zk");
+        let zk_dao_propose_main_bincode = include_bytes!("../proof/dao-propose-main.zk.bin");
+        let zk_dao_propose_main_bin = ZkBinary::decode(zk_dao_propose_main_bincode)?;
+        self.zk_bins.add_contract("dao-propose-main".to_string(), zk_dao_propose_main_bin, 13);
+        debug!(target: "demo", "Loading dao-propose-burn.zk");
+        let zk_dao_propose_burn_bincode = include_bytes!("../proof/dao-propose-burn.zk.bin");
+        let zk_dao_propose_burn_bin = ZkBinary::decode(zk_dao_propose_burn_bincode)?;
+        self.zk_bins.add_contract("dao-propose-burn".to_string(), zk_dao_propose_burn_bin, 13);
+        debug!(target: "demo", "Loading dao-vote-main.zk");
+        let zk_dao_vote_main_bincode = include_bytes!("../proof/dao-vote-main.zk.bin");
+        let zk_dao_vote_main_bin = ZkBinary::decode(zk_dao_vote_main_bincode)?;
+        self.zk_bins.add_contract("dao-vote-main".to_string(), zk_dao_vote_main_bin, 13);
+        debug!(target: "demo", "Loading dao-vote-burn.zk");
+        let zk_dao_vote_burn_bincode = include_bytes!("../proof/dao-vote-burn.zk.bin");
+        let zk_dao_vote_burn_bin = ZkBinary::decode(zk_dao_vote_burn_bincode)?;
+        self.zk_bins.add_contract("dao-vote-burn".to_string(), zk_dao_vote_burn_bin, 13);
+        let zk_dao_exec_bincode = include_bytes!("../proof/dao-exec.zk.bin");
+        let zk_dao_exec_bin = ZkBinary::decode(zk_dao_exec_bincode)?;
+        self.zk_bins.add_contract("dao-exec".to_string(), zk_dao_exec_bin, 13);
+
+        let cashier_signature_public = self.cashier.signature_public();
+
+        let money_state =
+            money_contract::state::State::new(cashier_signature_public, faucet_signature_public);
+        self.states.register(*money_contract::CONTRACT_ID, money_state);
+
+        let dao_state = dao_contract::State::new();
+        self.states.register(*dao_contract::CONTRACT_ID, dao_state);
+
+        Ok(())
     }
 
     fn new_money_wallet(&mut self, key: String) {
@@ -72,8 +139,6 @@ impl Client {
         dao_approval_ratio_quot: u64,
         dao_approval_ratio_base: u64,
         token_id: pallas::Base,
-        zk_bins: &ZkContractTable,
-        states: &mut StateRegistry,
     ) -> Result<pallas::Base> {
         let tx = self.dao_wallet.mint_tx(
             dao_proposer_limit,
@@ -81,13 +146,13 @@ impl Client {
             dao_approval_ratio_quot,
             dao_approval_ratio_base,
             token_id,
-            zk_bins,
+            &self.zk_bins,
         );
 
         // TODO: Proper error handling.
         // Only witness the value once the transaction is confirmed.
-        match self.validate(&tx, states, zk_bins) {
-            Ok(v) => self.dao_wallet.update_witness(states)?,
+        match self.validate(&tx) {
+            Ok(v) => self.dao_wallet.update_witness(&mut self.states)?,
             Err(e) => {}
         }
 
@@ -120,12 +185,7 @@ impl Client {
     }
 
     // TODO: Change these into errors instead of expects.
-    fn validate(
-        &mut self,
-        tx: &Transaction,
-        states: &mut StateRegistry,
-        zk_bins: &ZkContractTable,
-    ) -> Result<()> {
+    fn validate(&mut self, tx: &Transaction) -> Result<()> {
         let mut updates = vec![];
 
         // Validate all function calls in the tx
@@ -135,27 +195,29 @@ impl Client {
 
             if func_call.func_id == *money_contract::transfer::FUNC_ID {
                 debug!("money_contract::transfer::state_transition()");
-                let update = money_contract::transfer::validate::state_transition(states, idx, &tx)
-                    .expect("money_contract::transfer::validate::state_transition() failed!");
+                let update =
+                    money_contract::transfer::validate::state_transition(&self.states, idx, &tx)
+                        .expect("money_contract::transfer::validate::state_transition() failed!");
                 updates.push(update);
             } else if func_call.func_id == *dao_contract::mint::FUNC_ID {
                 debug!("dao_contract::mint::state_transition()");
-                let update = dao_contract::mint::validate::state_transition(states, idx, &tx)
+                let update = dao_contract::mint::validate::state_transition(&self.states, idx, &tx)
                     .expect("dao_contract::mint::validate::state_transition() failed!");
                 updates.push(update);
             } else if func_call.func_id == *dao_contract::propose::FUNC_ID {
                 debug!(target: "demo", "dao_contract::propose::state_transition()");
-                let update = dao_contract::propose::validate::state_transition(states, idx, &tx)
-                    .expect("dao_contract::propose::validate::state_transition() failed!");
+                let update =
+                    dao_contract::propose::validate::state_transition(&self.states, idx, &tx)
+                        .expect("dao_contract::propose::validate::state_transition() failed!");
                 updates.push(update);
             } else if func_call.func_id == *dao_contract::vote::FUNC_ID {
                 debug!(target: "demo", "dao_contract::vote::state_transition()");
-                let update = dao_contract::vote::validate::state_transition(states, idx, &tx)
+                let update = dao_contract::vote::validate::state_transition(&self.states, idx, &tx)
                     .expect("dao_contract::vote::validate::state_transition() failed!");
                 updates.push(update);
             } else if func_call.func_id == *dao_contract::exec::FUNC_ID {
                 debug!("dao_contract::exec::state_transition()");
-                let update = dao_contract::exec::validate::state_transition(states, idx, &tx)
+                let update = dao_contract::exec::validate::state_transition(&self.states, idx, &tx)
                     .expect("dao_contract::exec::validate::state_transition() failed!");
                 updates.push(update);
             }
@@ -163,10 +225,10 @@ impl Client {
 
         // Atomically apply all changes
         for update in updates {
-            update.apply(states);
+            update.apply(&mut self.states);
         }
 
-        tx.zk_verify(zk_bins);
+        tx.zk_verify(&self.zk_bins);
         tx.verify_sigs();
 
         Ok(())
@@ -180,24 +242,22 @@ impl Client {
         token_id: pallas::Base,
         amount: u64,
         key: String,
-        states: &mut StateRegistry,
-        zk_bins: &ZkContractTable,
     ) -> Result<()> {
         let dao_leaf_position = self.dao_wallet.leaf_position;
 
         let mut money_wallet = self.money_wallets.get_mut(&key).unwrap();
 
         let tx = money_wallet.propose_tx(
-            states,
-            &zk_bins,
             params,
             recipient,
             token_id,
             amount,
             dao_leaf_position,
+            &self.zk_bins,
+            &mut self.states,
         )?;
 
-        self.validate(&tx, states, zk_bins)?;
+        self.validate(&tx)?;
 
         self.dao_wallet.read_proposal(&tx)?;
 
@@ -354,8 +414,8 @@ impl DaoWallet {
     // TODO: Explicit error handling.
     fn get_treasury_path(
         &self,
-        states: &StateRegistry,
         own_coin: &OwnCoin,
+        states: &StateRegistry,
     ) -> Result<(Position, Vec<MerkleNode>)> {
         let (money_leaf_position, money_merkle_path) = {
             let state =
@@ -372,11 +432,11 @@ impl DaoWallet {
 
     fn build_exec_tx(
         &self,
-        states: &mut StateRegistry,
-        zk_bins: &ZkContractTable,
         proposal: Proposal,
         proposal_bulla: pallas::Base,
         dao_params: DaoParams,
+        zk_bins: &ZkContractTable,
+        states: &mut StateRegistry,
     ) -> Result<Transaction> {
         // TODO: move these to DAO struct?
         let tx_signature_secret = SecretKey::random(&mut OsRng);
@@ -386,7 +446,7 @@ impl DaoWallet {
         let own_coin = self.balances(states)?;
 
         let (treasury_leaf_position, treasury_merkle_path) =
-            self.get_treasury_path(states, &own_coin)?;
+            self.get_treasury_path(&own_coin, states)?;
 
         let input_value = own_coin.note.value;
 
@@ -518,13 +578,13 @@ impl MoneyWallet {
 
     fn propose_tx(
         &mut self,
-        states: &mut StateRegistry,
-        zk_bins: &ZkContractTable,
         params: DaoParams,
         recipient: PublicKey,
         token_id: pallas::Base,
         amount: u64,
         dao_leaf_position: Position,
+        zk_bins: &ZkContractTable,
+        states: &mut StateRegistry,
     ) -> Result<Transaction> {
         // To be able to make a proposal, we must prove we have ownership of governance tokens,
         // and that the quantity of governance tokens is within the accepted proposal limit.
@@ -603,11 +663,11 @@ impl MoneyWallet {
     fn vote_tx(
         &mut self,
         vote_option: bool,
-        states: &mut StateRegistry,
-        zk_bins: &ZkContractTable,
         dao_key: Keypair,
         proposal: Proposal,
         dao_params: DaoParams,
+        zk_bins: &ZkContractTable,
+        states: &mut StateRegistry,
     ) -> Result<Transaction> {
         // We must prove we have governance tokens in order to vote.
         let own_coin = self.balances(states)?;
@@ -644,95 +704,15 @@ impl MoneyWallet {
     }
 }
 
-async fn start_rpc(demo: Demo) -> Result<()> {
+async fn start_rpc(client: Client) -> Result<()> {
     let rpc_addr = Url::parse("tcp://127.0.0.1:7777")?;
 
-    let client = JsonRpcInterface::new(demo);
+    let rpc_client = JsonRpcInterface::new(client);
 
-    let rpc_interface = Arc::new(client);
+    let rpc_interface = Arc::new(rpc_client);
 
     listen_and_serve(rpc_addr, rpc_interface).await?;
     Ok(())
-}
-
-pub struct Demo {
-    cashier: Cashier,
-    client: Client,
-    states: StateRegistry,
-    zk_bins: ZkContractTable,
-}
-
-impl Demo {
-    fn new() -> Self {
-        let cashier = Cashier::new();
-        let client = Client::new();
-
-        // Lookup table for smart contract states
-        let mut states = StateRegistry::new();
-
-        // Initialize ZK binary table
-        let mut zk_bins = ZkContractTable::new();
-
-        Self { cashier, client, states, zk_bins }
-    }
-
-    fn init(&mut self) -> Result<()> {
-        // We use these to initialize the money state.
-        let faucet_signature_secret = SecretKey::random(&mut OsRng);
-        let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
-
-        debug!(target: "demo", "Loading dao-mint.zk");
-        let zk_dao_mint_bincode = include_bytes!("../proof/dao-mint.zk.bin");
-        let zk_dao_mint_bin = ZkBinary::decode(zk_dao_mint_bincode)?;
-        self.zk_bins.add_contract("dao-mint".to_string(), zk_dao_mint_bin, 13);
-
-        debug!(target: "demo", "Loading money-transfer contracts");
-        let start = Instant::now();
-        let mint_pk = ProvingKey::build(11, &MintContract::default());
-        debug!("Mint PK: [{:?}]", start.elapsed());
-        let start = Instant::now();
-        let burn_pk = ProvingKey::build(11, &BurnContract::default());
-        debug!("Burn PK: [{:?}]", start.elapsed());
-        let start = Instant::now();
-        let mint_vk = VerifyingKey::build(11, &MintContract::default());
-        debug!("Mint VK: [{:?}]", start.elapsed());
-        let start = Instant::now();
-        let burn_vk = VerifyingKey::build(11, &BurnContract::default());
-        debug!("Burn VK: [{:?}]", start.elapsed());
-
-        self.zk_bins.add_native("money-transfer-mint".to_string(), mint_pk, mint_vk);
-        self.zk_bins.add_native("money-transfer-burn".to_string(), burn_pk, burn_vk);
-        debug!(target: "demo", "Loading dao-propose-main.zk");
-        let zk_dao_propose_main_bincode = include_bytes!("../proof/dao-propose-main.zk.bin");
-        let zk_dao_propose_main_bin = ZkBinary::decode(zk_dao_propose_main_bincode)?;
-        self.zk_bins.add_contract("dao-propose-main".to_string(), zk_dao_propose_main_bin, 13);
-        debug!(target: "demo", "Loading dao-propose-burn.zk");
-        let zk_dao_propose_burn_bincode = include_bytes!("../proof/dao-propose-burn.zk.bin");
-        let zk_dao_propose_burn_bin = ZkBinary::decode(zk_dao_propose_burn_bincode)?;
-        self.zk_bins.add_contract("dao-propose-burn".to_string(), zk_dao_propose_burn_bin, 13);
-        debug!(target: "demo", "Loading dao-vote-main.zk");
-        let zk_dao_vote_main_bincode = include_bytes!("../proof/dao-vote-main.zk.bin");
-        let zk_dao_vote_main_bin = ZkBinary::decode(zk_dao_vote_main_bincode)?;
-        self.zk_bins.add_contract("dao-vote-main".to_string(), zk_dao_vote_main_bin, 13);
-        debug!(target: "demo", "Loading dao-vote-burn.zk");
-        let zk_dao_vote_burn_bincode = include_bytes!("../proof/dao-vote-burn.zk.bin");
-        let zk_dao_vote_burn_bin = ZkBinary::decode(zk_dao_vote_burn_bincode)?;
-        self.zk_bins.add_contract("dao-vote-burn".to_string(), zk_dao_vote_burn_bin, 13);
-        let zk_dao_exec_bincode = include_bytes!("../proof/dao-exec.zk.bin");
-        let zk_dao_exec_bin = ZkBinary::decode(zk_dao_exec_bincode)?;
-        self.zk_bins.add_contract("dao-exec".to_string(), zk_dao_exec_bin, 13);
-
-        let cashier_signature_public = self.cashier.signature_public();
-
-        let money_state =
-            money_contract::state::State::new(cashier_signature_public, faucet_signature_public);
-        self.states.register(*money_contract::CONTRACT_ID, money_state);
-
-        let dao_state = dao_contract::State::new();
-        self.states.register(*dao_contract::CONTRACT_ID, dao_state);
-
-        Ok(())
-    }
 }
 
 // Mint authority that mints the DAO treasury and airdrops governance tokens.
@@ -831,10 +811,10 @@ async fn main() -> Result<()> {
         ColorChoice::Auto,
     )?;
 
-    let mut demo = Demo::new();
-    demo.init();
+    let mut client = Client::new();
+    client.init();
 
-    start_rpc(demo).await?;
+    start_rpc(client).await?;
 
     Ok(())
 }
