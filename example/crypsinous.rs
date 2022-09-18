@@ -16,9 +16,9 @@ async fn main()
     let ticks=10;
     let reward=1;
     let epoch_consensus = EpochConsensus::new(Some(slots), Some(epochs), Some(ticks), Some(reward));
-    /// read n from the cmd
+    // read n from the cmd
     let n = 3;
-    /// initialize n stakeholders
+    // initialize n stakeholders
     let alice_settings = Settings {
         inbound: vec!(Url::parse("tls://127.0.0.1:12002").unwrap()),
         outbound_connections: 4,
@@ -49,7 +49,8 @@ async fn main()
         ].to_vec(),
         ..Default::default()
     };
-    let k : u32 = 13; //proof's number of rows
+    //proof's number of rows
+    let k : u32 = 13;
     let mut handles = vec!();
     let path = "/tmp/db";
     for i in 0..2 {
@@ -68,7 +69,7 @@ async fn main()
         ).unwrap();
 
         let handle = thread::spawn(move || {
-            block_on(stakeholder.background());
+            block_on(stakeholder.background(Some(10)));
         });
         handles.push(handle);
     }

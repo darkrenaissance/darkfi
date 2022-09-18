@@ -305,9 +305,14 @@ impl Stakeholder
         }
     }
 
-    pub async fn background(&mut self) {
+    pub async fn background(&mut self, hardlimit: Option<u8>) {
         self.clock.sync().await;
+        let mut c : u8= 0;
+        let lim : u8 = hardlimit.unwrap_or(0);
         while self.playing {
+            if c>lim && lim>0 {
+                break;
+            }
             // clock ticks slot begins
             // initialize the epoch if it's the time
             // check for leadership
@@ -351,6 +356,7 @@ impl Stakeholder
                 }
             }
             thread::sleep(Duration::from_millis(1000));
+            c+=1;
         }
     }
 
