@@ -94,7 +94,6 @@ impl JsonRpcInterface {
     // --> {"method": "mint_treasury", "params": []}
     // <-- {"result": "minting treasury..."}
     async fn mint_treasury(&self, id: Value, params: &[Value]) -> JsonResult {
-        // TODO: pass DAO params + zk_bins into mint_treasury
         // TODO: error handling
         let mut client = self.client.lock().await;
 
@@ -103,8 +102,8 @@ impl JsonRpcInterface {
         let bulla = params[2].as_str().unwrap();
 
         let dao_bulla = parse_b58(bulla).unwrap();
-
         let dao_addr = PublicKey::from_str(addr).unwrap();
+
         //match PublicKey::from_str(addr) {
         //    Ok(addr) => {
         //        debug!(target: "daod::rpc", "Decoded correctly: {:?}", addr)
@@ -117,38 +116,35 @@ impl JsonRpcInterface {
         let balance = client.mint_treasury(*XDRK_ID, token_supply, dao_bulla, dao_addr).unwrap();
 
         JsonResponse::new(json!(balance), id).into()
-        //JsonResponse::new(json!("test"), id).into()
     }
 
     // Create a new wallet for governance tokens.
-    // TODO: must pass a string identifier like alice, bob, charlie
-    async fn keygen(&self, id: Value, _params: &[Value]) -> JsonResult {
+    async fn keygen(&self, id: Value, params: &[Value]) -> JsonResult {
+        debug!(target: "dao-demo::rpc::keygen()", "Received keygen request");
         let mut client = self.client.lock().await;
-        // TODO: pass string id
-        //client.client.new_money_wallet(alice);
-        //let wallet = client.client.money_wallets.get(alice) {
-        //      Some(wallet) => wallet.keypair.public
-        //}
-        // TODO: return 'Alice: public key' to CLI
-        JsonResponse::new(json!("created new keys"), id).into()
+        let nym = params[0].as_str().unwrap().to_string();
+
+        client.new_money_wallet(nym.clone());
+
+        let wallet = client.money_wallets.get(&nym).unwrap();
+        let pubkey = wallet.get_public_key();
+
+        let addr: String = bs58::encode(pubkey.to_bytes()).into_string();
+        JsonResponse::new(json!(addr), id).into()
     }
     // --> {"method": "airdrop_tokens", "params": []}
     // <-- {"result": "airdropping tokens..."}
-    // TODO: pass a string 'alice'
-    async fn airdrop_tokens(&self, id: Value, _params: &[Value]) -> JsonResult {
+    async fn airdrop_tokens(&self, id: Value, params: &[Value]) -> JsonResult {
         let mut client = self.client.lock().await;
         let zk_bins = &client.zk_bins;
-        //let keypair_public = client.client.money_wallets.get(alice) {
-        //      Some(wallet) => wallet.keypair.public
-        //};
-        //let transaction = client.cashier.airdrop(keypair_public, zk_bins);
-        // client.client.validate(tx);
-        //
-        // client.client.money_wallets.get(alice) {
-        //      Some(wallet) => wallet.balances()
-        // }
-        // TODO: return wallet balance to command line
-        JsonResponse::new(json!("tokens airdropped"), id).into()
+
+        let nym = params[0].as_str().unwrap().to_string();
+        let value = params[1].as_u64().unwrap();
+
+        client.airdrop_user(value, *GDRK_ID, nym.clone()).unwrap();
+        let balance = client.query_balance(nym.clone()).unwrap();
+
+        JsonResponse::new(json!(balance), id).into()
     }
     // --> {"method": "create_proposal", "params": []}
     // <-- {"result": "creating proposal..."}

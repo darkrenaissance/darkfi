@@ -127,7 +127,8 @@ impl Client {
         let signature_secret = SecretKey::random(&mut OsRng);
         let leaf_position = Position::zero();
         let money_wallet = MoneyWallet { keypair, signature_secret, leaf_position };
-        self.money_wallets.insert(key, money_wallet);
+        self.money_wallets.insert(key.clone(), money_wallet);
+        debug!(target: "dao-demo::client::new_money_wallet()", "created wallet with key {}", &key);
     }
 
     // TODO: user passes DAO approval ratio: 1/2
@@ -196,10 +197,30 @@ impl Client {
         let tx =
             self.cashier.mint(*XDRK_ID, token_supply, dao_bulla, recipient, &self.zk_bins).unwrap();
 
-        self.validate(&tx).unwrap();
+        self.validate(&tx)?;
 
         let own_coin = self.dao_wallet.balances(&mut self.states)?;
 
+        let balance = own_coin.note.value;
+
+        Ok(balance)
+    }
+
+    fn airdrop_user(&mut self, value: u64, token_id: pallas::Base, nym: String) -> Result<()> {
+        let wallet = self.money_wallets.get(&nym).unwrap();
+        wallet.track(&mut self.states);
+
+        let addr = wallet.get_public_key();
+
+        let tx = self.cashier.airdrop(value, token_id, addr, &self.zk_bins)?;
+        self.validate(&tx)?;
+
+        Ok(())
+    }
+
+    fn query_balance(&mut self, nym: String) -> Result<u64> {
+        let wallet = self.money_wallets.get(&nym).unwrap();
+        let own_coin = wallet.balances(&mut self.states)?;
         let balance = own_coin.note.value;
 
         Ok(balance)
@@ -590,6 +611,17 @@ struct MoneyWallet {
 impl MoneyWallet {
     fn signature_public(&self) -> PublicKey {
         PublicKey::from_secret(self.signature_secret)
+    }
+
+    fn get_public_key(&self) -> PublicKey {
+        self.keypair.public
+    }
+
+    fn track(&self, states: &mut StateRegistry) -> Result<()> {
+        let state =
+            states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+        state.wallet_cache.track(self.keypair.secret);
+        Ok(())
     }
 
     fn balances(&self, states: &mut StateRegistry) -> Result<OwnCoin> {

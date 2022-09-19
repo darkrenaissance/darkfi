@@ -33,8 +33,15 @@ pub enum CliDaoSubCommands {
         /// DAO public identifier.
         dao_bulla: String,
     },
+    Keygen {
+        nym: String,
+    },
     /// Airdrop tokens
-    Airdrop {},
+    Airdrop {
+        nym: String,
+
+        value: u64,
+    },
     /// Propose
     Propose {},
     /// Vote
@@ -77,22 +84,27 @@ async fn start(options: CliDao) -> Result<()> {
                     dao_approval_ratio_base,
                 )
                 .await?;
-            println!("Server replied: {}", &reply.to_string());
+            println!("Created DAO bulla: {}", &reply.to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::Addr {}) => {
             let reply = client.addr().await?;
-            println!("Server replied: {}", &reply.to_string());
+            println!("DAO public address: {}", &reply.to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::Mint { token_supply, dao_addr, dao_bulla }) => {
             let reply = client.mint(token_supply, dao_addr, dao_bulla).await?;
-            println!("Server replied: {}", &reply.to_string());
+            println!("New DAO balance: {}", &reply.to_string());
             return Ok(())
         }
-        Some(CliDaoSubCommands::Airdrop {}) => {
-            let reply = client.airdrop().await?;
-            println!("Server replied: {}", &reply.to_string());
+        Some(CliDaoSubCommands::Keygen { nym }) => {
+            let reply = client.keygen(nym).await?;
+            println!("User public key: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::Airdrop { nym, value }) => {
+            let reply = client.airdrop(nym, value).await?;
+            println!("New user balance: {}", &reply.to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::Propose {}) => {

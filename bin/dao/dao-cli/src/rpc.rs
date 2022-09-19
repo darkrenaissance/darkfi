@@ -47,8 +47,15 @@ impl Rpc {
 
     // --> {"jsonrpc": "2.0", "method": "airdrop", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "airdropping tokens...", "id": 42}
-    pub async fn airdrop(&self) -> Result<Value> {
-        let req = JsonRequest::new("airdrop", json!([]));
+    pub async fn airdrop(&self, nym: String, value: u64) -> Result<Value> {
+        let req = JsonRequest::new("airdrop", json!([nym, value]));
+        self.client.request(req).await
+    }
+
+    // --> {"jsonrpc": "2.0", "method": "airdrop", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "airdropping tokens...", "id": 42}
+    pub async fn keygen(&self, nym: String) -> Result<Value> {
+        let req = JsonRequest::new("keygen", json!([nym]));
         self.client.request(req).await
     }
 
