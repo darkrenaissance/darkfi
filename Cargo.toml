@@ -324,6 +324,11 @@ name = "zk"
 path = "example/zk.rs"
 required-features = ["crypto"]
 
+[[example]]
+name = "dao"
+path = "example/dao-schema-rs/dao.rs"
+required-features = ["crypto"]
+
 #[[example]]
 #name = "lead"
 #path = "example/lead.rs"
