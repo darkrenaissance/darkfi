@@ -28,8 +28,20 @@ impl Rpc {
 
     // --> {"jsonrpc": "2.0", "method": "mint", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "minting tokens...", "id": 42}
-    pub async fn mint(&self) -> Result<Value> {
-        let req = JsonRequest::new("mint", json!([]));
+    pub async fn addr(&self) -> Result<Value> {
+        let req = JsonRequest::new("get_dao_addr", json!([]));
+        self.client.request(req).await
+    }
+
+    // --> {"jsonrpc": "2.0", "method": "mint", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "minting tokens...", "id": 42}
+    pub async fn mint(
+        &self,
+        token_supply: u64,
+        dao_addr: String,
+        dao_bulla: String,
+    ) -> Result<Value> {
+        let req = JsonRequest::new("mint", json!([token_supply, dao_addr, dao_bulla]));
         self.client.request(req).await
     }
 

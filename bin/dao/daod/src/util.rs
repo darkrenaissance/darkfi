@@ -18,9 +18,23 @@ use darkfi::{
     util::serial::Encodable,
     zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::decoder::ZkBinary,
+    Error,
 };
 
-// TODO: base58 encoding/ decoding
+/// Parse pallas::Base from a base58-encoded string
+pub fn parse_b58(s: &str) -> std::result::Result<pallas::Base, darkfi::Error> {
+    let bytes = bs58::decode(s).into_vec()?;
+    if bytes.len() != 32 {
+        return Err(Error::ParseFailed("Failed parsing DrkTokenId from base58 string"))
+    }
+
+    let ret = pallas::Base::from_repr(bytes.try_into().unwrap());
+    if ret.is_some().unwrap_u8() == 1 {
+        return Ok(ret.unwrap())
+    }
+
+    Err(Error::ParseFailed("Failed parsing DrkTokenId from base58 string"))
+}
 
 lazy_static! {
     pub static ref XDRK_ID: pallas::Base = pallas::Base::random(&mut OsRng);
@@ -40,22 +54,27 @@ impl std::hash::Hash for HashableBase {
     }
 }
 
+#[derive(Clone)]
 pub struct ZkBinaryContractInfo {
     pub k_param: u32,
     pub bincode: ZkBinary,
     pub proving_key: ProvingKey,
     pub verifying_key: VerifyingKey,
 }
+
+#[derive(Clone)]
 pub struct ZkNativeContractInfo {
     pub proving_key: ProvingKey,
     pub verifying_key: VerifyingKey,
 }
 
+#[derive(Clone)]
 pub enum ZkContractInfo {
     Binary(ZkBinaryContractInfo),
     Native(ZkNativeContractInfo),
 }
 
+#[derive(Clone)]
 pub struct ZkContractTable {
     // Key will be a hash of zk binary contract on chain
     table: HashMap<String, ZkContractInfo>,

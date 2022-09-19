@@ -65,7 +65,7 @@ impl Client {
     }
 
     fn init(&mut self) -> Result<()> {
-        // We use these to initialize the money state.
+        //We use these to initialize the money state.
         let faucet_signature_secret = SecretKey::random(&mut OsRng);
         let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
 
@@ -184,6 +184,27 @@ impl Client {
         Ok(dao_bulla.0)
     }
 
+    pub fn mint_treasury(
+        &mut self,
+        token_id: pallas::Base,
+        token_supply: u64,
+        dao_bulla: pallas::Base,
+        recipient: PublicKey,
+    ) -> Result<u64> {
+        self.dao_wallet.track(&mut self.states);
+
+        let tx =
+            self.cashier.mint(*XDRK_ID, token_supply, dao_bulla, recipient, &self.zk_bins).unwrap();
+
+        self.validate(&tx).unwrap();
+
+        let own_coin = self.dao_wallet.balances(&mut self.states)?;
+
+        let balance = own_coin.note.value;
+
+        Ok(balance)
+    }
+
     // TODO: Change these into errors instead of expects.
     fn validate(&mut self, tx: &Transaction) -> Result<()> {
         let mut updates = vec![];
@@ -283,6 +304,17 @@ impl DaoWallet {
         let vote_notes = Vec::new();
 
         Self { keypair, signature_secret, bulla_blind, leaf_position, params, vote_notes }
+    }
+
+    fn get_public_key(&self) -> PublicKey {
+        self.keypair.public
+    }
+
+    fn track(&self, states: &mut StateRegistry) -> Result<()> {
+        let state =
+            states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+        state.wallet_cache.track(self.keypair.secret);
+        Ok(())
     }
 
     // Mint the DAO bulla.
@@ -733,7 +765,7 @@ impl Cashier {
         PublicKey::from_secret(self.signature_secret)
     }
 
-    fn mint_treasury(
+    fn mint(
         &mut self,
         token_id: pallas::Base,
         token_supply: u64,

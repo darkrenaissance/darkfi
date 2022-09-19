@@ -22,7 +22,17 @@ pub enum CliDaoSubCommands {
         dao_approval_ratio_base: u64,
     },
     /// Mint tokens
-    Mint {},
+    Addr {},
+    Mint {
+        /// Number of treasury tokens to mint.
+        token_supply: u64,
+
+        /// Public key of the DAO treasury.
+        dao_addr: String,
+
+        /// DAO public identifier.
+        dao_bulla: String,
+    },
     /// Airdrop tokens
     Airdrop {},
     /// Propose
@@ -70,8 +80,13 @@ async fn start(options: CliDao) -> Result<()> {
             println!("Server replied: {}", &reply.to_string());
             return Ok(())
         }
-        Some(CliDaoSubCommands::Mint {}) => {
-            let reply = client.mint().await?;
+        Some(CliDaoSubCommands::Addr {}) => {
+            let reply = client.addr().await?;
+            println!("Server replied: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::Mint { token_supply, dao_addr, dao_bulla }) => {
+            let reply = client.mint(token_supply, dao_addr, dao_bulla).await?;
             println!("Server replied: {}", &reply.to_string());
             return Ok(())
         }

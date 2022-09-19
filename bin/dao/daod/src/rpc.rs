@@ -3,16 +3,23 @@ use std::sync::Arc;
 use async_std::sync::Mutex;
 use async_trait::async_trait;
 use log::debug;
-use pasta_curves::group::ff::PrimeField;
+use pasta_curves::{group::ff::PrimeField, pallas};
+use std::str::FromStr;
 
 use serde_json::{json, Value};
 
-use darkfi::rpc::{
-    jsonrpc::{ErrorCode::*, JsonError, JsonRequest, JsonResponse, JsonResult},
-    server::RequestHandler,
+use darkfi::{
+    crypto::keypair::PublicKey,
+    rpc::{
+        jsonrpc::{ErrorCode::*, JsonError, JsonRequest, JsonResponse, JsonResult},
+        server::RequestHandler,
+    },
 };
 
-use crate::{util::GDRK_ID, Client};
+use crate::{
+    util::{parse_b58, GDRK_ID, XDRK_ID},
+    Client,
+};
 
 pub struct JsonRpcInterface {
     client: Arc<Mutex<Client>>,
@@ -31,6 +38,7 @@ impl RequestHandler for JsonRpcInterface {
 
         match req.method.as_str() {
             Some("create") => return self.create_dao(req.id, params).await,
+            Some("get_dao_addr") => return self.get_dao_addr(req.id, params).await,
             Some("mint") => return self.mint_treasury(req.id, params).await,
             Some("keygen") => return self.keygen(req.id, params).await,
             Some("airdrop") => return self.airdrop_tokens(req.id, params).await,
@@ -68,22 +76,48 @@ impl JsonRpcInterface {
                 *GDRK_ID,
             )
             .unwrap();
-        // TODO: return dao_bulla to command line
-        // Encode as base58.
 
         let bulla: String = bs58::encode(dao_bulla.to_repr()).into_string();
         JsonResponse::new(json!(bulla), id).into()
     }
+
+    // --> {"method": "get_dao_addr", "params": []}
+    // <-- {"result": "getting dao public addr..."}
+    async fn get_dao_addr(&self, id: Value, params: &[Value]) -> JsonResult {
+        let mut client = self.client.lock().await;
+        let pubkey = client.dao_wallet.get_public_key();
+        let addr: String = bs58::encode(pubkey.to_bytes()).into_string();
+
+        JsonResponse::new(json!(addr), id).into()
+    }
+
     // --> {"method": "mint_treasury", "params": []}
     // <-- {"result": "minting treasury..."}
-    async fn mint_treasury(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut client = self.client.lock().await;
-        let zk_bins = &client.zk_bins;
+    async fn mint_treasury(&self, id: Value, params: &[Value]) -> JsonResult {
         // TODO: pass DAO params + zk_bins into mint_treasury
-        //let tx = client.cashier.mint_treasury();
-        // client.client.validate(tx);
-        // client.client.wallet.balances();
-        JsonResponse::new(json!("tokens minted"), id).into()
+        // TODO: error handling
+        let mut client = self.client.lock().await;
+
+        let token_supply = params[0].as_u64().unwrap();
+        let addr = params[1].as_str().unwrap();
+        let bulla = params[2].as_str().unwrap();
+
+        let dao_bulla = parse_b58(bulla).unwrap();
+
+        let dao_addr = PublicKey::from_str(addr).unwrap();
+        //match PublicKey::from_str(addr) {
+        //    Ok(addr) => {
+        //        debug!(target: "daod::rpc", "Decoded correctly: {:?}", addr)
+        //    }
+        //    Err(e) => {
+        //        debug!(target: "daod::rpc", "Decoded incorrectly: {}", e)
+        //    }
+        //}
+
+        let balance = client.mint_treasury(*XDRK_ID, token_supply, dao_bulla, dao_addr).unwrap();
+
+        JsonResponse::new(json!(balance), id).into()
+        //JsonResponse::new(json!("test"), id).into()
     }
 
     // Create a new wallet for governance tokens.
