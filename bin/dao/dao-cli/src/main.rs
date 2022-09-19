@@ -29,10 +29,12 @@ pub enum CliDaoSubCommands {
 
         /// Public key of the DAO treasury.
         dao_addr: String,
-
-        /// DAO public identifier.
-        dao_bulla: String,
     },
+    UserBalance {
+        nym: String,
+    },
+    DaoBalance {},
+    DaoBulla {},
     Keygen {
         nym: String,
     },
@@ -43,7 +45,13 @@ pub enum CliDaoSubCommands {
         value: u64,
     },
     /// Propose
-    Propose {},
+    Propose {
+        sender: String,
+
+        recipient: String,
+
+        amount: u64,
+    },
     /// Vote
     Vote {},
     /// Execute
@@ -92,8 +100,8 @@ async fn start(options: CliDao) -> Result<()> {
             println!("DAO public address: {}", &reply.to_string());
             return Ok(())
         }
-        Some(CliDaoSubCommands::Mint { token_supply, dao_addr, dao_bulla }) => {
-            let reply = client.mint(token_supply, dao_addr, dao_bulla).await?;
+        Some(CliDaoSubCommands::Mint { token_supply, dao_addr }) => {
+            let reply = client.mint(token_supply, dao_addr).await?;
             println!("New DAO balance: {}", &reply.to_string());
             return Ok(())
         }
@@ -107,9 +115,24 @@ async fn start(options: CliDao) -> Result<()> {
             println!("New user balance: {}", &reply.to_string());
             return Ok(())
         }
-        Some(CliDaoSubCommands::Propose {}) => {
-            let reply = client.propose().await?;
-            println!("Server replied: {}", &reply.to_string());
+        Some(CliDaoSubCommands::DaoBalance {}) => {
+            let reply = client.dao_balance().await?;
+            println!("DAO balance: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::DaoBulla {}) => {
+            let reply = client.dao_bulla().await?;
+            println!("DAO bulla: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::UserBalance { nym }) => {
+            let reply = client.user_balance(nym).await?;
+            println!("User balance: {}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::Propose { sender, recipient, amount }) => {
+            let reply = client.propose(sender, recipient, amount).await?;
+            println!("Proposal bulla: {}", &reply.to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::Vote {}) => {

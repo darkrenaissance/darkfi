@@ -125,8 +125,10 @@ impl Client {
     fn new_money_wallet(&mut self, key: String) {
         let keypair = Keypair::random(&mut OsRng);
         let signature_secret = SecretKey::random(&mut OsRng);
-        let leaf_position = Position::zero();
-        let money_wallet = MoneyWallet { keypair, signature_secret, leaf_position };
+        let own_coins: Vec<(OwnCoin, bool)> = Vec::new();
+        let money_wallet = MoneyWallet { keypair, signature_secret, own_coins };
+        money_wallet.track(&mut self.states);
+
         self.money_wallets.insert(key.clone(), money_wallet);
         debug!(target: "dao-demo::client::new_money_wallet()", "created wallet with key {}", &key);
     }
@@ -141,6 +143,7 @@ impl Client {
         dao_approval_ratio_base: u64,
         token_id: pallas::Base,
     ) -> Result<pallas::Base> {
+        debug!(target: "dao-demo::client::create_dao()", "START");
         let tx = self.dao_wallet.mint_tx(
             dao_proposer_limit,
             dao_quorum,
@@ -152,10 +155,8 @@ impl Client {
 
         // TODO: Proper error handling.
         // Only witness the value once the transaction is confirmed.
-        match self.validate(&tx) {
-            Ok(v) => self.dao_wallet.update_witness(&mut self.states)?,
-            Err(e) => {}
-        }
+        self.validate(&tx).unwrap();
+        self.dao_wallet.update_witness(&mut self.states).unwrap();
 
         // Retrieve DAO bulla from the state.
         let dao_bulla = {
@@ -180,54 +181,45 @@ impl Client {
             bulla_blind: self.dao_wallet.bulla_blind,
         };
 
-        self.dao_wallet.params.insert(HashableBase(dao_bulla.0), dao_params);
+        self.dao_wallet.params.push(dao_params);
+        self.dao_wallet.bullas.push(dao_bulla.clone());
 
         Ok(dao_bulla.0)
     }
 
-    pub fn mint_treasury(
+    fn mint_treasury(
         &mut self,
         token_id: pallas::Base,
         token_supply: u64,
-        dao_bulla: pallas::Base,
         recipient: PublicKey,
-    ) -> Result<u64> {
+    ) -> Result<()> {
         self.dao_wallet.track(&mut self.states);
 
-        let tx =
-            self.cashier.mint(*XDRK_ID, token_supply, dao_bulla, recipient, &self.zk_bins).unwrap();
+        let tx = self
+            .cashier
+            .mint(*XDRK_ID, token_supply, self.dao_wallet.bullas[0].0, recipient, &self.zk_bins)
+            .unwrap();
 
-        self.validate(&tx)?;
-
-        let own_coin = self.dao_wallet.balances(&mut self.states)?;
-
-        let balance = own_coin.note.value;
-
-        Ok(balance)
-    }
-
-    fn airdrop_user(&mut self, value: u64, token_id: pallas::Base, nym: String) -> Result<()> {
-        let wallet = self.money_wallets.get(&nym).unwrap();
-        wallet.track(&mut self.states);
-
-        let addr = wallet.get_public_key();
-
-        let tx = self.cashier.airdrop(value, token_id, addr, &self.zk_bins)?;
-        self.validate(&tx)?;
+        self.validate(&tx).unwrap();
+        self.update_wallets().unwrap();
 
         Ok(())
     }
 
-    fn query_balance(&mut self, nym: String) -> Result<u64> {
+    fn airdrop_user(&mut self, value: u64, token_id: pallas::Base, nym: String) -> Result<()> {
         let wallet = self.money_wallets.get(&nym).unwrap();
-        let own_coin = wallet.balances(&mut self.states)?;
-        let balance = own_coin.note.value;
+        let addr = wallet.get_public_key();
 
-        Ok(balance)
+        let tx = self.cashier.airdrop(value, token_id, addr, &self.zk_bins)?;
+        self.validate(&tx)?;
+        self.update_wallets().unwrap();
+
+        Ok(())
     }
 
     // TODO: Change these into errors instead of expects.
     fn validate(&mut self, tx: &Transaction) -> Result<()> {
+        debug!(target: "dao_demo::client::validate()", "commencing validate sequence");
         let mut updates = vec![];
 
         // Validate all function calls in the tx
@@ -276,21 +268,80 @@ impl Client {
         Ok(())
     }
 
+    fn update_wallets(&mut self) -> Result<()> {
+        let state =
+            self.states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+
+        let mut dao_coins = state.wallet_cache.get_received(&self.dao_wallet.keypair.secret);
+        for coin in dao_coins {
+            let note = coin.note.clone();
+            let coords = self.dao_wallet.keypair.public.0.to_affine().coordinates().unwrap();
+
+            let coin_hash = poseidon_hash::<8>([
+                *coords.x(),
+                *coords.y(),
+                DrkValue::from(note.value),
+                note.token_id,
+                note.serial,
+                note.spend_hook,
+                note.user_data,
+                note.coin_blind,
+            ]);
+
+            assert_eq!(coin_hash, coin.coin.0);
+            assert_eq!(note.spend_hook, *dao_contract::exec::FUNC_ID);
+            assert_eq!(note.user_data, self.dao_wallet.bullas[0].0);
+
+            self.dao_wallet.own_coins.push((coin, false));
+            debug!("DAO received a coin worth {} xDRK", note.value);
+        }
+
+        for (key, wallet) in &mut self.money_wallets {
+            let mut coins = state.wallet_cache.get_received(&wallet.keypair.secret);
+            for coin in coins {
+                let note = coin.note.clone();
+                let coords = wallet.keypair.public.0.to_affine().coordinates().unwrap();
+
+                let coin_hash = poseidon_hash::<8>([
+                    *coords.x(),
+                    *coords.y(),
+                    DrkValue::from(note.value),
+                    note.token_id,
+                    note.serial,
+                    note.spend_hook,
+                    note.user_data,
+                    note.coin_blind,
+                ]);
+
+                assert_eq!(coin_hash, coin.coin.0);
+                wallet.own_coins.push((coin, false));
+            }
+        }
+
+        Ok(())
+    }
+
     // TODO: error handling
     fn propose(
         &mut self,
-        params: DaoParams,
         recipient: PublicKey,
         token_id: pallas::Base,
         amount: u64,
-        key: String,
-    ) -> Result<()> {
+        sender: String,
+    ) -> Result<(Proposal, pallas::Base)> {
+        let params = self.dao_wallet.params[0].clone();
+
         let dao_leaf_position = self.dao_wallet.leaf_position;
 
-        let mut money_wallet = self.money_wallets.get_mut(&key).unwrap();
+        // To be able to make a proposal, we must prove we have ownership of governance tokens,
+        // and that the quantity of governance tokens is within the accepted proposal limit.
+        let mut sender_wallet = self.money_wallets.get_mut(&sender).unwrap();
+        //let own_coin = sender_wallet.balances()?;
+        //let (money_leaf_position, money_merkle_path) =
+        //    sender_wallet.get_path(&self.states, &own_coin)?;
 
-        let tx = money_wallet.propose_tx(
-            params,
+        let tx = sender_wallet.propose_tx(
+            params.clone(),
             recipient,
             token_id,
             amount,
@@ -299,11 +350,18 @@ impl Client {
             &mut self.states,
         )?;
 
+        // bang!
         self.validate(&tx)?;
+        self.update_wallets().unwrap();
 
-        self.dao_wallet.read_proposal(&tx)?;
+        let (proposal, proposal_bulla) = self.dao_wallet.read_proposal(&tx)?;
 
-        Ok(())
+        Ok((proposal, proposal_bulla))
+    }
+
+    fn get_addr_from_nym(&self, nym: String) -> Result<PublicKey> {
+        let wallet = self.money_wallets.get(&nym).unwrap();
+        Ok(wallet.get_public_key())
     }
 }
 
@@ -312,7 +370,9 @@ struct DaoWallet {
     signature_secret: SecretKey,
     bulla_blind: pallas::Base,
     leaf_position: Position,
-    params: HashMap<HashableBase, DaoParams>,
+    bullas: Vec<DaoBulla>,
+    params: Vec<DaoParams>,
+    own_coins: Vec<(OwnCoin, bool)>,
     vote_notes: Vec<dao_contract::vote::wallet::Note>,
 }
 impl DaoWallet {
@@ -321,10 +381,21 @@ impl DaoWallet {
         let signature_secret = SecretKey::random(&mut OsRng);
         let bulla_blind = pallas::Base::random(&mut OsRng);
         let leaf_position = Position::zero();
-        let params: HashMap<HashableBase, DaoParams> = HashMap::default();
+        let bullas = Vec::new();
+        let params = Vec::new();
+        let own_coins: Vec<(OwnCoin, bool)> = Vec::new();
         let vote_notes = Vec::new();
 
-        Self { keypair, signature_secret, bulla_blind, leaf_position, params, vote_notes }
+        Self {
+            keypair,
+            signature_secret,
+            bulla_blind,
+            leaf_position,
+            bullas,
+            params,
+            own_coins,
+            vote_notes,
+        }
     }
 
     fn get_public_key(&self) -> PublicKey {
@@ -348,6 +419,7 @@ impl DaoWallet {
         token_id: pallas::Base,
         zk_bins: &ZkContractTable,
     ) -> Transaction {
+        debug!(target: "dao-demo::dao::mint_tx()", "START");
         let builder = dao_contract::mint::wallet::Builder {
             dao_proposer_limit,
             dao_quorum,
@@ -378,43 +450,18 @@ impl DaoWallet {
         Ok(())
     }
 
-    fn balances(&self, states: &mut StateRegistry) -> Result<OwnCoin> {
-        let state =
-            states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
-
-        let mut recv_coins = state.wallet_cache.get_received(&self.keypair.secret);
-
-        let dao_recv_coin = recv_coins.pop().unwrap();
-        let treasury_note = dao_recv_coin.note.clone();
-
-        let coords = self.keypair.public.0.to_affine().coordinates().unwrap();
-        let coin = poseidon_hash::<8>([
-            *coords.x(),
-            *coords.y(),
-            DrkValue::from(treasury_note.value),
-            treasury_note.token_id,
-            treasury_note.serial,
-            treasury_note.spend_hook,
-            treasury_note.user_data,
-            treasury_note.coin_blind,
-        ]);
-
-        // TODO: Error handling
-        if coin == dao_recv_coin.coin.0 {
-            // return Ok(dao_recv_coin)
+    fn balances(&self) -> Result<u64> {
+        let mut balances = 0;
+        for (coin, is_spent) in &self.own_coins {
+            if *is_spent {
+                continue
+            }
+            balances += coin.note.value;
         }
-        // else {
-        //  return Err::InvalidCoin
-        // }
-
-        // TODO: this is the CLI output.
-        debug!("DAO received a coin worth {} xDRK", treasury_note.value);
-
-        // TODO: just return the value of the coin, not OwnCoin.
-        Ok(dao_recv_coin)
+        Ok(balances)
     }
 
-    fn read_proposal(&self, tx: &Transaction) -> Result<()> {
+    fn read_proposal(&self, tx: &Transaction) -> Result<(Proposal, pallas::Base)> {
         let (proposal, proposal_bulla) = {
             let func_call = &tx.func_calls[0];
             let call_data = func_call.call_data.as_any();
@@ -428,17 +475,15 @@ impl DaoWallet {
             // Return the proposal info
             (note.proposal, call_data.header.proposal_bulla)
         };
-        // TODO: this should print from the CLI rather than use debug statements.
         debug!(target: "demo", "Proposal now active!");
         debug!(target: "demo", "  destination: {:?}", proposal.dest);
         debug!(target: "demo", "  amount: {}", proposal.amount);
         debug!(target: "demo", "  token_id: {:?}", proposal.token_id);
         debug!(target: "demo", "Proposal bulla: {:?}", proposal_bulla);
 
-        Ok(())
-
-        // TODO: encode Proposal as base58 and return to cli
+        Ok((proposal, proposal_bulla))
     }
+
     // We decrypt the votes in a transaction and add it to the wallet.
     fn read_vote(&mut self, tx: &Transaction) -> Result<()> {
         let vote_note = {
@@ -491,17 +536,11 @@ impl DaoWallet {
         zk_bins: &ZkContractTable,
         states: &mut StateRegistry,
     ) -> Result<Transaction> {
+        let mut inputs = Vec::new();
+        let mut total_input_value = 0;
         // TODO: move these to DAO struct?
         let tx_signature_secret = SecretKey::random(&mut OsRng);
         let exec_signature_secret = SecretKey::random(&mut OsRng);
-
-        // We must prove we have sufficient governance tokens to execute this.
-        let own_coin = self.balances(states)?;
-
-        let (treasury_leaf_position, treasury_merkle_path) =
-            self.get_treasury_path(&own_coin, states)?;
-
-        let input_value = own_coin.note.value;
 
         // TODO: not sure what this is doing
         // Should this be moved into a different struct?
@@ -512,23 +551,37 @@ impl DaoWallet {
         let dao_serial = pallas::Base::random(&mut OsRng);
         let dao_coin_blind = pallas::Base::random(&mut OsRng);
 
-        let input = {
-            money_contract::transfer::wallet::BuilderInputInfo {
-                leaf_position: treasury_leaf_position,
-                merkle_path: treasury_merkle_path,
-                secret: self.keypair.secret,
-                note: own_coin.note.clone(),
-                user_data_blind,
-                value_blind: input_value_blind,
-                // TODO: in schema, we create random signatures here. why?
-                signature_secret: tx_signature_secret,
+        // We must prove we have sufficient governance tokens to execute this.
+        for (coin, is_spent) in &self.own_coins {
+            let is_spent = is_spent.clone();
+            if is_spent {
+                continue
             }
-        };
+            let (treasury_leaf_position, treasury_merkle_path) =
+                self.get_treasury_path(&coin, states)?;
+
+            let input_value = coin.note.value;
+
+            let input = {
+                money_contract::transfer::wallet::BuilderInputInfo {
+                    leaf_position: treasury_leaf_position,
+                    merkle_path: treasury_merkle_path,
+                    secret: self.keypair.secret,
+                    note: coin.note.clone(),
+                    user_data_blind,
+                    value_blind: input_value_blind,
+                    // TODO: in schema, we create random signatures here. why?
+                    signature_secret: tx_signature_secret,
+                }
+            };
+            total_input_value += input_value;
+            inputs.push(input);
+        }
 
         let builder = {
             money_contract::transfer::wallet::Builder {
                 clear_inputs: vec![],
-                inputs: vec![input],
+                inputs,
                 outputs: vec![
                     // Sending money
                     money_contract::transfer::wallet::BuilderOutputInfo {
@@ -542,8 +595,11 @@ impl DaoWallet {
                     },
                     // Change back to DAO
                     money_contract::transfer::wallet::BuilderOutputInfo {
-                        value: own_coin.note.value - proposal.amount,
-                        token_id: own_coin.note.token_id,
+                        value: total_input_value - proposal.amount,
+                        // TODO: this should be the token id of the treasury,
+                        // rather than the token id of the proposal.
+                        // total_id: own_coin.token_id,
+                        token_id: proposal.token_id,
                         public: self.keypair.public,
                         // ?
                         serial: dao_serial,
@@ -601,11 +657,11 @@ impl DaoWallet {
 }
 
 // Stores governance tokens and related secret values.
-#[derive(Clone)]
 struct MoneyWallet {
     keypair: Keypair,
     signature_secret: SecretKey,
-    leaf_position: Position,
+    own_coins: Vec<(OwnCoin, bool)>,
+    //leaf_position: Position,
 }
 
 impl MoneyWallet {
@@ -624,20 +680,13 @@ impl MoneyWallet {
         Ok(())
     }
 
-    fn balances(&self, states: &mut StateRegistry) -> Result<OwnCoin> {
-        let state =
-            states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
-
-        let mut recv_coins = state.wallet_cache.get_received(&self.keypair.secret);
-
-        let recv_coin = recv_coins.pop().unwrap();
-        let note = recv_coin.note.clone();
-
-        // TODO: this should output to command line
-        debug!("User received a coin worth {} gDRK", note.value);
-
-        // TODO: don't return the coin, just return the value
-        Ok(recv_coin)
+    fn balances(&self) -> Result<u64> {
+        let mut balances = 0;
+        for (coin, is_spent) in &self.own_coins {
+            if *is_spent {}
+            balances += coin.note.value;
+        }
+        Ok(balances)
     }
 
     fn propose_tx(
@@ -650,23 +699,26 @@ impl MoneyWallet {
         zk_bins: &ZkContractTable,
         states: &mut StateRegistry,
     ) -> Result<Transaction> {
-        // To be able to make a proposal, we must prove we have ownership of governance tokens,
-        // and that the quantity of governance tokens is within the accepted proposal limit.
-        let own_coin = self.balances(states)?;
+        let mut inputs = Vec::new();
 
-        let (money_leaf_position, money_merkle_path) = self.get_path(&states, &own_coin)?;
-
-        let signature_secret = SecretKey::random(&mut OsRng);
-
-        let input = {
-            dao_contract::propose::wallet::BuilderInput {
-                secret: self.keypair.secret,
-                note: own_coin.note.clone(),
-                leaf_position: money_leaf_position,
-                merkle_path: money_merkle_path,
-                signature_secret,
+        for (coin, is_spent) in &self.own_coins {
+            let is_spent = is_spent.clone();
+            if is_spent {
+                continue
             }
-        };
+            let (money_leaf_position, money_merkle_path) = self.get_path(&states, &coin)?;
+
+            let input = {
+                dao_contract::propose::wallet::BuilderInput {
+                    secret: self.keypair.secret,
+                    note: coin.note.clone(),
+                    leaf_position: money_leaf_position,
+                    merkle_path: money_merkle_path,
+                    signature_secret: self.signature_secret,
+                }
+            };
+            inputs.push(input);
+        }
 
         let (dao_merkle_path, dao_merkle_root) = {
             let state = states.lookup::<dao_contract::State>(*dao_contract::CONTRACT_ID).unwrap();
@@ -687,7 +739,7 @@ impl MoneyWallet {
         };
 
         let builder = dao_contract::propose::wallet::Builder {
-            inputs: vec![input],
+            inputs,
             proposal,
             dao: params.clone(),
             dao_leaf_position,
@@ -698,7 +750,8 @@ impl MoneyWallet {
         let func_call = builder.build(zk_bins);
         let func_calls = vec![func_call];
 
-        let signatures = sign(vec![signature_secret], &func_calls);
+        debug!(target: "dao-demo::money_wallet::propose", "signature_public {:?}", self.signature_public());
+        let signatures = sign(vec![self.signature_secret], &func_calls);
         Ok(Transaction { func_calls, signatures })
     }
 
@@ -733,24 +786,27 @@ impl MoneyWallet {
         zk_bins: &ZkContractTable,
         states: &mut StateRegistry,
     ) -> Result<Transaction> {
-        // We must prove we have governance tokens in order to vote.
-        let own_coin = self.balances(states)?;
+        let mut inputs = Vec::new();
 
-        let (money_leaf_position, money_merkle_path) = self.get_path(states, &own_coin)?;
+        // We must prove we have sufficient governance tokens in order to vote.
+        for (coin, is_spent) in &self.own_coins {
+            let (money_leaf_position, money_merkle_path) = self.get_path(states, &coin)?;
 
-        let input = {
-            dao_contract::vote::wallet::BuilderInput {
-                secret: self.keypair.secret,
-                note: own_coin.note.clone(),
-                leaf_position: money_leaf_position,
-                merkle_path: money_merkle_path,
-                signature_secret: self.signature_secret,
-            }
-        };
+            let input = {
+                dao_contract::vote::wallet::BuilderInput {
+                    secret: self.keypair.secret,
+                    note: coin.note.clone(),
+                    leaf_position: money_leaf_position,
+                    merkle_path: money_merkle_path,
+                    signature_secret: self.signature_secret,
+                }
+            };
+            inputs.push(input);
+        }
 
         let builder = {
             dao_contract::vote::wallet::Builder {
-                inputs: vec![input],
+                inputs,
                 vote: dao_contract::vote::wallet::Vote {
                     vote_option,
                     vote_option_blind: pallas::Scalar::random(&mut OsRng),

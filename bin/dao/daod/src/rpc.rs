@@ -39,6 +39,9 @@ impl RequestHandler for JsonRpcInterface {
         match req.method.as_str() {
             Some("create") => return self.create_dao(req.id, params).await,
             Some("get_dao_addr") => return self.get_dao_addr(req.id, params).await,
+            Some("dao_balance") => return self.dao_balance(req.id, params).await,
+            Some("dao_bulla") => return self.dao_bulla(req.id, params).await,
+            Some("user_balance") => return self.user_balance(req.id, params).await,
             Some("mint") => return self.mint_treasury(req.id, params).await,
             Some("keygen") => return self.keygen(req.id, params).await,
             Some("airdrop") => return self.airdrop_tokens(req.id, params).await,
@@ -59,7 +62,6 @@ impl JsonRpcInterface {
     // --> {"method": "create", "params": []}
     // <-- {"result": "creating dao..."}
     async fn create_dao(&self, id: Value, params: &[Value]) -> JsonResult {
-        // TODO: error handling
         let dao_proposer_limit = params[0].as_u64().unwrap();
         let dao_quorum = params[1].as_u64().unwrap();
         let dao_approval_ratio_quot = params[2].as_u64().unwrap();
@@ -87,35 +89,49 @@ impl JsonRpcInterface {
         let mut client = self.client.lock().await;
         let pubkey = client.dao_wallet.get_public_key();
         let addr: String = bs58::encode(pubkey.to_bytes()).into_string();
-
         JsonResponse::new(json!(addr), id).into()
     }
 
+    async fn dao_balance(&self, id: Value, params: &[Value]) -> JsonResult {
+        let mut client = self.client.lock().await;
+        let balance = client.dao_wallet.balances().unwrap();
+        JsonResponse::new(json!(balance), id).into()
+    }
+
+    async fn dao_bulla(&self, id: Value, params: &[Value]) -> JsonResult {
+        let mut client = self.client.lock().await;
+        let dao_bullas = client.dao_wallet.bullas.clone();
+        let mut bulla_vec = Vec::new();
+
+        for bulla in dao_bullas {
+            let dao_bulla: String = bs58::encode(bulla.0.to_repr()).into_string();
+            bulla_vec.push(dao_bulla);
+        }
+
+        JsonResponse::new(json!(bulla_vec), id).into()
+    }
+
+    async fn user_balance(&self, id: Value, params: &[Value]) -> JsonResult {
+        let mut client = self.client.lock().await;
+        let nym = params[0].as_str().unwrap().to_string();
+
+        let wallet = client.money_wallets.get(&nym).unwrap();
+        let balance = wallet.balances().unwrap();
+        JsonResponse::new(json!(balance), id).into()
+    }
     // --> {"method": "mint_treasury", "params": []}
     // <-- {"result": "minting treasury..."}
     async fn mint_treasury(&self, id: Value, params: &[Value]) -> JsonResult {
-        // TODO: error handling
         let mut client = self.client.lock().await;
 
         let token_supply = params[0].as_u64().unwrap();
         let addr = params[1].as_str().unwrap();
-        let bulla = params[2].as_str().unwrap();
-
-        let dao_bulla = parse_b58(bulla).unwrap();
         let dao_addr = PublicKey::from_str(addr).unwrap();
 
-        //match PublicKey::from_str(addr) {
-        //    Ok(addr) => {
-        //        debug!(target: "daod::rpc", "Decoded correctly: {:?}", addr)
-        //    }
-        //    Err(e) => {
-        //        debug!(target: "daod::rpc", "Decoded incorrectly: {}", e)
-        //    }
-        //}
+        client.mint_treasury(*XDRK_ID, token_supply, dao_addr).unwrap();
+        //let balance = client.query_dao_balance().unwrap();
 
-        let balance = client.mint_treasury(*XDRK_ID, token_supply, dao_bulla, dao_addr).unwrap();
-
-        JsonResponse::new(json!(balance), id).into()
+        JsonResponse::new(json!("minted treasury"), id).into()
     }
 
     // Create a new wallet for governance tokens.
@@ -132,6 +148,7 @@ impl JsonRpcInterface {
         let addr: String = bs58::encode(pubkey.to_bytes()).into_string();
         JsonResponse::new(json!(addr), id).into()
     }
+
     // --> {"method": "airdrop_tokens", "params": []}
     // <-- {"result": "airdropping tokens..."}
     async fn airdrop_tokens(&self, id: Value, params: &[Value]) -> JsonResult {
@@ -142,19 +159,37 @@ impl JsonRpcInterface {
         let value = params[1].as_u64().unwrap();
 
         client.airdrop_user(value, *GDRK_ID, nym.clone()).unwrap();
-        let balance = client.query_balance(nym.clone()).unwrap();
+        //let balance = client.query_balance(nym.clone()).unwrap();
 
-        JsonResponse::new(json!(balance), id).into()
+        JsonResponse::new(json!("tokens airdropped"), id).into()
     }
     // --> {"method": "create_proposal", "params": []}
     // <-- {"result": "creating proposal..."}
     // TODO: pass string 'alice' and dao bulla
-    async fn create_proposal(&self, id: Value, _params: &[Value]) -> JsonResult {
+    async fn create_proposal(&self, id: Value, params: &[Value]) -> JsonResult {
         let mut client = self.client.lock().await;
-        // let dao_params = self.client.client.dao_wallet.params.get(bulla);
-        //self.client.client.dao_wallet.propose(dao_params).unwrap();
-        // TODO: return proposal data and Proposal to CLI
-        JsonResponse::new(json!("proposal created"), id).into()
+
+        let sender = params[0].as_str().unwrap().to_string();
+        let recipient = params[1].as_str().unwrap();
+        let amount = params[2].as_u64().unwrap();
+
+        let recv_addr = PublicKey::from_str(recipient).unwrap();
+
+        let (proposal, proposal_bulla) =
+            client.propose(recv_addr, *XDRK_ID, amount, sender).unwrap();
+        let bulla: String = bs58::encode(proposal_bulla.to_repr()).into_string();
+        let token_id: String = bs58::encode(proposal.token_id.to_repr()).into_string();
+        let addr: String = bs58::encode(proposal.dest.to_bytes()).into_string();
+
+        let mut proposal_vec = Vec::new();
+
+        proposal_vec.push("Proposal now active!".to_string());
+        proposal_vec.push(format!("destination: {:?}", addr.to_string()));
+        proposal_vec.push(format!("amount: {:?}", proposal.amount.to_string()));
+        proposal_vec.push(format!("token_id: {:?}", token_id));
+        proposal_vec.push(format!("bulla: {:?}", bulla));
+
+        JsonResponse::new(json!(proposal_vec), id).into()
     }
     // --> {"method": "vote", "params": []}
     // <-- {"result": "voting..."}

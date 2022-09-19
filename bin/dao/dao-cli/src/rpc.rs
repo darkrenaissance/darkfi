@@ -35,13 +35,8 @@ impl Rpc {
 
     // --> {"jsonrpc": "2.0", "method": "mint", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "minting tokens...", "id": 42}
-    pub async fn mint(
-        &self,
-        token_supply: u64,
-        dao_addr: String,
-        dao_bulla: String,
-    ) -> Result<Value> {
-        let req = JsonRequest::new("mint", json!([token_supply, dao_addr, dao_bulla]));
+    pub async fn mint(&self, token_supply: u64, dao_addr: String) -> Result<Value> {
+        let req = JsonRequest::new("mint", json!([token_supply, dao_addr]));
         self.client.request(req).await
     }
 
@@ -59,10 +54,31 @@ impl Rpc {
         self.client.request(req).await
     }
 
+    // --> {"jsonrpc": "2.0", "method": "airdrop", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "airdropping tokens...", "id": 42}
+    pub async fn dao_balance(&self) -> Result<Value> {
+        let req = JsonRequest::new("dao_balance", json!([]));
+        self.client.request(req).await
+    }
+
+    // --> {"jsonrpc": "2.0", "method": "airdrop", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "airdropping tokens...", "id": 42}
+    pub async fn dao_bulla(&self) -> Result<Value> {
+        let req = JsonRequest::new("dao_bulla", json!([]));
+        self.client.request(req).await
+    }
+
+    // --> {"jsonrpc": "2.0", "method": "airdrop", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "airdropping tokens...", "id": 42}
+    pub async fn user_balance(&self, nym: String) -> Result<Value> {
+        let req = JsonRequest::new("user_balance", json!([nym]));
+        self.client.request(req).await
+    }
+
     // --> {"jsonrpc": "2.0", "method": "propose", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "creating proposal...", "id": 42}
-    pub async fn propose(&self) -> Result<Value> {
-        let req = JsonRequest::new("propose", json!([]));
+    pub async fn propose(&self, sender: String, recipient: String, amount: u64) -> Result<Value> {
+        let req = JsonRequest::new("propose", json!([sender, recipient, amount]));
         self.client.request(req).await
     }
 

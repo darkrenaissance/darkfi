@@ -44,7 +44,7 @@ lazy_static! {
     pub static ref GDRK_ID: pallas::Base = pallas::Base::random(&mut OsRng);
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Debug)]
 pub struct HashableBase(pub pallas::Base);
 
 impl std::hash::Hash for HashableBase {
@@ -164,6 +164,7 @@ impl Transaction {
             func_call.encode(&mut unsigned_tx_data).expect("failed to encode data");
             let signature_pub_keys = func_call.call_data.signature_public_keys();
             for signature_pub_key in signature_pub_keys {
+                debug!(target: "dao-demo::util::verify_sigs()", "{:?}", signature_pub_key);
                 let verify_result = signature_pub_key.verify(&unsigned_tx_data[..], &signature);
                 assert!(verify_result, "verify sigs[{}] failed", i);
             }
