@@ -4,6 +4,7 @@
 *_circuit_layout.png
 .vscode/
 .DS_Store
+.#*
 
 /target/*
 /tmp/*
