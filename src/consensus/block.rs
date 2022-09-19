@@ -1,8 +1,9 @@
 use std::fmt;
+
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use pasta_curves::pallas;
-use super::{StakeholderMetadata, StreamletMetadata, OuroborosMetadata, BLOCK_MAGIC_BYTES,BLOCK_VERSION};
+use super::{StakeholderMetadata, StreamletMetadata, OuroborosMetadata, BLOCK_MAGIC_BYTES, BLOCK_VERSION};
 
 use crate::{
     crypto::{

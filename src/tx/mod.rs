@@ -1,5 +1,4 @@
 use std::io;
-
 use log::error;
 use pasta_curves::group::Group;
 

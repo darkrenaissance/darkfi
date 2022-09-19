@@ -2,9 +2,7 @@ use log::debug;
 
 use crate::{
     consensus::{Block, BlockInfo},
-    util::{
-        time::Timestamp,
-    },
+    util::time::Timestamp,
     Result,
 };
 
@@ -83,7 +81,7 @@ impl Blockchain {
 
         for block in blocks {
             // Store transactions
-            let tx_hashes = self.transactions.insert(&block.txs)?;
+            let _tx_hashes = self.transactions.insert(&block.txs)?;
 
             // Store header
             let headerhash = self.headers.insert(&[block.header.clone()])?;
@@ -131,8 +129,6 @@ impl Blockchain {
 
         let headers = self.headers.get(hashes, true)?;
         let blocks = self.blocks.get(hashes, true)?;
-        let metadata = self.ouroboros_metadata.get(hashes, true)?;
-
 
         for (i, header) in headers.iter().enumerate() {
             let header = header.clone().unwrap();
@@ -174,7 +170,7 @@ impl Blockchain {
     }
 
     pub fn get_last_proof_hash(&self) -> Result<blake3::Hash> {
-        let (hash, om) = self.ouroboros_metadata.get_last().unwrap();
+        let (hash, _) = self.ouroboros_metadata.get_last().unwrap();
         Ok(hash)
     }
 

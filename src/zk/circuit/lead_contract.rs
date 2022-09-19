@@ -1,7 +1,7 @@
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointBaseField,  ScalarFixed,
+        FixedPoint, FixedPointBaseField, ScalarFixed,
     },
     poseidon::{primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig},
     sinsemilla::{
@@ -34,7 +34,6 @@ use crate::zk::gadget::{
     less_than::{ LessThanConfig, LessThanChip},
     native_range_check::{NativeRangeCheckChip},
 };
-
 
 const WINDOW_SIZE: usize = 3;
 const NUM_OF_BITS: usize = 254;
@@ -301,14 +300,6 @@ impl Circuit<pallas::Base> for LeadContract {
             config.advices[0],
             Value::known(pallas::Base::from(PRF_NULLIFIER_PREFIX)),
         )?;
-
-        // constant value 0
-        let zero = self.load_private(
-            layouter.namespace(|| "one"),
-            config.advices[0],
-            Value::known(pallas::Base::zero()),
-        )?;
-
         // staking coin timestamp
         let coin_timestamp = self.load_private(
             layouter.namespace(|| "load coin time stamp"),
@@ -345,7 +336,7 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
         // leadership coefficient used for fine-tunning leader election frequency
-        let c = self.load_private(
+        let _c = self.load_private(
             layouter.namespace(|| ""),
             config.advices[0],
             Value::known(pallas::Base::one()), // note! this parameter to be tuned.
@@ -567,10 +558,10 @@ impl Circuit<pallas::Base> for LeadContract {
         let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &sigma_scalar, &stake_plus)?;
 
         let y : Value<pallas::Base> = y_commit_base.value().cloned();
-        let T : Value<pallas::Base> = target.value().cloned();
+        let target : Value<pallas::Base> = target.value().cloned();
         less_than_chip.witness_less_than(
-            layouter.namespace(|| "y < T"),
-            T, //reversed for testing
+            layouter.namespace(|| "y < target"),
+            target, //reversed for testing
             y,
             0,
             true

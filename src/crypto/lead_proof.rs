@@ -1,6 +1,3 @@
-use std::time::Instant;
-
-
 use log::{
     error
 };
@@ -28,7 +25,6 @@ pub fn create_lead_proof(pk: &ProvingKey, coin: LeadCoin) -> Result<Proof> {
 pub fn verify_lead_proof(vk: &VerifyingKey,
                          proof: &Proof,
                          public_inputs: &[DrkCircuitField]) -> VerifyResult<()> {
-    let start = Instant::now();
     match proof.verify(vk, public_inputs) {
         Ok(()) => {Ok(())},
         Err(e) => {

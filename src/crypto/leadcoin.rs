@@ -75,7 +75,6 @@ impl LeadCoin {
         let po_rho = *po_rho_pt.to_affine().coordinates().unwrap().x();
 
 
-        let po_cmp = pallas::Base::from(1);
         let _zero = pallas::Base::from(0);
 
         // ===============

@@ -13,7 +13,9 @@ use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, OuroborosMetadata, Participant, ProposalChain, StreamletMetadata, Vote, Header};
+    Block, BlockInfo, BlockProposal, OuroborosMetadata, Participant, ProposalChain, StreamletMetadata, Vote, Header,
+};
+
 use crate::{
     blockchain::Blockchain,
     crypto::{

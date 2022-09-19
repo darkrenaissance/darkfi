@@ -1,4 +1,4 @@
-use halo2_proofs::{arithmetic::Field};
+use halo2_proofs::{arithmetic::Field,};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use halo2_gadgets::{
     poseidon::{primitives as poseidon},
@@ -19,7 +19,7 @@ use crate::{
         constants::MERKLE_DEPTH_ORCHARD,
         leadcoin::LeadCoin,
         lead_proof,
-        proof::{Proof, ProvingKey},
+        proof::{Proof, ProvingKey,},
         merkle_node::MerkleNode,
         util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
         types::DrkValueBlind,
@@ -97,19 +97,19 @@ impl Epoch {
         }
     }
     fn create_coins_election_seeds(&self, sl: pallas::Base) -> (pallas::Base, pallas::Base) {
-        let ELECTION_SEED_NONCE : pallas::Base = pallas::Base::from(3);
-        let ELECTION_SEED_LEAD : pallas::Base = pallas::Base::from(22);
+        let election_seed_nonce : pallas::Base = pallas::Base::from(3);
+        let election_seed_lead : pallas::Base = pallas::Base::from(22);
 
         // mu_rho
         let nonce_mu_msg = [
-            ELECTION_SEED_NONCE,
+            election_seed_nonce,
             self.eta,
             sl,
         ];
         let nonce_mu : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(nonce_mu_msg);
         // mu_y
         let lead_mu_msg = [
-            ELECTION_SEED_LEAD,
+            election_seed_lead,
             self.eta,
             sl,
         ];
@@ -166,7 +166,6 @@ impl Epoch {
             seeds.push(rho);
         }
         let (root_sks, path_sks) = self.create_coins_sks();
-        let cm1_val: u64 = rng.gen();
         //random commitment blinding values
         let c_cm1_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
         let c_cm2_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
@@ -274,7 +273,7 @@ impl Epoch {
     pub fn is_leader(&self, sl: u64) -> bool {
         let slusize = sl as usize;
         debug!("slot: {}, coin len: {}", sl, self.coins.len());
-        assert!(slusize < self.coins.len()  && sl>=0);
+        assert!(slusize < self.coins.len());
         let coin = self.coins[sl as usize];
         let y_exp = [
             coin.root_sk.unwrap(),

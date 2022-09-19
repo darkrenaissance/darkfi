@@ -1,6 +1,6 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
-use log::debug;
+//use log::{debug,info};
 use std::fmt;
 
 use rand::rngs::OsRng;
@@ -145,9 +145,9 @@ impl Stakeholder
     pub async fn new(consensus: EpochConsensus, settings: Settings, rel_path: &str, id: u8, k: Option<u32>) -> Result<Self>
     {
         let path = expand_path(&rel_path).unwrap();
-        debug!("opening db");
+        println!("opening db");
         let db = sled::open(&path)?;
-        debug!("opend db");
+        println!("opend db");
         let ts = Timestamp::current_time();
         let genesis_hash = blake3::hash(b"");
         //TODO lisen and add transactions
@@ -168,7 +168,7 @@ impl Stakeholder
         //
         let clock = Clock::new(Some(consensus.get_epoch_len()), Some(consensus.get_slot_len()), Some(consensus.get_tick_len()), settings.peers);
         let keypair = Keypair::random(&mut OsRng);
-        debug!("stakeholder constructed...");
+        println!("stakeholder constructed...");
         Ok(Self{blockchain: bc,
                 net: p2p,
                 clock: clock,
@@ -220,13 +220,12 @@ impl Stakeholder
     }
     */
 
-    fn init_network(&self) -> Result<()>{
-        //TODO initialize exectutor
-        //let exec = Arc<Executor<'_>>;
+    async fn init_network(&self) -> Result<()> {
+        println!("runing p2p net");
         let exec = Arc::new(Executor::new());
-        exec.run(self.net.clone().start(exec.clone()));
-        //self.net(exec);
-
+        self.net.clone().start(exec.clone()).await?;
+        self.net.clone().run(exec).await?;
+        println!("p2p net running...");
         Ok(())
     }
 
@@ -238,7 +237,7 @@ impl Stakeholder
     /// add new blockinfo to the blockchain
     pub fn add_block(&self, block: BlockInfo) {
         let blocks = [block];
-        self.blockchain.add(&blocks);
+        let _len = self.blockchain.add(&blocks);
     }
 
     pub fn add_tx(&mut self, tx: Transaction)
@@ -251,7 +250,6 @@ impl Stakeholder
     /// converted to pallas base
     pub fn get_eta(&self) -> pallas::Base
     {
-        let last_proof_slot : u64 = 0;
         let proof_tx_hash = self.blockchain.get_last_proof_hash().unwrap();
         let mut bytes : [u8;32] = *proof_tx_hash.as_bytes();
         // read first 254 bits
@@ -260,7 +258,7 @@ impl Stakeholder
         pallas::Base::from_repr(bytes).unwrap()
     }
 
-    pub fn valid_block(&self, blk : BlockInfo)  -> bool {
+    pub fn valid_block(&self, _blk : BlockInfo)  -> bool {
         //TODO implement
         true
     }
@@ -277,35 +275,37 @@ impl Stakeholder
     /// if so add the proof to metadata if stakeholder isn't the lead.
     pub async fn sync_block(&self) {
         let subscription : Subscription<Result<ChannelPtr>> = self.net.subscribe_channel().await;
-        debug!("--> channel");
+        println!("--> channel");
         let chanptr : ChannelPtr =  subscription.receive().await.unwrap();
-        debug!("--> received channel");
+        println!("--> received channel");
         //
         let message_subsytem = chanptr.get_message_subsystem();
-        debug!("--> adding dispatcher to msg subsystem");
+        println!("--> adding dispatcher to msg subsystem");
         message_subsytem.add_dispatch::<BlockInfo>().await;
-        debug!("--> added");
+        println!("--> added");
         //TODO start channel if isn't started yet
         //let info = chanptr.get_info();
-        //debug!("channel info: {}", info);
-        debug!("--> subscribe msg_sub");
+        //println!("channel info: {}", info);
+        println!("--> subscribe msg_sub");
         let msg_sub : MessageSubscription::<BlockInfo> =
             chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
-        debug!("--> subscribed");
+        println!("--> subscribed");
 
         let res = msg_sub.receive().await.unwrap();
         let blk : BlockInfo = (*res).to_owned();
         //TODO validate the block proof, and transactions.
         if self.valid_block(blk.clone())  {
             //TODO if valid only.
-            self.blockchain.add(&[blk.clone()]);
+            let _len = self.blockchain.add(&[blk.clone()]);
         } else {
-            debug!("received block is invalid!");
+            println!("received block is invalid!");
         }
     }
 
     pub async fn background(&mut self, hardlimit: Option<u8>) {
-        self.clock.sync().await;
+
+        let _ = self.init_network().await;
+        let _ = self.clock.sync().await;
         let mut c : u8= 0;
         let lim : u8 = hardlimit.unwrap_or(0);
         while self.playing {
@@ -327,31 +327,33 @@ impl Stakeholder
                 }
                 Ticks::NEWSLOT{e, sl} => self.new_slot(e, sl),
                 Ticks::TOCKS => {
+                    println!("tocks");
                     // slot is about to end.
                     // sync, and validate.
                     // no more transactions to be received/send to the end of slot.
                     if self.workspace.is_leader {
-                        debug!("<<<--- [[[leadership won]]] --->>>");
+                        println!("<<<--- [[[leadership won]]] --->>>");
                         //craete block
-                        let (block_info, block_hash) = self.workspace.new_block();
+                        let (block_info, _block_hash) = self.workspace.new_block();
                         //add the block to the blockchain
                         self.add_block(block_info.clone());
                         let block : Block = Block::from(block_info.clone());
                         // publish the block
                         //TODO (fix) before publishing the workspace tx root need to be set.
-                        self.net.broadcast(block);
+                        let _ret = self.net.broadcast(block).await;
                     } else {
                         //
-                        self.sync_block();
+                        self.sync_block().await;
                     }
                 },
                 Ticks::IDLE => {
                     continue
                 }
                 Ticks::OUTOFSYNC => {
+                    println!("out of sync");
                     // clock, and blockchain are out of sync
-                    self.clock.sync().await;
-                    self.sync_block();
+                    let _ = self.clock.sync().await;
+                    self.sync_block().await;
                 }
             }
             thread::sleep(Duration::from_millis(1000));
@@ -367,9 +369,9 @@ impl Stakeholder
     /// in the epoch's gen2esis data.
     fn new_epoch(&mut self)
     {
-        debug!("[new epoch] 4 {}", self);
+        println!("[new epoch] 4 {}", self);
         let eta = self.get_eta();
-        let mut epoch = Epoch::new(self.epoch_consensus, self.get_eta());
+        let mut epoch = Epoch::new(self.epoch_consensus, eta);
         //TODO calculate total stake
         // create coin with absolute slot/epoch.
         let num_slots = self.workspace.sl;
@@ -392,12 +394,12 @@ impl Stakeholder
     /// this will encourage each potential leader to play with honesty.
     fn new_slot(&mut self, e: u64, sl: u64)
     {
-        debug!("[new slot] 4 {}\ne:{}, sl:{}", self, e, sl);
-        let EMPTY_PTR = blake3::hash(b"");
+        println!("[new slot] 4 {}\ne:{}, sl:{}", self, e, sl);
+        let empty_ptr = blake3::hash(b"");
         let st : blake3::Hash = if e>0 || (e==0&&sl>0) {
             self.workspace.block.blockhash()
         } else {
-            EMPTY_PTR
+            empty_ptr
         };
         let is_leader : bool = self.epoch.is_leader(sl);
         // if is leader create proof
