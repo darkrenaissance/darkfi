@@ -329,6 +329,10 @@ name = "dao"
 path = "example/dao-schema-rs/dao.rs"
 required-features = ["crypto"]
 
+[[example]]
+name = "test"
+path = "example/derive_macro_example.rs"
+
 #[[example]]
 #name = "lead"
 #path = "example/lead.rs"
