@@ -22,6 +22,7 @@
 - [Miscellaneous tools](misc/misc.md)
   - [vanityaddr](misc/vanityaddr.md)
   - [ircd](misc/ircd.md)
+  - [ircd new](misc/ircd_new.md)
   - [tau](misc/tau.md)
   - [darkwiki](misc/darkwiki.md)
   - [dnetview](misc/dnetview.md)
