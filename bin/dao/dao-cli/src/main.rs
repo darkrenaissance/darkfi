@@ -23,6 +23,8 @@ pub enum CliDaoSubCommands {
     },
     /// Mint tokens
     Addr {},
+    GetVotes {},
+    GetProposals {},
     Mint {
         /// Number of treasury tokens to mint.
         token_supply: u64,
@@ -53,7 +55,11 @@ pub enum CliDaoSubCommands {
         amount: u64,
     },
     /// Vote
-    Vote {},
+    Vote {
+        nym: String,
+
+        vote: String,
+    },
     /// Execute
     Exec {},
 }
@@ -100,9 +106,19 @@ async fn start(options: CliDao) -> Result<()> {
             println!("DAO public address: {}", &reply.to_string());
             return Ok(())
         }
+        Some(CliDaoSubCommands::GetVotes {}) => {
+            let reply = client.get_votes().await?;
+            println!("{}", &reply.to_string());
+            return Ok(())
+        }
+        Some(CliDaoSubCommands::GetProposals {}) => {
+            let reply = client.get_proposals().await?;
+            println!("{}", &reply.to_string());
+            return Ok(())
+        }
         Some(CliDaoSubCommands::Mint { token_supply, dao_addr }) => {
             let reply = client.mint(token_supply, dao_addr).await?;
-            println!("New DAO balance: {}", &reply.to_string());
+            println!("{}", &reply.as_str().unwrap().to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::Keygen { nym }) => {
@@ -112,7 +128,7 @@ async fn start(options: CliDao) -> Result<()> {
         }
         Some(CliDaoSubCommands::Airdrop { nym, value }) => {
             let reply = client.airdrop(nym, value).await?;
-            println!("New user balance: {}", &reply.to_string());
+            println!("{}", &reply.as_str().unwrap().to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::DaoBalance {}) => {
@@ -135,8 +151,8 @@ async fn start(options: CliDao) -> Result<()> {
             println!("Proposal bulla: {}", &reply.to_string());
             return Ok(())
         }
-        Some(CliDaoSubCommands::Vote {}) => {
-            let reply = client.vote().await?;
+        Some(CliDaoSubCommands::Vote { nym, vote }) => {
+            let reply = client.vote(nym, vote).await?;
             println!("Server replied: {}", &reply.to_string());
             return Ok(())
         }

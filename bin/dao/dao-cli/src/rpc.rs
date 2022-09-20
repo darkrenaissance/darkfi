@@ -84,8 +84,22 @@ impl Rpc {
 
     // --> {"jsonrpc": "2.0", "method": "vote", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "voting...", "id": 42}
-    pub async fn vote(&self) -> Result<Value> {
-        let req = JsonRequest::new("vote", json!([]));
+    pub async fn vote(&self, nym: String, vote: String) -> Result<Value> {
+        let req = JsonRequest::new("vote", json!([nym, vote]));
+        self.client.request(req).await
+    }
+
+    // --> {"jsonrpc": "2.0", "method": "exec", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "executing...", "id": 42}
+    pub async fn get_votes(&self) -> Result<Value> {
+        let req = JsonRequest::new("get_votes", json!([]));
+        self.client.request(req).await
+    }
+
+    // --> {"jsonrpc": "2.0", "method": "exec", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "executing...", "id": 42}
+    pub async fn get_proposals(&self) -> Result<Value> {
+        let req = JsonRequest::new("get_proposals", json!([]));
         self.client.request(req).await
     }
 

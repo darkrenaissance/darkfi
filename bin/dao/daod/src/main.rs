@@ -321,24 +321,21 @@ impl Client {
         Ok(())
     }
 
-    // TODO: error handling
     fn propose(
         &mut self,
         recipient: PublicKey,
         token_id: pallas::Base,
         amount: u64,
         sender: String,
-    ) -> Result<(Proposal, pallas::Base)> {
+    ) -> Result<pallas::Base> {
         let params = self.dao_wallet.params[0].clone();
 
         let dao_leaf_position = self.dao_wallet.leaf_position;
 
-        // To be able to make a proposal, we must prove we have ownership of governance tokens,
-        // and that the quantity of governance tokens is within the accepted proposal limit.
+        // To be able to make a proposal, we must prove we have ownership
+        // of governance tokens, and that the quantity of governance
+        // tokens is within the accepted proposer limit.
         let mut sender_wallet = self.money_wallets.get_mut(&sender).unwrap();
-        //let own_coin = sender_wallet.balances()?;
-        //let (money_leaf_position, money_merkle_path) =
-        //    sender_wallet.get_path(&self.states, &own_coin)?;
 
         let tx = sender_wallet.propose_tx(
             params.clone(),
@@ -350,18 +347,46 @@ impl Client {
             &mut self.states,
         )?;
 
-        // bang!
         self.validate(&tx)?;
         self.update_wallets().unwrap();
 
-        let (proposal, proposal_bulla) = self.dao_wallet.read_proposal(&tx)?;
+        let proposal_bulla = self.dao_wallet.store_proposal(&tx)?;
 
-        Ok((proposal, proposal_bulla))
+        Ok(proposal_bulla)
     }
 
     fn get_addr_from_nym(&self, nym: String) -> Result<PublicKey> {
         let wallet = self.money_wallets.get(&nym).unwrap();
         Ok(wallet.get_public_key())
+    }
+
+    fn cast_vote(&mut self, nym: String, vote: bool) -> Result<()> {
+        let dao_key = self.dao_wallet.keypair;
+        let proposal = self.dao_wallet.proposals[0].clone();
+        let dao_params = self.dao_wallet.params[0].clone();
+        let dao_keypair = self.dao_wallet.keypair;
+
+        let mut voter_wallet = self.money_wallets.get_mut(&nym).unwrap();
+
+        let tx = voter_wallet
+            .vote_tx(
+                vote,
+                dao_key,
+                proposal,
+                dao_params,
+                dao_keypair,
+                &self.zk_bins,
+                &mut self.states,
+            )
+            .unwrap();
+
+        self.validate(&tx).unwrap();
+        // Do we need this here cos no value is actually spent?
+        self.update_wallets().unwrap();
+
+        self.dao_wallet.store_vote(&tx).unwrap();
+
+        Ok(())
     }
 }
 
@@ -373,6 +398,7 @@ struct DaoWallet {
     bullas: Vec<DaoBulla>,
     params: Vec<DaoParams>,
     own_coins: Vec<(OwnCoin, bool)>,
+    proposals: Vec<Proposal>,
     vote_notes: Vec<dao_contract::vote::wallet::Note>,
 }
 impl DaoWallet {
@@ -384,6 +410,7 @@ impl DaoWallet {
         let bullas = Vec::new();
         let params = Vec::new();
         let own_coins: Vec<(OwnCoin, bool)> = Vec::new();
+        let proposals: Vec<Proposal> = Vec::new();
         let vote_notes = Vec::new();
 
         Self {
@@ -394,6 +421,7 @@ impl DaoWallet {
             bullas,
             params,
             own_coins,
+            proposals,
             vote_notes,
         }
     }
@@ -461,7 +489,7 @@ impl DaoWallet {
         Ok(balances)
     }
 
-    fn read_proposal(&self, tx: &Transaction) -> Result<(Proposal, pallas::Base)> {
+    fn store_proposal(&mut self, tx: &Transaction) -> Result<pallas::Base> {
         let (proposal, proposal_bulla) = {
             let func_call = &tx.func_calls[0];
             let call_data = func_call.call_data.as_any();
@@ -481,11 +509,12 @@ impl DaoWallet {
         debug!(target: "demo", "  token_id: {:?}", proposal.token_id);
         debug!(target: "demo", "Proposal bulla: {:?}", proposal_bulla);
 
-        Ok((proposal, proposal_bulla))
+        self.proposals.push(proposal);
+        Ok(proposal_bulla)
     }
 
     // We decrypt the votes in a transaction and add it to the wallet.
-    fn read_vote(&mut self, tx: &Transaction) -> Result<()> {
+    fn store_vote(&mut self, tx: &Transaction) -> Result<()> {
         let vote_note = {
             let func_call = &tx.func_calls[0];
             let call_data = func_call.call_data.as_any();
@@ -500,13 +529,15 @@ impl DaoWallet {
 
         self.vote_notes.push(vote_note);
 
-        // TODO: this should print from the CLI rather than use debug statements.
-        // TODO: maybe this its own method? get votes
-        //debug!(target: "demo", "User voted!");
-        //debug!(target: "demo", "  vote_option: {}", vote_note.vote.vote_option);
-        //debug!(target: "demo", "  value: {}", vote_note.vote_value);
-
         Ok(())
+    }
+
+    fn get_proposals(&self) -> &Vec<Proposal> {
+        &self.proposals
+    }
+
+    fn get_votes(&self) -> &Vec<dao_contract::vote::wallet::Note> {
+        &self.vote_notes
     }
 
     // TODO: Explicit error handling.
@@ -774,15 +805,13 @@ impl MoneyWallet {
         Ok((money_leaf_position, money_merkle_path))
     }
 
-    // TODO: User must have the values Proposal and DaoParams in order to cast a vote.
-    // These should be encoded to base58 and printed to command-line when a DAO is made (DaoParams)
-    // and a Proposal is made (Proposal). Then the user loads a base58 string into the vote request.
     fn vote_tx(
         &mut self,
         vote_option: bool,
         dao_key: Keypair,
         proposal: Proposal,
         dao_params: DaoParams,
+        dao_keypair: Keypair,
         zk_bins: &ZkContractTable,
         states: &mut StateRegistry,
     ) -> Result<Transaction> {
@@ -811,7 +840,8 @@ impl MoneyWallet {
                     vote_option,
                     vote_option_blind: pallas::Scalar::random(&mut OsRng),
                 },
-                vote_keypair: self.keypair,
+                // For this demo votes are encrypted for the DAO.
+                vote_keypair: dao_keypair,
                 proposal: proposal.clone(),
                 dao: dao_params.clone(),
             }
