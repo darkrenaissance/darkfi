@@ -3,7 +3,7 @@ use std::fmt;
 
 use async_executor::Executor;
 use async_trait::async_trait;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use rand::seq::SliceRandom;
 use serde_json::{json, Value};
 use url::Url;
@@ -132,11 +132,7 @@ impl OutboundSession {
         }
     }
 
-    /// Start making outbound connections. Creates a connector object, then
-    /// starts a connect loop. Loads a valid address then tries to connect.
-    /// Once connected, registers the channel, removes it from the list of
-    /// pending channels, and starts sending messages across the channel.
-    /// Otherwise returns a network error.
+    /// Creates a connector object and tries to connect using it.
     pub async fn channel_connect_loop(
         self: Arc<Self>,
         slot_number: u32,
@@ -150,76 +146,104 @@ impl OutboundSession {
         let outbound_transports = &self.p2p().settings().outbound_transports;
 
         loop {
-            let addr = self.load_address(slot_number).await?;
-            info!(target: "net", "#{} processing outbound [{}]", slot_number, addr);
+            match self
+                .try_connect(slot_number, executor.clone(), &connector, outbound_transports)
+                .await
             {
-                let info = &mut self.slot_info.lock().await[slot_number as usize];
-                info.addr = Some(addr.clone());
-                info.state = OutboundState::Pending;
-            }
-
-            // Check that addr transport is in configured outbound transport
-            let addr_transport = TransportName::try_from(addr.clone())?;
-            let transports = if outbound_transports.contains(&addr_transport) {
-                vec![addr_transport]
-            } else {
-                warn!(target: "net", "#{} address {} transport is not in accepted outbound transports, will try with: {:?}", slot_number, addr, outbound_transports);
-                outbound_transports.clone()
-            };
-
-            for transport in transports {
-                // Replace addr transport
-                let mut transport_addr = addr.clone();
-                transport_addr.set_scheme(&transport.to_scheme())?;
-                info!(target: "net", "#{} connecting to outbound [{}]", slot_number, transport_addr);
-                match connector.connect(transport_addr.clone()).await {
-                    Ok(channel) => {
-                        // Blacklist goes here
-                        info!(target: "net", "#{} connected to outbound [{}]", slot_number, transport_addr);
-
-                        let stop_sub = channel.subscribe_stop().await;
-                        if stop_sub.is_err() {
-                            continue
-                        }
-
-                        self.clone().register_channel(channel.clone(), executor.clone()).await?;
-
-                        // Channel is now connected but not yet setup
-
-                        // Remove pending lock since register_channel will add the channel to p2p
-                        self.p2p().remove_pending(&addr).await;
-                        {
-                            let info = &mut self.slot_info.lock().await[slot_number as usize];
-                            info.channel = Some(channel.clone());
-                            info.state = OutboundState::Connected;
-                        }
-
-                        // Notify that channel processing has been finished
-                        if *self.notify.lock().await {
-                            self.channel_subscriber.notify(Ok(channel)).await;
-                        }
-
-                        // Wait for channel to close
-                        stop_sub.unwrap().receive().await;
-                    }
-                    Err(err) => {
-                        info!(target: "net", "Unable to connect to outbound [{}]: {}", &transport_addr, err);
-                    }
+                Ok(_) => info!(target: "net", "#{} slot disconnected", slot_number),
+                Err(err) => {
+                    error!(target: "net", "#{} slot connection failed: {}", slot_number, err)
                 }
             }
 
-            {
-                let info = &mut self.slot_info.lock().await[slot_number as usize];
-                info.addr = None;
-                info.channel = None;
-                info.state = OutboundState::Open;
-            }
+            async_util::sleep(self.p2p().settings().outbound_retry_seconds).await;
+        }
+    }
 
-            // Notify that channel processing has been finished (failed)
-            if *self.notify.lock().await {
-                self.channel_subscriber.notify(Err(Error::ConnectFailed)).await;
+    /// Start making an outbound connection, using provided connector.
+    /// Loads a valid address then tries to connect. Once connected,
+    /// registers the channel, removes it from the list of pending channels,
+    /// and starts sending messages across the channel, otherwise returns a network error.
+    async fn try_connect(
+        &self,
+        slot_number: u32,
+        executor: Arc<Executor<'_>>,
+        connector: &Connector,
+        outbound_transports: &Vec<TransportName>,
+    ) -> Result<()> {
+        let addr = self.load_address(slot_number).await?;
+        info!(target: "net", "#{} processing outbound [{}]", slot_number, addr);
+        {
+            let info = &mut self.slot_info.lock().await[slot_number as usize];
+            info.addr = Some(addr.clone());
+            info.state = OutboundState::Pending;
+        }
+
+        // Check that addr transport is in configured outbound transport
+        let addr_transport = TransportName::try_from(addr.clone())?;
+        let transports = if outbound_transports.contains(&addr_transport) {
+            vec![addr_transport]
+        } else {
+            warn!(target: "net", "#{} address {} transport is not in accepted outbound transports, will try with: {:?}", slot_number, addr, outbound_transports);
+            outbound_transports.clone()
+        };
+
+        for transport in transports {
+            // Replace addr transport
+            let mut transport_addr = addr.clone();
+            transport_addr.set_scheme(&transport.to_scheme())?;
+            info!(target: "net", "#{} connecting to outbound [{}]", slot_number, transport_addr);
+            match connector.connect(transport_addr.clone()).await {
+                Ok(channel) => {
+                    // Blacklist goes here
+                    info!(target: "net", "#{} connected to outbound [{}]", slot_number, transport_addr);
+
+                    let stop_sub = channel.subscribe_stop().await;
+                    if stop_sub.is_err() {
+                        continue
+                    }
+
+                    self.clone().register_channel(channel.clone(), executor.clone()).await?;
+
+                    // Channel is now connected but not yet setup
+
+                    // Remove pending lock since register_channel will add the channel to p2p
+                    self.p2p().remove_pending(&addr).await;
+                    {
+                        let info = &mut self.slot_info.lock().await[slot_number as usize];
+                        info.channel = Some(channel.clone());
+                        info.state = OutboundState::Connected;
+                    }
+
+                    // Notify that channel processing has been finished
+                    if *self.notify.lock().await {
+                        self.channel_subscriber.notify(Ok(channel)).await;
+                    }
+
+                    // Wait for channel to close
+                    stop_sub.unwrap().receive().await;
+
+                    return Ok(())
+                }
+                Err(err) => {
+                    error!(target: "net", "Unable to connect to outbound [{}]: {}", &transport_addr, err);
+                }
             }
         }
+
+        {
+            let info = &mut self.slot_info.lock().await[slot_number as usize];
+            info.addr = None;
+            info.channel = None;
+            info.state = OutboundState::Open;
+        }
+
+        // Notify that channel processing has been finished (failed)
+        if *self.notify.lock().await {
+            self.channel_subscriber.notify(Err(Error::ConnectFailed)).await;
+        }
+
+        Err(Error::ConnectFailed)
     }
 
     /// Loops through host addresses to find a outbound address that we can
