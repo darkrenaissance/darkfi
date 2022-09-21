@@ -389,7 +389,6 @@ mod tests {
         let spend_hook = pallas::Base::random(&mut OsRng);
         let user_data = pallas::Base::random(&mut OsRng);
 
-
         let msg = [
             *coords.x(),
             *coords.y(),

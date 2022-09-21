@@ -4,49 +4,49 @@ use async_std::sync::Arc;
 use std::fmt;
 
 use rand::rngs::OsRng;
-use std::time::Duration;
-use std::thread;
+use std::{thread, time::Duration};
 
 use crate::zk::circuit::LeadContract;
 
 use crate::{
-    consensus::{Block, BlockInfo,OuroborosMetadata, StakeholderMetadata,StreamletMetadata,TransactionLeadProof, Header},
-    util::{
-        time::Timestamp,
-        clock::{Clock,Ticks},
-        expand_path,
+    blockchain::{Blockchain, Epoch, EpochConsensus},
+    consensus::{
+        Block, BlockInfo, Header, OuroborosMetadata, StakeholderMetadata, StreamletMetadata,
+        TransactionLeadProof,
     },
-    system::{Subscription},
     crypto::{
-        proof::{Proof, ProvingKey, VerifyingKey,  },
-        leadcoin::{LeadCoin},
-        schnorr::{Signature,SchnorrSecret, SchnorrPublic},
-        keypair::{Keypair},
-        merkle_node::MerkleNode,
         address::Address,
+        keypair::Keypair,
+        leadcoin::LeadCoin,
+        merkle_node::MerkleNode,
+        proof::{Proof, ProvingKey, VerifyingKey},
+        schnorr::{SchnorrPublic, SchnorrSecret, Signature},
     },
-    blockchain::{Blockchain,Epoch,EpochConsensus},
-    net::{P2p,Settings, SettingsPtr, ChannelPtr, MessageSubscription},
-    tx::{Transaction},
+    net::{ChannelPtr, MessageSubscription, P2p, Settings, SettingsPtr},
+    system::Subscription,
+    tx::Transaction,
+    util::{
+        clock::{Clock, Ticks},
+        expand_path,
+        time::Timestamp,
+    },
     Result,
 };
 
 use url::Url;
 
-use pasta_curves::{
-    pallas,
-};
+use pasta_curves::pallas;
 
 use group::ff::PrimeField;
 
 #[derive(Debug)]
-pub struct SlotWorkspace
-{
-    pub st : blake3::Hash,
-    pub e: u64, // epoch index
-    pub sl: u64, // absolute slot index
+pub struct SlotWorkspace {
+    pub st: blake3::Hash,
+    pub e: u64,                // epoch index
+    pub sl: u64,               // absolute slot index
     pub txs: Vec<Transaction>, // unpublished block transactions
-    pub root: MerkleNode, /// merkle root of txs
+    pub root: MerkleNode,
+    /// merkle root of txs
     pub m: StakeholderMetadata,
     pub om: OuroborosMetadata,
     pub is_leader: bool,
@@ -56,35 +56,31 @@ pub struct SlotWorkspace
 
 impl Default for SlotWorkspace {
     fn default() -> Self {
-        Self {st: blake3::hash(b""),
-              e: 0,
-              sl: 0,
-              txs: vec![],
-              root: MerkleNode(pallas::Base::zero()),
-              is_leader: false,
-              m: StakeholderMetadata::default(),
-              om: OuroborosMetadata::default(),
-              proof: Proof::default(),
-              block: BlockInfo::default(),
+        Self {
+            st: blake3::hash(b""),
+            e: 0,
+            sl: 0,
+            txs: vec![],
+            root: MerkleNode(pallas::Base::zero()),
+            is_leader: false,
+            m: StakeholderMetadata::default(),
+            om: OuroborosMetadata::default(),
+            proof: Proof::default(),
+            block: BlockInfo::default(),
         }
     }
 }
 
 impl SlotWorkspace {
-
     pub fn new_block(&self) -> (BlockInfo, blake3::Hash) {
-        let sm = StreamletMetadata::new(vec!());
+        let sm = StreamletMetadata::new(vec![]);
         let header = Header::new(self.st, self.e, self.sl, Timestamp::current_time(), self.root);
-        let block = BlockInfo::new(header,
-                                   self.txs.clone(),
-                                   self.m.clone(),
-                                   self.om.clone(),
-                                   sm);
+        let block = BlockInfo::new(header, self.txs.clone(), self.m.clone(), self.om.clone(), sm);
         let hash = block.blockhash();
         (block, hash)
     }
 
-    pub fn add_tx(& mut self, tx: Transaction) {
+    pub fn add_tx(&mut self, tx: Transaction) {
         self.txs.push(tx);
     }
 
@@ -92,7 +88,7 @@ impl SlotWorkspace {
         self.root = root;
     }
 
-    pub fn set_stakeholdermetadata(& mut self, meta : StakeholderMetadata) {
+    pub fn set_stakeholdermetadata(&mut self, meta: StakeholderMetadata) {
         self.m = meta;
     }
 
@@ -116,23 +112,22 @@ impl SlotWorkspace {
         self.proof = proof;
     }
 
-    pub fn set_leader(&mut self, alead : bool) {
+    pub fn set_leader(&mut self, alead: bool) {
         self.is_leader = alead;
     }
 }
 
-pub struct Stakeholder
-{
+pub struct Stakeholder {
     pub blockchain: Blockchain, // stakeholder view of the blockchain
-    pub net : Arc<P2p>,
-    pub clock : Clock,
-    pub coins : Vec<LeadCoin>, // owned stakes
-    pub epoch : Epoch, // current epoch
-    pub epoch_consensus : EpochConsensus, // configuration for the epoch
-    pub pk : ProvingKey,
-    pub vk : VerifyingKey,
+    pub net: Arc<P2p>,
+    pub clock: Clock,
+    pub coins: Vec<LeadCoin>,            // owned stakes
+    pub epoch: Epoch,                    // current epoch
+    pub epoch_consensus: EpochConsensus, // configuration for the epoch
+    pub pk: ProvingKey,
+    pub vk: VerifyingKey,
     pub playing: bool,
-    pub workspace : SlotWorkspace,
+    pub workspace: SlotWorkspace,
     pub id: u8,
     pub keypair: Keypair,
     //pub subscription: Subscription<Result<ChannelPtr>>,
@@ -140,10 +135,14 @@ pub struct Stakeholder
     //pub msgsub : MessageSubscription::<BlockInfo>,
 }
 
-impl Stakeholder
-{
-    pub async fn new(consensus: EpochConsensus, settings: Settings, rel_path: &str, id: u8, k: Option<u32>) -> Result<Self>
-    {
+impl Stakeholder {
+    pub async fn new(
+        consensus: EpochConsensus,
+        settings: Settings,
+        rel_path: &str,
+        id: u8,
+        k: Option<u32>,
+    ) -> Result<Self> {
         let path = expand_path(&rel_path).unwrap();
         println!("opening db");
         let db = sled::open(&path)?;
@@ -166,30 +165,35 @@ impl Stakeholder
         let workspace = SlotWorkspace::default();
 
         //
-        let clock = Clock::new(Some(consensus.get_epoch_len()), Some(consensus.get_slot_len()), Some(consensus.get_tick_len()), settings.peers);
+        let clock = Clock::new(
+            Some(consensus.get_epoch_len()),
+            Some(consensus.get_slot_len()),
+            Some(consensus.get_tick_len()),
+            settings.peers,
+        );
         let keypair = Keypair::random(&mut OsRng);
         println!("stakeholder constructed...");
-        Ok(Self{blockchain: bc,
-                net: p2p,
-                clock: clock,
-                coins: vec![], //constructed with empty coins for sake of simulation only
-                // but should be populated from wallet db.
-                epoch: epoch,
-                epoch_consensus: consensus,
-                pk: lead_pk,
-                vk: lead_vk,
-                playing: true,
-                workspace: workspace,
-                id: id,
-                keypair: keypair
-                //subscription: subscription,
-                //chanptr: chanptr,
-                //msgsub: msg_sub,
+        Ok(Self {
+            blockchain: bc,
+            net: p2p,
+            clock,
+            coins: vec![], //constructed with empty coins for sake of simulation only
+            // but should be populated from wallet db.
+            epoch,
+            epoch_consensus: consensus,
+            pk: lead_pk,
+            vk: lead_vk,
+            playing: true,
+            workspace,
+            id,
+            keypair, //subscription: subscription,
+                     //chanptr: chanptr,
+                     //msgsub: msg_sub,
         })
     }
 
     /// wrapper on Schnorr signature
-    pub fn sign(&self, message : &[u8]) -> Signature {
+    pub fn sign(&self, message: &[u8]) -> Signature {
         self.keypair.secret.sign(message)
     }
 
@@ -208,7 +212,7 @@ impl Stakeholder
 
     /// get list stakeholder peers on the p2p network for synchronization
     pub fn get_peers(&self) -> Vec<Url> {
-        let settings : SettingsPtr = self.net.settings();
+        let settings: SettingsPtr = self.net.settings();
         settings.peers.clone()
     }
 
@@ -240,32 +244,30 @@ impl Stakeholder
         let _len = self.blockchain.add(&blocks);
     }
 
-    pub fn add_tx(&mut self, tx: Transaction)
-    {
+    pub fn add_tx(&mut self, tx: Transaction) {
         self.workspace.add_tx(tx);
     }
 
     /// extract leader selection lottery randomness \eta
     /// it's the hash of the previous lead proof
     /// converted to pallas base
-    pub fn get_eta(&self) -> pallas::Base
-    {
+    pub fn get_eta(&self) -> pallas::Base {
         let proof_tx_hash = self.blockchain.get_last_proof_hash().unwrap();
-        let mut bytes : [u8;32] = *proof_tx_hash.as_bytes();
+        let mut bytes: [u8; 32] = *proof_tx_hash.as_bytes();
         // read first 254 bits
         bytes[30] = 0;
         bytes[31] = 0;
         pallas::Base::from_repr(bytes).unwrap()
     }
 
-    pub fn valid_block(&self, _blk : BlockInfo)  -> bool {
+    pub fn valid_block(&self, _blk: BlockInfo) -> bool {
         //TODO implement
         true
     }
 
     /// listen to the network,
     /// for new transactions.
-    pub fn sync_tx (&self) {
+    pub fn sync_tx(&self) {
         //TODO
     }
 
@@ -274,9 +276,9 @@ impl Stakeholder
     /// validate the block proof, and the transactions,
     /// if so add the proof to metadata if stakeholder isn't the lead.
     pub async fn sync_block(&self) {
-        let subscription : Subscription<Result<ChannelPtr>> = self.net.subscribe_channel().await;
+        let subscription: Subscription<Result<ChannelPtr>> = self.net.subscribe_channel().await;
         println!("--> channel");
-        let chanptr : ChannelPtr =  subscription.receive().await.unwrap();
+        let chanptr: ChannelPtr = subscription.receive().await.unwrap();
         println!("--> received channel");
         //
         let message_subsytem = chanptr.get_message_subsystem();
@@ -287,14 +289,14 @@ impl Stakeholder
         //let info = chanptr.get_info();
         //println!("channel info: {}", info);
         println!("--> subscribe msg_sub");
-        let msg_sub : MessageSubscription::<BlockInfo> =
+        let msg_sub: MessageSubscription<BlockInfo> =
             chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
         println!("--> subscribed");
 
         let res = msg_sub.receive().await.unwrap();
-        let blk : BlockInfo = (*res).to_owned();
+        let blk: BlockInfo = (*res).to_owned();
         //TODO validate the block proof, and transactions.
-        if self.valid_block(blk.clone())  {
+        if self.valid_block(blk.clone()) {
             //TODO if valid only.
             let _len = self.blockchain.add(&[blk.clone()]);
         } else {
@@ -303,29 +305,28 @@ impl Stakeholder
     }
 
     pub async fn background(&mut self, hardlimit: Option<u8>) {
-
         let _ = self.init_network().await;
         let _ = self.clock.sync().await;
-        let mut c : u8= 0;
-        let lim : u8 = hardlimit.unwrap_or(0);
+        let mut c: u8 = 0;
+        let lim: u8 = hardlimit.unwrap_or(0);
         while self.playing {
-            if c>lim && lim>0 {
-                break;
+            if c > lim && lim > 0 {
+                break
             }
             // clock ticks slot begins
             // initialize the epoch if it's the time
             // check for leadership
             match self.clock.ticks().await {
-                Ticks::GENESIS{e, sl} => {
+                Ticks::GENESIS { e, sl } => {
                     //TODO (res) any initialization happening here?
                     self.new_epoch();
                     self.new_slot(e, sl);
                 }
-                Ticks::NEWEPOCH{e, sl} => {
+                Ticks::NEWEPOCH { e, sl } => {
                     self.new_epoch();
                     self.new_slot(e, sl);
                 }
-                Ticks::NEWSLOT{e, sl} => self.new_slot(e, sl),
+                Ticks::NEWSLOT { e, sl } => self.new_slot(e, sl),
                 Ticks::TOCKS => {
                     println!("tocks");
                     // slot is about to end.
@@ -337,7 +338,7 @@ impl Stakeholder
                         let (block_info, _block_hash) = self.workspace.new_block();
                         //add the block to the blockchain
                         self.add_block(block_info.clone());
-                        let block : Block = Block::from(block_info.clone());
+                        let block: Block = Block::from(block_info.clone());
                         // publish the block
                         //TODO (fix) before publishing the workspace tx root need to be set.
                         let _ret = self.net.broadcast(block).await;
@@ -345,10 +346,8 @@ impl Stakeholder
                         //
                         self.sync_block().await;
                     }
-                },
-                Ticks::IDLE => {
-                    continue
                 }
+                Ticks::IDLE => continue,
                 Ticks::OUTOFSYNC => {
                     println!("out of sync");
                     // clock, and blockchain are out of sync
@@ -357,7 +356,7 @@ impl Stakeholder
                 }
             }
             thread::sleep(Duration::from_millis(1000));
-            c+=1;
+            c += 1;
         }
     }
 
@@ -367,8 +366,7 @@ impl Stakeholder
     /// on the onset of the epoch, layout the new the competing coins
     /// assuming static stake during the epoch, enforced by the commitment to competing coins
     /// in the epoch's gen2esis data.
-    fn new_epoch(&mut self)
-    {
+    fn new_epoch(&mut self) {
         println!("[new epoch] 4 {}", self);
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, eta);
@@ -380,11 +378,10 @@ impl Stakeholder
         // it's value is dependent on the tekonomics,
         // set to one untill then.
         let reward = pallas::Base::one();
-        let sigma : pallas::Base = pallas::Base::from(num_slots)*reward;
+        let sigma: pallas::Base = pallas::Base::from(num_slots) * reward;
         epoch.create_coins(sigma); // set epoch interal fields working space with competing coins
         self.epoch = epoch.clone();
     }
-
 
     /// at the begining of the slot
     /// stakeholder need to play the lottery for the slot.
@@ -392,22 +389,15 @@ impl Stakeholder
     /// commiting it's coins, to maximize success, thus,
     /// the lottery proof need to be conditioned on the slot itself, and previous proof.
     /// this will encourage each potential leader to play with honesty.
-    fn new_slot(&mut self, e: u64, sl: u64)
-    {
+    fn new_slot(&mut self, e: u64, sl: u64) {
         println!("[new slot] 4 {}\ne:{}, sl:{}", self, e, sl);
         let empty_ptr = blake3::hash(b"");
-        let st : blake3::Hash = if e>0 || (e==0&&sl>0) {
-            self.workspace.block.blockhash()
-        } else {
-            empty_ptr
-        };
-        let is_leader : bool = self.epoch.is_leader(sl);
+        let st: blake3::Hash =
+            if e > 0 || (e == 0 && sl > 0) { self.workspace.block.blockhash() } else { empty_ptr };
+        let is_leader: bool = self.epoch.is_leader(sl);
         // if is leader create proof
-        let proof = if is_leader {
-            self.epoch.get_proof(sl, &self.pk.clone())
-        } else {
-            Proof::new(vec![])
-        };
+        let proof =
+            if is_leader { self.epoch.get_proof(sl, &self.pk.clone()) } else { Proof::new(vec![]) };
         // set workspace
         self.workspace.set_sl(sl);
         self.workspace.set_e(e);
@@ -419,8 +409,10 @@ impl Stakeholder
             let addr = Address::from(self.keypair.public);
             let sign = self.sign(proof.as_ref());
             let stakeholder_meta = StakeholderMetadata::new(sign, addr);
-            let ouroboros_meta = OuroborosMetadata::new(self.get_eta().to_repr(),
-                                                        TransactionLeadProof::from(proof.clone()));
+            let ouroboros_meta = OuroborosMetadata::new(
+                self.get_eta().to_repr(),
+                TransactionLeadProof::from(proof.clone()),
+            );
             self.workspace.set_stakeholdermetadata(stakeholder_meta);
             self.workspace.set_ouroborosmetadata(ouroboros_meta);
         }
@@ -428,7 +420,7 @@ impl Stakeholder
 }
 
 impl fmt::Display for Stakeholder {
-    fn fmt(&self, formater : &mut fmt::Formatter) ->  fmt::Result {
+    fn fmt(&self, formater: &mut fmt::Formatter) -> fmt::Result {
         formater.write_fmt(format_args!("stakeholder with id: {}", self.id))
     }
 }

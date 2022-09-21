@@ -11,7 +11,8 @@ use crate::{
         keypair::PublicKey,
         proof::{Proof, ProvingKey, VerifyingKey},
         types::{
-            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkValue, DrkValueBlind, DrkValueCommit,
+            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
+            DrkValue, DrkValueBlind, DrkValueCommit,
         },
         util::{pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
     },

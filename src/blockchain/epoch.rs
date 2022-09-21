@@ -1,8 +1,6 @@
-use halo2_proofs::{arithmetic::Field,};
+use halo2_gadgets::poseidon::primitives as poseidon;
+use halo2_proofs::arithmetic::Field;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use halo2_gadgets::{
-    poseidon::{primitives as poseidon},
-};
 
 use log::debug;
 
@@ -14,23 +12,21 @@ use pasta_curves::{
 
 use rand::{thread_rng, Rng};
 
-use crate::{
-    crypto::{
-        constants::MERKLE_DEPTH_ORCHARD,
-        leadcoin::LeadCoin,
-        lead_proof,
-        proof::{Proof, ProvingKey,},
-        merkle_node::MerkleNode,
-        util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
-        types::DrkValueBlind,
-    },
+use crate::crypto::{
+    constants::MERKLE_DEPTH_ORCHARD,
+    lead_proof,
+    leadcoin::LeadCoin,
+    merkle_node::MerkleNode,
+    proof::{Proof, ProvingKey},
+    types::DrkValueBlind,
+    util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
 };
 
-const PRF_NULLIFIER_PREFIX : u64 = 0;
+const PRF_NULLIFIER_PREFIX: u64 = 0;
 
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
-#[derive(Copy,Debug,Default,Clone)]
+#[derive(Copy, Debug, Default, Clone)]
 pub struct EpochItem {
     pub value: u64, // the stake value is static during the epoch.
 }
@@ -38,30 +34,36 @@ pub struct EpochItem {
 /// epoch configuration
 /// this struct need be a singleton,
 /// should be populated from configuration file.
-#[derive(Copy,Debug,Default,Clone)]
+#[derive(Copy, Debug, Default, Clone)]
 pub struct EpochConsensus {
-    pub sl_len : u64, /// number of slots per epoch
-    pub e_len : u64,
+    pub sl_len: u64,
+    /// number of slots per epoch
+    pub e_len: u64,
     pub tick_len: u64,
     pub reward: u64,
 }
 
-impl EpochConsensus{
-    pub fn new(sl_len: Option<u64>, e_len: Option<u64>, tick_len: Option<u64>, reward: Option<u64>) -> Self {
+impl EpochConsensus {
+    pub fn new(
+        sl_len: Option<u64>,
+        e_len: Option<u64>,
+        tick_len: Option<u64>,
+        reward: Option<u64>,
+    ) -> Self {
         Self {
             sl_len: sl_len.unwrap_or(22),
             e_len: e_len.unwrap_or(3),
             tick_len: tick_len.unwrap_or(22),
-            reward: reward.unwrap_or(1)
+            reward: reward.unwrap_or(1),
         }
     }
 
     /// TODO how is the reward derived?
-    pub fn get_reward(&self)  -> u64{
+    pub fn get_reward(&self) -> u64 {
         self.reward
     }
 
-    pub fn get_slot_len(&self)  -> u64{
+    pub fn get_slot_len(&self) -> u64 {
         self.sl_len
     }
 
@@ -74,7 +76,7 @@ impl EpochConsensus{
     }
 }
 
-#[derive(Debug,Default,Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Epoch {
     // TODO this need to emulate epoch
     // should have ep, slot, current block, etc.
@@ -82,38 +84,33 @@ pub struct Epoch {
     pub len: Option<usize>, // number of slots in the epoch
     //epoch item
     pub item: Option<EpochItem>,
-    pub eta: pallas::Base, // CRS for the leader selection.
+    pub eta: pallas::Base,    // CRS for the leader selection.
     pub coins: Vec<LeadCoin>, // competing coins
 }
 
 impl Epoch {
-
-    pub fn new(consensus: EpochConsensus, true_random:pallas::Base) -> Self
-    {
-        Self {len: Some(consensus.get_slot_len() as usize),
-              item: Some(EpochItem {value: consensus.reward}),
-              eta: true_random,
-              coins:vec!(),
+    pub fn new(consensus: EpochConsensus, true_random: pallas::Base) -> Self {
+        Self {
+            len: Some(consensus.get_slot_len() as usize),
+            item: Some(EpochItem { value: consensus.reward }),
+            eta: true_random,
+            coins: vec![],
         }
     }
     fn create_coins_election_seeds(&self, sl: pallas::Base) -> (pallas::Base, pallas::Base) {
-        let election_seed_nonce : pallas::Base = pallas::Base::from(3);
-        let election_seed_lead : pallas::Base = pallas::Base::from(22);
+        let election_seed_nonce: pallas::Base = pallas::Base::from(3);
+        let election_seed_lead: pallas::Base = pallas::Base::from(22);
 
         // mu_rho
-        let nonce_mu_msg = [
-            election_seed_nonce,
-            self.eta,
-            sl,
-        ];
-        let nonce_mu : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(nonce_mu_msg);
+        let nonce_mu_msg = [election_seed_nonce, self.eta, sl];
+        let nonce_mu: pallas::Base =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init()
+                .hash(nonce_mu_msg);
         // mu_y
-        let lead_mu_msg = [
-            election_seed_lead,
-            self.eta,
-            sl,
-        ];
-        let lead_mu : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(lead_mu_msg);
+        let lead_mu_msg = [election_seed_lead, self.eta, sl];
+        let lead_mu: pallas::Base =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init()
+                .hash(lead_mu_msg);
         (lead_mu, nonce_mu)
     }
 
@@ -127,18 +124,18 @@ impl Epoch {
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(self.len.unwrap() as usize);
         let mut root_sks: Vec<MerkleNode> = vec![];
         let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
-        let mut prev_sk_base : pallas::Base = pallas::Base::one();
+        let mut prev_sk_base: pallas::Base = pallas::Base::one();
         for _i in 0..self.len.unwrap() {
-            let sk_bytes = if _i ==0 {
+            let sk_bytes = if _i == 0 {
                 let base = pedersen_commitment_u64(1, pallas::Scalar::random(&mut rng));
                 let coord = base.to_affine().coordinates().unwrap();
-                let sk_base =  coord.x() * coord.y();
+                let sk_base = coord.x() * coord.y();
                 prev_sk_base = sk_base;
                 sk_base.to_repr()
             } else {
                 let base = pedersen_commitment_u64(1, mod_r_p(prev_sk_base));
                 let coord = base.to_affine().coordinates().unwrap();
-                let sk_base =  coord.x() * coord.y();
+                let sk_base = coord.x() * coord.y();
                 prev_sk_base = sk_base;
                 sk_base.to_repr()
             };
@@ -158,7 +155,7 @@ impl Epoch {
         (root_sks, path_sks)
     }
     //note! the strategy here is single competing coin per slot.
-    pub fn create_coins(& mut self, sigma : pallas::Base) -> Vec<LeadCoin> {
+    pub fn create_coins(&mut self, sigma: pallas::Base) -> Vec<LeadCoin> {
         let mut rng = thread_rng();
         let mut seeds: Vec<u64> = vec![];
         for _i in 0..self.len.unwrap() {
@@ -185,27 +182,25 @@ impl Epoch {
             //
             let c_root_sk: MerkleNode = root_sks[i];
 
-            let coin_pk_msg = [
-                c_tau,
-                c_root_sk.inner(),
-            ];
-            let c_pk : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_pk_msg);
+            let coin_pk_msg = [c_tau, c_root_sk.inner()];
+            let c_pk: pallas::Base =
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+                )
+                .hash(coin_pk_msg);
 
             let c_seed = pallas::Base::from(seeds[i]);
-            let sn_msg = [
-                c_seed,
-                c_root_sk.inner(),
-            ];
-            let c_sn : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(sn_msg);
+            let sn_msg = [c_seed, c_root_sk.inner()];
+            let c_sn: pallas::Base =
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+                )
+                .hash(sn_msg);
 
-
-            let coin_commit_msg_input = [
-                pallas::Base::from(PRF_NULLIFIER_PREFIX),
-                c_pk,
-                c_v,
-                c_seed
-            ];
-            let coin_commit_msg : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init().hash(coin_commit_msg_input);
+            let coin_commit_msg_input =
+                [pallas::Base::from(PRF_NULLIFIER_PREFIX), c_pk, c_v, c_seed];
+            let coin_commit_msg: pallas::Base =
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init(
+                )
+                .hash(coin_commit_msg_input);
             let c_cm: pallas::Point = pedersen_commitment_base(coin_commit_msg, c_cm1_blind);
             let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
             let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
@@ -213,21 +208,21 @@ impl Epoch {
             tree_cm.append(&c_cm_node.clone());
             let leaf_position = tree_cm.witness();
             let c_root_cm = tree_cm.root(0).unwrap();
-            let c_cm_path = tree_cm.authentication_path(leaf_position.unwrap(), &c_root_cm).unwrap();
+            let c_cm_path =
+                tree_cm.authentication_path(leaf_position.unwrap(), &c_root_cm).unwrap();
 
-            let coin_nonce2_msg = [
-                c_seed,
-                c_root_sk.inner()
-            ];
-            let c_seed2 : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_nonce2_msg);
+            let coin_nonce2_msg = [c_seed, c_root_sk.inner()];
+            let c_seed2: pallas::Base =
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+                )
+                .hash(coin_nonce2_msg);
 
-            let coin2_commit_msg_input = [
-                pallas::Base::from(PRF_NULLIFIER_PREFIX),
-                c_pk,
-                c_v,
-                c_seed2,
-            ];
-            let coin2_commit_msg : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init().hash(coin2_commit_msg_input);
+            let coin2_commit_msg_input =
+                [pallas::Base::from(PRF_NULLIFIER_PREFIX), c_pk, c_v, c_seed2];
+            let coin2_commit_msg: pallas::Base =
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init(
+                )
+                .hash(coin2_commit_msg_input);
             let c_cm2 = pedersen_commitment_base(coin2_commit_msg, c_cm2_blind);
 
             let c_root_sk = root_sks[i];
@@ -275,15 +270,18 @@ impl Epoch {
         debug!("slot: {}, coin len: {}", sl, self.coins.len());
         assert!(slusize < self.coins.len());
         let coin = self.coins[sl as usize];
-        let y_exp = [
-            coin.root_sk.unwrap(),
-            coin.nonce.unwrap(),
-        ];
-        let y_exp_hash : pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>,3,2>::init().hash(y_exp);
+        let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
+        let y_exp_hash: pallas::Base =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+                .hash(y_exp);
         // pick x coordiante of y for comparison
-        let y_x : pallas::Base = *pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash)).to_affine().coordinates().unwrap().x();
+        let y_x: pallas::Base = *pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
+            .to_affine()
+            .coordinates()
+            .unwrap()
+            .x();
         let ord = pallas::Base::from(10241024); //TODO fine tune this scalar.
-        let target = ord*coin.value.unwrap();
+        let target = ord * coin.value.unwrap();
         debug!("y_x: {:?}, target: {:?}", y_x, target);
         //reversed for testing
         target < y_x
@@ -295,10 +293,10 @@ impl Epoch {
     }
 }
 
-#[derive(Debug,Default,Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct LifeTime {
     //lifetime metadata
     //...
     //lifetime epochs
-    pub epochs : Vec<Epoch>,
+    pub epochs: Vec<Epoch>,
 }

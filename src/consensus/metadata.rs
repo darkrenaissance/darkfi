@@ -2,22 +2,16 @@ use super::{Participant, Vote};
 use rand::rngs::OsRng;
 
 use crate::{
-    util::{
-        serial::{SerialDecodable, SerialEncodable},
-    },
     crypto::{
         address::Address,
-        schnorr::Signature,
-        types::*,
-        proof::{
-            Proof,
-            ProvingKey,
-            VerifyingKey,
-        },
+        keypair::Keypair,
         lead_proof,
         leadcoin::LeadCoin,
-        keypair::Keypair,
+        proof::{Proof, ProvingKey, VerifyingKey},
+        schnorr::Signature,
+        types::*,
     },
+    util::serial::{SerialDecodable, SerialEncodable},
     VerifyResult,
 };
 
@@ -34,24 +28,18 @@ impl Default for StakeholderMetadata {
         let keypair = Keypair::random(&mut OsRng);
         let address = Address::from(keypair.public);
         let sign = Signature::dummy();
-        Self {
-            signature: sign,
-            address: address,
-        }
+        Self { signature: sign, address }
     }
 }
 
 impl StakeholderMetadata {
     pub fn new(signature: Signature, address: Address) -> Self {
-        Self {
-            signature,
-            address
-        }
+        Self { signature, address }
     }
 }
 
 /// wrapper over the Proof, for possiblity any metadata necessary in the future.
-#[derive(Debug, Clone, PartialEq,  SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct TransactionLeadProof {
     /// leadership proof
     pub lead_proof: Proof,
@@ -59,55 +47,45 @@ pub struct TransactionLeadProof {
 
 impl Default for TransactionLeadProof {
     fn default() -> Self {
-        Self {
-            lead_proof : Proof::default(),
-        }
+        Self { lead_proof: Proof::default() }
     }
 }
 
 impl TransactionLeadProof {
-    pub fn new(pk : &ProvingKey, coin: LeadCoin) -> Self
-    {
+    pub fn new(pk: &ProvingKey, coin: LeadCoin) -> Self {
         let proof = lead_proof::create_lead_proof(pk, coin.clone()).unwrap();
         Self { lead_proof: proof }
     }
 
-    pub fn verify(&self, vk : VerifyingKey, public_inputs: &[DrkCircuitField]) -> VerifyResult<()>
-    {
+    pub fn verify(&self, vk: VerifyingKey, public_inputs: &[DrkCircuitField]) -> VerifyResult<()> {
         lead_proof::verify_lead_proof(&vk, &self.lead_proof, public_inputs)
     }
 }
 
 impl From<Proof> for TransactionLeadProof {
     fn from(proof: Proof) -> Self {
-        Self { lead_proof: proof}
+        Self { lead_proof: proof }
     }
 }
-
-
-
 
 /// This struct represents [`Block`](super::Block) information used by the Ouroboros
 /// Praos consensus protocol.
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct OuroborosMetadata {
     /// response of global random oracle, or it's emulation.
-    pub eta: [u8;32],
+    pub eta: [u8; 32],
     /// stakeholder lead NIZK lead proof
-    pub lead_proof : TransactionLeadProof,
+    pub lead_proof: TransactionLeadProof,
 }
 
 impl Default for OuroborosMetadata {
     fn default() -> Self {
-        Self {
-            eta: [0;32],
-            lead_proof: TransactionLeadProof::default(),
-        }
+        Self { eta: [0; 32], lead_proof: TransactionLeadProof::default() }
     }
 }
 
 impl OuroborosMetadata {
-    pub fn new(eta: [u8;32], lead_proof: TransactionLeadProof) -> Self {
+    pub fn new(eta: [u8; 32], lead_proof: TransactionLeadProof) -> Self {
         Self { eta, lead_proof }
     }
 }

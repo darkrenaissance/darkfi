@@ -47,7 +47,6 @@ pub fn pedersen_commitment_u64(value: u64, blind: DrkValueBlind) -> DrkValueComm
     V * mod_r_p(DrkValue::from(value)) + R * blind
 }
 
-
 /// Simplified wrapper for poseidon hash function.
 pub fn poseidon_hash<const N: usize>(messages: [pallas::Base; N]) -> pallas::Base {
     poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<N>, 3, 2>::init()

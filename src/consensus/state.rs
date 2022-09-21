@@ -13,11 +13,13 @@ use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, OuroborosMetadata, Participant, ProposalChain, StreamletMetadata, Vote, Header,
+    Block, BlockInfo, BlockProposal, Header, OuroborosMetadata, Participant, ProposalChain,
+    StreamletMetadata, Vote,
 };
 
 use crate::{
     blockchain::Blockchain,
+    consensus::StakeholderMetadata,
     crypto::{
         address::Address,
         constants::MERKLE_DEPTH,
@@ -25,7 +27,6 @@ use crate::{
         merkle_node::MerkleNode,
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
-    consensus::{StakeholderMetadata},
     net,
     node::{
         state::{state_transition, ProgramState, StateUpdate},
@@ -303,7 +304,8 @@ impl ValidatorState {
             }
         }
         let root = tree.root(0).unwrap();
-        let header = Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
+        let header =
+            Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
         let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
         let m = StakeholderMetadata::new(signed_proposal, self.address);
@@ -387,10 +389,10 @@ impl ValidatorState {
             return Ok(None)
         }
 
-        if !leader.public_key.verify(
-            proposal.block.header.headerhash().as_bytes(),
-            &proposal.block.m.signature,
-        ) {
+        if !leader
+            .public_key
+            .verify(proposal.block.header.headerhash().as_bytes(), &proposal.block.m.signature)
+        {
             warn!("Proposer ({}) signature could not be verified", proposal.block.m.address);
             return Ok(None)
         }

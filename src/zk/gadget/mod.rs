@@ -1,7 +1,6 @@
 /// Base field arithmetic gadget
 pub mod arithmetic;
 
-
 /// Small range check, 0..8 bits
 pub mod small_range_check;
 

@@ -2,18 +2,18 @@ use std::{
     io::{stdin, Read},
     process::exit,
     /*
-<<<<<<< HEAD
-    str::FromStr,
-};
+    <<<<<<< HEAD
+        str::FromStr,
+    };
 
-use clap::{Parser, Subcommand};
-use darkfi::crypto::proof::VerifyingKey;
-use halo2_proofs::{arithmetic::Field, pasta::group::ff::PrimeField};
-use rand::rngs::OsRng;
-use serde_json::json;
-use termion::color;
-      =======
-      */
+    use clap::{Parser, Subcommand};
+    use darkfi::crypto::proof::VerifyingKey;
+    use halo2_proofs::{arithmetic::Field, pasta::group::ff::PrimeField};
+    use rand::rngs::OsRng;
+    use serde_json::json;
+    use termion::color;
+          =======
+          */
 };
 
 use clap::{Parser, Subcommand};
@@ -26,25 +26,25 @@ use darkfi::{
     cli_desc,
     crypto::{
         /*
-<<<<<<< HEAD
-        address::Address,
-        burn_proof::{create_burn_proof, verify_burn_proof},
-        keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
-        mint_proof::{create_mint_proof, verify_mint_proof},
-        proof::ProvingKey,
-        token_id,
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
-        util::{pedersen_commitment_base, pedersen_commitment_u64},
-        BurnRevealedValues, MintRevealedValues, OwnCoin, Proof,
-    },
-    rpc::{client::RpcClient, jsonrpc::JsonRequest},
-    util::{
-        cli::progress_bar,
-        encode_base10,
-        serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
-        =======
-            */
+        <<<<<<< HEAD
+                address::Address,
+                burn_proof::{create_burn_proof, verify_burn_proof},
+                keypair::{PublicKey, SecretKey},
+                merkle_node::MerkleNode,
+                mint_proof::{create_mint_proof, verify_mint_proof},
+                proof::ProvingKey,
+                token_id,
+                types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+                util::{pedersen_commitment_base, pedersen_commitment_u64},
+                BurnRevealedValues, MintRevealedValues, OwnCoin, Proof,
+            },
+            rpc::{client::RpcClient, jsonrpc::JsonRequest},
+            util::{
+                cli::progress_bar,
+                encode_base10,
+                serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
+                =======
+                    */
         burn_proof::{create_burn_proof, verify_burn_proof},
         keypair::{PublicKey, SecretKey},
         mint_proof::{create_mint_proof, verify_mint_proof},
@@ -102,144 +102,144 @@ enum Subcmd {
     Init {
         #[clap(short, long)]
         /*
-        <<<<<<< HEAD
-        /// Pair of token IDs to swap: e.g. token_to_send:token_to_recv
-        token_pair: String,
+                <<<<<<< HEAD
+                /// Pair of token IDs to swap: e.g. token_to_send:token_to_recv
+                token_pair: String,
 
-        #[clap(short, long)]
-        /// Pair of values to swap: e.g. value_to_send:value_to_recv
-        value_pair: String,
-    },
+                #[clap(short, long)]
+                /// Pair of values to swap: e.g. value_to_send:value_to_recv
+                value_pair: String,
+            },
 
-    /// Inspect swap data from stdin or file.
-    Inspect,
-}
-
-struct Rpc {
-    pub rpc_client: RpcClient,
-}
-
-impl Rpc {
-    async fn balance_of(&self, token_id: &str) -> Result<u64> {
-        let req = JsonRequest::new("wallet.get_balances", json!([]));
-        let rep = self.rpc_client.request(req).await?;
-
-        if !rep.is_object() {
-            eprintln!("Error: Invalid balance data received from darkfid RPC endpoint.");
-            exit(1);
+            /// Inspect swap data from stdin or file.
+            Inspect,
         }
 
-        for i in rep.as_object().unwrap().keys() {
-            if i == &token_id {
-                if let Some(balance) = rep[i].as_u64() {
-                    return Ok(balance)
-                }
-
-                eprintln!("Error: Invalid balance data received from darkfid RPC endpoint.");
-                exit(1);
-            }
+        struct Rpc {
+            pub rpc_client: RpcClient,
         }
 
-        Ok(0)
-    }
+        impl Rpc {
+            async fn balance_of(&self, token_id: &str) -> Result<u64> {
+                let req = JsonRequest::new("wallet.get_balances", json!([]));
+                let rep = self.rpc_client.request(req).await?;
 
-    async fn wallet_address(&self) -> Result<Address> {
-        let req = JsonRequest::new("wallet.get_addrs", json!([0_i64]));
-        let rep = self.rpc_client.request(req).await?;
-
-        if !rep.is_array() || !rep.as_array().unwrap()[0].is_string() {
-            eprintln!("Error: Invalid wallet address received from darkfid RPC endpoint.");
-            exit(1);
-        }
-
-        Address::from_str(rep[0].as_str().unwrap())
-    }
-
-    async fn get_coins_valtok(&self, value: u64, token_id: &str) -> Result<Vec<OwnCoin>> {
-        let req = JsonRequest::new("wallet.get_coins_valtok", json!([value, token_id, true]));
-        let rep = self.rpc_client.request(req).await?;
-
-        if !rep.is_array() {
-            eprintln!("Error: Invalid coin data received from darkfid RPC endpoint.");
-            exit(1);
-        }
-
-        let mut ret = vec![];
-        let rep = rep.as_array().unwrap();
-
-        for i in rep {
-            if !i.is_string() {
-                eprintln!("Error: Invalid base58 data for OwnCoin");
-                exit(1);
-            }
-
-            let data = match bs58::decode(i.as_str().unwrap()).into_vec() {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("Error: Failed decoding base58 for OwnCoin: {}", e);
+                if !rep.is_object() {
+                    eprintln!("Error: Invalid balance data received from darkfid RPC endpoint.");
                     exit(1);
                 }
-            };
 
-            let oc = match deserialize(&data) {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("Error: Failed deserializing OwnCoin: {}", e);
+                for i in rep.as_object().unwrap().keys() {
+                    if i == &token_id {
+                        if let Some(balance) = rep[i].as_u64() {
+                            return Ok(balance)
+                        }
+
+                        eprintln!("Error: Invalid balance data received from darkfid RPC endpoint.");
+                        exit(1);
+                    }
+                }
+
+                Ok(0)
+            }
+
+            async fn wallet_address(&self) -> Result<Address> {
+                let req = JsonRequest::new("wallet.get_addrs", json!([0_i64]));
+                let rep = self.rpc_client.request(req).await?;
+
+                if !rep.is_array() || !rep.as_array().unwrap()[0].is_string() {
+                    eprintln!("Error: Invalid wallet address received from darkfid RPC endpoint.");
                     exit(1);
                 }
-            };
 
-            ret.push(oc);
-        }
-
-        Ok(ret)
-    }
-
-    async fn get_merkle_path(&self, leaf_pos: usize) -> Result<Vec<MerkleNode>> {
-        let req = JsonRequest::new("wallet.get_merkle_path", json!([leaf_pos as u64]));
-        let rep = self.rpc_client.request(req).await?;
-
-        if !rep.is_array() {
-            eprintln!("Error: Invalid merkle path data received from darkfid RPC endpoint.");
-            exit(1);
-        }
-
-        let mut ret = vec![];
-        let rep = rep.as_array().unwrap();
-
-        for i in rep {
-            if !i.is_string() {
-                eprintln!("Error: Invalid base58 data for MerkleNode");
-                exit(1);
+                Address::from_str(rep[0].as_str().unwrap())
             }
 
-            let n = i.as_str().unwrap();
-            let n = match bs58::decode(n).into_vec() {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("Error: Failed decoding base58 for MerkleNode: {}", e);
+            async fn get_coins_valtok(&self, value: u64, token_id: &str) -> Result<Vec<OwnCoin>> {
+                let req = JsonRequest::new("wallet.get_coins_valtok", json!([value, token_id, true]));
+                let rep = self.rpc_client.request(req).await?;
+
+                if !rep.is_array() {
+                    eprintln!("Error: Invalid coin data received from darkfid RPC endpoint.");
                     exit(1);
                 }
-            };
 
-            if n.len() != 32 {
-                eprintln!("Error: MerkleNode byte length is not 32");
-                exit(1);
+                let mut ret = vec![];
+                let rep = rep.as_array().unwrap();
+
+                for i in rep {
+                    if !i.is_string() {
+                        eprintln!("Error: Invalid base58 data for OwnCoin");
+                        exit(1);
+                    }
+
+                    let data = match bs58::decode(i.as_str().unwrap()).into_vec() {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("Error: Failed decoding base58 for OwnCoin: {}", e);
+                            exit(1);
+                        }
+                    };
+
+                    let oc = match deserialize(&data) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("Error: Failed deserializing OwnCoin: {}", e);
+                            exit(1);
+                        }
+                    };
+
+                    ret.push(oc);
+                }
+
+                Ok(ret)
             }
 
-            let n = MerkleNode::from_bytes(&n.try_into().unwrap());
-            if n.is_some().unwrap_u8() == 0 {
-                eprintln!("Error: Noncanonical bytes of MerkleNode");
-                exit(1);
+            async fn get_merkle_path(&self, leaf_pos: usize) -> Result<Vec<MerkleNode>> {
+                let req = JsonRequest::new("wallet.get_merkle_path", json!([leaf_pos as u64]));
+                let rep = self.rpc_client.request(req).await?;
+
+                if !rep.is_array() {
+                    eprintln!("Error: Invalid merkle path data received from darkfid RPC endpoint.");
+                    exit(1);
+                }
+
+                let mut ret = vec![];
+                let rep = rep.as_array().unwrap();
+
+                for i in rep {
+                    if !i.is_string() {
+                        eprintln!("Error: Invalid base58 data for MerkleNode");
+                        exit(1);
+                    }
+
+                    let n = i.as_str().unwrap();
+                    let n = match bs58::decode(n).into_vec() {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("Error: Failed decoding base58 for MerkleNode: {}", e);
+                            exit(1);
+                        }
+                    };
+
+                    if n.len() != 32 {
+                        eprintln!("Error: MerkleNode byte length is not 32");
+                        exit(1);
+                    }
+
+                    let n = MerkleNode::from_bytes(&n.try_into().unwrap());
+                    if n.is_some().unwrap_u8() == 0 {
+                        eprintln!("Error: Noncanonical bytes of MerkleNode");
+                        exit(1);
+                    }
+
+                    ret.push(n.unwrap());
+                }
+
+                Ok(ret)
             }
-
-            ret.push(n.unwrap());
-        }
-
-        Ok(ret)
-    }
-        =======
-        */
+                =======
+                */
         /// Pair of token IDs to swap: token_to_send:token_to_recv
         token_pair: String,
 
@@ -303,17 +303,17 @@ async fn init_swap(
     token_pair: (String, String),
     value_pair: (u64, u64),
     /*
-<<<<<<< HEAD
-) -> Result<()> {
-    let rpc_client = RpcClient::new(endpoint).await?;
-    let rpc = Rpc { rpc_client };
+    <<<<<<< HEAD
+    ) -> Result<()> {
+        let rpc_client = RpcClient::new(endpoint).await?;
+        let rpc = Rpc { rpc_client };
 
-    // TODO: Think about decimals, there has to be some metadata to keep track.
-    let tp = (token_id::parse_b58(&token_pair.0)?, token_id::parse_b58(&token_pair.1)?);
-    let vp: (u64, u64) =
-        (value_pair.0.clone().try_into().unwrap(), value_pair.1.clone().try_into().unwrap());
-    =======
-    */
+        // TODO: Think about decimals, there has to be some metadata to keep track.
+        let tp = (token_id::parse_b58(&token_pair.0)?, token_id::parse_b58(&token_pair.1)?);
+        let vp: (u64, u64) =
+            (value_pair.0.clone().try_into().unwrap(), value_pair.1.clone().try_into().unwrap());
+        =======
+        */
 ) -> Result<PartialSwapData> {
     let rpc_client = RpcClient::new(endpoint).await?;
     let rpc = Rpc { rpc_client };
@@ -327,7 +327,6 @@ async fn init_swap(
     if balance < vp.0 {
         eprintln!(
             "Error: There's not enough balance for token \"{}\" in your wallet.",
-
             token_pair.0
         );
         eprintln!("Available balance is {} ({})", encode_base10(balance, 8), balance);
@@ -335,19 +334,19 @@ async fn init_swap(
     }
 
     /*
-<<<<<<< HEAD
-    // If not enough funds in a single coin, mint a single new coin
-    // with the funds. We do this to minimize the size of the swap
-    // transaction, i.e. 2 inputs and 2 outputs.
-    // TODO: Implement ^
-    // TODO: Maybe this should be done by the user beforehand?
+    <<<<<<< HEAD
+        // If not enough funds in a single coin, mint a single new coin
+        // with the funds. We do this to minimize the size of the swap
+        // transaction, i.e. 2 inputs and 2 outputs.
+        // TODO: Implement ^
+        // TODO: Maybe this should be done by the user beforehand?
 
-    // Find a coin to spend
-    let coins = rpc.get_coins_valtok(vp.0, &token_pair.0).await?;
-    if coins.is_empty() {
-        eprintln!("Error: Did not manage to find a coin with enough value to spend");
-    =======
-    */
+        // Find a coin to spend
+        let coins = rpc.get_coins_valtok(vp.0, &token_pair.0).await?;
+        if coins.is_empty() {
+            eprintln!("Error: Did not manage to find a coin with enough value to spend");
+        =======
+        */
     // If there's not enough funds in a single coin, mint a single new coin
     // with the funds. We do this to minimize the size of the swap transaction.
     // i.e. 2 inputs and 2 outputs.
@@ -363,15 +362,15 @@ async fn init_swap(
 
     eprintln!("Initializing swap data for:");
     /*
-<<<<<<< HEAD
-    eprintln!("Send: {} {} tokens", encode_base10(value_pair.0, 8), token_pair.0);
-    eprintln!("Recv: {} {} tokens", encode_base10(value_pair.1, 8), token_pair.1);
+    <<<<<<< HEAD
+        eprintln!("Send: {} {} tokens", encode_base10(value_pair.0, 8), token_pair.0);
+        eprintln!("Recv: {} {} tokens", encode_base10(value_pair.1, 8), token_pair.1);
 
-    // Fetch our default address
-    let our_address = rpc.wallet_address().await?;
-    let our_publickey = match PublicKey::try_from(our_address) {
-    =======
-    */
+        // Fetch our default address
+        let our_address = rpc.wallet_address().await?;
+        let our_publickey = match PublicKey::try_from(our_address) {
+        =======
+        */
     eprintln!("Send: {} {} tokens", encode_base10(vp.0, 8), token_pair.0);
     eprintln!("Recv: {} {} tokens", encode_base10(vp.1, 8), token_pair.1);
 
@@ -386,19 +385,19 @@ async fn init_swap(
     };
 
     /*
-<<<<<<< HEAD
-    // Build proving keys
-    let pb = progress_bar("Building proving key for the mint contract");
-    let mint_pk = ProvingKey::build(8, &MintContract::default());
-    pb.finish();
+    <<<<<<< HEAD
+        // Build proving keys
+        let pb = progress_bar("Building proving key for the mint contract");
+        let mint_pk = ProvingKey::build(8, &MintContract::default());
+        pb.finish();
 
-    let pb = progress_bar("Building proving key for the burn contract");
-    let burn_pk = ProvingKey::build(11, &BurnContract::default());
-    pb.finish();
+        let pb = progress_bar("Building proving key for the burn contract");
+        let burn_pk = ProvingKey::build(11, &BurnContract::default());
+        pb.finish();
 
-    // The coin we want to receive.
-    =======
-    */
+        // The coin we want to receive.
+        =======
+        */
     // Build ZK proving keys
     let pb = progress_bar("Building proving key for the Mint contract");
     let mint_pk = ProvingKey::build(11, &MintContract::default());
@@ -414,11 +413,11 @@ async fn init_swap(
     let recv_token_blind = DrkValueBlind::random(&mut OsRng);
     let recv_coin_blind = DrkCoinBlind::random(&mut OsRng);
     let recv_serial = DrkSerial::random(&mut OsRng);
-/*
-<<<<<<< HEAD
-    let pb = progress_bar("Building mint proof for receiving coin");
-    =======
-    */
+    /*
+    <<<<<<< HEAD
+        let pb = progress_bar("Building mint proof for receiving coin");
+        =======
+        */
     // Spend hook and user data disabled
     let spend_hook = DrkSpendHook::from(0);
     let user_data = DrkUserData::from(0);
@@ -433,28 +432,27 @@ async fn init_swap(
         recv_token_blind,
         recv_serial,
         /*
-<<<<<<< HEAD
-        recv_coin_blind,
-        our_publickey,
-        =======
-        */
+        <<<<<<< HEAD
+                recv_coin_blind,
+                our_publickey,
+                =======
+                */
         spend_hook,
         user_data,
         recv_coin_blind,
         our_pubk,
-
     )?;
     pb.finish();
 
     // The coin we are spending.
     /*
-<<<<<<< HEAD
-    // We'll spend the first one we've found.
-    let coin = coins[0];
+    <<<<<<< HEAD
+        // We'll spend the first one we've found.
+        let coin = coins[0];
 
-    let pb = progress_bar("Building burn proof for spending coin");
-    =======
-    */
+        let pb = progress_bar("Building burn proof for spending coin");
+        =======
+        */
     let coin = coins[0].clone();
 
     let pb = progress_bar("Building Burn proof for the spending coin");
@@ -463,18 +461,15 @@ async fn init_swap(
     let merkle_path = match rpc.get_merkle_path(usize::from(coin.leaf_position)).await {
         Ok(v) => v,
         Err(e) => {
-
             eprintln!("Failed to get Merkle path for our coin from darkfid RPC: {}", e);
             exit(1);
         }
     };
 
-
     // Spend hook and user data disabled
     let spend_hook = DrkSpendHook::from(0);
     let user_data = DrkUserData::from(0);
     let user_data_blind = DrkUserDataBlind::random(&mut OsRng);
-
 
     let (burn_proof, burn_revealed) = create_burn_proof(
         &burn_pk,
@@ -495,12 +490,12 @@ async fn init_swap(
     pb.finish();
 
     /*
-<<<<<<< HEAD
-    // Pack proofs together with pedersen commitment openings so
-    // counterparty can verify correctness.
-    let swap_data = SwapData {
-    =======
-    */
+    <<<<<<< HEAD
+        // Pack proofs together with pedersen commitment openings so
+        // counterparty can verify correctness.
+        let swap_data = SwapData {
+        =======
+        */
     // Create encrypted note
     let note = Note {
         serial: recv_serial,
@@ -517,7 +512,6 @@ async fn init_swap(
     // Pack proofs together with pedersen commitment openings so
     // counterparty can verify correctness.
     let partial_swap_data = PartialSwapData {
-
         mint_proof,
         mint_revealed,
         mint_value: vp.1,
@@ -531,18 +525,18 @@ async fn init_swap(
         burn_value_blind: coin.note.value_blind,
         burn_token_blind: coin.note.token_blind,
         /*
-<<<<<<< HEAD
-    };
+        <<<<<<< HEAD
+            };
 
-    // Print encoded data.
-    println!("{}", bs58::encode(serialize(&swap_data)).into_string());
+            // Print encoded data.
+            println!("{}", bs58::encode(serialize(&swap_data)).into_string());
 
-    Ok(())
-}
+            Ok(())
+        }
 
-fn inspect(data: &str) -> Result<()> {
-        =======
-        */
+        fn inspect(data: &str) -> Result<()> {
+                =======
+                */
         encrypted_note,
     };
 
@@ -550,7 +544,6 @@ fn inspect(data: &str) -> Result<()> {
 }
 
 fn inspect_partial(data: &str) -> Result<()> {
-
     let mut mint_valid = false;
     let mut burn_valid = false;
     let mut mint_value_valid = false;
@@ -567,13 +560,13 @@ fn inspect_partial(data: &str) -> Result<()> {
     };
 
     /*
-<<<<<<< HEAD
-    let sd: SwapData = match deserialize(&bytes) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("Error: Failed to deserialize swap data into struct: {}", e);
-    =======
-    */
+    <<<<<<< HEAD
+        let sd: SwapData = match deserialize(&bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Error: Failed to deserialize swap data into struct: {}", e);
+        =======
+        */
     let sd: PartialSwapData = match deserialize(&bytes) {
         Ok(v) => v,
         Err(e) => {
@@ -584,21 +577,21 @@ fn inspect_partial(data: &str) -> Result<()> {
     };
 
     /*
-<<<<<<< HEAD
-    eprintln!("Successfully decoded data into SwapData struct");
+    <<<<<<< HEAD
+        eprintln!("Successfully decoded data into SwapData struct");
 
-    // Build verifying keys
-    let pb = progress_bar("Building verifying key for the mint contract");
-    let mint_vk = VerifyingKey::build(8, &MintContract::default());
-    pb.finish();
+        // Build verifying keys
+        let pb = progress_bar("Building verifying key for the mint contract");
+        let mint_vk = VerifyingKey::build(8, &MintContract::default());
+        pb.finish();
 
-    let pb = progress_bar("Building verifying key for the burn contract");
-    let burn_vk = VerifyingKey::build(11, &BurnContract::default());
-    pb.finish();
+        let pb = progress_bar("Building verifying key for the burn contract");
+        let burn_vk = VerifyingKey::build(11, &BurnContract::default());
+        pb.finish();
 
-    let pb = progress_bar("Verifying burn proof");
-    =======
-    */
+        let pb = progress_bar("Verifying burn proof");
+        =======
+        */
     eprintln!("Successfully decoded partial swap data");
 
     // Build ZK verifying keys
@@ -618,10 +611,10 @@ fn inspect_partial(data: &str) -> Result<()> {
     pb.finish();
 
     /*
-<<<<<<< HEAD
-    let pb = progress_bar("Verifying mint proof");
-    =======
-    */
+    <<<<<<< HEAD
+        let pb = progress_bar("Verifying mint proof");
+        =======
+        */
     let pb = progress_bar("Verifying Mint proof");
 
     if verify_mint_proof(&mint_vk, &sd.mint_proof, &sd.mint_revealed).is_ok() {
@@ -630,12 +623,11 @@ fn inspect_partial(data: &str) -> Result<()> {
     pb.finish();
 
     /*
-<<<<<<< HEAD
-    eprintln!("  Verifying pedersen commitments");
-    =======
-    */
+    <<<<<<< HEAD
+        eprintln!("  Verifying pedersen commitments");
+        =======
+        */
     eprintln!("  Verifying Pedersen commitments");
-
 
     if pedersen_commitment_u64(sd.burn_value, sd.burn_value_blind) == sd.burn_revealed.value_commit
     {
@@ -722,22 +714,22 @@ fn inspect_partial(data: &str) -> Result<()> {
     );
 
     /*
-<<<<<<< HEAD
-    if !valid {
-        eprintln!(
-            "\nThe ZK proofs and commitments inspected are {}NOT VALID{}",
-            color::Fg(color::Red),
-            color::Fg(color::Reset)
-        );
-        exit(1);
-    } else {
-        eprintln!(
-            "\nThe ZK proofs and commitments inspected are {}VALID{}",
-            color::Fg(color::Green),
-            color::Fg(color::Reset)
-        );
-        =======
-            */
+    <<<<<<< HEAD
+        if !valid {
+            eprintln!(
+                "\nThe ZK proofs and commitments inspected are {}NOT VALID{}",
+                color::Fg(color::Red),
+                color::Fg(color::Reset)
+            );
+            exit(1);
+        } else {
+            eprintln!(
+                "\nThe ZK proofs and commitments inspected are {}VALID{}",
+                color::Fg(color::Green),
+                color::Fg(color::Reset)
+            );
+            =======
+                */
     eprint!("\nThe ZK proofs and commitments inspected are ");
     if !valid {
         println!("{}", fg_red("NOT VALID"));
@@ -929,7 +921,6 @@ fn try_sign_tx(note: &Note, tx_data: &[u8]) -> Result<schnorr::Signature> {
     eprintln!("Signing transaction...");
     let signature = secret.sign(tx_data);
     Ok(signature)
-
 }
 
 #[async_std::main]
@@ -941,16 +932,16 @@ async fn main() -> Result<()> {
             let token_pair = parse_token_pair(&token_pair)?;
             let value_pair = parse_value_pair(&value_pair)?;
             /*
-            <<<<<<< HEAD
+                <<<<<<< HEAD
 
-            init_swap(args.endpoint, token_pair, value_pair).await
-        }
-        Subcmd::Inspect => {
-            let mut buf = String::new();
-            stdin().read_to_string(&mut buf)?;
-            inspect(&buf.trim())
-            =======
-            */
+                init_swap(args.endpoint, token_pair, value_pair).await
+            }
+            Subcmd::Inspect => {
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                inspect(&buf.trim())
+                =======
+                */
             let swap_data = init_swap(args.endpoint, token_pair, value_pair).await?;
 
             println!("{}", bs58::encode(serialize(&swap_data)).into_string());

@@ -130,7 +130,6 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         Ok(())
     }
 
-
     /*
     pub fn witness_less_than2(
         &self,

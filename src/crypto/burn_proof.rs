@@ -18,7 +18,7 @@ use crate::{
             DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
             DrkUserDataBlind, DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
         },
-        util::{poseidon_hash},
+        util::poseidon_hash,
     },
     util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::burn_contract::BurnContract,

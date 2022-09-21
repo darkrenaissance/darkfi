@@ -7,14 +7,13 @@ use crate::{
 };
 
 pub mod epoch;
-pub use epoch::{Epoch, EpochItem,EpochConsensus};
+pub use epoch::{Epoch, EpochConsensus, EpochItem};
 
 pub mod blockstore;
 pub use blockstore::{BlockOrderStore, BlockStore, HeaderStore};
 
 pub mod metadatastore;
-pub use metadatastore::StreamletMetadataStore;
-pub use metadatastore::OuroborosMetadataStore;
+pub use metadatastore::{OuroborosMetadataStore, StreamletMetadataStore};
 
 pub mod nfstore;
 pub use nfstore::NullifierStore;
@@ -90,7 +89,7 @@ impl Blockchain {
             // Store block
             //let _block = Block::new(headerhash[0], tx_hashes, block.m.clone());
             //self.blocks.insert(&[_block])?;
-            let blk : Block = Block::from(block.clone());
+            let blk: Block = Block::from(block.clone());
             self.blocks.insert(&[blk])?;
 
             // Store block order
@@ -101,7 +100,6 @@ impl Blockchain {
 
             // Store streamlet metadata
             self.streamlet_metadata.insert(&[headerhash[0]], &[block.sm.clone()])?;
-
 
             // NOTE: The nullifiers and Merkle roots are applied in the state
             // transition apply function.
@@ -173,5 +171,4 @@ impl Blockchain {
         let (hash, _) = self.ouroboros_metadata.get_last().unwrap();
         Ok(hash)
     }
-
 }

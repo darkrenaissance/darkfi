@@ -24,7 +24,6 @@ use halo2_proofs::{
 };
 use log::{debug, error};
 
-
 pub use super::vm_stack::{StackVar, Witness};
 use super::{
     assign_free_advice,
@@ -63,7 +62,6 @@ pub struct VmConfig {
     native_253_range_check_config: NativeRangeCheckConfig<3, 253, 85>,
     lessthan_config: LessThanConfig<3, 253, 85>,
     boolcheck_config: SmallRangeCheckConfig,
-
 }
 
 impl VmConfig {
@@ -255,7 +253,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
             native_253_range_check_config,
             lessthan_config,
             boolcheck_config,
-
         }
     }
 

@@ -1,5 +1,5 @@
 use crate::{
-    consensus::{Block, StreamletMetadata, OuroborosMetadata, TransactionLeadProof},
+    consensus::{Block, OuroborosMetadata, StreamletMetadata, TransactionLeadProof},
     util::{
         serial::{deserialize, serialize},
         time::Timestamp,
@@ -104,7 +104,6 @@ impl StreamletMetadataStore {
     }
 }
 
-
 #[derive(Clone)]
 pub struct OuroborosMetadataStore(sled::Tree);
 
@@ -113,20 +112,16 @@ impl OuroborosMetadataStore {
     pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let tree = db.open_tree(SLED_OUROBOROS_METADATA_TREE)?;
         let store = Self(tree);
-        let eta : [u8;32] = *blake3::hash(b"let there be dark!").as_bytes();
+        let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
         // In case the store is empty, initialize it with the genesis block.
         if store.0.is_empty() {
             let genesis_block = Block::genesis_block(genesis_ts, genesis_data);
             let genesis_hash = blake3::hash(&serialize(&genesis_block));
 
             let empty_lead_proof = TransactionLeadProof::default();
-            let metadata = OuroborosMetadata {
-                eta: eta,
-                lead_proof: empty_lead_proof,
-            };
+            let metadata = OuroborosMetadata { eta, lead_proof: empty_lead_proof };
 
-            store.insert(&[genesis_hash],
-                         &[metadata])?;
+            store.insert(&[genesis_hash], &[metadata])?;
         }
 
         Ok(store)
@@ -199,6 +194,6 @@ impl OuroborosMetadataStore {
     /// Retrive last key/val
     pub fn get_last(&self) -> Result<(blake3::Hash, OuroborosMetadata)> {
         let all = self.get_all().unwrap();
-        Ok(all[all.len()-1].clone())
+        Ok(all[all.len() - 1].clone())
     }
 }

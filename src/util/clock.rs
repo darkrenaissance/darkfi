@@ -1,45 +1,47 @@
-use url::Url;
+use crate::{util::Timestamp, Result};
 use log::debug;
-use std::time::Duration;
-use std::thread;
-use crate::{
-    util::{Timestamp},
-    Result,
-};
+use std::{thread, time::Duration};
+use url::Url;
 
 pub enum Ticks {
-    GENESIS{e: u64, sl: u64}, //genesis epoch
-    NEWSLOT{e: u64, sl: u64}, // new slot
-    NEWEPOCH{e: u64, sl: u64}, // new epoch
-    TOCKS, //tocks, or slot is ending
-    IDLE, // idle clock state
-    OUTOFSYNC, //clock, and blockchain are out of sync
+    GENESIS { e: u64, sl: u64 },  //genesis epoch
+    NEWSLOT { e: u64, sl: u64 },  // new slot
+    NEWEPOCH { e: u64, sl: u64 }, // new epoch
+    TOCKS,                        //tocks, or slot is ending
+    IDLE,                         // idle clock state
+    OUTOFSYNC,                    //clock, and blockchain are out of sync
 }
 
-const BB_SL : u64 = u64::MAX-1; //big bang slot time (need to be negative value)
-const BB_E : u64 = 0; //big bang epoch time.
+const BB_SL: u64 = u64::MAX - 1; //big bang slot time (need to be negative value)
+const BB_E: u64 = 0; //big bang epoch time.
 
 #[derive(Debug)]
 pub struct Clock {
-    pub sl : u64, // relative slot index (zero-based) [0-len[
-    pub e : u64, //epoch index (zero-based) [0-\inf[
+    pub sl: u64,       // relative slot index (zero-based) [0-len[
+    pub e: u64,        //epoch index (zero-based) [0-\inf[
     pub tick_len: u64, // tick length in time
-    pub sl_len: u64, // slot length in ticks
-    pub e_len: u64, // epoch length in slots
+    pub sl_len: u64,   // slot length in ticks
+    pub e_len: u64,    // epoch length in slots
     pub peers: Vec<Url>,
     pub genesis_time: Timestamp,
 }
 
 impl Clock {
-    pub fn new(e_len: Option<u64>, sl_len: Option<u64>, tick_len: Option<u64>, peers: Vec<Url>) -> Self{
-        let gt : Timestamp = Timestamp::current_time();
-        Self { sl: BB_SL, //necessary for genesis slot
-               e: BB_E,
-               tick_len: tick_len.unwrap_or(22), // 22 seconds
-               sl_len: sl_len.unwrap_or(22),// ~8 minutes
-               e_len: e_len.unwrap_or(3), // 24.2 minutes
-               peers: peers,
-               genesis_time: gt,
+    pub fn new(
+        e_len: Option<u64>,
+        sl_len: Option<u64>,
+        tick_len: Option<u64>,
+        peers: Vec<Url>,
+    ) -> Self {
+        let gt: Timestamp = Timestamp::current_time();
+        Self {
+            sl: BB_SL, //necessary for genesis slot
+            e: BB_E,
+            tick_len: tick_len.unwrap_or(22), // 22 seconds
+            sl_len: sl_len.unwrap_or(22),     // ~8 minutes
+            e_len: e_len.unwrap_or(3),        // 24.2 minutes
+            peers,
+            genesis_time: gt,
         }
     }
 
@@ -54,22 +56,22 @@ impl Clock {
     async fn time(&self) -> Result<Timestamp> {
         //TODO (fix) add more than ntp server to time, and take the avg
         /*
-        match time::check_clock(self.peers.clone()).await {
-            Ok(t) => {
-                Ok(time::ntp_request().await?)
-            },
-            Err(e) => {
-                Err(Error::ClockOutOfSync(e.to_string()))
-            }
-    }
-        */
+            match time::check_clock(self.peers.clone()).await {
+                Ok(t) => {
+                    Ok(time::ntp_request().await?)
+                },
+                Err(e) => {
+                    Err(Error::ClockOutOfSync(e.to_string()))
+                }
+        }
+            */
         Ok(Timestamp::current_time())
     }
 
     /// time since genesis
     async fn time_to_genesis(&self) -> Timestamp {
         //TODO this value need to be assigned to kickoff time.
-        let genesis_time : i64 = self.genesis_time.0;
+        let genesis_time: i64 = self.genesis_time.0;
         let abs_time = self.time().await.unwrap();
         Timestamp(abs_time.0 - genesis_time)
     }
@@ -84,12 +86,12 @@ impl Clock {
 
     /// return true if the clock is at the begining (before 2/3 of the slot).
     async fn ticking(&self) -> bool {
-        let (abs, rel) =  self.tick_time().await;
+        let (abs, rel) = self.tick_time().await;
         debug!("abs ticks: {}, rel ticks: {}", abs, rel);
-        rel < (self.tick_len) /3
+        rel < (self.tick_len) / 3
     }
 
-    pub async fn sync(& mut self) -> Result<()> {
+    pub async fn sync(&mut self) -> Result<()> {
         let e = self.epoch_abs().await;
         let sl = self.slot_relative().await;
         self.sl = sl;
@@ -105,7 +107,7 @@ impl Clock {
     }
 
     /// relative zero based slot index
-    async fn  slot_relative(&self) -> u64 {
+    async fn slot_relative(&self) -> u64 {
         let e_abs = self.slot_abs().await % self.e_len;
         debug!("[slot_relative] slot len: {} - slot relative: {}", self.sl_len, e_abs);
         e_abs
@@ -123,28 +125,29 @@ impl Clock {
         let e = self.epoch_abs().await;
         let sl = self.slot_relative().await;
         if self.ticking().await {
-            debug!("e/e`: {}/{} sl/sl`: {}/{}, BB_E/BB_SL: {}/{}", e, self.e, sl, self.sl, BB_E, BB_SL);
-            if e==self.e&&e==BB_E &&  self.sl==BB_SL {
-                self.sl=sl+1; // 0
-                self.e=e; // 0
+            debug!(
+                "e/e`: {}/{} sl/sl`: {}/{}, BB_E/BB_SL: {}/{}",
+                e, self.e, sl, self.sl, BB_E, BB_SL
+            );
+            if e == self.e && e == BB_E && self.sl == BB_SL {
+                self.sl = sl + 1; // 0
+                self.e = e; // 0
                 debug!("new genesis");
-                Ticks::GENESIS{e:e, sl:sl}
-            } else if e==self.e&&sl==self.sl+1 {
-                self.sl=sl;
+                Ticks::GENESIS { e, sl }
+            } else if e == self.e && sl == self.sl + 1 {
+                self.sl = sl;
                 debug!("new slot");
-                Ticks::NEWSLOT{e:e, sl:sl}
-            } else if e==self.e+1 && sl==0 {
-                self.e=e;
-                self.sl=sl;
+                Ticks::NEWSLOT { e, sl }
+            } else if e == self.e + 1 && sl == 0 {
+                self.e = e;
+                self.sl = sl;
                 debug!("new epoch");
-                Ticks::NEWEPOCH{e:e, sl:sl}
-            }
-            else if e==self.e && sl==self.sl {
+                Ticks::NEWEPOCH { e, sl }
+            } else if e == self.e && sl == self.sl {
                 debug!("clock is idle");
                 thread::sleep(Duration::from_millis(100));
                 Ticks::IDLE
-            }
-            else {
+            } else {
                 debug!("clock is out of sync");
                 //clock is out of sync
                 Ticks::OUTOFSYNC

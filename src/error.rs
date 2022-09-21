@@ -321,7 +321,6 @@ pub enum Error {
     // ==============
     #[error("Did not find key")]
     UnknownKey,
-
 }
 
 /// Transaction verification errors
@@ -365,7 +364,6 @@ pub enum VerifyFailed {
 
     #[error("Internal error: {0}")]
     InternalError(String),
-
 }
 
 /// Client module errors

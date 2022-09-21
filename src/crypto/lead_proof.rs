@@ -1,18 +1,15 @@
-use log::{
-    error
-};
+use log::error;
 
 use rand::rngs::OsRng;
 
 use crate::{
     crypto::{
-        types::*,
         leadcoin::LeadCoin,
         proof::{Proof, ProvingKey, VerifyingKey},
+        types::*,
     },
-    Result, VerifyResult, VerifyFailed,
+    Result, VerifyFailed, VerifyResult,
 };
-
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_lead_proof(pk: &ProvingKey, coin: LeadCoin) -> Result<Proof> {
@@ -22,11 +19,13 @@ pub fn create_lead_proof(pk: &ProvingKey, coin: LeadCoin) -> Result<Proof> {
     Ok(proof)
 }
 
-pub fn verify_lead_proof(vk: &VerifyingKey,
-                         proof: &Proof,
-                         public_inputs: &[DrkCircuitField]) -> VerifyResult<()> {
+pub fn verify_lead_proof(
+    vk: &VerifyingKey,
+    proof: &Proof,
+    public_inputs: &[DrkCircuitField],
+) -> VerifyResult<()> {
     match proof.verify(vk, public_inputs) {
-        Ok(()) => {Ok(())},
+        Ok(()) => Ok(()),
         Err(e) => {
             error!("lead verification failed: {}", e);
             Err(VerifyFailed::InternalError("lead verification failure".to_string()))

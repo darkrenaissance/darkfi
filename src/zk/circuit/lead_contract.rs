@@ -1,9 +1,20 @@
+use crate::crypto::{
+    constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
+        util::gen_const_array,
+        NullifierK, OrchardFixedBases, OrchardFixedBasesFull, MERKLE_DEPTH_ORCHARD,
+    },
+    merkle_node::MerkleNode,
+};
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
         FixedPoint, FixedPointBaseField, ScalarFixed,
     },
-    poseidon::{primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig},
+    poseidon::{
+        primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
+        Pow5Config as PoseidonConfig,
+    },
     sinsemilla::{
         chip::{SinsemillaChip, SinsemillaConfig},
         merkle::{
@@ -15,31 +26,22 @@ use halo2_gadgets::{
 };
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn,},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn},
 };
 use pasta_curves::{pallas, Fp};
-use crate::crypto::{
-    constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-        util::gen_const_array,
-        OrchardFixedBases, OrchardFixedBasesFull, MERKLE_DEPTH_ORCHARD, NullifierK,
-    },
-    merkle_node::MerkleNode,
-};
 
 use crate::zk::gadget::{
     arithmetic::{ArithChip, ArithConfig, ArithInstruction},
     //even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
-
-    less_than::{ LessThanConfig, LessThanChip},
-    native_range_check::{NativeRangeCheckChip},
+    less_than::{LessThanChip, LessThanConfig},
+    native_range_check::NativeRangeCheckChip,
 };
 
 const WINDOW_SIZE: usize = 3;
 const NUM_OF_BITS: usize = 254;
 const NUM_OF_WINDOWS: usize = 85;
 
-const PRF_NULLIFIER_PREFIX : u64 = 0;
+const PRF_NULLIFIER_PREFIX: u64 = 0;
 
 #[derive(Clone, Debug)]
 pub struct LeadConfig {
@@ -54,7 +56,7 @@ pub struct LeadConfig {
     _sinsemilla_config_2:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
 
-    lessthan_config: LessThanConfig<WINDOW_SIZE,NUM_OF_BITS,NUM_OF_WINDOWS>,
+    lessthan_config: LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>,
 
     arith_config: ArithConfig,
 }
@@ -80,17 +82,14 @@ impl LeadConfig {
         MerkleChip::construct(self.merkle_config_2.clone())
     }
 
-
-    fn lessthan_chip(&self) -> LessThanChip<WINDOW_SIZE,NUM_OF_BITS,NUM_OF_WINDOWS> {
+    fn lessthan_chip(&self) -> LessThanChip<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS> {
         LessThanChip::construct(self.lessthan_config.clone())
     }
 
     fn arith_chip(&self) -> ArithChip {
         ArithChip::construct(self.arith_config.clone())
-     }
+    }
 }
-
-
 
 const LEAD_COIN_COMMIT_X_OFFSET: usize = 0;
 const LEAD_COIN_COMMIT_Y_OFFSET: usize = 1;
@@ -101,12 +100,11 @@ const LEAD_COIN_COMMIT_PATH_OFFSET: usize = 5;
 const LEAD_COIN_PK_OFFSET: usize = 6;
 const LEAD_COIN_SERIAL_NUMBER_OFFSET: usize = 7;
 const LEAD_Y_COMMIT_BASE_OFFSET: usize = 8;
-const LEAD_RHO_COMMIT_BASE_OFFSET: usize =9;
+const LEAD_RHO_COMMIT_BASE_OFFSET: usize = 9;
 
 pub fn concat_u8(lhs: &[u8], rhs: &[u8]) -> Vec<u8> {
     [lhs, rhs].concat()
 }
-
 
 #[derive(Default, Debug)]
 pub struct LeadContract {
@@ -231,7 +229,6 @@ impl Circuit<pallas::Base> for LeadContract {
 
         let k_values_table = meta.lookup_table_column();
 
-
         let lessthan_config = {
             let a = meta.advice_column();
             let b = meta.advice_column();
@@ -247,7 +244,6 @@ impl Circuit<pallas::Base> for LeadContract {
                 a_offset,
                 k_values_table,
             )
-
         };
 
         let arith_config = ArithChip::configure(meta, advices[7], advices[8], advices[6]);
@@ -266,12 +262,11 @@ impl Circuit<pallas::Base> for LeadContract {
         }
     }
 
-    fn synthesize (
+    fn synthesize(
         &self,
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
-
         let less_than_chip = config.lessthan_chip();
         NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::load_k_table(
             &mut layouter,
@@ -322,11 +317,8 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
         // staking coin secret key
-        let _root_sk = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            self.root_sk
-        )?;
+        let _root_sk =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.root_sk)?;
 
         // sigma scalar is 2^254/(total network stake + epsilon)
         let sigma_scalar = self.load_private(
@@ -345,14 +337,17 @@ impl Circuit<pallas::Base> for LeadContract {
         // coin public key pk=PRF_{root_sk}(tau)
         // coin public key is pseudo random hash of concatenation of the following:
         // coin timestamp, and root of coin's secret key.
-        let coin_pk_commit : AssignedCell<Fp,Fp> = {
-            let poseidon_message = [
-                coin_timestamp.clone(),
-                _root_sk.clone(),
-            ];
-            let poseidon_hasher = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
-                config.poseidon_chip(),
-                layouter.namespace(|| "Poseidon init"),
+        let coin_pk_commit: AssignedCell<Fp, Fp> = {
+            let poseidon_message = [coin_timestamp.clone(), _root_sk.clone()];
+            let poseidon_hasher = PoseidonHash::<
+                _,
+                _,
+                poseidon::P128Pow5T3,
+                poseidon::ConstantLength<2>,
+                3,
+                2,
+            >::init(
+                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
             let poseidon_output =
@@ -361,18 +356,20 @@ impl Circuit<pallas::Base> for LeadContract {
             poseidon_output
         };
 
-
         // coin c1 serial number sn=PRF_{root_sk}(nonce)
         // coin's serial number is derived from coin nonce (sampled at random)
         // and root of the coin's secret key sampled an random.
-        let sn_commit : AssignedCell<Fp,Fp> = {
-            let poseidon_message = [
-                coin_nonce.clone(),
-                _root_sk.clone()
-            ];
-            let poseidon_hasher = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
-                config.poseidon_chip(),
-                layouter.namespace(|| "Poseidon init"),
+        let sn_commit: AssignedCell<Fp, Fp> = {
+            let poseidon_message = [coin_nonce.clone(), _root_sk.clone()];
+            let poseidon_hasher = PoseidonHash::<
+                _,
+                _,
+                poseidon::P128Pow5T3,
+                poseidon::ConstantLength<2>,
+                3,
+                2,
+            >::init(
+                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
             let poseidon_output =
@@ -386,19 +383,27 @@ impl Circuit<pallas::Base> for LeadContract {
         let com = {
             // coin c1 nullifier is a commitment of the following
             // nullifier input
-            let nullifier_msg : AssignedCell<Fp,Fp> = {
-                let poseidon_message =  [
+            let nullifier_msg: AssignedCell<Fp, Fp> = {
+                let poseidon_message = [
                     prf_nullifier_prefix_base.clone(),
                     coin_pk_commit.clone(),
                     coin_value.clone(),
                     coin_nonce.clone(),
                 ];
-                let poseidon_hasher = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init(
+                let poseidon_hasher = PoseidonHash::<
+                    _,
+                    _,
+                    poseidon::P128Pow5T3,
+                    poseidon::ConstantLength<4>,
+                    3,
+                    2,
+                >::init(
                     config.poseidon_chip(),
                     layouter.namespace(|| "Poseidon init"),
                 )?;
 
-                let poseidon_output = poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
+                let poseidon_output = poseidon_hasher
+                    .hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
                 let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
                 poseidon_output
             };
@@ -413,7 +418,8 @@ impl Circuit<pallas::Base> for LeadContract {
                 layouter.namespace(|| "coin1 blind scalar"),
                 self.coin1_blind,
             )?;
-            let coin_commit_r = FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
+            let coin_commit_r =
+                FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), rcv)?
         };
 
@@ -424,14 +430,17 @@ impl Circuit<pallas::Base> for LeadContract {
         // nonce2  =  PRF_{root_sk}(coin_nonce)
         // poured coin derived nonce as a poseidon of the previous nonce, and
         // root of secret key.
-        let coin2_nonce : AssignedCell<Fp,Fp> = {
-            let poseidon_message = [
-                coin_nonce.clone(),
-                _root_sk.clone()
-            ];
-            let poseidon_hasher = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
-                config.poseidon_chip(),
-                layouter.namespace(|| "Poseidon init"),
+        let coin2_nonce: AssignedCell<Fp, Fp> = {
+            let poseidon_message = [coin_nonce.clone(), _root_sk.clone()];
+            let poseidon_hasher = PoseidonHash::<
+                _,
+                _,
+                poseidon::P128Pow5T3,
+                poseidon::ConstantLength<2>,
+                3,
+                2,
+            >::init(
+                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
             let poseidon_output =
@@ -445,23 +454,30 @@ impl Circuit<pallas::Base> for LeadContract {
         let com2 = {
             // coin2's commitment input body as a poseidon of input concatenation of
             // public key, stake, and poured coin's nonce.
-            let nullifier2_msg : AssignedCell<Fp,Fp> = {
+            let nullifier2_msg: AssignedCell<Fp, Fp> = {
                 let poseidon_message = [
                     prf_nullifier_prefix_base.clone(),
                     coin_pk_commit.clone(),
                     coin_value.clone(),
                     coin2_nonce.clone(),
                 ];
-                let poseidon_hasher = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init(
+                let poseidon_hasher = PoseidonHash::<
+                    _,
+                    _,
+                    poseidon::P128Pow5T3,
+                    poseidon::ConstantLength<4>,
+                    3,
+                    2,
+                >::init(
                     config.poseidon_chip(),
                     layouter.namespace(|| "Poseidon init"),
                 )?;
 
-                let poseidon_output =
-                    poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
+                let poseidon_output = poseidon_hasher
+                    .hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
                 let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
                 poseidon_output
-        };
+            };
             let coin_commit_v = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
             coin_commit_v.mul(layouter.namespace(|| "coin commit v"), nullifier2_msg)?
         };
@@ -472,16 +488,17 @@ impl Circuit<pallas::Base> for LeadContract {
                 layouter.namespace(|| "coin2 blind scalar"),
                 self.coin2_blind,
             )?;
-            let coin_commit_r = FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
+            let coin_commit_r =
+                FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), coin2_blind)?
         };
         let coin2_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let coin2_commit_x: AssignedCell<Fp, Fp> = coin2_commit.inner().x();
         let coin2_commit_y: AssignedCell<Fp, Fp> = coin2_commit.inner().y();
 
-
         // path is valid path to staked coin's commitment
-        let path : Value<[pallas::Base;MERKLE_DEPTH_ORCHARD]> = self.path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
+        let path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
+            self.path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
         let merkle_inputs = MerklePath::construct(
             [config.merkle_chip_1(), config.merkle_chip_2()],
@@ -500,20 +517,24 @@ impl Circuit<pallas::Base> for LeadContract {
             )?;
             res
         };
-        let computed_final_root = merkle_inputs .calculate_root(layouter.namespace(|| "calculate root"), coin_commit_prod)?;
+        let computed_final_root = merkle_inputs
+            .calculate_root(layouter.namespace(|| "calculate root"), coin_commit_prod)?;
 
         // lhs of the leader election lottery
         // *  y as COMIT(root_sk||nonce, mau_y)
         // beging the commitment to the coin's secret key, coin's nonce, and
         // random value deriven from the epoch sampled random eta.
-        let lottery_commit_msg : AssignedCell<Fp,Fp> = {
-            let poseidon_message = [
-                _root_sk.clone(),
-                coin_nonce.clone(),
-            ];
-            let poseidon_hasher = PoseidonHash::<_, _, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
-                config.poseidon_chip(),
-                layouter.namespace(|| "Poseidon init"),
+        let lottery_commit_msg: AssignedCell<Fp, Fp> = {
+            let poseidon_message = [_root_sk.clone(), coin_nonce.clone()];
+            let poseidon_hasher = PoseidonHash::<
+                _,
+                _,
+                poseidon::P128Pow5T3,
+                poseidon::ConstantLength<2>,
+                3,
+                2,
+            >::init(
+                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
             let poseidon_output =
@@ -523,7 +544,7 @@ impl Circuit<pallas::Base> for LeadContract {
         };
 
         let com = {
-            let y_commit_v = FixedPointBaseField::from_inner(ecc_chip.clone(),  NullifierK);
+            let y_commit_v = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
             y_commit_v.mul(layouter.namespace(|| "coin commit v"), lottery_commit_msg)?
         };
 
@@ -534,7 +555,8 @@ impl Circuit<pallas::Base> for LeadContract {
                 layouter.namespace(|| "mau_y scalar"),
                 self.mau_y,
             )?;
-            let y_commit_r = FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
+            let y_commit_r =
+                FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             y_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_y)?
         };
         let y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
@@ -546,25 +568,27 @@ impl Circuit<pallas::Base> for LeadContract {
             let mau_rho = ScalarFixed::new(
                 ecc_chip.clone(),
                 layouter.namespace(|| "mau_rho scalar"),
-                self.mau_rho
+                self.mau_rho,
             )?;
-            let rho_commit_r = FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
+            let rho_commit_r =
+                FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_rho)?
         };
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let rho_commit_base = rho_commit.inner().x();
         // stakeholder absolute stake + 1 (epsilon)
         let stake_plus = ar_chip.add(layouter.namespace(|| ""), &one, &coin_value.clone())?;
-        let target = ar_chip.mul(layouter.namespace(|| "calculate target"), &sigma_scalar, &stake_plus)?;
+        let target =
+            ar_chip.mul(layouter.namespace(|| "calculate target"), &sigma_scalar, &stake_plus)?;
 
-        let y : Value<pallas::Base> = y_commit_base.value().cloned();
-        let target : Value<pallas::Base> = target.value().cloned();
+        let y: Value<pallas::Base> = y_commit_base.value().cloned();
+        let target: Value<pallas::Base> = target.value().cloned();
         less_than_chip.witness_less_than(
             layouter.namespace(|| "y < target"),
             target, //reversed for testing
             y,
             0,
-            true
+            true,
         )?;
 
         layouter.constrain_instance(
@@ -580,7 +604,6 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_Y_OFFSET,
         )?;
 
-
         layouter.constrain_instance(
             coin2_commit_x.cell(),
             config.primary,
@@ -593,13 +616,11 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT2_Y_OFFSET,
         )?;
 
-
         layouter.constrain_instance(
             coin2_nonce.clone().cell(),
             config.primary,
             LEAD_COIN_NONCE2_OFFSET,
         )?;
-
 
         layouter.constrain_instance(
             computed_final_root.cell(),
@@ -607,12 +628,7 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_PATH_OFFSET,
         )?;
 
-
-        layouter.constrain_instance(
-        coin_pk_commit.cell(),
-        config.primary,
-        LEAD_COIN_PK_OFFSET,
-        )?;
+        layouter.constrain_instance(coin_pk_commit.cell(), config.primary, LEAD_COIN_PK_OFFSET)?;
 
         // constrain coin's pub key x value
         layouter.constrain_instance(

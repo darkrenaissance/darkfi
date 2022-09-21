@@ -1,14 +1,14 @@
 use std::fmt;
 
+use super::{
+    OuroborosMetadata, StakeholderMetadata, StreamletMetadata, BLOCK_MAGIC_BYTES, BLOCK_VERSION,
+};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use pasta_curves::pallas;
-use super::{StakeholderMetadata, StreamletMetadata, OuroborosMetadata, BLOCK_MAGIC_BYTES, BLOCK_VERSION};
 
 use crate::{
-    crypto::{
-        constants::MERKLE_DEPTH, merkle_node::MerkleNode,
-    },
+    crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode},
     net,
     tx::Transaction,
     util::{
@@ -62,7 +62,13 @@ impl Header {
 
 impl Default for Header {
     fn default() -> Self {
-        Header::new(blake3::hash(b""), 0 ,0, Timestamp::current_time(), MerkleNode(pallas::Base::zero()))
+        Header::new(
+            blake3::hash(b""),
+            0,
+            0,
+            Timestamp::current_time(),
+            MerkleNode(pallas::Base::zero()),
+        )
     }
 }
 
@@ -106,13 +112,7 @@ impl Block {
         let ts = Timestamp::current_time();
         let header = Header::new(st, e, sl, ts, root);
         let headerhash = header.headerhash();
-        Self { magic:magic,
-               header: headerhash,
-               txs: txs,
-               m: m,
-               om: om,
-               sm: sm
-        }
+        Self { magic, header: headerhash, txs, m, om, sm }
     }
 
     /// Generate the genesis block.
@@ -124,13 +124,7 @@ impl Block {
         let m = StakeholderMetadata::default();
         let om = OuroborosMetadata::default();
         let sm = StreamletMetadata::default();
-        Self{ magic: magic,
-              header: header.headerhash(),
-              txs: vec![],
-              m: m,
-              om: om,
-              sm: sm
-        }
+        Self { magic, header: header.headerhash(), txs: vec![], m, om, sm }
     }
 
     /// Calculate the block hash
@@ -175,7 +169,7 @@ impl Default for BlockInfo {
     fn default() -> Self {
         let magic = *BLOCK_MAGIC_BYTES;
         Self {
-            magic: magic,
+            magic,
             header: Header::default(),
             txs: vec![],
             m: StakeholderMetadata::default(),
@@ -197,10 +191,10 @@ impl BlockInfo {
         txs: Vec<Transaction>,
         m: StakeholderMetadata,
         om: OuroborosMetadata,
-        sm: StreamletMetadata
+        sm: StreamletMetadata,
     ) -> Self {
         let magic = *BLOCK_MAGIC_BYTES;
-        Self {magic, header, txs, m, om, sm}
+        Self { magic, header, txs, m, om, sm }
     }
 
     /// Calculate the block hash
@@ -213,12 +207,13 @@ impl BlockInfo {
 impl From<BlockInfo> for Block {
     fn from(b: BlockInfo) -> Self {
         let txids = b.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
-        Self { magic: b.magic,
-               header: b.header.headerhash(),
-               txs: txids,
-               m: b.m,
-               om: b.om,
-               sm: b.sm,
+        Self {
+            magic: b.magic,
+            header: b.header.headerhash(),
+            txs: txids,
+            m: b.m,
+            om: b.om,
+            sm: b.sm,
         }
     }
 }
@@ -259,8 +254,7 @@ impl BlockProposal {
 
 impl PartialEq for BlockProposal {
     fn eq(&self, other: &Self) -> bool {
-        self.block.header == other.block.header &&
-            self.block.txs == other.block.txs
+        self.block.header == other.block.header && self.block.txs == other.block.txs
     }
 }
 

@@ -69,7 +69,7 @@ impl ProgramOptions {
 
         let connection_slots = if let Some(connection_slots) = programcli.connect_slots {
             connection_slots
-        } else  {
+        } else {
             0
         };
 
