@@ -22,6 +22,8 @@ use crate::{
     util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 
+use log::debug;
+
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
     #[error("Invalid proposal")]

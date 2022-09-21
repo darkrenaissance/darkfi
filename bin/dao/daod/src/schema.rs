@@ -1244,6 +1244,7 @@ pub async fn demo() -> Result<()> {
                 serial: dao_serial,
                 coin_blind: dao_coin_blind,
                 spend_hook: *dao_contract::exec::FUNC_ID,
+                // TODO: should be DAO bulla
                 user_data: proposal_bulla,
             },
         ],

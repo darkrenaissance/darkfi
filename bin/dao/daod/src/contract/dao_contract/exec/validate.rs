@@ -17,6 +17,8 @@ use crate::{
     util::{CallDataBase, HashableBase, StateRegistry, Transaction, UpdateBase},
 };
 
+use log::debug;
+
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone, thiserror::Error)]

@@ -105,8 +105,8 @@ impl Rpc {
 
     // --> {"jsonrpc": "2.0", "method": "exec", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "executing...", "id": 42}
-    pub async fn exec(&self) -> Result<Value> {
-        let req = JsonRequest::new("exec", json!([]));
+    pub async fn exec(&self, bulla: String) -> Result<Value> {
+        let req = JsonRequest::new("exec", json!([bulla]));
         self.client.request(req).await
     }
 }

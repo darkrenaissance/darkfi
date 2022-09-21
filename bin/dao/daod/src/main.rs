@@ -167,7 +167,6 @@ impl Client {
             call_data.dao_bulla.clone()
         };
 
-        // TODO: instead of this print statement, return DAO bulla to CLI
         debug!(target: "demo", "Create DAO bulla: {:?}", dao_bulla.0);
 
         // We create a hashmap so we can easily retrieve DAO values for the demo.
@@ -388,6 +387,21 @@ impl Client {
 
         Ok(())
     }
+
+    fn exec_proposal(&mut self, bulla: pallas::Base) -> Result<()> {
+        let proposal = self.dao_wallet.proposals[0].clone();
+        let dao_params = self.dao_wallet.params[0].clone();
+
+        let tx = self
+            .dao_wallet
+            .exec_tx(proposal, bulla, dao_params, &self.zk_bins, &mut self.states)
+            .unwrap();
+
+        self.validate(&tx).unwrap();
+        self.update_wallets().unwrap();
+
+        Ok(())
+    }
 }
 
 struct DaoWallet {
@@ -395,6 +409,7 @@ struct DaoWallet {
     signature_secret: SecretKey,
     bulla_blind: pallas::Base,
     leaf_position: Position,
+    proposal_bullas: Vec<pallas::Base>,
     bullas: Vec<DaoBulla>,
     params: Vec<DaoParams>,
     own_coins: Vec<(OwnCoin, bool)>,
@@ -407,6 +422,7 @@ impl DaoWallet {
         let signature_secret = SecretKey::random(&mut OsRng);
         let bulla_blind = pallas::Base::random(&mut OsRng);
         let leaf_position = Position::zero();
+        let proposal_bullas = Vec::new();
         let bullas = Vec::new();
         let params = Vec::new();
         let own_coins: Vec<(OwnCoin, bool)> = Vec::new();
@@ -418,6 +434,7 @@ impl DaoWallet {
             signature_secret,
             bulla_blind,
             leaf_position,
+            proposal_bullas,
             bullas,
             params,
             own_coins,
@@ -510,6 +527,8 @@ impl DaoWallet {
         debug!(target: "demo", "Proposal bulla: {:?}", proposal_bulla);
 
         self.proposals.push(proposal);
+        self.proposal_bullas.push(proposal_bulla);
+
         Ok(proposal_bulla)
     }
 
@@ -559,7 +578,7 @@ impl DaoWallet {
         Ok((money_leaf_position, money_merkle_path))
     }
 
-    fn build_exec_tx(
+    fn exec_tx(
         &self,
         proposal: Proposal,
         proposal_bulla: pallas::Base,
@@ -567,6 +586,8 @@ impl DaoWallet {
         zk_bins: &ZkContractTable,
         states: &mut StateRegistry,
     ) -> Result<Transaction> {
+        let dao_bulla = self.bullas[0].clone();
+
         let mut inputs = Vec::new();
         let mut total_input_value = 0;
         // TODO: move these to DAO struct?
@@ -581,8 +602,10 @@ impl DaoWallet {
         let input_value_blind = pallas::Scalar::random(&mut OsRng);
         let dao_serial = pallas::Base::random(&mut OsRng);
         let dao_coin_blind = pallas::Base::random(&mut OsRng);
+        // disabled
+        let user_spend_hook = pallas::Base::from(0);
+        let user_data = pallas::Base::from(0);
 
-        // We must prove we have sufficient governance tokens to execute this.
         for (coin, is_spent) in &self.own_coins {
             let is_spent = is_spent.clone();
             if is_spent {
@@ -621,22 +644,20 @@ impl DaoWallet {
                         public: proposal.dest,
                         serial: proposal.serial,
                         coin_blind: proposal.blind,
-                        spend_hook: pallas::Base::from(0),
-                        user_data: pallas::Base::from(0),
+                        spend_hook: user_spend_hook,
+                        user_data,
                     },
                     // Change back to DAO
                     money_contract::transfer::wallet::BuilderOutputInfo {
                         value: total_input_value - proposal.amount,
-                        // TODO: this should be the token id of the treasury,
-                        // rather than the token id of the proposal.
-                        // total_id: own_coin.token_id,
-                        token_id: proposal.token_id,
+                        // TODO: Token id of the treasury.
+                        token_id: *XDRK_ID,
                         public: self.keypair.public,
                         // ?
                         serial: dao_serial,
                         coin_blind: dao_coin_blind,
                         spend_hook: *dao_contract::exec::FUNC_ID,
-                        user_data: proposal_bulla,
+                        user_data: dao_bulla.0,
                     },
                 ],
             }
@@ -646,19 +667,42 @@ impl DaoWallet {
 
         let mut yes_votes_value = 0;
         let mut yes_votes_blind = pallas::Scalar::from(0);
+        let mut yes_votes_commit = pallas::Point::identity();
 
         let mut all_votes_value = 0;
         let mut all_votes_blind = pallas::Scalar::from(0);
+        let mut all_votes_commit = pallas::Point::identity();
 
-        for note in &self.vote_notes {
-            if note.vote.vote_option {
-                // this is a yes vote
+        for (i, note) in self.vote_notes.iter().enumerate() {
+            let vote_commit = pedersen_commitment_u64(note.vote_value, note.vote_value_blind);
+
+            all_votes_commit += vote_commit;
+            all_votes_blind += note.vote_value_blind;
+
+            let yes_vote_commit = pedersen_commitment_u64(
+                note.vote.vote_option as u64 * note.vote_value,
+                note.vote.vote_option_blind,
+            );
+
+            yes_votes_commit += yes_vote_commit;
+            yes_votes_blind += note.vote.vote_option_blind;
+
+            let vote_option = note.vote.vote_option;
+
+            if vote_option {
                 yes_votes_value += note.vote_value;
-                yes_votes_blind += note.vote_value_blind;
             }
             all_votes_value += note.vote_value;
-            all_votes_blind += note.vote_value_blind;
+            let vote_result: String =
+                if vote_option { "yes".to_string() } else { "no".to_string() };
+
+            debug!("Voter {} voted {}", i, vote_result);
         }
+
+        debug!("Outcome = {} / {}", yes_votes_value, all_votes_value);
+
+        assert!(all_votes_commit == pedersen_commitment_u64(all_votes_value, all_votes_blind));
+        assert!(yes_votes_commit == pedersen_commitment_u64(yes_votes_value, yes_votes_blind));
 
         let builder = {
             dao_contract::exec::wallet::Builder {
@@ -672,7 +716,7 @@ impl DaoWallet {
                 user_coin_blind,
                 dao_serial,
                 dao_coin_blind,
-                input_value: proposal.amount,
+                input_value: total_input_value,
                 input_value_blind,
                 hook_dao_exec: *dao_contract::exec::FUNC_ID,
                 signature_secret: exec_signature_secret,
@@ -846,6 +890,7 @@ impl MoneyWallet {
                 dao: dao_params.clone(),
             }
         };
+
         let func_call = builder.build(zk_bins);
         let func_calls = vec![func_call];
 

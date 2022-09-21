@@ -239,10 +239,14 @@ impl JsonRpcInterface {
     }
     // --> {"method": "execute", "params": []}
     // <-- {"result": "executing..."}
-    async fn execute(&self, id: Value, _params: &[Value]) -> JsonResult {
+    async fn execute(&self, id: Value, params: &[Value]) -> JsonResult {
         let mut client = self.client.lock().await;
-        // client.client.dao_wallet.build_exec_tx(proposal, proposal_bulla)
-        //client.exec().unwrap();
+
+        let bulla_str = params[0].as_str().unwrap();
+        let bulla: pallas::Base = parse_b58(bulla_str).unwrap();
+
+        client.exec_proposal(bulla);
+
         JsonResponse::new(json!("executed"), id).into()
     }
 }

@@ -61,7 +61,9 @@ pub enum CliDaoSubCommands {
         vote: String,
     },
     /// Execute
-    Exec {},
+    Exec {
+        bulla: String,
+    },
 }
 
 /// DAO cli
@@ -156,8 +158,8 @@ async fn start(options: CliDao) -> Result<()> {
             println!("Server replied: {}", &reply.to_string());
             return Ok(())
         }
-        Some(CliDaoSubCommands::Exec {}) => {
-            let reply = client.exec().await?;
+        Some(CliDaoSubCommands::Exec { bulla }) => {
+            let reply = client.exec(bulla).await?;
             println!("Server replied: {}", &reply.to_string());
             return Ok(())
         }
