@@ -22,6 +22,7 @@ use crate::{
     error::{to_json_result, TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
+    util::find_free_id,
 };
 
 pub struct JsonRpcInterface {
@@ -343,9 +344,27 @@ impl JsonRpcInterface {
 
         let path = expand_path(params[0].as_str().unwrap())?.join("exported_tasks");
         let ws = self.workspace.lock().await.clone();
-        let tasks = MonthTasks::load_current_tasks(&path, ws, true)?;
 
-        for task in tasks {
+        let mut task_ids: Vec<u32> =
+            MonthTasks::load_current_tasks(&self.dataset_path, ws.clone(), false)?
+                .into_iter()
+                .map(|t| t.id)
+                .collect();
+
+        let task_ref_ids: Vec<String> =
+            MonthTasks::load_current_tasks(&self.dataset_path, ws.clone(), false)?
+                .into_iter()
+                .map(|t| t.ref_id)
+                .collect();
+
+        let imported_tasks = MonthTasks::load_current_tasks(&path, ws, true)?;
+
+        for mut task in imported_tasks {
+            if task_ref_ids.contains(&task.ref_id) {
+                continue
+            }
+            task.id = find_free_id(&task_ids);
+            task_ids.push(task.id);
             self.notify_queue_sender.send(task).await.map_err(Error::from)?;
         }
         Ok(json!(true))

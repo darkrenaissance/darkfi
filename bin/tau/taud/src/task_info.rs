@@ -65,7 +65,7 @@ pub struct TaskTags(Vec<String>);
 pub struct TaskInfo {
     pub(crate) ref_id: String,
     pub(crate) workspace: String,
-    id: u32,
+    pub(crate) id: u32,
     title: String,
     tags: TaskTags,
     desc: String,
