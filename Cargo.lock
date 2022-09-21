@@ -1203,6 +1203,8 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "native-tls",
+ "num-bigint",
+ "num-traits",
  "pasta_curves",
  "plotters",
  "rand",
@@ -2622,6 +2624,17 @@ checksum = "a8903e5a29a317527874d0402f867152a3d21c908bb0b933e416c65e301d4c36"
 dependencies = [
  "memchr",
  "minimal-lexical",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
 ]
 
 [[package]]

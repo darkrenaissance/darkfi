@@ -17,6 +17,9 @@ pub mod token_list;
 pub mod types;
 pub mod util;
 
+/// VDF (Verifiable Delay Function) using MiMC
+pub mod mimc_vdf;
+
 pub use burn_proof::BurnRevealedValues;
 pub use mint_proof::MintRevealedValues;
 pub use proof::Proof;
