@@ -155,12 +155,12 @@ async fn start(options: CliDao) -> Result<()> {
         }
         Some(CliDaoSubCommands::Vote { nym, vote }) => {
             let reply = client.vote(nym, vote).await?;
-            println!("Server replied: {}", &reply.to_string());
+            println!("{}", &reply.to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::Exec { bulla }) => {
             let reply = client.exec(bulla).await?;
-            println!("Server replied: {}", &reply.to_string());
+            println!("{}", &reply.to_string());
             return Ok(())
         }
         None => {}

@@ -36,10 +36,12 @@ pub fn parse_b58(s: &str) -> std::result::Result<pallas::Base, darkfi::Error> {
     Err(Error::ParseFailed("Failed parsing DrkTokenId from base58 string"))
 }
 
+// The token of the DAO treasury.
 lazy_static! {
     pub static ref XDRK_ID: pallas::Base = pallas::Base::random(&mut OsRng);
 }
 
+// Governance tokens that are airdropped to users to operate the DAO.
 lazy_static! {
     pub static ref GDRK_ID: pallas::Base = pallas::Base::random(&mut OsRng);
 }

@@ -41,19 +41,126 @@ use crate::{
     },
 };
 
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//// dao-demo 0.1
+////
+//// This is a very early prototype intended to demonstrate the underlying
+//// crypto of fully anonymous DAOs. DAO participants can own and operate
+//// a collective treasury according to rules set by the DAO. Communities
+//// can coordinate financially in the cover of a protective darkness,
+//// free from surveillance and persecution.
+////
+//// The following information is completely hidden:
+////
+//// * DAO treasury
+//// * DAO parameters
+//// * DAO participants
+//// * Proposals
+//// * Votes
+////
+//// The DAO enables participants to make proposals, cast votes, and spend
+//// money from the DAO treasury if a proposal passes. The basic operation
+//// involves transferring money from a treasury to a public key specified
+//// in a Proposal. This operation can only happen if several conditions are
+//// met.
+////
+//// At its basis, the DAO is a private key that is owned by all DAO participants
+//// but can only be operated according to constraints. These constraints are
+//// configured by DAO participants and enforced by ZK cryptography.
+////
+//// In this demo, the constraints are:
+////
+//// 1. DAO quorum: the number of governance tokens that must be allocated
+////    to a proposal in order for a proposal to pass.
+//// 2. Proposer limit: the number of governance tokens required to make a
+////    proposal.
+//// 3. DAO approval ratio: The ratio of yes/ no votes required for a
+////    proposal to pass.
+////
+//// In addition, DAO participants must prove ownership of governance tokens
+//// order to vote. Their voted is weighted according to the number of governance
+//// tokens in their wallet. In this current implementation, users do not spend
+//// or lock up these coins in order to vote- they simply prove ownership of them.
+////
+//// In the current prototype, the following information is exposed:
+////
+//// * Blinded votes are publically liked to the anonymous proposal identifier,
+////   so you can see which votes are voting on what proposal (without
+////   seeing anything else).
+//// * In the burn phase of casting a vote, we reveal a public value called a
+////   nullifier. The same public value is revealed when we spend the coins we
+////   used to vote, meaning you can link a vote with a user when they spend
+////   governance tokens. This is bad but is easily fixable. We will update the
+////   code to use different values in the vote (by creating an intermediate Coin
+////   used for voting).
+//// * Votes are currently encrypted to the DAO public key. This means that
+////   any DAO participant can decrypt votes as they come in. In the future,
+////   we can delay the decryption so that you cannot read votes until the final
+////   tally.
+////
+//// Additionally, the dao-demo app shown below is highly limited. Namely, we use
+//// a single God daemon to operate all the wallets. In the next version, every user
+//// wallet will be a seperate daemon connecting over a network and running on a
+//// blockchain.
+////
+//// /////////////////////////////////////////////////////////////////////
+////
+//// dao-demo 0.1 TODOs:
+////
+//// 1. Change mint_treasury() to take a DAO bulla from command line input
+////    rather than a public key.
+////
+//// 2. Token id is hardcoded rn. Change this so users can specify token_id
+////    as either xdrk or gdrk. In dao-cli we run a match statement to link to
+////    the corresponding static values XDRK_ID and GDRK_ID. Note: xdrk is used
+////    only for the DAO treasury. gdrk is the governance token used to operate
+////    the DAO.
+////
+//// 3. Show the token id as a string (e.g. xdrk) as well as the amount when
+////    we output balances to dao-cli. Optional: use prettytable library to display
+////    nicely (see darkfi/bin/drk).
+////
+//// 4. client.propose() currently takes a PublicKey for recipient instead of a nym,
+////    Make this a nym, e.g:
+////        ./dao-cli alice propose bob 1000
+////    client.propose() then looks up the correponding public key.
+////
+//// 5. Better document CLI/ CLI help.
+////
+//// 6. Make CLI usage more interactive. Example: when I cast a vote, output:
+////   "You voted {} with value {}." where value is the number of gDRK in a users
+////    wallet (and the same for making a proposal etc).
+////
+//// 7. Currently, DaoWallet stores DaoParams, DaoBulla's and Proposal's in a
+////    Vector. We retrieve values through indexing, meaning that we
+////    cannot currently support multiple DAOs and multiple proposals.
+////
+////    Instead, dao_wallet.create_dao() should create a struct called Dao
+////    which stores dao_info: HashMap<DaoBulla, DaoParams> and proposals:
+////    HashMap<ProposalBulla, Proposal>. Users pass the DaoBulla and
+////    ProposalBulla and we lookup the corresponding data. struct Dao should
+////    be owned by DaoWallet.
+////
+//// 8. Error handling :)
+////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
 pub struct Client {
-    cashier: Cashier,
     dao_wallet: DaoWallet,
     money_wallets: HashMap<String, MoneyWallet>,
+    cashier_wallet: CashierWallet,
     states: StateRegistry,
     zk_bins: ZkContractTable,
 }
 
 impl Client {
     fn new() -> Self {
+        // For this early demo we store all wallets in a single Client.
         let dao_wallet = DaoWallet::new();
         let money_wallets = HashMap::default();
-        let cashier = Cashier::new();
+        let cashier_wallet = CashierWallet::new();
 
         // Lookup table for smart contract states
         let mut states = StateRegistry::new();
@@ -61,9 +168,10 @@ impl Client {
         // Initialize ZK binary table
         let mut zk_bins = ZkContractTable::new();
 
-        Self { cashier, dao_wallet, money_wallets, states, zk_bins }
+        Self { dao_wallet, money_wallets, cashier_wallet, states, zk_bins }
     }
 
+    // Load ZK contracts into the ZkContractTable and initialize the StateRegistry.
     fn init(&mut self) -> Result<()> {
         //We use these to initialize the money state.
         let faucet_signature_secret = SecretKey::random(&mut OsRng);
@@ -110,7 +218,7 @@ impl Client {
         let zk_dao_exec_bin = ZkBinary::decode(zk_dao_exec_bincode)?;
         self.zk_bins.add_contract("dao-exec".to_string(), zk_dao_exec_bin, 13);
 
-        let cashier_signature_public = self.cashier.signature_public();
+        let cashier_signature_public = self.cashier_wallet.signature_public();
 
         let money_state =
             money_contract::state::State::new(cashier_signature_public, faucet_signature_public);
@@ -122,6 +230,7 @@ impl Client {
         Ok(())
     }
 
+    // Strictly for demo purposes.
     fn new_money_wallet(&mut self, key: String) {
         let keypair = Keypair::random(&mut OsRng);
         let signature_secret = SecretKey::random(&mut OsRng);
@@ -130,11 +239,8 @@ impl Client {
         money_wallet.track(&mut self.states);
 
         self.money_wallets.insert(key.clone(), money_wallet);
-        debug!(target: "dao-demo::client::new_money_wallet()", "created wallet with key {}", &key);
     }
 
-    // TODO: user passes DAO approval ratio: 1/2
-    // we parse that into dao_approval_ratio_base and dao_approval_ratio_quot
     fn create_dao(
         &mut self,
         dao_proposer_limit: u64,
@@ -143,7 +249,6 @@ impl Client {
         dao_approval_ratio_base: u64,
         token_id: pallas::Base,
     ) -> Result<pallas::Base> {
-        debug!(target: "dao-demo::client::create_dao()", "START");
         let tx = self.dao_wallet.mint_tx(
             dao_proposer_limit,
             dao_quorum,
@@ -153,9 +258,8 @@ impl Client {
             &self.zk_bins,
         );
 
-        // TODO: Proper error handling.
-        // Only witness the value once the transaction is confirmed.
         self.validate(&tx).unwrap();
+        // Only witness the value once the transaction is confirmed.
         self.dao_wallet.update_witness(&mut self.states).unwrap();
 
         // Retrieve DAO bulla from the state.
@@ -169,7 +273,7 @@ impl Client {
 
         debug!(target: "demo", "Create DAO bulla: {:?}", dao_bulla.0);
 
-        // We create a hashmap so we can easily retrieve DAO values for the demo.
+        // We store these values in a vector we can easily retrieve DAO values for the demo.
         let dao_params = DaoParams {
             proposer_limit: dao_proposer_limit,
             quorum: dao_quorum,
@@ -195,7 +299,7 @@ impl Client {
         self.dao_wallet.track(&mut self.states);
 
         let tx = self
-            .cashier
+            .cashier_wallet
             .mint(*XDRK_ID, token_supply, self.dao_wallet.bullas[0].0, recipient, &self.zk_bins)
             .unwrap();
 
@@ -209,8 +313,8 @@ impl Client {
         let wallet = self.money_wallets.get(&nym).unwrap();
         let addr = wallet.get_public_key();
 
-        let tx = self.cashier.airdrop(value, token_id, addr, &self.zk_bins)?;
-        self.validate(&tx)?;
+        let tx = self.cashier_wallet.airdrop(value, token_id, addr, &self.zk_bins).unwrap();
+        self.validate(&tx).unwrap();
         self.update_wallets().unwrap();
 
         Ok(())
@@ -380,7 +484,6 @@ impl Client {
             .unwrap();
 
         self.validate(&tx).unwrap();
-        // Do we need this here cos no value is actually spent?
         self.update_wallets().unwrap();
 
         self.dao_wallet.store_vote(&tx).unwrap();
@@ -482,16 +585,10 @@ impl DaoWallet {
         Transaction { func_calls, signatures }
     }
 
-    // TODO: error handling
     fn update_witness(&mut self, states: &mut StateRegistry) -> Result<()> {
         let state = states.lookup_mut::<dao_contract::State>(*dao_contract::CONTRACT_ID).unwrap();
-        let path = state.dao_tree.witness();
-        match path {
-            Some(path) => {
-                self.leaf_position = path;
-            }
-            None => {}
-        }
+        let path = state.dao_tree.witness().unwrap();
+        self.leaf_position = path;
         Ok(())
     }
 
@@ -590,12 +687,10 @@ impl DaoWallet {
 
         let mut inputs = Vec::new();
         let mut total_input_value = 0;
-        // TODO: move these to DAO struct?
+
         let tx_signature_secret = SecretKey::random(&mut OsRng);
         let exec_signature_secret = SecretKey::random(&mut OsRng);
 
-        // TODO: not sure what this is doing
-        // Should this be moved into a different struct?
         let user_serial = pallas::Base::random(&mut OsRng);
         let user_coin_blind = pallas::Base::random(&mut OsRng);
         let user_data_blind = pallas::Base::random(&mut OsRng);
@@ -624,7 +719,6 @@ impl DaoWallet {
                     note: coin.note.clone(),
                     user_data_blind,
                     value_blind: input_value_blind,
-                    // TODO: in schema, we create random signatures here. why?
                     signature_secret: tx_signature_secret,
                 }
             };
@@ -650,10 +744,8 @@ impl DaoWallet {
                     // Change back to DAO
                     money_contract::transfer::wallet::BuilderOutputInfo {
                         value: total_input_value - proposal.amount,
-                        // TODO: Token id of the treasury.
                         token_id: *XDRK_ID,
                         public: self.keypair.public,
-                        // ?
                         serial: dao_serial,
                         coin_blind: dao_coin_blind,
                         spend_hook: *dao_contract::exec::FUNC_ID,
@@ -663,7 +755,7 @@ impl DaoWallet {
             }
         };
 
-        let transfer_func_call = builder.build(zk_bins)?;
+        let transfer_func_call = builder.build(zk_bins).unwrap();
 
         let mut yes_votes_value = 0;
         let mut yes_votes_blind = pallas::Scalar::from(0);
@@ -736,7 +828,6 @@ struct MoneyWallet {
     keypair: Keypair,
     signature_secret: SecretKey,
     own_coins: Vec<(OwnCoin, bool)>,
-    //leaf_position: Position,
 }
 
 impl MoneyWallet {
@@ -781,7 +872,7 @@ impl MoneyWallet {
             if is_spent {
                 continue
             }
-            let (money_leaf_position, money_merkle_path) = self.get_path(&states, &coin)?;
+            let (money_leaf_position, money_merkle_path) = self.get_path(&states, &coin).unwrap();
 
             let input = {
                 dao_contract::propose::wallet::BuilderInput {
@@ -825,12 +916,10 @@ impl MoneyWallet {
         let func_call = builder.build(zk_bins);
         let func_calls = vec![func_call];
 
-        debug!(target: "dao-demo::money_wallet::propose", "signature_public {:?}", self.signature_public());
         let signatures = sign(vec![self.signature_secret], &func_calls);
         Ok(Transaction { func_calls, signatures })
     }
 
-    // TODO: Explicit error handling.
     fn get_path(
         &self,
         states: &StateRegistry,
@@ -863,7 +952,7 @@ impl MoneyWallet {
 
         // We must prove we have sufficient governance tokens in order to vote.
         for (coin, is_spent) in &self.own_coins {
-            let (money_leaf_position, money_merkle_path) = self.get_path(states, &coin)?;
+            let (money_leaf_position, money_merkle_path) = self.get_path(states, &coin).unwrap();
 
             let input = {
                 dao_contract::vote::wallet::BuilderInput {
@@ -900,24 +989,24 @@ impl MoneyWallet {
 }
 
 async fn start_rpc(client: Client) -> Result<()> {
-    let rpc_addr = Url::parse("tcp://127.0.0.1:7777")?;
+    let rpc_addr = Url::parse("tcp://127.0.0.1:7777").unwrap();
 
     let rpc_client = JsonRpcInterface::new(client);
 
     let rpc_interface = Arc::new(rpc_client);
 
-    listen_and_serve(rpc_addr, rpc_interface).await?;
+    listen_and_serve(rpc_addr, rpc_interface).await.unwrap();
     Ok(())
 }
 
 // Mint authority that mints the DAO treasury and airdrops governance tokens.
 #[derive(Clone)]
-struct Cashier {
+struct CashierWallet {
     keypair: Keypair,
     signature_secret: SecretKey,
 }
 
-impl Cashier {
+impl CashierWallet {
     fn new() -> Self {
         let keypair = Keypair::random(&mut OsRng);
         let signature_secret = SecretKey::random(&mut OsRng);
@@ -940,7 +1029,8 @@ impl Cashier {
         let user_data = dao_bulla;
         let value = token_supply;
 
-        let tx = self.transfer_tx(value, token_id, spend_hook, user_data, recipient, zk_bins)?;
+        let tx =
+            self.transfer_tx(value, token_id, spend_hook, user_data, recipient, zk_bins).unwrap();
 
         Ok(tx)
     }
@@ -973,7 +1063,7 @@ impl Cashier {
                 }],
             }
         };
-        let func_call = builder.build(zk_bins)?;
+        let func_call = builder.build(zk_bins).unwrap();
         let func_calls = vec![func_call];
 
         let signatures = sign(vec![self.signature_secret], &func_calls);
@@ -991,7 +1081,8 @@ impl Cashier {
         let spend_hook = DrkSpendHook::from(0);
         let user_data = DrkUserData::from(0);
 
-        let tx = self.transfer_tx(value, token_id, spend_hook, user_data, recipient, zk_bins)?;
+        let tx =
+            self.transfer_tx(value, token_id, spend_hook, user_data, recipient, zk_bins).unwrap();
 
         Ok(tx)
     }
@@ -1004,12 +1095,13 @@ async fn main() -> Result<()> {
         simplelog::Config::default(),
         TerminalMode::Mixed,
         ColorChoice::Auto,
-    )?;
+    )
+    .unwrap();
 
     let mut client = Client::new();
     client.init();
 
-    start_rpc(client).await?;
+    start_rpc(client).await.unwrap();
 
     Ok(())
 }

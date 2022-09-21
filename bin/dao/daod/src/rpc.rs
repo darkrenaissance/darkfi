@@ -129,7 +129,6 @@ impl JsonRpcInterface {
     }
 
     async fn dao_balance(&self, id: Value, params: &[Value]) -> JsonResult {
-        // TODO: token id
         let mut client = self.client.lock().await;
         let balance = client.dao_wallet.balances().unwrap();
         JsonResponse::new(json!(balance), id).into()
@@ -166,14 +165,12 @@ impl JsonRpcInterface {
         let dao_addr = PublicKey::from_str(addr).unwrap();
 
         client.mint_treasury(*XDRK_ID, token_supply, dao_addr).unwrap();
-        //let balance = client.query_dao_balance().unwrap();
 
         JsonResponse::new(json!("DAO treasury minted successfully."), id).into()
     }
 
     // Create a new wallet for governance tokens.
     async fn keygen(&self, id: Value, params: &[Value]) -> JsonResult {
-        debug!(target: "dao-demo::rpc::keygen()", "Received keygen request");
         let mut client = self.client.lock().await;
         let nym = params[0].as_str().unwrap().to_string();
 
@@ -196,13 +193,11 @@ impl JsonRpcInterface {
         let value = params[1].as_u64().unwrap();
 
         client.airdrop_user(value, *GDRK_ID, nym.clone()).unwrap();
-        //let balance = client.query_balance(nym.clone()).unwrap();
 
         JsonResponse::new(json!("Tokens airdropped successfully."), id).into()
     }
     // --> {"method": "create_proposal", "params": []}
     // <-- {"result": "creating proposal..."}
-    // TODO: pass string 'alice' and dao bulla
     async fn create_proposal(&self, id: Value, params: &[Value]) -> JsonResult {
         let mut client = self.client.lock().await;
 
@@ -235,7 +230,7 @@ impl JsonRpcInterface {
         }
 
         client.cast_vote(nym, vote_bool).unwrap();
-        JsonResponse::new(json!("voted"), id).into()
+        JsonResponse::new(json!("Vote cast successfully."), id).into()
     }
     // --> {"method": "execute", "params": []}
     // <-- {"result": "executing..."}
@@ -247,6 +242,6 @@ impl JsonRpcInterface {
 
         client.exec_proposal(bulla);
 
-        JsonResponse::new(json!("executed"), id).into()
+        JsonResponse::new(json!("Proposal executed successfully."), id).into()
     }
 }
