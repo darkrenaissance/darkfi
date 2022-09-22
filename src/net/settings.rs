@@ -28,6 +28,7 @@ pub struct Settings {
     pub app_version: Option<String>,
     pub outbound_transports: Vec<TransportName>,
     pub localnet: bool,
+    pub peer_discovery: bool,
 }
 
 impl Default for Settings {
@@ -48,6 +49,7 @@ impl Default for Settings {
             app_version: Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string()),
             outbound_transports: get_outbound_transports(vec![]),
             localnet: false,
+            peer_discovery: true,
         }
     }
 }
@@ -110,6 +112,11 @@ pub struct SettingsOpt {
     #[serde(default)]
     #[structopt(long)]
     pub localnet: bool,
+
+    /// Enable peer discovery
+    #[serde(default = "default_as_true")]
+    #[structopt(long)]
+    pub peer_discovery: bool,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -130,6 +137,7 @@ impl From<SettingsOpt> for Settings {
             app_version: settings_opt.app_version,
             outbound_transports: get_outbound_transports(settings_opt.outbound_transports),
             localnet: settings_opt.localnet,
+            peer_discovery: settings_opt.peer_discovery,
         }
     }
 }
@@ -151,4 +159,9 @@ pub fn get_outbound_transports(opt_outbound_transports: Vec<String>) -> Vec<Tran
     }
 
     outbound_transports
+}
+
+/// Auxiliary function to set serde bool value to true.
+fn default_as_true() -> bool {
+    true
 }

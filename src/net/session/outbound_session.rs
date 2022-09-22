@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use url::Url;
 
 use crate::{
-    net::TransportName,
+    net::{message, TransportName},
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     util::async_util,
     Error, Result,
@@ -249,8 +249,8 @@ impl OutboundSession {
     /// Loops through host addresses to find a outbound address that we can
     /// connect to. Checks whether address is valid by making sure it isn't
     /// our own inbound address, then checks whether it is already connected
-    /// (exists) or connecting (pending). Keeps looping until address is
-    /// found that passes all checks.
+    /// (exists) or connecting (pending). If no address was found, we try to
+    /// to discover new peers. Keeps looping until address is found that passes all checks.
     async fn load_address(&self, slot_number: u32) -> Result<Url> {
         loop {
             let p2p = self.p2p();
@@ -287,10 +287,58 @@ impl OutboundSession {
                 return Ok(addr)
             }
 
-            debug!(target: "net", "Hosts address pool is empty. Retrying connect slot #{}", slot_number);
+            // Peer discovery
+            if p2p.settings().peer_discovery {
+                debug!(target: "net", "#{} No available address found, entering peer discovery mode.", slot_number);
+                self.peer_discovery(slot_number).await?;
+                debug!(target: "net", "#{} Discovery mode ended.", slot_number);
+            }
 
+            // Sleep and then retry
+            debug!(target: "net", "Retrying connect slot #{}", slot_number);
             async_util::sleep(p2p.settings().outbound_retry_seconds).await;
         }
+    }
+
+    /// Try to find new peers to update available hosts.
+    async fn peer_discovery(&self, slot_number: u32) -> Result<()> {
+        // Check that another slot(thread) already tries to update hosts
+        let p2p = self.p2p();
+        if !p2p.clone().start_discovery().await {
+            debug!(target: "net", "#{} P2P already on discovery mode.", slot_number);
+            return Ok(())
+        }
+
+        debug!(target: "net", "#{} Discovery mode started.", slot_number);
+
+        // Getting a random connected channel to ask for peers
+        let channel = match p2p.clone().random_channel().await {
+            Some(c) => c,
+            None => {
+                debug!(target: "net", "#{} No peers found.", slot_number);
+                p2p.clone().stop_discovery().await;
+                return Ok(())
+            }
+        };
+
+        // Ask peer
+        debug!(target: "net", "#{} Asking peer: {}", slot_number, channel.address());
+
+        // Communication setup
+        let response_sub = channel.subscribe_msg::<message::AddrsMessage>().await?;
+        let get_addr_msg = message::GetAddrsMessage {};
+
+        // Executing request and waiting for response
+        channel.send(get_addr_msg).await?;
+        let resp = response_sub.receive().await?;
+
+        // Store response data
+        debug!(target: "net", "#{} response: {:?}", slot_number, resp.addrs);
+        p2p.hosts().store(resp.addrs.clone()).await;
+
+        p2p.stop_discovery().await;
+
+        Ok(())
     }
 
     /// Subscribe to a channel.

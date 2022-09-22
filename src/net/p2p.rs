@@ -5,6 +5,7 @@ use async_executor::Executor;
 use futures::{select, try_join, FutureExt};
 use fxhash::{FxHashMap, FxHashSet};
 use log::{debug, error, warn};
+use rand::Rng;
 use serde_json::json;
 use url::Url;
 
@@ -72,6 +73,9 @@ pub struct P2p {
     state: Mutex<P2pState>,
 
     settings: SettingsPtr,
+
+    /// Flag to check if on discovery mode
+    discovery: Mutex<bool>,
 }
 
 impl P2p {
@@ -90,13 +94,14 @@ impl P2p {
             channels: Mutex::new(FxHashMap::default()),
             channel_subscriber: Subscriber::new(),
             stop_subscriber: Subscriber::new(),
-            hosts: Hosts::new(),
+            hosts: Hosts::new(settings.localnet),
             protocol_registry: ProtocolRegistry::new(),
             session_manual: Mutex::new(None),
             session_inbound: Mutex::new(None),
             session_outbound: Mutex::new(None),
             state: Mutex::new(P2pState::Open),
             settings,
+            discovery: Mutex::new(false),
         });
 
         let parent = Arc::downgrade(&self_);
@@ -404,5 +409,32 @@ impl P2p {
     /// Retrieve channels
     pub fn channels(&self) -> &ConnectedChannels {
         &self.channels
+    }
+
+    /// Try to start discovery mode.
+    /// Returns false if already on discovery mode.
+    pub async fn start_discovery(self: Arc<Self>) -> bool {
+        if *self.discovery.lock().await {
+            return false
+        }
+        *self.discovery.lock().await = true;
+        true
+    }
+
+    /// Stops discovery mode.
+    pub async fn stop_discovery(self: Arc<Self>) {
+        *self.discovery.lock().await = false;
+    }
+
+    /// Retrieves a random connected channel
+    pub async fn random_channel(self: Arc<Self>) -> Option<Arc<Channel>> {
+        let channels_map = self.channels().lock().await;
+        let mut values = channels_map.values();
+
+        if values.len() == 0 {
+            return None
+        }
+
+        Some(values.nth(rand::thread_rng().gen_range(0..values.len())).unwrap().clone())
     }
 }

@@ -15,7 +15,6 @@ use super::{
 };
 
 const SEND_ADDR_SLEEP_SECONDS: u64 = 900;
-const LOCALNET: [&str; 5] = ["localhost", "0.0.0.0", "[::]", "127.0.0.1", "[::1]"];
 
 /// Defines address and get-address messages.
 pub struct ProtocolAddress {
@@ -60,35 +59,13 @@ impl ProtocolAddress {
 
     /// Handles receiving the address message. Loops to continually recieve
     /// address messages on the address subsciption. Adds the recieved
-    /// addresses to the list of hosts, after filtering localnet hosts,
-    /// if configured to do so.
+    /// addresses to the list of hosts.
     async fn handle_receive_addrs(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolAddress::handle_receive_addrs() [START]");
         loop {
             let addrs_msg = self.addrs_sub.receive().await?;
             debug!(target: "net", "ProtocolAddress::handle_receive_addrs() received {} addrs", addrs_msg.addrs.len());
-            let addrs = if !self.settings.localnet {
-                let mut filtered = vec![];
-                for addr in &addrs_msg.addrs {
-                    match addr.host_str() {
-                        Some(host_str) => {
-                            if LOCALNET.contains(&host_str) {
-                                debug!(target: "net", "  localnet host({}) detected, ignoring", host_str);
-                                continue
-                            }
-                        }
-                        None => {
-                            debug!(target: "net", "  empty host({}) detected, ignoring...", addr);
-                            continue
-                        }
-                    }
-                    filtered.push(addr.clone());
-                }
-                filtered
-            } else {
-                addrs_msg.addrs.clone()
-            };
-            self.hosts.store(addrs).await;
+            self.hosts.store(addrs_msg.addrs.clone()).await;
         }
     }
 
