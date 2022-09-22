@@ -1,12 +1,13 @@
-rpc_listen = "tcp://127.0.0.1:25570"
-irc_listen = "tcp://127.0.0.1:6669"
+# Node C
+rpc_listen = "tcp://127.0.0.1:25552"
+irc_listen = "tcp://127.0.0.1:25572"
 
 [net]
 outbound_connections = 0
-inbound = ["tls://127.0.0.1:25571"]
-external_addr = ["tls://127.0.0.1:25571"]
+inbound = ["tls://127.0.0.1:25562"]
+external_addr = ["tls://127.0.0.1:25562"]
 seeds = []
-peers = ["tls://127.0.0.1:25551"]
+peers = ["tls://127.0.0.1:25560"]
 
 [channel."#encrypted"]
 topic ="Encrypted channel"
