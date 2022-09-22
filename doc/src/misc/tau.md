@@ -1,7 +1,8 @@
 # Tau
 
 Encrypted tasks management app using peer-to-peer network.  
-Multiple users can collaborate by working on the same tasks, and all users will have synced task list.
+Multiple users can collaborate by working on the same tasks, 
+and all users will have synced tasks.
 
 
 ## Install 
@@ -13,71 +14,9 @@ Multiple users can collaborate by working on the same tasks, and all users will 
 % sudo make install "BINS=taud tau"
 ```
 
-## Usage (Local Deployment)
+## Usage 
 
-### Seed Node
-
-First you must run a seed node. The seed node is a static host which nodes can
-connect to when they first connect to the network. The `seed_session` simply
-connects to a seed node and runs `protocol_seed`, which requests a list of
-addresses from the seed node and disconnects straight after receiving them.
-
-	in config file:
-
-		## P2P accept addresses
-		inbound=["127.0.0.1:11001"] 
-
-Note that the above config doesn't specify an external address since the
-seed node shouldn't be advertised in the list of connectable nodes. The seed
-node does not participate as a normal node in the p2p network. It simply allows
-new nodes to discover other nodes in the network during the bootstrapping phase.
-
-### Inbound Node
-
-This is a node accepting inbound connections on the network but which is not
-making any outbound connections.
-
-The external addresses are important and must be correct.
-
-	in config file:
-		
-		## P2P accept addresses
-		inbound=["127.0.0.1:11002"]
-		
-		## P2P external addresses
-		external_addr=["127.0.0.1:11002"]
-
-		## Seed nodes to connect to 
-		seeds=["127.0.0.1:11001"]
-
-### Outbound Node
-
-This is a node which has 8 outbound connection slots and no inbound connections.
-This means the node has 8 slots which will actively search for unique nodes to
-connect to in the p2p network.
-
-	in config file:
-
-		## Connection slots
-		outbound_connections=8
-
-		## Seed nodes to connect to 
-		seeds=["127.0.0.1:11001"]
-
-
-Also note that for the first time ever running seed node you must run it with 
-`--key-gen`:
-```shell
-% taud --key-gen
-```
-This will generate a new secret key and print it to the terminal that
-you can share with nodes you want them to get and decrypt your tasks,
-otherwise if you have already generated or got a key from a peer, place
-it in `secret` field under the corresponding `workspace` in the config
-file.
-
-
-## Usage (CLI)
+To run your own instance check [Local Deployment](#local-deployment)
 
 ```shell
 % tau --help 
@@ -117,7 +56,8 @@ file.
 ```
 
 ### Quick start
-#### Let's add some tasks
+
+#### Add tasks
 
 ```shell
 % tau add Review tau usage desc:description	# will add a new task named
@@ -137,7 +77,7 @@ file.
 ```
 
 
-#### Now let's list tasks, and while we're at it let's use some filters
+#### List tasks
 
 ```shell
 % tau				# all non-stop tasks
@@ -151,7 +91,7 @@ file.
 ```
 
 
-#### Filtering tasks and run commands on them
+#### Filtering tasks
 
 Note: mod commands are: start, open, pause, stop and modify.
 
@@ -167,7 +107,6 @@ Note: All filters from the previous section could work with mod commands.
 % tau 3 info			# show information about task 3 (does not modify)
 ```
 
-
 #### Comments
 
 ```shell
@@ -181,7 +120,6 @@ Note: All filters from the previous section could work with mod commands.
 % tau log 0922			# will list assignees of stopped tasks
 % tau log 0922 [<Assignee>]	# will draw a heatmap of stopped tasks for [Assignee]
 ```
-
 
 #### Export and Import
 
@@ -217,6 +155,12 @@ start, if the Model doesn't have the ancestor event it will ask the network
 for the missing events, otherwise the event will be added to a chain in the
 model according to its ancestor. For example, in the diagram below, 
 if new event (Event-A2) received, it will be added to the first chain.
+
+### Find head event 
+	TODO
+
+### Find common ancestors
+	TODO
 
 ### View
 
@@ -277,6 +221,58 @@ The event could have many actions according to the underlying data.
 
 
 
+## Tau network protocol
+	TODO
 
+
+## Local Deployment
+
+### Seed Node
+
+First you must run a seed node. The seed node is a static host which nodes can
+connect to when they first connect to the network. The `seed_session` simply
+connects to a seed node and runs `protocol_seed`, which requests a list of
+addresses from the seed node and disconnects straight after receiving them.
+
+	in config file:
+
+		## P2P accept addresses
+		inbound=["127.0.0.1:11001"] 
+
+Note that the above config doesn't specify an external address since the
+seed node shouldn't be advertised in the list of connectable nodes. The seed
+node does not participate as a normal node in the p2p network. It simply allows
+new nodes to discover other nodes in the network during the bootstrapping phase.
+
+### Inbound Node
+
+This is a node accepting inbound connections on the network but which is not
+making any outbound connections.
+
+The external addresses are important and must be correct.
+
+	in config file:
+		
+		## P2P accept addresses
+		inbound=["127.0.0.1:11002"]
+		
+		## P2P external addresses
+		external_addr=["127.0.0.1:11002"]
+
+		## Seed nodes to connect to 
+		seeds=["127.0.0.1:11001"]
+
+### Outbound Node
+
+This is a node which has 8 outbound connection slots and no inbound connections.
+This means the node has 8 slots which will actively search for unique nodes to
+connect to in the p2p network.
+
+	in config file:
+
+		## Connection slots
+		outbound_connections=8
+
+		## Seed nodes to connect to 
 
 
