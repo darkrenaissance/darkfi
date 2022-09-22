@@ -1,7 +1,7 @@
 # Tau
 
-Encrypted tasks management app using peer-to-peer network and raft consensus.  
-multiple users can collaborate by working on the same tasks, and all users will have synced task list.
+Encrypted tasks management app using peer-to-peer network.  
+Multiple users can collaborate by working on the same tasks, and all users will have synced task list.
 
 
 ## Install 
@@ -196,3 +196,87 @@ Note: All filters from the previous section could work with mod commands.
 ```shell
 % tau switch darkfi	# darkfi workspace needs to be configured in config file
 ```
+
+## Tau Architecture 
+
+Tau using Model–view software architecture. All the operations, main data structures, 
+and handling messages from network protocol, happen in the Model side. 
+While keeping the View independent of the Model and focusing on getting update 
+from it continuously, and preserve and apply rules to received data.
+
+### Model
+
+The Model consist of chains(EventNodes) structured as a tree, each chain has Event-based
+list. To maintain strict order each event dependent on the hash of the previous event 
+in the chain's events. All the chains will shared a root event to preserve the tree
+structure. <em> check the diagram bellow  </em>
+
+On receiving new event from the network protocol, the event will be added to the
+orphans list, then a process of reorganizing the events in orphans list will
+start, if the Model doesn't have the ancestor event it will ask the network
+for the missing events, otherwise the event will be added to a chain in the
+model according to its ancestor. For example, in the diagram below, 
+if new event (Event-A2) received, it will be added to the first chain.
+
+### View
+
+The view's responsibility is to checking the chains in the Model and asking for
+new events, while keeping a list of event ids which have been imported
+previously to prevent importing the same event twice, then order these events
+according to the timestamp attached to each event, the last step is 
+dispatching these events to the clients. 
+<em> check the diagram bellow  </em>
+
+
+![data structure](../assets/mv_event.png)
+
+
+## Structures 
+
+### EventId
+
+Hash of all the metadata in the event
+
+	type EventId = [u8; 32];	
+
+### EventAction 
+
+The event could have many actions according to the underlying data.
+
+	enum EventAction { ... };	
+
+### Event
+
+| Description            | Data Type      | Comments                    |
+|----------------------- | -------------- | --------------------------- |
+| previous_event_hash    | `EventId` 	  | Hash of the previous event  |
+| Action     			 | `EventAction`  | event's action 				|
+| Timestamp     		 | u64  		  | event's timestamp 			|
+
+### EventNode
+
+| Description    | Data Type      		  | Comments                    			 |
+|--------------- | ---------------------- | ---------------------------------------- |
+| parent    	 | Option<`EventNode`> 	  | Only current root has this set to None   |
+| Event     	 | `Event`  			  | The event itself 					     |
+| Children     	 | Vec<`EventNode`>  	  | The events followed this event  		 |
+
+### Model 
+
+| Description   | Data Type      		  		   | Comments                    |
+|-------------- | -------------------------------- | --------------------------- |
+| current_root  | `EventId` 	  		  		   | The root event for the tree |
+| orphans       | Vec<`Event`>  		  		   | Recently added events 		 |
+| event_map     | HashMap<`EventId`, `EventNode`>  | The actual tree  		 	 |
+
+### View 
+
+| Description   | Data Type      	   | Comments                    				|
+|-------------- | -------------------- | ------------------------------------------ |
+| seen  		| HashSet<`EventId`>   | A list of events have imported from Model	|
+
+
+
+
+
+
