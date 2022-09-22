@@ -66,8 +66,9 @@ use crate::{
 //// met.
 ////
 //// At its basis, the DAO is a private key that is owned by all DAO participants
-//// but can only be operated according to constraints. These constraints are
-//// configured by DAO participants and enforced by ZK cryptography.
+//// but can only be operated according to constraints. These constraints,
+//// also known as DAO parameters, are configured by DAO participants and 
+//// enforced by ZK cryptography.
 ////
 //// In this demo, the constraints are:
 ////
@@ -79,15 +80,16 @@ use crate::{
 ////    proposal to pass.
 ////
 //// In addition, DAO participants must prove ownership of governance tokens
-//// order to vote. Their voted is weighted according to the number of governance
+//// order to vote. Their vote is weighted according to the number of governance
 //// tokens in their wallet. In this current implementation, users do not spend
 //// or lock up these coins in order to vote- they simply prove ownership of them.
 ////
 //// In the current prototype, the following information is exposed:
 ////
-//// * Blinded votes are publically liked to the anonymous proposal identifier,
-////   so you can see which votes are voting on what proposal (without
-////   seeing anything else).
+//// * Encrypted votes are publicly linked to the proposal identifier hash,
+////   meaning that it is possible to see that there is voting activity associated
+////   with a particular proposal identifier, but the contents of the proposal,
+////   how one has voted, and the associated DAO is fully private. 
 //// * In the burn phase of casting a vote, we reveal a public value called a
 ////   nullifier. The same public value is revealed when we spend the coins we
 ////   used to vote, meaning you can link a vote with a user when they spend
