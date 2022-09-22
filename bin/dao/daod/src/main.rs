@@ -108,25 +108,29 @@ use crate::{
 ////
 //// dao-demo 0.1 TODOs:
 ////
-//// 1. Change mint_treasury() to take a DAO bulla from command line input
-////    rather than a public key.
+//// High priority:
 ////
-//// 2. Token id is hardcoded rn. Change this so users can specify token_id
+//// 1. Show the token id as a string (e.g. xdrk) as well as the amount when
+////    we output balances to dao-cli. Optional: use prettytable library to display
+////    nicely (see darkfi/bin/drk).
+////    e.g: Balance: 1000 xDRK
+////
+//// 2. airdrop() should pass a PublicKey instead of a nym.
+////
+//// 3. vote() should pass a ProposalBulla.
+////
+//// 3. Better document CLI/ CLI help.
+////
+//// Less priority:
+////
+//// 4. Token id is hardcoded rn. Change this so users can specify token_id
 ////    as either xdrk or gdrk. In dao-cli we run a match statement to link to
 ////    the corresponding static values XDRK_ID and GDRK_ID. Note: xdrk is used
 ////    only for the DAO treasury. gdrk is the governance token used to operate
 ////    the DAO.
 ////
-//// 3. Show the token id as a string (e.g. xdrk) as well as the amount when
-////    we output balances to dao-cli. Optional: use prettytable library to display
-////    nicely (see darkfi/bin/drk).
-////
-//// 4. client.propose() currently takes a PublicKey for recipient instead of a nym,
-////    Make this a nym, e.g:
-////        ./dao-cli alice propose bob 1000
-////    client.propose() then looks up the correponding public key.
-////
-//// 5. Better document CLI/ CLI help.
+//// 5. Implement money transfer between MoneyWallets so users can send tokens to
+////    eachother.
 ////
 //// 6. Make CLI usage more interactive. Example: when I cast a vote, output:
 ////   "You voted {} with value {}." where value is the number of gDRK in a users
