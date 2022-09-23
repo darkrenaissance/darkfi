@@ -1,4 +1,9 @@
-use std::{process::exit, str::FromStr, time::Instant};
+use std::{
+    io::{stdin, Read},
+    process::exit,
+    str::FromStr,
+    time::Instant,
+};
 
 use clap::{Parser, Subcommand};
 use prettytable::{format, row, Table};
@@ -94,6 +99,9 @@ enum DrkSubcommand {
         #[clap(short, long)]
         token_id: String,
     },
+
+    /// Broadcast a given transaction from stdin
+    Broadcast,
 }
 
 struct Drk {
@@ -224,6 +232,14 @@ impl Drk {
         println!("Success! Transaction ID: {}", rep);
         Ok(())
     }
+
+    async fn tx_broadcast(&self, transaction: String) -> Result<()> {
+        println!("Attempting to broadcast transaction from stdin...");
+        let req = JsonRequest::new("tx.broadcast", json!([transaction]));
+        let rep = self.rpc_client.request(req).await?;
+        println!("Success!\nTransaction ID: {}", rep);
+        Ok(())
+    }
 }
 
 #[async_std::main]
@@ -267,6 +283,12 @@ async fn main() -> Result<()> {
 
         DrkSubcommand::Transfer { recipient, amount, network, token_id } => {
             drk.tx_transfer(network, token_id, recipient, amount).await
+        }
+
+        DrkSubcommand::Broadcast => {
+            let mut buf = String::new();
+            stdin().read_to_string(&mut buf)?;
+            drk.tx_broadcast(buf).await
         }
     }?;
 
