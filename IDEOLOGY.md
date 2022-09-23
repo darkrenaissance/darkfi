@@ -124,7 +124,7 @@ led to various postmodernist sociological approaches, in particular
 Immanuel Wallerstein’s capitalist world-system analysis. Tendencies
 like ecology, feminism, relativism, the New Left, and world-system
 analysis launched a period during which the social sciences
-splintered. Obviously, financial capital gaining hegem- ony as
+splintered. Obviously, financial capital gaining hegemony as
 the 1970s faded also played an important role. The upside of these
 developments was the collapse of the hegemony of Eurocentric thought.
 The downside, however, was the drawbacks of a highly fragmented
@@ -151,8 +151,8 @@ us from social truth.
 time society is recreated there is a tendency to form a new capital
 and power-state monopoly. Much like medieval theism was ideologically
 connected to absolute monarchies (sultanates and shāhanshāhs),
-modern social engineering—as re-creation— is essentially the
-divine disposition and ideology of the nation- state. Positivism in
+modern social engineering—as re-creation—is essentially the
+divine disposition and ideology of the nation-state. Positivism in
 this regard is modern theism.
 
 4. Revolutions cannot be interpreted as the re-creation acts of
