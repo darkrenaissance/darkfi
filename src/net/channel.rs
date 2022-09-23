@@ -286,10 +286,10 @@ impl Channel {
                     if Self::is_eof_error(err.clone()) {
                         info!("Inbound connection {} disconnected", self.address());
                     } else {
-                        error!("Read error on channel: {}", err);
+                        error!("Read error on channel {}: {}", self.address(), err);
                     }
                     debug!(target: "net",
-                     "Channel::receive_loop() stopping channel {:?}",
+                     "Channel::receive_loop() stopping channel {}",
                      self.address()
                     );
                     self.stop().await;

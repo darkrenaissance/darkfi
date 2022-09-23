@@ -1,6 +1,6 @@
 use async_std::{
     sync::{Arc, Mutex},
-    task,
+    task::sleep,
 };
 use std::time::Duration;
 
@@ -14,7 +14,7 @@ use rand::{rngs::OsRng, Rng, RngCore};
 use crate::{
     net,
     util::{
-        self, gen_id,
+        gen_id,
         serial::{deserialize, serialize, Decodable, Encodable},
     },
     Error, Result,
@@ -29,9 +29,9 @@ use super::{
     prune_map, DataStore, RaftSettings,
 };
 
-async fn send_node_id_loop(sender: async_channel::Sender<()>, timeout: i64) -> Result<()> {
+async fn send_loop(sender: async_channel::Sender<()>, timeout: Duration) -> Result<()> {
     loop {
-        util::sleep(timeout as u64).await;
+        sleep(timeout).await;
         sender.send(()).await?;
     }
 }
@@ -52,6 +52,8 @@ pub struct Raft<T> {
 
     pub(super) last_term: u64,
 
+    pub(super) last_heartbeat: i64,
+
     p2p_sender: Sender,
 
     msgs_channel: Channel<T>,
@@ -61,7 +63,9 @@ pub struct Raft<T> {
 
     seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
 
-    settings: RaftSettings,
+    pub(super) settings: RaftSettings,
+
+    pending_msgs: Vec<T>,
 }
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
@@ -102,12 +106,14 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             acked_length: MapLength(FxHashMap::default()),
             nodes: Arc::new(Mutex::new(FxHashMap::default())),
             last_term: 0,
+            last_heartbeat: Utc::now().timestamp(),
             p2p_sender,
             msgs_channel,
             commits_channel,
             datastore,
             seen_msgs,
             settings,
+            pending_msgs: vec![],
         })
     }
 
@@ -123,49 +129,51 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     ) -> Result<()> {
         let p2p_send_task = executor.spawn(p2p_send_loop(self.p2p_sender.1.clone(), p2p.clone()));
 
-        let prune_seen_messages_task = executor.spawn(prune_map::<String>(
-            self.seen_msgs.clone(),
-            self.settings.prun_messages_duration,
-        ));
+        let prune_seen_messages_task = executor
+            .spawn(prune_map::<String>(self.seen_msgs.clone(), self.settings.prun_duration));
 
-        let prune_nodes_id_task = executor
-            .spawn(prune_map::<NodeId>(self.nodes.clone(), self.settings.prun_nodes_ids_duration));
-
-        let (node_id_sx, node_id_rv) = async_channel::unbounded::<()>();
-        let send_node_id_loop_task =
-            executor.spawn(send_node_id_loop(node_id_sx, self.settings.node_id_timeout));
+        let prune_nodes_id_task =
+            executor.spawn(prune_map::<NodeId>(self.nodes.clone(), self.settings.prun_duration));
 
         let mut rng = rand::thread_rng();
+
+        let (id_sx, id_rv) = async_channel::unbounded::<()>();
+        let (heartbeat_sx, heartbeat_rv) = async_channel::unbounded::<()>();
+        let (timeout_sx, timeout_rv) = async_channel::unbounded::<()>();
+
+        let id_timeout = Duration::from_secs(self.settings.id_timeout);
+        let send_id_task = executor.spawn(send_loop(id_sx, id_timeout));
+
+        let heartbeat_timeout = Duration::from_millis(self.settings.heartbeat_timeout);
+        let send_heartbeat_task = executor.spawn(send_loop(heartbeat_sx, heartbeat_timeout));
+
+        let timeout =
+            Duration::from_secs(rng.gen_range(0..self.settings.timeout) + self.settings.timeout);
+        let send_timeout_task = executor.spawn(send_loop(timeout_sx, timeout));
 
         let broadcast_msg_rv = self.msgs_channel.1.clone();
 
         loop {
-            let timeout = if self.role == Role::Leader {
-                self.settings.heartbeat_timeout
-            } else {
-                rng.gen_range(0..self.settings.timeout) + self.settings.timeout
-            };
-            let timeout = Duration::from_millis(timeout);
-
-            let result: Result<()>;
-
-            select! {
-                m =  p2p_recv_channel.recv().fuse() => result = self.handle_method(m?).await,
-                m =  broadcast_msg_rv.recv().fuse() => result = self.broadcast_msg(&m?,None).await,
-                _ =  node_id_rv.recv().fuse() => result = self.send_node_id_msg().await,
-                _ = task::sleep(timeout).fuse() => {
-                    result = if self.role == Role::Leader {
-                        self.send_heartbeat().await
-                    }else {
-                        self.send_vote_request().await
-                    };
-                },
+            let mut result = select! {
+                m =  p2p_recv_channel.recv().fuse() => self.handle_method(m?).await,
+                m =  broadcast_msg_rv.recv().fuse() => self.broadcast_msg(&m?,None).await,
+                _ =  id_rv.recv().fuse() => self.send_id_msg().await,
+                _ = heartbeat_rv.recv().fuse() => self.send_heartbeat().await,
+                _ = timeout_rv.recv().fuse() => self.send_vote_request().await,
                 _ = stop_signal.recv().fuse() => break,
+            };
+
+            // send pending messages
+            if !self.pending_msgs.is_empty() && self.role != Role::Candidate {
+                let pending_msgs = self.pending_msgs.clone();
+                for m in &pending_msgs {
+                    result = self.broadcast_msg(m, None).await;
+                }
+                self.pending_msgs = vec![];
             }
 
-            match result {
-                Ok(_) => {}
-                Err(e) => warn!(target: "raft", "warn: {}", e),
+            if let Err(e) = result {
+                warn!(target: "raft", "warn: {}", e);
             }
         }
 
@@ -173,7 +181,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         p2p_send_task.cancel().await;
         prune_seen_messages_task.cancel().await;
         prune_nodes_id_task.cancel().await;
-        send_node_id_loop_task.cancel().await;
+        send_id_task.cancel().await;
+        send_heartbeat_task.cancel().await;
+        send_timeout_task.cancel().await;
         self.datastore.flush().await?;
         Ok(())
     }
@@ -201,28 +211,33 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.id.clone()
     }
 
-    async fn send_node_id_msg(&self) -> Result<()> {
-        let node_id_msg = serialize(&NodeIdMsg { id: self.id.clone() });
-        self.send(None, &node_id_msg, NetMsgMethod::NodeIdMsg, None).await?;
+    async fn send_id_msg(&self) -> Result<()> {
+        let id_msg = serialize(&NodeIdMsg { id: self.id.clone() });
+        self.send(None, &id_msg, NetMsgMethod::NodeIdMsg, None).await?;
         Ok(())
     }
 
     async fn broadcast_msg(&mut self, msg: &T, msg_id: Option<u64>) -> Result<()> {
-        if self.role == Role::Leader {
-            let msg = serialize(msg);
-            let log = Log { msg, term: self.current_term()? };
-            self.push_log(&log)?;
-
-            self.acked_length.insert(&self.id, self.logs_len());
-        } else {
-            let b_msg = BroadcastMsgRequest(serialize(msg));
-            self.send(
-                Some(self.current_leader.clone()),
-                &serialize(&b_msg),
-                NetMsgMethod::BroadcastRequest,
-                msg_id,
-            )
-            .await?;
+        match self.role {
+            Role::Leader => {
+                let msg = serialize(msg);
+                let log = Log { msg, term: self.current_term()? };
+                self.push_log(&log)?;
+                self.acked_length.insert(&self.id, self.logs_len());
+            }
+            Role::Follower => {
+                let b_msg = BroadcastMsgRequest(serialize(msg));
+                self.send(
+                    Some(self.current_leader.clone()),
+                    &serialize(&b_msg),
+                    NetMsgMethod::BroadcastRequest,
+                    msg_id,
+                )
+                .await?;
+            }
+            Role::Candidate => {
+                self.pending_msgs.push(msg.clone());
+            }
         }
 
         debug!(target: "raft", "Role: {:?} Id: {:?}, broadcast a msg id: {:?} ", self.role, self.id, msg_id);
@@ -237,6 +252,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
                 self.receive_log_response(lr).await?;
             }
             NetMsgMethod::LogRequest => {
+                self.last_heartbeat = Utc::now().timestamp();
                 let lr: LogRequest = deserialize(&msg.payload)?;
                 self.receive_log_request(lr).await?;
             }

@@ -22,7 +22,7 @@ impl Tau {
         Ok(())
     }
 
-    /// Get all task ids.
+    /// Get current open tasks ids.
     pub async fn get_ids(&self) -> Result<Vec<u64>> {
         let req = JsonRequest::new("get_ids", json!([]));
         let rep = self.rpc_client.request(req).await?;
@@ -70,6 +70,14 @@ impl Tau {
         Ok(serde_json::from_value(rep)?)
     }
 
+    /// Get month's stopped tasks.
+    pub async fn get_stop_tasks(&self, month: Option<i64>) -> Result<Vec<TaskInfo>> {
+        let req = JsonRequest::new("get_stop_tasks", json!([month]));
+        let rep = self.rpc_client.request(req).await?;
+
+        Ok(serde_json::from_value(rep)?)
+    }
+
     /// Switch workspace.
     pub async fn switch_ws(&self, workspace: String) -> Result<()> {
         let req = JsonRequest::new("switch_ws", json!([workspace]));
@@ -78,6 +86,14 @@ impl Tau {
         debug!("Got reply: {:?}", rep);
 
         Ok(())
+    }
+
+    /// Get current workspace.
+    pub async fn get_ws(&self) -> Result<String> {
+        let req = JsonRequest::new("get_ws", json!([]));
+        let rep = self.rpc_client.request(req).await?;
+
+        Ok(serde_json::from_value(rep)?)
     }
 
     /// Export tasks.

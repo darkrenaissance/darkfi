@@ -3,6 +3,8 @@
 *.zk.bin
 *_circuit_layout.png
 .vscode/
+.DS_Store
+.#*
 
 /target/*
 /tmp/*
@@ -21,3 +23,5 @@
 /vanityaddr
 /zkas
 /lilith
+/darkwiki
+/darkwikid

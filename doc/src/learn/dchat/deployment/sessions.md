@@ -20,7 +20,7 @@ that takes an address returns a `Channel`.
 
 **Manual**: Uses a `Connector` to connect to a single address that is passed
 to `ManualSession::connect()`. Used to create an explicit connection to
-an address.
+a specified address.
 
 **SeedSync**: Creates a connection to the seed nodes specified in settings.
 Loops through all the configured seeds and tries to connect to them

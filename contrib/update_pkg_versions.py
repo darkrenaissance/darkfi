@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Update the version in the toplevel Cargo.toml for DarkFi, and then run this
+# script to update all the other Cargo.toml files.
 import subprocess
 
 from os import chdir

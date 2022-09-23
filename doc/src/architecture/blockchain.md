@@ -47,7 +47,7 @@ A block $\textbf{B}$ is the building block of the blockchain.
 Block $B_{i}=(st, d, sl, B_{\pi}, \rho, \sigma_s)$ created for slot i
 by a stakeholder, and slot i leader $U_s$:
 
-$$\textbf{\textcolor{red}{st}}: \text{state of the prebvious block,
+$$\textbf{\textcolor{red}{st}}: \text{state of the previous block,
 Hash(head($\mathbb{C}$))}$$ $$\textbf{\textcolor{red}{d}}: \text{data held
 by the block}$$ $$\textbf{\textcolor{red}{sl}}: \text{slot id generated
 by the beacon}$$ $$\textbf{\textcolor{red}{$B_\pi$}}: \text{proof
@@ -60,7 +60,7 @@ the block}$$
 
 ## Leader selection
 
-At the onset of each slot each a stakeholder needs to verify if it's
+At the onset of each slot each stakeholder needs to verify if it's
 the weighted random leader for this slot.
 
 $$y < T_{i}$$ <center><sup><strong>check if VRF output is less than some
@@ -68,7 +68,7 @@ threshold </strong></sup></center>
 
 This statement might hold true for zero or more stakeholders, thus
 we might end up with multiple leaders for a slot, and other times no
-leader. Also note that no one would know who the leader is, how many
+leader. Also note that no one would know who the leader is or how many
 leaders are there for the slot, until you receive a signed block with
 a proof claiming to be a leader.
 

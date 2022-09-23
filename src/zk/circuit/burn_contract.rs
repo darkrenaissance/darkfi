@@ -93,8 +93,9 @@ const BURN_VALCOMY_OFFSET: usize = 2;
 const BURN_TOKCOMX_OFFSET: usize = 3;
 const BURN_TOKCOMY_OFFSET: usize = 4;
 const BURN_MERKLEROOT_OFFSET: usize = 5;
-const BURN_SIGKEYX_OFFSET: usize = 6;
-const BURN_SIGKEYY_OFFSET: usize = 7;
+const BURN_USERDATA_OFFSET: usize = 6;
+const BURN_SIGKEYX_OFFSET: usize = 7;
+const BURN_SIGKEYY_OFFSET: usize = 8;
 
 #[derive(Default, Debug)]
 pub struct BurnContract {
@@ -107,6 +108,12 @@ pub struct BurnContract {
     pub token_blind: Value<pallas::Scalar>,
     pub leaf_pos: Value<u32>,
     pub merkle_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
+    /// Allows composing this ZK proof to invoke other contracts
+    pub spend_hook: Value<pallas::Base>,
+    /// Data passed from this coin to the invoked contract
+    pub user_data: Value<pallas::Base>,
+    /// Blinding factor for the encrypted user_data
+    pub user_data_blind: Value<pallas::Base>,
     pub sig_secret: Value<pallas::Base>,
 }
 
@@ -257,6 +264,24 @@ impl Circuit<pallas::Base> for BurnContract {
             self.serial,
         )?;
 
+        let spend_hook = assign_free_advice(
+            layouter.namespace(|| "load spend_hook"),
+            config.advices[0],
+            self.spend_hook,
+        )?;
+
+        let user_data = assign_free_advice(
+            layouter.namespace(|| "load user_data"),
+            config.advices[0],
+            self.user_data,
+        )?;
+
+        let user_data_blind = assign_free_advice(
+            layouter.namespace(|| "load user_data_blind"),
+            config.advices[0],
+            self.user_data_blind,
+        )?;
+
         let hash = {
             let poseidon_message = [secret_key.clone(), serial.clone()];
 
@@ -310,13 +335,14 @@ impl Circuit<pallas::Base> for BurnContract {
         // Coin hash
         // =========
         let coin = {
-            let poseidon_message = [pub_x, pub_y, value, token, serial, coin_blind];
+            let poseidon_message =
+                [pub_x, pub_y, value, token, serial, spend_hook, user_data.clone(), coin_blind];
 
             let poseidon_hasher = PoseidonHash::<
                 _,
                 _,
                 poseidon::P128Pow5T3,
-                poseidon::ConstantLength<6>,
+                poseidon::ConstantLength<8>,
                 3,
                 2,
             >::init(
@@ -353,6 +379,33 @@ impl Circuit<pallas::Base> for BurnContract {
             BURN_MERKLEROOT_OFFSET,
         )?;
 
+        // ===========
+        // Export user_data
+        // ===========
+        let user_data_enc = {
+            let poseidon_message = [user_data, user_data_blind];
+
+            let poseidon_hasher = PoseidonHash::<
+                _,
+                _,
+                poseidon::P128Pow5T3,
+                poseidon::ConstantLength<2>,
+                3,
+                2,
+            >::init(
+                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
+            )?;
+
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
+
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
+            poseidon_output
+        };
+
+        // Constrain the coin C
+        layouter.constrain_instance(user_data_enc.cell(), config.primary, BURN_USERDATA_OFFSET)?;
+
         // ================
         // Value commitment
         // ================
@@ -369,12 +422,11 @@ impl Circuit<pallas::Base> for BurnContract {
 
         // v * G_1
         let (commitment, _) = {
-            let value_commit_v = ValueCommitV;
-            let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), value_commit_v);
+            let value_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), ValueCommitV);
             let value = ScalarFixedShort::new(
                 ecc_chip.clone(),
                 layouter.namespace(|| "value"),
-                (value, one.clone()),
+                (value, one),
             )?;
             value_commit_v.mul(layouter.namespace(|| "[value] ValueCommitV"), value)?
         };
@@ -386,8 +438,8 @@ impl Circuit<pallas::Base> for BurnContract {
                 layouter.namespace(|| "value_blind"),
                 self.value_blind,
             )?;
-            let value_commit_r = OrchardFixedBasesFull::ValueCommitR;
-            let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), value_commit_r);
+            let value_commit_r =
+                FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
         };
 
@@ -412,15 +464,9 @@ impl Circuit<pallas::Base> for BurnContract {
             assign_free_advice(layouter.namespace(|| "load token"), config.advices[0], self.token)?;
 
         // a * G_1
-        let (commitment, _) = {
-            let token_commit_v = ValueCommitV;
-            let token_commit_v = FixedPointShort::from_inner(ecc_chip.clone(), token_commit_v);
-            let token = ScalarFixedShort::new(
-                ecc_chip.clone(),
-                layouter.namespace(|| "token"),
-                (token, one),
-            )?;
-            token_commit_v.mul(layouter.namespace(|| "[token] ValueCommitV"), token)?
+        let commitment = {
+            let token_commit_v = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
+            token_commit_v.mul(layouter.namespace(|| "[token] NullifierK"), token)?
         };
 
         // r_A * G_2
@@ -430,8 +476,8 @@ impl Circuit<pallas::Base> for BurnContract {
                 layouter.namespace(|| "token_blind"),
                 self.token_blind,
             )?;
-            let token_commit_r = OrchardFixedBasesFull::ValueCommitR;
-            let token_commit_r = FixedPoint::from_inner(ecc_chip.clone(), token_commit_r);
+            let token_commit_r =
+                FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             token_commit_r.mul(layouter.namespace(|| "[token_blind] ValueCommitR"), rca)?
         };
 
@@ -488,7 +534,7 @@ mod tests {
         crypto::{
             keypair::{PublicKey, SecretKey},
             proof::{ProvingKey, VerifyingKey},
-            util::{mod_r_p, pedersen_commitment_scalar},
+            util::{pedersen_commitment_base, pedersen_commitment_u64},
             Proof,
         },
         Result,
@@ -506,19 +552,32 @@ mod tests {
 
     #[test]
     fn burn_circuit_assert() -> Result<()> {
-        let value = pallas::Base::from(42);
-        let token_id = pallas::Base::from(22);
+        let value = 42;
+        let token_id = pallas::Base::random(&mut OsRng);
         let value_blind = pallas::Scalar::random(&mut OsRng);
         let token_blind = pallas::Scalar::random(&mut OsRng);
         let serial = pallas::Base::random(&mut OsRng);
         let coin_blind = pallas::Base::random(&mut OsRng);
         let secret = SecretKey::random(&mut OsRng);
+        let spend_hook = pallas::Base::random(&mut OsRng);
+        let user_data = pallas::Base::random(&mut OsRng);
+        let user_data_blind = pallas::Base::random(&mut OsRng);
         let sig_secret = SecretKey::random(&mut OsRng);
 
         let coin2 = {
             let coords = PublicKey::from_secret(secret).0.to_affine().coordinates().unwrap();
-            let msg = [*coords.x(), *coords.y(), value, token_id, serial, coin_blind];
-            poseidon::Hash::<_, P128Pow5T3, ConstantLength<6>, 3, 2>::init().hash(msg)
+
+            let msg = [
+                *coords.x(),
+                *coords.y(),
+                pallas::Base::from(value),
+                token_id,
+                serial,
+                spend_hook,
+                user_data,
+                coin_blind,
+            ];
+            poseidon::Hash::<_, P128Pow5T3, ConstantLength<8>, 3, 2>::init().hash(msg)
         };
 
         let mut tree = BridgeTree::<MerkleNode, 32>::new(100);
@@ -542,11 +601,15 @@ mod tests {
         let nullifier =
             poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(nullifier);
 
-        let value_commit = pedersen_commitment_scalar(mod_r_p(value), value_blind);
+        let value_commit = pedersen_commitment_u64(value, value_blind);
         let value_coords = value_commit.to_affine().coordinates().unwrap();
 
-        let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
+        let token_commit = pedersen_commitment_base(token_id, token_blind);
         let token_coords = token_commit.to_affine().coordinates().unwrap();
+
+        let user_data_enc = [user_data, user_data_blind];
+        let user_data_enc =
+            poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(user_data_enc);
 
         let sig_pubkey = PublicKey::from_secret(sig_secret);
         let sig_coords = sig_pubkey.0.to_affine().coordinates().unwrap();
@@ -558,6 +621,7 @@ mod tests {
             *token_coords.x(),
             *token_coords.y(),
             merkle_root.0,
+            user_data_enc,
             *sig_coords.x(),
             *sig_coords.y(),
         ];
@@ -565,13 +629,16 @@ mod tests {
         let circuit = BurnContract {
             secret_key: Value::known(secret.0),
             serial: Value::known(serial),
-            value: Value::known(value),
+            value: Value::known(pallas::Base::from(value)),
             token: Value::known(token_id),
             coin_blind: Value::known(coin_blind),
             value_blind: Value::known(value_blind),
             token_blind: Value::known(token_blind),
             leaf_pos: Value::known(leaf_pos.try_into().unwrap()),
             merkle_path: Value::known(merkle_path.try_into().unwrap()),
+            spend_hook: Value::known(spend_hook),
+            user_data: Value::known(user_data),
+            user_data_blind: Value::known(user_data_blind),
             sig_secret: Value::known(sig_secret.0),
         };
 

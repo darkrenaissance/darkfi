@@ -17,24 +17,33 @@ use halo2_gadgets::{
     utilities::lookup_range_check::LookupRangeCheckConfig,
 };
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
+    circuit::{floor_planner, AssignedCell, Layouter, Value},
+    pasta::{group::Curve, pallas, Fp},
     plonk,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
-use log::debug;
-use pasta_curves::{group::Curve, pallas, Fp};
+use log::{debug, error};
 
-use super::gadget::arithmetic::{ArithChip, ArithConfig, ArithInstruction};
-
-use super::assign_free_advice;
 pub use super::vm_stack::{StackVar, Witness};
+use super::{
+    assign_free_advice,
+    gadget::{
+        arithmetic::{ArithChip, ArithConfig, ArithInstruction},
+        less_than::{LessThanChip, LessThanConfig},
+        native_range_check::{NativeRangeCheckChip, NativeRangeCheckConfig},
+        small_range_check::{SmallRangeCheckChip, SmallRangeCheckConfig},
+    },
+};
 use crate::{
     crypto::constants::{
         sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
         util::gen_const_array,
         NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
     },
-    zkas::{decoder::ZkBinary, opcode::Opcode},
+    zkas::{
+        types::{LitType, StackType},
+        Opcode, ZkBinary,
+    },
 };
 
 #[derive(Clone)]
@@ -48,26 +57,17 @@ pub struct VmConfig {
     _sinsemilla_cfg2: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
     arith_config: ArithConfig,
+
+    native_64_range_check_config: NativeRangeCheckConfig<3, 64, 22>,
+    native_253_range_check_config: NativeRangeCheckConfig<3, 253, 85>,
+    lessthan_config: LessThanConfig<3, 253, 85>,
+    boolcheck_config: SmallRangeCheckConfig,
 }
 
 impl VmConfig {
     fn ecc_chip(&self) -> EccChip<OrchardFixedBases> {
         EccChip::construct(self.ecc_config.clone())
     }
-
-    /*
-    fn sinsemilla_chip_1(
-        &self,
-    ) -> SinsemillaChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
-        SinsemillaChip::construct(self.sinsemilla_cfg1.clone())
-    }
-
-    fn sinsemilla_chip_2(
-        &self,
-    ) -> SinsemillaChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
-        SinsemillaChip::construct(self.sinsemilla_cfg2.clone())
-    }
-    */
 
     fn merkle_chip_1(
         &self,
@@ -90,34 +90,37 @@ impl VmConfig {
     }
 }
 
-#[derive(Clone, Default)]
 pub struct ZkCircuit {
     constants: Vec<String>,
     witnesses: Vec<Witness>,
-    opcodes: Vec<(Opcode, Vec<usize>)>,
+    literals: Vec<(LitType, String)>,
+    opcodes: Vec<(Opcode, Vec<(StackType, usize)>)>,
 }
 
 impl ZkCircuit {
     pub fn new(witnesses: Vec<Witness>, circuit_code: ZkBinary) -> Self {
         let constants = circuit_code.constants.iter().map(|x| x.1.clone()).collect();
-        Self { constants, witnesses, opcodes: circuit_code.opcodes }
+        #[allow(clippy::map_clone)]
+        let literals = circuit_code.literals.iter().map(|x| x.clone()).collect();
+        Self { constants, witnesses, literals, opcodes: circuit_code.opcodes }
     }
 }
 
 impl Circuit<pallas::Base> for ZkCircuit {
     type Config = VmConfig;
-    type FloorPlanner = SimpleFloorPlanner;
+    type FloorPlanner = floor_planner::V1;
 
     fn without_witnesses(&self) -> Self {
         Self {
             constants: self.constants.clone(),
             witnesses: self.witnesses.clone(),
+            literals: self.literals.clone(),
             opcodes: self.opcodes.clone(),
         }
     }
 
     fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
-        // Advice columns used in the circuit
+        //  Advice columns used in the circuit
         let advices = [
             meta.advice_column(),
             meta.advice_column(),
@@ -129,8 +132,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
             meta.advice_column(),
             meta.advice_column(),
             meta.advice_column(),
-            //meta.advice_column(),
-            //meta.advice_column(),
         ];
 
         // Fixed columns for the Sinsemilla generator lookup table
@@ -217,6 +218,27 @@ impl Circuit<pallas::Base> for ZkCircuit {
             (sinsemilla_cfg2, merkle_cfg2)
         };
 
+        // K-table for 64 bit range check lookups
+        let k_values_table_64 = meta.lookup_table_column();
+        let native_64_range_check_config =
+            NativeRangeCheckChip::<3, 64, 22>::configure(meta, advices[8], k_values_table_64);
+
+        // K-table for 253 bit range check lookups
+        let k_values_table_253 = meta.lookup_table_column();
+        let native_253_range_check_config =
+            NativeRangeCheckChip::<3, 253, 85>::configure(meta, advices[8], k_values_table_253);
+        let lessthan_config = LessThanChip::<3, 253, 85>::configure(
+            meta,
+            advices[6],
+            advices[7],
+            advices[8],
+            k_values_table_253,
+        );
+
+        // Configuration for boolean checks, it uses the small_range_check
+        // chip with a range of 2, which enforces one bit, i.e. 0 or 1.
+        let boolcheck_config = SmallRangeCheckChip::configure(meta, advices[9], 2);
+
         VmConfig {
             primary,
             advices,
@@ -227,6 +249,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
             _sinsemilla_cfg2,
             poseidon_config,
             arith_config,
+            native_64_range_check_config,
+            native_253_range_check_config,
+            lessthan_config,
+            boolcheck_config,
         }
     }
 
@@ -237,20 +263,57 @@ impl Circuit<pallas::Base> for ZkCircuit {
     ) -> std::result::Result<(), plonk::Error> {
         debug!("Entering synthesize()");
 
-        // Our stack which holds everything we reference.
+        // ===================
+        // VM Setup
+        //====================
+
+        // Our stack which holds every variable we reference and create.
         let mut stack: Vec<StackVar> = vec![];
+
+        // Our stack which holds all the literal values we have in the circuit.
+        // For now, we only support u64.
+        let mut litstack: Vec<u64> = vec![];
 
         // Offset for public inputs
         let mut public_inputs_offset = 0;
 
+        // Offset for literals
+        let mut literals_offset = 0;
+
         // Load the Sinsemilla generator lookup table used by the whole circuit.
         SinsemillaChip::load(config.sinsemilla_cfg1.clone(), &mut layouter)?;
+
+        // Construct the 64-bit NativeRangeCheck and LessThan chips
+        let rangecheck64_chip = NativeRangeCheckChip::<3, 64, 22>::construct(
+            config.native_64_range_check_config.clone(),
+        );
+        NativeRangeCheckChip::<3, 64, 22>::load_k_table(
+            &mut layouter,
+            config.native_64_range_check_config.k_values_table,
+        )?;
+
+        // Construct the 253-bit NativeRangeCheck and LessThan chips.
+        let rangecheck253_chip = NativeRangeCheckChip::<3, 253, 85>::construct(
+            config.native_253_range_check_config.clone(),
+        );
+        let lessthan_chip = LessThanChip::<3, 253, 85>::construct(config.lessthan_config.clone());
+        NativeRangeCheckChip::<3, 253, 85>::load_k_table(
+            &mut layouter,
+            config.native_253_range_check_config.k_values_table,
+        )?;
 
         // Construct the ECC chip.
         let ecc_chip = config.ecc_chip();
 
         // Construct the Arithmetic chip.
         let arith_chip = config.arithmetic_chip();
+
+        // Construct the boolean check chip.
+        let boolcheck_chip = SmallRangeCheckChip::construct(config.boolcheck_config.clone());
+
+        // ==========================
+        // Constants setup
+        // ==========================
 
         // This constant one is used for short multiplication
         let one = assign_free_advice(
@@ -259,7 +322,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             Value::known(pallas::Base::one()),
         )?;
 
-        // Lookup and push the constants onto the stack
+        // Lookup and push constants onto the stack
         for constant in &self.constants {
             debug!("Pushing constant `{}` to stack index {}", constant.as_str(), stack.len());
             match constant.as_str() {
@@ -278,7 +341,29 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let nfk = FixedPointBaseField::from_inner(ecc_chip.clone(), nfk);
                     stack.push(StackVar::EcFixedPointBase(nfk));
                 }
-                _ => unimplemented!(),
+
+                _ => {
+                    error!("Invalid constant name: {}", constant.as_str());
+                    return Err(plonk::Error::Synthesis)
+                }
+            }
+        }
+
+        // Load the literals onto the literal stack.
+        // N.B. Only uint64 is supported right now.
+        for literal in &self.literals {
+            match literal.0 {
+                LitType::Uint64 => match literal.1.parse::<u64>() {
+                    Ok(v) => litstack.push(v),
+                    Err(e) => {
+                        error!("Failed converting u64 literal: {}", e);
+                        return Err(plonk::Error::Synthesis)
+                    }
+                },
+                _ => {
+                    error!("Invalid literal: {:?}", literal);
+                    return Err(plonk::Error::Synthesis)
+                }
             }
         }
 
@@ -300,7 +385,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Witness::EcFixedPoint(_) => {
-                    unimplemented!()
+                    error!("Unable to witness EcFixedPoint, this is unimplemented.");
+                    return Err(plonk::Error::Synthesis)
                 }
 
                 Witness::Base(w) => {
@@ -341,7 +427,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
             }
         }
 
+        // =============================
         // And now, work through opcodes
+        // =============================
+        // TODO: Copy constraints
         for opcode in &self.opcodes {
             match opcode.0 {
                 Opcode::EcAdd => {
@@ -349,10 +438,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[0]].clone().into();
+                        stack[args[0].1].clone().into();
 
                     let rhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[1]].clone().into();
+                        stack[args[1].1].clone().into();
 
                     let ret = lhs.add(layouter.namespace(|| "EcAdd()"), &rhs)?;
 
@@ -365,12 +454,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[1]].clone().into();
+                        stack[args[1].1].clone().into();
 
                     let rhs = ScalarFixed::new(
                         ecc_chip.clone(),
                         layouter.namespace(|| "EcMul: ScalarFixed::new()"),
-                        stack[args[0]].clone().into(),
+                        stack[args[0].1].clone().into(),
                     )?;
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
@@ -384,9 +473,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[1]].clone().into();
+                        stack[args[1].1].clone().into();
 
-                    let rhs: AssignedCell<Fp, Fp> = stack[args[0]].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
 
                     let ret = lhs.mul(layouter.namespace(|| "EcMulBase()"), rhs)?;
 
@@ -399,15 +488,16 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[1]].clone().into();
+                        stack[args[1].1].clone().into();
 
                     let rhs = ScalarFixedShort::new(
                         ecc_chip.clone(),
                         layouter.namespace(|| "EcMulShort: ScalarFixedShort::new()"),
-                        (stack[args[0]].clone().into(), one.clone()),
+                        (stack[args[0].1].clone().into(), one.clone()),
                     )?;
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulShort()"), rhs)?;
+
                     debug!("Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
@@ -417,7 +507,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[0]].clone().into();
+                        stack[args[0].1].clone().into();
 
                     let ret = point.inner().x();
 
@@ -430,7 +520,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[0]].clone().into();
+                        stack[args[0].1].clone().into();
 
                     let ret = point.inner().y();
 
@@ -446,7 +536,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         Vec::with_capacity(args.len());
 
                     for idx in args {
-                        poseidon_message.push(stack[*idx].clone().into());
+                        poseidon_message.push(stack[idx.1].clone().into());
                     }
 
                     macro_rules! poseidon_hash {
@@ -476,12 +566,15 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     }
 
                     macro_rules! vla {
-                        ($args:ident, $a: ident, $b:ident, $c:ident, $($num:tt)*) => {
+                        ($args:ident, $a:ident, $b:ident, $c:ident, $($num:tt)*) => {
                             match $args.len() {
                                 $($num => {
                                     poseidon_hash!($num, $a, $b, $c);
                                 })*
-                                _ => unimplemented!()
+                                _ => {
+                                    error!("Unsupported poseidon hash for {} elements", $args.len());
+                                    return Err(plonk::Error::Synthesis)
+                                }
                             }
                         };
                     }
@@ -489,13 +582,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     vla!(args, a, b, c, 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16);
                 }
 
-                Opcode::CalculateMerkleRoot => {
-                    debug!("Executing `CalculateMerkleRoot{:?}` opcode", opcode.1);
+                Opcode::MerkleRoot => {
+                    debug!("Executing `MerkleRoot{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let leaf_pos = stack[args[0]].clone().into();
-                    let merkle_path = stack[args[1]].clone().into();
-                    let leaf = stack[args[2]].clone().into();
+                    let leaf_pos = stack[args[0].1].clone().into();
+                    let merkle_path = stack[args[1].1].clone().into();
+                    let leaf = stack[args[2].1].clone().into();
 
                     let merkle_inputs = MerklePath::construct(
                         [config.merkle_chip_1(), config.merkle_chip_2()],
@@ -505,7 +598,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     );
 
                     let root = merkle_inputs
-                        .calculate_root(layouter.namespace(|| "CalculateMerkleRoot()"), leaf)?;
+                        .calculate_root(layouter.namespace(|| "MerkleRoot()"), leaf)?;
 
                     debug!("Pushing merkle root to stack index {}", stack.len());
                     stack.push(StackVar::Base(root));
@@ -515,8 +608,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Executing `BaseAdd{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = &stack[args[0]].clone().into();
-                    let rhs = &stack[args[1]].clone().into();
+                    let lhs = &stack[args[0].1].clone().into();
+                    let rhs = &stack[args[1].1].clone().into();
 
                     let sum = arith_chip.add(layouter.namespace(|| "BaseAdd()"), lhs, rhs)?;
 
@@ -525,11 +618,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::BaseMul => {
-                    debug!("Executing `BaseMul{:?}` opcode", opcode.1);
+                    debug!("Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = &stack[args[0]].clone().into();
-                    let rhs = &stack[args[1]].clone().into();
+                    let lhs = &stack[args[0].1].clone().into();
+                    let rhs = &stack[args[1].1].clone().into();
 
                     let product = arith_chip.mul(layouter.namespace(|| "BaseMul()"), lhs, rhs)?;
 
@@ -541,8 +634,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     debug!("Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = &stack[args[0]].clone().into();
-                    let rhs = &stack[args[1]].clone().into();
+                    let lhs = &stack[args[0].1].clone().into();
+                    let rhs = &stack[args[1].1].clone().into();
 
                     let difference =
                         arith_chip.sub(layouter.namespace(|| "BaseSub()"), lhs, rhs)?;
@@ -551,34 +644,85 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     stack.push(StackVar::Base(difference));
                 }
 
-                /*
-                Opcode::GreaterThan => {
-                    debug!("Executing `GreaterThan{:?}` opcode", opcode.1);
-                    let args = &opcode.1;
+                Opcode::WitnessBase => {
+                    debug!("Executing `WitnessBase{:?}` opcode", opcode.1);
+                    //let args = &opcode.1;
 
-                    let lhs: AssignedCell<Fp, Fp> = stack[args[0]].clone().into();
-                    let rhs: AssignedCell<Fp, Fp> = stack[args[1]].clone().into();
+                    let lit = litstack[literals_offset];
+                    literals_offset += 1;
 
-                    eb_chip.decompose(layouter.namespace(|| "lhs range check"), lhs.clone())?;
-                    eb_chip.decompose(layouter.namespace(|| "rhs range check"), rhs.clone())?;
-
-                    let (helper, greater_than) = gt_chip.greater_than(
-                        layouter.namespace(|| "lhs > rhs"),
-                        lhs.into(),
-                        rhs.into(),
+                    let witness = assign_free_advice(
+                        layouter.namespace(|| "Witness literal"),
+                        config.advices[0],
+                        Value::known(pallas::Base::from(lit)),
                     )?;
 
-                    eb_chip.decompose(layouter.namespace(|| "helper range check"), helper.0)?;
-
-                    debug!("Pushing comparison result to stack index {}", stack.len());
-                    stack.push(StackVar::Base(greater_than.0));
+                    debug!("Pushing assignment to stack index {}", stack.len());
+                    stack.push(StackVar::Base(witness));
                 }
-                */
+
+                Opcode::RangeCheck => {
+                    debug!("Executing `RangeCheck{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let lit = litstack[literals_offset];
+                    literals_offset += 1;
+
+                    let arg = stack[args[1].1].clone();
+
+                    match lit {
+                        64 => {
+                            rangecheck64_chip.copy_range_check(
+                                layouter.namespace(|| "copy range check 64"),
+                                arg.into(),
+                                true,
+                            )?;
+                        }
+                        253 => {
+                            rangecheck253_chip.copy_range_check(
+                                layouter.namespace(|| "copy range check 253"),
+                                arg.into(),
+                                true,
+                            )?;
+                        }
+                        x => {
+                            error!("Unsupported bit-range {} for range_check", x);
+                            return Err(plonk::Error::Synthesis)
+                        }
+                    }
+                }
+
+                Opcode::LessThan => {
+                    debug!("Executing `LessThan{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let a = stack[args[0].1].clone().into();
+                    let b = stack[args[1].1].clone().into();
+
+                    lessthan_chip.copy_less_than(
+                        layouter.namespace(|| "copy a<b check"),
+                        a,
+                        b,
+                        0,
+                        true,
+                    )?;
+                }
+
+                Opcode::BoolCheck => {
+                    debug!("Executing `BoolCheck{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let w = stack[args[0].1].clone().into();
+
+                    boolcheck_chip
+                        .small_range_check(layouter.namespace(|| "copy boolean check"), w)?;
+                }
+
                 Opcode::ConstrainInstance => {
                     debug!("Executing `ConstrainInstance{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let var: AssignedCell<Fp, Fp> = stack[args[0]].clone().into();
+                    let var: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
 
                     layouter.constrain_instance(
                         var.cell(),
@@ -589,11 +733,14 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     public_inputs_offset += 1;
                 }
 
-                _ => todo!("Handle gracefully"),
+                _ => {
+                    error!("Unsupported opcode");
+                    return Err(plonk::Error::Synthesis)
+                }
             }
         }
 
-        debug!("Exiting synthesize()");
+        debug!("Exiting synthesize() successfully");
         Ok(())
     }
 }

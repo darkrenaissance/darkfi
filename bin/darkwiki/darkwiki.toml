@@ -1,0 +1,38 @@
+## JSON-RPC listen URL
+#rpc_listen="tcp://127.0.0.1:24330"
+
+## Sets Docs Path
+# docs="~/darkwiki"
+
+## Sets Author name
+# author="name"
+
+## Workspaces 
+# workspaces = ["darkfi:86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"]
+
+## Raft net settings
+[net]
+## P2P accept addresses
+#inbound = ["tls://127.0.0.1:24331"]
+
+## Connection slots
+outbound_connections=8
+
+## P2P external addresses
+#external_addr = ["tls://127.0.0.1:24331"]
+
+## Peers to connect to
+#peers = ["tls://127.0.0.1:24331"]
+
+## Seed nodes to connect to
+seeds = ["tls://lilith0.dark.fi:24331", "tls://lilith1.dark.fi:24331"]
+
+# Prefered transports for outbound connections
+#transports = ["tls", "tcp"]
+
+## these are the default configuration for the p2p network
+#manual_attempt_limit=0
+#seed_query_timeout_seconds=8
+#connect_timeout_seconds=10
+#channel_handshake_seconds=4
+#channel_heartbeat_seconds=10

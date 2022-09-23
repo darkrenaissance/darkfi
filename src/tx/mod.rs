@@ -1,7 +1,6 @@
-use std::io;
-
 use log::error;
 use pasta_curves::group::Group;
+use std::io;
 
 use crate::{
     crypto::{
@@ -13,16 +12,15 @@ use crate::{
         schnorr,
         schnorr::SchnorrPublic,
         types::{DrkTokenId, DrkValueBlind, DrkValueCommit},
-        util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+        util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
-    impl_vec,
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    util::serial::{Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result, VerifyFailed, VerifyResult,
 };
 
 pub mod builder;
-mod partial;
+pub mod partial;
 
 /// A DarkFi transaction
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
@@ -48,7 +46,7 @@ pub struct TransactionClearInput {
     pub token_blind: DrkValueBlind,
     /// Public key for the signature
     pub signature_public: PublicKey,
-    /// Input's signature
+    /// Transaction signature
     pub signature: schnorr::Signature,
 }
 
@@ -77,6 +75,16 @@ pub struct TransactionOutput {
 impl Transaction {
     /// Verify the transaction
     pub fn verify(&self, mint_vk: &VerifyingKey, burn_vk: &VerifyingKey) -> VerifyResult<()> {
+        // Transaction must have minimum 1 clear or anon input, and 1 output
+        if self.clear_inputs.len() + self.inputs.len() == 0 {
+            error!("tx::verify(): Missing inputs");
+            return Err(VerifyFailed::LackingInputs)
+        }
+        if self.outputs.is_empty() {
+            error!("tx::verify(): Missing outputs");
+            return Err(VerifyFailed::LackingOutputs)
+        }
+
         // Accumulator for the value commitments
         let mut valcom_total = DrkValueCommit::identity();
 
@@ -143,7 +151,7 @@ impl Transaction {
         Ok(())
     }
 
-    fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    pub fn encode_without_signature<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.clear_inputs.encode_without_signature(&mut s)?;
         len += self.inputs.encode_without_signature(&mut s)?;
@@ -163,8 +171,7 @@ impl Transaction {
 
         failed = failed ||
             self.clear_inputs.iter().any(|input| {
-                pedersen_commitment_scalar(mod_r_p(input.token_id), input.token_blind) !=
-                    token_commit_value
+                pedersen_commitment_base(input.token_id, input.token_blind) != token_commit_value
             });
         !failed
     }
@@ -197,7 +204,7 @@ impl TransactionClearInput {
 }
 
 impl TransactionInput {
-    fn from_partial(
+    pub fn from_partial(
         partial: partial::PartialTransactionInput,
         signature: schnorr::Signature,
     ) -> Self {
@@ -231,10 +238,5 @@ macro_rules! impl_vec_without_signature {
         }
     };
 }
-
 impl_vec_without_signature!(TransactionClearInput);
 impl_vec_without_signature!(TransactionInput);
-impl_vec!(TransactionClearInput);
-impl_vec!(TransactionInput);
-impl_vec!(TransactionOutput);
-impl_vec!(Transaction);

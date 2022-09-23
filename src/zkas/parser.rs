@@ -1,19 +1,27 @@
 use std::{iter::Peekable, str::Chars};
 
-use fxhash::FxBuildHasher;
 use indexmap::IndexMap;
 use itertools::Itertools;
 
 use super::{
-    ast::{
-        Constant, Constants, Statement, StatementType, Statements, UnparsedConstants,
-        UnparsedWitnesses, Variable, Witness, Witnesses,
-    },
+    ast::{Arg, Constant, Literal, Statement, StatementType, Variable, Witness},
     error::ErrorEmitter,
     lexer::{Token, TokenType},
-    opcode::Opcode,
-    types::Type,
+    LitType, Opcode, VarType,
 };
+
+/// zkas language builtin keywords.
+/// These can not be used anywhere except where they are expected.
+const KEYWORDS: [&str; 3] = ["constant", "contract", "circuit"];
+
+/// Valid EcFixedPoint constant names supported by the VM.
+const VALID_ECFIXEDPOINT: [&str; 1] = ["VALUE_COMMIT_RANDOM"];
+
+/// Valid EcFixedPointShort constant names supported by the VM.
+const VALID_ECFIXEDPOINTSHORT: [&str; 1] = ["VALUE_COMMIT_VALUE"];
+
+/// Valid EcFixedPointBase constant names supported by the VM.
+const VALID_ECFIXEDPOINTBASE: [&str; 1] = ["NULLIFIER_K"];
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -27,127 +35,130 @@ impl Parser {
         let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
         let error = ErrorEmitter::new("Parser", filename, lines);
 
-        Parser { tokens, error }
+        Self { tokens, error }
     }
 
-    pub fn parse(self) -> (Constants, Witnesses, Statements) {
-        // We use these to keep state when iterating
-        let mut declaring_constant = false;
-        let mut declaring_contract = false;
-        let mut declaring_circuit = false;
+    pub fn parse(&self) -> (Vec<Constant>, Vec<Witness>, Vec<Statement>) {
+        // We use these to keep state while parsing.
+        let mut namespace = None;
+        let (mut declaring_constant, mut declared_constant) = (false, false);
+        let (mut declaring_contract, mut declared_contract) = (false, false);
+        let (mut declaring_circuit, mut declared_circuit) = (false, false);
 
+        // The tokens gathered from each of the sections
         let mut constant_tokens = vec![];
         let mut contract_tokens = vec![];
         let mut circuit_tokens = vec![];
-        // Single statement in the circuit
-        let mut circuit_statement = vec![];
-        // All the circuit statements
-        let mut circuit_statements = vec![];
 
-        let mut ast = IndexMap::with_hasher(FxBuildHasher::default());
-        let mut namespace = String::new();
+        let mut circuit_stmt = vec![];
+        let mut circuit_stmts = vec![];
         let mut ast_inner = IndexMap::new();
-        let mut namespace_found = false; // Nasty
+        let mut ast = IndexMap::new();
+
+        if self.tokens[0].token_type != TokenType::Symbol {
+            self.error.abort(
+                "Source file does not start with a section. Expected `constant/contract/circuit`.",
+                0,
+                0,
+            );
+        }
 
         let mut iter = self.tokens.iter();
         while let Some(t) = iter.next() {
-            // Start by declaring a section
+            // Sections "constant", "contract", and "circuit" are
+            // the sections we must be declaring in our source code.
+            // When we find one, we'll take all the tokens found in
+            // the section and place them in their respective vec.
+            // NOTE: Currently this logic depends on the fact that
+            // the sections are closed off with braces. This should
+            // be revisited later when we decide to add other lang
+            // functionality that also depends on using braces.
             if !declaring_constant && !declaring_contract && !declaring_circuit {
-                if t.token_type != TokenType::Symbol {
-                    // TODO: Revisit
-                    // TODO: Visit this again when we are allowing imports
-                    unimplemented!();
+                //
+                // We use this macro to avoid code repetition in the following
+                // match statement for soaking up the section tokens.
+                macro_rules! absorb_inner_tokens {
+                    ($v:ident) => {
+                        for inner in iter.by_ref() {
+                            if KEYWORDS.contains(&inner.token.as_str()) &&
+                                inner.token_type == TokenType::Symbol
+                            {
+                                self.error.abort(
+                                    &format!("Keyword '{}' used in improper place.", inner.token),
+                                    inner.line,
+                                    inner.column,
+                                );
+                            }
+
+                            $v.push(inner.clone());
+                            if inner.token_type == TokenType::RightBrace {
+                                break
+                            }
+                        }
+                    };
                 }
 
-                // The sections we must be declaring in our source code
                 match t.token.as_str() {
                     "constant" => {
                         declaring_constant = true;
-                        // Eat all the tokens within the `constant` section
-                        for inner in iter.by_ref() {
-                            constant_tokens.push(inner.clone());
-                            if inner.token_type == TokenType::RightBrace {
-                                break
-                            }
-                        }
+                        absorb_inner_tokens!(constant_tokens);
                     }
-
                     "contract" => {
                         declaring_contract = true;
-                        // Eat all the tokens within the `contract` section
-                        for inner in iter.by_ref() {
-                            contract_tokens.push(inner.clone());
-                            if inner.token_type == TokenType::RightBrace {
-                                break
-                            }
-                        }
+                        absorb_inner_tokens!(contract_tokens);
                     }
-
                     "circuit" => {
                         declaring_circuit = true;
-                        // Eat all the tokens within the `circuit` section
-                        // TODO: Revisit when we support if/else and loops
-                        for inner in iter.by_ref() {
-                            circuit_tokens.push(inner.clone());
-                            if inner.token_type == TokenType::RightBrace {
-                                break
-                            }
+                        absorb_inner_tokens!(circuit_tokens);
+                    }
+
+                    x => self.error.abort(
+                        &format!("Section `{}` is not a valid section", x),
+                        t.line,
+                        t.column,
+                    ),
+                }
+            }
+
+            // We use this macro to set or check that the namespace of all sections
+            // is the same and no stray strings appeared.
+            macro_rules! check_namespace {
+                ($t:ident) => {
+                    if let Some(ns) = namespace.clone() {
+                        if ns != $t[0].token {
+                            self.error.abort(
+                                &format!("Found '{}' namespace, expected '{}'.", $t[0].token, ns),
+                                $t[0].line,
+                                $t[0].column,
+                            );
                         }
+                    } else {
+                        namespace = Some($t[0].token.clone());
                     }
-
-                    x => {
-                        self.error.emit(format!("Unknown `{}` proof section", x), t.line, t.column)
-                    }
-                }
+                };
             }
 
-            // We shouldn't be reaching these states
-            if declaring_constant && (declaring_contract || declaring_circuit) {
-                unreachable!()
-            }
-            if declaring_contract && (declaring_constant || declaring_circuit) {
-                unreachable!()
-            }
-            if declaring_circuit && (declaring_constant || declaring_contract) {
-                unreachable!()
-            }
-
-            // Now go through the token vectors and work it through
+            // Parse the constant section into the AST.
             if declaring_constant {
-                self.check_section_structure("constant", constant_tokens.clone());
-
-                // TODO: Do we need this?
-                if namespace_found && namespace != constant_tokens[0].token {
-                    self.error.emit(
-                        format!(
-                            "Found `{}` namespace. Expected `{}`.",
-                            constant_tokens[0].token, namespace
-                        ),
-                        constant_tokens[0].line,
-                        constant_tokens[0].column,
-                    );
-                } else {
-                    namespace = constant_tokens[0].token.clone();
-                    namespace_found = true;
+                if declared_constant {
+                    self.error.abort("Duplicate `constant` section found.", t.line, t.column);
                 }
 
-                let constants_cloned = constant_tokens.clone();
-                let mut constants_map = IndexMap::new();
-                // This is everything between the braces: { .. }
-                let mut constants_inner = constants_cloned[2..constant_tokens.len() - 1].iter();
+                self.check_section_structure("constant", constant_tokens.clone());
+                check_namespace!(constant_tokens);
 
-                while let Some((typ, name, comma)) = constants_inner.next_tuple() {
+                let mut constants_map = IndexMap::new();
+                // This is everything between the braces: { ... }
+                let mut constant_inner = constant_tokens[2..constant_tokens.len() - 1].iter();
+                while let Some((typ, name, comma)) = constant_inner.next_tuple() {
                     if comma.token_type != TokenType::Comma {
-                        self.error.emit(
-                            "Separator is not a comma".to_string(),
-                            comma.line,
-                            comma.column,
-                        );
+                        self.error.abort("Separator is not a comma.", comma.line, comma.column);
                     }
 
+                    // No variable shadowing
                     if constants_map.contains_key(name.token.as_str()) {
-                        self.error.emit(
-                            format!(
+                        self.error.abort(
+                            &format!(
                                 "Section `constant` already contains the token `{}`.",
                                 &name.token
                             ),
@@ -159,45 +170,36 @@ impl Parser {
                     constants_map.insert(name.token.clone(), (name.clone(), typ.clone()));
                 }
 
-                ast_inner.insert("constant".to_string(), constants_map);
-                declaring_constant = false;
-            }
-
-            if declaring_contract {
-                self.check_section_structure("contract", contract_tokens.clone());
-
-                // TODO: Do we need this?
-                if namespace_found && namespace != contract_tokens[0].token {
-                    self.error.emit(
-                        format!(
-                            "Found `{}` namespace. Expected `{}`.",
-                            contract_tokens[0].token, namespace
-                        ),
-                        contract_tokens[0].line,
-                        contract_tokens[0].column,
-                    );
-                } else {
-                    namespace = contract_tokens[0].token.clone();
-                    namespace_found = true;
+                if constant_inner.next().is_some() {
+                    self.error.abort("Internal error, leftovers in 'constant' iterator", 0, 0);
                 }
 
-                let contract_cloned = contract_tokens.clone();
-                let mut contract_map = IndexMap::new();
-                // This is everything between the braces: { .. }
-                let mut contract_inner = contract_cloned[2..contract_tokens.len() - 1].iter();
+                ast_inner.insert("constant".to_string(), constants_map);
+                declaring_constant = false;
+                declared_constant = true;
+            }
 
+            // Parse the contract section into the AST.
+            if declaring_contract {
+                if declared_contract {
+                    self.error.abort("Duplicate `contract` section found.", t.line, t.column);
+                }
+
+                self.check_section_structure("contract", contract_tokens.clone());
+                check_namespace!(contract_tokens);
+
+                let mut witnesses_map = IndexMap::new();
+                // This is everything between the braces: { ... }
+                let mut contract_inner = contract_tokens[2..contract_tokens.len() - 1].iter();
                 while let Some((typ, name, comma)) = contract_inner.next_tuple() {
                     if comma.token_type != TokenType::Comma {
-                        self.error.emit(
-                            "Separator is not a comma".to_string(),
-                            comma.line,
-                            comma.column,
-                        );
+                        self.error.abort("Separator is not a comma.", comma.line, comma.column);
                     }
 
-                    if contract_map.contains_key(name.token.as_str()) {
-                        self.error.emit(
-                            format!(
+                    // No variable shadowing
+                    if witnesses_map.contains_key(name.token.as_str()) {
+                        self.error.abort(
+                            &format!(
                                 "Section `contract` already contains the token `{}`.",
                                 &name.token
                             ),
@@ -206,177 +208,229 @@ impl Parser {
                         );
                     }
 
-                    contract_map.insert(name.token.clone(), (name.clone(), typ.clone()));
+                    witnesses_map.insert(name.token.clone(), (name.clone(), typ.clone()));
                 }
 
-                ast_inner.insert("contract".to_string(), contract_map);
+                if contract_inner.next().is_some() {
+                    self.error.abort("Internal error, leftovers in 'contract' iterator", 0, 0);
+                }
+
+                ast_inner.insert("contract".to_string(), witnesses_map);
                 declaring_contract = false;
+                declared_contract = true;
             }
 
+            // Parse the circuit section into the AST.
             if declaring_circuit {
-                self.check_section_structure("circuit", contract_tokens.clone());
-
-                if circuit_tokens[circuit_tokens.len() - 2].token_type != TokenType::Semicolon {
-                    self.error.emit(
-                        "Circuit section does not end with a semicolon. Would never finish parsing.".to_string(),
-                        circuit_tokens[circuit_tokens.len()-2].line,
-                        circuit_tokens[circuit_tokens.len()-2].column
-                    );
+                if declared_circuit {
+                    self.error.abort("Duplicate `circuit` section found.", t.line, t.column);
                 }
 
-                // TODO: Do we need this?
-                if namespace_found && namespace != circuit_tokens[0].token {
-                    self.error.emit(
-                        format!(
-                            "Found `{}` namespace. Expected `{}`.",
-                            circuit_tokens[0].token, namespace
-                        ),
-                        circuit_tokens[0].line,
-                        circuit_tokens[0].column,
-                    );
-                } else {
-                    namespace = circuit_tokens[0].token.clone();
-                    namespace_found = true;
-                }
+                self.check_section_structure("circuit", circuit_tokens.clone());
+                check_namespace!(circuit_tokens);
 
-                for i in circuit_tokens.clone()[2..circuit_tokens.len() - 1].iter() {
+                for i in circuit_tokens[2..circuit_tokens.len() - 1].iter() {
                     if i.token_type == TokenType::Semicolon {
-                        circuit_statements.push(circuit_statement.clone());
-                        // println!("{:?}", circuit_statement);
-                        circuit_statement = vec![];
+                        circuit_stmts.push(circuit_stmt.clone());
+                        circuit_stmt = vec![];
                         continue
                     }
-                    circuit_statement.push(i.clone());
+                    circuit_stmt.push(i.clone());
                 }
 
                 declaring_circuit = false;
+                declared_circuit = true;
             }
         }
 
-        ast.insert(namespace.clone(), ast_inner);
-        // TODO: Verify there are both constant/contract sections
-        // TODO: Verify there is a circuit section
-        // TODO: Check that there are no duplicate names in constants, contract
-        //       and circuit assignments
+        let ns = namespace.unwrap();
+        ast.insert(ns.clone(), ast_inner);
 
-        // Clean up the `constant` section
-        let c = ast.get(&namespace).unwrap().get("constant").unwrap();
-        let constants = self.parse_ast_constants(c);
+        let constants = {
+            let c = match ast.get(&ns).unwrap().get("constant") {
+                Some(c) => c,
+                None => {
+                    self.error.abort("Missing `constant` section in .zk source.", 0, 0);
+                    unreachable!();
+                }
+            };
+            self.parse_ast_constants(c)
+        };
 
-        // Clean up the `contract` section
-        let c = ast.get(&namespace).unwrap().get("contract").unwrap();
-        let witnesses = self.parse_ast_contract(c);
+        let witnesses = {
+            let c = match ast.get(&ns).unwrap().get("contract") {
+                Some(c) => c,
+                None => {
+                    self.error.abort("Missing `contract` section in .zk source.", 0, 0);
+                    unreachable!();
+                }
+            };
+            self.parse_ast_contract(c)
+        };
 
-        // Clean up the `circuit` section
-        let stmt = self.parse_ast_circuit(circuit_statements);
+        let statements = self.parse_ast_circuit(circuit_stmts);
+        if statements.is_empty() {
+            self.error.abort("Circuit section is empty.", 0, 0);
+        }
 
-        (constants, witnesses, stmt)
+        (constants, witnesses, statements)
     }
 
     fn check_section_structure(&self, section: &str, tokens: Vec<Token>) {
         if tokens[0].token_type != TokenType::String {
-            self.error.emit(
-                format!("{} section declaration must start with a naming string.", section),
+            self.error.abort(
+                "Section declaration must start with a naming string.",
                 tokens[0].line,
                 tokens[0].column,
             );
         }
 
         if tokens[1].token_type != TokenType::LeftBrace {
-            self.error.emit(
-                format!(
-                    "{} section opening is not correct. Must be opened with a left brace `{{`",
-                    section
-                ),
+            self.error.abort(
+                "Section must be opened with a left brace '{'",
                 tokens[0].line,
                 tokens[0].column,
             );
         }
 
-        if tokens[tokens.len() - 1].token_type != TokenType::RightBrace {
-            self.error.emit(
-                format!(
-                    "{} section closing is not correct. Must be closed with a right brace `}}`",
-                    section
-                ),
+        if tokens.last().unwrap().token_type != TokenType::RightBrace {
+            self.error.abort(
+                "Section must be closed with a right brace '}'",
                 tokens[0].line,
                 tokens[0].column,
             );
         }
 
-        if (section == "constant" || section == "contract") &&
-            tokens[2..tokens.len() - 1].len() % 3 != 0
-        {
-            self.error.emit(
-                format!(
-                    "Invalid number of elements in `{}` section. Must be pairs of `type:name` separated with a comma `,`",
-                    section
-                ),
-                tokens[0].line,
-                tokens[0].column,
-            );
-        }
+        match section {
+            "constant" | "contract" => {
+                if tokens.len() == 3 {
+                    self.error.warn(&format!("{} section is empty.", section), 0, 0);
+                }
+
+                if tokens[2..tokens.len() - 1].len() % 3 != 0 {
+                    self.error.abort(
+                        &format!("Invalid number of elements in '{}' section. Must be pairs of '<Type> <name>' separated with a comma ','.", section),
+                        tokens[0].line,
+                        tokens[0].column
+                    );
+                }
+            }
+            "circuit" => {
+                if tokens.len() == 3 {
+                    self.error.abort("circuit section is empty.", 0, 0);
+                }
+
+                if tokens[tokens.len() - 2].token_type != TokenType::Semicolon {
+                    self.error.abort(
+                        "Circuit section does not end with a semicolon. Would never finish parsing.",
+                        tokens[tokens.len()-2].line,
+                        tokens[tokens.len()-2].column,
+                    );
+                }
+            }
+            _ => panic!(),
+        };
     }
 
-    fn parse_ast_constants(&self, ast: &UnparsedConstants) -> Constants {
+    fn parse_ast_constants(&self, ast: &IndexMap<String, (Token, Token)>) -> Vec<Constant> {
         let mut ret = vec![];
 
+        // k = name
+        // v = (name, type)
         for (k, v) in ast {
             if &v.0.token != k {
-                self.error.emit(
-                    format!("Constant name `{}` doesn't match token `{}`.", v.0.token, k),
+                self.error.abort(
+                    &format!("Constant name `{}` doesn't match token `{}`.", v.0.token, k),
                     v.0.line,
                     v.0.column,
                 );
             }
 
             if v.0.token_type != TokenType::Symbol {
-                self.error.emit(
-                    format!("Constant name `{}` is not a symbol.", v.0.token),
+                self.error.abort(
+                    &format!("Constant name `{}` is not a symbol.", v.0.token),
                     v.0.line,
                     v.0.column,
                 );
             }
 
             if v.1.token_type != TokenType::Symbol {
-                self.error.emit(
-                    format!("Constant type `{}` is not a symbol.", v.1.token),
+                self.error.abort(
+                    &format!("Constant type `{}` is not a symbol.", v.1.token),
                     v.1.line,
                     v.1.column,
                 );
             }
 
+            // Valid constant types, these are the constants/generators supported
+            // in `src/crypto/constants.rs` and `src/crypto/constants/`.
             match v.1.token.as_str() {
                 "EcFixedPoint" => {
+                    if !VALID_ECFIXEDPOINT.contains(&v.0.token.as_str()) {
+                        self.error.abort(
+                            &format!(
+                                "`{}` is not a valid EcFixedPoint constant. Supported: {:?}",
+                                v.0.token.as_str(),
+                                VALID_ECFIXEDPOINT
+                            ),
+                            v.0.line,
+                            v.0.column,
+                        );
+                    }
+
                     ret.push(Constant {
                         name: k.to_string(),
-                        typ: Type::EcFixedPoint,
-                        line: v.0.line,
-                        column: v.0.column,
+                        typ: VarType::EcFixedPoint,
+                        line: v.1.line,
+                        column: v.1.column,
                     });
                 }
 
                 "EcFixedPointShort" => {
+                    if !VALID_ECFIXEDPOINTSHORT.contains(&v.0.token.as_str()) {
+                        self.error.abort(
+                            &format!(
+                                "`{}` is not a valid EcFixedPointShort constant. Supported: {:?}",
+                                v.0.token.as_str(),
+                                VALID_ECFIXEDPOINTSHORT
+                            ),
+                            v.0.line,
+                            v.0.column,
+                        );
+                    }
+
                     ret.push(Constant {
                         name: k.to_string(),
-                        typ: Type::EcFixedPointShort,
-                        line: v.0.line,
-                        column: v.0.column,
+                        typ: VarType::EcFixedPointShort,
+                        line: v.1.line,
+                        column: v.1.column,
                     });
                 }
 
                 "EcFixedPointBase" => {
+                    if !VALID_ECFIXEDPOINTBASE.contains(&v.0.token.as_str()) {
+                        self.error.abort(
+                            &format!(
+                                "`{}` is not a valid EcFixedPointBase constant. Supported: {:?}",
+                                v.0.token.as_str(),
+                                VALID_ECFIXEDPOINTBASE
+                            ),
+                            v.0.line,
+                            v.0.column,
+                        );
+                    }
+
                     ret.push(Constant {
                         name: k.to_string(),
-                        typ: Type::EcFixedPointBase,
-                        line: v.0.line,
-                        column: v.0.column,
+                        typ: VarType::EcFixedPointBase,
+                        line: v.1.line,
+                        column: v.1.column,
                     });
                 }
 
                 x => {
-                    self.error.emit(
-                        format!("`{}` is an illegal constant type", x),
+                    self.error.abort(
+                        &format!("`{}` is an unsupported constant type.", x),
                         v.1.line,
                         v.1.column,
                     );
@@ -387,39 +441,42 @@ impl Parser {
         ret
     }
 
-    fn parse_ast_contract(&self, ast: &UnparsedWitnesses) -> Witnesses {
+    fn parse_ast_contract(&self, ast: &IndexMap<String, (Token, Token)>) -> Vec<Witness> {
         let mut ret = vec![];
 
+        // k = name
+        // v = (name, type)
         for (k, v) in ast {
             if &v.0.token != k {
-                self.error.emit(
-                    format!("Witness name `{}` doesn't match token `{}`.", v.0.token, k),
+                self.error.abort(
+                    &format!("Witness name `{}` doesn't match token `{}`.", v.0.token, k),
                     v.0.line,
                     v.0.column,
                 );
             }
 
             if v.0.token_type != TokenType::Symbol {
-                self.error.emit(
-                    format!("Witness name `{}` is not a symbol.", v.0.token),
+                self.error.abort(
+                    &format!("Witness name `{}` is not a symbol.", v.0.token),
                     v.0.line,
                     v.0.column,
                 );
             }
 
             if v.1.token_type != TokenType::Symbol {
-                self.error.emit(
-                    format!("Witness type `{}` is not a symbol.", v.1.token),
+                self.error.abort(
+                    &format!("Witness type `{}` is not a symbol.", v.1.token),
                     v.1.line,
                     v.1.column,
                 );
             }
 
+            // Valid witness types
             match v.1.token.as_str() {
                 "Base" => {
                     ret.push(Witness {
                         name: k.to_string(),
-                        typ: Type::Base,
+                        typ: VarType::Base,
                         line: v.0.line,
                         column: v.0.column,
                     });
@@ -428,7 +485,7 @@ impl Parser {
                 "Scalar" => {
                     ret.push(Witness {
                         name: k.to_string(),
-                        typ: Type::Scalar,
+                        typ: VarType::Scalar,
                         line: v.0.line,
                         column: v.0.column,
                     });
@@ -437,7 +494,7 @@ impl Parser {
                 "MerklePath" => {
                     ret.push(Witness {
                         name: k.to_string(),
-                        typ: Type::MerklePath,
+                        typ: VarType::MerklePath,
                         line: v.0.line,
                         column: v.0.column,
                     });
@@ -446,7 +503,7 @@ impl Parser {
                 "Uint32" => {
                     ret.push(Witness {
                         name: k.to_string(),
-                        typ: Type::Uint32,
+                        typ: VarType::Uint32,
                         line: v.0.line,
                         column: v.0.column,
                     });
@@ -455,15 +512,15 @@ impl Parser {
                 "Uint64" => {
                     ret.push(Witness {
                         name: k.to_string(),
-                        typ: Type::Uint64,
+                        typ: VarType::Uint64,
                         line: v.0.line,
                         column: v.0.column,
                     });
                 }
 
                 x => {
-                    self.error.emit(
-                        format!("`{}` is an illegal witness type", x),
+                    self.error.abort(
+                        &format!("`{}` is an unsupported witness type.", x),
                         v.1.line,
                         v.1.column,
                     );
@@ -475,9 +532,64 @@ impl Parser {
     }
 
     fn parse_ast_circuit(&self, statements: Vec<Vec<Token>>) -> Vec<Statement> {
-        let mut stmts = vec![];
+        // The statement layouts/syntax in the language are as follows:
+        //
+        // C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
+        // | |          |                   |       |
+        // V V          V                   V       V
+        // variable    opcode              arg     arg
+        // assign
+        //
+        //                    constrain_instance(C);
+        //                       |               |
+        //                       V               V
+        //                     opcode           arg
+        //
+        //                                              inner opcode arg
+        //                                               |
+        //                  constrain_instance(ec_get_x(foo));
+        //                        |                 |
+        //                        V                 V
+        //                     opcode          arg as opcode
+        //
+        // In the latter, we want to support nested function calls, e.g.:
+        //
+        //          constrain_instance(ec_get_x(token_commit));
+        //
+        // The inner call's result would still get pushed on the stack,
+        // but it will not be accessible in any other scope.
+        //
+        // In certain opcodes, we also support literal types, and the
+        // opcodes can return a variable type after running the operation.
+        // e.g.
+        //            one = witness_base(1);
+        //           zero = witness_base(0);
+        //
+        // The literal type is used only in the function call's scope, but
+        // the result is then accessible on the stack to be used by further
+        // computation.
+        //
+        // Regarding multiple return values from opcodes, this is perhaps
+        // not necessary for the current language scope, as this is a low
+        // level representation. Note that it could be relatively easy to
+        // modify the parsing logic to support that here. For now we'll
+        // defer it, and if at some point we decide that the language is
+        // too expressive and noisy, we'll consider having multiple return
+        // types. It also very much depends on the type of functions/opcodes
+        // that we want to support.
 
+        // Vec of statements to return from this entire parsing operation.
+        let mut ret = vec![];
+
+        // Here, our statements tokens have been parsed and delimited by
+        // semicolons (;) in the source file. This iterator contains each
+        // of those statements as an array of tokens we then consume and
+        // build the AST further.
         for statement in statements {
+            if statement.is_empty() {
+                continue
+            }
+
             let (mut left_paren, mut right_paren) = (0, 0);
             for i in &statement {
                 match i.token.as_str() {
@@ -486,41 +598,41 @@ impl Parser {
                     _ => {}
                 }
             }
-            if left_paren != right_paren {
-                self.error.emit(
-                    "Incorrect number of left and right parenthesis for statement.".to_string(),
+
+            if left_paren != right_paren || (left_paren == 0 || right_paren == 0) {
+                self.error.abort(
+                    "Incorrect number of left and right parenthesis for statement.",
                     statement[0].line,
                     statement[0].column,
                 );
             }
 
-            // C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind)
-            // | |         |                     |
-            // V V         V                     V
-            // variable   opcode                args
-            // assign
-
-            // constrain_instance(C)
-            //     |              |
-            //     V              V
-            //   opcode         args
-
+            // Peekable iterator so we can see tokens in advance
+            // without consuming the iterator.
             let mut iter = statement.iter().peekable();
+
+            // Dummy statement that we'll hopefully fill now.
             let mut stmt = Statement::default();
 
             let mut parsing = false;
-
             while let Some(token) = iter.next() {
                 if !parsing {
+                    // TODO: MAKE SURE IT'S A SYMBOL
+
+                    // This logic must be changed if we want to support
+                    // multiple return values.
                     if let Some(next_token) = iter.peek() {
                         if next_token.token_type == TokenType::Assign {
-                            stmt.typ = StatementType::Assignment;
-                            stmt.variable = Some(Variable {
+                            stmt.line = token.line;
+                            stmt.typ = StatementType::Assign;
+                            stmt.rhs = vec![];
+                            stmt.lhs = Some(Variable {
                                 name: token.token.clone(),
-                                typ: Type::Dummy,
+                                typ: VarType::Dummy,
                                 line: token.line,
                                 column: token.column,
                             });
+
                             // Skip over the `=` token.
                             iter.next();
                             parsing = true;
@@ -528,14 +640,16 @@ impl Parser {
                         }
 
                         if next_token.token_type == TokenType::LeftParen {
+                            stmt.line = token.line;
                             stmt.typ = StatementType::Call;
-                            stmt.variable = None;
+                            stmt.rhs = vec![];
+                            stmt.lhs = None;
                             parsing = true;
                         }
 
                         if !parsing {
-                            self.error.emit(
-                                format!("Illegal token `{}`", next_token.token),
+                            self.error.abort(
+                                &format!("Illegal token `{}`.", next_token.token),
                                 next_token.line,
                                 next_token.column,
                             );
@@ -543,102 +657,50 @@ impl Parser {
                     }
                 }
 
-                // This matching could be moved over into the semantic analyzer.
-                // We could just parse any kind of symbol here, and then do lookup
-                // from the analyzer, to see if the calls actually exist and are
-                // supported.
-                // But for now, we'll just leave it here and expand later.
+                // If parsing == true, we now know if we're making a variable
+                // assignment or a function call without a return value.
+                // Let's dig deeper to see what the statement's call is, and
+                // what it contains as arguments. With this we'll fill `rhs`.
+                // The arguments could be literal types, other variables, or
+                // even nested function calls.
+                // For now, we don't care if the params are valid, as this is
+                // the job of the semantic analyzer which comes after the
+                // parsing module.
+
+                // The assumption here is that the current token is a function
+                // call, so we check if it's legit and start digging.
                 let func_name = token.token.as_str();
 
-                macro_rules! parse_func {
-                    ($opcode: expr) => {
-                        stmt.args = self.parse_function_call(token, &mut iter);
-                        stmt.opcode = $opcode;
-                        stmt.line = token.line;
-                        stmts.push(stmt.clone());
-
-                        parsing = false;
-                        continue
-                    };
+                // TODO: MAKE SURE IT'S A SYMBOL
+                if let Some(op) = Opcode::from_name(func_name) {
+                    let rhs = self.parse_function_call(token, &mut iter);
+                    stmt.opcode = op;
+                    stmt.rhs = rhs;
+                } else {
+                    self.error.abort(
+                        &format!("Unimplemented opcode `{}`.", func_name),
+                        token.line,
+                        token.column,
+                    );
                 }
 
-                match func_name {
-                    "poseidon_hash" => {
-                        parse_func!(Opcode::PoseidonHash);
-                    }
-
-                    "constrain_instance" => {
-                        parse_func!(Opcode::ConstrainInstance);
-                    }
-
-                    "calculate_merkle_root" => {
-                        parse_func!(Opcode::CalculateMerkleRoot);
-                    }
-
-                    "ec_mul_short" => {
-                        parse_func!(Opcode::EcMulShort);
-                    }
-
-                    "ec_mul_base" => {
-                        parse_func!(Opcode::EcMulBase);
-                    }
-
-                    "ec_mul" => {
-                        parse_func!(Opcode::EcMul);
-                    }
-
-                    "ec_get_x" => {
-                        parse_func!(Opcode::EcGetX);
-                    }
-
-                    "ec_get_y" => {
-                        parse_func!(Opcode::EcGetY);
-                    }
-
-                    "ec_add" => {
-                        parse_func!(Opcode::EcAdd);
-                    }
-
-                    "base_add" => {
-                        parse_func!(Opcode::BaseAdd);
-                    }
-
-                    "base_mul" => {
-                        parse_func!(Opcode::BaseMul);
-                    }
-
-                    "base_sub" => {
-                        parse_func!(Opcode::BaseSub);
-                    }
-
-                    "greater_than" => {
-                        parse_func!(Opcode::GreaterThan);
-                    }
-
-                    x => {
-                        self.error.emit(
-                            format!("Unimplemented function call `{}`", x),
-                            token.line,
-                            token.column,
-                        );
-                    }
-                }
+                ret.push(stmt);
+                stmt = Statement::default();
             }
         }
 
-        // println!("{:#?}", stmts);
-        stmts
+        ret
     }
 
     fn parse_function_call(
         &self,
         token: &Token,
         iter: &mut Peekable<std::slice::Iter<'_, Token>>,
-    ) -> Vec<Variable> {
+    ) -> Vec<Arg> {
         if let Some(next_token) = iter.peek() {
             if next_token.token_type != TokenType::LeftParen {
-                self.error.emit(
-                    "Invalid function call opening. Must start with a `(`".to_string(),
+                self.error.abort(
+                    "Invalid function call opening. Must start with a '('.",
                     next_token.line,
                     next_token.column,
                 );
@@ -646,33 +708,126 @@ impl Parser {
             // Skip the opening parenthesis
             iter.next();
         } else {
-            self.error.emit("Premature ending of statement".to_string(), token.line, token.column);
+            self.error.abort("Premature ending of statement.", token.line, token.column);
         }
 
-        // Eat up function arguments
-        let mut args = vec![];
-        while let Some((arg, sep)) = iter.next_tuple() {
-            args.push(Variable {
-                name: arg.token.clone(),
-                typ: Type::Dummy,
-                line: arg.line,
-                column: arg.column,
-            });
+        let mut ret = vec![];
 
-            if sep.token_type == TokenType::RightParen {
-                // Reached end of args
-                break
-            }
+        // The next element in the iter now hopefully contains an opcode
+        // argument. If it's another opcode, we'll recurse into this
+        // function's logic.
+        // Otherwise, we look for variable and literal types.
+        while let Some(arg) = iter.next() {
+            // ============================
+            // Parse a nested function call
+            // ============================
+            if let Some(op_inner) = Opcode::from_name(&arg.token) {
+                if let Some(paren) = iter.peek() {
+                    if paren.token_type != TokenType::LeftParen {
+                        self.error.abort(
+                            "Invalid function call opening. Must start with a '('.",
+                            paren.line,
+                            paren.column,
+                        );
+                    }
 
-            if sep.token_type != TokenType::Comma {
-                self.error.emit(
-                    "Argument separator is not a comma (`,`)".to_string(),
-                    sep.line,
-                    sep.column,
+                    // Recurse this function to get the params of the nested one.
+                    let args = self.parse_function_call(arg, iter);
+
+                    // Then we assign a "fake" variable that serves as a stack
+                    // reference.
+                    let var = Variable {
+                        name: format!("_op_inner_{}_{}", arg.line, arg.column),
+                        typ: VarType::Dummy,
+                        line: arg.line,
+                        column: arg.column,
+                    };
+
+                    let arg = Arg::Func(Statement {
+                        typ: StatementType::Assign,
+                        opcode: op_inner,
+                        lhs: Some(var),
+                        rhs: args,
+                        line: arg.line,
+                    });
+
+                    ret.push(arg);
+                    continue
+                }
+
+                self.error.abort(
+                    "Missing tokens in statement, there's a syntax error here.",
+                    arg.line,
+                    arg.column,
                 );
             }
+
+            // ==========================================
+            // Parse normal argument, not a function call
+            // ==========================================
+            if let Some(sep) = iter.next() {
+                // See if we have a variable or a literal type.
+                match arg.token_type {
+                    TokenType::Symbol => ret.push(Arg::Var(Variable {
+                        name: arg.token.clone(),
+                        typ: VarType::Dummy,
+                        line: arg.line,
+                        column: arg.column,
+                    })),
+
+                    TokenType::Number => {
+                        // Check if we can actually convert this into a number.
+                        match arg.token.parse::<u64>() {
+                            Ok(_) => {}
+                            Err(e) => {
+                                self.error.abort(
+                                    &format!("Failed to convert literal into u64: {}", e),
+                                    arg.line,
+                                    arg.column,
+                                );
+                            }
+                        };
+
+                        ret.push(Arg::Lit(Literal {
+                            name: arg.token.clone(),
+                            typ: LitType::Uint64,
+                            line: arg.line,
+                            column: arg.column,
+                        }))
+                    }
+
+                    TokenType::RightParen => {
+                        if let Some(comma) = iter.peek() {
+                            if comma.token_type == TokenType::Comma {
+                                iter.next();
+                            }
+                        }
+                        break
+                    }
+
+                    x => unimplemented!("{:#?}", x),
+                };
+
+                if sep.token_type == TokenType::RightParen {
+                    if let Some(comma) = iter.peek() {
+                        if comma.token_type == TokenType::Comma {
+                            iter.next();
+                        }
+                    }
+                    // Reached end of args
+                    break
+                }
+
+                if sep.token_type != TokenType::Comma {
+                    self.error.abort(
+                        "Argument separator is not a comma (`,`)",
+                        sep.line,
+                        sep.column,
+                    );
+                }
+            }
         }
 
-        args
+        ret
     }
 }

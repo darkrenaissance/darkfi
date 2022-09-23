@@ -289,11 +289,7 @@ pub enum Error {
     ConfigInvalid,
 
     #[error("Failed decoding bincode: {0}")]
-    ZkasDecoderError(&'static str),
-
-    #[cfg(feature = "regex")]
-    #[error(transparent)]
-    RegexError(#[from] regex::Error),
+    ZkasDecoderError(String),
 
     #[cfg(feature = "util")]
     #[error("System clock is not correct!")]
@@ -314,6 +310,12 @@ pub enum Error {
     #[error(transparent)]
     ClientFailed(#[from] ClientFailed),
 
+    //=============
+    // clock
+    //=============
+    #[error("clock out of sync with peers: {0}")]
+    ClockOutOfSync(String),
+
     // ==============
     // DHT errors
     // ==============
@@ -324,6 +326,12 @@ pub enum Error {
 /// Transaction verification errors
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum VerifyFailed {
+    #[error("Transaction has no inputs")]
+    LackingInputs,
+
+    #[error("Transaction has no outputs")]
+    LackingOutputs,
+
     #[error("Invalid cashier/faucet public key for clear input {0}")]
     InvalidCashierOrFaucetKey(usize),
 

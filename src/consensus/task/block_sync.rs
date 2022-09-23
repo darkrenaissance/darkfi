@@ -10,7 +10,6 @@ use log::{debug, info, warn};
 /// async task used for block syncing.
 pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> {
     info!("Starting blockchain sync...");
-
     // we retrieve p2p network connected channels, so we can use it to
     // parallelize downloads.
     // Using len here because is_empty() uses unstable library feature

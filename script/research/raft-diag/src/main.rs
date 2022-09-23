@@ -28,7 +28,7 @@ pub struct Args {
     pub rpc_listen: Url,
     /// Inbound listen URL
     #[structopt(long = "inbound")]
-    pub inbound_url: Option<Url>,
+    pub inbound_url: Vec<Url>,
     /// Seed Urls
     #[structopt(long = "seeds")]
     pub seed_urls: Vec<Url>,
@@ -161,10 +161,10 @@ async fn start(args: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     // Waiting Exit signal
     //
     let (signal, shutdown) = async_channel::bounded::<()>(1);
-    ctrlc_async::set_async_handler(async move {
+    ctrlc::set_handler(move || {
         warn!("Catch exit signal");
         // cleaning up tasks running in the background
-        if let Err(e) = signal.send(()).await {
+        if let Err(e) = async_std::task::block_on(signal.send(())) {
             error!("Error on sending exit signal: {}", e);
         }
     })

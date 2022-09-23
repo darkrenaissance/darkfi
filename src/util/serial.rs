@@ -1,5 +1,7 @@
+use fxhash::FxHashMap;
 use std::{
     borrow::Cow,
+    collections::{BTreeMap, HashSet},
     io,
     io::{Cursor, Read, Write},
     mem,
@@ -449,7 +451,7 @@ impl<T: Decodable> Decodable for Option<T> {
     }
 }
 
-impl<T: Encodable> Encodable for Vec<Option<T>> {
+impl<T: Encodable> Encodable for Vec<T> {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += VarInt(self.len() as u64).encode(&mut s)?;
@@ -459,7 +461,7 @@ impl<T: Encodable> Encodable for Vec<Option<T>> {
         Ok(len)
     }
 }
-impl<T: Decodable> Decodable for Vec<Option<T>> {
+impl<T: Decodable> Decodable for Vec<T> {
     fn decode<D: io::Read>(mut d: D) -> Result<Self> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = Vec::with_capacity(len as usize);
@@ -469,40 +471,6 @@ impl<T: Decodable> Decodable for Vec<Option<T>> {
         Ok(ret)
     }
 }
-
-// Vectors
-#[macro_export]
-macro_rules! impl_vec {
-    ($type: ty) => {
-        impl Encodable for Vec<$type> {
-            #[inline]
-            fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-                let mut len = 0;
-                len += VarInt(self.len() as u64).encode(&mut s)?;
-                for c in self.iter() {
-                    len += c.encode(&mut s)?;
-                }
-                Ok(len)
-            }
-        }
-        impl Decodable for Vec<$type> {
-            #[inline]
-            fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-                let len = VarInt::decode(&mut d)?.0;
-                let mut ret = Vec::with_capacity(len as usize);
-                for _ in 0..len {
-                    ret.push(Decodable::decode(&mut d)?);
-                }
-                Ok(ret)
-            }
-        }
-    };
-}
-
-impl_vec!(SocketAddr);
-impl_vec!(Url);
-impl_vec!([u8; 32]);
-impl_vec!(blake3::Hash);
 
 impl Encodable for IpAddr {
     fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
@@ -599,23 +567,6 @@ pub fn encode_with_size<S: io::Write>(data: &[u8], mut s: S) -> Result<usize> {
     Ok(vi_len + data.len())
 }
 
-impl Encodable for Vec<u8> {
-    #[inline]
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
-        encode_with_size(self, s)
-    }
-}
-
-impl Decodable for Vec<u8> {
-    #[inline]
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let len = VarInt::decode(&mut d)?.0 as usize;
-        let mut ret = vec![0u8; len];
-        d.read_slice(&mut ret)?;
-        Ok(ret)
-    }
-}
-
 impl Encodable for Box<[u8]> {
     #[inline]
     fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
@@ -642,6 +593,79 @@ impl Decodable for blake3::Hash {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
         Ok(bytes.into())
+    }
+}
+
+impl<T: Encodable> Encodable for HashSet<T> {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(&mut s)?;
+        for c in self.iter() {
+            len += c.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+
+impl<T: Decodable + std::cmp::Eq + std::hash::Hash> Decodable for HashSet<T> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let len = VarInt::decode(&mut d)?.0;
+        let mut ret = HashSet::new();
+        for _ in 0..len {
+            let entry: T = Decodable::decode(&mut d)?;
+            ret.insert(entry);
+        }
+        Ok(ret)
+    }
+}
+
+impl<T: Encodable, U: Encodable> Encodable for FxHashMap<T, U> {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(&mut s)?;
+        for c in self.iter() {
+            len += c.0.encode(&mut s)?;
+            len += c.1.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+
+impl<T: Decodable + std::cmp::Eq + std::hash::Hash, U: Decodable> Decodable for FxHashMap<T, U> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let len = VarInt::decode(&mut d)?.0;
+        let mut ret = FxHashMap::default();
+        for _ in 0..len {
+            let key: T = Decodable::decode(&mut d)?;
+            let entry: U = Decodable::decode(&mut d)?;
+            ret.insert(key, entry);
+        }
+        Ok(ret)
+    }
+}
+
+impl<T: Encodable, U: Encodable> Encodable for BTreeMap<T, U> {
+    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(&mut s)?;
+        for c in self.iter() {
+            len += c.0.encode(&mut s)?;
+            len += c.1.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+
+impl<T: Decodable + std::cmp::Ord, U: Decodable> Decodable for BTreeMap<T, U> {
+    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+        let len = VarInt::decode(&mut d)?.0;
+        let mut ret = BTreeMap::new();
+        for _ in 0..len {
+            let key: T = Decodable::decode(&mut d)?;
+            let entry: U = Decodable::decode(&mut d)?;
+            ret.insert(key, entry);
+        }
+        Ok(ret)
     }
 }
 

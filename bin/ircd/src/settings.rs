@@ -1,5 +1,6 @@
+use crypto_box::SalsaBox;
 use fxhash::FxHashMap;
-use log::info;
+use log::{info, warn};
 use serde::Deserialize;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -8,8 +9,33 @@ use url::Url;
 
 use darkfi::{net::settings::SettingsOpt, Result};
 
+// Location for config file
 pub const CONFIG_FILE: &str = "ircd_config.toml";
 pub const CONFIG_FILE_CONTENTS: &str = include_str!("../ircd_config.toml");
+
+// Buffers and ordering configuration
+pub const SIZE_OF_MSGS_BUFFER: usize = 4095;
+pub const SIZE_OF_IDSS_BUFFER: usize = 65536;
+pub const LIFETIME_FOR_ORPHAN: i64 = 600;
+pub const TERM_MAX_TIME_DIFFERENCE: i64 = 180;
+pub const BROADCAST_LAST_TERM_MSG: u64 = 4;
+
+// Msg config
+pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
+pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 32;
+
+// Protocol config
+pub const MAX_CONFIRM: u8 = 4;
+pub const UNREAD_MSG_EXPIRE_TIME: i64 = 18000;
+pub const TIMEOUT_FOR_RESEND_UNREAD_MSGS: u64 = 240;
+
+// IRC Client
+pub enum RPL {
+    NoTopic = 331,
+    Topic = 332,
+    NameReply = 353,
+    EndOfNames = 366,
+}
 
 /// ircd cli
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
@@ -21,11 +47,11 @@ pub struct Args {
     pub config: Option<String>,
 
     /// JSON-RPC listen URL
-    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:11055")]
+    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:25550")]
     pub rpc_listen: Url,
 
     /// IRC listen URL
-    #[structopt(long = "irc", default_value = "tcp://127.0.0.1:11066")]
+    #[structopt(long = "irc", default_value = "tcp://127.0.0.1:6667")]
     pub irc_listen: Url,
 
     /// Optional TLS certificate file path if `irc_listen` uses TLS
@@ -38,9 +64,21 @@ pub struct Args {
     #[structopt(long)]
     pub gen_secret: bool,
 
+    /// Generate a new NaCl keypair and exit
+    #[structopt(long)]
+    pub gen_keypair: bool,
+
+    /// Path to save keypair in
+    #[structopt(short)]
+    pub output: Option<String>,
+
     /// Autojoin channels
     #[structopt(long)]
     pub autojoin: Vec<String>,
+
+    /// Password
+    #[structopt(long)]
+    pub password: Option<String>,
 
     #[structopt(flatten)]
     pub net: SettingsOpt,
@@ -48,6 +86,18 @@ pub struct Args {
     /// Increase verbosity
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
+}
+
+#[derive(Clone)]
+pub struct ContactInfo {
+    /// Optional NaCl box for the channel, used for {en,de}cryption.
+    pub salt_box: Option<SalsaBox>,
+}
+
+impl ContactInfo {
+    pub fn new() -> Result<Self> {
+        Ok(Self { salt_box: None })
+    }
 }
 
 /// This struct holds information about preconfigured channels.
@@ -68,7 +118,7 @@ pub struct ChannelInfo {
     /// Optional topic for the channel
     pub topic: Option<String>,
     /// Optional NaCl box for the channel, used for {en,de}cryption.
-    pub salt_box: Option<crypto_box::Box>,
+    pub salt_box: Option<SalsaBox>,
     /// Flag indicates whether the user has joined the channel or not
     pub joined: bool,
     /// All nicknames which are visible on the channel
@@ -81,40 +131,136 @@ impl ChannelInfo {
     }
 }
 
-fn salt_box_from_shared_secret(s: &str) -> Result<crypto_box::Box> {
+fn salt_box_from_shared_secret(s: &str) -> Result<SalsaBox> {
     let bytes: [u8; 32] = bs58::decode(s).into_vec()?.try_into().unwrap();
     let secret = crypto_box::SecretKey::from(bytes);
     let public = secret.public_key();
-    Ok(crypto_box::Box::new(&public, &secret))
+    Ok(SalsaBox::new(&public, &secret))
+}
+
+fn parse_priv_key(data: &str) -> Result<String> {
+    let mut pk = String::new();
+
+    let map = match toml::from_str(data)? {
+        Value::Table(m) => m,
+        _ => return Ok(pk),
+    };
+
+    if !map.contains_key("private_key") {
+        return Ok(pk)
+    }
+
+    if !map["private_key"].is_table() {
+        return Ok(pk)
+    }
+
+    let private_keys = map["private_key"].as_table().unwrap();
+
+    for prv_key in private_keys {
+        pk = prv_key.0.into();
+    }
+
+    info!("Found secret key in config, noted it down.");
+    Ok(pk)
 }
 
 /// Parse a TOML string for any configured contact list and return
 /// a map containing said configurations.
 ///
 /// ```toml
-/// [contact."7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"]
-/// nicks = ["sneed", "chuck"]
+/// [contact."nick"]
+/// contact_pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 /// ```
-pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, crypto_box::Box>> {
+pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, ContactInfo>> {
     let mut ret = FxHashMap::default();
 
-    if let Value::Table(map) = toml::from_str(data)? {
-        if map.contains_key("contact") && map["contact"].is_table() {
-            for contact in map["contact"].as_table().unwrap() {
-                // (secret, nicks = [nick0, nick1])
-                if contact.1.as_table().unwrap().contains_key("nicks") {
-                    if let Some(nicks) = contact.1["nicks"].as_array() {
-                        let salt_box = salt_box_from_shared_secret(contact.0.as_str())?;
-                        for nick in nicks {
-                            if let Some(n) = nick.as_str() {
-                                info!("Instantiated salt box for {}", n);
-                                ret.insert(n.to_string(), salt_box.clone());
-                            }
-                        }
-                    }
-                }
-            }
+    let map = match toml::from_str(data) {
+        Ok(Value::Table(m)) => m,
+        _ => {
+            warn!("Invalid TOML string passed as argument to parse_configured_contacts()");
+            return Ok(ret)
         }
+    };
+
+    if !map.contains_key("contact") {
+        return Ok(ret)
+    }
+
+    if !map["contact"].is_table() {
+        warn!("TOML configuration contains a \"contact\" field, but it is not a table.");
+        return Ok(ret)
+    }
+
+    let contacts = map["contact"].as_table().unwrap();
+
+    // Our secret key for NaCl boxes.
+    let found_priv = match parse_priv_key(data) {
+        Ok(v) => v,
+        Err(_) => {
+            info!("Did not found private key in config, skipping contact configuration.");
+            return Ok(ret)
+        }
+    };
+
+    let bytes: [u8; 32] = match bs58::decode(found_priv).into_vec() {
+        Ok(v) => {
+            if v.len() != 32 {
+                warn!("Decoded base58 secret key string is not 32 bytes");
+                warn!("Skipping private contact configuration");
+                return Ok(ret)
+            }
+            v.try_into().unwrap()
+        }
+        Err(e) => {
+            warn!("Failed to decode base58 secret key from string: {}", e);
+            warn!("Skipping private contact configuration");
+            return Ok(ret)
+        }
+    };
+
+    let secret = crypto_box::SecretKey::from(bytes);
+
+    for cnt in contacts {
+        info!("Found configuration for contact {}", cnt.0);
+        let mut contact_info = ContactInfo::new()?;
+
+        if !cnt.1.is_table() {
+            warn!("Config for contact {} isn't a TOML table", cnt.0);
+            continue
+        }
+
+        let table = cnt.1.as_table().unwrap();
+        if table.is_empty() {
+            warn!("Configuration for contact {} is empty.", cnt.0);
+            continue
+        }
+
+        // Build the NaCl box
+        if !table.contains_key("contact_pubkey") || !table["contact_pubkey"].is_str() {
+            warn!("Contact {} doesn't have `contact_pubkey` set or is not a string.", cnt.0);
+            continue
+        }
+
+        let pub_str = table["contact_pubkey"].as_str().unwrap();
+        let bytes: [u8; 32] = match bs58::decode(pub_str).into_vec() {
+            Ok(v) => {
+                if v.len() != 32 {
+                    warn!("Decoded base58 string is not 32 bytes");
+                    continue
+                }
+
+                v.try_into().unwrap()
+            }
+            Err(e) => {
+                warn!("Failed to decode base58 pubkey from string: {}", e);
+                continue
+            }
+        };
+
+        let public = crypto_box::PublicKey::from(bytes);
+        contact_info.salt_box = Some(SalsaBox::new(&public, &secret));
+        ret.insert(cnt.0.to_string(), contact_info);
+        info!("Instantiated NaCl box for contact {}", cnt.0);
     }
 
     Ok(ret)
@@ -131,31 +277,40 @@ pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, crypto_
 pub fn parse_configured_channels(data: &str) -> Result<FxHashMap<String, ChannelInfo>> {
     let mut ret = FxHashMap::default();
 
-    if let Value::Table(map) = toml::from_str(data)? {
-        if map.contains_key("channel") && map["channel"].is_table() {
-            for chan in map["channel"].as_table().unwrap() {
-                info!("Found configuration for channel {}", chan.0);
-                let mut channel_info = ChannelInfo::new()?;
+    let map = match toml::from_str(data)? {
+        Value::Table(m) => m,
+        _ => return Ok(ret),
+    };
 
-                if chan.1.as_table().unwrap().contains_key("topic") {
-                    let topic = chan.1["topic"].as_str().unwrap().to_string();
-                    info!("Found topic for channel {}: {}", chan.0, topic);
-                    channel_info.topic = Some(topic);
-                }
+    if !map.contains_key("channel") {
+        return Ok(ret)
+    }
 
-                if chan.1.as_table().unwrap().contains_key("secret") {
-                    // Build the NaCl box
-                    if let Some(s) = chan.1["secret"].as_str() {
-                        let salt_box = salt_box_from_shared_secret(s)?;
-                        channel_info.salt_box = Some(salt_box);
-                        info!("Instantiated NaCl box for channel {}", chan.0);
-                    }
-                }
+    if !map["channel"].is_table() {
+        return Ok(ret)
+    }
 
-                ret.insert(chan.0.to_string(), channel_info);
+    for chan in map["channel"].as_table().unwrap() {
+        info!("Found configuration for channel {}", chan.0);
+        let mut channel_info = ChannelInfo::new()?;
+
+        if chan.1.as_table().unwrap().contains_key("topic") {
+            let topic = chan.1["topic"].as_str().unwrap().to_string();
+            info!("Found topic for channel {}: {}", chan.0, topic);
+            channel_info.topic = Some(topic);
+        }
+
+        if chan.1.as_table().unwrap().contains_key("secret") {
+            // Build the NaCl box
+            if let Some(s) = chan.1["secret"].as_str() {
+                let salt_box = salt_box_from_shared_secret(s)?;
+                channel_info.salt_box = Some(salt_box);
+                info!("Instantiated NaCl box for channel {}", chan.0);
             }
         }
-    };
+
+        ret.insert(chan.0.to_string(), channel_info);
+    }
 
     Ok(ret)
 }

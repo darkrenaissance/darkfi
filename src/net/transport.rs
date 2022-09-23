@@ -1,7 +1,6 @@
 use std::{net::SocketAddr, time::Duration};
 
 use async_trait::async_trait;
-// TODO remove *
 use futures::prelude::*;
 use futures_rustls::{TlsAcceptor, TlsStream};
 use url::Url;
@@ -26,7 +25,7 @@ pub(crate) fn socket_addr_to_url(addr: SocketAddr, scheme: &str) -> Result<Url> 
     Ok(url)
 }
 
-/// Used as wrapper for stream used by  Transport trait
+/// Used as wrapper for stream used by Transport trait
 pub trait TransportStream: AsyncWrite + AsyncRead + Unpin + Send + Sync {}
 
 /// Used as wrapper for listener used by Transport trait
@@ -35,7 +34,7 @@ pub trait TransportListener: Send + Sync + Unpin {
     async fn next(&self) -> Result<(Box<dyn TransportStream>, Url)>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TransportName {
     Tcp(Option<String>),
     Tor(Option<String>),
@@ -43,11 +42,25 @@ pub enum TransportName {
     Unix,
 }
 
-impl TryFrom<Url> for TransportName {
+impl TransportName {
+    pub fn to_scheme(&self) -> String {
+        match self {
+            Self::Tcp(None) => "tcp".into(),
+            Self::Tcp(Some(opt)) => format!("tcp+{}", opt),
+            Self::Tor(None) => "tor".into(),
+            Self::Tor(Some(opt)) => format!("tor+{}", opt),
+            Self::Nym(None) => "nym".into(),
+            Self::Nym(Some(opt)) => format!("nym+{}", opt),
+            Self::Unix => "unix".into(),
+        }
+    }
+}
+
+impl TryFrom<&str> for TransportName {
     type Error = crate::Error;
 
-    fn try_from(url: Url) -> Result<Self> {
-        let transport_name = match url.scheme() {
+    fn try_from(scheme: &str) -> Result<Self> {
+        let transport_name = match scheme {
             "tcp" => Self::Tcp(None),
             "tcp+tls" | "tls" => Self::Tcp(Some("tls".into())),
             "tor" => Self::Tor(None),
@@ -58,6 +71,14 @@ impl TryFrom<Url> for TransportName {
             n => return Err(crate::Error::UnsupportedTransport(n.into())),
         };
         Ok(transport_name)
+    }
+}
+
+impl TryFrom<Url> for TransportName {
+    type Error = crate::Error;
+
+    fn try_from(url: Url) -> Result<Self> {
+        Self::try_from(url.scheme())
     }
 }
 

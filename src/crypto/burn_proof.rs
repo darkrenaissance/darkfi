@@ -1,22 +1,24 @@
-use std::time::Instant;
-
-use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use rand::rngs::OsRng;
+use std::time::Instant;
 
 use super::{
     nullifier::Nullifier,
     proof::{Proof, ProvingKey, VerifyingKey},
-    util::{mod_r_p, pedersen_commitment_scalar, pedersen_commitment_u64},
+    util::{pedersen_commitment_base, pedersen_commitment_u64},
 };
 use crate::{
     crypto::{
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
-        types::*,
+        types::{
+            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
+            DrkUserDataBlind, DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
+        },
+        util::poseidon_hash,
     },
     util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::burn_contract::BurnContract,
@@ -29,6 +31,8 @@ pub struct BurnRevealedValues {
     pub token_commit: DrkValueCommit,
     pub nullifier: Nullifier,
     pub merkle_root: MerkleNode,
+    pub spend_hook: DrkSpendHook,
+    pub user_data_enc: DrkUserDataEnc,
     pub signature_public: PublicKey,
 }
 
@@ -44,22 +48,26 @@ impl BurnRevealedValues {
         secret: SecretKey,
         leaf_position: incrementalmerkletree::Position,
         merkle_path: Vec<MerkleNode>,
+        spend_hook: DrkSpendHook,
+        user_data: DrkUserData,
+        user_data_blind: DrkUserDataBlind,
         signature_secret: SecretKey,
     ) -> Self {
-        let nullifier = [secret.0, serial];
-        let nullifier =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(nullifier);
+        let nullifier = poseidon_hash::<2>([secret.0, serial]);
 
         let public_key = PublicKey::from_secret(secret);
         let coords = public_key.0.to_affine().coordinates().unwrap();
 
-        let messages =
-            [*coords.x(), *coords.y(), DrkValue::from(value), token_id, serial, coin_blind];
-
-        let coin =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
-                .hash(messages);
+        let coin = poseidon_hash::<8>([
+            *coords.x(),
+            *coords.y(),
+            DrkValue::from(value),
+            token_id,
+            serial,
+            spend_hook,
+            user_data,
+            coin_blind,
+        ]);
 
         let merkle_root = {
             let position: u64 = leaf_position.into();
@@ -75,22 +83,27 @@ impl BurnRevealedValues {
             current
         };
 
+        let user_data_enc = poseidon_hash::<2>([user_data, user_data_blind]);
+
         let value_commit = pedersen_commitment_u64(value, value_blind);
-        let token_commit = pedersen_commitment_scalar(mod_r_p(token_id), token_blind);
+        let token_commit = pedersen_commitment_base(token_id, token_blind);
 
         BurnRevealedValues {
             value_commit,
             token_commit,
             nullifier: Nullifier(nullifier),
             merkle_root,
+            spend_hook,
+            user_data_enc,
             signature_public: PublicKey::from_secret(signature_secret),
         }
     }
 
-    pub fn make_outputs(&self) -> [DrkCircuitField; 8] {
+    pub fn make_outputs(&self) -> Vec<DrkCircuitField> {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
         let merkle_root = self.merkle_root.0;
+        let user_data_enc = self.user_data_enc;
         let sig_coords = self.signature_public.0.to_affine().coordinates().unwrap();
 
         vec![
@@ -100,11 +113,10 @@ impl BurnRevealedValues {
             *token_coords.x(),
             *token_coords.y(),
             merkle_root,
+            user_data_enc,
             *sig_coords.x(),
             *sig_coords.y(),
         ]
-        .try_into()
-        .unwrap()
     }
 }
 
@@ -116,6 +128,9 @@ pub fn create_burn_proof(
     value_blind: DrkValueBlind,
     token_blind: DrkValueBlind,
     serial: DrkSerial,
+    spend_hook: DrkSpendHook,
+    user_data: DrkUserData,
+    user_data_blind: DrkUserDataBlind,
     coin_blind: DrkCoinBlind,
     secret: SecretKey,
     leaf_position: incrementalmerkletree::Position,
@@ -132,6 +147,9 @@ pub fn create_burn_proof(
         secret,
         leaf_position,
         merkle_path.clone(),
+        spend_hook,
+        user_data,
+        user_data_blind,
         signature_secret,
     );
 
@@ -147,6 +165,9 @@ pub fn create_burn_proof(
         token_blind: Value::known(token_blind),
         leaf_pos: Value::known(leaf_position as u32),
         merkle_path: Value::known(merkle_path.try_into().unwrap()),
+        spend_hook: Value::known(spend_hook),
+        user_data: Value::known(user_data),
+        user_data_blind: Value::known(user_data_blind),
         sig_secret: Value::known(signature_secret.0),
     };
 

@@ -46,5 +46,9 @@ As a final step, let's add that task to the `ProtocolJobManager` that is invoked
 in `start()`:
 
 ```rust
-{{#include ../../../../../example/dchat/src/protocol_dchat.rs:42::}}
+{{#include ../../../../../example/dchat/src/protocol_dchat.rs:44}}
+        //...
+{{#include ../../../../../example/dchat/src/protocol_dchat.rs:47}}
+        //...
+{{#include ../../../../../example/dchat/src/protocol_dchat.rs:50}}
 ```

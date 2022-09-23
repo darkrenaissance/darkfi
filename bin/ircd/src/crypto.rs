@@ -1,9 +1,17 @@
-use crypto_box::aead::Aead;
+use crypto_box::{
+    aead::{Aead, AeadCore},
+    SalsaBox,
+};
+use fxhash::FxHashMap;
 use rand::rngs::OsRng;
 
-/// Try decrypting a message given a NaCl box and a base58 string.
+use crate::{
+    settings::{ChannelInfo, ContactInfo},
+    Privmsg,
+};
+
 /// The format we're using is nonce+ciphertext, where nonce is 24 bytes.
-pub fn try_decrypt_message(salt_box: &crypto_box::Box, ciphertext: &str) -> Option<String> {
+fn try_decrypt(salt_box: &SalsaBox, ciphertext: &str) -> Option<String> {
     let bytes = match bs58::decode(ciphertext).into_vec() {
         Ok(v) => v,
         Err(_) => return None,
@@ -29,10 +37,9 @@ pub fn try_decrypt_message(salt_box: &crypto_box::Box, ciphertext: &str) -> Opti
     }
 }
 
-/// Encrypt a message given a NaCl box and a plaintext string.
 /// The format we're using is nonce+ciphertext, where nonce is 24 bytes.
-pub fn encrypt_message(salt_box: &crypto_box::Box, plaintext: &str) -> String {
-    let nonce = crypto_box::generate_nonce(&mut OsRng);
+pub fn encrypt(salt_box: &SalsaBox, plaintext: &str) -> String {
+    let nonce = SalsaBox::generate_nonce(&mut OsRng);
     let mut ciphertext = salt_box.encrypt(&nonce, plaintext.as_bytes()).unwrap();
 
     let mut concat = vec![];
@@ -40,4 +47,70 @@ pub fn encrypt_message(salt_box: &crypto_box::Box, plaintext: &str) -> String {
     concat.append(&mut ciphertext);
 
     bs58::encode(concat).into_string()
+}
+
+/// Decrypt PrivMsg target
+pub fn decrypt_target(
+    contact: &mut String,
+    privmsg: &mut Privmsg,
+    configured_chans: FxHashMap<String, ChannelInfo>,
+    configured_contacts: FxHashMap<String, ContactInfo>,
+) {
+    for chan_name in configured_chans.keys() {
+        let chan_info = configured_chans.get(chan_name).unwrap();
+        if !chan_info.joined {
+            continue
+        }
+
+        let salt_box = chan_info.salt_box.clone();
+
+        if let Some(salt_box) = salt_box {
+            let decrypted_target = try_decrypt(&salt_box, &privmsg.target);
+            if decrypted_target.is_none() {
+                continue
+            }
+
+            let target = decrypted_target.unwrap();
+            if *chan_name == target {
+                privmsg.target = target;
+                return
+            }
+        }
+    }
+
+    for cnt_name in configured_contacts.keys() {
+        let cnt_info = configured_contacts.get(cnt_name).unwrap();
+
+        let salt_box = cnt_info.salt_box.clone();
+        if let Some(salt_box) = salt_box {
+            let decrypted_target = try_decrypt(&salt_box, &privmsg.target);
+            if decrypted_target.is_none() {
+                continue
+            }
+
+            let target = decrypted_target.unwrap();
+            privmsg.target = target;
+            *contact = cnt_name.into();
+            return
+        }
+    }
+}
+
+/// Decrypt PrivMsg nickname and message
+pub fn decrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut Privmsg) {
+    let decrypted_nick = try_decrypt(&salt_box.clone(), &privmsg.nickname);
+    let decrypted_msg = try_decrypt(&salt_box.clone(), &privmsg.message);
+
+    if decrypted_nick.is_none() && decrypted_msg.is_none() {
+        return
+    }
+    privmsg.nickname = decrypted_nick.unwrap();
+    privmsg.message = decrypted_msg.unwrap();
+}
+
+/// Encrypt PrivMsg
+pub fn encrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut Privmsg) {
+    privmsg.nickname = encrypt(salt_box, &privmsg.nickname);
+    privmsg.target = encrypt(salt_box, &privmsg.target);
+    privmsg.message = encrypt(salt_box, &privmsg.message);
 }

@@ -1,5 +1,6 @@
 // Example transaction flow
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use pasta_curves::{group::ff::Field, pallas};
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -10,7 +11,6 @@ use darkfi::{
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
-        token_id::generate_id,
         OwnCoin, OwnCoins,
     },
     node::state::{state_transition, ProgramState, StateUpdate},
@@ -18,7 +18,6 @@ use darkfi::{
         TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
         TransactionBuilderOutputInfo,
     },
-    util::NetworkName,
     zk::circuit::{BurnContract, MintContract},
     Result,
 };
@@ -127,7 +126,7 @@ fn main() -> Result<()> {
 
     let keypair = Keypair::random(&mut OsRng);
 
-    let mint_vk = VerifyingKey::build(8, &MintContract::default());
+    let mint_vk = VerifyingKey::build(11, &MintContract::default());
     let burn_vk = VerifyingKey::build(11, &BurnContract::default());
 
     let mut state = MemoryState {
@@ -142,8 +141,7 @@ fn main() -> Result<()> {
         secrets: vec![keypair.secret],
     };
 
-    let token_id =
-        generate_id(&NetworkName::Solana, "So11111111111111111111111111111111111111112")?;
+    let token_id = pallas::Base::random(&mut OsRng);
 
     let builder = TransactionBuilder {
         clear_inputs: vec![TransactionBuilderClearInputInfo {
@@ -159,7 +157,7 @@ fn main() -> Result<()> {
         }],
     };
 
-    let mint_pk = ProvingKey::build(8, &MintContract::default());
+    let mint_pk = ProvingKey::build(11, &MintContract::default());
     let burn_pk = ProvingKey::build(11, &BurnContract::default());
     let tx = builder.build(&mint_pk, &burn_pk)?;
 
@@ -172,7 +170,7 @@ fn main() -> Result<()> {
 
     // Now spend
     let owncoin = &state.own_coins[0];
-    let note = owncoin.note;
+    let note = &owncoin.note;
     let leaf_position = owncoin.leaf_position;
     let root = state.tree.root(0).unwrap();
     let merkle_path = state.tree.authentication_path(leaf_position, &root).unwrap();
@@ -183,7 +181,7 @@ fn main() -> Result<()> {
             leaf_position,
             merkle_path,
             secret: keypair.secret,
-            note,
+            note: note.clone(),
         }],
         outputs: vec![TransactionBuilderOutputInfo {
             value: 110,

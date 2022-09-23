@@ -6,11 +6,14 @@ use crate::{
     Result,
 };
 
+pub mod epoch;
+pub use epoch::{Epoch, EpochConsensus, EpochItem};
+
 pub mod blockstore;
 pub use blockstore::{BlockOrderStore, BlockStore, HeaderStore};
 
 pub mod metadatastore;
-pub use metadatastore::StreamletMetadataStore;
+pub use metadatastore::{OuroborosMetadataStore, StreamletMetadataStore};
 
 pub mod nfstore;
 pub use nfstore::NullifierStore;
@@ -33,6 +36,8 @@ pub struct Blockchain {
     pub transactions: TxStore,
     /// Streamlet metadata sled tree
     pub streamlet_metadata: StreamletMetadataStore,
+    /// Ourobors metadata sled tree
+    pub ouroboros_metadata: OuroborosMetadataStore,
     /// Nullifiers sled tree
     pub nullifiers: NullifierStore,
     /// Merkle roots sled tree
@@ -40,12 +45,15 @@ pub struct Blockchain {
 }
 
 impl Blockchain {
+    //FIXME why the blockchain taking genesis_data on the constructor as a hash?
+    //genesis data are supposed to be a a hash?
     /// Instantiate a new `Blockchain` with the given `sled` database.
     pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let headers = HeaderStore::new(db, genesis_ts, genesis_data)?;
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
         let streamlet_metadata = StreamletMetadataStore::new(db, genesis_ts, genesis_data)?;
+        let ouroboros_metadata = OuroborosMetadataStore::new(db, genesis_ts, genesis_data)?;
         let transactions = TxStore::new(db)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
@@ -56,6 +64,7 @@ impl Blockchain {
             order,
             transactions,
             streamlet_metadata,
+            ouroboros_metadata,
             nullifiers,
             merkle_roots,
         })
@@ -71,18 +80,23 @@ impl Blockchain {
 
         for block in blocks {
             // Store transactions
-            let tx_hashes = self.transactions.insert(&block.txs)?;
+            let _tx_hashes = self.transactions.insert(&block.txs)?;
 
             // Store header
             let headerhash = self.headers.insert(&[block.header.clone()])?;
             ret.push(headerhash[0]);
 
             // Store block
-            let _block = Block::new(headerhash[0], tx_hashes, block.metadata.clone());
-            self.blocks.insert(&[_block])?;
+            //let _block = Block::new(headerhash[0], tx_hashes, block.m.clone());
+            //self.blocks.insert(&[_block])?;
+            let blk: Block = Block::from(block.clone());
+            self.blocks.insert(&[blk])?;
 
             // Store block order
             self.order.insert(&[block.header.slot], &[headerhash[0]])?;
+
+            // Store ouroboros metadata
+            self.ouroboros_metadata.insert(&[headerhash[0]], &[block.om.clone()])?;
 
             // Store streamlet metadata
             self.streamlet_metadata.insert(&[headerhash[0]], &[block.sm.clone()])?;
@@ -113,17 +127,15 @@ impl Blockchain {
 
         let headers = self.headers.get(hashes, true)?;
         let blocks = self.blocks.get(hashes, true)?;
-        let metadata = self.streamlet_metadata.get(hashes, true)?;
 
         for (i, header) in headers.iter().enumerate() {
             let header = header.clone().unwrap();
             let block = blocks[i].clone().unwrap();
-            let sm = metadata[i].clone().unwrap();
 
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(header, txs, block.metadata.clone(), sm);
+            let info = BlockInfo::new(header, txs, block.m.clone(), block.om, block.sm);
             ret.push(info);
         }
 
@@ -153,5 +165,10 @@ impl Blockchain {
     /// Retrieve the last block slot and hash.
     pub fn last(&self) -> Result<(u64, blake3::Hash)> {
         self.order.get_last()
+    }
+
+    pub fn get_last_proof_hash(&self) -> Result<blake3::Hash> {
+        let (hash, _) = self.ouroboros_metadata.get_last().unwrap();
+        Ok(hash)
     }
 }

@@ -14,7 +14,16 @@ use darkfi::{
     Result,
 };
 
-async fn start() -> Result<()> {
+mod dao_contract;
+mod example_contract;
+mod money_contract;
+
+mod demo;
+mod note;
+
+use crate::demo::demo;
+
+async fn _start() -> Result<()> {
     let rpc_addr = Url::parse("tcp://127.0.0.1:7777")?;
     let rpc_interface = Arc::new(JsonRpcInterface {});
 
@@ -57,6 +66,7 @@ async fn main() -> Result<()> {
         ColorChoice::Auto,
     )?;
 
-    start().await?;
+    //start().await?;
+    demo().await.unwrap();
     Ok(())
 }

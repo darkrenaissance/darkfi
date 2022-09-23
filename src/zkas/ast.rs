@@ -1,62 +1,9 @@
-use indexmap::IndexMap;
-
-use super::{lexer::Token, opcode::Opcode, types::Type};
-
-#[derive(Copy, PartialEq, Eq, Clone, Debug)]
-#[repr(u8)]
-pub enum StatementType {
-    Assignment = 0x00,
-    Call = 0x01,
-    Noop = 0xff,
-}
-
-pub enum Var {
-    Constant(Constant),
-    Witness(Witness),
-    Variable(Variable),
-}
-
-#[derive(Clone, Debug)]
-pub struct Variable {
-    pub name: String,
-    pub typ: Type,
-    pub line: usize,
-    pub column: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct Statement {
-    pub typ: StatementType,
-    pub variable: Option<Variable>,
-    pub opcode: Opcode,
-    pub args: Vec<Variable>,
-    pub line: usize,
-}
-
-impl Default for Statement {
-    fn default() -> Self {
-        Statement {
-            typ: StatementType::Noop,
-            variable: None,
-            opcode: Opcode::Noop,
-            args: vec![],
-            line: 0,
-        }
-    }
-}
-
-pub type UnparsedConstants = IndexMap<String, (Token, Token)>;
-pub type UnparsedWitnesses = IndexMap<String, (Token, Token)>;
-
-pub type Constants = Vec<Constant>;
-pub type Witnesses = Vec<Witness>;
-pub type Variables = Vec<Variable>;
-pub type Statements = Vec<Statement>;
+use super::{LitType, Opcode, VarType};
 
 #[derive(Clone, Debug)]
 pub struct Constant {
     pub name: String,
-    pub typ: Type,
+    pub typ: VarType,
     pub line: usize,
     pub column: usize,
 }
@@ -64,7 +11,60 @@ pub struct Constant {
 #[derive(Clone, Debug)]
 pub struct Witness {
     pub name: String,
-    pub typ: Type,
+    pub typ: VarType,
     pub line: usize,
     pub column: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct Variable {
+    pub name: String,
+    pub typ: VarType,
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct Literal {
+    pub name: String,
+    pub typ: LitType,
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Debug)]
+pub enum Var {
+    Constant(Constant),
+    Witness(Witness),
+    Variable(Variable),
+}
+
+#[derive(Clone, Debug)]
+pub enum Arg {
+    Var(Variable),
+    Lit(Literal),
+    Func(Statement),
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+#[repr(u8)]
+pub enum StatementType {
+    Noop = 0x00,
+    Assign = 0x01,
+    Call = 0x02,
+}
+
+#[derive(Clone, Debug)]
+pub struct Statement {
+    pub typ: StatementType,
+    pub opcode: Opcode,
+    pub lhs: Option<Variable>,
+    pub rhs: Vec<Arg>,
+    pub line: usize,
+}
+
+impl Default for Statement {
+    fn default() -> Self {
+        Self { typ: StatementType::Noop, opcode: Opcode::Noop, lhs: None, rhs: vec![], line: 0 }
+    }
 }

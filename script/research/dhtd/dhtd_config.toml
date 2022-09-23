@@ -9,11 +9,11 @@
 # JSON-RPC listen URL
 #rpc_listen = "tcp://127.0.0.1:9540"
 
-# P2P accept address
-#p2p_accept = "tls://127.0.0.1:9541"
+# P2P accept addresses
+#p2p_accept = ["tls://127.0.0.1:9541"]
 
-# P2P external address
-#p2p_external = "tls://127.0.0.1:9541"
+# P2P external addresses
+#p2p_external = ["tls://127.0.0.1:9541"]
 
 # Connection slots
 #slots = 8

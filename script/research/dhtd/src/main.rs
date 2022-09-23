@@ -24,6 +24,7 @@ use darkfi::{
         cli::{get_log_config, get_log_level, spawn_config},
         path::get_config_path,
         serial::serialize,
+        expand_path,
     },
     Result,
 };
@@ -46,12 +47,12 @@ struct Args {
     rpc_listen: Url,
 
     #[structopt(long)]
-    /// P2P accept address
-    p2p_accept: Option<Url>,
+    /// P2P accept addresses (repeatable flag)
+    p2p_accept: Vec<Url>,
 
     #[structopt(long)]
-    /// P2P external address
-    p2p_external: Option<Url>,
+    /// P2P external addresses (repeatable flag)
+    p2p_external: Vec<Url>,
 
     #[structopt(long, default_value = "8")]
     /// Connection slots
@@ -254,8 +255,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
     let (signal, shutdown) = async_channel::bounded::<()>(1);
-    ctrlc_async::set_async_handler(async move {
-        signal.send(()).await.unwrap();
+    ctrlc::set_handler(move || {
+        async_std::task::block_on(signal.send(())).unwrap();
     })
     .unwrap();
 

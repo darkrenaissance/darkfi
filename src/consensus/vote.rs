@@ -1,10 +1,7 @@
-use std::io;
-
 use crate::{
     crypto::{address::Address, schnorr::Signature},
-    impl_vec, net,
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Result,
+    net,
+    util::serial::{SerialDecodable, SerialEncodable},
 };
 
 /// This struct represents a `Vote` used by the Streamlet consensus
@@ -31,5 +28,3 @@ impl net::Message for Vote {
         "vote"
     }
 }
-
-impl_vec!(Vote);

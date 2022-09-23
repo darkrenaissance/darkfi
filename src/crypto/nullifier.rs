@@ -1,23 +1,19 @@
 use std::io;
 
-use halo2_gadgets::poseidon::primitives as poseidon;
 use pasta_curves::{group::ff::PrimeField, pallas};
 
 use crate::{
-    crypto::keypair::SecretKey,
+    crypto::{keypair::SecretKey, util::poseidon_hash},
     util::serial::{Decodable, Encodable, ReadExt, WriteExt},
     Result,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Nullifier(pub(crate) pallas::Base);
+pub struct Nullifier(pub pallas::Base);
 
 impl Nullifier {
     pub fn new(secret: SecretKey, serial: pallas::Base) -> Self {
-        let nullifier = [secret.0, serial];
-        let nullifier =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(nullifier);
+        let nullifier = poseidon_hash::<2>([secret.0, serial]);
         Nullifier(nullifier)
     }
 

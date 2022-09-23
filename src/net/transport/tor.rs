@@ -1,7 +1,3 @@
-use async_std::{
-    net::{TcpListener, TcpStream},
-    sync::Arc,
-};
 use std::{
     io,
     io::{BufRead, BufReader, Write},
@@ -10,11 +6,14 @@ use std::{
     time::Duration,
 };
 
+use async_std::{
+    net::{TcpListener, TcpStream},
+    sync::Arc,
+};
 use fast_socks5::client::{Config, Socks5Stream};
 use futures::prelude::*;
 use futures_rustls::{TlsAcceptor, TlsStream};
-use regex::Regex;
-use socket2::{Domain, Socket, Type};
+use socket2::{Domain, Socket, TcpKeepalive, Type};
 use url::Url;
 
 use crate::{Error, Result};
@@ -111,13 +110,14 @@ impl TorController {
         let port = url.port().unwrap();
 
         let payload = format!(
-            "AUTHENTICATE {a}\r\nADD_ONION NEW:BEST Flags=DiscardPK Port={p},{h}:{p}\r\n",
+            "AUTHENTICATE {a}\r\nADD_ONION NEW:ED25519-V3 Flags=DiscardPK Port={p},{h}:{p}\r\n",
             a = self.auth,
             p = port,
             h = host
         );
         stream.write_all(payload.as_bytes())?;
-        stream.set_read_timeout(Some(Duration::from_secs(1)))?; // Maybe a bit too much. Gives tor time to reply
+        // 1s is maybe a bit too much. Gives tor time to reply
+        stream.set_read_timeout(Some(Duration::from_secs(1)))?;
         let mut reader = BufReader::new(stream);
         let mut repl = String::new();
         while let Ok(nbytes) = reader.read_line(&mut repl) {
@@ -125,11 +125,19 @@ impl TorController {
                 break
             }
         }
-        let re = Regex::new(r"250-ServiceID=(\w+*)")?;
-        //let cap: Result<regex::Captures<'_>> =
-        let cap = re.captures(&repl).ok_or_else(|| Error::TorError(repl.clone()));
-        let hurl = cap?.get(1).map_or(Err(Error::TorError(repl.clone())), |m| Ok(m.as_str()))?;
-        let hurl = format!("tcp://{}.onion:{}", &hurl, port);
+
+        let spl: Vec<&str> = repl.split('\n').collect();
+        if spl.len() != 4 {
+            return Err(Error::TorError(format!("Unsuccessful reply from TorControl: {:?}", spl)))
+        }
+
+        let onion: Vec<&str> = spl[1].split('=').collect();
+        if onion.len() != 2 {
+            return Err(Error::TorError(format!("Unsuccessful reply from TorControl: {:?}", spl)))
+        }
+
+        let onion = &onion[1][..onion[1].len() - 1];
+        let hurl = format!("tcp://{}.onion:{}", onion, port);
         Ok(Url::parse(&hurl)?)
     }
 }
@@ -173,7 +181,7 @@ impl TorTransport {
             return Err(Error::TorError(
                 "Please set the env var DARKFI_TOR_COOKIE to the configured Tor cookie file.\n\
                 For example:\n\
-                \'export DARKFI_TOR_COOKIE\"/var/lib/tor/control_auth_cookie\"\'"
+                export DARKFI_TOR_COOKIE='/var/lib/tor/control_auth_cookie'"
                     .to_string(),
             ))
         }
@@ -234,6 +242,14 @@ impl TorTransport {
         if socket_addr.is_ipv6() {
             socket.set_only_v6(true)?;
         }
+
+        // TODO: Perhaps make these configurable
+        socket.set_nodelay(true)?;
+        let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(30));
+        socket.set_tcp_keepalive(&keepalive)?;
+        // TODO: Make sure to disallow running multiple instances of a program using this.
+        socket.set_reuse_port(true)?;
+
         Ok(socket)
     }
 
@@ -275,6 +291,7 @@ impl Transport for TorTransport {
     fn dial(self, url: Url, _timeout: Option<Duration>) -> Result<Self::Dial> {
         match url.scheme() {
             "tor" | "tor+tls" => {}
+            "tcp" | "tcp+tls" | "tls" => {}
             x => return Err(Error::UnsupportedTransport(x.to_string())),
         }
         Ok(Box::pin(self.do_dial(url)))

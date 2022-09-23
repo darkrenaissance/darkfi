@@ -5,6 +5,9 @@ pub use error::{ClientFailed, ClientResult, Error, Result, VerifyFailed, VerifyR
 pub mod blockchain;
 
 #[cfg(feature = "blockchain")]
+pub mod stakeholder;
+
+#[cfg(feature = "blockchain")]
 pub mod consensus;
 
 #[cfg(feature = "crypto")]
@@ -40,8 +43,8 @@ pub mod util;
 #[cfg(feature = "wallet")]
 pub mod wallet;
 
-//#[cfg(feature = "wasm-runtime")]
-//pub mod runtime;
+#[cfg(feature = "wasm-runtime")]
+pub mod runtime;
 
 #[cfg(feature = "zkas")]
 pub mod zkas;

@@ -2,13 +2,16 @@ use async_std::sync::{Arc, Mutex};
 use std::fmt;
 
 use async_executor::Executor;
+use futures::{select, try_join, FutureExt};
 use fxhash::{FxHashMap, FxHashSet};
-use log::debug;
+use log::{debug, error, warn};
+use rand::Rng;
 use serde_json::json;
 use url::Url;
 
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
+    util::sleep,
     Result,
 };
 
@@ -70,6 +73,9 @@ pub struct P2p {
     state: Mutex<P2pState>,
 
     settings: SettingsPtr,
+
+    /// Flag to check if on discovery mode
+    discovery: Mutex<bool>,
 }
 
 impl P2p {
@@ -88,13 +94,14 @@ impl P2p {
             channels: Mutex::new(FxHashMap::default()),
             channel_subscriber: Subscriber::new(),
             stop_subscriber: Subscriber::new(),
-            hosts: Hosts::new(),
+            hosts: Hosts::new(settings.localnet),
             protocol_registry: ProtocolRegistry::new(),
             session_manual: Mutex::new(None),
             session_inbound: Mutex::new(None),
             session_outbound: Mutex::new(None),
             state: Mutex::new(P2pState::Open),
             settings,
+            discovery: Mutex::new(false),
         });
 
         let parent = Arc::downgrade(&self_);
@@ -109,15 +116,14 @@ impl P2p {
     }
 
     pub async fn get_info(&self) -> serde_json::Value {
-        let external_addr = self
-            .settings
-            .external_addr
-            .as_ref()
-            .map(|addr| serde_json::Value::from(addr.to_string()))
-            .unwrap_or(serde_json::Value::Null);
+        // Building ext_addr_vec string
+        let mut ext_addr_vec = vec![];
+        for ext_addr in &self.settings.external_addr {
+            ext_addr_vec.push(ext_addr.as_ref().to_string());
+        }
 
         json!({
-            "external_addr": external_addr,
+            "external_addr": format!("{:?}", ext_addr_vec),
             "session_manual": self.session_manual().await.get_info().await,
             "session_inbound": self.session_inbound().await.get_info().await,
             "session_outbound": self.session_outbound().await.get_info().await,
@@ -183,6 +189,120 @@ impl P2p {
         Ok(())
     }
 
+    /// Wait for outbound connections to be established.
+    pub async fn wait_for_outbound(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "net", "P2p::wait_for_outbound() [BEGIN]");
+        // To verify that the network needs initialization, we check if we have seeds or peers configured,
+        // and have configured outbound slots.
+        if !(self.settings.seeds.is_empty() && self.settings.peers.is_empty()) &&
+            self.settings.outbound_connections > 0
+        {
+            debug!(target: "net", "P2p::wait_for_outbound(): seeds are configured, waiting for outbound initialization...");
+            // Retrieve P2P network settings;
+            let settings = self.settings();
+
+            // Retrieve our own inbound addresses
+            let self_inbound_addr = &settings.external_addr;
+
+            // Retrieve timeout config
+            let timeout = settings.connect_timeout_seconds as u64;
+
+            // Retrieve outbound addresses to connect to (including manual peers)
+            let peers = &settings.peers;
+            let outbound = &self.hosts().load_all().await;
+
+            // Enable manual channel subscriber notifications
+            self.session_manual().await.clone().enable_notify().await;
+
+            // Retrieve manual channel subscriber ptr
+            let manual_sub =
+                self.session_manual.lock().await.as_ref().unwrap().subscribe_channel().await;
+
+            // Enable outbound channel subscriber notifications
+            self.session_outbound().await.clone().enable_notify().await;
+
+            // Retrieve outbound channel subscriber ptr
+            let outbound_sub =
+                self.session_outbound.lock().await.as_ref().unwrap().subscribe_channel().await;
+
+            // Create tasks for peers and outbound
+            let peers_task = Self::outbound_addr_loop(
+                self_inbound_addr,
+                timeout,
+                self.subscribe_stop().await,
+                peers,
+                manual_sub,
+                executor.clone(),
+            );
+            let outbound_task = Self::outbound_addr_loop(
+                self_inbound_addr,
+                timeout,
+                self.subscribe_stop().await,
+                outbound,
+                outbound_sub,
+                executor,
+            );
+            // Wait for both tasks completion
+            try_join!(peers_task, outbound_task)?;
+
+            // Disable manual channel subscriber notifications
+            self.session_manual().await.disable_notify().await;
+
+            // Disable outbound channel subscriber notifications
+            self.session_outbound().await.disable_notify().await;
+        }
+
+        debug!(target: "net", "P2p::wait_for_outbound() [END]");
+        Ok(())
+    }
+
+    // Wait for the process for each of the provided addresses, excluding our own inbound addresses
+    async fn outbound_addr_loop(
+        self_inbound_addr: &[Url],
+        timeout: u64,
+        stop_sub: Subscription<()>,
+        addrs: &Vec<Url>,
+        subscriber: Subscription<Result<ChannelPtr>>,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        // Process addresses
+        for addr in addrs {
+            if self_inbound_addr.contains(addr) {
+                continue
+            }
+
+            // Wait for address to be processed.
+            // We use a timeout to eliminate the following cases:
+            //  1. Network timeout
+            //  2. Thread reaching the receiver after peer has signal it
+            let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
+            executor
+                .spawn(async move {
+                    sleep(timeout).await;
+                    timeout_s.send(()).await.unwrap_or(());
+                })
+                .detach();
+
+            select! {
+                msg = subscriber.receive().fuse() => {
+                        if let Err(e) = msg {
+                            warn!(
+                                "P2p::wait_for_outbound(): Outbound connection failed [{}]: {}",
+                                addr, e
+                            );
+                        }
+                },
+                _ = stop_sub.receive().fuse() => debug!("P2p::wait_for_outbound(): stop signal received!"),
+                _ = timeout_r.recv().fuse() => {
+                    warn!("P2p::wait_for_outbound(): Timeout on outbound connection: {}", addr);
+                    continue
+                },
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn stop(&self) {
         self.stop_subscriber.notify(()).await
     }
@@ -190,7 +310,13 @@ impl P2p {
     /// Broadcasts a message across all channels.
     pub async fn broadcast<M: Message + Clone>(&self, message: M) -> Result<()> {
         for channel in self.channels.lock().await.values() {
-            channel.send(message.clone()).await?;
+            if let Err(e) = channel.send(message.clone()).await {
+                error!(
+                    "P2p::broadcast(): Broadcasting message to {} failed: {}",
+                    channel.address(),
+                    e
+                );
+            }
         }
         Ok(())
     }
@@ -223,8 +349,22 @@ impl P2p {
     }
 
     /// Check whether a channel is stored in the list of connected channels.
-    pub async fn exists(&self, addr: &Url) -> bool {
-        self.channels.lock().await.contains_key(addr)
+    /// If key is not contained, we also check if we are connected with a different transport.
+    pub async fn exists(&self, addr: &Url) -> Result<bool> {
+        let channels = self.channels.lock().await;
+        if channels.contains_key(addr) {
+            return Ok(true)
+        }
+
+        let mut addr = addr.clone();
+        for transport in &self.settings.outbound_transports {
+            addr.set_scheme(&transport.to_scheme())?;
+            if channels.contains_key(&addr) {
+                return Ok(true)
+            }
+        }
+
+        Ok(false)
     }
 
     /// Add a channel to the list of pending channels.
@@ -266,7 +406,35 @@ impl P2p {
         self.stop_subscriber.clone().subscribe().await
     }
 
+    /// Retrieve channels
     pub fn channels(&self) -> &ConnectedChannels {
         &self.channels
+    }
+
+    /// Try to start discovery mode.
+    /// Returns false if already on discovery mode.
+    pub async fn start_discovery(self: Arc<Self>) -> bool {
+        if *self.discovery.lock().await {
+            return false
+        }
+        *self.discovery.lock().await = true;
+        true
+    }
+
+    /// Stops discovery mode.
+    pub async fn stop_discovery(self: Arc<Self>) {
+        *self.discovery.lock().await = false;
+    }
+
+    /// Retrieves a random connected channel
+    pub async fn random_channel(self: Arc<Self>) -> Option<Arc<Channel>> {
+        let channels_map = self.channels().lock().await;
+        let mut values = channels_map.values();
+
+        if values.len() == 0 {
+            return None
+        }
+
+        Some(values.nth(rand::thread_rng().gen_range(0..values.len())).unwrap().clone())
     }
 }

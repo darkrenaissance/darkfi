@@ -2,7 +2,7 @@ use std::io;
 
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
-    group::{ff::Field, GroupEncoding},
+    group::{ff::Field, Group, GroupEncoding},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -23,6 +23,12 @@ pub struct Signature {
     response: pallas::Scalar,
 }
 
+impl Signature {
+    pub fn dummy() -> Self {
+        Self { commit: pallas::Point::identity(), response: pallas::Scalar::zero() }
+    }
+}
+
 pub trait SchnorrSecret {
     fn sign(&self, message: &[u8]) -> Signature;
 }
@@ -34,8 +40,7 @@ pub trait SchnorrPublic {
 impl SchnorrSecret for SecretKey {
     fn sign(&self, message: &[u8]) -> Signature {
         let mask = pallas::Scalar::random(&mut OsRng);
-        let nfk = NullifierK;
-        let commit = nfk.generator() * mask;
+        let commit = NullifierK.generator() * mask;
 
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &commit.to_bytes(), message);
         let response = mask + challenge * mod_r_p(self.0);
@@ -47,8 +52,7 @@ impl SchnorrSecret for SecretKey {
 impl SchnorrPublic for PublicKey {
     fn verify(&self, message: &[u8], signature: &Signature) -> bool {
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
-        let nfk = NullifierK;
-        nfk.generator() * signature.response - self.0 * challenge == signature.commit
+        NullifierK.generator() * signature.response - self.0 * challenge == signature.commit
     }
 }
 

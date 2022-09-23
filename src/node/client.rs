@@ -2,6 +2,7 @@ use async_std::sync::{Arc, Mutex};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info};
+use pasta_curves::group::ff::PrimeField;
 
 use super::state::{state_transition, State};
 use crate::{
@@ -101,7 +102,7 @@ impl Client {
                     leaf_position,
                     merkle_path,
                     secret: own_coin.secret,
-                    note: own_coin.note,
+                    note: own_coin.note.clone(),
                 };
 
                 inputs.push(input);
@@ -155,8 +156,11 @@ impl Client {
         clear_input: bool,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<Transaction> {
-        // TODO: Token id debug
-        debug!("send(): Sending {}", amount);
+        debug!(
+            "send(): Sending {} {} tokens",
+            amount,
+            bs58::encode(token_id.to_repr()).into_string()
+        );
 
         if amount == 0 {
             return Err(ClientFailed::InvalidAmount(0))
@@ -234,7 +238,7 @@ impl Client {
 
     fn build_mint_pk() -> ProvingKey {
         debug!("Building proving key for MintContract");
-        ProvingKey::build(8, &MintContract::default())
+        ProvingKey::build(11, &MintContract::default())
     }
 
     fn build_burn_pk() -> ProvingKey {

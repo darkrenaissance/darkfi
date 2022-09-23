@@ -3,36 +3,57 @@ use async_std::sync::{Arc, Mutex};
 use fxhash::FxHashSet;
 use url::Url;
 
+const LOCALNET: [&str; 5] = ["localhost", "0.0.0.0", "[::]", "127.0.0.1", "[::1]"];
+
 /// Pointer to hosts class.
 pub type HostsPtr = Arc<Hosts>;
 
 /// Manages a store of network addresses.
 pub struct Hosts {
-    addrs: Mutex<Vec<Url>>,
+    addrs: Mutex<FxHashSet<Url>>,
+    localnet: bool,
 }
 
 impl Hosts {
     /// Create a new host list.
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self { addrs: Mutex::new(Vec::new()) })
+    pub fn new(localnet: bool) -> Arc<Self> {
+        Arc::new(Self { addrs: Mutex::new(FxHashSet::default()), localnet })
     }
 
-    /// Checks if a host address is in the host list.
-    async fn contains(&self, addrs: &[Url]) -> bool {
-        let a_set: FxHashSet<_> = addrs.iter().cloned().collect();
-        self.addrs.lock().await.iter().any(|item| a_set.contains(item))
-    }
+    /// Add a new host to the host list, after filtering localnet hosts,
+    /// if configured to do so.
+    pub async fn store(&self, input_addrs: Vec<Url>) {
+        let addrs = if !self.localnet {
+            let mut filtered = vec![];
+            for addr in &input_addrs {
+                match addr.host_str() {
+                    Some(host_str) => {
+                        if LOCALNET.contains(&host_str) {
+                            continue
+                        }
+                    }
+                    None => continue,
+                }
+                filtered.push(addr.clone());
+            }
+            filtered
+        } else {
+            input_addrs
+        };
 
-    /// Add a new host to the host list.
-    pub async fn store(&self, addrs: Vec<Url>) {
-        if !self.contains(&addrs).await {
-            self.addrs.lock().await.extend(addrs)
+        for addr in addrs {
+            self.addrs.lock().await.insert(addr);
         }
     }
 
     /// Return the list of hosts.
     pub async fn load_all(&self) -> Vec<Url> {
-        self.addrs.lock().await.clone()
+        self.addrs.lock().await.iter().cloned().collect()
+    }
+
+    /// Remove an Url from the list
+    pub async fn remove(&self, url: &Url) -> bool {
+        self.addrs.lock().await.remove(url)
     }
 
     /// Check if the host list is empty.

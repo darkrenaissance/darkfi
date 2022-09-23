@@ -21,9 +21,9 @@ syn keyword zkasType
 syn keyword zkasInstruction
     \ ec_add ec_mul ec_mul_base ec_mul_short
     \ ec_get_x ec_get_y
-    \ base_add base_mul base_sub greater_than
-    \ poseidon_hash calculate_merkle_root
-    \ constrain_instance
+    \ base_add base_mul base_sub
+    \ poseidon_hash merkle_root constrain_instance
+    \ range_check less_than bool_check witness_base
 
 syn region zkasString start='"' end='"' contained
 

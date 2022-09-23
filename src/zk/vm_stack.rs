@@ -5,7 +5,7 @@ use pasta_curves::{pallas, EpAffine};
 
 use crate::{
     crypto::{constants::OrchardFixedBases, merkle_node::MerkleNode},
-    zkas::{decoder::ZkBinary, types::Type},
+    zkas::{decoder::ZkBinary, types::VarType},
 };
 
 /// These represent the witness types outside of the circuit
@@ -21,6 +21,10 @@ pub enum Witness {
     Uint64(Value<u64>),
 }
 
+pub enum Literal {
+    Uint64(Value<u64>),
+}
+
 /// Helper function for verifiers to generate empty witnesses for
 /// a given decoded zkas binary
 pub fn empty_witnesses(zkbin: &ZkBinary) -> Vec<Witness> {
@@ -28,13 +32,13 @@ pub fn empty_witnesses(zkbin: &ZkBinary) -> Vec<Witness> {
 
     for witness in &zkbin.witnesses {
         match witness {
-            Type::EcPoint => ret.push(Witness::EcPoint(Value::unknown())),
-            Type::EcFixedPoint => ret.push(Witness::EcFixedPoint(Value::unknown())),
-            Type::Base => ret.push(Witness::Base(Value::unknown())),
-            Type::Scalar => ret.push(Witness::Scalar(Value::unknown())),
-            Type::MerklePath => ret.push(Witness::MerklePath(Value::unknown())),
-            Type::Uint32 => ret.push(Witness::Uint32(Value::unknown())),
-            Type::Uint64 => ret.push(Witness::Uint64(Value::unknown())),
+            VarType::EcPoint => ret.push(Witness::EcPoint(Value::unknown())),
+            VarType::EcFixedPoint => ret.push(Witness::EcFixedPoint(Value::unknown())),
+            VarType::Base => ret.push(Witness::Base(Value::unknown())),
+            VarType::Scalar => ret.push(Witness::Scalar(Value::unknown())),
+            VarType::MerklePath => ret.push(Witness::MerklePath(Value::unknown())),
+            VarType::Uint32 => ret.push(Witness::Uint32(Value::unknown())),
+            VarType::Uint64 => ret.push(Witness::Uint64(Value::unknown())),
             _ => todo!("Handle this gracefully"),
         }
     }

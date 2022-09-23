@@ -17,19 +17,26 @@ pub struct Args {
     #[structopt(long)]
     pub config: Option<String>,
     /// JSON-RPC listen URL
-    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:12055")]
+    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:23330")]
     pub rpc_listen: Url,
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.config/darkfi/tau")]
+    #[structopt(long, default_value = "~/.tau")]
     pub datastore: String,
     #[structopt(flatten)]
     pub net: SettingsOpt,
     /// Increase verbosity
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,
-    /// Generate a new secret key
+    /// Generate a new workspace
     #[structopt(long)]
-    pub key_gen: bool,
+    pub generate: bool,
+    /// Secret Key To Encrypt/Decrypt tasks
+    #[structopt(long)]
+    pub workspaces: Vec<String>,
+    ///  Clean all the local data in datastore path
+    /// (BE CAREFULL) Check the datastore path in the config file before running this
+    #[structopt(long)]
+    pub refresh: bool,
     /// Current display name    
     #[structopt(long)]
     pub nickname: Option<String>,

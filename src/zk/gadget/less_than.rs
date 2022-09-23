@@ -113,6 +113,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         a: Value<pallas::Base>,
         b: Value<pallas::Base>,
         offset: usize,
+        strict: bool,
     ) -> Result<(), Error> {
         let (a, _, a_offset) = layouter.assign_region(
             || "a less than b",
@@ -124,10 +125,35 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
             },
         )?;
 
-        self.less_than_range_check(layouter, a, a_offset)?;
+        self.less_than_range_check(layouter, a, a_offset, strict)?;
 
         Ok(())
     }
+
+    /*
+    pub fn witness_less_than2(
+        &self,
+        mut layouter: impl Layouter<pallas::Base>,
+        a: Value<pallas::Base>,
+        b: Value<pallas::Base>,
+        offset: usize,
+        strict: bool,
+    ) -> Result<AssignedCell<pallas::Base, pallas::Base>, Error> {
+        let (a, _, a_offset) = layouter.assign_region(
+            || "a less than b",
+            |mut region: Region<'_, pallas::Base>| {
+                let a = region.assign_advice(|| "a", self.config.a, offset, || a)?;
+                let b = region.assign_advice(|| "b", self.config.b, offset, || b)?;
+                let a_offset = self.less_than(region, a.clone(), b.clone(), offset)?;
+                Ok((a, b, a_offset))
+            },
+        )?;
+
+        self.less_than_range_check(layouter, a, a_offset.clone(), strict)?;
+
+        Ok(a_offset)
+    }
+    */
 
     pub fn copy_less_than(
         &self,
@@ -135,6 +161,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         a: AssignedCell<pallas::Base, pallas::Base>,
         b: AssignedCell<pallas::Base, pallas::Base>,
         offset: usize,
+        strict: bool,
     ) -> Result<(), Error> {
         let (a, _, a_offset) = layouter.assign_region(
             || "a less than b",
@@ -146,7 +173,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
             },
         )?;
 
-        self.less_than_range_check(layouter, a, a_offset)?;
+        self.less_than_range_check(layouter, a, a_offset, strict)?;
 
         Ok(())
     }
@@ -156,6 +183,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         mut layouter: impl Layouter<pallas::Base>,
         a: AssignedCell<pallas::Base, pallas::Base>,
         a_offset: AssignedCell<pallas::Base, pallas::Base>,
+        strict: bool,
     ) -> Result<(), Error> {
         let range_a_chip =
             NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::construct(
@@ -166,9 +194,13 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
                 self.config.range_a_offset_config.clone(),
             );
 
-        range_a_chip.copy_range_check(layouter.namespace(|| "a copy_range_check"), a)?;
-        range_a_offset_chip
-            .copy_range_check(layouter.namespace(|| "a_offset copy_range_check"), a_offset)?;
+        range_a_chip.copy_range_check(layouter.namespace(|| "a copy_range_check"), a, strict)?;
+
+        range_a_offset_chip.copy_range_check(
+            layouter.namespace(|| "a_offset copy_range_check"),
+            a_offset,
+            strict,
+        )?;
 
         Ok(())
     }
@@ -265,6 +297,7 @@ mod tests {
                         self.a,
                         self.b,
                         0,
+                        true,
                     )?;
 
                     Ok(())

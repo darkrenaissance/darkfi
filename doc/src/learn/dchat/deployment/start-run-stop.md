@@ -1,6 +1,4 @@
-# Start, run, stop
-
-## Creating the p2p network
+# Start-Run-Stop
 
 Now that we have initialized the network settings we can create an
 instance of the p2p network.
@@ -8,12 +6,10 @@ instance of the p2p network.
 Add the following to `main()`:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:174}}
+{{#include ../../../../../example/dchat/src/main.rs:196}}
 ```
 
-## Running the p2p network
-
-We will next create a Dchat struct that will store all the data required
+We will next create a `Dchat` struct that will store all the data required
 by dchat. For now, it will just hold a pointer to the p2p network.
 
 ```rust
@@ -33,18 +29,17 @@ takes an executor and runs three p2p methods, `p2p::start()`, `p2p::run()`,
 and `p2p::stop()`.
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:97:98}}
+{{#include ../../../../../example/dchat/src/main.rs:99:100}}
 
-{{#include ../../../../../example/dchat/src/main.rs:103}}
+{{#include ../../../../../example/dchat/src/main.rs:105}}
 
         self.p2p.clone().run(ex.clone()).await?;
 
-{{#include ../../../../../example/dchat/src/main.rs:108:112}}
+{{#include ../../../../../example/dchat/src/main.rs:110:114}}
 ```
+Let's take a quick look at the underlying p2p methods we're using here.
 
 ## Start
-
-Let's take a quick look at the underlying p2p methods we're using here.
 
 This is [start()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L129):
 
@@ -88,8 +83,12 @@ is received.
 
 ## Stop
 
-To send this shutdown signal, we'll need to manually call
-[stop()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L186).
+This is [stop()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L186).
+
+```rust
+    {{#include ../../../../../src/net/p2p.rs:186:188}}
+```
+
 `stop()` transmits a shutdown signal to all channels subscribed to the
 stop signal and safely shuts down the network.
 

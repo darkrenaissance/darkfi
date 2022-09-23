@@ -12,6 +12,10 @@ use super::{
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
     pub(super) async fn send_heartbeat(&mut self) -> Result<()> {
+        if self.role != Role::Leader {
+            return Ok(())
+        }
+
         let nodes = self.nodes.lock().await;
         let nodes_cloned = nodes.clone();
         drop(nodes);

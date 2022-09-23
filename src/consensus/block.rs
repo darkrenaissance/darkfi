@@ -1,24 +1,20 @@
-use std::{fmt, io};
-
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use log::debug;
-use rand::rngs::OsRng;
+use std::fmt;
 
 use super::{
-    Metadata, StreamletMetadata, BLOCK_INFO_MAGIC_BYTES, BLOCK_MAGIC_BYTES, BLOCK_VERSION,
+    OuroborosMetadata, StakeholderMetadata, StreamletMetadata, BLOCK_MAGIC_BYTES, BLOCK_VERSION,
 };
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use log::debug;
+use pasta_curves::pallas;
+
 use crate::{
-    crypto::{
-        address::Address, constants::MERKLE_DEPTH, keypair::Keypair, merkle_node::MerkleNode,
-        schnorr::SchnorrSecret,
-    },
-    impl_vec, net,
+    crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode},
+    net,
     tx::Transaction,
     util::{
-        serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+        serial::{serialize, SerialDecodable, SerialEncodable},
         time::Timestamp,
     },
-    Result,
 };
 
 /// This struct represents a tuple of the form (version, state, epoch, slot, timestamp, merkle_root).
@@ -64,6 +60,18 @@ impl Header {
     }
 }
 
+impl Default for Header {
+    fn default() -> Self {
+        Header::new(
+            blake3::hash(b""),
+            0,
+            0,
+            Timestamp::current_time(),
+            MerkleNode(pallas::Base::zero()),
+        )
+    }
+}
+
 /// This struct represents a tuple of the form (`magic`, `header`, `counter`, `txs`, `metadata`).
 /// The header and transactions are stored as hashes, serving as pointers to
 /// the actual data in the sled database.
@@ -71,30 +79,57 @@ impl Header {
 pub struct Block {
     /// Block magic bytes
     pub magic: [u8; 4],
-    /// Block header hash
+    /// Block header
     pub header: blake3::Hash,
-    /// Transaction hashes
+    /// Trasaction hashes
     pub txs: Vec<blake3::Hash>,
-    /// Additional block information
-    pub metadata: Metadata,
+    /// stakeholder metadata
+    pub m: StakeholderMetadata,
+    /// ouroboros block information,
+    pub om: OuroborosMetadata,
+    /// streamlet
+    pub sm: StreamletMetadata,
+}
+
+impl net::Message for Block {
+    fn name() -> &'static str {
+        "block"
+    }
 }
 
 impl Block {
-    pub fn new(header: blake3::Hash, txs: Vec<blake3::Hash>, metadata: Metadata) -> Self {
+    pub fn new(
+        st: blake3::Hash,
+        e: u64,
+        sl: u64,
+        txs: Vec<blake3::Hash>,
+        root: MerkleNode,
+        m: StakeholderMetadata,
+        om: OuroborosMetadata,
+        sm: StreamletMetadata,
+    ) -> Self {
         let magic = *BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, metadata }
+        let ts = Timestamp::current_time();
+        let header = Header::new(st, e, sl, ts, root);
+        let headerhash = header.headerhash();
+        Self { magic, header: headerhash, txs, m, om, sm }
     }
 
     /// Generate the genesis block.
     pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
+        let magic = *BLOCK_MAGIC_BYTES;
+        //let eta : [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
+        //let empty_lead_proof = TransactionLeadProof::default();
         let header = Header::genesis_header(genesis_ts, genesis_data);
-        // Signing the genesis data using a random keypair
-        let keypair = Keypair::random(&mut OsRng);
-        let signature = keypair.secret.sign(&genesis_data.as_bytes()[..]);
-        let address = Address::from(keypair.public);
-        let metadata = Metadata::new(String::from("proof"), String::from("r"), signature, address);
+        let m = StakeholderMetadata::default();
+        let om = OuroborosMetadata::default();
+        let sm = StreamletMetadata::default();
+        Self { magic, header: header.headerhash(), txs: vec![], m, om, sm }
+    }
 
-        Self::new(header.headerhash(), vec![], metadata)
+    /// Calculate the block hash
+    pub fn blockhash(&self) -> blake3::Hash {
+        blake3::hash(&serialize(self))
     }
 }
 
@@ -122,21 +157,25 @@ pub struct BlockInfo {
     pub header: Header,
     /// Transactions payload
     pub txs: Vec<Transaction>,
-    /// Additional proposal information
-    pub metadata: Metadata,
+    /// stakeholder metadata,
+    pub m: StakeholderMetadata,
+    /// ouroboros metadata
+    pub om: OuroborosMetadata,
     /// Proposal information used by Streamlet consensus
     pub sm: StreamletMetadata,
 }
 
-impl BlockInfo {
-    pub fn new(
-        header: Header,
-        txs: Vec<Transaction>,
-        metadata: Metadata,
-        sm: StreamletMetadata,
-    ) -> Self {
-        let magic = *BLOCK_INFO_MAGIC_BYTES;
-        Self { magic, header, txs, metadata, sm }
+impl Default for BlockInfo {
+    fn default() -> Self {
+        let magic = *BLOCK_MAGIC_BYTES;
+        Self {
+            magic,
+            header: Header::default(),
+            txs: vec![],
+            m: StakeholderMetadata::default(),
+            om: OuroborosMetadata::default(),
+            sm: StreamletMetadata::default(),
+        }
     }
 }
 
@@ -146,7 +185,38 @@ impl net::Message for BlockInfo {
     }
 }
 
-impl_vec!(BlockInfo);
+impl BlockInfo {
+    pub fn new(
+        header: Header,
+        txs: Vec<Transaction>,
+        m: StakeholderMetadata,
+        om: OuroborosMetadata,
+        sm: StreamletMetadata,
+    ) -> Self {
+        let magic = *BLOCK_MAGIC_BYTES;
+        Self { magic, header, txs, m, om, sm }
+    }
+
+    /// Calculate the block hash
+    pub fn blockhash(&self) -> blake3::Hash {
+        let block: Block = self.clone().into();
+        block.blockhash()
+    }
+}
+
+impl From<BlockInfo> for Block {
+    fn from(b: BlockInfo) -> Self {
+        let txids = b.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        Self {
+            magic: b.magic,
+            header: b.header.headerhash(),
+            txs: txids,
+            m: b.m,
+            om: b.om,
+            sm: b.sm,
+        }
+    }
+}
 
 /// Auxiliary structure used for blockchain syncing
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -173,27 +243,26 @@ impl BlockProposal {
     pub fn new(
         header: Header,
         txs: Vec<Transaction>,
-        metadata: Metadata,
+        m: StakeholderMetadata,
+        om: OuroborosMetadata,
         sm: StreamletMetadata,
     ) -> Self {
-        let block = BlockInfo::new(header, txs, metadata, sm);
+        let block = BlockInfo::new(header, txs, m, om, sm);
         Self { block }
     }
 }
 
 impl PartialEq for BlockProposal {
     fn eq(&self, other: &Self) -> bool {
-        self.block.header == other.block.header &&
-            self.block.txs == other.block.txs &&
-            self.block.metadata == other.block.metadata
+        self.block.header == other.block.header && self.block.txs == other.block.txs
     }
 }
 
 impl fmt::Display for BlockProposal {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_fmt(format_args!(
-            "BlockProposal {{ leader: {}, hash: {}, epoch: {}, slot: {}, txs: {} }}",
-            self.block.metadata.address,
+            "BlockProposal {{ leader addr: {}, hash: {}, epoch: {}, slot: {}, txs: {} }}",
+            self.block.m.address,
             self.block.header.headerhash(),
             self.block.header.epoch,
             self.block.header.slot,
@@ -207,8 +276,6 @@ impl net::Message for BlockProposal {
         "proposal"
     }
 }
-
-impl_vec!(BlockProposal);
 
 impl From<BlockProposal> for BlockInfo {
     fn from(block: BlockProposal) -> BlockInfo {
@@ -279,5 +346,3 @@ impl ProposalChain {
         true
     }
 }
-
-impl_vec!(ProposalChain);

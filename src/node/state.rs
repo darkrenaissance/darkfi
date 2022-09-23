@@ -164,8 +164,13 @@ impl State {
                     debug!(target: "state_apply", "Received a coin: amount {}", note.value);
                     let leaf_position = self.tree.witness().unwrap();
                     let nullifier = Nullifier::new(*secret, note.serial);
-                    let own_coin =
-                        OwnCoin { coin, note, secret: *secret, nullifier, leaf_position };
+                    let own_coin = OwnCoin {
+                        coin,
+                        note: note.clone(),
+                        secret: *secret,
+                        nullifier,
+                        leaf_position,
+                    };
 
                     // TODO: FIXME: BUG check values inside the note are correct
                     // We need to hash them all and check them against the coin
@@ -190,7 +195,7 @@ impl State {
         Ok(())
     }
 
-    fn try_decrypt_note(ciphertext: &EncryptedNote, secret: SecretKey) -> Option<Note> {
+    pub fn try_decrypt_note(ciphertext: &EncryptedNote, secret: SecretKey) -> Option<Note> {
         match ciphertext.decrypt(&secret) {
             Ok(note) => Some(note),
             Err(_) => None,
@@ -214,8 +219,8 @@ impl ProgramState for State {
         if let Ok(mr) = self.merkle_roots.contains(merkle_root) {
             return mr
         }
-        // FIXME: An error here means a db issue
-        false
+
+        panic!("RootStore db corruption, could not check merkle_roots.contains()");
     }
 
     fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
@@ -223,8 +228,8 @@ impl ProgramState for State {
         if let Ok(nf) = self.nullifiers.contains(nullifier) {
             return nf
         }
-        // FIXME: An error here means a db issue
-        false
+
+        panic!("NullifierStore db corruption, could not check nullifiers.contains()");
     }
 
     fn mint_vk(&self) -> &VerifyingKey {
@@ -238,7 +243,7 @@ impl ProgramState for State {
 
 fn build_mint_vk() -> VerifyingKey {
     debug!("Building verifying key for MintContract");
-    VerifyingKey::build(8, &MintContract::default())
+    VerifyingKey::build(11, &MintContract::default())
 }
 
 fn build_burn_vk() -> VerifyingKey {

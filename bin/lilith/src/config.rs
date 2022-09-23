@@ -12,13 +12,21 @@ use darkfi::{cli_desc, Result};
 #[serde(default)]
 #[structopt(name = "lilith", about = cli_desc!())]
 pub struct Args {
+    #[structopt(long, default_value = "tcp://127.0.0.1:18927")]
+    /// JSON-RPC listen URL
+    pub rpc_listen: Url,
+
     #[structopt(short, long)]
     /// Configuration file to use
     pub config: Option<String>,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1")]
-    /// Daemon published url, common for all enabled networks
-    pub url: Url,
+    #[structopt(long)]
+    /// Daemon published urls, common for all enabled networks (repeatable flag)
+    pub urls: Vec<Url>,
+
+    #[structopt(long, default_value = "~/.config/darkfi/lilith_hosts.tsv")]
+    /// Hosts .tsv file to use
+    pub hosts_file: String,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -34,14 +42,16 @@ pub struct NetInfo {
     pub seeds: Vec<Url>,
     /// Connect to peers (repeatable flag)
     pub peers: Vec<Url>,
+    /// Enable localnet hosts
+    pub localnet: bool,
 }
 
 /// Parse a TOML string for any configured network and return
 /// a map containing said configurations.
 ///
 /// ```toml
-/// [network."darkfid"]
-/// port = 7650
+/// [network."darkfid_sync"]
+/// port = 33032
 /// seeds = []
 /// peers = []
 /// ```
@@ -87,7 +97,13 @@ pub fn parse_configured_networks(data: &str) -> Result<FxHashMap<String, NetInfo
                     }
                 }
 
-                let net_info = NetInfo { port, seeds, peers };
+                let localnet = if table.contains_key("localnet") {
+                    table["localnet"].as_bool().unwrap()
+                } else {
+                    false
+                };
+
+                let net_info = NetInfo { port, seeds, peers, localnet };
                 ret.insert(name, net_info);
             }
         }

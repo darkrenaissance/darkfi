@@ -1,171 +1,127 @@
-use async_std::{
-    net::TcpListener,
-    sync::{Arc, Mutex},
-};
-use std::{fs::File, net::SocketAddr};
+use async_std::sync::Arc;
+use std::fmt;
 
 use async_channel::Receiver;
 use async_executor::Executor;
-use futures::{io::BufReader, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, FutureExt};
-use futures_rustls::{rustls, TlsAcceptor};
-use fxhash::FxHashMap;
-use log::{error, info, warn};
+
+use log::{info, warn};
 use rand::rngs::OsRng;
 use smol::future;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize, net,
+    net::P2pPtr,
     rpc::server::listen_and_serve,
     system::{Subscriber, SubscriberPtr},
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
         expand_path,
+        file::save_json_file,
         path::get_config_path,
+        sleep,
     },
-    Error, Result,
+    Result,
 };
 
+pub mod buffers;
+pub mod chains;
 pub mod crypto;
+pub mod irc;
 pub mod privmsg;
 pub mod protocol_privmsg;
+pub mod protocol_privmsg2;
 pub mod rpc;
-pub mod server;
 pub mod settings;
 
 use crate::{
-    privmsg::{Privmsg, PrivmsgsBuffer, SeenMsgIds},
-    protocol_privmsg::ProtocolPrivmsg,
+    buffers::{create_buffers, Buffers},
+    irc::IrcServer,
+    privmsg::Privmsg,
+    protocol_privmsg::{LastTerm, ProtocolPrivmsg},
     rpc::JsonRpcInterface,
-    server::IrcServerConnection,
-    settings::{
-        parse_configured_channels, parse_configured_contacts, Args, ChannelInfo, CONFIG_FILE,
-        CONFIG_FILE_CONTENTS,
-    },
+    settings::{Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
-const SIZE_OF_MSG_IDSS_BUFFER: usize = 65536;
-const SIZE_OF_MSGS_BUFFER: usize = 4096;
-pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
-pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 32;
+#[derive(serde::Serialize)]
+struct KeyPair {
+    private_key: String,
+    public_key: String,
+}
+
+impl fmt::Display for KeyPair {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Public key: {}\nPrivate key: {}", self.public_key, self.private_key)
+    }
+}
+
+async fn resend_unread_msgs(p2p: P2pPtr, buffers: Buffers) -> Result<()> {
+    loop {
+        sleep(settings::TIMEOUT_FOR_RESEND_UNREAD_MSGS).await;
+
+        for msg in buffers.unread_msgs.load().await.values() {
+            p2p.broadcast(msg.clone()).await?;
+        }
+    }
+}
+
+async fn send_last_term(p2p: P2pPtr, buffers: Buffers) -> Result<()> {
+    loop {
+        sleep(settings::BROADCAST_LAST_TERM_MSG).await;
+
+        let term = buffers.privmsgs.last_term().await;
+        p2p.broadcast(LastTerm { term }).await?;
+    }
+}
 
 struct Ircd {
-    // msgs
-    seen_msg_ids: SeenMsgIds,
-    privmsgs_buffer: PrivmsgsBuffer,
-    // channels
-    autojoin_chans: Vec<String>,
-    configured_chans: FxHashMap<String, ChannelInfo>,
-    configured_contacts: FxHashMap<String, crypto_box::Box>,
-    // p2p
-    p2p: net::P2pPtr,
-    senders: SubscriberPtr<Privmsg>,
+    notify_clients: SubscriberPtr<Privmsg>,
 }
 
 impl Ircd {
-    fn new(
-        seen_msg_ids: SeenMsgIds,
-        privmsgs_buffer: PrivmsgsBuffer,
-        autojoin_chans: Vec<String>,
-        configured_chans: FxHashMap<String, ChannelInfo>,
-        configured_contacts: FxHashMap<String, crypto_box::Box>,
-        p2p: net::P2pPtr,
-    ) -> Self {
-        let senders = Subscriber::new();
-        Self {
-            seen_msg_ids,
-            privmsgs_buffer,
-            autojoin_chans,
-            configured_chans,
-            configured_contacts,
-            p2p,
-            senders,
-        }
+    fn new() -> Self {
+        let notify_clients = Subscriber::new();
+        Self { notify_clients }
     }
 
-    fn start_p2p_receive_loop(&self, executor: Arc<Executor<'_>>, p2p_receiver: Receiver<Privmsg>) {
-        let senders = self.senders.clone();
+    async fn start(
+        &self,
+        settings: &Args,
+        buffers: Buffers,
+        p2p: net::P2pPtr,
+        p2p_receiver: Receiver<Privmsg>,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        let notify_clients = self.notify_clients.clone();
         executor
             .spawn(async move {
                 while let Ok(msg) = p2p_receiver.recv().await {
-                    senders.notify(msg).await;
+                    notify_clients.notify(msg).await;
                 }
             })
             .detach();
-    }
 
-    async fn process_new_connection<C: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
-        &self,
-        executor: Arc<Executor<'_>>,
-        stream: C,
-        peer_addr: SocketAddr,
-    ) -> Result<()> {
-        let (reader, writer) = stream.split();
+        let irc_server = IrcServer::new(
+            settings.clone(),
+            buffers.clone(),
+            p2p.clone(),
+            self.notify_clients.clone(),
+        )
+        .await?;
 
-        let mut reader = BufReader::new(reader);
-
-        // New subscriber
-        let receiver = self.senders.clone().subscribe().await;
-
-        // New irc connection
-        let mut conn = IrcServerConnection::new(
-            writer,
-            peer_addr,
-            self.seen_msg_ids.clone(),
-            self.privmsgs_buffer.clone(),
-            self.autojoin_chans.clone(),
-            self.configured_chans.clone(),
-            self.configured_contacts.clone(),
-            self.p2p.clone(),
-            self.senders.clone(),
-            receiver.get_id(),
-        );
-
+        let executor_cloned = executor.clone();
         executor
             .spawn(async move {
-                loop {
-                    let mut line = String::new();
-
-                    let result: Result<()> = futures::select! {
-                        msg = receiver.receive().fuse() => {
-                            match conn.process_msg_from_p2p(&msg).await {
-                                Ok(_) => Ok(()),
-                                Err(e) => {
-                                    error!("Process msg from p2p failed {}: {}", peer_addr, e);
-                                    Err(Error::ChannelStopped)
-                                }
-                            }
-                        }
-                        err = reader.read_line(&mut line).fuse() => {
-                            match conn.process_line_from_client(err, line).await {
-                                Ok(_) => Ok(()),
-                                Err(e) => {
-                                    error!("Process line from client failed {}: {}", peer_addr, e);
-                                    Err(Error::ChannelStopped)
-                                }
-                            }
-                        }
-                    };
-
-                    if let Err(e) = result {
-                        warn!("Close connection for clinet {}: {}", peer_addr, e);
-                        receiver.unsubscribe().await;
-                        break
-                    }
-                }
+                irc_server.start(executor_cloned.clone()).await.unwrap();
             })
             .detach();
-
         Ok(())
     }
 }
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
-    let seen_msg_ids =
-        Arc::new(Mutex::new(ringbuffer::AllocRingBuffer::with_capacity(SIZE_OF_MSG_IDSS_BUFFER)));
-    let privmsgs_buffer: PrivmsgsBuffer =
-        Arc::new(Mutex::new(ringbuffer::AllocRingBuffer::with_capacity(SIZE_OF_MSGS_BUFFER)));
+    let buffers = create_buffers();
 
     if settings.gen_secret {
         let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
@@ -174,16 +130,29 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         return Ok(())
     }
 
-    // Pick up channel settings from the TOML configuration
-    let cfg_path = get_config_path(settings.config, CONFIG_FILE)?;
-    let toml_contents = std::fs::read_to_string(cfg_path)?;
-    let configured_chans = parse_configured_channels(&toml_contents)?;
-    let configured_contacts = parse_configured_contacts(&toml_contents)?;
+    if settings.gen_keypair {
+        let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
+        let pub_key = secret_key.public_key();
+        let prv_encoded = bs58::encode(secret_key.as_bytes()).into_string();
+        let pub_encoded = bs58::encode(pub_key.as_bytes()).into_string();
+
+        let kp = KeyPair { private_key: prv_encoded, public_key: pub_encoded };
+
+        if settings.output.is_some() {
+            let datastore = expand_path(&settings.output.unwrap())?;
+            save_json_file(&datastore, &kp)?;
+        } else {
+            println!("Generated KeyPair:\n{}", kp);
+        }
+
+        return Ok(())
+    }
 
     //
     // P2p setup
     //
-    let net_settings = settings.net;
+    let mut net_settings = settings.net.clone();
+    net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
     let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<Privmsg>();
 
     let p2p = net::P2p::new(net_settings.into()).await;
@@ -191,23 +160,12 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let registry = p2p.protocol_registry();
 
-    let seen_msg_ids_cloned = seen_msg_ids.clone();
-    let privmsgs_buffer_cloned = privmsgs_buffer.clone();
+    let buffers_cloned = buffers.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let sender = p2p_send_channel.clone();
-            let seen_msg_ids_cloned = seen_msg_ids_cloned.clone();
-            let privmsgs_buffer_cloned = privmsgs_buffer_cloned.clone();
-            async move {
-                ProtocolPrivmsg::init(
-                    channel,
-                    sender,
-                    p2p,
-                    seen_msg_ids_cloned,
-                    privmsgs_buffer_cloned,
-                )
-                .await
-            }
+            let buffers_cloned = buffers_cloned.clone();
+            async move { ProtocolPrivmsg::init(channel, sender, p2p, buffers_cloned).await }
         })
         .await;
 
@@ -215,6 +173,12 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
 
     let executor_cloned = executor.clone();
     executor_cloned.spawn(p2p.clone().run(executor.clone())).detach();
+
+    //
+    // Sync tasks
+    //
+    executor.spawn(resend_unread_msgs(p2p.clone(), buffers.clone())).detach();
+    executor.spawn(send_last_term(p2p.clone(), buffers.clone())).detach();
 
     //
     // RPC interface
@@ -227,95 +191,17 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // IRC instance
     //
-    let listenaddr = settings.irc_listen.socket_addrs(|| None)?[0];
-    let listener = TcpListener::bind(listenaddr).await?;
 
-    let acceptor = match settings.irc_listen.scheme() {
-        "tls" => {
-            // openssl genpkey -algorithm ED25519 > example.com.key
-            // openssl req -new -out example.com.csr -key example.com.key
-            // openssl x509 -req -days 700 -in example.com.csr -signkey example.com.key -out example.com.crt
+    let ircd = Ircd::new();
 
-            if settings.irc_tls_secret.is_none() || settings.irc_tls_cert.is_none() {
-                error!("To listen using TLS, please set irc_tls_secret and irc_tls_cert in your config file.");
-                return Err(Error::KeypairPathNotFound)
-            }
-
-            let file = File::open(expand_path(&settings.irc_tls_secret.unwrap())?)?;
-            let mut reader = std::io::BufReader::new(file);
-            let secret = &rustls_pemfile::pkcs8_private_keys(&mut reader)?[0];
-            let secret = rustls::PrivateKey(secret.clone());
-
-            let file = File::open(expand_path(&settings.irc_tls_cert.unwrap())?)?;
-            let mut reader = std::io::BufReader::new(file);
-            let certificate = &rustls_pemfile::certs(&mut reader)?[0];
-            let certificate = rustls::Certificate(certificate.clone());
-
-            let config = rustls::ServerConfig::builder()
-                .with_safe_defaults()
-                .with_no_client_auth()
-                .with_single_cert(vec![certificate], secret)?;
-
-            let acceptor = TlsAcceptor::from(Arc::new(config));
-            Some(acceptor)
-        }
-        _ => None,
-    };
-
-    info!("IRC listening on {}", settings.irc_listen);
-
-    let executor_cloned = executor.clone();
-    executor
-        .spawn(async move {
-            let ircd = Ircd::new(
-                seen_msg_ids.clone(),
-                privmsgs_buffer.clone(),
-                settings.autojoin.clone(),
-                configured_chans.clone(),
-                configured_contacts.clone(),
-                p2p.clone(),
-            );
-
-            ircd.start_p2p_receive_loop(executor_cloned.clone(), p2p_recv_channel);
-
-            loop {
-                let (stream, peer_addr) = match listener.accept().await {
-                    Ok((s, a)) => (s, a),
-                    Err(e) => {
-                        error!("failed accepting new connections: {}", e);
-                        continue
-                    }
-                };
-
-                let result = if let Some(acceptor) = acceptor.clone() {
-                    let stream = match acceptor.accept(stream).await {
-                        Ok(s) => s,
-                        Err(e) => {
-                            error!("Failed accepting TLS connection: {}", e);
-                            continue
-                        }
-                    };
-                    ircd.process_new_connection(executor_cloned.clone(), stream, peer_addr).await
-                } else {
-                    ircd.process_new_connection(executor_cloned.clone(), stream, peer_addr).await
-                };
-
-                if let Err(e) = result {
-                    error!("Failed processing connection {}: {}", peer_addr, e);
-                    continue
-                };
-
-                info!("IRC Accepted new client: {}", peer_addr);
-            }
-        })
-        .detach();
+    ircd.start(&settings, buffers, p2p, p2p_recv_channel, executor.clone()).await?;
 
     // Run once receive exit signal
     let (signal, shutdown) = async_channel::bounded::<()>(1);
-    ctrlc_async::set_async_handler(async move {
+    ctrlc::set_handler(move || {
         warn!(target: "ircd", "ircd start Exit Signal");
         // cleaning up tasks running in the background
-        signal.send(()).await.unwrap();
+        async_std::task::block_on(signal.send(())).unwrap();
     })
     .unwrap();
 

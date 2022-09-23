@@ -8,17 +8,19 @@ use log::debug;
 use simplelog::WriteLogger;
 use url::Url;
 
-use darkfi::{net, net::Settings};
+use darkfi::{net, net::Settings, rpc::server::listen_and_serve};
 
 use crate::{
     dchat_error::ErrorMissingSpecifier,
     dchatmsg::{DchatMsg, DchatMsgsBuffer},
     protocol_dchat::ProtocolDchat,
+    rpc::JsonRpcInterface,
 };
 
 pub mod dchat_error;
 pub mod dchatmsg;
 pub mod protocol_dchat;
+pub mod rpc;
 
 pub type Error = Box<dyn error::Error>;
 pub type Result<T> = std::result::Result<T, Error>;
@@ -118,7 +120,19 @@ impl Dchat {
     }
 }
 
-fn alice() -> Result<Settings> {
+#[derive(Clone, Debug)]
+struct AppSettings {
+    accept_addr: Url,
+    net: Settings,
+}
+
+impl AppSettings {
+    pub fn new(accept_addr: Url, net: Settings) -> Self {
+        Self { accept_addr, net }
+    }
+}
+
+fn alice() -> Result<AppSettings> {
     let log_level = simplelog::LevelFilter::Debug;
     let log_config = simplelog::Config::default();
 
@@ -126,21 +140,24 @@ fn alice() -> Result<Settings> {
     let file = File::create(log_path).unwrap();
     WriteLogger::init(log_level, log_config, file)?;
 
-    let seed = Url::parse("tcp://127.0.0.1:55555").unwrap();
-    let inbound = Url::parse("tcp://127.0.0.1:55554").unwrap();
-    let ext_addr = Url::parse("tcp://127.0.0.1:55554").unwrap();
+    let seed = Url::parse("tcp://127.0.0.1:50515").unwrap();
+    let inbound = Url::parse("tcp://127.0.0.1:51554").unwrap();
+    let ext_addr = Url::parse("tcp://127.0.0.1:51554").unwrap();
 
-    let settings = Settings {
-        inbound: Some(inbound),
-        external_addr: Some(ext_addr),
+    let net = Settings {
+        inbound: vec![inbound],
+        external_addr: vec![ext_addr],
         seeds: vec![seed],
         ..Default::default()
     };
 
+    let accept_addr = Url::parse("tcp://127.0.0.1:55054").unwrap();
+    let settings = AppSettings::new(accept_addr, net);
+
     Ok(settings)
 }
 
-fn bob() -> Result<Settings> {
+fn bob() -> Result<AppSettings> {
     let log_level = simplelog::LevelFilter::Debug;
     let log_config = simplelog::Config::default();
 
@@ -148,21 +165,24 @@ fn bob() -> Result<Settings> {
     let file = File::create(log_path).unwrap();
     WriteLogger::init(log_level, log_config, file)?;
 
-    let seed = Url::parse("tcp://127.0.0.1:55555").unwrap();
+    let seed = Url::parse("tcp://127.0.0.1:50515").unwrap();
 
-    let settings = Settings {
-        inbound: None,
+    let net = Settings {
+        inbound: vec![],
         outbound_connections: 5,
         seeds: vec![seed],
         ..Default::default()
     };
+
+    let accept_addr = Url::parse("tcp://127.0.0.1:51054").unwrap();
+    let settings = AppSettings::new(accept_addr, net);
 
     Ok(settings)
 }
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    let settings: Result<Settings> = match std::env::args().nth(1) {
+    let settings: Result<AppSettings> = match std::env::args().nth(1) {
         Some(id) => match id.as_str() {
             "a" => alice(),
             "b" => bob(),
@@ -171,23 +191,30 @@ async fn main() -> Result<()> {
         None => Err(ErrorMissingSpecifier.into()),
     };
 
-    let p2p = net::P2p::new(settings?.into()).await;
+    let settings = settings?.clone();
+
+    let p2p = net::P2p::new(settings.net).await;
 
     let nthreads = num_cpus::get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();
+    let ex3 = ex2.clone();
 
     let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
 
-    let mut dchat = Dchat::new(p2p, msgs);
+    let mut dchat = Dchat::new(p2p.clone(), msgs);
+
+    let accept_addr = settings.accept_addr.clone();
+    let rpc = Arc::new(JsonRpcInterface { addr: accept_addr.clone(), p2p });
+    ex.spawn(async move { listen_and_serve(accept_addr.clone(), rpc).await }).detach();
 
     let (_, result) = Parallel::new()
-        .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
+        .each(0..nthreads, |_| smol::future::block_on(ex2.run(shutdown.recv())))
         .finish(|| {
             smol::future::block_on(async move {
-                dchat.start(ex2).await?;
+                dchat.start(ex3).await?;
                 drop(signal);
                 Ok(())
             })

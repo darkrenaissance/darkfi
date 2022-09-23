@@ -11,7 +11,7 @@ use log::*;
 use serde_json::json;
 use url::Url;
 
-use crate::{Error, Result};
+use crate::Result;
 
 use super::{
     super::{Connector, P2p},
@@ -37,10 +37,9 @@ impl SeedSyncSession {
 
         if settings.seeds.is_empty() {
             warn!("Skipping seed sync process since no seeds are configured.");
-            // Store external address in hosts explicitly
-            match &settings.external_addr {
-                Some(addr) => self.p2p().hosts().store(vec![addr.clone()]).await,
-                None => (),
+            // Store external addresses in hosts explicitly
+            if !settings.external_addr.is_empty() {
+                self.p2p().hosts().store(settings.external_addr.clone()).await
             }
 
             return Ok(())
@@ -81,8 +80,7 @@ impl SeedSyncSession {
 
         // Seed process complete
         if self.p2p().hosts().is_empty().await {
-            error!("Hosts pool still empty after seeding");
-            return Err(Error::NetworkOperationFailed)
+            warn!("Hosts pool still empty after seeding");
         }
 
         debug!(target: "net", "SeedSyncSession::start() [END]");

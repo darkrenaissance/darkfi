@@ -9,7 +9,7 @@ handle to the p2p network contained in the `Dchat` struct. It will then
 call `register()` on the registry and pass the `ProtocolDchat` constructor.
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:84:95}}
+{{#include ../../../../../example/dchat/src/main.rs:86:97}}
 ```
 
 There's a lot going on here. `register()` takes a closure with two
@@ -31,7 +31,7 @@ instead we wrap the `async move` in a `move` in order to capture the
 variables needed by `ProtocolDchat::init()`.
 
 Notice the use of a `bitflag`. We use `!SESSION_SEED` to specify that
-this protocol should be performed by every session, not including the
+this protocol should be performed by all sessions aside from the
 seed session.
 
 Also notice that `register_protocol()` requires a `DchatMsgsBuffer` that we
@@ -40,29 +40,33 @@ in `main()` and pass it to `Dchat::new()`. Let's add `DchatMsgsBuffer` to the
 `Dchat` struct definition first.
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:13:17}}
+{{#include ../../../../../example/dchat/src/main.rs:13:16}}
+{{#include ../../../../../example/dchat/src/main.rs:18}}
 
-{{#include ../../../../../example/dchat/src/main.rs:26:34}}
-{{#include ../../../../../example/dchat/src/main.rs:119}}
+{{#include ../../../../../example/dchat/src/main.rs:28:36}}
+    //...
+{{#include ../../../../../example/dchat/src/main.rs:121}}
 ```
 
 And initialize it:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:163:164}}
+{{#include ../../../../../example/dchat/src/main.rs:183:184}}
     //...
-{{#include ../../../../../example/dchat/src/main.rs:182:184}}
+{{#include ../../../../../example/dchat/src/main.rs:205}}
+
+    let mut dchat = Dchat::new(p2p, msgs);
     //...
-{{#include ../../../../../example/dchat/src/main.rs:197}}
+{{#include ../../../../../example/dchat/src/main.rs:224}}
 ```
 
 Finally, call `register_protocol()` in `dchat::start()`:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:97:103}}
+{{#include ../../../../../example/dchat/src/main.rs:99:105}}
         self.p2p.clone().run(ex.clone()).await?;
 
-{{#include ../../../../../example/dchat/src/main.rs:110:112}}
+{{#include ../../../../../example/dchat/src/main.rs:110:114}}
 ```
 Now try running Alice and Bob and seeing what debug output you get. Keep
 an eye out for the following:

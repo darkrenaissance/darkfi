@@ -52,12 +52,12 @@ struct Args {
     rpc_listen: Url,
 
     #[structopt(long)]
-    /// P2P accept address
-    p2p_accept: Option<Url>,
+    /// P2P accept addresses (repeatable flag)
+    p2p_accept: Vec<Url>,
 
     #[structopt(long)]
-    /// P2P external address
-    p2p_external: Option<Url>,
+    /// P2P external addresses (repeatable flag)
+    p2p_external: Vec<Url>,
 
     #[structopt(long, default_value = "8")]
     /// Connection slots
@@ -70,6 +70,14 @@ struct Args {
     #[structopt(long)]
     /// Connect to peer (repeatable flag)
     peers: Vec<Url>,
+
+    #[structopt(long)]
+    /// Prefered transports for outbound connections (repeatable flag)
+    transports: Vec<String>,
+    
+    #[structopt(long)]
+    /// Enable localnet hosts
+    localnet: bool,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -102,6 +110,12 @@ impl Fud {
         let entries = fs::read_dir(&self.folder).unwrap();
         {
             let mut lock = self.dht.write().await;
+
+            // Sync lookup map with network
+            if let Err(e) = lock.sync_lookup_map().await {
+                error!("Failed to sync lookup map: {}", e);
+            }
+
             for entry in entries {
                 let e = entry.unwrap();
                 let name = String::from(e.file_name().to_str().unwrap());
@@ -315,6 +329,23 @@ impl Fud {
             }
         }
     }
+
+    // RPCAPI:
+    // Replies to a ping method.
+    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
+    async fn pong(&self, id: Value, _params: &[Value]) -> JsonResult {
+        JsonResponse::new(json!("pong"), id).into()
+    }
+
+    // RPCAPI:
+    // Retrieves P2P network information.
+    // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
+    async fn get_info(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let resp = self.dht.read().await.p2p.get_info().await;
+        JsonResponse::new(resp, id).into()
+    }
 }
 
 #[async_trait]
@@ -330,6 +361,8 @@ impl RequestHandler for Fud {
             Some("list") => return self.list(req.id, params).await,
             Some("sync") => return self.sync(req.id, params).await,
             Some("get") => return self.get(req.id, params).await,
+            Some("ping") => return self.pong(req.id, params).await,
+            Some("get_info") => return self.get_info(req.id, params).await,
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
@@ -341,8 +374,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
     let (signal, shutdown) = async_channel::bounded::<()>(1);
-    ctrlc_async::set_async_handler(async move {
-        signal.send(()).await.unwrap();
+    ctrlc::set_handler(move || {
+        async_std::task::block_on(signal.send(())).unwrap();
     })
     .unwrap();
 
@@ -353,6 +386,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         external_addr: args.p2p_external,
         peers: args.peers.clone(),
         seeds: args.seeds.clone(),
+        outbound_transports: net::settings::get_outbound_transports(args.transports),
+        localnet: args.localnet,
         ..Default::default()
     };
 
@@ -380,6 +415,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     })
     .detach();
+
+    info!("Waiting for P2P outbound connections");
+    p2p.wait_for_outbound(ex).await?;
 
     fud.init().await?;
 

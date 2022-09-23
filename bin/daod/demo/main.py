@@ -525,9 +525,9 @@ class VoteProof:
         revealed.token_commit = crypto.pedersen_encrypt(
             self.token_id, self.token_blind, self.ec
         )
-        revealed.vote_option_commit = crypto.ff_hash(
-            self.ec.p, self.vote_option, self.vote_option_blind
-        )
+        #revealed.vote_option_commit = crypto.ff_hash(
+        #    self.ec.p, self.vote_option, self.vote_option_blind
+        #)
         return revealed
 
     def verify(self, public):
@@ -537,8 +537,9 @@ class VoteProof:
             return False
         return all([
             revealed.value_commit == public.value_commit,
+            revealed.vote_commit == public.vote_commit,
             revealed.token_commit == public.token_commit,
-            revealed.vote_option_commit == public.vote_option_commit
+            #revealed.vote_option_commit == public.vote_option_commit
         ])
 
 class VoteTx:
@@ -903,7 +904,9 @@ class DaoExecProof:
 
         assert self.total_votes >= self.dao.quorum
 
-        assert self.win_votes / self.total_votes >= self.dao.approval_ratio
+        # Approval ratio should be actually 2 values ffs
+        #assert self.win_votes / self.total_votes >= self.dao.approval_ratio
+        assert self.win_votes >= self.dao.approval_ratio * self.total_votes
 
         return all([
             revealed.all_proposals == public.all_proposals,
@@ -1308,9 +1311,9 @@ def main(argv):
             gov_token_id, note.token_blind, ec)
         assert tx.vote.revealed.token_commit == token_commit
 
-        vote_option_commit = crypto.ff_hash(
-            ec.p, note.vote_option, note.vote_option_blind)
-        assert tx.vote.revealed.vote_option_commit == vote_option_commit
+        #vote_option_commit = crypto.ff_hash(
+        #    ec.p, note.vote_option, note.vote_option_blind)
+        #assert tx.vote.revealed.vote_option_commit == vote_option_commit
 
         value_commit = crypto.pedersen_encrypt(
             note.value, note.value_blind, ec)

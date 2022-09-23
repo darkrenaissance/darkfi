@@ -1,7 +1,7 @@
 # Settings
 
 On production-ready software, you would usually configure your node
-using a config file or command line inputs. On `dchat` we are keeping
+using a config file or command line inputs. On dchat we are keeping
 things ultra simple. We pass a command line flag that is either `a` or
 `b`. If we pass `a` we will initialize an inbound node. If we pass `b`
 we will initialize an outbound node.
@@ -19,14 +19,52 @@ This is a function that returns the settings to create Alice, an
 inbound node:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:121:141}}
+fn alice() -> Result<Settings> {
+   let log_level = simplelog::LevelFilter::Debug;
+   let log_config = simplelog::Config::default();
+
+   let log_path = "/tmp/alice.log";
+   let file = File::create(log_path).unwrap();
+   WriteLogger::init(log_level, log_config, file)?;
+
+   let seed = Url::parse("tcp://127.0.0.1:55555").unwrap();
+   let inbound = Url::parse("tcp://127.0.0.1:55554").unwrap();
+   let ext_addr = Url::parse("tcp://127.0.0.1:55554").unwrap();
+
+   let settings = Settings {
+       inbound: Some(inbound),
+       external_addr: Some(ext_addr),
+       seeds: vec![seed],
+       ..Default::default()
+   };
+
+   Ok(settings)
+}
 ```
 
 This is a function that returns the settings to create Bob, an
 outbound node:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:143:161}}
+fn bob() -> Result<Settings> {
+   let log_level = simplelog::LevelFilter::Debug;
+   let log_config = simplelog::Config::default();
+
+   let log_path = "/tmp/bob.log";
+   let file = File::create(log_path).unwrap();
+   WriteLogger::init(log_level, log_config, file)?;
+
+   let seed = Url::parse("tcp://127.0.0.1:55555").unwrap();
+
+   let settings = Settings {
+       inbound: None,
+       outbound_connections: 5,
+       seeds: vec![seed],
+       ..Default::default()
+   };
+
+   Ok(settings)
+}
 ```
 
 Both outbound and inbound nodes specify a seed address to connect to. The

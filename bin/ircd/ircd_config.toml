@@ -1,5 +1,5 @@
 ## JSON-RPC listen URL
-#rpc_listen="tcp://127.0.0.1:11055"
+#rpc_listen="tcp://127.0.0.1:25550"
 
 ## IRC listen URL
 #irc_listen="tcp://127.0.0.1:6667"
@@ -14,22 +14,36 @@
 ## List of channels to autojoin for new client connections
 autojoin = ["#dev", "#memes", "#philosophy", "#markets", "#math", "#random"]
 
+## Daemon specific password (optional, but once you configure it,
+## it is required from the client side)
+#password="CHANGE_ME"
+
 ## P2P net settings
 [net]
-## P2P accept address
-#inbound="tls://127.0.0.1:11002" 
-
 ## Connection slots
 outbound_connections=5
 
-## P2P external address
-#external_addr="tls://127.0.0.1:11002"
+## P2P accept addresses
+#inbound = ["tls://0.0.0.0:25551"]
+# ipv6 version:
+#inbound = ["tls://[::]:25551"]
 
-## Peers to connect to
-#peers=["tls://127.0.0.1:11003"]
+## P2P external addresses
+## Put your IPs or hostnames here
+## This is how people can reach you on the inbound port configured above
+## You can also put an ipv6 address :)
+#external_addr = ["tls://XXX.XXX.XXX.XXX:25551"]
+# ipv6 version:
+#external_addr = ["tls://[ipv6 address here]:25551"]
+
+## Manually configured peers to connect to
+#peers = ["tls://127.0.0.1:25551"]
 
 ## Seed nodes to connect to 
-seeds=["tls://irc0.dark.fi:11001", "tls://irc1.dark.fi:11001"]
+seeds = ["tls://lilith0.dark.fi:25551", "tls://lilith1.dark.fi:25551"]
+
+# Prefered transports for outbound connections
+#outbound_transports = ["tls", "tcp"]
 
 ## Only used for debugging. Compromises privacy when set.
 #node_id = "foo"
@@ -42,16 +56,29 @@ seeds=["tls://irc0.dark.fi:11001", "tls://irc1.dark.fi:11001"]
 #channel_heartbeat_seconds=10
 
 ## Per-channel settings
-#[channel."#dev"]
+#[channel."#foo"]
 ## Create with `ircd --gen-secret`
 #secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 ## Topic to set for the channel
-#topic = "DarkFi Development HQ"
+#topic = "DarkFi Foo Stuff"
 
-## Contacts list
-# Shared secrets that encrypt direct communication between two nicknames on
-# the network.
-# These are in the form of secret:[nick0,nick1], which means that the same
-# shared secret will be used for all the nicknames in the list.
-[contact."7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"]
-nicks = ["sneed", "chuck"]
+[channel."#dev"]
+topic = "DarkFi Development HQ"
+
+### Contacts list
+## Private key used to decrypt direct messages to you along with
+## contact_pubkey. (configured only once)
+## Generate keypair using 'ircd --gen-keypair' 
+## or to save to a file 'ircd --gen-keypair -o ~/some_dir/filename'
+## !!SHOULD NEVER SHARE THIS!!
+#[private_key."955Dfa83pU7RCevT2rMrGfhza4kcy6FShSNE6AdR4Q7A"]
+
+## Shared Public key that encrypt direct communication between two nicknames
+## on the network.
+## These are in the form of [Contact_nick, Contact_pubkey]
+## Per-contact settings
+## contact nickname (this is not irc nickname, and could be anything you want)
+## irc msgs should be pointed to this nickname.
+#[contact."narodnik"]
+## contact public key
+#contact_pubkey = "C9vC6HNDfGQofWCapZfQK5MkV1JR8Cct839RDUCqbDGK"

@@ -77,12 +77,12 @@ struct Args {
     rpc_listen: Url,
 
     #[structopt(long)]
-    /// P2P accept address for the syncing protocol
-    sync_p2p_accept: Option<Url>,
+    /// P2P accept addresses for the syncing protocol
+    sync_p2p_accept: Vec<Url>,
 
     #[structopt(long)]
-    /// P2P external address for the syncing protocol
-    sync_p2p_external: Option<Url>,
+    /// P2P external addresses for the syncing protocol
+    sync_p2p_external: Vec<Url>,
 
     #[structopt(long, default_value = "8")]
     /// Connection slots for the syncing protocol
@@ -95,6 +95,14 @@ struct Args {
     #[structopt(long)]
     /// Connect to peer for the syncing protocol (repeatable flag)
     sync_p2p_peer: Vec<Url>,
+
+    #[structopt(long)]
+    /// Prefered transports of outbound connections for the syncing protocol (repeatable flag)
+    sync_p2p_transports: Vec<String>,
+
+    #[structopt(long)]
+    /// Enable localnet hosts
+    localnet: bool,
 
     #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
@@ -299,8 +307,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
     let (signal, shutdown) = async_channel::bounded::<()>(1);
-    ctrlc_async::set_async_handler(async move {
-        signal.send(()).await.unwrap();
+    ctrlc::set_handler(move || {
+        async_std::task::block_on(signal.send(())).unwrap();
     })
     .unwrap();
 
@@ -360,6 +368,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         external_addr: args.sync_p2p_external,
         peers: args.sync_p2p_peer.clone(),
         seeds: args.sync_p2p_seed.clone(),
+        outbound_transports: net::settings::get_outbound_transports(args.sync_p2p_transports),
+        localnet: args.localnet,
         ..Default::default()
     };
 
@@ -409,7 +419,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     })
     .detach();
 
-    match block_sync_task(sync_p2p.clone(), state.clone()).await {
+    info!("Waiting for sync P2P outbound connections");
+    sync_p2p.clone().wait_for_outbound(ex).await?;
+
+    match block_sync_task(sync_p2p, state.clone()).await {
         Ok(()) => *faucetd.synced.lock().await = true,
         Err(e) => error!("Failed syncing blockchain: {}", e),
     }

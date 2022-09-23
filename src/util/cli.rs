@@ -10,6 +10,7 @@ use std::{
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{de::DeserializeOwned, Serialize};
 use simplelog::ConfigBuilder;
+use termion::color;
 
 use crate::{Error, Result};
 
@@ -125,7 +126,7 @@ macro_rules! cli_desc {
 ///     async_daemonize, cli_desc,
 ///     util::{
 ///         cli::{get_log_config, get_log_level, spawn_config},
-///         path::get_config_path,
+///         path::get_config_path, expand_path
 ///     },
 ///     Result,
 /// };
@@ -164,10 +165,21 @@ macro_rules! async_daemonize {
             let log_level = get_log_level(args.verbose.into());
             let log_config = get_log_config();
 
-            let env_log_file_path = match std::env::var("DARKFI_LOG") {
-                Ok(p) => std::fs::File::create(p).unwrap(),
-                Err(_) => std::fs::File::create("/tmp/darkfi.log").unwrap(),
+            let log_file_path = match std::env::var("DARKFI_LOG") {
+                Ok(p) => p,
+                Err(_) => {
+                    let bin_name = if let Some(bin_name) = option_env!("CARGO_BIN_NAME") {
+                        bin_name
+                    } else {
+                        "darkfi"
+                    };
+                    std::fs::create_dir_all(expand_path("~/.local/darkfi")?)?;
+                    format!("~/.local/darkfi/{}.log", bin_name)
+                }
             };
+
+            let log_file_path = expand_path(&log_file_path)?;
+            let log_file = std::fs::File::create(log_file_path)?;
 
             simplelog::CombinedLogger::init(vec![
                 simplelog::TermLogger::new(
@@ -176,7 +188,7 @@ macro_rules! async_daemonize {
                     simplelog::TerminalMode::Mixed,
                     simplelog::ColorChoice::Auto,
                 ),
-                simplelog::WriteLogger::new(log_level, log_config, env_log_file_path),
+                simplelog::WriteLogger::new(log_level, log_config, log_file),
             ])?;
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
@@ -207,4 +219,12 @@ pub fn progress_bar(message: &str) -> ProgressBar {
     progress_bar.enable_steady_tick(Duration::from_millis(100));
     progress_bar.set_message(message.to_string());
     progress_bar
+}
+
+pub fn fg_red(message: &str) -> String {
+    format!("{}{}{}", color::Fg(color::Red), message, color::Fg(color::Reset))
+}
+
+pub fn fg_green(message: &str) -> String {
+    format!("{}{}{}", color::Fg(color::Green), message, color::Fg(color::Reset))
 }

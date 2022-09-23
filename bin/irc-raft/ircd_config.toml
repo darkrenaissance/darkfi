@@ -12,20 +12,23 @@ autojoin = ["#dev"]
 
 ## Raft net settings
 [net]
-## P2P accept address
-#inbound="tls://127.0.0.1:11002" 
+## P2P accept addresses
+#inbound=["tls://127.0.0.1:11002"]
 
 ## Connection slots
 outbound_connections=5
 
-## P2P external address
-#external_addr="tls://127.0.0.1:11002"
+## P2P external addresses
+#external_addr=["tls://127.0.0.1:11002"]
 
 ## Peers to connect to
 #peers=["tls://127.0.0.1:11003"]
 
 ## Seed nodes to connect to 
 seeds=["tls://irc0.dark.fi:11001", "tls://irc1.dark.fi:11001"]
+
+# Prefered transports for outbound connections
+#transports = ["tls", "tcp"]
 
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0

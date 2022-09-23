@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     dht::DhtPtr,
-    messages::{KeyRequest, KeyResponse, LookupRequest},
+    messages::{KeyRequest, KeyResponse, LookupMapRequest, LookupMapResponse, LookupRequest},
 };
 
 pub struct Protocol {
@@ -23,6 +23,7 @@ pub struct Protocol {
     req_sub: MessageSubscription<KeyRequest>,
     resp_sub: MessageSubscription<KeyResponse>,
     lookup_sub: MessageSubscription<LookupRequest>,
+    lookup_map_sub: MessageSubscription<LookupMapRequest>,
     jobsman: ProtocolJobsManagerPtr,
     dht: DhtPtr,
     p2p: P2pPtr,
@@ -40,10 +41,12 @@ impl Protocol {
         msg_subsystem.add_dispatch::<KeyRequest>().await;
         msg_subsystem.add_dispatch::<KeyResponse>().await;
         msg_subsystem.add_dispatch::<LookupRequest>().await;
+        msg_subsystem.add_dispatch::<LookupMapRequest>().await;
 
         let req_sub = channel.subscribe_msg::<KeyRequest>().await?;
         let resp_sub = channel.subscribe_msg::<KeyResponse>().await?;
         let lookup_sub = channel.subscribe_msg::<LookupRequest>().await?;
+        let lookup_map_sub = channel.subscribe_msg::<LookupMapRequest>().await?;
 
         Ok(Arc::new(Self {
             channel: channel.clone(),
@@ -51,6 +54,7 @@ impl Protocol {
             req_sub,
             resp_sub,
             lookup_sub,
+            lookup_map_sub,
             jobsman: ProtocolJobsManager::new("Protocol", channel),
             dht,
             p2p,
@@ -81,7 +85,7 @@ impl Protocol {
                     continue
                 }
 
-                dht.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
+                dht.seen.insert(req_copy.id, Utc::now().timestamp());
             }
 
             let daemon = self.dht.read().await.id;
@@ -134,7 +138,7 @@ impl Protocol {
                     continue
                 }
 
-                dht.seen.insert(resp_copy.id.clone(), Utc::now().timestamp());
+                dht.seen.insert(resp_copy.id, Utc::now().timestamp());
             }
 
             if self.dht.read().await.id != resp_copy.to {
@@ -179,20 +183,12 @@ impl Protocol {
                     continue
                 }
 
-                dht.seen.insert(req_copy.id.clone(), Utc::now().timestamp());
+                dht.seen.insert(req_copy.id, Utc::now().timestamp());
             }
 
             let result = match req_copy.req_type {
-                0 => self
-                    .dht
-                    .write()
-                    .await
-                    .lookup_insert(req_copy.key.clone(), req_copy.daemon.clone()),
-                _ => self
-                    .dht
-                    .write()
-                    .await
-                    .lookup_remove(req_copy.key.clone(), req_copy.daemon.clone()),
+                0 => self.dht.write().await.lookup_insert(req_copy.key, req_copy.daemon),
+                _ => self.dht.write().await.lookup_remove(req_copy.key, req_copy.daemon),
             };
 
             if let Err(e) = result {
@@ -202,6 +198,40 @@ impl Protocol {
 
             if let Err(e) = self.p2p.broadcast_with_exclude(req_copy, &exclude_list).await {
                 error!("Protocol::handle_receive_lookup_request(): p2p broadcast fail: {}", e);
+            };
+        }
+    }
+
+    async fn handle_receive_lookup_map_request(self: Arc<Self>) -> Result<()> {
+        debug!("Protocol::handle_receive_lookup_map_request() [START]");
+        loop {
+            let req = match self.lookup_map_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Protocol::handle_receive_lookup_map_request(): recv fail: {}", e);
+                    continue
+                }
+            };
+
+            debug!("Protocol::handle_receive_lookup_map_request(): req: {:?}", req);
+
+            {
+                let dht = &mut self.dht.write().await;
+                if dht.seen.contains_key(&req.id) {
+                    debug!(
+                        "Protocol::handle_receive_lookup_map_request(): We have already seen this request."
+                    );
+                    continue
+                }
+
+                dht.seen.insert(req.id, Utc::now().timestamp());
+            }
+
+            // Extra validations can be added here.
+            let lookup = self.dht.read().await.lookup.clone();
+            let response = LookupMapResponse::new(lookup);
+            if let Err(e) = self.channel.send(response).await {
+                error!("Protocol::handle_receive_lookup_map_request() channel send fail: {}", e);
             };
         }
     }
@@ -217,6 +247,10 @@ impl ProtocolBase for Protocol {
         self.jobsman
             .clone()
             .spawn(self.clone().handle_receive_lookup_request(), executor.clone())
+            .await;
+        self.jobsman
+            .clone()
+            .spawn(self.clone().handle_receive_lookup_map_request(), executor.clone())
             .await;
         debug!("Protocol::start() [END]");
         Ok(())

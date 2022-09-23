@@ -11,12 +11,9 @@ use crate::{
     Error, Result,
 };
 
-/// Plaintext size is serial + value + token_id + coin_blind + value_blind
-pub const NOTE_PLAINTEXT_SIZE: usize = 32 + 8 + 32 + 32 + 32 + 32;
 pub const AEAD_TAG_SIZE: usize = 16;
-pub const ENC_CIPHERTEXT_SIZE: usize = NOTE_PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Note {
     pub serial: DrkSerial,
     pub value: u64,
@@ -24,6 +21,7 @@ pub struct Note {
     pub coin_blind: DrkCoinBlind,
     pub value_blind: DrkValueBlind,
     pub token_blind: DrkValueBlind,
+    pub memo: Vec<u8>,
 }
 
 impl Note {
@@ -36,12 +34,12 @@ impl Note {
         let mut input = Vec::new();
         self.encode(&mut input)?;
 
-        let mut ciphertext = [0u8; ENC_CIPHERTEXT_SIZE];
+        let mut ciphertext = vec![0; input.len() + AEAD_TAG_SIZE];
         assert_eq!(
             ChachaPolyIetf::aead_cipher()
                 .seal_to(&mut ciphertext, &input, &[], key.as_ref(), &[0u8; 12])
                 .unwrap(),
-            ENC_CIPHERTEXT_SIZE
+            input.len() + AEAD_TAG_SIZE
         );
 
         Ok(EncryptedNote { ciphertext, ephem_public })
@@ -50,7 +48,7 @@ impl Note {
 
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct EncryptedNote {
-    ciphertext: [u8; ENC_CIPHERTEXT_SIZE],
+    ciphertext: Vec<u8>,
     ephem_public: PublicKey,
 }
 
@@ -59,12 +57,12 @@ impl EncryptedNote {
         let shared_secret = sapling_ka_agree(secret, &self.ephem_public);
         let key = kdf_sapling(&shared_secret, &self.ephem_public);
 
-        let mut plaintext = [0; ENC_CIPHERTEXT_SIZE];
+        let mut plaintext = vec![0; self.ciphertext.len()];
         assert_eq!(
             ChachaPolyIetf::aead_cipher()
                 .open_to(&mut plaintext, &self.ciphertext, &[], key.as_ref(), &[0u8; 12])
                 .map_err(|_| Error::NoteDecryptionFailed)?,
-            NOTE_PLAINTEXT_SIZE
+            self.ciphertext.len() - AEAD_TAG_SIZE
         );
 
         Note::decode(&plaintext[..])
@@ -86,6 +84,7 @@ mod tests {
             coin_blind: DrkCoinBlind::random(&mut OsRng),
             value_blind: DrkValueBlind::random(&mut OsRng),
             token_blind: DrkValueBlind::random(&mut OsRng),
+            memo: vec![32, 223, 231, 3, 1, 1],
         };
 
         let keypair = Keypair::random(&mut OsRng);
@@ -95,5 +94,6 @@ mod tests {
         assert_eq!(note.value, note2.value);
         assert_eq!(note.token_id, note2.token_id);
         assert_eq!(note.token_blind, note2.token_blind);
+        assert_eq!(note.memo, note2.memo);
     }
 }

@@ -54,26 +54,3 @@ impl From<url::ParseError> for DnetViewError {
         Self::UrlParse(err.to_string())
     }
 }
-//pub fn to_json_result(res: DnetViewResult<Value>, id: Value) -> JsonResult {
-//    match res {
-//        Ok(v) => JsonResult::Resp(jsonresp(v, id)),
-//        Err(err) => match err {
-//            DnetViewError::InvalidId => JsonResult::Err(jsonerr(
-//                ErrorCode::InvalidParams,
-//                Some("invalid task's id".into()),
-//                id,
-//            )),
-//            DnetViewError::InvalidData(e) | DnetViewError::SerdeJsonError(e) => {
-//                JsonResult::Err(jsonerr(ErrorCode::InvalidParams, Some(e), id))
-//            }
-//            DnetViewError::InvalidDueTime => JsonResult::Err(jsonerr(
-//                ErrorCode::InvalidParams,
-//                Some("invalid due time".into()),
-//                id,
-//            )),
-//            DnetViewError::Darkfi(e) => {
-//                JsonResult::Err(jsonerr(ErrorCode::InternalError, Some(e.to_string()), id))
-//            }
-//        },
-//    }
-//}

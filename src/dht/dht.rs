@@ -3,9 +3,9 @@ use async_std::sync::{Arc, RwLock};
 use chrono::Utc;
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
-use log::{debug, error};
+use log::{debug, error, warn};
 use rand::Rng;
-use std::{collections::HashSet, time::Duration};
+use std::collections::HashSet;
 
 use crate::{
     net,
@@ -16,12 +16,11 @@ use crate::{
 };
 
 use super::{
-    messages::{KeyRequest, KeyResponse, LookupRequest},
+    messages::{KeyRequest, KeyResponse, LookupMapRequest, LookupMapResponse, LookupRequest},
     protocol::Protocol,
 };
 
 // Constants configuration
-const REQUEST_TIMEOUT: u64 = 2400;
 const SEEN_DURATION: i64 = 120;
 
 /// Atomic pointer to DHT state
@@ -41,7 +40,7 @@ pub struct Dht {
     /// Network lookup map, containing nodes that holds each key
     pub lookup: FxHashMap<blake3::Hash, HashSet<blake3::Hash>>,
     /// P2P network pointer
-    p2p: P2pPtr,
+    pub p2p: P2pPtr,
     /// Channel to receive responses from P2P
     p2p_recv_channel: async_channel::Receiver<KeyResponse>,
     /// Stop signal channel to terminate background processes
@@ -104,14 +103,14 @@ impl Dht {
         key: blake3::Hash,
         value: Vec<u8>,
     ) -> Result<Option<blake3::Hash>> {
-        self.map.insert(key.clone(), value);
+        self.map.insert(key, value);
 
         if let Err(e) = self.lookup_insert(key, self.id) {
             error!("Failed to insert record to lookup map: {}", e);
             return Err(e)
         };
 
-        let request = LookupRequest::new(self.id, key.clone(), 0);
+        let request = LookupRequest::new(self.id, key, 0);
         if let Err(e) = self.p2p.broadcast(request).await {
             error!("Failed broadcasting request: {}", e);
             return Err(e)
@@ -126,13 +125,13 @@ impl Dht {
         match self.map.remove(&key) {
             Some(_) => {
                 debug!("Key removed: {}", key);
-                let request = LookupRequest::new(self.id, key.clone(), 1);
+                let request = LookupRequest::new(self.id, key, 1);
                 if let Err(e) = self.p2p.broadcast(request).await {
                     error!("Failed broadcasting request: {}", e);
                     return Err(e)
                 }
 
-                self.lookup_remove(key.clone(), self.id)
+                self.lookup_remove(key, self.id)
             }
             None => Ok(None),
         }
@@ -150,7 +149,7 @@ impl Dht {
         };
 
         lookup_set.insert(node_id);
-        self.lookup.insert(key.clone(), lookup_set);
+        self.lookup.insert(key, lookup_set);
 
         Ok(Some(key))
     }
@@ -167,7 +166,7 @@ impl Dht {
             if lookup_set.is_empty() {
                 self.lookup.remove(&key);
             } else {
-                self.lookup.insert(key.clone(), lookup_set);
+                self.lookup.insert(key, lookup_set);
             }
         }
 
@@ -207,7 +206,7 @@ impl Dht {
 
         // We create a key request, and broadcast it to the network
         // We choose last known peer as request recipient
-        let peer = peers.iter().last().unwrap().clone();
+        let peer = *peers.iter().last().unwrap();
         let request = KeyRequest::new(self.id, peer, key);
         // TODO: ask connected peers directly, not broadcast
         if let Err(e) = self.p2p.broadcast(request).await {
@@ -217,31 +216,77 @@ impl Dht {
 
         Ok(())
     }
+
+    /// Auxilary function to sync lookup map with network
+    pub async fn sync_lookup_map(&mut self) -> Result<()> {
+        debug!("Starting lookup map sync...");
+        let channels_map = self.p2p.channels().lock().await.clone();
+        let values = channels_map.values();
+        // Using len here because is_empty() uses unstable library feature
+        // called 'exact_size_is_empty'.
+        if values.len() != 0 {
+            // Node iterates the channel peers to ask for their lookup map
+            for channel in values {
+                // Communication setup
+                let msg_subsystem = channel.get_message_subsystem();
+                msg_subsystem.add_dispatch::<LookupMapResponse>().await;
+                let response_sub = channel.subscribe_msg::<LookupMapResponse>().await?;
+
+                // Node creates a `LookupMapRequest` and sends it
+                let order = LookupMapRequest::new(self.id);
+                channel.send(order).await?;
+
+                // Node stores response data.
+                let resp = response_sub.receive().await?;
+                if resp.lookup.is_empty() {
+                    warn!("Retrieved empty lookup map from an unsynced node, retrying...");
+                    continue
+                }
+
+                // Store retrieved records
+                debug!("Processing received records");
+                for (k, v) in &resp.lookup {
+                    for node in v {
+                        self.lookup_insert(*k, *node)?;
+                    }
+                }
+
+                break
+            }
+        } else {
+            warn!("Node is not connected to other nodes");
+        }
+
+        debug!("Lookup map synced!");
+        Ok(())
+    }
 }
 
 // Auxilary function to wait for a key response from the P2P network.
 pub async fn waiting_for_response(dht: DhtPtr) -> Result<Option<KeyResponse>> {
-    let (p2p_recv_channel, stop_signal) = {
+    let (p2p_recv_channel, stop_signal, timeout) = {
         let _dht = dht.read().await;
-        (_dht.p2p_recv_channel.clone(), _dht.stop_signal.clone())
+        (
+            _dht.p2p_recv_channel.clone(),
+            _dht.stop_signal.clone(),
+            _dht.p2p.settings().connect_timeout_seconds as u64,
+        )
     };
     let ex = Arc::new(async_executor::Executor::new());
     let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
     ex.spawn(async move {
-        sleep(Duration::from_millis(REQUEST_TIMEOUT).as_secs()).await;
+        sleep(timeout).await;
         timeout_s.send(()).await.unwrap_or(());
     })
     .detach();
 
-    loop {
-        select! {
-            msg = p2p_recv_channel.recv().fuse() => {
+    select! {
+        msg = p2p_recv_channel.recv().fuse() => {
                 let response = msg?;
                 return Ok(Some(response))
-            },
-            _ = stop_signal.recv().fuse() => break,
-            _ = timeout_r.recv().fuse() => break,
-        }
+        },
+        _ = stop_signal.recv().fuse() => {},
+        _ = timeout_r.recv().fuse() => {},
     }
     Ok(None)
 }

@@ -15,7 +15,7 @@ dchat. We'll need a few more external libraries too, so add these
 dependencies:
 
 ```
-{{#include ../../../../../example/dchat/Cargo.toml:10:26}}
+{{#include ../../../../../example/dchat/Cargo.toml:10:27}}
 ```
 
 

@@ -13,11 +13,13 @@ use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, Header, Metadata, Participant, ProposalChain,
+    Block, BlockInfo, BlockProposal, Header, OuroborosMetadata, Participant, ProposalChain,
     StreamletMetadata, Vote,
 };
+
 use crate::{
     blockchain::Blockchain,
+    consensus::StakeholderMetadata,
     crypto::{
         address::Address,
         constants::MERKLE_DEPTH,
@@ -302,18 +304,14 @@ impl ValidatorState {
             }
         }
         let root = tree.root(0).unwrap();
-
         let header =
             Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
         let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
-
-        let metadata =
-            Metadata::new(String::from("proof"), String::from("r"), signed_proposal, self.address);
-
+        let m = StakeholderMetadata::new(signed_proposal, self.address);
+        let om = OuroborosMetadata::default();
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
-
-        Ok(Some(BlockProposal::new(header, unproposed_txs, metadata, sm)))
+        Ok(Some(BlockProposal::new(header, unproposed_txs, m, om, sm)))
     }
 
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
@@ -383,19 +381,19 @@ impl ValidatorState {
         self.refresh_participants()?;
 
         let leader = self.slot_leader();
-        if leader.address != proposal.block.metadata.address {
+        if leader.address != proposal.block.m.address {
             warn!(
                 "Received proposal not from slot leader ({}), but from ({})",
-                leader.address, proposal.block.metadata.address
+                leader.address, proposal.block.m.address
             );
             return Ok(None)
         }
 
-        if !leader.public_key.verify(
-            proposal.block.header.headerhash().as_bytes(),
-            &proposal.block.metadata.signature,
-        ) {
-            warn!("Proposer ({}) signature could not be verified", proposal.block.metadata.address);
+        if !leader
+            .public_key
+            .verify(proposal.block.header.headerhash().as_bytes(), &proposal.block.m.signature)
+        {
+            warn!("Proposer ({}) signature could not be verified", proposal.block.m.address);
             return Ok(None)
         }
 
@@ -975,7 +973,7 @@ impl ValidatorState {
     pub async fn receive_sync_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         let mut new_blocks = vec![];
         for block in blocks {
-            match self.blockchain.has_block(&block) {
+            match self.blockchain.has_block(block) {
                 Ok(v) => {
                     if v {
                         debug!("receive_sync_blocks(): Existing block received");

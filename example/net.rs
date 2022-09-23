@@ -48,9 +48,9 @@ impl ProgramOptions {
         let programcli = DarkCli::parse();
 
         let accept_addr = if let Some(accept_addr) = programcli.accept {
-            Some(accept_addr.parse()?)
+            vec![accept_addr.parse()?]
         } else {
-            None
+            vec![]
         };
 
         let mut seed_addrs: Vec<url::Url> = vec![];
