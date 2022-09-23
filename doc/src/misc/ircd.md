@@ -170,3 +170,9 @@ And send messages to yourself.
 See the script `script/run_node.sh` for an example of how to deploy
 a full node which does seed session synchronization, and accepts both
 inbound and outbound connections.
+
+## Global Buffer
+
+Copy [this script](https://github.com/narodnik/weechat-global-buffer/blob/main/buffclone.py) to `~/.weechat/python/autoload/`,
+and you will create a single buffer which aggregates messages from all channels. It's useful to monitor activity
+from all channels without needing to flick through them.
