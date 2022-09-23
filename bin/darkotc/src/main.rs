@@ -129,7 +129,13 @@ async fn init_swap(
     token_pair: (String, String),
     value_pair: (u64, u64),
 ) -> Result<PartialSwapData> {
-    let rpc_client = RpcClient::new(endpoint).await?;
+    let rpc_client = match RpcClient::new(endpoint).await {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: Failed connecting to darkfid JSON-RPC endpoint.");
+            return Err(e)
+        }
+    };
     let rpc = Rpc { rpc_client };
 
     // TODO: Implement metadata for decimals, don't hardcode.
@@ -159,10 +165,6 @@ async fn init_swap(
         eprintln!("Error: Did not manage to find a coin with enough value to spend.");
         exit(1);
     }
-
-    eprintln!("Initializing swap data for:");
-    eprintln!("Send: {} {} tokens", encode_base10(vp.0, 8), token_pair.0);
-    eprintln!("Recv: {} {} tokens", encode_base10(vp.1, 8), token_pair.1);
 
     // Fetch our default address
     let our_addr = rpc.wallet_address().await?;
@@ -279,13 +281,6 @@ async fn init_swap(
 }
 
 fn inspect_partial(data: &str) -> Result<()> {
-    let mut mint_valid = false;
-    let mut burn_valid = false;
-    let mut mint_value_valid = false;
-    let mut mint_token_valid = false;
-    let mut burn_value_valid = false;
-    let mut burn_token_valid = false;
-
     let bytes = match bs58::decode(data).into_vec() {
         Ok(v) => v,
         Err(e) => {
@@ -314,38 +309,26 @@ fn inspect_partial(data: &str) -> Result<()> {
     pb.finish();
 
     let pb = progress_bar("Verifying Burn proof");
-    if verify_burn_proof(&burn_vk, &sd.burn_proof, &sd.burn_revealed).is_ok() {
-        burn_valid = true;
-    }
+    let burn_valid = verify_burn_proof(&burn_vk, &sd.burn_proof, &sd.burn_revealed).is_ok();
     pb.finish();
 
     let pb = progress_bar("Verifying Mint proof");
-    if verify_mint_proof(&mint_vk, &sd.mint_proof, &sd.mint_revealed).is_ok() {
-        mint_valid = true;
-    }
+    let mint_valid = verify_mint_proof(&mint_vk, &sd.mint_proof, &sd.mint_revealed).is_ok();
     pb.finish();
 
     eprintln!("  Verifying Pedersen commitments");
 
-    if pedersen_commitment_u64(sd.burn_value, sd.burn_value_blind) == sd.burn_revealed.value_commit
-    {
-        burn_value_valid = true;
-    }
+    let burn_value_valid = pedersen_commitment_u64(sd.burn_value, sd.burn_value_blind) ==
+        sd.burn_revealed.value_commit;
 
-    if pedersen_commitment_base(sd.burn_token, sd.burn_token_blind) == sd.burn_revealed.token_commit
-    {
-        burn_token_valid = true;
-    }
+    let burn_token_valid = pedersen_commitment_base(sd.burn_token, sd.burn_token_blind) ==
+        sd.burn_revealed.token_commit;
 
-    if pedersen_commitment_u64(sd.mint_value, sd.mint_value_blind) == sd.mint_revealed.value_commit
-    {
-        mint_value_valid = true;
-    }
+    let mint_value_valid = pedersen_commitment_u64(sd.mint_value, sd.mint_value_blind) ==
+        sd.mint_revealed.value_commit;
 
-    if pedersen_commitment_base(sd.mint_token, sd.mint_token_blind) == sd.mint_revealed.token_commit
-    {
-        mint_token_valid = true;
-    }
+    let mint_token_valid = pedersen_commitment_base(sd.mint_token, sd.mint_token_blind) ==
+        sd.mint_revealed.token_commit;
 
     let mut valid = true;
     eprintln!("Summary:");
@@ -594,6 +577,9 @@ async fn main() -> Result<()> {
         Subcmd::Init { token_pair, value_pair } => {
             let token_pair = parse_token_pair(&token_pair)?;
             let value_pair = parse_value_pair(&value_pair)?;
+            eprintln!("Creating half of an atomic swap");
+            eprintln!("Send: {} {} tokens.", encode_base10(value_pair.0, 8), token_pair.0);
+            eprintln!("Recv: {} {} tokens.", encode_base10(value_pair.1, 8), token_pair.1);
             let swap_data = init_swap(args.endpoint, token_pair, value_pair).await?;
 
             println!("{}", bs58::encode(serialize(&swap_data)).into_string());
