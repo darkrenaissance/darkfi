@@ -49,7 +49,7 @@ impl Darkfid {
         let mut fetch_all = false;
         for i in params {
             if !i.is_i64() {
-                return server_error(RpcError::Nan, id)
+                return server_error(RpcError::NaN, id)
             }
 
             if i.as_i64() == Some(-1) {
