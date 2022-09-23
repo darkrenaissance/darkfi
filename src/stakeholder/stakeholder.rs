@@ -128,7 +128,7 @@ pub struct Stakeholder {
     pub vk: VerifyingKey,
     pub playing: bool,
     pub workspace: SlotWorkspace,
-    pub id: u8,
+    pub id: i64,
     pub keypair: Keypair,
     //pub subscription: Subscription<Result<ChannelPtr>>,
     //pub chanptr : ChannelPtr,
@@ -140,7 +140,7 @@ impl Stakeholder {
         consensus: EpochConsensus,
         settings: Settings,
         rel_path: &str,
-        id: u8,
+        id: i64,
         k: Option<u32>,
     ) -> Result<Self> {
         let path = expand_path(rel_path).unwrap();
@@ -228,7 +228,8 @@ impl Stakeholder {
         println!("runing p2p net");
         let exec = Arc::new(Executor::new());
         self.net.clone().start(exec.clone()).await?;
-        self.net.clone().run(exec).await?;
+        //TODO (fix) await blocks
+        self.net.clone().run(exec);
         println!("p2p net running...");
         Ok(())
     }
@@ -276,31 +277,29 @@ impl Stakeholder {
     /// validate the block proof, and the transactions,
     /// if so add the proof to metadata if stakeholder isn't the lead.
     pub async fn sync_block(&self) {
-        let subscription: Subscription<Result<ChannelPtr>> = self.net.subscribe_channel().await;
-        println!("--> channel");
-        let chanptr: ChannelPtr = subscription.receive().await.unwrap();
-        println!("--> received channel");
-        //
-        let message_subsytem = chanptr.get_message_subsystem();
-        println!("--> adding dispatcher to msg subsystem");
-        message_subsytem.add_dispatch::<BlockInfo>().await;
-        println!("--> added");
-        //TODO start channel if isn't started yet
-        //let info = chanptr.get_info();
-        //println!("channel info: {}", info);
-        println!("--> subscribe msg_sub");
-        let msg_sub: MessageSubscription<BlockInfo> =
-            chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
-        println!("--> subscribed");
-
-        let res = msg_sub.receive().await.unwrap();
-        let blk: BlockInfo = (*res).to_owned();
-        //TODO validate the block proof, and transactions.
-        if self.valid_block(blk.clone()) {
-            //TODO if valid only.
-            let _len = self.blockchain.add(&[blk]);
-        } else {
-            println!("received block is invalid!");
+        for chanptr in self.net.channels().lock().await.values() {
+            //
+            let message_subsytem = chanptr.get_message_subsystem();
+            println!("--> adding dispatcher to msg subsystem");
+            message_subsytem.add_dispatch::<BlockInfo>().await;
+            println!("--> added");
+            //TODO start channel if isn't started yet
+            //let info = chanptr.get_info();
+            //println!("channel info: {}", info);
+            println!("--> subscribe msg_sub");
+            let msg_sub: MessageSubscription<BlockInfo> =
+                chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
+            println!("--> subscribed");
+            
+            let res = msg_sub.receive().await.unwrap();
+            let blk: BlockInfo = (*res).to_owned();
+            //TODO validate the block proof, and transactions.
+            if self.valid_block(blk.clone()) {
+                //TODO if valid only.
+                let _len = self.blockchain.add(&[blk]);
+            } else {
+                println!("received block is invalid!");
+            }
         }
     }
 
