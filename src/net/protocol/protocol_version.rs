@@ -141,7 +141,7 @@ impl ProtocolVersion {
 
         // Send version acknowledgement
         let verack = message::VerackMessage {
-            app: self.settings.app_version.clone().unwrap_or("".to_string()),
+            app: self.settings.app_version.clone().unwrap_or_else(|| "".to_string()),
         };
         self.channel.clone().send(verack).await?;
 
