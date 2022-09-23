@@ -19,7 +19,7 @@ pub enum RpcError {
     TxSimulationFail = -32112,
 
     // State-related errors,
-    NotYetSynced = -32120,
+    NotSynced = -32120,
     UnknownSlot = -32121,
 
     // Parsing errors
@@ -42,7 +42,7 @@ fn to_tuple(e: RpcError) -> (i64, String) {
         RpcError::TxBroadcastFail => "Failed broadcasting transaction",
         RpcError::TxSimulationFail => "Failed simulating transaction state change",
         // State-related errors
-        RpcError::NotYetSynced => "Blockchain not yet synced",
+        RpcError::NotSynced => "Blockchain is not synced",
         RpcError::UnknownSlot => "Did not find slot",
         // Parsing errors
         RpcError::ParseError => "Parse error",
@@ -53,7 +53,12 @@ fn to_tuple(e: RpcError) -> (i64, String) {
     (e as i64, msg.to_string())
 }
 
-pub fn server_error(e: RpcError, id: Value) -> JsonResult {
-    let (code, msg) = to_tuple(e);
-    JsonError::new(ServerError(code), Some(msg), id).into()
+pub fn server_error(e: RpcError, id: Value, msg: Option<&str>) -> JsonResult {
+    let (code, default_msg) = to_tuple(e);
+
+    if let Some(message) = msg {
+        return JsonError::new(ServerError(code), Some(message.to_string()), id).into()
+    }
+
+    JsonError::new(ServerError(code), Some(default_msg), id).into()
 }
