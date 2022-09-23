@@ -338,7 +338,7 @@ impl Circuit<pallas::Base> for LeadContract {
         // coin public key is pseudo random hash of concatenation of the following:
         // coin timestamp, and root of coin's secret key.
         let coin_pk_commit: AssignedCell<Fp, Fp> = {
-            let poseidon_message = [coin_timestamp.clone(), _root_sk.clone()];
+            let poseidon_message = [coin_timestamp, _root_sk.clone()];
             let poseidon_hasher = PoseidonHash::<
                 _,
                 _,
@@ -456,7 +456,7 @@ impl Circuit<pallas::Base> for LeadContract {
             // public key, stake, and poured coin's nonce.
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
                 let poseidon_message = [
-                    prf_nullifier_prefix_base.clone(),
+                    prf_nullifier_prefix_base,
                     coin_pk_commit.clone(),
                     coin_value.clone(),
                     coin2_nonce.clone(),
@@ -525,7 +525,7 @@ impl Circuit<pallas::Base> for LeadContract {
         // beging the commitment to the coin's secret key, coin's nonce, and
         // random value deriven from the epoch sampled random eta.
         let lottery_commit_msg: AssignedCell<Fp, Fp> = {
-            let poseidon_message = [_root_sk.clone(), coin_nonce.clone()];
+            let poseidon_message = [_root_sk, coin_nonce];
             let poseidon_hasher = PoseidonHash::<
                 _,
                 _,
@@ -571,13 +571,13 @@ impl Circuit<pallas::Base> for LeadContract {
                 self.mau_rho,
             )?;
             let rho_commit_r =
-                FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
+                FixedPoint::from_inner(ecc_chip, OrchardFixedBasesFull::ValueCommitR);
             rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_rho)?
         };
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let rho_commit_base = rho_commit.inner().x();
         // stakeholder absolute stake + 1 (epsilon)
-        let stake_plus = ar_chip.add(layouter.namespace(|| ""), &one, &coin_value.clone())?;
+        let stake_plus = ar_chip.add(layouter.namespace(|| ""), &one, &coin_value)?;
         let target =
             ar_chip.mul(layouter.namespace(|| "calculate target"), &sigma_scalar, &stake_plus)?;
 
@@ -616,11 +616,7 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT2_Y_OFFSET,
         )?;
 
-        layouter.constrain_instance(
-            coin2_nonce.clone().cell(),
-            config.primary,
-            LEAD_COIN_NONCE2_OFFSET,
-        )?;
+        layouter.constrain_instance(coin2_nonce.cell(), config.primary, LEAD_COIN_NONCE2_OFFSET)?;
 
         layouter.constrain_instance(
             computed_final_root.cell(),
