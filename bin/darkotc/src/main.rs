@@ -493,30 +493,18 @@ async fn sign_tx(endpoint: Url, data: &str) -> Result<Transaction> {
     eprintln!("Trying to sign transaction");
     let mut tx: Transaction = deserialize(&bs58::decode(data).into_vec()?)?;
 
-    let mut input_idxs = vec![];
+    // We assume our input and our output are in the same index, since this
+    // transaction contains 2 inputs and 2 outputs, and one of each is ours,
+    // and one of each is the other party's. So we go on and sign the input
+    // index of the output index we can decrypt the note for.
+    let mut idx_to_sign = 0;
     let mut signature = schnorr::Signature::dummy();
 
-    // Find dummy signatures to fill. We assume we're using the same
-    // signature everywhere.
-    eprintln!("Looking for dummy signatures...");
-    for (i, input) in tx.inputs.iter().enumerate() {
-        if input.signature == schnorr::Signature::dummy() {
-            eprintln!("Found dummy signature in input {}", i);
-            input_idxs.push(i);
-        }
-    }
-
-    if input_idxs.is_empty() {
-        eprintln!("Error: Did not find any dummy signatures in the transaction.");
-        exit(1);
-    }
-
-    // Find a note to decrypt that holds our secret key.
+    eprintln!("Looking for an encrypted note we can decrypt...");
     let mut found_secret = false;
     for (i, output) in tx.outputs.iter().enumerate() {
         // TODO: FIXME: Consider not closing the RPC on failure.
-        let rpc_client = RpcClient::new(endpoint.clone()).await?;
-        let rpc = Rpc { rpc_client };
+        let rpc = Rpc { rpc_client: RpcClient::new(endpoint.clone()).await? };
 
         let note = match rpc.decrypt_note(&output.enc_note).await {
             Ok(v) => v,
@@ -531,6 +519,7 @@ async fn sign_tx(endpoint: Url, data: &str) -> Result<Transaction> {
 
             signature = try_sign_tx(&note, &unsigned_tx_data[..])?;
             found_secret = true;
+            idx_to_sign = i;
             break
         }
 
@@ -543,10 +532,7 @@ async fn sign_tx(endpoint: Url, data: &str) -> Result<Transaction> {
         exit(1);
     }
 
-    for i in input_idxs {
-        tx.inputs[i].signature = signature.clone();
-    }
-
+    tx.inputs[idx_to_sign].signature = signature.clone();
     Ok(tx)
 }
 
