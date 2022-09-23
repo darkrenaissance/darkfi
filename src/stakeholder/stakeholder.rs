@@ -1,6 +1,6 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
-//use log::{debug,info};
+use log::{debug,info,error};
 use std::fmt;
 
 use rand::rngs::OsRng;
@@ -38,6 +38,8 @@ use url::Url;
 use pasta_curves::pallas;
 
 use group::ff::PrimeField;
+
+const LOG_T : &str = "stakeholder";
 
 #[derive(Debug)]
 pub struct SlotWorkspace {
@@ -144,9 +146,7 @@ impl Stakeholder {
         k: Option<u32>,
     ) -> Result<Self> {
         let path = expand_path(rel_path).unwrap();
-        println!("opening db");
         let db = sled::open(&path)?;
-        println!("opend db");
         let ts = Timestamp::current_time();
         let genesis_hash = blake3::hash(b"");
         //TODO lisen and add transactions
@@ -172,7 +172,7 @@ impl Stakeholder {
             settings.peers,
         );
         let keypair = Keypair::random(&mut OsRng);
-        println!("stakeholder constructed...");
+        debug!(target:LOG_T, "stakeholder constructed");
         Ok(Self {
             blockchain: bc,
             net: p2p,
@@ -225,12 +225,11 @@ impl Stakeholder {
     */
 
     async fn init_network(&self) -> Result<()> {
-        println!("runing p2p net");
         let exec = Arc::new(Executor::new());
         self.net.clone().start(exec.clone()).await?;
         //TODO (fix) await blocks
         self.net.clone().run(exec);
-        println!("p2p net running...");
+        info!(target:LOG_T, "net initialized");
         Ok(())
     }
 
@@ -277,19 +276,14 @@ impl Stakeholder {
     /// validate the block proof, and the transactions,
     /// if so add the proof to metadata if stakeholder isn't the lead.
     pub async fn sync_block(&self) {
+        info!(target:LOG_T, "syncing blocks");
         for chanptr in self.net.channels().lock().await.values() {
-            //
             let message_subsytem = chanptr.get_message_subsystem();
-            println!("--> adding dispatcher to msg subsystem");
             message_subsytem.add_dispatch::<BlockInfo>().await;
-            println!("--> added");
             //TODO start channel if isn't started yet
             //let info = chanptr.get_info();
-            //println!("channel info: {}", info);
-            println!("--> subscribe msg_sub");
             let msg_sub: MessageSubscription<BlockInfo> =
                 chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
-            println!("--> subscribed");
             
             let res = msg_sub.receive().await.unwrap();
             let blk: BlockInfo = (*res).to_owned();
@@ -298,7 +292,7 @@ impl Stakeholder {
                 //TODO if valid only.
                 let _len = self.blockchain.add(&[blk]);
             } else {
-                println!("received block is invalid!");
+                error!(target: LOG_T, "received block is invalid!");
             }
         }
     }
@@ -327,12 +321,12 @@ impl Stakeholder {
                 }
                 Ticks::NEWSLOT { e, sl } => self.new_slot(e, sl),
                 Ticks::TOCKS => {
-                    println!("tocks");
+                    info!(target:LOG_T, "tocks");
                     // slot is about to end.
                     // sync, and validate.
                     // no more transactions to be received/send to the end of slot.
                     if self.workspace.is_leader {
-                        println!("<<<--- [[[leadership won]]] --->>>");
+                        info!(target: LOG_T, "[leadership won]");
                         //craete block
                         let (block_info, _block_hash) = self.workspace.new_block();
                         //add the block to the blockchain
@@ -348,7 +342,7 @@ impl Stakeholder {
                 }
                 Ticks::IDLE => continue,
                 Ticks::OUTOFSYNC => {
-                    println!("out of sync");
+                    error!(target: LOG_T, "clock/blockchain are out of sync");
                     // clock, and blockchain are out of sync
                     let _ = self.clock.sync().await;
                     self.sync_block().await;
@@ -363,7 +357,7 @@ impl Stakeholder {
     /// assuming static stake during the epoch, enforced by the commitment to competing coins
     /// in the epoch's gen2esis data.
     fn new_epoch(&mut self) {
-        println!("[new epoch] 4 {}", self);
+        info!(target:LOG_T, "[new epoch] 4 {}", self);
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, eta);
         //TODO calculate total stake
@@ -386,7 +380,7 @@ impl Stakeholder {
     /// the lottery proof need to be conditioned on the slot itself, and previous proof.
     /// this will encourage each potential leader to play with honesty.
     fn new_slot(&mut self, e: u64, sl: u64) {
-        println!("[new slot] 4 {}\ne:{}, sl:{}", self, e, sl);
+        info!(target: LOG_T, "[new slot] 4 {}\ne:{}, sl:{}", self, e, sl);
         let empty_ptr = blake3::hash(b"");
         let st: blake3::Hash =
             if e > 0 || (e == 0 && sl > 0) { self.workspace.block.blockhash() } else { empty_ptr };
