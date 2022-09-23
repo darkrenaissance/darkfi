@@ -216,30 +216,19 @@ impl Model {
         (current_node.expect("internal logic error"), current_max)
     }
 
-    fn find_height(&self, mut node: EventNodePtr) -> u32 {
-        let mut height = 0;
-        while node.event.hash() != self.current_root {
-            height += 1;
-            node = node.parent.as_ref().expect("non-root nodes should have a parent set").clone();
-        }
-        height
-    }
-
     fn get_depth(&self, mut node: EventNodePtr) -> u32 {
         let mut depth = 0;
         while node.event.hash() != self.current_root {
             depth += 1;
-            node = node
-                .parent
-                .as_ref()
-                .expect("node_a: non-root nodes should have a parent set")
-                .clone();
+            node = node.parent.as_ref().expect("non-root nodes should have a parent set").clone();
         }
         depth
     }
+
     async fn find_ancestor_depth(&self, node_a: EventNodePtr, node_b: EventNodePtr) -> u32 {
-        // if node_a is a child of node_b
-        if node_b.event.hash() == node_a.parent.as_ref().unwrap().event.hash() {
+        // node_a is a child of node_b
+        let is_child = node_b.event.hash() == node_a.parent.as_ref().unwrap().event.hash();
+        if is_child {
             return 0
         }
 
@@ -250,7 +239,7 @@ impl Model {
 
     async fn debug(&self) {
         for (event_id, event_node) in &self.event_map {
-            let height = self.find_height(event_node.clone());
+            let height = self.get_depth(event_node.clone());
             println!("{}: {:?} [height={}]", hex::encode(&event_id), event_node.event, height);
         }
 
@@ -387,7 +376,7 @@ mod tests {
         let mut id3 = root_id;
         for x in 0..3 {
             let timestamp = get_current_time() + 1;
-            let node = create_message(id3, &format!("bob {}", x), "bob message", timestamp);
+            let node = create_message(id3, &format!("phi {}", x), "phi message", timestamp);
             id3 = node.hash();
             model.add(node).await;
 
@@ -401,7 +390,7 @@ mod tests {
         // At the end this fork must overtake the event_node 2
         for x in 7..14 {
             let timestamp = get_current_time() + 1;
-            let node = create_message(id1, &format!("bob {}", x), "bob message", timestamp);
+            let node = create_message(id1, &format!("alice {}", x), "alice message", timestamp);
             id1 = node.hash();
             model.add(node).await;
         }
