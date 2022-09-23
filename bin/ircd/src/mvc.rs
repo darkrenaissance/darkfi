@@ -88,6 +88,7 @@ struct PrivMsgEvent {
     msg: String,
 }
 
+#[derive(Debug)]
 struct EventNode {
     // Only current root has this set to None
     parent: Option<EventNodePtr>,
@@ -97,6 +98,7 @@ struct EventNode {
 
 type EventNodePtr = Arc<EventNode>;
 
+#[derive(Debug)]
 struct Model {
     // This is periodically updated so we discard old nodes
     current_root: EventId,
@@ -157,15 +159,12 @@ impl Model {
                 children: Mutex::new(Vec::new()),
             });
 
-            // BIGTODO #2:
             // Reject events which attach to forks too low in the chain
             // At some point we ignore all events from old branches
-
-            //let depth = self.find_ancestor_depth(node.clone(), self.find_head().await);
-            //if depth > 10 {
-            //    // Discard
-            //    continue
-            //}
+            let depth = self.find_ancestor_depth(node.clone(), self.find_head().await).await;
+            if depth > 10 {
+                continue
+            }
 
             parent.children.lock().await.push(node.clone());
             // Add node to the table
@@ -185,19 +184,19 @@ impl Model {
     // Gets the lead node with the maximal number of events counting from root
     async fn find_head(&self) -> EventNodePtr {
         let root = self.get_root();
-        Self::find_longest_chain(root, 0).await.1
+        Self::find_longest_chain(root, 0).await.0
     }
 
     #[async_recursion]
-    async fn find_longest_chain(parent_node: EventNodePtr, i: u32) -> (u32, EventNodePtr) {
+    async fn find_longest_chain(parent_node: EventNodePtr, i: u32) -> (EventNodePtr, u32) {
         let children = parent_node.children.lock().await;
         if children.is_empty() {
-            return (i, parent_node.clone())
+            return (parent_node.clone(), i)
         }
         let mut current_max = 0;
         let mut current_node = None;
         for node in &*children {
-            let (grandchild_i, grandchild_node) =
+            let (grandchild_node, grandchild_i) =
                 Self::find_longest_chain(node.clone(), i + 1).await;
 
             if grandchild_i > current_max {
@@ -214,7 +213,7 @@ impl Model {
             }
         }
         assert_ne!(current_max, 0);
-        (current_max, current_node.expect("internal logic error"))
+        (current_node.expect("internal logic error"), current_max)
     }
 
     fn find_height(&self, mut node: EventNodePtr) -> u32 {
@@ -226,16 +225,27 @@ impl Model {
         height
     }
 
-    fn find_ancestor_depth(&self, mut node_a: EventNodePtr, mut node_b: EventNodePtr) -> u32 {
+    fn get_depth(&self, mut node: EventNodePtr) -> u32 {
         let mut depth = 0;
-        while node_a.event.hash() != node_b.event.hash() {
+        while node.event.hash() != self.current_root {
             depth += 1;
-            node_a =
-                node_a.parent.as_ref().expect("non-root nodes should have a parent set").clone();
-            node_b =
-                node_b.parent.as_ref().expect("non-root nodes should have a parent set").clone();
+            node = node
+                .parent
+                .as_ref()
+                .expect("node_a: non-root nodes should have a parent set")
+                .clone();
         }
         depth
+    }
+    async fn find_ancestor_depth(&self, node_a: EventNodePtr, node_b: EventNodePtr) -> u32 {
+        // if node_a is a child of node_b
+        if node_b.event.hash() == node_a.parent.as_ref().unwrap().event.hash() {
+            return 0
+        }
+
+        let node_a_depth = self.get_depth(node_a);
+        let node_b_depth = self.get_depth(node_b);
+        node_b_depth - node_a_depth
     }
 
     async fn debug(&self) {
@@ -334,4 +344,68 @@ async fn realmain(_settings: Args, _executor: Arc<Executor<'_>>) -> Result<()> {
     model.debug().await;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[async_std::test]
+    async fn test_find_ancestor_depth() {
+        let result = 2 + 2;
+        assert_eq!(result, 4);
+        let mut model = Model::new();
+        let root_id = model.get_root().event.hash();
+
+        // event_node 1
+        // Fill this node with 5 events
+        let mut id1 = root_id;
+        for x in 0..7 {
+            let timestamp = get_current_time() + 1;
+            let node = create_message(id1, &format!("alice {}", x), "alice message", timestamp);
+            id1 = node.hash();
+            model.add(node).await;
+        }
+
+        // event_node 2
+        // Start from the root_id and fill the node with 14 events
+        // all the events must be added since the depth between id1
+        // and the last head is less than 9
+        let mut id2 = root_id;
+        for x in 0..14 {
+            let timestamp = get_current_time() + 1;
+            let node = create_message(id2, &format!("bob {}", x), "bob message", timestamp);
+            id2 = node.hash();
+            model.add(node).await;
+        }
+
+        assert_eq!(model.find_head().await.event.hash(), id2);
+
+        // event_node 3
+        // This will start as new fork, but no events will be added
+        // since the last event's depth is 14
+        let mut id3 = root_id;
+        for x in 0..3 {
+            let timestamp = get_current_time() + 1;
+            let node = create_message(id3, &format!("bob {}", x), "bob message", timestamp);
+            id3 = node.hash();
+            model.add(node).await;
+
+            // ensure events are not added
+            assert!(!model.event_map.contains_key(&id3));
+        }
+
+        assert_eq!(model.find_head().await.event.hash(), id2);
+
+        // Add more events to the event_node 1
+        // At the end this fork must overtake the event_node 2
+        for x in 7..14 {
+            let timestamp = get_current_time() + 1;
+            let node = create_message(id1, &format!("bob {}", x), "bob message", timestamp);
+            id1 = node.hash();
+            model.add(node).await;
+        }
+
+        assert_eq!(model.find_head().await.event.hash(), id1);
+    }
 }
