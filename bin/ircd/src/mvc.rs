@@ -24,6 +24,8 @@ use darkfi::{
 
 type EventId = [u8; 32];
 
+const MAX_DEPTH: u32 = 10;
+
 #[derive(SerialEncodable, SerialDecodable)]
 struct Event {
     previous_event_hash: EventId,
@@ -141,6 +143,9 @@ impl Model {
         for orphan in std::mem::take(&mut self.orphans) {
             let prev_event = orphan.previous_event_hash.clone();
 
+            // clean up the tree from old eventnodes
+            self.prune_forks().await;
+
             // Parent does not yet exist
             if !self.event_map.contains_key(&prev_event) {
                 remaining_orphans.push(orphan);
@@ -161,14 +166,57 @@ impl Model {
 
             // Reject events which attach to forks too low in the chain
             // At some point we ignore all events from old branches
-            let depth = self.find_ancestor_depth(node.clone(), self.find_head().await).await;
-            if depth > 10 {
+            let depth = self.find_ancestor_depth(node.clone(), self.find_head().await);
+            if depth > MAX_DEPTH {
                 continue
             }
 
             parent.children.lock().await.push(node.clone());
             // Add node to the table
             self.event_map.insert(node.event.hash(), node);
+        }
+    }
+
+    async fn prune_forks(&mut self) {
+        let head = self.find_head().await;
+        let head_event_hash = head.event.hash();
+        for (event_hash, node) in self.event_map.clone() {
+            // to prevent running through the same node twice
+            if !self.event_map.contains_key(&event_hash) {
+                continue
+            }
+
+            // skip the head event
+            if event_hash == head_event_hash {
+                continue
+            }
+
+            let empty_children = node.children.lock().await.is_empty();
+            if empty_children {
+                let depth = self.find_ancestor_depth(node.clone(), self.find_head().await);
+                if depth > MAX_DEPTH {
+                    self.remove_node(node.clone()).await;
+                }
+            }
+        }
+    }
+
+    async fn remove_node(&mut self, mut node: EventNodePtr) {
+        loop {
+            let event_id = node.event.hash();
+            let parent_event_id = node.parent.as_ref().unwrap().event.hash();
+
+            self.event_map.remove(&event_id);
+
+            let parent_node = self.event_map.get_mut(&parent_event_id).unwrap();
+            let children = &mut parent_node.children.lock().await;
+            let index = children.iter().position(|n| n.event.hash() == event_id).unwrap();
+            children.remove(index);
+
+            if !children.is_empty() {
+                return
+            }
+            node = parent_node.clone()
         }
     }
 
@@ -225,7 +273,7 @@ impl Model {
         depth
     }
 
-    async fn find_ancestor_depth(&self, node_a: EventNodePtr, node_b: EventNodePtr) -> u32 {
+    fn find_ancestor_depth(&self, node_a: EventNodePtr, node_b: EventNodePtr) -> u32 {
         // node_a is a child of node_b
         let is_child = node_b.event.hash() == node_a.parent.as_ref().unwrap().event.hash();
         if is_child {
@@ -234,13 +282,13 @@ impl Model {
 
         let node_a_depth = self.get_depth(node_a);
         let node_b_depth = self.get_depth(node_b);
-        node_b_depth - node_a_depth
+        (node_b_depth + 1) - node_a_depth
     }
 
     async fn debug(&self) {
         for (event_id, event_node) in &self.event_map {
-            let height = self.get_depth(event_node.clone());
-            println!("{}: {:?} [height={}]", hex::encode(&event_id), event_node.event, height);
+            let depth = self.get_depth(event_node.clone());
+            println!("{}: {:?} [depth={}]", hex::encode(&event_id), event_node.event, depth);
         }
 
         println!("root: {}", hex::encode(&self.get_root().event.hash()));
@@ -310,6 +358,7 @@ async fn realmain(_settings: Args, _executor: Arc<Executor<'_>>) -> Result<()> {
     let node2 = create_message(root_id, "bob", "bob message", timestamp);
     let node2_id = node2.hash();
     model.add(node2).await;
+
     let node3 = create_message(root_id, "charlie", "charlie message", timestamp);
     let node3_id = node3.hash();
     model.add(node3).await;
@@ -340,14 +389,49 @@ mod tests {
     use super::*;
 
     #[async_std::test]
-    async fn test_find_ancestor_depth() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+    async fn test_prune_forks() {
         let mut model = Model::new();
         let root_id = model.get_root().event.hash();
 
         // event_node 1
-        // Fill this node with 5 events
+        // Fill this node with 3 events
+        let mut event_node_1_ids = vec![];
+        let mut id1 = root_id;
+        for x in 0..3 {
+            let timestamp = get_current_time() + 1;
+            let node = create_message(id1, &format!("alice {}", x), "alice message", timestamp);
+            id1 = node.hash();
+            model.add(node).await;
+            event_node_1_ids.push(id1);
+        }
+
+        // event_node 2
+        // Start from the root_id and fill the node with 14 events
+        // All the events from event_node_1 should get removed from the tree
+        let mut id2 = root_id;
+        for x in 0..14 {
+            let timestamp = get_current_time() + 1;
+            let node = create_message(id2, &format!("bob {}", x), "bob message", timestamp);
+            id2 = node.hash();
+            model.add(node).await;
+        }
+
+        assert_eq!(model.find_head().await.event.hash(), id2);
+
+        for id in event_node_1_ids {
+            assert!(!model.event_map.contains_key(&id));
+        }
+
+        assert_eq!(model.event_map.len(), 15);
+    }
+
+    #[async_std::test]
+    async fn test_find_ancestor_depth() {
+        let mut model = Model::new();
+        let root_id = model.get_root().event.hash();
+
+        // event_node 1
+        // Fill this node with 7 events
         let mut id1 = root_id;
         for x in 0..7 {
             let timestamp = get_current_time() + 1;
