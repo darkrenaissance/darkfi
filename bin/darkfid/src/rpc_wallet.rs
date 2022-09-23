@@ -26,7 +26,7 @@ impl Darkfid {
     // Attempts to generate a new keypair and returns its address upon success.
     // --> {"jsonrpc": "2.0", "method": "wallet.keygen", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "1DarkFi...", "id": 1}
-    pub async fn keygen(&self, id: Value, _params: &[Value]) -> JsonResult {
+    pub async fn wallet_keygen(&self, id: Value, _params: &[Value]) -> JsonResult {
         match self.client.keygen().await {
             Ok(a) => JsonResponse::new(json!(a.to_string()), id).into(),
             Err(e) => {
@@ -41,7 +41,7 @@ impl Darkfid {
     // encoded format. `-1` is supported to fetch all available keys.
     // --> {"jsonrpc": "2.0", "method": "wallet.get_addrs", "params": [1, 2], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["foo", "bar"], "id": 1}
-    pub async fn get_addrs(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_get_addrs(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -95,7 +95,7 @@ impl Darkfid {
     // Returns the encoded secret key upon success.
     // --> {"jsonrpc": "2.0", "method": "wallet.export_keypair", "params": [0], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "foobar", "id": 1}
-    pub async fn export_keypair(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_export_keypair(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_u64() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -120,7 +120,7 @@ impl Darkfid {
     // Returns the public counterpart as the result upon success.
     // --> {"jsonrpc": "2.0", "method": "wallet.import_keypair", "params": ["foobar"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "pubfoobar", "id": 1}
-    pub async fn import_keypair(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_import_keypair(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -161,7 +161,7 @@ impl Darkfid {
     // Returns `true` upon success.
     // --> {"jsonrpc": "2.0", "method": "wallet.set_default_address", "params": [2], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    pub async fn set_default_address(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_set_default_address(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_u64() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -197,7 +197,7 @@ impl Darkfid {
     // Returns a map of balances, indexed by the token ID.
     // --> {"jsonrpc": "2.0", "method": "wallet.get_balances", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [{"1Foobar...": 100}, {...}]", "id": 1}
-    pub async fn get_balances(&self, id: Value, _params: &[Value]) -> JsonResult {
+    pub async fn wallet_get_balances(&self, id: Value, _params: &[Value]) -> JsonResult {
         let balances = match self.client.get_balances().await {
             Ok(v) => v,
             Err(e) => {
@@ -229,7 +229,7 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "wallet.get_coins_valtok", "params": [1234, "F00b4r...", true], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["coin", "data", ...], "id": 1}
-    pub async fn get_coins_valtok(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_get_coins_valtok(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 3 ||
             !params[0].is_u64() ||
             !params[1].is_string() ||
@@ -265,7 +265,7 @@ impl Darkfid {
     // Query the state merkle tree for the merkle path of a given leaf position.
     // --> {"jsonrpc": "2.0", "method": "wallet.get_merkle_path", "params": [3], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["f091uf1...", "081ff0h10w1h0...", ...], "id": 1}
-    pub async fn get_merkle_path(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_get_merkle_path(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_u64() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -290,7 +290,7 @@ impl Darkfid {
     // found in the wallet.
     // --> {"jsonrpc": "2.0", "method": "wallet.decrypt_note", params": [ciphertext], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "base58_encoded_plain_note", "id": 1}
-    pub async fn decrypt_note(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_decrypt_note(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }

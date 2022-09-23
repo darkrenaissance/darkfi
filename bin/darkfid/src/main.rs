@@ -182,23 +182,52 @@ impl RequestHandler for Darkfid {
         let params = req.params.as_array().unwrap();
 
         match req.method.as_str() {
-            Some("ping") => return self.pong(req.id, params).await,
-            Some("clock") => return self.clock(req.id, params).await,
-            Some("blockchain.get_slot") => return self.get_slot(req.id, params).await,
-            Some("blockchain.merkle_roots") => return self.merkle_roots(req.id, params).await,
-            Some("tx.transfer") => return self.transfer(req.id, params).await,
-            Some("tx.broadcast") => return self.broadcast(req.id, params).await,
-            Some("wallet.keygen") => return self.keygen(req.id, params).await,
-            Some("wallet.get_addrs") => return self.get_addrs(req.id, params).await,
-            Some("wallet.export_keypair") => return self.export_keypair(req.id, params).await,
-            Some("wallet.import_keypair") => return self.import_keypair(req.id, params).await,
-            Some("wallet.set_default_address") => {
-                return self.set_default_address(req.id, params).await
+            // =====================
+            // Miscellaneous methods
+            // =====================
+            Some("ping") => return self.misc_pong(req.id, params).await,
+            Some("clock") => return self.misc_clock(req.id, params).await,
+
+            // ==================
+            // Blockchain methods
+            // ==================
+            Some("blockchain.get_slot") => return self.blockchain_get_slot(req.id, params).await,
+            Some("blockchain.merkle_roots") => {
+                return self.blockchain_merkle_roots(req.id, params).await
             }
-            Some("wallet.get_balances") => return self.get_balances(req.id, params).await,
-            Some("wallet.get_coins_valtok") => return self.get_coins_valtok(req.id, params).await,
-            Some("wallet.get_merkle_path") => return self.get_merkle_path(req.id, params).await,
-            Some("wallet.decrypt_note") => return self.decrypt_note(req.id, params).await,
+
+            // ===================
+            // Transaction methods
+            // ===================
+            Some("tx.transfer") => return self.tx_transfer(req.id, params).await,
+            Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
+
+            // ==============
+            // Wallet methods
+            // ==============
+            Some("wallet.keygen") => return self.wallet_keygen(req.id, params).await,
+            Some("wallet.get_addrs") => return self.wallet_get_addrs(req.id, params).await,
+            Some("wallet.export_keypair") => {
+                return self.wallet_export_keypair(req.id, params).await
+            }
+            Some("wallet.import_keypair") => {
+                return self.wallet_import_keypair(req.id, params).await
+            }
+            Some("wallet.set_default_address") => {
+                return self.wallet_set_default_address(req.id, params).await
+            }
+            Some("wallet.get_balances") => return self.wallet_get_balances(req.id, params).await,
+            Some("wallet.get_coins_valtok") => {
+                return self.wallet_get_coins_valtok(req.id, params).await
+            }
+            Some("wallet.get_merkle_path") => {
+                return self.wallet_get_merkle_path(req.id, params).await
+            }
+            Some("wallet.decrypt_note") => return self.wallet_decrypt_note(req.id, params).await,
+
+            // ==============
+            // Invalid method
+            // ==============
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }

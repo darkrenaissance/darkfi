@@ -26,7 +26,7 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "tx.transfer", "params": ["dest_addr", "token_id", 12345], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID...", "id": 1}
-    pub async fn transfer(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn tx_transfer(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 3 ||
             !params[0].is_string() ||
             !params[1].is_string() ||
@@ -108,7 +108,7 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "tx.broadcast", "params": ["base58encodedTX"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID...", "id": 1}
-    pub async fn broadcast(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn tx_broadcast(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }

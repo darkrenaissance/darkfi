@@ -18,7 +18,7 @@ impl Darkfid {
     // Returns a readable block upon success.
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_slot", "params": [0], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
-    pub async fn get_slot(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn blockchain_get_slot(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_u64() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -50,7 +50,7 @@ impl Darkfid {
     // Queries the blockchain database for all available merkle roots.
     // --> {"jsonrpc": "2.0", "method": "blockchain.merkle_roots", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [..., ..., ...], "id": 1}
-    pub async fn merkle_roots(&self, id: Value, _params: &[Value]) -> JsonResult {
+    pub async fn blockchain_merkle_roots(&self, id: Value, _params: &[Value]) -> JsonResult {
         let roots: Vec<MerkleNode> =
             match self.validator_state.read().await.blockchain.merkle_roots.get_all() {
                 Ok(v) => v,
