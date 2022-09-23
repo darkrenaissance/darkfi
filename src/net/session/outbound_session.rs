@@ -323,18 +323,8 @@ impl OutboundSession {
 
         // Ask peer
         debug!(target: "net", "#{} Asking peer: {}", slot_number, channel.address());
-
-        // Communication setup
-        let response_sub = channel.subscribe_msg::<message::AddrsMessage>().await?;
         let get_addr_msg = message::GetAddrsMessage {};
-
-        // Executing request and waiting for response
         channel.send(get_addr_msg).await?;
-        let resp = response_sub.receive().await?;
-
-        // Store response data
-        debug!(target: "net", "#{} response: {:?}", slot_number, resp.addrs);
-        p2p.hosts().store(resp.addrs.clone()).await;
 
         p2p.stop_discovery().await;
 
