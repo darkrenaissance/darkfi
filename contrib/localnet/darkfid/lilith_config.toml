@@ -10,7 +10,7 @@
 #rpc_listen = "tcp://127.0.0.1:18927"
 
 # Daemon published urls, common for all enabled networks
-urls = ["tls://127.0.0.1"]
+urls = ["tcp://127.0.0.1"]
 
 # Hosts .tsv file to use
 hosts_file="lilith_hosts.tsv"
