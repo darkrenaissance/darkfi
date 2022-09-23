@@ -143,7 +143,7 @@ impl Stakeholder {
         id: u8,
         k: Option<u32>,
     ) -> Result<Self> {
-        let path = expand_path(&rel_path).unwrap();
+        let path = expand_path(rel_path).unwrap();
         println!("opening db");
         let db = sled::open(&path)?;
         println!("opend db");
@@ -298,7 +298,7 @@ impl Stakeholder {
         //TODO validate the block proof, and transactions.
         if self.valid_block(blk.clone()) {
             //TODO if valid only.
-            let _len = self.blockchain.add(&[blk.clone()]);
+            let _len = self.blockchain.add(&[blk]);
         } else {
             println!("received block is invalid!");
         }
@@ -360,9 +360,6 @@ impl Stakeholder {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        format!("stakeholder with id:{}", self.id.to_string())
-    }
     /// on the onset of the epoch, layout the new the competing coins
     /// assuming static stake during the epoch, enforced by the commitment to competing coins
     /// in the epoch's gen2esis data.
@@ -409,10 +406,8 @@ impl Stakeholder {
             let addr = Address::from(self.keypair.public);
             let sign = self.sign(proof.as_ref());
             let stakeholder_meta = StakeholderMetadata::new(sign, addr);
-            let ouroboros_meta = OuroborosMetadata::new(
-                self.get_eta().to_repr(),
-                TransactionLeadProof::from(proof.clone()),
-            );
+            let ouroboros_meta =
+                OuroborosMetadata::new(self.get_eta().to_repr(), TransactionLeadProof::from(proof));
             self.workspace.set_stakeholdermetadata(stakeholder_meta);
             self.workspace.set_ouroborosmetadata(ouroboros_meta);
         }
