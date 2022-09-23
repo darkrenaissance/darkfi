@@ -260,7 +260,7 @@ impl Epoch {
     /// retrive leadership lottary coins of static stake,
     /// retrived for for commitment in the genesis data
     pub fn get_coins(&self) -> Vec<LeadCoin> {
-        return self.coins.clone()
+        self.coins.clone()
     }
 
     /// see if the participant stakeholder of this epoch is
