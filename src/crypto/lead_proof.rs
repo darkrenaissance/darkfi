@@ -15,7 +15,7 @@ use crate::{
 pub fn create_lead_proof(pk: &ProvingKey, coin: LeadCoin) -> Result<Proof> {
     let contract = coin.create_contract();
     let public_inputs = coin.public_inputs();
-    let proof = Proof::create(&pk, &[contract], &public_inputs, &mut OsRng)?;
+    let proof = Proof::create(pk, &[contract], &public_inputs, &mut OsRng)?;
     Ok(proof)
 }
 

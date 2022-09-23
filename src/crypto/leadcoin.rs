@@ -111,7 +111,7 @@ impl LeadCoin {
     }
 
     pub fn create_contract(&self) -> LeadContract {
-        let contract = LeadContract {
+        LeadContract {
             path: Value::known(self.path.unwrap()),
             root_sk: Value::known(self.root_sk.unwrap()),
             path_sk: Value::known(self.path_sk.unwrap()),
@@ -127,7 +127,6 @@ impl LeadCoin {
             mau_y: Value::known(mod_r_p(self.y_mu.unwrap())),
             root_cm: Value::known(self.root_cm.unwrap()),
             sigma_scalar: Value::known(self.sigma_scalar.unwrap()),
-        };
-        contract
+        }
     }
 }
