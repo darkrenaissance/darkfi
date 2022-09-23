@@ -166,7 +166,7 @@ impl Model {
 
             // Reject events which attach to forks too low in the chain
             // At some point we ignore all events from old branches
-            let depth = self.find_ancestor_depth(node.clone(), self.find_head().await);
+            let depth = self.diff_depth(node.clone(), self.find_head().await);
             if depth > MAX_DEPTH {
                 continue
             }
@@ -193,7 +193,7 @@ impl Model {
 
             let empty_children = node.children.lock().await.is_empty();
             if empty_children {
-                let depth = self.find_ancestor_depth(node.clone(), self.find_head().await);
+                let depth = self.diff_depth(node.clone(), self.find_head().await);
                 if depth > MAX_DEPTH {
                     self.remove_node(node.clone()).await;
                 }
@@ -264,30 +264,53 @@ impl Model {
         (current_node.expect("internal logic error"), current_max)
     }
 
-    fn get_depth(&self, mut node: EventNodePtr) -> u32 {
+    // TODO change this to count from bottom
+    fn find_depth(&self, mut node: EventNodePtr, ancestor_id: EventId) -> u32 {
         let mut depth = 0;
-        while node.event.hash() != self.current_root {
+        while node.event.hash() != ancestor_id {
             depth += 1;
             node = node.parent.as_ref().expect("non-root nodes should have a parent set").clone();
         }
         depth
     }
 
-    fn find_ancestor_depth(&self, node_a: EventNodePtr, node_b: EventNodePtr) -> u32 {
+    fn find_ancestor(&self, mut node_a: EventNodePtr, mut node_b: EventNodePtr) -> EventId {
         // node_a is a child of node_b
         let is_child = node_b.event.hash() == node_a.parent.as_ref().unwrap().event.hash();
         if is_child {
-            return 0
+            return node_b.event.hash()
         }
 
-        let node_a_depth = self.get_depth(node_a);
-        let node_b_depth = self.get_depth(node_b);
+        while node_a.event.hash() != node_b.event.hash() {
+            let node_a_parent =
+                node_a.parent.as_ref().expect("non-root nodes should have a parent set");
+
+            let node_b_parent =
+                node_b.parent.as_ref().expect("non-root nodes should have a parent set");
+
+            if node_a_parent.event.hash() == self.current_root ||
+                node_b_parent.event.hash() == self.current_root
+            {
+                return self.current_root
+            }
+
+            node_a = node_a_parent.clone();
+            node_b = node_b_parent.clone();
+        }
+
+        node_a.event.hash().clone()
+    }
+
+    fn diff_depth(&self, node_a: EventNodePtr, node_b: EventNodePtr) -> u32 {
+        let ancestor = self.find_ancestor(node_a.clone(), node_b.clone());
+        let node_a_depth = self.find_depth(node_a, ancestor);
+        let node_b_depth = self.find_depth(node_b, ancestor);
         (node_b_depth + 1) - node_a_depth
     }
 
     async fn debug(&self) {
         for (event_id, event_node) in &self.event_map {
-            let depth = self.get_depth(event_node.clone());
+            let depth = self.find_depth(event_node.clone(), self.current_root);
             println!("{}: {:?} [depth={}]", hex::encode(&event_id), event_node.event, depth);
         }
 
@@ -426,7 +449,7 @@ mod tests {
     }
 
     #[async_std::test]
-    async fn test_find_ancestor_depth() {
+    async fn test_diff_depth() {
         let mut model = Model::new();
         let root_id = model.get_root().event.hash();
 
