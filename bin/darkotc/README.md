@@ -19,9 +19,9 @@ We will communicate with two darkfid nodes which represent two peers
 in the atomic swap, and with the faucet, so we can get some coins in
 our wallets.
 
-* The first endpoint (Alice) JSON-RPC URI is: `tls://127.0.0.1:8440`.
-* The second endpoint (Bob) JSON-RPC URI is: `tls://127.0.0.1:8540`.
-* The faucet JSON-RPC URI is: `tls://127.0.0.1:8640`.
+* The first endpoint (Alice) JSON-RPC URI is: `tcp://127.0.0.1:8440`.
+* The second endpoint (Bob) JSON-RPC URI is: `tcp://127.0.0.1:8540`.
+* The faucet JSON-RPC URI is: `tcp://127.0.0.1:8640`.
 
 
 ### Airdropping shitcoins
@@ -31,9 +31,9 @@ will airdrop some coins to both Alice and Bob, so they can swap them
 between each other. We'll also export some variables for easier usage.
 
 ```
-% export ALICE_RPC="tls://127.0.0.1:8440"
-% export BOB_RPC="tls://127.0.0.1:8540"
-% export FAUCET_RPC="tls://127.0.0.1:8640"
+% export ALICE_RPC="tcp://127.0.0.1:8440"
+% export BOB_RPC="tcp://127.0.0.1:8540"
+% export FAUCET_RPC="tcp://127.0.0.1:8640"
 % export ALICE_TOKEN="A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd"
 % export BOB_TOKEN="BNBZ9YprWvEGMYHW4dFvbLuLfHnN9Bs64zuTFQAbw9Dy"
 % ./drk -e "${ALICE_RPC}" airdrop --faucet-endpoint "${FAUCET_RPC}" \
@@ -78,7 +78,7 @@ and burn proofs, and all the necessary transaction data (see
 
 The way this works is that Alice _mints_ the tokens she wants to
 receive (in this case, 14 `BOB_TOKEN`, and _burns_ the token she
-wants to send to Bob (in this case 117 `ALICE_TOKEN`). In turn,
+wants to send to Bob (in this case 113 `ALICE_TOKEN`). In turn,
 Bob does the same with his tokens.
 
 Once Alice builds her half of the atomic swap, she can send the newly
