@@ -67,7 +67,6 @@ impl Proof {
         mut rng: impl RngCore,
     ) -> std::result::Result<Self, plonk::Error> {
         let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
-        println!("creating plonk proof");
         plonk::create_proof(
             &pk.params,
             &pk.pk,
@@ -76,7 +75,6 @@ impl Proof {
             &mut rng,
             &mut transcript,
         )?;
-        println!("created plonk proof");
 
         Ok(Proof(transcript.finalize()))
     }
