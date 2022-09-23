@@ -109,7 +109,7 @@ impl Darkfid {
     // --> {"jsonrpc": "2.0", "method": "tx.broadcast", "params": ["base58encodedTX"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID...", "id": 1}
     pub async fn tx_broadcast(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 || params[0].is_string() {
+        if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
@@ -119,7 +119,7 @@ impl Darkfid {
         }
 
         // Try to deserialize the transaction
-        let tx_bytes = match bs58::decode(params[0].as_str().unwrap()).into_vec() {
+        let tx_bytes = match bs58::decode(params[0].as_str().unwrap().trim()).into_vec() {
             Ok(v) => v,
             Err(e) => {
                 error!("[RPC] tx.broadcast: Failed decoding base58 transaction: {}", e);
@@ -153,6 +153,8 @@ impl Darkfid {
                 error!("[RPC] tx.broadcast: Failed broadcasting transaction: {}", e);
                 return server_error(RpcError::TxBroadcastFail, id, None)
             }
+
+            // TODO: Mark coin as spent in the wallet
         } else {
             warn!("[RPC] tx.broadcast: No sync P2P network, not broadcasting transaction.");
             return server_error(RpcError::TxBroadcastFail, id, None)
