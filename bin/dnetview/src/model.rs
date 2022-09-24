@@ -1,9 +1,8 @@
 use async_std::sync::{Arc, Mutex};
-
 use fxhash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
-use darkfi::util::NanoTimestamp;
+use darkfi::util::time::NanoTimestamp;
 
 type MsgLog = Vec<(NanoTimestamp, String, String)>;
 type MsgMap = Mutex<FxHashMap<String, MsgLog>>;

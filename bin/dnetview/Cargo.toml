@@ -36,4 +36,4 @@ thiserror = "1.0.34"
 # Encoding and parsing
 serde_json = "1.0.85"
 serde = {version = "1.0.144", features = ["derive"]}
-
+hex = "0.4.3"

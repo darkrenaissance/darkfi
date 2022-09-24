@@ -1,5 +1,4 @@
 use fxhash::FxHashMap;
-
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -9,7 +8,7 @@ use tui::{
     Frame,
 };
 
-use darkfi::util::NanoTimestamp;
+use darkfi::util::time::NanoTimestamp;
 
 use crate::{
     error::{DnetViewError, DnetViewResult},
