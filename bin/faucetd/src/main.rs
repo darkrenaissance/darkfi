@@ -31,12 +31,12 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
+    serial::serialize,
     util::{
+        async_util::sleep,
         cli::{get_log_config, get_log_level, spawn_config},
-        decode_base10, expand_path,
-        path::get_config_path,
-        serial::serialize,
-        sleep,
+        parse::decode_base10,
+        path::{expand_path, get_config_path},
     },
     wallet::walletdb::init_wallet,
     Error, Result,
@@ -174,6 +174,7 @@ impl Faucetd {
     // RPCAPI:
     // Processes an airdrop request and airdrops requested token and amount to address.
     // Returns the transaction ID upon success.
+    //
     // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42, "1F00b4r..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
     async fn airdrop(&self, id: Value, params: &[Value]) -> JsonResult {
