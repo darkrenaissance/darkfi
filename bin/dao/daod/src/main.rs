@@ -66,7 +66,7 @@ use crate::{
 //// met.
 ////
 //// At its basis, the DAO is a treasury that is owned by everyone who holds
-//// the DAO governance token. These constraints, also known as DAO parameters, 
+//// the DAO governance token. These constraints, also known as DAO parameters,
 //// are configured by DAO participants and enforced by ZK cryptography.
 ////
 //// In this demo, the constraints are:
@@ -88,7 +88,7 @@ use crate::{
 //// * Encrypted votes are publicly linked to the proposal identifier hash,
 ////   meaning that it is possible to see that there is voting activity associated
 ////   with a particular proposal identifier, but the contents of the proposal,
-////   how one has voted, and the associated DAO is fully private. 
+////   how one has voted, and the associated DAO is fully private.
 //// * In the burn phase of casting a vote, we reveal a public value called a
 ////   nullifier. The same public value is revealed when we spend the coins we
 ////   used to vote, meaning you can link a vote with a user when they spend
@@ -118,11 +118,15 @@ use crate::{
 ////
 //// 2. airdrop() should pass a PublicKey instead of a nym.
 ////
-//// 3. vote() should pass a ProposalBulla.
+//// 3. Rename xDRK and gDRK to DRK and GOV (xDRK = DRK, gDRK = GOV)
 ////
-//// 3. Better document CLI/ CLI help.
+//// 5. Change MoneyWallets to be a HashMap<PublicKey, MoneyWallet>
+////
+//// 6. vote() should pass a ProposalBulla
 ////
 //// Less priority:
+////
+//// 5. Better document CLI/ CLI help.
 ////
 //// 4. Token id is hardcoded rn. Change this so users can specify token_id
 ////    as either xdrk or gdrk. In dao-cli we run a match statement to link to
