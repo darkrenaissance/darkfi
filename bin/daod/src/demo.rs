@@ -1,3 +1,11 @@
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+    hash::Hasher,
+    io,
+    time::Instant,
+};
+
 use incrementalmerkletree::Tree;
 use log::debug;
 use pasta_curves::{
@@ -9,12 +17,6 @@ use pasta_curves::{
     pallas,
 };
 use rand::rngs::OsRng;
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    hash::Hasher,
-    time::Instant,
-};
 
 use darkfi::{
     crypto::{
@@ -25,7 +27,7 @@ use darkfi::{
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
-    util::serial::Encodable,
+    serial::Encodable,
     zk::{
         circuit::{BurnContract, MintContract},
         vm::ZkCircuit,
@@ -188,7 +190,7 @@ pub struct FuncCall {
 }
 
 impl Encodable for FuncCall {
-    fn encode<W: std::io::Write>(&self, mut w: W) -> std::result::Result<usize, darkfi::Error> {
+    fn encode<W: io::Write>(&self, mut w: W) -> core::result::Result<usize, io::Error> {
         let mut len = 0;
         len += self.contract_id.encode(&mut w)?;
         len += self.func_id.encode(&mut w)?;
@@ -212,7 +214,7 @@ pub trait CallDataBase {
     fn encode_bytes(
         &self,
         writer: &mut dyn std::io::Write,
-    ) -> std::result::Result<usize, darkfi::Error>;
+    ) -> core::result::Result<usize, std::io::Error>;
 }
 
 type GenericContractState = Box<dyn Any>;

@@ -14,7 +14,7 @@ use darkfi::{
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
     zk::vm::{Witness, ZkCircuit},
 };
 

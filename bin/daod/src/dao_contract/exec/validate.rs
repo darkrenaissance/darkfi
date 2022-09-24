@@ -6,7 +6,7 @@ use pasta_curves::{
 
 use darkfi::{
     crypto::{coin::Coin, keypair::PublicKey, types::DrkCircuitField},
-    util::serial::{Encodable, SerialDecodable, SerialEncodable},
+    serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
 
@@ -102,7 +102,7 @@ impl CallDataBase for CallData {
     fn encode_bytes(
         &self,
         mut writer: &mut dyn std::io::Write,
-    ) -> std::result::Result<usize, darkfi::Error> {
+    ) -> core::result::Result<usize, std::io::Error> {
         self.encode(&mut writer)
     }
 }
