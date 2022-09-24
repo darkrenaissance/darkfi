@@ -5,12 +5,12 @@ use serde_json::json;
 use darkfi::{
     crypto::{
         address::Address,
+        coin::OwnCoin,
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
-        OwnCoin,
     },
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
-    util::serial::{deserialize, serialize},
+    serial::{deserialize, serialize},
     Result,
 };
 

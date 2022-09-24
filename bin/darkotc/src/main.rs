@@ -27,14 +27,14 @@ use darkfi::{
         BurnRevealedValues, MintRevealedValues, Proof,
     },
     rpc::client::RpcClient,
+    serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable},
     tx::{
         partial::{PartialTransaction, PartialTransactionInput},
         Transaction, TransactionInput, TransactionOutput,
     },
     util::{
         cli::{fg_green, fg_red, progress_bar},
-        encode_base10,
-        serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable},
+        parse::encode_base10,
     },
     zk::circuit::{BurnContract, MintContract},
     Result,
