@@ -56,10 +56,6 @@ async-trait = {version = "0.1.57", optional = true}
 async-channel = {version = "1.7.1", optional = true}
 async-executor = {version = "1.4.1", optional = true}
 
-# async-net
-async-native-tls = {version = "0.4.0", optional = true}
-native-tls = {version = "0.2.10", optional = true}
-
 # Networking
 socket2 = {version = "0.4.7", optional = true}
 futures-rustls = {version = "0.22.2", features = ["dangerous_configuration"], optional = true}
@@ -150,35 +146,30 @@ async-runtime = [
 	"smol",
 ]
 
-async-net = [
-	"async-native-tls",
-	"native-tls",
-]
-
 websockets = [
 	"async-tungstenite",
 	"tungstenite",
+	"futures-rustls",
 ]
 
 util = [
     "blake3",
-	"bs58",
-	"hex",
-	"bincode",
-	"serde",
-	"toml",
-	"url",
-	"simplelog",
-	"serde_json",
-	"dirs",
-	"fxhash",
-	"chrono",
-	"indicatif",
-	"termion",
+    "bs58",
+    "hex",
+    "bincode",
+    "serde",
+    "toml",
+    "url",
+    "simplelog",
+    "serde_json",
+    "dirs",
+    "fxhash",
+    "chrono",
+    "indicatif",
+    "termion",
 
-    "async-net",
     "async-runtime",
-	"rpc",
+    "rpc",
     "serial",
 ]
 
@@ -198,9 +189,7 @@ rpc = [
 	"url",
 	"fast-socks5",
 
-	"async-net",
 	"async-runtime",
-	"websockets",
 	"net",
 ]
 

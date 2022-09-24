@@ -4,9 +4,9 @@ use std::{
     task::{Context, Poll},
 };
 
-use async_native_tls::{TlsConnector, TlsStream};
 use async_tungstenite::WebSocketStream;
 use futures::sink::Sink;
+use futures_rustls::{client::TlsStream, rustls::ServerName, TlsConnector};
 use smol::{prelude::*, Async};
 use tungstenite::{handshake::client::Response, Message};
 use url::Url;
@@ -88,7 +88,7 @@ pub async fn connect(addr: &str, tls: TlsConnector) -> DrkResult<(WsStream, Resp
         }
         "wss" => {
             let stream = Async::<TcpStream>::connect(socket_addr).await?;
-            let stream = tls.connect(host, stream).await?;
+            let stream = tls.connect(ServerName::try_from(host.as_str())?, stream).await?;
             let (stream, resp) = async_tungstenite::client_async(addr, stream).await?;
             Ok((WsStream::Tls(stream), resp))
         }
