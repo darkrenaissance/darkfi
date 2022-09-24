@@ -5,14 +5,13 @@ use log::{debug, error};
 use crate::{
     blockchain::{nfstore::NullifierStore, rootstore::RootStore},
     crypto::{
-        coin::Coin,
+        coin::{Coin, OwnCoin},
         constants::MERKLE_DEPTH,
         keypair::{PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::VerifyingKey,
-        OwnCoin,
     },
     tx::Transaction,
     wallet::walletdb::WalletPtr,

@@ -51,3 +51,15 @@ pub mod runtime;
 
 #[cfg(feature = "zkas")]
 pub mod zkas;
+
+pub const ANSI_LOGO: &str = include_str!("../contrib/darkfi.ansi");
+
+#[macro_export]
+macro_rules! cli_desc {
+    () => {{
+        let mut desc = env!("CARGO_PKG_DESCRIPTION").to_string();
+        desc.push_str("\n");
+        desc.push_str(darkfi::ANSI_LOGO);
+        Box::leak(desc.into_boxed_str()) as &'static str
+    }};
+}

@@ -4,6 +4,7 @@ pub use darkfi_derive::{SerialDecodable, SerialEncodable};
 
 #[cfg(feature = "async-serial")]
 mod async_serial;
+
 mod encoding_types;
 mod endian;
 

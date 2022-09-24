@@ -1,6 +1,6 @@
 use crate::{
     crypto::merkle_node::MerkleNode,
-    util::serial::{deserialize, serialize},
+    serial::{deserialize, serialize},
     Result,
 };
 

@@ -9,7 +9,7 @@ use url::Url;
 use crate::{
     net::TransportName,
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
-    util::sleep,
+    util::async_util::sleep,
     Error, Result,
 };
 

@@ -1,7 +1,7 @@
 use fxhash::FxHashMap;
 
 use crate::{
-    util::serial::{serialize, Decodable, Encodable},
+    serial::{serialize, Decodable, Encodable},
     Result,
 };
 

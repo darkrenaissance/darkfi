@@ -1,13 +1,9 @@
-use std::io;
-
 use pasta_curves::{group::ff::PrimeField, pallas};
 
-use crate::{
-    util::serial::{Decodable, Encodable, ReadExt, WriteExt},
-    Result,
-};
+use super::{keypair::SecretKey, note::Note, nullifier::Nullifier};
+use crate::serial::{SerialDecodable, SerialEncodable};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, SerialEncodable, SerialDecodable)]
 pub struct Coin(pub pallas::Base);
 
 impl Coin {
@@ -20,17 +16,11 @@ impl Coin {
     }
 }
 
-impl Encodable for Coin {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        s.write_slice(&self.to_bytes()[..])?;
-        Ok(32)
-    }
-}
-
-impl Decodable for Coin {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let mut bytes = [0u8; 32];
-        d.read_slice(&mut bytes)?;
-        Ok(Self::from_bytes(bytes))
-    }
+#[derive(Clone, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
+pub struct OwnCoin {
+    pub coin: Coin,
+    pub note: Note,
+    pub secret: SecretKey,
+    pub nullifier: Nullifier,
+    pub leaf_position: incrementalmerkletree::Position,
 }

@@ -5,7 +5,7 @@ use group::ff::PrimeField;
 use serde_json::Value;
 
 use super::{token_id::generate_id, types::DrkTokenId};
-use crate::{util::NetworkName, Result};
+use crate::{util::net_name::NetworkName, Result};
 
 #[derive(Clone, Debug)]
 pub struct TokenInfo {

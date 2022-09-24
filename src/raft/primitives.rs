@@ -3,7 +3,7 @@ use std::io;
 use fxhash::FxHashMap;
 
 use crate::{
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
+    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
 
@@ -164,7 +164,7 @@ pub enum NetMsgMethod {
 }
 
 impl Encodable for NetMsgMethod {
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> core::result::Result<usize, io::Error> {
         let len: usize = match self {
             Self::LogResponse => 0,
             Self::LogRequest => 1,
@@ -178,7 +178,7 @@ impl Encodable for NetMsgMethod {
 }
 
 impl Decodable for NetMsgMethod {
-    fn decode<D: io::Read>(d: D) -> Result<Self> {
+    fn decode<D: io::Read>(d: D) -> core::result::Result<Self, io::Error> {
         let com: u8 = Decodable::decode(d)?;
         Ok(match com {
             0 => Self::LogResponse,

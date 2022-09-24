@@ -10,11 +10,9 @@ use pasta_curves::pallas;
 use crate::{
     crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode},
     net,
+    serial::{serialize, SerialDecodable, SerialEncodable},
     tx::Transaction,
-    util::{
-        serial::{serialize, SerialDecodable, SerialEncodable},
-        time::Timestamp,
-    },
+    util::time::Timestamp,
 };
 
 /// This struct represents a tuple of the form (version, state, epoch, slot, timestamp, merkle_root).

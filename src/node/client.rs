@@ -8,14 +8,14 @@ use super::state::{state_transition, State};
 use crate::{
     crypto::{
         address::Address,
-        coin::Coin,
+        coin::{Coin, OwnCoin},
         constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey},
         merkle_node::MerkleNode,
         proof::ProvingKey,
         types::DrkTokenId,
-        OwnCoin,
     },
+    serial::Encodable,
     tx::{
         builder::{
             TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
@@ -23,7 +23,6 @@ use crate::{
         },
         Transaction,
     },
-    util::serial::Encodable,
     wallet::walletdb::{Balances, WalletPtr},
     zk::circuit::{BurnContract, MintContract},
     ClientFailed, ClientResult, Result,

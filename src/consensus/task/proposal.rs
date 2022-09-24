@@ -6,7 +6,7 @@ use super::consensus_sync_task;
 use crate::{
     consensus::{Participant, ValidatorStatePtr},
     net::P2pPtr,
-    util::sleep,
+    util::async_util::sleep,
 };
 
 /// async task used for participating in the consensus protocol

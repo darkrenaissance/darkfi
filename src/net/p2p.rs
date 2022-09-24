@@ -11,7 +11,7 @@ use url::Url;
 
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
-    util::sleep,
+    util::async_util::sleep,
     Result,
 };
 

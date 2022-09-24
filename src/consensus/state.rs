@@ -32,11 +32,9 @@ use crate::{
         state::{state_transition, ProgramState, StateUpdate},
         Client, MemoryState, State,
     },
+    serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
     tx::Transaction,
-    util::{
-        serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
-        time::Timestamp,
-    },
+    util::time::Timestamp,
     Result,
 };
 

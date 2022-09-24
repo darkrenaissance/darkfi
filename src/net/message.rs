@@ -3,7 +3,7 @@ use log::debug;
 use url::Url;
 
 use crate::{
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
+    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
     Error, Result,
 };
 

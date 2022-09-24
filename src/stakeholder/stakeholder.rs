@@ -1,6 +1,6 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
-use log::{debug,info,error};
+use log::{debug, error, info};
 use std::fmt;
 
 use rand::rngs::OsRng;
@@ -22,12 +22,11 @@ use crate::{
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
     },
-    net::{ChannelPtr, MessageSubscription, P2p, Settings, SettingsPtr},
-    system::Subscription,
+    net::{MessageSubscription, P2p, Settings, SettingsPtr},
     tx::Transaction,
     util::{
         clock::{Clock, Ticks},
-        expand_path,
+        path::expand_path,
         time::Timestamp,
     },
     Result,
@@ -39,7 +38,7 @@ use pasta_curves::pallas;
 
 use group::ff::PrimeField;
 
-const LOG_T : &str = "stakeholder";
+const LOG_T: &str = "stakeholder";
 
 #[derive(Debug)]
 pub struct SlotWorkspace {
@@ -172,7 +171,7 @@ impl Stakeholder {
             settings.peers,
         );
         let keypair = Keypair::random(&mut OsRng);
-        debug!(target:LOG_T, "stakeholder constructed");
+        debug!(target: LOG_T, "stakeholder constructed");
         Ok(Self {
             blockchain: bc,
             net: p2p,
@@ -229,7 +228,7 @@ impl Stakeholder {
         self.net.clone().start(exec.clone()).await?;
         //TODO (fix) await blocks
         self.net.clone().run(exec);
-        info!(target:LOG_T, "net initialized");
+        info!(target: LOG_T, "net initialized");
         Ok(())
     }
 
@@ -276,7 +275,7 @@ impl Stakeholder {
     /// validate the block proof, and the transactions,
     /// if so add the proof to metadata if stakeholder isn't the lead.
     pub async fn sync_block(&self) {
-        info!(target:LOG_T, "syncing blocks");
+        info!(target: LOG_T, "syncing blocks");
         for chanptr in self.net.channels().lock().await.values() {
             let message_subsytem = chanptr.get_message_subsystem();
             message_subsytem.add_dispatch::<BlockInfo>().await;
@@ -284,7 +283,7 @@ impl Stakeholder {
             //let info = chanptr.get_info();
             let msg_sub: MessageSubscription<BlockInfo> =
                 chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
-            
+
             let res = msg_sub.receive().await.unwrap();
             let blk: BlockInfo = (*res).to_owned();
             //TODO validate the block proof, and transactions.
@@ -321,7 +320,7 @@ impl Stakeholder {
                 }
                 Ticks::NEWSLOT { e, sl } => self.new_slot(e, sl),
                 Ticks::TOCKS => {
-                    info!(target:LOG_T, "tocks");
+                    info!(target: LOG_T, "tocks");
                     // slot is about to end.
                     // sync, and validate.
                     // no more transactions to be received/send to the end of slot.
@@ -357,7 +356,7 @@ impl Stakeholder {
     /// assuming static stake during the epoch, enforced by the commitment to competing coins
     /// in the epoch's gen2esis data.
     fn new_epoch(&mut self) {
-        info!(target:LOG_T, "[new epoch] 4 {}", self);
+        info!(target: LOG_T, "[new epoch] 4 {}", self);
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, eta);
         //TODO calculate total stake

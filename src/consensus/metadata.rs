@@ -11,7 +11,7 @@ use crate::{
         schnorr::Signature,
         types::*,
     },
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
     VerifyResult,
 };
 

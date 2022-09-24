@@ -2,7 +2,7 @@ use chrono::Utc;
 use log::info;
 
 use crate::{
-    util::serial::{serialize, Decodable, Encodable},
+    serial::{serialize, Decodable, Encodable},
     Result,
 };
 

@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use crate::{
     net,
-    util::serial::{serialize, SerialDecodable, SerialEncodable},
+    serial::{serialize, SerialDecodable, SerialEncodable},
 };
 
 /// This struct represents a DHT key request

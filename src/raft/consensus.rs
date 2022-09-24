@@ -13,10 +13,8 @@ use rand::{rngs::OsRng, Rng, RngCore};
 
 use crate::{
     net,
-    util::{
-        gen_id,
-        serial::{deserialize, serialize, Decodable, Encodable},
-    },
+    serial::{deserialize, serialize, Decodable, Encodable},
+    util::gen_id,
     Error, Result,
 };
 

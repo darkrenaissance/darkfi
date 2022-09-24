@@ -7,7 +7,7 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
     },
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
+    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
 
@@ -65,7 +65,8 @@ impl EncryptedNote {
             self.ciphertext.len() - AEAD_TAG_SIZE
         );
 
-        Note::decode(&plaintext[..])
+        let note = Note::decode(&plaintext[..])?;
+        Ok(note)
     }
 }
 

@@ -1,7 +1,7 @@
 use group::ff::PrimeField;
 
 use super::types::DrkTokenId;
-use crate::{util::NetworkName, Error, Result};
+use crate::{util::net_name::NetworkName, Error, Result};
 
 pub fn generate_id(network: &NetworkName, token_str: &str) -> Result<DrkTokenId> {
     let mut net_bytes: Vec<u8> = network.to_string().as_bytes().to_vec();

@@ -22,8 +22,7 @@ use crate::{
             MERKLE_DEPTH_ORCHARD,
         },
     },
-    util::serial::{Decodable, Encodable},
-    Result,
+    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
 };
 
 lazy_static! {
@@ -40,7 +39,7 @@ lazy_static! {
     };
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, SerialEncodable, SerialDecodable)]
 pub struct MerkleNode(pub pallas::Base);
 
 impl MerkleNode {
@@ -118,26 +117,14 @@ impl Hashable for MerkleNode {
     }
 }
 
-impl Encodable for MerkleNode {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        self.0.encode(&mut s)
-    }
-}
-
-impl Decodable for MerkleNode {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self(Decodable::decode(&mut d)?))
-    }
-}
-
 impl Encodable for incrementalmerkletree::Position {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
         u64::from(*self).encode(&mut s)
     }
 }
 
 impl Decodable for incrementalmerkletree::Position {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
         let dec: u64 = Decodable::decode(&mut d)?;
         Ok(Self::try_from(dec).unwrap())
     }

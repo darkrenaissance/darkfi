@@ -19,7 +19,7 @@ use crate::{
             DrkValueBlind,
         },
     },
-    util::serial::Encodable,
+    serial::Encodable,
     Result,
 };
 

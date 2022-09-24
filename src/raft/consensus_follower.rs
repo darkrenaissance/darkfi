@@ -3,7 +3,7 @@ use std::cmp::min;
 use log::debug;
 
 use crate::{
-    util::serial::{serialize, Decodable, Encodable},
+    serial::{serialize, Decodable, Encodable},
     Result,
 };
 

@@ -12,7 +12,7 @@ use url::Url;
 
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
-    util::NanoTimestamp,
+    util::time::NanoTimestamp,
     Error, Result,
 };
 

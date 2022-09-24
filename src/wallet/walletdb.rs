@@ -13,19 +13,16 @@ use sqlx::{
 use crate::{
     crypto::{
         address::Address,
-        coin::Coin,
+        coin::{Coin, OwnCoin},
         constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::Note,
         nullifier::Nullifier,
         types::DrkTokenId,
-        OwnCoin, OwnCoins,
     },
-    util::{
-        expand_path,
-        serial::{deserialize, serialize},
-    },
+    serial::{deserialize, serialize},
+    util::path::expand_path,
     Error::{WalletEmptyPassword, WalletTreeExists},
     Result,
 };
@@ -249,7 +246,7 @@ impl WalletDb {
         Ok(())
     }
 
-    pub async fn get_own_coins(&self) -> Result<OwnCoins> {
+    pub async fn get_own_coins(&self) -> Result<Vec<OwnCoin>> {
         debug!("Finding own coins");
         let is_spent = 0;
 
