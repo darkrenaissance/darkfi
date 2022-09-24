@@ -43,6 +43,28 @@ The `Event` could have many actions according to the underlying data.
 |-------------- | -------------------- | ---------------------------------------------- |
 | seen  		| HashSet<`EventId`>   | A list of `Event`s have imported from Model	|
 
+## InvItem
+
+Unique generated integer
+
+	type InvItem = u32;	
+
+## Inv
+
+On receiving a new `Event`, the node must advertise its knowledge for this `Event` to confirm receipt 
+
+| Description   | Data Type      	   | Comments           		|
+|-------------- | -------------------- | -------------------------- |
+| Invs	  	  	| Vec<`InvItem`> 	   | A list of `InvItem`		|
+
+## GetData
+
+On receiving an `Inv` message if the client doesn't have the `InvItem`s, 
+Sending back `GetData` message contain the missing `InvItem`s
+
+| Description   | Data Type      	   | Comments              		|
+|-------------- | -------------------- | -------------------------- |
+| Invs	  	    | Vec<`InvItem`> 	   | A list of `EventId`   		|
 
 ## UnreadMessages
 
@@ -57,29 +79,6 @@ All the `Event`s will apply to these filtering rules:
 | Description | Data Type                   | Comments                                                                             |
 |-------------|---------------------------- | -------------------------------------------------------------------------------------|
 | Messages    | HashMap<`InvItem`, `Event`> | Hold all the `Event`s that have broadcasted to other nodes but haven't confirmed yet |
-
-## InvItem
-
-Unique generated integer
-
-	type InvItem = u32;	
-
-## Inv
-
-On receiving a new `Event`, the node must advertise its knowledge for this `Event` to confirm receipt 
-
-| Description | Data Type   		| Comments				|
-|-------------|--------------------	|---------------------- |
-| Invs	  	  | Vec<`InvItem`> 		| A list of `InvItem`   |
-
-## GetData
-
-On receiving an `Inv` message if the client doesn't have the `InvItem`s, 
-Sending back `GetData` message contain the missing `InvItem`s
-
-| Description | Data Type   		| Comments				|
-|-------------|--------------------	|---------------------- |
-| Invs	  	  | Vec<`InvItem`> 		| A list of `EventId`   |
 
 ## Sync 
 
