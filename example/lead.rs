@@ -1,3 +1,4 @@
+use futures::executor::block_on;
 use halo2_proofs::{arithmetic::Field, dev::MockProver};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{
@@ -5,29 +6,16 @@ use pasta_curves::{
     group::{ff::PrimeField, Curve},
     pallas,
 };
-
-use futures::executor::block_on;
-
-use darkfi::crypto::proof::{ProvingKey, VerifyingKey};
 use url::Url;
 
 use darkfi::{
     blockchain::{
         epoch::{Epoch, EpochItem},
-        Blockchain, EpochConsensus,
+        EpochConsensus,
     },
-    consensus::{BlockInfo, StakeholderMetadata, StreamletMetadata, TransactionLeadProof},
-    crypto::{
-        constants::MERKLE_DEPTH_ORCHARD,
-        lead_proof,
-        leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN},
-        merkle_node::MerkleNode,
-    },
-    net::{P2p, Settings, SettingsPtr},
+    crypto::leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN},
+    net::Settings,
     stakeholder::stakeholder::Stakeholder,
-    tx::Transaction,
-    util::time::Timestamp,
-    zk::circuit::lead_contract::LeadContract,
 };
 
 fn main() {

@@ -1550,6 +1550,7 @@ dependencies = [
  "darkfi",
  "easy-parallel",
  "fxhash",
+ "hex",
  "log",
  "num_cpus",
  "rand",
