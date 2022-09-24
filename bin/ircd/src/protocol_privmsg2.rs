@@ -1,7 +1,7 @@
-use async_std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 
 use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
 use fxhash::FxHashMap;
@@ -10,10 +10,8 @@ use rand::{rngs::OsRng, RngCore};
 
 use darkfi::{
     net,
-    util::{
-        serial::{SerialDecodable, SerialEncodable},
-        sleep,
-    },
+    serial::{SerialDecodable, SerialEncodable},
+    util::async_util::sleep,
     Result,
 };
 

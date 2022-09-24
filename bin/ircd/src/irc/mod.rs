@@ -1,7 +1,7 @@
-use async_std::{net::TcpListener, sync::Arc};
 use std::{fs::File, net::SocketAddr};
 
 use async_executor::Executor;
+use async_std::{net::TcpListener, sync::Arc};
 use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
 use futures_rustls::{rustls, TlsAcceptor};
 use fxhash::FxHashMap;
@@ -10,7 +10,7 @@ use log::{error, info};
 use darkfi::{
     net::P2pPtr,
     system::SubscriberPtr,
-    util::{expand_path, path::get_config_path},
+    util::path::{expand_path, get_config_path},
     Error, Result,
 };
 

@@ -13,11 +13,10 @@ use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize,
+    serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable},
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
-        path::get_config_path,
-        serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable},
+        path::{expand_path, get_config_path},
     },
     Result,
 };
@@ -68,7 +67,7 @@ enum EventAction {
 }
 
 impl Encodable for EventAction {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
         match self {
             Self::PrivMsg(event) => {
                 let mut len = 0;
@@ -81,11 +80,11 @@ impl Encodable for EventAction {
 }
 
 impl Decodable for EventAction {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
         let type_id = d.read_u8()?;
         match type_id {
             0 => Ok(Self::PrivMsg(PrivMsgEvent::decode(d)?)),
-            _ => Err(darkfi::Error::ParseFailed("Bad type ID byte for Event")),
+            _ => Err(io::Error::new(io::ErrorKind::Other, "Bad type ID byte for Event")),
         }
     }
 }

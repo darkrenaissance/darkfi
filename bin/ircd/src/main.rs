@@ -1,8 +1,8 @@
-use async_std::sync::Arc;
 use std::fmt;
 
 use async_channel::Receiver;
 use async_executor::Executor;
+use async_std::sync::Arc;
 
 use log::{info, warn};
 use rand::rngs::OsRng;
@@ -15,11 +15,10 @@ use darkfi::{
     rpc::server::listen_and_serve,
     system::{Subscriber, SubscriberPtr},
     util::{
+        async_util::sleep,
         cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
         file::save_json_file,
-        path::get_config_path,
-        sleep,
+        path::{expand_path, get_config_path},
     },
     Result,
 };

@@ -1,7 +1,7 @@
-use async_std::sync::Arc;
 use std::cmp::Ordering;
 
 use async_executor::Executor;
+use async_std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 use log::debug;
@@ -9,7 +9,7 @@ use rand::{rngs::OsRng, RngCore};
 
 use darkfi::{
     net,
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
     Result,
 };
 

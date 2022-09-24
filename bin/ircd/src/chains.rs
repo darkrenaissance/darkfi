@@ -5,7 +5,7 @@ use chrono::Utc;
 use fxhash::FxHashMap;
 use ripemd::{Digest, Ripemd256};
 
-use darkfi::util::serial::{SerialDecodable, SerialEncodable};
+use darkfi::serial::{SerialDecodable, SerialEncodable};
 
 const MAX_CHAIN_SIZE: usize = 4096;
 
