@@ -1,4 +1,5 @@
 *.pyc
+*.pickle
 *.sage.py
 *.zk.bin
 *_circuit_layout.png
