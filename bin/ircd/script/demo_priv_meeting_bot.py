@@ -1,9 +1,5 @@
 # TODO
-# 1) Make a config file
-# 2) Point host, port, channel there
-# 3) Add private channel (seed) to the config
-# 4) Make variable seed in the async def start():
-# 5) Read all host, port, channel and seed from the config file
+# 1) Enable for multiple chats
 
 import json
 import asyncio
