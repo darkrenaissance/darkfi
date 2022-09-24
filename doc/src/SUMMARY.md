@@ -14,6 +14,7 @@
 - [Client](clients/clients.md)
   - [darkfid JSON-RPC API](clients/darkfid_jsonrpc.md)
   - [cashierd JSON-RPC API](clients/cashierd_jsonrpc.md)
+  - [faucetd JSON-RPC API](clients/faucetd_jsonrpc.md)
 - [zkas](zkas/zkas.md)
   - [Bincode](zkas/bincode.md)
   - [Examples](zkas/examples.md)
