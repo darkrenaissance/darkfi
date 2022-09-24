@@ -1,3 +1,4 @@
+#[cfg(feature = "async-runtime")]
 /// async utility functions
 pub mod async_util;
 

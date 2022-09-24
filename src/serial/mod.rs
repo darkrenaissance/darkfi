@@ -2,7 +2,7 @@ use std::io::{Cursor, Error, ErrorKind, Read, Write};
 
 pub use darkfi_derive::{SerialDecodable, SerialEncodable};
 
-#[cfg(feature = "async-serial")]
+#[cfg(feature = "async-runtime")]
 mod async_serial;
 
 mod encoding_types;

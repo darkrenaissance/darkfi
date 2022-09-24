@@ -21,7 +21,7 @@ easy-parallel = "3.2.0"
 log = "0.4.17"
 num_cpus = "1.13.1"
 simplelog = "0.12.0"
-thiserror = "1.0.34"
+thiserror = "1.0.35"
 
 # Crypto
 incrementalmerkletree = "0.3.0"
@@ -37,4 +37,4 @@ serde_json = "1.0.85"
 
 # Utilities
 lazy_static = "1.4.0"
-url = "2.2.2"
+url = "2.3.1"

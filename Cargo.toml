@@ -18,104 +18,101 @@ name = "darkfi"
 
 [workspace]
 members = [
-	"bin/zkas",
-	#"bin/cashierd",
-	"bin/darkfid",
-	"bin/darkotc",
-	"bin/drk",
-	"bin/faucetd",
-	"bin/ircd",
-	#"bin/irc-raft",
-	"bin/dnetview",
-	"bin/daod",
-	"bin/dao-cli",
-	"bin/tau/taud",
-	"bin/tau/tau-cli",
-	"bin/darkwiki/darkwikid",
-	"bin/darkwiki/darkwiki-cli",
-	"bin/vanityaddr",
-	"bin/lilith",
-	"src/sdk",
-	"src/serial/derive",
-	"src/serial/derive-internal",
+    "bin/zkas",
+    #"bin/cashierd",
+    "bin/darkfid",
+    "bin/darkotc",
+    "bin/drk",
+    "bin/faucetd",
+    "bin/ircd",
+    #"bin/irc-raft",
+    "bin/dnetview",
+    "bin/daod",
+    "bin/dao-cli",
+    "bin/tau/taud",
+    "bin/tau/tau-cli",
+    "bin/darkwiki/darkwikid",
+    "bin/darkwiki/darkwiki-cli",
+    "bin/vanityaddr",
+    "bin/lilith",
+    "src/sdk",
+    "src/serial/derive",
+    "src/serial/derive-internal",
 
     "example/dchat",
 ]
 
 [dependencies]
 # Hard dependencies
-libc = "0.2.132"
+libc = "0.2.133"
 log = "0.4.17"
-thiserror = "1.0.34"
+thiserror = "1.0.35"
 
 # async-runtime
-smol = {version = "1.2.5", optional = true}
-futures = {version = "0.3.24", optional = true}
-async-std = {version = "1.12.0", features = ["attributes"], optional = true}
-async-trait = {version = "0.1.57", optional = true}
 async-channel = {version = "1.7.1", optional = true}
 async-executor = {version = "1.4.1", optional = true}
+async-std = {version = "1.12.0", features = ["attributes"], optional = true}
+async-trait = {version = "0.1.57", optional = true}
+futures = {version = "0.3.24", optional = true}
+smol = {version = "1.2.5", optional = true}
 
 # Networking
-socket2 = {version = "0.4.7", optional = true}
 futures-rustls = {version = "0.22.2", features = ["dangerous_configuration"], optional = true}
+socket2 = {version = "0.4.7", optional = true}
 
 # TLS cert utilities
-ed25519-compact = {version = "1.0.11", features = ["pem"], optional = true}
+ed25519-compact = {version = "1.0.15", features = ["pem"], optional = true}
 rcgen = {version = "0.9.3", features = ["pem"], optional = true}
 rustls-pemfile = {version = "1.0.1", optional = true}
 
 # Encoding
-hex = {version = "0.4.3", optional = true}
-bs58 = {version = "0.4.0", optional = true}
-toml = {version = "0.5.9", optional = true}
-bytes = {version = "1.2.1", optional = true}
 bincode = {version = "2.0.0-rc.1", features = ["serde"], optional = true}
+bs58 = {version = "0.4.0", optional = true}
+hex = {version = "0.4.3", optional = true}
 serde_json = {version = "1.0.85", optional = true}
-serde = {version = "1.0.144", features = ["derive"], optional = true}
+serde = {version = "1.0.145", features = ["derive"], optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
+toml = {version = "0.5.9", optional = true}
 
 # Utilities
-url = {version = "2.2.2", features = ["serde"], optional = true}
-dirs = {version = "4.0.0", optional = true}
-subtle = {version = "2.4.1", optional = true}
-lazy_static = {version = "1.4.0", optional = true}
-lazy-init = {version = "0.5.1", optional = true}
-fxhash = {version = "0.2.1", optional = true}
-indexmap = {version = "1.9.1", optional = true}
-itertools = {version = "0.10.3", optional = true}
+chrono = {version = "0.4.22", optional = true}
 darkfi-derive = {path = "src/serial/derive", optional = true}
 darkfi-derive-internal = {path = "src/serial/derive-internal", optional = true}
-chrono = {version = "0.4.22", optional = true}
+dirs = {version = "4.0.0", optional = true}
+fxhash = {version = "0.2.1", optional = true}
+indexmap = {version = "1.9.1", optional = true}
+itertools = {version = "0.10.5", optional = true}
+lazy-init = {version = "0.5.1", optional = true}
+lazy_static = {version = "1.4.0", optional = true}
+subtle = {version = "2.4.1", optional = true}
+url = {version = "2.3.1", features = ["serde"], optional = true}
 
 # Misc
-termion = {version = "1.5.6", optional = true}
+indicatif = {version = "0.17.1", optional = true}
 simplelog = {version = "0.12.0", optional = true}
-indicatif = {version = "0.17.0", optional = true}
+termion = {version = "1.5.6", optional = true}
 
 # Websockets
-tungstenite = {version = "0.17.3", optional = true}
 async-tungstenite = {version = "0.17.2", optional = true}
+tungstenite = {version = "0.17.3", optional = true}
 
 # socks5
 fast-socks5 = {version = "0.4.3", optional = true}
 
 # Crypto
-bitvec = {version = "1.0.1", optional = true}
 rand = {version = "0.8.5", optional = true}
-blake3 = {version = "1.3.1", optional = true}
-sha2 = {version = "0.10.5", optional = true}
-group = {version = "0.12.0", optional = true}
-arrayvec = {version = "0.7.2", optional = true}
 blake2b_simd = {version = "1.0.0", optional = true}
-pasta_curves = {version = "0.4.0", optional = true}
+blake3 = {version = "1.3.1", optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
-incrementalmerkletree = {version = "0.3.0", optional = true}
+group = {version = "0.12.0", optional = true}
 halo2_proofs = {version = "0.2.0", optional = true}
 halo2_gadgets = {version = "0.2.0", optional = true}
+incrementalmerkletree = {version = "0.3.0", optional = true}
 num-bigint = {version = "0.4.3", optional = true}
 num-traits = {version = "0.2.15", optional = true}
+pasta_curves = {version = "0.4.0", optional = true}
+sha2 = {version = "0.10.6", optional = true}
 
 # Smart contract runtime
 drk-sdk = {path = "src/sdk", optional = true}
@@ -124,8 +121,8 @@ wasmer-compiler-singlepass = {version = "2.3.0", optional = true}
 wasmer-middlewares = {version = "2.3.0", optional = true}
 
 # Wallet management
-sqlx = {version = "0.6.1", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
-libsqlite3-sys = {version = "0.24.1", features = ["bundled-sqlcipher"],  optional = true }
+libsqlite3-sys = {version = "0.24.2", features = ["bundled-sqlcipher"],  optional = true }
+sqlx = {version = "0.6.2", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
 
 # Blockchain store
 sled = {version = "0.34.7", optional = true}
@@ -134,182 +131,210 @@ sled = {version = "0.34.7", optional = true}
 clap = {version = "3.2.20", features = ["derive"]}
 halo2_proofs = {version = "0.2.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
 halo2_gadgets = {version = "0.2.0", features = ["dev-graph", "test-dependencies"]}
-plotters = "0.3.3"
+plotters = "0.3.4"
 
+# -----BEGIN LIBRARY FEATURES-----
 [features]
 async-runtime = [
-	"async-std",
-	"async-channel",
-	"async-executor",
-	"async-trait",
-	"futures",
-	"smol",
+    "async-std",
+    "async-channel",
+    "async-executor",
+    "async-trait",
+    "futures",
+    "smol",
 ]
 
-websockets = [
-	"async-tungstenite",
-	"tungstenite",
-	"futures-rustls",
-]
-
-util = [
+blockchain = [
     "blake3",
-    "bs58",
-    "hex",
-    "bincode",
-    "serde",
-    "toml",
-    "url",
-    "simplelog",
-    "serde_json",
-    "dirs",
-    "fxhash",
     "chrono",
-    "indicatif",
-    "termion",
+    "group",
+    "halo2_gadgets",
+    "halo2_proofs",
+    "incrementalmerkletree",
+    "lazy-init",
+    "lazy_static",
+    "pasta_curves",
+    "rand",
+    "sled",
+    "url",
 
     "async-runtime",
+    "crypto",
+    "net",
+    "serial",
+    "tx",
+    "node",
+    "util",
+]
+
+crypto = [
+    "blake2b_simd",
+    "blake3",
+    "bs58",
+    "crypto_api_chachapoly",
+    "fxhash",
+    "group",
+    "halo2_gadgets",
+    "halo2_proofs",
+    "hex",
+    "incrementalmerkletree",
+    "lazy_static",
+    "num-bigint",
+    "num-traits",
+    "pasta_curves",
+    "rand",
+    "serde",
+    "serde_json",
+    "sha2",
+    "subtle",
+
+    "util",
+    "serial",
+    "zkas",
+]
+
+dht = [
+    "blake3",
+    "chrono",
+    "fxhash",
+    "rand",
+
+    "async-runtime",
+    "net",
     "serial",
 ]
 
-async-serial = [
-    "futures",
+net = [
+    "fxhash",
+    "ed25519-compact",
+    "fast-socks5",
+    "futures-rustls",
+    "hex",
+    "structopt",
+    "structopt-toml",
+    "rand",
+    "rcgen",
+    "rustls-pemfile",
+    "serde",
+    "serde_json",
+    "socket2",
+    "url",
 
+    "async-runtime",
+    "serial",
+    "system",
+    "util",
+]
+
+node = [
+    "bs58",
+    "group",
+    "incrementalmerkletree",
+    "lazy-init",
+
+    "async-runtime",
+    "blockchain",
+    "crypto",
+    "serial",
+    "tx",
+    "wallet",
+]
+
+raft = [
+    "chrono",
+    "fxhash",
+    "rand",
+    "sled",
+
+    "async-runtime",
+    "net",
+    "serial",
+    "util",
+]
+
+rpc = [
+    "hex",
+    "rand",
+    "serde",
+    "serde_json",
+    "url",
+
+    "async-runtime",
+    "net",
     "serial",
 ]
 
 serial = [
     "darkfi-derive",
-    "darkfi-derive-internal",
-]
-
-rpc = [
-	"rand",
-	"url",
-	"fast-socks5",
-
-	"async-runtime",
-	"net",
-]
-
-blockchain = [
-	"blake3",
-	"chrono",
-	"indexmap",
-	"sled",
-
-	"crypto",
-	"tx",
-	"net",
-	"node",
-	"util",
 ]
 
 system = [
-	"fxhash",
-	"rand",
+    "fxhash",
+    "rand",
 
-	"async-runtime",
-]
-
-net = [
-	"fxhash",
-	"socket2",
-	"futures-rustls",
-	"fast-socks5",
-	"ed25519-compact",
-	"rcgen",
-	"rustls-pemfile",
-	"structopt",
-	"structopt-toml",
-
-	"async-serial",
-	"serial",
-	"system",
-	"util",
-]
-
-crypto = [
-	"bitvec",
-	"blake3",
-	"rand",
-	"pasta_curves",
-	"blake2b_simd",
-	"incrementalmerkletree",
-	"halo2_proofs",
-	"halo2_gadgets",
-	"num-bigint",
-	"num-traits",
-	"subtle",
-	"lazy_static",
-	"group",
-	"arrayvec",
-	"crypto_api_chachapoly",
-	"sha2",
-	"bs58",
-
-	"util",
-	"serial",
-	"zkas",
-]
-
-wallet = [
-	"sqlx",
-	"libsqlite3-sys",
-	"async-std",
-
-	"crypto",
-	"util",
-]
-
-wasm-runtime = [
-	"drk-sdk",
-	"wasmer",
-	"wasmer-compiler-singlepass",
-	"wasmer-middlewares",
-]
-
-node = [
-	"url",
-	"bytes",
-	"lazy-init",
-
-	"async-runtime",
-	"blockchain",
-	"crypto",
-	"wallet",
-	"util",
-	"net",
-]
-
-zkas = [
-	"termion",
-	"indexmap",
-	"itertools",
-
-	"serial",
-]
-
-raft = [
-	"blake3",
-	"sled",
-
-	"util",
-	"net",
-	"rpc",
+    "async-runtime",
 ]
 
 tx = [
-	"crypto",
-	"util",
-]
-
-dht = [
+    "group",
+    "incrementalmerkletree",
     "rand",
 
-    "net",
+    "serial",
+    "crypto",
+]
+
+util = [
+    "chrono",
+    "dirs",
+    "indicatif",
+    "rand",
+    "simplelog",
+    "serde",
+    "serde_json",
+    "termion",
+    "toml",
+    "url",
+
+    "serial",
+]
+
+wallet = [
+    "async-std",
+    "bincode",
+    "bs58",
+    "group",
+    "rand",
+    "sqlx",
+    "incrementalmerkletree",
+    "libsqlite3-sys",
+
+    "crypto",
+    "serial",
     "util",
 ]
+
+wasm-runtime = [
+    "wasmer",
+    "wasmer-compiler-singlepass",
+    "wasmer-middlewares",
+
+    "drk-sdk",
+]
+
+websockets = [
+    "async-tungstenite",
+    "tungstenite",
+]
+
+zkas = [
+    "termion",
+    "indexmap",
+    "itertools",
+
+    "serial",
+]
+# -----END LIBRARY FEATURES-----
 
 [[example]]
 name = "net"

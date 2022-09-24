@@ -1,6 +1,7 @@
-use log::error;
-use pasta_curves::group::Group;
 use std::io;
+
+use group::Group;
+use log::error;
 
 use crate::{
     crypto::{

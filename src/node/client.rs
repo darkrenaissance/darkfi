@@ -1,8 +1,8 @@
 use async_std::sync::{Arc, Mutex};
+use group::ff::PrimeField;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info};
-use pasta_curves::group::ff::PrimeField;
 
 use super::state::{state_transition, State};
 use crate::{

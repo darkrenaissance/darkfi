@@ -1175,18 +1175,15 @@ dependencies = [
 name = "darkfi"
 version = "0.3.0"
 dependencies = [
- "arrayvec",
  "async-channel",
  "async-executor",
  "async-std",
  "async-trait",
  "async-tungstenite",
  "bincode",
- "bitvec",
  "blake2b_simd",
  "blake3",
  "bs58",
- "bytes",
  "chrono",
  "clap 3.2.22",
  "crypto_api_chachapoly",
