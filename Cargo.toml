@@ -305,6 +305,9 @@ tx = [
 ]
 
 dht = [
+    "rand",
+
+    "net",
     "util",
 ]
 
