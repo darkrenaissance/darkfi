@@ -1,6 +1,6 @@
 # IRC Private Channel Bot
 
-meeting_bot_secret.py is an upgraded version of the meeting_bot.py for IRC. This version allows for multiple channels, including private ones.
+*meeting_bot_secret.py* is an upgraded version of the *meeting_bot.py* for IRC. This version allows for multiple channels, including private ones.
 
 **Note:**
 
