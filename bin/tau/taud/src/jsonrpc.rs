@@ -1,6 +1,6 @@
-use async_std::sync::Mutex;
 use std::{fs::create_dir_all, path::PathBuf};
 
+use async_std::sync::Mutex;
 use async_trait::async_trait;
 use crypto_box::SalsaBox;
 use fxhash::FxHashMap;
@@ -14,7 +14,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         server::RequestHandler,
     },
-    util::{expand_path, Timestamp},
+    util::{path::expand_path, time::Timestamp},
     Error,
 };
 

@@ -1,4 +1,3 @@
-use async_std::sync::{Arc, Mutex};
 use std::{
     env,
     fs::{create_dir_all, remove_dir_all},
@@ -7,6 +6,7 @@ use std::{
 };
 
 use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use crypto_box::{
     aead::{Aead, AeadCore},
     SalsaBox, SecretKey,
@@ -21,11 +21,10 @@ use darkfi::{
     async_daemonize, net,
     raft::{NetMsg, ProtocolRaft, Raft, RaftSettings},
     rpc::server::listen_and_serve,
+    serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
-        path::get_config_path,
-        serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
+        path::{expand_path, get_config_path},
     },
     Error, Result,
 };

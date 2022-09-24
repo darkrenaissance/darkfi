@@ -1,16 +1,15 @@
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use darkfi::util::{
-    file::{load_json_file, save_json_file},
-    gen_id,
-    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Timestamp,
+use darkfi::{
+    serial::{SerialDecodable, SerialEncodable},
+    util::{
+        file::{load_json_file, save_json_file},
+        gen_id,
+        time::Timestamp,
+    },
 };
 
 use crate::{
@@ -50,15 +49,15 @@ impl Comment {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TaskEvents(Vec<TaskEvent>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TaskComments(Vec<Comment>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TaskProjects(Vec<String>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TaskAssigns(Vec<String>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TaskTags(Vec<String>);
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
@@ -262,80 +261,4 @@ impl TaskInfo {
         self.state = state.to_string();
         self.set_event("state", &state);
     }
-}
-
-impl Encodable for TaskEvents {
-    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
-        encode_vec(&self.0, s)
-    }
-}
-
-impl Decodable for TaskEvents {
-    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
-        Ok(Self(decode_vec(d)?))
-    }
-}
-impl Encodable for TaskComments {
-    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
-        encode_vec(&self.0, s)
-    }
-}
-
-impl Decodable for TaskComments {
-    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
-        Ok(Self(decode_vec(d)?))
-    }
-}
-impl Encodable for TaskProjects {
-    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
-        encode_vec(&self.0, s)
-    }
-}
-
-impl Decodable for TaskProjects {
-    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
-        Ok(Self(decode_vec(d)?))
-    }
-}
-
-impl Encodable for TaskAssigns {
-    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
-        encode_vec(&self.0, s)
-    }
-}
-
-impl Decodable for TaskAssigns {
-    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
-        Ok(Self(decode_vec(d)?))
-    }
-}
-
-impl Encodable for TaskTags {
-    fn encode<S: io::Write>(&self, s: S) -> darkfi::Result<usize> {
-        encode_vec(&self.0, s)
-    }
-}
-
-impl Decodable for TaskTags {
-    fn decode<D: io::Read>(d: D) -> darkfi::Result<Self> {
-        Ok(Self(decode_vec(d)?))
-    }
-}
-
-fn encode_vec<T: Encodable, S: io::Write>(vec: &[T], mut s: S) -> darkfi::Result<usize> {
-    let mut len = 0;
-    len += VarInt(vec.len() as u64).encode(&mut s)?;
-    for c in vec.iter() {
-        len += c.encode(&mut s)?;
-    }
-    Ok(len)
-}
-
-fn decode_vec<T: Decodable, D: io::Read>(mut d: D) -> darkfi::Result<Vec<T>> {
-    let len = VarInt::decode(&mut d)?.0;
-    let mut ret = Vec::with_capacity(len as usize);
-    for _ in 0..len {
-        ret.push(Decodable::decode(&mut d)?);
-    }
-    Ok(ret)
 }
