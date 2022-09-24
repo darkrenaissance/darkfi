@@ -65,10 +65,9 @@ use crate::{
 //// in a Proposal. This operation can only happen if several conditions are
 //// met.
 ////
-//// At its basis, the DAO is a private key that is owned by all DAO participants
-//// but can only be operated according to constraints. These constraints,
-//// also known as DAO parameters, are configured by DAO participants and 
-//// enforced by ZK cryptography.
+//// At its basis, the DAO is a treasury that is owned by everyone who holds
+//// the DAO governance token. These constraints, also known as DAO parameters, 
+//// are configured by DAO participants and enforced by ZK cryptography.
 ////
 //// In this demo, the constraints are:
 ////
