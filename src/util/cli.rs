@@ -82,18 +82,6 @@ pub fn get_log_config() -> simplelog::Config {
     }
 }
 
-pub const ANSI_LOGO: &str = include_str!("../../contrib/darkfi.ansi");
-
-#[macro_export]
-macro_rules! cli_desc {
-    () => {{
-        let mut desc = env!("CARGO_PKG_DESCRIPTION").to_string();
-        desc.push_str("\n");
-        desc.push_str(darkfi::util::cli::ANSI_LOGO);
-        Box::leak(desc.into_boxed_str()) as &'static str
-    }};
-}
-
 /// This macro is used for a standard way of daemonizing darkfi binaries
 /// with TOML config file configuration, and argument parsing. It also
 /// spawns a multithreaded async executor and passes it into the given

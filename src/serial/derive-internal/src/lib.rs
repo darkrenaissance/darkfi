@@ -1,4 +1,4 @@
-//! Derive (de)serialization for structs, see src/util/derive
+//! Derive (de)serialization for structs, see src/serial/derive
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{Fields, Ident, Index, ItemEnum, ItemStruct, WhereClause};
@@ -33,8 +33,8 @@ pub fn enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2>
     body.extend(ret);
 
     Ok(quote! {
-        impl #cratename::util::serial::Encodable for #name #where_clause {
-            fn encode<S: std::io::Write>(&self, mut s: S) -> #cratename::Result<usize> {
+        impl #cratename::serial::Encodable for #name #where_clause {
+            fn encode<S: std::io::Write>(&self, mut s: S) -> ::core::result::Result<usize, std::io::Error> {
                 #body
             }
         }
@@ -74,7 +74,7 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
                 let field_type = &field.ty;
                 where_clause.predicates.push(
                     syn::parse2(quote! {
-                        #field_type: #cratename::util::serial::Encodable
+                        #field_type: #cratename::serial::Encodable
                     })
                     .unwrap(),
                 );
@@ -111,8 +111,8 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
     }
 
     Ok(quote! {
-        impl #cratename::util::serial::Encodable for #name #where_clause {
-            fn encode<S: std::io::Write>(&self, mut s: S) -> #cratename::Result<usize> {
+        impl #cratename::serial::Encodable for #name #where_clause {
+            fn encode<S: std::io::Write>(&self, mut s: S) -> ::core::result::Result<usize, std::io::Error> {
                 #body
             }
         }
@@ -155,13 +155,13 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
                             let field_type = &field.ty;
                             where_clause.predicates.push(
                                 syn::parse2(quote! {
-                                    #field_type: #cratename::util::serial::Decodable
+                                    #field_type: #cratename::serial::Decodable
                                 })
                                 .unwrap(),
                             );
 
                             quote! {
-                                #field_name: #cratename::util::serial::Decodable::decode(&mut d)?,
+                                #field_name: #cratename::serial::Decodable::decode(&mut d)?,
                             }
                         }
                     };
@@ -177,7 +177,7 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
             let mut body = TokenStream2::new();
             for _ in 0..fields.unnamed.len() {
                 let delta = quote! {
-                    #cratename::util::serial::Decodable::decode(&mut d)?,
+                    #cratename::serial::Decodable::decode(&mut d)?,
                 };
                 body.extend(delta);
             }
@@ -194,8 +194,8 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
     };
 
     Ok(quote! {
-        impl #cratename::util::serial::Decodable for #name #where_clause {
-            fn decode<D: std::io::Read>(mut d: D) -> #cratename::Result<Self> {
+        impl #cratename::serial::Decodable for #name #where_clause {
+            fn decode<D: std::io::Read>(mut d: D) -> ::core::result::Result<Self, std::io::Error> {
                 Ok(#return_value)
             }
         }

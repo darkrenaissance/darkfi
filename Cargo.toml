@@ -36,8 +36,8 @@ members = [
 	"bin/vanityaddr",
 	"bin/lilith",
 	"src/sdk",
-	"src/util/derive",
-	"src/util/derive-internal",
+	"src/serial/derive",
+	"src/serial/derive-internal",
 
     "example/dchat",
 ]
@@ -89,8 +89,8 @@ lazy-init = {version = "0.5.1", optional = true}
 fxhash = {version = "0.2.1", optional = true}
 indexmap = {version = "1.9.1", optional = true}
 itertools = {version = "0.10.3", optional = true}
-darkfi-derive = {path = "src/util/derive", optional = true}
-darkfi-derive-internal = {path = "src/util/derive-internal", optional = true}
+darkfi-derive = {path = "src/serial/derive", optional = true}
+darkfi-derive-internal = {path = "src/serial/derive-internal", optional = true}
 chrono = {version = "0.4.22", optional = true}
 
 # Misc
@@ -178,9 +178,19 @@ util = [
 
     "async-net",
     "async-runtime",
-	"darkfi-derive",
-	"darkfi-derive-internal",
 	"rpc",
+    "serial",
+]
+
+async-serial = [
+    "futures",
+
+    "serial",
+]
+
+serial = [
+    "darkfi-derive",
+    "darkfi-derive-internal",
 ]
 
 rpc = [
@@ -225,8 +235,10 @@ net = [
 	"structopt",
 	"structopt-toml",
 
-	"util",
+	"async-serial",
+	"serial",
 	"system",
+	"util",
 ]
 
 crypto = [
@@ -249,6 +261,7 @@ crypto = [
 	"bs58",
 
 	"util",
+	"serial",
 	"zkas",
 ]
 
@@ -286,7 +299,7 @@ zkas = [
 	"indexmap",
 	"itertools",
 
-	"util",
+	"serial",
 ]
 
 raft = [

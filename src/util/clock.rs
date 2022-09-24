@@ -1,7 +1,9 @@
-use crate::{util::Timestamp, Result};
-use log::debug;
 use std::{thread, time::Duration};
+
+use log::debug;
 use url::Url;
+
+use crate::{util::time::Timestamp, Result};
 
 pub enum Ticks {
     GENESIS { e: u64, sl: u64 },  //genesis epoch

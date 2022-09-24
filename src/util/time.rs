@@ -13,7 +13,7 @@ use url::Url;
 
 use crate::{
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
     Error, Result,
 };
 

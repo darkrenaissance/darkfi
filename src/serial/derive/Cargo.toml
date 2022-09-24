@@ -1,6 +1,11 @@
 [package]
 name = "darkfi-derive"
 version = "0.3.0"
+homepage = "https://dark.fi"
+description = "Crate for serialization derive macros"
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
 edition = "2021"
 
 [lib]

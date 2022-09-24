@@ -369,6 +369,9 @@ pub enum VerifyFailed {
 /// Client module errors
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ClientFailed {
+    #[error("IO error: {0}")]
+    Io(std::io::ErrorKind),
+
     #[error("Not enough value: {0}")]
     NotEnoughValue(u64),
 
@@ -400,6 +403,12 @@ impl From<Error> for ClientFailed {
 impl From<VerifyFailed> for ClientFailed {
     fn from(err: VerifyFailed) -> Self {
         Self::VerifyError(err.to_string())
+    }
+}
+
+impl From<std::io::Error> for ClientFailed {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err.kind())
     }
 }
 
