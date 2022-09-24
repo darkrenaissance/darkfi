@@ -15,7 +15,7 @@ use darkfi::{
         ErrorCode::{InternalError, InvalidParams, ParseError},
         JsonError, JsonResponse, JsonResult,
     },
-    util::serial::{deserialize, serialize},
+    serial::{deserialize, serialize},
 };
 
 use super::Darkfid;

@@ -8,8 +8,8 @@ use darkfi::{
     crypto::{address::Address, keypair::PublicKey, token_id},
     node::MemoryState,
     rpc::jsonrpc::{ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
+    serial::{deserialize, serialize},
     tx::Transaction,
-    util::serial::{deserialize, serialize},
 };
 
 use super::Darkfid;

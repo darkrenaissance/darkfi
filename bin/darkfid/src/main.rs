@@ -27,6 +27,7 @@ use darkfi::{
     net::P2pPtr,
     node::Client,
     rpc::{
+        clock_sync::check_clock,
         jsonrpc::{
             ErrorCode::{InvalidParams, MethodNotFound},
             JsonError, JsonRequest, JsonResult,
@@ -35,9 +36,7 @@ use darkfi::{
     },
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
-        path::get_config_path,
-        time::check_clock,
+        path::{expand_path, get_config_path},
     },
     wallet::walletdb::init_wallet,
     Error, Result,
@@ -269,7 +268,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
         // We verify that the system clock is valid before initializing
         let peers = [&args.consensus_peer_rpc[..], &args.consensus_seed_rpc[..]].concat();
-        if (check_clock(peers).await).is_err() {
+        if (check_clock(&peers).await).is_err() {
             error!("System clock is invalid, terminating...");
             return Err(Error::InvalidClock)
         };
