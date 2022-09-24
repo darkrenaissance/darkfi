@@ -169,7 +169,6 @@ util = [
     "termion",
 
     "async-runtime",
-    "rpc",
     "serial",
 ]
 
@@ -328,7 +327,6 @@ required-features = ["crypto"]
 name = "lead"
 path = "example/lead.rs"
 required-features = ["node"]
-
 
 [[example]]
 name = "crypsinous"

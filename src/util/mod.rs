@@ -1,4 +1,3 @@
-#[cfg(feature = "async-runtime")]
 /// async utility functions
 pub mod async_util;
 
@@ -21,7 +20,7 @@ pub mod parse;
 /// Filesystem path utilities
 pub mod path;
 
-/// Time utilities (TODO: Util should **not** depend on `net` feature, so remove ntp from here)
+/// Time utilities
 pub mod time;
 
 // =======================
