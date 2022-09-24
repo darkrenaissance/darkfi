@@ -151,9 +151,9 @@ us from social truth.
 time society is recreated there is a tendency to form a new capital
 and power-state monopoly. Much like medieval theism was ideologically
 connected to absolute monarchies (sultanates and shāhanshāhs),
-modern social engineering—as re-creation—is essentially the
-divine disposition and ideology of the nation-state. Positivism in
-this regard is modern theism.
+modern social engineering as rereation is essentially the divine
+disposition and ideology of the nation-state. Positivism in this
+regard is modern theism.
 
 4. Revolutions cannot be interpreted as the re-creation acts of
 society. When thusly understood they cannot escape positivist
