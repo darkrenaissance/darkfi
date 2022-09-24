@@ -1,8 +1,5 @@
-use ::darkfi::{blockchain::EpochConsensus,
-               net::Settings,
-               stakeholder::Stakeholder,
-               util::time::Timestamp,
-               
+use ::darkfi::{
+    blockchain::EpochConsensus, net::Settings, stakeholder::Stakeholder, util::time::Timestamp,
 };
 
 use clap::Parser;
@@ -13,13 +10,13 @@ use vec;
 
 #[derive(Parser)]
 struct NetCli {
-    #[clap(long,value_parser,default_value="tls://127.0.0.1:12003")]
+    #[clap(long, value_parser, default_value = "tls://127.0.0.1:12003")]
     addr: String,
-    #[clap(long,value_parser,default_value="/tmp/db")]
+    #[clap(long, value_parser, default_value = "/tmp/db")]
     path: String,
-    #[clap(long,value_parser,default_value="tls://127.0.0.1:12004")]
+    #[clap(long, value_parser, default_value = "tls://127.0.0.1:12004")]
     peers: Vec<String>,
-    #[clap(long,value_parser,default_value="tls://lilith.dark.fi:25551")]
+    #[clap(long, value_parser, default_value = "tls://lilith.dark.fi:25551")]
     seeds: Vec<String>,
 }
 
@@ -59,15 +56,10 @@ async fn main() {
     let path = args.path;
     let id = Timestamp::current_time().0;
 
-    let mut stakeholder = block_on(Stakeholder::new(
-        epoch_consensus.clone(),
-        settings.clone(),
-        &path,
-        id,
-        Some(k),
-    ))
-        .unwrap();
-    
+    let mut stakeholder =
+        block_on(Stakeholder::new(epoch_consensus.clone(), settings.clone(), &path, id, Some(k)))
+            .unwrap();
+
     let handle = thread::spawn(move || {
         block_on(stakeholder.background(Some(9)));
     });
