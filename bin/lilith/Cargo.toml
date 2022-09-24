@@ -11,7 +11,7 @@ keywords = []
 categories = []
 
 [dependencies]
-darkfi = {path = "../../", features = ["net"]}
+darkfi = {path = "../../", features = ["net", "rpc"]}
 
 # Async
 async-channel = "1.7.1"

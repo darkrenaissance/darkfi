@@ -22,9 +22,8 @@ use darkfi::{
     },
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
         file::{load_file, save_file},
-        path::get_config_path,
+        path::{expand_path, get_config_path},
     },
     Result,
 };
