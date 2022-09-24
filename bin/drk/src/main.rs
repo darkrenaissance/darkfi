@@ -18,7 +18,8 @@ use darkfi::{
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
         cli::{get_log_config, get_log_level, progress_bar},
-        encode_base10, NetworkName,
+        net_name::NetworkName,
+        parse::encode_base10,
     },
     Result,
 };
