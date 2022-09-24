@@ -1,11 +1,18 @@
 # IRC Private Channel Bot
 
-The meeting bot used in IRC Channels can be slightly hacked to run in private channels. This is a demo version - a quick fix. Download this folder and follow the setup:
+meeting_bot_secret.py is an upgraded version of the meeting_bot.py for IRC. This version allows for multiple channels, including private ones.
+
+**Note:**
+
+* {user} needs to be exchanged with your *username*.
+* Every channel runs a bot on a different thread - be careful how many bots you deploy!
+
 
 **Setup**
 
-1. Open meeting_bot_config.json
-2. Change "channel" and "secret" values to ones of the room you want to deploy the bot to
-3. Save the file
-4. Navigate terminal to the folder where is demo_priv_meeting_bot.py
-5. `$ python demo_priv_meeting_bot.py`
+* Donwload  *meeting_bot_secret.py* and *meeting_bot_secret_config.py* 
+* Copy meeting_bot_secret_config.py to /home/{user}/.config/darkfi
+* Open the config and set up all the channels and the values of name and secret (if not private, secret must be {null})
+* Change {user} to your *username* in *meeting_bot_secret.py* in the path of *load_config()* function
+* Navigate terminal to the folder where is *meeting_bot_secret.py*
+* Run the bot: `$ python meeting_bot_secret.py`

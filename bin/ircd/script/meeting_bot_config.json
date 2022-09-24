@@ -1,7 +1,0 @@
-{
-    "host":"127.0.0.1",
-    "port":6667,
-    "channel":"#enter_channel_name",
-    "nickname":"meeting_bot",
-    "secret":"#enter_secret"
-}
