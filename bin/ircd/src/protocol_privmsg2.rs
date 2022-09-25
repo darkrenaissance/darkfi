@@ -127,6 +127,11 @@ struct Inv {
 }
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
+struct SyncEvent {
+    head: EventId,
+}
+
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct GetData {
     invs: Vec<InvItem>,
 }
@@ -136,6 +141,7 @@ pub struct ProtocolEvent {
     event_sub: net::MessageSubscription<Event>,
     inv_sub: net::MessageSubscription<Inv>,
     getdata_sub: net::MessageSubscription<GetData>,
+    syncevent_sub: net::MessageSubscription<SyncEvent>,
     p2p: net::P2pPtr,
     channel: net::ChannelPtr,
     seen_event: Seen<EventId>,
@@ -155,6 +161,7 @@ impl ProtocolEvent {
         message_subsytem.add_dispatch::<Event>().await;
         message_subsytem.add_dispatch::<Inv>().await;
         message_subsytem.add_dispatch::<GetData>().await;
+        message_subsytem.add_dispatch::<SyncEvent>().await;
 
         let event_sub =
             channel.clone().subscribe_msg::<Event>().await.expect("Missing Event dispatcher!");
@@ -164,11 +171,18 @@ impl ProtocolEvent {
         let getdata_sub =
             channel.clone().subscribe_msg::<GetData>().await.expect("Missing GetData dispatcher!");
 
+        let syncevent_sub = channel
+            .clone()
+            .subscribe_msg::<SyncEvent>()
+            .await
+            .expect("Missing SyncEvent dispatcher!");
+
         Arc::new(Self {
+            jobsman: net::ProtocolJobsManager::new("ProtocolEvent", channel.clone()),
             event_sub,
             inv_sub,
             getdata_sub,
-            jobsman: net::ProtocolJobsManager::new("ProtocolEvent", channel.clone()),
+            syncevent_sub,
             p2p,
             channel,
             seen_event,
@@ -240,10 +254,19 @@ impl ProtocolEvent {
         }
     }
 
+    async fn handle_receive_syncevent(self: Arc<Self>) -> Result<()> {
+        debug!(target: "ircd", "ProtocolEvent::handle_receive_syncevent() [START]");
+        loop {
+            let syncevent = self.syncevent_sub.receive().await?;
+            let head = (*syncevent).to_owned().head;
+        }
+    }
+
     // every 2 seconds send a Sync msg
     async fn send_sync_hash_loop(self: Arc<Self>) -> Result<()> {
         loop {
-            // Send Sync msg
+            //let head = self.model.fing_longest_chain();
+            //self.channel.send(SyncEvent { head }).await;
             sleep(2).await;
         }
     }
@@ -273,6 +296,7 @@ impl net::ProtocolBase for ProtocolEvent {
         self.jobsman.clone().spawn(self.clone().handle_receive_event(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_inv(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_getdata(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_syncevent(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().send_sync_hash_loop(), executor.clone()).await;
         debug!(target: "ircd", "ProtocolEvent::start() [END]");
         Ok(())
@@ -292,6 +316,12 @@ impl net::Message for Event {
 impl net::Message for Inv {
     fn name() -> &'static str {
         "inv"
+    }
+}
+
+impl net::Message for SyncEvent {
+    fn name() -> &'static str {
+        "syncevent"
     }
 }
 

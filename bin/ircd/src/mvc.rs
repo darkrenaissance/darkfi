@@ -1,18 +1,15 @@
-use async_std::sync::{Arc, Mutex};
 use std::{
     collections::{HashMap, HashSet},
     fmt, io,
 };
 
-use async_recursion::async_recursion;
 use ripemd::{Digest, Ripemd256};
 
 use darkfi::serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable};
 
 // TODO
-// Pass EventId for all the functions instead of EventNodePtr
-// Use hashmap for Event's childrens
-// Remove Mutex from Event's childrens
+// move Model and View into separate modules
+// move get_current_time to another place
 // More tests
 
 pub type EventId = [u8; 32];
@@ -51,7 +48,6 @@ impl fmt::Debug for Event {
     }
 }
 
-
 #[derive(Clone)]
 enum EventAction {
     PrivMsg(PrivMsgEvent),
@@ -86,27 +82,25 @@ struct PrivMsgEvent {
     msg: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct EventNode {
     // Only current root has this set to None
-    parent: Option<EventNodePtr>,
+    parent: Option<EventId>,
     event: Event,
-    children: Mutex<Vec<EventNodePtr>>,
+    children: Vec<EventId>,
 }
-
-type EventNodePtr = Arc<EventNode>;
 
 #[derive(Debug)]
 struct Model {
     // This is periodically updated so we discard old nodes
     current_root: EventId,
-    orphans: Vec<Event>,
-    event_map: HashMap<EventId, EventNodePtr>,
+    orphans: HashMap<EventId, Event>,
+    event_map: HashMap<EventId, EventNode>,
 }
 
 impl Model {
     fn new() -> Self {
-        let root_node = Arc::new(EventNode {
+        let root_node = EventNode {
             parent: None,
             event: Event {
                 previous_event_hash: [0u8; 32],
@@ -117,32 +111,24 @@ impl Model {
                 timestamp: get_current_time(),
                 read_confirms: 0,
             },
-            children: Mutex::new(Vec::new()),
-        });
-        let root_node_id = root_node.event.hash();
+            children: Vec::new(),
+        };
 
+        let root_node_id = root_node.event.hash();
         let event_map = HashMap::from([(root_node_id.clone(), root_node)]);
 
-        Self { current_root: root_node_id, orphans: Vec::new(), event_map }
+        Self { current_root: root_node_id, orphans: HashMap::new(), event_map }
     }
 
-    async fn add(&mut self, event: Event) {
-        self.orphans.push(event);
-        self.reorganize().await;
+    fn add(&mut self, event: Event) {
+        self.orphans.insert(event.hash(), event);
+        self.reorganize();
     }
 
-    // TODO: Update root only after some time
-    // Recursively free nodes climbing up from old root to new root
-    // Also remove entries from event_map
-
-    async fn reorganize(&mut self) {
+    fn reorganize(&mut self) {
         let mut remaining_orphans = Vec::new();
-        for orphan in std::mem::take(&mut self.orphans) {
+        for (_, orphan) in std::mem::take(&mut self.orphans) {
             let prev_event = orphan.previous_event_hash.clone();
-
-            // clean up the tree from old eventnodes
-            self.prune_forks().await;
-            self.update_root().await;
 
             // Parent does not yet exist
             if !self.event_map.contains_key(&prev_event) {
@@ -155,135 +141,122 @@ impl Model {
                 continue
             }
 
-            let parent = self.event_map.get(&prev_event).expect("logic error").clone();
-            let node = Arc::new(EventNode {
-                parent: Some(parent.clone()),
-                event: orphan,
-                children: Mutex::new(Vec::new()),
-            });
+            let node = EventNode { parent: Some(prev_event), event: orphan, children: Vec::new() };
+            let node_hash = node.event.hash();
 
-            // Reject events which attach to forks too low in the chain
-            // At some point we ignore all events from old branches
-            let depth = self.diff_depth(node.clone(), self.find_head().await);
-            if depth > MAX_DEPTH {
-                continue
-            }
-
-            parent.children.lock().await.push(node.clone());
+            let parent = self.event_map.get_mut(&prev_event).unwrap();
+            parent.children.push(node_hash);
             // Add node to the table
-            self.event_map.insert(node.event.hash(), node);
+            self.event_map.insert(node_hash, node);
+
+            // clean up the tree from old eventnodes
+            self.prune_forks();
+            self.update_root();
         }
     }
 
-    async fn prune_forks(&mut self) {
-        let head = self.find_head().await;
-        let head_hash = head.event.hash();
-        for (event_hash, node) in self.event_map.clone() {
-            // to prevent running through the same node twice
-            if !self.event_map.contains_key(&event_hash) {
-                continue
-            }
-
+    fn prune_forks(&mut self) {
+        let head = self.find_head();
+        let mut remove_list = vec![];
+        // Reject events which attach to forks too low in the chain
+        // At some point we ignore all events from old branches
+        for (event_hash, node) in self.event_map.iter() {
             // skip the head event
-            if event_hash == head_hash {
+            if event_hash == &head {
                 continue
             }
 
             // check if the node is a leaf
-            if node.children.lock().await.is_empty() {
-                let depth = self.diff_depth(node.clone(), self.find_head().await);
+            if node.children.is_empty() {
+                let depth = self.diff_depth(event_hash.clone(), self.find_head());
                 if depth > MAX_DEPTH {
-                    self.remove_node(node.clone()).await;
+                    remove_list.push(event_hash.clone());
                 }
             }
         }
+
+        for event in remove_list {
+            self.remove_node(event);
+        }
     }
 
-    async fn update_root(&mut self) {
-        let head = self.find_head().await;
-        let head_hash = head.event.hash();
+    fn update_root(&mut self) {
+        let head = self.find_head();
 
         // collect the leaves in the tree
         let mut leaves = vec![];
 
-        for (event_hash, node) in self.event_map.clone() {
+        for (event_hash, node) in self.event_map.iter() {
             // skip the head event
-            if event_hash == head_hash {
+            if event_hash == &head {
                 continue
             }
 
             // check if the node is a leaf
-            if node.children.lock().await.is_empty() {
-                leaves.push(node);
+            if node.children.is_empty() {
+                leaves.push(event_hash);
             }
         }
 
         // find the common ancestor between each leaf and the head event
         let mut ancestors = vec![];
         for leaf in leaves {
-            let ancestor = self.find_ancestor(leaf, head.clone());
-            let ancestor = self.event_map.get(&ancestor).unwrap().clone();
+            let ancestor = self.find_ancestor(leaf.clone(), head);
             ancestors.push(ancestor);
         }
 
         // find the highest ancestor
         let highest_ancestor = ancestors.iter().max_by(|&a, &b| {
-            self.find_depth(a.clone(), head_hash).cmp(&self.find_depth(b.clone(), head_hash))
+            self.find_depth(a.clone(), &head).cmp(&self.find_depth(b.clone(), &head))
         });
 
         // set the new root
         if let Some(ancestor) = highest_ancestor {
-            let ancestor_hash = ancestor.event.hash();
-
             // the ancestor must have at least height > 10
-            let ancestor_height = self.find_height(self.get_root(), ancestor_hash).await.unwrap();
+            let ancestor_height = self.find_height(&self.current_root, ancestor).unwrap();
             if ancestor_height < 10 {
                 return
             }
 
             // removing the parents of the new root node
-            let mut root = self.get_root();
+            let mut root = self.event_map.get(&self.current_root).unwrap();
             loop {
                 let root_hash = root.event.hash();
 
-                if root_hash == ancestor_hash {
+                if &root_hash == ancestor {
                     break
                 }
 
-                let root_childs = root.children.lock().await;
+                let root_childs = &root.children;
                 assert_eq!(root_childs.len(), 1);
-
                 let child = root_childs.get(0).unwrap().clone();
-                drop(root_childs);
 
                 self.event_map.remove(&root_hash);
-                root = child;
+                root = self.event_map.get(&child).unwrap();
             }
 
-            self.current_root = ancestor_hash;
+            self.current_root = ancestor.clone();
         }
     }
 
-    async fn remove_node(&mut self, mut node: EventNodePtr) {
+    fn remove_node(&mut self, mut event_id: EventId) {
         loop {
-            let event_id = node.event.hash();
+            if !self.event_map.contains_key(&event_id) {
+                break
+            }
+
+            let node = self.event_map.get(&event_id).unwrap().clone();
             self.event_map.remove(&event_id);
 
-            let parent = node.parent.as_ref().unwrap().clone();
-            let parent_children = &mut parent.children.lock().await;
-            let index = parent_children.iter().position(|n| n.event.hash() == event_id).unwrap();
-            parent_children.remove(index);
+            let parent = self.event_map.get_mut(&node.parent.unwrap()).unwrap();
+            let index = parent.children.iter().position(|&n| n == event_id).unwrap();
+            parent.children.remove(index);
 
-            if !parent_children.is_empty() {
-                return
+            if !parent.children.is_empty() {
+                break
             }
-            node = parent.clone();
+            event_id = parent.event.hash();
         }
-    }
-
-    fn get_root(&self) -> EventNodePtr {
-        let root_id = &self.current_root;
-        return self.event_map.get(root_id).expect("root ID is not in the event map!").clone()
     }
 
     // find_head
@@ -291,33 +264,35 @@ impl Model {
     // -> + 1 for every recursion, return self if no children
     // -> select max from returned values
     // Gets the lead node with the maximal number of events counting from root
-    async fn find_head(&self) -> EventNodePtr {
-        let root = self.get_root();
-        Self::find_longest_chain(root, 0).await.0
+    fn find_head(&self) -> EventId {
+        self.find_longest_chain(&self.current_root, 0).0
     }
 
-    #[async_recursion]
-    async fn find_longest_chain(parent_node: EventNodePtr, i: u32) -> (EventNodePtr, u32) {
-        let children = parent_node.children.lock().await;
+    fn find_longest_chain(&self, parent_node: &EventId, i: u32) -> (EventId, u32) {
+        let children = &self.event_map.get(parent_node).unwrap().children;
         if children.is_empty() {
             return (parent_node.clone(), i)
         }
+
         let mut current_max = 0;
         let mut current_node = None;
-        for node in &*children {
-            let (grandchild_node, grandchild_i) =
-                Self::find_longest_chain(node.clone(), i + 1).await;
+        for node in children.iter() {
+            let (grandchild_node, grandchild_i) = self.find_longest_chain(node, i + 1);
 
             if grandchild_i > current_max {
                 current_max = grandchild_i;
-                current_node = Some(grandchild_node.clone());
+                current_node = Some(grandchild_node);
             } else if grandchild_i == current_max {
                 // Break ties using the timestamp
-                if grandchild_node.event.timestamp >
-                    current_node.as_ref().expect("current_node should be set!").event.timestamp
-                {
+
+                let grandchild_node_timestamp =
+                    self.event_map.get(&grandchild_node).unwrap().event.timestamp;
+                let current_node_timestamp =
+                    self.event_map.get(&current_node.unwrap()).unwrap().event.timestamp;
+
+                if grandchild_node_timestamp > current_node_timestamp {
                     current_max = grandchild_i;
-                    current_node = Some(grandchild_node.clone());
+                    current_node = Some(grandchild_node);
                 }
             }
         }
@@ -325,11 +300,11 @@ impl Model {
         (current_node.expect("internal logic error"), current_max)
     }
 
-    fn find_depth(&self, mut node: EventNodePtr, ancestor_id: EventId) -> u32 {
+    fn find_depth(&self, mut node: EventId, ancestor_id: &EventId) -> u32 {
         let mut depth = 0;
-        while node.event.hash() != ancestor_id {
+        while &node != ancestor_id {
             depth += 1;
-            if let Some(parent) = node.parent.clone() {
+            if let Some(parent) = self.event_map.get(&node).unwrap().parent.clone() {
                 node = parent
             } else {
                 break
@@ -338,71 +313,66 @@ impl Model {
         depth
     }
 
-    #[async_recursion]
-    async fn find_height(&self, parent: EventNodePtr, child_id: EventId) -> Option<u32> {
+    fn find_height(&self, parent: &EventId, child_id: &EventId) -> Option<u32> {
         let mut height = 0;
-        if parent.event.hash() == child_id {
+
+        if parent == child_id {
             return Some(height)
         }
 
         height += 1;
 
-        let children = parent.children.lock().await.clone();
-
-        if children.is_empty() {
+        let parent_children = &self.event_map.get(parent).unwrap().children;
+        if parent_children.is_empty() {
             return None
         }
 
-        for parent_child in children.iter() {
-            if let Some(h) = self.find_height(parent_child.clone(), child_id).await {
+        for parent_child in parent_children.iter() {
+            if let Some(h) = self.find_height(parent_child, child_id) {
                 return Some(height + h)
             }
         }
         None
     }
 
-    fn find_ancestor(&self, mut node_a: EventNodePtr, mut node_b: EventNodePtr) -> EventId {
+    fn find_ancestor(&self, mut node_a: EventId, mut node_b: EventId) -> EventId {
         // node_a is a child of node_b
-        let is_child = node_b.event.hash() == node_a.parent.as_ref().unwrap().event.hash();
+        let is_child = node_b == self.event_map.get(&node_a).unwrap().parent.unwrap();
+
         if is_child {
-            return node_b.event.hash()
+            return node_b.clone()
         }
 
-        while node_a.event.hash() != node_b.event.hash() {
-            let node_a_parent =
-                node_a.parent.as_ref().expect("non-root nodes should have a parent set");
+        while node_a != node_b {
+            let node_a_parent = self.event_map.get(&node_a).unwrap().parent.unwrap();
+            let node_b_parent = self.event_map.get(&node_b).unwrap().parent.unwrap();
 
-            let node_b_parent =
-                node_b.parent.as_ref().expect("non-root nodes should have a parent set");
-
-            if node_a_parent.event.hash() == self.current_root ||
-                node_b_parent.event.hash() == self.current_root
-            {
+            if node_a_parent == self.current_root || node_b_parent == self.current_root {
                 return self.current_root
             }
 
-            node_a = node_a_parent.clone();
-            node_b = node_b_parent.clone();
+            node_a = node_a_parent;
+            node_b = node_b_parent;
         }
 
-        node_a.event.hash().clone()
+        node_a.clone()
     }
 
-    fn diff_depth(&self, node_a: EventNodePtr, node_b: EventNodePtr) -> u32 {
-        let ancestor = self.find_ancestor(node_a.clone(), node_b.clone());
-        let node_a_depth = self.find_depth(node_a, ancestor);
-        let node_b_depth = self.find_depth(node_b, ancestor);
+    fn diff_depth(&self, node_a: EventId, node_b: EventId) -> u32 {
+        let ancestor = self.find_ancestor(node_a, node_b);
+        let node_a_depth = self.find_depth(node_a, &ancestor);
+        let node_b_depth = self.find_depth(node_b, &ancestor);
         (node_b_depth + 1) - node_a_depth
     }
 
-    async fn debug(&self) {
+    fn debug(&self) {
         for (event_id, event_node) in &self.event_map {
-            let depth = self.find_depth(event_node.clone(), self.current_root);
+            let depth = self.find_depth(event_id.clone(), &self.current_root);
             println!("{}: {:?} [depth={}]", hex::encode(&event_id), event_node.event, depth);
         }
 
-        println!("root: {}", hex::encode(&self.get_root().event.hash()));
-        println!("head: {}", hex::encode(&self.find_head().await.event.hash()));
+        println!("root: {}", hex::encode(&self.current_root));
+        println!("head: {}", hex::encode(&self.find_head()));
     }
 }
 
@@ -414,15 +384,6 @@ pub fn get_current_time() -> u64 {
         .as_millis()
         .try_into()
         .unwrap()
-}
-
-fn create_message(previous_event_hash: EventId, nick: &str, msg: &str, timestamp: u64) -> Event {
-    Event {
-        previous_event_hash,
-        action: EventAction::PrivMsg(PrivMsgEvent { nick: nick.to_string(), msg: msg.to_string() }),
-        timestamp,
-        read_confirms: 4
-    }
 }
 
 struct View {
@@ -446,10 +407,27 @@ impl View {
 mod tests {
     use super::*;
 
-    #[async_std::test]
-    async fn test_update_root() {
+    fn create_message(
+        previous_event_hash: EventId,
+        nick: &str,
+        msg: &str,
+        timestamp: u64,
+    ) -> Event {
+        Event {
+            previous_event_hash,
+            action: EventAction::PrivMsg(PrivMsgEvent {
+                nick: nick.to_string(),
+                msg: msg.to_string(),
+            }),
+            timestamp,
+            read_confirms: 4,
+        }
+    }
+
+    #[test]
+    fn test_update_root() {
         let mut model = Model::new();
-        let root_id = model.get_root().event.hash();
+        let root_id = model.current_root;
 
         // event_node 1
         // Fill this node with 5 events
@@ -458,7 +436,7 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
             id1 = node.hash();
-            model.add(node).await;
+            model.add(node);
         }
 
         // event_node 2
@@ -468,7 +446,7 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
             id2 = node.hash();
-            model.add(node).await;
+            model.add(node);
         }
 
         // Fill id2 node with 8 events
@@ -477,7 +455,7 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id3, &format!("chain 2 msg {}", x), "message", timestamp);
             id3 = node.hash();
-            model.add(node).await;
+            model.add(node);
         }
 
         // Fill id2 node with 9 events
@@ -486,19 +464,19 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id4, &format!("chain 2 msg {}", x), "message", timestamp);
             id4 = node.hash();
-            model.add(node).await;
+            model.add(node);
         }
 
-        assert_eq!(model.find_height(model.get_root(), id2).await.unwrap(), 0);
-        assert_eq!(model.find_height(model.get_root(), id3).await.unwrap(), 8);
-        assert_eq!(model.find_height(model.get_root(), id4).await.unwrap(), 9);
+        assert_eq!(model.find_height(&model.current_root, &id2).unwrap(), 0);
+        assert_eq!(model.find_height(&model.current_root, &id3).unwrap(), 8);
+        assert_eq!(model.find_height(&model.current_root, &id4).unwrap(), 9);
         assert_eq!(model.current_root, id2);
     }
 
-    #[async_std::test]
-    async fn test_find_height() {
+    #[test]
+    fn test_find_height() {
         let mut model = Model::new();
-        let root_id = model.get_root().event.hash();
+        let root_id = model.current_root;
 
         // event_node 1
         // Fill this node with 8 events
@@ -507,7 +485,7 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
             id1 = node.hash();
-            model.add(node).await;
+            model.add(node);
         }
 
         // event_node 2
@@ -517,17 +495,17 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
             id2 = node.hash();
-            model.add(node).await;
+            model.add(node);
         }
 
-        assert_eq!(model.find_height(model.get_root(), id1).await.unwrap(), 8);
-        assert_eq!(model.find_height(model.get_root(), id2).await.unwrap(), 14);
+        assert_eq!(model.find_height(&model.current_root, &id1).unwrap(), 8);
+        assert_eq!(model.find_height(&model.current_root, &id2).unwrap(), 14);
     }
 
-    #[async_std::test]
-    async fn test_prune_forks() {
+    #[test]
+    fn test_prune_forks() {
         let mut model = Model::new();
-        let root_id = model.get_root().event.hash();
+        let root_id = model.current_root;
 
         // event_node 1
         // Fill this node with 3 events
@@ -537,7 +515,7 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
             id1 = node.hash();
-            model.add(node).await;
+            model.add(node);
             event_node_1_ids.push(id1);
         }
 
@@ -549,10 +527,10 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
             id2 = node.hash();
-            model.add(node).await;
+            model.add(node);
         }
 
-        assert_eq!(model.find_head().await.event.hash(), id2);
+        assert_eq!(model.find_head(), id2);
 
         for id in event_node_1_ids {
             assert!(!model.event_map.contains_key(&id));
@@ -561,10 +539,10 @@ mod tests {
         assert_eq!(model.event_map.len(), 15);
     }
 
-    #[async_std::test]
-    async fn test_diff_depth() {
+    #[test]
+    fn test_diff_depth() {
         let mut model = Model::new();
-        let root_id = model.get_root().event.hash();
+        let root_id = model.current_root;
 
         // event_node 1
         // Fill this node with 7 events
@@ -573,7 +551,7 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
             id1 = node.hash();
-            model.add(node).await;
+            model.add(node);
         }
 
         // event_node 2
@@ -585,10 +563,10 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
             id2 = node.hash();
-            model.add(node).await;
+            model.add(node);
         }
 
-        assert_eq!(model.find_head().await.event.hash(), id2);
+        assert_eq!(model.find_head(), id2);
 
         // event_node 3
         // This will start as new fork, but no events will be added
@@ -598,13 +576,13 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id3, &format!("chain 3 msg {}", x), "message", timestamp);
             id3 = node.hash();
-            model.add(node).await;
+            model.add(node);
 
             // ensure events are not added
             assert!(!model.event_map.contains_key(&id3));
         }
 
-        assert_eq!(model.find_head().await.event.hash(), id2);
+        assert_eq!(model.find_head(), id2);
 
         // Add more events to the event_node 1
         // At the end this fork must overtake the event_node 2
@@ -612,9 +590,9 @@ mod tests {
             let timestamp = get_current_time() + 1;
             let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
             id1 = node.hash();
-            model.add(node).await;
+            model.add(node);
         }
 
-        assert_eq!(model.find_head().await.event.hash(), id1);
+        assert_eq!(model.find_head(), id1);
     }
 }
