@@ -24,9 +24,9 @@ use darkfi::{
 };
 
 pub mod buffers;
-pub mod chains;
 pub mod crypto;
 pub mod irc;
+pub mod mvc;
 pub mod privmsg;
 pub mod protocol_privmsg;
 pub mod protocol_privmsg2;

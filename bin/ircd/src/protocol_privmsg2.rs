@@ -3,7 +3,6 @@ use std::collections::VecDeque;
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use chrono::Utc;
 use fxhash::FxHashMap;
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
@@ -15,10 +14,19 @@ use darkfi::{
     Result,
 };
 
-use crate::{
-    chains::{Chains, Privmsg},
-    settings,
-};
+use crate::mvc::{get_current_time, Event, EventId};
+
+const UNREAD_EVENT_EXPIRE_TIME: u64 = 3600; // in seconds
+const SIZE_OF_SEEN_BUFFER: usize = 65536;
+const MAX_CONFIRM: u8 = 4;
+
+type InvId = u64;
+
+#[derive(SerialEncodable, SerialDecodable, Clone, Debug, PartialEq, Eq, Hash)]
+struct InvItem {
+    id: InvId,
+    hash: EventId,
+}
 
 #[derive(Clone)]
 pub struct RingBuffer<T> {
@@ -43,323 +51,241 @@ impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
     }
 }
 
-pub struct SeenIds {
-    ids: Mutex<RingBuffer<String>>,
+pub struct Seen<T> {
+    seen: Mutex<RingBuffer<T>>,
 }
 
-impl SeenIds {
+impl<T: Eq + PartialEq + Clone> Seen<T> {
     pub fn new() -> Self {
-        Self { ids: Mutex::new(RingBuffer::new(settings::SIZE_OF_IDSS_BUFFER)) }
+        Self { seen: Mutex::new(RingBuffer::new(SIZE_OF_SEEN_BUFFER)) }
     }
 
-    pub async fn push(&self, id: &String) -> bool {
-        let ids = &mut self.ids.lock().await;
-        if !ids.contains(id) {
-            ids.push(id.clone());
+    pub async fn push(&self, item: &T) -> bool {
+        let seen = &mut self.seen.lock().await;
+        if !seen.contains(item) {
+            seen.push(item.clone());
             return true
         }
         false
     }
 }
 
-pub struct UnreadMsgs {
-    msgs: Mutex<FxHashMap<String, Privmsg>>,
+pub struct UnreadEvents {
+    events: Mutex<FxHashMap<EventId, Event>>,
 }
 
-impl UnreadMsgs {
+impl UnreadEvents {
     pub fn new() -> Self {
-        Self { msgs: Mutex::new(FxHashMap::default()) }
+        Self { events: Mutex::new(FxHashMap::default()) }
     }
 
-    pub async fn contains(&self, key: &str) -> bool {
-        self.msgs.lock().await.contains_key(key)
+    pub async fn contains(&self, key: &EventId) -> bool {
+        self.events.lock().await.contains_key(key)
     }
 
-    // Increase the read_confirms for a message, if it has exceeded the MAX_CONFIRM
-    // then remove it from the hash_map and return Some(msg), otherwise return None
-    pub async fn inc_read_confirms(&self, key: &str) -> Option<Privmsg> {
-        let msgs = &mut self.msgs.lock().await;
+    // Increase the read_confirms for an event, if it has exceeded the MAX_CONFIRM
+    // then remove it from the hash_map and return Some(event), otherwise return None
+    pub async fn inc_read_confirms(&self, key: &EventId) -> Option<Event> {
+        let events = &mut self.events.lock().await;
         let mut result = None;
 
-        if let Some(msg) = msgs.get_mut(key) {
-            msg.read_confirms += 1;
-            if msg.read_confirms >= settings::MAX_CONFIRM {
-                result = Some(msg.clone())
+        if let Some(event) = events.get_mut(key) {
+            event.read_confirms += 1;
+            if event.read_confirms >= MAX_CONFIRM {
+                result = Some(event.clone())
             }
         }
 
         if result.is_some() {
-            msgs.remove(key);
+            events.remove(key);
         }
 
         result
     }
 
-    pub async fn insert(&self, msg: &Privmsg) {
-        let msgs = &mut self.msgs.lock().await;
+    pub async fn insert(&self, event: &Event) {
+        let events = &mut self.events.lock().await;
 
-        // prune expired msgs
+        // prune expired events
         let mut prune_ids = vec![];
-        for (id, m) in msgs.iter() {
-            if m.timestamp + settings::UNREAD_MSG_EXPIRE_TIME < Utc::now().timestamp() {
+        for (id, e) in events.iter() {
+            if e.timestamp + (UNREAD_EVENT_EXPIRE_TIME * 1000) < get_current_time() {
                 prune_ids.push(id.clone());
             }
         }
         for id in prune_ids {
-            msgs.remove(&id);
+            events.remove(&id);
         }
 
-        msgs.insert(msg.id.clone(), msg.clone());
+        events.insert(event.hash().clone(), event.clone());
     }
 }
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct Inv {
-    id: String,
-    hash: String,
-    target: String,
+    invs: Vec<InvItem>,
 }
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
-struct GetMsgs {
-    invs: Vec<String>,
-    target: String,
+struct GetData {
+    invs: Vec<InvItem>,
 }
 
-#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
-struct Hashes {
-    hashes: Vec<String>,
-    height: usize,
-    target: String,
-}
-
-#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
-struct SyncHash {
-    height: usize,
-    target: String,
-}
-
-pub struct ProtocolPrivmsg {
+pub struct ProtocolEvent {
     jobsman: net::ProtocolJobsManagerPtr,
-    notify: async_channel::Sender<Privmsg>,
-    msg_sub: net::MessageSubscription<Privmsg>,
+    event_sub: net::MessageSubscription<Event>,
     inv_sub: net::MessageSubscription<Inv>,
-    getmsgs_sub: net::MessageSubscription<GetMsgs>,
-    hashes_sub: net::MessageSubscription<Hashes>,
-    synchash_sub: net::MessageSubscription<SyncHash>,
+    getdata_sub: net::MessageSubscription<GetData>,
     p2p: net::P2pPtr,
     channel: net::ChannelPtr,
-    chains: Chains,
-    seen_ids: SeenIds,
-    unread_msgs: UnreadMsgs,
+    seen_event: Seen<EventId>,
+    seen_inv: Seen<InvId>,
+    unread_events: UnreadEvents,
 }
 
-impl ProtocolPrivmsg {
+impl ProtocolEvent {
     pub async fn init(
         channel: net::ChannelPtr,
-        notify: async_channel::Sender<Privmsg>,
         p2p: net::P2pPtr,
-        chains: Chains,
-        seen_ids: SeenIds,
-        unread_msgs: UnreadMsgs,
+        seen_event: Seen<EventId>,
+        seen_inv: Seen<InvId>,
+        unread_events: UnreadEvents,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
-        message_subsytem.add_dispatch::<Privmsg>().await;
+        message_subsytem.add_dispatch::<Event>().await;
         message_subsytem.add_dispatch::<Inv>().await;
-        message_subsytem.add_dispatch::<GetMsgs>().await;
-        message_subsytem.add_dispatch::<Hashes>().await;
-        message_subsytem.add_dispatch::<SyncHash>().await;
+        message_subsytem.add_dispatch::<GetData>().await;
 
-        let msg_sub =
-            channel.clone().subscribe_msg::<Privmsg>().await.expect("Missing Privmsg dispatcher!");
+        let event_sub =
+            channel.clone().subscribe_msg::<Event>().await.expect("Missing Event dispatcher!");
 
         let inv_sub = channel.subscribe_msg::<Inv>().await.expect("Missing Inv dispatcher!");
 
-        let getmsgs_sub =
-            channel.clone().subscribe_msg::<GetMsgs>().await.expect("Missing GetMsgs dispatcher!");
-
-        let hashes_sub =
-            channel.clone().subscribe_msg::<Hashes>().await.expect("Missing Hashes dispatcher!");
-
-        let synchash_sub = channel
-            .clone()
-            .subscribe_msg::<SyncHash>()
-            .await
-            .expect("Missing HashSync dispatcher!");
+        let getdata_sub =
+            channel.clone().subscribe_msg::<GetData>().await.expect("Missing GetData dispatcher!");
 
         Arc::new(Self {
-            notify,
-            msg_sub,
+            event_sub,
             inv_sub,
-            getmsgs_sub,
-            hashes_sub,
-            synchash_sub,
-            jobsman: net::ProtocolJobsManager::new("ProtocolPrivmsg", channel.clone()),
+            getdata_sub,
+            jobsman: net::ProtocolJobsManager::new("ProtocolEvent", channel.clone()),
             p2p,
             channel,
-            chains,
-            seen_ids,
-            unread_msgs,
+            seen_event,
+            seen_inv,
+            unread_events,
         })
     }
 
     async fn handle_receive_inv(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_inv() [START]");
+        debug!(target: "ircd", "ProtocolEvent::handle_receive_inv() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
             let inv = self.inv_sub.receive().await?;
             let inv = (*inv).to_owned();
 
-            if !self.seen_ids.push(&inv.id).await {
-                continue
+            for inv in inv.invs.iter() {
+                if !self.seen_inv.push(&inv.id).await {
+                    continue
+                }
+
+                // On receive inv message, if the unread_events buffer has the event's hash then increase
+                // the read_confirms, if not then send GetMsgs contain the event's hash
+                if !self.unread_events.contains(&inv.hash).await {
+                    self.send_getdata(vec![inv.clone()]).await?;
+                } else if let Some(event) = self.unread_events.inc_read_confirms(&inv.hash).await {
+                    self.new_event(&event).await?;
+                }
             }
 
-            // On receive inv message, if the unread_msgs buffer has the msg's hash then increase
-            // the read_confirms, if not then send GetMsgs contain the msg's hash
-            if !self.unread_msgs.contains(&inv.hash).await {
-                self.send_getmsgs(&inv.target, vec![inv.hash.clone()]).await?;
-            } else if let Some(msg) = self.unread_msgs.inc_read_confirms(&inv.hash).await {
-                self.new_msg(&msg).await?;
-            }
-
-            // Either way, broadcast the inv msg
+            // Broadcast the inv msg
             self.p2p.broadcast_with_exclude(inv, &exclude_list).await?;
         }
     }
 
-    async fn handle_receive_msg(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_msg() [START]");
+    async fn handle_receive_event(self: Arc<Self>) -> Result<()> {
+        debug!(target: "ircd", "ProtocolEvent::handle_receive_event() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
-            let msg = self.msg_sub.receive().await?;
-            let mut msg = (*msg).to_owned();
+            let event = self.event_sub.receive().await?;
+            let mut event = (*event).to_owned();
 
-            if !self.seen_ids.push(&msg.id).await {
+            if !self.seen_event.push(&event.hash()).await {
                 continue
             }
 
-            // If the msg has read_confirms greater or equal to MAX_CONFIRM, it will be added to
-            // the chains, otherwise increase the msg's read_confirms, add it to unread_msgs, and
-            // broadcast an Inv msg contain the hash of the message
-            if msg.read_confirms >= settings::MAX_CONFIRM {
-                self.new_msg(&msg).await?;
+            // If the event has read_confirms greater or equal to MAX_CONFIRM, it will be added to
+            // the model, otherwise increase the event's read_confirms, add it to unread_events, and
+            // broadcast an Inv msg
+            if event.read_confirms >= MAX_CONFIRM {
+                self.new_event(&event).await?;
             } else {
-                msg.read_confirms += 1;
-                self.unread_msgs.insert(&msg).await;
-                self.send_inv_msg(&msg).await?;
+                event.read_confirms += 1;
+                self.unread_events.insert(&event).await;
+                self.send_inv(&event).await?;
             }
 
             // Broadcast the msg
-            self.p2p.broadcast_with_exclude(msg, &exclude_list).await?;
+            self.p2p.broadcast_with_exclude(event, &exclude_list).await?;
         }
     }
 
-    async fn handle_receive_getmsgs(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_getmsgs() [START]");
+    async fn handle_receive_getdata(self: Arc<Self>) -> Result<()> {
+        debug!(target: "ircd", "ProtocolEvent::handle_receive_getdata() [START]");
         loop {
-            let getmsgs = self.getmsgs_sub.receive().await?;
+            let getdata = self.getdata_sub.receive().await?;
+            let invs = (*getdata).to_owned().invs;
 
-            // Load the msgs from the chains, and send them back to the sender
-            let msgs = self.chains.get_msgs(&getmsgs.target, &getmsgs.invs).await;
-            for msg in msgs {
-                self.channel.send(msg.clone()).await?;
-            }
+            for inv in invs {}
         }
     }
 
-    async fn handle_receive_hashes(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_hashes() [START]");
-        loop {
-            let hashmsg = self.hashes_sub.receive().await?;
-
-            self.chains
-                .push_hashes(hashmsg.target.clone(), hashmsg.height, hashmsg.hashes.clone())
-                .await;
-        }
-    }
-
-    async fn handle_receive_synchash(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolPrivmsg::handle_receive_synchash() [START]");
-        loop {
-            let synchash = self.synchash_sub.receive().await?;
-
-            if synchash.height < self.chains.get_height(&synchash.target).await {
-                let hashes = self.chains.get_hashes(&synchash.target, synchash.height + 1).await;
-                // send the hashes from the chain
-                self.channel
-                    .send(Hashes {
-                        target: synchash.target.clone(),
-                        height: synchash.height + 1,
-                        hashes: hashes.clone(),
-                    })
-                    .await?;
-
-                // send the msgs from the chain's buffer
-                let msgs = self.chains.get_msgs(&synchash.target, &hashes).await;
-                for msg in msgs {
-                    self.channel.send(msg).await?;
-                }
-            }
-        }
-    }
-
-    // every 2 seconds send a SyncHash msg, contain the last_height for each chain
+    // every 2 seconds send a Sync msg
     async fn send_sync_hash_loop(self: Arc<Self>) -> Result<()> {
         loop {
-            // TODO loop through preconfigured channels
-            let height = self.chains.get_height("").await;
-            self.channel.send(SyncHash { target: "".to_string(), height }).await?;
+            // Send Sync msg
             sleep(2).await;
         }
     }
 
-    async fn new_msg(&self, msg: &Privmsg) -> Result<()> {
-        if self.chains.push_msg(msg).await {
-            self.notify.send(msg.clone()).await?;
-        }
+    async fn new_event(&self, event: &Event) -> Result<()> {
+        // self.model.add(event).await?;
         Ok(())
     }
 
-    async fn send_inv_msg(&self, msg: &Privmsg) -> Result<()> {
-        let inv_id = OsRng.next_u64().to_string();
-        self.p2p
-            .broadcast(Inv { id: inv_id, hash: msg.id.clone(), target: msg.target.clone() })
-            .await?;
+    async fn send_inv(&self, event: &Event) -> Result<()> {
+        let id = OsRng.next_u64();
+        self.p2p.broadcast(Inv { invs: vec![InvItem { id, hash: event.hash() }] }).await?;
         Ok(())
     }
 
-    async fn send_getmsgs(&self, target: &str, hashes: Vec<String>) -> Result<()> {
-        self.channel.send(GetMsgs { target: target.to_string(), invs: hashes }).await?;
+    async fn send_getdata(&self, invs: Vec<InvItem>) -> Result<()> {
+        self.channel.send(GetData { invs }).await?;
         Ok(())
     }
 }
 
 #[async_trait]
-impl net::ProtocolBase for ProtocolPrivmsg {
-    /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the
-    /// protocol task manager, then queues the reply. Sends out a ping and
-    /// waits for pong reply. Waits for ping and replies with a pong.
+impl net::ProtocolBase for ProtocolEvent {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolPrivmsg::start() [START]");
+        debug!(target: "ircd", "ProtocolEvent::start() [START]");
         self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().handle_receive_msg(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_event(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_inv(), executor.clone()).await;
-        self.jobsman.clone().spawn(self.clone().handle_receive_getmsgs(), executor.clone()).await;
-        self.jobsman.clone().spawn(self.clone().handle_receive_hashes(), executor.clone()).await;
-        self.jobsman.clone().spawn(self.clone().handle_receive_synchash(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_getdata(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().send_sync_hash_loop(), executor.clone()).await;
-        debug!(target: "ircd", "ProtocolPrivmsg::start() [END]");
+        debug!(target: "ircd", "ProtocolEvent::start() [END]");
         Ok(())
     }
 
     fn name(&self) -> &'static str {
-        "ProtocolPrivmsg"
+        "ProtocolEvent"
     }
 }
 
-impl net::Message for Privmsg {
+impl net::Message for Event {
     fn name() -> &'static str {
-        "privmsg"
+        "event"
     }
 }
 
@@ -369,20 +295,8 @@ impl net::Message for Inv {
     }
 }
 
-impl net::Message for GetMsgs {
+impl net::Message for GetData {
     fn name() -> &'static str {
-        "getmsgs"
-    }
-}
-
-impl net::Message for Hashes {
-    fn name() -> &'static str {
-        "hashes"
-    }
-}
-
-impl net::Message for SyncHash {
-    fn name() -> &'static str {
-        "synchash"
+        "getdata"
     }
 }

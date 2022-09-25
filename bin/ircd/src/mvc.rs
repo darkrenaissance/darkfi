@@ -4,22 +4,10 @@ use std::{
     fmt, io,
 };
 
-use async_executor::Executor;
 use async_recursion::async_recursion;
 use ripemd::{Digest, Ripemd256};
-use smol::future;
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
 
-use darkfi::{
-    async_daemonize,
-    serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable},
-    util::{
-        cli::{get_log_config, get_log_level, spawn_config},
-        path::{expand_path, get_config_path},
-    },
-    Result,
-};
+use darkfi::serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable};
 
 // TODO
 // Pass EventId for all the functions instead of EventNodePtr
@@ -27,19 +15,20 @@ use darkfi::{
 // Remove Mutex from Event's childrens
 // More tests
 
-type EventId = [u8; 32];
+pub type EventId = [u8; 32];
 
 const MAX_DEPTH: u32 = 10;
 
-#[derive(SerialEncodable, SerialDecodable)]
-struct Event {
+#[derive(SerialEncodable, SerialDecodable, Clone)]
+pub struct Event {
     previous_event_hash: EventId,
     action: EventAction,
-    timestamp: u64,
+    pub timestamp: u64,
+    pub read_confirms: u8,
 }
 
 impl Event {
-    fn hash(&self) -> EventId {
+    pub fn hash(&self) -> EventId {
         let mut bytes = Vec::new();
         self.encode(&mut bytes).expect("serialize failed!");
 
@@ -62,6 +51,8 @@ impl fmt::Debug for Event {
     }
 }
 
+
+#[derive(Clone)]
 enum EventAction {
     PrivMsg(PrivMsgEvent),
 }
@@ -89,7 +80,7 @@ impl Decodable for EventAction {
     }
 }
 
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(SerialEncodable, SerialDecodable, Clone)]
 struct PrivMsgEvent {
     nick: String,
     msg: String,
@@ -124,6 +115,7 @@ impl Model {
                     msg: "Let there be dark".to_string(),
                 }),
                 timestamp: get_current_time(),
+                read_confirms: 0,
             },
             children: Mutex::new(Vec::new()),
         });
@@ -414,22 +406,7 @@ impl Model {
     }
 }
 
-pub const CONFIG_FILE: &str = "ircd_config.toml";
-pub const CONFIG_FILE_CONTENTS: &str = include_str!("../ircd_config.toml");
-
-#[derive(Clone, Debug, serde::Deserialize, StructOpt, StructOptToml)]
-#[serde(default)]
-#[structopt(name = "ircd")]
-pub struct Args {
-    #[structopt(long)]
-    pub config: Option<String>,
-
-    /// Increase verbosity
-    #[structopt(short, parse(from_occurrences))]
-    pub verbose: u8,
-}
-
-fn get_current_time() -> u64 {
+pub fn get_current_time() -> u64 {
     let start = std::time::SystemTime::now();
     start
         .duration_since(std::time::UNIX_EPOCH)
@@ -444,6 +421,7 @@ fn create_message(previous_event_hash: EventId, nick: &str, msg: &str, timestamp
         previous_event_hash,
         action: EventAction::PrivMsg(PrivMsgEvent { nick: nick.to_string(), msg: msg.to_string() }),
         timestamp,
+        read_confirms: 4
     }
 }
 
@@ -462,44 +440,6 @@ impl View {
         // 2. Order those events according to timestamp
         // Then the events are replayed to the IRC client
     }
-}
-
-async_daemonize!(realmain);
-async fn realmain(_settings: Args, _executor: Arc<Executor<'_>>) -> Result<()> {
-    let mut model = Model::new();
-    let root_id = model.get_root().event.hash();
-
-    let timestamp = get_current_time() + 1;
-
-    let node1 = create_message(root_id, "alice", "alice message", timestamp);
-    model.add(node1).await;
-    let node2 = create_message(root_id, "bob", "bob message", timestamp);
-    let node2_id = node2.hash();
-    model.add(node2).await;
-
-    let node3 = create_message(root_id, "charlie", "charlie message", timestamp);
-    let node3_id = node3.hash();
-    model.add(node3).await;
-
-    let node4 = create_message(node2_id, "delta", "delta message", timestamp);
-    let node4_id = node4.hash();
-    model.add(node4).await;
-
-    assert_eq!(model.find_head().await.event.hash(), node4_id);
-
-    // Now lets extend another chain
-    let node5 = create_message(node3_id, "epsilon", "epsilon message", timestamp);
-    let node5_id = node5.hash();
-    model.add(node5).await;
-    let node6 = create_message(node5_id, "phi", "phi message", timestamp);
-    let node6_id = node6.hash();
-    model.add(node6).await;
-
-    assert_eq!(model.find_head().await.event.hash(), node6_id);
-
-    model.debug().await;
-
-    Ok(())
 }
 
 #[cfg(test)]

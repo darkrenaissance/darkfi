@@ -48,7 +48,3 @@ structopt-toml = "0.5.1"
 bs58 = "0.4.0"
 toml = "0.5.9"
 hex = "0.4.3"
-
-[[bin]]
-name = "mvc"
-path = "./src/mvc.rs"
