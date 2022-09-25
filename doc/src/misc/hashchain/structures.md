@@ -43,11 +43,16 @@ The `Event` could have many actions according to the underlying data.
 |-------------- | -------------------- | ---------------------------------------------- |
 | seen  		| HashSet<`EventId`>   | A list of `Event`s have imported from Model	|
 
+## InvId
+
+	type InvId = u64;
+
 ## InvItem
 
-Unique generated integer
-
-	type InvItem = u32;	
+| Description   | Data Type      	   | Comments      			    |
+|-------------- | -------------------- | -------------------------- |
+| Id  			| `InvId`  			   | Unique generated integer	|
+| Hash  		| `EventId`   		   | Hash of the Event			|
 
 ## Inv
 
@@ -59,12 +64,11 @@ On receiving a new `Event`, the node must advertise its knowledge for this `Even
 
 ## GetData
 
-On receiving an `Inv` message if the client doesn't have the `InvItem`s, 
-Sending back `GetData` message contain the missing `InvItem`s
+Sending back `GetData` message contain the missing items, when receiving an `Inv` message. 
 
 | Description   | Data Type      	   | Comments              		|
 |-------------- | -------------------- | -------------------------- |
-| Invs	  	    | Vec<`InvItem`> 	   | A list of `EventId`   		|
+| Invs	  	    | Vec<`EventId`> 	   | A list of `EventId`   		|
 
 ## UnreadMessages
 
@@ -78,7 +82,7 @@ All the `Event`s will apply to these filtering rules:
 
 | Description | Data Type                   | Comments                                                                             |
 |-------------|---------------------------- | -------------------------------------------------------------------------------------|
-| Messages    | HashMap<`InvItem`, `Event`> | Hold all the `Event`s that have broadcasted to other nodes but haven't confirmed yet |
+| Messages    | HashMap<`EventId`, `Event`> | Hold all the `Event`s that have broadcasted to other nodes but haven't confirmed yet |
 
 ## Sync 
 
@@ -101,23 +105,14 @@ in the node correspond to `EventId` in `Sync` message
 | Head  	  | `EventId`	 | The head in the `Sync` message 	|
 
 
-## SeenEventIds
+## Seen<ObjectId>
 
-Every `Event` received its id will be add to this list to prevent receiving duplicate `Event`s.
+This used to prevent receiving duplicate Objects.
 The list will contains only 2^16 ids.
 
 | Description | Data Type      | Comments			  		   |
 |-------------|--------------- |------------------------------ |
-| Ids		  | Vec<`EventId`> | Contains all the `Event`s ids |
-
-## SeenInvIds
-
-Every `InvItem` received its id will be add to this list to prevent receiving duplicate `InvItem`.
-The list will contains only 2^16 ids.
-
-| Description | Data Type      | Comments			  		     |
-|-------------|--------------- |------------------------------   |
-| Ids		  | Vec<`InvItem`> | Contains all the `InvItem`s ids |
+| Ids		  | Vec<ObjectId>  | Contains objects ids    	   |
 
 
 ## Actions types
