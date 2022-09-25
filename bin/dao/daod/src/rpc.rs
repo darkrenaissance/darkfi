@@ -2,14 +2,16 @@ use std::sync::Arc;
 
 use async_std::sync::Mutex;
 use async_trait::async_trait;
+use fxhash::FxHashMap;
 use log::debug;
 use pasta_curves::{group::ff::PrimeField, pallas};
+use rand::rngs::OsRng;
 use std::str::FromStr;
 
 use serde_json::{json, Value};
 
 use darkfi::{
-    crypto::keypair::PublicKey,
+    crypto::keypair::{Keypair, PublicKey, SecretKey},
     rpc::{
         jsonrpc::{ErrorCode::*, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::RequestHandler,
@@ -17,8 +19,9 @@ use darkfi::{
 };
 
 use crate::{
-    util::{parse_b58, GDRK_ID, XDRK_ID},
-    Client,
+    contract::money_contract::state::OwnCoin,
+    util::{parse_b58, DRK_ID, GOV_ID},
+    Client, MoneyWallet,
 };
 
 pub struct JsonRpcInterface {
@@ -77,7 +80,7 @@ impl JsonRpcInterface {
                 dao_quorum,
                 dao_approval_ratio_quot,
                 dao_approval_ratio_base,
-                *GDRK_ID,
+                *GOV_ID,
             )
             .unwrap();
 
@@ -164,7 +167,7 @@ impl JsonRpcInterface {
         let addr = params[1].as_str().unwrap();
         let dao_addr = PublicKey::from_str(addr).unwrap();
 
-        client.mint_treasury(*XDRK_ID, token_supply, dao_addr).unwrap();
+        client.mint_treasury(*DRK_ID, token_supply, dao_addr).unwrap();
 
         JsonResponse::new(json!("DAO treasury minted successfully."), id).into()
     }
@@ -192,7 +195,7 @@ impl JsonRpcInterface {
         let nym = params[0].as_str().unwrap().to_string();
         let value = params[1].as_u64().unwrap();
 
-        client.airdrop_user(value, *GDRK_ID, nym.clone()).unwrap();
+        client.airdrop_user(value, *GOV_ID, nym.clone()).unwrap();
 
         JsonResponse::new(json!("Tokens airdropped successfully."), id).into()
     }
@@ -207,7 +210,7 @@ impl JsonRpcInterface {
 
         let recv_addr = PublicKey::from_str(recipient).unwrap();
 
-        let proposal_bulla = client.propose(recv_addr, *XDRK_ID, amount, sender).unwrap();
+        let proposal_bulla = client.propose(recv_addr, *DRK_ID, amount, sender).unwrap();
         let bulla: String = bs58::encode(proposal_bulla.to_repr()).into_string();
 
         JsonResponse::new(json!(bulla), id).into()

@@ -1,4 +1,7 @@
+use std::process::exit;
+
 use clap::{IntoApp, Parser, Subcommand};
+use prettytable::{format, row, Table};
 use url::Url;
 
 use darkfi::{rpc::client::RpcClient, Result};
@@ -134,8 +137,32 @@ async fn start(options: CliDao) -> Result<()> {
             return Ok(())
         }
         Some(CliDaoSubCommands::DaoBalance {}) => {
-            let reply = client.dao_balance().await?;
-            println!("DAO balance: {}", &reply.to_string());
+            let rep = client.dao_balance().await?;
+
+            if !rep.is_object() {
+                eprintln!("Invalid balance data received from darkfid RPC endpoint.");
+                exit(1);
+            }
+
+            let mut table = Table::new();
+            table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+            table.set_titles(row!["Token", "Balance"]);
+
+            for i in rep.as_object().unwrap().keys() {
+                if let Some(balance) = rep[i].as_u64() {
+                    table.add_row(row![i, balance]);
+                    continue
+                }
+
+                eprintln!("Found invalid balance data for key \"{}\"", i);
+            }
+
+            if table.is_empty() {
+                println!("No balances.");
+            } else {
+                println!("{}", table);
+            }
+            // println!("DAO balance: {}", &reply.to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::DaoBulla {}) => {
@@ -144,8 +171,32 @@ async fn start(options: CliDao) -> Result<()> {
             return Ok(())
         }
         Some(CliDaoSubCommands::UserBalance { nym }) => {
-            let reply = client.user_balance(nym).await?;
-            println!("User balance: {}", &reply.to_string());
+            let rep = client.user_balance(nym).await?;
+
+            if !rep.is_object() {
+                eprintln!("Invalid balance data received from darkfid RPC endpoint.");
+                exit(1);
+            }
+
+            let mut table = Table::new();
+            table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+            table.set_titles(row!["Token", "Balance"]);
+
+            for i in rep.as_object().unwrap().keys() {
+                if let Some(balance) = rep[i].as_u64() {
+                    table.add_row(row![i, balance]);
+                    continue
+                }
+
+                eprintln!("Found invalid balance data for key \"{}\"", i);
+            }
+
+            if table.is_empty() {
+                println!("No balances.");
+            } else {
+                println!("{}", table);
+            }
+            // println!("User balance: {}", &reply.to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::Propose { sender, recipient, amount }) => {

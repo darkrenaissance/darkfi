@@ -38,12 +38,12 @@ pub fn parse_b58(s: &str) -> std::result::Result<pallas::Base, darkfi::Error> {
 
 // The token of the DAO treasury.
 lazy_static! {
-    pub static ref XDRK_ID: pallas::Base = pallas::Base::random(&mut OsRng);
+    pub static ref DRK_ID: pallas::Base = pallas::Base::random(&mut OsRng);
 }
 
 // Governance tokens that are airdropped to users to operate the DAO.
 lazy_static! {
-    pub static ref GDRK_ID: pallas::Base = pallas::Base::random(&mut OsRng);
+    pub static ref GOV_ID: pallas::Base = pallas::Base::random(&mut OsRng);
 }
 
 #[derive(Eq, PartialEq, Debug)]

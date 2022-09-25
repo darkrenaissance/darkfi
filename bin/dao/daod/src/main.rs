@@ -1,5 +1,7 @@
 use std::{any::TypeId, collections::HashMap, sync::Arc, time::Instant};
 
+use fxhash::FxHashMap;
+use group::ff::PrimeField;
 use incrementalmerkletree::{Position, Tree};
 use log::debug;
 use pasta_curves::{
@@ -37,7 +39,7 @@ use crate::{
     },
     rpc::JsonRpcInterface,
     util::{
-        sign, FuncCall, HashableBase, StateRegistry, Transaction, ZkContractTable, GDRK_ID, XDRK_ID,
+        sign, FuncCall, HashableBase, StateRegistry, Transaction, ZkContractTable, DRK_ID, GOV_ID,
     },
 };
 
@@ -120,28 +122,28 @@ use crate::{
 ////
 //// 3. Rename xDRK and gDRK to DRK and GOV (xDRK = DRK, gDRK = GOV)
 ////
-//// 5. Change MoneyWallets to be a HashMap<PublicKey, MoneyWallet>
+//// 4. Change MoneyWallets to be a HashMap<PublicKey, MoneyWallet>
 ////
-//// 6. vote() should pass a ProposalBulla
+//// 5. vote() should pass a ProposalBulla
 ////
 //// Less priority:
 ////
-//// 5. Better document CLI/ CLI help.
+//// 6. Better document CLI/ CLI help.
 ////
-//// 4. Token id is hardcoded rn. Change this so users can specify token_id
+//// 7. Token id is hardcoded rn. Change this so users can specify token_id
 ////    as either xdrk or gdrk. In dao-cli we run a match statement to link to
 ////    the corresponding static values XDRK_ID and GDRK_ID. Note: xdrk is used
 ////    only for the DAO treasury. gdrk is the governance token used to operate
 ////    the DAO.
 ////
-//// 5. Implement money transfer between MoneyWallets so users can send tokens to
+//// 8. Implement money transfer between MoneyWallets so users can send tokens to
 ////    eachother.
 ////
-//// 6. Make CLI usage more interactive. Example: when I cast a vote, output:
+//// 9. Make CLI usage more interactive. Example: when I cast a vote, output:
 ////   "You voted {} with value {}." where value is the number of gDRK in a users
 ////    wallet (and the same for making a proposal etc).
 ////
-//// 7. Currently, DaoWallet stores DaoParams, DaoBulla's and Proposal's in a
+//// 10. Currently, DaoWallet stores DaoParams, DaoBulla's and Proposal's in a
 ////    Vector. We retrieve values through indexing, meaning that we
 ////    cannot currently support multiple DAOs and multiple proposals.
 ////
@@ -151,7 +153,7 @@ use crate::{
 ////    ProposalBulla and we lookup the corresponding data. struct Dao should
 ////    be owned by DaoWallet.
 ////
-//// 8. Error handling :)
+//// 11. Error handling :)
 ////
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -309,7 +311,7 @@ impl Client {
 
         let tx = self
             .cashier_wallet
-            .mint(*XDRK_ID, token_supply, self.dao_wallet.bullas[0].0, recipient, &self.zk_bins)
+            .mint(*DRK_ID, token_supply, self.dao_wallet.bullas[0].0, recipient, &self.zk_bins)
             .unwrap();
 
         self.validate(&tx).unwrap();
@@ -582,7 +584,7 @@ impl DaoWallet {
             dao_quorum,
             dao_approval_ratio_quot,
             dao_approval_ratio_base,
-            gov_token_id: *GDRK_ID,
+            gov_token_id: *GOV_ID,
             dao_pubkey: self.keypair.public,
             dao_bulla_blind: self.bulla_blind,
             _signature_secret: self.signature_secret,
@@ -601,15 +603,19 @@ impl DaoWallet {
         Ok(())
     }
 
-    fn balances(&self) -> Result<u64> {
+    fn balances(&self) -> Result<FxHashMap<String, u64>> {
+        let mut ret: FxHashMap<String, u64> = FxHashMap::default();
         let mut balances = 0;
+        let token_id = "DRK".to_owned();
         for (coin, is_spent) in &self.own_coins {
             if *is_spent {
                 continue
             }
             balances += coin.note.value;
         }
-        Ok(balances)
+        ret.insert(token_id, balances);
+
+        Ok(ret)
     }
 
     fn store_proposal(&mut self, tx: &Transaction) -> Result<pallas::Base> {
@@ -753,7 +759,7 @@ impl DaoWallet {
                     // Change back to DAO
                     money_contract::transfer::wallet::BuilderOutputInfo {
                         value: total_input_value - proposal.amount,
-                        token_id: *XDRK_ID,
+                        token_id: *DRK_ID,
                         public: self.keypair.public,
                         serial: dao_serial,
                         coin_blind: dao_coin_blind,
@@ -855,13 +861,17 @@ impl MoneyWallet {
         Ok(())
     }
 
-    fn balances(&self) -> Result<u64> {
+    fn balances(&self) -> Result<FxHashMap<String, u64>> {
+        let mut ret: FxHashMap<String, u64> = FxHashMap::default();
         let mut balances = 0;
+        let token_id = "GOV".to_owned();
         for (coin, is_spent) in &self.own_coins {
             if *is_spent {}
             balances += coin.note.value;
         }
-        Ok(balances)
+        ret.insert(token_id, balances);
+
+        Ok(ret)
     }
 
     fn propose_tx(

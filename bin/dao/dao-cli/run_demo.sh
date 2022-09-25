@@ -6,8 +6,18 @@ addr3=${addr2::-1}
 echo $addr3
 
 cargo run mint 1000000 $addr3
-cargo run keygen alice 
-cargo run keygen bob
+
+alice=$(cargo run keygen alice)
+alice=$(cargo run keygen alice | cut -d " " -f 4)
+alice2=$(echo $alice | cut -c 2-)
+alice3=${alice2::-1}
+echo $alice3
+
+bob=$(cargo run keygen bob)
+bob=$(cargo run keygen bob | cut -d " " -f 4)
+bob2=$(echo $bob | cut -c 2-)
+bob3=${bob2::-1}
+echo $bob3
 
 charlie=$(cargo run keygen charlie)
 charlie=$(cargo run keygen charlie | cut -d " " -f 4)
