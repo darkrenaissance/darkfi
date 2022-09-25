@@ -25,16 +25,16 @@ The `Event` could have many actions according to the underlying data.
 
 | Description    | Data Type      		  | Comments                    			 			  |
 |--------------- | ---------------------- | ----------------------------------------------------- |
-| parent    	 | Option<`EventNode`> 	  | Only current root has this set to None   			  |
+| parent    	 | Option<`EventId`> 	  | Only current root has this set to None   			  |
 | Event     	 | `Event`  			  | The `Event` itself 					       			  |
-| Children     	 | Vec<`EventNode`>  	  | The `Event`s which has parent as this `Event` hash    |
+| Children     	 | Vec<`EventId`>  	      | The `Event`s which has parent as this `Event` hash    |
 
 ## Model 
 
 | Description   | Data Type      		  		   | Comments                      |
 |-------------- | -------------------------------- | ----------------------------- |
 | current_root  | `EventId` 	  		  		   | The root `Event` for the tree |
-| orphans       | Vec<`Event`>  		  		   | Recently added `Event`s 	   |
+| orphans       | HashMap<`EventId`, `Event`>  	   | Recently added `Event`s 	   |
 | event_map     | HashMap<`EventId`, `EventNode`>  | The actual tree  		 	   |
 
 ## View 
@@ -93,17 +93,6 @@ roughly in sync.
 | Description | Data Type   | Comments					 	|
 |-------------|-------------|------------------------------ |
 | Head	      | `EventId` 	| head id in the longest chain  |
-
-## Events  
-
-This used in response to `Sync` message, sending all the children 
-in the node correspond to `EventId` in `Sync` message 
-
-| Description | Data Type    | Comments							|
-|-------------|------------- |--------------------------------- |
-| Events	  | Vec<`Event`> | A list of `Event`  			  	|
-| Head  	  | `EventId`	 | The head in the `Sync` message 	|
-
 
 ## Seen<ObjectId>
 
