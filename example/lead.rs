@@ -1,9 +1,6 @@
 use futures::executor::block_on;
-use halo2_proofs::{arithmetic::Field, dev::MockProver};
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use halo2_proofs::{dev::MockProver};
 use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::PrimeField, Curve},
     pallas,
 };
 use url::Url;
@@ -61,8 +58,8 @@ fn main() {
 
     let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] = coin.public_inputs_as_array();
 
-    let lead_pk = stakeholder.get_provkingkey();
-    let lead_vk = stakeholder.get_verifyingkey();
+    //let lead_pk = stakeholder.get_provkingkey();
+    //let lead_vk = stakeholder.get_verifyingkey();
 
     //let proof = lead_proof::create_lead_proof(&lead_pk.clone(), coin.clone()).unwrap();
     //lead_proof::verify_lead_proof(&lead_vk, &proof, &public_inputs);
