@@ -42,7 +42,7 @@ const LOG_T: &str = "stakeholder";
 
 #[derive(Debug)]
 pub struct SlotWorkspace {
-    pub st: blake3::Hash,
+    pub st: blake3::Hash,      // hash of the previous block
     pub e: u64,                // epoch index
     pub sl: u64,               // absolute slot index
     pub txs: Vec<Transaction>, // unpublished block transactions
@@ -356,11 +356,12 @@ impl Stakeholder {
     /// assuming static stake during the epoch, enforced by the commitment to competing coins
     /// in the epoch's gen2esis data.
     fn new_epoch(&mut self) {
-        info!(target: LOG_T, "[new epoch] 4 {}", self);
+        info!(target: LOG_T, "[new epoch] {}", self);
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, eta);
         //TODO calculate total stake
-        // create coin with absolute slot/epoch.
+        // create coin with absolute slo/epocht.
+        //TODO (fix) this is supposed to be the total number of slots
         let num_slots = self.workspace.sl;
         // total stake;
         // TODO sigma scalar for tunning target function
