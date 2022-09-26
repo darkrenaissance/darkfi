@@ -1,7 +1,7 @@
-use std::fmt;
 use async_channel::Receiver;
 use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
+use std::fmt;
 
 use log::{info, warn};
 use rand::rngs::OsRng;
