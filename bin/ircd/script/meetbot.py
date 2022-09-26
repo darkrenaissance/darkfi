@@ -44,7 +44,9 @@ async def channel_listen(host, port, nick, chan):
         if not msg:
             continue
 
-        command = msg.split(" ")[1]
+        split_msg = msg.split(" ")
+        command = split_msg[1]
+        nick = split_msg[0][1:].rsplit("!", 1)[0]
         logging.debug("%s: Recv: %s", chan, msg.rstrip())
 
         if command == "PRIVMSG":
@@ -102,19 +104,24 @@ async def channel_listen(host, port, nick, chan):
                     logging.debug("%s: Topic msg len not 5, skipping", chan)
                     continue
 
-                topic = topic[4].rstrip()
+                topic = topic[4].rstrip() + f" (by {nick})"
 
                 if topic == "":
                     logging.debug("%s: Topic message empty, skipping", chan)
                     continue
 
                 topics = CHANS[chan]["topics"]
-                topics.append(topic)
-                CHANS[chan]["topics"] = topics
-                logging.debug("%s: Appended topic to channel topics", chan)
+                if topic not in topics:
+                    topics.append(topic)
+                    CHANS[chan]["topics"] = topics
+                    logging.debug("%s: Appended topic to channel topics", chan)
+                    reply = f"PRIVMSG {chan} :Added topic: {topic}"
+                    logging.info("%s: Send: %s", chan, reply)
+                else:
+                    logging.debug("%s: Topic already in list of topics", chan)
+                    reply = f"PRIVMSG {chan} :Topic already in list"
+                    logging.info("%s: Send: %s", chan, reply)
 
-                reply = f"PRIVMSG {chan} :Added topic: {topic}"
-                logging.info("%s: Send: %s", chan, reply)
                 writer.write((reply + "\r\n").encode("utf-8"))
                 await writer.drain()
                 continue

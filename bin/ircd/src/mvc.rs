@@ -210,7 +210,7 @@ impl Model {
 
         // set the new root
         if let Some(ancestor) = highest_ancestor {
-            // TODO change this number 
+            // TODO change this number
             // set to 10 for testing only
             // the ancestor must have at least height > 300
             let ancestor_height = self.find_height(&self.current_root, ancestor).unwrap();
