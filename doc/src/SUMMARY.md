@@ -27,7 +27,6 @@
   - [HashChain](misc/hashchain/hashchain.md)
   	- [Architecture](misc/hashchain/architecture.md)
   	- [Network Protocol](misc/hashchain/network_protocol.md)
-  	- [Structures](misc/hashchain/structures.md)
   - [darkwiki](misc/darkwiki.md)
   - [dnetview](misc/dnetview.md)
 - [Learn](learn/learn.md)
