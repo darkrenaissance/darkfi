@@ -2,6 +2,8 @@ use async_std::sync::{Arc, Mutex};
 use std::net::IpAddr;
 
 use fxhash::FxHashSet;
+use ipnet::{Ipv4Net, Ipv6Net};
+use iprange::IpRange;
 use url::Url;
 
 use super::constants::{IP4_PRIV_RANGES, IP6_PRIV_RANGES, LOCALNET};
@@ -13,19 +15,31 @@ pub type HostsPtr = Arc<Hosts>;
 pub struct Hosts {
     addrs: Mutex<FxHashSet<Url>>,
     localnet: bool,
+    ipv4_range: IpRange<Ipv4Net>,
+    ipv6_range: IpRange<Ipv6Net>,
 }
 
 impl Hosts {
     /// Create a new host list.
     pub fn new(localnet: bool) -> Arc<Self> {
-        Arc::new(Self { addrs: Mutex::new(FxHashSet::default()), localnet })
+        // Initialize ipv4_range and ipv6_range if needed
+        let mut ipv4_range: IpRange<Ipv4Net> =
+            IP4_PRIV_RANGES.iter().map(|s| s.parse().unwrap()).collect();
+        let mut ipv6_range: IpRange<Ipv6Net> =
+            IP6_PRIV_RANGES.iter().map(|s| s.parse().unwrap()).collect();
+
+        // These will make the trie potentially smaller
+        ipv4_range.simplify();
+        ipv6_range.simplify();
+
+        Arc::new(Self { addrs: Mutex::new(FxHashSet::default()), localnet, ipv4_range, ipv6_range })
     }
 
     /// Add a new host to the host list, after filtering.
     pub async fn store(&self, input_addrs: Vec<Url>) {
         let addrs = if !self.localnet {
             let filtered = filter_localnet(input_addrs);
-            filter_invalid(filtered)
+            filter_invalid(&self.ipv4_range, &self.ipv6_range, filtered)
         } else {
             input_addrs
         };
@@ -70,7 +84,11 @@ fn filter_localnet(input_addrs: Vec<Url>) -> Vec<Url> {
 }
 
 /// Auxiliary function to filter invalid(unresolvable) hosts.
-fn filter_invalid(input_addrs: Vec<Url>) -> Vec<Url> {
+fn filter_invalid(
+    ipv4_range: &IpRange<Ipv4Net>,
+    ipv6_range: &IpRange<Ipv6Net>,
+    input_addrs: Vec<Url>,
+) -> Vec<Url> {
     let mut filtered = vec![];
     for addr in &input_addrs {
         // Discard domainless Urls
@@ -96,13 +114,13 @@ fn filter_invalid(input_addrs: Vec<Url>) -> Vec<Url> {
             for i in socket_addrs {
                 match i.ip() {
                     IpAddr::V4(a) => {
-                        if IP4_PRIV_RANGES.contains(&a.to_string().as_str()) {
+                        if ipv4_range.contains(&a) {
                             valid = false;
                             break
                         }
                     }
                     IpAddr::V6(a) => {
-                        if IP6_PRIV_RANGES.contains(&a.to_string().as_str()) {
+                        if ipv6_range.contains(&a) {
                             valid = false;
                             break
                         }

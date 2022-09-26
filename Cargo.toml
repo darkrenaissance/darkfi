@@ -58,6 +58,8 @@ smol = {version = "1.2.5", optional = true}
 
 # Networking
 futures-rustls = {version = "0.22.2", features = ["dangerous_configuration"], optional = true}
+iprange = {version = "0.6.7", optional = true}
+ipnet = {version = "2.5.0", optional = true}
 socket2 = {version = "0.4.7", optional = true}
 
 # TLS cert utilities
@@ -212,6 +214,8 @@ net = [
     "fast-socks5",
     "futures-rustls",
     "hex",
+    "iprange",
+    "ipnet",
     "structopt",
     "structopt-toml",
     "rand",
