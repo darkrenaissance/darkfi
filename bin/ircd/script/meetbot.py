@@ -25,18 +25,22 @@ async def channel_listen(host, port, nick, chan):
         logging.debug("%s: Send CAP msg", chan)
         msg = "CAP REQ : no-history\r\n"
         writer.write(msg.encode("utf-8"))
+        await writer.drain()
 
         logging.debug("%s: Send NICK msg", chan)
         msg = f"NICK {nick}\r\n"
         writer.write(msg.encode("utf-8"))
+        await writer.drain()
 
         logging.debug("%s: Send CAP END msg", chan)
         msg = "CAP END\r\n"
         writer.write(msg.encode("utf-8"))
+        await writer.drain()
 
         logging.debug("%s: Send JOIN msg", chan)
         msg = f"JOIN {chan}\r\n"
         writer.write(msg.encode("utf-8"))
+        await writer.drain()
 
         logging.info("%s: Listening to channel", chan)
         while True:
@@ -167,7 +171,7 @@ async def channel_listen(host, port, nick, chan):
                     continue
 
     except KeyboardInterrupt:
-        pass
+        return
     except ConnectionRefusedError:
         logging.warning("%s: Connection refused, trying again in 3s...", chan)
         await asyncio.sleep(3)
