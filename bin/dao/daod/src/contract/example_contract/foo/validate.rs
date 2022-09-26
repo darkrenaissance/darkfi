@@ -6,20 +6,19 @@ use darkfi::{
     Error as DarkFiError,
 };
 
-use std::any::{Any, TypeId};
+use std::any::Any;
 
 use crate::{
     contract::example_contract::{state::State, CONTRACT_ID},
-    util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
+    util::{CallDataBase, StateRegistry, UpdateBase},
 };
 
-type Result<T> = std::result::Result<T, Error>;
+// type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {
-    #[error("ValueExists")]
-    ValueExists,
-
+    // #[error("ValueExists")]
+    // ValueExists,
     #[error("DarkFi error: {0}")]
     DarkFiError(String),
 }
@@ -57,28 +56,28 @@ impl CallDataBase for CallData {
     }
 }
 
-pub fn state_transition(
-    states: &StateRegistry,
-    func_call_index: usize,
-    parent_tx: &Transaction,
-) -> Result<Box<dyn UpdateBase + Send>> {
-    let func_call = &parent_tx.func_calls[func_call_index];
-    let call_data = func_call.call_data.as_any();
+// pub fn state_transition(
+//     states: &StateRegistry,
+//     func_call_index: usize,
+//     parent_tx: &Transaction,
+// ) -> Result<Box<dyn UpdateBase + Send>> {
+//     let func_call = &parent_tx.func_calls[func_call_index];
+//     let call_data = func_call.call_data.as_any();
 
-    assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
-    let call_data = call_data.downcast_ref::<CallData>();
+//     assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
+//     let call_data = call_data.downcast_ref::<CallData>();
 
-    // This will be inside wasm so unwrap is fine.
-    let call_data = call_data.unwrap();
+//     // This will be inside wasm so unwrap is fine.
+//     let call_data = call_data.unwrap();
 
-    let example_state = states.lookup::<State>(*CONTRACT_ID).unwrap();
+//     let example_state = states.lookup::<State>(*CONTRACT_ID).unwrap();
 
-    if example_state.public_exists(&call_data.public_value) {
-        return Err(Error::ValueExists)
-    }
+//     if example_state.public_exists(&call_data.public_value) {
+//         return Err(Error::ValueExists)
+//     }
 
-    Ok(Box::new(Update { public_value: call_data.public_value }))
-}
+//     Ok(Box::new(Update { public_value: call_data.public_value }))
+// }
 
 #[derive(Clone)]
 pub struct Update {

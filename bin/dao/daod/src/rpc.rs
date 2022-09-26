@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_std::sync::Mutex;
 use async_trait::async_trait;
-use fxhash::FxHashMap;
 use log::debug;
 use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::rngs::OsRng;
@@ -90,8 +89,8 @@ impl JsonRpcInterface {
 
     // --> {"method": "get_dao_addr", "params": []}
     // <-- {"result": "getting dao public addr..."}
-    async fn get_dao_addr(&self, id: Value, params: &[Value]) -> JsonResult {
-        let mut client = self.client.lock().await;
+    async fn get_dao_addr(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let client = self.client.lock().await;
         let pubkey = client.dao_wallet.get_public_key();
         let addr: String = bs58::encode(pubkey.to_bytes()).into_string();
         JsonResponse::new(json!(addr), id).into()
@@ -99,8 +98,8 @@ impl JsonRpcInterface {
 
     // --> {"method": "get_dao_addr", "params": []}
     // <-- {"result": "getting dao public addr..."}
-    async fn get_votes(&self, id: Value, params: &[Value]) -> JsonResult {
-        let mut client = self.client.lock().await;
+    async fn get_votes(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let client = self.client.lock().await;
         let vote_notes = client.dao_wallet.get_votes();
         let mut vote_data = vec![];
 
@@ -115,8 +114,8 @@ impl JsonRpcInterface {
 
     // --> {"method": "get_dao_addr", "params": []}
     // <-- {"result": "getting dao public addr..."}
-    async fn get_proposals(&self, id: Value, params: &[Value]) -> JsonResult {
-        let mut client = self.client.lock().await;
+    async fn get_proposals(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let client = self.client.lock().await;
         let proposals = client.dao_wallet.get_proposals();
         let mut proposal_data = vec![];
 
@@ -131,14 +130,14 @@ impl JsonRpcInterface {
         JsonResponse::new(json!(proposal_data), id).into()
     }
 
-    async fn dao_balance(&self, id: Value, params: &[Value]) -> JsonResult {
-        let mut client = self.client.lock().await;
+    async fn dao_balance(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let client = self.client.lock().await;
         let balance = client.dao_wallet.balances().unwrap();
         JsonResponse::new(json!(balance), id).into()
     }
 
-    async fn dao_bulla(&self, id: Value, params: &[Value]) -> JsonResult {
-        let mut client = self.client.lock().await;
+    async fn dao_bulla(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let client = self.client.lock().await;
         let dao_bullas = client.dao_wallet.bullas.clone();
         let mut bulla_vec = Vec::new();
 
@@ -151,7 +150,7 @@ impl JsonRpcInterface {
     }
 
     async fn user_balance(&self, id: Value, params: &[Value]) -> JsonResult {
-        let mut client = self.client.lock().await;
+        let client = self.client.lock().await;
         let nym = params[0].as_str().unwrap();
 
         let pubkey = PublicKey::from_str(nym).unwrap();
@@ -183,7 +182,7 @@ impl JsonRpcInterface {
         let signature_secret = SecretKey::random(&mut OsRng);
         let own_coins: Vec<(OwnCoin, bool)> = Vec::new();
         let money_wallet = MoneyWallet { keypair, signature_secret, own_coins };
-        money_wallet.track(&mut client.states);
+        money_wallet.track(&mut client.states).unwrap();
 
         client.money_wallets.insert(keypair.public, money_wallet);
 
@@ -198,7 +197,7 @@ impl JsonRpcInterface {
     // <-- {"result": "airdropping tokens..."}
     async fn airdrop_tokens(&self, id: Value, params: &[Value]) -> JsonResult {
         let mut client = self.client.lock().await;
-        let zk_bins = &client.zk_bins;
+        // let zk_bins = &client.zk_bins;
 
         let addr = PublicKey::from_str(params[0].as_str().unwrap()).unwrap();
         let value = params[1].as_u64().unwrap();
@@ -254,7 +253,7 @@ impl JsonRpcInterface {
         let bulla_str = params[0].as_str().unwrap();
         let bulla: pallas::Base = parse_b58(bulla_str).unwrap();
 
-        client.exec_proposal(bulla);
+        client.exec_proposal(bulla).unwrap();
 
         JsonResponse::new(json!("Proposal executed successfully."), id).into()
     }

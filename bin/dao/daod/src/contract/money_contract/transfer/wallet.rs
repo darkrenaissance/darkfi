@@ -1,8 +1,4 @@
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::Field, Curve},
-    pallas,
-};
+use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -28,8 +24,6 @@ use crate::{
     note,
     util::{FuncCall, ZkContractInfo, ZkContractTable},
 };
-
-use log::debug;
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct Note {

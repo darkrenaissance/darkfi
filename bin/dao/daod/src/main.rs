@@ -1,13 +1,12 @@
-use std::{any::TypeId, collections::HashMap, sync::Arc, time::Instant};
+use std::{sync::Arc, time::Instant};
 
 use fxhash::FxHashMap;
-use group::ff::PrimeField;
 use incrementalmerkletree::{Position, Tree};
 use log::debug;
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::Field, Curve, Group},
-    pallas, Fp, Fq,
+    pallas,
 };
 use rand::rngs::OsRng;
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
@@ -35,12 +34,10 @@ mod util;
 use crate::{
     contract::{
         dao_contract::{self, mint::wallet::DaoParams, propose::wallet::Proposal, DaoBulla},
-        money_contract::{self, state::OwnCoin, transfer::Note},
+        money_contract::{self, state::OwnCoin},
     },
     rpc::JsonRpcInterface,
-    util::{
-        sign, FuncCall, HashableBase, StateRegistry, Transaction, ZkContractTable, DRK_ID, GOV_ID,
-    },
+    util::{sign, StateRegistry, Transaction, ZkContractTable, DRK_ID},
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -178,10 +175,10 @@ impl Client {
         let cashier_wallet = CashierWallet::new();
 
         // Lookup table for smart contract states
-        let mut states = StateRegistry::new();
+        let states = StateRegistry::new();
 
         // Initialize ZK binary table
-        let mut zk_bins = ZkContractTable::new();
+        let zk_bins = ZkContractTable::new();
 
         Self { dao_wallet, money_wallets, cashier_wallet, states, zk_bins }
     }
@@ -305,11 +302,11 @@ impl Client {
         token_supply: u64,
         recipient: PublicKey,
     ) -> Result<()> {
-        self.dao_wallet.track(&mut self.states);
+        self.dao_wallet.track(&mut self.states)?;
 
         let tx = self
             .cashier_wallet
-            .mint(*DRK_ID, token_supply, self.dao_wallet.bullas[0].0, recipient, &self.zk_bins)
+            .mint(token_id, token_supply, self.dao_wallet.bullas[0].0, recipient, &self.zk_bins)
             .unwrap();
 
         self.validate(&tx).unwrap();
@@ -384,7 +381,7 @@ impl Client {
         let state =
             self.states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
 
-        let mut dao_coins = state.wallet_cache.get_received(&self.dao_wallet.keypair.secret);
+        let dao_coins = state.wallet_cache.get_received(&self.dao_wallet.keypair.secret);
         for coin in dao_coins {
             let note = coin.note.clone();
             let coords = self.dao_wallet.keypair.public.0.to_affine().coordinates().unwrap();
@@ -408,8 +405,8 @@ impl Client {
             debug!("DAO received a coin worth {} xDRK", note.value);
         }
 
-        for (key, wallet) in &mut self.money_wallets {
-            let mut coins = state.wallet_cache.get_received(&wallet.keypair.secret);
+        for (_key, wallet) in &mut self.money_wallets {
+            let coins = state.wallet_cache.get_received(&wallet.keypair.secret);
             for coin in coins {
                 let note = coin.note.clone();
                 let coords = wallet.keypair.public.0.to_affine().coordinates().unwrap();
@@ -447,7 +444,7 @@ impl Client {
         // To be able to make a proposal, we must prove we have ownership
         // of governance tokens, and that the quantity of governance
         // tokens is within the accepted proposer limit.
-        let mut sender_wallet = self.money_wallets.get_mut(&sender).unwrap();
+        let sender_wallet = self.money_wallets.get_mut(&sender).unwrap();
 
         let tx = sender_wallet.propose_tx(
             params.clone(),
@@ -478,7 +475,7 @@ impl Client {
         let dao_params = self.dao_wallet.params[0].clone();
         let dao_keypair = self.dao_wallet.keypair;
 
-        let mut voter_wallet = self.money_wallets.get_mut(&pubkey).unwrap();
+        let voter_wallet = self.money_wallets.get_mut(&pubkey).unwrap();
 
         let tx = voter_wallet
             .vote_tx(
@@ -582,7 +579,7 @@ impl DaoWallet {
             dao_quorum,
             dao_approval_ratio_quot,
             dao_approval_ratio_base,
-            gov_token_id: *GOV_ID,
+            gov_token_id: token_id,
             dao_pubkey: self.keypair.public,
             dao_bulla_blind: self.bulla_blind,
             _signature_secret: self.signature_secret,
@@ -691,7 +688,7 @@ impl DaoWallet {
     fn exec_tx(
         &self,
         proposal: Proposal,
-        proposal_bulla: pallas::Base,
+        _proposal_bulla: pallas::Base,
         dao_params: DaoParams,
         zk_bins: &ZkContractTable,
         states: &mut StateRegistry,
@@ -844,13 +841,13 @@ struct MoneyWallet {
 }
 
 impl MoneyWallet {
-    fn signature_public(&self) -> PublicKey {
-        PublicKey::from_secret(self.signature_secret)
-    }
+    // fn signature_public(&self) -> PublicKey {
+    //     PublicKey::from_secret(self.signature_secret)
+    // }
 
-    fn get_public_key(&self) -> PublicKey {
-        self.keypair.public
-    }
+    // fn get_public_key(&self) -> PublicKey {
+    //     self.keypair.public
+    // }
 
     fn track(&self, states: &mut StateRegistry) -> Result<()> {
         let state =
@@ -958,7 +955,7 @@ impl MoneyWallet {
     fn vote_tx(
         &mut self,
         vote_option: bool,
-        dao_key: Keypair,
+        _dao_key: Keypair,
         proposal: Proposal,
         dao_params: DaoParams,
         dao_keypair: Keypair,
@@ -968,7 +965,7 @@ impl MoneyWallet {
         let mut inputs = Vec::new();
 
         // We must prove we have sufficient governance tokens in order to vote.
-        for (coin, is_spent) in &self.own_coins {
+        for (coin, _is_spent) in &self.own_coins {
             let (money_leaf_position, money_merkle_path) = self.get_path(states, &coin).unwrap();
 
             let input = {
@@ -1019,15 +1016,16 @@ async fn start_rpc(client: Client) -> Result<()> {
 // Mint authority that mints the DAO treasury and airdrops governance tokens.
 #[derive(Clone)]
 struct CashierWallet {
-    keypair: Keypair,
+    // keypair: Keypair,
     signature_secret: SecretKey,
 }
 
 impl CashierWallet {
     fn new() -> Self {
-        let keypair = Keypair::random(&mut OsRng);
+        // let keypair = Keypair::random(&mut OsRng);
         let signature_secret = SecretKey::random(&mut OsRng);
-        Self { keypair, signature_secret }
+        // Self { keypair, signature_secret }
+        Self { signature_secret }
     }
 
     fn signature_public(&self) -> PublicKey {
@@ -1116,7 +1114,7 @@ async fn main() -> Result<()> {
     .unwrap();
 
     let mut client = Client::new();
-    client.init();
+    client.init()?;
 
     start_rpc(client).await.unwrap();
 
