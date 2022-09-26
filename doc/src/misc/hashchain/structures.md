@@ -56,15 +56,11 @@ The `Event` could have many actions according to the underlying data.
 
 ## Inv
 
-On receiving a new `Event`, the node must advertise its knowledge for this `Event` to confirm receipt 
-
 | Description   | Data Type      	   | Comments           		|
 |-------------- | -------------------- | -------------------------- |
 | Invs	  	  	| Vec<`InvItem`> 	   | A list of `InvItem`		|
 
 ## GetData
-
-Sending back `GetData` message contain the missing items, when receiving an `Inv` message. 
 
 | Description   | Data Type      	   | Comments              		|
 |-------------- | -------------------- | -------------------------- |
@@ -72,27 +68,15 @@ Sending back `GetData` message contain the missing items, when receiving an `Inv
 
 ## UnreadMessages
 
-Once a `Event` received from the network it will be added to this list unless it has `read_confirms` above the `MAXIMUM CONFIRMATION`. 
-All unread `Event`s are continually sent until receiving confirmations from other nodes.  
-
-All the `Event`s will apply to these filtering rules: 
-- Reject new `Event` too far in the future from now (20 Minutes)
-- Reject old `Event` too far in the past from now (1 Hour)
-- All `Event`s are organized by timestamp. Older `Event`s just gently expired and are then ignored.
-
 | Description | Data Type                   | Comments                                                                             |
 |-------------|---------------------------- | -------------------------------------------------------------------------------------|
 | Messages    | HashMap<`EventId`, `Event`> | Hold all the `Event`s that have broadcasted to other nodes but haven't confirmed yet |
 
-## Sync 
+## SyncEvent 
 
-Every 2 seconds each client must broadcast this message which contains 
-the head in the longest chain the client has to ensure the chain remain 
-roughly in sync.
-
-| Description | Data Type   | Comments					 	|
-|-------------|-------------|------------------------------ |
-| Head	      | `EventId` 	| head id in the longest chain  |
+| Description | Data Type    	| Comments					 	|
+|-------------|---------------- |------------------------------ |
+| Leaves	  | Vec<`EventId`> 	| hash of `Event`s   			|
 
 ## Seen<ObjectId>
 
