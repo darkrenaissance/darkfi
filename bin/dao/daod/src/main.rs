@@ -110,41 +110,30 @@ use crate::{
 ////
 //// High priority:
 ////
-//// 1. Show the token id as a string (e.g. xdrk) as well as the amount when
-////    we output balances to dao-cli. Optional: use prettytable library to display
-////    nicely (see darkfi/bin/drk).
-////    e.g: Balance: 1000 xDRK
+//// 1. Change MoneyWallets to be a HashMap<PublicKey, MoneyWallet>
 ////
-//// 2. airdrop() should pass a PublicKey instead of a nym.
+//// 2. vote() should pass a ProposalBulla
 ////
-//// 3. Rename xDRK and gDRK to DRK and GOV (xDRK = DRK, gDRK = GOV)
-////
-//// 4. Change MoneyWallets to be a HashMap<PublicKey, MoneyWallet>
-////
-//// 5. vote() should pass a ProposalBulla
-////
-//// 6. Delete old dao-cli and daod directories
-////
-//// 7. Clean up warnings :)
+//// 3. Delete old dao-cli and daod directories
 ////
 //// Less priority:
 ////
-//// 7. Better document CLI/ CLI help.
+//// 1. Better document CLI/ CLI help.
 ////
-//// 8. Token id is hardcoded rn. Change this so users can specify token_id
+//// 2. Token id is hardcoded rn. Change this so users can specify token_id
 ////    as either xdrk or gdrk. In dao-cli we run a match statement to link to
 ////    the corresponding static values XDRK_ID and GDRK_ID. Note: xdrk is used
 ////    only for the DAO treasury. gdrk is the governance token used to operate
 ////    the DAO.
 ////
-//// 9. Implement money transfer between MoneyWallets so users can send tokens to
+//// 3. Implement money transfer between MoneyWallets so users can send tokens to
 ////    eachother.
 ////
-//// 10. Make CLI usage more interactive. Example: when I cast a vote, output:
+//// 4. Make CLI usage more interactive. Example: when I cast a vote, output:
 ////   "You voted {} with value {}." where value is the number of gDRK in a users
 ////    wallet (and the same for making a proposal etc).
 ////
-//// 11. Currently, DaoWallet stores DaoParams, DaoBulla's and Proposal's in a
+//// 5. Currently, DaoWallet stores DaoParams, DaoBulla's and Proposal's in a
 ////    Vector. We retrieve values through indexing, meaning that we
 ////    cannot currently support multiple DAOs and multiple proposals.
 ////
@@ -154,7 +143,7 @@ use crate::{
 ////    ProposalBulla and we lookup the corresponding data. struct Dao should
 ////    be owned by DaoWallet.
 ////
-//// 12. Error handling :)
+//// 6. Error handling :)
 ////
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
