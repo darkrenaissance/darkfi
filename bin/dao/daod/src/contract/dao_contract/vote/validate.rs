@@ -1,3 +1,12 @@
+use std::any::{Any, TypeId};
+
+use log::error;
+use pasta_curves::{
+    arithmetic::CurveAffine,
+    group::{Curve, Group},
+    pallas,
+};
+
 use darkfi::{
     crypto::{
         keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier, types::DrkCircuitField,
@@ -5,13 +14,6 @@ use darkfi::{
     util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
-use log::error;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{Curve, Group},
-    pallas,
-};
-use std::any::{Any, TypeId};
 
 use crate::{
     contract::{

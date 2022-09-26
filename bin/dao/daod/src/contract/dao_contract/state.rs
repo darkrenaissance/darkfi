@@ -1,12 +1,14 @@
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use pasta_curves::{group::Group, pallas};
 use std::{any::Any, collections::HashMap};
 
-use crate::util::HashableBase;
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use pasta_curves::{group::Group, pallas};
+
 use darkfi::{
     crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode, nullifier::Nullifier},
     util::serial::{SerialDecodable, SerialEncodable},
 };
+
+use crate::util::HashableBase;
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoBulla(pub pallas::Base);

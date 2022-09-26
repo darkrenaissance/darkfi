@@ -1,3 +1,5 @@
+use std::any::{Any, TypeId};
+
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{Curve, Group},
@@ -9,8 +11,6 @@ use darkfi::{
     util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
-
-use std::any::{Any, TypeId};
 
 use crate::{
     contract::{dao_contract, dao_contract::CONTRACT_ID, money_contract},

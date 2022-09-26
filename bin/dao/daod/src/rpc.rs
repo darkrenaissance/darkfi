@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
 use async_std::sync::Mutex;
+use std::{str::FromStr, sync::Arc};
+
 use async_trait::async_trait;
 use log::debug;
 use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::rngs::OsRng;
-use std::str::FromStr;
-
 use serde_json::{json, Value};
 
 use darkfi::{

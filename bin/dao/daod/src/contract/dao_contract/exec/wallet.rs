@@ -1,8 +1,7 @@
-use log::debug;
-use rand::rngs::OsRng;
-
 use halo2_proofs::circuit::Value;
+use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{

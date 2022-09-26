@@ -1,3 +1,5 @@
+use std::{any::Any, collections::HashMap, hash::Hasher};
+
 use lazy_static::lazy_static;
 use log::debug;
 use pasta_curves::{
@@ -5,7 +7,6 @@ use pasta_curves::{
     pallas,
 };
 use rand::rngs::OsRng;
-use std::{any::Any, collections::HashMap, hash::Hasher};
 
 use darkfi::{
     crypto::{

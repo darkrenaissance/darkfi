@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use pasta_curves::pallas;
 
 use darkfi::{
@@ -5,8 +7,6 @@ use darkfi::{
     util::serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
-
-use std::any::Any;
 
 use crate::{
     contract::example_contract::{state::State, CONTRACT_ID},

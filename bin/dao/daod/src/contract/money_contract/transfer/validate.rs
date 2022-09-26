@@ -2,7 +2,6 @@ use std::any::{Any, TypeId};
 
 use incrementalmerkletree::Tree;
 use log::{debug, error};
-
 use pasta_curves::{group::Group, pallas};
 
 use darkfi::{
