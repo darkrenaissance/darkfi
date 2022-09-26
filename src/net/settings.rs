@@ -29,6 +29,7 @@ pub struct Settings {
     pub outbound_transports: Vec<TransportName>,
     pub localnet: bool,
     pub peer_discovery: bool,
+    pub channel_log: bool,
 }
 
 impl Default for Settings {
@@ -50,6 +51,7 @@ impl Default for Settings {
             outbound_transports: get_outbound_transports(vec![]),
             localnet: false,
             peer_discovery: true,
+            channel_log: false,
         }
     }
 }
@@ -117,6 +119,11 @@ pub struct SettingsOpt {
     #[serde(default = "default_as_true")]
     #[structopt(long)]
     pub peer_discovery: bool,
+
+    /// Enable channel log
+    #[serde(default)]
+    #[structopt(long)]
+    pub channel_log: bool,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -138,6 +145,7 @@ impl From<SettingsOpt> for Settings {
             outbound_transports: get_outbound_transports(settings_opt.outbound_transports),
             localnet: settings_opt.localnet,
             peer_discovery: settings_opt.peer_discovery,
+            channel_log: settings_opt.channel_log,
         }
     }
 }

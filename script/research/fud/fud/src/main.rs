@@ -21,11 +21,10 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
+    serial::serialize,
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
-        path::get_config_path,
-        serial::serialize,
+        path::{expand_path, get_config_path},
     },
     Result,
 };
@@ -74,10 +73,14 @@ struct Args {
     #[structopt(long)]
     /// Prefered transports for outbound connections (repeatable flag)
     transports: Vec<String>,
-    
+
     #[structopt(long)]
     /// Enable localnet hosts
     localnet: bool,
+
+    #[structopt(long)]
+    /// Enable channel log
+    channel_log: bool,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -388,6 +391,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         seeds: args.seeds.clone(),
         outbound_transports: net::settings::get_outbound_transports(args.transports),
         localnet: args.localnet,
+        channel_log: args.channel_log,
         ..Default::default()
     };
 

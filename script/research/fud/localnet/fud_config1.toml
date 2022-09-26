@@ -32,3 +32,6 @@ seeds = ["tcp://127.0.0.1:13337"]
 
 # Enable localnet hosts
 localnet = true
+
+# Enable channel log
+channel_log = true

@@ -8,6 +8,8 @@ inbound = ["tls://127.0.0.1:25560"]
 external_addr = ["tls://127.0.0.1:25560"]
 seeds = []
 peers = []
+localnet = true
+channel_log = true
 
 [channel."#plain"]
 topic = "Plain unencrypted channel"

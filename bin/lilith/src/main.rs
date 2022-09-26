@@ -149,6 +149,7 @@ async fn spawn_network(
         peers: info.peers,
         outbound_connections: 0,
         localnet: info.localnet,
+        channel_log: info.channel_log,
         app_version: None,
         ..Default::default()
     };

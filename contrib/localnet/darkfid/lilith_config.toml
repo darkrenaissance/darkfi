@@ -21,12 +21,14 @@ port = 33032
 #seeds = []
 #peers = []
 localnet = true
+channel_log = true
 
 [network."darkfid_consensus"]
 port = 33033
 #seeds = []
 #peers = []
 localnet = true
+channel_log = true
 
 #[network."ircd"]
 #port = 25551

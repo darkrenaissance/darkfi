@@ -42,6 +42,9 @@ sync_p2p_seed = ["tcp://127.0.0.1:33032"]
 # Enable localnet hosts
 localnet = true
 
+# Enable channel log
+channel_log = true
+
 # Airdrop timeout limit in seconds
 airdrop_timeout = 10
 

@@ -69,6 +69,9 @@ sync_p2p_seed = ["tcp://127.0.0.1:33032"]
 # Enable localnet hosts
 localnet = true
 
+# Enable channel log
+channel_log = true
+
 # Whitelisted faucet public key
 faucet_pub = ["1z3JuN456MieHtpoF4cr5a1ntFF87L8Z3m2E5ACppFodFcjnLS"]
 
