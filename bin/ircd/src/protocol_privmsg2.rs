@@ -128,7 +128,7 @@ struct Inv {
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct SyncEvent {
-    head: EventId,
+    leaves: Vec<EventId>,
 }
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
@@ -258,15 +258,14 @@ impl ProtocolEvent {
         debug!(target: "ircd", "ProtocolEvent::handle_receive_syncevent() [START]");
         loop {
             let syncevent = self.syncevent_sub.receive().await?;
-            let head = (*syncevent).to_owned().head;
         }
     }
 
     // every 2 seconds send a Sync msg
     async fn send_sync_hash_loop(self: Arc<Self>) -> Result<()> {
         loop {
-            //let head = self.model.fing_longest_chain();
-            //self.channel.send(SyncEvent { head }).await;
+            //let leaves = self.model.find_leaves();
+            //self.channel.send(SyncEvent { leaves }).await;
             sleep(2).await;
         }
     }

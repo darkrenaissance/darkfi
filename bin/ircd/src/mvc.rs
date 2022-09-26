@@ -150,57 +150,55 @@ impl Model {
             self.event_map.insert(node_hash, node);
 
             // clean up the tree from old eventnodes
-            self.prune_forks();
+            self.prune_chains();
             self.update_root();
         }
     }
 
-    fn prune_forks(&mut self) {
+    fn prune_chains(&mut self) {
         let head = self.find_head();
-        let mut remove_list = vec![];
-        // Reject events which attach to forks too low in the chain
+        let leaves = self.find_leaves();
+
+        // Reject events which attach to chains too low in the chain
         // At some point we ignore all events from old branches
-        for (event_hash, node) in self.event_map.iter() {
+        for leaf in leaves {
             // skip the head event
-            if event_hash == &head {
+            if leaf == head {
                 continue
             }
 
-            // check if the node is a leaf
-            if node.children.is_empty() {
-                let depth = self.diff_depth(event_hash.clone(), self.find_head());
-                if depth > MAX_DEPTH {
-                    remove_list.push(event_hash.clone());
-                }
+            let depth = self.diff_depth(leaf.clone(), head);
+            if depth > MAX_DEPTH {
+                self.remove_node(leaf);
             }
-        }
-
-        for event in remove_list {
-            self.remove_node(event);
         }
     }
 
-    fn update_root(&mut self) {
-        let head = self.find_head();
-
+    fn find_leaves(&self) -> Vec<EventId> {
         // collect the leaves in the tree
         let mut leaves = vec![];
 
         for (event_hash, node) in self.event_map.iter() {
-            // skip the head event
-            if event_hash == &head {
-                continue
-            }
-
             // check if the node is a leaf
             if node.children.is_empty() {
-                leaves.push(event_hash);
+                leaves.push(event_hash.clone());
             }
         }
 
-        // find the common ancestor between each leaf and the head event
+        leaves
+    }
+
+    fn update_root(&mut self) {
+        let head = self.find_head();
+        let leaves = self.find_leaves();
+
+        // find the common ancestor between for each leaf and the head event
         let mut ancestors = vec![];
         for leaf in leaves {
+            if leaf == head {
+                continue
+            }
+
             let ancestor = self.find_ancestor(leaf.clone(), head);
             ancestors.push(ancestor);
         }
@@ -503,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prune_forks() {
+    fn test_prune_chains() {
         let mut model = Model::new();
         let root_id = model.current_root;
 
@@ -569,7 +567,7 @@ mod tests {
         assert_eq!(model.find_head(), id2);
 
         // event_node 3
-        // This will start as new fork, but no events will be added
+        // This will start as new chain, but no events will be added
         // since the last event's depth is 14
         let mut id3 = root_id;
         for x in 0..3 {
@@ -585,7 +583,7 @@ mod tests {
         assert_eq!(model.find_head(), id2);
 
         // Add more events to the event_node 1
-        // At the end this fork must overtake the event_node 2
+        // At the end this chain must overtake the event_node 2
         for x in 7..14 {
             let timestamp = get_current_time() + 1;
             let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
