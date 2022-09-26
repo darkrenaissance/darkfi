@@ -192,7 +192,7 @@ impl Model {
         let head = self.find_head();
         let leaves = self.find_leaves();
 
-        // find the common ancestor between for each leaf and the head event
+        // find the common ancestor for each leaf and the head event
         let mut ancestors = vec![];
         for leaf in leaves {
             if leaf == head {
@@ -210,9 +210,10 @@ impl Model {
 
         // set the new root
         if let Some(ancestor) = highest_ancestor {
-            // the ancestor must have at least height > 10
+            // TODO change this number 
+            // the ancestor must have at least height > 300
             let ancestor_height = self.find_height(&self.current_root, ancestor).unwrap();
-            if ancestor_height < 10 {
+            if ancestor_height < 300 {
                 return
             }
 
@@ -311,22 +312,22 @@ impl Model {
         depth
     }
 
-    fn find_height(&self, parent: &EventId, child_id: &EventId) -> Option<u32> {
+    fn find_height(&self, node: &EventId, child_id: &EventId) -> Option<u32> {
         let mut height = 0;
 
-        if parent == child_id {
+        if node == child_id {
             return Some(height)
         }
 
         height += 1;
 
-        let parent_children = &self.event_map.get(parent).unwrap().children;
-        if parent_children.is_empty() {
+        let children = &self.event_map.get(node).unwrap().children;
+        if children.is_empty() {
             return None
         }
 
-        for parent_child in parent_children.iter() {
-            if let Some(h) = self.find_height(parent_child, child_id) {
+        for child in children.iter() {
+            if let Some(h) = self.find_height(child, child_id) {
                 return Some(height + h)
             }
         }
