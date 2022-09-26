@@ -44,7 +44,7 @@ const LOG_T: &str = "stakeholder";
 pub struct SlotWorkspace {
     pub st: blake3::Hash,      // hash of the previous block
     pub e: u64,                // epoch index
-    pub sl: u64,               // absolute slot index
+    pub sl: u64,               // relative slot index
     pub txs: Vec<Transaction>, // unpublished block transactions
     pub root: MerkleNode,
     /// merkle root of txs
@@ -363,11 +363,14 @@ impl Stakeholder {
         // create coin with absolute slo/epocht.
         //TODO (fix) this is supposed to be the total number of slots
         let num_slots = self.workspace.sl;
+        let epochs = self.workspace.e;
+        let epoch_len = self.epoch_consensus.get_epoch_len();
         // total stake;
         // TODO sigma scalar for tunning target function
         // it's value is dependent on the tekonomics,
         // set to one untill then.
         let reward = pallas::Base::one();
+        let num_slots = num_slots+epochs*epoch_len;
         let sigma: pallas::Base = pallas::Base::from(num_slots) * reward;
         epoch.create_coins(sigma); // set epoch interal fields working space with competing coins
         self.epoch = epoch.clone();
@@ -379,11 +382,14 @@ impl Stakeholder {
     /// commiting it's coins, to maximize success, thus,
     /// the lottery proof need to be conditioned on the slot itself, and previous proof.
     /// this will encourage each potential leader to play with honesty.
+    /// * `e` - epoch index
+    /// * `sl` - slot relative index
     fn new_slot(&mut self, e: u64, sl: u64) {
-        info!(target: LOG_T, "[new slot] 4 {}\ne:{}, sl:{}", self, e, sl);
-        let empty_ptr = blake3::hash(b"");
-        let st: blake3::Hash =
-            if e > 0 || (e == 0 && sl > 0) { self.workspace.block.blockhash() } else { empty_ptr };
+        info!(target: LOG_T, "[new slot] e:{}, rel sl:{}", self, e, sl);
+        let st: blake3::Hash = if e > 0 || (e == 0 && sl > 0) {
+            self.workspace.block.blockhash()
+        } else {  blake3::hash(b"")
+        };
         let is_leader: bool = self.epoch.is_leader(sl);
         // if is leader create proof
         let proof =
