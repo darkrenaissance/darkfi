@@ -152,9 +152,11 @@ impl JsonRpcInterface {
 
     async fn user_balance(&self, id: Value, params: &[Value]) -> JsonResult {
         let mut client = self.client.lock().await;
-        let nym = params[0].as_str().unwrap().to_string();
+        let nym = params[0].as_str().unwrap();
 
-        let wallet = client.money_wallets.get(&nym).unwrap();
+        let pubkey = PublicKey::from_str(nym).unwrap();
+
+        let wallet = client.money_wallets.get(&pubkey).unwrap();
         let balance = wallet.balances().unwrap();
         JsonResponse::new(json!(balance), id).into()
     }
@@ -173,16 +175,22 @@ impl JsonRpcInterface {
     }
 
     // Create a new wallet for governance tokens.
-    async fn keygen(&self, id: Value, params: &[Value]) -> JsonResult {
+    async fn keygen(&self, id: Value, _params: &[Value]) -> JsonResult {
         let mut client = self.client.lock().await;
-        let nym = params[0].as_str().unwrap().to_string();
+        // let nym = params[0].as_str().unwrap().to_string();
 
-        client.new_money_wallet(nym.clone());
+        let keypair = Keypair::random(&mut OsRng);
+        let signature_secret = SecretKey::random(&mut OsRng);
+        let own_coins: Vec<(OwnCoin, bool)> = Vec::new();
+        let money_wallet = MoneyWallet { keypair, signature_secret, own_coins };
+        money_wallet.track(&mut client.states);
 
-        let wallet = client.money_wallets.get(&nym).unwrap();
-        let pubkey = wallet.get_public_key();
+        client.money_wallets.insert(keypair.public, money_wallet);
 
-        let addr: String = bs58::encode(pubkey.to_bytes()).into_string();
+        // let wallet = client.money_wallets.get(&nym).unwrap();
+        // let pubkey = wallet.get_public_key();
+
+        let addr: String = bs58::encode(keypair.public.to_bytes()).into_string();
         JsonResponse::new(json!(addr), id).into()
     }
 
@@ -192,10 +200,10 @@ impl JsonRpcInterface {
         let mut client = self.client.lock().await;
         let zk_bins = &client.zk_bins;
 
-        let nym = params[0].as_str().unwrap().to_string();
+        let addr = PublicKey::from_str(params[0].as_str().unwrap()).unwrap();
         let value = params[1].as_u64().unwrap();
 
-        client.airdrop_user(value, *GOV_ID, nym.clone()).unwrap();
+        client.airdrop_user(value, *GOV_ID, addr).unwrap();
 
         JsonResponse::new(json!("Tokens airdropped successfully."), id).into()
     }
@@ -204,13 +212,14 @@ impl JsonRpcInterface {
     async fn create_proposal(&self, id: Value, params: &[Value]) -> JsonResult {
         let mut client = self.client.lock().await;
 
-        let sender = params[0].as_str().unwrap().to_string();
+        let sender = params[0].as_str().unwrap();
         let recipient = params[1].as_str().unwrap();
         let amount = params[2].as_u64().unwrap();
 
         let recv_addr = PublicKey::from_str(recipient).unwrap();
+        let sndr_addr = PublicKey::from_str(sender).unwrap();
 
-        let proposal_bulla = client.propose(recv_addr, *DRK_ID, amount, sender).unwrap();
+        let proposal_bulla = client.propose(recv_addr, *DRK_ID, amount, sndr_addr).unwrap();
         let bulla: String = bs58::encode(proposal_bulla.to_repr()).into_string();
 
         JsonResponse::new(json!(bulla), id).into()
@@ -220,8 +229,10 @@ impl JsonRpcInterface {
     async fn vote(&self, id: Value, params: &[Value]) -> JsonResult {
         let mut client = self.client.lock().await;
 
-        let nym = params[0].as_str().unwrap().to_string();
+        let addr = params[0].as_str().unwrap();
         let vote_str = params[1].as_str().unwrap();
+
+        let addr = PublicKey::from_str(addr).unwrap();
 
         // This would be cleaner as a match statement,
         // but we need to sort out error handling first.
@@ -232,7 +243,7 @@ impl JsonRpcInterface {
             vote_bool = false
         }
 
-        client.cast_vote(nym, vote_bool).unwrap();
+        client.cast_vote(addr, vote_bool).unwrap();
         JsonResponse::new(json!("Vote cast successfully."), id).into()
     }
     // --> {"method": "execute", "params": []}

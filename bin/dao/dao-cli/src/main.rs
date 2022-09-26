@@ -40,9 +40,7 @@ pub enum CliDaoSubCommands {
     },
     DaoBalance {},
     DaoBulla {},
-    Keygen {
-        nym: String,
-    },
+    Keygen {},
     /// Airdrop tokens
     Airdrop {
         nym: String,
@@ -126,8 +124,8 @@ async fn start(options: CliDao) -> Result<()> {
             println!("{}", &reply.as_str().unwrap().to_string());
             return Ok(())
         }
-        Some(CliDaoSubCommands::Keygen { nym }) => {
-            let reply = client.keygen(nym).await?;
+        Some(CliDaoSubCommands::Keygen {}) => {
+            let reply = client.keygen().await?;
             println!("User public key: {}", &reply.to_string());
             return Ok(())
         }

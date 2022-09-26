@@ -164,7 +164,7 @@ use crate::{
 
 pub struct Client {
     dao_wallet: DaoWallet,
-    money_wallets: HashMap<String, MoneyWallet>,
+    money_wallets: FxHashMap<PublicKey, MoneyWallet>,
     cashier_wallet: CashierWallet,
     states: StateRegistry,
     zk_bins: ZkContractTable,
@@ -174,7 +174,7 @@ impl Client {
     fn new() -> Self {
         // For this early demo we store all wallets in a single Client.
         let dao_wallet = DaoWallet::new();
-        let money_wallets = HashMap::default();
+        let money_wallets = FxHashMap::default();
         let cashier_wallet = CashierWallet::new();
 
         // Lookup table for smart contract states
@@ -245,16 +245,10 @@ impl Client {
         Ok(())
     }
 
-    // Strictly for demo purposes.
-    fn new_money_wallet(&mut self, key: String) {
-        let keypair = Keypair::random(&mut OsRng);
-        let signature_secret = SecretKey::random(&mut OsRng);
-        let own_coins: Vec<(OwnCoin, bool)> = Vec::new();
-        let money_wallet = MoneyWallet { keypair, signature_secret, own_coins };
-        money_wallet.track(&mut self.states);
+    // // Strictly for demo purposes.
+    // fn new_money_wallet(&mut self) {
 
-        self.money_wallets.insert(key.clone(), money_wallet);
-    }
+    // }
 
     fn create_dao(
         &mut self,
@@ -324,9 +318,9 @@ impl Client {
         Ok(())
     }
 
-    fn airdrop_user(&mut self, value: u64, token_id: pallas::Base, nym: String) -> Result<()> {
-        let wallet = self.money_wallets.get(&nym).unwrap();
-        let addr = wallet.get_public_key();
+    fn airdrop_user(&mut self, value: u64, token_id: pallas::Base, addr: PublicKey) -> Result<()> {
+        // let wallet = self.money_wallets.get(&nym).unwrap();
+        // let addr = wallet.get_public_key();
 
         let tx = self.cashier_wallet.airdrop(value, token_id, addr, &self.zk_bins).unwrap();
         self.validate(&tx).unwrap();
@@ -444,7 +438,7 @@ impl Client {
         recipient: PublicKey,
         token_id: pallas::Base,
         amount: u64,
-        sender: String,
+        sender: PublicKey,
     ) -> Result<pallas::Base> {
         let params = self.dao_wallet.params[0].clone();
 
@@ -473,18 +467,18 @@ impl Client {
         Ok(proposal_bulla)
     }
 
-    fn get_addr_from_nym(&self, nym: String) -> Result<PublicKey> {
-        let wallet = self.money_wallets.get(&nym).unwrap();
-        Ok(wallet.get_public_key())
-    }
+    // fn get_addr_from_nym(&self, nym: String) -> Result<PublicKey> {
+    //     let wallet = self.money_wallets.get(&nym).unwrap();
+    //     Ok(wallet.get_public_key())
+    // }
 
-    fn cast_vote(&mut self, nym: String, vote: bool) -> Result<()> {
+    fn cast_vote(&mut self, pubkey: PublicKey, vote: bool) -> Result<()> {
         let dao_key = self.dao_wallet.keypair;
         let proposal = self.dao_wallet.proposals[0].clone();
         let dao_params = self.dao_wallet.params[0].clone();
         let dao_keypair = self.dao_wallet.keypair;
 
-        let mut voter_wallet = self.money_wallets.get_mut(&nym).unwrap();
+        let mut voter_wallet = self.money_wallets.get_mut(&pubkey).unwrap();
 
         let tx = voter_wallet
             .vote_tx(

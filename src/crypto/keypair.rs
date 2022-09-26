@@ -1,4 +1,9 @@
-use std::{convert::TryFrom, io, str::FromStr};
+use std::{
+    convert::TryFrom,
+    hash::{Hash, Hasher},
+    io,
+    str::FromStr,
+};
 
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
@@ -90,6 +95,13 @@ impl PublicKey {
 
     pub fn y(&self) -> pallas::Base {
         *self.0.to_affine().coordinates().unwrap().y()
+    }
+}
+
+impl Hash for PublicKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let bytes = self.0.to_affine().to_bytes();
+        bytes.hash(state);
     }
 }
 
