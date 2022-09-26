@@ -1,8 +1,6 @@
 use futures::executor::block_on;
-use halo2_proofs::{dev::MockProver};
-use pasta_curves::{
-    pallas,
-};
+use halo2_proofs::dev::MockProver;
+use pasta_curves::pallas;
 use url::Url;
 
 use darkfi::{

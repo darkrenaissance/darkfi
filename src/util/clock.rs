@@ -1,7 +1,7 @@
-use std::{thread, time::Duration};
-use log::debug;
-use url::Url;
 use crate::{util::time::Timestamp, Result};
+use log::debug;
+use std::{thread, time::Duration};
+use url::Url;
 
 pub enum Ticks {
     GENESIS { e: u64, sl: u64 },  //genesis epoch
@@ -67,7 +67,7 @@ impl Clock {
     }
 
     /// return absolute tick to genesis, and relative tick index in the slot.
-    async fn tick_time(&self) -> (u64, u64,u64) {
+    async fn tick_time(&self) -> (u64, u64, u64) {
         let time = self.time_to_genesis().await.0 as u64;
         let tick_abs: u64 = time / self.tick_len;
         let tick_rel: u64 = time % self.tick_len;
@@ -118,13 +118,9 @@ impl Clock {
         let e = self.epoch_abs().await;
         let sl = self.slot_relative().await;
         if self.ticking().await {
-            debug!("e/e`: {}/{} sl/sl`: {}/{}, BB_E/BB_SL: {}/{}",
-                   e,
-                   self.e,
-                   sl,
-                   self.sl,
-                   BB_E,
-                   BB_SL
+            debug!(
+                "e/e`: {}/{} sl/sl`: {}/{}, BB_E/BB_SL: {}/{}",
+                e, self.e, sl, self.sl, BB_E, BB_SL
             );
             if e == self.e && e == BB_E && self.sl == BB_SL {
                 self.sl = sl + 1; // 0
@@ -158,29 +154,23 @@ impl Clock {
 
 #[cfg(test)]
 mod tests {
-    use std::{thread, time::Duration};
-    use crate::util::clock::{Clock,Ticks};
+    use crate::util::{
+        clock::{Clock, Ticks},
+        time,
+    };
     use futures::executor::block_on;
-    use crate::util::time;
+    use std::{thread, time::Duration};
     #[test]
     fn clock_works() {
-        let clock = Clock::new(Some(9),
-                               Some(9),
-                               Some(9),
-                               vec![]
-        );
+        let clock = Clock::new(Some(9), Some(9), Some(9), vec![]);
         //block th for 3 secs
         thread::sleep(Duration::from_millis(1000));
         let ttg = block_on(clock.time_to_genesis()).0;
-        assert!(ttg>=1 && ttg<2);
+        assert!(ttg >= 1 && ttg < 2);
     }
 
     fn clock_ticking() {
-        let clock = Clock::new(Some(9),
-                               Some(9),
-                               Some(9),
-                               vec![]
-        );
+        let clock = Clock::new(Some(9), Some(9), Some(9), vec![]);
         //block th for 3 secs
         thread::sleep(Duration::from_millis(1000));
         assert!(block_on(clock.ticking()));
@@ -189,17 +179,12 @@ mod tests {
     }
 
     fn clock_ticks() {
-        let mut clock = Clock::new(Some(9),
-                               Some(9),
-                               Some(9),
-                               vec![]
-        );
+        let mut clock = Clock::new(Some(9), Some(9), Some(9), vec![]);
         //
-        let tick : Ticks = block_on(clock.ticks());
-        assert_eq!(matches!(tick, Ticks::GENESIS{e:0,sl:0}), true);
+        let tick: Ticks = block_on(clock.ticks());
+        assert_eq!(matches!(tick, Ticks::GENESIS { e: 0, sl: 0 }), true);
         thread::sleep(Duration::from_millis(3000));
-        let tock  : Ticks = block_on(clock.ticks());
+        let tock: Ticks = block_on(clock.ticks());
         assert_eq!(matches!(tock, Ticks::TOCKS), true);
-
     }
 }
