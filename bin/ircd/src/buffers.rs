@@ -240,7 +240,7 @@ impl Orphan {
 }
 
 pub struct SeenIds {
-    ids: Mutex<RingBuffer<u64>>,
+    ids: RingBuffer<u64>,
 }
 
 impl Default for SeenIds {
@@ -251,13 +251,12 @@ impl Default for SeenIds {
 
 impl SeenIds {
     pub fn new() -> Self {
-        Self { ids: Mutex::new(RingBuffer::new(settings::SIZE_OF_IDSS_BUFFER)) }
+        Self { ids: RingBuffer::new(settings::SIZE_OF_IDSS_BUFFER) }
     }
 
-    pub async fn push(&self, id: u64) -> bool {
-        let ids = &mut self.ids.lock().await;
-        if !ids.contains(&id) {
-            ids.push(id);
+    pub fn push(&mut self, id: u64) -> bool {
+        if !self.ids.contains(&id) {
+            self.ids.push(id);
             return true
         }
         false
@@ -346,14 +345,6 @@ mod tests {
         b.push("h9");
         assert_eq!(b.len(), 3);
         assert_eq!(b.iter().last().unwrap(), &"h9");
-    }
-
-    #[async_std::test]
-    async fn test_seen_ids() {
-        let seen_ids = SeenIds::default();
-        assert!(seen_ids.push(3000).await);
-        assert!(seen_ids.push(3001).await);
-        assert!(!seen_ids.push(3000).await);
     }
 
     #[async_std::test]

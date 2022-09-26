@@ -1,3 +1,4 @@
+use async_std::sync::{Arc, Mutex};
 use std::net::SocketAddr;
 
 use futures::{
@@ -14,7 +15,7 @@ use darkfi::{
 };
 
 use crate::{
-    buffers::Buffers,
+    buffers::SeenIds,
     crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
     settings,
     settings::RPL,
@@ -29,7 +30,7 @@ pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     pub address: SocketAddr,
 
     // msgs buffer
-    buffers: Buffers,
+    seen: Arc<Mutex<SeenIds>>,
 
     // irc config
     irc_config: IrcConfig,
@@ -44,13 +45,13 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     pub fn new(
         write_stream: WriteHalf<C>,
         address: SocketAddr,
-        buffers: Buffers,
+        seen: Arc<Mutex<SeenIds>>,
         irc_config: IrcConfig,
         p2p: P2pPtr,
         notify_clients: SubscriberPtr<Privmsg>,
         subscription: Subscription<Privmsg>,
     ) -> Self {
-        Self { write_stream, address, buffers, irc_config, p2p, notify_clients, subscription }
+        Self { write_stream, address, seen, irc_config, p2p, notify_clients, subscription }
     }
 
     /// Start listening for messages came from p2p network or irc client
@@ -204,11 +205,6 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
             if *self.irc_config.capabilities.get("no-history").unwrap() {
                 return Ok(())
-            }
-
-            // Send dm messages in buffer
-            for msg in self.buffers.privmsgs.load().await {
-                self.process_msg(&msg).await?;
             }
         }
         Ok(())
@@ -446,9 +442,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
         info!("[CLIENT {}] (Plain) PRIVMSG {} :{}", self.address, target, message,);
 
-        let last_term = self.buffers.privmsgs.last_term().await + 1;
-
-        let mut privmsg = Privmsg::new(&self.irc_config.nickname, target, &message, last_term);
+        let mut privmsg = Privmsg::new(&self.irc_config.nickname, target, &message, 0);
 
         if target.starts_with('#') {
             if !self.irc_config.configured_chans.contains_key(target) {
@@ -477,8 +471,10 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
         }
 
-        self.buffers.seen_ids.push(privmsg.id).await;
-        self.buffers.privmsgs.push(&privmsg).await;
+        {
+            let ids = &mut self.seen.lock().await;
+            ids.push(privmsg.id);
+        }
 
         self.notify_clients
             .notify_with_exclude(privmsg.clone(), &[self.subscription.get_id()])
