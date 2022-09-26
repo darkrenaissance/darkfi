@@ -53,7 +53,7 @@ impl ChannelInfo {
             "last_status": self.last_status,
             "log": self.log.lock().await.clone(),
         });
-        self.log.lock().await.clear();
+        *self.log.lock().await = Vec::new();
         result
     }
 }
