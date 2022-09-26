@@ -212,7 +212,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
     async fn reply(&mut self, message: &str) -> Result<()> {
         self.write_stream.write_all(message.as_bytes()).await?;
-        debug!("Sent {}", message);
+        debug!("Sent {}", message.trim_end());
         Ok(())
     }
 
