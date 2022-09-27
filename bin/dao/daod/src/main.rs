@@ -114,22 +114,22 @@ use crate::{
 ////
 //// Less priority:
 ////
-//// 7. Better document CLI/ CLI help.
+//// 1. Better document CLI/ CLI help.
 ////
-//// 8. Token id is hardcoded rn. Change this so users can specify token_id
+//// 2. Token id is hardcoded rn. Change this so users can specify token_id
 ////    as either xdrk or gdrk. In dao-cli we run a match statement to link to
 ////    the corresponding static values XDRK_ID and GDRK_ID. Note: xdrk is used
 ////    only for the DAO treasury. gdrk is the governance token used to operate
 ////    the DAO.
 ////
-//// 9. Implement money transfer between MoneyWallets so users can send tokens to
+//// 3. Implement money transfer between MoneyWallets so users can send tokens to
 ////    eachother.
 ////
-//// 10. Make CLI usage more interactive. Example: when I cast a vote, output:
+//// 4. Make CLI usage more interactive. Example: when I cast a vote, output:
 ////   "You voted {} with value {}." where value is the number of gDRK in a users
 ////    wallet (and the same for making a proposal etc).
 ////
-//// 11. Currently, DaoWallet stores DaoParams, DaoBulla's and Proposal's in a
+//// 5. Currently, DaoWallet stores DaoParams, DaoBulla's and Proposal's in a
 ////    Vector. We retrieve values through indexing, meaning that we
 ////    cannot currently support multiple DAOs and multiple proposals.
 ////
@@ -139,7 +139,7 @@ use crate::{
 ////    ProposalBulla and we lookup the corresponding data. struct Dao should
 ////    be owned by DaoWallet.
 ////
-//// 12. Error handling :)
+//// 6. Error handling :)
 ////
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
