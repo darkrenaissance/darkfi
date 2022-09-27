@@ -5,7 +5,7 @@ use url::Url;
 
 use darkfi::{
     blockchain::{
-        epoch::{Epoch, EpochItem},
+        epoch::{Epoch},
         EpochConsensus,
     },
     crypto::leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN},
@@ -19,9 +19,8 @@ fn main() {
 
     //
     const LEN: usize = 10;
-    let epoch_item = EpochItem {
-        value: 332233,  //static stake value
-    };
+    let value = 33223;  //static stake value
+
     //
     let settings = Settings {
         inbound: vec![Url::parse("tls://127.0.0.1:12002").unwrap()],
@@ -46,7 +45,7 @@ fn main() {
         block_on(Stakeholder::new(consensus, settings, "db", 0, Some(k))).unwrap();
 
     let eta: pallas::Base = stakeholder.get_eta();
-    let mut epoch = Epoch { len: Some(LEN), item: Some(epoch_item), eta, coins: vec![] };
+    let mut epoch = Epoch { len: Some(LEN), value: Some(value), eta, coins: vec![] };
     // sigma is nubmer of slots * reward (assuming reward is 1 for simplicity)
     let sigma = pallas::Base::from(10);
     let coins: Vec<LeadCoin> = epoch.create_coins(sigma);

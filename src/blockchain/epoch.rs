@@ -23,24 +23,18 @@ use crate::crypto::{
 };
 
 const PRF_NULLIFIER_PREFIX: u64 = 0;
-
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
-
-#[derive(Copy, Debug, Default, Clone)]
-pub struct EpochItem {
-    pub value: u64, // the stake value is static during the epoch.
-}
 
 /// epoch configuration
 /// this struct need be a singleton,
-/// should be populated from configuration file.
+/// TODO should be populated from configuration file.
 #[derive(Copy, Debug, Default, Clone)]
 pub struct EpochConsensus {
-    pub sl_len: u64,
+    pub sl_len: u64, // length of slot in terms of ticks
     /// number of slots per epoch
-    pub e_len: u64,
-    pub tick_len: u64,
-    pub reward: u64,
+    pub e_len: u64, // length of epoch in terms of slots
+    pub tick_len: u64, // length of tick in terms of seconds
+    pub reward: u64, // constant reward value for the slot leader
 }
 
 impl EpochConsensus {
@@ -58,19 +52,23 @@ impl EpochConsensus {
         }
     }
 
-    /// TODO how is the reward derived?
+    /// getter for constant stakeholder reward
+    /// used for configuring the stakeholder reward value
     pub fn get_reward(&self) -> u64 {
         self.reward
     }
 
+    /// getter for the slot length in terms of ticks
     pub fn get_slot_len(&self) -> u64 {
         self.sl_len
     }
 
+    /// getter for the epoch length in terms of slots
     pub fn get_epoch_len(&self) -> u64 {
         self.e_len
     }
 
+    /// getter for the
     pub fn get_tick_len(&self) -> u64 {
         self.tick_len
     }
@@ -78,12 +76,10 @@ impl EpochConsensus {
 
 #[derive(Debug, Default, Clone)]
 pub struct Epoch {
-    // TODO this need to emulate epoch
     // should have ep, slot, current block, etc.
     //epoch metadata
     pub len: Option<usize>, // number of slots in the epoch
-    //epoch item
-    pub item: Option<EpochItem>,
+    pub value: Option<u64>, // the stake value is static during the epoch.
     pub eta: pallas::Base,    // CRS for the leader selection.
     pub coins: Vec<LeadCoin>, // competing coins
 }
@@ -92,7 +88,7 @@ impl Epoch {
     pub fn new(consensus: EpochConsensus, true_random: pallas::Base) -> Self {
         Self {
             len: Some(consensus.get_slot_len() as usize),
-            item: Some(EpochItem { value: consensus.reward }),
+            value: Some(consensus.reward),
             eta: true_random,
             coins: vec![],
         }
@@ -171,7 +167,7 @@ impl Epoch {
         let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(self.len.unwrap() as usize);
         let mut coins: Vec<LeadCoin> = vec![];
         for i in 0..self.len.unwrap() {
-            let c_v = pallas::Base::from(self.item.unwrap().value);
+            let c_v = pallas::Base::from(self.value.unwrap());
             //random sampling of the same size of prf,
             //pseudo random sampling that is the size of pederson commitment
             // coin slot number

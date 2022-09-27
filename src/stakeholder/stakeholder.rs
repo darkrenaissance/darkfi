@@ -383,7 +383,7 @@ impl Stakeholder {
     /// * `e` - epoch index
     /// * `sl` - slot relative index
     fn new_slot(&mut self, e: u64, sl: u64) {
-        info!(target: LOG_T, "[new slot] e:{}, rel sl:{}", e, sl);
+        info!(target: LOG_T, "[new slot] {}, e:{}, rel sl:{}", self, e, sl);
         let st: blake3::Hash = if e > 0 || (e == 0 && sl > 0) {
             self.workspace.block.blockhash()
         } else {
