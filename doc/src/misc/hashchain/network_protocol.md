@@ -34,14 +34,14 @@ The protocol classify the Events by their state:
 An `Inv` message is a confirmation from a node in the network that the `Event`
 has been read.
 
-Confirmation for an `Event` not exist in the `UnreadMessages` list, 
+Confirmation for an `Event` not exist in the `UnreadEvents` list, 
 The protocol send a `GetData` message to request the missing `Event`.
 
-The protocol update the `Event` in the `UnreadMessages` list by increasing the
+The protocol update the `Event` in the `UnreadEvents` list by increasing the
 read_confirms by one.
 
 The state for updated `Event` change to read when the read_confirms exceed
-`MAX_CONFIMRS`, Then the `Event remove from the `UnreadMessages` list and add to the `Model`. 
+`MAX_CONFIMRS`, Then the `Event remove from the `UnreadEvents` list and add to the `Model`. 
 
 The protocol rebroadcast the received `Inv` to the network.
 
@@ -54,29 +54,29 @@ an `Inv` message to confirm that the `Event` has been read.
 
 | Description   | Data Type      	   | Comments              		|
 |-------------- | -------------------- | -------------------------- |
-| Invs	  	    | Vec<`EventId`> 	   | A list of `EventId`   		|
+| events	  	| Vec<`EventId`> 	   | A list of `EventId`   		|
 
 ### Receiving a `GetData` message
 
-The protocol search in both `Model` and `UnreadMessages` for requested `Event`
+The protocol search in both `Model` and `UnreadEvents` for requested `Event`s
 in `GetData` message.
 
 
-## UnreadMessages
+## UnreadEvents
 
 | Description | Data Type                   | Comments                                                                             |
 |-------------|---------------------------- | -------------------------------------------------------------------------------------|
 | Messages    | HashMap<`EventId`, `Event`> | Hold all the `Event`s that have broadcasted to other nodes but haven't confirmed yet |
 
-### Add new `Event` to `UnreadMessages` 
+### Add new `Event` to `UnreadEvents` 
 
-To add an `Event` to `UnreadMessages`, the protocol first must check the validity of
+To add an `Event` to `UnreadEvents`, the protocol first must check the validity of
 `Event`. 
 
 The `Event` is not valid in the network if it's too far in the future from now,
 or too far in the past from now.
 
-### Updating `UnreadMessages` list
+### Updating `UnreadEvents` list
 
 The protocol continually broadcast unread `Event` to the network 
 after a certain period of time(`SEND_UNREAD_EVENTS_INTERVAL`), 
@@ -111,7 +111,7 @@ The list will contains only 2^16 ids.
 
 ## Receiving a new `Event`
 
-The new received `Event` with unread status add to the `UnreadMessages` buffer after
+The new received `Event` with unread status add to the `UnreadEvents` buffer after
 increasing the read_confirms by one. 
 
 The `Event` with read status add to the `Model`.
@@ -124,7 +124,7 @@ in the network get the Event.
 A new created `Event` has unread status with read_confirms equal to 0.
 
 The protocol broadcast the `Event` to the network after adding it to the
-`UnreadMessages`.
+`UnreadEvents`.
 
 ## Add new `Event` to `Model` 
 
