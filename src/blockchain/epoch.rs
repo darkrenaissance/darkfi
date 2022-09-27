@@ -126,6 +126,7 @@ impl Epoch {
         let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
         let mut prev_sk_base: pallas::Base = pallas::Base::one();
         for _i in 0..self.len.unwrap() {
+            //TODO (fix) add sk for the coin struct to be used in txs decryption of tx notes.
             let sk_bytes = if _i == 0 {
                 let base = pedersen_commitment_u64(1, pallas::Scalar::random(&mut rng));
                 let coord = base.to_affine().coordinates().unwrap();
@@ -283,7 +284,7 @@ impl Epoch {
         let ord = pallas::Base::from(10241024); //TODO fine tune this scalar.
         let target = ord * coin.value.unwrap();
         debug!("y_x: {:?}, target: {:?}", y_x, target);
-        //reversed for testing
+        //TODO (FIX) reversed for testin
         target < y_x
     }
 

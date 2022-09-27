@@ -359,13 +359,10 @@ impl Stakeholder {
         info!(target: LOG_T, "[new epoch] {}", self);
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, eta);
-        //TODO calculate total stake
-        // create coin with absolute slo/epocht.
-        //TODO (fix) this is supposed to be the total number of slots
+        // total stake
         let num_slots = self.workspace.sl;
         let epochs = self.workspace.e;
         let epoch_len = self.epoch_consensus.get_epoch_len();
-        // total stake;
         // TODO sigma scalar for tunning target function
         // it's value is dependent on the tekonomics,
         // set to one untill then.
@@ -382,6 +379,7 @@ impl Stakeholder {
     /// commiting it's coins, to maximize success, thus,
     /// the lottery proof need to be conditioned on the slot itself, and previous proof.
     /// this will encourage each potential leader to play with honesty.
+    /// TODO this is fixed by commiting to the stakers at epoch genesis slot
     /// * `e` - epoch index
     /// * `sl` - slot relative index
     fn new_slot(&mut self, e: u64, sl: u64) {
