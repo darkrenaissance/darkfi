@@ -37,7 +37,7 @@ use crate::{
         money_contract::{self, state::OwnCoin},
     },
     rpc::JsonRpcInterface,
-    util::{sign, StateRegistry, Transaction, ZkContractTable, DRK_ID},
+    util::{sign, StateRegistry, Transaction, ZkContractTable, DRK_ID, GOV_ID},
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -598,18 +598,20 @@ impl DaoWallet {
         Ok(())
     }
 
+    // TODO: Make this a HashMap<TokenID, u64>
+    // only parse it to a String in the cli.
     fn balances(&self) -> Result<FxHashMap<String, u64>> {
         let mut ret: FxHashMap<String, u64> = FxHashMap::default();
-        let mut balances = 0;
-        let token_id = "DRK".to_owned();
         for (coin, is_spent) in &self.own_coins {
-            if *is_spent {
-                continue
+            if *is_spent {}
+            if coin.note.token_id == *DRK_ID {
+                let id = "DRK".to_owned();
+                ret.insert(id, coin.note.value);
+            } else if coin.note.token_id == *GOV_ID {
+                let id = "GOV".to_owned();
+                ret.insert(id, coin.note.value);
             }
-            balances += coin.note.value;
         }
-        ret.insert(token_id, balances);
-
         Ok(ret)
     }
 
@@ -856,16 +858,20 @@ impl MoneyWallet {
         Ok(())
     }
 
+    // TODO: Make this a HashMap<TokenID, u64>
+    // only parse it to a String in the cli.
     fn balances(&self) -> Result<FxHashMap<String, u64>> {
         let mut ret: FxHashMap<String, u64> = FxHashMap::default();
-        let mut balances = 0;
-        let token_id = "GOV".to_owned();
         for (coin, is_spent) in &self.own_coins {
             if *is_spent {}
-            balances += coin.note.value;
+            if coin.note.token_id == *DRK_ID {
+                let id = "DRK".to_owned();
+                ret.insert(id, coin.note.value);
+            } else if coin.note.token_id == *GOV_ID {
+                let id = "GOV".to_owned();
+                ret.insert(id, coin.note.value);
+            }
         }
-        ret.insert(token_id, balances);
-
         Ok(ret)
     }
 
