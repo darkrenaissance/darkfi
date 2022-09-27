@@ -14,7 +14,8 @@ use darkfi::serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncod
 
 pub type EventId = [u8; 32];
 
-const MAX_DEPTH: u32 = 10;
+const MAX_DEPTH: u32 = 300;
+const MAX_HEIGHT: u32 = 300;
 
 #[derive(SerialEncodable, SerialDecodable, Clone)]
 pub struct Event {
@@ -91,7 +92,7 @@ struct EventNode {
 }
 
 #[derive(Debug)]
-struct Model {
+pub struct Model {
     // This is periodically updated so we discard old nodes
     current_root: EventId,
     orphans: HashMap<EventId, Event>,
@@ -99,7 +100,7 @@ struct Model {
 }
 
 impl Model {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let root_node = EventNode {
             parent: None,
             event: Event {
@@ -120,33 +121,60 @@ impl Model {
         Self { current_root: root_node_id, orphans: HashMap::new(), event_map }
     }
 
-    fn add(&mut self, event: Event) {
+    pub fn add(&mut self, event: Event) {
         self.orphans.insert(event.hash(), event);
         self.reorganize();
     }
 
+    pub fn is_orphan(&self, event: &Event) -> bool {
+        !self.event_map.contains_key(&event.previous_event_hash)
+    }
+
+    pub fn find_leaves(&self) -> Vec<EventId> {
+        // collect the leaves in the tree
+        let mut leaves = vec![];
+
+        for (event_hash, node) in self.event_map.iter() {
+            // check if the node is a leaf
+            if node.children.is_empty() {
+                leaves.push(event_hash.clone());
+            }
+        }
+
+        leaves
+    }
+
+    pub fn get_event(&self, event: &EventId) -> Option<Event> {
+        self.event_map.get(event).map(|en| en.event.clone())
+    }
+
+    pub fn get_event_children(&self, event: &EventId) -> Vec<Event> {
+        let mut children = vec![];
+        if let Some(ev) = self.event_map.get(event) {
+            for child in ev.children.iter() {
+                let child = self.event_map.get(child).unwrap();
+                children.push(child.event.clone());
+            }
+        }
+        children
+    }
+
     fn reorganize(&mut self) {
-        let mut remaining_orphans = Vec::new();
         for (_, orphan) in std::mem::take(&mut self.orphans) {
-            let prev_event = orphan.previous_event_hash.clone();
-
-            // Parent does not yet exist
-            if !self.event_map.contains_key(&prev_event) {
-                remaining_orphans.push(orphan);
-
-                // BIGTODO #1:
-                // TODO: We need to fetch missing ancestors from the network
-                // Trigger get_blocks() request
-
+            if self.is_orphan(&orphan) {
+                // XXX should we remove orphan if it's too old
                 continue
             }
 
-            let node = EventNode { parent: Some(prev_event), event: orphan, children: Vec::new() };
+            let prev_event = orphan.previous_event_hash.clone();
+
+            let node =
+                EventNode { parent: Some(prev_event), event: orphan.clone(), children: Vec::new() };
             let node_hash = node.event.hash();
 
             let parent = self.event_map.get_mut(&prev_event).unwrap();
             parent.children.push(node_hash);
-            // Add node to the table
+
             self.event_map.insert(node_hash, node);
 
             // clean up the tree from old eventnodes
@@ -174,20 +202,6 @@ impl Model {
         }
     }
 
-    fn find_leaves(&self) -> Vec<EventId> {
-        // collect the leaves in the tree
-        let mut leaves = vec![];
-
-        for (event_hash, node) in self.event_map.iter() {
-            // check if the node is a leaf
-            if node.children.is_empty() {
-                leaves.push(event_hash.clone());
-            }
-        }
-
-        leaves
-    }
-
     fn update_root(&mut self) {
         let head = self.find_head();
         let leaves = self.find_leaves();
@@ -210,11 +224,9 @@ impl Model {
 
         // set the new root
         if let Some(ancestor) = highest_ancestor {
-            // TODO change this number
-            // set to 10 for testing only
-            // the ancestor must have at least height > 300
+            // the ancestor must have at least height > MAX_HEIGHT
             let ancestor_height = self.find_height(&self.current_root, ancestor).unwrap();
-            if ancestor_height < 10 {
+            if ancestor_height < MAX_HEIGHT {
                 return
             }
 
@@ -362,10 +374,11 @@ impl Model {
         let ancestor = self.find_ancestor(node_a, node_b);
         let node_a_depth = self.find_depth(node_a, &ancestor);
         let node_b_depth = self.find_depth(node_b, &ancestor);
+
         (node_b_depth + 1) - node_a_depth
     }
 
-    fn debug(&self) {
+    fn _debug(&self) {
         for (event_id, event_node) in &self.event_map {
             let depth = self.find_depth(event_id.clone(), &self.current_root);
             println!("{}: {:?} [depth={}]", hex::encode(&event_id), event_node.event, depth);
@@ -430,9 +443,9 @@ mod tests {
         let root_id = model.current_root;
 
         // event_node 1
-        // Fill this node with 5 events
+        // Fill this node with MAX_HEIGHT events
         let mut id1 = root_id;
-        for x in 0..5 {
+        for x in 0..MAX_HEIGHT {
             let timestamp = get_current_time() + 1;
             let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
             id1 = node.hash();
@@ -440,36 +453,38 @@ mod tests {
         }
 
         // event_node 2
-        // Fill this node with 14 events
+        // Fill this node with MAX_HEIGHT + 10 events
         let mut id2 = root_id;
-        for x in 0..14 {
+        for x in 0..(MAX_HEIGHT + 10) {
             let timestamp = get_current_time() + 1;
             let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
             id2 = node.hash();
             model.add(node);
         }
 
-        // Fill id2 node with 8 events
+        // Fill id2 node with MAX_HEIGHT / 2
         let mut id3 = id2;
-        for x in 14..22 {
+        for x in (MAX_HEIGHT + 10)..(MAX_HEIGHT * 2) {
             let timestamp = get_current_time() + 1;
-            let node = create_message(id3, &format!("chain 2 msg {}", x), "message", timestamp);
+            let node =
+                create_message(id3, &format!("chain 2 branch 1 msg {}", x), "message", timestamp);
             id3 = node.hash();
             model.add(node);
         }
 
         // Fill id2 node with 9 events
         let mut id4 = id2;
-        for x in 14..23 {
+        for x in (MAX_HEIGHT + 10)..(MAX_HEIGHT * 2 + 30) {
             let timestamp = get_current_time() + 1;
-            let node = create_message(id4, &format!("chain 2 msg {}", x), "message", timestamp);
+            let node =
+                create_message(id4, &format!("chain 2 branch 2 msg {}", x), "message", timestamp);
             id4 = node.hash();
             model.add(node);
         }
 
         assert_eq!(model.find_height(&model.current_root, &id2).unwrap(), 0);
-        assert_eq!(model.find_height(&model.current_root, &id3).unwrap(), 8);
-        assert_eq!(model.find_height(&model.current_root, &id4).unwrap(), 9);
+        assert_eq!(model.find_height(&model.current_root, &id3).unwrap(), (MAX_HEIGHT - 10));
+        assert_eq!(model.find_height(&model.current_root, &id4).unwrap(), (MAX_HEIGHT + 20));
         assert_eq!(model.current_root, id2);
     }
 
@@ -523,7 +538,7 @@ mod tests {
         // Start from the root_id and fill the node with 14 events
         // All the events from event_node_1 should get removed from the tree
         let mut id2 = root_id;
-        for x in 0..14 {
+        for x in 0..(MAX_DEPTH + 10) {
             let timestamp = get_current_time() + 1;
             let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
             id2 = node.hash();
@@ -536,7 +551,7 @@ mod tests {
             assert!(!model.event_map.contains_key(&id));
         }
 
-        assert_eq!(model.event_map.len(), 15);
+        assert_eq!(model.event_map.len(), (MAX_DEPTH + 11) as usize);
     }
 
     #[test]
@@ -545,9 +560,9 @@ mod tests {
         let root_id = model.current_root;
 
         // event_node 1
-        // Fill this node with 7 events
+        // Fill this node with (MAX_DEPTH / 2) events
         let mut id1 = root_id;
-        for x in 0..7 {
+        for x in 0..(MAX_DEPTH / 2) {
             let timestamp = get_current_time() + 1;
             let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
             id1 = node.hash();
@@ -555,11 +570,11 @@ mod tests {
         }
 
         // event_node 2
-        // Start from the root_id and fill the node with 14 events
+        // Start from the root_id and fill the node with (MAX_DEPTH + 10) events
         // all the events must be added since the depth between id1
-        // and the last head is less than 9
+        // and the last head is less than MAX_DEPTH
         let mut id2 = root_id;
-        for x in 0..14 {
+        for x in 0..(MAX_DEPTH + 10) {
             let timestamp = get_current_time() + 1;
             let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
             id2 = node.hash();
@@ -570,9 +585,9 @@ mod tests {
 
         // event_node 3
         // This will start as new chain, but no events will be added
-        // since the last event's depth is 14
+        // since the last event's depth is MAX_DEPTH + 10
         let mut id3 = root_id;
-        for x in 0..3 {
+        for x in 0..30 {
             let timestamp = get_current_time() + 1;
             let node = create_message(id3, &format!("chain 3 msg {}", x), "message", timestamp);
             id3 = node.hash();
@@ -586,7 +601,7 @@ mod tests {
 
         // Add more events to the event_node 1
         // At the end this chain must overtake the event_node 2
-        for x in 7..14 {
+        for x in (MAX_DEPTH / 2)..(MAX_DEPTH + 15) {
             let timestamp = get_current_time() + 1;
             let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
             id1 = node.hash();
