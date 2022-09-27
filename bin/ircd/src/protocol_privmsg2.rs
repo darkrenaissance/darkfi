@@ -14,22 +14,14 @@ use darkfi::{
     Result,
 };
 
-use crate::mvc::{get_current_time, Event, EventId};
+use crate::mvc::{get_current_time, Event, EventId, Model};
 
 const UNREAD_EVENT_EXPIRE_TIME: u64 = 3600; // in seconds
 const SIZE_OF_SEEN_BUFFER: usize = 65536;
 const MAX_CONFIRM: u8 = 4;
 
-type InvId = u64;
-
-#[derive(SerialEncodable, SerialDecodable, Clone, Debug, PartialEq, Eq, Hash)]
-struct InvItem {
-    id: InvId,
-    hash: EventId,
-}
-
 #[derive(Clone)]
-pub struct RingBuffer<T> {
+struct RingBuffer<T> {
     pub items: VecDeque<T>,
 }
 
@@ -49,6 +41,29 @@ impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
     pub fn contains(&self, val: &T) -> bool {
         self.items.contains(val)
     }
+}
+
+type InvId = u64;
+
+#[derive(SerialEncodable, SerialDecodable, Clone, Debug, PartialEq, Eq, Hash)]
+struct InvItem {
+    id: InvId,
+    hash: EventId,
+}
+
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
+struct Inv {
+    invs: Vec<InvItem>,
+}
+
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
+struct SyncEvent {
+    leaves: Vec<EventId>,
+}
+
+#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
+struct GetData {
+    events: Vec<EventId>,
 }
 
 pub struct Seen<T> {
@@ -71,25 +86,28 @@ impl<T: Eq + PartialEq + Clone> Seen<T> {
 }
 
 pub struct UnreadEvents {
-    events: Mutex<FxHashMap<EventId, Event>>,
+    events: FxHashMap<EventId, Event>,
 }
 
 impl UnreadEvents {
     pub fn new() -> Self {
-        Self { events: Mutex::new(FxHashMap::default()) }
+        Self { events: FxHashMap::default() }
     }
 
-    pub async fn contains(&self, key: &EventId) -> bool {
-        self.events.lock().await.contains_key(key)
+    fn contains(&self, key: &EventId) -> bool {
+        self.events.contains_key(key)
+    }
+
+    fn get(&self, key: &EventId) -> Option<Event> {
+        self.events.get(key).cloned()
     }
 
     // Increase the read_confirms for an event, if it has exceeded the MAX_CONFIRM
     // then remove it from the hash_map and return Some(event), otherwise return None
-    pub async fn inc_read_confirms(&self, key: &EventId) -> Option<Event> {
-        let events = &mut self.events.lock().await;
+    fn inc_read_confirms(&mut self, key: &EventId) -> Option<Event> {
         let mut result = None;
 
-        if let Some(event) = events.get_mut(key) {
+        if let Some(event) = self.events.get_mut(key) {
             event.read_confirms += 1;
             if event.read_confirms >= MAX_CONFIRM {
                 result = Some(event.clone())
@@ -97,43 +115,26 @@ impl UnreadEvents {
         }
 
         if result.is_some() {
-            events.remove(key);
+            self.events.remove(key);
         }
 
         result
     }
 
-    pub async fn insert(&self, event: &Event) {
-        let events = &mut self.events.lock().await;
-
+    fn insert(&mut self, event: &Event) {
         // prune expired events
         let mut prune_ids = vec![];
-        for (id, e) in events.iter() {
+        for (id, e) in self.events.iter() {
             if e.timestamp + (UNREAD_EVENT_EXPIRE_TIME * 1000) < get_current_time() {
                 prune_ids.push(id.clone());
             }
         }
         for id in prune_ids {
-            events.remove(&id);
+            self.events.remove(&id);
         }
 
-        events.insert(event.hash().clone(), event.clone());
+        self.events.insert(event.hash().clone(), event.clone());
     }
-}
-
-#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
-struct Inv {
-    invs: Vec<InvItem>,
-}
-
-#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
-struct SyncEvent {
-    leaves: Vec<EventId>,
-}
-
-#[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
-struct GetData {
-    invs: Vec<InvItem>,
 }
 
 pub struct ProtocolEvent {
@@ -144,18 +145,20 @@ pub struct ProtocolEvent {
     syncevent_sub: net::MessageSubscription<SyncEvent>,
     p2p: net::P2pPtr,
     channel: net::ChannelPtr,
+    model: Arc<Mutex<Model>>,
     seen_event: Seen<EventId>,
     seen_inv: Seen<InvId>,
-    unread_events: UnreadEvents,
+    unread_events: Arc<Mutex<UnreadEvents>>,
 }
 
 impl ProtocolEvent {
     pub async fn init(
         channel: net::ChannelPtr,
         p2p: net::P2pPtr,
+        model: Arc<Mutex<Model>>,
         seen_event: Seen<EventId>,
         seen_inv: Seen<InvId>,
-        unread_events: UnreadEvents,
+        unread_events: Arc<Mutex<UnreadEvents>>,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Event>().await;
@@ -185,10 +188,36 @@ impl ProtocolEvent {
             syncevent_sub,
             p2p,
             channel,
+            model,
             seen_event,
             seen_inv,
             unread_events,
         })
+    }
+
+    async fn handle_receive_event(self: Arc<Self>) -> Result<()> {
+        debug!(target: "ircd", "ProtocolEvent::handle_receive_event() [START]");
+        let exclude_list = vec![self.channel.address()];
+        loop {
+            let event = self.event_sub.receive().await?;
+            let mut event = (*event).to_owned();
+
+            if !self.seen_event.push(&event.hash()).await {
+                continue
+            }
+
+            event.read_confirms += 1;
+
+            if event.read_confirms >= MAX_CONFIRM {
+                self.new_event(&event).await?;
+            } else {
+                self.unread_events.lock().await.insert(&event);
+                self.send_inv(&event).await?;
+            }
+
+            // Broadcast the msg
+            self.p2p.broadcast_with_exclude(event, &exclude_list).await?;
+        }
     }
 
     async fn handle_receive_inv(self: Arc<Self>) -> Result<()> {
@@ -203,12 +232,13 @@ impl ProtocolEvent {
                     continue
                 }
 
-                // On receive inv message, if the unread_events buffer has the event's hash then increase
-                // the read_confirms, if not then send GetMsgs contain the event's hash
-                if !self.unread_events.contains(&inv.hash).await {
-                    self.send_getdata(vec![inv.clone()]).await?;
-                } else if let Some(event) = self.unread_events.inc_read_confirms(&inv.hash).await {
-                    self.new_event(&event).await?;
+                {
+                    let mut unread_events = self.unread_events.lock().await;
+                    if !unread_events.contains(&inv.hash) {
+                        self.send_getdata(vec![inv.hash]).await?;
+                    } else if let Some(event) = unread_events.inc_read_confirms(&inv.hash) {
+                        self.new_event(&event).await?;
+                    }
                 }
             }
 
@@ -216,41 +246,24 @@ impl ProtocolEvent {
             self.p2p.broadcast_with_exclude(inv, &exclude_list).await?;
         }
     }
-
-    async fn handle_receive_event(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolEvent::handle_receive_event() [START]");
-        let exclude_list = vec![self.channel.address()];
-        loop {
-            let event = self.event_sub.receive().await?;
-            let mut event = (*event).to_owned();
-
-            if !self.seen_event.push(&event.hash()).await {
-                continue
-            }
-
-            // If the event has read_confirms greater or equal to MAX_CONFIRM, it will be added to
-            // the model, otherwise increase the event's read_confirms, add it to unread_events, and
-            // broadcast an Inv msg
-            if event.read_confirms >= MAX_CONFIRM {
-                self.new_event(&event).await?;
-            } else {
-                event.read_confirms += 1;
-                self.unread_events.insert(&event).await;
-                self.send_inv(&event).await?;
-            }
-
-            // Broadcast the msg
-            self.p2p.broadcast_with_exclude(event, &exclude_list).await?;
-        }
-    }
-
     async fn handle_receive_getdata(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolEvent::handle_receive_getdata() [START]");
         loop {
             let getdata = self.getdata_sub.receive().await?;
-            let invs = (*getdata).to_owned().invs;
+            let events = (*getdata).to_owned().events;
 
-            for inv in invs {}
+            for event_id in events {
+                let unread_event = self.unread_events.lock().await.get(&event_id);
+                if let Some(event) = unread_event {
+                    self.channel.send(event).await?;
+                    continue
+                }
+
+                let model_event = self.model.lock().await.get_event(&event_id);
+                if let Some(event) = model_event {
+                    self.channel.send(event).await?;
+                }
+            }
         }
     }
 
@@ -258,20 +271,45 @@ impl ProtocolEvent {
         debug!(target: "ircd", "ProtocolEvent::handle_receive_syncevent() [START]");
         loop {
             let syncevent = self.syncevent_sub.receive().await?;
+
+            let model = self.model.lock().await;
+            let leaves = model.find_leaves();
+
+            if leaves == syncevent.leaves {
+                continue
+            }
+
+            for leaf in syncevent.leaves.iter() {
+                if leaves.contains(leaf) {
+                    continue
+                }
+
+                let children = model.get_event_children(leaf);
+
+                for child in children {
+                    self.channel.send(child).await?;
+                }
+            }
         }
     }
 
-    // every 2 seconds send a Sync msg
+    // every 2 seconds send a SyncEvent msg
     async fn send_sync_hash_loop(self: Arc<Self>) -> Result<()> {
         loop {
-            //let leaves = self.model.find_leaves();
-            //self.channel.send(SyncEvent { leaves }).await;
             sleep(2).await;
+            let leaves = self.model.lock().await.find_leaves();
+            self.channel.send(SyncEvent { leaves }).await?;
         }
     }
 
     async fn new_event(&self, event: &Event) -> Result<()> {
-        // self.model.add(event).await?;
+        let mut model = self.model.lock().await;
+        if model.is_orphan(event) {
+            self.send_getdata(vec![event.hash()]).await?;
+        } else {
+            model.add(event.clone());
+        }
+
         Ok(())
     }
 
@@ -281,8 +319,8 @@ impl ProtocolEvent {
         Ok(())
     }
 
-    async fn send_getdata(&self, invs: Vec<InvItem>) -> Result<()> {
-        self.channel.send(GetData { invs }).await?;
+    async fn send_getdata(&self, events: Vec<EventId>) -> Result<()> {
+        self.channel.send(GetData { events }).await?;
         Ok(())
     }
 }
