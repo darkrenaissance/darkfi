@@ -1,21 +1,51 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt, io,
-};
+use std::{fmt, io};
 
+use fxhash::FxHashMap;
 use ripemd::{Digest, Ripemd256};
 
 use darkfi::serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable};
 
-// TODO
-// move Model and View into separate modules
-// move get_current_time to another place
-// More tests
+use crate::settings::get_current_time;
 
 pub type EventId = [u8; 32];
 
 const MAX_DEPTH: u32 = 300;
 const MAX_HEIGHT: u32 = 300;
+
+#[derive(SerialEncodable, SerialDecodable, Clone)]
+struct PrivMsgEvent {
+    nick: String,
+    msg: String,
+    target: String,
+}
+
+#[derive(Clone)]
+enum EventAction {
+    PrivMsg(PrivMsgEvent),
+}
+
+impl Encodable for EventAction {
+    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
+        match self {
+            Self::PrivMsg(event) => {
+                let mut len = 0;
+                len += 0u8.encode(&mut s)?;
+                len += event.encode(s)?;
+                Ok(len)
+            }
+        }
+    }
+}
+
+impl Decodable for EventAction {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
+        let type_id = d.read_u8()?;
+        match type_id {
+            0 => Ok(Self::PrivMsg(PrivMsgEvent::decode(d)?)),
+            _ => Err(io::Error::new(io::ErrorKind::Other, "Bad type ID byte for Event")),
+        }
+    }
+}
 
 #[derive(SerialEncodable, SerialDecodable, Clone)]
 pub struct Event {
@@ -49,40 +79,6 @@ impl fmt::Debug for Event {
     }
 }
 
-#[derive(Clone)]
-enum EventAction {
-    PrivMsg(PrivMsgEvent),
-}
-
-impl Encodable for EventAction {
-    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
-        match self {
-            Self::PrivMsg(event) => {
-                let mut len = 0;
-                len += 0u8.encode(&mut s)?;
-                len += event.encode(s)?;
-                Ok(len)
-            }
-        }
-    }
-}
-
-impl Decodable for EventAction {
-    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
-        let type_id = d.read_u8()?;
-        match type_id {
-            0 => Ok(Self::PrivMsg(PrivMsgEvent::decode(d)?)),
-            _ => Err(io::Error::new(io::ErrorKind::Other, "Bad type ID byte for Event")),
-        }
-    }
-}
-
-#[derive(SerialEncodable, SerialDecodable, Clone)]
-struct PrivMsgEvent {
-    nick: String,
-    msg: String,
-}
-
 #[derive(Debug, Clone)]
 struct EventNode {
     // Only current root has this set to None
@@ -95,8 +91,8 @@ struct EventNode {
 pub struct Model {
     // This is periodically updated so we discard old nodes
     current_root: EventId,
-    orphans: HashMap<EventId, Event>,
-    event_map: HashMap<EventId, EventNode>,
+    orphans: FxHashMap<EventId, Event>,
+    event_map: FxHashMap<EventId, EventNode>,
 }
 
 impl Model {
@@ -108,6 +104,7 @@ impl Model {
                 action: EventAction::PrivMsg(PrivMsgEvent {
                     nick: "root".to_string(),
                     msg: "Let there be dark".to_string(),
+                    target: "root".to_string(),
                 }),
                 timestamp: get_current_time(),
                 read_confirms: 0,
@@ -116,9 +113,11 @@ impl Model {
         };
 
         let root_node_id = root_node.event.hash();
-        let event_map = HashMap::from([(root_node_id.clone(), root_node)]);
 
-        Self { current_root: root_node_id, orphans: HashMap::new(), event_map }
+        let mut event_map = FxHashMap::default();
+        event_map.insert(root_node_id.clone(), root_node);
+
+        Self { current_root: root_node_id, orphans: FxHashMap::default(), event_map }
     }
 
     pub fn add(&mut self, event: Event) {
@@ -331,9 +330,7 @@ impl Model {
         if node == child_id {
             return Some(height)
         }
-
         height += 1;
-
         let children = &self.event_map.get(node).unwrap().children;
         if children.is_empty() {
             return None
@@ -389,33 +386,6 @@ impl Model {
     }
 }
 
-pub fn get_current_time() -> u64 {
-    let start = std::time::SystemTime::now();
-    start
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_millis()
-        .try_into()
-        .unwrap()
-}
-
-struct View {
-    seen: HashSet<EventId>,
-}
-
-impl View {
-    pub fn new() -> Self {
-        Self { seen: HashSet::new() }
-    }
-
-    fn process(_model: &Model) {
-        // This does 2 passes:
-        // 1. Walk down all chains and get unseen events
-        // 2. Order those events according to timestamp
-        // Then the events are replayed to the IRC client
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -431,6 +401,7 @@ mod tests {
             action: EventAction::PrivMsg(PrivMsgEvent {
                 nick: nick.to_string(),
                 msg: msg.to_string(),
+                target: "".to_string(),
             }),
             timestamp,
             read_confirms: 4,

@@ -14,7 +14,10 @@ use darkfi::{
     Result,
 };
 
-use crate::mvc::{get_current_time, Event, EventId, Model};
+use crate::{
+    model::{Event, EventId, Model},
+    settings::get_current_time,
+};
 
 const UNREAD_EVENT_EXPIRE_TIME: u64 = 3600; // in seconds
 const SIZE_OF_SEEN_BUFFER: usize = 65536;

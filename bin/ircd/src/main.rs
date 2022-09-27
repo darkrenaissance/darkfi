@@ -23,12 +23,13 @@ use darkfi::{
 pub mod buffers;
 pub mod crypto;
 pub mod irc;
-pub mod mvc;
+pub mod model;
 pub mod privmsg;
 pub mod protocol_privmsg;
 pub mod protocol_privmsg2;
 pub mod rpc;
 pub mod settings;
+pub mod view;
 
 use crate::{
     buffers::SeenIds,
