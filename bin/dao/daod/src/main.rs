@@ -110,22 +110,7 @@ use crate::{
 ////
 //// High priority:
 ////
-//// 1. Show the token id as a string (e.g. xdrk) as well as the amount when
-////    we output balances to dao-cli. Optional: use prettytable library to display
-////    nicely (see darkfi/bin/drk).
-////    e.g: Balance: 1000 xDRK
-////
-//// 2. airdrop() should pass a PublicKey instead of a nym.
-////
-//// 3. Rename xDRK and gDRK to DRK and GOV (xDRK = DRK, gDRK = GOV)
-////
-//// 4. Change MoneyWallets to be a HashMap<PublicKey, MoneyWallet>
-////
 //// 5. vote() should pass a ProposalBulla
-////
-//// 6. Delete old dao-cli and daod directories
-////
-//// 7. Clean up warnings :)
 ////
 //// Less priority:
 ////
