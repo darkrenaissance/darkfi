@@ -1,14 +1,14 @@
-use fxhash::FxHashSet;
+use fxhash::FxHashMap;
 
 use crate::model::{EventId, Model};
 
 struct View {
-    seen: FxHashSet<EventId>,
+    seen: FxHashMap<EventId>,
 }
 
 impl View {
     pub fn new() -> Self {
-        Self { seen: FxHashSet::default() }
+        Self { seen: FxHashMap::default() }
     }
 
     fn process(_model: &Model) {
