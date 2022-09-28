@@ -1,9 +1,9 @@
 use fxhash::FxHashMap;
 
-use crate::model::{EventId, Model};
+use crate::model::{Event, EventId, Model};
 
 struct View {
-    seen: FxHashMap<EventId>,
+    seen: FxHashMap<EventId, Event>,
 }
 
 impl View {
