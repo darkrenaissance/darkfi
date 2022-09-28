@@ -53,13 +53,13 @@ All the chains share a root `Event` to preserve the tree structure.
 
 ## View 
 
-The `View` asking `Model` for new `Event`s, then dispatching these `Event`s to the clients. 
+The `View` check the `Model` for new `Event`s, then dispatch these `Event`s to the clients. 
 
-The `Event`s in `View` are sorted according to the timestamp attached to each `Event`.
+`Event`s are sorted according to the timestamp attached to each `Event`.
 
-| Description   | Data Type      	   | Comments                    					|
-|-------------- | -------------------- | ---------------------------------------------- |
-| seen  		| HashSet<`EventId`>   | A list of `Event`s have imported from Model	|
+| Description   | Data Type      	   | Comments               |
+|-------------- | -------------------- | ---------------------- |
+| seen  		| HashMap<`EventId`>   | A list of `Event`s 	|
 
 # Architecture 
 
@@ -78,21 +78,24 @@ orphans list.
 For example, in the <em> Example1 </em> below, An `Event` add to the first chain if
 its previous hash is Event-A1
 
-## Remove old chains 
+## Remove old leaves 
 
-	TODO
+Remove leaves which are too far from the head leaf(the leaf in the longest chain).
+
+The depth difference from the common ancestor between a leaf to be removed and a head leaf 
+must be greater than `MAX_DEPTH`. 
 
 ## Update the root 
 
-	TODO
+Finding the highest common ancestor for the leaves and assign it as the root
+for the tree.
+
+The highest common ancestor must have height greater than `MAX_HEIGHT`.
 
 ![data structure](../../assets/mv_event.png)
 
 Example1
 
-![data structure](../../assets/mv_event_tree.png)
-
-Example2
 
 
 
