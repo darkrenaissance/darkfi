@@ -13,19 +13,22 @@ USAGE:
     fud [FLAGS] [OPTIONS]
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-    -v               Increase verbosity (-vvv supported)
+        --channel-log    Enable channel log
+    -h, --help           Prints help information
+        --localnet       Enable localnet hosts
+    -V, --version        Prints version information
+    -v                   Increase verbosity (-vvv supported)
 
 OPTIONS:
-    -c, --config <config>                Configuration file to use
-        --folder <folder>                Path to the contents directory [default: ~/.config/darkfi/fud]
-        --p2p-accept <p2p-accept>        P2P accept address
-        --p2p-external <p2p-external>    P2P external address
-        --peers <peers>...               Connect to peer (repeatable flag)
-        --rpc-listen <rpc-listen>        JSON-RPC listen URL [default: tcp://127.0.0.1:13336]
-        --seeds <seeds>...               Connect to seed (repeatable flag)
-        --slots <slots>                  Connection slots [default: 8]
+    -c, --config <config>                   Configuration file to use
+        --folder <folder>                   Path to the contents directory [default: ~/.config/darkfi/fud]
+        --p2p-accept <p2p-accept>...        P2P accept addresses (repeatable flag)
+        --p2p-external <p2p-external>...    P2P external addresses (repeatable flag)
+        --peers <peers>...                  Connect to peer (repeatable flag)
+        --rpc-listen <rpc-listen>           JSON-RPC listen URL [default: tcp://127.0.0.1:13336]
+        --seeds <seeds>...                  Connect to seed (repeatable flag)
+        --slots <slots>                     Connection slots [default: 8]
+        --transports <transports>...        Prefered transports for outbound connections (repeatable flag)
 ```
 
 On first execution, daemon will create default config file ~/.config/darkfi/fud_config.toml.
