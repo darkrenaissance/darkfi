@@ -21,6 +21,7 @@ use crate::{
         merkle_node::MerkleNode,
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
+        coin::OwnCoin,
     },
     net::{MessageSubscription, P2p, Settings, SettingsPtr},
     tx::Transaction,
@@ -46,8 +47,7 @@ pub struct SlotWorkspace {
     pub e: u64,                // epoch index
     pub sl: u64,               // relative slot index
     pub txs: Vec<Transaction>, // unpublished block transactions
-    pub root: MerkleNode,
-    /// merkle root of txs
+    pub root: MerkleNode, /// merkle root of txs
     pub m: StakeholderMetadata,
     pub om: OuroborosMetadata,
     pub is_leader: bool,
@@ -116,13 +116,14 @@ impl SlotWorkspace {
     pub fn set_leader(&mut self, alead: bool) {
         self.is_leader = alead;
     }
+
 }
 
 pub struct Stakeholder {
     pub blockchain: Blockchain, // stakeholder view of the blockchain
     pub net: Arc<P2p>,
     pub clock: Clock,
-    pub coins: Vec<LeadCoin>,            // owned stakes
+    pub ownedcoins: Vec<OwnCoin>,        // owned stakes
     pub epoch: Epoch,                    // current epoch
     pub epoch_consensus: EpochConsensus, // configuration for the epoch
     pub pk: ProvingKey,
@@ -148,22 +149,14 @@ impl Stakeholder {
         let db = sled::open(&path)?;
         let ts = Timestamp::current_time();
         let genesis_hash = blake3::hash(b"");
-        //TODO lisen and add transactions
-
         let bc = Blockchain::new(&db, ts, genesis_hash).unwrap();
-
-        //TODO replace with const
         let eta = pallas::Base::one();
         let epoch = Epoch::new(consensus, eta);
 
         let lead_pk = ProvingKey::build(k.unwrap(), &LeadContract::default());
         let lead_vk = VerifyingKey::build(k.unwrap(), &LeadContract::default());
         let p2p = P2p::new(settings.clone()).await;
-
-        //TODO
         let workspace = SlotWorkspace::default();
-
-        //
         let clock = Clock::new(
             Some(consensus.get_epoch_len()),
             Some(consensus.get_slot_len()),
@@ -176,8 +169,7 @@ impl Stakeholder {
             blockchain: bc,
             net: p2p,
             clock,
-            coins: vec![], //constructed with empty coins for sake of simulation only
-            // but should be populated from wallet db.
+            ownedcoins: vec![], //TODO should be read from wallet db.
             epoch,
             epoch_consensus: consensus,
             pk: lead_pk,
@@ -369,7 +361,7 @@ impl Stakeholder {
         let reward = pallas::Base::one();
         let num_slots = num_slots + epochs * epoch_len;
         let sigma: pallas::Base = pallas::Base::from(num_slots) * reward;
-        epoch.create_coins(sigma); // set epoch interal fields working space with competing coins
+        epoch.create_coins(sigma, self.ownedcoins.clone()); // set epoch interal fields working space with competing coins
         self.epoch = epoch.clone();
     }
 
@@ -389,26 +381,27 @@ impl Stakeholder {
         } else {
             blake3::hash(b"")
         };
-        let is_leader: bool = self.epoch.is_leader(sl);
-        // if is leader create proof
-        let proof =
-            if is_leader { self.epoch.get_proof(sl, &self.pk.clone()) } else { Proof::new(vec![]) };
         // set workspace
         self.workspace.set_sl(sl);
         self.workspace.set_e(e);
         self.workspace.set_st(st);
-        self.workspace.set_leader(is_leader);
+        let mut winning_coin_idx :  usize = 0;
+        let won = self.epoch.is_leader(sl, &mut winning_coin_idx);
+        let proof = if won {
+            self.epoch.get_proof(sl, winning_coin_idx,  &self.pk.clone())
+        } else {
+            Proof::new(vec![])
+        };
+        self.workspace.set_leader(won);
         self.workspace.set_proof(proof.clone());
-        //
-        if is_leader {
-            let addr = Address::from(self.keypair.public);
-            let sign = self.sign(proof.as_ref());
-            let stakeholder_meta = StakeholderMetadata::new(sign, addr);
-            let ouroboros_meta =
-                OuroborosMetadata::new(self.get_eta().to_repr(), TransactionLeadProof::from(proof));
-            self.workspace.set_stakeholdermetadata(stakeholder_meta);
-            self.workspace.set_ouroborosmetadata(ouroboros_meta);
-        }
+
+        let addr = Address::from(self.keypair.public);
+        let sign = self.sign(proof.as_ref());
+        let stakeholder_meta = StakeholderMetadata::new(sign, addr);
+        let ouroboros_meta =
+            OuroborosMetadata::new(self.get_eta().to_repr(), TransactionLeadProof::from(proof));
+        self.workspace.set_stakeholdermetadata(stakeholder_meta);
+        self.workspace.set_ouroborosmetadata(ouroboros_meta);
     }
 }
 
