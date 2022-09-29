@@ -367,7 +367,7 @@ impl Stakeholder {
         // it's value is dependent on the tekonomics,
         // set to one untill then.
         let reward = pallas::Base::one();
-        let num_slots = num_slots+epochs*epoch_len;
+        let num_slots = num_slots + epochs * epoch_len;
         let sigma: pallas::Base = pallas::Base::from(num_slots) * reward;
         epoch.create_coins(sigma); // set epoch interal fields working space with competing coins
         self.epoch = epoch.clone();
@@ -383,10 +383,11 @@ impl Stakeholder {
     /// * `e` - epoch index
     /// * `sl` - slot relative index
     fn new_slot(&mut self, e: u64, sl: u64) {
-        info!(target: LOG_T, "[new slot] e:{}, rel sl:{}", self, e, sl);
+        info!(target: LOG_T, "[new slot] e:{}, rel sl:{}", e, sl);
         let st: blake3::Hash = if e > 0 || (e == 0 && sl > 0) {
             self.workspace.block.blockhash()
-        } else {  blake3::hash(b"")
+        } else {
+            blake3::hash(b"")
         };
         let is_leader: bool = self.epoch.is_leader(sl);
         // if is leader create proof

@@ -4,9 +4,7 @@ use log::{error, warn};
 use serde_json::{json, Value};
 
 use darkfi::{
-    consensus::ValidatorState,
     crypto::{address::Address, keypair::PublicKey, token_id},
-    node::MemoryState,
     rpc::jsonrpc::{ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
     serial::{deserialize, serialize},
     tx::Transaction,
@@ -101,6 +99,49 @@ impl Darkfid {
     }
 
     // RPCAPI:
+    // Simulate a network state transition with the given transaction.
+    // Returns `true` if the transaction is valid, otherwise, a corresponding
+    // error.
+    //
+    // --> {"jsonrpc": "2.0", "method": "tx.simulate", "params": ["base58encodedTX"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+    pub async fn tx_simulate(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        if !(*self.synced.lock().await) {
+            error!("[RPC] tx.simulate: Blockchain is not synced");
+            return server_error(RpcError::NotSynced, id, None)
+        }
+
+        // Try to deserialize the transaction
+        let tx_bytes = match bs58::decode(params[0].as_str().unwrap().trim()).into_vec() {
+            Ok(v) => v,
+            Err(e) => {
+                error!("[RPC] tx.simulate: Failed decoding base58 transaction: {}", e);
+                return server_error(RpcError::ParseError, id, None)
+            }
+        };
+
+        let tx: Transaction = match deserialize(&tx_bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("[RPC] tx.simulate: Failed deserializing bytes into Transaction: {}", e);
+                return server_error(RpcError::ParseError, id, None)
+            }
+        };
+
+        // Simulate state transition
+        if let Err(e) = self.simulate_transaction(&tx).await {
+            error!("[RPC] tx.broadcast: Failed to validate state transition: {}", e);
+            return server_error(RpcError::TxSimulationFail, id, None)
+        }
+
+        JsonResponse::new(json!(true), id).into()
+    }
+
+    // RPCAPI:
     // Broadcast a given transaction to the P2P network.
     // The function will first simulate the state transition in order to see
     // if the transaction is actually valid, and in turn it will return an
@@ -135,19 +176,13 @@ impl Darkfid {
             }
         };
 
-        // Grab the current state and apply a new MemoryState
-        let validator_state = self.validator_state.read().await;
-        let state = validator_state.state_machine.lock().await;
-        let mem_state = MemoryState::new(state.clone());
-        drop(state);
-        drop(validator_state);
-
         // Simulate state transition
-        if let Err(e) = ValidatorState::validate_state_transitions(mem_state, &[tx.clone()]) {
+        if let Err(e) = self.simulate_transaction(&tx).await {
             error!("[RPC] tx.broadcast: Failed to validate state transition: {}", e);
             return server_error(RpcError::TxSimulationFail, id, None)
         }
 
+        // TODO: Should we apply the state transition locally before broadcasting it?
         if let Some(sync_p2p) = &self.sync_p2p {
             if let Err(e) = sync_p2p.broadcast(tx.clone()).await {
                 error!("[RPC] tx.broadcast: Failed broadcasting transaction: {}", e);

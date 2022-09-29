@@ -175,6 +175,9 @@ mod rpc_misc;
 mod rpc_tx;
 mod rpc_wallet;
 
+// Internal methods
+mod internal;
+
 #[async_trait]
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
