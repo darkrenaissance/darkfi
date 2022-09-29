@@ -2,11 +2,13 @@ use async_executor::Executor;
 use async_std::sync::Arc;
 use log::{debug, error, info};
 use std::fmt;
+use halo2_proofs::arithmetic::Field;
 
 use rand::rngs::OsRng;
 use std::{thread, time::Duration};
 
 use crate::zk::circuit::LeadContract;
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 
 use crate::{
     blockchain::{Blockchain, Epoch, EpochConsensus},
@@ -15,13 +17,21 @@ use crate::{
         TransactionLeadProof,
     },
     crypto::{
+        constants::MERKLE_DEPTH,
         address::Address,
-        keypair::Keypair,
+        keypair::{Keypair, PublicKey, SecretKey},
+        nullifier::Nullifier,
         leadcoin::LeadCoin,
         merkle_node::MerkleNode,
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
         coin::OwnCoin,
+        note::{EncryptedNote, Note},
+    },
+    node::state::{state_transition, ProgramState, StateUpdate},
+    tx::builder::{
+        TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
+        TransactionBuilderOutputInfo,
     },
     net::{MessageSubscription, P2p, Settings, SettingsPtr},
     tx::Transaction,
@@ -40,6 +50,7 @@ use pasta_curves::pallas;
 use group::ff::PrimeField;
 
 const LOG_T: &str = "stakeholder";
+const TREE_LEN: usize = 100;
 
 #[derive(Debug)]
 pub struct SlotWorkspace {
@@ -119,6 +130,101 @@ impl SlotWorkspace {
 
 }
 
+struct StakeholderState {
+    /// The entire Merkle tree state
+    tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    /// List of all previous and the current Merkle roots.
+    /// This is the hashed value of all the children.
+    merkle_roots: Vec<MerkleNode>,
+    /// Nullifiers prevent double spending
+    nullifiers: Vec<Nullifier>,
+    /// All received coins
+    // NOTE: We need maybe a flag to keep track of which ones are
+    // spent. Maybe the spend field links to a tx hash:input index.
+    // We should also keep track of the tx hash:output index where
+    // this coin was received.
+    own_coins: Vec<OwnCoin>,
+    /// Verifying key for the mint zk circuit.
+    mint_vk: VerifyingKey,
+    /// Verifying key for the burn zk circuit.
+    burn_vk: VerifyingKey,
+
+    /// Public key of the cashier
+    cashier_signature_public: PublicKey,
+
+    /// Public key of the faucet
+    faucet_signature_public: PublicKey,
+
+    /// List of all our secret keys
+    secrets: Vec<SecretKey>,
+}
+
+impl ProgramState for StakeholderState {
+    fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
+        public == &self.cashier_signature_public
+    }
+
+    fn is_valid_faucet_public_key(&self, public: &PublicKey) -> bool {
+        public == &self.faucet_signature_public
+    }
+
+    fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
+        self.merkle_roots.iter().any(|m| m == merkle_root)
+    }
+
+    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
+        self.nullifiers.iter().any(|n| n == nullifier)
+    }
+
+    fn mint_vk(&self) -> &VerifyingKey {
+        &self.mint_vk
+    }
+
+    fn burn_vk(&self) -> &VerifyingKey {
+        &self.burn_vk
+    }
+}
+
+impl StakeholderState {
+    fn apply(&mut self, mut update: StateUpdate) {
+        // Extend our list of nullifiers with the ones from the update
+        self.nullifiers.append(&mut update.nullifiers);
+
+        // Update merkle tree and witnesses
+        for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
+            // Add the new coins to the Merkle tree
+            let node = MerkleNode(coin.0);
+            self.tree.append(&node);
+
+            // Keep track of all Merkle roots that have existed
+            self.merkle_roots.push(self.tree.root(0).unwrap());
+
+            // If it's our own coin, witness it and append to the vector.
+            if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
+                let leaf_position = self.tree.witness().unwrap();
+                let nullifier = Nullifier::new(secret, note.serial);
+                let own_coin = OwnCoin { coin, note, secret, nullifier, leaf_position };
+                self.own_coins.push(own_coin);
+            }
+        }
+    }
+
+    fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, SecretKey)> {
+        // Loop through all our secret keys...
+        for secret in &self.secrets {
+            // .. attempt to decrypt the note ...
+            if let Ok(note) = ciphertext.decrypt(secret) {
+                // ... and return the decrypted note for this coin.
+                return Some((note, *secret))
+            }
+        }
+
+        // We weren't able to decrypt the note with any of our keys.
+        None
+    }
+}
+
+
 pub struct Stakeholder {
     pub blockchain: Blockchain, // stakeholder view of the blockchain
     pub net: Arc<P2p>,
@@ -126,12 +232,18 @@ pub struct Stakeholder {
     pub ownedcoins: Vec<OwnCoin>,        // owned stakes
     pub epoch: Epoch,                    // current epoch
     pub epoch_consensus: EpochConsensus, // configuration for the epoch
-    pub pk: ProvingKey,
-    pub vk: VerifyingKey,
+    pub mint_pk: ProvingKey,
+    pub burn_pk: ProvingKey,
+    pub mint_vk: VerifyingKey,
+    pub burn_vk: VerifyingKey,
     pub playing: bool,
     pub workspace: SlotWorkspace,
     pub id: i64,
     pub keypair: Keypair,
+    pub cashier_signature_public : PublicKey,
+    pub faucet_signature_public : PublicKey,
+    pub cashier_signature_secret : SecretKey,
+    pub faucet_signature_secret : SecretKey,
     //pub subscription: Subscription<Result<ChannelPtr>>,
     //pub chanptr : ChannelPtr,
     //pub msgsub : MessageSubscription::<BlockInfo>,
@@ -153,8 +265,10 @@ impl Stakeholder {
         let eta = pallas::Base::one();
         let epoch = Epoch::new(consensus, eta);
 
-        let lead_pk = ProvingKey::build(k.unwrap(), &LeadContract::default());
-        let lead_vk = VerifyingKey::build(k.unwrap(), &LeadContract::default());
+        let mint_pk = ProvingKey::build(k.unwrap(), &LeadContract::default());
+        let burn_pk = ProvingKey::build(k.unwrap(), &LeadContract::default());
+        let mint_vk = VerifyingKey::build(k.unwrap(), &LeadContract::default());
+        let burn_vk = VerifyingKey::build(k.unwrap(), &LeadContract::default());
         let p2p = P2p::new(settings.clone()).await;
         let workspace = SlotWorkspace::default();
         let clock = Clock::new(
@@ -163,23 +277,33 @@ impl Stakeholder {
             Some(consensus.get_tick_len()),
             settings.peers,
         );
+        let cashier_signature_secret = SecretKey::random(&mut OsRng);
+        let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
+
+        let faucet_signature_secret = SecretKey::random(&mut OsRng);
+        let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
+
         let keypair = Keypair::random(&mut OsRng);
         debug!(target: LOG_T, "stakeholder constructed");
-        Ok(Self {
+        Ok( Self {
             blockchain: bc,
             net: p2p,
             clock,
             ownedcoins: vec![], //TODO should be read from wallet db.
             epoch,
             epoch_consensus: consensus,
-            pk: lead_pk,
-            vk: lead_vk,
+            mint_pk: mint_pk,
+            burn_pk: burn_pk,
+            mint_vk: mint_vk,
+            burn_vk: burn_vk,
             playing: true,
             workspace,
             id,
-            keypair, //subscription: subscription,
-                     //chanptr: chanptr,
-                     //msgsub: msg_sub,
+            keypair,
+            cashier_signature_public,
+            faucet_signature_public,
+            cashier_signature_secret,
+            faucet_signature_secret,
         })
     }
 
@@ -194,11 +318,11 @@ impl Stakeholder {
     }
 
     pub fn get_provkingkey(&self) -> ProvingKey {
-        self.pk.clone()
+        self.mint_pk.clone()
     }
 
     pub fn get_verifyingkey(&self) -> VerifyingKey {
-        self.vk.clone()
+        self.mint_vk.clone()
     }
 
     /// get list stakeholder peers on the p2p network for synchronization
@@ -388,7 +512,7 @@ impl Stakeholder {
         let mut winning_coin_idx :  usize = 0;
         let won = self.epoch.is_leader(sl, &mut winning_coin_idx);
         let proof = if won {
-            self.epoch.get_proof(sl, winning_coin_idx,  &self.pk.clone())
+            self.epoch.get_proof(sl, winning_coin_idx,  &self.mint_pk.clone())
         } else {
             Proof::new(vec![])
         };
@@ -402,6 +526,48 @@ impl Stakeholder {
             OuroborosMetadata::new(self.get_eta().to_repr(), TransactionLeadProof::from(proof));
         self.workspace.set_stakeholdermetadata(stakeholder_meta);
         self.workspace.set_ouroborosmetadata(ouroboros_meta);
+        //
+        if won {
+            //TODO (res) verify the coin is finalized
+            // could be finalized in later slot accord to the finalization policy that is WIP.
+            let owned_coin = self.finalize_coin(&self.epoch.get_coin(sl as usize, winning_coin_idx as usize));
+            self.ownedcoins.push(owned_coin);
+        }
+    }
+
+    //TODO (res) validate the owncoin is the same winning leadcoin
+    pub fn finalize_coin (&self, coin : &LeadCoin) -> OwnCoin {
+        let mut state = StakeholderState {
+            tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(TREE_LEN),
+            merkle_roots: vec![],
+            nullifiers: vec![],
+            own_coins: vec![],
+            mint_vk: self.mint_vk.clone(),
+            burn_vk: self.burn_vk.clone(),
+            cashier_signature_public: self.cashier_signature_public.clone(),
+            faucet_signature_public: self.faucet_signature_public.clone(),
+            secrets: vec![self.keypair.secret],
+        };
+        let token_id = pallas::Base::random(&mut OsRng);
+        let builder = TransactionBuilder {
+            clear_inputs: vec![TransactionBuilderClearInputInfo {
+                value: coin.value.unwrap(),
+                token_id,
+                signature_secret: self.cashier_signature_secret,
+            }],
+            inputs: vec![],
+            outputs: vec![TransactionBuilderOutputInfo {
+                value: coin.value.unwrap(),
+                token_id,
+                public: self.keypair.public,
+            }],
+        };
+        let tx = builder.build(&self.mint_pk, &self.burn_pk).unwrap();
+        tx.verify(&state.mint_vk, &state.burn_vk);
+        let _note = tx.outputs[0].enc_note.decrypt(&self.keypair.secret).unwrap();
+        let update = state_transition(&state, tx).unwrap();
+        state.apply(update);
+        state.own_coins[0].clone()
     }
 }
 

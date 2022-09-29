@@ -99,6 +99,10 @@ impl Epoch {
         self.coins.clone()
     }
 
+    pub fn get_coin(&self, sl: usize, idx: usize) -> LeadCoin {
+        self.coins[sl][idx]
+    }
+
     pub fn len(&self)  -> usize {
         self.consensus.get_epoch_len() as usize
     }
@@ -263,7 +267,7 @@ impl Epoch {
         // election seeds
         let (y_mu, rho_mu) = self.create_coins_election_seeds(c_sl);
         let coin = LeadCoin {
-            value: Some(c_v),
+            value: Some(value),
             cm: Some(c_cm),
             cm2: Some(c_cm2),
             idx: u32::try_from(i).unwrap(), //TODO should be abs slot
@@ -299,7 +303,7 @@ impl Epoch {
         assert!(slusize < self.coins.len());
         let competing_coins : &Vec<LeadCoin>= &self.coins.clone()[sl as usize];
         let mut am_leader = vec![];
-        let mut highest_stake = pallas::Base::zero();
+        let mut highest_stake = 0;
         let mut highest_stake_idx : usize= 0;
         for (idx, coin) in competing_coins.iter().enumerate() {
             let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
@@ -313,7 +317,7 @@ impl Epoch {
                 .unwrap()
                 .x();
             let ord = pallas::Base::from(10241024); //TODO fine tune this scalar.
-            let target = ord * coin.value.unwrap();
+            let target = ord * pallas::Base::from(coin.value.unwrap());
             debug!("y_x: {:?}, target: {:?}", y_x, target);
             //TODO (FIX) reversed for testin
             let iam_leader =  target < y_x;
