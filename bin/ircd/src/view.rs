@@ -1,6 +1,8 @@
 use fxhash::FxHashMap;
 
-use crate::model::{Event, EventId, Model};
+use darkfi::Result;
+
+use crate::model::{Event, EventId, EventQueueArc, Model};
 
 struct View {
     seen: FxHashMap<EventId, Event>,
@@ -11,10 +13,11 @@ impl View {
         Self { seen: FxHashMap::default() }
     }
 
-    fn process(_model: &Model) {
-        // This does 2 passes:
-        // 1. Walk down all chains and get unseen events
-        // 2. Order those events according to timestamp
-        // Then the events are replayed to the IRC client
+    pub async fn process(&mut self, event_queue: EventQueueArc) -> Result<()>  {
+        loop {
+            let new_event = event_queue.fetch().await?;
+            // TODO sort the events
+            self.seen.insert(new_event.hash(), new_event);
+        }
     }
 }
