@@ -16,6 +16,8 @@ pub enum DaoError {
     StateNotFound,
     #[error("InternalError")]
     Darkfi(#[from] darkfi::error::Error),
+    #[error("Verify proof failed: '{0}', '{0}'")]
+    VerifyProofFailed(usize, String),
 }
 
 pub type DaoResult<T> = std::result::Result<T, DaoError>;

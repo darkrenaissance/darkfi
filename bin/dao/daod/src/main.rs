@@ -371,7 +371,7 @@ impl Client {
             update.apply(&mut self.states);
         }
 
-        tx.zk_verify(&self.zk_bins);
+        tx.zk_verify(&self.zk_bins)?;
         tx.verify_sigs();
 
         Ok(())

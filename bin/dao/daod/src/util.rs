@@ -22,6 +22,8 @@ use darkfi::{
     Error,
 };
 
+use crate::error::{DaoError, DaoResult};
+
 /// Parse pallas::Base from a base58-encoded string
 pub fn parse_b58(s: &str) -> std::result::Result<pallas::Base, darkfi::Error> {
     let bytes = bs58::decode(s).into_vec()?;
@@ -128,7 +130,7 @@ impl Transaction {
     /// Verify ZK contracts for the entire tx
     /// In real code, we could parallelize this for loop
     /// TODO: fix use of unwrap with Result type stuff
-    pub fn zk_verify(&self, zk_bins: &ZkContractTable) {
+    pub fn zk_verify(&self, zk_bins: &ZkContractTable) -> DaoResult<()> {
         for func_call in &self.func_calls {
             let proofs_public_vals = &func_call.call_data.zk_public_values();
 
@@ -146,17 +148,24 @@ impl Transaction {
                     ZkContractInfo::Binary(info) => {
                         let verifying_key = &info.verifying_key;
                         let verify_result = proof.verify(&verifying_key, public_vals);
-                        assert!(verify_result.is_ok(), "verify proof[{}]='{}' failed", i, key);
+                        if verify_result.is_err() {
+                            return Err(DaoError::VerifyProofFailed(i, key.to_string()))
+                        }
+                        //assert!(verify_result.is_ok(), "verify proof[{}]='{}' failed", i, key);
                     }
                     ZkContractInfo::Native(info) => {
                         let verifying_key = &info.verifying_key;
                         let verify_result = proof.verify(&verifying_key, public_vals);
-                        assert!(verify_result.is_ok(), "verify proof[{}]='{}' failed", i, key);
+                        if verify_result.is_err() {
+                            return Err(DaoError::VerifyProofFailed(i, key.to_string()))
+                        }
+                        //assert!(verify_result.is_ok(), "verify proof[{}]='{}' failed", i, key);
                     }
                 };
                 debug!(target: "demo", "zk_verify({}) passed [i={}]", key, i);
             }
         }
+        Ok(())
     }
 
     pub fn verify_sigs(&self) {
