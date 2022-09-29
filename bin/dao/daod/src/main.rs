@@ -27,6 +27,7 @@ use darkfi::{
 };
 
 mod contract;
+mod error;
 mod note;
 mod rpc;
 mod util;
@@ -36,6 +37,7 @@ use crate::{
         dao_contract::{self, mint::wallet::DaoParams, propose::wallet::Proposal, DaoBulla},
         money_contract::{self, state::OwnCoin},
     },
+    error::{DaoError, DaoResult},
     rpc::JsonRpcInterface,
     util::{sign, StateRegistry, Transaction, ZkContractTable, DRK_ID, GOV_ID},
 };
@@ -227,11 +229,6 @@ impl Client {
         Ok(())
     }
 
-    // // Strictly for demo purposes.
-    // fn new_money_wallet(&mut self) {
-
-    // }
-
     fn create_dao(
         &mut self,
         dao_proposer_limit: u64,
@@ -239,7 +236,7 @@ impl Client {
         dao_approval_ratio_quot: u64,
         dao_approval_ratio_base: u64,
         token_id: pallas::Base,
-    ) -> Result<pallas::Base> {
+    ) -> DaoResult<pallas::Base> {
         let tx = self.dao_wallet.mint_tx(
             dao_proposer_limit,
             dao_quorum,
@@ -249,7 +246,7 @@ impl Client {
             &self.zk_bins,
         );
 
-        self.validate(&tx).unwrap();
+        self.validate(&tx)?;
         // Only witness the value once the transaction is confirmed.
         self.dao_wallet.update_witness(&mut self.states).unwrap();
 
@@ -286,7 +283,7 @@ impl Client {
         token_id: pallas::Base,
         token_supply: u64,
         recipient: PublicKey,
-    ) -> Result<()> {
+    ) -> DaoResult<()> {
         self.dao_wallet.track(&mut self.states)?;
 
         let tx = self
@@ -294,25 +291,30 @@ impl Client {
             .mint(token_id, token_supply, self.dao_wallet.bullas[0].0, recipient, &self.zk_bins)
             .unwrap();
 
-        self.validate(&tx).unwrap();
-        self.update_wallets().unwrap();
+        self.validate(&tx)?;
+        self.update_wallets()?;
 
         Ok(())
     }
 
-    fn airdrop_user(&mut self, value: u64, token_id: pallas::Base, addr: PublicKey) -> Result<()> {
+    fn airdrop_user(
+        &mut self,
+        value: u64,
+        token_id: pallas::Base,
+        addr: PublicKey,
+    ) -> DaoResult<()> {
         // let wallet = self.money_wallets.get(&nym).unwrap();
         // let addr = wallet.get_public_key();
 
         let tx = self.cashier_wallet.airdrop(value, token_id, addr, &self.zk_bins).unwrap();
-        self.validate(&tx).unwrap();
-        self.update_wallets().unwrap();
+        self.validate(&tx)?;
+        self.update_wallets()?;
 
         Ok(())
     }
 
     // TODO: Change these into errors instead of expects.
-    fn validate(&mut self, tx: &Transaction) -> Result<()> {
+    fn validate(&mut self, tx: &Transaction) -> DaoResult<()> {
         debug!(target: "dao_demo::client::validate()", "commencing validate sequence");
         let mut updates = vec![];
 
@@ -323,31 +325,44 @@ impl Client {
 
             if func_call.func_id == *money_contract::transfer::FUNC_ID {
                 debug!("money_contract::transfer::state_transition()");
-                let update =
-                    money_contract::transfer::validate::state_transition(&self.states, idx, &tx)
-                        .expect("money_contract::transfer::validate::state_transition() failed!");
-                updates.push(update);
+                match money_contract::transfer::validate::state_transition(&self.states, idx, &tx) {
+                    Ok(update) => {
+                        updates.push(update);
+                    }
+                    Err(e) => return Err(DaoError::StateTransitionFailed(e.to_string())),
+                }
             } else if func_call.func_id == *dao_contract::mint::FUNC_ID {
                 debug!("dao_contract::mint::state_transition()");
-                let update = dao_contract::mint::validate::state_transition(&self.states, idx, &tx)
-                    .expect("dao_contract::mint::validate::state_transition() failed!");
-                updates.push(update);
+                match dao_contract::mint::validate::state_transition(&self.states, idx, &tx) {
+                    Ok(update) => {
+                        updates.push(update);
+                    }
+                    Err(e) => return Err(DaoError::StateTransitionFailed(e.to_string())),
+                }
             } else if func_call.func_id == *dao_contract::propose::FUNC_ID {
                 debug!(target: "demo", "dao_contract::propose::state_transition()");
-                let update =
-                    dao_contract::propose::validate::state_transition(&self.states, idx, &tx)
-                        .expect("dao_contract::propose::validate::state_transition() failed!");
-                updates.push(update);
+                match dao_contract::propose::validate::state_transition(&self.states, idx, &tx) {
+                    Ok(update) => {
+                        updates.push(update);
+                    }
+                    Err(e) => return Err(DaoError::StateTransitionFailed(e.to_string())),
+                }
             } else if func_call.func_id == *dao_contract::vote::FUNC_ID {
                 debug!(target: "demo", "dao_contract::vote::state_transition()");
-                let update = dao_contract::vote::validate::state_transition(&self.states, idx, &tx)
-                    .expect("dao_contract::vote::validate::state_transition() failed!");
-                updates.push(update);
+                match dao_contract::vote::validate::state_transition(&self.states, idx, &tx) {
+                    Ok(update) => {
+                        updates.push(update);
+                    }
+                    Err(e) => return Err(DaoError::StateTransitionFailed(e.to_string())),
+                }
             } else if func_call.func_id == *dao_contract::exec::FUNC_ID {
                 debug!("dao_contract::exec::state_transition()");
-                let update = dao_contract::exec::validate::state_transition(&self.states, idx, &tx)
-                    .expect("dao_contract::exec::validate::state_transition() failed!");
-                updates.push(update);
+                match dao_contract::exec::validate::state_transition(&self.states, idx, &tx) {
+                    Ok(update) => {
+                        updates.push(update);
+                    }
+                    Err(e) => return Err(DaoError::StateTransitionFailed(e.to_string())),
+                }
             }
         }
 
@@ -362,9 +377,12 @@ impl Client {
         Ok(())
     }
 
-    fn update_wallets(&mut self) -> Result<()> {
-        let state =
-            self.states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+    fn update_wallets(&mut self) -> DaoResult<()> {
+        let state = self.states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID);
+        if state.is_none() {
+            return Err(DaoError::StateNotFound)
+        }
+        let state = state.unwrap();
 
         let dao_coins = state.wallet_cache.get_received(&self.dao_wallet.keypair.secret);
         for coin in dao_coins {
@@ -421,7 +439,7 @@ impl Client {
         token_id: pallas::Base,
         amount: u64,
         sender: PublicKey,
-    ) -> Result<pallas::Base> {
+    ) -> DaoResult<pallas::Base> {
         let params = self.dao_wallet.params[0].clone();
 
         let dao_leaf_position = self.dao_wallet.leaf_position;
@@ -429,7 +447,11 @@ impl Client {
         // To be able to make a proposal, we must prove we have ownership
         // of governance tokens, and that the quantity of governance
         // tokens is within the accepted proposer limit.
-        let sender_wallet = self.money_wallets.get_mut(&sender).unwrap();
+        let sender_wallet = self.money_wallets.get_mut(&sender);
+        if sender_wallet.is_none() {
+            return Err(DaoError::NoWalletFound)
+        }
+        let sender_wallet = sender_wallet.unwrap();
 
         let tx = sender_wallet.propose_tx(
             params.clone(),
@@ -442,48 +464,59 @@ impl Client {
         )?;
 
         self.validate(&tx)?;
-        self.update_wallets().unwrap();
+        self.update_wallets()?;
 
         let proposal_bulla = self.dao_wallet.store_proposal(&tx)?;
 
         Ok(proposal_bulla)
     }
 
-    // fn get_addr_from_nym(&self, nym: String) -> Result<PublicKey> {
-    //     let wallet = self.money_wallets.get(&nym).unwrap();
-    //     Ok(wallet.get_public_key())
-    // }
-
-    fn cast_vote(&mut self, pubkey: PublicKey, vote: bool) -> Result<()> {
+    fn cast_vote(&mut self, pubkey: PublicKey, vote: bool) -> DaoResult<()> {
         let dao_key = self.dao_wallet.keypair;
+        if self.dao_wallet.proposals.is_empty() {
+            return Err(DaoError::NoProposals)
+        }
         let proposal = self.dao_wallet.proposals[0].clone();
+
+        if self.dao_wallet.params.is_empty() {
+            return Err(DaoError::DaoNotConfigured)
+        }
         let dao_params = self.dao_wallet.params[0].clone();
         let dao_keypair = self.dao_wallet.keypair;
 
-        let voter_wallet = self.money_wallets.get_mut(&pubkey).unwrap();
+        let voter_wallet = self.money_wallets.get_mut(&pubkey);
+        if voter_wallet.is_none() {
+            return Err(DaoError::NoWalletFound)
+        }
+        let voter_wallet = voter_wallet.unwrap();
 
-        let tx = voter_wallet
-            .vote_tx(
-                vote,
-                dao_key,
-                proposal,
-                dao_params,
-                dao_keypair,
-                &self.zk_bins,
-                &mut self.states,
-            )
-            .unwrap();
+        let tx = voter_wallet.vote_tx(
+            vote,
+            dao_key,
+            proposal,
+            dao_params,
+            dao_keypair,
+            &self.zk_bins,
+            &mut self.states,
+        )?;
 
-        self.validate(&tx).unwrap();
-        self.update_wallets().unwrap();
+        self.validate(&tx)?;
+        self.update_wallets()?;
 
         self.dao_wallet.store_vote(&tx).unwrap();
 
         Ok(())
     }
 
-    fn exec_proposal(&mut self, bulla: pallas::Base) -> Result<()> {
+    fn exec_proposal(&mut self, bulla: pallas::Base) -> DaoResult<()> {
+        if self.dao_wallet.proposals.is_empty() {
+            return Err(DaoError::NoProposals)
+        }
         let proposal = self.dao_wallet.proposals[0].clone();
+
+        if self.dao_wallet.params.is_empty() {
+            return Err(DaoError::DaoNotConfigured)
+        }
         let dao_params = self.dao_wallet.params[0].clone();
 
         let tx = self
@@ -491,8 +524,8 @@ impl Client {
             .exec_tx(proposal, bulla, dao_params, &self.zk_bins, &mut self.states)
             .unwrap();
 
-        self.validate(&tx).unwrap();
-        self.update_wallets().unwrap();
+        self.validate(&tx)?;
+        self.update_wallets()?;
 
         Ok(())
     }
@@ -541,9 +574,12 @@ impl DaoWallet {
         self.keypair.public
     }
 
-    fn track(&self, states: &mut StateRegistry) -> Result<()> {
-        let state =
-            states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+    fn track(&self, states: &mut StateRegistry) -> DaoResult<()> {
+        let state = states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID);
+        if state.is_none() {
+            return Err(DaoError::StateNotFound)
+        }
+        let state = state.unwrap();
         state.wallet_cache.track(self.keypair.secret);
         Ok(())
     }
@@ -576,8 +612,12 @@ impl DaoWallet {
         Transaction { func_calls, signatures }
     }
 
-    fn update_witness(&mut self, states: &mut StateRegistry) -> Result<()> {
-        let state = states.lookup_mut::<dao_contract::State>(*dao_contract::CONTRACT_ID).unwrap();
+    fn update_witness(&mut self, states: &mut StateRegistry) -> DaoResult<()> {
+        let state = states.lookup_mut::<dao_contract::State>(*dao_contract::CONTRACT_ID);
+        if state.is_none() {
+            return Err(DaoError::StateNotFound)
+        }
+        let state = state.unwrap();
         let path = state.dao_tree.witness().unwrap();
         self.leaf_position = path;
         Ok(())
@@ -836,9 +876,12 @@ impl MoneyWallet {
     //     self.keypair.public
     // }
 
-    fn track(&self, states: &mut StateRegistry) -> Result<()> {
-        let state =
-            states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+    fn track(&self, states: &mut StateRegistry) -> DaoResult<()> {
+        let state = states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID);
+        if state.is_none() {
+            return Err(DaoError::StateNotFound)
+        }
+        let state = state.unwrap();
         state.wallet_cache.track(self.keypair.secret);
         Ok(())
     }
