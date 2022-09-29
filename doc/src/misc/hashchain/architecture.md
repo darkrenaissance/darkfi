@@ -50,6 +50,7 @@ All the chains share a root `Event` to preserve the tree structure.
 | current_root  | `EventId` 	  		  		   | The root `Event` for the tree |
 | orphans       | HashMap<`EventId`, `Event`>  	   | Recently added `Event`s 	   |
 | event_map     | HashMap<`EventId`, `EventNode`>  | The actual tree  		 	   |
+| events_queue  | `EventsQueue`					   | Communication channel 
 
 ## View 
 
@@ -57,9 +58,16 @@ The `View` check the `Model` for new `Event`s, then dispatch these `Event`s to t
 
 `Event`s are sorted according to the timestamp attached to each `Event`.
 
-| Description   | Data Type      	   | Comments               |
-|-------------- | -------------------- | ---------------------- |
-| seen  		| HashMap<`EventId`>   | A list of `Event`s 	|
+| Description   | Data Type      	   		    | Comments               |
+|-------------- | ----------------------------- | ---------------------- |
+| seen  		| HashMap<`EventId`, `Event`>   | A list of `Event`s 	 |
+
+## EventsQueue 
+
+The `EventsQueue` used to transport the event from `Model` to `View`.
+
+The `Model` fill The `EventsQueue` with the new `Event`, while the `View` keep
+fetching `Event`s from queue continuously.
 
 # Architecture 
 
@@ -70,10 +78,11 @@ from it continuously.
 
 ## Add new Event
 
-On receiving new `Event` from the network protocol, the `Event` add to the
+Once receiving new `Event` from the network protocol, the `Event` will be add to the
 orphans list. 
 
-`Event` from orphans list add to chains according to its ancestor. 
+After the ancestor for the new orphan gets found, The orphan `Event` will be add to the chain
+according to its ancestor.
 
 For example, in the <em> Example1 </em> below, An `Event` add to the first chain if
 its previous hash is Event-A1

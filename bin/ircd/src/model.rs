@@ -12,12 +12,12 @@ use darkfi::{
 use crate::settings::get_current_time;
 
 pub type EventId = [u8; 32];
-pub type EventQueueArc = Arc<EventQueue>;
+pub type EventsQueueArc = Arc<EventsQueue>;
 
-pub struct EventQueue(async_channel::Sender<Event>, async_channel::Receiver<Event>);
+pub struct EventsQueue(async_channel::Sender<Event>, async_channel::Receiver<Event>);
 
-impl EventQueue {
-    pub fn new() -> EventQueueArc {
+impl EventsQueue {
+    pub fn new() -> EventsQueueArc {
         let (sn, rv) = async_channel::unbounded();
         Arc::new(Self(sn, rv))
     }
@@ -110,16 +110,16 @@ struct EventNode {
     children: Vec<EventId>,
 }
 
-#[derive(Debug)]
 pub struct Model {
     // This is periodically updated so we discard old nodes
     current_root: EventId,
     orphans: FxHashMap<EventId, Event>,
     event_map: FxHashMap<EventId, EventNode>,
+    events_queue: EventsQueueArc,
 }
 
 impl Model {
-    pub fn new() -> Self {
+    pub fn new(events_queue: EventsQueueArc) -> Self {
         let root_node = EventNode {
             parent: None,
             event: Event {
@@ -140,7 +140,7 @@ impl Model {
         let mut event_map = FxHashMap::default();
         event_map.insert(root_node_id.clone(), root_node);
 
-        Self { current_root: root_node_id, orphans: FxHashMap::default(), event_map }
+        Self { current_root: root_node_id, orphans: FxHashMap::default(), event_map, events_queue }
     }
 
     pub fn add(&mut self, event: Event) {
@@ -433,7 +433,8 @@ mod tests {
 
     #[test]
     fn test_update_root() {
-        let mut model = Model::new();
+        let events_queue = EventsQueue::new();
+        let mut model = Model::new(events_queue);
         let root_id = model.current_root;
 
         // event_node 1
@@ -484,7 +485,8 @@ mod tests {
 
     #[test]
     fn test_find_height() {
-        let mut model = Model::new();
+        let events_queue = EventsQueue::new();
+        let mut model = Model::new(events_queue);
         let root_id = model.current_root;
 
         // event_node 1
@@ -513,7 +515,8 @@ mod tests {
 
     #[test]
     fn test_prune_chains() {
-        let mut model = Model::new();
+        let events_queue = EventsQueue::new();
+        let mut model = Model::new(events_queue);
         let root_id = model.current_root;
 
         // event_node 1
@@ -550,7 +553,8 @@ mod tests {
 
     #[test]
     fn test_diff_depth() {
-        let mut model = Model::new();
+        let events_queue = EventsQueue::new();
+        let mut model = Model::new(events_queue);
         let root_id = model.current_root;
 
         // event_node 1
@@ -607,7 +611,8 @@ mod tests {
 
     #[test]
     fn test_event_hash() {
-        let mut model = Model::new();
+        let events_queue = EventsQueue::new();
+        let mut model = Model::new(events_queue);
         let root_id = model.current_root;
 
         let timestamp = get_current_time() + 1;

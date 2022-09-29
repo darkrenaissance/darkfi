@@ -2,7 +2,7 @@ use fxhash::FxHashMap;
 
 use darkfi::Result;
 
-use crate::model::{Event, EventId, EventQueueArc, Model};
+use crate::model::{Event, EventId, EventsQueueArc, Model};
 
 struct View {
     seen: FxHashMap<EventId, Event>,
@@ -13,9 +13,9 @@ impl View {
         Self { seen: FxHashMap::default() }
     }
 
-    pub async fn process(&mut self, event_queue: EventQueueArc) -> Result<()> {
+    pub async fn process(&mut self, events_queue: EventsQueueArc) -> Result<()> {
         loop {
-            let new_event = event_queue.fetch().await?;
+            let new_event = events_queue.fetch().await?;
             // TODO sort the events
             self.seen.insert(new_event.hash(), new_event);
         }
