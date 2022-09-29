@@ -74,6 +74,7 @@ pub struct Event {
     previous_event_hash: EventId,
     action: EventAction,
     pub timestamp: u64,
+    #[skip_serialize]
     pub read_confirms: u8,
 }
 
@@ -602,5 +603,23 @@ mod tests {
         }
 
         assert_eq!(model.find_head(), id1);
+    }
+
+    #[test]
+    fn test_event_hash() {
+        let mut model = Model::new();
+        let root_id = model.current_root;
+
+        let timestamp = get_current_time() + 1;
+        let event = create_message(root_id, "msg", "message", timestamp);
+        let mut event2 = event.clone();
+
+        let event_hash = event.hash();
+
+        event2.read_confirms += 3;
+        let event2_hash = event2.hash();
+
+        assert_eq!(event2_hash, event_hash);
+        assert_ne!(event2.read_confirms, event.read_confirms);
     }
 }

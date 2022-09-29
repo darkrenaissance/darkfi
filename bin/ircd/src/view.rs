@@ -13,7 +13,7 @@ impl View {
         Self { seen: FxHashMap::default() }
     }
 
-    pub async fn process(&mut self, event_queue: EventQueueArc) -> Result<()>  {
+    pub async fn process(&mut self, event_queue: EventQueueArc) -> Result<()> {
         loop {
             let new_event = event_queue.fetch().await?;
             // TODO sort the events
