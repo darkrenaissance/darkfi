@@ -24,6 +24,8 @@ members = [
     "bin/darkotc",
     "bin/drk",
     "bin/faucetd",
+    "bin/fud/fu",
+    "bin/fud/fud",
     "bin/ircd",
     "bin/dnetview",
     "bin/daod",

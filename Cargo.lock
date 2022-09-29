@@ -1913,6 +1913,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "fu"
+version = "0.3.0"
+dependencies = [
+ "async-std",
+ "clap 3.2.22",
+ "darkfi",
+ "log",
+ "serde_json",
+ "simplelog",
+ "url",
+]
+
+[[package]]
+name = "fud"
+version = "0.3.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "async-trait",
+ "blake3",
+ "ctrlc",
+ "darkfi",
+ "easy-parallel",
+ "futures-lite",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "simplelog",
+ "structopt",
+ "structopt-toml",
+ "url",
+]
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
