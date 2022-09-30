@@ -191,14 +191,14 @@ impl Epoch {
             if owned.len()>0 {
                 let mut slot_coins = vec![];
                 for j in  0..owned.len() {
-                    let coin = self.create_leadcoin(sigma, pallas::Base::from(owned[j].note.value), i, root_sks[i], path_sks[i], seeds[i]);
+                    let coin = self.create_leadcoin(sigma, owned[j].note.value, i, root_sks[i], path_sks[i], seeds[i]);
                     slot_coins.push(coin.clone());
                 }
                 self.coins.push(slot_coins);
             }
             // otherwise compete with zero stake
             else {
-                let coin = self.create_leadcoin(sigma, pallas::Base::zero(), i, root_sks[i], path_sks[i], seeds[i]);
+                let coin = self.create_leadcoin(sigma, 0, i, root_sks[i], path_sks[i], seeds[i]);
                 self.coins.push(vec!(coin));
             }
         }
@@ -206,7 +206,7 @@ impl Epoch {
     }
 
     pub fn create_leadcoin(&self, sigma: pallas::Base,
-                           value : pallas::Base,
+                           value : u64,
                            i: usize,
                            c_root_sk: MerkleNode,
                            c_path_sk: [MerkleNode; MERKLE_DEPTH_ORCHARD],
@@ -216,7 +216,7 @@ impl Epoch {
         let c_cm1_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
         let c_cm2_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
         let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(self.len());
-        let c_v = value;
+        let c_v = pallas::Base::from(value);
         // coin relative slot index in the epoch
         let c_sl = pallas::Base::from(u64::try_from(i).unwrap());
         //
@@ -303,9 +303,9 @@ impl Epoch {
         assert!(slusize < self.coins.len());
         let competing_coins : &Vec<LeadCoin>= &self.coins.clone()[sl as usize];
         let mut am_leader = vec![];
-        let mut highest_stake = pallas::Base::zero();
+        let mut highest_stake = 0;
         let mut highest_stake_idx : usize= 0;
-        for (idx, coin) in competing_coins.iter().enumerate() {
+        for (winning_idx, coin) in competing_coins.iter().enumerate() {
             let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
             let y_exp_hash: pallas::Base =
                 poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
@@ -317,16 +317,17 @@ impl Epoch {
                 .unwrap()
                 .x();
             let ord = pallas::Base::from(10241024); //TODO fine tune this scalar.
-            let target = ord * coin.value.unwrap();
+            let target = ord * pallas::Base::from(coin.value.unwrap());
             debug!("y_x: {:?}, target: {:?}", y_x, target);
             //TODO (FIX) reversed for testin
             let iam_leader =  target < y_x;
             if iam_leader && coin.value.unwrap() > highest_stake {
                 highest_stake = coin.value.unwrap();
-                highest_stake_idx = idx;
+                highest_stake_idx = winning_idx;
             }
             am_leader.push(iam_leader);
         }
+        *idx = highest_stake_idx;
         am_leader.len() > 0
     }
 

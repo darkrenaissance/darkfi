@@ -575,15 +575,13 @@ impl Stakeholder {
         let token_id = pallas::Base::random(&mut OsRng);
         let builder = TransactionBuilder {
             clear_inputs: vec![TransactionBuilderClearInputInfo {
-                //value: coin.value.unwrap(),
-                value: 10,
+                value: coin.value.unwrap(),
                 token_id,
                 signature_secret: self.cashier_signature_secret,
             }],
             inputs: vec![],
             outputs: vec![TransactionBuilderOutputInfo {
-                //value: coin.value.unwrap(),
-                value: 10,
+                value: coin.value.unwrap(),
                 token_id,
                 public: self.keypair.public,
             }],
