@@ -21,7 +21,7 @@ pub const LEAD_PUBLIC_INPUT_LEN: usize = 10;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
-    pub value: Option<u64>,                         // coin stake
+    pub value: Option<pallas::Base>,                         // coin stake
     pub cm: Option<pallas::Point>,                           // coin commitment
     pub cm2: Option<pallas::Point>,                          // poured coin commitment
     pub idx: u32,                                            // coin idex
@@ -118,7 +118,7 @@ impl LeadCoin {
             coin_timestamp: Value::known(self.tau.unwrap()), //
             coin_nonce: Value::known(self.nonce.unwrap()),
             coin1_blind: Value::known(self.c1_blind.unwrap()),
-            value: Value::known(pallas::Base::from(self.value.unwrap())),
+            value: Value::known(self.value.unwrap()),
             coin2_blind: Value::known(self.c2_blind.unwrap()),
             cm_pos: Value::known(self.idx),
             //sn_c1: Value::known(self.sn.unwrap()),

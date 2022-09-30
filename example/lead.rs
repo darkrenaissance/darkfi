@@ -2,6 +2,8 @@ use futures::executor::block_on;
 use halo2_proofs::dev::MockProver;
 use pasta_curves::pallas;
 use url::Url;
+use log::{debug, error, log_enabled, info, Level};
+use env_logger;
 
 use darkfi::{
     blockchain::{
@@ -14,6 +16,8 @@ use darkfi::{
 };
 
 fn main() {
+    debug!("..");
+    let _ = env_logger::init();
     let k: u32 = 13;
     //
 
@@ -45,12 +49,11 @@ fn main() {
         block_on(Stakeholder::new(consensus, settings, "db", 0, Some(k))).unwrap();
 
     let eta: pallas::Base = stakeholder.get_eta();
-    let mut epoch = Epoch { len: Some(LEN), value: Some(value), eta, coins: vec![] };
+    let mut epoch = Epoch::new(consensus,  eta);
     // sigma is nubmer of slots * reward (assuming reward is 1 for simplicity)
     let sigma = pallas::Base::from(10);
-    let coins: Vec<LeadCoin> = epoch.create_coins(sigma);
-    let coin_idx = 0;
-    let coin = coins[coin_idx];
+    let coins: Vec<Vec<LeadCoin>> = epoch.create_coins(sigma, vec!());
+    let coin = coins[0][0];
     let contract = coin.create_contract();
 
     let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] = coin.public_inputs_as_array();

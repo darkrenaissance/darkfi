@@ -22,6 +22,7 @@ struct NetCli {
 
 #[async_std::main]
 async fn main() {
+    let _ = env_logger::init();
     let args = NetCli::parse();
     let addr = vec![Url::parse(args.addr.as_str()).unwrap()];
     let mut peers = vec![];
