@@ -2419,6 +2419,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "ircd2"
+version = "0.4.0"
+dependencies = [
+ "async-channel",
+ "async-executor",
+ "async-std",
+ "async-trait",
+ "bs58",
+ "chrono",
+ "clap 3.2.22",
+ "crypto_box",
+ "ctrlc",
+ "darkfi",
+ "easy-parallel",
+ "futures",
+ "futures-rustls",
+ "fxhash",
+ "hex",
+ "log",
+ "rand",
+ "ripemd",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "toml",
+ "url",
+]
+
+[[package]]
 name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
