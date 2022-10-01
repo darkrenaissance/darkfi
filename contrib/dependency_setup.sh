@@ -30,6 +30,13 @@ setup_apt() {
 		libexpat1-dev || return 1
 }
 
+setup_pacman() {
+	PACMAN="$SUDO $1"
+
+	$PACMAN -Sy base-devel cmake wget expat freetype2 fontconfig \
+	  jq openssl clang llvm libgudev
+}
+
 setup_xbps() {
 	XBPS="$SUDO $1"
 
@@ -50,6 +57,13 @@ Linux)
 	if command -v apt-get >/dev/null; then
 		echo "Setting up for apt-get" >&2
 		setup_apt "$(command -v apt-get)" || exit 1
+		echo "Dependencies installed!" >&2
+		exit 0
+	fi
+
+	if command -v pacman; then
+		echo "Setting up for pacman" >&2
+		setup_pacman "$(command -v pacman)" || exit 1
 		echo "Dependencies installed!" >&2
 		exit 0
 	fi
