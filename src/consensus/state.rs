@@ -32,11 +32,9 @@ use crate::{
         state::{state_transition, ProgramState, StateUpdate},
         Client, MemoryState, State,
     },
+    serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
     tx::Transaction,
-    util::{
-        serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
-        time::Timestamp,
-    },
+    util::time::Timestamp,
     Result,
 };
 
@@ -201,7 +199,7 @@ impl ValidatorState {
         debug!("append_tx(): Starting state transition validation");
         let canon_state_clone = self.state_machine.lock().await.clone();
         let mem_state = MemoryState::new(canon_state_clone);
-        match self.validate_state_transitions(mem_state, &[tx.clone()]) {
+        match Self::validate_state_transitions(mem_state, &[tx.clone()]) {
             Ok(_) => debug!("append_tx(): State transition valid"),
             Err(e) => {
                 warn!("append_tx(): State transition fail: {}", e);
@@ -450,7 +448,7 @@ impl ValidatorState {
         let canon_state_clone = self.state_machine.lock().await.clone();
         let mem_state = MemoryState::new(canon_state_clone);
 
-        match self.validate_state_transitions(mem_state, &proposal.block.txs) {
+        match Self::validate_state_transitions(mem_state, &proposal.block.txs) {
             Ok(_) => {
                 debug!("vote(): State transition valid")
             }
@@ -722,7 +720,7 @@ impl ValidatorState {
             debug!(target: "consensus", "Applying state transition for finalized block");
             let canon_state_clone = self.state_machine.lock().await.clone();
             let mem_st = MemoryState::new(canon_state_clone);
-            let state_updates = self.validate_state_transitions(mem_st, &proposal.txs)?;
+            let state_updates = Self::validate_state_transitions(mem_st, &proposal.txs)?;
             self.update_canon_state(state_updates, None).await?;
             self.remove_txs(proposal.txs.clone())?;
         }
@@ -924,7 +922,7 @@ impl ValidatorState {
         let mut mem_state = MemoryState::new(canon_state_clone);
         for block in blocks {
             let mut state_updates =
-                self.validate_state_transitions(mem_state.clone(), &block.txs)?;
+                Self::validate_state_transitions(mem_state.clone(), &block.txs)?;
 
             for update in &state_updates {
                 mem_state.apply(update.clone());
@@ -1002,7 +1000,6 @@ impl ValidatorState {
     /// Validate state transitions for given transactions and state and
     /// return a vector of [`StateUpdate`]
     pub fn validate_state_transitions(
-        &self,
         state: MemoryState,
         txs: &[Transaction],
     ) -> Result<Vec<StateUpdate>> {

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use darkfi::util::{
     file::{load_json_file, save_json_file},
-    Timestamp,
+    time::Timestamp,
 };
 
 use crate::{

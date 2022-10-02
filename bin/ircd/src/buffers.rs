@@ -240,7 +240,7 @@ impl Orphan {
 }
 
 pub struct SeenIds {
-    ids: Mutex<RingBuffer<u64>>,
+    ids: RingBuffer<u64>,
 }
 
 impl Default for SeenIds {
@@ -251,13 +251,12 @@ impl Default for SeenIds {
 
 impl SeenIds {
     pub fn new() -> Self {
-        Self { ids: Mutex::new(RingBuffer::new(settings::SIZE_OF_IDSS_BUFFER)) }
+        Self { ids: RingBuffer::new(settings::SIZE_OF_IDSS_BUFFER) }
     }
 
-    pub async fn push(&self, id: u64) -> bool {
-        let ids = &mut self.ids.lock().await;
-        if !ids.contains(&id) {
-            ids.push(id);
+    pub fn push(&mut self, id: u64) -> bool {
+        if !self.ids.contains(&id) {
+            self.ids.push(id);
             return true
         }
         false
@@ -327,7 +326,6 @@ impl UMsgs {
 mod tests {
     use super::*;
     use crate::Privmsg;
-    use rand::{seq::SliceRandom, thread_rng};
 
     #[test]
     fn test_ring_buffer() {
@@ -347,64 +345,6 @@ mod tests {
         b.push("h9");
         assert_eq!(b.len(), 3);
         assert_eq!(b.iter().last().unwrap(), &"h9");
-    }
-
-    #[async_std::test]
-    async fn test_privmsgs_buffer() {
-        let pms = PrivmsgsBuffer::new();
-
-        //
-        // Fill the buffer with random generated terms in range 0..3001
-        //
-        let mut terms: Vec<u64> = (1..3001).collect();
-        terms.shuffle(&mut thread_rng());
-
-        for term in terms {
-            let privmsg = Privmsg::new("nick", "#dev", &format!("message_{}", term), term);
-            pms.push(&privmsg).await;
-        }
-
-        assert_eq!(pms.len().await, 3000);
-        assert_eq!(pms.last_term().await, 3000);
-
-        //
-        // Fill the buffer with random generated terms in range 2000..4001
-        // Since the buffer len now is 3000 it will take only the terms from
-        // 3001 to 4000 without overwriting
-        //
-        let mut terms: Vec<u64> = (2000..4001).collect();
-        terms.shuffle(&mut thread_rng());
-
-        for term in terms {
-            let privmsg = Privmsg::new("nick", "#dev", &format!("message_{}", term), term);
-            pms.push(&privmsg).await;
-        }
-
-        assert_eq!(pms.len().await, settings::SIZE_OF_MSGS_BUFFER);
-        assert_eq!(pms.last_term().await, 4000);
-
-        //
-        // Fill the buffer with random generated terms in range 4000..7001
-        // Since the buffer max size is SIZE_OF_MSGS_BUFFER it has to remove the old msges
-        //
-        let mut terms: Vec<u64> = (4001..7001).collect();
-        terms.shuffle(&mut thread_rng());
-
-        for term in terms {
-            let privmsg = Privmsg::new("nick", "#dev", &format!("message_{}", term), term);
-            pms.push(&privmsg).await;
-        }
-
-        assert_eq!(pms.len().await, settings::SIZE_OF_MSGS_BUFFER);
-        assert_eq!(pms.last_term().await, 7000);
-    }
-
-    #[async_std::test]
-    async fn test_seen_ids() {
-        let seen_ids = SeenIds::default();
-        assert!(seen_ids.push(3000).await);
-        assert!(seen_ids.push(3001).await);
-        assert!(!seen_ids.push(3000).await);
     }
 
     #[async_std::test]

@@ -6,7 +6,7 @@ use darkfi::{
         diffie_hellman::{kdf_sapling, sapling_ka_agree},
         keypair::{PublicKey, SecretKey},
     },
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
+    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
 
@@ -51,7 +51,8 @@ impl EncryptedNote2 {
             self.ciphertext.len() - AEAD_TAG_SIZE
         );
 
-        T::decode(&plaintext[..])
+        let t = T::decode(&plaintext[..])?;
+        Ok(t)
     }
 }
 

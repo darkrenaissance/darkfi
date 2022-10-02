@@ -12,7 +12,7 @@ lazy-init = "0.5.1"
 log = "0.4.17"
 pasta_curves = "0.4.0"
 rand = "0.8.5"
-serde = {version = "1.0.144", features = ["derive"]}
+serde = {version = "1.0.145", features = ["derive"]}
 sled = "0.34.7"
 
 [workspace]

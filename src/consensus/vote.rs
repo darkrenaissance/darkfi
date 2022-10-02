@@ -1,7 +1,7 @@
 use crate::{
     crypto::{address::Address, schnorr::Signature},
     net,
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
 };
 
 /// This struct represents a `Vote` used by the Streamlet consensus

@@ -1,10 +1,10 @@
+use serde_json::{json, Value};
+use url::Url;
+
 use darkfi::{
     error::Result,
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
 };
-
-use serde_json::{json, Value};
-use url::Url;
 
 use crate::error::{DnetViewError, DnetViewResult};
 

@@ -5,13 +5,13 @@ use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
+        coin::OwnCoin,
         constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
-        OwnCoin, OwnCoins,
     },
     node::state::{state_transition, ProgramState, StateUpdate},
     tx::builder::{
@@ -36,7 +36,7 @@ struct MemoryState {
     // spent. Maybe the spend field links to a tx hash:input index.
     // We should also keep track of the tx hash:output index where
     // this coin was received.
-    own_coins: OwnCoins,
+    own_coins: Vec<OwnCoin>,
     /// Verifying key for the mint zk circuit.
     mint_vk: VerifyingKey,
     /// Verifying key for the burn zk circuit.

@@ -1,6 +1,6 @@
 use crate::{
     crypto::nullifier::Nullifier,
-    util::serial::{deserialize, serialize},
+    serial::{deserialize, serialize},
     Result,
 };
 

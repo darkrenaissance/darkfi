@@ -1,6 +1,7 @@
-use log::error;
-use pasta_curves::group::Group;
 use std::io;
+
+use group::Group;
+use log::error;
 
 use crate::{
     crypto::{
@@ -15,7 +16,7 @@ use crate::{
         util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
-    util::serial::{Encodable, SerialDecodable, SerialEncodable, VarInt},
+    serial::{Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result, VerifyFailed, VerifyResult,
 };
 

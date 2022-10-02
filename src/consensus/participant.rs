@@ -1,7 +1,7 @@
 use crate::{
     crypto::{address::Address, keypair::PublicKey},
     net,
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
 };
 
 /// This struct represents a tuple of the form:

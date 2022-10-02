@@ -13,7 +13,7 @@ use rand::RngCore;
 
 use crate::{
     crypto::{address::Address, constants::NullifierK, util::mod_r_p},
-    util::serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable, WriteExt},
+    serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable, WriteExt},
     Error, Result,
 };
 
@@ -97,7 +97,7 @@ impl FromStr for PublicKey {
     type Err = crate::Error;
 
     /// Tries to create a `PublicKey` instance from a base58 encoded string.
-    fn from_str(encoded: &str) -> std::result::Result<Self, crate::Error> {
+    fn from_str(encoded: &str) -> core::result::Result<Self, crate::Error> {
         let decoded = bs58::decode(encoded).into_vec()?;
         if decoded.len() != 32 {
             return Err(Error::PublicKeyFromStr)
@@ -117,68 +117,68 @@ impl TryFrom<Address> for PublicKey {
 }
 
 impl Encodable for pallas::Base {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
         s.write_slice(&self.to_repr()[..])?;
         Ok(32)
     }
 }
 
 impl Decodable for pallas::Base {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
         let result = pallas::Base::from_repr(bytes);
         if result.is_some().into() {
             Ok(result.unwrap())
         } else {
-            Err(Error::BadOperationType)
+            Err(io::Error::new(io::ErrorKind::Other, "Failed to deserialize pallas::Base"))
         }
     }
 }
 
 impl Encodable for pallas::Scalar {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
         s.write_slice(&self.to_repr()[..])?;
         Ok(32)
     }
 }
 
 impl Decodable for pallas::Scalar {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
         let result = pallas::Scalar::from_repr(bytes);
         if result.is_some().into() {
             Ok(result.unwrap())
         } else {
-            Err(Error::BadOperationType)
+            Err(io::Error::new(io::ErrorKind::Other, "Failed to deserialize pallas::Scalar"))
         }
     }
 }
 
 impl Encodable for pallas::Point {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
         s.write_slice(&self.to_bytes()[..])?;
         Ok(32)
     }
 }
 
 impl Decodable for pallas::Point {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
         let result = Self::from_bytes(&bytes);
         if result.is_some().into() {
             Ok(result.unwrap())
         } else {
-            Err(Error::BadOperationType)
+            Err(io::Error::new(io::ErrorKind::Other, "Failed to deserialize pallas::Point"))
         }
     }
 }
 
 #[cfg(feature = "serde")]
 impl serde::Serialize for SecretKey {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -196,11 +196,11 @@ struct SecretKeyVisitor;
 impl<'de> serde::de::Visitor<'de> for SecretKeyVisitor {
     type Value = SecretKey;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("hex string")
     }
 
-    fn visit_str<E>(self, value: &str) -> std::result::Result<SecretKey, E>
+    fn visit_str<E>(self, value: &str) -> core::result::Result<SecretKey, E>
     where
         E: serde::de::Error,
     {
@@ -213,7 +213,7 @@ impl<'de> serde::de::Visitor<'de> for SecretKeyVisitor {
 
 #[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for SecretKey {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<SecretKey, D::Error>
+    fn deserialize<D>(deserializer: D) -> core::result::Result<SecretKey, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -224,7 +224,7 @@ impl<'de> serde::Deserialize<'de> for SecretKey {
 
 #[cfg(feature = "serde")]
 impl serde::Serialize for PublicKey {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -242,11 +242,11 @@ struct PublicKeyVisitor;
 impl<'de> serde::de::Visitor<'de> for PublicKeyVisitor {
     type Value = PublicKey;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("hex string")
     }
 
-    fn visit_str<E>(self, value: &str) -> std::result::Result<PublicKey, E>
+    fn visit_str<E>(self, value: &str) -> core::result::Result<PublicKey, E>
     where
         E: serde::de::Error,
     {
@@ -259,7 +259,7 @@ impl<'de> serde::de::Visitor<'de> for PublicKeyVisitor {
 
 #[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for PublicKey {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<PublicKey, D::Error>
+    fn deserialize<D>(deserializer: D) -> core::result::Result<PublicKey, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -273,7 +273,7 @@ mod tests {
     use super::*;
     use crate::{
         crypto::util::pedersen_commitment_base,
-        util::serial::{deserialize, serialize},
+        serial::{deserialize, serialize},
     };
 
     #[test]

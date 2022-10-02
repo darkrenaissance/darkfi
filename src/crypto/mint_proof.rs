@@ -16,7 +16,7 @@ use crate::{
         },
         util::{pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
     },
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
     zk::circuit::mint_contract::MintContract,
     Result,
 };

@@ -1,12 +1,7 @@
-use async_std::sync::Arc;
 use std::{fs::File, io, io::Read};
 
+use async_std::sync::Arc;
 use clap::Parser;
-use darkfi::util::{
-    cli::{get_log_config, get_log_level, spawn_config, Config},
-    expand_path,
-    path::get_config_path,
-};
 use easy_parallel::Parallel;
 use log::info;
 use simplelog::*;
@@ -16,6 +11,13 @@ use tui::{
     backend::{Backend, TermionBackend},
     Terminal,
 };
+
+use darkfi::util::{
+    async_util,
+    cli::{get_log_config, get_log_level, spawn_config, Config},
+    path::{expand_path, get_config_path},
+};
+
 pub mod config;
 pub mod error;
 pub mod model;
@@ -101,7 +103,7 @@ impl DnetView {
                     _ => (),
                 }
             }
-            util::sleep(100).await;
+            async_util::msleep(100).await;
         }
     }
 }

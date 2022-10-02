@@ -19,13 +19,13 @@ wallet_pass = "changeme"
 database = "faucetd/blockchain"
 
 # JSON-RPC listen URL
-rpc_listen = "tls://127.0.0.1:8640"
+rpc_listen = "tcp://127.0.0.1:8640"
 
 # P2P accept addresses for the syncing protocol
-sync_p2p_accept = ["tls://127.0.0.1:8642"]
+sync_p2p_accept = ["tcp://127.0.0.1:8642"]
 
 # P2P external addresses for the syncing protocol
-sync_p2p_external = ["tls://127.0.0.1:8642"]
+sync_p2p_external = ["tcp://127.0.0.1:8642"]
 
 # Connection slots for the syncing protocol
 #sync_slots = 8
@@ -41,6 +41,9 @@ sync_p2p_seed = ["tcp://127.0.0.1:33032"]
 
 # Enable localnet hosts
 localnet = true
+
+# Enable channel log
+channel_log = true
 
 # Airdrop timeout limit in seconds
 airdrop_timeout = 10

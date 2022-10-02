@@ -10,7 +10,8 @@ use std::collections::HashSet;
 use crate::{
     net,
     net::P2pPtr,
-    util::{serial::serialize, sleep},
+    serial::serialize,
+    util::async_util::sleep,
     Error::{NetworkNotConnected, UnknownKey},
     Result,
 };

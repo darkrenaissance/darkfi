@@ -12,7 +12,7 @@ use darkfi::{
             DrkValueBlind,
         },
     },
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
     Result,
 };
 

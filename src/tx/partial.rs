@@ -5,7 +5,7 @@ use crate::{
         types::{DrkTokenId, DrkValueBlind},
         BurnRevealedValues, Proof,
     },
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
 };
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]

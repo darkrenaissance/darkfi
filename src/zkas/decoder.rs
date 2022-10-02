@@ -1,6 +1,6 @@
 use super::{compiler::MAGIC_BYTES, types::StackType, LitType, Opcode, VarType};
 use crate::{
-    util::serial::{deserialize_partial, VarInt},
+    serial::{deserialize_partial, VarInt},
     Error::ZkasDecoderError as ZkasErr,
     Result,
 };

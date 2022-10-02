@@ -88,6 +88,9 @@ pub mod settings;
 /// Network transport implementations.
 pub mod transport;
 
+/// Network constants for various validations.
+pub mod constants;
+
 pub use acceptor::{Acceptor, AcceptorPtr};
 pub use channel::{Channel, ChannelPtr};
 pub use connector::Connector;
@@ -105,3 +108,26 @@ pub use transport::{
     TcpTransport, TorTransport, Transport, TransportListener, TransportName, TransportStream,
     UnixTransport,
 };
+
+// Relevant serializations
+use crate::serial::{Decodable, Encodable};
+use std::io;
+
+impl Encodable for url::Url {
+    fn encode<S: io::Write>(&self, s: S) -> core::result::Result<usize, io::Error> {
+        let mut len = 0;
+        len += self.as_str().to_string().encode(s)?;
+        Ok(len)
+    }
+}
+
+impl Decodable for url::Url {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
+        let url_str: String = Decodable::decode(&mut d)?;
+        let url = match url::Url::parse(&url_str) {
+            Ok(v) => v,
+            Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+        };
+        Ok(url)
+    }
+}

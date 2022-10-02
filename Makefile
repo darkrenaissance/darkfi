@@ -36,7 +36,7 @@ zkas: $(BINDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
 
-$(PROOFS_BIN): $(PROOFS)
+$(PROOFS_BIN): $(PROOFS) zkas
 	./zkas $(basename $@) -o $@
 
 token_lists:

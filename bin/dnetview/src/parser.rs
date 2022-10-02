@@ -1,12 +1,12 @@
-use async_std::sync::Arc;
 use std::collections::hash_map::Entry;
 
+use async_std::sync::Arc;
 use log::{debug, error, info};
 use serde_json::Value;
 use smol::Executor;
 use url::Url;
 
-use darkfi::util::NanoTimestamp;
+use darkfi::util::{async_util, time::NanoTimestamp};
 
 use crate::{
     config::{DnvConfig, Node, NodeType},
@@ -55,7 +55,7 @@ impl DataParser {
                 }
             }
             self.parse_offline(node.name.clone()).await?;
-            crate::util::sleep(2000).await;
+            async_util::sleep(2000).await;
         }
     }
 
@@ -96,7 +96,7 @@ impl DataParser {
             }
 
             // Sleep until next poll
-            crate::util::sleep(2000).await;
+            async_util::sleep(2000).await;
         }
     }
 

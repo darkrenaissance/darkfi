@@ -2,7 +2,7 @@ use std::any::{Any, TypeId};
 
 use darkfi::{
     crypto::{keypair::PublicKey, types::DrkCircuitField},
-    util::serial::{Encodable, SerialDecodable, SerialEncodable},
+    serial::{Encodable, SerialDecodable, SerialEncodable},
 };
 
 use crate::{
@@ -67,7 +67,7 @@ impl CallDataBase for CallData {
     fn encode_bytes(
         &self,
         mut writer: &mut dyn std::io::Write,
-    ) -> std::result::Result<usize, darkfi::Error> {
+    ) -> core::result::Result<usize, std::io::Error> {
         self.encode(&mut writer)
     }
 }

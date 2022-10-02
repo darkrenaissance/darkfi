@@ -11,11 +11,11 @@ use crate::{
         schnorr::Signature,
         types::*,
     },
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
     VerifyResult,
 };
 
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct StakeholderMetadata {
     /// Block owner signature
     pub signature: Signature,
@@ -39,21 +39,15 @@ impl StakeholderMetadata {
 }
 
 /// wrapper over the Proof, for possiblity any metadata necessary in the future.
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TransactionLeadProof {
     /// leadership proof
     pub lead_proof: Proof,
 }
 
-impl Default for TransactionLeadProof {
-    fn default() -> Self {
-        Self { lead_proof: Proof::default() }
-    }
-}
-
 impl TransactionLeadProof {
     pub fn new(pk: &ProvingKey, coin: LeadCoin) -> Self {
-        let proof = lead_proof::create_lead_proof(pk, coin.clone()).unwrap();
+        let proof = lead_proof::create_lead_proof(pk, coin).unwrap();
         Self { lead_proof: proof }
     }
 
@@ -70,18 +64,12 @@ impl From<Proof> for TransactionLeadProof {
 
 /// This struct represents [`Block`](super::Block) information used by the Ouroboros
 /// Praos consensus protocol.
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct OuroborosMetadata {
     /// response of global random oracle, or it's emulation.
     pub eta: [u8; 32],
     /// stakeholder lead NIZK lead proof
     pub lead_proof: TransactionLeadProof,
-}
-
-impl Default for OuroborosMetadata {
-    fn default() -> Self {
-        Self { eta: [0; 32], lead_proof: TransactionLeadProof::default() }
-    }
 }
 
 impl OuroborosMetadata {

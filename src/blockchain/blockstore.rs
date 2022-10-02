@@ -1,9 +1,7 @@
 use crate::{
     consensus::{Block, Header},
-    util::{
-        serial::{deserialize, serialize},
-        time::Timestamp,
-    },
+    serial::{deserialize, serialize},
+    util::time::Timestamp,
     Error, Result,
 };
 

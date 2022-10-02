@@ -12,7 +12,7 @@ fn is_digit(ch: char) -> bool {
     ('0'..='9').contains(&ch)
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TokenType {
     Symbol,
     String,

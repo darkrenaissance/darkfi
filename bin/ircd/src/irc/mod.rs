@@ -1,7 +1,10 @@
-use async_std::{net::TcpListener, sync::Arc};
 use std::{fs::File, net::SocketAddr};
 
 use async_executor::Executor;
+use async_std::{
+    net::TcpListener,
+    sync::{Arc, Mutex},
+};
 use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
 use futures_rustls::{rustls, TlsAcceptor};
 use fxhash::FxHashMap;
@@ -10,12 +13,12 @@ use log::{error, info};
 use darkfi::{
     net::P2pPtr,
     system::SubscriberPtr,
-    util::{expand_path, path::get_config_path},
+    util::path::{expand_path, get_config_path},
     Error, Result,
 };
 
 use crate::{
-    buffers::Buffers,
+    buffers::SeenIds,
     settings::{
         parse_configured_channels, parse_configured_contacts, Args, ChannelInfo, ContactInfo,
         CONFIG_FILE,
@@ -80,7 +83,7 @@ impl IrcConfig {
 pub struct IrcServer {
     settings: Args,
     irc_config: IrcConfig,
-    buffers: Buffers,
+    seen: Arc<Mutex<SeenIds>>,
     p2p: P2pPtr,
     notify_clients: SubscriberPtr<Privmsg>,
 }
@@ -88,12 +91,12 @@ pub struct IrcServer {
 impl IrcServer {
     pub async fn new(
         settings: Args,
-        buffers: Buffers,
+        seen: Arc<Mutex<SeenIds>>,
         p2p: P2pPtr,
         notify_clients: SubscriberPtr<Privmsg>,
     ) -> Result<Self> {
         let irc_config = IrcConfig::new(&settings)?;
-        Ok(Self { settings, irc_config, buffers, p2p, notify_clients })
+        Ok(Self { settings, irc_config, seen, p2p, notify_clients })
     }
 
     /// Start listening to new irc clients connecting to the irc server address
@@ -151,7 +154,7 @@ impl IrcServer {
         let mut client = IrcClient::new(
             writer,
             peer_addr,
-            self.buffers.clone(),
+            self.seen.clone(),
             self.irc_config.clone(),
             self.p2p.clone(),
             self.notify_clients.clone(),

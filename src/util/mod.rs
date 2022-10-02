@@ -1,28 +1,34 @@
 #[cfg(feature = "async-runtime")]
-pub mod async_serial;
-#[cfg(feature = "async-runtime")]
+/// async utility functions
 pub mod async_util;
 
+/// Command-line interface utilities
 pub mod cli;
+
+/// Lamport clock (TODO: maybe shouldn't be in util module)
 pub mod clock;
-pub mod endian;
+pub use clock::{Clock, Ticks};
+
+/// Filesystem utilities
 pub mod file;
+
+/// Network differentiations (TODO: shouldn't be here in util module))
 pub mod net_name;
+
+/// Parsing helpers
 pub mod parse;
+
+/// Filesystem path utilities
 pub mod path;
-pub mod serial;
+
+/// Time utilities
 pub mod time;
 
-#[cfg(feature = "async-runtime")]
-pub use async_util::sleep;
-
-pub use net_name::NetworkName;
-pub use parse::{decode_base10, encode_base10};
-pub use path::{expand_path, join_config_path, load_keypair_to_str};
-
-pub use clock::{Clock, Ticks};
+// =======================
+// TODO: Why is this here?
+// =======================
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-pub use time::{check_clock, ntp_request, unix_timestamp, NanoTimestamp, Timestamp};
 pub fn gen_id(len: usize) -> String {
     thread_rng().sample_iter(&Alphanumeric).take(len).map(char::from).collect()
 }
+// ======================

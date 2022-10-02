@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 borsh = "0.9.3"
 drk-sdk = { path = "../../src/sdk" }
+darkfi = { path = "../../", features = ["serial"]}
 
 [dependencies.pasta_curves]
 git = "https://github.com/darkrenaissance/pasta_curves"
@@ -19,6 +20,7 @@ features = ["borsh"]
 
 [dev-dependencies]
 darkfi = { path = "../../", features = ["wasm-runtime"] }
+simplelog = "0.12.0"
 
 [profile.release]
 lto = true

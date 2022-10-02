@@ -3,7 +3,7 @@ use async_std::sync::{Arc, Mutex};
 use chrono::Utc;
 use log::{debug, error};
 
-use crate::{net, util, Result};
+use crate::{net, util::async_util, Result};
 
 mod consensus;
 mod consensus_candidate;
@@ -26,7 +26,7 @@ async fn prune_map<T: Clone + Eq + std::hash::Hash>(
     seen_duration: i64,
 ) {
     loop {
-        util::sleep(seen_duration as u64).await;
+        async_util::sleep(seen_duration as u64).await;
         debug!(target: "raft", "Pruning item in map");
 
         let now = Utc::now().timestamp();

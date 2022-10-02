@@ -4,7 +4,7 @@ use log::debug;
 use sled::Batch;
 
 use crate::{
-    util::serial::{deserialize, serialize, Decodable, Encodable},
+    serial::{deserialize, serialize, Decodable, Encodable},
     Error, Result,
 };
 

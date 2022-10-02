@@ -27,6 +27,7 @@ use darkfi::{
     net::P2pPtr,
     node::Client,
     rpc::{
+        clock_sync::check_clock,
         jsonrpc::{
             ErrorCode::{InvalidParams, MethodNotFound},
             JsonError, JsonRequest, JsonResult,
@@ -35,9 +36,7 @@ use darkfi::{
     },
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
-        path::get_config_path,
-        time::check_clock,
+        path::{expand_path, get_config_path},
     },
     wallet::walletdb::init_wallet,
     Error, Result,
@@ -142,6 +141,10 @@ struct Args {
     localnet: bool,
 
     #[structopt(long)]
+    /// Enable channel log
+    channel_log: bool,
+
+    #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
     cashier_pub: Vec<String>,
 
@@ -172,6 +175,9 @@ mod rpc_misc;
 mod rpc_tx;
 mod rpc_wallet;
 
+// Internal methods
+mod internal;
+
 #[async_trait]
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
@@ -182,22 +188,52 @@ impl RequestHandler for Darkfid {
         let params = req.params.as_array().unwrap();
 
         match req.method.as_str() {
-            Some("ping") => return self.pong(req.id, params).await,
-            Some("clock") => return self.clock(req.id, params).await,
-            Some("blockchain.get_slot") => return self.get_slot(req.id, params).await,
-            Some("blockchain.merkle_roots") => return self.merkle_roots(req.id, params).await,
-            Some("tx.transfer") => return self.transfer(req.id, params).await,
-            Some("wallet.keygen") => return self.keygen(req.id, params).await,
-            Some("wallet.get_addrs") => return self.get_addrs(req.id, params).await,
-            Some("wallet.export_keypair") => return self.export_keypair(req.id, params).await,
-            Some("wallet.import_keypair") => return self.import_keypair(req.id, params).await,
-            Some("wallet.set_default_address") => {
-                return self.set_default_address(req.id, params).await
+            // =====================
+            // Miscellaneous methods
+            // =====================
+            Some("ping") => return self.misc_pong(req.id, params).await,
+            Some("clock") => return self.misc_clock(req.id, params).await,
+
+            // ==================
+            // Blockchain methods
+            // ==================
+            Some("blockchain.get_slot") => return self.blockchain_get_slot(req.id, params).await,
+            Some("blockchain.merkle_roots") => {
+                return self.blockchain_merkle_roots(req.id, params).await
             }
-            Some("wallet.get_balances") => return self.get_balances(req.id, params).await,
-            Some("wallet.get_coins_valtok") => return self.get_coins_valtok(req.id, params).await,
-            Some("wallet.get_merkle_path") => return self.get_merkle_path(req.id, params).await,
-            Some("wallet.decrypt_note") => return self.decrypt_note(req.id, params).await,
+
+            // ===================
+            // Transaction methods
+            // ===================
+            Some("tx.transfer") => return self.tx_transfer(req.id, params).await,
+            Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
+
+            // ==============
+            // Wallet methods
+            // ==============
+            Some("wallet.keygen") => return self.wallet_keygen(req.id, params).await,
+            Some("wallet.get_addrs") => return self.wallet_get_addrs(req.id, params).await,
+            Some("wallet.export_keypair") => {
+                return self.wallet_export_keypair(req.id, params).await
+            }
+            Some("wallet.import_keypair") => {
+                return self.wallet_import_keypair(req.id, params).await
+            }
+            Some("wallet.set_default_address") => {
+                return self.wallet_set_default_address(req.id, params).await
+            }
+            Some("wallet.get_balances") => return self.wallet_get_balances(req.id, params).await,
+            Some("wallet.get_coins_valtok") => {
+                return self.wallet_get_coins_valtok(req.id, params).await
+            }
+            Some("wallet.get_merkle_path") => {
+                return self.wallet_get_merkle_path(req.id, params).await
+            }
+            Some("wallet.decrypt_note") => return self.wallet_decrypt_note(req.id, params).await,
+
+            // ==============
+            // Invalid method
+            // ==============
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
@@ -239,7 +275,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
         // We verify that the system clock is valid before initializing
         let peers = [&args.consensus_peer_rpc[..], &args.consensus_seed_rpc[..]].concat();
-        if (check_clock(peers).await).is_err() {
+        if (check_clock(&peers).await).is_err() {
             error!("System clock is invalid, terminating...");
             return Err(Error::InvalidClock)
         };
@@ -312,6 +348,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             seeds: args.sync_p2p_seed.clone(),
             outbound_transports: net::settings::get_outbound_transports(args.sync_p2p_transports),
             localnet: args.localnet,
+            channel_log: args.channel_log,
             ..Default::default()
         };
 
@@ -357,6 +394,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
                     args.consensus_p2p_transports,
                 ),
                 localnet: args.localnet,
+                channel_log: args.channel_log,
                 ..Default::default()
             };
             let p2p = net::P2p::new(consensus_network_settings).await;

@@ -1,4 +1,4 @@
-use pasta_curves::group::ff::Field;
+use group::ff::Field;
 use rand::rngs::OsRng;
 
 use super::{
@@ -19,7 +19,7 @@ use crate::{
             DrkValueBlind,
         },
     },
-    util::serial::Encodable,
+    serial::Encodable,
     Result,
 };
 

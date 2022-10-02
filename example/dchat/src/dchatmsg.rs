@@ -2,7 +2,7 @@ use async_std::sync::{Arc, Mutex};
 
 use darkfi::{
     net,
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
 };
 
 pub type DchatMsgsBuffer = Arc<Mutex<Vec<DchatMsg>>>;

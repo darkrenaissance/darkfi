@@ -1,0 +1,37 @@
+## fud configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+# Path to the contents directory
+folder = "fud0"
+
+# JSON-RPC listen URL
+rpc_listen = "tls://127.0.0.1:13338"
+
+# P2P accept address
+p2p_accept = ["tls://127.0.0.1:13339"]
+
+# P2P external address
+p2p_external = ["tls://127.0.0.1:13339"]
+
+# Connection slots
+#slots = 8
+
+# Seed nodes to connect to
+seeds = ["tcp://127.0.0.1:13337"]
+
+# Peers to connect to
+#peers = []
+
+# Prefered transports for outbound connections
+#transports = ["tls", "tcp"]
+
+# Enable localnet hosts
+localnet = true
+
+# Enable channel log
+channel_log = true

@@ -1,5 +1,4 @@
 # Node B
-
 rpc_listen = "tcp://127.0.0.1:25551"
 irc_listen = "tcp://127.0.0.1:25571"
 
@@ -9,6 +8,8 @@ inbound = ["tls://127.0.0.1:25561"]
 external_addr = ["tls://127.0.0.1:25561"]
 seeds = []
 peers = ["tls://127.0.0.1:25560"]
+localnet = true
+channel_log = true
 
 [channel."#encrypted"]
 topic ="Encrypted channel"

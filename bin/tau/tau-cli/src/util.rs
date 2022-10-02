@@ -8,7 +8,7 @@ use std::{
 use chrono::{Datelike, Local, NaiveDate};
 use log::error;
 
-use darkfi::{util::Timestamp, Result};
+use darkfi::{util::time::Timestamp, Result};
 
 /// Parse due date (e.g. "1503" for 15 March) as i64 timestamp.
 pub fn due_as_timestamp(due: &str) -> Option<i64> {

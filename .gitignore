@@ -1,4 +1,5 @@
 *.pyc
+*.pickle
 *.sage.py
 *.zk.bin
 *_circuit_layout.png
@@ -17,6 +18,8 @@
 /dnetview
 /drk
 /faucetd
+/fu
+/fud
 /ircd
 /tau
 /taud
@@ -25,3 +28,4 @@
 /lilith
 /darkwiki
 /darkwikid
+TAGS

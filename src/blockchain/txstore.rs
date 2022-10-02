@@ -1,6 +1,6 @@
 use crate::{
+    serial::{deserialize, serialize},
     tx::Transaction,
-    util::serial::{deserialize, serialize},
     Error, Result,
 };
 

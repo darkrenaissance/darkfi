@@ -16,6 +16,8 @@ pub enum TaudError {
     SerdeJsonError(String),
     #[error("Encryption error: `{0}`")]
     EncryptionError(String),
+    #[error("IO Error: `{0}`")]
+    IoError(String),
 }
 
 pub type TaudResult<T> = std::result::Result<T, TaudError>;
@@ -29,6 +31,12 @@ impl From<serde_json::Error> for TaudError {
 impl From<crypto_box::aead::Error> for TaudError {
     fn from(err: crypto_box::aead::Error) -> TaudError {
         TaudError::EncryptionError(err.to_string())
+    }
+}
+
+impl From<std::io::Error> for TaudError {
+    fn from(err: std::io::Error) -> TaudError {
+        TaudError::IoError(err.to_string())
     }
 }
 
@@ -49,6 +57,9 @@ pub fn to_json_result(res: TaudResult<Value>, id: Value) -> JsonResult {
                 JsonError::new(ErrorCode::InternalError, Some(e), id).into()
             }
             TaudError::Darkfi(e) => {
+                JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
+            }
+            TaudError::IoError(e) => {
                 JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
             }
         },

@@ -34,7 +34,7 @@ pub trait TransportListener: Send + Sync + Unpin {
     async fn next(&self) -> Result<(Box<dyn TransportStream>, Url)>;
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransportName {
     Tcp(Option<String>),
     Tor(Option<String>),

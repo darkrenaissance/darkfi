@@ -22,9 +22,8 @@ use darkfi::{
     },
     util::{
         cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
         file::{load_file, save_file},
-        path::get_config_path,
+        path::{expand_path, get_config_path},
     },
     Result,
 };
@@ -150,6 +149,7 @@ async fn spawn_network(
         peers: info.peers,
         outbound_connections: 0,
         localnet: info.localnet,
+        channel_log: info.channel_log,
         app_version: None,
         ..Default::default()
     };

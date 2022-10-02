@@ -1,4 +1,6 @@
-use ::darkfi::{blockchain::EpochConsensus, net::Settings, stakeholder::Stakeholder};
+use ::darkfi::{
+    blockchain::EpochConsensus, net::Settings, stakeholder::Stakeholder, util::time::Timestamp,
+};
 
 use clap::Parser;
 use futures::executor::block_on;
@@ -8,24 +10,29 @@ use vec;
 
 #[derive(Parser)]
 struct NetCli {
+    #[clap(long, value_parser, default_value = "tls://127.0.0.1:12003")]
     addr: String,
+    #[clap(long, value_parser, default_value = "/tmp/db")]
     path: String,
+    #[clap(long, value_parser, default_value = "tls://127.0.0.1:12004")]
     peers: Vec<String>,
+    #[clap(long, value_parser, default_value = "tls://lilith.dark.fi:25551")]
+    seeds: Vec<String>,
 }
 
 #[async_std::main]
 async fn main() {
+    let _ = env_logger::init();
     let args = NetCli::parse();
     let addr = vec![Url::parse(args.addr.as_str()).unwrap()];
     let mut peers = vec![];
     for i in 0..args.peers.len() {
         peers.push(Url::parse(args.peers[i].as_str()).unwrap());
     }
-    let seeds = [
-        Url::parse("tls://irc0.dark.fi:11001").unwrap(),
-        Url::parse("tls://irc1.dark.fi:11001").unwrap(),
-    ]
-    .to_vec();
+    let mut seeds = vec![];
+    for i in 0..args.seeds.len() {
+        seeds.push(Url::parse(args.seeds[i].as_str()).unwrap());
+    }
     let slots = 3;
     let epochs = 3;
     let ticks = 10;
@@ -47,26 +54,15 @@ async fn main() {
     };
     //proof's number of rows
     let k: u32 = 13;
-    let mut handles = vec![];
     let path = args.path;
-    for i in 0..2 {
-        let rel_path = format!("{}{}", path, i.to_string());
+    let id = Timestamp::current_time().0;
 
-        let mut stakeholder = block_on(Stakeholder::new(
-            epoch_consensus.clone(),
-            settings.clone(),
-            &rel_path,
-            i,
-            Some(k),
-        ))
-        .unwrap();
+    let mut stakeholder =
+        block_on(Stakeholder::new(epoch_consensus.clone(), settings.clone(), &path, id, Some(k)))
+            .unwrap();
 
-        let handle = thread::spawn(move || {
-            block_on(stakeholder.background(Some(9)));
-        });
-        handles.push(handle);
-    }
-    for handle in handles {
-        handle.join().unwrap();
-    }
+    let handle = thread::spawn(move || {
+        block_on(stakeholder.background(Some(9)));
+    });
+    handle.join().unwrap();
 }

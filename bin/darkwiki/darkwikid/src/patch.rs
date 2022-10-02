@@ -3,9 +3,9 @@ use std::{cmp::Ordering, io};
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
-use darkfi::util::{
+use darkfi::{
     serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Timestamp,
+    util::time::Timestamp,
 };
 
 use crate::str_to_chars;
@@ -407,7 +407,7 @@ impl Patch {
 }
 
 impl Decodable for OpMethod {
-    fn decode<D: io::Read>(mut d: D) -> darkfi::Result<Self> {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
         let com: u8 = Decodable::decode(&mut d)?;
         match com {
             0 => {
@@ -422,13 +422,13 @@ impl Decodable for OpMethod {
                 let i: u64 = Decodable::decode(&mut d)?;
                 Ok(Self::Retain(i))
             }
-            _ => Err(darkfi::Error::ParseFailed("Parse OpMethod failed")),
+            _ => Err(io::Error::new(io::ErrorKind::Other, "Parse OpMethod failed")),
         }
     }
 }
 
 impl Encodable for OpMethod {
-    fn encode<S: io::Write>(&self, mut s: S) -> darkfi::Result<usize> {
+    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
         let len: usize = match self {
             Self::Delete(i) => (0_u8).encode(&mut s)? + i.encode(&mut s)?,
             Self::Insert(t) => (1_u8).encode(&mut s)? + t.encode(&mut s)?,
@@ -439,7 +439,7 @@ impl Encodable for OpMethod {
 }
 
 impl Encodable for OpMethods {
-    fn encode<S: io::Write>(&self, mut s: S) -> darkfi::Result<usize> {
+    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
         let mut len = 0;
         len += VarInt(self.0.len() as u64).encode(&mut s)?;
         for c in self.0.iter() {
@@ -450,7 +450,7 @@ impl Encodable for OpMethods {
 }
 
 impl Decodable for OpMethods {
-    fn decode<D: io::Read>(mut d: D) -> darkfi::Result<Self> {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = Vec::with_capacity(len as usize);
         for _ in 0..len {
@@ -463,9 +463,9 @@ impl Decodable for OpMethods {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi::util::{
-        gen_id,
+    use darkfi::{
         serial::{deserialize, serialize},
+        util::gen_id,
     };
 
     #[test]

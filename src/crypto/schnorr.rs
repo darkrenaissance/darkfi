@@ -1,5 +1,3 @@
-use std::io;
-
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
     group::{ff::Field, Group, GroupEncoding},
@@ -13,11 +11,10 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         util::{hash_to_scalar, mod_r_p},
     },
-    util::serial::{Decodable, Encodable},
-    Result,
+    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Signature {
     commit: pallas::Point,
     response: pallas::Scalar,
@@ -56,24 +53,9 @@ impl SchnorrPublic for PublicKey {
     }
 }
 
-impl Encodable for Signature {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        let mut len = 0;
-        len += self.commit.encode(&mut s)?;
-        len += self.response.encode(s)?;
-        Ok(len)
-    }
-}
-
-impl Decodable for Signature {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        Ok(Self { commit: Decodable::decode(&mut d)?, response: Decodable::decode(d)? })
-    }
-}
-
 #[cfg(feature = "serde")]
 impl serde::Serialize for Signature {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -91,11 +73,11 @@ struct SignatureVisitor;
 impl<'de> serde::de::Visitor<'de> for SignatureVisitor {
     type Value = Signature;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("hex string")
     }
 
-    fn visit_str<E>(self, value: &str) -> std::result::Result<Signature, E>
+    fn visit_str<E>(self, value: &str) -> core::result::Result<Signature, E>
     where
         E: serde::de::Error,
     {
@@ -108,7 +90,7 @@ impl<'de> serde::de::Visitor<'de> for SignatureVisitor {
 
 #[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for Signature {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Signature, D::Error>
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Signature, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -120,6 +102,7 @@ impl<'de> serde::Deserialize<'de> for Signature {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::serial::{deserialize, serialize};
 
     #[test]
     fn test_schnorr() {
@@ -128,5 +111,9 @@ mod tests {
         let signature = secret.sign(&message[..]);
         let public = PublicKey::from_secret(secret);
         assert!(public.verify(&message[..], &signature));
+
+        let ser = serialize(&signature);
+        let de = deserialize(&ser).unwrap();
+        assert!(public.verify(&message[..], &de));
     }
 }

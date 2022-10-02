@@ -141,10 +141,6 @@ pub enum Error {
     #[error("tungstenite error: {0}")]
     TungsteniteError(String),
 
-    #[cfg(feature = "async-native-tls")]
-    #[error("async_native_tls error: {0}")]
-    AsyncNativeTlsError(String),
-
     #[error("Tor error: {0}")]
     TorError(String),
 
@@ -182,6 +178,10 @@ pub enum Error {
     #[cfg(feature = "futures-rustls")]
     #[error(transparent)]
     RustlsError(#[from] futures_rustls::rustls::Error),
+
+    #[cfg(feature = "futures-rustls")]
+    #[error("Invalid DNS Name {0}")]
+    RustlsInvalidDns(String),
 
     // =======================
     // Protocol-related errors
@@ -369,6 +369,9 @@ pub enum VerifyFailed {
 /// Client module errors
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ClientFailed {
+    #[error("IO error: {0}")]
+    Io(std::io::ErrorKind),
+
     #[error("Not enough value: {0}")]
     NotEnoughValue(u64),
 
@@ -400,6 +403,12 @@ impl From<Error> for ClientFailed {
 impl From<VerifyFailed> for ClientFailed {
     fn from(err: VerifyFailed) -> Self {
         Self::VerifyError(err.to_string())
+    }
+}
+
+impl From<std::io::Error> for ClientFailed {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err.kind())
     }
 }
 
@@ -448,13 +457,6 @@ impl From<async_channel::RecvError> for Error {
     }
 }
 
-#[cfg(feature = "async-native-tls")]
-impl From<async_native_tls::Error> for Error {
-    fn from(err: async_native_tls::Error) -> Self {
-        Self::AsyncNativeTlsError(err.to_string())
-    }
-}
-
 impl From<log::SetLoggerError> for Error {
     fn from(err: log::SetLoggerError) -> Self {
         Self::SetLoggerError(err.to_string())
@@ -479,6 +481,13 @@ impl From<halo2_proofs::plonk::Error> for Error {
 impl From<tungstenite::Error> for Error {
     fn from(err: tungstenite::Error) -> Self {
         Self::TungsteniteError(err.to_string())
+    }
+}
+
+#[cfg(feature = "futures-rustls")]
+impl From<futures_rustls::rustls::client::InvalidDnsNameError> for Error {
+    fn from(err: futures_rustls::rustls::client::InvalidDnsNameError) -> Self {
+        Self::RustlsInvalidDns(err.to_string())
     }
 }
 

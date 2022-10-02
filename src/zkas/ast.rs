@@ -46,7 +46,7 @@ pub enum Arg {
     Func(Statement),
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum StatementType {
     Noop = 0x00,

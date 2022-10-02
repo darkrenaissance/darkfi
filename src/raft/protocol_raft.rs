@@ -7,7 +7,7 @@ use fxhash::FxHashMap;
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
 
-use crate::{net, util::serial::serialize, Result};
+use crate::{net, serial::serialize, Result};
 
 use super::primitives::{NetMsg, NetMsgMethod, NodeId, NodeIdMsg};
 

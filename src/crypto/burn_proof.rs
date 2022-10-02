@@ -20,7 +20,7 @@ use crate::{
         },
         util::poseidon_hash,
     },
-    util::serial::{SerialDecodable, SerialEncodable},
+    serial::{SerialDecodable, SerialEncodable},
     zk::circuit::burn_contract::BurnContract,
     Result,
 };

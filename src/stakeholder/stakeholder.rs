@@ -1,12 +1,14 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
-//use log::{debug,info};
+use log::{debug, error, info};
 use std::fmt;
+use halo2_proofs::arithmetic::Field;
 
 use rand::rngs::OsRng;
 use std::{thread, time::Duration};
 
-use crate::zk::circuit::LeadContract;
+use crate::zk::circuit::{LeadContract,BurnContract,MintContract};
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 
 use crate::{
     blockchain::{Blockchain, Epoch, EpochConsensus},
@@ -15,19 +17,27 @@ use crate::{
         TransactionLeadProof,
     },
     crypto::{
+        constants::MERKLE_DEPTH,
         address::Address,
-        keypair::Keypair,
+        keypair::{Keypair, PublicKey, SecretKey},
+        nullifier::Nullifier,
         leadcoin::LeadCoin,
         merkle_node::MerkleNode,
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
+        coin::OwnCoin,
+        note::{EncryptedNote, Note},
     },
-    net::{ChannelPtr, MessageSubscription, P2p, Settings, SettingsPtr},
-    system::Subscription,
+    node::state::{state_transition, ProgramState, StateUpdate},
+    tx::builder::{
+        TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
+        TransactionBuilderOutputInfo,
+    },
+    net::{MessageSubscription, P2p, Settings, SettingsPtr},
     tx::Transaction,
     util::{
         clock::{Clock, Ticks},
-        expand_path,
+        path::expand_path,
         time::Timestamp,
     },
     Result,
@@ -39,14 +49,16 @@ use pasta_curves::pallas;
 
 use group::ff::PrimeField;
 
+const LOG_T: &str = "stakeholder";
+const TREE_LEN: usize = 100;
+
 #[derive(Debug)]
 pub struct SlotWorkspace {
-    pub st: blake3::Hash,
+    pub st: blake3::Hash,      // hash of the previous block
     pub e: u64,                // epoch index
-    pub sl: u64,               // absolute slot index
+    pub sl: u64,               // relative slot index
     pub txs: Vec<Transaction>, // unpublished block transactions
-    pub root: MerkleNode,
-    /// merkle root of txs
+    pub root: MerkleNode, /// merkle root of txs
     pub m: StakeholderMetadata,
     pub om: OuroborosMetadata,
     pub is_leader: bool,
@@ -115,21 +127,125 @@ impl SlotWorkspace {
     pub fn set_leader(&mut self, alead: bool) {
         self.is_leader = alead;
     }
+
 }
+
+struct StakeholderState {
+    /// The entire Merkle tree state
+    tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    /// List of all previous and the current Merkle roots.
+    /// This is the hashed value of all the children.
+    merkle_roots: Vec<MerkleNode>,
+    /// Nullifiers prevent double spending
+    nullifiers: Vec<Nullifier>,
+    /// All received coins
+    // NOTE: We need maybe a flag to keep track of which ones are
+    // spent. Maybe the spend field links to a tx hash:input index.
+    // We should also keep track of the tx hash:output index where
+    // this coin was received.
+    own_coins: Vec<OwnCoin>,
+    /// Verifying key for the mint zk circuit.
+    mint_vk: VerifyingKey,
+    /// Verifying key for the burn zk circuit.
+    burn_vk: VerifyingKey,
+
+    /// Public key of the cashier
+    cashier_signature_public: PublicKey,
+
+    /// Public key of the faucet
+    faucet_signature_public: PublicKey,
+
+    /// List of all our secret keys
+    secrets: Vec<SecretKey>,
+}
+
+impl ProgramState for StakeholderState {
+    fn is_valid_cashier_public_key(&self, public: &PublicKey) -> bool {
+        public == &self.cashier_signature_public
+    }
+
+    fn is_valid_faucet_public_key(&self, public: &PublicKey) -> bool {
+        public == &self.faucet_signature_public
+    }
+
+    fn is_valid_merkle(&self, merkle_root: &MerkleNode) -> bool {
+        self.merkle_roots.iter().any(|m| m == merkle_root)
+    }
+
+    fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
+        self.nullifiers.iter().any(|n| n == nullifier)
+    }
+
+    fn mint_vk(&self) -> &VerifyingKey {
+        &self.mint_vk
+    }
+
+    fn burn_vk(&self) -> &VerifyingKey {
+        &self.burn_vk
+    }
+}
+
+impl StakeholderState {
+    fn apply(&mut self, mut update: StateUpdate) {
+        // Extend our list of nullifiers with the ones from the update
+        self.nullifiers.append(&mut update.nullifiers);
+
+        // Update merkle tree and witnesses
+        for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
+            // Add the new coins to the Merkle tree
+            let node = MerkleNode(coin.0);
+            self.tree.append(&node);
+
+            // Keep track of all Merkle roots that have existed
+            self.merkle_roots.push(self.tree.root(0).unwrap());
+
+            // If it's our own coin, witness it and append to the vector.
+            if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
+                let leaf_position = self.tree.witness().unwrap();
+                let nullifier = Nullifier::new(secret, note.serial);
+                let own_coin = OwnCoin { coin, note, secret, nullifier, leaf_position };
+                self.own_coins.push(own_coin);
+            }
+        }
+    }
+
+    fn try_decrypt_note(&self, ciphertext: EncryptedNote) -> Option<(Note, SecretKey)> {
+        // Loop through all our secret keys...
+        for secret in &self.secrets {
+            // .. attempt to decrypt the note ...
+            if let Ok(note) = ciphertext.decrypt(secret) {
+                // ... and return the decrypted note for this coin.
+                return Some((note, *secret))
+            }
+        }
+
+        // We weren't able to decrypt the note with any of our keys.
+        None
+    }
+}
+
 
 pub struct Stakeholder {
     pub blockchain: Blockchain, // stakeholder view of the blockchain
     pub net: Arc<P2p>,
     pub clock: Clock,
-    pub coins: Vec<LeadCoin>,            // owned stakes
+    pub ownedcoins: Vec<OwnCoin>,        // owned stakes
     pub epoch: Epoch,                    // current epoch
     pub epoch_consensus: EpochConsensus, // configuration for the epoch
-    pub pk: ProvingKey,
-    pub vk: VerifyingKey,
+    pub lead_pk: ProvingKey,
+    pub mint_pk: ProvingKey,
+    pub burn_pk: ProvingKey,
+    pub lead_vk: VerifyingKey,
+    pub mint_vk: VerifyingKey,
+    pub burn_vk: VerifyingKey,
     pub playing: bool,
     pub workspace: SlotWorkspace,
-    pub id: u8,
+    pub id: i64,
     pub keypair: Keypair,
+    pub cashier_signature_public : PublicKey,
+    pub faucet_signature_public : PublicKey,
+    pub cashier_signature_secret : SecretKey,
+    pub faucet_signature_secret : SecretKey,
     //pub subscription: Subscription<Result<ChannelPtr>>,
     //pub chanptr : ChannelPtr,
     //pub msgsub : MessageSubscription::<BlockInfo>,
@@ -140,55 +256,60 @@ impl Stakeholder {
         consensus: EpochConsensus,
         settings: Settings,
         rel_path: &str,
-        id: u8,
+        id: i64,
         k: Option<u32>,
     ) -> Result<Self> {
-        let path = expand_path(&rel_path).unwrap();
-        println!("opening db");
+        let path = expand_path(rel_path).unwrap();
         let db = sled::open(&path)?;
-        println!("opend db");
         let ts = Timestamp::current_time();
         let genesis_hash = blake3::hash(b"");
-        //TODO lisen and add transactions
-
         let bc = Blockchain::new(&db, ts, genesis_hash).unwrap();
-
-        //TODO replace with const
         let eta = pallas::Base::one();
         let epoch = Epoch::new(consensus, eta);
 
         let lead_pk = ProvingKey::build(k.unwrap(), &LeadContract::default());
+        let mint_pk = ProvingKey::build(k.unwrap(), &MintContract::default());
+        let burn_pk = ProvingKey::build(k.unwrap(), &BurnContract::default());
         let lead_vk = VerifyingKey::build(k.unwrap(), &LeadContract::default());
+        let mint_vk = VerifyingKey::build(k.unwrap(), &MintContract::default());
+        let burn_vk = VerifyingKey::build(k.unwrap(), &BurnContract::default());
         let p2p = P2p::new(settings.clone()).await;
-
-        //TODO
         let workspace = SlotWorkspace::default();
-
-        //
         let clock = Clock::new(
             Some(consensus.get_epoch_len()),
             Some(consensus.get_slot_len()),
             Some(consensus.get_tick_len()),
             settings.peers,
         );
+        let cashier_signature_secret = SecretKey::random(&mut OsRng);
+        let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
+
+        let faucet_signature_secret = SecretKey::random(&mut OsRng);
+        let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
+
         let keypair = Keypair::random(&mut OsRng);
-        println!("stakeholder constructed...");
-        Ok(Self {
+        debug!(target: LOG_T, "stakeholder constructed");
+        Ok( Self {
             blockchain: bc,
             net: p2p,
             clock,
-            coins: vec![], //constructed with empty coins for sake of simulation only
-            // but should be populated from wallet db.
+            ownedcoins: vec![], //TODO should be read from wallet db.
             epoch,
             epoch_consensus: consensus,
-            pk: lead_pk,
-            vk: lead_vk,
+            lead_pk: lead_pk,
+            mint_pk: mint_pk,
+            burn_pk: burn_pk,
+            lead_vk: lead_vk,
+            mint_vk: mint_vk,
+            burn_vk: burn_vk,
             playing: true,
             workspace,
             id,
-            keypair, //subscription: subscription,
-                     //chanptr: chanptr,
-                     //msgsub: msg_sub,
+            keypair,
+            cashier_signature_public,
+            faucet_signature_public,
+            cashier_signature_secret,
+            faucet_signature_secret,
         })
     }
 
@@ -202,12 +323,28 @@ impl Stakeholder {
         self.keypair.public.verify(message, signature)
     }
 
-    pub fn get_provkingkey(&self) -> ProvingKey {
-        self.pk.clone()
+    pub fn get_leadprovkingkey(&self) -> ProvingKey {
+        self.lead_pk.clone()
     }
 
-    pub fn get_verifyingkey(&self) -> VerifyingKey {
-        self.vk.clone()
+    pub fn get_mintprovkingkey(&self) -> ProvingKey {
+        self.mint_pk.clone()
+    }
+
+    pub fn get_burnprovkingkey(&self) -> ProvingKey {
+        self.burn_pk.clone()
+    }
+
+    pub fn get_leadverifyingkey(&self) -> VerifyingKey {
+        self.lead_vk.clone()
+    }
+
+    pub fn get_mintverifyingkey(&self) -> VerifyingKey {
+        self.mint_vk.clone()
+    }
+
+    pub fn get_burnverifyingkey(&self) -> VerifyingKey {
+        self.burn_vk.clone()
     }
 
     /// get list stakeholder peers on the p2p network for synchronization
@@ -225,11 +362,11 @@ impl Stakeholder {
     */
 
     async fn init_network(&self) -> Result<()> {
-        println!("runing p2p net");
         let exec = Arc::new(Executor::new());
         self.net.clone().start(exec.clone()).await?;
-        self.net.clone().run(exec).await?;
-        println!("p2p net running...");
+        //TODO (fix) await blocks
+        self.net.clone().run(exec);
+        info!(target: LOG_T, "net initialized");
         Ok(())
     }
 
@@ -276,31 +413,24 @@ impl Stakeholder {
     /// validate the block proof, and the transactions,
     /// if so add the proof to metadata if stakeholder isn't the lead.
     pub async fn sync_block(&self) {
-        let subscription: Subscription<Result<ChannelPtr>> = self.net.subscribe_channel().await;
-        println!("--> channel");
-        let chanptr: ChannelPtr = subscription.receive().await.unwrap();
-        println!("--> received channel");
-        //
-        let message_subsytem = chanptr.get_message_subsystem();
-        println!("--> adding dispatcher to msg subsystem");
-        message_subsytem.add_dispatch::<BlockInfo>().await;
-        println!("--> added");
-        //TODO start channel if isn't started yet
-        //let info = chanptr.get_info();
-        //println!("channel info: {}", info);
-        println!("--> subscribe msg_sub");
-        let msg_sub: MessageSubscription<BlockInfo> =
-            chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
-        println!("--> subscribed");
+        info!(target: LOG_T, "syncing blocks");
+        for chanptr in self.net.channels().lock().await.values() {
+            let message_subsytem = chanptr.get_message_subsystem();
+            message_subsytem.add_dispatch::<BlockInfo>().await;
+            //TODO start channel if isn't started yet
+            //let info = chanptr.get_info();
+            let msg_sub: MessageSubscription<BlockInfo> =
+                chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
 
-        let res = msg_sub.receive().await.unwrap();
-        let blk: BlockInfo = (*res).to_owned();
-        //TODO validate the block proof, and transactions.
-        if self.valid_block(blk.clone()) {
-            //TODO if valid only.
-            let _len = self.blockchain.add(&[blk.clone()]);
-        } else {
-            println!("received block is invalid!");
+            let res = msg_sub.receive().await.unwrap();
+            let blk: BlockInfo = (*res).to_owned();
+            //TODO validate the block proof, and transactions.
+            if self.valid_block(blk.clone()) {
+                //TODO if valid only.
+                let _len = self.blockchain.add(&[blk]);
+            } else {
+                error!(target: LOG_T, "received block is invalid!");
+            }
         }
     }
 
@@ -328,12 +458,12 @@ impl Stakeholder {
                 }
                 Ticks::NEWSLOT { e, sl } => self.new_slot(e, sl),
                 Ticks::TOCKS => {
-                    println!("tocks");
+                    info!(target: LOG_T, "tocks");
                     // slot is about to end.
                     // sync, and validate.
                     // no more transactions to be received/send to the end of slot.
                     if self.workspace.is_leader {
-                        println!("<<<--- [[[leadership won]]] --->>>");
+                        info!(target: LOG_T, "[leadership won]");
                         //craete block
                         let (block_info, _block_hash) = self.workspace.new_block();
                         //add the block to the blockchain
@@ -349,7 +479,7 @@ impl Stakeholder {
                 }
                 Ticks::IDLE => continue,
                 Ticks::OUTOFSYNC => {
-                    println!("out of sync");
+                    error!(target: LOG_T, "clock/blockchain are out of sync");
                     // clock, and blockchain are out of sync
                     let _ = self.clock.sync().await;
                     self.sync_block().await;
@@ -360,26 +490,24 @@ impl Stakeholder {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        format!("stakeholder with id:{}", self.id.to_string())
-    }
     /// on the onset of the epoch, layout the new the competing coins
     /// assuming static stake during the epoch, enforced by the commitment to competing coins
     /// in the epoch's gen2esis data.
     fn new_epoch(&mut self) {
-        println!("[new epoch] 4 {}", self);
+        info!(target: LOG_T, "[new epoch] {}", self);
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, eta);
-        //TODO calculate total stake
-        // create coin with absolute slot/epoch.
+        // total stake
         let num_slots = self.workspace.sl;
-        // total stake;
+        let epochs = self.workspace.e;
+        let epoch_len = self.epoch_consensus.get_epoch_len();
         // TODO sigma scalar for tunning target function
         // it's value is dependent on the tekonomics,
         // set to one untill then.
         let reward = pallas::Base::one();
+        let num_slots = num_slots + epochs * epoch_len;
         let sigma: pallas::Base = pallas::Base::from(num_slots) * reward;
-        epoch.create_coins(sigma); // set epoch interal fields working space with competing coins
+        epoch.create_coins(sigma, self.ownedcoins.clone()); // set epoch interal fields working space with competing coins
         self.epoch = epoch.clone();
     }
 
@@ -389,33 +517,82 @@ impl Stakeholder {
     /// commiting it's coins, to maximize success, thus,
     /// the lottery proof need to be conditioned on the slot itself, and previous proof.
     /// this will encourage each potential leader to play with honesty.
+    /// TODO this is fixed by commiting to the stakers at epoch genesis slot
+    /// * `e` - epoch index
+    /// * `sl` - slot relative index
     fn new_slot(&mut self, e: u64, sl: u64) {
-        println!("[new slot] 4 {}\ne:{}, sl:{}", self, e, sl);
-        let empty_ptr = blake3::hash(b"");
-        let st: blake3::Hash =
-            if e > 0 || (e == 0 && sl > 0) { self.workspace.block.blockhash() } else { empty_ptr };
-        let is_leader: bool = self.epoch.is_leader(sl);
-        // if is leader create proof
-        let proof =
-            if is_leader { self.epoch.get_proof(sl, &self.pk.clone()) } else { Proof::new(vec![]) };
+        info!(target: LOG_T, "[new slot] {}, e:{}, rel sl:{}", self, e, sl);
+        let st: blake3::Hash = if e > 0 || (e == 0 && sl > 0) {
+            self.workspace.block.blockhash()
+        } else {
+            blake3::hash(b"")
+        };
         // set workspace
         self.workspace.set_sl(sl);
         self.workspace.set_e(e);
         self.workspace.set_st(st);
-        self.workspace.set_leader(is_leader);
+        let mut winning_coin_idx :  usize = 0;
+        let won = self.epoch.is_leader(sl, &mut winning_coin_idx);
+        let proof = if won {
+            self.epoch.get_proof(sl, winning_coin_idx,  &self.get_leadprovkingkey())
+        } else {
+            Proof::new(vec![])
+        };
+        self.workspace.set_leader(won);
         self.workspace.set_proof(proof.clone());
+
+        let addr = Address::from(self.keypair.public);
+        let sign = self.sign(proof.as_ref());
+        let stakeholder_meta = StakeholderMetadata::new(sign, addr);
+        let ouroboros_meta =
+            OuroborosMetadata::new(self.get_eta().to_repr(), TransactionLeadProof::from(proof));
+        self.workspace.set_stakeholdermetadata(stakeholder_meta);
+        self.workspace.set_ouroborosmetadata(ouroboros_meta);
         //
-        if is_leader {
-            let addr = Address::from(self.keypair.public);
-            let sign = self.sign(proof.as_ref());
-            let stakeholder_meta = StakeholderMetadata::new(sign, addr);
-            let ouroboros_meta = OuroborosMetadata::new(
-                self.get_eta().to_repr(),
-                TransactionLeadProof::from(proof.clone()),
-            );
-            self.workspace.set_stakeholdermetadata(stakeholder_meta);
-            self.workspace.set_ouroborosmetadata(ouroboros_meta);
+        if won {
+            //TODO (res) verify the coin is finalized
+            // could be finalized in later slot accord to the finalization policy that is WIP.
+            let owned_coin = self.finalize_coin(&self.epoch.get_coin(sl as usize, winning_coin_idx as usize));
+            self.ownedcoins.push(owned_coin);
         }
+    }
+
+    //TODO (res) validate the owncoin is the same winning leadcoin
+    pub fn finalize_coin (&self, coin : &LeadCoin) -> OwnCoin {
+
+        let mut state = StakeholderState {
+            tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(TREE_LEN),
+            merkle_roots: vec![],
+            nullifiers: vec![],
+            own_coins: vec![],
+            mint_vk: self.mint_vk.clone(),
+            burn_vk: self.burn_vk.clone(),
+            cashier_signature_public: self.cashier_signature_public.clone(),
+            faucet_signature_public: self.faucet_signature_public.clone(),
+            secrets: vec![self.keypair.secret],
+        };
+
+        let token_id = pallas::Base::random(&mut OsRng);
+        let builder = TransactionBuilder {
+            clear_inputs: vec![TransactionBuilderClearInputInfo {
+                value: coin.value.unwrap(),
+                token_id,
+                signature_secret: self.cashier_signature_secret,
+            }],
+            inputs: vec![],
+            outputs: vec![TransactionBuilderOutputInfo {
+                value: coin.value.unwrap(),
+                token_id,
+                public: self.keypair.public,
+            }],
+        };
+        let tx = builder.build(&self.mint_pk, &self.burn_pk).unwrap();
+
+        tx.verify(&state.mint_vk, &state.burn_vk);
+        let _note = tx.outputs[0].enc_note.decrypt(&self.keypair.secret).unwrap();
+        let update = state_transition(&state, tx).unwrap();
+        state.apply(update);
+        state.own_coins[0].clone()
     }
 }
 
