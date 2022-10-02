@@ -1,10 +1,9 @@
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 use crypto_box::{
     aead::{Aead, AeadCore},
     SalsaBox,
 };
-use fxhash::FxHashMap;
 use rand::rngs::OsRng;
 
 use crate::{
@@ -65,59 +64,51 @@ pub fn encrypt(salt_box: &SalsaBox, plaintext: &str) -> String {
 
 /// Decrypt PrivMsg target
 pub fn decrypt_target(
-    contact: &mut String,
     privmsg: &mut PrivMsgEvent,
-    configured_chans: FxHashMap<String, ChannelInfo>,
-    configured_contacts: FxHashMap<String, ContactInfo>,
+    configured_chans: &HashMap<String, ChannelInfo>,
+    configured_contacts: &HashMap<String, ContactInfo>,
+    private_key: &Option<String>,
 ) {
-    for chan_name in configured_chans.keys() {
-        let chan_info = configured_chans.get(chan_name).unwrap();
+    for (name, chan_info) in configured_chans {
         if !chan_info.joined {
             continue
         }
 
-        let salt_box = chan_info.salt_box.clone();
+        let salt_box = chan_info.salt_box(&name).clone();
 
         if let Some(salt_box) = salt_box {
-            let decrypted_target = try_decrypt(&salt_box, &privmsg.target);
-            if decrypted_target.is_none() {
-                continue
-            }
-
-            let target = decrypted_target.unwrap();
-            if *chan_name == target {
-                privmsg.target = target;
+            if let Some(_) = try_decrypt(&salt_box, &privmsg.target) {
+                privmsg.target = name.clone();
                 return
             }
         }
     }
 
-    for cnt_name in configured_contacts.keys() {
-        let cnt_info = configured_contacts.get(cnt_name).unwrap();
+    if private_key.is_none() {
+        return
+    }
 
-        let salt_box = cnt_info.salt_box.clone();
+    for (name, contact_info) in configured_contacts {
+        let salt_box = contact_info.salt_box(&private_key.as_ref().unwrap(), &name).clone();
+
         if let Some(salt_box) = salt_box {
-            let decrypted_target = try_decrypt(&salt_box, &privmsg.target);
-            if decrypted_target.is_none() {
-                continue
+            if let Some(_) = try_decrypt(&salt_box, &privmsg.target) {
+                privmsg.target = name.clone();
+                return
             }
-
-            let target = decrypted_target.unwrap();
-            privmsg.target = target;
-            *contact = cnt_name.into();
-            return
         }
     }
 }
 
 /// Decrypt PrivMsg nickname and message
 pub fn decrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut PrivMsgEvent) {
-    let decrypted_nick = try_decrypt(&salt_box.clone(), &privmsg.nick);
-    let decrypted_msg = try_decrypt(&salt_box.clone(), &privmsg.msg);
+    let decrypted_nick = try_decrypt(&salt_box, &privmsg.nick);
+    let decrypted_msg = try_decrypt(&salt_box, &privmsg.msg);
 
     if decrypted_nick.is_none() && decrypted_msg.is_none() {
         return
     }
+
     privmsg.nick = decrypted_nick.unwrap();
     privmsg.msg = decrypted_msg.unwrap();
 }

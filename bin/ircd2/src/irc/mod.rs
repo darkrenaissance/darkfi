@@ -1,24 +1,16 @@
 use async_std::{net::TcpListener, sync::Arc};
-use std::{fs::File, net::SocketAddr};
+use std::{collections::HashMap, fs::File, net::SocketAddr};
 
 use async_executor::Executor;
 use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
 use futures_rustls::{rustls, TlsAcceptor};
-use fxhash::FxHashMap;
 use log::{error, info};
 
-use darkfi::{
-    system::SubscriberPtr,
-    util::path::{expand_path, get_config_path},
-    Error, Result,
-};
+use darkfi::{system::SubscriberPtr, util::path::expand_path, Error, Result};
 
 use crate::{
     privmsg::PrivMsgEvent,
-    settings::{
-        parse_configured_channels, parse_configured_contacts, Args, ChannelInfo, ContactInfo,
-        CONFIG_FILE,
-    },
+    settings::{Args, ChannelInfo, ContactInfo},
 };
 
 mod client;
@@ -37,28 +29,28 @@ pub struct IrcConfig {
     // user config
     pub nickname: String,
     pub password: String,
-    pub capabilities: FxHashMap<String, bool>,
+    pub private_key: Option<String>,
+    pub capabilities: HashMap<String, bool>,
 
     // channels and contacts
     pub auto_channels: Vec<String>,
-    pub configured_chans: FxHashMap<String, ChannelInfo>,
-    pub configured_contacts: FxHashMap<String, ContactInfo>,
+    pub channels: HashMap<String, ChannelInfo>,
+    pub contacts: HashMap<String, ContactInfo>,
 }
 
 impl IrcConfig {
     pub fn new(settings: &Args) -> Result<Self> {
         let password = settings.password.as_ref().unwrap_or(&String::new()).clone();
+        let private_key = settings.private_key.clone();
 
         let auto_channels = settings.autojoin.clone();
 
-        // Pick up channel settings from the TOML configuration
-        let cfg_path = get_config_path(settings.config.clone(), CONFIG_FILE)?;
-        let toml_contents = std::fs::read_to_string(cfg_path)?;
-        let configured_chans = parse_configured_channels(&toml_contents)?;
-        let configured_contacts = parse_configured_contacts(&toml_contents)?;
+        let channels = settings.channels.clone();
+        let contacts = settings.contacts.clone();
 
-        let mut capabilities = FxHashMap::default();
+        let mut capabilities = HashMap::new();
         capabilities.insert("no-history".to_string(), false);
+
         Ok(Self {
             is_nick_init: false,
             is_user_init: false,
@@ -68,8 +60,9 @@ impl IrcConfig {
             nickname: "anon".to_string(),
             password,
             auto_channels,
-            configured_chans,
-            configured_contacts,
+            channels,
+            contacts,
+            private_key,
             capabilities,
         })
     }

@@ -51,8 +51,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
             futures::select! {
                 // Process msg from View
-                msg = self.subscription.receive().fuse() => {
-                    if let Err(e) = self.process_msg(&msg).await {
+                mut msg = self.subscription.receive().fuse() => {
+                    if let Err(e) = self.process_msg(&mut msg).await {
                         error!("[CLIENT {}] Process msg: {}",  self.address, e);
                         break
                     }
@@ -75,32 +75,29 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         self.subscription.unsubscribe().await;
     }
 
-    pub async fn process_msg(&mut self, msg: &PrivMsgEvent) -> Result<()> {
+    pub async fn process_msg(&mut self, msg: &mut PrivMsgEvent) -> Result<()> {
         info!("[CLIENT {}] msg from View: {:?}", self.address, msg.to_string());
 
-        let mut msg = msg.clone();
-        let mut contact = String::new();
-
         decrypt_target(
-            &mut contact,
-            &mut msg,
-            self.irc_config.configured_chans.clone(),
-            self.irc_config.configured_contacts.clone(),
+            msg,
+            &self.irc_config.channels,
+            &self.irc_config.contacts,
+            &self.irc_config.private_key,
         );
 
         if msg.target.starts_with('#') {
             // Try to potentially decrypt the incoming message.
-            if !self.irc_config.configured_chans.contains_key(&msg.target) {
+            if !self.irc_config.channels.contains_key(&msg.target) {
                 return Ok(())
             }
 
-            let chan_info = self.irc_config.configured_chans.get_mut(&msg.target).unwrap();
+            let chan_info = self.irc_config.channels.get_mut(&msg.target).unwrap();
             if !chan_info.joined {
                 return Ok(())
             }
 
-            if let Some(salt_box) = &chan_info.salt_box {
-                decrypt_privmsg(salt_box, &mut msg);
+            if let Some(salt_box) = &chan_info.salt_box(&msg.target) {
+                decrypt_privmsg(salt_box, msg);
                 info!(
                     "[CLIENT {}] Decrypted received message: {:?}",
                     self.address,
@@ -114,24 +111,25 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
 
             self.reply(&msg.to_string()).await?;
-        } else if self.irc_config.is_cap_end && self.irc_config.is_nick_init {
-            if !self.irc_config.configured_contacts.contains_key(&contact) {
-                return Ok(())
-            }
+        } else if self.irc_config.private_key.is_some() {
+            if let Some(contact_info) = self.irc_config.contacts.get(&msg.target) {
+                let salt_box = &contact_info
+                    .salt_box(&self.irc_config.private_key.as_ref().unwrap(), &msg.target);
 
-            let contact_info = self.irc_config.configured_contacts.get(&contact).unwrap();
-            if let Some(salt_box) = &contact_info.salt_box {
-                decrypt_privmsg(salt_box, &mut msg);
-                // This is for /query
-                msg.nick = contact;
+                if salt_box.is_none() {
+                    return Ok(())
+                }
+
+                decrypt_privmsg(salt_box.as_ref().unwrap(), msg);
+
                 info!(
                     "[CLIENT {}] Decrypted received message: {:?}",
                     self.address,
                     msg.to_string()
                 );
-            }
 
-            self.reply(&msg.to_string()).await?;
+                self.reply(&msg.to_string()).await?;
+            }
         }
 
         Ok(())
@@ -200,8 +198,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
             // join all channels
             self.on_receive_join(self.irc_config.auto_channels.clone()).await?;
-            self.on_receive_join(self.irc_config.configured_chans.keys().cloned().collect())
-                .await?;
+            self.on_receive_join(self.irc_config.channels.keys().cloned().collect()).await?;
 
             if *self.irc_config.capabilities.get("no-history").unwrap() {
                 return Ok(())
@@ -263,8 +260,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             let part_reply =
                 format!(":{}!anon@dark.fi PART {}\r\n", self.irc_config.nickname, chan);
             self.reply(&part_reply).await?;
-            if self.irc_config.configured_chans.contains_key(chan) {
-                let chan_info = self.irc_config.configured_chans.get_mut(chan).unwrap();
+            if self.irc_config.channels.contains_key(chan) {
+                let chan_info = self.irc_config.channels.get_mut(chan).unwrap();
                 chan_info.joined = false;
             }
         }
@@ -279,7 +276,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
 
             let topic = &line[substr_idx + 1..];
-            let chan_info = self.irc_config.configured_chans.get_mut(channel).unwrap();
+            let chan_info = self.irc_config.channels.get_mut(channel).unwrap();
             chan_info.topic = Some(topic.to_string());
 
             let topic_reply = format!(
@@ -289,7 +286,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             self.reply(&topic_reply).await?;
         } else {
             // Client is asking or the topic
-            let chan_info = self.irc_config.configured_chans.get(channel).unwrap();
+            let chan_info = self.irc_config.channels.get(channel).unwrap();
             let topic_reply = if let Some(topic) = &chan_info.topic {
                 format!(
                     "{} {} {} :{}\r\n",
@@ -401,8 +398,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             if !chan.starts_with('#') {
                 continue
             }
-            if self.irc_config.configured_chans.contains_key(chan) {
-                let chan_info = self.irc_config.configured_chans.get(chan).unwrap();
+            if self.irc_config.channels.contains_key(chan) {
+                let chan_info = self.irc_config.channels.get(chan).unwrap();
 
                 if chan_info.names.is_empty() {
                     return Ok(())
@@ -449,35 +446,36 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         };
 
         if target.starts_with('#') {
-            if !self.irc_config.configured_chans.contains_key(target) {
+            if !self.irc_config.channels.contains_key(target) {
                 return Ok(())
             }
 
-            let channel_info = self.irc_config.configured_chans.get(target).unwrap();
+            let channel_info = self.irc_config.channels.get(target).unwrap();
 
             if !channel_info.joined {
                 return Ok(())
             }
 
-            if let Some(salt_box) = &channel_info.salt_box {
+            if let Some(salt_box) = &channel_info.salt_box(&target) {
                 encrypt_privmsg(salt_box, &mut privmsg);
                 info!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.address, privmsg.to_string());
             }
-        } else {
-            if !self.irc_config.configured_contacts.contains_key(target) {
-                return Ok(())
-            }
-
-            let contact_info = self.irc_config.configured_contacts.get(target).unwrap();
-            if let Some(salt_box) = &contact_info.salt_box {
-                encrypt_privmsg(salt_box, &mut privmsg);
-                info!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.address, privmsg.to_string());
+        } else if self.irc_config.private_key.is_some() {
+            if let Some(contact_info) = self.irc_config.contacts.get(target) {
+                if let Some(salt_box) =
+                    &contact_info.salt_box(&self.irc_config.private_key.as_ref().unwrap(), target)
+                {
+                    encrypt_privmsg(salt_box, &mut privmsg);
+                    info!(
+                        "[CLIENT {}] (Encrypted) PRIVMSG: {:?}",
+                        self.address,
+                        privmsg.to_string()
+                    );
+                }
             }
         }
 
-        // Notify the server
         self.server_notifier.send((privmsg, self.subscription.get_id())).await?;
-
         Ok(())
     }
 
@@ -486,13 +484,13 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             if !chan.starts_with('#') {
                 continue
             }
-            if !self.irc_config.configured_chans.contains_key(chan) {
-                let mut chan_info = ChannelInfo::new()?;
+            if !self.irc_config.channels.contains_key(chan) {
+                let mut chan_info = ChannelInfo::new();
                 chan_info.topic = Some("n/a".to_string());
-                self.irc_config.configured_chans.insert(chan.to_string(), chan_info);
+                self.irc_config.channels.insert(chan.to_string(), chan_info);
             }
 
-            let chan_info = self.irc_config.configured_chans.get_mut(chan).unwrap();
+            let chan_info = self.irc_config.channels.get_mut(chan).unwrap();
             if chan_info.joined {
                 return Ok(())
             }
