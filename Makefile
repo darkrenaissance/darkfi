@@ -69,10 +69,7 @@ cleanbin:
 	rm -f $(BINS)
 
 clean: cleanbin
-	@for i in $(BINS); \
-	do \
-		RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean $i; \
-	done;
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean
 
 install:
 	@for i in $(BINS); \
