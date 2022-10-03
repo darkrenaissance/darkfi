@@ -158,10 +158,6 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             return Err(Error::MalformedPacket)
         }
 
-        if self.irc_config.password.is_empty() {
-            self.irc_config.is_pass_init = true
-        }
-
         let (command, value) = parse_line(&line)?;
         let (command, value) = (command.as_str(), value.as_str());
 
@@ -185,6 +181,12 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn registre(&mut self) -> Result<()> {
+        if !self.irc_config.is_pass_init {
+            if self.irc_config.password.is_empty() {
+                self.irc_config.is_pass_init = true
+            }
+        }
+
         if !self.irc_config.is_registered &&
             self.irc_config.is_cap_end &&
             self.irc_config.is_nick_init &&

@@ -70,7 +70,6 @@ impl IrcConfig {
 
 pub struct IrcServer {
     settings: Args,
-    irc_config: IrcConfig,
     clients_subscriptions: SubscriberPtr<PrivMsgEvent>,
 }
 
@@ -79,10 +78,8 @@ impl IrcServer {
         settings: Args,
         clients_subscriptions: SubscriberPtr<PrivMsgEvent>,
     ) -> Result<Self> {
-        let irc_config = IrcConfig::new(&settings)?;
-        Ok(Self { settings, irc_config, clients_subscriptions })
+        Ok(Self { settings, clients_subscriptions })
     }
-
     pub async fn start(&self, executor: Arc<Executor<'_>>) -> Result<()> {
         let (notifier, recv) = async_channel::unbounded();
 
@@ -170,15 +167,12 @@ impl IrcServer {
         // Subscription for the new client
         let client_subscription = self.clients_subscriptions.clone().subscribe().await;
 
+        // new irc configuration
+        let irc_config = IrcConfig::new(&self.settings)?;
+
         // New irc client
-        let mut client = IrcClient::new(
-            writer,
-            reader,
-            peer_addr,
-            self.irc_config.clone(),
-            notifier,
-            client_subscription,
-        );
+        let mut client =
+            IrcClient::new(writer, reader, peer_addr, irc_config, notifier, client_subscription);
 
         // Start listening and detach
         executor

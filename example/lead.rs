@@ -1,15 +1,12 @@
+use env_logger;
 use futures::executor::block_on;
 use halo2_proofs::dev::MockProver;
+use log::{debug, error, info, log_enabled, Level};
 use pasta_curves::pallas;
 use url::Url;
-use log::{debug, error, log_enabled, info, Level};
-use env_logger;
 
 use darkfi::{
-    blockchain::{
-        epoch::{Epoch},
-        EpochConsensus,
-    },
+    blockchain::{epoch::Epoch, EpochConsensus},
     crypto::leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN},
     net::Settings,
     stakeholder::stakeholder::Stakeholder,
@@ -23,7 +20,7 @@ fn main() {
 
     //
     const LEN: usize = 10;
-    let value = 33223;  //static stake value
+    let value = 33223; //static stake value
 
     //
     let settings = Settings {
@@ -49,10 +46,10 @@ fn main() {
         block_on(Stakeholder::new(consensus, settings, "db", 0, Some(k))).unwrap();
 
     let eta: pallas::Base = stakeholder.get_eta();
-    let mut epoch = Epoch::new(consensus,  eta);
+    let mut epoch = Epoch::new(consensus, eta);
     // sigma is nubmer of slots * reward (assuming reward is 1 for simplicity)
     let sigma = pallas::Base::from(10);
-    let coins: Vec<Vec<LeadCoin>> = epoch.create_coins(sigma, vec!());
+    let coins: Vec<Vec<LeadCoin>> = epoch.create_coins(sigma, vec![]);
     let coin = coins[0][0];
     let contract = coin.create_contract();
 
