@@ -1,13 +1,13 @@
 use async_executor::Executor;
 use async_std::sync::Arc;
+use halo2_proofs::arithmetic::Field;
 use log::{debug, error, info};
 use std::fmt;
-use halo2_proofs::arithmetic::Field;
 
 use rand::rngs::OsRng;
 use std::{thread, time::Duration};
 
-use crate::zk::circuit::{LeadContract,BurnContract,MintContract};
+use crate::zk::circuit::{BurnContract, LeadContract, MintContract};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 
 use crate::{
@@ -17,24 +17,26 @@ use crate::{
         TransactionLeadProof,
     },
     crypto::{
-        constants::MERKLE_DEPTH,
         address::Address,
+        coin::OwnCoin,
+        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
-        nullifier::Nullifier,
         leadcoin::LeadCoin,
         merkle_node::MerkleNode,
+        note::{EncryptedNote, Note},
+        nullifier::Nullifier,
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
-        coin::OwnCoin,
-        note::{EncryptedNote, Note},
-    },
-    node::state::{state_transition, ProgramState, StateUpdate},
-    tx::builder::{
-        TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
-        TransactionBuilderOutputInfo,
     },
     net::{MessageSubscription, P2p, Settings, SettingsPtr},
-    tx::Transaction,
+    node::state::{state_transition, ProgramState, StateUpdate},
+    tx::{
+        builder::{
+            TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
+            TransactionBuilderOutputInfo,
+        },
+        Transaction,
+    },
     util::{
         clock::{Clock, Ticks},
         path::expand_path,
@@ -58,7 +60,8 @@ pub struct SlotWorkspace {
     pub e: u64,                // epoch index
     pub sl: u64,               // relative slot index
     pub txs: Vec<Transaction>, // unpublished block transactions
-    pub root: MerkleNode, /// merkle root of txs
+    pub root: MerkleNode,
+    /// merkle root of txs
     pub m: StakeholderMetadata,
     pub om: OuroborosMetadata,
     pub is_leader: bool,
@@ -127,7 +130,6 @@ impl SlotWorkspace {
     pub fn set_leader(&mut self, alead: bool) {
         self.is_leader = alead;
     }
-
 }
 
 struct StakeholderState {
@@ -224,7 +226,6 @@ impl StakeholderState {
     }
 }
 
-
 pub struct Stakeholder {
     pub blockchain: Blockchain, // stakeholder view of the blockchain
     pub net: Arc<P2p>,
@@ -242,10 +243,10 @@ pub struct Stakeholder {
     pub workspace: SlotWorkspace,
     pub id: i64,
     pub keypair: Keypair,
-    pub cashier_signature_public : PublicKey,
-    pub faucet_signature_public : PublicKey,
-    pub cashier_signature_secret : SecretKey,
-    pub faucet_signature_secret : SecretKey,
+    pub cashier_signature_public: PublicKey,
+    pub faucet_signature_public: PublicKey,
+    pub cashier_signature_secret: SecretKey,
+    pub faucet_signature_secret: SecretKey,
     //pub subscription: Subscription<Result<ChannelPtr>>,
     //pub chanptr : ChannelPtr,
     //pub msgsub : MessageSubscription::<BlockInfo>,
@@ -289,19 +290,19 @@ impl Stakeholder {
 
         let keypair = Keypair::random(&mut OsRng);
         debug!(target: LOG_T, "stakeholder constructed");
-        Ok( Self {
+        Ok(Self {
             blockchain: bc,
             net: p2p,
             clock,
             ownedcoins: vec![], //TODO should be read from wallet db.
             epoch,
             epoch_consensus: consensus,
-            lead_pk: lead_pk,
-            mint_pk: mint_pk,
-            burn_pk: burn_pk,
-            lead_vk: lead_vk,
-            mint_vk: mint_vk,
-            burn_vk: burn_vk,
+            lead_pk,
+            mint_pk,
+            burn_pk,
+            lead_vk,
+            mint_vk,
+            burn_vk,
             playing: true,
             workspace,
             id,
@@ -531,10 +532,10 @@ impl Stakeholder {
         self.workspace.set_sl(sl);
         self.workspace.set_e(e);
         self.workspace.set_st(st);
-        let mut winning_coin_idx :  usize = 0;
+        let mut winning_coin_idx: usize = 0;
         let won = self.epoch.is_leader(sl, &mut winning_coin_idx);
         let proof = if won {
-            self.epoch.get_proof(sl, winning_coin_idx,  &self.get_leadprovkingkey())
+            self.epoch.get_proof(sl, winning_coin_idx, &self.get_leadprovkingkey())
         } else {
             Proof::new(vec![])
         };
@@ -552,14 +553,14 @@ impl Stakeholder {
         if won {
             //TODO (res) verify the coin is finalized
             // could be finalized in later slot accord to the finalization policy that is WIP.
-            let owned_coin = self.finalize_coin(&self.epoch.get_coin(sl as usize, winning_coin_idx as usize));
+            let owned_coin =
+                self.finalize_coin(&self.epoch.get_coin(sl as usize, winning_coin_idx as usize));
             self.ownedcoins.push(owned_coin);
         }
     }
 
     //TODO (res) validate the owncoin is the same winning leadcoin
-    pub fn finalize_coin (&self, coin : &LeadCoin) -> OwnCoin {
-
+    pub fn finalize_coin(&self, coin: &LeadCoin) -> OwnCoin {
         let mut state = StakeholderState {
             tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(TREE_LEN),
             merkle_roots: vec![],

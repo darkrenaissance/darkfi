@@ -21,7 +21,7 @@ pub const LEAD_PUBLIC_INPUT_LEN: usize = 10;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
-    pub value: Option<u64>,                         // coin stake
+    pub value: Option<u64>,                                  // coin stake
     pub cm: Option<pallas::Point>,                           // coin commitment
     pub cm2: Option<pallas::Point>,                          // poured coin commitment
     pub idx: u32,                                            // coin idex
