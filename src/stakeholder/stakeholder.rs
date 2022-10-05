@@ -316,40 +316,49 @@ impl Stakeholder {
 
     /// wrapper on Schnorr signature
     pub fn sign(&self, message: &[u8]) -> Signature {
+        info!(target: LOG_T, "sign()");
         self.keypair.secret.sign(message)
     }
 
     /// wrapper on schnorr public verify
     pub fn verify(&self, message: &[u8], signature: &Signature) -> bool {
+        info!(target: LOG_T, "verify()");
         self.keypair.public.verify(message, signature)
     }
 
     pub fn get_leadprovkingkey(&self) -> ProvingKey {
+        info!(target: LOG_T, "get_leadprovkingkey()");
         self.lead_pk.clone()
     }
 
     pub fn get_mintprovkingkey(&self) -> ProvingKey {
+        info!(target: LOG_T, "get_mintprovkingkey()");
         self.mint_pk.clone()
     }
 
     pub fn get_burnprovkingkey(&self) -> ProvingKey {
+        info!(target: LOG_T, "get_burnprovkingkey()");
         self.burn_pk.clone()
     }
 
     pub fn get_leadverifyingkey(&self) -> VerifyingKey {
+        info!(target: LOG_T, "get_leadverifyingkey()");
         self.lead_vk.clone()
     }
 
     pub fn get_mintverifyingkey(&self) -> VerifyingKey {
+        info!(target: LOG_T, "get_mintverifyingkey()");
         self.mint_vk.clone()
     }
 
     pub fn get_burnverifyingkey(&self) -> VerifyingKey {
+        info!(target: LOG_T, "get_burnverifyingkey()");
         self.burn_vk.clone()
     }
 
     /// get list stakeholder peers on the p2p network for synchronization
     pub fn get_peers(&self) -> Vec<Url> {
+        info!(target: LOG_T, "get_peers()");
         let settings: SettingsPtr = self.net.settings();
         settings.peers.clone()
     }
@@ -363,26 +372,29 @@ impl Stakeholder {
     */
 
     async fn init_network(&self) -> Result<()> {
+        info!(target: LOG_T, "init_network()");
         let exec = Arc::new(Executor::new());
         self.net.clone().start(exec.clone()).await?;
-        //TODO (fix) await blocks
-        self.net.clone().run(exec);
+        exec.spawn(self.net.clone().run(exec.clone())).detach();
         info!(target: LOG_T, "net initialized");
         Ok(())
     }
 
     pub fn get_net(&self) -> Arc<P2p> {
+        info!(target: LOG_T, "get_net()");
         //TODO use P2p ptr not to overwrite wrappers
         self.net.clone()
     }
 
     /// add new blockinfo to the blockchain
     pub fn add_block(&self, block: BlockInfo) {
+        info!(target: LOG_T, "add_block()");
         let blocks = [block];
         let _len = self.blockchain.add(&blocks);
     }
 
     pub fn add_tx(&mut self, tx: Transaction) {
+        info!(target: LOG_T, "add_tx()");
         self.workspace.add_tx(tx);
     }
 
@@ -390,6 +402,8 @@ impl Stakeholder {
     /// it's the hash of the previous lead proof
     /// converted to pallas base
     pub fn get_eta(&self) -> pallas::Base {
+        info!(target: LOG_T, "get_eta()");
+
         let proof_tx_hash = self.blockchain.get_last_proof_hash().unwrap();
         let mut bytes: [u8; 32] = *proof_tx_hash.as_bytes();
         // read first 254 bits
@@ -399,6 +413,8 @@ impl Stakeholder {
     }
 
     pub fn valid_block(&self, _blk: BlockInfo) -> bool {
+        info!(target: LOG_T, "valid_block()");
+
         //TODO implement
         true
     }
@@ -436,6 +452,7 @@ impl Stakeholder {
     }
 
     pub async fn background(&mut self, hardlimit: Option<u8>) {
+        info!(target: LOG_T, "background");
         let _ = self.init_network().await;
         let _ = self.clock.sync().await;
         let mut c: u8 = 0;
@@ -561,6 +578,7 @@ impl Stakeholder {
 
     //TODO (res) validate the owncoin is the same winning leadcoin
     pub fn finalize_coin(&self, coin: &LeadCoin) -> OwnCoin {
+        info!(target: LOG_T, "finalize coin");
         let mut state = StakeholderState {
             tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(TREE_LEN),
             merkle_roots: vec![],
@@ -589,7 +607,7 @@ impl Stakeholder {
         };
         let tx = builder.build(&self.mint_pk, &self.burn_pk).unwrap();
 
-        tx.verify(&state.mint_vk, &state.burn_vk);
+        tx.verify(&state.mint_vk, &state.burn_vk).unwrap();
         let _note = tx.outputs[0].enc_note.decrypt(&self.keypair.secret).unwrap();
         let update = state_transition(&state, tx).unwrap();
         state.apply(update);
