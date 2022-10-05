@@ -78,23 +78,14 @@ The server start listening to an address specifed in the configuration file.
 
 For each irc client get connected, an `IrcClient` instance created.
 
-A Communication channel get initialized by the server for the new `IrcClient` 
-and add to the subscriptions list for handling data between them. 
-in this way the server handle and maintain each irc client connection separately.  
-
 | Description				| Data Type						| Comments												|
 |-------------------------- |------------------------------ | ----------------------------------------------------- |
 | settings					| `Settings`					| The base settings parsed from the configuration file  |
-| clients_subscriptions		| SubscriberPtr<`PrivMsgEvent`> | Channels to notify the `IrcClient`s about new messages|
+| clients_subscriptions		| SubscriberPtr<`ClientSubMsg`> | Channels to notify the `IrcClient`s about new data	|
 
 ##  IrcClient
 
 The `IrcClient` handle all irc opeartions and commands from the irc client.
-
-The subscription channel listen to the server for new messages from the ircd 
-network and pass them to the irc client. While notify the server to broadcast 
-new messages from the irc client.
-
 
 | Description		| Data Type							| Comments																	|
 |-------------------------- |------------------------------ | ----------------------------------------------------- |
@@ -102,8 +93,33 @@ new messages from the irc client.
 | read_stream		| ReadHalf<Stream>					| Read data from the connection stream										|
 | address			| SocketAddr						| The actual address for the irc client connection							|
 | irc_config		| `IrcConfig`						| Base configuration for irc												|
-| server_notifier 	| Channel<(`PrivMsgEvent`, u64)> 	| A Channel to notify the server about a new message from the irc client	|
-| subscription 		| Subscription<`PrivMsgEvent`> 		| A channel to receive messages from the server 							|
+| server_notifier 	| Channel<(`NotifierMsg`, u64)> 	| A Channel to notify the server about a new data from the irc client		|
+| subscription 		| Subscription<`ClientSubMsg`> 		| A channel to receive notification from the server 						|
+
+
+## Communications between the server and the clients
+
+Two Communication channels get initialized by the server for every new `IrcClient`. 
+
+The channel `Channel<(NotifierMsg, u64)>` used  by the `IrcClient` to
+notify the server about new messages/queries received from the irc client.
+
+The channel `Subscription<ClientSubMsg>` used by the server to notify
+`IrcClient`s about new messages/queries fetched from the `View`. 
+
+### ClientSubMsg
+
+	enum ClientSubMsg {
+		Privmsg(`PrivMsgEvent`),
+		Config(`IrcConfig`),	
+	}
+
+### NotifierMsg 
+
+	enum NotifierMsg {
+		Privmsg(`PrivMsgEvent`),
+		UpdateConfig,
+	}
 
 
 
