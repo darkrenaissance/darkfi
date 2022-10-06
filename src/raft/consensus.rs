@@ -87,6 +87,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let id = match datastore.id.get_last()? {
             Some(_id) => _id,
             None => {
+                // FIXME: This should be a big number, like a hash.
                 let id = NodeId(gen_id(30));
                 datastore.id.insert(&id)?;
                 id
@@ -133,8 +134,6 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let prune_nodes_id_task =
             executor.spawn(prune_map::<NodeId>(self.nodes.clone(), self.settings.prun_duration));
 
-        let mut rng = rand::thread_rng();
-
         let (id_sx, id_rv) = async_channel::unbounded::<()>();
         let (heartbeat_sx, heartbeat_rv) = async_channel::unbounded::<()>();
         let (timeout_sx, timeout_rv) = async_channel::unbounded::<()>();
@@ -145,6 +144,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let heartbeat_timeout = Duration::from_millis(self.settings.heartbeat_timeout);
         let send_heartbeat_task = executor.spawn(send_loop(heartbeat_sx, heartbeat_timeout));
 
+        let rng = &mut OsRng;
         let timeout =
             Duration::from_secs(rng.gen_range(0..self.settings.timeout) + self.settings.timeout);
         let send_timeout_task = executor.spawn(send_loop(timeout_sx, timeout));
