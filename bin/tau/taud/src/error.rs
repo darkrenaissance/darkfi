@@ -59,9 +59,7 @@ pub fn to_json_result(res: TaudResult<Value>, id: Value) -> JsonResult {
             TaudError::Darkfi(e) => {
                 JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
             }
-            TaudError::IoError(e) => {
-                JsonError::new(ErrorCode::InternalError, Some(e.to_string()), id).into()
-            }
+            TaudError::IoError(e) => JsonError::new(ErrorCode::InternalError, Some(e), id).into(),
         },
     }
 }

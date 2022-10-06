@@ -88,9 +88,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         self.irc_config.private_key = new_config.private_key;
         self.irc_config.password = new_config.password;
 
-        if let Err(_) =
-            self.on_receive_join(self.irc_config.channels.keys().cloned().collect()).await
-        {
+        if self.on_receive_join(self.irc_config.channels.keys().cloned().collect()).await.is_err() {
             warn!("Error to join updated channels");
         }
     }
@@ -134,7 +132,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         } else if self.irc_config.private_key.is_some() {
             if let Some(contact_info) = self.irc_config.contacts.get(&msg.target) {
                 let salt_box = &contact_info
-                    .salt_box(&self.irc_config.private_key.as_ref().unwrap(), &msg.target);
+                    .salt_box(self.irc_config.private_key.as_ref().unwrap(), &msg.target);
 
                 if salt_box.is_none() {
                     return Ok(())
@@ -201,10 +199,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn registre(&mut self) -> Result<()> {
-        if !self.irc_config.is_pass_init {
-            if self.irc_config.password.is_empty() {
-                self.irc_config.is_pass_init = true
-            }
+        if !self.irc_config.is_pass_init && self.irc_config.password.is_empty() {
+            self.irc_config.is_pass_init = true
         }
 
         if !self.irc_config.is_registered &&
@@ -477,14 +473,14 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 return Ok(())
             }
 
-            if let Some(salt_box) = &channel_info.salt_box(&target) {
+            if let Some(salt_box) = &channel_info.salt_box(target) {
                 encrypt_privmsg(salt_box, &mut privmsg);
                 info!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.address, privmsg.to_string());
             }
         } else if self.irc_config.private_key.is_some() {
             if let Some(contact_info) = self.irc_config.contacts.get(target) {
                 if let Some(salt_box) =
-                    &contact_info.salt_box(&self.irc_config.private_key.as_ref().unwrap(), target)
+                    &contact_info.salt_box(self.irc_config.private_key.as_ref().unwrap(), target)
                 {
                     encrypt_privmsg(salt_box, &mut privmsg);
                     info!(

@@ -224,7 +224,7 @@ impl Darkwiki {
                 }
                 patch = self.raft.1.recv().fuse() => {
                     for (workspace, salsa_box) in self.workspaces.iter() {
-                        if let Ok(mut patch) = decrypt_patch(&patch.clone()?, &salsa_box) {
+                        if let Ok(mut patch) = decrypt_patch(&patch.clone()?, salsa_box) {
                             info!("[{}] Receive a {:?}", workspace, patch);
                             patch.workspace = workspace.clone();
                             self.on_receive_patch(&patch)?;
@@ -260,7 +260,7 @@ impl Darkwiki {
             sync_patch.author = received_patch.author.clone();
             save_json_file::<Patch>(&sync_id_path, &sync_patch)?;
         } else if !received_patch.base.is_empty() {
-            save_json_file::<Patch>(&sync_id_path, &received_patch)?;
+            save_json_file::<Patch>(&sync_id_path, received_patch)?;
         }
 
         Ok(())
@@ -291,7 +291,7 @@ impl Darkwiki {
             if !dry {
                 for patch in patches {
                     info!("Send a {:?}", patch);
-                    let encrypt_patch = encrypt_patch(&patch, &salsa_box, rng)?;
+                    let encrypt_patch = encrypt_patch(&patch, salsa_box, rng)?;
                     self.raft.0.send(encrypt_patch).await?;
                 }
             }
@@ -379,7 +379,7 @@ impl Darkwiki {
         // save and compare docs in darkwiki and local dirs
         // then merged with sync patches if any received
         let mut docs = vec![];
-        get_docs_paths(&mut docs, &docs_path, None)?;
+        get_docs_paths(&mut docs, docs_path, None)?;
         for doc in docs {
             let doc_path = doc.to_str().unwrap();
 
@@ -582,7 +582,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         loop {
             println!("Name for the new workspace: ");
             let mut workspace = String::new();
-            stdin().read_line(&mut workspace).ok().expect("Failed to read line");
+            stdin().read_line(&mut workspace).expect("Failed to read line");
             let workspace = workspace.to_lowercase();
             let workspace = workspace.trim();
             if workspace.is_empty() && workspace.len() < 3 {

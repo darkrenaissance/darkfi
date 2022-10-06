@@ -90,7 +90,7 @@ pub struct Args {
 /// [contact."nick"]
 /// pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 /// ```
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize)]
 pub struct ContactInfo {
     pub pubkey: Option<String>,
 }
@@ -103,7 +103,7 @@ impl ContactInfo {
     pub fn salt_box(&self, private_key: &str, contact_name: &str) -> Option<SalsaBox> {
         if let Ok(private) = parse_priv(private_key) {
             if let Some(p) = &self.pubkey {
-                if let Ok(public) = parse_pub(&p) {
+                if let Ok(public) = parse_pub(p) {
                     return Some(SalsaBox::new(&public, &private))
                 } else {
                     error!("Uncorrect public key in for contact {}", contact_name);
@@ -130,7 +130,7 @@ impl ContactInfo {
 /// Having a topic set is useful if one wants to have a topic in the
 /// configured channel. It is not shared with others, but it is useful
 /// for personal reference.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct ChannelInfo {
     /// Optional topic for the channel
     pub topic: Option<String>,

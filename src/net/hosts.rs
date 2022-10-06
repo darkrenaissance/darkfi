@@ -148,5 +148,5 @@ fn is_valid_onion(onion: &str) -> bool {
 
     let alphabet = base32::Alphabet::RFC4648 { padding: false };
 
-    !base32::decode(alphabet, onion).is_none()
+    base32::decode(alphabet, onion).is_some()
 }

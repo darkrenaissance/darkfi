@@ -203,7 +203,7 @@ impl OutboundSession {
                         continue
                     }
 
-                    self.clone().register_channel(channel.clone(), executor.clone()).await?;
+                    self.register_channel(channel.clone(), executor.clone()).await?;
 
                     // Channel is now connected but not yet setup
 

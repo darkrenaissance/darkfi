@@ -13,8 +13,8 @@ use crate::{
 };
 
 use super::{
-    dht::DhtPtr,
     messages::{KeyRequest, KeyResponse, LookupMapRequest, LookupMapResponse, LookupRequest},
+    DhtPtr,
 };
 
 pub struct Protocol {

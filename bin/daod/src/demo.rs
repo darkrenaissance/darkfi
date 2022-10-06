@@ -51,6 +51,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[derive(Eq, PartialEq)]
 pub struct HashableBase(pub pallas::Base);
 
+// FIXME: TODO: This should need Hash, use something else like a b58 string.
 impl std::hash::Hash for HashableBase {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let bytes = self.0.to_repr();
@@ -136,12 +137,12 @@ impl Transaction {
                 match zk_bins.lookup(key).unwrap() {
                     ZkContractInfo::Binary(info) => {
                         let verifying_key = &info.verifying_key;
-                        let verify_result = proof.verify(&verifying_key, public_vals);
+                        let verify_result = proof.verify(verifying_key, public_vals);
                         assert!(verify_result.is_ok(), "verify proof[{}]='{}' failed", i, key);
                     }
                     ZkContractInfo::Native(info) => {
                         let verifying_key = &info.verifying_key;
-                        let verify_result = proof.verify(&verifying_key, public_vals);
+                        let verify_result = proof.verify(verifying_key, public_vals);
                         assert!(verify_result.is_ok(), "verify proof[{}]='{}' failed", i, key);
                     }
                 };
@@ -166,7 +167,7 @@ impl Transaction {
     }
 }
 
-fn sign(signature_secrets: Vec<SecretKey>, func_calls: &Vec<FuncCall>) -> Vec<Signature> {
+fn sign(signature_secrets: &[SecretKey], func_calls: &[FuncCall]) -> Vec<Signature> {
     let mut signatures = vec![];
     let mut unsigned_tx_data = vec![];
     for (_i, (signature_secret, func_call)) in
@@ -233,11 +234,13 @@ impl StateRegistry {
         self.states.insert(HashableBase(contract_id), state);
     }
 
-    pub fn lookup_mut<'a, S: 'static>(&'a mut self, contract_id: ContractId) -> Option<&'a mut S> {
+    //pub fn lookup_mut<'a, S: 'static>(&'a mut self, contract_id: ContractId) -> Option<&'a mut S> {
+    pub fn lookup_mut<S: 'static>(&mut self, contract_id: ContractId) -> Option<&mut S> {
         self.states.get_mut(&HashableBase(contract_id)).and_then(|state| state.downcast_mut())
     }
 
-    pub fn lookup<'a, S: 'static>(&'a self, contract_id: ContractId) -> Option<&'a S> {
+    //pub fn lookup<'a, S: 'static>(&'a self, contract_id: ContractId) -> Option<&'a S> {
+    pub fn lookup<S: 'static>(&self, contract_id: ContractId) -> Option<&S> {
         self.states.get(&HashableBase(contract_id)).and_then(|state| state.downcast_ref())
     }
 }
@@ -266,14 +269,14 @@ pub async fn example() -> Result<()> {
 
     //// Wallet
 
-    let foo = example_contract::foo::wallet::Foo { a: 5, b: 10 };
+    let foo_w = example_contract::foo::wallet::Foo { a: 5, b: 10 };
     let signature_secret = SecretKey::random(&mut OsRng);
 
-    let builder = example_contract::foo::wallet::Builder { foo, signature_secret };
+    let builder = example_contract::foo::wallet::Builder { foo: foo_w, signature_secret };
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret], &func_calls);
+    let signatures = sign(&[signature_secret], &func_calls);
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -412,7 +415,7 @@ pub async fn demo() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret], &func_calls);
+    let signatures = sign(&[signature_secret], &func_calls);
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -457,7 +460,7 @@ pub async fn demo() -> Result<()> {
         assert_eq!(tx.func_calls.len(), 1);
         let func_call = &tx.func_calls[0];
         let call_data = func_call.call_data.as_any();
-        assert_eq!((&*call_data).type_id(), TypeId::of::<dao_contract::mint::validate::CallData>());
+        assert_eq!((*call_data).type_id(), TypeId::of::<dao_contract::mint::validate::CallData>());
         let call_data = call_data.downcast_ref::<dao_contract::mint::validate::CallData>().unwrap();
         call_data.dao_bulla.clone()
     };
@@ -509,7 +512,7 @@ pub async fn demo() -> Result<()> {
     let func_call = builder.build(&zk_bins)?;
     let func_calls = vec![func_call];
 
-    let signatures = sign(vec![cashier_signature_secret], &func_calls);
+    let signatures = sign(&[cashier_signature_secret], &func_calls);
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -636,7 +639,7 @@ pub async fn demo() -> Result<()> {
     let func_call = builder.build(&zk_bins)?;
     let func_calls = vec![func_call];
 
-    let signatures = sign(vec![cashier_signature_secret], &func_calls);
+    let signatures = sign(&[cashier_signature_secret], &func_calls);
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -730,7 +733,7 @@ pub async fn demo() -> Result<()> {
     let (money_leaf_position, money_merkle_path) = {
         let state = states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
         let tree = &state.tree;
-        let leaf_position = gov_recv[0].leaf_position.clone();
+        let leaf_position = gov_recv[0].leaf_position;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
         (leaf_position, merkle_path)
@@ -775,7 +778,7 @@ pub async fn demo() -> Result<()> {
 
     let builder = dao_contract::propose::wallet::Builder {
         inputs: vec![input],
-        proposal: proposal.clone(),
+        proposal,
         dao: dao_params.clone(),
         dao_leaf_position,
         dao_merkle_path,
@@ -785,7 +788,7 @@ pub async fn demo() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret], &func_calls);
+    let signatures = sign(&[signature_secret], &func_calls);
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -818,7 +821,7 @@ pub async fn demo() -> Result<()> {
         let func_call = &tx.func_calls[0];
         let call_data = func_call.call_data.as_any();
         assert_eq!(
-            (&*call_data).type_id(),
+            (*call_data).type_id(),
             TypeId::of::<dao_contract::propose::validate::CallData>()
         );
         let call_data =
@@ -874,7 +877,7 @@ pub async fn demo() -> Result<()> {
     let (money_leaf_position, money_merkle_path) = {
         let state = states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
         let tree = &state.tree;
-        let leaf_position = gov_recv[0].leaf_position.clone();
+        let leaf_position = gov_recv[0].leaf_position;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
         (leaf_position, merkle_path)
@@ -890,8 +893,7 @@ pub async fn demo() -> Result<()> {
     };
 
     let vote_option: bool = true;
-
-    assert!(vote_option == true || vote_option == false);
+    // assert!(vote_option || !vote_option); // wtf
 
     // We create a new keypair to encrypt the vote.
     // For the demo MVP, you can just use the dao_keypair secret
@@ -911,7 +913,7 @@ pub async fn demo() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret], &func_calls);
+    let signatures = sign(&[signature_secret], &func_calls);
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -945,7 +947,7 @@ pub async fn demo() -> Result<()> {
         assert_eq!(tx.func_calls.len(), 1);
         let func_call = &tx.func_calls[0];
         let call_data = func_call.call_data.as_any();
-        assert_eq!((&*call_data).type_id(), TypeId::of::<dao_contract::vote::validate::CallData>());
+        assert_eq!((*call_data).type_id(), TypeId::of::<dao_contract::vote::validate::CallData>());
         let call_data = call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
 
         let header = &call_data.header;
@@ -962,7 +964,7 @@ pub async fn demo() -> Result<()> {
     let (money_leaf_position, money_merkle_path) = {
         let state = states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
         let tree = &state.tree;
-        let leaf_position = gov_recv[1].leaf_position.clone();
+        let leaf_position = gov_recv[1].leaf_position;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
         (leaf_position, merkle_path)
@@ -978,8 +980,7 @@ pub async fn demo() -> Result<()> {
     };
 
     let vote_option: bool = false;
-
-    assert!(vote_option == true || vote_option == false);
+    // assert!(vote_option || !vote_option); // wtf
 
     // We create a new keypair to encrypt the vote.
     let vote_keypair_2 = Keypair::random(&mut OsRng);
@@ -998,7 +999,7 @@ pub async fn demo() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret], &func_calls);
+    let signatures = sign(&[signature_secret], &func_calls);
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -1032,7 +1033,7 @@ pub async fn demo() -> Result<()> {
         assert_eq!(tx.func_calls.len(), 1);
         let func_call = &tx.func_calls[0];
         let call_data = func_call.call_data.as_any();
-        assert_eq!((&*call_data).type_id(), TypeId::of::<dao_contract::vote::validate::CallData>());
+        assert_eq!((*call_data).type_id(), TypeId::of::<dao_contract::vote::validate::CallData>());
         let call_data = call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
 
         let header = &call_data.header;
@@ -1049,7 +1050,7 @@ pub async fn demo() -> Result<()> {
     let (money_leaf_position, money_merkle_path) = {
         let state = states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
         let tree = &state.tree;
-        let leaf_position = gov_recv[2].leaf_position.clone();
+        let leaf_position = gov_recv[2].leaf_position;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
         (leaf_position, merkle_path)
@@ -1065,8 +1066,7 @@ pub async fn demo() -> Result<()> {
     };
 
     let vote_option: bool = true;
-
-    assert!(vote_option == true || vote_option == false);
+    // assert!(vote_option || !vote_option); // wtf
 
     // We create a new keypair to encrypt the vote.
     let vote_keypair_3 = Keypair::random(&mut OsRng);
@@ -1085,7 +1085,7 @@ pub async fn demo() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign(vec![signature_secret], &func_calls);
+    let signatures = sign(&[signature_secret], &func_calls);
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -1119,7 +1119,7 @@ pub async fn demo() -> Result<()> {
         assert_eq!(tx.func_calls.len(), 1);
         let func_call = &tx.func_calls[0];
         let call_data = func_call.call_data.as_any();
-        assert_eq!((&*call_data).type_id(), TypeId::of::<dao_contract::vote::validate::CallData>());
+        assert_eq!((*call_data).type_id(), TypeId::of::<dao_contract::vote::validate::CallData>());
         let call_data = call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
 
         let header = &call_data.header;
@@ -1208,7 +1208,7 @@ pub async fn demo() -> Result<()> {
     let (treasury_leaf_position, treasury_merkle_path) = {
         let state = states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
         let tree = &state.tree;
-        let leaf_position = dao_recv_coin.leaf_position.clone();
+        let leaf_position = dao_recv_coin.leaf_position;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
         (leaf_position, merkle_path)
@@ -1272,7 +1272,7 @@ pub async fn demo() -> Result<()> {
     let exec_func_call = builder.build(&zk_bins);
     let func_calls = vec![transfer_func_call, exec_func_call];
 
-    let signatures = sign(vec![tx_signature_secret, exec_signature_secret], &func_calls);
+    let signatures = sign(&[tx_signature_secret, exec_signature_secret], &func_calls);
     let tx = Transaction { func_calls, signatures };
 
     {
@@ -1284,7 +1284,7 @@ pub async fn demo() -> Result<()> {
         let transfer_call_data = transfer_func_call.call_data.as_any();
 
         assert_eq!(
-            (&*transfer_call_data).type_id(),
+            (*transfer_call_data).type_id(),
             TypeId::of::<money_contract::transfer::validate::CallData>()
         );
         let transfer_call_data =

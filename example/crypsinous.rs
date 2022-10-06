@@ -6,7 +6,6 @@ use clap::Parser;
 use futures::executor::block_on;
 use std::thread;
 use url::Url;
-use vec;
 
 #[derive(Parser)]
 struct NetCli {
@@ -22,7 +21,7 @@ struct NetCli {
 
 #[async_std::main]
 async fn main() {
-    let _ = env_logger::init();
+    env_logger::init();
     let args = NetCli::parse();
     let addr = vec![Url::parse(args.addr.as_str()).unwrap()];
     let mut peers = vec![];
@@ -47,7 +46,7 @@ async fn main() {
         connect_timeout_seconds: 10,
         channel_handshake_seconds: 4,
         channel_heartbeat_seconds: 10,
-        external_addr: addr.clone(),
+        external_addr: addr,
         peers,
         seeds,
         ..Default::default()
@@ -58,8 +57,7 @@ async fn main() {
     let id = Timestamp::current_time().0;
 
     let mut stakeholder =
-        block_on(Stakeholder::new(epoch_consensus.clone(), settings.clone(), &path, id, Some(k)))
-            .unwrap();
+        block_on(Stakeholder::new(epoch_consensus, settings, &path, id, Some(k))).unwrap();
 
     let handle = thread::spawn(move || {
         block_on(stakeholder.background(Some(9)));

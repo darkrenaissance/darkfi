@@ -507,7 +507,7 @@ mod tests {
         patch1.insert("ex");
         patch1.retain(7);
 
-        let mut patch2 = patch_init.clone();
+        let mut patch2 = patch_init;
         patch2.delete(4);
         patch2.insert("new");
         patch2.retain(13);
@@ -544,7 +544,7 @@ mod tests {
         patch1.insert("ex");
         patch1.retain(7);
 
-        let mut patch2 = patch_init.clone();
+        let mut patch2 = patch_init;
         patch2.delete(4);
         patch2.insert("new");
         patch2.retain(13);
@@ -565,7 +565,7 @@ mod tests {
         patch1.retain(13);
         patch1.insert(" world");
 
-        let mut patch2 = patch_init.clone();
+        let mut patch2 = patch_init;
         patch2.retain(1);
         patch2.delete(5);
         patch2.insert("this is the title");

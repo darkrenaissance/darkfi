@@ -351,18 +351,17 @@ impl JsonRpcInterface {
                 .map(|t| t.id)
                 .collect();
 
-        let task_ref_ids: Vec<String> =
-            MonthTasks::load_current_tasks(&self.dataset_path, ws.clone(), false)?
-                .into_iter()
-                .map(|t| t.ref_id)
-                .collect();
-
-        let imported_tasks = MonthTasks::load_current_tasks(&path, ws, true)?;
+        let imported_tasks = MonthTasks::load_current_tasks(&path, ws.clone(), true)?;
 
         for mut task in imported_tasks {
-            if task_ref_ids.contains(&task.ref_id) {
+            if MonthTasks::load_current_tasks(&self.dataset_path, ws.clone(), false)?
+                .into_iter()
+                .map(|t| t.ref_id)
+                .any(|x| x == task.ref_id)
+            {
                 continue
             }
+
             task.id = find_free_id(&task_ids);
             task_ids.push(task.id);
             self.notify_queue_sender.send(task).await.map_err(Error::from)?;

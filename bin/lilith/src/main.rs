@@ -191,7 +191,7 @@ async fn spawn_network(
 }
 
 /// Retrieve saved hosts for provided networks
-fn load_hosts(path: &Path, networks: &Vec<String>) -> FxHashMap<String, FxHashSet<Url>> {
+fn load_hosts(path: &Path, networks: &[&str]) -> FxHashMap<String, FxHashSet<Url>> {
     let mut saved_hosts = FxHashMap::default();
     info!("Retrieving saved hosts from: {:?}", path);
     let contents = load_file(path);
@@ -202,7 +202,7 @@ fn load_hosts(path: &Path, networks: &Vec<String>) -> FxHashMap<String, FxHashSe
 
     for line in contents.unwrap().lines() {
         let data: Vec<&str> = line.split('\t').collect();
-        if networks.contains(&data[0].to_string()) {
+        if networks.contains(&data[0]) {
             let mut hosts = match saved_hosts.get(data[0]) {
                 Some(hosts) => hosts.clone(),
                 None => FxHashSet::default(),
@@ -274,7 +274,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // Retrieve saved hosts for configured networks
     let full_path = expand_path(&args.hosts_file)?;
-    let saved_hosts = load_hosts(&full_path, &configured_nets.keys().cloned().collect());
+    let nets: Vec<&str> = configured_nets.keys().map(|x| x.as_str()).collect();
+    let saved_hosts = load_hosts(&full_path, &nets);
 
     // Spawn configured networks
     let mut spawns = vec![];

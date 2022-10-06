@@ -1,6 +1,6 @@
-use async_std::sync::Arc;
-use std::{fmt, io};
+use std::{cmp::Ordering, fmt, io};
 
+use async_std::sync::Arc;
 use fxhash::FxHashMap;
 use ripemd::{Digest, Ripemd256};
 
@@ -138,7 +138,7 @@ impl Model {
         let root_node_id = root_node.event.hash();
 
         let mut event_map = FxHashMap::default();
-        event_map.insert(root_node_id.clone(), root_node);
+        event_map.insert(root_node_id, root_node);
 
         Self { current_root: root_node_id, orphans: FxHashMap::default(), event_map, events_queue }
     }
@@ -159,7 +159,7 @@ impl Model {
         for (event_hash, node) in self.event_map.iter() {
             // check if the node is a leaf
             if node.children.is_empty() {
-                leaves.push(event_hash.clone());
+                leaves.push(*event_hash);
             }
         }
 
@@ -188,7 +188,7 @@ impl Model {
                 continue
             }
 
-            let prev_event = orphan.previous_event_hash.clone();
+            let prev_event = orphan.previous_event_hash;
 
             let node =
                 EventNode { parent: Some(prev_event), event: orphan.clone(), children: Vec::new() };
@@ -217,7 +217,7 @@ impl Model {
                 continue
             }
 
-            let depth = self.diff_depth(leaf.clone(), head);
+            let depth = self.diff_depth(leaf, head);
             if depth > MAX_DEPTH {
                 self.remove_node(leaf);
             }
@@ -235,14 +235,14 @@ impl Model {
                 continue
             }
 
-            let ancestor = self.find_ancestor(leaf.clone(), head);
+            let ancestor = self.find_ancestor(leaf, head);
             ancestors.push(ancestor);
         }
 
         // find the highest ancestor
-        let highest_ancestor = ancestors.iter().max_by(|&a, &b| {
-            self.find_depth(a.clone(), &head).cmp(&self.find_depth(b.clone(), &head))
-        });
+        let highest_ancestor = ancestors
+            .iter()
+            .max_by(|&a, &b| self.find_depth(*a, &head).cmp(&self.find_depth(*b, &head)));
 
         // set the new root
         if let Some(ancestor) = highest_ancestor {
@@ -263,13 +263,13 @@ impl Model {
 
                 let root_childs = &root.children;
                 assert_eq!(root_childs.len(), 1);
-                let child = root_childs.get(0).unwrap().clone();
+                let child = *root_childs.first().unwrap();
 
                 self.event_map.remove(&root_hash);
                 root = self.event_map.get(&child).unwrap();
             }
 
-            self.current_root = ancestor.clone();
+            self.current_root = *ancestor;
         }
     }
 
@@ -305,7 +305,7 @@ impl Model {
     fn find_longest_chain(&self, parent_node: &EventId, i: u32) -> (EventId, u32) {
         let children = &self.event_map.get(parent_node).unwrap().children;
         if children.is_empty() {
-            return (parent_node.clone(), i)
+            return (*parent_node, i)
         }
 
         let mut current_max = 0;
@@ -313,20 +313,27 @@ impl Model {
         for node in children.iter() {
             let (grandchild_node, grandchild_i) = self.find_longest_chain(node, i + 1);
 
-            if grandchild_i > current_max {
-                current_max = grandchild_i;
-                current_node = Some(grandchild_node);
-            } else if grandchild_i == current_max {
-                // Break ties using the timestamp
-
-                let grandchild_node_timestamp =
-                    self.event_map.get(&grandchild_node).unwrap().event.timestamp;
-                let current_node_timestamp =
-                    self.event_map.get(&current_node.unwrap()).unwrap().event.timestamp;
-
-                if grandchild_node_timestamp > current_node_timestamp {
+            match &grandchild_i.cmp(&current_max) {
+                Ordering::Greater => {
                     current_max = grandchild_i;
                     current_node = Some(grandchild_node);
+                }
+                Ordering::Equal => {
+                    // Break ties using the timestamp
+
+                    let grandchild_node_timestamp =
+                        self.event_map.get(&grandchild_node).unwrap().event.timestamp;
+                    let current_node_timestamp =
+                        self.event_map.get(&current_node.unwrap()).unwrap().event.timestamp;
+
+                    if grandchild_node_timestamp > current_node_timestamp {
+                        current_max = grandchild_i;
+                        current_node = Some(grandchild_node);
+                    }
+                }
+                Ordering::Less => {
+                    // Left a todo here because not sure if it should be handled.
+                    todo!();
                 }
             }
         }
@@ -338,7 +345,7 @@ impl Model {
         let mut depth = 0;
         while &node != ancestor_id {
             depth += 1;
-            if let Some(parent) = self.event_map.get(&node).unwrap().parent.clone() {
+            if let Some(parent) = self.event_map.get(&node).unwrap().parent {
                 node = parent
             } else {
                 break
@@ -372,7 +379,7 @@ impl Model {
         let is_child = node_b == self.event_map.get(&node_a).unwrap().parent.unwrap();
 
         if is_child {
-            return node_b.clone()
+            return node_b
         }
 
         while node_a != node_b {
@@ -387,7 +394,7 @@ impl Model {
             node_b = node_b_parent;
         }
 
-        node_a.clone()
+        node_a
     }
 
     fn diff_depth(&self, node_a: EventId, node_b: EventId) -> u32 {
@@ -400,7 +407,7 @@ impl Model {
 
     fn _debug(&self) {
         for (event_id, event_node) in &self.event_map {
-            let depth = self.find_depth(event_id.clone(), &self.current_root);
+            let depth = self.find_depth(*event_id, &self.current_root);
             println!("{}: {:?} [depth={}]", hex::encode(&event_id), event_node.event, depth);
         }
 
@@ -612,7 +619,7 @@ mod tests {
     #[test]
     fn test_event_hash() {
         let events_queue = EventsQueue::new();
-        let mut model = Model::new(events_queue);
+        let model = Model::new(events_queue);
         let root_id = model.current_root;
 
         let timestamp = get_current_time() + 1;

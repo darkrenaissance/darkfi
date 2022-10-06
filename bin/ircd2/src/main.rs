@@ -67,7 +67,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     ////////////////////
     let events_queue = EventsQueue::new();
     let model = Arc::new(Mutex::new(Model::new(events_queue.clone())));
-    let view = Arc::new(Mutex::new(View::new(events_queue)));
+    let _view = Arc::new(Mutex::new(View::new(events_queue)));
 
     ////////////////////
     // P2p setup

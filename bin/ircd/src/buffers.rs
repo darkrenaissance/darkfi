@@ -24,7 +24,7 @@ pub fn create_buffers() -> Buffers {
     Arc::new(Msgs { privmsgs, unread_msgs, seen_ids })
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct RingBuffer<T> {
     pub items: VecDeque<T>,
 }
@@ -71,6 +71,7 @@ impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
     }
 }
 
+#[derive(Default)]
 pub struct PrivmsgsBuffer {
     msgs: Mutex<OrderingAlgo>,
 }

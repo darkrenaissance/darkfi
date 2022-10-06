@@ -1,7 +1,6 @@
-use env_logger;
 use futures::executor::block_on;
 use halo2_proofs::dev::MockProver;
-use log::{debug, error, info, log_enabled, Level};
+use log::debug;
 use pasta_curves::pallas;
 use url::Url;
 
@@ -14,13 +13,13 @@ use darkfi::{
 
 fn main() {
     debug!("..");
-    let _ = env_logger::init();
+    env_logger::init();
     let k: u32 = 13;
     //
 
     //
     const LEN: usize = 10;
-    let value = 33223; //static stake value
+    let _value = 33223; //static stake value
 
     //
     let settings = Settings {

@@ -499,17 +499,14 @@ impl ValidatorState {
             }
         }
 
-        match fork {
-            Some(mut chain) => {
-                debug!("Proposal to fork a forkchain was received.");
-                chain.proposals.pop(); // removing last block to create the fork
-                if !chain.proposals.is_empty() {
-                    // if len is 0 we will verify against blockchain last block
-                    self.consensus.proposals.push(chain);
-                    return Ok(self.consensus.proposals.len() as i64 - 1)
-                }
+        if let Some(mut chain) = fork {
+            debug!("Proposal to fork a forkchain was received.");
+            chain.proposals.pop(); // removing last block to create the fork
+            if !chain.proposals.is_empty() {
+                // if len is 0 we will verify against blockchain last block
+                self.consensus.proposals.push(chain);
+                return Ok(self.consensus.proposals.len() as i64 - 1)
             }
-            None => (),
         }
 
         let (last_slot, last_block) = self.blockchain.last()?;

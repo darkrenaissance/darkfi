@@ -13,6 +13,7 @@ use url::Url;
 
 use crate::{Error, Result as DrkResult};
 
+#[allow(clippy::large_enum_variant)]
 pub enum WsStream {
     Tcp(WebSocketStream<Async<TcpStream>>),
     Tls(WebSocketStream<TlsStream<Async<TcpStream>>>),

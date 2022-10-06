@@ -73,9 +73,8 @@ impl DnetView {
                 }
             })?;
 
-            match err {
-                Some(e) => return Err(e),
-                None => {}
+            if let Some(e) = err {
+                return Err(e)
             }
 
             self.view.msg_list.scroll()?;
