@@ -8,7 +8,7 @@ use darkfi::{
     blockchain::{epoch::Epoch, EpochConsensus},
     crypto::leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN},
     net::Settings,
-    stakeholder::stakeholder::Stakeholder,
+    stakeholder::Stakeholder,
 };
 
 fn main() {
