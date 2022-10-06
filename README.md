@@ -15,6 +15,8 @@ for the P2P IRC daemon.
 This project requires the Rust compiler to be installed. 
 Please visit [Rustup](https://rustup.rs/) for instructions.
 
+Minimum Rust version supported is **1.64.0**.
+
 The following dependencies are also required:
 
 |          Dependency          |   Debian-based   |   
