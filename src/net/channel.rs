@@ -279,6 +279,7 @@ impl Channel {
         message_subsystem.add_dispatch::<message::PongMessage>().await;
         message_subsystem.add_dispatch::<message::GetAddrsMessage>().await;
         message_subsystem.add_dispatch::<message::AddrsMessage>().await;
+        message_subsystem.add_dispatch::<message::ExtAddrsMessage>().await;
     }
 
     /// Convenience function that returns the Message Subsystem.
