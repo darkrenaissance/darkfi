@@ -2,7 +2,7 @@
 #   optionally with: --build-arg ALPINE_VER=$alpine_ver --build-arg RUST_VER=$rust_ver
 # The wallet test fail problem (see below) was the same for alpine {3.14,3.15,3.16} and rust {1.60,1.61,1.62}
 
-ARG RUST_VER=1.62
+ARG RUST_VER=1.64
 ARG ALPINE_VER=3.16
 
 FROM rust:${RUST_VER}-alpine${ALPINE_VER}
@@ -12,7 +12,10 @@ ARG ALPINE_VER
 
 RUN echo "=======================================================" \
     &&echo "===>>>>> The following error will occur during the test::" \
-    && echo "process didn't exit successfully: /opt/darkfi/target/release/deps/darkfi-7ff55152bc1bdc59 (signal: 11, SIGSEGV: invalid memory reference)" \
+    && echo "test util::parse::tests::test_truncate ... ok" \
+    && echo "test runtime::memory::tests::can_read_from_memory ... ok" \
+    && echo "error: test failed, to rerun pass '-p darkfi --lib'" \
+    && echo ".... process didn't exit successfully: /opt/darkfi/target/release/deps/darkfi-... (signal: 11, SIGSEGV: invalid memory reference)" \
     && echo "rust ${RUST_VER} / alpine ${ALPINE_VER}" \
     && rustc -V && cargo -V \
     && cat /etc/os-release  \
@@ -24,7 +27,7 @@ RUN apk update
 RUN apk add cmake jq wget clang curl gcc make
 RUN apk add llvm-dev openssl-dev expat-dev freetype-dev
 RUN apk add libudev-zero-dev libgudev-dev
-RUN apk add pkgconf clang-dev
+RUN apk add pkgconf clang-dev fontconfig-dev
 
 RUN apk add build-base
 
