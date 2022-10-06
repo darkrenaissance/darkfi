@@ -231,6 +231,9 @@ impl OutboundSession {
             }
         }
 
+        // Remove url from hosts
+        self.p2p().hosts().remove(&addr).await;
+
         {
             let info = &mut self.slot_info.lock().await[slot_number as usize];
             info.addr = None;
