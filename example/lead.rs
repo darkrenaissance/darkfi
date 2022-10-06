@@ -13,7 +13,6 @@ use darkfi::{
 
 fn main() {
     debug!("..");
-    env_logger::init();
     let k: u32 = 13;
     //
 

@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 async-std = {version = "1.12.0", features = ["attributes"]}
-bincode = "2.0.0-rc.1"
+bincode = "2.0.0-rc.2"
 darkfi = {path = "../../../", features = ["blockchain"]}
 incrementalmerkletree = "0.3.0"
 lazy-init = "0.5.1"

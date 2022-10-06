@@ -25,7 +25,7 @@ clap = {version = "3.2.20", features = ["derive"]}
 log = "0.4.17"
 num_cpus = "1.13.1"
 simplelog = "0.12.0"
-thiserror = "1.0.35"
+thiserror = "1.0.37"
 url = "2.3.1"
 fxhash = "0.2.1"
 
@@ -49,8 +49,8 @@ num-bigint = {version = "0.4.3", features = ["rand", "serde"], optional = true}
 # Solana bridge dependencies
 native-tls = {version = "0.2.10", optional = true}
 async-native-tls = {version = "0.4.0", optional = true}
-solana-client = {version = "1.13.1", optional = true}
-solana-sdk = {version = "1.13.1", optional = true}
+solana-client = {version = "1.14.5", optional = true}
+solana-sdk = {version = "1.14.5", optional = true}
 spl-associated-token-account = {version = "1.1.1", features = ["no-entrypoint"], optional = true}
 spl-token = {version = "3.5.0", features = ["no-entrypoint"], optional = true}
 tungstenite = {version = "0.17.3", optional = true}
