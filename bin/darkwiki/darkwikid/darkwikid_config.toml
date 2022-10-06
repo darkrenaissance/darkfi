@@ -1,38 +1,49 @@
-## JSON-RPC listen URL
-#rpc_listen="tcp://127.0.0.1:24330"
+## darkwiki configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the commandline.
 
-## Sets Docs Path
-# docs="~/darkwiki"
+# JSON-RPC listen URL
+#rpc_listen = "tcp://localhost:24330"
 
-## Sets Author name
-# author="name"
+# Toplevel path to where you wish to store darkwiki files.
+#docs = "~/darkwiki"
 
-## Workspaces 
-# workspaces = ["darkfi:86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"]
+# The nickname your darkwikid will use for your patches.
+#author = "Anonymous"
 
-## Raft net settings
+# Workspaces, configured as an array, so instead of having multiple
+# keys, just append them in this list:
+# workspace = [
+#     "darkfi:Ar7GhqEPdc8dYWbmPwLaTfvtHGwaS9Ki2UmSJvCURisd",
+# ]
+
+# Network settings
 [net]
-## P2P accept addresses
-#inbound = ["tls://127.0.0.1:24331"]
+# P2P accept addresses
+#inbound = ["tls://0.0.0.0:24331"]
 
-## Connection slots
-outbound_connections=8
+# Outbound connection slots
+outbound_connections = 8
 
-## P2P external addresses
-#external_addr = ["tls://127.0.0.1:24331"]
+# P2P external addresses, if your node is reachable from the Internet.
+#external_addr = ["tls://your_ip_addr_or_domain:24331"]
 
-## Peers to connect to
+# Manual connections to peers. This is in addition to outbound_connections.
 #peers = ["tls://127.0.0.1:24331"]
 
-## Seed nodes to connect to
+# Seed nodes to connect to
 seeds = ["tls://lilith0.dark.fi:24331", "tls://lilith1.dark.fi:24331"]
 
 # Prefered transports for outbound connections
 #transports = ["tls", "tcp"]
 
-## these are the default configuration for the p2p network
-#manual_attempt_limit=0
-#seed_query_timeout_seconds=8
-#connect_timeout_seconds=10
-#channel_handshake_seconds=4
-#channel_heartbeat_seconds=10
+# These are the default configuration for the P2P network
+#manual_attempt_limit = 0
+#seed_query_timeout_seconds = 8
+#connect_timeout_seconds = 10
+#channel_handshake_seconds = 4
+#channel_heartbeat_seconds = 10
