@@ -2,7 +2,7 @@ use fxhash::FxHashMap;
 
 use darkfi::Result;
 
-use crate::model::{Event, EventId, EventsQueueArc, Model};
+use crate::model::{Event, EventId, EventsQueueArc};
 
 struct View {
     seen: FxHashMap<EventId, Event>,

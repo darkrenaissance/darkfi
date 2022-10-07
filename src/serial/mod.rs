@@ -770,52 +770,6 @@ mod tests {
         */
     }
 
-    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
-    struct TestDerive0 {
-        foo: String,
-        bar: u64,
-    }
-
-    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
-    struct TestDerive1 {
-        baz: TestDerive0,
-        meh: bool,
-    }
-
-    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
-    struct TestDerive2(u64);
-
-    #[derive(Debug, PartialEq, Clone, SerialEncodable, SerialDecodable)]
-    struct TestDerive3 {
-        foo: u64,
-        #[skip_serialize]
-        bar: u64,
-        meh: u64,
-    }
-
-    #[test]
-    fn serialize_deserialize_struct() {
-        let t0 = TestDerive0 { foo: String::from("Andrew"), bar: 42 };
-        let t1 = TestDerive1 { baz: t0.clone(), meh: false };
-        let t2 = TestDerive2(u64::MAX);
-        let t3 = TestDerive3 { foo: 30, bar: 20, meh: 44 };
-
-        let t0_bytes = serialize(&t0);
-        let t1_bytes = serialize(&t1);
-        let t2_bytes = serialize(&t2);
-        let t3_bytes = serialize(&t3);
-
-        let t0_de: TestDerive0 = deserialize(&t0_bytes).unwrap();
-        let t1_de: TestDerive1 = deserialize(&t1_bytes).unwrap();
-        let t2_de: TestDerive2 = deserialize(&t2_bytes).unwrap();
-        let t3_de: TestDerive3 = deserialize(&t3_bytes).unwrap();
-
-        assert_eq!(t0, t0_de);
-        assert_eq!(t1, t1_de);
-        assert_eq!(t2, t2_de);
-        assert_eq!(t3_de, TestDerive3 { foo: 30, bar: 0, meh: 44 });
-    }
-
     #[test]
     fn encode_payload_test() -> Result<(), Error> {
         let mut buf = vec![];
@@ -835,5 +789,70 @@ mod tests {
             ]
         );
         Ok(())
+    }
+
+    #[derive(Debug, PartialEq, SerialEncodable, SerialDecodable)]
+    enum TestEnum0 {
+        First,
+        Second,
+        Third,
+    }
+
+    #[derive(Debug, PartialEq, SerialEncodable, SerialDecodable)]
+    enum TestEnum1 {
+        First = 0x01,
+        Second = 0x03,
+        Third = 0xf1,
+        Fourth = 0xfefe,
+    }
+
+    #[test]
+    fn derive_serialize_deserialize_enum() {
+        let first = serialize(&TestEnum0::First);
+        let second = serialize(&TestEnum0::Second);
+        let third = serialize(&TestEnum0::Third);
+        assert_eq!(deserialize::<TestEnum0>(&first).unwrap(), TestEnum0::First);
+        assert_eq!(deserialize::<TestEnum0>(&second).unwrap(), TestEnum0::Second);
+        assert_eq!(deserialize::<TestEnum0>(&third).unwrap(), TestEnum0::Third);
+
+        let first = serialize(&TestEnum1::First);
+        let second = serialize(&TestEnum1::Second);
+        let third = serialize(&TestEnum1::Third);
+        let fourth = serialize(&TestEnum1::Fourth);
+        assert_eq!(first, [0]);
+        assert_eq!(second, [1]);
+        assert_eq!(third, [2]);
+        assert_eq!(fourth, [3]);
+    }
+
+    #[derive(Debug, PartialEq, SerialEncodable, SerialDecodable)]
+    struct TestStruct0 {
+        foo: u64,
+        bar: bool,
+        baz: String,
+    }
+
+    #[derive(Debug, PartialEq, SerialEncodable, SerialDecodable)]
+    struct TestStruct1(String);
+
+    #[test]
+    fn derive_serialize_deserialize_struct() {
+        let foo = 44;
+        let bar = true;
+        let baz = String::from("foobarbaz");
+        let ts0 = TestStruct0 { foo, bar, baz: baz.clone() };
+        let ts0_s = serialize(&ts0);
+        let ts0_n = deserialize::<TestStruct0>(&ts0_s).unwrap();
+        assert_eq!(foo, ts0_n.foo);
+        assert_eq!(bar, ts0_n.bar);
+        assert_eq!(baz.clone(), ts0_n.baz);
+        assert_eq!(ts0, ts0_n);
+        assert_eq!(ts0_n, TestStruct0 { foo, bar, baz: baz.clone() });
+
+        let ts1 = TestStruct1(baz.clone());
+        let ts1_s = serialize(&ts1);
+        let ts1_n = deserialize::<TestStruct1>(&ts1_s).unwrap();
+        assert_eq!(ts1, ts1_n);
+        assert_eq!(ts1_n, TestStruct1(baz.clone()));
     }
 }

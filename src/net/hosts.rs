@@ -48,7 +48,20 @@ impl Hosts {
         }
     }
 
-    // TODO: add single host store, which also checks that resolved ips are the same as the connection
+    /// Add a new hosts external adders to the host list, after filtering and verifying
+    /// the address url resolves to the provided connection address.
+    pub async fn store_ext(&self, connection_addr: Url, input_addrs: Vec<Url>) {
+        let addrs = if !self.localnet {
+            let filtered = filter_localnet(input_addrs);
+            let filtered = filter_invalid(&self.ipv4_range, &self.ipv6_range, filtered);
+            filter_non_resolving(connection_addr, filtered)
+        } else {
+            input_addrs
+        };
+        for addr in addrs {
+            self.addrs.lock().await.insert(addr);
+        }
+    }
 
     /// Return the list of hosts.
     pub async fn load_all(&self) -> Vec<Url> {
@@ -135,6 +148,64 @@ fn filter_invalid(
     filtered
 }
 
+/// Auxiliary function to filter unresolvable hosts, based on provided connection addr (excluding onion).
+fn filter_non_resolving(connection_addr: Url, input_addrs: Vec<Url>) -> Vec<Url> {
+    let connection_domain = connection_addr.domain().unwrap();
+    // Validate connection onion domain
+    if connection_domain.ends_with(".onion") && !is_valid_onion(connection_domain) {
+        return vec![]
+    }
+
+    // Retrieve connection IPs
+    let mut ipv4_range = vec![];
+    let mut ipv6_range = vec![];
+    for i in connection_addr.socket_addrs(|| None).unwrap() {
+        match i.ip() {
+            IpAddr::V4(a) => {
+                ipv4_range.push(a);
+            }
+            IpAddr::V6(a) => {
+                ipv6_range.push(a);
+            }
+        }
+    }
+
+    // Filter input addresses
+    let mut filtered = vec![];
+    for addr in input_addrs {
+        // Keep valid onion domains
+        let addr_domain = addr.domain().unwrap();
+        if addr_domain.ends_with(".onion") && addr_domain == connection_domain {
+            filtered.push(addr.clone());
+            continue
+        }
+
+        // Checking IP validity
+        let mut valid = true;
+        let socket_addrs = addr.socket_addrs(|| None).unwrap();
+        for i in socket_addrs {
+            match i.ip() {
+                IpAddr::V4(a) => {
+                    if !ipv4_range.contains(&a) {
+                        valid = false;
+                        break
+                    }
+                }
+                IpAddr::V6(a) => {
+                    if !ipv6_range.contains(&a) {
+                        valid = false;
+                        break
+                    }
+                }
+            }
+        }
+        if valid {
+            filtered.push(addr.clone());
+        }
+    }
+    filtered
+}
+
 /// Auxiliary function to validate an onion.
 fn is_valid_onion(onion: &str) -> bool {
     let onion = match onion.strip_suffix(".onion") {
@@ -148,5 +219,5 @@ fn is_valid_onion(onion: &str) -> bool {
 
     let alphabet = base32::Alphabet::RFC4648 { padding: false };
 
-    !base32::decode(alphabet, onion).is_none()
+    base32::decode(alphabet, onion).is_some()
 }

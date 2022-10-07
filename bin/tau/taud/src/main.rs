@@ -130,7 +130,7 @@ async fn on_receive_task(
     workspaces: &FxHashMap<String, SalsaBox>,
 ) -> TaudResult<()> {
     for (workspace, salsa_box) in workspaces.iter() {
-        let task = decrypt_task(&task, &salsa_box);
+        let task = decrypt_task(task, salsa_box);
         if let Err(e) = task {
             info!("unable to decrypt the task: {}", e);
             continue
@@ -139,7 +139,7 @@ async fn on_receive_task(
         let mut task = task.unwrap();
         info!(target: "tau", "Save the task: ref: {}", task.ref_id);
         task.workspace = workspace.clone();
-        task.save(&datastore_path)?;
+        task.save(datastore_path)?;
     }
     Ok(())
 }
@@ -187,7 +187,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         loop {
             println!("Name for the new workspace: ");
             let mut workspace = String::new();
-            stdin().read_line(&mut workspace).ok().expect("Failed to read line");
+            stdin().read_line(&mut workspace).expect("Failed to read line");
             let workspace = workspace.to_lowercase();
             let workspace = workspace.trim();
             if workspace.is_empty() && workspace.len() < 3 {

@@ -154,10 +154,7 @@ impl Clock {
 
 #[cfg(test)]
 mod tests {
-    use crate::util::{
-        clock::{Clock, Ticks},
-        time,
-    };
+    use crate::util::clock::{Clock, Ticks};
     use futures::executor::block_on;
     use std::{thread, time::Duration};
     #[test]
@@ -166,7 +163,7 @@ mod tests {
         //block th for 3 secs
         thread::sleep(Duration::from_millis(1000));
         let ttg = block_on(clock.time_to_genesis()).0;
-        assert!(ttg >= 1 && ttg < 2);
+        assert!((1..2).contains(&ttg));
     }
 
     fn clock_ticking() {

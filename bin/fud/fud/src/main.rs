@@ -275,21 +275,21 @@ impl Fud {
 
         // We execute this sequence to prevent lock races between threads
         // Verify key exists
-        let exists = self.dht.read().await.contains_key(key_hash.clone());
-        if let None = exists {
+        let exists = self.dht.read().await.contains_key(key_hash);
+        if exists.is_none() {
             info!("Did not find key: {}", key);
-            return server_error(RpcError::UnknownKey, id).into()
+            return server_error(RpcError::UnknownKey, id)
         }
 
         // Check if key is local or should query network
         let path = self.folder.join(key.clone());
         let local = exists.unwrap();
         if local {
-            match self.dht.read().await.get(key_hash.clone()) {
+            match self.dht.read().await.get(key_hash) {
                 Some(_) => return JsonResponse::new(json!(path), id).into(),
                 None => {
                     info!("Did not find key: {}", key);
-                    return server_error(RpcError::UnknownKey, id).into()
+                    return server_error(RpcError::UnknownKey, id)
                 }
             }
         }
@@ -297,7 +297,7 @@ impl Fud {
         info!("Key doesn't exist locally, querring network...");
         if let Err(e) = self.dht.read().await.request_key(key_hash).await {
             error!("Failed to query key: {}", e);
-            return server_error(RpcError::QueryFailed, id).into()
+            return server_error(RpcError::QueryFailed, id)
         }
 
         info!("Waiting response...");
@@ -322,13 +322,13 @@ impl Fud {
                     }
                     None => {
                         info!("Did not find key: {}", key);
-                        server_error(RpcError::UnknownKey, id).into()
+                        server_error(RpcError::UnknownKey, id)
                     }
                 }
             }
             Err(e) => {
                 error!("Error while waiting network response: {}", e);
-                server_error(RpcError::WaitingNetworkError, id).into()
+                server_error(RpcError::WaitingNetworkError, id)
             }
         }
     }

@@ -109,17 +109,12 @@ impl<'a> View {
     // according to what set of msgs is selected.
     // it's ugly. would prefer something more simple
     fn update_msg_index(&mut self) {
-        match self.id_menu.state.selected() {
-            Some(i) => match self.ordered_list.get(i) {
-                Some(i) => match self.msg_list.msg_map.get(i) {
-                    Some(i) => {
-                        self.msg_list.index = i.len();
-                    }
-                    None => {}
-                },
-                None => {}
-            },
-            None => {}
+        if let Some(sel) = self.id_menu.state.selected() {
+            if let Some(ord) = self.ordered_list.get(sel) {
+                if let Some(i) = self.msg_list.msg_map.get(ord) {
+                    self.msg_list.index = i.len();
+                }
+            }
         }
     }
 
@@ -328,7 +323,7 @@ impl<'a> View {
                         lines.push(Spans::from(accept_addr));
                     }
                     if session.hosts.is_some() {
-                        let hosts = Span::styled(format!("Hosts:"), style);
+                        let hosts = Span::styled("Hosts:".to_string(), style);
                         lines.push(Spans::from(hosts));
                         for host in session.hosts.as_ref().unwrap() {
                             let host = Span::styled(format!("      {}", host), style);

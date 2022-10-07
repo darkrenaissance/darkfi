@@ -89,19 +89,19 @@ pub fn get_log_config() -> simplelog::Config {
 ///
 /// The Cargo.toml dependencies needed for this are:
 /// ```text
-/// async-channel = "1.6.1"
+/// async-channel = "1.7.1"
 /// async-executor = "1.4.1"
-/// async-std = "1.11.0"
+/// async-std = "1.12.0"
 /// darkfi = { path = "../../", features = ["util"] }
 /// easy-parallel = "3.2.0"
 /// futures-lite = "1.12.0"
-/// simplelog = "0.12.0-alpha1"
+/// simplelog = "0.12.0"
 ///
 /// # Argument parsing
-/// serde = "1.0.136"
-/// serde_derive = "1.0.136"
+/// serde = "1.0.135"
+/// serde_derive = "1.0.145"
 /// structopt = "0.3.26"
-/// structopt-toml = "0.5.0"
+/// structopt-toml = "0.5.1"
 /// ```
 ///
 /// Example usage:
@@ -216,4 +216,16 @@ pub fn fg_red(message: &str) -> String {
 
 pub fn fg_green(message: &str) -> String {
     format!("{}{}{}", color::Fg(color::Green), message, color::Fg(color::Reset))
+}
+
+pub fn start_fg_red() -> String {
+    format!("{}", color::Fg(color::Red))
+}
+
+pub fn start_fg_green() -> String {
+    format!("{}", color::Fg(color::Green))
+}
+
+pub fn fg_reset() -> String {
+    format!("{}", color::Fg(color::Reset))
 }

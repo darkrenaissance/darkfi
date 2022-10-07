@@ -40,6 +40,8 @@ impl Rpc {
 async fn start(options: CliDao) -> Result<()> {
     let rpc_addr = "tcp://127.0.0.1:7777";
     let client = Rpc { client: RpcClient::new(Url::parse(rpc_addr)?).await? };
+
+    #[allow(clippy::single_match)]
     match options.command {
         Some(CliDaoSubCommands::Hello {}) => {
             let reply = client.say_hello().await?;

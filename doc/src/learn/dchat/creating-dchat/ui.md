@@ -6,7 +6,7 @@ send messages and see received messages inside the inbox. Our inbox
 simply displays the messages that `ProtocolDchat` has saved in the
 `DchatMsgBuffer`.
 
-Here's what is should look like:
+Here's what it should look like:
 
 ```rust
 {{#include ../../../../../example/dchat/src/main.rs:38:84}}

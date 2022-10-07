@@ -102,8 +102,12 @@ impl Epoch {
         self.consensus.get_epoch_len() as usize
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn col(&self) -> usize {
-        if self.coins.len() == 0 {
+        if self.coins.is_empty() {
             0
         } else {
             self.coins[0].len()
@@ -180,21 +184,21 @@ impl Epoch {
         let (root_sks, path_sks) = self.create_coins_sks();
 
         // matrix of leadcoins, each row has competing coins per slot.
-        let mut coins: Vec<Vec<LeadCoin>> = vec![];
+        let _coins: Vec<Vec<LeadCoin>> = vec![];
         for i in 0..self.len() {
             // if you have any stake used is for competition
-            if owned.len() > 0 {
+            if !owned.is_empty() {
                 let mut slot_coins = vec![];
-                for j in 0..owned.len() {
+                for elem in &owned {
                     let coin = self.create_leadcoin(
                         sigma,
-                        owned[j].note.value,
+                        elem.note.value,
                         i,
                         root_sks[i],
                         path_sks[i],
                         seeds[i],
                     );
-                    slot_coins.push(coin.clone());
+                    slot_coins.push(coin);
                 }
                 self.coins.push(slot_coins);
             }
@@ -330,7 +334,7 @@ impl Epoch {
             am_leader.push(iam_leader);
         }
         *idx = highest_stake_idx;
-        am_leader.len() > 0
+        !am_leader.is_empty()
     }
 
     /// * `sl` - relative slot index (zero based)

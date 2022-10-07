@@ -33,7 +33,6 @@ pub struct IrcConfig {
     pub capabilities: HashMap<String, bool>,
 
     // channels and contacts
-    pub auto_channels: Vec<String>,
     pub channels: HashMap<String, ChannelInfo>,
     pub contacts: HashMap<String, ContactInfo>,
 }
@@ -43,9 +42,14 @@ impl IrcConfig {
         let password = settings.password.as_ref().unwrap_or(&String::new()).clone();
         let private_key = settings.private_key.clone();
 
-        let auto_channels = settings.autojoin.clone();
+        let mut channels = settings.channels.clone();
 
-        let channels = settings.channels.clone();
+        for chan in settings.autojoin.iter() {
+            if !channels.contains_key(chan) {
+                channels.insert(chan.clone(), ChannelInfo::new());
+            }
+        }
+
         let contacts = settings.contacts.clone();
 
         let mut capabilities = HashMap::new();
@@ -59,7 +63,6 @@ impl IrcConfig {
             is_pass_init: false,
             nickname: "anon".to_string(),
             password,
-            auto_channels,
             channels,
             contacts,
             private_key,
@@ -68,53 +71,79 @@ impl IrcConfig {
     }
 }
 
+#[derive(Clone)]
+pub enum ClientSubMsg {
+    Privmsg(PrivMsgEvent),
+    Config(IrcConfig),
+}
+#[derive(Clone)]
+pub enum NotifierMsg {
+    Privmsg(PrivMsgEvent),
+    UpdateConfig,
+}
+
 pub struct IrcServer {
     settings: Args,
-    clients_subscriptions: SubscriberPtr<PrivMsgEvent>,
+    clients_subscriptions: SubscriberPtr<ClientSubMsg>,
 }
 
 impl IrcServer {
     pub async fn new(
         settings: Args,
-        clients_subscriptions: SubscriberPtr<PrivMsgEvent>,
+        clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<Self> {
         Ok(Self { settings, clients_subscriptions })
     }
     pub async fn start(&self, executor: Arc<Executor<'_>>) -> Result<()> {
-        let (notifier, recv) = async_channel::unbounded();
+        let (msg_notifier, msg_recv) = async_channel::unbounded();
 
         // Listen to msgs from clients
-        executor.spawn(Self::listen_to_msgs(recv, self.clients_subscriptions.clone())).detach();
+        executor.spawn(Self::listen_to_msgs(msg_recv, self.clients_subscriptions.clone())).detach();
 
         // Start listening for new connections
-        self.listen(notifier, executor.clone()).await?;
+        self.listen(msg_notifier, executor.clone()).await?;
 
         Ok(())
     }
 
     /// Start listening to msgs from irc clients
     pub async fn listen_to_msgs(
-        recv: async_channel::Receiver<(PrivMsgEvent, u64)>,
-        clients_subscriptions: SubscriberPtr<PrivMsgEvent>,
+        recv: async_channel::Receiver<(NotifierMsg, u64)>,
+        clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
         loop {
             let (msg, subscription_id) = recv.recv().await?;
 
-            // TODO Add to View to prevent duplicate msg, since a client may has already added the
-            // msg to its buffer
+            match msg {
+                NotifierMsg::Privmsg(msg) => {
+                    // TODO Add to View to prevent duplicate msg, since a client may has already added the
+                    // msg to its buffer
 
-            // Since this will be added to the View directly, other clients connected to irc
-            // server must get informed about this new msg
-            clients_subscriptions.notify_with_exclude(msg, &[subscription_id]).await;
+                    // Since this will be added to the View directly, other clients connected to irc
+                    // server must get informed about this new msg
+                    clients_subscriptions
+                        .notify_with_exclude(ClientSubMsg::Privmsg(msg), &[subscription_id])
+                        .await;
 
-            // TODO broadcast to the p2p network
+                    // TODO broadcast to the p2p network
+                }
+
+                NotifierMsg::UpdateConfig => {
+                    //
+                    // load and parse the new settings from configuration file and pass it to all
+                    // irc clients
+                    //
+                    // let new_config = IrcConfig::new()?;
+                    // clients_subscriptions.notify(ClientSubMsg::Config(new_config)).await;
+                }
+            }
         }
     }
 
     /// Start listening to new connections from irc clients
     pub async fn listen(
         &self,
-        notifier: async_channel::Sender<(PrivMsgEvent, u64)>,
+        notifier: async_channel::Sender<(NotifierMsg, u64)>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let (listener, acceptor) = self.setup_listener().await?;
@@ -158,7 +187,7 @@ impl IrcServer {
         &self,
         stream: C,
         peer_addr: SocketAddr,
-        notifier: async_channel::Sender<(PrivMsgEvent, u64)>,
+        notifier: async_channel::Sender<(NotifierMsg, u64)>,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         let (reader, writer) = stream.split();

@@ -133,14 +133,14 @@ impl UnreadEvents {
         let mut prune_ids = vec![];
         for (id, e) in self.events.iter() {
             if e.timestamp + (UNREAD_EVENT_EXPIRE_TIME * 1000) < get_current_time() {
-                prune_ids.push(id.clone());
+                prune_ids.push(*id);
             }
         }
         for id in prune_ids {
             self.events.remove(&id);
         }
 
-        self.events.insert(event.hash().clone(), event.clone());
+        self.events.insert(event.hash(), event.clone());
     }
 }
 

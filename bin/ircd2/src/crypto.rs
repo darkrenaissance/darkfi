@@ -74,10 +74,10 @@ pub fn decrypt_target(
             continue
         }
 
-        let salt_box = chan_info.salt_box(&name).clone();
+        let salt_box = chan_info.salt_box(name).clone();
 
         if let Some(salt_box) = salt_box {
-            if let Some(_) = try_decrypt(&salt_box, &privmsg.target) {
+            if try_decrypt(&salt_box, &privmsg.target).is_some() {
                 privmsg.target = name.clone();
                 return
             }
@@ -89,10 +89,10 @@ pub fn decrypt_target(
     }
 
     for (name, contact_info) in configured_contacts {
-        let salt_box = contact_info.salt_box(&private_key.as_ref().unwrap(), &name).clone();
+        let salt_box = contact_info.salt_box(private_key.as_ref().unwrap(), name).clone();
 
         if let Some(salt_box) = salt_box {
-            if let Some(_) = try_decrypt(&salt_box, &privmsg.target) {
+            if try_decrypt(&salt_box, &privmsg.target).is_some() {
                 privmsg.target = name.clone();
                 return
             }
@@ -102,8 +102,8 @@ pub fn decrypt_target(
 
 /// Decrypt PrivMsg nickname and message
 pub fn decrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut PrivMsgEvent) {
-    let decrypted_nick = try_decrypt(&salt_box, &privmsg.nick);
-    let decrypted_msg = try_decrypt(&salt_box, &privmsg.msg);
+    let decrypted_nick = try_decrypt(salt_box, &privmsg.nick);
+    let decrypted_msg = try_decrypt(salt_box, &privmsg.msg);
 
     if decrypted_nick.is_none() && decrypted_msg.is_none() {
         return

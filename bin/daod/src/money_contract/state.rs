@@ -41,7 +41,7 @@ impl WalletCache {
         for (other_secret, own_coins) in self.cache.iter_mut() {
             if *secret == *other_secret {
                 // clear own_coins vec, and return current contents
-                return std::mem::replace(own_coins, Vec::new())
+                return std::mem::take(own_coins)
             }
         }
         panic!("you forget to track() this secret!");

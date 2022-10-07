@@ -319,8 +319,13 @@ pub enum Error {
     // ==============
     // DHT errors
     // ==============
+    // FIXME: This is out of context, be specific when writing errors.
     #[error("Did not find key")]
     UnknownKey,
+
+    // Catch-all
+    #[error("{0}")]
+    Custom(String),
 }
 
 /// Transaction verification errors

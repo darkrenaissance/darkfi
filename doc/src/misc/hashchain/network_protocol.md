@@ -11,23 +11,13 @@ The protocol classify the Events by their state:
 	Unread: read_confirms < `MAX_CONFIMRS` 
 	Read: 	read_confirms >= `MAX_CONFIMRS` 
 
-
-## InvId
-
-	type InvId = u64;
-
-## InvItem
-
-| Description   | Data Type      	   | Comments      			    |
-|-------------- | -------------------- | -------------------------- |
-| Id  			| `InvId`  			   | Unique generated integer	|
-| Hash  		| `EventId`   		   | Hash of Event				|
-
 ## Inv
+
+Inventory vectors are used for notifying other nodes about objects they have or data which is being requested.
 
 | Description   | Data Type      	   | Comments           		|
 |-------------- | -------------------- | -------------------------- |
-| Invs	  	  	| Vec<`InvItem`> 	   | A list of `InvItem`		|
+| invs	  	  	| `Vec<[u8; 32]>`      | Inventory items    		|
 
 ### Receiving an `Inv` message
 

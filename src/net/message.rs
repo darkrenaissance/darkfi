@@ -37,6 +37,12 @@ pub struct AddrsMessage {
     pub addrs: Vec<Url>,
 }
 
+/// Sends external address information to inbound connection.
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct ExtAddrsMessage {
+    pub ext_addrs: Vec<Url>,
+}
+
 /// Requests version information of outbound connection.
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct VersionMessage {
@@ -71,6 +77,12 @@ impl Message for GetAddrsMessage {
 impl Message for AddrsMessage {
     fn name() -> &'static str {
         "addr"
+    }
+}
+
+impl Message for ExtAddrsMessage {
+    fn name() -> &'static str {
+        "extaddr"
     }
 }
 

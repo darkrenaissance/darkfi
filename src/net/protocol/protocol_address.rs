@@ -20,6 +20,7 @@ const SEND_ADDR_SLEEP_SECONDS: u64 = 900;
 pub struct ProtocolAddress {
     channel: ChannelPtr,
     addrs_sub: MessageSubscription<message::AddrsMessage>,
+    ext_addrs_sub: MessageSubscription<message::ExtAddrsMessage>,
     get_addrs_sub: MessageSubscription<message::GetAddrsMessage>,
     hosts: HostsPtr,
     jobsman: ProtocolJobsManagerPtr,
@@ -27,8 +28,8 @@ pub struct ProtocolAddress {
 }
 
 impl ProtocolAddress {
-    /// Create a new address protocol. Makes an address and get-address
-    /// subscription and adds them to the address protocol instance.
+    /// Create a new address protocol. Makes an address, an external address
+    /// and a  get-address subscription and adds them to the address protocol instance.
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let settings = p2p.settings();
         let hosts = p2p.hosts();
@@ -40,6 +41,13 @@ impl ProtocolAddress {
             .await
             .expect("Missing addrs dispatcher!");
 
+        // Creates a subscription to external address message.
+        let ext_addrs_sub = channel
+            .clone()
+            .subscribe_msg::<message::ExtAddrsMessage>()
+            .await
+            .expect("Missing ext_addrs dispatcher!");
+
         // Creates a subscription to get-address message.
         let get_addrs_sub = channel
             .clone()
@@ -50,6 +58,7 @@ impl ProtocolAddress {
         Arc::new(Self {
             channel: channel.clone(),
             addrs_sub,
+            ext_addrs_sub,
             get_addrs_sub,
             hosts,
             jobsman: ProtocolJobsManager::new("ProtocolAddress", channel),
@@ -66,6 +75,18 @@ impl ProtocolAddress {
             let addrs_msg = self.addrs_sub.receive().await?;
             debug!(target: "net", "ProtocolAddress::handle_receive_addrs() received {} addrs", addrs_msg.addrs.len());
             self.hosts.store(addrs_msg.addrs.clone()).await;
+        }
+    }
+
+    /// Handles receiving the external address message. Loops to continually recieve
+    /// external address messages on the address subsciption. Adds the recieved
+    /// external addresses to the list of hosts.
+    async fn handle_receive_ext_addrs(self: Arc<Self>) -> Result<()> {
+        debug!(target: "net", "ProtocolAddress::handle_receive_ext_addrs() [START]");
+        loop {
+            let ext_addrs_msg = self.ext_addrs_sub.receive().await?;
+            debug!(target: "net", "ProtocolAddress::handle_receive_ext_addrs() received {} addrs", ext_addrs_msg.ext_addrs.len());
+            self.hosts.store_ext(self.channel.address(), ext_addrs_msg.ext_addrs.clone()).await;
         }
     }
 
@@ -92,9 +113,9 @@ impl ProtocolAddress {
     async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
         debug!(target: "net", "ProtocolAddress::send_addrs() [START]");
         loop {
-            let addrs = self.settings.external_addr.clone();
-            let addr_msg = message::AddrsMessage { addrs };
-            self.channel.clone().send(addr_msg).await?;
+            let ext_addrs = self.settings.external_addr.clone();
+            let ext_addr_msg = message::ExtAddrsMessage { ext_addrs };
+            self.channel.clone().send(ext_addr_msg).await?;
             async_util::sleep(SEND_ADDR_SLEEP_SECONDS).await;
         }
     }
@@ -118,6 +139,7 @@ impl ProtocolBase for ProtocolAddress {
         debug!(target: "net", "ProtocolAddress::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_ext_addrs(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_get_addrs(), executor).await;
 
         // Send get_address message.

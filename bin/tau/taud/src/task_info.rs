@@ -179,13 +179,13 @@ impl TaskInfo {
     pub fn set_title(&mut self, title: &str) {
         debug!(target: "tau", "TaskInfo::set_title()");
         self.title = title.into();
-        self.set_event("title", &title);
+        self.set_event("title", title);
     }
 
     pub fn set_desc(&mut self, desc: &str) {
         debug!(target: "tau", "TaskInfo::set_desc()");
         self.desc = desc.into();
-        self.set_event("desc", &desc);
+        self.set_event("desc", desc);
     }
 
     pub fn set_tags(&mut self, tags: &[String]) {
@@ -259,6 +259,6 @@ impl TaskInfo {
             return
         }
         self.state = state.to_string();
-        self.set_event("state", &state);
+        self.set_event("state", state);
     }
 }

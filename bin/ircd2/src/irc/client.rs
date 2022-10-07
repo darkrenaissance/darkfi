@@ -17,7 +17,7 @@ use crate::{
     ChannelInfo,
 };
 
-use super::IrcConfig;
+use super::{ClientSubMsg, IrcConfig, NotifierMsg};
 
 pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     // network stream
@@ -28,8 +28,8 @@ pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     // irc config
     irc_config: IrcConfig,
 
-    server_notifier: async_channel::Sender<(PrivMsgEvent, u64)>,
-    subscription: Subscription<PrivMsgEvent>,
+    server_notifier: async_channel::Sender<(NotifierMsg, u64)>,
+    subscription: Subscription<ClientSubMsg>,
 }
 
 impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
@@ -38,8 +38,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         read_stream: BufReader<ReadHalf<C>>,
         address: SocketAddr,
         irc_config: IrcConfig,
-        server_notifier: async_channel::Sender<(PrivMsgEvent, u64)>,
-        subscription: Subscription<PrivMsgEvent>,
+        server_notifier: async_channel::Sender<(NotifierMsg, u64)>,
+        subscription: Subscription<ClientSubMsg>,
     ) -> Self {
         Self { write_stream, read_stream, address, irc_config, subscription, server_notifier }
     }
@@ -51,11 +51,17 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
             futures::select! {
                 // Process msg from View
-                mut msg = self.subscription.receive().fuse() => {
-                    if let Err(e) = self.process_msg(&mut msg).await {
-                        error!("[CLIENT {}] Process msg: {}",  self.address, e);
-                        break
+                msg = self.subscription.receive().fuse() => {
+                    match msg {
+                        ClientSubMsg::Privmsg(mut m) => {
+                            if let Err(e) = self.process_msg(&mut m).await {
+                                error!("[CLIENT {}] Process msg: {}",  self.address, e);
+                                break
+                            }
+                        }
+                        ClientSubMsg::Config(c) => self.update_config(c).await,
                     }
+
                 }
                 // Process msg from IRC client
                 err = self.read_stream.read_line(&mut line).fuse() => {
@@ -73,6 +79,18 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
         warn!("[CLIENT {}] Close connection", self.address);
         self.subscription.unsubscribe().await;
+    }
+
+    pub async fn update_config(&mut self, new_config: IrcConfig) {
+        self.irc_config.channels.extend(new_config.channels);
+        self.irc_config.contacts.extend(new_config.contacts);
+        self.irc_config.nickname = new_config.nickname;
+        self.irc_config.private_key = new_config.private_key;
+        self.irc_config.password = new_config.password;
+
+        if self.on_receive_join(self.irc_config.channels.keys().cloned().collect()).await.is_err() {
+            warn!("Error to join updated channels");
+        }
     }
 
     pub async fn process_msg(&mut self, msg: &mut PrivMsgEvent) -> Result<()> {
@@ -114,7 +132,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         } else if self.irc_config.private_key.is_some() {
             if let Some(contact_info) = self.irc_config.contacts.get(&msg.target) {
                 let salt_box = &contact_info
-                    .salt_box(&self.irc_config.private_key.as_ref().unwrap(), &msg.target);
+                    .salt_box(self.irc_config.private_key.as_ref().unwrap(), &msg.target);
 
                 if salt_box.is_none() {
                     return Ok(())
@@ -181,10 +199,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn registre(&mut self) -> Result<()> {
-        if !self.irc_config.is_pass_init {
-            if self.irc_config.password.is_empty() {
-                self.irc_config.is_pass_init = true
-            }
+        if !self.irc_config.is_pass_init && self.irc_config.password.is_empty() {
+            self.irc_config.is_pass_init = true
         }
 
         if !self.irc_config.is_registered &&
@@ -199,7 +215,6 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             self.irc_config.is_registered = true;
 
             // join all channels
-            self.on_receive_join(self.irc_config.auto_channels.clone()).await?;
             self.on_receive_join(self.irc_config.channels.keys().cloned().collect()).await?;
 
             if *self.irc_config.capabilities.get("no-history").unwrap() {
@@ -458,14 +473,14 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 return Ok(())
             }
 
-            if let Some(salt_box) = &channel_info.salt_box(&target) {
+            if let Some(salt_box) = &channel_info.salt_box(target) {
                 encrypt_privmsg(salt_box, &mut privmsg);
                 info!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.address, privmsg.to_string());
             }
         } else if self.irc_config.private_key.is_some() {
             if let Some(contact_info) = self.irc_config.contacts.get(target) {
                 if let Some(salt_box) =
-                    &contact_info.salt_box(&self.irc_config.private_key.as_ref().unwrap(), target)
+                    &contact_info.salt_box(self.irc_config.private_key.as_ref().unwrap(), target)
                 {
                     encrypt_privmsg(salt_box, &mut privmsg);
                     info!(
@@ -477,7 +492,10 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
         }
 
-        self.server_notifier.send((privmsg, self.subscription.get_id())).await?;
+        self.server_notifier
+            .send((NotifierMsg::Privmsg(privmsg), self.subscription.get_id()))
+            .await?;
+
         Ok(())
     }
 

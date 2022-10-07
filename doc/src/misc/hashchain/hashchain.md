@@ -12,7 +12,7 @@ The `Event` could have many actions according to the underlying data.
 
 	enum EventAction { ... };	
 
-#### Privmsg 
+### Privmsg 
 
 | Description 	| Data Type   	| Comments																	|
 |-------------- |-------------- | ------------------------------------------------------------------------- |
@@ -25,17 +25,16 @@ The `Event` could have many actions according to the underlying data.
 | Description            | Data Type      | Comments                    |
 |----------------------- | -------------- | --------------------------- |
 | previous_event_hash    | `EventId` 	  | Hash of the previous `Event`|
-| Action     			 | `EventAction`  | `Event`'s action 			|
-| Timestamp     		 | u64  		  | `Event`'s timestamp 		|
-| read_confirms			 | u8	 		  | A confirmation counter 	    |
+| action     			 | `EventAction`  | `Event`'s action 			|
+| timestamp     		 | u64  		  | `Event`'s timestamp 		|
 
 ## EventNode
 
 | Description    | Data Type      		  | Comments                    			 			  |
 |--------------- | ---------------------- | ----------------------------------------------------- |
 | parent    	 | Option<`EventId`> 	  | Only current root has this set to None   			  |
-| Event     	 | `Event`  			  | The `Event` itself 					       			  |
-| Children     	 | Vec<`EventId`>  	      | The `Event`s which has parent as this `Event` hash    |
+| event     	 | `Event`  			  | The `Event` itself 					       			  |
+| children     	 | Vec<`EventId`>  	      | The `Event`s which has parent as this `Event` hash    |
 
 ## Model 
 

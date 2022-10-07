@@ -1,14 +1,17 @@
 use std::{cmp::Ordering, io};
 
-use colored::Colorize;
+use dryoc::constants::CRYPTO_SECRETBOX_NONCEBYTES;
 use serde::{Deserialize, Serialize};
 
 use darkfi::{
     serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    util::time::Timestamp,
+    util::{
+        cli::{fg_green, fg_red},
+        time::Timestamp,
+    },
 };
 
-use crate::str_to_chars;
+use crate::util::str_to_chars;
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
 pub enum OpMethod {
@@ -19,6 +22,12 @@ pub enum OpMethod {
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
 pub struct OpMethods(pub Vec<OpMethod>);
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct EncryptedPatch {
+    pub nonce: [u8; CRYPTO_SECRETBOX_NONCEBYTES],
+    pub ciphertext: Vec<u8>,
+}
 
 #[derive(PartialEq, Eq, SerialEncodable, SerialDecodable, Serialize, Deserialize, Clone, Debug)]
 pub struct Patch {
@@ -369,7 +378,7 @@ impl Patch {
 
     pub fn colorize(&self) -> String {
         if self.ops.0.is_empty() {
-            return format!("{}", self.base.green())
+            return fg_green(&self.base)
         }
 
         let mut st = vec![];
@@ -393,11 +402,11 @@ impl Patch {
                             deleted_part.push(s.to_string());
                         }
                     }
-                    colorized_str.push(format!("{}", deleted_part.join("").red()));
+                    colorized_str.push(fg_red(&deleted_part.join("")));
                 }
                 OpMethod::Insert(insert) => {
                     let chars = str_to_chars(insert);
-                    colorized_str.push(format!("{}", chars.join("").green()));
+                    colorized_str.push(fg_green(&chars.join("")))
                 }
             }
         }
@@ -507,7 +516,7 @@ mod tests {
         patch1.insert("ex");
         patch1.retain(7);
 
-        let mut patch2 = patch_init.clone();
+        let mut patch2 = patch_init;
         patch2.delete(4);
         patch2.insert("new");
         patch2.retain(13);
@@ -544,7 +553,7 @@ mod tests {
         patch1.insert("ex");
         patch1.retain(7);
 
-        let mut patch2 = patch_init.clone();
+        let mut patch2 = patch_init;
         patch2.delete(4);
         patch2.insert("new");
         patch2.retain(13);
@@ -565,7 +574,7 @@ mod tests {
         patch1.retain(13);
         patch1.insert(" world");
 
-        let mut patch2 = patch_init.clone();
+        let mut patch2 = patch_init;
         patch2.retain(1);
         patch2.delete(5);
         patch2.insert("this is the title");

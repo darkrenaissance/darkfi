@@ -155,7 +155,7 @@ impl Builder {
         let mut outputs = vec![];
         let mut output_blinds = vec![];
         // This value_blind calc assumes there will always be at least a single output
-        assert!(self.outputs.len() > 0);
+        assert!(!self.outputs.is_empty());
 
         for (i, output) in self.outputs.iter().enumerate() {
             let value_blind = if i == self.outputs.len() - 1 {

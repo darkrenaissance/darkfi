@@ -115,7 +115,7 @@ pub fn state_transition(
     let func_call = &parent_tx.func_calls[func_call_index];
     let call_data = func_call.call_data.as_any();
 
-    assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
+    assert_eq!((*call_data).type_id(), TypeId::of::<CallData>());
     let call_data = call_data.downcast_ref::<CallData>();
 
     // This will be inside wasm so unwrap is fine.
