@@ -3,39 +3,195 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{Fields, Ident, Index, ItemEnum, ItemStruct, WhereClause};
 
-// TODO
+mod helpers;
+use helpers::contains_skip;
+
 pub fn enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2> {
     let name = &input.ident;
-    let (_impl_generics, _ty_generics, where_clause) = input.generics.split_for_impl();
-    let where_clause = where_clause.map_or_else(
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let mut where_clause = where_clause.map_or_else(
         || WhereClause { where_token: Default::default(), predicates: Default::default() },
         Clone::clone,
     );
 
-    let mut body = TokenStream2::new();
+    let mut variant_idx_body = TokenStream2::new();
+    let mut fields_body = TokenStream2::new();
+    for (variant_idx, variant) in input.variants.iter().enumerate() {
+        let variant_idx = u8::try_from(variant_idx).expect("up to 256 enum variants are supported");
+        let variant_ident = &variant.ident;
+        let mut variant_header = TokenStream2::new();
+        let mut variant_body = TokenStream2::new();
+        match &variant.fields {
+            Fields::Named(fields) => {
+                for field in &fields.named {
+                    let field_name = field.ident.as_ref().unwrap();
+                    if contains_skip(&field.attrs) {
+                        variant_header.extend(quote! { _ #field_name, }); // TODO: Test this
+                        continue
+                    } else {
+                        let field_type = &field.ty;
+                        where_clause.predicates.push(
+                            syn::parse2(quote! {
+                                #field_type: #cratename::serial::Encodable
+                            })
+                            .unwrap(),
+                        );
+                        variant_header.extend(quote! { #field_name, });
+                    }
+                    variant_body.extend(quote! {
+                        len += self.#field_name.encode(&mut s);
+                    })
+                }
+                variant_header = quote! { { #variant_header } };
+                variant_idx_body.extend(quote!(
+                    #name::#variant_ident { .. } => #variant_idx,
+                ));
+            }
+            Fields::Unnamed(fields) => {
+                for (field_idx, field) in fields.unnamed.iter().enumerate() {
+                    let field_idx =
+                        u32::try_from(field_idx).expect("up to 2^32 fields are supported");
+                    if contains_skip(&field.attrs) {
+                        let field_ident =
+                            Ident::new(format!("_id{}", field_idx).as_str(), Span::call_site());
+                        variant_header.extend(quote! { #field_ident, });
+                        continue
+                    } else {
+                        let field_type = &field.ty;
+                        where_clause.predicates.push(
+                            syn::parse2(quote! {
+                                #field_type: #cratename::serial::Encodable
+                            })
+                            .unwrap(),
+                        );
 
-    let ln = quote! {
-        let mut len = 0;
-    };
-    body.extend(ln);
-
-    for var in input.variants.iter() {
-        match &var.fields {
-            Fields::Named(_) => {}
-            Fields::Unnamed(_) => {}
-            Fields::Unit => {}
+                        let field_ident =
+                            Ident::new(format!("id{}", field_idx).as_str(), Span::call_site());
+                        variant_header.extend(quote! { #field_ident, });
+                        variant_body.extend(quote! {
+                            len += self.#field_ident.encode(&mut s)?;
+                        })
+                    }
+                }
+                variant_header = quote! { ( #variant_header )};
+                variant_idx_body.extend(quote!(
+                    #name::#variant_ident(..) => #variant_idx,
+                ));
+            }
+            Fields::Unit => {
+                variant_idx_body.extend(quote!(
+                    #name::#variant_ident => #variant_idx,
+                ));
+            }
         }
+        fields_body.extend(quote!(
+            #name::#variant_ident #variant_header => {
+                #variant_body
+            }
+        ))
     }
 
-    let ret = quote! {
-        Ok(len)
+    Ok(quote! {
+        impl #impl_generics #cratename::serial::Encodable for #name #ty_generics #where_clause {
+            fn encode<S: std::io::Write>(&self, mut s: S) -> ::core::result::Result<usize, std::io::Error> {
+                let variant_idx: u8 = match self {
+                    #variant_idx_body
+                };
+
+                s.write_all(&variant_idx.to_le_bytes())?;
+                let mut len = 1;
+
+                match self {
+                    #fields_body
+                }
+
+                Ok(len)
+            }
+        }
+    })
+}
+
+pub fn enum_de(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2> {
+    let name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let mut where_clause = where_clause.map_or_else(
+        || WhereClause { where_token: Default::default(), predicates: Default::default() },
+        Clone::clone,
+    );
+
+    let mut variant_arms = TokenStream2::new();
+    for (variant_idx, variant) in input.variants.iter().enumerate() {
+        let variant_idx = u8::try_from(variant_idx).expect("up to 256 enum variants are supported");
+        let variant_ident = &variant.ident;
+        let mut variant_header = TokenStream2::new();
+        match &variant.fields {
+            Fields::Named(fields) => {
+                for field in &fields.named {
+                    let field_name = field.ident.as_ref().unwrap();
+                    if contains_skip(&field.attrs) {
+                        variant_header.extend(quote! {
+                                #field_name: Default::default(),
+                        });
+                    } else {
+                        let field_type = &field.ty;
+                        where_clause.predicates.push(
+                            syn::parse2(quote! {
+                                #field_type: #cratename::serial::Decodable
+                            })
+                            .unwrap(),
+                        );
+
+                        variant_header.extend(quote! {
+                            #field_name: #cratename::serial::Decodable::decode(&mut d)?,
+                        });
+                    }
+                }
+                variant_header = quote! { { #variant_header } };
+            }
+            Fields::Unnamed(fields) => {
+                for field in fields.unnamed.iter() {
+                    if contains_skip(&field.attrs) {
+                        variant_header.extend(quote! { Default::default(), });
+                    } else {
+                        let field_type = &field.ty;
+                        where_clause.predicates.push(
+                            syn::parse2(quote! {
+                                #field_type: #cratename::serial::Decodable
+                            })
+                            .unwrap(),
+                        );
+
+                        variant_header
+                            .extend(quote! { #cratename::serial::Decodable::decode(&mut d)?, });
+                    }
+                }
+                variant_header = quote! { ( #variant_header ) };
+            }
+            Fields::Unit => {}
+        }
+
+        variant_arms.extend(quote! {
+            #variant_idx => #name::#variant_ident #variant_header ,
+        });
+    }
+
+    let variant_idx = quote! {
+        let variant_idx: u8 = #cratename::serial::Decodable::decode(&mut d)?;
     };
-    body.extend(ret);
 
     Ok(quote! {
-        impl #cratename::serial::Encodable for #name #where_clause {
-            fn encode<S: std::io::Write>(&self, mut s: S) -> ::core::result::Result<usize, std::io::Error> {
-                #body
+        impl #impl_generics #cratename::serial::Decodable for #name #ty_generics #where_clause {
+            fn decode<D: std::io::Read>(mut d: D) -> ::core::result::Result<Self, std::io::Error> {
+                #variant_idx
+
+                let return_value = match variant_idx {
+                    #variant_arms
+                    _ => {
+                        let msg = format!("Unexpected variant index: {:?}", variant_idx);
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, msg));
+                    }
+                };
+                Ok(return_value)
             }
         }
     })
@@ -43,7 +199,7 @@ pub fn enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2>
 
 pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStream2> {
     let name = &input.ident;
-    let (_impl_generics, _ty_generics, where_clause) = input.generics.split_for_impl();
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let mut where_clause = where_clause.map_or_else(
         || WhereClause { where_token: Default::default(), predicates: Default::default() },
         Clone::clone,
@@ -53,16 +209,9 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
 
     match &input.fields {
         Fields::Named(fields) => {
-            let ln = quote! {
-                let mut len = 0;
-            };
-            body.extend(ln);
-
             for field in &fields.named {
-                if let Some(attr) = field.attrs.get(0) {
-                    if attr.path.is_ident("skip_serialize") {
-                        continue
-                    }
+                if contains_skip(&field.attrs) {
+                    continue
                 }
 
                 let field_name = field.ident.as_ref().unwrap();
@@ -79,18 +228,8 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
                     .unwrap(),
                 );
             }
-
-            let ret = quote! {
-                Ok(len)
-            };
-            body.extend(ret)
         }
         Fields::Unnamed(fields) => {
-            let ln = quote! {
-                let mut len = 0;
-            };
-            body.extend(ln);
-
             for field_idx in 0..fields.unnamed.len() {
                 let field_idx = Index {
                     index: u32::try_from(field_idx).expect("up to 2^32 fields are supported"),
@@ -101,19 +240,16 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
                 };
                 body.extend(delta);
             }
-
-            let ret = quote! {
-                Ok(len)
-            };
-            body.extend(ret)
         }
         Fields::Unit => {}
     }
 
     Ok(quote! {
-        impl #cratename::serial::Encodable for #name #where_clause {
+        impl #impl_generics #cratename::serial::Encodable for #name #ty_generics #where_clause {
             fn encode<S: std::io::Write>(&self, mut s: S) -> ::core::result::Result<usize, std::io::Error> {
+                let mut len = 0;
                 #body
+                Ok(len)
             }
         }
     })
@@ -121,7 +257,7 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
 
 pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStream2> {
     let name = &input.ident;
-    let (_impl_generics, _ty_generics, where_clause) = input.generics.split_for_impl();
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let mut where_clause = where_clause.map_or_else(
         || WhereClause { where_token: Default::default(), predicates: Default::default() },
         Clone::clone,
@@ -130,45 +266,28 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
     let return_value = match &input.fields {
         Fields::Named(fields) => {
             let mut body = TokenStream2::new();
-
             for field in &fields.named {
                 let field_name = field.ident.as_ref().unwrap();
-                let attr = field.attrs.get(0);
 
-                let delta: TokenStream2 =
-                    if attr.is_some() && attr.unwrap().path.is_ident("skip_serialize") {
-                        {
-                            let field_type = &field.ty;
-                            where_clause.predicates.push(
-                                syn::parse2(quote! {
-                                    #field_type: core::default::Default
-                                })
-                                .unwrap(),
-                            );
+                let delta: TokenStream2 = if contains_skip(&field.attrs) {
+                    quote! {
+                        #field_name: Default::default(),
+                    }
+                } else {
+                    let field_type = &field.ty;
+                    where_clause.predicates.push(
+                        syn::parse2(quote! {
+                            #field_type: #cratename::serial::Decodable
+                        })
+                        .unwrap(),
+                    );
 
-                            quote! {
-                                #field_name: #field_type::default(),
-                            }
-                        }
-                    } else {
-                        {
-                            let field_type = &field.ty;
-                            where_clause.predicates.push(
-                                syn::parse2(quote! {
-                                    #field_type: #cratename::serial::Decodable
-                                })
-                                .unwrap(),
-                            );
-
-                            quote! {
-                                #field_name: #cratename::serial::Decodable::decode(&mut d)?,
-                            }
-                        }
-                    };
-
+                    quote! {
+                        #field_name: #cratename::serial::Decodable::decode(&mut d)?,
+                    }
+                };
                 body.extend(delta);
             }
-
             quote! {
                 Self { #body }
             }
@@ -181,7 +300,6 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
                 };
                 body.extend(delta);
             }
-
             quote! {
                 Self( #body )
             }
@@ -194,7 +312,7 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
     };
 
     Ok(quote! {
-        impl #cratename::serial::Decodable for #name #where_clause {
+        impl #impl_generics #cratename::serial::Decodable for #name #ty_generics #where_clause {
             fn decode<D: std::io::Read>(mut d: D) -> ::core::result::Result<Self, std::io::Error> {
                 Ok(#return_value)
             }
