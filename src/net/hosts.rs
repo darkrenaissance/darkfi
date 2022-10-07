@@ -43,8 +43,9 @@ impl Hosts {
         } else {
             input_addrs
         };
+        let mut addrs_map = self.addrs.lock().await;
         for addr in addrs {
-            self.addrs.lock().await.insert(addr);
+            addrs_map.insert(addr);
         }
     }
 
@@ -58,8 +59,9 @@ impl Hosts {
         } else {
             input_addrs
         };
+        let mut addrs_map = self.addrs.lock().await;
         for addr in addrs {
-            self.addrs.lock().await.insert(addr);
+            addrs_map.insert(addr);
         }
     }
 
