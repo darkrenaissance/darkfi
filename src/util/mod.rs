@@ -9,6 +9,9 @@ pub mod cli;
 pub mod clock;
 pub use clock::{Clock, Ticks};
 
+/// Various encoding formats
+pub mod encoding;
+
 /// Filesystem utilities
 pub mod file;
 
