@@ -93,21 +93,19 @@ impl Hosts {
 fn filter_localnet(input_addrs: Vec<Url>) -> Vec<Url> {
     debug!(target: "net", "hosts::filter_localnet() [Input addresses: {:?}]", input_addrs);
     let mut filtered = vec![];
+
     for addr in &input_addrs {
-        match addr.host_str() {
-            Some(host_str) => {
-                if LOCALNET.contains(&host_str) {
-                    debug!(target: "net", "hosts::filter_localnet() [Filtered LOCALNET host_str: {}]", host_str);
-                    continue
-                }
-            }
-            None => {
-                debug!(target: "net", "hosts::filter_localnet() [Filtered None host_str for addr: {}]", addr);
+        if let Some(host_str) = addr.host_str {
+            if !LOCALNET.contains(&host_str) {
+                filtered.push(addr.clone());
                 continue
             }
+            debug!("Filtered localnet addr: {}", addr);
+            continue
         }
-        filtered.push(addr.clone());
+        panic!("addr.host_str is empty, take care that it can't be before");
     }
+
     debug!(target: "net", "hosts::filter_localnet() [Filtered addresses: {:?}]", filtered);
     filtered
 }
@@ -131,97 +129,109 @@ fn filter_invalid(
         };
 
         // Validate onion domain
-        if domain.ends_with(".onion") && is_valid_onion(domain) {
-            filtered.insert(addr.clone(), vec![]);
+        if domain.ends_with("onion") {
+            match is_valid_onion(domain) {
+                true => filtered.insert(addr.clone(), vec![]),
+                false => warn!("Got invalid onion address: {}", addr),
+            }
             continue
         }
 
-        // Validate normal domain
-        match addr.socket_addrs(|| None) {
-            Ok(socket_addrs) => {
-                // Check if domain resolved to anything
-                if socket_addrs.is_empty() {
-                    debug!(target: "net", "hosts::filter_invalid() [Filtered unresolvable url: {}]", addr);
-                    continue
-                }
-                // Checking resolved IP validity
-                let mut resolves = vec![];
-                for i in socket_addrs {
-                    let ip = i.ip();
-                    match ip {
-                        IpAddr::V4(a) => {
-                            if ipv4_range.contains(&a) {
-                                debug!(target: "net", "hosts::filter_invalid() [Filtered invalid ip: {}]", a);
-                                continue
-                            }
-                            resolves.push(ip);
+        // Validate Internet domains and IPs. socket_addrs() does a resolution
+        // with the local DNS resolver (i.e. /etc/resolv.conf), so the admin has
+        // to take care of any DNS leaks by properly configuring their system for
+        // DNS resolution.
+        if let Ok(socket_addrs) = addr.socket_addrs(|| None) {
+            // Check if domain resolved to anything
+            if socket_addrs.is_empty() {
+                debug!("Filtered unresolvable URL: {}", addr);
+                continue
+            }
+
+            // Checking resolved IP validity
+            let mut resolves = vec![];
+            for i in socket_addrs {
+                let ip = i.ip();
+                match ip {
+                    IpAddr::V4(a) => {
+                        if ipv4_range.contains(&a) {
+                            debug!("Filtered private-range IPv4: {}", a);
+                            continue
                         }
-                        IpAddr::V6(a) => {
-                            if ipv6_range.contains(&a) {
-                                debug!(target: "net", "hosts::filter_invalid() [Filtered invalid ip: {}]", a);
-                                continue
-                            }
-                            resolves.push(ip);
+                    }
+                    IpAddr::V6(a) => {
+                        if ipv6_range.contains(&a) {
+                            debug!("Filtered private range IPv6: {}", a);
+                            continue
                         }
                     }
                 }
-                if resolves.is_empty() {
-                    debug!(target: "net", "hosts::filter_invalid() [Filtered unresolvable url: {}]", addr);
-                    continue
-                }
-                filtered.insert(addr.clone(), resolves);
+                resolves.push(ip);
             }
-            Err(err) => {
-                debug!(target: "net", "hosts::filter_invalid() [Filtered Err(socket_addrs) for url {}: {}]", addr, err)
+
+            if resolves.is_empty() {
+                debug!("Filtered unresolvable URL: {}", addr);
+                continue
             }
+
+            filtered.insert(addr.clone(), resolves);
+        } else {
+            warn!("Failed resolving socket_addrs for {}", addr);
+            continue
         }
     }
+
     debug!(target: "net", "hosts::filter_invalid() [Filtered addresses: {:?}]", filtered);
     filtered
 }
 
-/// Auxiliary function to filter unresolvable hosts, based on provided connection addr (excluding onion).
+/// Filters `input_addrs` keys to whatever has at least one `IpAddr` that is
+/// the same as `connection_addr`'s IP address.
+/// Skips .onion domains.
 fn filter_non_resolving(
     connection_addr: Url,
     input_addrs: FxHashMap<Url, Vec<IpAddr>>,
 ) -> Vec<Url> {
     debug!(target: "net", "hosts::filter_non_resolving() [Input addresses: {:?}]", input_addrs);
     debug!(target: "net", "hosts::filter_non_resolving() [Connection address: {}]", connection_addr);
-    let connection_domain = connection_addr.domain().unwrap();
-    // Validate connection onion domain
-    if connection_domain.ends_with(".onion") && !is_valid_onion(connection_domain) {
-        debug!(target: "net", "hosts::filter_non_resolving() [Tor connection detected, skipping filterring.]");
-        return vec![]
-    }
 
     // Retrieve connection IPs
     let mut ipv4_range = vec![];
     let mut ipv6_range = vec![];
-    for i in connection_addr.socket_addrs(|| None).unwrap() {
-        match i.ip() {
-            IpAddr::V4(a) => {
-                ipv4_range.push(a);
-            }
-            IpAddr::V6(a) => {
-                ipv6_range.push(a);
+
+    match connection_addr.socket_addrs(|| None) {
+        Ok(v) => {
+            for i in v {
+                match i.ip() {
+                    IpAddr::V4(a) => ipv4_range.push(a),
+                    IpAddr::V6(a) => ipv6_range.push(a),
+                }
             }
         }
-    }
-    debug!(target: "net", "hosts::filter_non_resolving() [ipv4_range: {:?}]", ipv4_range);
-    debug!(target: "net", "hosts::filter_non_resolving() [ipv6_range: {:?}]", ipv6_range);
+        Err(e) => {
+            error!("Failed resolving connection_addr {}: {}", connection_addr, e);
+            return vec![]
+        }
+    };
 
-    // Filter input addresses
+    debug!("{} IPv4: {:?}", connection_addr, ipv4_range);
+    debug!("{} IPv6: {:?}", connection_addr, ipv6_range);
+
     let mut filtered = vec![];
+    let connection_domain = connection_addr.domain().unwrap();
+
     for (addr, resolves) in &input_addrs {
-        // Keep valid onion domains
+        // Keep onion domains. It's assumed that the .onion addresses
+        // have already been validated.
         let addr_domain = addr.domain().unwrap();
         if addr_domain.ends_with(".onion") && addr_domain == connection_domain {
             filtered.push(addr.clone());
             continue
         }
 
-        // Checking IP validity
+        // Checking IP validity. If at least one IP matches, we consider it fine.
         let mut valid = false;
+
         for ip in resolves {
             match ip {
                 IpAddr::V4(a) => {
@@ -238,17 +248,22 @@ fn filter_non_resolving(
                 }
             }
         }
+
         if !valid {
             debug!(target: "net", "hosts::filter_non_resolving() [Filtered unresolvable url: {}]", addr);
             continue
         }
+
         filtered.push(addr.clone());
     }
+
     debug!(target: "net", "hosts::filter_non_resolving() [Filtered addresses: {:?}]", filtered);
     filtered
 }
 
-/// Auxiliary function to validate an onion.
+/// Validate a given .onion address. Currently it just checks that the
+/// length and encoding are ok, and does not do any deeper check. Should
+/// be fixed in the future.
 fn is_valid_onion(onion: &str) -> bool {
     let onion = match onion.strip_suffix(".onion") {
         Some(s) => s,
