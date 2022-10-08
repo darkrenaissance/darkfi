@@ -8,6 +8,7 @@ use log::{debug, error, warn};
 use url::Url;
 
 use super::constants::{IP4_PRIV_RANGES, IP6_PRIV_RANGES, LOCALNET};
+use crate::util::encoding::base32;
 
 /// Pointer to hosts class.
 pub type HostsPtr = Arc<Hosts>;
@@ -275,7 +276,5 @@ fn is_valid_onion(onion: &str) -> bool {
         return false
     }
 
-    let alphabet = base32::Alphabet::RFC4648 { padding: false };
-
-    base32::decode(alphabet, onion).is_some()
+    base32::decode(&onion.to_uppercase()).is_some()
 }
