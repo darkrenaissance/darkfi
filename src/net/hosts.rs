@@ -4,7 +4,7 @@ use std::net::IpAddr;
 use fxhash::{FxHashMap, FxHashSet};
 use ipnet::{Ipv4Net, Ipv6Net};
 use iprange::IpRange;
-use log::debug;
+use log::{debug, error, warn};
 use url::Url;
 
 use super::constants::{IP4_PRIV_RANGES, IP6_PRIV_RANGES, LOCALNET};
@@ -95,15 +95,15 @@ fn filter_localnet(input_addrs: Vec<Url>) -> Vec<Url> {
     let mut filtered = vec![];
 
     for addr in &input_addrs {
-        if let Some(host_str) = addr.host_str {
+        if let Some(host_str) = addr.host_str() {
             if !LOCALNET.contains(&host_str) {
                 filtered.push(addr.clone());
                 continue
             }
-            debug!("Filtered localnet addr: {}", addr);
+            debug!(target: "net", "hosts::filter_localnet() [Filtered localnet addr: {}]", addr);
             continue
         }
-        panic!("addr.host_str is empty, take care that it can't be before");
+        warn!(target: "net", "hosts::filter_localnet() [{} addr.host_str is empty, skipping.]", addr);
     }
 
     debug!(target: "net", "hosts::filter_localnet() [Filtered addresses: {:?}]", filtered);
@@ -131,8 +131,12 @@ fn filter_invalid(
         // Validate onion domain
         if domain.ends_with("onion") {
             match is_valid_onion(domain) {
-                true => filtered.insert(addr.clone(), vec![]),
-                false => warn!("Got invalid onion address: {}", addr),
+                true => {
+                    filtered.insert(addr.clone(), vec![]);
+                }
+                false => {
+                    warn!(target: "net", "hosts::filter_invalid() [Got invalid onion address: {}]", addr)
+                }
             }
             continue
         }
@@ -144,7 +148,7 @@ fn filter_invalid(
         if let Ok(socket_addrs) = addr.socket_addrs(|| None) {
             // Check if domain resolved to anything
             if socket_addrs.is_empty() {
-                debug!("Filtered unresolvable URL: {}", addr);
+                debug!(target: "net", "hosts::filter_invalid() [Filtered unresolvable URL: {}]", addr);
                 continue
             }
 
@@ -155,13 +159,13 @@ fn filter_invalid(
                 match ip {
                     IpAddr::V4(a) => {
                         if ipv4_range.contains(&a) {
-                            debug!("Filtered private-range IPv4: {}", a);
+                            debug!(target: "net", "hosts::filter_invalid() [Filtered private-range IPv4: {}]", a);
                             continue
                         }
                     }
                     IpAddr::V6(a) => {
                         if ipv6_range.contains(&a) {
-                            debug!("Filtered private range IPv6: {}", a);
+                            debug!(target: "net", "hosts::filter_invalid() [Filtered private range IPv6: {}]", a);
                             continue
                         }
                     }
@@ -170,13 +174,13 @@ fn filter_invalid(
             }
 
             if resolves.is_empty() {
-                debug!("Filtered unresolvable URL: {}", addr);
+                debug!(target: "net", "hosts::filter_invalid() [Filtered unresolvable URL: {}]", addr);
                 continue
             }
 
             filtered.insert(addr.clone(), resolves);
         } else {
-            warn!("Failed resolving socket_addrs for {}", addr);
+            warn!(target: "net", "hosts::filter_invalid() [Failed resolving socket_addrs for {}]", addr);
             continue
         }
     }
@@ -209,29 +213,26 @@ fn filter_non_resolving(
             }
         }
         Err(e) => {
-            error!("Failed resolving connection_addr {}: {}", connection_addr, e);
+            error!(target: "net", "hosts::filter_non_resolving() [Failed resolving connection_addr {}: {}]", connection_addr, e);
             return vec![]
         }
     };
 
-    debug!("{} IPv4: {:?}", connection_addr, ipv4_range);
-    debug!("{} IPv6: {:?}", connection_addr, ipv6_range);
+    debug!(target: "net", "hosts::filter_non_resolving() [{} IPv4: {:?}]", connection_addr, ipv4_range);
+    debug!(target: "net", "hosts::filter_non_resolving() [{} IPv6: {:?}]", connection_addr, ipv6_range);
 
     let mut filtered = vec![];
-    let connection_domain = connection_addr.domain().unwrap();
-
     for (addr, resolves) in &input_addrs {
         // Keep onion domains. It's assumed that the .onion addresses
         // have already been validated.
         let addr_domain = addr.domain().unwrap();
-        if addr_domain.ends_with(".onion") && addr_domain == connection_domain {
+        if addr_domain.ends_with(".onion") {
             filtered.push(addr.clone());
             continue
         }
 
         // Checking IP validity. If at least one IP matches, we consider it fine.
         let mut valid = false;
-
         for ip in resolves {
             match ip {
                 IpAddr::V4(a) => {
