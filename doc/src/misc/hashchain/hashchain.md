@@ -12,14 +12,6 @@ The `Event` could have many actions according to the underlying data.
 
 	enum EventAction { ... };	
 
-### Privmsg 
-
-| Description 	| Data Type   	| Comments																	|
-|-------------- |-------------- | ------------------------------------------------------------------------- |
-| nickname    	| String		| The nickname for the sender (must be less than 32 chars) 					|
-| target      	| String		| The target for the `Privmsg` (recipient) 				 					|
-| message     	| String		| The `Privmsg`'s content 				 									|
-
 ## Event
 
 | Description            | Data Type      | Comments                    |
