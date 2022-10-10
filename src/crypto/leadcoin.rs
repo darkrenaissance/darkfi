@@ -7,7 +7,7 @@ use crate::{
         constants::MERKLE_DEPTH_ORCHARD,
         merkle_node::MerkleNode,
         util::{mod_r_p, pedersen_commitment_base},
-        keypair::{Keypair, SecretKey, PublicKey},
+        keypair::{Keypair},
     },
     zk::circuit::lead_contract::LeadContract,
 };

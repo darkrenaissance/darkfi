@@ -298,12 +298,13 @@ impl Circuit<pallas::Base> for LeadContract {
             Value::known(pallas::Base::from(PRF_NULLIFIER_PREFIX)),
         )?;
         // staking coin timestamp
+        /*
         let coin_timestamp = self.load_private(
             layouter.namespace(|| "load coin time stamp"),
             config.advices[0],
             self.coin_timestamp,
         )?;
-
+        */
         // staking coin nonce
         let coin_nonce: AssignedCell<Fp, Fp> = self.load_private(
             layouter.namespace(|| "load coin nonce"),
