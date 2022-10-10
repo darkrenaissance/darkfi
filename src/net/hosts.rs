@@ -278,3 +278,197 @@ fn is_valid_onion(onion: &str) -> bool {
 
     base32::decode(&onion.to_uppercase()).is_some()
 }
+
+#[cfg(test)]
+mod tests {
+    use std::net::{IpAddr, Ipv4Addr};
+
+    use fxhash::{FxHashMap, FxHashSet};
+    use ipnet::{Ipv4Net, Ipv6Net};
+    use iprange::IpRange;
+    // Uncomment for inner logging
+    //use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
+    use url::Url;
+
+    use crate::net::{
+        constants::{IP4_PRIV_RANGES, IP6_PRIV_RANGES},
+        hosts::{filter_invalid, filter_localnet, filter_non_resolving, is_valid_onion},
+    };
+
+    #[test]
+    fn test_filter_localnet() {
+        // Uncomment for inner logging
+        /*
+        TermLogger::init(
+            LevelFilter::Debug,
+            Config::default(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        )
+        .unwrap();
+        */
+
+        // Create addresses to test
+        let valid = Url::parse("tls://facebook.com:13333").unwrap();
+        let onion = Url::parse(
+            "tor://facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd.onion:13333",
+        )
+        .unwrap();
+        let localhost = Url::parse("tls://localhost:13333").unwrap();
+        let localip = Url::parse("tls://127.0.0.1:13333").unwrap();
+
+        // Create input addresses vector
+        let input_addrs = vec![valid.clone(), onion.clone(), localhost, localip];
+
+        // Create expected output addresses vector
+        let output_addrs = vec![valid, onion];
+        let output_addrs = FxHashSet::from_iter(output_addrs.iter());
+
+        // Execute filtering for v4 addr
+        let filtered = filter_localnet(input_addrs);
+        let filtered = FxHashSet::from_iter(filtered.iter());
+        // Validate filtered addresses
+        assert_eq!(output_addrs, filtered);
+    }
+
+    #[test]
+    fn test_filter_invalid() {
+        // Uncomment for inner logging
+        /*
+        TermLogger::init(
+            LevelFilter::Debug,
+            Config::default(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        )
+        .unwrap();
+        */
+
+        // Initialize ipv4_range and ipv6_range if needed
+        let mut ipv4_range: IpRange<Ipv4Net> =
+            IP4_PRIV_RANGES.iter().map(|s| s.parse().unwrap()).collect();
+        let mut ipv6_range: IpRange<Ipv6Net> =
+            IP6_PRIV_RANGES.iter().map(|s| s.parse().unwrap()).collect();
+
+        // These will make the trie potentially smaller
+        ipv4_range.simplify();
+        ipv6_range.simplify();
+
+        // Create addresses to test
+        let valid = Url::parse("tls://facebook.com:13333").unwrap();
+        let domainless = Url::parse("unix:/run/foo.socket").unwrap();
+        let mut hostless = Url::parse("tls://185.60.216.35:13333").unwrap();
+        hostless.set_host(None).unwrap();
+        let onion = Url::parse(
+            "tor://facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd.onion:13333",
+        )
+        .unwrap();
+        let invalid_onion =
+            Url::parse("tor://facebookwemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd.onion:13333")
+                .unwrap();
+
+        // Create input addresses vector
+        let input_addrs = vec![valid.clone(), domainless, hostless, onion.clone(), invalid_onion];
+
+        // Create expected output addresses vector
+        let output_addrs = vec![valid, onion];
+        let output_addrs = FxHashSet::from_iter(output_addrs.iter());
+
+        // Execute filtering for v4 addr
+        let filtered = filter_invalid(&ipv4_range, &ipv6_range, input_addrs);
+        let filtered: Vec<Url> = filtered.into_iter().map(|(k, _)| k).collect();
+        let filtered = FxHashSet::from_iter(filtered.iter());
+        // Validate filtered addresses
+        assert_eq!(output_addrs, filtered);
+    }
+
+    #[test]
+    fn test_filter_non_resolving() {
+        // Uncomment for inner logging
+        /*
+        TermLogger::init(
+            LevelFilter::Debug,
+            Config::default(),
+            TerminalMode::Mixed,
+            ColorChoice::Auto,
+        )
+        .unwrap();
+        */
+        
+        // Create addresses to test
+        let connection_url_v4 = Url::parse("tls://185.60.216.35:13333").unwrap();
+        let connection_url_v6 =
+            Url::parse("tls://[2a03:2880:f12d:83:face:b00c:0:25de]:13333").unwrap();
+        let fake_connection_url = Url::parse("tls://185.199.109.153:13333").unwrap();
+        let resolving_url = Url::parse("tls://facebook.com:13333").unwrap();
+        let random_url = Url::parse("tls://facebookkk.com:13333").unwrap();
+        let onion = Url::parse(
+            "tor://facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd.onion:13333",
+        )
+        .unwrap();
+
+        // Create input addresses hashmap, containing created addresses, excluding connection url
+        let mut input_addrs = FxHashMap::default();
+        input_addrs.insert(
+            resolving_url.clone(),
+            vec![
+                IpAddr::V4(Ipv4Addr::new(185, 60, 216, 35)),
+                "2a03:2880:f12d:83:face:b00c:0:25de".parse().unwrap(),
+            ],
+        );
+        input_addrs.insert(random_url, vec![]);
+        input_addrs.insert(onion.clone(), vec![]);
+
+        // Create expected output addresses hashset
+        let mut output_addrs = FxHashMap::default();
+        output_addrs.insert(
+            resolving_url,
+            vec![
+                IpAddr::V4(Ipv4Addr::new(185, 60, 216, 35)),
+                "2a03:2880:f12d:83:face:b00c:0:25de".parse().unwrap(),
+            ],
+        );
+        output_addrs.insert(onion.clone(), vec![]);
+        // Convert hashmap to Vec<Url and then to hashset, to ignore shuffling
+        let output_addrs: Vec<Url> = output_addrs.into_iter().map(|(k, _)| k).collect();
+        let output_addrs = FxHashSet::from_iter(output_addrs.iter());
+
+        let mut fake_output_addrs: FxHashMap<Url, Vec<Url>> = FxHashMap::default();
+        // Onion addresses don't get filtered, as we can't resolve them
+        fake_output_addrs.insert(onion, vec![]);
+        let fake_output_addrs: Vec<Url> = fake_output_addrs.into_iter().map(|(k, _)| k).collect();
+        let fake_output_addrs = FxHashSet::from_iter(fake_output_addrs.iter());
+
+        // Execute filtering for v4 addr
+        let filtered = filter_non_resolving(connection_url_v4, input_addrs.clone());
+        let filtered = FxHashSet::from_iter(filtered.iter());
+        // Validate filtered addresses
+        assert_eq!(output_addrs, filtered);
+
+        // Execute filtering for v6 addr
+        let filtered = filter_non_resolving(connection_url_v6, input_addrs.clone());
+        let filtered = FxHashSet::from_iter(filtered.iter());
+        assert_eq!(output_addrs, filtered);
+
+        // Execute filtering for fake addr
+        let filtered = filter_non_resolving(fake_connection_url, input_addrs);
+        let filtered = FxHashSet::from_iter(filtered.iter());
+        assert_eq!(fake_output_addrs, filtered);
+    }
+
+    #[test]
+    fn test_is_valid_onion() {
+        // Valid onion
+        assert_eq!(
+            is_valid_onion("facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd.onion"),
+            true
+        );
+        // Valid onion without .onion suffix
+        assert_eq!(
+            is_valid_onion("facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd"),
+            true
+        );
+        // Invalid onion
+        assert_eq!(is_valid_onion("facebook.com"), false);
+    }
+}
