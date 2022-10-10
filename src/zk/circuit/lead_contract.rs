@@ -97,10 +97,11 @@ const LEAD_COIN_COMMIT2_X_OFFSET: usize = 2;
 const LEAD_COIN_COMMIT2_Y_OFFSET: usize = 3;
 const LEAD_COIN_NONCE2_OFFSET: usize = 4;
 const LEAD_COIN_COMMIT_PATH_OFFSET: usize = 5;
-const LEAD_COIN_PK_OFFSET: usize = 6;
-const LEAD_COIN_SERIAL_NUMBER_OFFSET: usize = 7;
-const LEAD_Y_COMMIT_BASE_OFFSET: usize = 8;
-const LEAD_RHO_COMMIT_BASE_OFFSET: usize = 9;
+const LEAD_COIN_PK_X_OFFSET: usize = 6;
+const LEAD_COIN_PK_Y_OFFSET: usize = 7;
+const LEAD_COIN_SERIAL_NUMBER_OFFSET: usize = 8;
+const LEAD_Y_COMMIT_BASE_OFFSET: usize = 9;
+const LEAD_RHO_COMMIT_BASE_OFFSET: usize = 10;
 
 pub fn concat_u8(lhs: &[u8], rhs: &[u8]) -> Vec<u8> {
     [lhs, rhs].concat()
@@ -110,6 +111,7 @@ pub fn concat_u8(lhs: &[u8], rhs: &[u8]) -> Vec<u8> {
 pub struct LeadContract {
     // witness
     pub path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
+    pub sk: Value<pallas::Base>,
     pub root_sk: Value<pallas::Base>, // coins merkle tree secret key of coin1
     pub path_sk: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the secret key root_sk
     pub coin_timestamp: Value<pallas::Base>,
@@ -318,7 +320,11 @@ impl Circuit<pallas::Base> for LeadContract {
 
         // staking coin secret key
         let _root_sk =
-            self.load_private(layouter.namespace(|| ""), config.advices[0], self.root_sk)?;
+            self.load_private(layouter.namespace(|| "root sk"), config.advices[0], self.root_sk)?;
+
+        // staking coin secret key
+        let sk: AssignedCell<Fp, Fp> =
+            self.load_private(layouter.namespace(|| "sk"), config.advices[0], self.sk).unwrap();
 
         // sigma scalar is 2^254/(total network stake + epsilon)
         let sigma_scalar = self.load_private(
@@ -334,28 +340,36 @@ impl Circuit<pallas::Base> for LeadContract {
             Value::known(pallas::Base::one()), // note! this parameter to be tuned.
         )?;
 
+        // the original crypsinous pk is as follows.
         // coin public key pk=PRF_{root_sk}(tau)
         // coin public key is pseudo random hash of concatenation of the following:
         // coin timestamp, and root of coin's secret key.
-        let coin_pk_commit: AssignedCell<Fp, Fp> = {
-            let poseidon_message = [coin_timestamp, _root_sk.clone()];
-            let poseidon_hasher = PoseidonHash::<
-                _,
-                _,
-                poseidon::P128Pow5T3,
-                poseidon::ConstantLength<2>,
-                3,
-                2,
-            >::init(
-                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
-            )?;
-
-            let poseidon_output =
-                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
-            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
-            poseidon_output
+        //let coin_pk_commit: AssignedCell<Fp, Fp> = {
+        //    let poseidon_message = [coin_timestamp, _root_sk.clone()];
+        //  //let poseidon_hasher = PoseidonHash::<
+        //      _,
+        //      _,
+        //      poseidon::P128Pow5T3,
+        //      poseidon::ConstantLength<2>,
+        //      3,
+        //      2,
+        //  >::init(
+        //      config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
+        //  )?;
+        //
+        //  let poseidon_output =
+        //      poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
+        //  let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
+        //  poseidon_output
+        //};
+        // darkfi coin pk
+        //
+        let coin_pk  = {
+            let coin_pk_commit_v = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
+            coin_pk_commit_v.mul(layouter.namespace(|| "coin pk commit v"), sk.clone())?
         };
-
+        let coin_pk_x = coin_pk.inner().x();
+        let coin_pk_y = coin_pk.inner().y();
         // coin c1 serial number sn=PRF_{root_sk}(nonce)
         // coin's serial number is derived from coin nonce (sampled at random)
         // and root of the coin's secret key sampled an random.
@@ -386,7 +400,8 @@ impl Circuit<pallas::Base> for LeadContract {
             let nullifier_msg: AssignedCell<Fp, Fp> = {
                 let poseidon_message = [
                     prf_nullifier_prefix_base.clone(),
-                    coin_pk_commit.clone(),
+                    coin_pk_x.clone(),
+                    coin_pk_y.clone(),
                     coin_value.clone(),
                     coin_nonce.clone(),
                 ];
@@ -394,7 +409,7 @@ impl Circuit<pallas::Base> for LeadContract {
                     _,
                     _,
                     poseidon::P128Pow5T3,
-                    poseidon::ConstantLength<4>,
+                    poseidon::ConstantLength<5>,
                     3,
                     2,
                 >::init(
@@ -457,7 +472,8 @@ impl Circuit<pallas::Base> for LeadContract {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
                 let poseidon_message = [
                     prf_nullifier_prefix_base,
-                    coin_pk_commit.clone(),
+                    coin_pk_x.clone(),
+                    coin_pk_y.clone(),
                     coin_value.clone(),
                     coin2_nonce.clone(),
                 ];
@@ -465,7 +481,7 @@ impl Circuit<pallas::Base> for LeadContract {
                     _,
                     _,
                     poseidon::P128Pow5T3,
-                    poseidon::ConstantLength<4>,
+                    poseidon::ConstantLength<5>,
                     3,
                     2,
                 >::init(
@@ -624,7 +640,8 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_PATH_OFFSET,
         )?;
 
-        layouter.constrain_instance(coin_pk_commit.cell(), config.primary, LEAD_COIN_PK_OFFSET)?;
+        layouter.constrain_instance(coin_pk_x.cell(), config.primary, LEAD_COIN_PK_X_OFFSET)?;
+        layouter.constrain_instance(coin_pk_y.cell(), config.primary, LEAD_COIN_PK_Y_OFFSET)?;
 
         // constrain coin's pub key x value
         layouter.constrain_instance(

@@ -7,6 +7,7 @@ use crate::{
         constants::MERKLE_DEPTH_ORCHARD,
         merkle_node::MerkleNode,
         util::{mod_r_p, pedersen_commitment_base},
+        keypair::{Keypair, SecretKey, PublicKey},
     },
     zk::circuit::lead_contract::LeadContract,
 };
@@ -17,7 +18,7 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 
 //use halo2_proofs::arithmetic::CurveAffine;
 
-pub const LEAD_PUBLIC_INPUT_LEN: usize = 10;
+pub const LEAD_PUBLIC_INPUT_LEN: usize = 11;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
@@ -30,7 +31,7 @@ pub struct LeadCoin {
     pub nonce: Option<pallas::Base>,                         // coin nonce
     pub nonce_cm: Option<pallas::Base>,                      // coin nonce's commitment
     pub sn: Option<pallas::Base>,                            // coin's serial number
-    pub pk: Option<pallas::Base>,                            // coin public key
+    pub keypair: Option<Keypair>,
     pub root_cm: Option<pallas::Scalar>,                     // root of coin commitment
     pub root_sk: Option<pallas::Base>,                       // coin's secret key
     pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,    // path to the coin's commitment
@@ -53,7 +54,7 @@ impl LeadCoin {
 
         let po_cm = self.cm.unwrap().to_affine().coordinates().unwrap();
         let po_cm2 = self.cm2.unwrap().to_affine().coordinates().unwrap();
-        let po_pk = self.pk.unwrap();
+        let po_pk = self.keypair.unwrap().public.0.to_affine().coordinates().unwrap();
         let po_sn = self.sn.unwrap();
 
         let y_mu = self.y_mu.unwrap();
@@ -98,7 +99,8 @@ impl LeadCoin {
             *po_cm2.y(),
             po_nonce,
             cm_root.0,
-            po_pk,
+            *po_pk.x(),
+            *po_pk.y(),
             po_sn,
             po_y,
             po_rho,
@@ -113,6 +115,7 @@ impl LeadCoin {
     pub fn create_contract(&self) -> LeadContract {
         LeadContract {
             path: Value::known(self.path.unwrap()),
+            sk: Value::known(self.keypair.unwrap().secret.0),
             root_sk: Value::known(self.root_sk.unwrap()),
             path_sk: Value::known(self.path_sk.unwrap()),
             coin_timestamp: Value::known(self.tau.unwrap()), //

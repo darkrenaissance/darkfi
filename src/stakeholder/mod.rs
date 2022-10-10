@@ -238,7 +238,6 @@ pub struct Stakeholder {
     pub playing: bool,
     pub workspace: SlotWorkspace,
     pub id: i64,
-    pub keypair: Keypair,
     pub cashier_signature_public: PublicKey,
     pub faucet_signature_public: PublicKey,
     pub cashier_signature_secret: SecretKey,
@@ -284,7 +283,6 @@ impl Stakeholder {
         let faucet_signature_secret = SecretKey::random(&mut OsRng);
         let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
 
-        let keypair = Keypair::random(&mut OsRng);
         debug!(target: LOG_T, "stakeholder constructed");
         Ok(Self {
             blockchain: bc,
@@ -302,7 +300,6 @@ impl Stakeholder {
             playing: true,
             workspace,
             id,
-            keypair,
             cashier_signature_public,
             faucet_signature_public,
             cashier_signature_secret,
@@ -310,17 +307,13 @@ impl Stakeholder {
         })
     }
 
-    /// wrapper on Schnorr signature
-    pub fn sign(&self, message: &[u8]) -> Signature {
-        info!(target: LOG_T, "sign()");
-        self.keypair.secret.sign(message)
-    }
-
+    /*
     /// wrapper on schnorr public verify
     pub fn verify(&self, message: &[u8], signature: &Signature) -> bool {
         info!(target: LOG_T, "verify()");
         self.keypair.public.verify(message, signature)
     }
+    */
 
     pub fn get_leadprovkingkey(&self) -> ProvingKey {
         info!(target: LOG_T, "get_leadprovkingkey()");
@@ -555,8 +548,10 @@ impl Stakeholder {
         self.workspace.set_leader(won);
         self.workspace.set_proof(proof.clone());
 
-        let addr = Address::from(self.keypair.public);
-        let sign = self.sign(proof.as_ref());
+        let coin = self.epoch.get_coin(sl as usize, winning_coin_idx as usize);
+        let keypair = coin.keypair.unwrap();
+        let addr = Address::from(keypair.public);
+        let sign = keypair.secret.sign(proof.as_ref());
         let stakeholder_meta = StakeholderMetadata::new(sign, addr);
         let ouroboros_meta =
             OuroborosMetadata::new(self.get_eta().to_repr(), TransactionLeadProof::from(proof));
@@ -575,6 +570,7 @@ impl Stakeholder {
     //TODO (res) validate the owncoin is the same winning leadcoin
     pub fn finalize_coin(&self, coin: &LeadCoin) -> OwnCoin {
         info!(target: LOG_T, "finalize coin");
+        let keypair = coin.keypair.unwrap();
         let mut state = StakeholderState {
             tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(TREE_LEN),
             merkle_roots: vec![],
@@ -584,7 +580,7 @@ impl Stakeholder {
             burn_vk: self.burn_vk.clone(),
             cashier_signature_public: self.cashier_signature_public,
             faucet_signature_public: self.faucet_signature_public,
-            secrets: vec![self.keypair.secret],
+            secrets: vec![keypair.secret],
         };
 
         let token_id = pallas::Base::random(&mut OsRng);
@@ -598,13 +594,13 @@ impl Stakeholder {
             outputs: vec![TransactionBuilderOutputInfo {
                 value: coin.value.unwrap(),
                 token_id,
-                public: self.keypair.public,
+                public: keypair.public,
             }],
         };
         let tx = builder.build(&self.mint_pk, &self.burn_pk).unwrap();
 
         tx.verify(&state.mint_vk, &state.burn_vk).unwrap();
-        let _note = tx.outputs[0].enc_note.decrypt(&self.keypair.secret).unwrap();
+        let _note = tx.outputs[0].enc_note.decrypt(&keypair.secret).unwrap();
         let update = state_transition(&state, tx).unwrap();
         state.apply(update);
         state.own_coins[0].clone()

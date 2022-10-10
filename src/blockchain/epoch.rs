@@ -21,6 +21,7 @@ use crate::crypto::{
     proof::{Proof, ProvingKey},
     types::DrkValueBlind,
     util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
+    keypair::{Keypair,SecretKey},
 };
 
 const PRF_NULLIFIER_PREFIX: u64 = 0;
@@ -132,12 +133,11 @@ impl Epoch {
         (lead_mu, nonce_mu)
     }
 
-    fn create_coins_sks(&self) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>) {
-        /*
-        at the onset of an epoch, the first slot's coin's secret key
-        is sampled at random, and the rest of the secret keys are derived,
-        for sk (secret key) at time i+1 is derived from secret key at time i.
-         */
+    /// at the onset of an epoch, the first slot's coin's secret key
+    /// is sampled at random, and the rest of the secret keys are derived,
+    /// for sk (secret key) at time i+1 is derived from secret key at time i.
+    ///
+    fn create_coins_sks(&self, sks: &mut Vec<SecretKey>) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>) {
         let mut rng = thread_rng();
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(self.len());
         let mut root_sks: Vec<MerkleNode> = vec![];
@@ -145,19 +145,17 @@ impl Epoch {
         let mut prev_sk_base: pallas::Base = pallas::Base::one();
         for _i in 0..self.len() {
             //TODO (fix) add sk for the coin struct to be used in txs decryption of tx notes.
-            let sk_bytes = if _i == 0 {
-                let base = pedersen_commitment_u64(1, pallas::Scalar::random(&mut rng));
-                let coord = base.to_affine().coordinates().unwrap();
-                let sk_base = coord.x() * coord.y();
-                prev_sk_base = sk_base;
-                sk_base.to_repr()
+            let base : pallas::Point = if _i == 0 {
+                pedersen_commitment_u64(1, pallas::Scalar::random(&mut rng))
             } else {
-                let base = pedersen_commitment_u64(1, mod_r_p(prev_sk_base));
-                let coord = base.to_affine().coordinates().unwrap();
-                let sk_base = coord.x() * coord.y();
-                prev_sk_base = sk_base;
-                sk_base.to_repr()
+                pedersen_commitment_u64(1, mod_r_p(prev_sk_base))
             };
+            let coord = base.to_affine().coordinates().unwrap();
+            //TODO (fix) change this to sk = hash(x,y)
+            let sk_base = coord.x() * coord.y();
+            sks.push(SecretKey::from(SecretKey(sk_base)));
+            prev_sk_base = sk_base;
+            let sk_bytes = sk_base.to_repr();
             let node = MerkleNode::from_bytes(&sk_bytes).unwrap();
             //let serialized = serde_json::to_string(&node).unwrap();
             //debug!("serialized: {}", serialized);
@@ -173,6 +171,7 @@ impl Epoch {
         }
         (root_sks, path_sks)
     }
+
     //note! the strategy here is single competing coin per slot.
     pub fn create_coins(&mut self, sigma: pallas::Base, owned: Vec<OwnCoin>) -> Vec<Vec<LeadCoin>> {
         let mut rng = thread_rng();
@@ -181,7 +180,8 @@ impl Epoch {
             let rho: u64 = rng.gen();
             seeds.push(rho);
         }
-        let (root_sks, path_sks) = self.create_coins_sks();
+        let mut sks: Vec<SecretKey> = vec![];
+        let (root_sks, path_sks) = self.create_coins_sks(&mut sks);
 
         // matrix of leadcoins, each row has competing coins per slot.
         let _coins: Vec<Vec<LeadCoin>> = vec![];
@@ -197,6 +197,7 @@ impl Epoch {
                         root_sks[i],
                         path_sks[i],
                         seeds[i],
+                        sks[i]
                     );
                     slot_coins.push(coin);
                 }
@@ -204,7 +205,7 @@ impl Epoch {
             }
             // otherwise compete with zero stake
             else {
-                let coin = self.create_leadcoin(sigma, 0, i, root_sks[i], path_sks[i], seeds[i]);
+                let coin = self.create_leadcoin(sigma, 0, i, root_sks[i], path_sks[i], seeds[i], sks[i]);
                 self.coins.push(vec![coin]);
             }
         }
@@ -219,7 +220,10 @@ impl Epoch {
         c_root_sk: MerkleNode,
         c_path_sk: [MerkleNode; MERKLE_DEPTH_ORCHARD],
         seed: u64,
+        sk: SecretKey,
     ) -> LeadCoin {
+        // keypair
+        let keypair : Keypair = Keypair::new(sk);
         //random commitment blinding values
         let mut rng = thread_rng();
         let c_cm1_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
@@ -233,10 +237,12 @@ impl Epoch {
         let c_tau = pallas::Base::from(u64::try_from(i).unwrap());
         //
 
-        let coin_pk_msg = [c_tau, c_root_sk.inner()];
-        let c_pk: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(coin_pk_msg);
+        //let coin_pk_msg = [c_tau, c_root_sk.inner()];
+        //let c_pk: pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_pk_msg);
+        let c_pk: pallas::Point = keypair.public.0;
+        let c_pk_coord = c_pk.to_affine().coordinates().unwrap();
+        let c_pk_x = c_pk_coord.x();
+        let c_pk_y = c_pk_coord.y();
 
         let c_seed = pallas::Base::from(seed);
         let sn_msg = [c_seed, c_root_sk.inner()];
@@ -244,9 +250,9 @@ impl Epoch {
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
                 .hash(sn_msg);
 
-        let coin_commit_msg_input = [pallas::Base::from(PRF_NULLIFIER_PREFIX), c_pk, c_v, c_seed];
+        let coin_commit_msg_input = [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed];
         let coin_commit_msg: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init()
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<5>, 3, 2>::init()
                 .hash(coin_commit_msg_input);
         let c_cm: pallas::Point = pedersen_commitment_base(coin_commit_msg, c_cm1_blind);
         let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
@@ -262,9 +268,9 @@ impl Epoch {
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
                 .hash(coin_nonce2_msg);
 
-        let coin2_commit_msg_input = [pallas::Base::from(PRF_NULLIFIER_PREFIX), c_pk, c_v, c_seed2];
+        let coin2_commit_msg_input = [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed2];
         let coin2_commit_msg: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init()
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<5>, 3, 2>::init()
                 .hash(coin2_commit_msg_input);
         let c_cm2 = pedersen_commitment_base(coin2_commit_msg, c_cm2_blind);
 
@@ -280,7 +286,7 @@ impl Epoch {
             nonce: Some(c_seed),
             nonce_cm: Some(c_seed2),
             sn: Some(c_sn),
-            pk: Some(c_pk),
+            keypair: Some(keypair),
             root_cm: Some(mod_r_p(c_root_cm.inner())),
             root_sk: Some(c_root_sk.inner()),
             path: Some(c_cm_path.as_slice().try_into().unwrap()),
