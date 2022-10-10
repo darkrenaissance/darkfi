@@ -1605,6 +1605,7 @@ dependencies = [
  "bs58",
  "clap 3.2.22",
  "darkfi",
+ "indicatif",
  "log",
  "pasta_curves",
  "prettytable-rs",

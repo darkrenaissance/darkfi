@@ -8,7 +8,6 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use prettytable::{format, row, Table};
-
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -18,7 +17,7 @@ use darkfi::{
     crypto::{address::Address, token_id},
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
-        cli::{get_log_config, get_log_level, progress_bar},
+        cli::{fg_red, get_log_config, get_log_level, progress_bar},
         net_name::NetworkName,
         parse::encode_base10,
     },
@@ -26,7 +25,7 @@ use darkfi::{
 };
 
 mod deploy_contract;
-use deploy_contract::deploy_contract;
+use deploy_contract::create_deploy_data;
 
 #[derive(Parser)]
 #[clap(name = "drk", about = cli_desc!(), version)]
@@ -41,11 +40,11 @@ struct Args {
     endpoint: Url,
 
     #[clap(subcommand)]
-    command: DrkSubcommand,
+    command: Subcmd,
 }
 
 #[derive(Subcommand)]
-enum DrkSubcommand {
+enum Subcmd {
     /// Send a ping request to the RPC
     Ping,
 
@@ -108,10 +107,10 @@ enum DrkSubcommand {
     /// Broadcast a given transaction from stdin
     Broadcast,
 
-    /// Smart contract operations
-    Contract {
-        /// Deploy
-        deploy: bool,
+    /// Deploy a smart contract in the current directory or a given path.
+    DeployContract {
+        #[clap(long, default_value = ".")]
+        path: PathBuf,
     },
 }
 
@@ -261,17 +260,24 @@ async fn main() -> Result<()> {
     let log_config = get_log_config();
     TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let rpc_client = RpcClient::new(args.endpoint).await?;
-    let drk = Drk { rpc_client };
-
     match args.command {
-        DrkSubcommand::Ping => drk.ping().await,
-
-        DrkSubcommand::Airdrop { address, faucet_endpoint, amount, token_id } => {
-            drk.airdrop(address, faucet_endpoint, amount, token_id).await
+        Subcmd::Ping => {
+            let rpc_client = RpcClient::new(args.endpoint).await?;
+            let drk = Drk { rpc_client };
+            return drk.ping().await
         }
 
-        DrkSubcommand::Wallet { keygen, balance, address, all_addresses } => {
+        Subcmd::Airdrop { address, faucet_endpoint, amount, token_id } => {
+            let rpc_client = RpcClient::new(args.endpoint).await?;
+            let drk = Drk { rpc_client };
+
+            return drk.airdrop(address, faucet_endpoint, amount, token_id).await
+        }
+
+        Subcmd::Wallet { keygen, balance, address, all_addresses } => {
+            let rpc_client = RpcClient::new(args.endpoint).await?;
+            let drk = Drk { rpc_client };
+
             if keygen {
                 return drk.wallet_keygen().await
             }
@@ -292,24 +298,34 @@ async fn main() -> Result<()> {
             exit(2);
         }
 
-        DrkSubcommand::Transfer { recipient, amount, network, token_id } => {
-            drk.tx_transfer(network, token_id, recipient, amount).await
+        Subcmd::Transfer { recipient, amount, network, token_id } => {
+            let rpc_client = RpcClient::new(args.endpoint).await?;
+            let drk = Drk { rpc_client };
+
+            return drk.tx_transfer(network, token_id, recipient, amount).await
         }
 
-        DrkSubcommand::Broadcast => {
+        Subcmd::Broadcast => {
+            let rpc_client = RpcClient::new(args.endpoint).await?;
+            let drk = Drk { rpc_client };
+
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
-            drk.tx_broadcast(buf).await
+
+            return drk.tx_broadcast(buf).await
         }
 
-        DrkSubcommand::Contract { deploy } => {
-            // TODO
-            if deploy {
-                let data = deploy_contract(&PathBuf::from("."))?;
-            }
+        Subcmd::DeployContract { path } => {
+            eprintln!("Trying to deploy the smart contract in {:?}", path);
+            let deploy_data = match create_deploy_data(&path) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{}: Failed to deploy smart contract: {}", fg_red("Error:"), e);
+                    exit(1);
+                }
+            };
+
             Ok(())
         }
-    }?;
-
-    drk.close_connection().await
+    }
 }

@@ -1,73 +1,48 @@
 use std::{
     env::set_current_dir,
     fs::{read, read_dir, read_to_string, File},
-    io::Write,
-    path::Path,
-    process::exit,
+    io::{ErrorKind, Write},
+    path::{Path, PathBuf},
     str::FromStr,
 };
 
-use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
-use rand::RngCore;
+use rand::{rngs::OsRng, RngCore};
 
 use darkfi::{
-    crypto::{
-        keypair::{PublicKey, SecretKey},
-        util::poseidon_hash,
-    },
+    crypto::keypair::SecretKey,
     runtime::vm_runtime::{Runtime, ENTRYPOINT},
+    util::cli::{fg_green, fg_red},
     zkas::ZkBinary,
-    Result,
+    Error, Result,
 };
 
-// TODO: Move some of this generic stuff into the library
-
-const DEPLOY_KEY_NAME: &str = "deploy.key";
 const CIRCUIT_DIR_NAME: &str = "proof";
 const CONTRACT_FILE_NAME: &str = "contract.wasm";
+const DEPLOY_KEY_NAME: &str = "deploy.key";
 
-pub struct ContractDeploy {
-    /// Secret key used for deploy authorization
-    pub deploy_key: SecretKey,
-    /// Public address of the contract, derived from the deploy key
-    pub public: pallas::Base,
-    /// Compiled smart contract wasm binary to be executed in the wasm vm runtime
-    pub binary: Vec<u8>,
-    /// Compiled zkas circuits used by the smart contract provers and verifiers
-    pub circuits: Vec<Vec<u8>>,
-}
-
-/// Creates a new deploy key for deploying a private smart contract.
-/// This key allows to update the wasm code on the blockchain by creating
-/// a signature. When deployed, the contract can be accessed by requesting
-/// the public counterpart of this secret key.
-fn create_deploy_key(mut rng: impl RngCore, path: &Path) -> Result<()> {
-    eprintln!("Creating a deploy key");
+/// Creates a new deploy key used for deploying private smart contracts.
+/// This key allows to update the wasm code and the zk circuits on chain
+/// by creating a signature. When deployed, the contract can be accessed
+/// by requesting the public counterpart of this secret key.
+pub fn create_deploy_key(mut rng: impl RngCore, path: &Path) -> Result<SecretKey> {
     let secret = SecretKey::random(&mut rng);
     let mut file = File::create(path)?;
     file.write_all(&bs58::encode(&secret.to_bytes()).into_string().as_bytes())?;
-    eprintln!("Written deploy key to {}", path.display());
-    Ok(())
+    Ok(secret)
 }
 
-/// Reads a deploy key from a file on the filesystem, and returns it,
-/// along with its public counterpart.
-/// TODO: Make a type for the public counterpart.
-fn read_deploy_key(s: &str) -> Result<(SecretKey, pallas::Base)> {
-    eprintln!("Reading deploy key from file: {}", s);
+/// Reads a deploy key from a file on the filesystem and returns it.
+fn read_deploy_key(s: &Path) -> core::result::Result<SecretKey, std::io::Error> {
+    eprintln!("Trying to read deploy key from file: {:?}", s);
     let contents = read_to_string(s)?;
-    let secret = SecretKey::from_str(&contents)?;
-    let coords = PublicKey::from_secret(secret).0.to_affine().coordinates().unwrap();
-    let public = poseidon_hash::<2>([*coords.x(), *coords.y()]);
-    Ok((secret, public))
+    let secret = SecretKey::from_str(&contents).unwrap();
+    Ok(secret)
 }
 
-/// Deploys a given compiled smart contract on the network.
-/// TODO: Implement storage/tx fees in ZK, linear to the size of the binary.
+/// Creates necessary data to deploy a given smart contract on the network.
 /// For consistency, we point this function to a directory where our smart
-/// contract and the compiled circuits are contained. This gives us a uniform
-/// approach to scm and gives a generic layout of a smart contract repository:
-///
+/// contract and the compiled circuits are contained. This is going to give
+/// us a uniform approach to scm and gives a generic layout of the source:
 /// ```text
 /// smart-contract
 /// ├── Cargo.toml
@@ -83,29 +58,46 @@ fn read_deploy_key(s: &str) -> Result<(SecretKey, pallas::Base)> {
 /// │   └── lib.rs
 /// └── tests
 /// ```
-pub fn deploy_contract(path: &Path) -> Result<ContractDeploy> {
-    // chdir into the contract directory
+//pub fn create_deploy_data(path: &Path) -> Result<ContractDeploy> {
+pub fn create_deploy_data(path: &Path) -> Result<()> {
+    // Try to chdir into the contract directory
     if let Err(e) = set_current_dir(path) {
-        eprintln!("Error changing directory to {}: {}", path.display(), e);
-        exit(1);
+        eprintln!("Failed to chdir into {:?}", path);
+        return Err(e.into())
     }
 
-    let deploy_key = match read_deploy_key(DEPLOY_KEY_NAME) {
-        Ok(v) => v,
+    let deploy_key: SecretKey;
+
+    let deploy_key = match read_deploy_key(&PathBuf::from(DEPLOY_KEY_NAME)) {
+        Ok(v) => deploy_key = v,
         Err(e) => {
-            eprintln!("Error: Failed to read {}: {}", DEPLOY_KEY_NAME, e);
-            exit(1);
+            if e.kind() == ErrorKind::NotFound {
+                // We didn't find a deploy key, generate a new one.
+                eprintln!("Did not find an existing key, creating a new one.");
+                match create_deploy_key(&mut OsRng, &PathBuf::from(DEPLOY_KEY_NAME)) {
+                    Ok(v) => {
+                        eprintln!("Created new deploy key in \"{}\".", DEPLOY_KEY_NAME);
+                        deploy_key = v;
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to create new deploy key");
+                        return Err(e)
+                    }
+                }
+            }
+            eprintln!("Failed to read deploy key");
+            return Err(e.into())
         }
     };
 
-    // Validate compiled circuits. Looks for files ending with `.zk.bin`.
-    eprintln!("Validating compiled circuits in {}/", CIRCUIT_DIR_NAME);
+    // Search for ZK circuits in the directory. If none are found, we'll bail.
+    // The logic searches for `.zk.bin` files created by zkas.
+    eprintln!("Searching for compiled ZK circuits in \"{}\" ...", CIRCUIT_DIR_NAME);
     let mut circuits = vec![];
-    let dir_iter = read_dir(CIRCUIT_DIR_NAME)?;
-    for i in dir_iter {
+    for i in read_dir(CIRCUIT_DIR_NAME)? {
         if let Err(e) = i {
-            eprintln!("Error iterating over directory: {}", e);
-            exit(1);
+            eprintln!("Error iterating over \"{}\" directory", CIRCUIT_DIR_NAME);
+            return Err(e.into())
         }
 
         let f = i.unwrap();
@@ -113,43 +105,55 @@ pub fn deploy_contract(path: &Path) -> Result<ContractDeploy> {
         let fname = fname.to_str().unwrap();
 
         if fname.ends_with(".zk.bin") {
-            // Validate that it can be decoded
-            eprintln!("Found {}", f.path().display());
+            // Validate that the files can be properly decoded
+            eprintln!("{} {}", fg_green("Found:"), f.path().display());
             let buf = read(f.path())?;
             if let Err(e) = ZkBinary::decode(&buf) {
-                eprintln!("Error decoding zkas bincode in {}: {}", f.path().display(), e);
-                exit(1);
+                eprintln!("{} Failed to decode zkas bincode in {:?}", fg_red("Error:"), f.path());
+                return Err(e)
             }
 
-            eprintln!("{} is a valid zkas circuit", f.path().display());
             circuits.push(buf.clone());
         }
     }
 
-    // Validate wasm binary.
-    eprintln!("Reading wasm binary in {}", CONTRACT_FILE_NAME);
+    if circuits.is_empty() {
+        return Err(Error::Custom("Found no valid ZK circuits".to_string()))
+    }
+
+    // Validate wasm binary. We inspect the bincode and try to load it into
+    // the wasm runtime. If loaded, we then look for the `ENTRYPOINT` function
+    // which we hardcode into our sdk and runtime and is the canonical way to
+    // run wasm binaries on chain.
+    eprintln!("Inspecting wasm binary in \"{}\"", CONTRACT_FILE_NAME);
     let wasm_bytes = read(CONTRACT_FILE_NAME)?;
-    eprintln!("Initializing mock wasm runtime to check validity");
+    eprintln!("Initializing moch wasm runtime to check validity");
     let runtime = match Runtime::new(&wasm_bytes) {
-        Ok(v) => v,
+        Ok(v) => {
+            eprintln!("Found {} wasm binary", fg_green("valid"));
+            v
+        }
         Err(e) => {
-            eprintln!("Error: Failed to initialize wasm runtime: {}", e);
-            exit(1);
+            eprintln!("Failed to initialize wasm runtime");
+            return Err(e)
         }
     };
 
-    eprintln!("Looking for entrypoint function");
+    eprintln!("Looking for entrypoint function inside the wasm");
     if let Err(e) = runtime.instance.exports.get_function(ENTRYPOINT) {
-        eprintln!("Error: Did not find entrypoint function in the wasm: {}", e);
-        exit(1);
+        eprintln!("{} Could not find entrypoint function", fg_red("Error:"));
+        return Err(e.into())
     }
 
-    let cd = ContractDeploy {
-        deploy_key: deploy_key.0,
-        public: deploy_key.1,
-        binary: wasm_bytes,
-        circuits,
-    };
+    // TODO: Create a ZK proof enforcing the deploy key relations with their public
+    // counterparts (public key and contract address)
+    let mut total_bytes = 0;
+    total_bytes += wasm_bytes.len();
+    for circuit in circuits {
+        total_bytes += circuit.len();
+    }
 
-    Ok(cd)
+    // TODO: Return the data back to the main function, and work further in creating
+    // a transaction and broadcasting it.
+    Ok(())
 }
