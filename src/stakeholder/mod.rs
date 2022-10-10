@@ -15,6 +15,7 @@ use crate::{
     consensus::{
         Block, BlockInfo, Header, OuroborosMetadata, StakeholderMetadata, StreamletMetadata,
         TransactionLeadProof,
+        clock::{Clock, Ticks},
     },
     crypto::{
         address::Address,
@@ -37,7 +38,6 @@ use crate::{
         Transaction,
     },
     util::{
-        clock::{Clock, Ticks},
         path::expand_path,
         time::Timestamp,
     },

@@ -5,10 +5,6 @@ pub mod async_util;
 /// Command-line interface utilities
 pub mod cli;
 
-/// Lamport clock (TODO: maybe shouldn't be in util module)
-pub mod clock;
-pub use clock::{Clock, Ticks};
-
 /// Various encoding formats
 pub mod encoding;
 

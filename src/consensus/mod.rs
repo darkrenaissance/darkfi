@@ -29,6 +29,10 @@ pub mod proto;
 /// async tasks to utilize the protocols
 pub mod task;
 
+/// Lamport clock
+pub mod clock;
+pub use clock::{Clock, Ticks};
+
 use lazy_static::lazy_static;
 lazy_static! {
     /// Genesis hash for the mainnet chain

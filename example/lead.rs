@@ -17,7 +17,6 @@ fn main() {
     //
 
     //
-    const LEN: usize = 10;
     let _value = 33223; //static stake value
 
     //
