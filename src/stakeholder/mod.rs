@@ -13,9 +13,9 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use crate::{
     blockchain::{Blockchain, Epoch, EpochConsensus},
     consensus::{
+        clock::{Clock, Ticks},
         Block, BlockInfo, Header, OuroborosMetadata, StakeholderMetadata, StreamletMetadata,
         TransactionLeadProof,
-        clock::{Clock, Ticks},
     },
     crypto::{
         address::Address,
@@ -37,10 +37,7 @@ use crate::{
         },
         Transaction,
     },
-    util::{
-        path::expand_path,
-        time::Timestamp,
-    },
+    util::{path::expand_path, time::Timestamp},
     Result,
 };
 
