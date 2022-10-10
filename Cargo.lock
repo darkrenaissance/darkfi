@@ -1602,10 +1602,13 @@ name = "drk"
 version = "0.3.0"
 dependencies = [
  "async-std",
+ "bs58",
  "clap 3.2.22",
  "darkfi",
  "log",
+ "pasta_curves",
  "prettytable-rs",
+ "rand",
  "serde_json",
  "simplelog",
  "url",

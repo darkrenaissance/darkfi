@@ -1,5 +1,6 @@
 use std::{
     io::{stdin, Read},
+    path::PathBuf,
     process::exit,
     str::FromStr,
     time::Instant,
@@ -23,6 +24,9 @@ use darkfi::{
     },
     Result,
 };
+
+mod deploy_contract;
+use deploy_contract::deploy_contract;
 
 #[derive(Parser)]
 #[clap(name = "drk", about = cli_desc!(), version)]
@@ -103,6 +107,12 @@ enum DrkSubcommand {
 
     /// Broadcast a given transaction from stdin
     Broadcast,
+
+    /// Smart contract operations
+    Contract {
+        /// Deploy
+        deploy: bool,
+    },
 }
 
 struct Drk {
@@ -290,6 +300,14 @@ async fn main() -> Result<()> {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
             drk.tx_broadcast(buf).await
+        }
+
+        DrkSubcommand::Contract { deploy } => {
+            // TODO
+            if deploy {
+                let data = deploy_contract(&PathBuf::from("."))?;
+            }
+            Ok(())
         }
     }?;
 

@@ -20,7 +20,7 @@ const WASM_MEM_ALLOC: &str = "__drkruntime_mem_alloc";
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
 /// Hardcoded entrypoint function of a contract
-const ENTRYPOINT: &str = "entrypoint";
+pub const ENTRYPOINT: &str = "entrypoint";
 /// Gas limit for a contract
 const GAS_LIMIT: u64 = 200000;
 
@@ -42,8 +42,8 @@ impl WasmerEnv for Env {
 }
 
 pub struct Runtime {
-    pub(crate) instance: Instance,
-    pub(crate) env: Env,
+    pub instance: Instance,
+    pub env: Env,
 }
 
 impl Runtime {

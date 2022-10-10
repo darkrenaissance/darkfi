@@ -58,6 +58,19 @@ impl SecretKey {
     }
 }
 
+impl FromStr for SecretKey {
+    type Err = crate::Error;
+
+    /// Tries to create a `SecretKey` instance from a base58 encoded string.
+    fn from_str(encoded: &str) -> core::result::Result<Self, crate::Error> {
+        let decoded = bs58::decode(encoded).into_vec()?;
+        if decoded.len() != 32 {
+            return Err(Error::SecretKeyFromStr)
+        }
+        Self::from_bytes(decoded.try_into().unwrap())
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug, SerialDecodable, SerialEncodable)]
 pub struct PublicKey(pub pallas::Point);
 
