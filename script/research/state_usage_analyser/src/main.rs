@@ -17,7 +17,7 @@ use darkfi::{
         state::{state_transition, ProgramState},
         Client, MemoryState, State,
     },
-    util::{cli::progress_bar, expand_path},
+    util::{cli::progress_bar, path::expand_path},
     wallet::walletdb::init_wallet,
 };
 

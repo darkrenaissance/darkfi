@@ -154,7 +154,7 @@ impl Clock {
 
 #[cfg(test)]
 mod tests {
-    use crate::consensus::clock::{Clock, Ticks};
+    use super::{Clock, Ticks};
     use futures::executor::block_on;
     use std::{thread, time::Duration};
     #[test]
