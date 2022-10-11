@@ -79,19 +79,13 @@ the entire tx is rejected. Additionally some smart contracts might impose additi
 on the transaction's structure or other function calls (such as their call data).
 
 ```rust
-struct Transaction {
-    func_calls: Vec<FuncCall>
-}
+{{#include ../../../bin/daod/src/demo.rs:transaction}}
 ```
 
 Function calls represent mutations of the current active state to a new state.
 
 ```rust
-struct FuncCall {
-    contract_id: ContractId,
-    func_id: FuncId,
-    call_data: Box<dyn Any>,
-}
+{{#include ../../../bin/daod/src/demo.rs:funccall}}
 ```
 
 The `contract_id` corresponds to the top level module for the contract which
@@ -172,6 +166,38 @@ The transaction verification pipeline roughly looks like this:
 2. Loop through all updates
     1. Lookup specific `apply()` function based off the `contract_id` and `func_id`.
     2. Call `apply(update)` to finalize the change.
+
+## ZK Proofs and Signatures
+
+Lets review again the format of transactions.
+
+```rust
+{{#include ../../../bin/daod/src/demo.rs:transaction}}
+```
+
+And corresponding function calls.
+
+```rust
+{{#include ../../../bin/daod/src/demo.rs:funccall}}
+```
+
+As we can see the ZK proofs and signatures are separate from the actuall `call_data` interpreted
+by `state_transition()`. They are both automatically verified by the VM.
+
+However for verification to work, the ZK proofs also need corresponding public values, and
+the signatures need the public keys. We do this in the `CallDataBase` trait by exporting these
+methods:
+
+```rust
+{{#include ../../../bin/daod/src/demo.rs:calldatabase_trait}}
+```
+
+These methods export the required values needed for the ZK proofs and signature verification
+from the actual call data itself.
+
+For signature verification, the data we are verifying is simply the entire transactions minus
+the actual signatures. That's why the signatures are a separate top level field in the
+transaction.
 
 ## Parallelisation Techniques
 

@@ -111,10 +111,14 @@ impl ZkContractTable {
     }
 }
 
+// ANCHOR: transaction
 pub struct Transaction {
     pub func_calls: Vec<FuncCall>,
+    // TODO: this is wrong. It should be Vec<Vec<Signature>>
+    // each Vec<Signature> correspond to ONE function call
     pub signatures: Vec<Signature>,
 }
+// ANCHOR_END: transaction
 
 impl Transaction {
     /// Verify ZK contracts for the entire tx
@@ -158,6 +162,7 @@ impl Transaction {
         {
             func_call.encode(&mut unsigned_tx_data).expect("failed to encode data");
             let signature_pub_keys = func_call.call_data.signature_public_keys();
+            // TODO: Wrong must be fixed
             for signature_pub_key in signature_pub_keys {
                 let verify_result = signature_pub_key.verify(&unsigned_tx_data[..], &signature);
                 assert!(verify_result, "verify sigs[{}] failed", i);
@@ -183,12 +188,14 @@ fn sign(signature_secrets: &[SecretKey], func_calls: &[FuncCall]) -> Vec<Signatu
 type ContractId = pallas::Base;
 type FuncId = pallas::Base;
 
+// ANCHOR: funccall
 pub struct FuncCall {
     pub contract_id: ContractId,
     pub func_id: FuncId,
     pub call_data: Box<dyn CallDataBase>,
     pub proofs: Vec<Proof>,
 }
+// ANCHOR_END: funccall
 
 impl Encodable for FuncCall {
     fn encode<W: io::Write>(&self, mut w: W) -> core::result::Result<usize, io::Error> {
@@ -201,6 +208,7 @@ impl Encodable for FuncCall {
     }
 }
 
+// ANCHOR: calldatabase_trait
 pub trait CallDataBase {
     // Public values for verifying the proofs
     // Needed so we can convert internal types so they can be used in Proof::verify()
@@ -217,6 +225,7 @@ pub trait CallDataBase {
         writer: &mut dyn std::io::Write,
     ) -> core::result::Result<usize, std::io::Error>;
 }
+// ANCHOR_END: calldatabase_trait
 
 type GenericContractState = Box<dyn Any>;
 
