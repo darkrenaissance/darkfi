@@ -86,7 +86,7 @@ in order for them to spawn a config file, which you can then review.
 ## Bash Completion
 This will add the options auto completion of `drk` and `darkfid`.
 ```shell
-% echo source $(pwd)/contrib/auto-complete >> ~/.bashrc
+% echo source \$(pwd)/contrib/auto-complete >> ~/.bashrc
 ```
 
 ### Examples and usage
