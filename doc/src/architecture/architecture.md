@@ -10,9 +10,9 @@ and make his work effortless and smooth.
 
 | Component   | Description                                                            | Surgeon | Copilot | Assistant | Status   |
 |-------------|------------------------------------------------------------------------|---------|---------|-----------|----------|
-| consensus   | Algorithm for blockchain consensus                                     | err     | agg     |           | Progress |
+| consensus   | Algorithm for blockchain consensus                                     | err     | agg     | das       | Progress |
 | zk / crypto | ZK compiler and crypto algos                                           | par     | nar     |           | Mature   |
-| wasm        | WASM smart contract system                                             | par     | nar     | das       | Progress |
+| wasm        | WASM smart contract system                                             | par     | nar     | xsan      | Progress |
 | net         | p2p network protocol code                                              | agg     | xsan    | nar       | Mature   |
 | blockchain  | consensus + net + db                                                   | err     | das     |           | Easy     |
 | bridge      | Develop robust & secure multi-chain bridge architecture                | par     | xsan    |           | None     |
