@@ -21,6 +21,9 @@ Inventory vectors are used for notifying other nodes about objects they have or 
 
 ### Receiving an `Inv` message
 
+Allows a node to advertise its knowledge of one or more objects. It can be received unsolicited,
+or in reply to `getevents`. 
+
 An `Inv` message is a confirmation from a node in the network that the `Event`
 has been read.
 
