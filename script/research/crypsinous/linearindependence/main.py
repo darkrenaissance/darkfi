@@ -9,8 +9,16 @@ def target(f, rel_stake):
     T  = L * (1 - (1-f)**rel_stake)
     return T
 
+def approx_target_in_zk(sigma_1, sigma_2, stake):
+    # both sigma_1, sigma_2 are constants, if f is a constant.
+    # if f is constant then sigma_12, sigma_2
+    # this dictates that tuning need to be hardcoded,
+    # secondly the reward, or at least the total stake in the network,
+    # can't be anonymous, should be public.
+    T = sigma_1 * stake + sigma_2*stake**2
+    return T
+
 def approx_target(f, stake, Sigma):
-    stake = int(stake)
     x = (1-f)
     c = math.log(x)
     k = L*c
@@ -22,8 +30,8 @@ def approx_target(f, stake, Sigma):
     # sigma is in Z
     sigma_2 = int(sigma_2)
     sigma_1 = int(sigma_1)
-    T = sigma_1 * stake + sigma_2*stake**2
-    return T
+    stake = int(stake)
+    return approx_target_in_zk(sigma_1, sigma_2, stake)
 
 
 f = 0.5
