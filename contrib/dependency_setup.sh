@@ -27,7 +27,8 @@ setup_apt() {
 	$APTGET update || return 1
 	$APTGET install -y build-essential cmake jq wget pkg-config \
 		clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
-		libexpat1-dev || return 1
+		libexpat1-dev curl gcc make libssl-dev fonts-lato \
+		libfontconfig-dev || return 1
 }
 
 setup_pacman() {
@@ -43,6 +44,25 @@ setup_xbps() {
 	$XBPS -S base-devel cmake wget expat-devel freetype-devel \
 		fontconfig-devel jq openssl-devel clang libclang llvm \
 		libllvm12 libgudev-devel
+}
+
+setup_dnf() {
+	DNF="$SUDO $1"
+
+	$DNF install -y gcc gcc-c++ kernel-headers cmake jq wget \
+		pkg-config clang clang-libs llvm-libs \
+		rust-libudev-devel rust-freetype-rs-devel \
+		rust-expat-sys-devel openssl-devel findutils \
+		fontconfig-devel || return 1
+}
+
+setup_apk() {
+	APK="$SUDO $1"
+
+	$APK update
+	$APK add cmake jq wget clang curl gcc make llvm-dev openssl-dev expat-dev \
+		freetype-dev libudev-zero-dev libgudev-dev pkgconf clang-dev \
+		 fontconfig-dev build-base || return 1
 }
 
 case "$(uname -s)" in
@@ -71,6 +91,21 @@ Linux)
 	if command -v xbps-install; then
 		echo "Setting up for xbps" >&2
 		setup_xbps "$(command -v xbps-install)" || exit 1
+		echo "Dependencies installed!" >&2
+		exit 0
+	fi
+
+
+	if command -v dnf; then
+		echo "Setting up for dnf" >&2
+		setup_dnf "$(command -v dnf)" || exit 1
+		echo "Dependencies installed!" >&2
+		exit 0
+	fi
+
+	if command -v apk; then
+		echo "Setting up for apk" >&2
+		setup_apk "$(command -v apk)" || exit 1
 		echo "Dependencies installed!" >&2
 		exit 0
 	fi
