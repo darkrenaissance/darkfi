@@ -18,7 +18,7 @@ and make his work effortless and smooth.
 | bridge      | Develop robust & secure multi-chain bridge architecture                | par     | xsan    |           | None     |
 | tokenomics  | Research and define DRK tokenomics                                     | xeno    | err     | nar       | Starting |
 | util        | Various utilities and tooling                                          | nar     | xsan    | das       | Progress |
-| integration | Responsible for overseeing integration and liaising with team copilots | nar     |         |           | Progress |
+| arch        | Architecture, project management and integration                       | nar     |         |           | Progress |
 
 Priorities:
 
