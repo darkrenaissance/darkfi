@@ -25,6 +25,8 @@
   - [ircd](misc/ircd/ircd.md)
   	- [Specification](misc/ircd/specification.md)
   - [tau](misc/tau.md)
+  - [event_graph](misc/event_graph/event_graph.md)
+    - [Network Protocol](misc/event_graph/network_protocol.md)
   - [HashChain](misc/hashchain/hashchain.md)
   	- [Network Protocol](misc/hashchain/network_protocol.md)
   - [darkwiki](misc/darkwiki.md)
