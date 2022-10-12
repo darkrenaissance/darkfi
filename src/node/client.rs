@@ -23,7 +23,7 @@ use crate::{
         },
         Transaction,
     },
-    wallet::walletdb::{Balances, WalletPtr},
+    wallet::walletdb::{Balance, Balances, WalletPtr},
     zk::circuit::{BurnContract, MintContract},
     ClientFailed, ClientResult, Result,
 };
@@ -216,6 +216,10 @@ impl Client {
     pub async fn keygen(&self) -> Result<Address> {
         let kp = self.wallet.keygen().await?;
         Ok(Address::from(kp.public))
+    }
+    
+    pub async fn get_balance(&self, token_id: DrkTokenId) -> Result<Option<Balance>> {
+        self.wallet.get_balance(token_id).await
     }
 
     pub async fn get_balances(&self) -> Result<Balances> {
