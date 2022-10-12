@@ -39,7 +39,7 @@ def approx_target(c, stake, Sigma, k):
     sigmas = [int((c/Sigma)**i * (L/fact(i))) for i in range(1, k+1)]
     return -1*approx_target_in_zk(sigmas, stake)
 
-def approx_target_no_div(c, stake, Sigma, k):
+def approx_target_with_div(c, stake, Sigma, k):
     sigmas = [(c/Sigma)**i * (L/fact(i)) for i in range(1, k+1)]
     return -1*approx_target_in_zk(sigmas, stake)
 
@@ -68,7 +68,7 @@ for i in range(TOTAL):
     t = target(f, stake/(i+1.0))
     col += [t]
     for j in range(1,k+1):
-        t_approx = approx_target_no_div(c, stake, (i+1.0), j)
+        t_approx = approx_target_with_div(c, stake, (i+1.0), j)
         col += [t_approx]
     for j in range(1,k+1):
         t_approx = approx_target(c, stake, (i+1.0), j)
