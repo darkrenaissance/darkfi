@@ -65,6 +65,14 @@ setup_apk() {
 		 fontconfig-dev build-base || return 1
 }
 
+setup_zypper() {
+	ZYPPER="$SUDO $1"
+
+	$ZYPPER install -y gcc gcc-c++ kernel-headers cmake jq wget git \
+		pkg-config clang openssl-devel findutils \
+		fontconfig-devel || return 1
+}
+
 case "$(uname -s)" in
 Linux)
 	if command -v apt >/dev/null; then
@@ -106,6 +114,13 @@ Linux)
 	if command -v apk; then
 		echo "Setting up for apk" >&2
 		setup_apk "$(command -v apk)" || exit 1
+		echo "Dependencies installed!" >&2
+		exit 0
+	fi
+
+	if command -v zypper; then
+		echo "Setting up for zypper" >&2
+		setup_zypper "$(command -v zypper)" || exit 1
 		echo "Dependencies installed!" >&2
 		exit 0
 	fi
