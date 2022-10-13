@@ -13,6 +13,12 @@ pub enum ContractError {
 
     #[error("Internal error")]
     Internal,
+
+    #[error("IO error: {0}")]
+    IoError(String),
+
+    #[error("Error checking if nullifier exists")]
+    NullifierExistCheck,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -25,11 +31,15 @@ macro_rules! to_builtin {
 
 pub const CUSTOM_ZERO: u64 = to_builtin!(1);
 pub const INTERNAL_ERROR: u64 = to_builtin!(2);
+pub const IO_ERROR: u64 = to_builtin!(3);
+pub const NULLIFIER_EXIST_CHECK: u64 = to_builtin!(4);
 
 impl From<ContractError> for u64 {
     fn from(err: ContractError) -> Self {
         match err {
             ContractError::Internal => INTERNAL_ERROR,
+            ContractError::IoError(_) => IO_ERROR,
+            ContractError::NullifierExistCheck => NULLIFIER_EXIST_CHECK,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -46,7 +56,15 @@ impl From<u64> for ContractError {
         match error {
             CUSTOM_ZERO => Self::Custom(0),
             INTERNAL_ERROR => Self::Internal,
+            IO_ERROR => Self::IoError("Unknown".to_string()),
+            NULLIFIER_EXIST_CHECK => Self::NullifierExistCheck,
             _ => Self::Custom(error as u32),
         }
+    }
+}
+
+impl From<std::io::Error> for ContractError {
+    fn from(err: std::io::Error) -> Self {
+        Self::IoError(format!("{}", err))
     }
 }

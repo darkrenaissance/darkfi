@@ -9,3 +9,6 @@ pub mod log;
 
 /// Crypto-related definitions
 pub mod crypto;
+
+/// Functions for state queries
+pub mod state;
