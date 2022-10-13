@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use drk_sdk::entrypoint;
+use darkfi_sdk::entrypoint;
 use log::debug;
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, Function, HostEnvInitError, Instance, LazyInit,
@@ -12,8 +12,11 @@ use wasmer_middlewares::{
     Metering,
 };
 
-use super::{memory::MemoryManipulation, util::drk_log};
-use crate::Result;
+use super::{chain_state::nullifier_exists, memory::MemoryManipulation, util::drk_log};
+use crate::{
+    node::{state::StateUpdate, MemoryState},
+    Result,
+};
 
 /// Function name in our wasm module that allows us to allocate some memory.
 const WASM_MEM_ALLOC: &str = "__drkruntime_mem_alloc";
@@ -24,10 +27,17 @@ pub const ENTRYPOINT: &str = "entrypoint";
 /// Gas limit for a contract
 const GAS_LIMIT: u64 = 200000;
 
+/// The wasm vm runtime instantiated for every smart contract that runs.
 #[derive(Clone)]
 pub struct Env {
+    /// Logs produced by the contract
     pub logs: Arc<Mutex<Vec<String>>>,
+    /// Direct memory access to the VM
     pub memory: LazyInit<Memory>,
+    /// Cloned state machine living in memory
+    pub state_machine: Arc<MemoryState>,
+    /// State updates produced by the contract
+    pub state_updates: Arc<Mutex<Vec<StateUpdate>>>,
 }
 
 impl WasmerEnv for Env {
@@ -41,6 +51,16 @@ impl WasmerEnv for Env {
     }
 }
 
+/// The result of the VM execution
+pub struct ExecutionResult {
+    /// The exit code returned by the wasm program
+    pub exitcode: u8,
+    /// Logs written from the wasm program
+    pub logs: Vec<String>,
+    /// State machine updates produced by the wasm program
+    pub state_updates: Vec<StateUpdate>,
+}
+
 pub struct Runtime {
     pub instance: Instance,
     pub env: Env,
@@ -48,7 +68,7 @@ pub struct Runtime {
 
 impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
-    pub fn new(wasm_bytes: &[u8]) -> Result<Self> {
+    pub fn new(wasm_bytes: &[u8], state_machine: MemoryState) -> Result<Self> {
         // This function will be called for each `Operator` encountered during
         // the wasm module execution. It should return the cost of the operator
         // that it received as its first argument.
@@ -75,13 +95,24 @@ impl Runtime {
         let module = Module::new(&store, wasm_bytes)?;
 
         debug!(target: "wasm-runtime", "Importing functions...");
-        let env = Env { logs: Arc::new(Mutex::new(vec![])), memory: LazyInit::new() };
+        let logs = Arc::new(Mutex::new(vec![]));
+        let memory = LazyInit::new();
+        let state_machine = Arc::new(state_machine);
+        let state_updates = Arc::new(Mutex::new(vec![]));
+
+        let env = Env { logs, memory, state_machine, state_updates };
         let import_object = imports! {
             "env" => {
                 "drk_log_" => Function::new_native_with_env(
                     &store,
                     env.clone(),
                     drk_log,
+                ),
+
+                "nullifier_exists_" => Function::new_native_with_env(
+                    &store,
+                    env.clone(),
+                    nullifier_exists,
                 ),
             }
         };
@@ -97,7 +128,7 @@ impl Runtime {
         // Get module linear memory
         let memory = self.memory()?;
 
-        // Retrieve ptr to pass data
+        // Retrieve ptr to pass data, and write the payload into the vm memory
         let mem_offset = self.guest_mem_alloc(payload.len())?;
         memory.write(mem_offset, payload)?;
 
