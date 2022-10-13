@@ -10,7 +10,7 @@ pub use metadata::{
 
 /// Consensus participant
 pub mod participant;
-pub use participant::Participant;
+pub use participant::{KeepAlive, Participant};
 
 /// Consensus state
 pub mod state;

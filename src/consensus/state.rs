@@ -13,7 +13,7 @@ use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, Header, OuroborosMetadata, Participant, ProposalChain,
+    Block, BlockInfo, BlockProposal, Header, KeepAlive, OuroborosMetadata, Participant, ProposalChain,
     StreamletMetadata,
 };
 
@@ -419,12 +419,9 @@ impl ValidatorState {
         // TODO: [PLACEHOLDER] Add crypsinous proof validation (to replace balance proof)
         // TODO: [PLACEHOLDER] Add rewards validation
         
-        // TODO: uncomment this after adding seen attribute to participant
-        /*
         if current > leader.seen {
             leader.seen = current;
         }
-        */
 
         // Invalidating quarantine
         leader.quarantined = None;
@@ -601,16 +598,59 @@ impl ValidatorState {
         if self.consensus.pending_participants.contains(&participant) {
             return false
         }
+        
+    // TODO: [PLACEHOLDER] Add balance proof validation
 
         self.consensus.pending_participants.push(participant);
         true
     }
+    
+    /// Update participant seen.
+    pub fn participant_keep_alive(&mut self, keep_alive: KeepAlive) -> bool {
+        match self.consensus.participants.get(&keep_alive.address) {
+            None => {
+                warn!(
+                    "Keep alive message from unknown participant: {}",
+                    keep_alive.address.to_string()
+                );
+                false
+            }
+            Some(participant) => {
+                let current = self.current_slot();
+                if current != keep_alive.slot {
+                    warn!("keep alive message slot is not current one for: {}", keep_alive.address);
+                    return false
+                }
+
+                let serialized = serialize(&current);
+                if !participant.public_key.verify(&serialized, &keep_alive.signature) {
+                    warn!(
+                        "Keep alive message signature could not be verified for: {}",
+                        keep_alive.address
+                    );
+                    return false
+                }
+
+                // TODO: [PLACEHOLDER] Add balance proof validation
+
+                // Updating participant last seen slot
+                let mut participant = participant.clone();
+                participant.seen = current;
+
+                // Invalidating quarantine
+                participant.quarantined = None;
+
+                self.consensus.participants.insert(participant.address, participant);
+
+                true
+            }
+        }
+    }
+
 
     /// Refresh the participants map, to retain only the active ones.
-    /// Active nodes are considered those that joined previous slot
-    /// or on the slot the last proposal was generated, either voted
-    /// or joined the previous of that slot. That ensures we cover
-    /// the case of a node joining while the chosen slot leader is inactive.
+    /// Active nodes are considered those that their last seen slot is
+    /// in range: [current_slot - QUARANTINE_DURATION, current_slot]
     /// Inactive nodes are marked as quarantined, so they can be removed if
     /// they are in quarantine more than the predifined quarantine period.
     pub fn refresh_participants(&mut self) -> Result<()> {
@@ -635,39 +675,23 @@ impl ValidatorState {
         self.consensus.pending_participants = vec![];
 
         let mut inactive = Vec::new();
-        let mut last_slot = self.last_slot()?;
-
-        // This check ensures that we don't chech the current slot,
-        // as a node might receive the proposal of current slot before
-        // starting refreshing participants, so the last_slot will be
-        // the current one.
-        if last_slot >= current {
-            last_slot = current - 1;
-        }
-
-        let previous_slot = current - 1;
-        // This check ensures that when restarting the network, previous
-        // from last slot is not u64::MAX
-        let previous_from_last_slot = match last_slot {
-            0 => 0,
-            _ => last_slot - 1,
-        };
+        let low_bound = current - QUARANTINE_DURATION;
 
         debug!(
-            "refresh_participants(): Node {:?} checking slots: previous - {:?}, last - {:?}, previous from last - {:?}",
-            self.address, previous_slot, last_slot, previous_from_last_slot
+            "refresh_participants(): Node {} checking slots range: {} -> {}",
+            self.address, low_bound, current
         );
 
         let leader = self.slot_leader();
         for (index, participant) in self.consensus.participants.iter_mut() {
             match participant.quarantined {
                 Some(slot) => {
-                    if (current - slot) > QUARANTINE_DURATION {
+                    if slot < low_bound {
                         warn!(
-                            "refresh_participants(): Removing participant: {:?} (joined {:?}, voted {:?})",
+                            "refresh_participants(): Removing participant: {} (seen {}, quarantined {})",
                             participant.address,
-                            participant.joined,
-                            participant.voted
+                            participant.seen,
+                            slot
                         );
                         inactive.push(*index);
                     }
@@ -677,40 +701,18 @@ impl ValidatorState {
                     // becoming the leader. This can be used for slashing in the future.
                     if participant.address == leader.address {
                         debug!(
-                            "refresh_participants(): Quaranteening leader: {:?} (joined {:?}, voted {:?})",
-                            participant.address,
-                            participant.joined,
-                            participant.voted
+                            "refresh_participants(): Quaranteening leader: {} (seen {})",
+                            participant.address, participant.seen
                         );
                         participant.quarantined = Some(current);
                         continue
                     }
-                    match participant.voted {
-                        Some(slot) => {
-                            if slot < last_slot {
-                                warn!(
-                                    "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
-                                    participant.address,
-                                    participant.joined,
-                                    participant.voted
-                                );
-                                participant.quarantined = Some(current);
-                            }
-                        }
-                        None => {
-                            if (previous_slot == last_slot && participant.joined < previous_slot) ||
-                                (previous_slot != last_slot &&
-                                    participant.joined < previous_from_last_slot)
-                            {
-                                warn!(
-                                    "refresh_participants(): Quaranteening participant: {:?} (joined {:?}, voted {:?})",
-                                    participant.address,
-                                    participant.joined,
-                                    participant.voted
-                                );
-                                participant.quarantined = Some(current);
-                            }
-                        }
+                    if participant.seen < low_bound {
+                        warn!(
+                            "refresh_participants(): Quaranteening participant: {} (seen {})",
+                            participant.address, participant.seen
+                        );
+                        participant.quarantined = Some(current);
                     }
                 }
             }

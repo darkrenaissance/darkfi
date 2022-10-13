@@ -2,6 +2,10 @@
 mod protocol_participant;
 pub use protocol_participant::ProtocolParticipant;
 
+/// Participant keep alive protocol
+mod protocol_keep_alive;
+pub use protocol_keep_alive::ProtocolKeepAlive;
+
 /// Block proposal protocol
 mod protocol_proposal;
 pub use protocol_proposal::ProtocolProposal;

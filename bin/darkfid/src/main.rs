@@ -10,7 +10,7 @@ use darkfi::{
     async_daemonize, cli_desc,
     consensus::{
         proto::{
-            ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx,
+            ProtocolKeepAlive, ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx,
         },
         state::ValidatorStatePtr,
         task::{block_sync_task, proposal_task},
@@ -375,7 +375,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let consensus_p2p = {
         if !args.consensus {
             None
-        } else {
+        } else {            
             info!("Registering consensus P2P protocols...");
             let consensus_network_settings = net::Settings {
                 inbound: args.consensus_p2p_accept,
@@ -398,6 +398,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
                 .register(net::SESSION_ALL, move |channel, p2p| {
                     let state = _state.clone();
                     async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
+                })
+                .await;
+
+            let _state = state.clone();
+            registry
+                .register(net::SESSION_ALL, move |channel, p2p| {
+                    let state = _state.clone();
+                    async move { ProtocolKeepAlive::init(channel, state, p2p).await.unwrap() }
                 })
                 .await;
 
@@ -465,7 +473,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         consensus_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
 
         info!("Starting consensus protocol task");
-        ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state)).detach();
+        let _ex = ex.clone();
+        ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state, _ex)).detach();
     } else {
         info!("Not starting consensus P2P network");
     }
