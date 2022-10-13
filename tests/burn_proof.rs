@@ -101,7 +101,7 @@ fn burn_proof() -> Result<()> {
     let merkle_root = tree.root(0).unwrap();
 
     let public_inputs = vec![
-        nullifier,
+        nullifier.inner(),
         *value_coords.x(),
         *value_coords.y(),
         *token_coords.x(),
