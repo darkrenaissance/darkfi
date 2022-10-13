@@ -38,7 +38,7 @@ impl Keypair {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, SerialDecodable, SerialEncodable)]
-pub struct SecretKey(pub pallas::Base);
+pub struct SecretKey(pallas::Base);
 
 impl SecretKey {
     pub fn random(mut rng: impl RngCore) -> Self {
@@ -55,6 +55,16 @@ impl SecretKey {
             Some(k) => Ok(Self(k)),
             None => Err(Error::SecretKeyFromBytes),
         }
+    }
+
+    pub fn inner(&self) -> pallas::Base {
+        self.0
+    }
+}
+
+impl From<pallas::Base> for SecretKey {
+    fn from(x: pallas::Base) -> Self {
+        Self(x)
     }
 }
 

@@ -12,6 +12,7 @@ use darkfi::{
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
+        util::poseidon_hash,
     },
     node::state::{state_transition, ProgramState, StateUpdate},
     tx::builder::{
@@ -95,7 +96,7 @@ impl MemoryState {
             // If it's our own coin, witness it and append to the vector.
             if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
                 let leaf_position = self.tree.witness().unwrap();
-                let nullifier = Nullifier::new(secret, note.serial);
+                let nullifier = Nullifier::from(poseidon_hash::<2>([secret.inner(), note.serial]));
                 let own_coin = OwnCoin { coin, note, secret, nullifier, leaf_position };
                 self.own_coins.push(own_coin);
             }

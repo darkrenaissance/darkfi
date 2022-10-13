@@ -53,7 +53,7 @@ impl BurnRevealedValues {
         user_data_blind: DrkUserDataBlind,
         signature_secret: SecretKey,
     ) -> Self {
-        let nullifier = poseidon_hash::<2>([secret.0, serial]);
+        let nullifier = Nullifier::from(poseidon_hash::<2>([secret.inner(), serial]));
 
         let public_key = PublicKey::from_secret(secret);
         let coords = public_key.0.to_affine().coordinates().unwrap();
@@ -91,7 +91,7 @@ impl BurnRevealedValues {
         BurnRevealedValues {
             value_commit,
             token_commit,
-            nullifier: Nullifier(nullifier),
+            nullifier,
             merkle_root,
             spend_hook,
             user_data_enc,
@@ -156,7 +156,7 @@ pub fn create_burn_proof(
     let leaf_position: u64 = leaf_position.into();
 
     let c = BurnContract {
-        secret_key: Value::known(secret.0),
+        secret_key: Value::known(secret.inner()),
         serial: Value::known(serial),
         value: Value::known(DrkValue::from(value)),
         token: Value::known(token_id),
@@ -168,7 +168,7 @@ pub fn create_burn_proof(
         spend_hook: Value::known(spend_hook),
         user_data: Value::known(user_data),
         user_data_blind: Value::known(user_data_blind),
-        sig_secret: Value::known(signature_secret.0),
+        sig_secret: Value::known(signature_secret.inner()),
     };
 
     let start = Instant::now();

@@ -494,10 +494,10 @@ mod tests {
     use crate::crypto::{
         merkle_node::MerkleNode,
         types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
+        util::poseidon_hash,
     };
-    use group::ff::Field;
     use incrementalmerkletree::Tree;
-    use pasta_curves::pallas;
+    use pasta_curves::{group::ff::Field, pallas};
     use rand::rngs::OsRng;
 
     const WPASS: &str = "darkfi";
@@ -515,7 +515,7 @@ mod tests {
         };
 
         let coin = Coin(pallas::Base::random(&mut OsRng));
-        let nullifier = Nullifier::new(*s, serial);
+        let nullifier = Nullifier::from(poseidon_hash::<2>([s.inner(), serial]));
         let leaf_position: incrementalmerkletree::Position = 0.into();
 
         OwnCoin { coin, note, secret: *s, nullifier, leaf_position }

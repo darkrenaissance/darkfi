@@ -95,7 +95,7 @@ impl Builder {
             let leaf_pos: u64 = input.leaf_position.into();
 
             let prover_witnesses = vec![
-                Witness::Base(Value::known(input.secret.0)),
+                Witness::Base(Value::known(input.secret.inner())),
                 Witness::Base(Value::known(note.serial)),
                 Witness::Base(Value::known(pallas::Base::from(0))),
                 Witness::Base(Value::known(pallas::Base::from(0))),
@@ -106,7 +106,7 @@ impl Builder {
                 Witness::Base(Value::known(gov_token_blind)),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
-                Witness::Base(Value::known(input.signature_secret.0)),
+                Witness::Base(Value::known(input.signature_secret.inner())),
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
@@ -140,7 +140,7 @@ impl Builder {
             let token_commit = poseidon_hash::<2>([note.token_id, gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
-            let nullifier = poseidon_hash::<2>([input.secret.0, note.serial]);
+            let nullifier = Nullifier::from(poseidon_hash::<2>([input.secret.0, note.serial]));
 
             let vote_commit = pedersen_commitment_u64(note.value, vote_value_blind);
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
@@ -164,12 +164,7 @@ impl Builder {
                 .expect("DAO::vote() proving error!");
             proofs.push(input_proof);
 
-            let input = Input {
-                nullifier: Nullifier(nullifier),
-                vote_commit,
-                merkle_root,
-                signature_public,
-            };
+            let input = Input { nullifier, vote_commit, merkle_root, signature_public };
             inputs.push(input);
         }
 

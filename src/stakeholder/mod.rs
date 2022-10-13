@@ -1,14 +1,14 @@
+use std::fmt;
+
 use async_executor::Executor;
 use async_std::sync::Arc;
 use halo2_proofs::arithmetic::Field;
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, error, info};
-use std::fmt;
-
+use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::rngs::OsRng;
 use std::{thread, time::Duration};
-
-use crate::zk::circuit::{BurnContract, LeadContract, MintContract};
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use url::Url;
 
 use crate::{
     blockchain::{Blockchain, Epoch, EpochConsensus},
@@ -27,7 +27,8 @@ use crate::{
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::{Proof, ProvingKey, VerifyingKey},
-        schnorr::{SchnorrSecret},
+        schnorr::{SchnorrPublic, SchnorrSecret, Signature},
+        util::poseidon_hash,
     },
     net::{MessageSubscription, P2p, Settings, SettingsPtr},
     node::state::{state_transition, ProgramState, StateUpdate},
@@ -38,14 +39,9 @@ use crate::{
         Transaction,
     },
     util::{path::expand_path, time::Timestamp},
+    zk::circuit::{BurnContract, LeadContract, MintContract},
     Result,
 };
-
-use url::Url;
-
-use pasta_curves::pallas;
-
-use group::ff::PrimeField;
 
 const LOG_T: &str = "stakeholder";
 const TREE_LEN: usize = 100;
@@ -200,7 +196,7 @@ impl StakeholderState {
             // If it's our own coin, witness it and append to the vector.
             if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
                 let leaf_position = self.tree.witness().unwrap();
-                let nullifier = Nullifier::new(secret, note.serial);
+                let nullifier = Nullifier::from(poseidon_hash::<2>([secret.inner(), note.serial]));
                 let own_coin = OwnCoin { coin, note, secret, nullifier, leaf_position };
                 self.own_coins.push(own_coin);
             }

@@ -40,7 +40,7 @@ impl SchnorrSecret for SecretKey {
         let commit = NullifierK.generator() * mask;
 
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &commit.to_bytes(), message);
-        let response = mask + challenge * mod_r_p(self.0);
+        let response = mask + challenge * mod_r_p(self.inner());
 
         Signature { commit, response }
     }

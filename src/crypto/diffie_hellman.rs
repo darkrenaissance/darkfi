@@ -23,7 +23,7 @@ pub fn sapling_ka_agree(esk: &SecretKey, pk_d: &PublicKey) -> PublicKey {
     // of bits instead of individual bits).
     // We want that to be fast because it's in the hot path for trial decryption of
     // notes on chain.
-    let esk_s = mod_r_p(esk.0);
+    let esk_s = mod_r_p(esk.inner());
     let mut wnaf = group::Wnaf::new();
     PublicKey(wnaf.scalar(&esk_s).base(pk_d.0).clear_cofactor())
 }

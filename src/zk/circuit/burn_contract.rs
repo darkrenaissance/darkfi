@@ -597,7 +597,7 @@ mod tests {
         let merkle_path = tree.authentication_path(leaf_pos, &merkle_root).unwrap();
         let leaf_pos: u64 = leaf_pos.into();
 
-        let nullifier = [secret.0, serial];
+        let nullifier = [secret.inner(), serial];
         let nullifier =
             poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(nullifier);
 
@@ -627,7 +627,7 @@ mod tests {
         ];
 
         let circuit = BurnContract {
-            secret_key: Value::known(secret.0),
+            secret_key: Value::known(secret.inner()),
             serial: Value::known(serial),
             value: Value::known(pallas::Base::from(value)),
             token: Value::known(token_id),
@@ -639,7 +639,7 @@ mod tests {
             spend_hook: Value::known(spend_hook),
             user_data: Value::known(user_data),
             user_data_blind: Value::known(user_data_blind),
-            sig_secret: Value::known(sig_secret.0),
+            sig_secret: Value::known(sig_secret.inner()),
         };
 
         use plotters::prelude::*;

@@ -117,7 +117,9 @@ fn main() {
 
         println!(
             "{{\"address\":\"{}\",\"attempts\":{},\"secret\":\"{:?}\"}}",
-            addr.address, attempts, addr.secret.0
+            addr.address,
+            attempts,
+            addr.secret.inner()
         );
 
         exit(0);

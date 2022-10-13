@@ -89,7 +89,7 @@ impl Builder {
             let leaf_pos: u64 = input.leaf_position.into();
 
             let prover_witnesses = vec![
-                Witness::Base(Value::known(input.secret.0)),
+                Witness::Base(Value::known(input.secret.inner())),
                 Witness::Base(Value::known(note.serial)),
                 Witness::Base(Value::known(pallas::Base::from(0))),
                 Witness::Base(Value::known(pallas::Base::from(0))),
@@ -100,7 +100,7 @@ impl Builder {
                 Witness::Base(Value::known(gov_token_blind)),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
-                Witness::Base(Value::known(input.signature_secret.0)),
+                Witness::Base(Value::known(input.signature_secret.inner())),
             ];
 
             let public_key = PublicKey::from_secret(input.secret);

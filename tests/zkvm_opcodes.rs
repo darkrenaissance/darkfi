@@ -81,7 +81,7 @@ fn zkvm_opcodes() -> Result<()> {
     let d_m = [pallas::Base::one(), blind, *value_coords.x(), *value_coords.y()];
     let d = poseidon::Hash::<_, P128Pow5T3, ConstantLength<4>, 3, 2>::init().hash(d_m);
 
-    let public = PublicKey::from_secret(SecretKey(secret));
+    let public = PublicKey::from_secret(SecretKey::from(secret));
     let public_coords = public.0.to_affine().coordinates().unwrap();
 
     let public_inputs = vec![

@@ -12,6 +12,7 @@ use crate::{
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::VerifyingKey,
+        util::poseidon_hash,
     },
     tx::Transaction,
     wallet::walletdb::WalletPtr,
@@ -162,7 +163,8 @@ impl State {
                 if let Some(note) = State::try_decrypt_note(enc_note, *secret) {
                     debug!(target: "state_apply", "Received a coin: amount {}", note.value);
                     let leaf_position = self.tree.witness().unwrap();
-                    let nullifier = Nullifier::new(*secret, note.serial);
+                    let nullifier =
+                        Nullifier::from(poseidon_hash::<2>([secret.inner(), note.serial]));
                     let own_coin = OwnCoin {
                         coin,
                         note: note.clone(),
