@@ -14,3 +14,14 @@ The
 [`main.rs`](https://github.com/darkrenaissance/darkfi/blob/master/bin/zkas/src/main.rs)
 file shows how this toolchain is put together to produce binary code
 from source code.
+
+# Architecture
+
+The main part of the compilation happens inside the parser. New opcodes
+can be added by extending
+[`opcode.rs`](https://github.com/darkrenaissance/darkfi/blob/master/src/zkas/opcode.rs).
+
+```rust
+{{#include ../../../bin/zkas/src/main.rs:zkas}}
+```
+

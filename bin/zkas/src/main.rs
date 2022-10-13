@@ -53,6 +53,7 @@ fn main() {
     // Clean up tabs, and convert CRLF to LF.
     let source = source.replace('\t', "    ").replace("\r\n", "\n");
 
+    // ANCHOR: zkas
     // The lexer goes over the input file and separates its content into
     // tokens that get fed into a parser.
     let lexer = Lexer::new(filename, source.chars());
@@ -93,6 +94,7 @@ fn main() {
     );
 
     let bincode = compiler.compile();
+    // ANCHOR_END: zkas
 
     let output = match args.output {
         Some(o) => o,
