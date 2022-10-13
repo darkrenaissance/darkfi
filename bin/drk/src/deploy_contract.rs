@@ -128,7 +128,7 @@ pub fn create_deploy_data(path: &Path) -> Result<()> {
     eprintln!("Inspecting wasm binary in \"{}\"", CONTRACT_FILE_NAME);
     let wasm_bytes = read(CONTRACT_FILE_NAME)?;
     eprintln!("Initializing moch wasm runtime to check validity");
-    let runtime = match Runtime::new(&wasm_bytes) {
+    let runtime = match Runtime::new(&wasm_bytes, MemoryState::new(State::dummy()?)) {
         Ok(v) => {
             eprintln!("Found {} wasm binary", fg_green("valid"));
             v

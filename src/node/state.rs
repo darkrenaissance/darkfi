@@ -3,7 +3,8 @@ use lazy_init::Lazy;
 use log::{debug, error};
 
 use crate::{
-    blockchain::{nfstore::NullifierStore, rootstore::RootStore},
+    blockchain::{nfstore::NullifierStore, rootstore::RootStore, Blockchain},
+    consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
     crypto::{
         coin::{Coin, OwnCoin},
         constants::MERKLE_DEPTH,
@@ -133,6 +134,22 @@ pub struct State {
 }
 
 impl State {
+    /// Create a dummy state
+    pub fn dummy() -> Result<Self> {
+        let db = sled::Config::new().temporary(true).open()?;
+        let bc = Blockchain::new(&db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
+        let mt = BridgeTree::<MerkleNode, 32>::new(100);
+        Ok(State {
+            tree: mt,
+            merkle_roots: bc.merkle_roots,
+            nullifiers: bc.nullifiers,
+            cashier_pubkeys: vec![],
+            faucet_pubkeys: vec![],
+            mint_vk: Lazy::new(),
+            burn_vk: Lazy::new(),
+        })
+    }
+
     /// Apply a [`StateUpdate`] to some state.
     pub async fn apply(
         &mut self,

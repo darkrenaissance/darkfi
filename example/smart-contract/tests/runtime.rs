@@ -28,21 +28,7 @@ fn run_contract() -> Result<()> {
     // ============================================================
     // Build a ledger state so the runtime has something to work on
     // ============================================================
-    let sled_db = sled::Config::new().temporary(true).open()?;
-    let blockchain =
-        Blockchain::new(&sled_db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
-
-    let merkle_tree = BridgeTree::<MerkleNode, 32>::new(100);
-
-    let state_machine = State {
-        tree: merkle_tree,
-        merkle_roots: blockchain.merkle_roots,
-        nullifiers: blockchain.nullifiers,
-        cashier_pubkeys: vec![],
-        faucet_pubkeys: vec![],
-        mint_vk: Lazy::new(),
-        burn_vk: Lazy::new(),
-    };
+    let state_machine = MemoryState::new(State::dummy())?;
 
     // We check if this nullifier is in the set from the contract
     state_machine.nullifiers.insert(&[Nullifier::from(pallas::Base::from(0x10))])?;
