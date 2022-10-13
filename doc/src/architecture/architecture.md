@@ -22,9 +22,22 @@ and make his work effortless and smooth.
 
 Priorities:
 
-1. consensus
-2. wasm
+1. Consensus
+    1. Settle on final algorithm. Currently fixing the reward function.
+    2. Review the contracts
+    3. Create the blockchain API
+2. WASM
+    1. Update current WASM code
+    2. Experiment and draft docs
+    3. Begin to implement smart contract subsystem
+    4. Migrate dao and otc applications over
 3. util
+    1. Simulate event graph subsystem
+    2. Create underlying event graph subsystem
+    3. Create abstraction layer and APIs
+    4. Begin to rewire ircd and taud
+    5. Update taud to CRDTs
+    6. Q&A on wallet application
 
 ## Release Cycle
 
