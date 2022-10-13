@@ -25,7 +25,6 @@ impl StreamletMetadataStore {
             let genesis_block = Block::genesis_block(genesis_ts, genesis_data);
 
             let metadata = StreamletMetadata {
-                votes: vec![],
                 notarized: true,
                 finalized: true,
                 participants: vec![],

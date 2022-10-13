@@ -12,10 +12,6 @@ pub use metadata::{
 pub mod participant;
 pub use participant::Participant;
 
-/// Consensus vote
-pub mod vote;
-pub use vote::Vote;
-
 /// Consensus state
 pub mod state;
 pub use state::{ValidatorState, ValidatorStatePtr};

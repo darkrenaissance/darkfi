@@ -63,22 +63,11 @@ impl ProtocolProposal {
 
             let proposal_copy = (*proposal).clone();
 
-            let vote = match self.state.write().await.receive_proposal(&proposal_copy).await {
-                Ok(v) => {
-                    if v.is_none() {
-                        debug!("ProtocolProposal::handle_receive_proposal(): Node didn't vote for proposed block.");
-                        continue
-                    }
-                    v.unwrap()
-                }
-                Err(e) => {
-                    debug!("ProtocolProposal::handle_receive_proposal(): error processing proposal: {}", e);
-                    continue
-                }
-            };
-
-            if let Err(e) = self.state.write().await.receive_vote(&vote).await {
-                error!("ProtocolProposal::handle_receive_proposal(): receive_vote error: {}", e);
+            if let Err(e) = self.state.write().await.receive_proposal(&proposal_copy).await {
+                error!(
+                    "ProtocolProposal::handle_receive_proposal(): receive_proposal error: {}",
+                    e
+                );
                 continue
             }
 
@@ -89,11 +78,6 @@ impl ProtocolProposal {
                     e
                 );
             };
-
-            // Broadcast vote
-            if let Err(e) = self.p2p.broadcast(vote).await {
-                error!("ProtocolProposal::handle_receive_proposal(): vote broadcast fail: {}", e);
-            }
         }
     }
 }

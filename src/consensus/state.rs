@@ -14,7 +14,7 @@ use rand::rngs::OsRng;
 
 use super::{
     Block, BlockInfo, BlockProposal, Header, OuroborosMetadata, Participant, ProposalChain,
-    StreamletMetadata, Vote,
+    StreamletMetadata,
 };
 
 use crate::{
@@ -32,7 +32,7 @@ use crate::{
         state::{state_transition, ProgramState, StateUpdate},
         Client, MemoryState, State,
     },
-    serial::{serialize, Encodable, SerialDecodable, SerialEncodable},
+    serial::{serialize, SerialDecodable, SerialEncodable},
     tx::Transaction,
     util::time::Timestamp,
     Result,
@@ -54,9 +54,6 @@ pub struct ConsensusState {
     pub genesis_block: blake3::Hash,
     /// Fork chains containing block proposals
     pub proposals: Vec<ProposalChain>,
-    /// Orphan votes pool, in case a vote reaches a node before the
-    /// corresponding block
-    pub orphan_votes: Vec<Vote>,
     /// Validators currently participating in the consensus
     pub participants: BTreeMap<Address, Participant>,
     /// Validators to be added on the next slot as participants
@@ -74,7 +71,6 @@ impl ConsensusState {
             genesis_ts,
             genesis_block,
             proposals: vec![],
-            orphan_votes: vec![],
             participants: BTreeMap::new(),
             pending_participants: vec![],
             refreshed: 0,
@@ -245,11 +241,11 @@ impl ValidatorState {
         Ok(last_slot)
     }
 
-    /// Calculates seconds until next slot starting time.
-    /// Slots durationis configured using the delta value.
-    pub fn next_slot_start(&self) -> Duration {
+    /// Calculates seconds until next Nth slot starting time.
+    /// Slots duration is configured using the delta value.
+    pub fn next_n_slot_start(&self, n: u64) -> Duration {
         let start_time = NaiveDateTime::from_timestamp(self.consensus.genesis_ts.0, 0);
-        let current_slot = self.current_slot() + 1;
+        let current_slot = self.current_slot() + n;
         let next_slot_start = (current_slot * (2 * DELTA)) + (start_time.timestamp() as u64);
         let next_slot_start = NaiveDateTime::from_timestamp(next_slot_start as i64, 0);
         let current_time = NaiveDateTime::from_timestamp(Utc::now().timestamp(), 0);
@@ -287,11 +283,11 @@ impl ValidatorState {
     }
 
     /// Generate a block proposal for the current slot, containing all
-    /// unconfirmed transactions. Proposal extends the longest notarized fork
+    /// unconfirmed transactions. Proposal extends the longest fork
     /// chain the node is holding.
     pub fn propose(&self) -> Result<Option<BlockProposal>> {
         let slot = self.current_slot();
-        let (prev_hash, index) = self.longest_notarized_chain_last_hash().unwrap();
+        let (prev_hash, index) = self.longest_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
 
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
@@ -309,6 +305,11 @@ impl ValidatorState {
         let m = StakeholderMetadata::new(signed_proposal, self.address);
         let om = OuroborosMetadata::default();
         let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
+        
+        // TODO: [PLACEHOLDER] Add balance proof creation
+        // TODO: [PLACEHOLDER] Add crypsinous leader proof creation (to replace balance proof)
+        // TODO: [PLACEHOLDER] Add rewards calculation (proof?)
+        // TODO: [PLACEHOLDER] Create and add rewards transaction
         Ok(Some(BlockProposal::new(header, unproposed_txs, m, om, sm)))
     }
 
@@ -337,24 +338,24 @@ impl ValidatorState {
         unproposed_txs
     }
 
-    /// Finds the longest fully notarized blockchain the node holds and
+    /// Finds the longest blockchain the node holds and
     /// returns the last block hash and the chain index.
-    pub fn longest_notarized_chain_last_hash(&self) -> Result<(blake3::Hash, i64)> {
-        let mut longest_notarized_chain: Option<ProposalChain> = None;
+    pub fn longest_chain_last_hash(&self) -> Result<(blake3::Hash, i64)> {
+        let mut longest: Option<ProposalChain> = None;
         let mut length = 0;
         let mut index = -1;
 
         if !self.consensus.proposals.is_empty() {
             for (i, chain) in self.consensus.proposals.iter().enumerate() {
-                if chain.notarized() && chain.proposals.len() > length {
-                    longest_notarized_chain = Some(chain.clone());
+                if chain.proposals.len() > length {
+                    longest = Some(chain.clone());
                     length = chain.proposals.len();
                     index = i as i64;
                 }
             }
         }
 
-        let hash = match longest_notarized_chain {
+        let hash = match longest {
             Some(chain) => chain.proposals.last().unwrap().block.header.headerhash(),
             None => self.blockchain.last()?.1,
         };
@@ -362,13 +363,18 @@ impl ValidatorState {
         Ok((hash, index))
     }
 
-    /// Receive the proposed block, verify its sender (slot leader),
-    /// and proceed with voting on it.
-    pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
+    /// Given a proposal, the node verify its sender (slot leader), finds which blockchain
+    /// it extends and check if it can be finalized. If the proposal extends
+    /// the canonical blockchain, a new fork chain is created.
+    pub async fn receive_proposal(
+        &mut self,
+        proposal: &BlockProposal,
+    ) -> Result<Option<Vec<BlockInfo>>> {
+        let current = self.current_slot();
         // Node hasn't started participating
         match self.participating {
             Some(start) => {
-                if self.current_slot() < start {
+                if current < start {
                     return Ok(None)
                 }
             }
@@ -378,7 +384,7 @@ impl ValidatorState {
         // Node refreshes participants records
         self.refresh_participants()?;
 
-        let leader = self.slot_leader();
+        let mut leader = self.slot_leader();
         if leader.address != proposal.block.m.address {
             warn!(
                 "Received proposal not from slot leader ({}), but from ({})",
@@ -387,39 +393,43 @@ impl ValidatorState {
             return Ok(None)
         }
 
-        if !leader
-            .public_key
-            .verify(proposal.block.header.headerhash().as_bytes(), &proposal.block.m.signature)
-        {
+        if !leader.public_key.verify(
+            proposal.block.header.headerhash().as_bytes(),
+            &proposal.block.m.signature,
+        ) {
             warn!("Proposer ({}) signature could not be verified", proposal.block.m.address);
             return Ok(None)
         }
 
-        self.vote(proposal).await
-    }
+        debug!("receive_proposal(): Starting state transition validation");
+        let canon_state_clone = self.state_machine.lock().await.clone();
+        let mem_state = MemoryState::new(canon_state_clone);
 
-    /// Given a proposal, the node finds which blockchain it extends.
-    /// If the proposal extends the canonical blockchain, a new fork chain
-    /// is created. The node votes on the proposal only if it extends the
-    /// longest notarized fork chain it has seen and its state transition is valid.
-    pub async fn vote(&mut self, proposal: &BlockProposal) -> Result<Option<Vote>> {
-        let mut proposal = proposal.clone();
-
-        // Generate proposal hash
-        let proposal_hash = proposal.block.header.headerhash();
-
-        // Add orphan votes
-        let mut orphans = Vec::new();
-        for vote in self.consensus.orphan_votes.iter() {
-            if vote.proposal == proposal_hash {
-                proposal.block.sm.votes.push(vote.clone());
-                orphans.push(vote.clone());
+        match Self::validate_state_transitions(mem_state, &proposal.block.txs) {
+            Ok(_) => {
+                debug!("receive_proposal(): State transition valid")
+            }
+            Err(e) => {
+                warn!("receive_proposal(): State transition fail: {}", e);
+                return Ok(None)
             }
         }
 
-        for vote in orphans {
-            self.consensus.orphan_votes.retain(|v| *v != vote);
+        // TODO: [PLACEHOLDER] Add balance proof validation
+        // TODO: [PLACEHOLDER] Add crypsinous proof validation (to replace balance proof)
+        // TODO: [PLACEHOLDER] Add rewards validation
+        
+        // TODO: uncomment this after adding seen attribute to participant
+        /*
+        if current > leader.seen {
+            leader.seen = current;
         }
+        */
+
+        // Invalidating quarantine
+        leader.quarantined = None;
+
+        self.consensus.participants.insert(leader.address, leader);
 
         let index = self.find_extended_chain_index(&proposal)?;
 
@@ -427,50 +437,27 @@ impl ValidatorState {
             return Ok(None)
         }
 
-        let chain = match index {
+        let mut to_broadcast = vec![];
+        match index {
             -1 => {
                 let pc = ProposalChain::new(self.consensus.genesis_block, proposal.clone());
                 self.consensus.proposals.push(pc);
-                self.consensus.proposals.last().unwrap()
             }
             _ => {
                 self.consensus.proposals[index as usize].add(&proposal);
-                &self.consensus.proposals[index as usize]
+                match self.chain_finalization(index).await {
+                    Ok(v) => {
+                        to_broadcast = v;
+                    }
+                    Err(e) => {
+                        error!("consensus: Block finalization failed: {}", e);
+                        return Err(e)
+                    }
+                }
             }
         };
 
-        if !self.extends_notarized_chain(chain) {
-            debug!("vote(): Proposal does not extend notarized chain");
-            return Ok(None)
-        }
-
-        debug!("vote(): Starting state transition validation");
-        let canon_state_clone = self.state_machine.lock().await.clone();
-        let mem_state = MemoryState::new(canon_state_clone);
-
-        match Self::validate_state_transitions(mem_state, &proposal.block.txs) {
-            Ok(_) => {
-                debug!("vote(): State transition valid")
-            }
-            Err(e) => {
-                warn!("vote(): State transition fail: {}", e);
-                return Ok(None)
-            }
-        }
-
-        let signed_hash = self.secret.sign(&serialize(&proposal_hash));
-        Ok(Some(Vote::new(signed_hash, proposal_hash, proposal.block.header.slot, self.address)))
-    }
-
-    /// Verify if the provided chain is notarized excluding the last block.
-    pub fn extends_notarized_chain(&self, chain: &ProposalChain) -> bool {
-        for proposal in &chain.proposals[..(chain.proposals.len() - 1)] {
-            if !proposal.block.sm.notarized {
-                return false
-            }
-        }
-
-        true
+        Ok(Some(to_broadcast))
     }
 
     /// Given a proposal, find the index of the chain it extends.
@@ -518,118 +505,6 @@ impl ValidatorState {
         Ok(-1)
     }
 
-    /// Receive a vote for a proposal.
-    /// First, sender is verified using their public key.
-    /// The proposal is then searched for in the node's fork chains.
-    /// If the vote wasn't received before, it is appended to the proposal
-    /// votes list.
-    /// When a node sees 2n/3 votes for a proposal, it notarizes it.
-    /// When a proposal gets notarized, the transactions it contains are
-    /// removed from the node's unconfirmed tx list.
-    /// Finally, we check if the notarization of the proposal can finalize
-    /// parent proposals in its chain.
-    pub async fn receive_vote(&mut self, vote: &Vote) -> Result<(bool, Option<Vec<BlockInfo>>)> {
-        let current_slot = self.current_slot();
-        // Node hasn't started participating
-        match self.participating {
-            Some(start) => {
-                if current_slot < start {
-                    return Ok((false, None))
-                }
-            }
-            None => return Ok((false, None)),
-        }
-
-        // Node refreshes participants records
-        self.refresh_participants()?;
-        let node_count = self.consensus.participants.len();
-
-        // Checking that the voter can actually vote.
-        match self.consensus.participants.get(&vote.address) {
-            Some(participant) => {
-                let mut participant = participant.clone();
-                let va = vote.address;
-                if current_slot <= participant.joined {
-                    warn!("consensus: Voter ({}) joined after current slot.", va);
-                    return Ok((false, None))
-                }
-
-                let mut encoded_proposal = vec![];
-
-                if let Err(e) = vote.proposal.encode(&mut encoded_proposal) {
-                    error!("consensus: Proposal encoding failed: {:?}", e);
-                    return Ok((false, None))
-                };
-
-                if !participant.public_key.verify(&encoded_proposal, &vote.vote) {
-                    warn!("consensus: Voter ({}), signature couldn't be verified", va);
-                    return Ok((false, None))
-                }
-
-                // Updating participant vote
-                match participant.voted {
-                    Some(voted) => {
-                        if vote.slot > voted {
-                            participant.voted = Some(vote.slot);
-                        }
-                    }
-                    None => participant.voted = Some(vote.slot),
-                }
-
-                // Invalidating quarantine
-                participant.quarantined = None;
-
-                self.consensus.participants.insert(participant.address, participant);
-            }
-            None => {
-                warn!("consensus: Voter ({}) is not a participant!", vote.address);
-                return Ok((false, None))
-            }
-        }
-
-        let proposal = match self.find_proposal(&vote.proposal) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("consensus: find_proposal() failed: {}", e);
-                return Err(e)
-            }
-        };
-
-        if proposal.is_none() {
-            debug!(target: "consensus", "Received vote for unknown proposal.");
-            if !self.consensus.orphan_votes.contains(vote) {
-                self.consensus.orphan_votes.push(vote.clone());
-            }
-
-            return Ok((false, None))
-        }
-
-        let (proposal, chain_idx) = proposal.unwrap();
-        if proposal.block.sm.votes.contains(vote) {
-            debug!("receive_vote(): Already seen this vote");
-            return Ok((false, None))
-        }
-
-        proposal.block.sm.votes.push(vote.clone());
-
-        let mut to_broadcast = vec![];
-        if !proposal.block.sm.notarized && proposal.block.sm.votes.len() > (2 * node_count / 3) {
-            debug!("receive_vote(): Notarized a block");
-            proposal.block.sm.notarized = true;
-            match self.chain_finalization(chain_idx).await {
-                Ok(v) => {
-                    to_broadcast = v;
-                }
-                Err(e) => {
-                    error!("consensus: Block finalization failed: {}", e);
-                    return Err(e)
-                }
-            }
-        }
-
-        Ok((true, Some(to_broadcast)))
-    }
-
     /// Search the chains we're holding for the given proposal.
     pub fn find_proposal(
         &mut self,
@@ -660,9 +535,8 @@ impl ValidatorState {
 
     /// Provided an index, the node checks if the chain can be finalized.
     /// Consensus finalization logic:
-    /// - If the node has observed the notarization of 3 consecutive
-    ///   proposals in a fork chain, it finalizes (appends to canonical
-    ///   blockchain) all proposals up to the middle block.
+    /// - If the node has observed the creation of 3 proposals in a fork chain,
+    ///   it finalizes (appends to canonical blockchain) all proposals up to the last one.
     /// When fork chain proposals are finalized, the rest of fork chains not
     /// starting by those proposals are removed.
     pub async fn chain_finalization(&mut self, chain_index: i64) -> Result<Vec<BlockInfo>> {
@@ -676,33 +550,15 @@ impl ValidatorState {
             return Ok(vec![])
         }
 
-        let mut consecutive = 0;
-        for proposal in &chain.proposals {
-            if proposal.block.sm.notarized {
-                consecutive += 1;
-                continue
-            }
-
-            break
-        }
-
-        if consecutive < 3 {
-            debug!(
-                "chain_finalization(): Less than 3 notarized blocks in chain {}, nothing to finalize",
-                chain_index
-            );
-            return Ok(vec![])
-        }
-
+        let bound = chain.proposals.len() - 1;
         let mut finalized = vec![];
-        for proposal in &mut chain.proposals[..(consecutive - 1)] {
-            proposal.block.sm.finalized = true;
+        for proposal in &mut chain.proposals[..bound] {
             finalized.push(proposal.clone().into());
         }
 
-        chain.proposals.drain(0..(consecutive - 1));
+        chain.proposals.drain(0..bound);
 
-        info!("consensus: Adding {} finalized block to canonical chain", finalized.len());
+        info!("consensus: Adding {} finalized block to canonical chain.", finalized.len());
         let blockhashes = match self.blockchain.add(&finalized) {
             Ok(v) => v,
             Err(e) => {
@@ -735,18 +591,6 @@ impl ValidatorState {
 
         for chain in dropped {
             self.consensus.proposals.retain(|c| *c != chain);
-        }
-
-        // Remove orphan votes
-        let mut orphans = vec![];
-        for vote in self.consensus.orphan_votes.iter() {
-            if vote.slot <= last_slot {
-                orphans.push(vote.clone());
-            }
-        }
-
-        for vote in orphans {
-            self.consensus.orphan_votes.retain(|v| *v != vote);
         }
 
         Ok(finalized)
@@ -896,7 +740,6 @@ impl ValidatorState {
             genesis_ts,
             genesis_block,
             proposals: vec![],
-            orphan_votes: vec![],
             participants: BTreeMap::new(),
             pending_participants: vec![],
             refreshed: 0,

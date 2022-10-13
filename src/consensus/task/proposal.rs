@@ -13,7 +13,7 @@ use crate::{
 pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: ValidatorStatePtr) {
     // Node waits just before the current or next slot end, so it can
     // start syncing latest state.
-    let mut seconds_until_next_slot = state.read().await.next_slot_start();
+    let mut seconds_until_next_slot = state.read().await.next_n_slot_start(1);
     let one_sec = Duration::new(1, 0);
 
     loop {
@@ -24,7 +24,7 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
 
         info!("consensus: Waiting for next slot ({:?} sec)", seconds_until_next_slot);
         sleep(seconds_until_next_slot.as_secs()).await;
-        seconds_until_next_slot = state.read().await.next_slot_start();
+        seconds_until_next_slot = state.read().await.next_n_slot_start(1);
     }
 
     info!("consensus: Waiting for next slot ({:?} sec)", seconds_until_next_slot);
@@ -57,7 +57,7 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
     }
 
     loop {
-        let seconds_next_slot = state.read().await.next_slot_start().as_secs();
+        let seconds_next_slot = state.read().await.next_n_slot_start(1).as_secs();
         info!("consensus: Waiting for next slot ({} sec)", seconds_next_slot);
         sleep(seconds_next_slot).await;
 
@@ -91,25 +91,14 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
 
         info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
         debug!("consensus: Full proposal: {:?}", proposal);
-        let vote = state.write().await.receive_proposal(&proposal).await;
-        let vote = match vote {
-            Ok(v) => {
-                if v.is_none() {
-                    debug!("proposal_task(): Node did not vote for the proposed block");
-                    continue
+        match state.write().await.receive_proposal(&proposal).await {
+            Ok(to_broadcast) => {
+                info!("consensus: Block proposal  saved successfully");
+                // Broadcast block to other consensus nodes
+                match consensus_p2p.broadcast(proposal).await {
+                    Ok(()) => info!("consensus: Proposal broadcasted successfully"),
+                    Err(e) => error!("consensus: Failed broadcasting proposal: {}", e),
                 }
-                v.unwrap()
-            }
-            Err(e) => {
-                error!("consensus: Failed processing proposal: {}", e);
-                continue
-            }
-        };
-
-        let result = state.write().await.receive_vote(&vote).await;
-        match result {
-            Ok((_, to_broadcast)) => {
-                info!("consensus: Vote saved successfully");
                 // Broadcast finalized blocks info, if any:
                 if let Some(blocks) = to_broadcast {
                     info!("consensus: Broadcasting finalized blocks");
@@ -124,21 +113,8 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
                 }
             }
             Err(e) => {
-                error!("consensus: Vote save failed: {}", e);
-                // TODO: Is this fallthrough ok?
+                error!("consensus: Block proposal save failed: {}", e);
             }
-        }
-
-        // Broadcast block to other consensus nodes
-        match consensus_p2p.broadcast(proposal).await {
-            Ok(()) => info!("consensus: Proposal broadcasted successfully"),
-            Err(e) => error!("consensus: Failed broadcasting proposal: {}", e),
-        }
-
-        // Broadcast leader vote
-        match consensus_p2p.broadcast(vote).await {
-            Ok(()) => info!("consensus: Leader vote broadcasted successfully"),
-            Err(e) => error!("consensus: Failed broadcasting leader vote: {}", e),
         }
     }
 }

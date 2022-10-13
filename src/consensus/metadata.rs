@@ -1,4 +1,4 @@
-use super::{Participant, Vote};
+use super::Participant;
 use rand::rngs::OsRng;
 
 use crate::{
@@ -82,8 +82,6 @@ impl OuroborosMetadata {
 /// consensus protocol.
 #[derive(Debug, Clone, Default, SerialEncodable, SerialDecodable)]
 pub struct StreamletMetadata {
-    /// Slot votes
-    pub votes: Vec<Vote>,
     /// Block notarization flag
     pub notarized: bool,
     /// Block finalization flag
@@ -94,6 +92,6 @@ pub struct StreamletMetadata {
 
 impl StreamletMetadata {
     pub fn new(participants: Vec<Participant>) -> Self {
-        Self { votes: vec![], notarized: false, finalized: false, participants }
+        Self { notarized: false, finalized: false, participants }
     }
 }

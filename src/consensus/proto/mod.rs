@@ -10,10 +10,6 @@ pub use protocol_proposal::ProtocolProposal;
 mod protocol_tx;
 pub use protocol_tx::ProtocolTx;
 
-/// Consensus vote protocol
-mod protocol_vote;
-pub use protocol_vote::ProtocolVote;
-
 /// Validator + Replicator blockchain sync protocol
 mod protocol_sync;
 pub use protocol_sync::ProtocolSync;
