@@ -24,6 +24,7 @@ Priorities:
 
 1. Consensus
     1. Settle on final algorithm. Currently fixing the reward function.
+        1. Todos are leader proof, rewards proof, balance proof and ledger API
     2. Review the contracts
     3. Create the blockchain API
 2. WASM
