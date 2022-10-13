@@ -15,13 +15,13 @@ use rand::{thread_rng, Rng};
 use crate::crypto::{
     coin::OwnCoin,
     constants::MERKLE_DEPTH_ORCHARD,
+    keypair::{Keypair, SecretKey},
     lead_proof,
     leadcoin::LeadCoin,
     merkle_node::MerkleNode,
     proof::{Proof, ProvingKey},
     types::DrkValueBlind,
     util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
-    keypair::{Keypair,SecretKey},
 };
 
 const PRF_NULLIFIER_PREFIX: u64 = 0;
@@ -137,7 +137,10 @@ impl Epoch {
     /// is sampled at random, and the rest of the secret keys are derived,
     /// for sk (secret key) at time i+1 is derived from secret key at time i.
     ///
-    fn create_coins_sks(&self, sks: &mut Vec<SecretKey>) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>) {
+    fn create_coins_sks(
+        &self,
+        sks: &mut Vec<SecretKey>,
+    ) -> (Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>) {
         let mut rng = thread_rng();
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(self.len());
         let mut root_sks: Vec<MerkleNode> = vec![];
@@ -145,7 +148,7 @@ impl Epoch {
         let mut prev_sk_base: pallas::Base = pallas::Base::one();
         for _i in 0..self.len() {
             //TODO (fix) add sk for the coin struct to be used in txs decryption of tx notes.
-            let base : pallas::Point = if _i == 0 {
+            let base: pallas::Point = if _i == 0 {
                 pedersen_commitment_u64(1, pallas::Scalar::random(&mut rng))
             } else {
                 pedersen_commitment_u64(1, mod_r_p(prev_sk_base))
@@ -156,7 +159,7 @@ impl Epoch {
             sks.push(SecretKey::from(SecretKey(sk_base)));
             prev_sk_base = sk_base;
             let sk_bytes = sk_base.to_repr();
-            let node = MerkleNode::from_bytes(&sk_bytes).unwrap();
+            let node = MerkleNode::from_bytes(sk_bytes).unwrap();
             //let serialized = serde_json::to_string(&node).unwrap();
             //debug!("serialized: {}", serialized);
             tree.append(&node.clone());
@@ -197,7 +200,7 @@ impl Epoch {
                         root_sks[i],
                         path_sks[i],
                         seeds[i],
-                        sks[i]
+                        sks[i],
                     );
                     slot_coins.push(coin);
                 }
@@ -205,7 +208,8 @@ impl Epoch {
             }
             // otherwise compete with zero stake
             else {
-                let coin = self.create_leadcoin(sigma, 0, i, root_sks[i], path_sks[i], seeds[i], sks[i]);
+                let coin =
+                    self.create_leadcoin(sigma, 0, i, root_sks[i], path_sks[i], seeds[i], sks[i]);
                 self.coins.push(vec![coin]);
             }
         }
@@ -223,7 +227,7 @@ impl Epoch {
         sk: SecretKey,
     ) -> LeadCoin {
         // keypair
-        let keypair : Keypair = Keypair::new(sk);
+        let keypair: Keypair = Keypair::new(sk);
         //random commitment blinding values
         let mut rng = thread_rng();
         let c_cm1_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
@@ -250,7 +254,8 @@ impl Epoch {
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
                 .hash(sn_msg);
 
-        let coin_commit_msg_input = [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed];
+        let coin_commit_msg_input =
+            [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed];
         let coin_commit_msg: pallas::Base =
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<5>, 3, 2>::init()
                 .hash(coin_commit_msg_input);
@@ -268,7 +273,8 @@ impl Epoch {
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
                 .hash(coin_nonce2_msg);
 
-        let coin2_commit_msg_input = [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed2];
+        let coin2_commit_msg_input =
+            [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed2];
         let coin2_commit_msg: pallas::Base =
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<5>, 3, 2>::init()
                 .hash(coin2_commit_msg_input);

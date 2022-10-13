@@ -12,7 +12,7 @@ use serde::{
     ser::Serializer,
     Deserialize, Serialize,
 };
-use subtle::{Choice, ConditionallySelectable, CtOption};
+use subtle::{Choice, ConditionallySelectable};
 
 use crate::{
     crypto::{
@@ -47,8 +47,12 @@ impl MerkleNode {
         self.0.to_repr()
     }
 
-    pub fn from_bytes(bytes: &[u8; 32]) -> CtOption<Self> {
-        pallas::Base::from_repr(*bytes).map(MerkleNode)
+    pub fn from_bytes(bytes: [u8; 32]) -> Option<Self> {
+        let n = pallas::Base::from_repr(bytes);
+        match bool::from(n.is_some()) {
+            true => Some(Self(n.unwrap())),
+            false => None,
+        }
     }
 
     pub fn from_coin(coin: &Coin) -> Self {
@@ -69,7 +73,7 @@ impl Serialize for MerkleNode {
 impl<'de> Deserialize<'de> for MerkleNode {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         let parsed = <[u8; 32]>::deserialize(deserializer)?;
-        <Option<_>>::from(Self::from_bytes(&parsed)).ok_or_else(|| {
+        <Option<_>>::from(Self::from_bytes(parsed)).ok_or_else(|| {
             Error::custom("Attempted to deserialize a non-canonical representation of a Pallas base field element")
         })
     }
