@@ -1,8 +1,8 @@
-use borsh::maybestd::io::Error as BorshIoError;
 use std::result::Result as ResultGeneric;
 
 pub type ContractResult = ResultGeneric<(), ContractError>;
 
+/// Error codes available in the contract.
 #[derive(Debug, thiserror::Error)]
 pub enum ContractError {
     /// Allows on-chain programs to implement contract-specific error types and
@@ -13,9 +13,6 @@ pub enum ContractError {
 
     #[error("Internal error")]
     Internal,
-
-    #[error("IO error: {0}")]
-    BorshIoError(String),
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -28,13 +25,11 @@ macro_rules! to_builtin {
 
 pub const CUSTOM_ZERO: u64 = to_builtin!(1);
 pub const INTERNAL_ERROR: u64 = to_builtin!(2);
-pub const BORSH_IO_ERROR: u64 = to_builtin!(3);
 
 impl From<ContractError> for u64 {
     fn from(err: ContractError) -> Self {
         match err {
             ContractError::Internal => INTERNAL_ERROR,
-            ContractError::BorshIoError(_) => BORSH_IO_ERROR,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -51,14 +46,7 @@ impl From<u64> for ContractError {
         match error {
             CUSTOM_ZERO => Self::Custom(0),
             INTERNAL_ERROR => Self::Internal,
-            BORSH_IO_ERROR => Self::BorshIoError("Unknown".to_string()),
             _ => Self::Custom(error as u32),
         }
-    }
-}
-
-impl From<BorshIoError> for ContractError {
-    fn from(error: BorshIoError) -> Self {
-        Self::BorshIoError(format!("{}", error))
     }
 }
