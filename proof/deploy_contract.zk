@@ -19,7 +19,7 @@ circuit "DeployContract" {
 	constrain_instance(signature_y);
 
 	# Derive the contract address from the public key's coordinates
-	address = poseidon_hash(signature_x, signature_y)
+	address = poseidon_hash(signature_x, signature_y);
 	constrain_instance(address);
 
 	# Constrain the byte size of the deployed binaries

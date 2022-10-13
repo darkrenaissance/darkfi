@@ -81,6 +81,7 @@ impl Compiler {
                 StatementType::Assign => tmp_stack.push(&i.lhs.as_ref().unwrap().name),
                 // In case of a simple call, we don't append anything to the stack
                 StatementType::Call => {}
+                // TODO: FIXME: unreachable is reached with missing semicolons in the code
                 _ => unreachable!(),
             }
 
