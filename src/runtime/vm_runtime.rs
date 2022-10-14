@@ -12,7 +12,11 @@ use wasmer_middlewares::{
     Metering,
 };
 
-use super::{chain_state::nullifier_exists, memory::MemoryManipulation, util::drk_log};
+use super::{
+    chain_state::{is_valid_merkle, nullifier_exists},
+    memory::MemoryManipulation,
+    util::drk_log,
+};
 use crate::{
     node::{state::StateUpdate, MemoryState},
     Result,
@@ -113,6 +117,12 @@ impl Runtime {
                     &store,
                     env.clone(),
                     nullifier_exists,
+                ),
+
+                "is_valid_merkle_" => Function::new_native_with_env(
+                    &store,
+                    env.clone(),
+                    is_valid_merkle,
                 ),
             }
         };
