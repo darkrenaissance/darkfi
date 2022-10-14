@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use async_executor::Executor;
 use clap::Parser;
 use simplelog::*;
+use smol::Executor;
 
 use darkfi::{
     net,

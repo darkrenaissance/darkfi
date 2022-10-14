@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use async_executor::Executor;
 use async_std::sync::Arc;
 use log::{debug, error, info};
+use smol::Executor;
 
 use super::{consensus_sync_task, keep_alive_task};
 use crate::{

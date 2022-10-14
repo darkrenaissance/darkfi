@@ -1,7 +1,7 @@
-use async_executor::Executor;
 use async_std::sync::Arc;
 use log::{debug, error};
 use rand::Rng;
+use smol::Executor;
 
 use crate::{
     consensus::{state::QUARANTINE_DURATION, KeepAlive, ValidatorStatePtr},
