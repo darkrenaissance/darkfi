@@ -12,5 +12,8 @@ edition = "2021"
 # Error handling
 thiserror = "1.0.37"
 
+# Encoding
+bs58 = "0.4.0"
+
 # Cryptography
 pasta_curves = "0.4.0"

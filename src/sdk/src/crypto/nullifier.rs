@@ -1,3 +1,6 @@
+use core::str::FromStr;
+use std::io;
+
 use pasta_curves::{group::ff::PrimeField, pallas};
 
 /// The `Nullifier` is represented as a base field element.
@@ -30,5 +33,27 @@ impl Nullifier {
 impl From<pallas::Base> for Nullifier {
     fn from(x: pallas::Base) -> Self {
         Self(x)
+    }
+}
+
+impl FromStr for Nullifier {
+    type Err = io::Error;
+
+    /// Tries to decode a base58 string into a `Nullifier` type.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = match bs58::decode(s).into_vec() {
+            Ok(v) => v,
+            Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+        };
+
+        if bytes.len() != 32 {
+            return Err(io::Error::new(io::ErrorKind::Other, "Length of decoded bytes is not 32"))
+        }
+
+        if let Some(nullifier) = Self::from_bytes(bytes.try_into().unwrap()) {
+            return Ok(nullifier)
+        }
+
+        return Err(io::Error::new(io::ErrorKind::Other, "Invalid bytes for Nullifier"))
     }
 }
