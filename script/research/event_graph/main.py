@@ -11,6 +11,9 @@ class Event:
         self.timestamp = datetime.now().timestamp
         self.parents = parents
 
+    def set_timestamp(self, timestamp):
+        self.timestamp = timestamp
+
     def hash(self) -> str:
         m = sha256()
         m.update(str.encode(str(self.timestamp)))
@@ -40,6 +43,8 @@ class Event:
  E7: [E4]
  E8: [E2] 
 """
+
+
 class Graph:
     def __init__(self):
         self.events = dict()
@@ -78,18 +83,18 @@ class Node:
         self.orphan_pool = Graph()
         self.active_pool = Graph()
 
+        # the active pool should always start with one event
+        genesis_event = Event([])
+        genesis_event.set_timestamp(0.0)
+
+        self.genesis_event = genesis_event
+        self.active_pool.add_event(genesis_event)
+
+
     def receive_new_event(self, event: Event):
 
-        # TODO: the active pool should always start with one event
-        #       which is hardcoded into the software. The genesis event.
-        #       Then we can remove this code below.
-        # check if the event has no parents, and the active pool
-        # is empty, then add the event directly to the active pool
+        # reject events with no parents
         if len(event.parents) == 0:
-            if len(self.active_pool.events) == 0:
-                self.active_pool.add_event(event)
-                self.relink(event)
-
             return
 
         missing_parents = self.active_pool.check(event.parents)
@@ -98,7 +103,16 @@ class Node:
             # if there are no missing parents
             # add the event to active pool
             self.active_pool.add_event(event)
-            self.relink(event)
+
+            # events list to be removed from orphan pool
+            # after relink 
+            remove_list: EventIds = []
+            self.relink(event, remove_list)
+
+            # clean up orphan pool
+            for ev in remove_list:
+                self.orphan_pool.remove_event(ev)
+
         else:
             # add the received event to the orphan pool
             self.orphan_pool.add_event(event)
@@ -123,35 +137,25 @@ class Node:
             else:
                 request_list.append(parent_hash)
 
-    def relink(self, event: Event):
+    def relink(self, event: Event, remove_list=[]):
         # check if the orphan pool has an event linked
         # to the new added event
-        # TODO: you cannot call this recursively.
-        #       You must clear the orphan_pool before iteration, and keep
-        #       track of all remaining orphans.
-        #       Then add them back after the for loop is finished.
-        #       You have a bool if things change:
-        #
-        #           is_reorganized = False
-        #           remaining_orphans = []
-
-        # while not is_reorganized:
-        for (orphan_hash, orphan) in dict(self.orphan_pool.events).items():
+        for (orphan_hash, orphan) in self.orphan_pool.events.items():
+            if orphan_hash in remove_list:
+                continue
 
             if event.hash() not in orphan.parents:
                 continue
+
 
             missing_parents = self.active_pool.check(orphan.parents)
 
             if len(missing_parents) == 0:
                 self.active_pool.add_event(orphan)
-                # Error, you cannot do this. You will invalidate the iterator.
-                self.orphan_pool.remove_event(orphan_hash)
-
-                # is_reorganized = True
+                remove_list.append(orphan_hash)
 
                 # recursive call
-                self.relink(orphan)
+                self.relink(orphan, remove_list)
 
     def __str__(self):
         return f"""------
@@ -177,7 +181,7 @@ async def main():
 def test_node():
     node_a = Node("NodeA")
 
-    event0 = Event([])
+    event0 = node_a.genesis_event 
     event1 = Event([event0.hash()])
     event2 = Event([event1.hash()])
     event3 = Event([event2.hash(), event0.hash()])
@@ -185,7 +189,6 @@ def test_node():
     event5 = Event([event4.hash(), "FAKEHASH"])
     event6 = Event([event5.hash(), event3.hash()])
 
-    node_a.receive_new_event(event0)
     node_a.receive_new_event(event3)
     node_a.receive_new_event(event2)
     node_a.receive_new_event(event1)
