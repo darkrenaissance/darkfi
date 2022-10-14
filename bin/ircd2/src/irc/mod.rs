@@ -1,7 +1,6 @@
-use async_std::{net::TcpListener, sync::Arc};
 use std::{collections::HashMap, fs::File, net::SocketAddr};
 
-use async_executor::Executor;
+use async_std::{net::TcpListener, sync::Arc};
 use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
 use futures_rustls::{rustls, TlsAcceptor};
 use log::{error, info};
@@ -94,8 +93,8 @@ impl IrcServer {
     ) -> Result<Self> {
         Ok(Self { settings, clients_subscriptions })
     }
-    pub async fn start(&self, executor: Arc<Executor<'_>>) -> Result<()> {
-        let (msg_notifier, msg_recv) = async_channel::unbounded();
+    pub async fn start(&self, executor: Arc<smol::Executor<'_>>) -> Result<()> {
+        let (msg_notifier, msg_recv) = smol::channel::unbounded();
 
         // Listen to msgs from clients
         executor.spawn(Self::listen_to_msgs(msg_recv, self.clients_subscriptions.clone())).detach();
@@ -108,7 +107,7 @@ impl IrcServer {
 
     /// Start listening to msgs from irc clients
     pub async fn listen_to_msgs(
-        recv: async_channel::Receiver<(NotifierMsg, u64)>,
+        recv: smol::channel::Receiver<(NotifierMsg, u64)>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
         loop {
@@ -143,8 +142,8 @@ impl IrcServer {
     /// Start listening to new connections from irc clients
     pub async fn listen(
         &self,
-        notifier: async_channel::Sender<(NotifierMsg, u64)>,
-        executor: Arc<Executor<'_>>,
+        notifier: smol::channel::Sender<(NotifierMsg, u64)>,
+        executor: Arc<smol::Executor<'_>>,
     ) -> Result<()> {
         let (listener, acceptor) = self.setup_listener().await?;
         info!("[IRC SERVER] listening on {}", self.settings.irc_listen);
@@ -187,8 +186,8 @@ impl IrcServer {
         &self,
         stream: C,
         peer_addr: SocketAddr,
-        notifier: async_channel::Sender<(NotifierMsg, u64)>,
-        executor: Arc<Executor<'_>>,
+        notifier: smol::channel::Sender<(NotifierMsg, u64)>,
+        executor: Arc<smol::Executor<'_>>,
     ) -> Result<()> {
         let (reader, writer) = stream.split();
         let reader = BufReader::new(reader);

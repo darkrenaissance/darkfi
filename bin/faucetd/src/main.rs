@@ -1,15 +1,11 @@
 use std::{collections::HashMap, str::FromStr};
 
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
-use futures_lite::future;
 use log::{debug, error, info};
-use serde_derive::Deserialize;
 use serde_json::{json, Value};
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use darkfi::{
@@ -32,12 +28,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     serial::serialize,
-    util::{
-        async_util::sleep,
-        cli::{get_log_config, get_log_level, spawn_config},
-        parse::decode_base10,
-        path::{expand_path, get_config_path},
-    },
+    util::{async_util::sleep, parse::decode_base10, path::expand_path},
     wallet::walletdb::init_wallet,
     Error, Result,
 };
@@ -307,11 +298,11 @@ async fn prune_airdrop_map(map: Arc<Mutex<HashMap<Address, i64>>>, timeout: i64)
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // We use this handler to block this function after detaching all
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
-    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
     ctrlc::set_handler(move || {
         async_std::task::block_on(signal.send(())).unwrap();
     })

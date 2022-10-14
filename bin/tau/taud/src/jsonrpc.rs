@@ -27,7 +27,7 @@ use crate::{
 
 pub struct JsonRpcInterface {
     dataset_path: PathBuf,
-    notify_queue_sender: async_channel::Sender<TaskInfo>,
+    notify_queue_sender: smol::channel::Sender<TaskInfo>,
     nickname: String,
     workspace: Mutex<String>,
     workspaces: FxHashMap<String, SalsaBox>,
@@ -78,7 +78,7 @@ impl RequestHandler for JsonRpcInterface {
 impl JsonRpcInterface {
     pub fn new(
         dataset_path: PathBuf,
-        notify_queue_sender: async_channel::Sender<TaskInfo>,
+        notify_queue_sender: smol::channel::Sender<TaskInfo>,
         nickname: String,
         workspaces: FxHashMap<String, SalsaBox>,
         p2p: net::P2pPtr,

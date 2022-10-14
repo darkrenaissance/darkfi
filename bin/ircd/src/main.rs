@@ -1,22 +1,16 @@
-use async_channel::Receiver;
-use async_executor::Executor;
-use async_std::sync::{Arc, Mutex};
 use std::fmt;
 
+use async_std::sync::{Arc, Mutex};
 use log::{info, warn};
 use rand::rngs::OsRng;
-use smol::future;
+use smol::channel::Receiver;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize, net,
     rpc::server::listen_and_serve,
     system::{Subscriber, SubscriberPtr},
-    util::{
-        cli::{get_log_config, get_log_level, spawn_config},
-        file::save_json_file,
-        path::{expand_path, get_config_path},
-    },
+    util::{file::save_json_file, path::expand_path},
     Result,
 };
 
@@ -68,7 +62,7 @@ impl Ircd {
         seen: Arc<Mutex<SeenIds>>,
         p2p: net::P2pPtr,
         p2p_receiver: Receiver<Privmsg>,
-        executor: Arc<Executor<'_>>,
+        executor: Arc<smol::Executor<'_>>,
     ) -> Result<()> {
         let notify_clients = self.notify_clients.clone();
         executor
@@ -98,7 +92,7 @@ impl Ircd {
 }
 
 async_daemonize!(realmain);
-async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     let seen = Arc::new(Mutex::new(SeenIds::new()));
 
     if settings.gen_secret {
@@ -131,7 +125,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     let mut net_settings = settings.net.clone();
     net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
-    let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<Privmsg>();
+    let (p2p_send_channel, p2p_recv_channel) = smol::channel::unbounded::<Privmsg>();
 
     let p2p = net::P2p::new(net_settings.into()).await;
     let p2p2 = p2p.clone();
@@ -167,7 +161,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     ircd.start(&settings, seen, p2p, p2p_recv_channel, executor.clone()).await?;
 
     // Run once receive exit signal
-    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
     ctrlc::set_handler(move || {
         warn!(target: "ircd", "ircd start Exit Signal");
         // cleaning up tasks running in the background

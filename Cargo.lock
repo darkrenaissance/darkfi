@@ -1246,8 +1246,6 @@ dependencies = [
 name = "darkfid"
 version = "0.3.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-std",
  "async-trait",
  "blake3",
@@ -1256,7 +1254,6 @@ dependencies = [
  "ctrlc",
  "darkfi",
  "easy-parallel",
- "futures-lite",
  "fxhash",
  "incrementalmerkletree",
  "lazy-init",
@@ -1264,10 +1261,10 @@ dependencies = [
  "pasta_curves",
  "rand",
  "serde",
- "serde_derive",
  "serde_json",
  "simplelog",
  "sled",
+ "smol",
  "structopt",
  "structopt-toml",
  "url",
@@ -1753,8 +1750,6 @@ dependencies = [
 name = "faucetd"
 version = "0.3.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-std",
  "async-trait",
  "blake3",
@@ -1763,16 +1758,15 @@ dependencies = [
  "ctrlc",
  "darkfi",
  "easy-parallel",
- "futures-lite",
  "hex",
  "lazy-init",
  "log",
  "rand",
  "serde",
- "serde_derive",
  "serde_json",
  "simplelog",
  "sled",
+ "smol",
  "structopt",
  "structopt-toml",
  "url",
@@ -1920,20 +1914,17 @@ dependencies = [
 name = "fud"
 version = "0.3.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-std",
  "async-trait",
  "blake3",
  "ctrlc",
  "darkfi",
  "easy-parallel",
- "futures-lite",
  "log",
  "serde",
- "serde_derive",
  "serde_json",
  "simplelog",
+ "smol",
  "structopt",
  "structopt-toml",
  "url",
@@ -2390,8 +2381,6 @@ dependencies = [
 name = "ircd"
 version = "0.4.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-recursion",
  "async-std",
  "async-trait",
@@ -2424,8 +2413,6 @@ dependencies = [
 name = "ircd2"
 version = "0.4.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-std",
  "async-trait",
  "bs58",
@@ -2547,20 +2534,17 @@ dependencies = [
 name = "lilith"
 version = "0.3.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-std",
  "async-trait",
  "ctrlc",
  "darkfi",
  "easy-parallel",
- "futures-lite",
  "fxhash",
  "log",
  "serde",
- "serde_derive",
  "serde_json",
  "simplelog",
+ "smol",
  "structopt",
  "structopt-toml",
  "toml",
@@ -4137,8 +4121,6 @@ dependencies = [
 name = "taud"
 version = "0.4.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-std",
  "async-trait",
  "bs58",

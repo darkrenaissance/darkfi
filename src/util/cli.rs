@@ -89,35 +89,23 @@ pub fn get_log_config() -> simplelog::Config {
 ///
 /// The Cargo.toml dependencies needed for this are:
 /// ```text
-/// async-channel = "1.7.1"
-/// async-executor = "1.4.1"
 /// async-std = "1.12.0"
 /// darkfi = { path = "../../", features = ["util"] }
 /// easy-parallel = "3.2.0"
-/// futures-lite = "1.12.0"
 /// simplelog = "0.12.0"
+/// smol = "1.2.5"
 ///
 /// # Argument parsing
-/// serde = "1.0.135"
-/// serde_derive = "1.0.145"
+/// serde = {version = "1.0.135", features = ["derive"]}
 /// structopt = "0.3.26"
 /// structopt-toml = "0.5.1"
 /// ```
 ///
 /// Example usage:
-/// ```text
+/// ```no_run
 /// use async_std::sync::Arc;
-/// use futures_lite::future;
+//  use darkfi::{async_daemonize, cli_desc, Result};
 /// use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
-///
-/// use darkfi::{
-///     async_daemonize, cli_desc,
-///     util::{
-///         cli::{get_log_config, get_log_level, spawn_config},
-///         path::get_config_path, expand_path
-///     },
-///     Result,
-/// };
 ///
 /// const CONFIG_FILE: &str = "daemond_config.toml";
 /// const CONFIG_FILE_CONTENTS: &str = include_str!("../daemond_config.toml");
@@ -136,7 +124,7 @@ pub fn get_log_config() -> simplelog::Config {
 /// }
 ///
 /// async_daemonize!(realmain);
-/// async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+/// async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 ///     println!("Hello, world!");
 ///     Ok(())
 /// }
@@ -147,12 +135,12 @@ macro_rules! async_daemonize {
     ($realmain:ident) => {
         fn main() -> Result<()> {
             let args = Args::from_args_with_toml("").unwrap();
-            let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
-            spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
+            let cfg_path = darkfi::util::path::get_config_path(args.config, CONFIG_FILE)?;
+            darkfi::util::cli::spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
             let args = Args::from_args_with_toml(&std::fs::read_to_string(cfg_path)?).unwrap();
 
-            let log_level = get_log_level(args.verbose.into());
-            let log_config = get_log_config();
+            let log_level = darkfi::util::cli::get_log_level(args.verbose.into());
+            let log_config = darkfi::util::cli::get_log_config();
 
             let log_file_path = match std::env::var("DARKFI_LOG") {
                 Ok(p) => p,
@@ -162,12 +150,12 @@ macro_rules! async_daemonize {
                     } else {
                         "darkfi"
                     };
-                    std::fs::create_dir_all(expand_path("~/.local/darkfi")?)?;
+                    std::fs::create_dir_all(darkfi::util::path::expand_path("~/.local/darkfi")?)?;
                     format!("~/.local/darkfi/{}.log", bin_name)
                 }
             };
 
-            let log_file_path = expand_path(&log_file_path)?;
+            let log_file_path = darkfi::util::path::expand_path(&log_file_path)?;
             let log_file = std::fs::File::create(log_file_path)?;
 
             simplelog::CombinedLogger::init(vec![
@@ -181,14 +169,14 @@ macro_rules! async_daemonize {
             ])?;
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
-            let ex = Arc::new(async_executor::Executor::new());
-            let (signal, shutdown) = async_channel::unbounded::<()>();
+            let ex = async_std::sync::Arc::new(smol::Executor::new());
+            let (signal, shutdown) = smol::channel::unbounded::<()>();
             let (_, result) = easy_parallel::Parallel::new()
                 // Run four executor threads
-                .each(0..4, |_| future::block_on(ex.run(shutdown.recv())))
+                .each(0..4, |_| smol::future::block_on(ex.run(shutdown.recv())))
                 // Run the main future on the current thread.
                 .finish(|| {
-                    future::block_on(async {
+                    smol::future::block_on(async {
                         $realmain(args, ex.clone()).await?;
                         drop(signal);
                         Ok::<(), darkfi::Error>(())

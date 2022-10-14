@@ -1,6 +1,5 @@
 use std::{fs::File, net::SocketAddr};
 
-use async_executor::Executor;
 use async_std::{
     net::TcpListener,
     sync::{Arc, Mutex},
@@ -9,6 +8,7 @@ use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
 use futures_rustls::{rustls, TlsAcceptor};
 use fxhash::FxHashMap;
 use log::{error, info};
+use smol::Executor;
 
 use darkfi::{
     net::P2pPtr,

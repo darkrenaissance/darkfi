@@ -1,8 +1,6 @@
 use fxhash::FxHashMap;
 use log::{info, warn};
-use serde_derive::Deserialize;
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use toml::Value;
 use url::Url;
 

@@ -5,7 +5,6 @@ use std::{
     process::exit,
 };
 
-use async_executor::Executor;
 use async_std::{
     stream::StreamExt,
     sync::{Arc, Mutex, RwLock},
@@ -18,7 +17,6 @@ use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_async_std::Signals;
-use smol::future;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -27,7 +25,6 @@ use darkfi::{
     raft::{NetMsg, ProtocolRaft, Raft, RaftSettings},
     rpc::server::listen_and_serve,
     util::{
-        cli::{get_log_config, get_log_level, spawn_config},
         file::{load_file, load_json_file, save_file, save_json_file},
         path::{expand_path, get_config_path},
     },
@@ -515,7 +512,7 @@ async fn handle_signals(
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, executor: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
     let docs_path = expand_path(&args.docs)?;
     let store_path = expand_path(docs_path.join(".log").to_str().unwrap())?;

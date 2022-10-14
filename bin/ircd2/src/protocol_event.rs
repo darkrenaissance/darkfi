@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
 
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use fxhash::FxHashMap;
@@ -334,7 +333,7 @@ impl ProtocolEvent {
 
 #[async_trait]
 impl net::ProtocolBase for ProtocolEvent {
-    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+    async fn start(self: Arc<Self>, executor: Arc<smol::Executor<'_>>) -> Result<()> {
         debug!(target: "ircd", "ProtocolEvent::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_event(), executor.clone()).await;

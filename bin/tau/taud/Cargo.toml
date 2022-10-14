@@ -17,8 +17,6 @@ darkfi = { path = "../../../", features = ["rpc", "raft", "net", "bs58"]}
 smol = "1.2.5"
 async-std = {version = "1.12.0", features = ["attributes"]}
 async-trait = "0.1.57"
-async-channel = "1.7.1"
-async-executor = "1.4.1"
 easy-parallel = "3.2.0"
 futures = "0.3.24"
 

@@ -28,7 +28,7 @@ pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     // irc config
     irc_config: IrcConfig,
 
-    server_notifier: async_channel::Sender<(NotifierMsg, u64)>,
+    server_notifier: smol::channel::Sender<(NotifierMsg, u64)>,
     subscription: Subscription<ClientSubMsg>,
 }
 
@@ -38,7 +38,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         read_stream: BufReader<ReadHalf<C>>,
         address: SocketAddr,
         irc_config: IrcConfig,
-        server_notifier: async_channel::Sender<(NotifierMsg, u64)>,
+        server_notifier: smol::channel::Sender<(NotifierMsg, u64)>,
         subscription: Subscription<ClientSubMsg>,
     ) -> Self {
         Self { write_stream, read_stream, address, irc_config, subscription, server_notifier }

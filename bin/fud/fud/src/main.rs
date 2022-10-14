@@ -1,13 +1,10 @@
-use async_executor::Executor;
+use std::{collections::HashSet, fs, path::PathBuf};
+
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use futures_lite::future;
 use log::{debug, error, info, warn};
-use serde_derive::Deserialize;
 use serde_json::{json, Value};
-use std::{collections::HashSet, fs, path::PathBuf};
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use darkfi::{
@@ -22,15 +19,13 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     serial::serialize,
-    util::{
-        cli::{get_log_config, get_log_level, spawn_config},
-        path::{expand_path, get_config_path},
-    },
+    util::path::expand_path,
     Result,
 };
 
 mod error;
 use error::{server_error, RpcError};
+
 const CONFIG_FILE: &str = "fud_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../fud_config.toml");
 
@@ -372,11 +367,11 @@ impl RequestHandler for Fud {
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // We use this handler to block this function after detaching all
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
-    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
     ctrlc::set_handler(move || {
         async_std::task::block_on(signal.send(())).unwrap();
     })

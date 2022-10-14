@@ -1,7 +1,7 @@
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use log::debug;
+use smol::Executor;
 
 use darkfi::{
     net,
@@ -16,7 +16,7 @@ struct InvObject(String);
 
 pub struct ProtocolPrivmsg {
     jobsman: net::ProtocolJobsManagerPtr,
-    notify: async_channel::Sender<Privmsg>,
+    notify: smol::channel::Sender<Privmsg>,
     msg_sub: net::MessageSubscription<Privmsg>,
     p2p: net::P2pPtr,
     channel: net::ChannelPtr,
@@ -26,7 +26,7 @@ pub struct ProtocolPrivmsg {
 impl ProtocolPrivmsg {
     pub async fn init(
         channel: net::ChannelPtr,
-        notify: async_channel::Sender<Privmsg>,
+        notify: smol::channel::Sender<Privmsg>,
         p2p: net::P2pPtr,
         seen: Arc<Mutex<SeenIds>>,
     ) -> net::ProtocolBasePtr {

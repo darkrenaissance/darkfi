@@ -1,13 +1,9 @@
 use std::str::FromStr;
 
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use futures_lite::future;
 use log::{debug, error, info};
-use serde_derive::Deserialize;
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use darkfi::{
@@ -34,10 +30,7 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
-    util::{
-        cli::{get_log_config, get_log_level, spawn_config},
-        path::{expand_path, get_config_path},
-    },
+    util::path::expand_path,
     wallet::walletdb::init_wallet,
     Error, Result,
 };
@@ -260,7 +253,7 @@ impl Darkfid {
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     if args.consensus && args.clock_sync {
         // We verify that if peer/seed nodes are configured, their rpc config also exists
         if ((!args.consensus_p2p_peer.is_empty() && args.consensus_peer_rpc.is_empty()) ||
@@ -284,7 +277,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // We use this handler to block this function after detaching all
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
-    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
     ctrlc::set_handler(move || {
         async_std::task::block_on(signal.send(())).unwrap();
     })

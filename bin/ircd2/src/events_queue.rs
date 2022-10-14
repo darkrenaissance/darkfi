@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use async_std::sync::Arc;
 
 use darkfi::{Error, Result};
 
@@ -6,11 +6,11 @@ use crate::model::Event;
 
 pub type EventsQueuePtr = Arc<EventsQueue>;
 
-pub struct EventsQueue(async_channel::Sender<Event>, async_channel::Receiver<Event>);
+pub struct EventsQueue(smol::channel::Sender<Event>, smol::channel::Receiver<Event>);
 
 impl EventsQueue {
     pub fn new() -> EventsQueuePtr {
-        let (sn, rv) = async_channel::unbounded();
+        let (sn, rv) = smol::channel::unbounded();
         Arc::new(Self(sn, rv))
     }
 

@@ -1,9 +1,7 @@
 use std::path::Path;
 
-use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use futures_lite::future;
 use fxhash::{FxHashMap, FxHashSet};
 use log::{error, info, warn};
 use serde_json::{json, Value};
@@ -21,7 +19,6 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     util::{
-        cli::{get_log_config, get_log_level, spawn_config},
         file::{load_file, save_file},
         path::{expand_path, get_config_path},
     },
@@ -135,7 +132,7 @@ async fn spawn_network(
     info: NetInfo,
     urls: Vec<Url>,
     saved_hosts: Option<&FxHashSet<Url>>,
-    ex: Arc<Executor<'_>>,
+    ex: Arc<smol::Executor<'_>>,
 ) -> Result<Spawn> {
     let mut full_urls = Vec::new();
     for url in &urls {
@@ -243,11 +240,11 @@ fn save_hosts(path: &Path, spawns: FxHashMap<String, Vec<String>>) {
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // We use this handler to block this function after detaching all
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
-    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
     ctrlc::set_handler(move || {
         async_std::task::block_on(signal.send(())).unwrap();
     })

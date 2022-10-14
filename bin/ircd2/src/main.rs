@@ -1,20 +1,13 @@
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
-
 use log::{info, warn};
 use rand::rngs::OsRng;
-use smol::future;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize, net,
     rpc::server::listen_and_serve,
     system::Subscriber,
-    util::{
-        cli::{get_log_config, get_log_level, spawn_config},
-        file::save_json_file,
-        path::{expand_path, get_config_path},
-    },
+    util::{file::save_json_file, path::expand_path},
     Result,
 };
 
@@ -40,7 +33,7 @@ use crate::{
 };
 
 async_daemonize!(realmain);
-async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     ////////////////////
     // Generate new keypair and exit
     ////////////////////
@@ -129,7 +122,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     ////////////////////
     // Wait for SIGINT
     ////////////////////
-    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
     ctrlc::set_handler(move || {
         warn!(target: "ircd", "ircd start Exit Signal");
         // cleaning up tasks running in the background

@@ -1,11 +1,11 @@
 use std::collections::VecDeque;
 
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use fxhash::FxHashMap;
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
+use smol::Executor;
 
 use darkfi::{
     net,
