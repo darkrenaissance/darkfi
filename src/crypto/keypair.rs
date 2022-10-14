@@ -114,6 +114,11 @@ impl PublicKey {
     pub fn y(&self) -> pallas::Base {
         *self.0.to_affine().coordinates().unwrap().y()
     }
+
+    pub fn xy(&self) -> (pallas::Base, pallas::Base) {
+        let coords = self.0.to_affine().coordinates().unwrap();
+        (*coords.x(), *coords.y())
+    }
 }
 
 impl FromStr for PublicKey {

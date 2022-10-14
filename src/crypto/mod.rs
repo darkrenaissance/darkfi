@@ -15,6 +15,9 @@ pub mod token_list;
 pub mod types;
 pub mod util;
 
+/// Contract ID definitions
+pub mod contract_id;
+
 /// VDF (Verifiable Delay Function) using MiMC
 pub mod mimc_vdf;
 
