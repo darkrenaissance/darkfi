@@ -5,9 +5,9 @@ use pasta_curves::pallas;
 use crate::{
     crypto::{
         constants::MERKLE_DEPTH_ORCHARD,
+        keypair::Keypair,
         merkle_node::MerkleNode,
         util::{mod_r_p, pedersen_commitment_base},
-        keypair::{Keypair},
     },
     zk::circuit::lead_contract::LeadContract,
 };
@@ -22,22 +22,22 @@ pub const LEAD_PUBLIC_INPUT_LEN: usize = 11;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
-    pub value: Option<u64>,                                  // coin stake
-    pub cm: Option<pallas::Point>,                           // coin commitment
-    pub cm2: Option<pallas::Point>,                          // poured coin commitment
-    pub idx: u32,                                            // coin idex
-    pub sl: Option<pallas::Base>,                            // coin slot id
-    pub tau: Option<pallas::Base>,                           // coin time stamp
-    pub nonce: Option<pallas::Base>,                         // coin nonce
-    pub nonce_cm: Option<pallas::Base>,                      // coin nonce's commitment
-    pub sn: Option<pallas::Base>,                            // coin's serial number
+    pub value: Option<u64>,             // coin stake
+    pub cm: Option<pallas::Point>,      // coin commitment
+    pub cm2: Option<pallas::Point>,     // poured coin commitment
+    pub idx: u32,                       // coin idex
+    pub sl: Option<pallas::Base>,       // coin slot id
+    pub tau: Option<pallas::Base>,      // coin time stamp
+    pub nonce: Option<pallas::Base>,    // coin nonce
+    pub nonce_cm: Option<pallas::Base>, // coin nonce's commitment
+    pub sn: Option<pallas::Base>,       // coin's serial number
     pub keypair: Option<Keypair>,
-    pub root_cm: Option<pallas::Scalar>,                     // root of coin commitment
-    pub root_sk: Option<pallas::Base>,                       // coin's secret key
-    pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,    // path to the coin's commitment
+    pub root_cm: Option<pallas::Scalar>, // root of coin commitment
+    pub root_sk: Option<pallas::Base>,   // coin's secret key
+    pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the coin's commitment
     pub path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the coin's secret key
-    pub c1_blind: Option<pallas::Scalar>,                    // coin opening
-    pub c2_blind: Option<pallas::Scalar>,                    // poured coin opening
+    pub c1_blind: Option<pallas::Scalar>, // coin opening
+    pub c2_blind: Option<pallas::Scalar>, // poured coin opening
     // election seeds
     pub y_mu: Option<pallas::Base>, // leader election nonce derived from eta at onset of epoch
     pub rho_mu: Option<pallas::Base>, // leader election nonce derived from eta at onset of epoch
@@ -115,7 +115,7 @@ impl LeadCoin {
     pub fn create_contract(&self) -> LeadContract {
         LeadContract {
             path: Value::known(self.path.unwrap()),
-            sk: Value::known(self.keypair.unwrap().secret.0),
+            sk: Value::known(self.keypair.unwrap().secret.inner()),
             root_sk: Value::known(self.root_sk.unwrap()),
             path_sk: Value::known(self.path_sk.unwrap()),
             coin_timestamp: Value::known(self.tau.unwrap()), //

@@ -365,7 +365,7 @@ impl Circuit<pallas::Base> for LeadContract {
         //};
         // darkfi coin pk
         //
-        let coin_pk  = {
+        let coin_pk = {
             let coin_pk_commit_v = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
             coin_pk_commit_v.mul(layouter.namespace(|| "coin pk commit v"), sk.clone())?
         };

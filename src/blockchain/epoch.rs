@@ -156,7 +156,7 @@ impl Epoch {
             let coord = base.to_affine().coordinates().unwrap();
             //TODO (fix) change this to sk = hash(x,y)
             let sk_base = coord.x() * coord.y();
-            sks.push(SecretKey::from(SecretKey(sk_base)));
+            sks.push(SecretKey::from(sk_base));
             prev_sk_base = sk_base;
             let sk_bytes = sk_base.to_repr();
             let node = MerkleNode::from_bytes(sk_bytes).unwrap();

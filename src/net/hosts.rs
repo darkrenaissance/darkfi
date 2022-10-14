@@ -394,7 +394,7 @@ mod tests {
         )
         .unwrap();
         */
-        
+
         // Create addresses to test
         let connection_url_v4 = Url::parse("tls://185.60.216.35:13333").unwrap();
         let connection_url_v6 =

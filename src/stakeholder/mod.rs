@@ -27,7 +27,7 @@ use crate::{
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::{Proof, ProvingKey, VerifyingKey},
-        schnorr::{SchnorrPublic, SchnorrSecret, Signature},
+        schnorr::SchnorrSecret,
         util::poseidon_hash,
     },
     net::{MessageSubscription, P2p, Settings, SettingsPtr},
