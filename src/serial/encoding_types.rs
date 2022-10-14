@@ -1,6 +1,6 @@
 //! Encodings for external crates
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     io::{Error, Read, Write},
 };
 
@@ -50,6 +50,29 @@ impl<T: Decodable + std::cmp::Ord, U: Decodable> Decodable for BTreeMap<T, U> {
             let key: T = Decodable::decode(&mut d)?;
             let entry: U = Decodable::decode(&mut d)?;
             ret.insert(key, entry);
+        }
+        Ok(ret)
+    }
+}
+
+impl<T: Encodable> Encodable for BTreeSet<T> {
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(&mut s)?;
+        for c in self.iter() {
+            len += c.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+
+impl<T: Decodable + std::cmp::Ord> Decodable for BTreeSet<T> {
+    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+        let len = VarInt::decode(&mut d)?.0;
+        let mut ret = BTreeSet::new();
+        for _ in 0..len {
+            let key: T = Decodable::decode(&mut d)?;
+            ret.insert(key);
         }
         Ok(ret)
     }
