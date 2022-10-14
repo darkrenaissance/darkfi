@@ -14,8 +14,7 @@ use crate::{
     blockchain::{Blockchain, Epoch, EpochConsensus},
     consensus::{
         clock::{Clock, Ticks},
-        Block, BlockInfo, Header, OuroborosMetadata, StakeholderMetadata, StreamletMetadata,
-        TransactionLeadProof,
+        Block, BlockInfo, Header, LeadProof, Metadata,
     },
     crypto::{
         address::Address,
@@ -54,8 +53,7 @@ pub struct SlotWorkspace {
     pub txs: Vec<Transaction>, // unpublished block transactions
     pub root: MerkleNode,
     /// merkle root of txs
-    pub m: StakeholderMetadata,
-    pub om: OuroborosMetadata,
+    pub m: Metadata,
     pub is_leader: bool,
     pub proof: Proof,
     pub block: BlockInfo,
@@ -70,8 +68,7 @@ impl Default for SlotWorkspace {
             txs: vec![],
             root: MerkleNode(pallas::Base::zero()),
             is_leader: false,
-            m: StakeholderMetadata::default(),
-            om: OuroborosMetadata::default(),
+            m: Metadata::default(),
             proof: Proof::default(),
             block: BlockInfo::default(),
         }
@@ -80,9 +77,8 @@ impl Default for SlotWorkspace {
 
 impl SlotWorkspace {
     pub fn new_block(&self) -> (BlockInfo, blake3::Hash) {
-        let sm = StreamletMetadata::new(vec![]);
         let header = Header::new(self.st, self.e, self.sl, Timestamp::current_time(), self.root);
-        let block = BlockInfo::new(header, self.txs.clone(), self.m.clone(), self.om.clone(), sm);
+        let block = BlockInfo::new(header, self.txs.clone(), self.m.clone());
         let hash = block.blockhash();
         (block, hash)
     }
@@ -95,12 +91,8 @@ impl SlotWorkspace {
         self.root = root;
     }
 
-    pub fn set_stakeholdermetadata(&mut self, meta: StakeholderMetadata) {
+    pub fn set_metadata(&mut self, meta: Metadata) {
         self.m = meta;
-    }
-
-    pub fn set_ouroborosmetadata(&mut self, meta: OuroborosMetadata) {
-        self.om = meta;
     }
 
     pub fn set_sl(&mut self, sl: u64) {
@@ -548,11 +540,9 @@ impl Stakeholder {
         let keypair = coin.keypair.unwrap();
         let addr = Address::from(keypair.public);
         let sign = keypair.secret.sign(proof.as_ref());
-        let stakeholder_meta = StakeholderMetadata::new(sign, addr);
-        let ouroboros_meta =
-            OuroborosMetadata::new(self.get_eta().to_repr(), TransactionLeadProof::from(proof));
-        self.workspace.set_stakeholdermetadata(stakeholder_meta);
-        self.workspace.set_ouroborosmetadata(ouroboros_meta);
+        let meta =
+            Metadata::new(sign, addr, self.get_eta().to_repr(), LeadProof::from(proof), vec![]);
+        self.workspace.set_metadata(meta);
         //
         if won {
             //TODO (res) verify the coin is finalized

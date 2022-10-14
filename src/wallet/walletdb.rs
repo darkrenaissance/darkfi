@@ -420,7 +420,7 @@ impl WalletDb {
 
         Ok(())
     }
-    
+
     pub async fn get_balance(&self, token_id: DrkTokenId) -> Result<Option<Balance>> {
         debug!("Getting balance of token ID");
 
@@ -428,12 +428,13 @@ impl WalletDb {
         let id = serialize(&token_id);
 
         let mut conn = self.conn.acquire().await?;
-        let row =
-            sqlx::query("SELECT value, token_id, nullifier FROM coins WHERE token_id = ?1 AND is_spent = ?2;")
-                .bind(id)
-                .bind(is_spent)
-                .fetch_optional(&mut conn)
-                .await?;
+        let row = sqlx::query(
+            "SELECT value, token_id, nullifier FROM coins WHERE token_id = ?1 AND is_spent = ?2;",
+        )
+        .bind(id)
+        .bind(is_spent)
+        .fetch_optional(&mut conn)
+        .await?;
 
         let balance = match row {
             Some(b) => {
@@ -600,7 +601,7 @@ mod tests {
             assert_eq!(i, token_id);
             assert!(wallet.token_id_exists(i).await?);
         }
-        
+
         // get_balance()
         let balance = wallet.get_balance(token_id).await?;
         assert_eq!(balance.unwrap().value, 69);

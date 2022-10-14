@@ -13,13 +13,12 @@ use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, Header, KeepAlive, OuroborosMetadata, Participant, ProposalChain,
-    StreamletMetadata,
+    Block, BlockInfo, BlockProposal, Header, KeepAlive, LeadProof, Metadata, Participant,
+    ProposalChain,
 };
 
 use crate::{
     blockchain::Blockchain,
-    consensus::StakeholderMetadata,
     crypto::{
         address::Address,
         constants::MERKLE_DEPTH,
@@ -302,15 +301,17 @@ impl ValidatorState {
             Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
         let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
-        let m = StakeholderMetadata::new(signed_proposal, self.address);
-        let om = OuroborosMetadata::default();
-        let sm = StreamletMetadata::new(self.consensus.participants.values().cloned().collect());
-        
+        // TODO: Replace with correct proof
+        let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
+        let proof = LeadProof::default();
+        let participants = self.consensus.participants.values().cloned().collect();
+        let metadata = Metadata::new(signed_proposal, self.address, eta, proof, participants);
+
         // TODO: [PLACEHOLDER] Add balance proof creation
         // TODO: [PLACEHOLDER] Add crypsinous leader proof creation (to replace balance proof)
         // TODO: [PLACEHOLDER] Add rewards calculation (proof?)
         // TODO: [PLACEHOLDER] Create and add rewards transaction
-        Ok(Some(BlockProposal::new(header, unproposed_txs, m, om, sm)))
+        Ok(Some(BlockProposal::new(header, unproposed_txs, metadata)))
     }
 
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
@@ -385,19 +386,19 @@ impl ValidatorState {
         self.refresh_participants()?;
 
         let mut leader = self.slot_leader();
-        if leader.address != proposal.block.m.address {
+        if leader.address != proposal.block.metadata.address {
             warn!(
                 "Received proposal not from slot leader ({}), but from ({})",
-                leader.address, proposal.block.m.address
+                leader.address, proposal.block.metadata.address
             );
             return Ok(None)
         }
 
         if !leader.public_key.verify(
             proposal.block.header.headerhash().as_bytes(),
-            &proposal.block.m.signature,
+            &proposal.block.metadata.signature,
         ) {
-            warn!("Proposer ({}) signature could not be verified", proposal.block.m.address);
+            warn!("Proposer ({}) signature could not be verified", proposal.block.metadata.address);
             return Ok(None)
         }
 
@@ -418,7 +419,7 @@ impl ValidatorState {
         // TODO: [PLACEHOLDER] Add balance proof validation
         // TODO: [PLACEHOLDER] Add crypsinous proof validation (to replace balance proof)
         // TODO: [PLACEHOLDER] Add rewards validation
-        
+
         if current > leader.seen {
             leader.seen = current;
         }
@@ -463,20 +464,20 @@ impl ValidatorState {
         for (index, chain) in self.consensus.proposals.iter().enumerate() {
             let last = chain.proposals.last().unwrap();
             let hash = last.block.header.headerhash();
-            if proposal.block.header.state == hash &&
+            if proposal.block.header.previous == hash &&
                 proposal.block.header.slot > last.block.header.slot
             {
                 return Ok(index as i64)
             }
 
-            if proposal.block.header.state == last.block.header.state &&
+            if proposal.block.header.previous == last.block.header.previous &&
                 proposal.block.header.slot == last.block.header.slot
             {
                 debug!("find_extended_chain_index(): Proposal already received");
                 return Ok(-2)
             }
 
-            if proposal.block.header.state == last.block.header.state &&
+            if proposal.block.header.previous == last.block.header.previous &&
                 proposal.block.header.slot > last.block.header.slot
             {
                 fork = Some(chain.clone());
@@ -494,7 +495,7 @@ impl ValidatorState {
         }
 
         let (last_slot, last_block) = self.blockchain.last()?;
-        if proposal.block.header.state != last_block || proposal.block.header.slot <= last_slot {
+        if proposal.block.header.previous != last_block || proposal.block.header.slot <= last_slot {
             debug!("find_extended_chain_index(): Proposal doesn't extend any known chain");
             return Ok(-2)
         }
@@ -581,7 +582,7 @@ impl ValidatorState {
         let mut dropped = vec![];
         for chain in self.consensus.proposals.iter() {
             let first = chain.proposals.first().unwrap();
-            if first.block.header.state != last_block || first.block.header.slot <= last_slot {
+            if first.block.header.previous != last_block || first.block.header.slot <= last_slot {
                 dropped.push(chain.clone());
             }
         }
@@ -598,13 +599,13 @@ impl ValidatorState {
         if self.consensus.pending_participants.contains(&participant) {
             return false
         }
-        
-    // TODO: [PLACEHOLDER] Add balance proof validation
+
+        // TODO: [PLACEHOLDER] Add balance proof validation
 
         self.consensus.pending_participants.push(participant);
         true
     }
-    
+
     /// Update participant seen.
     pub fn participant_keep_alive(&mut self, keep_alive: KeepAlive) -> bool {
         match self.consensus.participants.get(&keep_alive.address) {
@@ -646,7 +647,6 @@ impl ValidatorState {
             }
         }
     }
-
 
     /// Refresh the participants map, to retain only the active ones.
     /// Active nodes are considered those that their last seen slot is

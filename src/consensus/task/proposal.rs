@@ -58,7 +58,7 @@ pub async fn proposal_task(
         Ok(()) => info!("consensus: Participation message broadcasted successfully."),
         Err(e) => error!("Failed broadcasting consensus participation: {}", e),
     }
-    
+
     // Node initiates the background task to send keep alive messages
     match keep_alive_task(consensus_p2p.clone(), state.clone(), ex).await {
         Ok(()) => info!("consensus: Keep alive background task initiated successfully."),

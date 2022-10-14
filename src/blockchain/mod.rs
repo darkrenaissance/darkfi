@@ -13,7 +13,7 @@ pub mod blockstore;
 pub use blockstore::{BlockOrderStore, BlockStore, HeaderStore};
 
 pub mod metadatastore;
-pub use metadatastore::{OuroborosMetadataStore, StreamletMetadataStore};
+pub use metadatastore::MetadataStore;
 
 pub mod nfstore;
 pub use nfstore::NullifierStore;
@@ -37,10 +37,8 @@ pub struct Blockchain {
     pub order: BlockOrderStore,
     /// Transactions sled tree
     pub transactions: TxStore,
-    /// Streamlet metadata sled tree
-    pub streamlet_metadata: StreamletMetadataStore,
-    /// Ourobors metadata sled tree
-    pub ouroboros_metadata: OuroborosMetadataStore,
+    /// Metadata sled tree
+    pub metadata: MetadataStore,
     /// Nullifiers sled tree
     pub nullifiers: NullifierStore,
     /// Merkle roots sled tree
@@ -55,22 +53,12 @@ impl Blockchain {
         let headers = HeaderStore::new(db, genesis_ts, genesis_data)?;
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
-        let streamlet_metadata = StreamletMetadataStore::new(db, genesis_ts, genesis_data)?;
-        let ouroboros_metadata = OuroborosMetadataStore::new(db, genesis_ts, genesis_data)?;
+        let metadata = MetadataStore::new(db, genesis_ts, genesis_data)?;
         let transactions = TxStore::new(db)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
 
-        Ok(Self {
-            headers,
-            blocks,
-            order,
-            transactions,
-            streamlet_metadata,
-            ouroboros_metadata,
-            nullifiers,
-            merkle_roots,
-        })
+        Ok(Self { headers, blocks, order, transactions, metadata, nullifiers, merkle_roots })
     }
 
     /// Insert a given slice of [`BlockInfo`] into the blockchain database.
@@ -99,10 +87,7 @@ impl Blockchain {
             self.order.insert(&[block.header.slot], &[headerhash[0]])?;
 
             // Store ouroboros metadata
-            self.ouroboros_metadata.insert(&[headerhash[0]], &[block.om.clone()])?;
-
-            // Store streamlet metadata
-            self.streamlet_metadata.insert(&[headerhash[0]], &[block.sm.clone()])?;
+            self.metadata.insert(&[headerhash[0]], &[block.metadata.clone()])?;
 
             // NOTE: The nullifiers and Merkle roots are applied in the state
             // transition apply function.
@@ -138,7 +123,7 @@ impl Blockchain {
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(header, txs, block.m.clone(), block.om, block.sm);
+            let info = BlockInfo::new(header, txs, block.metadata.clone());
             ret.push(info);
         }
 
@@ -171,7 +156,7 @@ impl Blockchain {
     }
 
     pub fn get_last_proof_hash(&self) -> Result<blake3::Hash> {
-        let (hash, _) = self.ouroboros_metadata.get_last().unwrap();
+        let (hash, _) = self.metadata.get_last().unwrap();
         Ok(hash)
     }
 }

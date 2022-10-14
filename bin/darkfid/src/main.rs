@@ -10,7 +10,8 @@ use darkfi::{
     async_daemonize, cli_desc,
     consensus::{
         proto::{
-            ProtocolKeepAlive, ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx,
+            ProtocolKeepAlive, ProtocolParticipant, ProtocolProposal, ProtocolSync,
+            ProtocolSyncConsensus, ProtocolTx,
         },
         state::ValidatorStatePtr,
         task::{block_sync_task, proposal_task},
@@ -375,7 +376,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let consensus_p2p = {
         if !args.consensus {
             None
-        } else {            
+        } else {
             info!("Registering consensus P2P protocols...");
             let consensus_network_settings = net::Settings {
                 inbound: args.consensus_p2p_accept,

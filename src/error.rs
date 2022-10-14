@@ -235,7 +235,7 @@ pub enum Error {
 
     #[error("Merkle tree already exists in wallet")]
     WalletTreeExists,
-    
+
     #[error("Wallet insufficient balance")]
     WalletInsufficientBalance,
 
