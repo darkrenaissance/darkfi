@@ -34,5 +34,5 @@ pub(crate) fn drk_log(env: &Env, ptr: u32, len: u32) {
         return
     }
 
-    error!(target: "wasm_runtime", "Failed to read any bytes from VM memory");
+    error!(target: "wasm_runtime::drk_log", "Failed to read any bytes from VM memory");
 }

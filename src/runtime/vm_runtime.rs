@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use darkfi_sdk::entrypoint;
-use log::debug;
+use log::{debug, info};
 use wasmer::{
     imports, wasmparser::Operator, CompilerConfig, Function, HostEnvInitError, Instance, LazyInit,
     Memory, Module, Store, Universal, Value, WasmerEnv,
@@ -73,9 +73,11 @@ pub struct Runtime {
 impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
     pub fn new(wasm_bytes: &[u8], state_machine: MemoryState) -> Result<Self> {
+        info!(target: "warm_runtime::new", "Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
         // the wasm module execution. It should return the cost of the operator
         // that it received as its first argument.
+        // https://docs.rs/wasmparser/latest/wasmparser/enum.Operator.html
         let cost_function = |operator: &Operator| -> u64 {
             match operator {
                 Operator::LocalGet { .. } => 1,
@@ -95,16 +97,17 @@ impl Runtime {
         compiler.push_middleware(metering);
         let store = Store::new(&Universal::new(compiler).engine());
 
-        debug!(target: "wasm_runtime", "Compiling module...");
+        debug!(target: "wasm_runtime::new", "Compiling module");
         let module = Module::new(&store, wasm_bytes)?;
 
-        debug!(target: "wasm_runtime", "Importing functions...");
-        let logs = Arc::new(Mutex::new(vec![]));
+        debug!(target: "wasm_runtime::new", "Importing functions");
         let memory = LazyInit::new();
+        let logs = Arc::new(Mutex::new(vec![]));
         let state_machine = Arc::new(state_machine);
         let state_updates = Arc::new(Mutex::new(vec![]));
 
         let env = Env { logs, memory, state_machine, state_updates };
+
         let import_object = imports! {
             "env" => {
                 "drk_log_" => Function::new_native_with_env(
@@ -127,7 +130,7 @@ impl Runtime {
             }
         };
 
-        debug!(target: "wasm_runtime", "Instantiating module...");
+        debug!(target: "wasm_runtime::new", "Instantiating module");
         let instance = Instance::new(&module, &import_object)?;
 
         Ok(Self { instance, env })
@@ -142,25 +145,25 @@ impl Runtime {
         let mem_offset = self.guest_mem_alloc(payload.len())?;
         memory.write(mem_offset, payload)?;
 
-        debug!(target: "wasm_runtime", "Getting entrypoint function...");
+        debug!(target: "wasm_runtime::run", "Getting entrypoint function");
         let entrypoint = self.instance.exports.get_function(ENTRYPOINT)?;
 
-        debug!(target: "wasm_runtime", "Executing wasm...");
+        debug!(target: "wasm_runtime::run", "Executing wasm");
         let ret = match entrypoint.call(&[Value::I32(mem_offset as i32)]) {
             Ok(v) => {
                 self.print_logs();
-                debug!(target: "wasm_runtime", "{}", self.gas_info());
+                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
                 v
             }
             Err(e) => {
                 self.print_logs();
-                debug!(target: "wasm_runtime", "{}", self.gas_info());
+                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
                 return Err(e.into())
             }
         };
 
-        debug!(target: "wasm_runtime", "wasm executed successfully");
-        debug!(target: "wasm_runtime", "Contract returned: {:?}", ret[0]);
+        debug!(target: "wasm_runtime::run", "wasm executed successfully");
+        debug!(target: "wasm_runtime::run", "Contract returned: {:?}", ret[0]);
 
         let retval = match ret[0] {
             Value::I64(v) => v as u64,
@@ -177,7 +180,7 @@ impl Runtime {
     fn print_logs(&self) {
         let logs = self.env.logs.lock().unwrap();
         for msg in logs.iter() {
-            debug!(target: "wasm_runtime", "Contract log: {}", msg);
+            debug!(target: "wasm_runtime::run", "Contract log: {}", msg);
         }
     }
 
