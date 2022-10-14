@@ -10,7 +10,7 @@ use crate::{
 /// an existing nullifier in the blockchain state machine.
 pub fn nullifier_exists(env: &Env, ptr: u32, len: u32) -> i32 {
     if let Some(bytes) = env.memory.get_ref().unwrap().read(ptr, len as usize) {
-        debug!(target: "wasm-runtime", "[wasm::nullifier_exists] Read bytes: {:?}", bytes);
+        debug!(target: "wasm_runtime::nullifier_exists", "Read bytes: {:?}", bytes);
 
         let nullifier = match Nullifier::from_bytes(bytes.try_into().unwrap()) {
             Some(nf) => {
@@ -37,7 +37,7 @@ pub fn nullifier_exists(env: &Env, ptr: u32, len: u32) -> i32 {
 /// a valid Merkle root in the chain's Merkle tree.
 pub fn is_valid_merkle(env: &Env, ptr: u32, len: u32) -> i32 {
     if let Some(bytes) = env.memory.get_ref().unwrap().read(ptr, len as usize) {
-        debug!(target: "wasm_runtime::nullifier_exists", "Read bytes: {:?}", bytes);
+        debug!(target: "wasm_runtime::is_valid_merkle", "Read bytes: {:?}", bytes);
 
         let merkle_node = match MerkleNode::from_bytes(bytes.try_into().unwrap()) {
             Some(mn) => {

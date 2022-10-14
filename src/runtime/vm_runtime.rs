@@ -95,10 +95,10 @@ impl Runtime {
         compiler.push_middleware(metering);
         let store = Store::new(&Universal::new(compiler).engine());
 
-        debug!(target: "wasm-runtime", "Compiling module...");
+        debug!(target: "wasm_runtime", "Compiling module...");
         let module = Module::new(&store, wasm_bytes)?;
 
-        debug!(target: "wasm-runtime", "Importing functions...");
+        debug!(target: "wasm_runtime", "Importing functions...");
         let logs = Arc::new(Mutex::new(vec![]));
         let memory = LazyInit::new();
         let state_machine = Arc::new(state_machine);
@@ -127,7 +127,7 @@ impl Runtime {
             }
         };
 
-        debug!(target: "wasm-runtime", "Instantiating module...");
+        debug!(target: "wasm_runtime", "Instantiating module...");
         let instance = Instance::new(&module, &import_object)?;
 
         Ok(Self { instance, env })
@@ -142,25 +142,25 @@ impl Runtime {
         let mem_offset = self.guest_mem_alloc(payload.len())?;
         memory.write(mem_offset, payload)?;
 
-        debug!(target: "wasm-runtime", "Getting entrypoint function...");
+        debug!(target: "wasm_runtime", "Getting entrypoint function...");
         let entrypoint = self.instance.exports.get_function(ENTRYPOINT)?;
 
-        debug!(target: "wasm-runtime", "Executing wasm...");
+        debug!(target: "wasm_runtime", "Executing wasm...");
         let ret = match entrypoint.call(&[Value::I32(mem_offset as i32)]) {
             Ok(v) => {
                 self.print_logs();
-                debug!(target: "wasm-runtime", "{}", self.gas_info());
+                debug!(target: "wasm_runtime", "{}", self.gas_info());
                 v
             }
             Err(e) => {
                 self.print_logs();
-                debug!(target: "wasm-runtime", "{}", self.gas_info());
+                debug!(target: "wasm_runtime", "{}", self.gas_info());
                 return Err(e.into())
             }
         };
 
-        debug!(target: "wasm-runtime", "wasm executed successfully");
-        debug!(target: "wasm-runtime", "Contract returned: {:?}", ret[0]);
+        debug!(target: "wasm_runtime", "wasm executed successfully");
+        debug!(target: "wasm_runtime", "Contract returned: {:?}", ret[0]);
 
         let retval = match ret[0] {
             Value::I64(v) => v as u64,
@@ -177,7 +177,7 @@ impl Runtime {
     fn print_logs(&self) {
         let logs = self.env.logs.lock().unwrap();
         for msg in logs.iter() {
-            debug!(target: "wasm-runtime", "Contract log: {}", msg);
+            debug!(target: "wasm_runtime", "Contract log: {}", msg);
         }
     }
 

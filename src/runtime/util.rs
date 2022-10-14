@@ -23,7 +23,7 @@ pub(crate) fn drk_log(env: &Env, ptr: u32, len: u32) {
         let msg = match String::from_utf8(bytes.to_vec()) {
             Ok(v) => v,
             Err(e) => {
-                warn!(target: "wasm-runtime", "Invalid UTF-8 string: {:?}", e);
+                warn!(target: "wasm_runtime", "Invalid UTF-8 string: {:?}", e);
                 return
             }
         };
@@ -34,5 +34,5 @@ pub(crate) fn drk_log(env: &Env, ptr: u32, len: u32) {
         return
     }
 
-    error!(target: "wasm-runtime", "Failed to read any bytes from VM memory");
+    error!(target: "wasm_runtime", "Failed to read any bytes from VM memory");
 }
