@@ -44,6 +44,9 @@ class Graph:
     def __init__(self):
         self.events = dict()
 
+        # NOTE: we will need to keep track of heads for creating new events.
+        #       Not needed for this demo though.
+
     def add_event(self, event: Event):
         self.events[event.hash()] = event
 
@@ -77,6 +80,9 @@ class Node:
 
     def receive_new_event(self, event: Event):
 
+        # TODO: the active pool should always start with one event
+        #       which is hardcoded into the software. The genesis event.
+        #       Then we can remove this code below.
         # check if the event has no parents, and the active pool
         # is empty, then add the event directly to the active pool
         if len(event.parents) == 0:
@@ -120,6 +126,16 @@ class Node:
     def relink(self, event: Event):
         # check if the orphan pool has an event linked
         # to the new added event
+        # TODO: you cannot call this recursively.
+        #       You must clear the orphan_pool before iteration, and keep
+        #       track of all remaining orphans.
+        #       Then add them back after the for loop is finished.
+        #       You have a bool if things change:
+        #
+        #           is_reorganized = False
+        #           remaining_orphans = []
+
+        # while not is_reorganized:
         for (orphan_hash, orphan) in dict(self.orphan_pool.events).items():
 
             if event.hash() not in orphan.parents:
@@ -129,7 +145,10 @@ class Node:
 
             if len(missing_parents) == 0:
                 self.active_pool.add_event(orphan)
+                # Error, you cannot do this. You will invalidate the iterator.
                 self.orphan_pool.remove_event(orphan_hash)
+
+                # is_reorganized = True
 
                 # recursive call
                 self.relink(orphan)
