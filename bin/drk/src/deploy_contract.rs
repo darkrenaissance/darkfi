@@ -10,6 +10,7 @@ use rand::{rngs::OsRng, RngCore};
 
 use darkfi::{
     crypto::keypair::SecretKey,
+    node::{MemoryState, State},
     runtime::vm_runtime::{Runtime, ENTRYPOINT},
     util::cli::{fg_green, fg_red},
     zkas::ZkBinary,

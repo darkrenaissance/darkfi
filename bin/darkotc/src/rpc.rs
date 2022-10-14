@@ -141,8 +141,8 @@ impl Rpc {
                 exit(1);
             }
 
-            let n = MerkleNode::from_bytes(&n.try_into().unwrap());
-            if n.is_some().unwrap_u8() == 0 {
+            let n = MerkleNode::from_bytes(n.try_into().unwrap());
+            if n.is_none() {
                 eprintln!("Error: Noncanonical bytes of MerkleNode");
                 exit(1);
             }

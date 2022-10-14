@@ -140,7 +140,8 @@ impl Builder {
             let token_commit = poseidon_hash::<2>([note.token_id, gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
-            let nullifier = Nullifier::from(poseidon_hash::<2>([input.secret.0, note.serial]));
+            let nullifier =
+                Nullifier::from(poseidon_hash::<2>([input.secret.inner(), note.serial]));
 
             let vote_commit = pedersen_commitment_u64(note.value, vote_value_blind);
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
@@ -148,7 +149,7 @@ impl Builder {
             let sigpub_coords = signature_public.0.to_affine().coordinates().unwrap();
 
             let public_inputs = vec![
-                nullifier,
+                nullifier.inner(),
                 *vote_commit_coords.x(),
                 *vote_commit_coords.y(),
                 token_commit,

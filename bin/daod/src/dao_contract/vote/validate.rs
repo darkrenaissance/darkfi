@@ -68,7 +68,7 @@ impl CallDataBase for CallData {
             zk_publics.push((
                 "dao-vote-burn".to_string(),
                 vec![
-                    input.nullifier.0,
+                    input.nullifier.inner(),
                     *value_coords.x(),
                     *value_coords.y(),
                     self.header.token_commit,
