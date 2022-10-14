@@ -1,47 +1,43 @@
-use incrementalmerkletree::bridgetree::BridgeTree;
-use lazy_init::Lazy;
-use pasta_curves::pallas;
-
 use darkfi::{
-    blockchain::Blockchain,
-    consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
-    crypto::{merkle_node::MerkleNode, nullifier::Nullifier},
+    crypto::nullifier::Nullifier,
     node::{MemoryState, State},
     runtime::{util::serialize_payload, vm_runtime::Runtime},
     serial::serialize,
     Result,
 };
+use darkfi_sdk::pasta::pallas;
 
 use smart_contract::Args;
 
 #[test]
 fn run_contract() -> Result<()> {
-    let mut logcfg = simplelog::ConfigBuilder::new();
-    logcfg.add_filter_ignore("sled".to_string());
+    // Debug log configuration
+    let mut cfg = simplelog::ConfigBuilder::new();
+    cfg.add_filter_ignore("sled".to_string());
     simplelog::TermLogger::init(
         simplelog::LevelFilter::Debug,
-        logcfg.build(),
+        cfg.build(),
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
     )?;
 
-    // ============================================================
+    // =============================================================
     // Build a ledger state so the runtime has something to work on
-    // ============================================================
-    let state_machine = MemoryState::new(State::dummy())?;
+    // =============================================================
+    let state_machine = State::dummy()?;
 
-    // We check if this nullifier is in the set from the contract
+    // Add a nullifier to the nullifier set. (This is checked by the contract)
     state_machine.nullifiers.insert(&[Nullifier::from(pallas::Base::from(0x10))])?;
 
     // ================================================================
     // Load the wasm binary into memory and create an execution runtime
     // ================================================================
-    let wasm_bytes = std::fs::read("smart_contract.wasm")?;
+    let wasm_bytes = std::fs::read("contract.wasm")?;
     let mut runtime = Runtime::new(&wasm_bytes, MemoryState::new(state_machine))?;
 
-    // ===========================================================
-    // Build some kind of payload for the wasm entrypoint function
-    // ===========================================================
+    // =============================================
+    // Build some kind of payload to show an example
+    // =============================================
     let args = Args { a: 777, b: 666 };
     let payload = serialize(&args);
 

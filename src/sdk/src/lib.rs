@@ -1,3 +1,5 @@
+pub use pasta_curves as pasta;
+
 /// Entrypoint used for the wasm binaries
 pub mod entrypoint;
 

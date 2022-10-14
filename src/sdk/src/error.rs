@@ -19,6 +19,9 @@ pub enum ContractError {
 
     #[error("Error checking if nullifier exists")]
     NullifierExistCheck,
+
+    #[error("Error checking merkle root validity")]
+    ValidMerkleCheck,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -33,6 +36,7 @@ pub const CUSTOM_ZERO: u64 = to_builtin!(1);
 pub const INTERNAL_ERROR: u64 = to_builtin!(2);
 pub const IO_ERROR: u64 = to_builtin!(3);
 pub const NULLIFIER_EXIST_CHECK: u64 = to_builtin!(4);
+pub const VALID_MERKLE_CHECK: u64 = to_builtin!(5);
 
 impl From<ContractError> for u64 {
     fn from(err: ContractError) -> Self {
@@ -40,6 +44,7 @@ impl From<ContractError> for u64 {
             ContractError::Internal => INTERNAL_ERROR,
             ContractError::IoError(_) => IO_ERROR,
             ContractError::NullifierExistCheck => NULLIFIER_EXIST_CHECK,
+            ContractError::ValidMerkleCheck => VALID_MERKLE_CHECK,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -58,6 +63,7 @@ impl From<u64> for ContractError {
             INTERNAL_ERROR => Self::Internal,
             IO_ERROR => Self::IoError("Unknown".to_string()),
             NULLIFIER_EXIST_CHECK => Self::NullifierExistCheck,
+            VALID_MERKLE_CHECK => Self::ValidMerkleCheck,
             _ => Self::Custom(error as u32),
         }
     }
