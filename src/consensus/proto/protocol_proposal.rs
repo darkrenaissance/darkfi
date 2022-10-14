@@ -62,8 +62,24 @@ impl ProtocolProposal {
             debug!("ProtocolProposal::handle_receive_proposal(): Full proposal: {:?}", proposal);
 
             let proposal_copy = (*proposal).clone();
+            
+            let mut state = self.state.write().await;
+            
+            // Verify we have the proposal already
+            match state.find_proposal(&proposal_copy.block.header.headerhash()) {
+                Ok(p) => {
+                    if let Some(_) = p {
+                        debug!("ProtocolProposal::handle_receive_proposal(): Proposal already received.");
+                        continue
+                    }
+                },
+                Err(e) => {
+                    error!("ProtocolProposal::handle_receive_proposal(): find_proposal() failed: {}", e);
+                    continue
+                }
+            };
 
-            if let Err(e) = self.state.write().await.receive_proposal(&proposal_copy).await {
+            if let Err(e) = state.receive_proposal(&proposal_copy).await {
                 error!(
                     "ProtocolProposal::handle_receive_proposal(): receive_proposal error: {}",
                     e

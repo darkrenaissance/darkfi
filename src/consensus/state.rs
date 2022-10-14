@@ -506,12 +506,12 @@ impl ValidatorState {
     /// Search the chains we're holding for the given proposal.
     pub fn find_proposal(
         &mut self,
-        vote_proposal: &blake3::Hash,
+        input_proposal: &blake3::Hash,
     ) -> Result<Option<(&mut BlockProposal, i64)>> {
         for (index, chain) in &mut self.consensus.proposals.iter_mut().enumerate() {
             for proposal in chain.proposals.iter_mut().rev() {
                 let proposal_hash = proposal.block.header.headerhash();
-                if vote_proposal == &proposal_hash {
+                if input_proposal == &proposal_hash {
                     return Ok(Some((proposal, index as i64)))
                 }
             }
