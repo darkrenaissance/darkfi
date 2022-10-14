@@ -9,6 +9,10 @@
 //! If you feel like trying, please help out with this migration, but do
 //! it properly, with care, and write documentation while you're at it.
 
+/// Merkle node definitions
+pub mod merkle_node;
+pub use merkle_node::MerkleNode;
+
 /// Nullifier definitions
 pub mod nullifier;
 pub use nullifier::Nullifier;
