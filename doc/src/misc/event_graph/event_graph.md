@@ -63,3 +63,9 @@ So in this diagram, A will send `event` to $B_1, \dots, B_6$. Each $B_i$ will re
 back to A with `inv`, and A will stop sending `event`. Each one of $C_1, \dots, C_3$
 also receive `inv`, and since they don't have the event, they will send back to $B_3$,
 a `getevent` message. $B_3$ will send them the `event`.
+
+## Genesis Event
+
+All nodes start with a single hardcoded genesis event in their graph. The application
+layer should ignore this event. This serves as the origin event for synchronization.
+
