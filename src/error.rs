@@ -271,11 +271,11 @@ pub enum Error {
     #[error("Infallible error: {0}")]
     InfallibleError(String),
 
-    #[cfg(feature = "async-channel")]
+    #[cfg(feature = "smol")]
     #[error("async_channel sender error: {0}")]
     AsyncChannelSendError(String),
 
-    #[cfg(feature = "async-channel")]
+    #[cfg(feature = "smol")]
     #[error("async_channel receiver error: {0}")]
     AsyncChannelRecvError(String),
 
@@ -451,16 +451,16 @@ impl From<()> for Error {
     }
 }
 
-#[cfg(feature = "async-channel")]
-impl<T> From<async_channel::SendError<T>> for Error {
-    fn from(err: async_channel::SendError<T>) -> Self {
+#[cfg(feature = "smol")]
+impl<T> From<smol::channel::SendError<T>> for Error {
+    fn from(err: smol::channel::SendError<T>) -> Self {
         Self::AsyncChannelSendError(err.to_string())
     }
 }
 
-#[cfg(feature = "async-channel")]
-impl From<async_channel::RecvError> for Error {
-    fn from(err: async_channel::RecvError) -> Self {
+#[cfg(feature = "smol")]
+impl From<smol::channel::RecvError> for Error {
+    fn from(err: smol::channel::RecvError) -> Self {
         Self::AsyncChannelRecvError(err.to_string())
     }
 }

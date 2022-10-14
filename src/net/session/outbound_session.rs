@@ -1,11 +1,11 @@
-use async_std::sync::{Arc, Mutex, Weak};
 use std::fmt;
 
-use async_executor::Executor;
+use async_std::sync::{Arc, Mutex, Weak};
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
 use rand::seq::SliceRandom;
 use serde_json::{json, Value};
+use smol::Executor;
 use url::Url;
 
 use crate::{

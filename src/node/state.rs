@@ -155,7 +155,7 @@ impl State {
         &mut self,
         update: StateUpdate,
         secret_keys: Vec<SecretKey>,
-        notify: Option<async_channel::Sender<(PublicKey, u64)>>,
+        notify: Option<smol::channel::Sender<(PublicKey, u64)>>,
         wallet: WalletPtr,
     ) -> Result<()> {
         debug!(target: "state_apply", "Extend nullifier set");

@@ -7,8 +7,8 @@ use crate::{
     Error, Result,
 };
 
-pub type Channel<T> = (async_channel::Sender<T>, async_channel::Receiver<T>);
-pub type Sender = (async_channel::Sender<NetMsg>, async_channel::Receiver<NetMsg>);
+pub type Channel<T> = (smol::channel::Sender<T>, smol::channel::Receiver<T>);
+pub type Sender = (smol::channel::Sender<NetMsg>, smol::channel::Receiver<NetMsg>);
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Role {

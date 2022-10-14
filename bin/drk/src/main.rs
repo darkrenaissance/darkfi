@@ -264,14 +264,14 @@ async fn main() -> Result<()> {
         Subcmd::Ping => {
             let rpc_client = RpcClient::new(args.endpoint).await?;
             let drk = Drk { rpc_client };
-            return drk.ping().await
+            drk.ping().await
         }
 
         Subcmd::Airdrop { address, faucet_endpoint, amount, token_id } => {
             let rpc_client = RpcClient::new(args.endpoint).await?;
             let drk = Drk { rpc_client };
 
-            return drk.airdrop(address, faucet_endpoint, amount, token_id).await
+            drk.airdrop(address, faucet_endpoint, amount, token_id).await
         }
 
         Subcmd::Wallet { keygen, balance, address, all_addresses } => {
@@ -302,7 +302,7 @@ async fn main() -> Result<()> {
             let rpc_client = RpcClient::new(args.endpoint).await?;
             let drk = Drk { rpc_client };
 
-            return drk.tx_transfer(network, token_id, recipient, amount).await
+            drk.tx_transfer(network, token_id, recipient, amount).await
         }
 
         Subcmd::Broadcast => {
@@ -312,7 +312,7 @@ async fn main() -> Result<()> {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
 
-            return drk.tx_broadcast(buf).await
+            drk.tx_broadcast(buf).await
         }
 
         Subcmd::DeployContract { path } => {

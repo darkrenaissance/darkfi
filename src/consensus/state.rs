@@ -867,7 +867,7 @@ impl ValidatorState {
     pub async fn update_canon_state(
         &self,
         updates: Vec<StateUpdate>,
-        notify: Option<async_channel::Sender<(PublicKey, u64)>>,
+        notify: Option<smol::channel::Sender<(PublicKey, u64)>>,
     ) -> Result<()> {
         let secret_keys: Vec<SecretKey> =
             self.client.get_keypairs().await?.iter().map(|x| x.secret).collect();

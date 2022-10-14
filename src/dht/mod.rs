@@ -1,11 +1,12 @@
-use async_executor::Executor;
+use std::collections::HashSet;
+
 use async_std::sync::{Arc, RwLock};
 use chrono::Utc;
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{debug, error, warn};
 use rand::Rng;
-use std::collections::HashSet;
+use smol::Executor;
 
 use crate::{
     net,
@@ -43,9 +44,9 @@ pub struct Dht {
     /// P2P network pointer
     pub p2p: P2pPtr,
     /// Channel to receive responses from P2P
-    p2p_recv_channel: async_channel::Receiver<KeyResponse>,
+    p2p_recv_channel: smol::channel::Receiver<KeyResponse>,
     /// Stop signal channel to terminate background processes
-    stop_signal: async_channel::Receiver<()>,
+    stop_signal: smol::channel::Receiver<()>,
     /// Daemon seen requests/responses ids and timestamp,
     /// to prevent rebroadcasting and loops
     pub seen: FxHashMap<blake3::Hash, i64>,
@@ -55,7 +56,7 @@ impl Dht {
     pub async fn new(
         initial: Option<FxHashMap<blake3::Hash, HashSet<blake3::Hash>>>,
         p2p_ptr: P2pPtr,
-        stop_signal: async_channel::Receiver<()>,
+        stop_signal: smol::channel::Receiver<()>,
         ex: Arc<Executor<'_>>,
     ) -> Result<DhtPtr> {
         // Generate a random id
@@ -68,7 +69,7 @@ impl Dht {
             None => FxHashMap::default(),
         };
         let p2p = p2p_ptr.clone();
-        let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<KeyResponse>();
+        let (p2p_send_channel, p2p_recv_channel) = smol::channel::unbounded::<KeyResponse>();
         let seen = FxHashMap::default();
 
         let dht = Arc::new(RwLock::new(Dht {
@@ -273,8 +274,8 @@ pub async fn waiting_for_response(dht: DhtPtr) -> Result<Option<KeyResponse>> {
             _dht.p2p.settings().connect_timeout_seconds as u64,
         )
     };
-    let ex = Arc::new(async_executor::Executor::new());
-    let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
+    let ex = Arc::new(Executor::new());
+    let (timeout_s, timeout_r) = smol::channel::unbounded::<()>();
     ex.spawn(async move {
         sleep(timeout).await;
         timeout_s.send(()).await.unwrap_or(());

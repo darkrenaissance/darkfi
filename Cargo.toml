@@ -51,8 +51,6 @@ log = "0.4.17"
 thiserror = "1.0.37"
 
 # async-runtime
-async-channel = {version = "1.7.1", optional = true}
-async-executor = {version = "1.4.1", optional = true}
 async-std = {version = "1.12.0", features = ["attributes"], optional = true}
 async-trait = {version = "0.1.57", optional = true}
 futures = {version = "0.3.24", optional = true}
@@ -141,8 +139,6 @@ plotters = "0.3.4"
 [features]
 async-runtime = [
     "async-std",
-    "async-channel",
-    "async-executor",
     "async-trait",
     "futures",
     "smol",

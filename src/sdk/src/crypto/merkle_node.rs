@@ -54,6 +54,6 @@ impl FromStr for MerkleNode {
             return Ok(merkle_node)
         }
 
-        return Err(io::Error::new(io::ErrorKind::Other, "Invalid bytes for MerkleNode"))
+        Err(io::Error::new(io::ErrorKind::Other, "Invalid bytes for MerkleNode"))
     }
 }

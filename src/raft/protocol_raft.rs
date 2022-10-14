@@ -1,20 +1,18 @@
 use async_std::sync::{Arc, Mutex};
-
-use async_executor::Executor;
 use async_trait::async_trait;
 use chrono::Utc;
 use fxhash::FxHashMap;
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
-
-use crate::{net, serial::serialize, Result};
+use smol::Executor;
 
 use super::primitives::{NetMsg, NetMsgMethod, NodeId, NodeIdMsg};
+use crate::{net, serial::serialize, Result};
 
 pub struct ProtocolRaft {
     id: NodeId,
     jobsman: net::ProtocolJobsManagerPtr,
-    notify_queue_sender: async_channel::Sender<NetMsg>,
+    notify_queue_sender: smol::channel::Sender<NetMsg>,
     msg_sub: net::MessageSubscription<NetMsg>,
     p2p: net::P2pPtr,
     seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
@@ -25,7 +23,7 @@ impl ProtocolRaft {
     pub async fn init(
         id: NodeId,
         channel: net::ChannelPtr,
-        notify_queue_sender: async_channel::Sender<NetMsg>,
+        notify_queue_sender: smol::channel::Sender<NetMsg>,
         p2p: net::P2pPtr,
         seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
     ) -> net::ProtocolBasePtr {

@@ -1,8 +1,8 @@
-use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 use log::{debug, error};
+use smol::Executor;
 
 use crate::{
     net::{
@@ -19,7 +19,7 @@ use super::{
 
 pub struct Protocol {
     channel: ChannelPtr,
-    notify_queue_sender: async_channel::Sender<KeyResponse>,
+    notify_queue_sender: smol::channel::Sender<KeyResponse>,
     req_sub: MessageSubscription<KeyRequest>,
     resp_sub: MessageSubscription<KeyResponse>,
     lookup_sub: MessageSubscription<LookupRequest>,
@@ -32,7 +32,7 @@ pub struct Protocol {
 impl Protocol {
     pub async fn init(
         channel: ChannelPtr,
-        notify_queue_sender: async_channel::Sender<KeyResponse>,
+        notify_queue_sender: smol::channel::Sender<KeyResponse>,
         dht: DhtPtr,
         p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {

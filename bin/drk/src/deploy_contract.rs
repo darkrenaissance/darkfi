@@ -28,7 +28,7 @@ const DEPLOY_KEY_NAME: &str = "deploy.key";
 pub fn create_deploy_key(mut rng: impl RngCore, path: &Path) -> Result<SecretKey> {
     let secret = SecretKey::random(&mut rng);
     let mut file = File::create(path)?;
-    file.write_all(&bs58::encode(&secret.to_bytes()).into_string().as_bytes())?;
+    file.write_all(bs58::encode(&secret.to_bytes()).into_string().as_bytes())?;
     Ok(secret)
 }
 

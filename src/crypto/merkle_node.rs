@@ -73,7 +73,7 @@ impl Serialize for MerkleNode {
 impl<'de> Deserialize<'de> for MerkleNode {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         let parsed = <[u8; 32]>::deserialize(deserializer)?;
-        <Option<_>>::from(Self::from_bytes(parsed)).ok_or_else(|| {
+        Self::from_bytes(parsed).ok_or_else(|| {
             Error::custom("Attempted to deserialize a non-canonical representation of a Pallas base field element")
         })
     }

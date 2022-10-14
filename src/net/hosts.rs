@@ -237,13 +237,13 @@ fn filter_non_resolving(
         for ip in resolves {
             match ip {
                 IpAddr::V4(a) => {
-                    if ipv4_range.contains(&a) {
+                    if ipv4_range.contains(a) {
                         valid = true;
                         break
                     }
                 }
                 IpAddr::V6(a) => {
-                    if ipv6_range.contains(&a) {
+                    if ipv6_range.contains(a) {
                         valid = true;
                         break
                     }

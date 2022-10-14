@@ -1,12 +1,12 @@
 use std::fmt;
 
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use futures::{select, stream::FuturesUnordered, try_join, FutureExt, StreamExt, TryFutureExt};
 use fxhash::{FxHashMap, FxHashSet};
 use log::{debug, error, warn};
 use rand::Rng;
 use serde_json::json;
+use smol::Executor;
 use url::Url;
 
 use crate::{
@@ -275,7 +275,7 @@ impl P2p {
             // We use a timeout to eliminate the following cases:
             //  1. Network timeout
             //  2. Thread reaching the receiver after peer has signal it
-            let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
+            let (timeout_s, timeout_r) = smol::channel::unbounded::<()>();
             executor
                 .spawn(async move {
                     sleep(timeout).await;

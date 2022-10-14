@@ -18,9 +18,9 @@ use crate::{
 
 /// JSON-RPC client implementation using asynchronous channels.
 pub struct RpcClient {
-    send: async_channel::Sender<Value>,
-    recv: async_channel::Receiver<JsonResult>,
-    stop_signal: async_channel::Sender<()>,
+    send: smol::channel::Sender<Value>,
+    recv: smol::channel::Receiver<JsonResult>,
+    stop_signal: smol::channel::Sender<()>,
     url: Url,
 }
 
@@ -104,13 +104,13 @@ impl RpcClient {
     async fn open_channels(
         uri: &Url,
     ) -> Result<(
-        async_channel::Sender<Value>,
-        async_channel::Receiver<JsonResult>,
-        async_channel::Sender<()>,
+        smol::channel::Sender<Value>,
+        smol::channel::Receiver<JsonResult>,
+        smol::channel::Sender<()>,
     )> {
-        let (data_send, data_recv) = async_channel::unbounded();
-        let (result_send, result_recv) = async_channel::unbounded();
-        let (stop_send, stop_recv) = async_channel::unbounded();
+        let (data_send, data_recv) = smol::channel::unbounded();
+        let (result_send, result_recv) = smol::channel::unbounded();
+        let (stop_send, stop_recv) = smol::channel::unbounded();
 
         let transport_name = TransportName::try_from(uri.clone())?;
 
@@ -174,9 +174,9 @@ impl RpcClient {
     /// Internal function that loops on a given stream and multiplexes the data.
     async fn reqrep_loop<T: TransportStream>(
         mut stream: T,
-        result_send: async_channel::Sender<JsonResult>,
-        data_recv: async_channel::Receiver<Value>,
-        stop_recv: async_channel::Receiver<()>,
+        result_send: smol::channel::Sender<JsonResult>,
+        data_recv: smol::channel::Receiver<Value>,
+        stop_recv: smol::channel::Receiver<()>,
     ) -> Result<()> {
         // If we don't get a reply within 30 seconds, we'll fail.
         let read_timeout = Duration::from_secs(30);

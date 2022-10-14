@@ -54,6 +54,6 @@ impl FromStr for Nullifier {
             return Ok(nullifier)
         }
 
-        return Err(io::Error::new(io::ErrorKind::Other, "Invalid bytes for Nullifier"))
+        Err(io::Error::new(io::ErrorKind::Other, "Invalid bytes for Nullifier"))
     }
 }

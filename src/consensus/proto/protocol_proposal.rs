@@ -1,8 +1,7 @@
 use async_std::sync::Arc;
-
-use async_executor::Executor;
 use async_trait::async_trait;
 use log::{debug, error, info};
+use smol::Executor;
 use url::Url;
 
 use crate::{
@@ -62,9 +61,9 @@ impl ProtocolProposal {
             debug!("ProtocolProposal::handle_receive_proposal(): Full proposal: {:?}", proposal);
 
             let proposal_copy = (*proposal).clone();
-            
+
             let mut state = self.state.write().await;
-            
+
             // Verify we have the proposal already
             match state.find_proposal(&proposal_copy.block.header.headerhash()) {
                 Ok(p) => {
@@ -72,9 +71,12 @@ impl ProtocolProposal {
                         debug!("ProtocolProposal::handle_receive_proposal(): Proposal already received.");
                         continue
                     }
-                },
+                }
                 Err(e) => {
-                    error!("ProtocolProposal::handle_receive_proposal(): find_proposal() failed: {}", e);
+                    error!(
+                        "ProtocolProposal::handle_receive_proposal(): find_proposal() failed: {}",
+                        e
+                    );
                     continue
                 }
             };

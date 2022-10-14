@@ -1150,8 +1150,6 @@ dependencies = [
 name = "darkfi"
 version = "0.3.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-std",
  "async-trait",
  "async-tungstenite",

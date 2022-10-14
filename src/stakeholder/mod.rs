@@ -1,13 +1,12 @@
-use std::fmt;
+use std::{fmt, thread, time::Duration};
 
-use async_executor::Executor;
 use async_std::sync::Arc;
 use halo2_proofs::arithmetic::Field;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, error, info};
 use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::rngs::OsRng;
-use std::{thread, time::Duration};
+use smol::Executor;
 use url::Url;
 
 use crate::{

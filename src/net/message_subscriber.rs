@@ -18,7 +18,7 @@ type MessageResult<M> = Result<Arc<M>>;
 /// channel.
 pub struct MessageSubscription<M: Message> {
     id: MessageSubscriptionId,
-    recv_queue: async_channel::Receiver<MessageResult<M>>,
+    recv_queue: smol::channel::Receiver<MessageResult<M>>,
     parent: Arc<MessageDispatcher<M>>,
 }
 
@@ -51,7 +51,7 @@ trait MessageDispatcherInterface: Send + Sync {
 
 /// A dispatchers that is unique to every Message. Maintains a list of subscribers that are subscribed to that unique Message type and handles sending messages across these subscriptions.
 struct MessageDispatcher<M: Message> {
-    subs: Mutex<FxHashMap<MessageSubscriptionId, async_channel::Sender<MessageResult<M>>>>,
+    subs: Mutex<FxHashMap<MessageSubscriptionId, smol::channel::Sender<MessageResult<M>>>>,
 }
 
 impl<M: Message> MessageDispatcher<M> {
@@ -69,7 +69,7 @@ impl<M: Message> MessageDispatcher<M> {
     /// Subscribe to a channel. Assigns a new ID and adds it to the list of
     /// subscribers.
     pub async fn subscribe(self: Arc<Self>) -> MessageSubscription<M> {
-        let (sender, recvr) = async_channel::unbounded();
+        let (sender, recvr) = smol::channel::unbounded();
         let sub_id = Self::random_id();
         self.subs.lock().await.insert(sub_id, sender);
 

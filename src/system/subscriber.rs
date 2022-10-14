@@ -1,6 +1,4 @@
-use async_std::sync::Mutex;
-use std::sync::Arc;
-
+use async_std::sync::{Arc, Mutex};
 use fxhash::FxHashMap;
 use log::warn;
 use rand::Rng;
@@ -11,7 +9,7 @@ pub type SubscriptionId = u64;
 
 pub struct Subscription<T> {
     id: SubscriptionId,
-    recv_queue: async_channel::Receiver<T>,
+    recv_queue: smol::channel::Receiver<T>,
     parent: Arc<Subscriber<T>>,
 }
 
@@ -39,7 +37,7 @@ impl<T: Clone> Subscription<T> {
 
 // Simple broadcast (publish-subscribe) class
 pub struct Subscriber<T> {
-    subs: Mutex<FxHashMap<u64, async_channel::Sender<T>>>,
+    subs: Mutex<FxHashMap<u64, smol::channel::Sender<T>>>,
 }
 
 impl<T: Clone> Subscriber<T> {
@@ -53,7 +51,7 @@ impl<T: Clone> Subscriber<T> {
     }
 
     pub async fn subscribe(self: Arc<Self>) -> Subscription<T> {
-        let (sender, recvr) = async_channel::unbounded();
+        let (sender, recvr) = smol::channel::unbounded();
 
         let sub_id = Self::random_id();
 

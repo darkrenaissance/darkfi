@@ -40,7 +40,7 @@ async fn prune_map<T: Clone + Eq + std::hash::Hash>(
     }
 }
 
-async fn p2p_send_loop(receiver: async_channel::Receiver<NetMsg>, p2p: net::P2pPtr) -> Result<()> {
+async fn p2p_send_loop(receiver: smol::channel::Receiver<NetMsg>, p2p: net::P2pPtr) -> Result<()> {
     loop {
         let msg: NetMsg = receiver.recv().await?;
         if let Err(e) = p2p.broadcast(msg).await {
