@@ -6,9 +6,6 @@ use crate::{
     Result,
 };
 
-pub mod epoch;
-pub use epoch::{Epoch, EpochConsensus};
-
 pub mod blockstore;
 pub use blockstore::{BlockOrderStore, BlockStore, HeaderStore};
 

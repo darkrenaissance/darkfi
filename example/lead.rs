@@ -5,14 +5,15 @@ use pasta_curves::pallas;
 use url::Url;
 
 use darkfi::{
-    blockchain::{epoch::Epoch, EpochConsensus},
     crypto::leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN},
     net::Settings,
-    stakeholder::Stakeholder,
+    stakeholder::{Stakeholder, epoch::{Epoch, {EpochConsensus}}},
 };
 
+
 fn main() {
-    debug!("..");
+    env_logger::init();
+
     let k: u32 = 13;
     //
 
@@ -44,9 +45,10 @@ fn main() {
 
     let eta: pallas::Base = stakeholder.get_eta();
     let mut epoch = Epoch::new(consensus, eta);
-    // sigma is nubmer of slots * reward (assuming reward is 1 for simplicity)
     let sigma = pallas::Base::from(10);
-    let coins: Vec<Vec<LeadCoin>> = epoch.create_coins(sigma, vec![]);
+    let coins: Vec<Vec<LeadCoin>> = epoch.create_coins(sigma.clone(),
+                                                       sigma,
+                                                       vec![]);
     let coin = coins[0][0];
     let contract = coin.create_contract();
 

@@ -1,11 +1,12 @@
 use ::darkfi::{
-    blockchain::EpochConsensus, net::Settings, stakeholder::Stakeholder, util::time::Timestamp,
+    net::Settings, stakeholder::{Stakeholder, EpochConsensus},util::time::Timestamp,
 };
 
 use clap::Parser;
 use futures::executor::block_on;
 use std::thread;
 use url::Url;
+
 
 #[derive(Parser)]
 struct NetCli {
@@ -21,6 +22,7 @@ struct NetCli {
 
 #[async_std::main]
 async fn main() {
+    env_logger::init();
     let args = NetCli::parse();
     let addr = vec![Url::parse(args.addr.as_str()).unwrap()];
     let mut peers = vec![];

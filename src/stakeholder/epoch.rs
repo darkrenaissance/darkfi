@@ -22,10 +22,21 @@ use crate::crypto::{
     proof::{Proof, ProvingKey},
     types::DrkValueBlind,
     util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
+    keypair::{Keypair,SecretKey},
+
 };
+use crate::stakeholder::utils::{fbig2ibig, base2ibig};
+
+use dashu::float::{DBig, FBig, round::{mode::{HalfAway, Zero}, Rounding::*}};
+use dashu::integer::{IBig,UBig,Sign};
+
+use crate::stakeholder::Float10;
+use crate::stakeholder::consts::{RADIX_BITS};
+
 
 const PRF_NULLIFIER_PREFIX: u64 = 0;
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
+
 
 /// epoch configuration
 /// this struct need be a singleton,
@@ -33,7 +44,7 @@ const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 #[derive(Copy, Debug, Default, Clone)]
 pub struct EpochConsensus {
     pub sl_len: u64, // length of slot in terms of ticks
-    /// number of slots per epoch
+    // number of slots per epoch
     pub e_len: u64, // length of epoch in terms of slots
     pub tick_len: u64, // length of tick in terms of seconds
     pub reward: u64, // constant reward value for the slot leader
@@ -54,6 +65,9 @@ impl EpochConsensus {
         }
     }
 
+    pub fn total_stake(&self, e: u64, sl: u64) -> u64 {
+        (e*self.e_len +  sl+ 1) * self.reward
+    }
     /// getter for constant stakeholder reward
     /// used for configuring the stakeholder reward value
     pub fn get_reward(&self) -> u64 {
@@ -176,7 +190,7 @@ impl Epoch {
     }
 
     //note! the strategy here is single competing coin per slot.
-    pub fn create_coins(&mut self, sigma: pallas::Base, owned: Vec<OwnCoin>) -> Vec<Vec<LeadCoin>> {
+    pub fn create_coins(&mut self, sigma1: pallas::Base, sigma2: pallas::Base, owned: Vec<OwnCoin>) -> Vec<Vec<LeadCoin>> {
         let mut rng = thread_rng();
         let mut seeds: Vec<u64> = vec![];
         for _i in 0..self.len() {
@@ -194,7 +208,8 @@ impl Epoch {
                 let mut slot_coins = vec![];
                 for elem in &owned {
                     let coin = self.create_leadcoin(
-                        sigma,
+                        sigma1,
+                        sigma2,
                         elem.note.value,
                         i,
                         root_sks[i],
@@ -208,8 +223,15 @@ impl Epoch {
             }
             // otherwise compete with zero stake
             else {
-                let coin =
-                    self.create_leadcoin(sigma, 0, i, root_sks[i], path_sks[i], seeds[i], sks[i]);
+                let coin = self.create_leadcoin(sigma1,
+                                                sigma2,
+                                                0,
+                                                i,
+                                                root_sks[i],
+                                                path_sks[i],
+                                                seeds[i],
+                                                sks[i]
+                );
                 self.coins.push(vec![coin]);
             }
         }
@@ -218,7 +240,8 @@ impl Epoch {
 
     pub fn create_leadcoin(
         &self,
-        sigma: pallas::Base,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
         value: u64,
         i: usize,
         c_root_sk: MerkleNode,
@@ -301,7 +324,8 @@ impl Epoch {
             c2_blind: Some(c_cm2_blind),
             y_mu: Some(y_mu),
             rho_mu: Some(rho_mu),
-            sigma_scalar: Some(sigma),
+            sigma1: Some(sigma1),
+            sigma2: Some(sigma2),
         };
         coin
     }
@@ -324,26 +348,31 @@ impl Epoch {
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
             let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
             let y_exp_hash: pallas::Base =
-                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
-                )
-                .hash(y_exp);
-            // pick x coordinate of y for comparison
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_exp);
+            //TODO (fix) use the hash of y coordinates, using single coordinate is insecure.
+            //  pick x coordinate of y for comparison
             let y_x: pallas::Base =
                 *pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
-                    .to_affine()
-                    .coordinates()
-                    .unwrap()
-                    .x();
-            let ord = pallas::Base::from(10241024); //TODO fine tune this scalar.
-            let target = ord * pallas::Base::from(coin.value.unwrap());
-            debug!("y_x: {:?}, target: {:?}", y_x, target);
-            //TODO (FIX) reversed for testin
-            let iam_leader = target < y_x;
-            if iam_leader && coin.value.unwrap() > highest_stake {
-                highest_stake = coin.value.unwrap();
-                highest_stake_idx = winning_idx;
+                .to_affine()
+                .coordinates()
+                .unwrap().x();
+            let val_2ibig = Float10::try_from(coin.value.unwrap())
+                .unwrap()
+                .with_precision(RADIX_BITS)
+                .value();
+            let target = base2ibig(coin.sigma1.unwrap()) * val_2ibig.clone() +
+                base2ibig(coin.sigma2.unwrap()) * val_2ibig.clone() * val_2ibig;
+            let target_ibig = fbig2ibig(target);
+            let y_ibig = base2ibig(y_x);
+            debug!("y_x: {}, target: {}", y_ibig, target_ibig);
+            let iam_leader =  y_ibig < target_ibig ;
+            if iam_leader {
+                if coin.value.unwrap() > highest_stake {
+                    highest_stake = coin.value.unwrap();
+                    highest_stake_idx = winning_idx;
+                }
+                am_leader.push(iam_leader);
             }
-            am_leader.push(iam_leader);
         }
         *idx = highest_stake_idx;
         !am_leader.is_empty()

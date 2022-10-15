@@ -127,7 +127,8 @@ pub struct LeadContract {
     pub mau_rho: Value<pallas::Scalar>,
     pub mau_y: Value<pallas::Scalar>,
     pub root_cm: Value<pallas::Scalar>,
-    pub sigma_scalar: Value<pallas::Base>,
+    pub sigma1: Value<pallas::Base>,
+    pub sigma2: Value<pallas::Base>,
     //pub eta : Option<u32>,
     //pub rho : Option<u32>,
     //pub h : Option<u32>, // hash of this data
@@ -269,6 +270,7 @@ impl Circuit<pallas::Base> for LeadContract {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
+
         let less_than_chip = config.lessthan_chip();
         NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::load_k_table(
             &mut layouter,
@@ -327,11 +329,16 @@ impl Circuit<pallas::Base> for LeadContract {
         let sk: AssignedCell<Fp, Fp> =
             self.load_private(layouter.namespace(|| "sk"), config.advices[0], self.sk).unwrap();
 
-        // sigma scalar is 2^254/(total network stake + epsilon)
-        let sigma_scalar = self.load_private(
-            layouter.namespace(|| "load scalar "),
+        let sigma1 = self.load_private(
+            layouter.namespace(|| "load sigma1 "),
             config.advices[0],
-            self.sigma_scalar,
+            self.sigma1,
+        )?;
+
+        let sigma2 = self.load_private(
+            layouter.namespace(|| "load sigma2 "),
+            config.advices[0],
+            self.sigma2,
         )?;
 
         // leadership coefficient used for fine-tunning leader election frequency
@@ -593,17 +600,25 @@ impl Circuit<pallas::Base> for LeadContract {
         };
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let rho_commit_base = rho_commit.inner().x();
-        // stakeholder absolute stake + 1 (epsilon)
-        let stake_plus = ar_chip.add(layouter.namespace(|| ""), &one, &coin_value)?;
-        let target =
-            ar_chip.mul(layouter.namespace(|| "calculate target"), &sigma_scalar, &stake_plus)?;
+
+
+        let term1 = ar_chip.mul(layouter.namespace(|| "calculate term1"), &sigma1, &coin_value.clone())?;
+
+        let term2_1 = ar_chip.mul(layouter.namespace(|| "calculate term2_1"), &sigma2, &coin_value.clone())?;
+
+        let term2 = ar_chip.mul(layouter.namespace(|| "calculate term2"), &term2_1, &coin_value.clone())?;
+
+        let target = ar_chip.add(layouter.namespace(|| "calculate target"), &term1, &term2)?;
+        let target = ar_chip.mul(layouter.namespace(|| ""), &one, &coin_value.clone())?;
+        let target: Value<pallas::Base> = target.value().cloned();
 
         let y: Value<pallas::Base> = y_commit_base.value().cloned();
-        let target: Value<pallas::Base> = target.value().cloned();
+
+
         less_than_chip.witness_less_than(
             layouter.namespace(|| "y < target"),
-            target, //reversed for testing
             y,
+            target,
             0,
             true,
         )?;
@@ -664,5 +679,6 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
         Ok(())
+
     }
 }

@@ -41,7 +41,8 @@ pub struct LeadCoin {
     // election seeds
     pub y_mu: Option<pallas::Base>, // leader election nonce derived from eta at onset of epoch
     pub rho_mu: Option<pallas::Base>, // leader election nonce derived from eta at onset of epoch
-    pub sigma_scalar: Option<pallas::Base>,
+    pub sigma1: Option<pallas::Base>,
+    pub sigma2: Option<pallas::Base>,
 }
 
 impl LeadCoin {
@@ -63,18 +64,13 @@ impl LeadCoin {
         let nonce = self.nonce.unwrap();
         let lottery_msg_input = [root_sk, nonce];
         let lottery_msg: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(lottery_msg_input);
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(lottery_msg_input);
         //
         let po_y_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(y_mu));
         let po_y = *po_y_pt.to_affine().coordinates().unwrap().x();
         //
         let po_rho_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(rho_mu));
         let po_rho = *po_rho_pt.to_affine().coordinates().unwrap().x();
-
-        let _zero = pallas::Base::from(0);
-
-        // ===============
 
         let cm_pos = self.idx;
         let cm_root = {
@@ -129,7 +125,8 @@ impl LeadCoin {
             mau_rho: Value::known(mod_r_p(self.rho_mu.unwrap())),
             mau_y: Value::known(mod_r_p(self.y_mu.unwrap())),
             root_cm: Value::known(self.root_cm.unwrap()),
-            sigma_scalar: Value::known(self.sigma_scalar.unwrap()),
+            sigma1: Value::known(self.sigma1.unwrap()),
+            sigma2: Value::known(self.sigma2.unwrap()),
         }
     }
 }

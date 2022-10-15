@@ -9,8 +9,12 @@ use rand::rngs::OsRng;
 use smol::Executor;
 use url::Url;
 
+pub mod types;
+pub mod consts;
+pub mod utils;
+
 use crate::{
-    blockchain::{Blockchain, Epoch, EpochConsensus},
+    blockchain::{Blockchain},
     consensus::{
         clock::{Clock, Ticks},
         Block, BlockInfo, Header, LeadProof, Metadata,
@@ -37,12 +41,26 @@ use crate::{
         Transaction,
     },
     util::{path::expand_path, time::Timestamp},
-    zk::circuit::{BurnContract, LeadContract, MintContract},
+
+    stakeholder::types::{Float10},
+    stakeholder::consts::{RADIX_BITS, LOG_T, TREE_LEN, P},
+    stakeholder::utils::{fbig2base},
     Result,
 };
 
-const LOG_T: &str = "stakeholder";
-const TREE_LEN: usize = 100;
+use url::Url;
+
+use pasta_curves::pallas;
+
+use group::ff::PrimeField;
+
+
+use dashu::float::{DBig, FBig, round::{mode::{HalfAway, Zero}, Rounding::*}};
+use dashu::integer::{IBig};
+use dashu_macros::fbig;
+
+pub mod epoch;
+pub use epoch::{Epoch, EpochConsensus};
 
 #[derive(Debug)]
 pub struct SlotWorkspace {
@@ -443,11 +461,11 @@ impl Stakeholder {
             match self.clock.ticks().await {
                 Ticks::GENESIS { e, sl } => {
                     //TODO (res) any initialization happening here?
-                    self.new_epoch();
+                    self.new_epoch(e, sl);
                     self.new_slot(e, sl);
                 }
                 Ticks::NEWEPOCH { e, sl } => {
-                    self.new_epoch();
+                    self.new_epoch(e, sl);
                     self.new_slot(e, sl);
                 }
                 Ticks::NEWSLOT { e, sl } => self.new_slot(e, sl),
@@ -484,10 +502,23 @@ impl Stakeholder {
         }
     }
 
+    fn get_f(&self) -> Float10 {
+        //TODO (res) should be function of the average time to end of slot
+        // in the previous epoch.
+        let one : Float10 = Float10::from_str_native("1")
+            .unwrap()
+            .with_precision(RADIX_BITS)
+            .value();
+        let two : Float10 = Float10::from_str_native("2")
+            .unwrap()
+            .with_precision(RADIX_BITS)
+            .value();
+        one/two
+    }
     /// on the onset of the epoch, layout the new the competing coins
     /// assuming static stake during the epoch, enforced by the commitment to competing coins
     /// in the epoch's gen2esis data.
-    fn new_epoch(&mut self) {
+    fn new_epoch(&mut self, e: u64, sl: u64) {
         info!(target: LOG_T, "[new epoch] {}", self);
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, eta);
@@ -500,10 +531,52 @@ impl Stakeholder {
         // set to one untill then.
         let reward = pallas::Base::one();
         let num_slots = num_slots + epochs * epoch_len;
-        let sigma: pallas::Base = pallas::Base::from(num_slots) * reward;
-        epoch.create_coins(sigma, self.ownedcoins.clone()); // set epoch interal fields working space with competing coins
+        //
+        let f = self.get_f();
+        let total_stake = self.epoch.consensus.total_stake(e, sl);
+        let one : Float10 = Float10::from_str_native("1")
+            .unwrap()
+            .with_precision(RADIX_BITS)
+            .value();
+        let two : Float10 = Float10::from_str_native("2")
+            .unwrap()
+            .with_precision(RADIX_BITS)
+            .value();
+        //TODO should set f precision here
+        /*
+        let f : Float10 =  Float10::try_from(f_val)
+            .unwrap()
+            .with_precision(RADIX_BITS)
+        .value();
+        */
+        let mut field_p = Float10::from_str_native(P)
+            .unwrap()
+            .with_precision(RADIX_BITS)
+            .value();
+        let total_sigma  = Float10::try_from(total_stake)
+            .unwrap()
+            .with_precision(RADIX_BITS)
+            .value();
+        let x = one - f;
+        info!("x: {}", x);
+        // also ln small x should work normally.
+        let c = x.ln();
+        info!("c: {}", c);
+        let sigma1_fbig = c.clone()/total_sigma.clone() * field_p.clone();
+        info!("sigma1: {}", sigma1_fbig);
+
+        //TODO in sigma calculation get rad if exp is neg
+        let sigma1 : pallas::Base = fbig2base(sigma1_fbig);
+        info!("sigma1 base: {:?}", sigma1);
+        let sigma2_fbig = c.clone()/total_sigma.clone() * c.clone()/total_sigma.clone()  * field_p.clone()/two.clone();
+        info!("sigma2: {}", sigma2_fbig);
+        let sigma2 : pallas::Base = fbig2base(sigma2_fbig);
+        info!("sigma2 base: {:?}", sigma2);
+        epoch.create_coins(sigma1, sigma2, self.ownedcoins.clone()); // set epoch interal fields working space with competing coins
         self.epoch = epoch.clone();
     }
+
+
 
     /// at the begining of the slot
     /// stakeholder need to play the lottery for the slot.

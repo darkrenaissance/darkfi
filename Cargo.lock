@@ -1163,8 +1163,11 @@ dependencies = [
  "darkfi-derive",
  "darkfi-derive-internal",
  "darkfi-sdk",
+ "dashu",
+ "dashu-macros",
  "dirs",
  "ed25519-compact",
+ "env_logger",
  "fast-socks5",
  "futures",
  "futures-rustls",
@@ -1400,6 +1403,56 @@ dependencies = [
  "darling_core 0.14.1",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "dashu"
+version = "0.2.0"
+source = "git+https://github.com/ertosns/dashu#744c8c546947a1988e6c0710433cd5e58d3af86f"
+dependencies = [
+ "dashu-base",
+ "dashu-float",
+ "dashu-int",
+ "dashu-macros",
+]
+
+[[package]]
+name = "dashu-base"
+version = "0.2.0"
+source = "git+https://github.com/ertosns/dashu#744c8c546947a1988e6c0710433cd5e58d3af86f"
+
+[[package]]
+name = "dashu-float"
+version = "0.2.0"
+source = "git+https://github.com/ertosns/dashu#744c8c546947a1988e6c0710433cd5e58d3af86f"
+dependencies = [
+ "dashu-base",
+ "dashu-int",
+ "static_assertions",
+]
+
+[[package]]
+name = "dashu-int"
+version = "0.2.0"
+source = "git+https://github.com/ertosns/dashu#744c8c546947a1988e6c0710433cd5e58d3af86f"
+dependencies = [
+ "cfg-if 1.0.0",
+ "dashu-base",
+ "num-traits",
+ "rand",
+ "static_assertions",
+]
+
+[[package]]
+name = "dashu-macros"
+version = "0.2.0"
+source = "git+https://github.com/ertosns/dashu#744c8c546947a1988e6c0710433cd5e58d3af86f"
+dependencies = [
+ "dashu-base",
+ "dashu-float",
+ "dashu-int",
+ "proc-macro2",
+ "quote",
 ]
 
 [[package]]
@@ -1699,6 +1752,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c90bf5f19754d10198ccb95b70664fc925bd1fc090a0fd9a6ebc54acc8cd6272"
+dependencies = [
+ "atty",
+ "humantime",
+ "log",
+ "regex",
+ "termcolor",
 ]
 
 [[package]]
@@ -2266,6 +2332,12 @@ name = "httparse"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d897f394bad6a705d5f4104762e116a75639e470d80901eed05a860a95cb1904"
+
+[[package]]
+name = "humantime"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "iana-time-zone"
