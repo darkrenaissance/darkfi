@@ -24,6 +24,16 @@ contract Dao {
 }
 ```
 
+## Important Invariants
+
+1. The state of a contract (the contract member values) is globally readable but
+   *only* writable by that contract's functions.
+2. Transactions are atomic. If a subsequent contract function call fails then the earlier
+   ones are also invalid. The entire tx will be rolled back.
+3. `foo_contract::bar_func::validate::state_transition()` is able to access the entire
+   transaction to perform validation on its structure. It might need to enforce requirements
+   on the calldata of other function calls within the same tx. See `DAO::exec()`.
+
 ## Global Smart Contract State
 
 Internally we represent this smart contract like this:
@@ -121,6 +131,7 @@ mod dao_contract {
             // So we know the tx is well formed.
 
             // we can elide this with macro magic
+            // dao_contract::mint::validate::CallData
             assert_eq((&**call_data).type_id(), TypeId::of::<CallData>());
             let func_call = func_call.call_data.downcast_ref::<CallData>();
 
