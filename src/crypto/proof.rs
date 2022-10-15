@@ -101,10 +101,10 @@ mod tests {
                 DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkValueBlind,
             },
         },
-        serial::{Decodable, Encodable},
         zk::circuit::MintContract,
         Result,
     };
+    use darkfi_serial::{Decodable, Encodable};
     use group::ff::Field;
     use rand::rngs::OsRng;
 

@@ -6,6 +6,7 @@ description = "Demo chat to document darkfi net code"
 
 [dependencies]
 darkfi = {path = "../../", features = ["net", "rpc"]}
+darkfi-serial = {path = "../../src/serial"}
 
 # Async
 async-std = "1.12.0"

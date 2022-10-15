@@ -239,7 +239,7 @@ impl Default for MessageSubsystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::serial::{Decodable, Encodable};
+    use darkfi_serial::{Decodable, Encodable};
     use std::io;
 
     #[async_std::test]

@@ -1242,8 +1242,10 @@ dependencies = [
  "bs58",
  "darkfi-serial",
  "halo2_gadgets",
+ "halo2_proofs",
  "incrementalmerkletree",
  "pasta_curves",
+ "rand",
  "thiserror",
 ]
 
@@ -1482,6 +1484,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "darkfi",
+ "darkfi-serial",
  "easy-parallel",
  "log",
  "num_cpus",

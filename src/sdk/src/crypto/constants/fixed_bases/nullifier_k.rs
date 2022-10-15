@@ -2930,9 +2930,8 @@ mod tests {
         super::{NUM_WINDOWS, ORCHARD_PERSONALIZATION},
         *,
     };
-    use group::Curve;
     use halo2_gadgets::ecc::chip::constants::{test_lagrange_coeffs, test_zs_and_us};
-    use pasta_curves::{arithmetic::CurveExt, pallas};
+    use pasta_curves::{arithmetic::CurveExt, group::Curve, pallas};
 
     #[test]
     fn generator() {

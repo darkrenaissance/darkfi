@@ -2931,12 +2931,11 @@ mod tests {
         super::{COMMIT_IVK_PERSONALIZATION, NUM_WINDOWS},
         *,
     };
-    use group::Curve;
     use halo2_gadgets::{
         ecc::chip::constants::{test_lagrange_coeffs, test_zs_and_us},
         sinsemilla::primitives::CommitDomain,
     };
-    use pasta_curves::{arithmetic::CurveAffine, pallas};
+    use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 
     #[test]
     fn generator() {

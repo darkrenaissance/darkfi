@@ -54,7 +54,7 @@ impl SchnorrPublic for PublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::serial::{deserialize, serialize};
+    use darkfi_serial::{deserialize, serialize};
 
     #[test]
     fn test_schnorr() {

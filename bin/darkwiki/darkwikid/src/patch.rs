@@ -470,10 +470,8 @@ impl Decodable for OpMethods {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi::{
-        serial::{deserialize, serialize},
-        util::gen_id,
-    };
+    use darkfi::util::gen_id;
+    use darkfi_serial::{deserialize, serialize};
 
     #[test]
     fn test_to_string() {

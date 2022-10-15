@@ -131,9 +131,9 @@ mod tests {
         fixed_bases::{COMMIT_IVK_PERSONALIZATION, NOTE_COMMITMENT_PERSONALIZATION},
         sinsemilla::MERKLE_CRH_PERSONALIZATION,
     };
-    use group::{ff::PrimeField, Curve};
     use halo2_gadgets::sinsemilla::primitives::{CommitDomain, HashDomain};
     use halo2_proofs::{arithmetic::CurveAffine, pasta::pallas};
+    use pasta_curves::group::{ff::PrimeField, Curve};
     use rand::{self, rngs::OsRng, Rng};
 
     #[test]
