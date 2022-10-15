@@ -64,7 +64,8 @@ impl LeadCoin {
         let nonce = self.nonce.unwrap();
         let lottery_msg_input = [root_sk, nonce];
         let lottery_msg: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(lottery_msg_input);
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+                .hash(lottery_msg_input);
         //
         let po_y_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(y_mu));
         let po_y = *po_y_pt.to_affine().coordinates().unwrap().x();

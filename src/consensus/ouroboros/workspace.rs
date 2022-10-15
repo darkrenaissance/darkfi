@@ -1,15 +1,8 @@
 use crate::{
-    consensus::{
-        BlockInfo, Header, Metadata,
-    },
-    tx::{
-        Transaction,
-    },
-    util::{ time::Timestamp},
-    crypto::{
-        merkle_node::MerkleNode,
-        proof::{Proof},
-    }
+    consensus::{BlockInfo, Header, Metadata},
+    crypto::{merkle_node::MerkleNode, proof::Proof},
+    tx::Transaction,
+    util::time::Timestamp,
 };
 use pasta_curves::pallas;
 

@@ -5,9 +5,9 @@
 pub struct EpochConsensus {
     pub sl_len: u64, // length of slot in terms of ticks
     // number of slots per epoch
-    pub e_len: u64, // length of epoch in terms of slots
+    pub e_len: u64,    // length of epoch in terms of slots
     pub tick_len: u64, // length of tick in terms of seconds
-    pub reward: u64, // constant reward value for the slot leader
+    pub reward: u64,   // constant reward value for the slot leader
 }
 
 impl EpochConsensus {
@@ -26,7 +26,7 @@ impl EpochConsensus {
     }
 
     pub fn total_stake(&self, e: u64, sl: u64) -> u64 {
-        (e*self.e_len +  sl+ 1) * self.reward
+        (e * self.e_len + sl + 1) * self.reward
     }
     /// getter for constant stakeholder reward
     /// used for configuring the stakeholder reward value

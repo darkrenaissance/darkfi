@@ -2,16 +2,16 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 
 use crate::{
     crypto::{
-        constants::MERKLE_DEPTH,
-        merkle_node::MerkleNode,
-        nullifier::Nullifier,
-        util::poseidon_hash,
-        note::{EncryptedNote, Note},
         coin::OwnCoin,
-        proof::{VerifyingKey},
+        constants::MERKLE_DEPTH,
         keypair::{PublicKey, SecretKey},
+        merkle_node::MerkleNode,
+        note::{EncryptedNote, Note},
+        nullifier::Nullifier,
+        proof::VerifyingKey,
+        util::poseidon_hash,
     },
-    node::state::{state_transition, StateUpdate},
+    node::state::{ProgramState, StateUpdate},
 };
 
 pub struct StakeholderState {
@@ -88,11 +88,11 @@ impl StakeholderState {
                 let leaf_position = self.tree.witness().unwrap();
                 let nullifier = poseidon_hash::<2>([secret.inner(), note.serial]);
                 let own_coin = OwnCoin {
-                    coin: coin,
-                    note: note,
-                    secret: secret,
+                    coin,
+                    note,
+                    secret,
                     nullifier: Nullifier::from(nullifier),
-                    leaf_position: leaf_position
+                    leaf_position,
                 };
                 self.own_coins.push(own_coin);
             }

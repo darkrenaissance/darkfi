@@ -1,15 +1,13 @@
 use futures::executor::block_on;
 use halo2_proofs::dev::MockProver;
-use log::debug;
 use pasta_curves::pallas;
 use url::Url;
 
 use darkfi::{
+    consensus::ouroboros::{Epoch, EpochConsensus, Stakeholder},
     crypto::leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN},
     net::Settings,
-    consensus::ouroboros::{Stakeholder, Epoch, EpochConsensus},
 };
-
 
 fn main() {
     env_logger::init();
@@ -46,9 +44,7 @@ fn main() {
     let eta: pallas::Base = stakeholder.get_eta();
     let mut epoch = Epoch::new(consensus, eta);
     let sigma = pallas::Base::from(10);
-    let coins: Vec<Vec<LeadCoin>> = epoch.create_coins(sigma.clone(),
-                                                       sigma,
-                                                       vec![]);
+    let coins: Vec<Vec<LeadCoin>> = epoch.create_coins(sigma.clone(), sigma, vec![]);
     let coin = coins[0][0];
     let contract = coin.create_contract();
 

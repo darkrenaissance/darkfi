@@ -13,6 +13,11 @@ use pasta_curves::{
 use rand::{thread_rng, Rng};
 
 use crate::{
+    consensus::ouroboros::{
+        consts::RADIX_BITS,
+        utils::{base2ibig, fbig2ibig},
+        EpochConsensus, Float10,
+    },
     crypto::{
         coin::OwnCoin,
         constants::MERKLE_DEPTH_ORCHARD,
@@ -24,19 +29,10 @@ use crate::{
         types::DrkValueBlind,
         util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
     },
-    consensus::ouroboros::{
-        EpochConsensus,
-        utils::{fbig2ibig, base2ibig},
-        Float10,
-        consts::{RADIX_BITS},
-    }
 };
-
-
 
 const PRF_NULLIFIER_PREFIX: u64 = 0;
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
-
 
 #[derive(Debug, Default, Clone)]
 pub struct Epoch {
@@ -138,7 +134,12 @@ impl Epoch {
     }
 
     //note! the strategy here is single competing coin per slot.
-    pub fn create_coins(&mut self, sigma1: pallas::Base, sigma2: pallas::Base, owned: Vec<OwnCoin>) -> Vec<Vec<LeadCoin>> {
+    pub fn create_coins(
+        &mut self,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
+        owned: Vec<OwnCoin>,
+    ) -> Vec<Vec<LeadCoin>> {
         let mut rng = thread_rng();
         let mut seeds: Vec<u64> = vec![];
         for _i in 0..self.len() {
@@ -171,14 +172,15 @@ impl Epoch {
             }
             // otherwise compete with zero stake
             else {
-                let coin = self.create_leadcoin(sigma1,
-                                                sigma2,
-                                                0,
-                                                i,
-                                                root_sks[i],
-                                                path_sks[i],
-                                                seeds[i],
-                                                sks[i]
+                let coin = self.create_leadcoin(
+                    sigma1,
+                    sigma2,
+                    0,
+                    i,
+                    root_sks[i],
+                    path_sks[i],
+                    seeds[i],
+                    sks[i],
                 );
                 self.coins.push(vec![coin]);
             }
@@ -296,24 +298,25 @@ impl Epoch {
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
             let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
             let y_exp_hash: pallas::Base =
-                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_exp);
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+                )
+                .hash(y_exp);
             //TODO (fix) use the hash of y coordinates, using single coordinate is insecure.
             //  pick x coordinate of y for comparison
             let y_x: pallas::Base =
                 *pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
-                .to_affine()
-                .coordinates()
-                .unwrap().x();
-            let val_2ibig = Float10::try_from(coin.value.unwrap())
-                .unwrap()
-                .with_precision(RADIX_BITS)
-                .value();
+                    .to_affine()
+                    .coordinates()
+                    .unwrap()
+                    .x();
+            let val_2ibig =
+                Float10::try_from(coin.value.unwrap()).unwrap().with_precision(RADIX_BITS).value();
             let target = base2ibig(coin.sigma1.unwrap()) * val_2ibig.clone() +
                 base2ibig(coin.sigma2.unwrap()) * val_2ibig.clone() * val_2ibig;
             let target_ibig = fbig2ibig(target);
             let y_ibig = base2ibig(y_x);
             debug!("y_x: {}, target: {}", y_ibig, target_ibig);
-            let iam_leader =  y_ibig < target_ibig ;
+            let iam_leader = y_ibig < target_ibig;
             if iam_leader {
                 if coin.value.unwrap() > highest_stake {
                     highest_stake = coin.value.unwrap();

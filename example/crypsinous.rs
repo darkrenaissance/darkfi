@@ -1,13 +1,13 @@
 use ::darkfi::{
+    consensus::ouroboros::{EpochConsensus, Stakeholder},
     net::Settings,
-    consensus::ouroboros::{Stakeholder, EpochConsensus},util::time::Timestamp,
+    util::time::Timestamp,
 };
 
 use clap::Parser;
 use futures::executor::block_on;
 use std::thread;
 use url::Url;
-
 
 #[derive(Parser)]
 struct NetCli {

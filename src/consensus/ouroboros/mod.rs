@@ -1,30 +1,29 @@
-use smol::Executor;
 use async_std::sync::Arc;
 use halo2_proofs::arithmetic::Field;
 use log::{debug, error, info};
+use smol::Executor;
 use std::fmt;
 
 use rand::rngs::OsRng;
 use std::{thread, time::Duration};
 
 use crate::zk::circuit::{BurnContract, LeadContract, MintContract};
-use incrementalmerkletree::{bridgetree::BridgeTree};
+use incrementalmerkletree::bridgetree::BridgeTree;
 
-pub mod types;
 pub mod consts;
+pub mod types;
 pub mod utils;
 
 use crate::{
-    blockchain::{Blockchain},
+    blockchain::Blockchain,
     consensus::{
         clock::{Clock, Ticks},
-        Block, BlockInfo, Metadata,
-        LeadProof,
         ouroboros::{
-            types::{Float10},
-            consts::{RADIX_BITS, LOG_T, TREE_LEN, P},
-            utils::{fbig2base},
+            consts::{LOG_T, P, RADIX_BITS, TREE_LEN},
+            types::Float10,
+            utils::fbig2base,
         },
+        Block, BlockInfo, LeadProof, Metadata,
     },
     crypto::{
         address::Address,
@@ -33,12 +32,11 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         leadcoin::LeadCoin,
         merkle_node::MerkleNode,
-        nullifier::Nullifier,
         proof::{Proof, ProvingKey, VerifyingKey},
-        schnorr::{SchnorrSecret},
+        schnorr::SchnorrSecret,
     },
     net::{MessageSubscription, P2p, Settings, SettingsPtr},
-    node::state::{state_transition, ProgramState},
+    node::state::state_transition,
     tx::{
         builder::{
             TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderOutputInfo,
@@ -46,7 +44,6 @@ use crate::{
         Transaction,
     },
     util::{path::expand_path, time::Timestamp},
-
     Result,
 };
 
@@ -56,10 +53,8 @@ use pasta_curves::pallas;
 
 use group::ff::PrimeField;
 
-
 pub mod epochconsensus;
 pub use epochconsensus::EpochConsensus;
-
 
 pub mod epoch;
 pub use epoch::Epoch;
@@ -69,8 +64,6 @@ pub(crate) use workspace::SlotWorkspace;
 
 pub(crate) mod state;
 pub(crate) use state::StakeholderState;
-
-
 
 pub struct Stakeholder {
     pub blockchain: Blockchain, // stakeholder view of the blockchain
@@ -201,7 +194,6 @@ impl Stakeholder {
         let settings: SettingsPtr = self.net.settings();
         settings.peers.clone()
     }
-
 
     async fn init_network(&self) -> Result<()> {
         info!(target: LOG_T, "init_network()");
@@ -343,15 +335,11 @@ impl Stakeholder {
     fn get_f(&self) -> Float10 {
         //TODO (res) should be function of the average time to end of slot
         // in the previous epoch.
-        let one : Float10 = Float10::from_str_native("1")
-            .unwrap()
-            .with_precision(RADIX_BITS)
-            .value();
-        let two : Float10 = Float10::from_str_native("2")
-            .unwrap()
-            .with_precision(RADIX_BITS)
-            .value();
-        one/two
+        let one: Float10 =
+            Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+        let two: Float10 =
+            Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
+        one / two
     }
     /// on the onset of the epoch, layout the new the competing coins
     /// assuming static stake during the epoch, enforced by the commitment to competing coins
@@ -368,14 +356,10 @@ impl Stakeholder {
         //
         let f = self.get_f();
         let total_stake = self.epoch.consensus.total_stake(e, sl);
-        let one : Float10 = Float10::from_str_native("1")
-            .unwrap()
-            .with_precision(RADIX_BITS)
-            .value();
-        let two : Float10 = Float10::from_str_native("2")
-            .unwrap()
-            .with_precision(RADIX_BITS)
-            .value();
+        let one: Float10 =
+            Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+        let two: Float10 =
+            Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
         //TODO should set f precision here
         /*
         let f : Float10 =  Float10::try_from(f_val)
@@ -383,34 +367,29 @@ impl Stakeholder {
             .with_precision(RADIX_BITS)
         .value();
         */
-        let field_p = Float10::from_str_native(P)
-            .unwrap()
-            .with_precision(RADIX_BITS)
-            .value();
-        let total_sigma  = Float10::try_from(total_stake)
-            .unwrap()
-            .with_precision(RADIX_BITS)
-            .value();
+        let field_p = Float10::from_str_native(P).unwrap().with_precision(RADIX_BITS).value();
+        let total_sigma =
+            Float10::try_from(total_stake).unwrap().with_precision(RADIX_BITS).value();
         let x = one - f;
         info!("x: {}", x);
         // also ln small x should work normally.
         let c = x.ln();
         info!("c: {}", c);
-        let sigma1_fbig = c.clone()/total_sigma.clone() * field_p.clone();
+        let sigma1_fbig = c.clone() / total_sigma.clone() * field_p.clone();
         info!("sigma1: {}", sigma1_fbig);
 
         //TODO in sigma calculation get rad if exp is neg
-        let sigma1 : pallas::Base = fbig2base(sigma1_fbig);
+        let sigma1: pallas::Base = fbig2base(sigma1_fbig);
         info!("sigma1 base: {:?}", sigma1);
-        let sigma2_fbig = c.clone()/total_sigma.clone() * c.clone()/total_sigma.clone()  * field_p.clone()/two.clone();
+        let sigma2_fbig = c.clone() / total_sigma.clone() * c.clone() / total_sigma.clone() *
+            field_p.clone() /
+            two.clone();
         info!("sigma2: {}", sigma2_fbig);
-        let sigma2 : pallas::Base = fbig2base(sigma2_fbig);
+        let sigma2: pallas::Base = fbig2base(sigma2_fbig);
         info!("sigma2 base: {:?}", sigma2);
         epoch.create_coins(sigma1, sigma2, self.ownedcoins.clone()); // set epoch interal fields working space with competing coins
         self.epoch = epoch.clone();
     }
-
-
 
     /// at the begining of the slot
     /// stakeholder need to play the lottery for the slot.

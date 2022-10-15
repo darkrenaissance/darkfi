@@ -270,7 +270,6 @@ impl Circuit<pallas::Base> for LeadContract {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
-
         let less_than_chip = config.lessthan_chip();
         NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::load_k_table(
             &mut layouter,
@@ -594,18 +593,22 @@ impl Circuit<pallas::Base> for LeadContract {
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let rho_commit_base = rho_commit.inner().x();
 
+        let term1 =
+            ar_chip.mul(layouter.namespace(|| "calculate term1"), &sigma1, &coin_value.clone())?;
 
-        let term1 = ar_chip.mul(layouter.namespace(|| "calculate term1"), &sigma1, &coin_value.clone())?;
+        let term2_1 = ar_chip.mul(
+            layouter.namespace(|| "calculate term2_1"),
+            &sigma2,
+            &coin_value.clone(),
+        )?;
 
-        let term2_1 = ar_chip.mul(layouter.namespace(|| "calculate term2_1"), &sigma2, &coin_value.clone())?;
-
-        let term2 = ar_chip.mul(layouter.namespace(|| "calculate term2"), &term2_1, &coin_value.clone())?;
+        let term2 =
+            ar_chip.mul(layouter.namespace(|| "calculate term2"), &term2_1, &coin_value.clone())?;
 
         let target = ar_chip.add(layouter.namespace(|| "calculate target"), &term1, &term2)?;
         let target: Value<pallas::Base> = target.value().cloned();
 
         let y: Value<pallas::Base> = y_commit_base.value().cloned();
-
 
         less_than_chip.witness_less_than(
             layouter.namespace(|| "y < target"),
@@ -671,6 +674,5 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
         Ok(())
-
     }
 }
