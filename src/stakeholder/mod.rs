@@ -54,8 +54,13 @@ use pasta_curves::pallas;
 
 use group::ff::PrimeField;
 
+
+pub mod epochconsensus;
+pub use epochconsensus::EpochConsensus;
+
+
 pub mod epoch;
-pub use epoch::{Epoch, EpochConsensus};
+pub use epoch::Epoch;
 
 pub(crate) mod workspace;
 pub(crate) use workspace::SlotWorkspace;

@@ -7,7 +7,7 @@ use url::Url;
 use darkfi::{
     crypto::leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN},
     net::Settings,
-    stakeholder::{Stakeholder, epoch::{Epoch, {EpochConsensus}}},
+    stakeholder::{Stakeholder, Epoch, EpochConsensus},
 };
 
 
