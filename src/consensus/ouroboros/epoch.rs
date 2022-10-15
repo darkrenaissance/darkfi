@@ -12,23 +12,26 @@ use pasta_curves::{
 
 use rand::{thread_rng, Rng};
 
-use crate::crypto::{
-    coin::OwnCoin,
-    constants::MERKLE_DEPTH_ORCHARD,
-    keypair::{Keypair, SecretKey},
-    lead_proof,
-    leadcoin::LeadCoin,
-    merkle_node::MerkleNode,
-    proof::{Proof, ProvingKey},
-    types::DrkValueBlind,
-    util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
-
+use crate::{
+    crypto::{
+        coin::OwnCoin,
+        constants::MERKLE_DEPTH_ORCHARD,
+        keypair::{Keypair, SecretKey},
+        lead_proof,
+        leadcoin::LeadCoin,
+        merkle_node::MerkleNode,
+        proof::{Proof, ProvingKey},
+        types::DrkValueBlind,
+        util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
+    },
+    consensus::ouroboros::{
+        EpochConsensus,
+        utils::{fbig2ibig, base2ibig},
+        Float10,
+        consts::{RADIX_BITS},
+    }
 };
 
-use crate::stakeholder::EpochConsensus;
-use crate::stakeholder::utils::{fbig2ibig, base2ibig};
-use crate::stakeholder::Float10;
-use crate::stakeholder::consts::{RADIX_BITS};
 
 
 const PRF_NULLIFIER_PREFIX: u64 = 0;

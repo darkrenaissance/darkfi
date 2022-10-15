@@ -20,6 +20,11 @@ use crate::{
         clock::{Clock, Ticks},
         Block, BlockInfo, Header, Metadata,
         LeadProof,
+        ouroboros::{
+            types::{Float10},
+            consts::{RADIX_BITS, LOG_T, TREE_LEN, P},
+            utils::{fbig2base},
+        },
     },
     crypto::{
         address::Address,
@@ -42,9 +47,7 @@ use crate::{
         Transaction,
     },
     util::{path::expand_path, time::Timestamp},
-    stakeholder::types::{Float10},
-    stakeholder::consts::{RADIX_BITS, LOG_T, TREE_LEN, P},
-    stakeholder::utils::{fbig2base},
+
     Result,
 };
 

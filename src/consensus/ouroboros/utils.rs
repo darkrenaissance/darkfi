@@ -1,7 +1,7 @@
 use pasta_curves::pallas;
 use group::ff::PrimeField;
 use dashu::integer::{IBig, Sign, UBig};
-use crate::stakeholder::Float10;
+use crate::consensus::ouroboros::Float10;
 use log::{info};
 
 pub(crate) fn fbig2ibig(f: Float10) -> IBig {

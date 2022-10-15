@@ -27,6 +27,8 @@ pub mod task;
 pub mod clock;
 pub use clock::{Clock, Ticks};
 
+pub mod ouroboros;
+
 use lazy_static::lazy_static;
 lazy_static! {
     /// Genesis hash for the mainnet chain

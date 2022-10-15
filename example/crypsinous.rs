@@ -1,5 +1,6 @@
 use ::darkfi::{
-    net::Settings, stakeholder::{Stakeholder, EpochConsensus},util::time::Timestamp,
+    net::Settings,
+    consensus::ouroboros::{Stakeholder, EpochConsensus},util::time::Timestamp,
 };
 
 use clap::Parser;
