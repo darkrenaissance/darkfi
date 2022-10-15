@@ -1,7 +1,11 @@
 use super::{
     crypto::{MerkleNode, Nullifier},
-    error::ContractError,
+    error::{ContractError, ContractResult},
 };
+
+pub trait Verification {
+    fn verify(&self) -> ContractResult;
+}
 
 pub fn nullifier_exists(nullifier: &Nullifier) -> Result<bool, ContractError> {
     #[cfg(target_arch = "wasm32")]

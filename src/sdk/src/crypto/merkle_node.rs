@@ -1,11 +1,12 @@
 use core::str::FromStr;
 use std::io;
 
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::PrimeField, pallas};
 
 /// The `MerkleNode` is represented as a base field element.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct MerkleNode(pallas::Base);
 
 impl MerkleNode {

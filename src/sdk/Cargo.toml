@@ -8,6 +8,13 @@ repository = "https://github.com/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 
+[dependencies.darkfi-serial]
+path = "../serial"
+features = [
+    "derive",
+    "pasta_curves",
+]
+
 [dependencies]
 # Error handling
 thiserror = "1.0.37"
@@ -17,3 +24,5 @@ bs58 = "0.4.0"
 
 # Cryptography
 pasta_curves = "0.4.0"
+incrementalmerkletree = "0.3.0"
+halo2_gadgets = "0.2.0"

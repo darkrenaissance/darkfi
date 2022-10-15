@@ -16,3 +16,9 @@ pub use merkle_node::MerkleNode;
 /// Nullifier definitions
 pub mod nullifier;
 pub use nullifier::Nullifier;
+
+/// Pedersen commitment utilities
+pub mod pedersen;
+
+/// Cryptographic constants
+pub mod constants;
