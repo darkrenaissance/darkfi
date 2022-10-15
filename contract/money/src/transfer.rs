@@ -1,3 +1,14 @@
+use darkfi_sdk::{
+    crypto::{
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64, ValueCommit},
+        MerkleNode,
+    },
+    error::{ContractError, ContractResult},
+    msg,
+    pasta::pallas,
+    state::Verification,
+};
+
 use super::State;
 
 /// This function is the execution of the `Transfer` functionality.
@@ -54,7 +65,7 @@ pub fn exec(state: &mut State, tx: Transaction) -> ContractResult {
     msg!("Applying state update");
     state.nullifiers.extend_from_slice(&nullifiers);
     for output in tx.outputs {
-        state.tree.append(&MerkleNode(coin.inner()));
+        state.tree.append(&MerkleNode::from(output.coin.inner()));
         state.merkle_roots.push(state.tree.root(0).unwrap());
     }
 }
@@ -62,7 +73,7 @@ pub fn exec(state: &mut State, tx: Transaction) -> ContractResult {
 // `Verification` could be a generic trait we implement for doing
 // arbitrary verification in contracts.
 impl Verification for Transaction {
-    pub fn verify(&self) -> ContractResult {
+    fn verify(&self) -> ContractResult {
         // Must have minimum 1 clear or anon input
         if self.clear_inputs.len() + self.inputs.len() == 0 {
             msg!("Error: Missing inputs in transaction");

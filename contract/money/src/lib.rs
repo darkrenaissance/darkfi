@@ -1,3 +1,11 @@
+use darkfi::serial::{deserialize, SerialDecodable, SerialEncodable};
+use darkfi_sdk::{
+    crypto::{MerkleNode, Nullifier},
+    entrypoint,
+    error::ContractResult,
+};
+use incrementalmerkletree::bridgetree::BridgeTree;
+
 /// Available functions for this contract.
 /// We identify them with the first byte passed in through the payload.
 #[repr(u8)]
@@ -27,7 +35,7 @@ pub mod transfer;
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct State {
     /// The Merkle tree of all coins used by this contract.
-    pub tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    pub tree: BridgeTree<MerkleNode, 32>,
     /// List of all previous and current Merkle roots.
     pub merkle_roots: Vec<MerkleNode>,
     /// Published nullifiers that have been seen.
@@ -46,7 +54,7 @@ impl State {
 
 #[cfg(not(feature = "no-entrypoint"))]
 entrypoint!(process_instruction);
-fn process_instruction(contract_id: &ContractId, ix: &[u8]) -> ContractResult {
+fn process_instruction(state: &[u8], ix: &[u8]) -> ContractResult {
     // This is the entrypoint function of the smart contract which gets executed
     // by the wasm runtime. The `contract_id` passed in is used to lookup the
     // current state from the ledger using the `lookup_state` function.
@@ -54,7 +62,7 @@ fn process_instruction(contract_id: &ContractId, ix: &[u8]) -> ContractResult {
     // first byte of the payload is a pointer to a function we with to run, and
     // the remainter is a serialized `Transaction` object we'll try to deserialize
     // and work with.
-    let mut state: State = deserialize(&lookup_state(contract_id)?)?;
+    let mut state: State = deserialize(state)?;
 
     match Function::from(ix[0]) {
         Function::Transfer => {
@@ -65,7 +73,7 @@ fn process_instruction(contract_id: &ContractId, ix: &[u8]) -> ContractResult {
             // host. Then if everything else outside of the wasm execution is
             // valid, the host can reference this new state and update it on the
             // ledger.
-            apply_state(&serialize(&state))?;
+            //apply_state(&serialize(&state))?;
         }
     }
 

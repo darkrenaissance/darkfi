@@ -17,4 +17,9 @@ overflow-checks = true
 
 [dependencies]
 darkfi-sdk = { path = "../../src/sdk" }
-darkfi = { path = "../../", features = ["serial"] }
+# TODO: serial/crypto feature that enables all this stuff
+darkfi = { path = "../../", features = ["serial", "pasta_curves", "incrementalmerkletree"] }
+incrementalmerkletree = "0.3.0"
+
+# TODO: Dummy getrandomndom = { version = "0.2.7", features = ["custom"] }
+getrandom = { version = "0.2.7", features = ["custom"] }
