@@ -384,11 +384,3 @@ impl Epoch {
         lead_proof::create_lead_proof(pk, coin).unwrap()
     }
 }
-
-#[derive(Debug, Default, Clone)]
-pub struct LifeTime {
-    //lifetime metadata
-    //...
-    //lifetime epochs
-    pub epochs: Vec<Epoch>,
-}
