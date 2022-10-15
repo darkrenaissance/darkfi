@@ -8,7 +8,7 @@ use darkfi_derive_internal::{enum_de, enum_ser, struct_de, struct_ser};
 
 #[proc_macro_derive(SerialEncodable, attributes(skip_serialize))]
 pub fn darkfi_serialize(input: TokenStream) -> TokenStream {
-    let found_crate = crate_name("darkfi").expect("darkfi is found in Cargo.toml");
+    let found_crate = crate_name("darkfi-serial").expect("darkfi-serial is found in Cargo.toml");
 
     let found_crate = match found_crate {
         FoundCrate::Name(name) => name,
@@ -36,7 +36,7 @@ pub fn darkfi_serialize(input: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(SerialDecodable, attributes(skip_serialize))]
 pub fn darkfi_deserialize(input: TokenStream) -> TokenStream {
-    let found_crate = crate_name("darkfi").expect("darkfi is found in Cargo.toml");
+    let found_crate = crate_name("darkfi-serial").expect("darkfi-serial is found in Cargo.toml");
 
     let found_crate = match found_crate {
         FoundCrate::Name(name) => name,

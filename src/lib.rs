@@ -28,9 +28,6 @@ pub mod raft;
 #[cfg(feature = "rpc")]
 pub mod rpc;
 
-#[cfg(feature = "serial")]
-pub mod serial;
-
 #[cfg(feature = "system")]
 pub mod system;
 

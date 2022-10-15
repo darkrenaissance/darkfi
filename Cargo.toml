@@ -37,7 +37,9 @@ members = [
     "bin/darkwiki/darkwiki-cli",
     "bin/vanityaddr",
     "bin/lilith",
+
     "src/sdk",
+    "src/serial",
     "src/serial/derive",
     "src/serial/derive-internal",
 
@@ -79,6 +81,7 @@ toml = {version = "0.5.9", optional = true}
 
 # Utilities
 chrono = {version = "0.4.22", optional = true}
+darkfi-serial = {path = "src/serial", optional = true}
 darkfi-derive = {path = "src/serial/derive", optional = true}
 darkfi-derive-internal = {path = "src/serial/derive-internal", optional = true}
 dirs = {version = "4.0.0", optional = true}
@@ -166,8 +169,8 @@ blockchain = [
 
     "async-runtime",
     "crypto",
+    "darkfi-serial",
     "net",
-    "serial",
     "tx",
     "node",
     "util",
@@ -194,20 +197,22 @@ crypto = [
     "sha2",
     "subtle",
 
+    "darkfi-serial",
+    "darkfi-serial/crypto",
     "util",
-    "serial",
     "zkas",
 ]
 
 dht = [
     "blake3",
     "chrono",
-    "fxhash",
     "rand",
 
     "async-runtime",
+    "darkfi-serial",
+    "darkfi-serial/collections",
+    "darkfi-serial/hash",
     "net",
-    "serial",
 ]
 
 net = [
@@ -229,7 +234,9 @@ net = [
     "url",
 
     "async-runtime",
-    "serial",
+    "darkfi-serial",
+    "darkfi-serial/async",
+    "darkfi-serial/url",
     "system",
     "util",
 ]
@@ -243,7 +250,7 @@ node = [
     "async-runtime",
     "blockchain",
     "crypto",
-    "serial",
+    "darkfi-serial",
     "tx",
     "wallet",
 ]
@@ -255,8 +262,8 @@ raft = [
     "sled",
 
     "async-runtime",
+    "darkfi-serial",
     "net",
-    "serial",
     "util",
 ]
 
@@ -268,12 +275,8 @@ rpc = [
     "url",
 
     "async-runtime",
+    "darkfi-serial",
     "net",
-    "serial",
-]
-
-serial = [
-    "darkfi-derive",
 ]
 
 system = [
@@ -288,7 +291,7 @@ tx = [
     "incrementalmerkletree",
     "rand",
 
-    "serial",
+    "darkfi-serial",
     "crypto",
 ]
 
@@ -304,7 +307,7 @@ util = [
     "toml",
     "url",
 
-    "serial",
+    "darkfi-serial",
 ]
 
 wallet = [
@@ -318,7 +321,7 @@ wallet = [
     "libsqlite3-sys",
 
     "crypto",
-    "serial",
+    "darkfi-serial",
     "util",
 ]
 
@@ -341,7 +344,7 @@ zkas = [
     "indexmap",
     "itertools",
 
-    "serial",
+    "darkfi-serial",
 ]
 # -----END LIBRARY FEATURES-----
 

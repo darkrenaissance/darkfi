@@ -1,5 +1,8 @@
-use futures::prelude::*;
 use std::io::{Error, ErrorKind};
+
+use futures_lite::{
+    AsyncRead, AsyncReadExt as AsyncReadExtFut, AsyncWrite, AsyncWriteExt as AsyncWriteExtFut,
+};
 
 use super::{endian, VarInt};
 

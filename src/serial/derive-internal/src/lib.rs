@@ -32,7 +32,7 @@ pub fn enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2>
                         let field_type = &field.ty;
                         where_clause.predicates.push(
                             syn::parse2(quote! {
-                                #field_type: #cratename::serial::Encodable
+                                #field_type: #cratename::Encodable
                             })
                             .unwrap(),
                         );
@@ -60,7 +60,7 @@ pub fn enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2>
                         let field_type = &field.ty;
                         where_clause.predicates.push(
                             syn::parse2(quote! {
-                                #field_type: #cratename::serial::Encodable
+                                #field_type: #cratename::Encodable
                             })
                             .unwrap(),
                         );
@@ -92,7 +92,7 @@ pub fn enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2>
     }
 
     Ok(quote! {
-        impl #impl_generics #cratename::serial::Encodable for #name #ty_generics #where_clause {
+        impl #impl_generics #cratename::Encodable for #name #ty_generics #where_clause {
             fn encode<S: std::io::Write>(&self, mut s: S) -> ::core::result::Result<usize, std::io::Error> {
                 let variant_idx: u8 = match self {
                     #variant_idx_body
@@ -136,13 +136,13 @@ pub fn enum_de(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2> 
                         let field_type = &field.ty;
                         where_clause.predicates.push(
                             syn::parse2(quote! {
-                                #field_type: #cratename::serial::Decodable
+                                #field_type: #cratename::Decodable
                             })
                             .unwrap(),
                         );
 
                         variant_header.extend(quote! {
-                            #field_name: #cratename::serial::Decodable::decode(&mut d)?,
+                            #field_name: #cratename::Decodable::decode(&mut d)?,
                         });
                     }
                 }
@@ -156,13 +156,12 @@ pub fn enum_de(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2> 
                         let field_type = &field.ty;
                         where_clause.predicates.push(
                             syn::parse2(quote! {
-                                #field_type: #cratename::serial::Decodable
+                                #field_type: #cratename::Decodable
                             })
                             .unwrap(),
                         );
 
-                        variant_header
-                            .extend(quote! { #cratename::serial::Decodable::decode(&mut d)?, });
+                        variant_header.extend(quote! { #cratename::Decodable::decode(&mut d)?, });
                     }
                 }
                 variant_header = quote! { ( #variant_header ) };
@@ -176,11 +175,11 @@ pub fn enum_de(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream2> 
     }
 
     let variant_idx = quote! {
-        let variant_idx: u8 = #cratename::serial::Decodable::decode(&mut d)?;
+        let variant_idx: u8 = #cratename::Decodable::decode(&mut d)?;
     };
 
     Ok(quote! {
-        impl #impl_generics #cratename::serial::Decodable for #name #ty_generics #where_clause {
+        impl #impl_generics #cratename::Decodable for #name #ty_generics #where_clause {
             fn decode<D: std::io::Read>(mut d: D) -> ::core::result::Result<Self, std::io::Error> {
                 #variant_idx
 
@@ -223,7 +222,7 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
                 let field_type = &field.ty;
                 where_clause.predicates.push(
                     syn::parse2(quote! {
-                        #field_type: #cratename::serial::Encodable
+                        #field_type: #cratename::Encodable
                     })
                     .unwrap(),
                 );
@@ -245,7 +244,7 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
     }
 
     Ok(quote! {
-        impl #impl_generics #cratename::serial::Encodable for #name #ty_generics #where_clause {
+        impl #impl_generics #cratename::Encodable for #name #ty_generics #where_clause {
             fn encode<S: std::io::Write>(&self, mut s: S) -> ::core::result::Result<usize, std::io::Error> {
                 let mut len = 0;
                 #body
@@ -277,13 +276,13 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
                     let field_type = &field.ty;
                     where_clause.predicates.push(
                         syn::parse2(quote! {
-                            #field_type: #cratename::serial::Decodable
+                            #field_type: #cratename::Decodable
                         })
                         .unwrap(),
                     );
 
                     quote! {
-                        #field_name: #cratename::serial::Decodable::decode(&mut d)?,
+                        #field_name: #cratename::Decodable::decode(&mut d)?,
                     }
                 };
                 body.extend(delta);
@@ -296,7 +295,7 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
             let mut body = TokenStream2::new();
             for _ in 0..fields.unnamed.len() {
                 let delta = quote! {
-                    #cratename::serial::Decodable::decode(&mut d)?,
+                    #cratename::Decodable::decode(&mut d)?,
                 };
                 body.extend(delta);
             }
@@ -312,7 +311,7 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
     };
 
     Ok(quote! {
-        impl #impl_generics #cratename::serial::Decodable for #name #ty_generics #where_clause {
+        impl #impl_generics #cratename::Decodable for #name #ty_generics #where_clause {
             fn decode<D: std::io::Read>(mut d: D) -> ::core::result::Result<Self, std::io::Error> {
                 Ok(#return_value)
             }

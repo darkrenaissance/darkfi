@@ -1,12 +1,13 @@
 use std::io::{Cursor, Error, ErrorKind, Read, Write};
 
+#[cfg(feature = "derive")]
 pub use darkfi_derive::{SerialDecodable, SerialEncodable};
 
-#[cfg(feature = "async-runtime")]
+#[cfg(feature = "async")]
 mod async_serial;
 
-mod encoding_types;
 mod endian;
+mod types;
 
 /// Data which can be encoded in a consensus-consistent way.
 pub trait Encodable {
