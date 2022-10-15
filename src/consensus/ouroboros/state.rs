@@ -11,7 +11,7 @@ use crate::{
         proof::VerifyingKey,
         util::poseidon_hash,
     },
-    node::state::{ProgramState, StateUpdate},
+    node::state::{StateUpdate, ProgramState},
 };
 
 pub struct StakeholderState {
