@@ -1128,6 +1128,7 @@ dependencies = [
  "async-trait",
  "crypto_api_chachapoly",
  "darkfi",
+ "darkfi-serial",
  "easy-parallel",
  "futures",
  "group",
@@ -1164,6 +1165,7 @@ dependencies = [
  "darkfi-derive-internal",
  "darkfi-sdk",
  "dashu",
+ "darkfi-serial",
  "dirs",
  "ed25519-compact",
  "env_logger",
@@ -1238,8 +1240,24 @@ name = "darkfi-sdk"
 version = "0.3.0"
 dependencies = [
  "bs58",
+ "darkfi-serial",
+ "halo2_gadgets",
+ "incrementalmerkletree",
  "pasta_curves",
  "thiserror",
+]
+
+[[package]]
+name = "darkfi-serial"
+version = "0.3.0"
+dependencies = [
+ "blake3",
+ "darkfi-derive",
+ "futures-lite",
+ "fxhash",
+ "incrementalmerkletree",
+ "pasta_curves",
+ "url",
 ]
 
 [[package]]
@@ -1253,6 +1271,7 @@ dependencies = [
  "chrono",
  "ctrlc",
  "darkfi",
+ "darkfi-serial",
  "easy-parallel",
  "fxhash",
  "incrementalmerkletree",
@@ -1278,6 +1297,7 @@ dependencies = [
  "bs58",
  "clap 3.2.22",
  "darkfi",
+ "darkfi-serial",
  "halo2_gadgets",
  "halo2_proofs",
  "rand",
@@ -1308,13 +1328,12 @@ dependencies = [
 name = "darkwikid"
 version = "0.4.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-std",
  "async-trait",
  "blake3",
  "bs58",
  "darkfi",
+ "darkfi-serial",
  "dryoc",
  "easy-parallel",
  "futures",
@@ -1820,6 +1839,7 @@ dependencies = [
  "chrono",
  "ctrlc",
  "darkfi",
+ "darkfi-serial",
  "easy-parallel",
  "hex",
  "lazy-init",
@@ -1982,6 +2002,7 @@ dependencies = [
  "blake3",
  "ctrlc",
  "darkfi",
+ "darkfi-serial",
  "easy-parallel",
  "log",
  "serde",
@@ -2459,6 +2480,7 @@ dependencies = [
  "crypto_box",
  "ctrlc",
  "darkfi",
+ "darkfi-serial",
  "easy-parallel",
  "futures",
  "futures-rustls",
@@ -2490,6 +2512,7 @@ dependencies = [
  "crypto_box",
  "ctrlc",
  "darkfi",
+ "darkfi-serial",
  "easy-parallel",
  "futures",
  "futures-rustls",
@@ -4197,6 +4220,7 @@ dependencies = [
  "crypto_box",
  "ctrlc",
  "darkfi",
+ "darkfi-serial",
  "easy-parallel",
  "futures",
  "fxhash",
