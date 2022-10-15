@@ -1,3 +1,4 @@
+use darkfi_serial::{deserialize, serialize};
 use fxhash::FxHashMap;
 use incrementalmerkletree::Tree;
 use log::error;
@@ -15,7 +16,6 @@ use darkfi::{
         ErrorCode::{InternalError, InvalidParams, ParseError},
         JsonError, JsonResponse, JsonResult,
     },
-    serial::{deserialize, serialize},
 };
 
 use super::Darkfid;

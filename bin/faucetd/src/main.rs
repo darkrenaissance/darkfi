@@ -3,6 +3,7 @@ use std::{collections::HashMap, str::FromStr};
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
+use darkfi_serial::serialize;
 use log::{debug, error, info};
 use serde_json::{json, Value};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
@@ -27,7 +28,6 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
-    serial::serialize,
     util::{async_util::sleep, parse::decode_base10, path::expand_path},
     wallet::walletdb::init_wallet,
     Error, Result,

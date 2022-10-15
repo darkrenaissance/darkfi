@@ -1,10 +1,10 @@
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::pallas;
 
 use super::{
     keypair::{PublicKey, SecretKey},
     util::poseidon_hash,
 };
-use crate::serial::{SerialDecodable, SerialEncodable};
 
 /// Contract ID used to reference smart contracts on the ledger.
 #[repr(C)]

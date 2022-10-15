@@ -5,7 +5,7 @@ use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use url::Url;
 
-use crate::net::TransportName;
+use crate::net::transport::TransportName;
 
 /// Atomic pointer to network settings.
 pub type SettingsPtr = Arc<Settings>;

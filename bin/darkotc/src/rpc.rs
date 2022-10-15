@@ -1,5 +1,6 @@
 use std::{process::exit, str::FromStr};
 
+use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
 
 use darkfi::{
@@ -10,7 +11,6 @@ use darkfi::{
         note::{EncryptedNote, Note},
     },
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
-    serial::{deserialize, serialize},
     Result,
 };
 

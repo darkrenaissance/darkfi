@@ -1,7 +1,8 @@
+use darkfi_serial::{SerialDecodable, SerialEncodable};
+
 use crate::{
     crypto::{address::Address, keypair::PublicKey, schnorr::Signature},
     net,
-    serial::{SerialDecodable, SerialEncodable},
 };
 
 /// This struct represents a tuple of the form:

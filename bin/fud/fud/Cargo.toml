@@ -12,6 +12,7 @@ categories = []
 
 [dependencies]
 darkfi = {path = "../../../", features = ["dht", "rpc"]}
+darkfi-serial = {path = "../../../src/serial"}
 
 # Async
 async-std = "1.12.0"

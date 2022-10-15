@@ -1,9 +1,11 @@
+use std::time::Instant;
+
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use rand::rngs::OsRng;
-use std::time::Instant;
 
 use super::{
     nullifier::Nullifier,
@@ -20,7 +22,6 @@ use crate::{
         },
         util::poseidon_hash,
     },
-    serial::{SerialDecodable, SerialEncodable},
     zk::circuit::burn_contract::BurnContract,
     Result,
 };

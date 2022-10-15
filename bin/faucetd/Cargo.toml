@@ -16,6 +16,7 @@ bs58 = "0.4.0"
 chrono = "0.4.22"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 darkfi = {path = "../../", features = ["blockchain", "wallet", "rpc", "net", "node"]}
+darkfi-serial = {path = "../../src/serial"}
 easy-parallel = "3.2.0"
 hex = "0.4.3"
 lazy-init = "0.5.1"

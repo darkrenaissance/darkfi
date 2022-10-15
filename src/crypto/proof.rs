@@ -1,3 +1,4 @@
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::{
     plonk,
     plonk::{Circuit, SingleVerifier},
@@ -7,10 +8,7 @@ use halo2_proofs::{
 use pasta_curves::vesta;
 use rand::RngCore;
 
-use crate::{
-    crypto::types::DrkCircuitField,
-    serial::{SerialDecodable, SerialEncodable},
-};
+use crate::crypto::types::DrkCircuitField;
 
 // TODO: this API needs rework. It's not very good.
 // keygen_pk() takes a VerifyingKey by value,

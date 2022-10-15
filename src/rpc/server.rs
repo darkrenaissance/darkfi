@@ -7,9 +7,9 @@ use url::Url;
 
 use super::jsonrpc::{JsonRequest, JsonResult};
 use crate::{
-    net::{
-        transport::Transport, TcpTransport, TorTransport, TransportListener, TransportName,
-        TransportStream, UnixTransport,
+    net::transport::{
+        TcpTransport, TorTransport, Transport, TransportListener, TransportName, TransportStream,
+        UnixTransport,
     },
     Error, Result,
 };

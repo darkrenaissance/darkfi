@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use darkfi_serial::{deserialize, serialize};
 use dryoc::{
     classic::crypto_secretbox::{crypto_secretbox_easy, crypto_secretbox_open_easy, Key, Nonce},
     constants::CRYPTO_SECRETBOX_MACBYTES,
@@ -12,11 +13,7 @@ use fxhash::FxHashMap;
 use log::{error, info, warn};
 use unicode_segmentation::UnicodeSegmentation;
 
-use darkfi::{
-    serial::{deserialize, serialize},
-    util::path::expand_path,
-    Error, Result,
-};
+use darkfi::{util::path::expand_path, Error, Result};
 
 use crate::{Args, EncryptedPatch, Patch};
 

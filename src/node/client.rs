@@ -15,7 +15,6 @@ use crate::{
         proof::ProvingKey,
         types::DrkTokenId,
     },
-    serial::Encodable,
     tx::{
         builder::{
             TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderInputInfo,
@@ -129,12 +128,10 @@ impl Client {
 
         outputs.push(TransactionBuilderOutputInfo { value, token_id, public: pubkey });
         let builder = TransactionBuilder { clear_inputs, inputs, outputs };
-        let mut tx_data = vec![];
 
         let mint_pk = self.mint_pk.get_or_create(Client::build_mint_pk);
         let burn_pk = self.burn_pk.get_or_create(Client::build_burn_pk);
         let tx = builder.build(mint_pk, burn_pk)?;
-        tx.encode(&mut tx_data)?;
 
         // Check if state transition is valid before broadcasting
         debug!("build_slab_from_tx(): Checking if state transition is valid");

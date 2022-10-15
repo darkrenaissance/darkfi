@@ -1,3 +1,4 @@
+use darkfi_serial::serialize;
 use group::ff::Field;
 use rand::rngs::OsRng;
 
@@ -19,7 +20,6 @@ use crate::{
             DrkValueBlind,
         },
     },
-    serial::Encodable,
     Result,
 };
 
@@ -179,14 +179,12 @@ impl TransactionBuilder {
         }
 
         let partial_tx = PartialTransaction { clear_inputs, inputs, outputs };
-
-        let mut unsigned_tx_data = vec![];
-        partial_tx.encode(&mut unsigned_tx_data)?;
+        let unsigned_tx_data = serialize(&partial_tx);
 
         let mut clear_inputs = vec![];
         for (input, info) in partial_tx.clear_inputs.into_iter().zip(self.clear_inputs) {
             let secret = info.signature_secret;
-            let signature = secret.sign(&unsigned_tx_data[..]);
+            let signature = secret.sign(&unsigned_tx_data);
             let input = TransactionClearInput::from_partial(input, signature);
             clear_inputs.push(input);
         }
@@ -195,7 +193,7 @@ impl TransactionBuilder {
         for (input, signature_secret) in
             partial_tx.inputs.into_iter().zip(signature_secrets.into_iter())
         {
-            let signature = signature_secret.sign(&unsigned_tx_data[..]);
+            let signature = signature_secret.sign(&unsigned_tx_data);
             let input = TransactionInput::from_partial(input, signature);
             inputs.push(input);
         }

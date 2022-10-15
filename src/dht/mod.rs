@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use async_std::sync::{Arc, RwLock};
 use chrono::Utc;
+use darkfi_serial::serialize;
 use futures::{select, FutureExt};
-use fxhash::FxHashMap;
 use log::{debug, error, warn};
 use rand::Rng;
 use smol::Executor;
@@ -11,7 +11,6 @@ use smol::Executor;
 use crate::{
     net,
     net::P2pPtr,
-    serial::serialize,
     util::async_util::sleep,
     Error::{NetworkNotConnected, UnknownKey},
     Result,
@@ -38,9 +37,9 @@ pub struct Dht {
     /// Daemon id
     pub id: blake3::Hash,
     /// Daemon hasmap
-    pub map: FxHashMap<blake3::Hash, Vec<u8>>,
+    pub map: HashMap<blake3::Hash, Vec<u8>>,
     /// Network lookup map, containing nodes that holds each key
-    pub lookup: FxHashMap<blake3::Hash, HashSet<blake3::Hash>>,
+    pub lookup: HashMap<blake3::Hash, HashSet<blake3::Hash>>,
     /// P2P network pointer
     pub p2p: P2pPtr,
     /// Channel to receive responses from P2P
@@ -49,12 +48,12 @@ pub struct Dht {
     stop_signal: smol::channel::Receiver<()>,
     /// Daemon seen requests/responses ids and timestamp,
     /// to prevent rebroadcasting and loops
-    pub seen: FxHashMap<blake3::Hash, i64>,
+    pub seen: HashMap<blake3::Hash, i64>,
 }
 
 impl Dht {
     pub async fn new(
-        initial: Option<FxHashMap<blake3::Hash, HashSet<blake3::Hash>>>,
+        initial: Option<HashMap<blake3::Hash, HashSet<blake3::Hash>>>,
         p2p_ptr: P2pPtr,
         stop_signal: smol::channel::Receiver<()>,
         ex: Arc<Executor<'_>>,
@@ -63,14 +62,14 @@ impl Dht {
         let mut rng = rand::thread_rng();
         let n: u16 = rng.gen();
         let id = blake3::hash(&serialize(&n));
-        let map = FxHashMap::default();
+        let map = HashMap::default();
         let lookup = match initial {
             Some(l) => l,
-            None => FxHashMap::default(),
+            None => HashMap::default(),
         };
         let p2p = p2p_ptr.clone();
         let (p2p_send_channel, p2p_recv_channel) = smol::channel::unbounded::<KeyResponse>();
-        let seen = FxHashMap::default();
+        let seen = HashMap::default();
 
         let dht = Arc::new(RwLock::new(Dht {
             id,

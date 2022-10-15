@@ -1,8 +1,8 @@
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use pasta_curves::pallas;
 
 use darkfi::{
     crypto::{keypair::PublicKey, types::DrkCircuitField},
-    serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
 

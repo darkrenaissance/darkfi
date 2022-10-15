@@ -4,6 +4,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use halo2_proofs::{arithmetic::Field, pasta::group::ff::PrimeField};
 use rand::rngs::OsRng;
 use url::Url;
@@ -27,7 +28,6 @@ use darkfi::{
         BurnRevealedValues, MintRevealedValues, Proof,
     },
     rpc::client::RpcClient,
-    serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable},
     tx::{
         partial::{PartialTransaction, PartialTransactionInput},
         Transaction, TransactionInput, TransactionOutput,
@@ -425,8 +425,7 @@ async fn join(endpoint: Url, d0: PartialSwapData, d1: PartialSwapData) -> Result
     let outputs = vec![output0, output1];
 
     let partial_tx = PartialTransaction { clear_inputs: vec![], inputs, outputs };
-    let mut unsigned_tx_data = vec![];
-    partial_tx.encode(&mut unsigned_tx_data)?;
+    let unsigned_tx_data = serialize(&partial_tx);
 
     let mut inputs = vec![];
     let mut signed: bool;

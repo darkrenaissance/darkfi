@@ -3,11 +3,10 @@ name = "daod"
 version = "0.3.0"
 edition = "2021"
 
-[dependencies.darkfi]
-path = "../../"
-features = ["rpc", "crypto", "tx", "node"]
-
 [dependencies]
+darkfi = {path = "../../", features = ["rpc", "crypto", "tx", "node"]}
+darkfi-serial = {path = "../../src/serial"}
+
 # Async
 smol = "1.2.5"
 futures = "0.3.24"

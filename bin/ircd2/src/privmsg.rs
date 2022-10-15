@@ -1,6 +1,6 @@
 use std::io;
 
-use darkfi::serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable};
+use darkfi_serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable};
 
 #[derive(SerialEncodable, SerialDecodable, Clone)]
 pub struct PrivMsgEvent {

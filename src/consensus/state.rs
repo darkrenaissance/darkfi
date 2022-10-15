@@ -7,6 +7,7 @@ use std::{
 
 use async_std::sync::{Arc, Mutex, RwLock};
 use chrono::{NaiveDateTime, Utc};
+use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info, warn};
@@ -31,7 +32,6 @@ use crate::{
         state::{state_transition, ProgramState, StateUpdate},
         Client, MemoryState, State,
     },
-    serial::{serialize, SerialDecodable, SerialEncodable},
     tx::Transaction,
     util::time::Timestamp,
     Result,

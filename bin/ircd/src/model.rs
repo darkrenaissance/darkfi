@@ -1,13 +1,11 @@
 use std::{cmp::Ordering, fmt, io};
 
 use async_std::sync::Arc;
+use darkfi_serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable};
 use fxhash::FxHashMap;
 use ripemd::{Digest, Ripemd256};
 
-use darkfi::{
-    serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable},
-    Error, Result,
-};
+use darkfi::{Error, Result};
 
 use crate::settings::get_current_time;
 

@@ -1,3 +1,4 @@
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
     group::{ff::Field, Group, GroupEncoding},
@@ -5,13 +6,10 @@ use pasta_curves::{
 };
 use rand::rngs::OsRng;
 
-use crate::{
-    crypto::{
-        constants::{NullifierK, DRK_SCHNORR_DOMAIN},
-        keypair::{PublicKey, SecretKey},
-        util::{hash_to_scalar, mod_r_p},
-    },
-    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
+use crate::crypto::{
+    constants::{NullifierK, DRK_SCHNORR_DOMAIN},
+    keypair::{PublicKey, SecretKey},
+    util::{hash_to_scalar, mod_r_p},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
@@ -50,52 +48,6 @@ impl SchnorrPublic for PublicKey {
     fn verify(&self, message: &[u8], signature: &Signature) -> bool {
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
         NullifierK.generator() * signature.response - self.0 * challenge == signature.commit
-    }
-}
-
-#[cfg(feature = "serde")]
-impl serde::Serialize for Signature {
-    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut bytes = vec![];
-        self.encode(&mut bytes).unwrap();
-        let hex_repr = hex::encode(&bytes);
-        serializer.serialize_str(&hex_repr)
-    }
-}
-
-#[cfg(feature = "serde")]
-struct SignatureVisitor;
-
-#[cfg(feature = "serde")]
-impl<'de> serde::de::Visitor<'de> for SignatureVisitor {
-    type Value = Signature;
-
-    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
-        formatter.write_str("hex string")
-    }
-
-    fn visit_str<E>(self, value: &str) -> core::result::Result<Signature, E>
-    where
-        E: serde::de::Error,
-    {
-        let bytes = hex::decode(value).unwrap();
-        let mut r = std::io::Cursor::new(bytes);
-        let decoded: Signature = Signature::decode(&mut r).unwrap();
-        Ok(decoded)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for Signature {
-    fn deserialize<D>(deserializer: D) -> core::result::Result<Signature, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = deserializer.deserialize_str(SignatureVisitor).unwrap();
-        Ok(bytes)
     }
 }
 

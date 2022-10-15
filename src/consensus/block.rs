@@ -1,14 +1,14 @@
 use std::fmt;
 
-use super::{Metadata, BLOCK_MAGIC_BYTES, BLOCK_VERSION};
+use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use pasta_curves::pallas;
 
+use super::{Metadata, BLOCK_MAGIC_BYTES, BLOCK_VERSION};
 use crate::{
     crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode},
     net,
-    serial::{serialize, SerialDecodable, SerialEncodable},
     tx::Transaction,
     util::time::Timestamp,
 };

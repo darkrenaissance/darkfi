@@ -1,6 +1,7 @@
+use darkfi_serial::{deserialize, serialize};
+
 use crate::{
     consensus::{Block, Metadata},
-    serial::{deserialize, serialize},
     util::time::Timestamp,
     Error, Result,
 };

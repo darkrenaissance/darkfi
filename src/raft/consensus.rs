@@ -5,18 +5,14 @@ use async_std::{
     task::sleep,
 };
 use chrono::Utc;
+use darkfi_serial::{deserialize, serialize, Decodable, Encodable};
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{debug, error, warn};
 use rand::{rngs::OsRng, Rng, RngCore};
 use smol::Executor;
 
-use crate::{
-    net,
-    serial::{deserialize, serialize, Decodable, Encodable},
-    util::gen_id,
-    Error, Result,
-};
+use crate::{net, util::gen_id, Error, Result};
 
 use super::{
     p2p_send_loop,

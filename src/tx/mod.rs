@@ -1,5 +1,6 @@
 use std::io;
 
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable, VarInt};
 use group::Group;
 use log::error;
 
@@ -16,7 +17,6 @@ use crate::{
         util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
-    serial::{Encodable, SerialDecodable, SerialEncodable, VarInt},
     Result, VerifyFailed, VerifyResult,
 };
 

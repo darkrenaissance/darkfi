@@ -1,8 +1,7 @@
 use std::{io, str::FromStr};
 
+use darkfi_serial::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
-
-use crate::serial::{Decodable, Encodable};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum NetworkName {

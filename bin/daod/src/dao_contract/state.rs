@@ -1,12 +1,10 @@
 use std::{any::Any, collections::HashMap};
 
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{group::Group, pallas};
 
-use darkfi::{
-    crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode, nullifier::Nullifier},
-    serial::{SerialDecodable, SerialEncodable},
-};
+use darkfi::crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode, nullifier::Nullifier};
 
 use crate::demo::HashableBase;
 

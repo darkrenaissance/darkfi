@@ -1,12 +1,10 @@
 use std::time::UNIX_EPOCH;
 
 use chrono::{NaiveDateTime, Utc};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    serial::{SerialDecodable, SerialEncodable},
-    Result,
-};
+use crate::Result;
 
 /// Wrapper struct to represent [`chrono`] UTC timestamps.
 #[derive(

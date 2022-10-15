@@ -1,8 +1,8 @@
 use std::any::{Any, TypeId};
 
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::Tree;
 use log::{debug, error};
-
 use pasta_curves::{group::Group, pallas};
 
 use darkfi::{
@@ -15,7 +15,6 @@ use darkfi::{
         util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues,
     },
-    serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
 

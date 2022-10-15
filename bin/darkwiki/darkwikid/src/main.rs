@@ -102,10 +102,10 @@ struct DarkWiki {
     settings: DarkWikiSettings,
     #[allow(clippy::type_complexity)]
     rpc: (
-        async_channel::Sender<Vec<Vec<Patch>>>,
-        async_channel::Receiver<(String, bool, Vec<String>)>,
+        smol::channel::Sender<Vec<Vec<Patch>>>,
+        smol::channel::Receiver<(String, bool, Vec<String>)>,
     ),
-    raft: (async_channel::Sender<EncryptedPatch>, async_channel::Receiver<EncryptedPatch>),
+    raft: (smol::channel::Sender<EncryptedPatch>, smol::channel::Receiver<EncryptedPatch>),
 }
 
 impl DarkWiki {
@@ -483,7 +483,7 @@ impl DarkWiki {
 async fn handle_signals(
     mut signals: Signals,
     cfg_path: PathBuf,
-    term_tx: async_channel::Sender<()>,
+    term_tx: smol::channel::Sender<()>,
 ) {
     debug!("Started signal handler");
     while let Some(signal) = signals.next().await {
@@ -558,7 +558,7 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     // Signal handling for config reload and graceful termination.
     let signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
     let handle = signals.handle();
-    let (term_tx, term_rx) = async_channel::bounded::<()>(1);
+    let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
     let signals_task = task::spawn(handle_signals(signals, cfg_path.clone(), term_tx));
     info!("Set up signal handling");
 
@@ -573,8 +573,8 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
         }
     }
 
-    let (rpc_tx, rpc_rx) = async_channel::unbounded::<(String, bool, Vec<String>)>();
-    let (notify_tx, notify_rx) = async_channel::unbounded::<Vec<Vec<Patch>>>();
+    let (rpc_tx, rpc_rx) = smol::channel::unbounded::<(String, bool, Vec<String>)>();
+    let (notify_tx, notify_rx) = smol::channel::unbounded::<Vec<Vec<Patch>>>();
 
     // ===============
     // JSON-RPC server
@@ -597,7 +597,7 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     // =========
     let mut net_settings = args.net.clone();
     net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
-    let (p2p_tx, p2p_rx) = async_channel::unbounded::<NetMsg>();
+    let (p2p_tx, p2p_rx) = smol::channel::unbounded::<NetMsg>();
     let p2p = net::P2p::new(net_settings.into()).await;
     let registry = p2p.protocol_registry();
 
@@ -627,7 +627,7 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
         })
         .detach();
 
-    let (raft_term_tx, raft_term_rx) = async_channel::bounded::<()>(1);
+    let (raft_term_tx, raft_term_rx) = smol::channel::bounded::<()>(1);
     let _p2p = p2p.clone();
     let _ex = executor.clone();
     executor

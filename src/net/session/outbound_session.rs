@@ -9,7 +9,7 @@ use smol::Executor;
 use url::Url;
 
 use crate::{
-    net::{message, TransportName},
+    net::{message, transport::TransportName},
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     util::async_util,
     Error, Result,

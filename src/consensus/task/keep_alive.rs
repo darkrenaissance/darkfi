@@ -1,4 +1,5 @@
 use async_std::sync::Arc;
+use darkfi_serial::serialize;
 use log::{debug, error};
 use rand::Rng;
 use smol::Executor;
@@ -7,7 +8,6 @@ use crate::{
     consensus::{state::QUARANTINE_DURATION, KeepAlive, ValidatorStatePtr},
     crypto::schnorr::SchnorrSecret,
     net::P2pPtr,
-    serial::serialize,
     util::async_util::sleep,
     Result,
 };

@@ -1,3 +1,4 @@
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
 
@@ -12,7 +13,6 @@ use darkfi::{
             DrkValueBlind,
         },
     },
-    serial::{SerialDecodable, SerialEncodable},
     Result,
 };
 

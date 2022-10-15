@@ -1,8 +1,6 @@
-use crate::{
-    crypto::merkle_node::MerkleNode,
-    serial::{deserialize, serialize},
-    Result,
-};
+use darkfi_serial::{deserialize, serialize};
+
+use crate::{crypto::merkle_node::MerkleNode, Result};
 
 const SLED_ROOTS_TREE: &[u8] = b"_merkleroots";
 

@@ -1,12 +1,9 @@
 use std::str::FromStr;
 
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use sha2::Digest;
 
-use crate::{
-    crypto::keypair::PublicKey,
-    serial::{SerialDecodable, SerialEncodable},
-    Error, Result,
-};
+use crate::{crypto::keypair::PublicKey, Error, Result};
 
 enum AddressType {
     Payment = 0,

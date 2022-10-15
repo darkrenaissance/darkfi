@@ -1,4 +1,5 @@
 use crypto_api_chachapoly::ChachaPolyIetf;
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -6,7 +7,6 @@ use darkfi::{
         diffie_hellman::{kdf_sapling, sapling_ka_agree},
         keypair::{PublicKey, SecretKey},
     },
-    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
 

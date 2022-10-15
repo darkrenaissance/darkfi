@@ -1,9 +1,7 @@
 use std::any::{Any, TypeId};
 
-use darkfi::{
-    crypto::{keypair::PublicKey, types::DrkCircuitField},
-    serial::{Encodable, SerialDecodable, SerialEncodable},
-};
+use darkfi::crypto::{keypair::PublicKey, types::DrkCircuitField};
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
     dao_contract::{DaoBulla, State, CONTRACT_ID},

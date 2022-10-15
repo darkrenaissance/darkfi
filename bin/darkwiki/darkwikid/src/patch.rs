@@ -1,14 +1,12 @@
 use std::{cmp::Ordering, io};
 
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt};
 use dryoc::constants::CRYPTO_SECRETBOX_NONCEBYTES;
 use serde::{Deserialize, Serialize};
 
-use darkfi::{
-    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    util::{
-        cli::{fg_green, fg_red},
-        time::Timestamp,
-    },
+use darkfi::util::{
+    cli::{fg_green, fg_red},
+    time::Timestamp,
 };
 
 use crate::util::str_to_chars;

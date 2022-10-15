@@ -1,13 +1,14 @@
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
+use darkfi_serial::serialize;
 use fxhash::FxHashMap;
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
 use smol::Executor;
 
 use super::primitives::{NetMsg, NetMsgMethod, NodeId, NodeIdMsg};
-use crate::{net, serial::serialize, Result};
+use crate::{net, Result};
 
 pub struct ProtocolRaft {
     id: NodeId,

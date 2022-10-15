@@ -1,11 +1,12 @@
 use std::str::Chars;
 
+use darkfi_serial::{serialize, VarInt};
+
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Witness},
     error::ErrorEmitter,
     types::StackType,
 };
-use crate::serial::{serialize, VarInt};
 
 /// Version of the binary
 pub const BINARY_VERSION: u8 = 2;

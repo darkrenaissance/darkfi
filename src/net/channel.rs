@@ -1,5 +1,4 @@
 use async_std::sync::{Arc, Mutex};
-
 use futures::{
     io::{ReadHalf, WriteHalf},
     AsyncReadExt,
@@ -10,16 +9,16 @@ use serde_json::json;
 use smol::Executor;
 use url::Url;
 
+use super::{
+    message,
+    message_subscriber::{MessageSubscription, MessageSubsystem},
+    transport::TransportStream,
+    Session, SessionBitflag, SessionWeakPtr,
+};
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     util::time::NanoTimestamp,
     Error, Result,
-};
-
-use super::{
-    message,
-    message_subscriber::{MessageSubscription, MessageSubsystem},
-    Session, SessionBitflag, SessionWeakPtr, TransportStream,
 };
 
 /// Atomic pointer to async channel.

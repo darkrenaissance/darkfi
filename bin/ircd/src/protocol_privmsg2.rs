@@ -2,17 +2,13 @@ use std::collections::VecDeque;
 
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use fxhash::FxHashMap;
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
 use smol::Executor;
 
-use darkfi::{
-    net,
-    serial::{SerialDecodable, SerialEncodable},
-    util::async_util::sleep,
-    Result,
-};
+use darkfi::{net, util::async_util::sleep, Result};
 
 use crate::{
     model::{Event, EventId, Model},

@@ -1,10 +1,9 @@
 use std::{cmp::Ordering, fmt};
 
 use async_std::sync::{Arc, Mutex};
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use fxhash::FxHashMap;
 use ripemd::{Digest, Ripemd256};
-
-use darkfi::serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
     events_queue::EventsQueuePtr,

@@ -1,11 +1,9 @@
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt};
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use log::debug;
 use url::Url;
 
-use crate::{
-    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Error, Result,
-};
+use crate::{Error, Result};
 
 const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
 

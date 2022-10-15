@@ -1,18 +1,17 @@
-use async_std::sync::{Arc, Mutex};
 use std::{env, fs};
 
+use async_std::sync::{Arc, Mutex};
 use log::{error, info};
 use smol::Executor;
 use url::Url;
 
+use super::{
+    transport::{TcpTransport, TorTransport, Transport, TransportListener, TransportName},
+    Channel, ChannelPtr, SessionWeakPtr,
+};
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     Error, Result,
-};
-
-use super::{
-    Channel, ChannelPtr, SessionWeakPtr, TcpTransport, TorTransport, Transport, TransportListener,
-    TransportName,
 };
 
 /// Atomic pointer to Acceptor class.

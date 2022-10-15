@@ -1,3 +1,14 @@
+use darkfi_serial::{SerialDecodable, SerialEncodable};
+use halo2_proofs::circuit::Value;
+use incrementalmerkletree::Hashable;
+use log::debug;
+use pasta_curves::{
+    arithmetic::CurveAffine,
+    group::{ff::Field, Curve},
+    pallas,
+};
+use rand::rngs::OsRng;
+
 use darkfi::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
@@ -6,17 +17,8 @@ use darkfi::{
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
-    serial::{SerialDecodable, SerialEncodable},
     zk::vm::{Witness, ZkCircuit},
 };
-use halo2_proofs::circuit::Value;
-use incrementalmerkletree::Hashable;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::Field, Curve},
-    pallas,
-};
-use rand::rngs::OsRng;
 
 use crate::{
     dao_contract::{
@@ -28,8 +30,6 @@ use crate::{
     demo::{FuncCall, ZkContractInfo, ZkContractTable},
     money_contract, note,
 };
-
-use log::debug;
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct Note {

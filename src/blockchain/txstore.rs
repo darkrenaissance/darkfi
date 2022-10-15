@@ -1,8 +1,6 @@
-use crate::{
-    serial::{deserialize, serialize},
-    tx::Transaction,
-    Error, Result,
-};
+use darkfi_serial::{deserialize, serialize};
+
+use crate::{tx::Transaction, Error, Result};
 
 const SLED_TX_TREE: &[u8] = b"_transactions";
 

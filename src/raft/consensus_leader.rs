@@ -1,9 +1,7 @@
+use darkfi_serial::{serialize, Decodable, Encodable};
 use fxhash::FxHashMap;
 
-use crate::{
-    serial::{serialize, Decodable, Encodable},
-    Result,
-};
+use crate::Result;
 
 use super::{
     primitives::{LogRequest, LogResponse, Logs, NetMsgMethod, NodeId, Role},

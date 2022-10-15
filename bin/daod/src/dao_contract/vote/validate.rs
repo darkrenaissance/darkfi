@@ -1,17 +1,19 @@
-use darkfi::{
-    crypto::{
-        keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier, types::DrkCircuitField,
-    },
-    serial::{Encodable, SerialDecodable, SerialEncodable},
-    Error as DarkFiError,
-};
+use std::any::{Any, TypeId};
+
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use log::error;
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{Curve, Group},
     pallas,
 };
-use std::any::{Any, TypeId};
+
+use darkfi::{
+    crypto::{
+        keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier, types::DrkCircuitField,
+    },
+    Error as DarkFiError,
+};
 
 use crate::{
     dao_contract,

@@ -1,15 +1,13 @@
 use std::path::{Path, PathBuf};
 
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use darkfi::{
-    serial::{SerialDecodable, SerialEncodable},
-    util::{
-        file::{load_json_file, save_json_file},
-        gen_id,
-        time::Timestamp,
-    },
+use darkfi::util::{
+    file::{load_json_file, save_json_file},
+    gen_id,
+    time::Timestamp,
 };
 
 use crate::{

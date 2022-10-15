@@ -1,4 +1,5 @@
 use crypto_api_chachapoly::ChachaPolyIetf;
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
 use crate::{
@@ -7,7 +8,6 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
     },
-    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
 
@@ -58,6 +58,7 @@ impl EncryptedNote {
         let key = kdf_sapling(&shared_secret, &self.ephem_public);
 
         let mut plaintext = vec![0; self.ciphertext.len()];
+
         assert_eq!(
             ChachaPolyIetf::aead_cipher()
                 .open_to(&mut plaintext, &self.ciphertext, &[], key.as_ref(), &[0u8; 12])

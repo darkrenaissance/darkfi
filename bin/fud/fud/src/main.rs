@@ -2,6 +2,7 @@ use std::{collections::HashSet, fs, path::PathBuf};
 
 use async_std::sync::Arc;
 use async_trait::async_trait;
+use darkfi_serial::serialize;
 use log::{debug, error, info, warn};
 use serde_json::{json, Value};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
@@ -18,7 +19,6 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
-    serial::serialize,
     util::path::expand_path,
     Result,
 };

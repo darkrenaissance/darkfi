@@ -10,6 +10,7 @@ use crypto_box::{
     aead::{Aead, AeadCore},
     SalsaBox, SecretKey,
 };
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{debug, error, info, warn};
@@ -19,7 +20,6 @@ use darkfi::{
     async_daemonize, net,
     raft::{NetMsg, ProtocolRaft, Raft, RaftSettings},
     rpc::server::listen_and_serve,
-    serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
     util::path::expand_path,
     Error, Result,
 };

@@ -1,13 +1,10 @@
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::debug;
 use smol::Executor;
 
-use darkfi::{
-    net,
-    serial::{SerialDecodable, SerialEncodable},
-    Result,
-};
+use darkfi::{net, Result};
 
 use crate::{buffers::SeenIds, Privmsg};
 

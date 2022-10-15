@@ -1,10 +1,8 @@
 use chrono::Utc;
+use darkfi_serial::{serialize, Decodable, Encodable};
 use log::info;
 
-use crate::{
-    serial::{serialize, Decodable, Encodable},
-    Result,
-};
+use crate::Result;
 
 use super::{
     primitives::{NetMsgMethod, Role, VoteRequest, VoteResponse},

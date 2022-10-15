@@ -1,11 +1,9 @@
 use std::io;
 
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use fxhash::FxHashMap;
 
-use crate::{
-    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
-    Error, Result,
-};
+use crate::{Error, Result};
 
 pub type Channel<T> = (smol::channel::Sender<T>, smol::channel::Receiver<T>);
 pub type Sender = (smol::channel::Sender<NetMsg>, smol::channel::Receiver<NetMsg>);

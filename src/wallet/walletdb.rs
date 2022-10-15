@@ -1,6 +1,7 @@
 use std::{fs::create_dir_all, path::Path, str::FromStr, time::Duration};
 
 use async_std::sync::Arc;
+use darkfi_serial::{deserialize, serialize};
 use group::ff::PrimeField;
 use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, error, info, LevelFilter};
@@ -21,7 +22,6 @@ use crate::{
         nullifier::Nullifier,
         types::DrkTokenId,
     },
-    serial::{deserialize, serialize},
     util::path::expand_path,
     Error::{WalletEmptyPassword, WalletTreeExists},
     Result,

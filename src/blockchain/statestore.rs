@@ -1,4 +1,6 @@
-use crate::{crypto::contract_id::ContractId, serial::serialize, Result};
+use darkfi_serial::serialize;
+
+use crate::{crypto::contract_id::ContractId, Result};
 
 const SLED_STATES_TREE: &[u8] = b"_states";
 

@@ -1,3 +1,4 @@
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{Curve, Group},
@@ -6,7 +7,6 @@ use pasta_curves::{
 
 use darkfi::{
     crypto::{coin::Coin, keypair::PublicKey, types::DrkCircuitField},
-    serial::{Encodable, SerialDecodable, SerialEncodable},
     Error as DarkFiError,
 };
 

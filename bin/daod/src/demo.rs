@@ -6,6 +6,7 @@ use std::{
     time::Instant,
 };
 
+use darkfi_serial::Encodable;
 use incrementalmerkletree::Tree;
 use log::debug;
 use pasta_curves::{
@@ -27,7 +28,6 @@ use darkfi::{
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
-    serial::Encodable,
     zk::{
         circuit::{BurnContract, MintContract},
         vm::ZkCircuit,

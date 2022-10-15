@@ -1,6 +1,7 @@
-use super::Participant;
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
+use super::Participant;
 use crate::{
     crypto::{
         address::Address,
@@ -11,7 +12,6 @@ use crate::{
         schnorr::Signature,
         types::*,
     },
-    serial::{SerialDecodable, SerialEncodable},
     VerifyResult,
 };
 

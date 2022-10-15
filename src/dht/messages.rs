@@ -1,11 +1,9 @@
-use fxhash::FxHashMap;
-use rand::Rng;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use crate::{
-    net,
-    serial::{serialize, SerialDecodable, SerialEncodable},
-};
+use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
+use rand::Rng;
+
+use crate::net;
 
 /// This struct represents a DHT key request
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
@@ -127,11 +125,11 @@ pub struct LookupMapResponse {
     /// Request id
     pub id: blake3::Hash,
     /// Daemon lookup map, containing nodes that holds each key
-    pub lookup: FxHashMap<blake3::Hash, HashSet<blake3::Hash>>,
+    pub lookup: HashMap<blake3::Hash, HashSet<blake3::Hash>>,
 }
 
 impl LookupMapResponse {
-    pub fn new(lookup: FxHashMap<blake3::Hash, HashSet<blake3::Hash>>) -> Self {
+    pub fn new(lookup: HashMap<blake3::Hash, HashSet<blake3::Hash>>) -> Self {
         // Generate a random id
         let mut rng = rand::thread_rng();
         let n: u16 = rng.gen();

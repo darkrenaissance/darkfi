@@ -1,6 +1,5 @@
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::PrimeField, pallas};
-
-use crate::serial::{SerialDecodable, SerialEncodable};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Nullifier(pallas::Base);

@@ -1,3 +1,4 @@
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
 use pasta_curves::{
@@ -14,7 +15,6 @@ use darkfi::{
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
-    serial::{SerialDecodable, SerialEncodable},
     zk::vm::{Witness, ZkCircuit},
 };
 

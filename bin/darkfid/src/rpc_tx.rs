@@ -1,12 +1,12 @@
 use std::str::FromStr;
 
+use darkfi_serial::{deserialize, serialize};
 use log::{error, warn};
 use serde_json::{json, Value};
 
 use darkfi::{
     crypto::{address::Address, keypair::PublicKey, token_id},
     rpc::jsonrpc::{ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
-    serial::{deserialize, serialize},
     tx::Transaction,
 };
 
