@@ -1164,7 +1164,6 @@ dependencies = [
  "darkfi-derive-internal",
  "darkfi-sdk",
  "dashu",
- "dashu-macros",
  "dirs",
  "ed25519-compact",
  "env_logger",

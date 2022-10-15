@@ -1,9 +1,7 @@
 use pasta_curves::pallas;
 use group::ff::PrimeField;
-use dashu::float::{DBig, FBig, round::{mode::{HalfAway, Zero}, Rounding::*}};
 use dashu::integer::{IBig, Sign, UBig};
 use crate::stakeholder::Float10;
-use crate::stakeholder::consts::{RADIX_BITS};
 use log::{info};
 
 pub(crate) fn fbig2ibig(f: Float10) -> IBig {
@@ -57,7 +55,6 @@ mod tests {
     use crate::stakeholder::utils::{base2ibig, fbig2base, fbig2ibig};
     use crate::stakeholder::consts::{RADIX_BITS};
     use pasta_curves::pallas;
-    use dashu::float::{DBig, FBig, round::{mode::{HalfAway, Zero}, Rounding::*}};
     use dashu::integer::{IBig};
     use crate::stakeholder::Float10;
     #[test]

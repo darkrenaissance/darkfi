@@ -55,11 +55,6 @@ use pasta_curves::pallas;
 
 use group::ff::PrimeField;
 
-
-use dashu::float::{DBig, FBig, round::{mode::{HalfAway, Zero}, Rounding::*}};
-use dashu::integer::{IBig};
-use dashu_macros::fbig;
-
 pub mod epoch;
 pub use epoch::{Epoch, EpochConsensus};
 
@@ -524,14 +519,10 @@ impl Stakeholder {
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, eta);
         // total stake
-        let num_slots = self.workspace.sl;
-        let epochs = self.workspace.e;
-        let epoch_len = self.epoch_consensus.get_epoch_len();
-        // TODO sigma scalar for tunning target function
-        // it's value is dependent on the tekonomics,
-        // set to one untill then.
-        let reward = pallas::Base::one();
-        let num_slots = num_slots + epochs * epoch_len;
+        // let rel_sl = self.workspace.sl;
+        // let epochs = self.workspace.e;
+        // let epoch_len = self.epoch_consensus.get_epoch_len();
+        // let abs_sl = rel_sl + epochs * epoch_len;
         //
         let f = self.get_f();
         let total_stake = self.epoch.consensus.total_stake(e, sl);
@@ -550,7 +541,7 @@ impl Stakeholder {
             .with_precision(RADIX_BITS)
         .value();
         */
-        let mut field_p = Float10::from_str_native(P)
+        let field_p = Float10::from_str_native(P)
             .unwrap()
             .with_precision(RADIX_BITS)
             .value();

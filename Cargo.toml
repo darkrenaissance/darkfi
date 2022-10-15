@@ -131,7 +131,6 @@ sled = {version = "0.34.7", optional = true}
 
 # big float
 dashu = { version = "0.2.0", git = "https://github.com/ertosns/dashu" } 
-dashu-macros = { version = "0.2.0",  git = "https://github.com/ertosns/dashu" }
 
 # env logger
 env_logger = "0.9.1"

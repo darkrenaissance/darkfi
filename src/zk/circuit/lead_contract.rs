@@ -285,13 +285,6 @@ impl Circuit<pallas::Base> for LeadContract {
         // load witnesses
         // ===============
 
-        // constant identity value 1
-        let one = self.load_private(
-            layouter.namespace(|| "one"),
-            config.advices[0],
-            Value::known(pallas::Base::one()),
-        )?;
-
         // prefix to the pseudo-random-function that prefix input
         // to the nullifier poseidon hash
         let prf_nullifier_prefix_base = self.load_private(
@@ -609,7 +602,6 @@ impl Circuit<pallas::Base> for LeadContract {
         let term2 = ar_chip.mul(layouter.namespace(|| "calculate term2"), &term2_1, &coin_value.clone())?;
 
         let target = ar_chip.add(layouter.namespace(|| "calculate target"), &term1, &term2)?;
-        let target = ar_chip.mul(layouter.namespace(|| ""), &one, &coin_value.clone())?;
         let target: Value<pallas::Base> = target.value().cloned();
 
         let y: Value<pallas::Base> = y_commit_base.value().cloned();
