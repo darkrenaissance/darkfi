@@ -1,6 +1,10 @@
-use std::{convert::TryFrom, str::FromStr};
+use std::{
+    convert::TryFrom,
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
     arithmetic::CurveAffine,
@@ -18,6 +22,8 @@ use crate::{
 };
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg(feature = "serde")]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct Keypair {
     pub secret: SecretKey,
     pub public: PublicKey,
@@ -36,7 +42,7 @@ impl Keypair {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, SerialDecodable, SerialEncodable)]
-pub struct SecretKey(pallas::Base);
+pub struct SecretKey(pub pallas::Base);
 
 impl SecretKey {
     pub fn random(mut rng: impl RngCore) -> Self {
@@ -119,6 +125,13 @@ impl PublicKey {
     }
 }
 
+impl Hash for PublicKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let bytes = self.0.to_affine().to_bytes();
+        bytes.hash(state);
+    }
+}
+
 impl FromStr for PublicKey {
     type Err = crate::Error;
 
@@ -130,6 +143,98 @@ impl FromStr for PublicKey {
         }
 
         Self::from_bytes(&decoded.try_into().unwrap())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for SecretKey {
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut bytes = vec![];
+        self.encode(&mut bytes).unwrap();
+        let hex_repr = hex::encode(&bytes);
+        serializer.serialize_str(&hex_repr)
+    }
+}
+
+#[cfg(feature = "serde")]
+struct SecretKeyVisitor;
+
+#[cfg(feature = "serde")]
+impl<'de> serde::de::Visitor<'de> for SecretKeyVisitor {
+    type Value = SecretKey;
+
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+        formatter.write_str("hex string")
+    }
+
+    fn visit_str<E>(self, value: &str) -> core::result::Result<SecretKey, E>
+    where
+        E: serde::de::Error,
+    {
+        let bytes = hex::decode(value).unwrap();
+        let mut r = std::io::Cursor::new(bytes);
+        let decoded: SecretKey = SecretKey::decode(&mut r).unwrap();
+        Ok(decoded)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for SecretKey {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<SecretKey, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = deserializer.deserialize_str(SecretKeyVisitor).unwrap();
+        Ok(bytes)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for PublicKey {
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut bytes = vec![];
+        self.encode(&mut bytes).unwrap();
+        let hex_repr = hex::encode(&bytes);
+        serializer.serialize_str(&hex_repr)
+    }
+}
+
+#[cfg(feature = "serde")]
+struct PublicKeyVisitor;
+
+#[cfg(feature = "serde")]
+impl<'de> serde::de::Visitor<'de> for PublicKeyVisitor {
+    type Value = PublicKey;
+
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+        formatter.write_str("hex string")
+    }
+
+    fn visit_str<E>(self, value: &str) -> core::result::Result<PublicKey, E>
+    where
+        E: serde::de::Error,
+    {
+        let bytes = hex::decode(value).unwrap();
+        let mut r = std::io::Cursor::new(bytes);
+        let decoded: PublicKey = PublicKey::decode(&mut r).unwrap();
+        Ok(decoded)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<PublicKey, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = deserializer.deserialize_str(PublicKeyVisitor).unwrap();
+        Ok(bytes)
     }
 }
 

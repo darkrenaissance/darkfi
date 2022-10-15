@@ -10,8 +10,7 @@ CARGO = cargo
 #RUSTFLAGS = -C target-cpu=native
 
 # Binaries to be built
-
-BINS = drk darkfid tau taud ircd dnetview darkotc darkwikid darkwiki
+BINS = drk darkfid tau taud ircd dnetview darkotc darkwikid darkwiki dao
 
 # Common dependencies which should force the binaries to be rebuilt
 BINDEPS = \
@@ -24,7 +23,7 @@ BINDEPS = \
 
 # ZK proofs to compile with zkas
 PROOFS = \
-	$(shell find bin/daod/proof -type f -name '*.zk') \
+	$(shell find bin/dao/daod/proof -type f -name '*.zk') \
 	$(shell find proof -type f -name '*.zk') \
 	example/simple.zk
 

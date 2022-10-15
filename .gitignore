@@ -11,7 +11,7 @@
 /tmp/*
 
 /cashierd
-/dao-cli
+/dao
 /daod
 /darkfid
 /darkotc

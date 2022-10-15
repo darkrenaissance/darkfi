@@ -2,7 +2,7 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::PrimeField, pallas};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct Nullifier(pallas::Base);
+pub struct Nullifier(pub pallas::Base);
 
 impl Nullifier {
     pub fn from_bytes(bytes: [u8; 32]) -> Option<Self> {

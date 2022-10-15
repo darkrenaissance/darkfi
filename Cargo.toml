@@ -29,8 +29,8 @@ members = [
     "bin/ircd",
     "bin/ircd2",
     "bin/dnetview",
-    "bin/daod",
-    "bin/dao-cli",
+    "bin/dao/daod",
+    "bin/dao/dao-cli",
     "bin/tau/taud",
     "bin/tau/tau-cli",
     "bin/darkwiki/darkwikid",
@@ -362,6 +362,16 @@ required-features = ["node"]
 name = "zk"
 path = "example/zk.rs"
 required-features = ["crypto"]
+
+[[example]]
+name = "dao"
+path = "example/dao/dao.rs"
+required-features = ["crypto"]
+
+[[example]]
+name = "test"
+path = "example/derive_macro_example.rs"
+required-features = ["serial"]
 
 [[example]]
 name = "lead"

@@ -1100,7 +1100,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dao-cli"
+name = "dao"
 version = "0.3.0"
 dependencies = [
  "async-channel",
@@ -1112,6 +1112,7 @@ dependencies = [
  "futures",
  "log",
  "num_cpus",
+ "prettytable-rs",
  "serde_json",
  "simplelog",
  "smol",
@@ -1126,11 +1127,13 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
+ "bs58",
  "crypto_api_chachapoly",
  "darkfi",
  "darkfi-serial",
  "easy-parallel",
  "futures",
+ "fxhash",
  "group",
  "halo2_gadgets",
  "halo2_proofs",
