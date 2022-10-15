@@ -8,7 +8,7 @@ use rand::rngs::OsRng;
 use std::{thread, time::Duration};
 
 use crate::zk::circuit::{BurnContract, LeadContract, MintContract};
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use incrementalmerkletree::{bridgetree::BridgeTree};
 
 pub mod types;
 pub mod consts;
@@ -18,7 +18,7 @@ use crate::{
     blockchain::{Blockchain},
     consensus::{
         clock::{Clock, Ticks},
-        Block, BlockInfo, Header, Metadata,
+        Block, BlockInfo, Metadata,
         LeadProof,
         ouroboros::{
             types::{Float10},
@@ -33,13 +33,12 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         leadcoin::LeadCoin,
         merkle_node::MerkleNode,
-        note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr::{SchnorrSecret},
     },
     net::{MessageSubscription, P2p, Settings, SettingsPtr},
-    node::state::{state_transition, ProgramState, StateUpdate},
+    node::state::{state_transition, ProgramState},
     tx::{
         builder::{
             TransactionBuilder, TransactionBuilderClearInputInfo, TransactionBuilderOutputInfo,

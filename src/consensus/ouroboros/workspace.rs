@@ -1,9 +1,6 @@
-use log::{debug, error, info};
-use std::fmt;
-
 use crate::{
     consensus::{
-        Block, BlockInfo, Header, Metadata,
+        BlockInfo, Header, Metadata,
     },
     tx::{
         Transaction,

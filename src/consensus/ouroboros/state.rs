@@ -8,10 +8,10 @@ use crate::{
         util::poseidon_hash,
         note::{EncryptedNote, Note},
         coin::OwnCoin,
-        proof::{ProvingKey, VerifyingKey},
+        proof::{VerifyingKey},
         keypair::{PublicKey, SecretKey},
     },
-    node::state::{state_transition, ProgramState, StateUpdate},
+    node::state::{state_transition, StateUpdate},
 };
 
 pub struct StakeholderState {
