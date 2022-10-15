@@ -326,7 +326,7 @@ required-features = ["crypto"]
 
 [[example]]
 name = "dao"
-path = "example/dao-schema-rs/dao.rs"
+path = "example/dao/dao.rs"
 required-features = ["crypto"]
 
 [[example]]
