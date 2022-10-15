@@ -22,7 +22,6 @@ use crate::crypto::{
     proof::{Proof, ProvingKey},
     types::DrkValueBlind,
     util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
-    keypair::{Keypair,SecretKey},
 
 };
 use crate::stakeholder::utils::{fbig2ibig, base2ibig};

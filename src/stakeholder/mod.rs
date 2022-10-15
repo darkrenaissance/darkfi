@@ -1,13 +1,14 @@
-use std::{fmt, thread, time::Duration};
-
+use smol::Executor;
 use async_std::sync::Arc;
 use halo2_proofs::arithmetic::Field;
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, error, info};
-use pasta_curves::{group::ff::PrimeField, pallas};
+use std::fmt;
+
 use rand::rngs::OsRng;
-use smol::Executor;
-use url::Url;
+use std::{thread, time::Duration};
+
+use crate::zk::circuit::{BurnContract, LeadContract, MintContract};
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 
 pub mod types;
 pub mod consts;
@@ -17,20 +18,21 @@ use crate::{
     blockchain::{Blockchain},
     consensus::{
         clock::{Clock, Ticks},
-        Block, BlockInfo, Header, LeadProof, Metadata,
+        Block, BlockInfo, Header, Metadata,
+        LeadProof,
     },
     crypto::{
         address::Address,
         coin::OwnCoin,
         constants::MERKLE_DEPTH,
         keypair::{PublicKey, SecretKey},
+        util::poseidon_hash,
         leadcoin::LeadCoin,
         merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
         nullifier::Nullifier,
         proof::{Proof, ProvingKey, VerifyingKey},
-        schnorr::SchnorrSecret,
-        util::poseidon_hash,
+        schnorr::{SchnorrSecret},
     },
     net::{MessageSubscription, P2p, Settings, SettingsPtr},
     node::state::{state_transition, ProgramState, StateUpdate},
@@ -41,7 +43,6 @@ use crate::{
         Transaction,
     },
     util::{path::expand_path, time::Timestamp},
-
     stakeholder::types::{Float10},
     stakeholder::consts::{RADIX_BITS, LOG_T, TREE_LEN, P},
     stakeholder::utils::{fbig2base},
@@ -61,6 +62,7 @@ use dashu_macros::fbig;
 
 pub mod epoch;
 pub use epoch::{Epoch, EpochConsensus};
+
 
 #[derive(Debug)]
 pub struct SlotWorkspace {
@@ -205,8 +207,14 @@ impl StakeholderState {
             // If it's our own coin, witness it and append to the vector.
             if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
                 let leaf_position = self.tree.witness().unwrap();
-                let nullifier = Nullifier::from(poseidon_hash::<2>([secret.inner(), note.serial]));
-                let own_coin = OwnCoin { coin, note, secret, nullifier, leaf_position };
+                let nullifier = poseidon_hash::<2>([secret.inner(), note.serial]);
+                let own_coin = OwnCoin {
+                    coin: coin,
+                    note: note,
+                    secret: secret,
+                    nullifier: Nullifier::from(nullifier),
+                    leaf_position: leaf_position
+                };
                 self.own_coins.push(own_coin);
             }
         }
@@ -357,13 +365,6 @@ impl Stakeholder {
         settings.peers.clone()
     }
 
-    /*
-    fn  new_block(&self) {
-        //TODO initialize blocks in the epoch, and add coin commitment in genesis
-        let block_info = BlockInfo::new(st, e, sl, txs, metadata, sm);
-        self.block = block_info;
-    }
-    */
 
     async fn init_network(&self) -> Result<()> {
         info!(target: LOG_T, "init_network()");

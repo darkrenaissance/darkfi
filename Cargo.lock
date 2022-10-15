@@ -1436,7 +1436,7 @@ name = "dashu-int"
 version = "0.2.0"
 source = "git+https://github.com/ertosns/dashu#744c8c546947a1988e6c0710433cd5e58d3af86f"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if",
  "dashu-base",
  "num-traits",
  "rand",
