@@ -12,7 +12,7 @@ use darkfi::{
 };
 
 use crate::{
-    contract::dao_contract::{mint::validate::CallData, state::DaoBulla, CONTRACT_ID},
+    contract::dao::{mint::validate::CallData, state::DaoBulla, CONTRACT_ID},
     util::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 

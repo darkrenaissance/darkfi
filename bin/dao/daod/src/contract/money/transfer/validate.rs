@@ -20,8 +20,8 @@ use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
     contract::{
-        dao_contract,
-        money_contract::{state::State, CONTRACT_ID},
+        dao,
+        money::{state::State, CONTRACT_ID},
     },
     note::EncryptedNote2,
     util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
@@ -122,7 +122,7 @@ pub fn state_transition(
                 // TODO: we need to change these to pallas::Base
                 // temporary workaround for now
                 // if func_call.func_id == spend_hook ...
-                if func_call.func_id == *dao_contract::exec::FUNC_ID {
+                if func_call.func_id == *dao::exec::FUNC_ID {
                     is_found = true;
                     break
                 }

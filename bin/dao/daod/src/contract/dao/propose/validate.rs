@@ -14,10 +14,7 @@ use darkfi::{
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
-    contract::{
-        dao_contract, dao_contract::State as DaoState, money_contract,
-        money_contract::state::State as MoneyState,
-    },
+    contract::{dao, dao::State as DaoState, money, money::state::State as MoneyState},
     note::EncryptedNote2,
     util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
@@ -141,13 +138,13 @@ pub fn state_transition(
 
     // Check the merkle roots for the input coins are valid
     for input in &call_data.inputs {
-        let money_state = states.lookup::<MoneyState>(*money_contract::CONTRACT_ID).unwrap();
+        let money_state = states.lookup::<MoneyState>(*money::CONTRACT_ID).unwrap();
         if !money_state.is_valid_merkle(&input.merkle_root) {
             return Err(Error::InvalidInputMerkleRoot)
         }
     }
 
-    let state = states.lookup::<DaoState>(*dao_contract::CONTRACT_ID).unwrap();
+    let state = states.lookup::<DaoState>(*dao::CONTRACT_ID).unwrap();
 
     // Is the DAO bulla generated in the ZK proof valid
     if !state.is_valid_dao_merkle(&call_data.header.dao_merkle_root) {
@@ -167,7 +164,7 @@ pub struct Update {
 
 impl UpdateBase for Update {
     fn apply(self: Box<Self>, states: &mut StateRegistry) {
-        let state = states.lookup_mut::<DaoState>(*dao_contract::CONTRACT_ID).unwrap();
+        let state = states.lookup_mut::<DaoState>(*dao::CONTRACT_ID).unwrap();
         state.add_proposal_bulla(self.proposal_bulla);
     }
 }

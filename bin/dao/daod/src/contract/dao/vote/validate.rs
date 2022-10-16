@@ -16,10 +16,7 @@ use darkfi::{
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
-    contract::{
-        dao_contract, dao_contract::State as DaoState, money_contract,
-        money_contract::state::State as MoneyState,
-    },
+    contract::{dao, dao::State as DaoState, money, money::state::State as MoneyState},
     note::EncryptedNote2,
     util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
@@ -150,7 +147,7 @@ pub fn state_transition(
     // This will be inside wasm so unwrap is fine.
     let call_data = call_data.unwrap();
 
-    let dao_state = states.lookup::<DaoState>(*dao_contract::CONTRACT_ID).unwrap();
+    let dao_state = states.lookup::<DaoState>(*dao::CONTRACT_ID).unwrap();
 
     // Check proposal_bulla exists
     let votes_info = dao_state.lookup_proposal_votes(call_data.header.proposal_bulla);
@@ -163,7 +160,7 @@ pub fn state_transition(
     let mut vote_nulls = Vec::new();
     let mut all_vote_commit = pallas::Point::identity();
     for input in &call_data.inputs {
-        let money_state = states.lookup::<MoneyState>(*money_contract::CONTRACT_ID).unwrap();
+        let money_state = states.lookup::<MoneyState>(*money::CONTRACT_ID).unwrap();
         if !money_state.is_valid_merkle(&input.merkle_root) {
             return Err(Error::InvalidInputMerkleRoot)
         }
@@ -199,7 +196,7 @@ pub struct Update {
 
 impl UpdateBase for Update {
     fn apply(mut self: Box<Self>, states: &mut StateRegistry) {
-        let state = states.lookup_mut::<DaoState>(*dao_contract::CONTRACT_ID).unwrap();
+        let state = states.lookup_mut::<DaoState>(*dao::CONTRACT_ID).unwrap();
         let votes_info = state.lookup_proposal_votes_mut(self.proposal_bulla).unwrap();
         votes_info.yes_votes_commit += self.yes_vote_commit;
         votes_info.all_votes_commit += self.all_vote_commit;

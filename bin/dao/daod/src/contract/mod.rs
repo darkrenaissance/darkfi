@@ -1,3 +1,3 @@
-pub mod dao_contract;
-pub mod example_contract;
-pub mod money_contract;
+pub mod dao;
+pub mod example;
+pub mod money;

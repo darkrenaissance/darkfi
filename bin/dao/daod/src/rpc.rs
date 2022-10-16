@@ -16,7 +16,7 @@ use darkfi::{
 };
 
 use crate::{
-    contract::money_contract::state::OwnCoin,
+    contract::money::state::OwnCoin,
     error::{server_error, RpcError},
     util::{parse_b58, DRK_ID, GOV_ID},
     Client, MoneyWallet,

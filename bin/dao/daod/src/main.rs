@@ -34,8 +34,8 @@ mod util;
 
 use crate::{
     contract::{
-        dao_contract::{self, mint::wallet::DaoParams, propose::wallet::Proposal, DaoBulla},
-        money_contract::{self, state::OwnCoin},
+        dao::{self, mint::wallet::DaoParams, propose::wallet::Proposal, DaoBulla},
+        money::{self, state::OwnCoin},
     },
     error::{DaoError, DaoResult},
     rpc::JsonRpcInterface,
@@ -220,11 +220,11 @@ impl Client {
         let cashier_signature_public = self.cashier_wallet.signature_public();
 
         let money_state =
-            money_contract::state::State::new(cashier_signature_public, faucet_signature_public);
-        self.states.register(*money_contract::CONTRACT_ID, money_state);
+            money::state::State::new(cashier_signature_public, faucet_signature_public);
+        self.states.register(*money::CONTRACT_ID, money_state);
 
-        let dao_state = dao_contract::State::new();
-        self.states.register(*dao_contract::CONTRACT_ID, dao_state);
+        let dao_state = dao::State::new();
+        self.states.register(*dao::CONTRACT_ID, dao_state);
 
         Ok(())
     }
@@ -254,8 +254,7 @@ impl Client {
         let dao_bulla = {
             let func_call = &tx.func_calls[0];
             let call_data = func_call.call_data.as_any();
-            let call_data =
-                call_data.downcast_ref::<dao_contract::mint::validate::CallData>().unwrap();
+            let call_data = call_data.downcast_ref::<dao::mint::validate::CallData>().unwrap();
             call_data.dao_bulla.clone()
         };
 
@@ -323,41 +322,41 @@ impl Client {
             // So then the verifier will lookup the corresponding state_transition and apply
             // functions based off the func_id
 
-            if func_call.func_id == *money_contract::transfer::FUNC_ID {
+            if func_call.func_id == *money::transfer::FUNC_ID {
                 debug!("money_contract::transfer::state_transition()");
-                match money_contract::transfer::validate::state_transition(&self.states, idx, &tx) {
+                match money::transfer::validate::state_transition(&self.states, idx, &tx) {
                     Ok(update) => {
                         updates.push(update);
                     }
                     Err(e) => return Err(DaoError::StateTransitionFailed(e.to_string())),
                 }
-            } else if func_call.func_id == *dao_contract::mint::FUNC_ID {
+            } else if func_call.func_id == *dao::mint::FUNC_ID {
                 debug!("dao_contract::mint::state_transition()");
-                match dao_contract::mint::validate::state_transition(&self.states, idx, &tx) {
+                match dao::mint::validate::state_transition(&self.states, idx, &tx) {
                     Ok(update) => {
                         updates.push(update);
                     }
                     Err(e) => return Err(DaoError::StateTransitionFailed(e.to_string())),
                 }
-            } else if func_call.func_id == *dao_contract::propose::FUNC_ID {
+            } else if func_call.func_id == *dao::propose::FUNC_ID {
                 debug!(target: "demo", "dao_contract::propose::state_transition()");
-                match dao_contract::propose::validate::state_transition(&self.states, idx, &tx) {
+                match dao::propose::validate::state_transition(&self.states, idx, &tx) {
                     Ok(update) => {
                         updates.push(update);
                     }
                     Err(e) => return Err(DaoError::StateTransitionFailed(e.to_string())),
                 }
-            } else if func_call.func_id == *dao_contract::vote::FUNC_ID {
+            } else if func_call.func_id == *dao::vote::FUNC_ID {
                 debug!(target: "demo", "dao_contract::vote::state_transition()");
-                match dao_contract::vote::validate::state_transition(&self.states, idx, &tx) {
+                match dao::vote::validate::state_transition(&self.states, idx, &tx) {
                     Ok(update) => {
                         updates.push(update);
                     }
                     Err(e) => return Err(DaoError::StateTransitionFailed(e.to_string())),
                 }
-            } else if func_call.func_id == *dao_contract::exec::FUNC_ID {
+            } else if func_call.func_id == *dao::exec::FUNC_ID {
                 debug!("dao_contract::exec::state_transition()");
-                match dao_contract::exec::validate::state_transition(&self.states, idx, &tx) {
+                match dao::exec::validate::state_transition(&self.states, idx, &tx) {
                     Ok(update) => {
                         updates.push(update);
                     }
@@ -378,7 +377,7 @@ impl Client {
     }
 
     fn update_wallets(&mut self) -> DaoResult<()> {
-        let state = self.states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID);
+        let state = self.states.lookup_mut::<money::State>(*money::CONTRACT_ID);
         if state.is_none() {
             return Err(DaoError::StateNotFound)
         }
@@ -401,7 +400,7 @@ impl Client {
             ]);
 
             assert_eq!(coin_hash, coin.coin.0);
-            assert_eq!(note.spend_hook, *dao_contract::exec::FUNC_ID);
+            assert_eq!(note.spend_hook, *dao::exec::FUNC_ID);
             assert_eq!(note.user_data, self.dao_wallet.bullas[0].0);
 
             self.dao_wallet.own_coins.push((coin, false));
@@ -541,7 +540,7 @@ struct DaoWallet {
     params: Vec<DaoParams>,
     own_coins: Vec<(OwnCoin, bool)>,
     proposals: Vec<Proposal>,
-    vote_notes: Vec<dao_contract::vote::wallet::Note>,
+    vote_notes: Vec<dao::vote::wallet::Note>,
 }
 impl DaoWallet {
     fn new() -> Self {
@@ -575,7 +574,7 @@ impl DaoWallet {
     }
 
     fn track(&self, states: &mut StateRegistry) -> DaoResult<()> {
-        let state = states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID);
+        let state = states.lookup_mut::<money::State>(*money::CONTRACT_ID);
         if state.is_none() {
             return Err(DaoError::StateNotFound)
         }
@@ -595,7 +594,7 @@ impl DaoWallet {
         zk_bins: &ZkContractTable,
     ) -> Transaction {
         debug!(target: "dao-demo::dao::mint_tx()", "START");
-        let builder = dao_contract::mint::wallet::Builder {
+        let builder = dao::mint::wallet::Builder {
             dao_proposer_limit,
             dao_quorum,
             dao_approval_ratio_quot,
@@ -613,7 +612,7 @@ impl DaoWallet {
     }
 
     fn update_witness(&mut self, states: &mut StateRegistry) -> DaoResult<()> {
-        let state = states.lookup_mut::<dao_contract::State>(*dao_contract::CONTRACT_ID);
+        let state = states.lookup_mut::<dao::State>(*dao::CONTRACT_ID);
         if state.is_none() {
             return Err(DaoError::StateNotFound)
         }
@@ -644,11 +643,10 @@ impl DaoWallet {
         let (proposal, proposal_bulla) = {
             let func_call = &tx.func_calls[0];
             let call_data = func_call.call_data.as_any();
-            let call_data =
-                call_data.downcast_ref::<dao_contract::propose::validate::CallData>().unwrap();
+            let call_data = call_data.downcast_ref::<dao::propose::validate::CallData>().unwrap();
 
             let header = &call_data.header;
-            let note: dao_contract::propose::wallet::Note =
+            let note: dao::propose::wallet::Note =
                 header.enc_note.decrypt(&self.keypair.secret).unwrap();
 
             // Return the proposal info
@@ -671,11 +669,10 @@ impl DaoWallet {
         let vote_note = {
             let func_call = &tx.func_calls[0];
             let call_data = func_call.call_data.as_any();
-            let call_data =
-                call_data.downcast_ref::<dao_contract::vote::validate::CallData>().unwrap();
+            let call_data = call_data.downcast_ref::<dao::vote::validate::CallData>().unwrap();
 
             let header = &call_data.header;
-            let note: dao_contract::vote::wallet::Note =
+            let note: dao::vote::wallet::Note =
                 header.enc_note.decrypt(&self.keypair.secret).unwrap();
             note
         };
@@ -689,7 +686,7 @@ impl DaoWallet {
         &self.proposals
     }
 
-    fn get_votes(&self) -> &Vec<dao_contract::vote::wallet::Note> {
+    fn get_votes(&self) -> &Vec<dao::vote::wallet::Note> {
         &self.vote_notes
     }
 
@@ -700,8 +697,7 @@ impl DaoWallet {
         states: &StateRegistry,
     ) -> Result<(Position, Vec<MerkleNode>)> {
         let (money_leaf_position, money_merkle_path) = {
-            let state =
-                states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+            let state = states.lookup::<money::State>(*money::CONTRACT_ID).unwrap();
             let tree = &state.tree;
             let leaf_position = own_coin.leaf_position.clone();
             let root = tree.root(0).unwrap();
@@ -749,7 +745,7 @@ impl DaoWallet {
             let input_value = coin.note.value;
 
             let input = {
-                money_contract::transfer::wallet::BuilderInputInfo {
+                money::transfer::wallet::BuilderInputInfo {
                     leaf_position: treasury_leaf_position,
                     merkle_path: treasury_merkle_path,
                     secret: self.keypair.secret,
@@ -764,12 +760,12 @@ impl DaoWallet {
         }
 
         let builder = {
-            money_contract::transfer::wallet::Builder {
+            money::transfer::wallet::Builder {
                 clear_inputs: vec![],
                 inputs,
                 outputs: vec![
                     // Sending money
-                    money_contract::transfer::wallet::BuilderOutputInfo {
+                    money::transfer::wallet::BuilderOutputInfo {
                         value: proposal.amount,
                         token_id: proposal.token_id,
                         public: proposal.dest,
@@ -779,13 +775,13 @@ impl DaoWallet {
                         user_data,
                     },
                     // Change back to DAO
-                    money_contract::transfer::wallet::BuilderOutputInfo {
+                    money::transfer::wallet::BuilderOutputInfo {
                         value: total_input_value - proposal.amount,
                         token_id: *DRK_ID,
                         public: self.keypair.public,
                         serial: dao_serial,
                         coin_blind: dao_coin_blind,
-                        spend_hook: *dao_contract::exec::FUNC_ID,
+                        spend_hook: *dao::exec::FUNC_ID,
                         user_data: dao_bulla.0,
                     },
                 ],
@@ -834,7 +830,7 @@ impl DaoWallet {
         assert!(yes_votes_commit == pedersen_commitment_u64(yes_votes_value, yes_votes_blind));
 
         let builder = {
-            dao_contract::exec::wallet::Builder {
+            dao::exec::wallet::Builder {
                 proposal: proposal.clone(),
                 dao: dao_params.clone(),
                 yes_votes_value,
@@ -847,7 +843,7 @@ impl DaoWallet {
                 dao_coin_blind,
                 input_value: total_input_value,
                 input_value_blind,
-                hook_dao_exec: *dao_contract::exec::FUNC_ID,
+                hook_dao_exec: *dao::exec::FUNC_ID,
                 signature_secret: exec_signature_secret,
             }
         };
@@ -877,7 +873,7 @@ impl MoneyWallet {
     // }
 
     fn track(&self, states: &mut StateRegistry) -> DaoResult<()> {
-        let state = states.lookup_mut::<money_contract::State>(*money_contract::CONTRACT_ID);
+        let state = states.lookup_mut::<money::State>(*money::CONTRACT_ID);
         if state.is_none() {
             return Err(DaoError::StateNotFound)
         }
@@ -923,7 +919,7 @@ impl MoneyWallet {
             let (money_leaf_position, money_merkle_path) = self.get_path(&states, &coin).unwrap();
 
             let input = {
-                dao_contract::propose::wallet::BuilderInput {
+                dao::propose::wallet::BuilderInput {
                     secret: self.keypair.secret,
                     note: coin.note.clone(),
                     leaf_position: money_leaf_position,
@@ -935,7 +931,7 @@ impl MoneyWallet {
         }
 
         let (dao_merkle_path, dao_merkle_root) = {
-            let state = states.lookup::<dao_contract::State>(*dao_contract::CONTRACT_ID).unwrap();
+            let state = states.lookup::<dao::State>(*dao::CONTRACT_ID).unwrap();
             let tree = &state.dao_tree;
             let root = tree.root(0).unwrap();
             let merkle_path = tree.authentication_path(dao_leaf_position, &root).unwrap();
@@ -943,7 +939,7 @@ impl MoneyWallet {
         };
 
         let proposal = {
-            dao_contract::propose::wallet::Proposal {
+            dao::propose::wallet::Proposal {
                 dest: recipient,
                 amount,
                 serial: pallas::Base::random(&mut OsRng),
@@ -952,7 +948,7 @@ impl MoneyWallet {
             }
         };
 
-        let builder = dao_contract::propose::wallet::Builder {
+        let builder = dao::propose::wallet::Builder {
             inputs,
             proposal,
             dao: params.clone(),
@@ -974,8 +970,7 @@ impl MoneyWallet {
         own_coin: &OwnCoin,
     ) -> Result<(Position, Vec<MerkleNode>)> {
         let (money_leaf_position, money_merkle_path) = {
-            let state =
-                states.lookup::<money_contract::State>(*money_contract::CONTRACT_ID).unwrap();
+            let state = states.lookup::<money::State>(*money::CONTRACT_ID).unwrap();
             let tree = &state.tree;
             let leaf_position = own_coin.leaf_position.clone();
             let root = tree.root(0).unwrap();
@@ -1003,7 +998,7 @@ impl MoneyWallet {
             let (money_leaf_position, money_merkle_path) = self.get_path(states, &coin).unwrap();
 
             let input = {
-                dao_contract::vote::wallet::BuilderInput {
+                dao::vote::wallet::BuilderInput {
                     secret: self.keypair.secret,
                     note: coin.note.clone(),
                     leaf_position: money_leaf_position,
@@ -1015,9 +1010,9 @@ impl MoneyWallet {
         }
 
         let builder = {
-            dao_contract::vote::wallet::Builder {
+            dao::vote::wallet::Builder {
                 inputs,
-                vote: dao_contract::vote::wallet::Vote {
+                vote: dao::vote::wallet::Vote {
                     vote_option,
                     vote_option_blind: pallas::Scalar::random(&mut OsRng),
                 },
@@ -1074,7 +1069,7 @@ impl CashierWallet {
         recipient: PublicKey,
         zk_bins: &ZkContractTable,
     ) -> Result<Transaction> {
-        let spend_hook = *dao_contract::exec::FUNC_ID;
+        let spend_hook = *dao::exec::FUNC_ID;
         let user_data = dao_bulla;
         let value = token_supply;
 
@@ -1094,14 +1089,14 @@ impl CashierWallet {
         zk_bins: &ZkContractTable,
     ) -> Result<Transaction> {
         let builder = {
-            money_contract::transfer::wallet::Builder {
-                clear_inputs: vec![money_contract::transfer::wallet::BuilderClearInputInfo {
+            money::transfer::wallet::Builder {
+                clear_inputs: vec![money::transfer::wallet::BuilderClearInputInfo {
                     value,
                     token_id,
                     signature_secret: self.signature_secret,
                 }],
                 inputs: vec![],
-                outputs: vec![money_contract::transfer::wallet::BuilderOutputInfo {
+                outputs: vec![money::transfer::wallet::BuilderOutputInfo {
                     value,
                     token_id,
                     public: recipient,

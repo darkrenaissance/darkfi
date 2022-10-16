@@ -14,7 +14,7 @@ use darkfi::{
 };
 
 use crate::{
-    contract::{dao_contract, dao_contract::CONTRACT_ID, money_contract},
+    contract::{dao, dao::CONTRACT_ID, money},
     util::{CallDataBase, HashableBase, StateRegistry, Transaction, UpdateBase},
 };
 
@@ -132,17 +132,17 @@ pub fn state_transition(
     }
 
     // 3. First item should be a Money::transfer() calldata
-    if parent_tx.func_calls[0].func_id != *money_contract::transfer::FUNC_ID {
+    if parent_tx.func_calls[0].func_id != *money::transfer::FUNC_ID {
         return Err(Error::InvalidCallData)
     }
 
     let money_transfer_call_data = parent_tx.func_calls[0].call_data.as_any();
     let money_transfer_call_data =
-        money_transfer_call_data.downcast_ref::<money_contract::transfer::validate::CallData>();
+        money_transfer_call_data.downcast_ref::<money::transfer::validate::CallData>();
     let money_transfer_call_data = money_transfer_call_data.unwrap();
     assert_eq!(
         money_transfer_call_data.type_id(),
-        TypeId::of::<money_contract::transfer::validate::CallData>()
+        TypeId::of::<money::transfer::validate::CallData>()
     );
 
     // 4. Money::transfer() has exactly 2 outputs
@@ -169,9 +169,8 @@ pub fn state_transition(
     }
 
     // 3. get the ProposalVote from DAO::State
-    let state = states
-        .lookup::<dao_contract::State>(*CONTRACT_ID)
-        .expect("Return type is not of type State");
+    let state =
+        states.lookup::<dao::State>(*CONTRACT_ID).expect("Return type is not of type State");
     let proposal_votes = state.proposal_votes.get(&HashableBase(call_data.proposal)).unwrap();
 
     // 4. check yes_votes_commit is the same as in ProposalVote
@@ -194,7 +193,7 @@ pub struct Update {
 impl UpdateBase for Update {
     fn apply(self: Box<Self>, states: &mut StateRegistry) {
         let state = states
-            .lookup_mut::<dao_contract::State>(*CONTRACT_ID)
+            .lookup_mut::<dao::State>(*CONTRACT_ID)
             .expect("Return type is not of type State");
         state.proposal_votes.remove(&HashableBase(self.proposal)).unwrap();
     }

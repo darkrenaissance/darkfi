@@ -18,7 +18,7 @@ use darkfi::{
 };
 
 use crate::{
-    contract::money_contract::{
+    contract::money::{
         transfer::validate::{CallData, ClearInput, Input, Output},
         CONTRACT_ID,
     },

@@ -4,7 +4,7 @@ use darkfi::crypto::{keypair::PublicKey, types::DrkCircuitField};
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
-    contract::dao_contract::{DaoBulla, State, CONTRACT_ID},
+    contract::dao::{DaoBulla, State, CONTRACT_ID},
     util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 

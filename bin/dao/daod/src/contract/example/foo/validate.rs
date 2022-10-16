@@ -10,7 +10,7 @@ use darkfi::{
 };
 
 use crate::{
-    contract::example_contract::{state::State, CONTRACT_ID},
+    contract::example::{state::State, CONTRACT_ID},
     util::{CallDataBase, StateRegistry, UpdateBase},
 };
 
