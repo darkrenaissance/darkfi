@@ -6,12 +6,11 @@ use pasta_curves::{
     pallas,
 };
 
-use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
-
 use darkfi::{
     crypto::{coin::Coin, keypair::PublicKey, types::DrkCircuitField},
     Error as DarkFiError,
 };
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
     contract::{dao, dao::CONTRACT_ID, money},

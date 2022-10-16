@@ -3,9 +3,8 @@ use std::{any::Any, collections::HashMap};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{group::Group, pallas};
 
-use darkfi_serial::{SerialDecodable, SerialEncodable};
-
 use darkfi::crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode, nullifier::Nullifier};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::util::HashableBase;
 

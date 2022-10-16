@@ -1,8 +1,6 @@
 use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
 
-use darkfi_serial::{SerialDecodable, SerialEncodable};
-
 use darkfi::{
     crypto::{
         burn_proof::create_burn_proof,
@@ -16,6 +14,7 @@ use darkfi::{
     },
     Result,
 };
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::{
     contract::money::{

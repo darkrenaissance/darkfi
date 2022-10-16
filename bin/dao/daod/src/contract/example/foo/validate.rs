@@ -2,12 +2,11 @@ use std::any::Any;
 
 use pasta_curves::pallas;
 
-use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
-
 use darkfi::{
     crypto::{keypair::PublicKey, types::DrkCircuitField},
     Error as DarkFiError,
 };
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
     contract::example::{state::State, CONTRACT_ID},
