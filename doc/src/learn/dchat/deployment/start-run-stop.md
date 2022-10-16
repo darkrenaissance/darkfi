@@ -41,10 +41,10 @@ Let's take a quick look at the underlying p2p methods we're using here.
 
 ## Start
 
-This is [start()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L129):
+This is [start()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L135):
 
 ```rust
-{{#include ../../../../../src/net/p2p.rs:129:143}}
+{{#include ../../../../../src/net/p2p.rs:134:149}}
 ```
 
 `start()` changes the `P2pState` to `P2pState::Start` and runs a [seed
@@ -60,10 +60,10 @@ the channel from the channel list.
 
 ## Run
 
-This is [run()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L157):
+This is [run()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L163):
 
 ```rust
-{{#include ../../../../../src/net/p2p.rs:157:184}}
+{{#include ../../../../../src/net/p2p.rs:161:190}}
 ```
 
 `run()` changes the P2pState to `P2pState::Run`. It then calls `start()`
@@ -83,10 +83,10 @@ is received.
 
 ## Stop
 
-This is [stop()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L186).
+This is [stop()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L306).
 
 ```rust
-    {{#include ../../../../../src/net/p2p.rs:186:188}}
+    {{#include ../../../../../src/net/p2p.rs:306:308}}
 ```
 
 `stop()` transmits a shutdown signal to all channels subscribed to the
