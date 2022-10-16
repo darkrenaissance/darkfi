@@ -1,10 +1,10 @@
-use darkfi::serial::{deserialize, SerialDecodable, SerialEncodable};
 use darkfi_sdk::{
     crypto::{MerkleNode, Nullifier},
     entrypoint,
     error::ContractResult,
+    incrementalmerkletree::bridgetree::BridgeTree,
 };
-use incrementalmerkletree::bridgetree::BridgeTree;
+use darkfi_serial::{deserialize, SerialDecodable, SerialEncodable};
 
 /// Available functions for this contract.
 /// We identify them with the first byte passed in through the payload.

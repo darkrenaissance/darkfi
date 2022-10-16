@@ -4,8 +4,9 @@ use darkfi_sdk::{
         MerkleNode,
     },
     error::{ContractError, ContractResult},
+    incrementalmerkletree::Tree,
     msg,
-    pasta::pallas,
+    pasta::{group::Group, pallas},
     state::Verification,
 };
 
@@ -68,6 +69,8 @@ pub fn exec(state: &mut State, tx: Transaction) -> ContractResult {
         state.tree.append(&MerkleNode::from(output.coin.inner()));
         state.merkle_roots.push(state.tree.root(0).unwrap());
     }
+
+    Ok(())
 }
 
 // `Verification` could be a generic trait we implement for doing

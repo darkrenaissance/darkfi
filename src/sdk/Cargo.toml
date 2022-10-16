@@ -27,6 +27,10 @@ pasta_curves = "0.4.0"
 incrementalmerkletree = "0.3.0"
 halo2_gadgets = "0.2.0"
 
+# Misc
+lazy_static = "1.4.0"
+subtle = "2.4.1"
+
 [dev-dependencies]
 halo2_proofs = "0.2.0"
 rand = "0.8.5"
