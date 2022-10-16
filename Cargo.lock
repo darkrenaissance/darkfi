@@ -339,25 +339,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
-name = "bincode"
-version = "2.0.0-rc.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bb50c5a2ef4b9b1e7ae73e3a73b52ea24b20312d629f9c4df28260b7ad2c3c4"
-dependencies = [
- "bincode_derive",
- "serde",
-]
-
-[[package]]
-name = "bincode_derive"
-version = "2.0.0-rc.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a45a23389446d2dd25dc8e73a7a3b3c43522b630cac068927f0649d43d719d2"
-dependencies = [
- "virtue",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1130,6 +1111,7 @@ dependencies = [
  "bs58",
  "crypto_api_chachapoly",
  "darkfi",
+ "darkfi-sdk",
  "darkfi-serial",
  "easy-parallel",
  "futures",
@@ -1157,7 +1139,6 @@ dependencies = [
  "async-std",
  "async-trait",
  "async-tungstenite",
- "bincode",
  "blake2b_simd",
  "blake3",
  "bs58",
@@ -1169,14 +1150,12 @@ dependencies = [
  "darkfi-sdk",
  "darkfi-serial",
  "dashu",
- "dirs",
  "ed25519-compact",
  "env_logger",
  "fast-socks5",
  "futures",
  "futures-rustls",
  "fxhash",
- "group",
  "halo2_gadgets",
  "halo2_proofs",
  "hex",
@@ -1247,8 +1226,10 @@ dependencies = [
  "halo2_gadgets",
  "halo2_proofs",
  "incrementalmerkletree",
+ "lazy_static",
  "pasta_curves",
  "rand",
+ "subtle",
  "thiserror",
 ]
 
@@ -1276,6 +1257,7 @@ dependencies = [
  "chrono",
  "ctrlc",
  "darkfi",
+ "darkfi-sdk",
  "darkfi-serial",
  "easy-parallel",
  "fxhash",
@@ -1302,6 +1284,7 @@ dependencies = [
  "bs58",
  "clap 3.2.22",
  "darkfi",
+ "darkfi-sdk",
  "darkfi-serial",
  "halo2_gadgets",
  "halo2_proofs",
@@ -1482,8 +1465,6 @@ dependencies = [
 name = "dchat"
 version = "0.1.0"
 dependencies = [
- "async-channel",
- "async-executor",
  "async-std",
  "async-trait",
  "darkfi",
@@ -4637,12 +4618,6 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
-
-[[package]]
-name = "virtue"
-version = "0.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b60dcd6a64dd45abf9bd426970c9843726da7fc08f44cd6fcebf68c21220a63"
 
 [[package]]
 name = "wait-timeout"

@@ -1,3 +1,5 @@
+use darkfi_sdk::crypto::MerkleNode;
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
 use pasta_curves::{
@@ -10,13 +12,11 @@ use rand::rngs::OsRng;
 use darkfi::{
     crypto::{
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
     zk::vm::{Witness, ZkCircuit},
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::{
     contract::{
@@ -122,7 +122,7 @@ impl Builder {
 
             let merkle_root = {
                 let position: u64 = input.leaf_position.into();
-                let mut current = MerkleNode(coin);
+                let mut current = MerkleNode::from(coin);
                 for (level, sibling) in input.merkle_path.iter().enumerate() {
                     let level = level as u8;
                     current = if position & (1 << level) == 0 {
@@ -146,7 +146,7 @@ impl Builder {
                 *value_coords.x(),
                 *value_coords.y(),
                 token_commit,
-                merkle_root.0,
+                merkle_root.inner(),
                 *sigpub_coords.x(),
                 *sigpub_coords.y(),
             ];
@@ -239,7 +239,7 @@ impl Builder {
         ];
         let public_inputs = vec![
             token_commit,
-            self.dao_merkle_root.0,
+            self.dao_merkle_root.inner(),
             proposal_bulla,
             *total_funds_coords.x(),
             *total_funds_coords.y(),

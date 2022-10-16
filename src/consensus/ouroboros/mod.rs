@@ -1,18 +1,14 @@
+use std::{fmt, thread, time::Duration};
+
 use async_std::sync::Arc;
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 use halo2_proofs::arithmetic::Field;
-use log::{debug, error, info};
-use smol::Executor;
-use std::fmt;
-
-use rand::rngs::OsRng;
-use std::{thread, time::Duration};
-
-use crate::zk::circuit::{BurnContract, LeadContract, MintContract};
 use incrementalmerkletree::bridgetree::BridgeTree;
-
-pub mod consts;
-pub mod types;
-pub mod utils;
+use log::{debug, error, info};
+use pasta_curves::{group::ff::PrimeField, pallas};
+use rand::rngs::OsRng;
+use smol::Executor;
+use url::Url;
 
 use crate::{
     blockchain::Blockchain,
@@ -28,10 +24,8 @@ use crate::{
     crypto::{
         address::Address,
         coin::OwnCoin,
-        constants::MERKLE_DEPTH,
         keypair::{PublicKey, SecretKey},
         leadcoin::LeadCoin,
-        merkle_node::MerkleNode,
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr::SchnorrSecret,
     },
@@ -44,14 +38,13 @@ use crate::{
         Transaction,
     },
     util::{path::expand_path, time::Timestamp},
+    zk::circuit::{BurnContract, LeadContract, MintContract},
     Result,
 };
 
-use url::Url;
-
-use pasta_curves::pallas;
-
-use group::ff::PrimeField;
+pub mod consts;
+pub mod types;
+pub mod utils;
 
 pub mod epochconsensus;
 pub use epochconsensus::EpochConsensus;

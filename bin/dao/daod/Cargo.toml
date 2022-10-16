@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 darkfi = {path = "../../../", features = ["rpc", "crypto", "tx", "node"]}
+darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = {path = "../../../src/serial"}
 
 # Async

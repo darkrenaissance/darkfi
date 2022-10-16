@@ -1,12 +1,10 @@
+use darkfi_sdk::crypto::MerkleNode;
 use log::{debug, error};
 use serde_json::{json, Value};
 
-use darkfi::{
-    crypto::merkle_node::MerkleNode,
-    rpc::jsonrpc::{
-        ErrorCode::{InternalError, InvalidParams},
-        JsonError, JsonResponse, JsonResult,
-    },
+use darkfi::rpc::jsonrpc::{
+    ErrorCode::{InternalError, InvalidParams},
+    JsonError, JsonResponse, JsonResult,
 };
 
 use super::Darkfid;
@@ -69,6 +67,8 @@ impl Darkfid {
                 return JsonError::new(InternalError, None, id).into()
             }
         };
+
+        let roots: Vec<String> = roots.iter().map(|x| x.to_string()).collect();
 
         JsonResponse::new(json!(roots), id).into()
     }

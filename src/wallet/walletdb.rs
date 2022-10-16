@@ -1,10 +1,11 @@
 use std::{fs::create_dir_all, path::Path, str::FromStr, time::Duration};
 
 use async_std::sync::Arc;
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
 use darkfi_serial::{deserialize, serialize};
-use group::ff::PrimeField;
 use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, error, info, LevelFilter};
+use pasta_curves::group::ff::PrimeField;
 use rand::rngs::OsRng;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode},
@@ -15,11 +16,8 @@ use crate::{
     crypto::{
         address::Address,
         coin::{Coin, OwnCoin},
-        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         note::Note,
-        nullifier::Nullifier,
         types::DrkTokenId,
     },
     util::path::expand_path,
@@ -223,8 +221,7 @@ impl WalletDb {
         let mut conn = self.conn.acquire().await?;
 
         let row = sqlx::query("SELECT * FROM tree").fetch_one(&mut conn).await?;
-        let (tree, _read): (BridgeTree<MerkleNode, MERKLE_DEPTH>, usize) =
-            bincode::serde::decode_from_slice(row.get("tree"), bincode::config::legacy())?;
+        let tree = deserialize(row.get("tree"))?;
         Ok(tree)
     }
 
@@ -232,7 +229,7 @@ impl WalletDb {
         debug!("put_tree(): Attempting to write merkle tree");
         let mut conn = self.conn.acquire().await?;
 
-        let tree_bytes = bincode::serde::encode_to_vec(tree, bincode::config::legacy())?;
+        let tree_bytes = serialize(tree);
 
         debug!("put_tree(): Deleting old row");
         sqlx::query("DELETE FROM tree;").execute(&mut conn).await?;
@@ -520,10 +517,10 @@ impl WalletDb {
 mod tests {
     use super::*;
     use crate::crypto::{
-        merkle_node::MerkleNode,
         types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
         util::poseidon_hash,
     };
+    use darkfi_sdk::crypto::MerkleNode;
     use incrementalmerkletree::Tree;
     use pasta_curves::{group::ff::Field, pallas};
     use rand::rngs::OsRng;
@@ -572,19 +569,19 @@ mod tests {
 
         // put_own_coin()
         wallet.put_own_coin(c0.clone()).await?;
-        tree1.append(&MerkleNode::from_coin(&c0.coin));
+        tree1.append(&MerkleNode::from(c0.coin.0));
         tree1.witness();
 
         wallet.put_own_coin(c1.clone()).await?;
-        tree1.append(&MerkleNode::from_coin(&c1.coin));
+        tree1.append(&MerkleNode::from(c1.coin.0));
         tree1.witness();
 
         wallet.put_own_coin(c2.clone()).await?;
-        tree1.append(&MerkleNode::from_coin(&c2.coin));
+        tree1.append(&MerkleNode::from(c2.coin.0));
         tree1.witness();
 
         wallet.put_own_coin(c3.clone()).await?;
-        tree1.append(&MerkleNode::from_coin(&c3.coin));
+        tree1.append(&MerkleNode::from(c3.coin.0));
         tree1.witness();
 
         // We'll check this merkle root corresponds to the one we'll retrieve.

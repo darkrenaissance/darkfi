@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use darkfi_sdk::crypto::{MerkleNode, Nullifier};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
@@ -8,14 +9,12 @@ use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use rand::rngs::OsRng;
 
 use super::{
-    nullifier::Nullifier,
     proof::{Proof, ProvingKey, VerifyingKey},
     util::{pedersen_commitment_base, pedersen_commitment_u64},
 };
 use crate::{
     crypto::{
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         types::{
             DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
             DrkUserDataBlind, DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
@@ -72,7 +71,7 @@ impl BurnRevealedValues {
 
         let merkle_root = {
             let position: u64 = leaf_position.into();
-            let mut current = MerkleNode(coin);
+            let mut current = MerkleNode::from(coin);
             for (level, sibling) in merkle_path.iter().enumerate() {
                 let level = level as u8;
                 current = if position & (1 << level) == 0 {
@@ -103,7 +102,7 @@ impl BurnRevealedValues {
     pub fn make_outputs(&self) -> Vec<DrkCircuitField> {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
-        let merkle_root = self.merkle_root.0;
+        let merkle_root = self.merkle_root.inner();
         let user_data_enc = self.user_data_enc;
         let sig_coords = self.signature_public.0.to_affine().coordinates().unwrap();
 

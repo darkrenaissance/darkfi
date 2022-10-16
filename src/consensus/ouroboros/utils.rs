@@ -1,8 +1,8 @@
-use crate::consensus::ouroboros::types::Float10;
 use dashu::integer::{IBig, Sign, UBig};
-use group::ff::PrimeField;
 use log::info;
-use pasta_curves::pallas;
+use pasta_curves::{group::ff::PrimeField, pallas};
+
+use crate::consensus::ouroboros::types::Float10;
 
 pub(crate) fn fbig2ibig(f: Float10) -> IBig {
     info!("fbig -> ibig (f): {}", f);

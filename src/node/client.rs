@@ -1,17 +1,16 @@
 use async_std::sync::{Arc, Mutex};
-use group::ff::PrimeField;
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info};
+use pasta_curves::group::ff::PrimeField;
 
 use super::state::{state_transition, State};
 use crate::{
     crypto::{
         address::Address,
         coin::{Coin, OwnCoin},
-        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey},
-        merkle_node::MerkleNode,
         proof::ProvingKey,
         types::DrkTokenId,
     },

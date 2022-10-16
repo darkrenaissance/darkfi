@@ -1,3 +1,5 @@
+use darkfi_sdk::crypto::{MerkleNode, Nullifier};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
 use log::debug;
@@ -11,14 +13,11 @@ use rand::rngs::OsRng;
 use darkfi::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
-        merkle_node::MerkleNode,
-        nullifier::Nullifier,
         util::{pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
     zk::vm::{Witness, ZkCircuit},
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::{
     contract::{
@@ -128,7 +127,7 @@ impl Builder {
 
             let merkle_root = {
                 let position: u64 = input.leaf_position.into();
-                let mut current = MerkleNode(coin);
+                let mut current = MerkleNode::from(coin);
                 for (level, sibling) in input.merkle_path.iter().enumerate() {
                     let level = level as u8;
                     current = if position & (1 << level) == 0 {
@@ -155,7 +154,7 @@ impl Builder {
                 *vote_commit_coords.x(),
                 *vote_commit_coords.y(),
                 token_commit,
-                merkle_root.0,
+                merkle_root.inner(),
                 *sigpub_coords.x(),
                 *sigpub_coords.y(),
             ];
@@ -168,7 +167,7 @@ impl Builder {
             proofs.push(input_proof);
 
             let input = Input {
-                nullifier: Nullifier(nullifier),
+                nullifier: Nullifier::from(nullifier),
                 vote_commit,
                 merkle_root,
                 signature_public,

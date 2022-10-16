@@ -1,4 +1,4 @@
-use core::str::FromStr;
+use core::{fmt, str::FromStr};
 use std::io;
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -37,10 +37,17 @@ impl From<pallas::Base> for Nullifier {
     }
 }
 
+impl fmt::Display for Nullifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", bs58::encode(self.to_bytes()).into_string())
+    }
+}
+
 impl FromStr for Nullifier {
     type Err = io::Error;
 
     /// Tries to decode a base58 string into a `Nullifier` type.
+    /// This string is the same string received by calling `Nullifier::to_string()`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = match bs58::decode(s).into_vec() {
             Ok(v) => v,

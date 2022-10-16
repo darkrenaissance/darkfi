@@ -1,8 +1,8 @@
-use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
 use darkfi::{net, Result};
 use log::debug;
+use smol::Executor;
 
 use crate::dchatmsg::{DchatMsg, DchatMsgsBuffer};
 

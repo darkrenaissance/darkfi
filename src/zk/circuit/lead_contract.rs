@@ -1,10 +1,10 @@
-use crate::crypto::{
+use darkfi_sdk::crypto::{
     constants::{
         sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
         util::gen_const_array,
         NullifierK, OrchardFixedBases, OrchardFixedBasesFull, MERKLE_DEPTH_ORCHARD,
     },
-    merkle_node::MerkleNode,
+    MerkleNode,
 };
 use halo2_gadgets::{
     ecc::{

@@ -1,4 +1,4 @@
-use group::ff::PrimeField;
+use pasta_curves::group::ff::PrimeField;
 
 use super::types::DrkTokenId;
 use crate::{util::net_name::NetworkName, Error, Result};

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use fxhash::FxHashMap;
-use group::ff::PrimeField;
+use pasta_curves::group::ff::PrimeField;
 use serde_json::Value;
 
 use super::{token_id::generate_id, types::DrkTokenId};

@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
+use darkfi_sdk::crypto::MerkleNode;
 use fxhash::FxHashMap;
 use incrementalmerkletree::{Position, Tree};
 use log::debug;
@@ -15,7 +16,6 @@ use url::Url;
 use darkfi::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         proof::{ProvingKey, VerifyingKey},
         types::{DrkSpendHook, DrkUserData, DrkValue},
         util::{pedersen_commitment_u64, poseidon_hash},

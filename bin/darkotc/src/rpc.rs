@@ -1,5 +1,6 @@
 use std::{process::exit, str::FromStr};
 
+use darkfi_sdk::crypto::MerkleNode;
 use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
 
@@ -7,7 +8,6 @@ use darkfi::{
     crypto::{
         address::Address,
         coin::OwnCoin,
-        merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
     },
     rpc::{client::RpcClient, jsonrpc::JsonRequest},

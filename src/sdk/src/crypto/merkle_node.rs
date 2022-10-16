@@ -1,4 +1,4 @@
-use core::str::FromStr;
+use core::{fmt, str::FromStr};
 use std::{io, iter};
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -63,10 +63,17 @@ impl From<pallas::Base> for MerkleNode {
     }
 }
 
+impl fmt::Display for MerkleNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", bs58::encode(self.to_bytes()).into_string())
+    }
+}
+
 impl FromStr for MerkleNode {
     type Err = io::Error;
 
     /// Tries to decode a base58 string into a `MerkleNode` type.
+    /// This string is the same string received by calling `MerkleNode::to_string()`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = match bs58::decode(s).into_vec() {
             Ok(v) => v,

@@ -1,5 +1,6 @@
 use std::any::{Any, TypeId};
 
+use darkfi_sdk::crypto::{MerkleNode, Nullifier};
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use log::error;
 use pasta_curves::{
@@ -9,9 +10,7 @@ use pasta_curves::{
 };
 
 use darkfi::{
-    crypto::{
-        keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier, types::DrkCircuitField,
-    },
+    crypto::{keypair::PublicKey, types::DrkCircuitField},
     Error as DarkFiError,
 };
 
@@ -74,7 +73,7 @@ impl CallDataBase for CallData {
                     *value_coords.x(),
                     *value_coords.y(),
                     self.header.token_commit,
-                    input.merkle_root.0,
+                    input.merkle_root.inner(),
                     *sigpub_coords.x(),
                     *sigpub_coords.y(),
                 ],

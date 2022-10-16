@@ -1,5 +1,6 @@
+use darkfi_sdk::crypto::MerkleNode;
 use darkfi_serial::serialize;
-use group::ff::Field;
+use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
 
 use super::{
@@ -10,7 +11,6 @@ use crate::{
     crypto::{
         burn_proof::create_burn_proof,
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         mint_proof::create_mint_proof,
         note::Note,
         proof::ProvingKey,

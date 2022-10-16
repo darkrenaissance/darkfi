@@ -1,13 +1,10 @@
 pub mod address;
 pub mod burn_proof;
 pub mod coin;
-pub mod constants;
 pub mod diffie_hellman;
 pub mod keypair;
-pub mod merkle_node;
 pub mod mint_proof;
 pub mod note;
-pub mod nullifier;
 pub mod proof;
 pub mod schnorr;
 pub mod token_id;

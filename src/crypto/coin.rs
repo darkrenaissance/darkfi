@@ -1,7 +1,8 @@
+use darkfi_sdk::crypto::Nullifier;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::PrimeField, pallas};
 
-use super::{keypair::SecretKey, note::Note, nullifier::Nullifier};
+use super::{keypair::SecretKey, note::Note};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, SerialEncodable, SerialDecodable)]
 pub struct Coin(pub pallas::Base);

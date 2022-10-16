@@ -7,6 +7,7 @@ use std::{
 
 use async_std::sync::{Arc, Mutex, RwLock};
 use chrono::{NaiveDateTime, Utc};
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
@@ -22,9 +23,7 @@ use crate::{
     blockchain::Blockchain,
     crypto::{
         address::Address,
-        constants::MERKLE_DEPTH,
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
     net,
@@ -292,7 +291,7 @@ impl ValidatorState {
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
         for tx in &unproposed_txs {
             for output in &tx.outputs {
-                tree.append(&MerkleNode::from_coin(&output.revealed.coin));
+                tree.append(&MerkleNode::from(output.revealed.coin.0));
                 tree.witness();
             }
         }

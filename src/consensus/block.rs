@@ -1,17 +1,13 @@
 use std::fmt;
 
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use pasta_curves::pallas;
 
 use super::{Metadata, BLOCK_MAGIC_BYTES, BLOCK_VERSION};
-use crate::{
-    crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode},
-    net,
-    tx::Transaction,
-    util::time::Timestamp,
-};
+use crate::{net, tx::Transaction, util::time::Timestamp};
 
 /// This struct represents a tuple of the form (version, previous, epoch, slot, timestamp, merkle_root).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
@@ -63,7 +59,7 @@ impl Default for Header {
             0,
             0,
             Timestamp::current_time(),
-            MerkleNode(pallas::Base::zero()),
+            MerkleNode::from(pallas::Base::zero()),
         )
     }
 }

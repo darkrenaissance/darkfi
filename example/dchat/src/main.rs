@@ -1,11 +1,10 @@
-use async_executor::Executor;
-use async_std::sync::{Arc, Mutex};
-use easy_parallel::Parallel;
-
 use std::{error, fs::File, io::stdin};
 
+use async_std::sync::{Arc, Mutex};
+use easy_parallel::Parallel;
 use log::debug;
 use simplelog::WriteLogger;
+use smol::Executor;
 use url::Url;
 
 use darkfi::{net, net::Settings, rpc::server::listen_and_serve};
@@ -196,7 +195,7 @@ async fn main() -> Result<()> {
     let p2p = net::P2p::new(settings.net).await;
 
     let nthreads = num_cpus::get();
-    let (signal, shutdown) = async_channel::unbounded::<()>();
+    let (signal, shutdown) = smol::channel::unbounded::<()>();
 
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();

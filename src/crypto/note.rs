@@ -75,7 +75,7 @@ impl EncryptedNote {
 mod tests {
     use super::*;
     use crate::crypto::keypair::Keypair;
-    use group::ff::Field;
+    use pasta_curves::group::ff::Field;
 
     #[test]
     fn test_note_encdec() {

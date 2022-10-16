@@ -1,3 +1,8 @@
+use std::{
+    any::{Any, TypeId},
+    time::Instant,
+};
+
 use incrementalmerkletree::Tree;
 use log::debug;
 use pasta_curves::{
@@ -6,10 +11,6 @@ use pasta_curves::{
     pallas,
 };
 use rand::rngs::OsRng;
-use std::{
-    any::{Any, TypeId},
-    time::Instant,
-};
 
 use darkfi::{
     crypto::{

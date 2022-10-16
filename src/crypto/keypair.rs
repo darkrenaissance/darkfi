@@ -4,6 +4,7 @@ use std::{
     str::FromStr,
 };
 
+use darkfi_sdk::crypto::constants::NullifierK;
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
@@ -17,7 +18,7 @@ use pasta_curves::{
 use rand::RngCore;
 
 use crate::{
-    crypto::{address::Address, constants::NullifierK, util::mod_r_p},
+    crypto::{address::Address, util::mod_r_p},
     Error, Result,
 };
 

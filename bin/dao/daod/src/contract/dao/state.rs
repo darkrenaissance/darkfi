@@ -1,10 +1,9 @@
 use std::{any::Any, collections::HashMap};
 
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{group::Group, pallas};
-
-use darkfi::crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode, nullifier::Nullifier};
-use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::util::HashableBase;
 
@@ -55,14 +54,14 @@ impl State {
     }
 
     pub fn add_dao_bulla(&mut self, bulla: DaoBulla) {
-        let node = MerkleNode(bulla.0);
+        let node = MerkleNode::from(bulla.0);
         self.dao_bullas.push(bulla);
         self.dao_tree.append(&node);
         self.dao_roots.push(self.dao_tree.root(0).unwrap());
     }
 
     pub fn add_proposal_bulla(&mut self, bulla: pallas::Base) {
-        let node = MerkleNode(bulla);
+        let node = MerkleNode::from(bulla);
         //self.proposal_bullas.push(bulla);
         self.proposal_tree.append(&node);
         self.proposal_roots.push(self.proposal_tree.root(0).unwrap());

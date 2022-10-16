@@ -1,3 +1,4 @@
+use darkfi_sdk::crypto::constants::{NullifierK, DRK_SCHNORR_DOMAIN};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
@@ -7,7 +8,6 @@ use pasta_curves::{
 use rand::rngs::OsRng;
 
 use crate::crypto::{
-    constants::{NullifierK, DRK_SCHNORR_DOMAIN},
     keypair::{PublicKey, SecretKey},
     util::{hash_to_scalar, mod_r_p},
 };

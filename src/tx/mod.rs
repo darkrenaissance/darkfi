@@ -1,8 +1,8 @@
 use std::io;
 
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable, VarInt};
-use group::Group;
 use log::error;
+use pasta_curves::group::Group;
 
 use crate::{
     crypto::{

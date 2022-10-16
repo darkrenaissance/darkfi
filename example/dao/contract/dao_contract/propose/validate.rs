@@ -1,5 +1,6 @@
 use std::any::{Any, TypeId};
 
+use darkfi_sdk::crypto::MerkleNode;
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use log::error;
 use pasta_curves::{
@@ -9,7 +10,7 @@ use pasta_curves::{
 };
 
 use darkfi::{
-    crypto::{keypair::PublicKey, merkle_node::MerkleNode, types::DrkCircuitField},
+    crypto::{keypair::PublicKey, types::DrkCircuitField},
     Error as DarkFiError,
 };
 
@@ -68,7 +69,7 @@ impl CallDataBase for CallData {
                     *value_coords.x(),
                     *value_coords.y(),
                     self.header.token_commit,
-                    input.merkle_root.0,
+                    input.merkle_root.inner(),
                     *sigpub_coords.x(),
                     *sigpub_coords.y(),
                 ],
@@ -80,7 +81,7 @@ impl CallDataBase for CallData {
             "dao-propose-main".to_string(),
             vec![
                 self.header.token_commit,
-                self.header.dao_merkle_root.0,
+                self.header.dao_merkle_root.inner(),
                 self.header.proposal_bulla,
                 *total_funds_coords.x(),
                 *total_funds_coords.y(),

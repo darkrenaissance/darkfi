@@ -1,3 +1,6 @@
+use std::{any::Any, collections::HashMap, hash::Hasher};
+
+use darkfi_serial::Encodable;
 use lazy_static::lazy_static;
 use log::debug;
 use pasta_curves::{
@@ -5,7 +8,6 @@ use pasta_curves::{
     pallas,
 };
 use rand::rngs::OsRng;
-use std::{any::Any, collections::HashMap, hash::Hasher};
 
 use darkfi::{
     crypto::{
@@ -15,7 +17,6 @@ use darkfi::{
         types::DrkCircuitField,
         Proof,
     },
-    util::serial::Encodable,
     zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::decoder::ZkBinary,
 };
@@ -177,7 +178,7 @@ pub struct FuncCall {
 }
 
 impl Encodable for FuncCall {
-    fn encode<W: std::io::Write>(&self, mut w: W) -> std::result::Result<usize, darkfi::Error> {
+    fn encode<W: std::io::Write>(&self, mut w: W) -> std::result::Result<usize, std::io::Error> {
         let mut len = 0;
         len += self.contract_id.encode(&mut w)?;
         len += self.func_id.encode(&mut w)?;
@@ -201,10 +202,11 @@ pub trait CallDataBase {
     fn encode_bytes(
         &self,
         writer: &mut dyn std::io::Write,
-    ) -> std::result::Result<usize, darkfi::Error>;
+    ) -> std::result::Result<usize, std::io::Error>;
 }
 
-type GenericContractState = Box<dyn Any + Send>;
+//type GenericContractState = Box<dyn Any + Send>;
+type GenericContractState = Box<dyn Any>;
 
 pub struct StateRegistry {
     pub states: HashMap<HashableBase, GenericContractState>,

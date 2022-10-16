@@ -1,3 +1,4 @@
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error};
@@ -7,11 +8,8 @@ use crate::{
     consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
     crypto::{
         coin::{Coin, OwnCoin},
-        constants::MERKLE_DEPTH,
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
-        nullifier::Nullifier,
         proof::VerifyingKey,
         util::poseidon_hash,
     },
@@ -166,7 +164,7 @@ impl State {
         debug!(target: "state_apply", "Update Merkle tree and witnesses");
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.iter()) {
             // Add the new coins to the Merkle tree
-            let node = MerkleNode(coin.0);
+            let node = MerkleNode::from(coin.0);
             debug!("Current merkle tree: {:#?}", self.tree);
             self.tree.append(&node);
             debug!("Merkle tree after append: {:#?}", self.tree);

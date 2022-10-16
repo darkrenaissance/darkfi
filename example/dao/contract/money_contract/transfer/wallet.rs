@@ -1,3 +1,4 @@
+use darkfi_sdk::crypto::MerkleNode;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
@@ -6,7 +7,6 @@ use darkfi::{
     crypto::{
         burn_proof::create_burn_proof,
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         mint_proof::create_mint_proof,
         types::{
             DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,

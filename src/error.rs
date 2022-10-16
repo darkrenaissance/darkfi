@@ -67,14 +67,6 @@ pub enum Error {
     #[error(transparent)]
     TomlDeserializeError(#[from] toml::de::Error),
 
-    #[cfg(feature = "bincode")]
-    #[error("bincode decode error: {0}")]
-    BincodeDecodeError(String),
-
-    #[cfg(feature = "bincode")]
-    #[error("bincode encode error: {0}")]
-    BincodeEncodeError(String),
-
     #[cfg(feature = "bs58")]
     #[error(transparent)]
     Bs58DecodeError(#[from] bs58::decode::Error),
@@ -496,20 +488,6 @@ impl From<tungstenite::Error> for Error {
 impl From<futures_rustls::rustls::client::InvalidDnsNameError> for Error {
     fn from(err: futures_rustls::rustls::client::InvalidDnsNameError) -> Self {
         Self::RustlsInvalidDns(err.to_string())
-    }
-}
-
-#[cfg(feature = "bincode")]
-impl From<bincode::error::DecodeError> for Error {
-    fn from(err: bincode::error::DecodeError) -> Self {
-        Self::BincodeDecodeError(err.to_string())
-    }
-}
-
-#[cfg(feature = "bincode")]
-impl From<bincode::error::EncodeError> for Error {
-    fn from(err: bincode::error::EncodeError) -> Self {
-        Self::BincodeEncodeError(err.to_string())
     }
 }
 

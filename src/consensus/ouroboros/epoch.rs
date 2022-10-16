@@ -1,15 +1,13 @@
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode};
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::arithmetic::Field;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-
 use log::debug;
-
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::PrimeField, Curve},
     pallas,
 };
-
 use rand::{thread_rng, Rng};
 
 use crate::{
@@ -20,11 +18,9 @@ use crate::{
     },
     crypto::{
         coin::OwnCoin,
-        constants::MERKLE_DEPTH_ORCHARD,
         keypair::{Keypair, SecretKey},
         lead_proof,
         leadcoin::LeadCoin,
-        merkle_node::MerkleNode,
         proof::{Proof, ProvingKey},
         types::DrkValueBlind,
         util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
@@ -235,7 +231,7 @@ impl Epoch {
         let c_cm: pallas::Point = pedersen_commitment_base(coin_commit_msg, c_cm1_blind);
         let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
         let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
-        let c_cm_node = MerkleNode(c_cm_base);
+        let c_cm_node = MerkleNode::from(c_cm_base);
         tree_cm.append(&c_cm_node.clone());
         let leaf_position = tree_cm.witness();
         let c_root_cm = tree_cm.root(0).unwrap();

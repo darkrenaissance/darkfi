@@ -1,3 +1,4 @@
+use darkfi_sdk::crypto::MerkleNode;
 use halo2_gadgets::poseidon::{
     primitives as poseidon,
     primitives::{ConstantLength, P128Pow5T3},
@@ -14,7 +15,6 @@ use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 use darkfi::{
     crypto::{
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         proof::{ProvingKey, VerifyingKey},
         util::pedersen_commitment_u64,
         Proof,
@@ -52,12 +52,12 @@ fn zkvm_opcodes() -> Result<()> {
         poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(messages)
     };
 
-    tree.append(&MerkleNode(c0));
+    tree.append(&MerkleNode::from(c0));
     tree.witness();
-    tree.append(&MerkleNode(c1));
-    tree.append(&MerkleNode(c2));
+    tree.append(&MerkleNode::from(c1));
+    tree.append(&MerkleNode::from(c2));
     let leaf_pos = tree.witness().unwrap();
-    tree.append(&MerkleNode(c3));
+    tree.append(&MerkleNode::from(c3));
     tree.witness();
 
     let root = tree.root(0).unwrap();
@@ -89,7 +89,7 @@ fn zkvm_opcodes() -> Result<()> {
         *value_coords.y(),
         c2,
         d,
-        root.0,
+        root.inner(),
         *public_coords.x(),
         *public_coords.y(),
     ];

@@ -1,22 +1,16 @@
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode};
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
-use pasta_curves::pallas;
+use incrementalmerkletree::Hashable;
+use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 
 use crate::{
     crypto::{
-        constants::MERKLE_DEPTH_ORCHARD,
         keypair::Keypair,
-        merkle_node::MerkleNode,
         util::{mod_r_p, pedersen_commitment_base},
     },
     zk::circuit::lead_contract::LeadContract,
 };
-
-use incrementalmerkletree::Hashable;
-
-use pasta_curves::{arithmetic::CurveAffine, group::Curve};
-
-//use halo2_proofs::arithmetic::CurveAffine;
 
 pub const LEAD_PUBLIC_INPUT_LEN: usize = 11;
 
@@ -78,7 +72,7 @@ impl LeadCoin {
             let pos: u32 = cm_pos;
             let c_cm_coordinates = self.cm.unwrap().to_affine().coordinates().unwrap();
             let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
-            let mut current = MerkleNode(c_cm_base);
+            let mut current = MerkleNode::from(c_cm_base);
             for (level, sibling) in self.path.unwrap().iter().enumerate() {
                 let level = level as u8;
                 current = if pos & (1 << level) == 0 {
@@ -95,7 +89,7 @@ impl LeadCoin {
             *po_cm2.x(),
             *po_cm2.y(),
             po_nonce,
-            cm_root.0,
+            cm_root.inner(),
             *po_pk.x(),
             *po_pk.y(),
             po_sn,

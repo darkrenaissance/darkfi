@@ -1,23 +1,19 @@
 use blake2b_simd::Params;
-
+use darkfi_sdk::crypto::constants::{
+    fixed_bases::{
+        VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES, VALUE_COMMITMENT_V_BYTES,
+    },
+    util::gen_const_array,
+    NullifierK,
+};
 use halo2_gadgets::{ecc::chip::FixedPoint, poseidon::primitives as poseidon};
-
 use pasta_curves::{
     arithmetic::{CurveExt, FieldExt},
     group::ff::PrimeField,
     pallas,
 };
 
-use super::{
-    constants::{
-        fixed_bases::{
-            VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES, VALUE_COMMITMENT_V_BYTES,
-        },
-        util::gen_const_array,
-        NullifierK,
-    },
-    types::*,
-};
+use super::types::*;
 
 pub fn hash_to_scalar(persona: &[u8], a: &[u8], b: &[u8]) -> pallas::Scalar {
     let mut hasher = Params::new().hash_length(64).personal(persona).to_state();

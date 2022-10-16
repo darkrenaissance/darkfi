@@ -1,10 +1,8 @@
+use darkfi_sdk::crypto::{MerkleNode, Nullifier};
 use log::{debug, error};
 
 use super::{memory::MemoryManipulation, vm_runtime::Env};
-use crate::{
-    crypto::{merkle_node::MerkleNode, nullifier::Nullifier},
-    node::state::ProgramState,
-};
+use crate::node::state::ProgramState;
 
 /// Try to read a `Nullifier` from the given pointer and check if it's
 /// an existing nullifier in the blockchain state machine.

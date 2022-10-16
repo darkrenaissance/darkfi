@@ -1,5 +1,5 @@
 use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
-use pasta_curves::group::{cofactor::CofactorGroup, GroupEncoding};
+use pasta_curves::group::{cofactor::CofactorGroup, GroupEncoding, Wnaf};
 
 use crate::crypto::{
     keypair::{PublicKey, SecretKey},
@@ -24,7 +24,7 @@ pub fn sapling_ka_agree(esk: &SecretKey, pk_d: &PublicKey) -> PublicKey {
     // We want that to be fast because it's in the hot path for trial decryption of
     // notes on chain.
     let esk_s = mod_r_p(esk.inner());
-    let mut wnaf = group::Wnaf::new();
+    let mut wnaf = Wnaf::new();
     PublicKey(wnaf.scalar(&esk_s).base(pk_d.0).clear_cofactor())
 }
 

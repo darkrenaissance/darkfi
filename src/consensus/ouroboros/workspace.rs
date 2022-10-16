@@ -1,10 +1,12 @@
+use darkfi_sdk::crypto::MerkleNode;
+use pasta_curves::pallas;
+
 use crate::{
     consensus::{BlockInfo, Header, Metadata},
-    crypto::{merkle_node::MerkleNode, proof::Proof},
+    crypto::proof::Proof,
     tx::Transaction,
     util::time::Timestamp,
 };
-use pasta_curves::pallas;
 
 #[derive(Debug)]
 pub struct SlotWorkspace {
@@ -27,7 +29,7 @@ impl Default for SlotWorkspace {
             e: 0,
             sl: 0,
             txs: vec![],
-            root: MerkleNode(pallas::Base::zero()),
+            root: MerkleNode::from(pallas::Base::zero()),
             is_leader: false,
             m: Metadata::default(),
             proof: Proof::default(),

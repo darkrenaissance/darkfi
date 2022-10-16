@@ -1,4 +1,5 @@
 // Example transaction flow
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{group::ff::Field, pallas};
 use rand::rngs::OsRng;
@@ -6,11 +7,8 @@ use rand::rngs::OsRng;
 use darkfi::{
     crypto::{
         coin::OwnCoin,
-        constants::MERKLE_DEPTH,
         keypair::{Keypair, PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
-        nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
         util::poseidon_hash,
     },
@@ -87,7 +85,7 @@ impl MemoryState {
         // Update merkle tree and witnesses
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
             // Add the new coins to the Merkle tree
-            let node = MerkleNode(coin.0);
+            let node = MerkleNode::from(coin.0);
             self.tree.append(&node);
 
             // Keep track of all Merkle roots that have existed
