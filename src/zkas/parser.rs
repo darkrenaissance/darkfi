@@ -14,6 +14,9 @@ use super::{
 /// These can not be used anywhere except where they are expected.
 const KEYWORDS: [&str; 3] = ["constant", "contract", "circuit"];
 
+/// Forbidden namespaces
+const NOPE_NS: [&str; 4] = [".constant", ".literal", ".contract", ".circuit"];
+
 /// Valid EcFixedPoint constant names supported by the VM.
 const VALID_ECFIXEDPOINT: [&str; 1] = ["VALUE_COMMIT_RANDOM"];
 
@@ -38,7 +41,7 @@ impl Parser {
         Self { tokens, error }
     }
 
-    pub fn parse(&self) -> (Vec<Constant>, Vec<Witness>, Vec<Statement>) {
+    pub fn parse(&self) -> (String, Vec<Constant>, Vec<Witness>, Vec<Statement>) {
         // We use these to keep state while parsing.
         let mut namespace = None;
         let (mut declaring_constant, mut declared_constant) = (false, false);
@@ -133,6 +136,13 @@ impl Parser {
                             );
                         }
                     } else {
+                        if NOPE_NS.contains(&$t[0].token.as_str()) {
+                            self.error.abort(
+                                &format!("'{}' cannot be a namespace.", $t[0].token),
+                                $t[0].line,
+                                $t[0].column,
+                            );
+                        }
                         namespace = Some($t[0].token.clone());
                     }
                 };
@@ -273,7 +283,7 @@ impl Parser {
             self.error.abort("Circuit section is empty.", 0, 0);
         }
 
-        (constants, witnesses, statements)
+        (ns, constants, witnesses, statements)
     }
 
     fn check_section_structure(&self, section: &str, tokens: Vec<Token>) {
