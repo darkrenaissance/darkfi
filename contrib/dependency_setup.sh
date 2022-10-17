@@ -73,6 +73,15 @@ setup_zypper() {
 		fontconfig-devel || return 1
 }
 
+setup_emerge() {
+	EMERGE="$SUDO $1"
+
+	$EMERGE dev-util/cmake app-misc/jq net-misc/wget dev-util/pkgconf \
+		virtual/libudev media-libs/freetype dev-libs/expat \
+		net-misc/curl net-libs/libssh media-libs/fontconfig || return 1
+# sys-devel/clang failed, but it worked anyway
+}
+
 case "$(uname -s)" in
 Linux)
 	if command -v apt >/dev/null; then
@@ -121,6 +130,13 @@ Linux)
 	if command -v zypper; then
 		echo "Setting up for zypper" >&2
 		setup_zypper "$(command -v zypper)" || exit 1
+		echo "Dependencies installed!" >&2
+		exit 0
+	fi
+
+	if command -v emerge; then
+		echo "Setting up for emerge" >&2
+		setup_emerge "$(command -v emerge)" || exit 1
 		echo "Dependencies installed!" >&2
 		exit 0
 	fi
