@@ -360,8 +360,8 @@ required-features = ["crypto"]
 
 [[example]]
 name = "dao"
-path = "example/dao/dao.rs"
-required-features = ["crypto"]
+path = "example/dao/src/dao.rs"
+required-features = ["crypto", "rpc"]
 
 [[example]]
 name = "lead"

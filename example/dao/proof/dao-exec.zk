@@ -91,7 +91,7 @@ circuit "DaoExec" {
        proposal_token_id,
        dao_serial,
        dao_spend_hook,
-       proposal_bulla,
+       dao_bulla,
        dao_coin_blind,
     );
     constrain_instance(coin_1);

@@ -13,7 +13,7 @@ use darkfi::{
 };
 
 use crate::{
-    contract::example_contract::{foo::validate::CallData, CONTRACT_ID},
+    contract::example::{foo::validate::CallData, CONTRACT_ID},
     util::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 

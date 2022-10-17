@@ -1,3 +1,7 @@
+use halo2_proofs::circuit::Value;
+use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+use rand::rngs::OsRng;
+
 use darkfi::{
     crypto::{
         keypair::{PublicKey, SecretKey},
@@ -6,12 +10,9 @@ use darkfi::{
     },
     zk::vm::{Witness, ZkCircuit},
 };
-use halo2_proofs::circuit::Value;
-use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
-use rand::rngs::OsRng;
 
 use crate::{
-    contract::dao_contract::{mint::validate::CallData, state::DaoBulla, CONTRACT_ID},
+    contract::dao::{mint::validate::CallData, state::DaoBulla, CONTRACT_ID},
     util::{FuncCall, ZkContractInfo, ZkContractTable},
 };
 

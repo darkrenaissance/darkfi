@@ -1,5 +1,4 @@
 use crypto_api_chachapoly::ChachaPolyIetf;
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -9,6 +8,7 @@ use darkfi::{
     },
     Error, Result,
 };
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
 pub const AEAD_TAG_SIZE: usize = 16;
 
@@ -51,8 +51,7 @@ impl EncryptedNote2 {
             self.ciphertext.len() - AEAD_TAG_SIZE
         );
 
-        let t = T::decode(&plaintext[..])?;
-        Ok(t)
+        T::decode(&plaintext[..]).map_err(Error::from)
     }
 }
 

@@ -4,7 +4,7 @@ use darkfi::crypto::{keypair::PublicKey, types::DrkCircuitField};
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
-    contract::dao_contract::{DaoBulla, State, CONTRACT_ID},
+    contract::dao::{DaoBulla, State, CONTRACT_ID},
     util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 
@@ -16,7 +16,7 @@ pub fn state_transition(
     let func_call = &parent_tx.func_calls[func_call_index];
     let call_data = func_call.call_data.as_any();
 
-    assert_eq!((*call_data).type_id(), TypeId::of::<CallData>());
+    assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
     let call_data = call_data.downcast_ref::<CallData>();
 
     // This will be inside wasm so unwrap is fine.
@@ -65,7 +65,7 @@ impl CallDataBase for CallData {
     fn encode_bytes(
         &self,
         mut writer: &mut dyn std::io::Write,
-    ) -> core::result::Result<usize, std::io::Error> {
+    ) -> std::result::Result<usize, std::io::Error> {
         self.encode(&mut writer)
     }
 }

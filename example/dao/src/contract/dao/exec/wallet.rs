@@ -1,8 +1,7 @@
-use log::debug;
-use rand::rngs::OsRng;
-
 use halo2_proofs::circuit::Value;
+use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
@@ -14,7 +13,7 @@ use darkfi::{
 };
 
 use crate::{
-    contract::dao_contract::{
+    contract::dao::{
         exec::validate::CallData, mint::wallet::DaoParams, propose::wallet::Proposal, CONTRACT_ID,
     },
     util::{FuncCall, ZkContractInfo, ZkContractTable},
@@ -40,7 +39,6 @@ pub struct Builder {
 impl Builder {
     pub fn build(self, zk_bins: &ZkContractTable) -> FuncCall {
         debug!(target: "dao_contract::exec::wallet::Builder", "build()");
-        debug!(target: "dao_contract::exec::wallet", "proposalserial{:?}", self.proposal.serial);
         let mut proofs = vec![];
 
         let proposal_dest_coords = self.proposal.dest.0.to_affine().coordinates().unwrap();
@@ -100,7 +98,7 @@ impl Builder {
             self.proposal.token_id,
             self.dao_serial,
             self.hook_dao_exec,
-            proposal_bulla,
+            dao_bulla,
             self.dao_coin_blind,
         ]);
 
@@ -123,6 +121,7 @@ impl Builder {
         let zk_bin = zk_info.bincode.clone();
 
         let prover_witnesses = vec![
+            //
             // proposal params
             Witness::Base(Value::known(*proposal_dest_coords.x())),
             Witness::Base(Value::known(*proposal_dest_coords.y())),
@@ -173,7 +172,6 @@ impl Builder {
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
-        debug!(target: "example_contract::foo::wallet::Builder", "input_proof Proof::create()");
         let proving_key = &zk_info.proving_key;
         let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::exec() proving error!)");

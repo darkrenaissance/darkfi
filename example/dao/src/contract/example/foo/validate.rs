@@ -1,15 +1,15 @@
-use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
+use std::any::{Any, TypeId};
+
 use pasta_curves::pallas;
 
 use darkfi::{
     crypto::{keypair::PublicKey, types::DrkCircuitField},
     Error as DarkFiError,
 };
-
-use std::any::{Any, TypeId};
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
-    contract::example_contract::{state::State, CONTRACT_ID},
+    contract::example::{state::State, CONTRACT_ID},
     util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 
@@ -19,7 +19,6 @@ type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("ValueExists")]
     ValueExists,
-
     #[error("DarkFi error: {0}")]
     DarkFiError(String),
 }
@@ -52,7 +51,7 @@ impl CallDataBase for CallData {
     fn encode_bytes(
         &self,
         mut writer: &mut dyn std::io::Write,
-    ) -> core::result::Result<usize, std::io::Error> {
+    ) -> std::result::Result<usize, std::io::Error> {
         self.encode(&mut writer)
     }
 }
@@ -65,7 +64,7 @@ pub fn state_transition(
     let func_call = &parent_tx.func_calls[func_call_index];
     let call_data = func_call.call_data.as_any();
 
-    assert_eq!((*call_data).type_id(), TypeId::of::<CallData>());
+    assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
     let call_data = call_data.downcast_ref::<CallData>();
 
     // This will be inside wasm so unwrap is fine.
