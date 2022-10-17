@@ -18,26 +18,25 @@ use darkfi::{
     },
     zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::decoder::ZkBinary,
-    Error,
 };
 use darkfi_serial::Encodable;
 
 use crate::error::{DaoError, DaoResult};
 
-/// Parse pallas::Base from a base58-encoded string
-pub fn parse_b58(s: &str) -> std::result::Result<pallas::Base, darkfi::Error> {
-    let bytes = bs58::decode(s).into_vec()?;
-    if bytes.len() != 32 {
-        return Err(Error::ParseFailed("Failed parsing DrkTokenId from base58 string"))
-    }
+// /// Parse pallas::Base from a base58-encoded string
+// pub fn parse_b58(s: &str) -> std::result::Result<pallas::Base, darkfi::Error> {
+//     let bytes = bs58::decode(s).into_vec()?;
+//     if bytes.len() != 32 {
+//         return Err(Error::ParseFailed("Failed parsing DrkTokenId from base58 string"))
+//     }
 
-    let ret = pallas::Base::from_repr(bytes.try_into().unwrap());
-    if ret.is_some().unwrap_u8() == 1 {
-        return Ok(ret.unwrap())
-    }
+//     let ret = pallas::Base::from_repr(bytes.try_into().unwrap());
+//     if ret.is_some().unwrap_u8() == 1 {
+//         return Ok(ret.unwrap())
+//     }
 
-    Err(Error::ParseFailed("Failed parsing DrkTokenId from base58 string"))
-}
+//     Err(Error::ParseFailed("Failed parsing DrkTokenId from base58 string"))
+// }
 
 // The token of the DAO treasury.
 lazy_static! {

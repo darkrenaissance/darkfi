@@ -1,21 +1,10 @@
-use async_std::sync::{Arc, Mutex};
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    hash::Hasher,
-    io,
-    time::Instant,
-};
+use std::{any::TypeId, time::Instant};
 
-use darkfi_serial::Encodable;
 use incrementalmerkletree::Tree;
-use log::{debug, info};
+use log::debug;
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{
-        ff::{Field, PrimeField},
-        Curve, Group,
-    },
+    group::{ff::Field, Curve, Group},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -24,16 +13,10 @@ use darkfi::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
-        schnorr::{SchnorrPublic, SchnorrSecret, Signature},
-        types::{DrkCircuitField, DrkSpendHook, DrkUserData, DrkValue},
+        types::{DrkSpendHook, DrkUserData, DrkValue},
         util::{pedersen_commitment_u64, poseidon_hash},
-        Proof,
     },
-    zk::{
-        circuit::{BurnContract, MintContract},
-        vm::ZkCircuit,
-        vm_stack::empty_witnesses,
-    },
+    zk::circuit::{BurnContract, MintContract},
     zkas::decoder::ZkBinary,
 };
 
@@ -106,7 +89,7 @@ pub async fn example() -> Result<()> {
         update.apply(&mut states);
     }
 
-    tx.zk_verify(&zk_bins);
+    tx.zk_verify(&zk_bins).unwrap();
     tx.verify_sigs();
 
     Ok(())
@@ -249,7 +232,7 @@ async fn main() -> Result<()> {
         update.apply(&mut states);
     }
 
-    tx.zk_verify(&zk_bins);
+    tx.zk_verify(&zk_bins).unwrap();
     tx.verify_sigs();
 
     // Wallet stuff
@@ -346,7 +329,7 @@ async fn main() -> Result<()> {
         update.apply(&mut states);
     }
 
-    tx.zk_verify(&zk_bins);
+    tx.zk_verify(&zk_bins).unwrap();
     tx.verify_sigs();
 
     //// Wallet
@@ -473,7 +456,7 @@ async fn main() -> Result<()> {
         update.apply(&mut states);
     }
 
-    tx.zk_verify(&zk_bins);
+    tx.zk_verify(&zk_bins).unwrap();
     tx.verify_sigs();
 
     //// Wallet
@@ -619,7 +602,7 @@ async fn main() -> Result<()> {
         update.apply(&mut states);
     }
 
-    tx.zk_verify(&zk_bins);
+    tx.zk_verify(&zk_bins).unwrap();
     tx.verify_sigs();
 
     //// Wallet
@@ -740,7 +723,7 @@ async fn main() -> Result<()> {
         update.apply(&mut states);
     }
 
-    tx.zk_verify(&zk_bins);
+    tx.zk_verify(&zk_bins).unwrap();
     tx.verify_sigs();
 
     //// Wallet
@@ -826,7 +809,7 @@ async fn main() -> Result<()> {
         update.apply(&mut states);
     }
 
-    tx.zk_verify(&zk_bins);
+    tx.zk_verify(&zk_bins).unwrap();
     tx.verify_sigs();
 
     //// Wallet
@@ -912,7 +895,7 @@ async fn main() -> Result<()> {
         update.apply(&mut states);
     }
 
-    tx.zk_verify(&zk_bins);
+    tx.zk_verify(&zk_bins).unwrap();
     tx.verify_sigs();
 
     //// Wallet
@@ -1130,7 +1113,7 @@ async fn main() -> Result<()> {
     }
 
     // Other stuff
-    tx.zk_verify(&zk_bins);
+    tx.zk_verify(&zk_bins).unwrap();
     tx.verify_sigs();
 
     //// Wallet
