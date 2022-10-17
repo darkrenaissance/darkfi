@@ -1,5 +1,7 @@
 use std::any::{Any, TypeId};
 
+use darkfi_sdk::crypto::{MerkleNode, Nullifier};
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::Tree;
 use log::{debug, error};
 use pasta_curves::{group::Group, pallas};
@@ -8,15 +10,12 @@ use darkfi::{
     crypto::{
         coin::Coin,
         keypair::PublicKey,
-        merkle_node::MerkleNode,
-        nullifier::Nullifier,
         types::{DrkCircuitField, DrkTokenId, DrkValueBlind, DrkValueCommit},
         util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues,
     },
     Error as DarkFiError,
 };
-use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
     contract::{
@@ -51,7 +50,7 @@ impl UpdateBase for Update {
         //// Update merkle tree and witnesses
         for (coin, enc_note) in self.coins.into_iter().zip(self.enc_notes.into_iter()) {
             // Add the new coins to the Merkle tree
-            let node = MerkleNode(coin.0);
+            let node = MerkleNode::from(coin.0);
             state.tree.append(&node);
 
             // Keep track of all Merkle roots that have existed

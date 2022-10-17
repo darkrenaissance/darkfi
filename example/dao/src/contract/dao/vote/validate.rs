@@ -1,5 +1,7 @@
 use std::any::{Any, TypeId};
 
+use darkfi_sdk::crypto::{MerkleNode, Nullifier};
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use log::error;
 use pasta_curves::{
     arithmetic::CurveAffine,
@@ -8,12 +10,9 @@ use pasta_curves::{
 };
 
 use darkfi::{
-    crypto::{
-        keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier, types::DrkCircuitField,
-    },
+    crypto::{keypair::PublicKey, types::DrkCircuitField},
     Error as DarkFiError,
 };
-use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
     contract::{dao, dao::State as DaoState, money, money::state::State as MoneyState},
@@ -67,11 +66,11 @@ impl CallDataBase for CallData {
             zk_publics.push((
                 "dao-vote-burn".to_string(),
                 vec![
-                    input.nullifier.0,
+                    input.nullifier.inner(),
                     *value_coords.x(),
                     *value_coords.y(),
                     self.header.token_commit,
-                    input.merkle_root.0,
+                    input.merkle_root.inner(),
                     *sigpub_coords.x(),
                     *sigpub_coords.y(),
                 ],

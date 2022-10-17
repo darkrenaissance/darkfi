@@ -1,11 +1,9 @@
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 
 use darkfi::crypto::{
     coin::Coin,
-    constants::MERKLE_DEPTH,
     keypair::{PublicKey, SecretKey},
-    merkle_node::MerkleNode,
-    nullifier::Nullifier,
 };
 
 use super::transfer;
