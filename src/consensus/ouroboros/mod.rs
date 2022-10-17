@@ -2,17 +2,11 @@ use std::{fmt, thread, time::Duration};
 use async_std::sync::Arc;
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 use halo2_proofs::arithmetic::Field;
-use log::{error, info};
 use smol::Executor;
-use std::fmt;
 use rand::rngs::OsRng;
-use std::{thread, time::Duration};
-use crate::zk::circuit::{BurnContract, LeadContract, MintContract};
 use incrementalmerkletree::bridgetree::BridgeTree;
-use log::{debug, error, info};
+use log::{error, info};
 use pasta_curves::{group::ff::PrimeField, pallas};
-use rand::rngs::OsRng;
-use smol::Executor;
 use url::Url;
 use crate::{
     blockchain::Blockchain,

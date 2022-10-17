@@ -306,6 +306,10 @@ impl Epoch {
             //
             let y_x: pallas::Base = *y_coordinates.x();
             let y_y: pallas::Base = *y_coordinates.y();
+            let y_coord_arr = [y_x, y_y];
+            let y: pallas::Base =
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+                .hash(y_coord_arr);
             //
             let val_2ibig =
                 Float10::try_from(coin.value.unwrap()).unwrap().with_precision(RADIX_BITS).value();
@@ -317,7 +321,7 @@ impl Epoch {
             let y_ibig = base2ibig(y_x);
             info!("y_x: {}, target ibig: {}", y_ibig, target_ibig);
             info!("target base: {:?}", target_base);
-            let iam_leader = y_x < target_base;
+            let iam_leader = y < target_base;
             if iam_leader {
                 if coin.value.unwrap() > highest_stake {
                     highest_stake = coin.value.unwrap();

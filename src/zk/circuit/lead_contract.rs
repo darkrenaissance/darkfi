@@ -576,8 +576,26 @@ impl Circuit<pallas::Base> for LeadContract {
             y_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_y)?
         };
         let y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        let y_commit_base = y_commit.inner().x();
+        let y_commit_base_y = y_commit.inner().x();
+        let y_commit_base_x = y_commit.inner().x();
+        let y_commit_base : AssignedCell<Fp, Fp> = {
+            let y_coord = [y_commit_base_y, y_commit_base_x];
+            let poseidon_hasher = PoseidonHash::<
+                    _,
+                _,
+                poseidon::P128Pow5T3,
+                poseidon::ConstantLength<2>,
+                3,
+                2,
+                >::init(
+                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
+            )?;
 
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), y_coord)?;
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
+            poseidon_output
+        };
         // constraint rho as COMIT(PRF(root_sk||nonce), rho_mu)
         // r*G_2
         let (blind, _) = {
