@@ -11,6 +11,9 @@ default-theme = "ayu"
 preferred-dark-theme = "ayu"
 theme = "theme"
 
+[output.html.playground]
+runnable = false
+
 [output.katex]
 
 [preprocessor.katex]
