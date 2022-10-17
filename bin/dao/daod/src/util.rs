@@ -121,10 +121,14 @@ impl ZkContractTable {
     }
 }
 
+// ANCHOR: transaction
 pub struct Transaction {
     pub func_calls: Vec<FuncCall>,
+    // TODO: this is wrong. It should be Vec<Vec<Signature>>
+    // each Vec<Signature> correspond to ONE function call
     pub signatures: Vec<Signature>,
 }
+// ANCHOR_END: transaction
 
 impl Transaction {
     /// Verify ZK contracts for the entire tx
