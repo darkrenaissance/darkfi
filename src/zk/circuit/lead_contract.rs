@@ -36,6 +36,7 @@ use crate::zk::gadget::{
     less_than::{LessThanChip, LessThanConfig},
     native_range_check::NativeRangeCheckChip,
 };
+use log::info;
 
 const WINDOW_SIZE: usize = 3;
 const NUM_OF_BITS: usize = 254;
@@ -340,6 +341,12 @@ impl Circuit<pallas::Base> for LeadContract {
             Value::known(pallas::Base::one()), // note! this parameter to be tuned.
         )?;
 
+        let one = self.load_private(
+            layouter.namespace(|| "one"),
+            config.advices[0],
+            Value::known(pallas::Base::one()),
+        )?;
+
         // the original crypsinous pk is as follows.
         // coin public key pk=PRF_{root_sk}(tau)
         // coin public key is pseudo random hash of concatenation of the following:
@@ -391,7 +398,6 @@ impl Circuit<pallas::Base> for LeadContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
-
         // commitment to the staking coin
         // coin commiment H=COMMIT(PRF(prefix||pk||V||nonce), r)
         let com = {
@@ -404,12 +410,13 @@ impl Circuit<pallas::Base> for LeadContract {
                     coin_pk_y.clone(),
                     coin_value.clone(),
                     coin_nonce.clone(),
+                    one.clone(),
                 ];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
                     poseidon::P128Pow5T3,
-                    poseidon::ConstantLength<5>,
+                    poseidon::ConstantLength<6>,
                     3,
                     2,
                 >::init(
@@ -463,7 +470,6 @@ impl Circuit<pallas::Base> for LeadContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
-
         // coin2 commiment H=COMMIT(PRF(pk||V||nonce2), r2)
         // poured coin's commitment is a nullifier
         let com2 = {
@@ -476,12 +482,13 @@ impl Circuit<pallas::Base> for LeadContract {
                     coin_pk_y.clone(),
                     coin_value.clone(),
                     coin2_nonce.clone(),
+                    one.clone()
                 ];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
                     poseidon::P128Pow5T3,
-                    poseidon::ConstantLength<5>,
+                    poseidon::ConstantLength<6>,
                     3,
                     2,
                 >::init(

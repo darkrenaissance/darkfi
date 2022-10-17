@@ -198,6 +198,7 @@ impl Epoch {
         let keypair: Keypair = Keypair::new(sk);
         //random commitment blinding values
         let mut rng = thread_rng();
+        let one = pallas::Base::one();
         let c_cm1_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
         let c_cm2_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
         let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(self.len());
@@ -223,9 +224,9 @@ impl Epoch {
                 .hash(sn_msg);
 
         let coin_commit_msg_input =
-            [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed];
+            [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed, one];
         let coin_commit_msg: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<5>, 3, 2>::init()
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
                 .hash(coin_commit_msg_input);
         let c_cm: pallas::Point = pedersen_commitment_base(coin_commit_msg, c_cm1_blind);
         let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
@@ -242,9 +243,9 @@ impl Epoch {
                 .hash(coin_nonce2_msg);
 
         let coin2_commit_msg_input =
-            [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed2];
+            [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed2, one];
         let coin2_commit_msg: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<5>, 3, 2>::init()
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
                 .hash(coin2_commit_msg_input);
         let c_cm2 = pedersen_commitment_base(coin2_commit_msg, c_cm2_blind);
 
