@@ -146,6 +146,7 @@ impl JsonRpcInterface {
             let amount = proposal.amount;
             let token_id = proposal.token_id;
             let token_id: String = bs58::encode(token_id.to_repr()).into_string();
+            let dest: String = bs58::encode(dest.to_bytes()).into_string();
             proposal_data.push((dest, amount, token_id));
         }
 
