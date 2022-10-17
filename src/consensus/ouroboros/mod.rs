@@ -1,15 +1,19 @@
 use std::{fmt, thread, time::Duration};
-
 use async_std::sync::Arc;
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 use halo2_proofs::arithmetic::Field;
+use log::{error, info};
+use smol::Executor;
+use std::fmt;
+use rand::rngs::OsRng;
+use std::{thread, time::Duration};
+use crate::zk::circuit::{BurnContract, LeadContract, MintContract};
 use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, error, info};
 use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::rngs::OsRng;
 use smol::Executor;
 use url::Url;
-
 use crate::{
     blockchain::Blockchain,
     consensus::{
@@ -41,20 +45,15 @@ use crate::{
     zk::circuit::{BurnContract, LeadContract, MintContract},
     Result,
 };
-
 pub mod consts;
 pub mod types;
 pub mod utils;
-
 pub mod epochconsensus;
 pub use epochconsensus::EpochConsensus;
-
 pub mod epoch;
 pub use epoch::Epoch;
-
 pub(crate) mod workspace;
 pub(crate) use workspace::SlotWorkspace;
-
 pub(crate) mod state;
 pub(crate) use state::StakeholderState;
 
@@ -119,7 +118,7 @@ impl Stakeholder {
         let faucet_signature_secret = SecretKey::random(&mut OsRng);
         let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
 
-        debug!(target: LOG_T, "stakeholder constructed");
+        info!(target: LOG_T, "stakeholder constructed");
         Ok(Self {
             blockchain: bc,
             net: p2p,

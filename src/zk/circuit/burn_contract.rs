@@ -94,7 +94,7 @@ const BURN_USERDATA_OFFSET: usize = 6;
 const BURN_SIGKEYX_OFFSET: usize = 7;
 const BURN_SIGKEYY_OFFSET: usize = 8;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct BurnContract {
     pub secret_key: Value<pallas::Base>,
     pub serial: Value<pallas::Base>,

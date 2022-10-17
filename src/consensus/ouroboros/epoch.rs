@@ -2,17 +2,16 @@ use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode};
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::arithmetic::Field;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use log::debug;
+use log::info;
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{ff::PrimeField, Curve},
     pallas,
 };
 use rand::{thread_rng, Rng};
-
 use crate::{
     consensus::ouroboros::{
-        consts::RADIX_BITS,
+        consts::{RADIX_BITS, LOTTERY_HEAD_START},
         utils::{base2ibig, fbig2ibig},
         EpochConsensus, Float10,
     },
@@ -115,7 +114,7 @@ impl Epoch {
             let sk_bytes = sk_base.to_repr();
             let node = MerkleNode::from_bytes(sk_bytes).unwrap();
             //let serialized = serde_json::to_string(&node).unwrap();
-            //debug!("serialized: {}", serialized);
+            //info!("serialized: {}", serialized);
             tree.append(&node.clone());
             let leaf_position = tree.witness();
             let root = tree.root(0).unwrap();
@@ -171,7 +170,7 @@ impl Epoch {
                 let coin = self.create_leadcoin(
                     sigma1,
                     sigma2,
-                    0,
+                    LOTTERY_HEAD_START,
                     i,
                     root_sks[i],
                     path_sks[i],
@@ -285,7 +284,7 @@ impl Epoch {
     /// returns true if the stakeholder is a leader for the current slot, else otherwise
     pub fn is_leader(&self, sl: u64, idx: &mut usize) -> bool {
         let slusize = sl as usize;
-        debug!("slot: {}, coin len: {}", sl, self.coins.len());
+        info!("slot: {}, coin len: {}", sl, self.coins.len());
         assert!(slusize < self.coins.len());
         let competing_coins: &Vec<LeadCoin> = &self.coins.clone()[sl as usize];
         let mut am_leader = vec![];
@@ -299,20 +298,26 @@ impl Epoch {
                 .hash(y_exp);
             //TODO (fix) use the hash of y coordinates, using single coordinate is insecure.
             //  pick x coordinate of y for comparison
-            let y_x: pallas::Base =
-                *pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
-                    .to_affine()
-                    .coordinates()
-                    .unwrap()
-                    .x();
+            let y_coordinates =
+                pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
+                .to_affine()
+                .coordinates()
+                .unwrap();
+            //
+            let y_x: pallas::Base = *y_coordinates.x();
+            let y_y: pallas::Base = *y_coordinates.y();
+            //
             let val_2ibig =
                 Float10::try_from(coin.value.unwrap()).unwrap().with_precision(RADIX_BITS).value();
-            let target = base2ibig(coin.sigma1.unwrap()) * val_2ibig.clone() +
-                base2ibig(coin.sigma2.unwrap()) * val_2ibig.clone() * val_2ibig;
-            let target_ibig = fbig2ibig(target);
+            let val_base = pallas::Base::from(coin.value.unwrap());
+            let target_base = coin.sigma1.unwrap() * val_base +
+                coin.sigma2.unwrap() * val_base * val_base;
+            let target_fbig = base2ibig(coin.sigma1.unwrap()) * val_2ibig.clone() + base2ibig(coin.sigma2.unwrap()) * val_2ibig.clone() * val_2ibig;
+            let target_ibig = fbig2ibig(target_fbig);
             let y_ibig = base2ibig(y_x);
-            debug!("y_x: {}, target: {}", y_ibig, target_ibig);
-            let iam_leader = y_ibig < target_ibig;
+            info!("y_x: {}, target ibig: {}", y_ibig, target_ibig);
+            info!("target base: {:?}", target_base);
+            let iam_leader = y_x < target_base;
             if iam_leader {
                 if coin.value.unwrap() > highest_stake {
                     highest_stake = coin.value.unwrap();
@@ -331,6 +336,7 @@ impl Epoch {
     /// returns  the of proof of the winning coin of slot `sl` at index `idx` with
     /// proving key `pk`
     pub fn get_proof(&self, sl: u64, idx: usize, pk: &ProvingKey) -> Proof {
+        info!("get_proof");
         let competing_coins: &Vec<LeadCoin> = &self.coins.clone()[sl as usize];
         let coin = competing_coins[idx];
         lead_proof::create_lead_proof(pk, coin).unwrap()

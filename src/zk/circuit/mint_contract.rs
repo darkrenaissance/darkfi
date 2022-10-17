@@ -50,7 +50,7 @@ const MINT_VALCOMY_OFFSET: usize = 2;
 const MINT_TOKCOMX_OFFSET: usize = 3;
 const MINT_TOKCOMY_OFFSET: usize = 4;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct MintContract {
     /// X coordinate for public key
     pub pub_x: Value<pallas::Base>,
