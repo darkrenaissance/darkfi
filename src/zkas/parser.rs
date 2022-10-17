@@ -53,8 +53,11 @@ impl Parser {
         let mut contract_tokens = vec![];
         let mut circuit_tokens = vec![];
 
+        // Tokens belonging to the current statement
         let mut circuit_stmt = vec![];
+        // All completed statements are pushed here
         let mut circuit_stmts = vec![];
+        // Contains constant and contract sections
         let mut ast_inner = IndexMap::new();
         let mut ast = IndexMap::new();
 
@@ -239,8 +242,10 @@ impl Parser {
                 self.check_section_structure("circuit", circuit_tokens.clone());
                 check_namespace!(circuit_tokens);
 
+                // Grab tokens for each statement
                 for i in circuit_tokens[2..circuit_tokens.len() - 1].iter() {
                     if i.token_type == TokenType::Semicolon {
+                        // Push completed statement to the stack
                         circuit_stmts.push(circuit_stmt.clone());
                         circuit_stmt = vec![];
                         continue
@@ -252,6 +257,8 @@ impl Parser {
                 declared_circuit = true;
             }
         }
+
+        // Tokens have been processed and ast is complete
 
         let ns = namespace.unwrap();
         ast.insert(ns.clone(), ast_inner);
@@ -286,6 +293,7 @@ impl Parser {
         (ns, constants, witnesses, statements)
     }
 
+    /// Routine checks on section structure
     fn check_section_structure(&self, section: &str, tokens: Vec<Token>) {
         if tokens[0].token_type != TokenType::String {
             self.error.abort(
@@ -338,7 +346,7 @@ impl Parser {
                     );
                 }
             }
-            _ => panic!(),
+            _ => unreachable!(),
         };
     }
 
