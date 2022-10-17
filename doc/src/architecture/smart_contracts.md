@@ -89,13 +89,13 @@ the entire tx is rejected. Additionally some smart contracts might impose additi
 on the transaction's structure or other function calls (such as their call data).
 
 ```rust
-{{#include ../../../bin/daod/src/demo.rs:transaction}}
+{{#include ../../../bin/dao/daod/src/util.rs:transaction}}
 ```
 
 Function calls represent mutations of the current active state to a new state.
 
 ```rust
-{{#include ../../../bin/daod/src/demo.rs:funccall}}
+{{#include ../../../bin/dao/daod/src/util.rs:funccall}}
 ```
 
 The `contract_id` corresponds to the top level module for the contract which
@@ -183,13 +183,13 @@ The transaction verification pipeline roughly looks like this:
 Lets review again the format of transactions.
 
 ```rust
-{{#include ../../../bin/daod/src/demo.rs:transaction}}
+{{#include ../../../bin/dao/daod/src/util.rs:transaction}}
 ```
 
 And corresponding function calls.
 
 ```rust
-{{#include ../../../bin/daod/src/demo.rs:funccall}}
+{{#include ../../../bin/dao/daod/src/util.rs:funccall}}
 ```
 
 As we can see the ZK proofs and signatures are separate from the actuall `call_data` interpreted
@@ -200,7 +200,7 @@ the signatures need the public keys. We do this in the `CallDataBase` trait by e
 methods:
 
 ```rust
-{{#include ../../../bin/daod/src/demo.rs:calldatabase_trait}}
+{{#include ../../../bin/dao/daod/src/util.rs:calldatabase_trait}}
 ```
 
 These methods export the required values needed for the ZK proofs and signature verification

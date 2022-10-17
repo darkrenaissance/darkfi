@@ -121,10 +121,13 @@ impl ZkContractTable {
     }
 }
 
+// ANCHOR: transaction
 pub struct Transaction {
     pub func_calls: Vec<FuncCall>,
+    // TODO: MUST be Vec<Vec<Signature>>, this is wrong
     pub signatures: Vec<Signature>,
 }
+// ANCHOR_END: transaction
 
 impl Transaction {
     /// Verify ZK contracts for the entire tx
@@ -200,12 +203,14 @@ pub fn sign(signature_secrets: Vec<SecretKey>, func_calls: &Vec<FuncCall>) -> Ve
 type ContractId = pallas::Base;
 type FuncId = pallas::Base;
 
+// ANCHOR: funccall
 pub struct FuncCall {
     pub contract_id: ContractId,
     pub func_id: FuncId,
     pub call_data: Box<dyn CallDataBase + Send + Sync>,
     pub proofs: Vec<Proof>,
 }
+// ANCHOR_END: funccall
 
 impl Encodable for FuncCall {
     fn encode<W: std::io::Write>(&self, mut w: W) -> std::result::Result<usize, std::io::Error> {
@@ -218,6 +223,7 @@ impl Encodable for FuncCall {
     }
 }
 
+// ANCHOR: calldatabase_trait
 pub trait CallDataBase {
     // Public values for verifying the proofs
     // Needed so we can convert internal types so they can be used in Proof::verify()
@@ -234,6 +240,7 @@ pub trait CallDataBase {
         writer: &mut dyn std::io::Write,
     ) -> std::result::Result<usize, std::io::Error>;
 }
+// ANCHOR_END: calldatabase_trait
 
 type GenericContractState = Box<dyn Any + Send>;
 
