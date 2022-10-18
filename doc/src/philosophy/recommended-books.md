@@ -23,7 +23,10 @@
 
 * [The Story of Philosophy](https://en.wikipedia.org/wiki/The_Story_of_Philosophy) by Will Durant
 * [The Sovereign Individual](https://en.wikipedia.org/wiki/The_Sovereign_Individual)
-  is very popular among crypto people.
+  is very popular among crypto people. Makes several prescient predictions
+  including about cryptocurrency, algorithmic money and the response by
+  nation states against this emeregent technology. Good reading to understand
+  the coming conflict between cryptocurrency and states.
 
 ## Python
 
