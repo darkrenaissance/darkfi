@@ -1,7 +1,10 @@
 # Summary
 
 [DarkFi](README.md)
-- [Ideology](IDEOLOGY.md)
+- [Philosophy](philosophy/philosophy.md)
+  - [Ideology](philosophy/ideology.md)
+  - [Recommended Books](philosophy/recommended-books.md)
+  - [Reading Maths Books](philosophy/reading-maths-books.md)
 - [Development](development.md)
 - [Port ranges](portranges.md)
 - [Architecture](architecture/architecture.md)
