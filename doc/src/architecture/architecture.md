@@ -40,6 +40,11 @@ Priorities:
     5. Update taud to CRDTs
     6. Q&A on wallet application
 
+Deferred (future):
+
+1. Migration away from SQLite for WalletDb to file system db based off
+   git porcelain.
+
 ## Release Cycle
 
 <table>
