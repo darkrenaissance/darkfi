@@ -73,6 +73,7 @@ This allows us to coordinate more effectively.
 |---------|--------------------|-------------------------------------------------------------------------------------------------------|
 | gm      | good morning       | Reporting in                                                                                          |
 | gn      | good night         | Logging off for the day                                                                               |
+| +++     | thumbs up          | Understood, makes sense                                                                               |
 | afk*    | away from keyboard | Shutting down the computer so you will lose messages sent to you                                      |
 | b*      | back               | Returning back after leaving                                                                          |
 | brb     | be right back      | If you are in a meeting and need to leave for a few mins. For example, maybe you need to grab a book. |
