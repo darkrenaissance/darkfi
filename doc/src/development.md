@@ -53,3 +53,20 @@ and works, we can use a helper for `cargo` called
 
 The `Makefile` provided in the repository is already set up to use it,
 so it's enough to install `cargo hack` and run `make check`.
+
+## Etiquette
+
+These are not hard and fast rules, but guidance for team members working together.
+This allows us to coordinate more effectively.
+
+| Abbrev  | Meaning            | Description                                                                                           |
+|---------|--------------------|-------------------------------------------------------------------------------------------------------|
+| gm      | good morning       | Reporting in                                                                                          |
+| gn      | good night         | Logging off for the day                                                                               |
+| afk*    | away from keyboard | Shutting down the computer so you will lose messages sent to you                                      |
+| b*      | back               | Returning back after leaving                                                                          |
+| brb     | be right back      | If you are in a meeting and need to leave for a few mins. For example, maybe you need to grab a book. |
+| one sec | one second         | You need to search something on the web, or you are just doing the task (example: opening the file).  |
+
+* once we have proper syncing these will become less relevant and not needed.
+
