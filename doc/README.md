@@ -11,4 +11,5 @@ For the mdbook-katex backend run:
 
 ```
 cargo install --git "https://github.com/lzanini/mdbook-katex"
+cargo install mdbook-toc
 ```

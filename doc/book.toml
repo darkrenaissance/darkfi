@@ -17,3 +17,8 @@ runnable = false
 [output.katex]
 
 [preprocessor.katex]
+
+[preprocessor.toc]
+command = "mdbook-toc"
+renderer = ["html"]
+

@@ -1,5 +1,7 @@
 # Anonymous Smart Contracts
 
+<!-- toc -->
+
 Every full node is a **verifier**.
 
 **Prover** is the person executing the smart contract function on their secret witness data.
