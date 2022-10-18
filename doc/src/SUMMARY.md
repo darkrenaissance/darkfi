@@ -28,6 +28,7 @@
   - [vanityaddr](misc/vanityaddr.md)
   - [ircd](misc/ircd/ircd.md)
   	- [Specification](misc/ircd/specification.md)
+  	- [Private Message](misc/ircd/private_message.md)
   - [tau](misc/tau.md)
   - [event_graph](misc/event_graph/event_graph.md)
     - [Network Protocol](misc/event_graph/network_protocol.md)
