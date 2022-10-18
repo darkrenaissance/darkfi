@@ -54,6 +54,16 @@ and works, we can use a helper for `cargo` called
 The `Makefile` provided in the repository is already set up to use it,
 so it's enough to install `cargo hack` and run `make check`.
 
+## ChangeLog
+
+Whenever a major change or sub-project is completed, a summary must be noted
+in the [ChangeLog](https://github.com/darkrenaissance/darkfi/blob/master/ChangeLog).
+Think of this as a bulletin board where the rest of the team is notified of
+important progress.
+
+As we move through the stages, the current yyyy-mm-dd marker is updated with
+the current date, and a new section above is created.
+
 ## Etiquette
 
 These are not hard and fast rules, but guidance for team members working together.
