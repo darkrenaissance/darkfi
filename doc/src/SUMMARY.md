@@ -14,6 +14,7 @@
   - [Blockchain](architecture/blockchain.md)
   - [DNA](architecture/dna.md)
   - [Smart Contracts](architecture/smart_contracts.md)
+  - [Tooling](architecture/tooling.md)
 - [Client](clients/clients.md)
   - [darkfid JSON-RPC API](clients/darkfid_jsonrpc.md)
   - [cashierd JSON-RPC API](clients/cashierd_jsonrpc.md)
