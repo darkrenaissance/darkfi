@@ -1,6 +1,6 @@
 # Tooling
 
-# DarkFi Fullnode Daemon
+## DarkFi Fullnode Daemon
 
 `drkd` the darkfi fullnode. It manages the blockchain, validates transactions
 and remains connected to the p2p network.
@@ -15,7 +15,7 @@ Clients can connect over localhost RPC or secure socket and perform these functi
 `drkd` does not have any concept of keys or wallet functionality. It does not
 manage keys.
 
-# Low Level Client
+## Low Level Client
 
 Clients manage keys and objects. They make queries to `drkd`, and receive notes
 encrypted to their public keys.
