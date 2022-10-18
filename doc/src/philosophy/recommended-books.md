@@ -15,7 +15,7 @@
 * [Authoritarian vs Democratic Technics](https://wiki.polytech.barcelona/index.php?title=File:Mumford_authoritarian_vs_democratic_technics.pdf)
   by Mumford is a short 10 page summary of his books
   [The Myth of the Machine parts 1 & 2](https://en.wikipedia.org/wiki/The_Myth_of_the_Machine).
-  Mumford was a history and philosophy of science and technology. His
+  Mumford was a historian and philosopher of science and technology. His
   books describe the two dominant legacies within technology; one enslaving
   humanity, and the other one liberating humanity from the state.
 
