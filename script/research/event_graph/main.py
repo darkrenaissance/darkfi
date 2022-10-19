@@ -1,6 +1,7 @@
 from hashlib import sha256
 from datetime import datetime
 from random import randint
+import math
 import asyncio
 
 import matplotlib.pyplot as plt
@@ -19,6 +20,7 @@ class Event:
     def set_timestamp(self, timestamp):
         self.timestamp = timestamp
 
+    # Hash of timestamp and the parents
     def hash(self) -> str:
         m = sha256()
         m.update(str.encode(str(self.timestamp)))
@@ -61,7 +63,7 @@ class Graph:
         if event_id in self.events:
             del self.events[event_id]
 
-    # check if given events are exist in the graph
+    # Check if given events are exist in the graph
     # return a list of missing events
     def check(self, events: EventIds) -> EventIds:
         missing_events = []
@@ -85,109 +87,122 @@ class Node:
         self.orphan_pool = Graph()
         self.active_pool = Graph()
 
-        # the active pool should always start with one event
+        # The active pool should always start with one event
         genesis_event = Event([])
         genesis_event.set_timestamp(0.0)
-
-        # make the root node as head
-        self.heads = [genesis_event.hash()]
-
         self.genesis_event = genesis_event
         self.active_pool.add_event(genesis_event)
 
+        # On the initialization make the root node as head
+        self.heads = [genesis_event.hash()]
+
+    # Remove the parents for the event if they are exist in heads
     def remove_heads(self, event):
         for p in event.parents:
             if p in self.heads:
                 self.heads.remove(p)
 
+    # Add the event to heads
     def update_heads(self, event):
         event_hash = event.hash()
         self.remove_heads(event)
         self.heads.append(event_hash)
 
+    # On receive new event
     def receive_new_event(self, event: Event):
         event_hash = event.hash()
 
-        # reject events with no parents
+        # Reject event with no parents
         if not event.parents:
             return
 
-        # reject event already exist in active pool
+        # Reject event already exist in active pool
         if not self.active_pool.check([event_hash]):
             return
 
-        # reject event already exist in orphan pool
+        # Reject event already exist in orphan pool
         if not self.orphan_pool.check([event_hash]):
             return
 
+        # Check if parents for this event are missing from active pool
         missing_parents = self.active_pool.check(event.parents)
 
         if not missing_parents:
-            # if there are no missing parents
-            # add the event to active pool
+            # Add the event to active pool
             self.active_pool.add_event(event)
             self.update_heads(event)
 
-            # events list to be removed from orphan pool
-            # after relink
+            # Move events from oprhan pool to active pool if they are child of
+            # the new added event
             remove_list: EventIds = []
             self.relink(event, remove_list)
 
-            # clean up orphan pool
+            # Clean up orphan pool
             for ev in remove_list:
                 self.orphan_pool.remove_event(ev)
 
         else:
-            # add the received event to the orphan pool
+            # Add the received event to the orphan pool
             self.orphan_pool.add_event(event)
 
-            # check if all the missing parents are in orphan pool
-            # if the missing parents and their links not in orphan pool, request
-            # them from the network
+            # Check if all missing parents are in orphan pool, otherwise
+            # request them from the network
             request_list = []
             self.check_parents(request_list, missing_parents)
 
             print(f"{self.name} request from the network: {request_list}")
 
             # XXX
-            # send all the missing parents in request_list
+            # Send all the missing parents in request_list
             # to the node who send this event
 
+    # This will check if passed parents are in the orphan pool, and fill
+    # request_list with missing parents
     def check_parents(self, request_list, parents: EventIds, visited=[]):
         for parent_hash in parents:
+
+            # Check if the function already visit this parent
             if parent_hash in visited:
                 continue
-
             visited.append(parent_hash)
 
+            # If the parent in orphan pool, do recursive call to check its
+            # parents as well, otherwise add the parent to request_list
             if parent_hash in self.orphan_pool.events:
                 parent = self.orphan_pool.events[parent_hash]
 
-                # recursive call
+                # Recursive call
                 self.check_parents(request_list, parent.parents, visited)
             else:
                 request_list.append(parent_hash)
 
+    # Check if the orphan pool has an event linked
+    # to the passed event and relink it accordingly
     def relink(self, event: Event, remove_list=[]):
         event_hash = event.hash()
 
-        # check if the orphan pool has an event linked
-        # to the new added event
         for (orphan_hash, orphan) in self.orphan_pool.events.items():
+
+            # Check if the orphan is not already in remove_list
             if orphan_hash in remove_list:
                 continue
 
+            # Check if the event is a parent of orphan event
             if event_hash not in orphan.parents:
                 continue
 
+            # Check if the remain parents of the orphan
+            # are not missing from active pool
             missing_parents = self.active_pool.check(orphan.parents)
 
             if not missing_parents:
+                # Add the orphan to active pool
                 self.active_pool.add_event(orphan)
                 self.update_heads(orphan)
+                # Add the orphan to remove_list
                 remove_list.append(orphan_hash)
 
-                # recursive call
+                # Recursive call
                 self.relink(orphan, remove_list)
 
     def __str__(self):
@@ -197,26 +212,37 @@ class Node:
 	        \n Orphan Pool: {self.orphan_pool}"""
 
 
-MAX_BROADCAST_DELAY = 2
+# Number of nodes
+NODES_N = 15
+# Broadcast attempt for each node
+BROADCAST_ATTEMPT = 3
+
+MAX_BROADCAST_DELAY = round(math.log(NODES_N))
 MIN_BROADCAST_DELAY = 0
 
-NODES_N = 15
-BROADCAST_ATTEMPT = 3
+# Timeout for sending tasks to finish
 BROADCAST_TIMEOUT = NODES_N * BROADCAST_ATTEMPT * MAX_BROADCAST_DELAY
 
 
+# Each node has NODES_N of this function running in the background
+# for receiving events from each node separately
 async def recv_loop(node, peer, queue):
     while True:
+        # Wait new event
         event = await queue.get()
         node.receive_new_event(event)
         queue.task_done()
         print(f"{node.name} receive event from {peer}: \n {event}")
 
 
+# Send new event at random intervals
+# Each node has this function running in the background
 async def send_loop(node, queue):
     for _ in range(BROADCAST_ATTEMPT):
 
         await asyncio.sleep(randint(MIN_BROADCAST_DELAY, MAX_BROADCAST_DELAY))
+
+        # Create new event with the last heads as parents
         event = Event(node.heads)
 
         print(f"{node.name} broadcast event: \n {event}")
@@ -226,45 +252,35 @@ async def send_loop(node, queue):
 
 
 async def main():
-    send_tasks = []
-    recv_tasks = []
-
     nodes = []
     queues = dict()
 
     print(f"Run {NODES_N} Nodes")
 
-    for i in range(NODES_N):
-        node = Node(f"Node{i}")
-        nodes.append(node)
-
-        queue = asyncio.Queue()
-        queues[node.name] = queue
-
-        send_task = asyncio.create_task(send_loop(node, queue))
-        send_tasks.append(send_task)
-
-    for node in nodes:
-        for (peer, queue) in queues.items():
-            recv_task = asyncio.create_task(recv_loop(node, peer, queue))
-            recv_tasks.append(recv_task)
-
     try:
-        # run recv tasks
-        r_g = asyncio.gather(*send_tasks)
+        # Initialize new nodes and create coroutine task for each node
+        # contains send_loop function
+        for i in range(NODES_N):
+            node = Node(f"Node{i}")
+            nodes.append(node)
 
-        # run and wait for send tasks
-        s_g = asyncio.gather(*send_tasks)
+            queue = asyncio.Queue()
+            queues[node.name] = queue
+
+        # Initialize NODES_N * NODES_N coroutine tasks for receiving events
+        for node in nodes:
+            for (peer, queue) in queues.items():
+                asyncio.create_task(recv_loop(node, peer, queue))
+
+        # Run and wait for send tasks
+        s_g = asyncio.gather(*[send_loop(n, queues[n.name]) for n in nodes])
         await asyncio.wait_for(s_g, BROADCAST_TIMEOUT)
 
-        # cancel recv tasks
-        r_g.cancel()
-
-        # assert if all nodes share the same active pool graph
+        # Assert if all nodes share the same active pool graph
         assert (all(n.active_pool.events.keys() ==
                 nodes[0].active_pool.events.keys() for n in nodes))
 
-        # assert if all nodes share the same orphan pool graph
+        # Assert if all nodes share the same orphan pool graph
         assert (all(n.orphan_pool.events.keys() ==
                 nodes[0].orphan_pool.events.keys() for n in nodes))
 
@@ -272,14 +288,6 @@ async def main():
 
     except asyncio.exceptions.TimeoutError:
         print("Broadcast TimeoutError")
-
-
-def print_nodes(nodes):
-    for node in nodes:
-        print(node.name)
-        print(len(node.active_pool.events))
-        print(len(node.orphan_pool.events))
-        print("###############")
 
 
 def print_graph(nodes):
