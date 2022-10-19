@@ -65,3 +65,13 @@
 
 * Atiyah-MacDonald. Many independent solution sheets online if you search for them.
   Or ask me ;)
+
+### Algebraic Number Theory
+
+* Algebraic Number Theory by Frazer Jarvis, chapters 1-5 (~100 pages) is your primary text.
+  Book is ideal for self study since it has solutions for exercises.
+* Introductory Algebraic Number Theory by Alaca and Williams is a bit dry but a good
+  supplementary reference text.
+* Elementary Number Theory by Jones and Jones, is a short text recommended in the preface
+  to the Jarvis book.
+
