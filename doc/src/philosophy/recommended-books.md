@@ -58,7 +58,9 @@
 
 ### Algebraic Geometry
 
-* Ideals, Varieties and Algorithms by Cox, Little, O'Shea.
+* Ideals, Varieties and Algorithms by Cox, Little, O'Shea. They have a follow up
+  advanced graduate text called Using Algebraic Geometry. It's the sequel book
+  explaining things that were missing from the first text.
 * Hartshorne is a famous text.
 
 #### Commutative Algebra
