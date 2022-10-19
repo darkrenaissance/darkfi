@@ -36,7 +36,6 @@ use crate::zk::gadget::{
     less_than::{LessThanChip, LessThanConfig},
     native_range_check::NativeRangeCheckChip,
 };
-use log::info;
 
 const WINDOW_SIZE: usize = 3;
 const NUM_OF_BITS: usize = 254;
@@ -292,14 +291,6 @@ impl Circuit<pallas::Base> for LeadContract {
             config.advices[0],
             Value::known(pallas::Base::from(PRF_NULLIFIER_PREFIX)),
         )?;
-        // staking coin timestamp
-        /*
-        let coin_timestamp = self.load_private(
-            layouter.namespace(|| "load coin time stamp"),
-            config.advices[0],
-            self.coin_timestamp,
-        )?;
-        */
         // staking coin nonce
         let coin_nonce: AssignedCell<Fp, Fp> = self.load_private(
             layouter.namespace(|| "load coin nonce"),
@@ -334,23 +325,22 @@ impl Circuit<pallas::Base> for LeadContract {
             self.sigma2,
         )?;
 
-        // leadership coefficient used for fine-tunning leader election frequency
-        let _c = self.load_private(
-            layouter.namespace(|| ""),
-            config.advices[0],
-            Value::known(pallas::Base::one()), // note! this parameter to be tuned.
-        )?;
-
         let one = self.load_private(
             layouter.namespace(|| "one"),
             config.advices[0],
             Value::known(pallas::Base::one()),
         )?;
 
-        // the original crypsinous pk is as follows.
+        // the original crypsinous coin pk is as follows.
         // coin public key pk=PRF_{root_sk}(tau)
         // coin public key is pseudo random hash of concatenation of the following:
         // coin timestamp, and root of coin's secret key.
+        // staking coin timestamp
+        //let coin_timestamp = self.load_private(
+        //layouter.namespace(|| "load coin time stamp"),
+        //config.advices[0],
+        //self.coin_timestamp,
+        //)?;
         //let coin_pk_commit: AssignedCell<Fp, Fp> = {
         //    let poseidon_message = [coin_timestamp, _root_sk.clone()];
         //  //let poseidon_hasher = PoseidonHash::<
@@ -369,8 +359,10 @@ impl Circuit<pallas::Base> for LeadContract {
         //  let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
         //  poseidon_output
         //};
-        // darkfi coin pk
-        //
+        // darkfi coin pk is based off secret key:
+        // pk = G(nullifierK) * sk
+        // the later is implemented for the sake of conversion between
+        // lead coin  and owncoin.
         let coin_pk = {
             let coin_pk_commit_v = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
             coin_pk_commit_v.mul(layouter.namespace(|| "coin pk commit v"), sk)?
