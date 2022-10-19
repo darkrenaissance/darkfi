@@ -106,8 +106,11 @@ impl Epoch {
                 pedersen_commitment_u64(1, mod_r_p(prev_sk_base))
             };
             let coord = base.to_affine().coordinates().unwrap();
-            //TODO (fix) change this to sk = hash(x,y)
-            let sk_base = coord.x() * coord.y();
+            let sk_x = *coord.x();
+            let sk_y = *coord.y();
+            let sk_coord_ar = [sk_x, sk_y];
+            let sk_base: pallas::Base =
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(sk_coord_ar);
             sks.push(SecretKey::from(sk_base));
             prev_sk_base = sk_base;
             let sk_bytes = sk_base.to_repr();
@@ -293,9 +296,7 @@ impl Epoch {
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
             let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
             let y_exp_hash: pallas::Base =
-                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
-                )
-                .hash(y_exp);
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_exp);
             //TODO (fix) use the hash of y coordinates, using single coordinate is insecure.
             //  pick x coordinate of y for comparison
             let y_coordinates =
@@ -308,8 +309,7 @@ impl Epoch {
             let y_y: pallas::Base = *y_coordinates.y();
             let y_coord_arr = [y_x, y_y];
             let y: pallas::Base =
-                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(y_coord_arr);
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_coord_arr);
             //
             let val_2ibig =
                 Float10::try_from(coin.value.unwrap()).unwrap().with_precision(RADIX_BITS).value();
