@@ -74,4 +74,6 @@
   supplementary reference text.
 * Elementary Number Theory by Jones and Jones, is a short text recommended in the preface
   to the Jarvis book.
+* [Algebraic Number Theory](https://www.jmilne.org/math/CourseNotes/ANT.pdf)
+  by Milne, are course notes written which are clear and concise.
 
