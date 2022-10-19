@@ -11,9 +11,8 @@ use pasta_curves::{
 use rand::{thread_rng, Rng};
 use crate::{
     consensus::ouroboros::{
-        consts::{RADIX_BITS, LOTTERY_HEAD_START},
-        utils::{base2ibig, fbig2ibig},
-        EpochConsensus, Float10,
+        consts::{LOTTERY_HEAD_START},
+        EpochConsensus,
     },
     crypto::{
         coin::OwnCoin,
@@ -25,7 +24,6 @@ use crate::{
         util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
     },
 };
-use dashu::base::Abs;
 
 const PRF_NULLIFIER_PREFIX: u64 = 0;
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
@@ -313,13 +311,6 @@ impl Epoch {
             let val_base = pallas::Base::from(coin.value.unwrap());
             let target_base = coin.sigma1.unwrap() * val_base +
                 coin.sigma2.unwrap() * val_base * val_base;
-            let val_2ibig =
-                Float10::try_from(coin.value.unwrap()).unwrap().with_precision(RADIX_BITS).value();
-            let target_fbig = base2ibig(coin.sigma1.unwrap()) * val_2ibig.clone() + base2ibig(coin.sigma2.unwrap()) * val_2ibig.clone() * val_2ibig;
-            let target_ibig = fbig2ibig(target_fbig);
-            let target_ibig_ref = base2ibig(target_base);
-            // TODO (res) there is small discrepancy between base, and dashu
-            debug_assert!((target_ibig_ref - target_ibig).abs() < 100);
             info!("y: {:?}", y);
             info!("T: {:?}", target_base);
             let iam_leader = y < target_base;

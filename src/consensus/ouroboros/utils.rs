@@ -1,19 +1,24 @@
-use dashu::integer::{IBig, Sign, UBig};
-use log::info;
-use pasta_curves::{group::ff::PrimeField, pallas};
-
+use dashu::integer::{IBig, Sign};
+use log::{info,debug};
+use pasta_curves::{pallas};
 use crate::consensus::ouroboros::types::Float10;
+//use pasta_curves::{group::ff::PrimeField};
+//use dashu::integer::{UBig};
 
 pub(crate) fn fbig2ibig(f: Float10) -> IBig {
-    info!("fbig -> ibig (f): {}", f);
     let rad = IBig::try_from(10).unwrap();
     let sig = f.repr().significand();
     let exp = f.repr().exponent();
-    let val: IBig = if exp >= 0 { sig.clone() * rad.pow(exp as usize) } else { sig.clone() };
-    info!("fbig -> ibig (i): {}", val);
+    let val: IBig = if exp >= 0 {
+        sig.clone() * rad.pow(exp as usize)
+    } else {
+        sig.clone()
+    };
+    debug!("fbig2ibig (f): {}", f);
+    debug!("fbig2ibig (i): {}", val);
     val
 }
-
+/*
 pub(crate) fn base2ibig(base: pallas::Base) -> IBig {
     //
     let byts: [u8; 32] = base.to_repr();
@@ -28,7 +33,7 @@ pub(crate) fn base2ibig(base: pallas::Base) -> IBig {
     let ibig = IBig::from_parts(Sign::Positive, uparts);
     ibig
 }
-
+*/
 pub(crate) fn fbig2base(f: Float10) -> pallas::Base {
     info!("fbig -> base (f): {}", f);
     let val: IBig = fbig2ibig(f);
@@ -65,6 +70,7 @@ mod tests {
         assert_eq!(i, sig);
     }
 
+    /*
     #[test]
     fn dashu_test_base2ibig() {
         //
@@ -79,4 +85,5 @@ mod tests {
         let res_ibig: IBig = base2ibig(res_base);
         assert_eq!(res_ibig, ibig);
     }
+    */
 }
