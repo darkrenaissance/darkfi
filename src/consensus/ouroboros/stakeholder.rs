@@ -345,9 +345,7 @@ impl Stakeholder {
 
         let sigma1: pallas::Base = fbig2base(sigma1_fbig);
         info!("sigma1 base: {:?}", sigma1);
-        let sigma2_fbig = c.clone() / total_sigma.clone() * c.clone() / total_sigma.clone() *
-            field_p.clone() /
-            two.clone();
+        let sigma2_fbig = (c.clone() / total_sigma.clone()).powf(two.clone()) * (field_p.clone() / two.clone());
         info!("sigma2: {}", sigma2_fbig);
         let sigma2: pallas::Base = fbig2base(sigma2_fbig);
         info!("sigma2 base: {:?}", sigma2);
@@ -392,10 +390,7 @@ impl Stakeholder {
         let meta =
             Metadata::new(sign, addr, self.get_eta().to_repr(), LeadProof::from(proof), vec![]);
         self.workspace.set_metadata(meta);
-        //
         if won {
-            //TODO (res) verify the coin is finalized
-            // could be finalized in later slot accord to the finalization policy that is WIP.
             let owned_coin =
                 self.finalize_coin(&self.epoch.get_coin(sl as usize, winning_coin_idx as usize));
             self.ownedcoins.push(owned_coin);
