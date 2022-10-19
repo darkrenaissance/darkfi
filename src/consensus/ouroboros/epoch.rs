@@ -25,6 +25,7 @@ use crate::{
         util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
     },
 };
+use dashu::base::Abs;
 
 const PRF_NULLIFIER_PREFIX: u64 = 0;
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
@@ -297,8 +298,6 @@ impl Epoch {
             let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
             let y_exp_hash: pallas::Base =
                 poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_exp);
-            //TODO (fix) use the hash of y coordinates, using single coordinate is insecure.
-            //  pick x coordinate of y for comparison
             let y_coordinates =
                 pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
                 .to_affine()
@@ -311,16 +310,18 @@ impl Epoch {
             let y: pallas::Base =
                 poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_coord_arr);
             //
-            let val_2ibig =
-                Float10::try_from(coin.value.unwrap()).unwrap().with_precision(RADIX_BITS).value();
             let val_base = pallas::Base::from(coin.value.unwrap());
             let target_base = coin.sigma1.unwrap() * val_base +
                 coin.sigma2.unwrap() * val_base * val_base;
+            let val_2ibig =
+                Float10::try_from(coin.value.unwrap()).unwrap().with_precision(RADIX_BITS).value();
             let target_fbig = base2ibig(coin.sigma1.unwrap()) * val_2ibig.clone() + base2ibig(coin.sigma2.unwrap()) * val_2ibig.clone() * val_2ibig;
             let target_ibig = fbig2ibig(target_fbig);
-            let y_ibig = base2ibig(y_x);
-            info!("y_x: {}, target ibig: {}", y_ibig, target_ibig);
-            info!("target base: {:?}", target_base);
+            let target_ibig_ref = base2ibig(target_base);
+            // TODO (res) there is small discrepancy between base, and dashu
+            debug_assert!((target_ibig_ref - target_ibig).abs() < 100);
+            info!("y: {:?}", y);
+            info!("T: {:?}", target_base);
             let iam_leader = y < target_base;
             if iam_leader {
                 if coin.value.unwrap() > highest_stake {
