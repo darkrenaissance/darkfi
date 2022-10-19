@@ -147,6 +147,7 @@ fn alice() -> Result<AppSettings> {
         inbound: vec![inbound],
         external_addr: vec![ext_addr],
         seeds: vec![seed],
+        localnet: true,
         ..Default::default()
     };
 
@@ -170,6 +171,7 @@ fn bob() -> Result<AppSettings> {
         inbound: vec![],
         outbound_connections: 5,
         seeds: vec![seed],
+        localnet: true,
         ..Default::default()
     };
 
