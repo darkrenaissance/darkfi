@@ -24,10 +24,13 @@ pub enum CliDaoSubCommands {
         /// Base value of minimum vote ratio of yes:no votes required for a proposal to pass.
         dao_approval_ratio_base: u64,
     },
-    /// Mint tokens
+    /// Get DAO public address.
     Addr {},
+    /// Get votes on current proposal in the form of [[true/false, user's GOV_tokens],[...]].
     GetVotes {},
+    /// Get proposals in the form of [[destination, amount, token_id], [...]].
     GetProposals {},
+    /// Mint tokens.
     Mint {
         /// Number of treasury tokens to mint.
         token_supply: u64,
@@ -35,34 +38,43 @@ pub enum CliDaoSubCommands {
         /// Public key of the DAO treasury.
         dao_addr: String,
     },
+    /// Get user balance.
     UserBalance {
+        /// User public address.
         addr: String,
     },
+    /// Get DAO treasury balance.
     DaoBalance {},
+    /// Get DAO bulla.
     DaoBulla {},
+    /// Generate a new PublicKey.
     Keygen {},
-    /// Airdrop tokens
+    /// Airdrop tokens given recipient address and value.
     Airdrop {
+        /// Airdrop recipient address.
         addr: String,
-
+        /// Value to be airdropped.
         value: u64,
     },
-    /// Propose
+    /// Create a Proposal.
     Propose {
+        /// Sender PublicKey.
         sender: String,
-
+        /// Recipient PublicKey.
         recipient: String,
-
+        /// Amount of tokens to be sent.
         amount: u64,
     },
     /// Vote
     Vote {
+        /// Voter's public address.
         addr: String,
-
+        /// Vote value [yes/no].
         vote: String,
     },
-    /// Execute
+    /// Execute proposal bulla.
     Exec {
+        /// Bulla.
         bulla: String,
     },
 }
