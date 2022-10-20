@@ -348,6 +348,28 @@ impl JsonRpcInterface {
         }
         let addr = addr.unwrap();
 
+        let balance = match PublicKey::from_str(addr) {
+            Ok(key) => match client.money_wallets.get(&key) {
+                Some(wallet) => {
+                    let balance = wallet.balances().unwrap();
+                    if balance.get("GOV").is_some() {
+                        *balance.get("GOV").unwrap()
+                    } else {
+                        error!("Balance is empty");
+                        0
+                    }
+                }
+                None => {
+                    error!("No wallet found for provided key");
+                    0
+                }
+            },
+            Err(_) => {
+                error!("Could not parse PublicKey from string");
+                0
+            }
+        };
+
         let vote_str = params[1].as_str();
         if vote_str.is_none() {
             return JsonError::new(InvalidParams, None, id).into()
@@ -362,7 +384,13 @@ impl JsonRpcInterface {
 
         match PublicKey::from_str(addr) {
             Ok(key) => match client.cast_vote(key, vote_bool) {
-                Ok(_) => JsonResponse::new(json!("Vote cast successfully."), id).into(),
+                Ok(_) => {
+                    let rep = format!(
+                        "Vote cast successfully, you voted {} with value {} GOV.",
+                        vote_str, balance
+                    );
+                    JsonResponse::new(json!(rep), id).into()
+                }
                 Err(e) => {
                     error!("Failed casting vote: {}", e);
                     return server_error(RpcError::Vote, id)

@@ -36,14 +36,14 @@ pub enum CliDaoSubCommands {
         dao_addr: String,
     },
     UserBalance {
-        nym: String,
+        addr: String,
     },
     DaoBalance {},
     DaoBulla {},
     Keygen {},
     /// Airdrop tokens
     Airdrop {
-        nym: String,
+        addr: String,
 
         value: u64,
     },
@@ -57,7 +57,7 @@ pub enum CliDaoSubCommands {
     },
     /// Vote
     Vote {
-        nym: String,
+        addr: String,
 
         vote: String,
     },
@@ -111,12 +111,12 @@ async fn start(options: CliDao) -> Result<()> {
         }
         Some(CliDaoSubCommands::GetVotes {}) => {
             let reply = client.get_votes().await?;
-            println!("{}", &reply.to_string());
+            println!("Votes on current proposals: {}", &reply.to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::GetProposals {}) => {
             let reply = client.get_proposals().await?;
-            println!("{}", &reply.to_string());
+            println!("Current proposals: {}", &reply.to_string());
             return Ok(())
         }
         Some(CliDaoSubCommands::Mint { token_supply, dao_addr }) => {
@@ -129,9 +129,12 @@ async fn start(options: CliDao) -> Result<()> {
             println!("User public key: {}", &reply.to_string());
             return Ok(())
         }
-        Some(CliDaoSubCommands::Airdrop { nym, value }) => {
-            let reply = client.airdrop(nym, value).await?;
+        Some(CliDaoSubCommands::Airdrop { addr, value }) => {
+            println!("Requesting airdrop of {} GOV", value);
+
+            let reply = client.airdrop(addr, value).await?;
             println!("{}", &reply.as_str().unwrap().to_string());
+
             return Ok(())
         }
         Some(CliDaoSubCommands::DaoBalance {}) => {
@@ -168,8 +171,8 @@ async fn start(options: CliDao) -> Result<()> {
             println!("DAO bulla: {}", &reply.to_string());
             return Ok(())
         }
-        Some(CliDaoSubCommands::UserBalance { nym }) => {
-            let rep = client.user_balance(nym).await?;
+        Some(CliDaoSubCommands::UserBalance { addr }) => {
+            let rep = client.user_balance(addr).await?;
 
             if !rep.is_object() {
                 eprintln!("Invalid balance data received from darkfid RPC endpoint.");
@@ -198,12 +201,18 @@ async fn start(options: CliDao) -> Result<()> {
             return Ok(())
         }
         Some(CliDaoSubCommands::Propose { sender, recipient, amount }) => {
-            let reply = client.propose(sender, recipient, amount).await?;
-            println!("Proposal bulla: {}", &reply.to_string());
+            let reply = client.propose(sender.clone(), recipient.clone(), amount).await?;
+            println!(
+                "Proposal bulla: {}\nSender: {}\nRecipient: {}\nAmount: {} DRK",
+                &reply.to_string(),
+                sender,
+                recipient,
+                amount
+            );
             return Ok(())
         }
-        Some(CliDaoSubCommands::Vote { nym, vote }) => {
-            let reply = client.vote(nym, vote).await?;
+        Some(CliDaoSubCommands::Vote { addr, vote }) => {
+            let reply = client.vote(addr, vote).await?;
             println!("{}", &reply.to_string());
             return Ok(())
         }
