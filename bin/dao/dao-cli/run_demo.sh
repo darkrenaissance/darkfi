@@ -1,5 +1,5 @@
 #!/bin/bash
-dao="../../../dao"
+dao="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && cd ../../.. && pwd )/dao"
 
 $dao create 110 110 1 2
 addr=$($dao addr | cut -d " " -f 4)
