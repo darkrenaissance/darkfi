@@ -49,6 +49,7 @@ impl ChannelInfo {
         }
     }
 
+    // ANCHOR: get_info
     async fn get_info(&self) -> serde_json::Value {
         let log = match &self.log {
             Some(l) => {
@@ -68,6 +69,7 @@ impl ChannelInfo {
             "log": log,
         })
     }
+    // ANCHOR_END: get_info
 }
 
 /// Async channel for communication between nodes.

@@ -11,36 +11,40 @@ Let's define a new struct called `AppSettings` that has two fields,
 `Url` and `Settings`.
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:123:132}}
+{{#include ../../../../../example/dchat/src/main.rs:app_settings}}
 ```
 
 Next, we'll change our `alice()` method to return a `AppSettings`
 instead of a `Settings`.
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:135}}
-    //...
-{{#include ../../../../../example/dchat/src/main.rs:143:158}}
+{{#include ../../../../../example/dchat/src/main.rs:alice}}
 ```
 
 And the same for `bob()`:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:160}}
-    //...
-{{#include ../../../../../example/dchat/src/main.rs:170:181}}
+{{#include ../../../../../example/dchat/src/main.rs:bob}}
 ```
 
 Update `main()` with the new type:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:183:192}}
+#[async_std::main]
+async fn main() -> Result<()> {
+    let settings: Result<AppSettings> = match std::env::args().nth(1) {
+        Some(id) => match id.as_str() {
+            "a" => alice(),
+            "b" => bob(),
+            _ => Err(ErrorMissingSpecifier.into()),
+        },
+        None => Err(ErrorMissingSpecifier.into()),
+    };
 
-{{#include ../../../../../example/dchat/src/main.rs:194}}
+    let settings = settings?.clone();
 
-{{#include ../../../../../example/dchat/src/main.rs:196}}
+    let p2p = net::P2p::new(settings.net).await;
     //...
-{{#include ../../../../../example/dchat/src/main.rs:224}}
+    }
+}
 ```
-
-

@@ -8,7 +8,7 @@ takes two values, an accept `Url` that will receive JSON-RPC requests,
 and a pointer to the p2p network.
 
 ```rust
-{{#include ../../../../../example/dchat/src/rpc.rs:1:17}}
+{{#include ../../../../../example/dchat/src/rpc.rs:jsonrpc}}
 ```
 
 We'll need to implement a trait called `RequestHandler` for
@@ -20,13 +20,13 @@ and returns a `JsonResult`. These types are defined inside
 
 This is `JsonResult`:
 ```rust
-{{#include ../../../../../src/rpc/jsonrpc.rs:49:55}}
+{{#include ../../../../../src/rpc/jsonrpc.rs:jsonresult}}
 ```
 
 This is `JsonRequest`:
 
 ```rust
-{{#include ../../../../../src/rpc/jsonrpc.rs:75:86}}
+{{#include ../../../../../src/rpc/jsonrpc.rs:jsonrequest}}
 ```
 
 We'll use `handle_request()` to run a match statement on
@@ -37,8 +37,18 @@ that respond to methods received over JSON-RPC.  We haven't implemented
 any methods yet, so for now let's just return a `JsonError`.
 
 ```rust
-{{#include ../../../../../example/dchat/src/rpc.rs:19:28}}
-{{#include ../../../../../example/dchat/src/rpc.rs:31:34}}
+#[async_trait]
+impl RequestHandler for JsonRpcInterface {
+    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
+        if req.params.as_array().is_none() {
+            return JsonError::new(ErrorCode::InvalidRequest, None, req.id).into()
+        }
+
+        debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
+
+        match req.method.as_str() {
+            Some(_) | None => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+        }
+    }
+}
 ```
-
-

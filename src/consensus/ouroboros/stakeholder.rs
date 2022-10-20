@@ -1,13 +1,3 @@
-use std::{fmt, thread, time::Duration};
-use async_std::sync::Arc;
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
-use halo2_proofs::arithmetic::Field;
-use smol::Executor;
-use rand::rngs::OsRng;
-use incrementalmerkletree::bridgetree::BridgeTree;
-use log::{error, info};
-use pasta_curves::{group::ff::PrimeField, pallas};
-use url::Url;
 use crate::{
     blockchain::Blockchain,
     consensus::{
@@ -16,7 +6,7 @@ use crate::{
             consts::{LOG_T, P, RADIX_BITS, TREE_LEN},
             types::Float10,
             utils::fbig2base,
-            EpochConsensus,Epoch, SlotWorkspace, StakeholderState,
+            Epoch, EpochConsensus, SlotWorkspace, StakeholderState,
         },
         Block, BlockInfo, LeadProof, Metadata,
     },
@@ -40,6 +30,16 @@ use crate::{
     zk::circuit::{BurnContract, LeadContract, MintContract},
     Result,
 };
+use async_std::sync::Arc;
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
+use halo2_proofs::arithmetic::Field;
+use incrementalmerkletree::bridgetree::BridgeTree;
+use log::{error, info};
+use pasta_curves::{group::ff::PrimeField, pallas};
+use rand::rngs::OsRng;
+use smol::Executor;
+use std::{fmt, thread, time::Duration};
+use url::Url;
 
 pub struct Stakeholder {
     pub blockchain: Blockchain, // stakeholder view of the blockchain
@@ -324,9 +324,7 @@ impl Stakeholder {
         // let epoch_len = self.epoch_consensus.get_epoch_len();
         // let abs_sl = rel_sl + epochs * epoch_len;
         //
-        let f = self.get_f()
-            .with_precision(RADIX_BITS)
-            .value();
+        let f = self.get_f().with_precision(RADIX_BITS).value();
         let total_stake = self.epoch.consensus.total_stake(e, sl);
         let one: Float10 =
             Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
@@ -345,7 +343,8 @@ impl Stakeholder {
 
         let sigma1: pallas::Base = fbig2base(sigma1_fbig);
         info!("sigma1 base: {:?}", sigma1);
-        let sigma2_fbig = (c.clone() / total_sigma.clone()).powf(two.clone()) * (field_p.clone() / two.clone());
+        let sigma2_fbig =
+            (c.clone() / total_sigma.clone()).powf(two.clone()) * (field_p.clone() / two.clone());
         info!("sigma2: {}", sigma2_fbig);
         let sigma2: pallas::Base = fbig2base(sigma2_fbig);
         info!("sigma2 base: {:?}", sigma2);

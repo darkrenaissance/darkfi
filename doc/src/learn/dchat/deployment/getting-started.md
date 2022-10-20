@@ -4,7 +4,7 @@ We'll create a new cargo directory and add DarkFi to our `Cargo.toml`,
 like so:
 
 ```
-{{#include ../../../../../example/dchat/Cargo.toml::8}}
+{{#include ../../../../../example/dchat/Cargo.toml:darkfi}}
 ```
 
 Be sure to replace the path to DarkFi with the correct path for your
@@ -15,7 +15,7 @@ dchat. We'll need a few more external libraries too, so add these
 dependencies:
 
 ```
-{{#include ../../../../../example/dchat/Cargo.toml:10:27}}
+{{#include ../../../../../example/dchat/Cargo.toml:dependencies}}
 ```
 
 

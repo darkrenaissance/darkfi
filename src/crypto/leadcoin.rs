@@ -12,7 +12,6 @@ use crate::{
     zk::circuit::lead_contract::LeadContract,
 };
 
-
 pub const LEAD_PUBLIC_INPUT_LEN: usize = 11;
 
 #[derive(Debug, Default, Clone, Copy)]

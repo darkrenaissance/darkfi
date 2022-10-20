@@ -1,3 +1,4 @@
+// ANCHOR: msg
 use async_std::sync::{Arc, Mutex};
 
 use darkfi::net;
@@ -15,3 +16,4 @@ impl net::Message for DchatMsg {
 pub struct DchatMsg {
     pub msg: String,
 }
+// ANCHOR_END: msg

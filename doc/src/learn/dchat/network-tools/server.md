@@ -11,12 +11,7 @@ requests.
 Add the following lines to `main()`:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:183:184}}
-
-    //...
-{{#include ../../../../../example/dchat/src/main.rs:209:212}}
-    //...
-{{#include ../../../../../example/dchat/src/main.rs:224}}
+{{#include ../../../../../example/dchat/src/main.rs:json_init}}
 ```
 
 We create a new `JsonRpcInterface` inside an `Arc` pointer and pass in our
@@ -33,5 +28,5 @@ We have enabled JSON-RPC.
 Here's what our complete `main()` function looks like:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:183:224}}
+{{#include ../../../../../example/dchat/src/main.rs:main}}
 ```

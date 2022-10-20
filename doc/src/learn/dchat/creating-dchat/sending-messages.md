@@ -8,7 +8,7 @@ introduce us to a new p2p method that is essential to our chat app:
 `p2p.broadcast()`.
 
 ```
-{{#include ../../../../../example/dchat/src/main.rs:116:120}}
+{{#include ../../../../../example/dchat/src/main.rs:send}}
 ```
 
 We pass a `String` called msg that will be taken from user input. We use
@@ -18,7 +18,7 @@ can now support. Finally, we pass the message into `p2p.broadcast()`.
 Here's what happens under the hood:
 
 ```rust
-{{#include ../../../../../src/net/p2p.rs:191:196}}
+{{#include ../../../../../src/net/p2p.rs:broadcast}}
 ```
 
 This is pretty straightforward: `broadcast()` takes a generic `Message` type

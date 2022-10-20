@@ -1,18 +1,8 @@
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode};
-use halo2_gadgets::poseidon::primitives as poseidon;
-use halo2_proofs::arithmetic::Field;
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use log::info;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::PrimeField, Curve},
-    pallas,
-};
-use rand::{thread_rng, Rng};
 use crate::{
     consensus::ouroboros::{
-        consts::{LOTTERY_HEAD_START},
-        EpochConsensus,
+        consts::{LOTTERY_HEAD_START, RADIX_BITS},
+        utils::{base2ibig, fbig2ibig},
+        EpochConsensus, Float10,
     },
     crypto::{
         coin::OwnCoin,
@@ -24,6 +14,17 @@ use crate::{
         util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
     },
 };
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode};
+use halo2_gadgets::poseidon::primitives as poseidon;
+use halo2_proofs::arithmetic::Field;
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
+use log::info;
+use pasta_curves::{
+    arithmetic::CurveAffine,
+    group::{ff::PrimeField, Curve},
+    pallas,
+};
+use rand::{thread_rng, Rng};
 
 const PRF_NULLIFIER_PREFIX: u64 = 0;
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
@@ -109,7 +110,9 @@ impl Epoch {
             let sk_y = *coord.y();
             let sk_coord_ar = [sk_x, sk_y];
             let sk_base: pallas::Base =
-                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(sk_coord_ar);
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+                )
+                .hash(sk_coord_ar);
             sks.push(SecretKey::from(sk_base));
             prev_sk_base = sk_base;
             let sk_bytes = sk_base.to_repr();
@@ -295,9 +298,10 @@ impl Epoch {
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
             let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
             let y_exp_hash: pallas::Base =
-                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_exp);
-            let y_coordinates =
-                pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+                )
+                .hash(y_exp);
+            let y_coordinates = pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
                 .to_affine()
                 .coordinates()
                 .unwrap();
@@ -306,11 +310,13 @@ impl Epoch {
             let y_y: pallas::Base = *y_coordinates.y();
             let y_coord_arr = [y_x, y_y];
             let y: pallas::Base =
-                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_coord_arr);
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+                )
+                .hash(y_coord_arr);
             //
             let val_base = pallas::Base::from(coin.value.unwrap());
-            let target_base = coin.sigma1.unwrap() * val_base +
-                coin.sigma2.unwrap() * val_base * val_base;
+            let target_base =
+                coin.sigma1.unwrap() * val_base + coin.sigma2.unwrap() * val_base * val_base;
             info!("y: {:?}", y);
             info!("T: {:?}", target_base);
             let iam_leader = y < target_base;

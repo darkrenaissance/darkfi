@@ -1,7 +1,7 @@
-use dashu::integer::{IBig, Sign};
-use log::{info,debug};
-use pasta_curves::{pallas};
 use crate::consensus::ouroboros::types::Float10;
+use dashu::integer::{IBig, Sign};
+use log::{debug, info};
+use pasta_curves::pallas;
 //use pasta_curves::{group::ff::PrimeField};
 //use dashu::integer::{UBig};
 
@@ -9,11 +9,7 @@ pub(crate) fn fbig2ibig(f: Float10) -> IBig {
     let rad = IBig::try_from(10).unwrap();
     let sig = f.repr().significand();
     let exp = f.repr().exponent();
-    let val: IBig = if exp >= 0 {
-        sig.clone() * rad.pow(exp as usize)
-    } else {
-        sig.clone()
-    };
+    let val: IBig = if exp >= 0 { sig.clone() * rad.pow(exp as usize) } else { sig.clone() };
     debug!("fbig2ibig (f): {}", f);
     debug!("fbig2ibig (i): {}", val);
     val

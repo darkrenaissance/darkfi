@@ -7,15 +7,14 @@ let's implement some methods.
 We'll start with a simple `pong` method that replies to `ping`.
 
 ```rust
-{{#include ../../../../../example/dchat/src/rpc.rs:36:43}}
-{{#include ../../../../../example/dchat/src/rpc.rs:53}}
+{{#include ../../../../../example/dchat/src/rpc.rs:pong}}
 ```
 
 And add it to `handle_request()`:
 
 ```rust
-{{#include ../../../../../example/dchat/src/rpc.rs:19:21}}
-        //...
-{{#include ../../../../../example/dchat/src/rpc.rs:28:29}}
-{{#include ../../../../../example/dchat/src/rpc.rs:31:34}}
+        match req.method.as_str() {
+            Some("ping") => self.pong(req.id, req.params).await,
+            Some(_) | None => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+            }
 ```

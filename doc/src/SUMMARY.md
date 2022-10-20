@@ -58,7 +58,7 @@
       - [Slap on a UI](learn/dchat/creating-dchat/ui.md)
       - [Using dchat](learn/dchat/creating-dchat/using-dchat.md)
     - [Net tools](learn/dchat/network-tools/part-3.md)
-      - [RPC interface](learn/dchat/network-tools/jsonrpcinterface.md)
+      - [RPC interface](learn/dchat/network-tools/rpc.md)
       - [Accept addr](learn/dchat/network-tools/accept-addr.md)
       - [Adding methods](learn/dchat/network-tools/pong.md)
       - [RPC server](learn/dchat/network-tools/server.md)

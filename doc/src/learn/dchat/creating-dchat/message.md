@@ -20,5 +20,5 @@ this in a `Mutex` to ensure thread safety and an `Arc` pointer so we can
 pass it around.
 
 ```rust
-{{#include ../../../../../example/dchat/src/dchatmsg.rs::19}}
+{{#include ../../../../../example/dchat/src/dchatmsg.rs:msg}}
 ```

@@ -46,6 +46,7 @@ impl ErrorCode {
 }
 
 /// Wrapping enum around the possible JSON-RPC object types.
+// ANCHOR: jsonresult
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum JsonResult {
@@ -53,6 +54,7 @@ pub enum JsonResult {
     Error(JsonError),
     Notification(JsonNotification),
 }
+// ANCHOR_END: jsonresult
 
 impl From<JsonResponse> for JsonResult {
     fn from(resp: JsonResponse) -> Self {
@@ -73,6 +75,7 @@ impl From<JsonNotification> for JsonResult {
 }
 
 /// A JSON-RPC request object.
+// ANCHOR: jsonrequest
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JsonRequest {
     /// JSON-RPC version
@@ -84,6 +87,7 @@ pub struct JsonRequest {
     /// Request parameters
     pub params: Value,
 }
+// ANCHOR_END: jsonrequest
 
 impl JsonRequest {
     pub fn new(method: &str, parameters: Value) -> Self {

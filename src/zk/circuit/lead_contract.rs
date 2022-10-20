@@ -474,7 +474,7 @@ impl Circuit<pallas::Base> for LeadContract {
                     coin_pk_y.clone(),
                     coin_value.clone(),
                     coin2_nonce.clone(),
-                    one.clone()
+                    one.clone(),
                 ];
                 let poseidon_hasher = PoseidonHash::<
                     _,
@@ -577,16 +577,16 @@ impl Circuit<pallas::Base> for LeadContract {
         let y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let y_commit_base_y = y_commit.inner().x();
         let y_commit_base_x = y_commit.inner().x();
-        let y_commit_base : AssignedCell<Fp, Fp> = {
+        let y_commit_base: AssignedCell<Fp, Fp> = {
             let y_coord = [y_commit_base_y, y_commit_base_x];
             let poseidon_hasher = PoseidonHash::<
-                    _,
+                _,
                 _,
                 poseidon::P128Pow5T3,
                 poseidon::ConstantLength<2>,
                 3,
                 2,
-                >::init(
+            >::init(
                 config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
