@@ -252,6 +252,7 @@ impl Stakeholder {
         let _ = self.clock.sync().await;
         let mut c: u8 = 0;
         let lim: u8 = hardlimit.unwrap_or(0);
+        let mut epoch_not_started = true;
         while self.playing {
             if c > lim && lim > 0 {
                 break
@@ -263,12 +264,18 @@ impl Stakeholder {
                 Ticks::GENESIS { e, sl } => {
                     self.new_epoch(e, sl);
                     self.new_slot(e, sl);
+                    epoch_not_started = false;
                 }
                 Ticks::NEWEPOCH { e, sl } => {
                     self.new_epoch(e, sl);
-                    self.new_slot(e, sl);
+                    //self.new_slot(e, sl);
+                    epoch_not_started = false;
                 }
-                Ticks::NEWSLOT { e, sl } => self.new_slot(e, sl),
+                Ticks::NEWSLOT { e, sl } => {
+                    if !epoch_not_started {
+                        self.new_slot(e, sl);
+                    }
+                }
                 Ticks::TOCKS => {
                     info!(target: LOG_T, "tocks");
                     // slot is about to end.

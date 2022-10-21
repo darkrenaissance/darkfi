@@ -62,7 +62,7 @@ async fn main() {
         block_on(Stakeholder::new(epoch_consensus, settings, &path, id, Some(k))).unwrap();
 
     let handle = thread::spawn(move || {
-        block_on(stakeholder.background(Some(9)));
+        block_on(stakeholder.background(Some(100)));
     });
     handle.join().unwrap();
 }
