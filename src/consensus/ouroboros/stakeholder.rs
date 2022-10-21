@@ -274,7 +274,7 @@ impl Stakeholder {
                     // slot is about to end.
                     // sync, and validate.
                     // no more transactions to be received/send to the end of slot.
-                    if self.workspace.is_leader {
+                    if self.workspace.has_leader() {
                         info!(target: LOG_T, "[leadership won]");
                         //craete block
                         let (block_info, _block_hash) = self.workspace.new_block();
@@ -373,26 +373,27 @@ impl Stakeholder {
         self.workspace.set_e(e);
         self.workspace.set_st(st);
         let mut winning_coin_idx: usize = 0;
-        let won = self.epoch.is_leader(sl, &mut winning_coin_idx);
-        let proof = if won {
-            self.epoch.get_proof(sl, winning_coin_idx, &self.get_leadprovkingkey())
-        } else {
-            Proof::new(vec![])
-        };
-        self.workspace.set_leader(won);
-        self.workspace.set_proof(proof.clone());
-
-        let coin = self.epoch.get_coin(sl as usize, winning_coin_idx as usize);
-        let keypair = coin.keypair.unwrap();
-        let addr = Address::from(keypair.public);
-        let sign = keypair.secret.sign(proof.as_ref());
-        let meta =
-            Metadata::new(sign, addr, self.get_eta().to_repr(), LeadProof::from(proof), vec![]);
-        self.workspace.set_metadata(meta);
-        if won {
-            let owned_coin =
-                self.finalize_coin(&self.epoch.get_coin(sl as usize, winning_coin_idx as usize));
-            self.ownedcoins.push(owned_coin);
+        let won : Vec<bool> = self.epoch.is_leader(sl, &mut winning_coin_idx);
+        for i in 0..won.len() {
+            let proof = if won[i] {
+                self.epoch.get_proof(sl, i, &self.get_leadprovkingkey())
+            } else {
+                Proof::new(vec![])
+            };
+            self.workspace.add_leader(won[i]);
+            self.workspace.set_idx(winning_coin_idx);
+            let coin = self.epoch.get_coin(sl as usize, i);
+            let keypair = coin.keypair.unwrap();
+            let addr = Address::from(keypair.public);
+            let sign = keypair.secret.sign(proof.as_ref());
+            let meta =
+                Metadata::new(sign, addr, self.get_eta().to_repr(), LeadProof::from(proof), vec![]);
+            self.workspace.add_metadata(meta);
+            if won[i] {
+                let owned_coin =
+                    self.finalize_coin(&self.epoch.get_coin(sl as usize, winning_coin_idx as usize));
+                self.ownedcoins.push(owned_coin);
+            }
         }
     }
 

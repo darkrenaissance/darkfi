@@ -1,8 +1,9 @@
 use crate::{
     consensus::ouroboros::{
         consts::{LOTTERY_HEAD_START, RADIX_BITS},
-        utils::{base2ibig, fbig2ibig},
-        EpochConsensus, Float10,
+        utils::{fbig2ibig},
+        types::{Float10},
+        EpochConsensus,
     },
     crypto::{
         coin::OwnCoin,
@@ -285,9 +286,9 @@ impl Epoch {
     /// only the highest values coin is selected, since the stakeholder can't give more
     /// than a proof per block.
     /// * `sl` - slot relative index
-    /// * `idx` - index of the winning coin
+    /// * `idx` - index of the highest winning coin
     /// returns true if the stakeholder is a leader for the current slot, else otherwise
-    pub fn is_leader(&self, sl: u64, idx: &mut usize) -> bool {
+    pub fn is_leader(&self, sl: u64, idx: &mut usize) -> Vec<bool> {
         let slusize = sl as usize;
         info!("slot: {}, coin len: {}", sl, self.coins.len());
         assert!(slusize < self.coins.len());
@@ -298,9 +299,7 @@ impl Epoch {
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
             let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
             let y_exp_hash: pallas::Base =
-                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
-                )
-                .hash(y_exp);
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_exp);
             let y_coordinates = pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
                 .to_affine()
                 .coordinates()
@@ -325,11 +324,11 @@ impl Epoch {
                     highest_stake = coin.value.unwrap();
                     highest_stake_idx = winning_idx;
                 }
-                am_leader.push(iam_leader);
             }
+            am_leader.push(iam_leader);
         }
         *idx = highest_stake_idx;
-        !am_leader.is_empty()
+        am_leader
     }
 
     /// * `sl` - relative slot index (zero based)
