@@ -1,28 +1,18 @@
 from hashlib import sha256
 from datetime import datetime
 from random import randint, random
+from collections import Counter
 import math
 import asyncio
+import logging
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 
 
 EventId = str
 EventIds = list[EventId]
-
-# Number of nodes
-NODES_N = 10
-# Broadcast attempt for each node
-BROADCAST_ATTEMPT = 3
-
-MAX_BROADCAST_DELAY = round(math.log(NODES_N))
-MIN_BROADCAST_DELAY = 0
-
-PROBABILITY_OF_DROPPING_MSG = 0.50  # 1/2
-
-# Timeout for sending tasks to finish
-BROADCAST_TIMEOUT = NODES_N * BROADCAST_ATTEMPT * MAX_BROADCAST_DELAY
 
 
 class NetworkPool:
@@ -33,7 +23,7 @@ class NetworkPool:
         for n in self.nodes:
             event = n.get_event(event_id)
             if event != None:
-                return event
+                return (n.name, event)
 
         return None
 
@@ -66,7 +56,7 @@ class Event:
 
 
 """
-## Graph Example
+# Graph Example
  E1: []
  E2: [E1]
  E3: [E1]
@@ -76,8 +66,6 @@ class Event:
  E7: [E4]
  E8: [E2]
 """
-
-
 class Graph:
     def __init__(self):
         self.events = dict()
@@ -134,9 +122,11 @@ class Node:
         event_hash = event.hash()
         self.remove_heads(event)
         self.heads.append(event_hash)
+        self.heads = sorted(self.heads)
 
     # On receive new event
-    def receive_new_event(self, event: Event, np):
+    def receive_new_event(self, event: Event, peer, np):
+        logging.debug(f"{self.name} receive event from {peer}: \n {event}")
         event_hash = event.hash()
 
         # Reject event with no parents
@@ -177,7 +167,8 @@ class Node:
             request_list = []
             self.check_parents(request_list, missing_parents)
 
-            print(f"{self.name} request from the network: {request_list}")
+            logging.debug(
+                f"{self.name} request from the network: {request_list}")
 
             # XXX
             # Send all the missing parents in request_list
@@ -186,15 +177,17 @@ class Node:
             # For simulation purpose the node fetch the missed parents from the
             # network pool which contains all the nodes and its messages
             for event in request_list:
-                requested_event = np.request(event)
+                peer, requested_event = np.request(event)
                 if requested_event != None:
-                    self.receive_new_event(requested_event, np)
+                    self.receive_new_event(requested_event, peer, np)
                 else:
                     # It must always find the missed event from the network
-                    print(f"Error: {self.name} requested {event} not found")
+                    logging.error(
+                        f"Error: {self.name} requested {event} not found")
 
     # This will check if passed parents are in the orphan pool, and fill
     # request_list with missing parents
+
     def check_parents(self, request_list, parents: EventIds, visited=[]):
         for parent_hash in parents:
 
@@ -215,7 +208,7 @@ class Node:
 
     # Check if the orphan pool has an event linked
     # to the passed event and relink it accordingly
-    def relink(self, event: Event, remove_list=[]):
+    def relink(self, event: Event, remove_list):
         event_hash = event.hash()
 
         for (orphan_hash, orphan) in self.orphan_pool.events.items():
@@ -252,53 +245,70 @@ class Node:
         return event
 
     def __str__(self):
-        return f"""------
+        return f"""
 	        \n Name: {self.name}
 	        \n Active Pool: {self.active_pool}
-	        \n Orphan Pool: {self.orphan_pool}"""
+	        \n Orphan Pool: {self.orphan_pool}
+	        \n Heads: {self.heads}"""
 
 
-# Each node has NODES_N of this function running in the background
+# Each node has nodes_n of this function running in the background
 # for receiving events from each node separately
-async def recv_loop(node, peer, queue, np):
+async def recv_loop(podm, node, peer, queue, np):
     while True:
         # Wait new event
         event = await queue.get()
         queue.task_done()
 
-        if random() <= PROBABILITY_OF_DROPPING_MSG:
-            print(f"{node.name} dropped: \n  {event}")
+        if event == None:
+            break
+
+        if random() <= podm:
+            logging.debug(f"{node.name} dropped: \n  {event}")
             continue
 
-        node.receive_new_event(event, np)
-        print(f"{node.name} receive event from {peer}: \n {event}")
+        node.receive_new_event(event, peer, np)
 
 
 # Send new event at random intervals
 # Each node has this function running in the background
-async def send_loop(node):
-    for _ in range(BROADCAST_ATTEMPT):
+async def send_loop(nodes_n, max_delay, broadcast_attempt,  node):
+    for _ in range(broadcast_attempt):
 
-        await asyncio.sleep(randint(MIN_BROADCAST_DELAY, MAX_BROADCAST_DELAY))
+        await asyncio.sleep(randint(0, max_delay))
 
         # Create new event with the last heads as parents
         event = Event(node.heads)
 
-        print(f"{node.name} broadcast event: \n {event}")
-        for _ in range(NODES_N):
+        logging.debug(f"{node.name} broadcast event: \n {event}")
+        for _ in range(nodes_n):
             await node.queue.put(event)
             await node.queue.join()
 
 
-async def main():
+"""
+Run a simulation with the provided params:
+    nodes_n: number of nodes
+    podm: probability of dropping messages (ex: 0.30 -> %30)
+    broadcast_attempt: number of messages each node should broadcast
+
+"""
+async def run(nodes_n=3, podm=0.30, broadcast_attempt=3, check=False):
+
+    logging.debug(f"Running simulation with nodes: {nodes_n}, podm: {podm},\
+                  broadcast_attempt: {broadcast_attempt}")
+
+    max_delay = round(math.log(nodes_n))
+    broadcast_timeout = nodes_n * broadcast_attempt * max_delay
+
     nodes = []
 
-    print(f"Run {NODES_N} Nodes")
+    logging.info(f"Run {nodes_n} Nodes")
 
     try:
 
-        # Initialize NODES_N nodes
-        for i in range(NODES_N):
+        # Initialize nodes_n nodes
+        for i in range(nodes_n):
             queue = asyncio.Queue()
             node = Node(f"Node{i}", queue)
             nodes.append(node)
@@ -306,37 +316,111 @@ async def main():
         # Initialize NetworkPool contains all nodes
         np = NetworkPool(nodes)
 
-        # Initialize NODES_N * NODES_N coroutine tasks for receiving events
+        # Initialize nodes_n * nodes_n coroutine tasks for receiving events
         # Each node listen to all queues from the running nodes
+        recv_tasks = []
         for node in nodes:
             for n in nodes:
-                asyncio.create_task(recv_loop(node, n.name, n.queue, np))
+                recv_tasks.append(recv_loop(podm, node, n.name, n.queue, np))
+
+        r_g = asyncio.gather(*recv_tasks)
 
         # Create coroutine task contains send_loop function for each node
         # Run and wait for send tasks
-        s_g = asyncio.gather(*[send_loop(n) for n in nodes])
-        await asyncio.wait_for(s_g, BROADCAST_TIMEOUT)
+        s_g = asyncio.gather(
+            *[send_loop(nodes_n, max_delay, broadcast_attempt, n) for n in nodes])
+        await asyncio.wait_for(s_g, broadcast_timeout)
 
-        # Assert if all nodes share the same active pool graph
-        # assert (all(n.active_pool.events.keys() ==
-        #        nodes[0].active_pool.events.keys() for n in nodes))
+        # Gracefully stop all receiving tasks
+        for n in nodes:
+            for _ in range(nodes_n):
+                await n.queue.put(None)
+                await n.queue.join()
 
-        # Assert if all nodes share the same orphan pool graph
-        # assert (all(n.orphan_pool.events.keys() ==
-        #        nodes[0].orphan_pool.events.keys() for n in nodes))
+        await r_g
 
-        # Assert if all nodes heads are equal
-        #assert (all(n.heads == nodes[0].heads for n in nodes))
+        if check:
 
-        # print_graph([nodes[0]])
+            for node in nodes:
+                logging.debug(node)
 
-    except KeyboardInterrupt:
-        print("Done")
+            # Assert if all nodes share the same active pool graph
+            assert (all(n.active_pool.events.keys() ==
+                        nodes[0].active_pool.events.keys() for n in nodes))
+
+            # Assert if all nodes share the same orphan pool graph
+            assert (all(n.orphan_pool.events.keys() ==
+                        nodes[0].orphan_pool.events.keys() for n in nodes))
+
+        return nodes
+
     except asyncio.exceptions.TimeoutError:
-        print("Broadcast TimeoutError")
+        logging.error("Broadcast TimeoutError")
 
 
-def print_graph(nodes):
+async def main():
+
+    # run the simulation `sim_n` times with a fixed `podm`
+    # and increase number of nodes by `sim_nodes_inc`
+    sim = []
+    sim_n = 5
+    sim_nodes_inc = 2
+
+    # number of nodes
+    nodes_n = 10
+    # probability of dropping messages
+    podm = 0.10
+    # number of messages each node should broadcast
+    broadcast_attempt = 10
+
+    for _ in range(sim_n):
+        nodes = await run(nodes_n, podm, broadcast_attempt)
+        sim.append(nodes)
+        nodes_n += sim_nodes_inc
+
+    nodes_n_list = []
+    msgs_synced = []
+
+    for nodes in sim:
+        nodes_n = len(nodes)
+
+        nodes_n_list.append(nodes_n)
+
+        events = Counter()
+        for node in nodes:
+            events.update(list(node.active_pool.events.keys()))
+
+        # Remove the genesis event
+        del events["8aed642bf5118b9d3c859bd4be35ecac75b6e873cce34e7b6f554b06f75550d7"]
+
+        expect_msgs_synced = (nodes_n * broadcast_attempt)
+        actual_msgs_synced = 0
+        for val in events.values():
+            # if the event is fully synced with all nodes
+            if val == nodes_n:
+                actual_msgs_synced += 1
+
+        res = (actual_msgs_synced * 100) / expect_msgs_synced 
+
+        msgs_synced.append(res)
+
+        logging.info(events)
+        logging.info(f"nodes_n: {nodes_n}")
+        logging.info(f"actual_msg_synced: {actual_msgs_synced}")
+        logging.info(f"expect_msgs_synced: {expect_msgs_synced}")
+        logging.info(f"res: %{res}")
+
+    logging.disable()
+    plt.plot(nodes_n_list, msgs_synced)
+    plt.ylim(0, 100)
+    plt.title(
+        f"Event Graph simulation with %{podm * 100} probability of dropping messages")
+    plt.ylabel("Events sync percentage")
+    plt.xlabel("Number of nodes")
+    plt.show()
+
+
+def print_network_graph(nodes):
     for (i, node) in enumerate(nodes):
         graph = nx.Graph()
 
@@ -363,4 +447,8 @@ def print_graph(nodes):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG,
+                        handlers=[logging.FileHandler("debug.log", mode="w"),
+                                  logging.StreamHandler()])
+
     asyncio.run(main())
