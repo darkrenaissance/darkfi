@@ -7,16 +7,22 @@ use pasta_curves::{
     group::{ff::PrimeField, Curve},
     pallas,
 };
-use rand::{thread_rng, Rng};
+use rand::{thread_rng, Rng, rngs::OsRng};
 
-use darkfi::crypto::{
-    coin::OwnCoin,
-    keypair::{Keypair, SecretKey},
-    leadcoin::LeadCoin,
-    types::DrkValueBlind,
-    util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64},
+use darkfi::{
+    crypto::{
+        coin::{Coin, OwnCoin},
+        keypair::{Keypair, SecretKey},
+        leadcoin::LeadCoin,
+        note::Note,
+        
+        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+        util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
+    },
+    wallet::walletdb::WalletDb,
+    Result,
 };
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode};
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode, Nullifier};
 
 use crate::utils::{Float10, fbig2base};
 
@@ -330,4 +336,28 @@ pub fn is_leader(slot: u64, epoch_coins: &Vec<Vec<LeadCoin>>) -> (bool, usize) {
     }
     
     (won, highest_stake_idx)
+}
+
+/// Generate staking coins for provided wallet.
+pub async fn generate_staking_coins(wallet: &WalletDb) -> Result<Vec<OwnCoin>> {
+    let keypair = wallet.get_default_keypair().await?;
+    let token_id = DrkTokenId::random(&mut OsRng);
+    let value = 420;
+    let serial = DrkSerial::random(&mut OsRng);
+    let note = Note {
+        serial,
+        value,
+        token_id,
+        coin_blind: DrkCoinBlind::random(&mut OsRng),
+        value_blind: DrkValueBlind::random(&mut OsRng),
+        token_blind: DrkValueBlind::random(&mut OsRng),
+        memo: vec![],
+    };
+    let coin = Coin(pallas::Base::random(&mut OsRng));
+    let nullifier = Nullifier::from(poseidon_hash::<2>([keypair.secret.inner(), serial]));
+    let leaf_position: incrementalmerkletree::Position = 0.into();
+    let coin = OwnCoin { coin, note, secret: keypair.secret, nullifier, leaf_position };
+    wallet.put_own_coin(coin.clone()).await?;
+    
+    Ok(vec![coin])
 }
