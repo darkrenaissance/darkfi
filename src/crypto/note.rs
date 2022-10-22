@@ -57,7 +57,7 @@ impl EncryptedNote {
         let shared_secret = sapling_ka_agree(secret, &self.ephem_public);
         let key = kdf_sapling(&shared_secret, &self.ephem_public);
 
-        let mut plaintext = vec![0; self.ciphertext.len()];
+        let mut plaintext = vec![0; self.ciphertext.len() - AEAD_TAG_SIZE];
 
         assert_eq!(
             ChachaPolyIetf::aead_cipher()
