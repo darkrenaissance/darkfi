@@ -5,10 +5,10 @@ from collections import Counter
 import math
 import asyncio
 import logging
+from logging import debug, error, info
 
 import matplotlib.pyplot as plt
 import networkx as nx
-import numpy as np
 
 
 EventId = str
@@ -23,7 +23,7 @@ class NetworkPool:
         for n in self.nodes:
             event = n.get_event(event_id)
             if event != None:
-                return (n.name, event)
+                return event
 
         return None
 
@@ -65,6 +65,7 @@ class Event:
  E6: [E4, E5]
  E7: [E4]
  E8: [E2]
+
 """
 class Graph:
     def __init__(self):
@@ -74,7 +75,7 @@ class Graph:
         self.events[event.hash()] = event
 
     def remove_event(self, event_id: EventId):
-        if event_id in self.events:
+        if self.events.get(event_id) != None:
             del self.events[event_id]
 
     # Check if given events are exist in the graph
@@ -126,7 +127,7 @@ class Node:
 
     # On receive new event
     def receive_new_event(self, event: Event, peer, np):
-        logging.debug(f"{self.name} receive event from {peer}: \n {event}")
+        debug(f"{self.name} receive event from {peer}: \n {event}")
         event_hash = event.hash()
 
         # Reject event with no parents
@@ -141,99 +142,130 @@ class Node:
         if not self.orphan_pool.check([event_hash]):
             return
 
-        # Check if parents for this event are missing from active pool
-        missing_parents = self.active_pool.check(event.parents)
+        # Add the new event to the orphan pool
+        self.orphan_pool.add_event(event)
 
+        # This function is the core of syncing algorithm
+        #
+        # Find all the links from the new event to events in orphan pool
+        # Bring these events to the active pool then add the new event
+        self.relink_orphan(event, np)
+
+    def relink_orphan(self, orphan, np):
+        # Check if the parents of the orphan
+        # are not missing from active pool
+        missing_parents = self.active_pool.check(orphan.parents)
         if not missing_parents:
-            # Add the event to active pool
-            self.active_pool.add_event(event)
-            self.update_heads(event)
+            self.add_to_active_pool(orphan)
+            return
 
-            # Move events from oprhan pool to active pool if they are child of
-            # the new added event
-            remove_list: EventIds = []
-            self.relink(event, remove_list)
+        # Check the missing parents from orphan pool and sync with the network for
+        # missing ones
+        self.check_orphan_pool(list(missing_parents), np)
 
-            # Clean up orphan pool
-            for ev in remove_list:
-                self.orphan_pool.remove_event(ev)
+        # At this stage all the missing parents must be in the orphan pool
+        # The next step is to move them to active pool
+        self.update_active_pool(missing_parents, [])
 
-        else:
-            # Add the received event to the orphan pool
-            self.orphan_pool.add_event(event)
+        # Check again that the parents of the orphan are in the active pool
+        missing_parents = self.active_pool.check(orphan.parents)
+        assert (not missing_parents)
 
+        # Last stage, add the event to active pool
+        self.add_to_active_pool(orphan)
+
+
+    def check_orphan_pool(self, missing_events, np):
+        debug(f"{self.name} check_orphan_pool() {missing_events}")
+
+        while True:
             # Check if all missing parents are in orphan pool, otherwise
-            # request them from the network
+            # add them to request list
             request_list = []
-            self.check_parents(request_list, missing_parents)
 
-            logging.debug(
-                f"{self.name} request from the network: {request_list}")
+            self.check_missing_parents(request_list, missing_events, [])
 
-            # XXX
-            # Send all the missing parents in request_list
-            # to the node who send this event
+            if not request_list:
+                break
 
-            # For simulation purpose the node fetch the missed parents from the
-            # network pool which contains all the nodes and its messages
-            for event in request_list:
-                peer, requested_event = np.request(event)
-                if requested_event != None:
-                    self.receive_new_event(requested_event, peer, np)
-                else:
-                    # It must always find the missed event from the network
-                    logging.error(
-                        f"Error: {self.name} requested {event} not found")
+            missing_events = self.fetch_events(request_list, np)
 
-    # This will check if passed parents are in the orphan pool, and fill
-    # request_list with missing parents
 
-    def check_parents(self, request_list, parents: EventIds, visited=[]):
-        for parent_hash in parents:
+    def check_missing_parents(self, request_list, events: EventIds, visited):
+        debug(f"{self.name} check_missing_parents() {events}")
+        for event_hash in events:
 
-            # Check if the function already visit this parent
-            if parent_hash in visited:
+            # Check if the function already visit this event
+            if event_hash in visited:
                 continue
-            visited.append(parent_hash)
+            visited.append(event_hash)
 
-            # If the parent in orphan pool, do recursive call to check its
-            # parents as well, otherwise add the parent to request_list
-            if parent_hash in self.orphan_pool.events:
-                parent = self.orphan_pool.events[parent_hash]
-
-                # Recursive call
-                self.check_parents(request_list, parent.parents, visited)
+            # If the event in orphan pool, do recursive call to check its
+            # parents as well, otherwise add the event to request_list
+            event = self.orphan_pool.events.get(event_hash)
+            if event == None:
+                # Check first if it's not in the active pool
+                if self.active_pool.events.get(event_hash) == None:
+                    request_list.append(event_hash)
             else:
-                request_list.append(parent_hash)
-
-    # Check if the orphan pool has an event linked
-    # to the passed event and relink it accordingly
-    def relink(self, event: Event, remove_list):
-        event_hash = event.hash()
-
-        for (orphan_hash, orphan) in self.orphan_pool.events.items():
-
-            # Check if the orphan is not already in remove_list
-            if orphan_hash in remove_list:
-                continue
-
-            # Check if the event is a parent of orphan event
-            if event_hash not in orphan.parents:
-                continue
-
-            # Check if the remain parents of the orphan
-            # are not missing from active pool
-            missing_parents = self.active_pool.check(orphan.parents)
-
-            if not missing_parents:
-                # Add the orphan to active pool
-                self.active_pool.add_event(orphan)
-                self.update_heads(orphan)
-                # Add the orphan to remove_list
-                remove_list.append(orphan_hash)
-
                 # Recursive call
-                self.relink(orphan, remove_list)
+                # Climb up for the event parents
+                self.check_missing_parents(request_list, event.parents, visited)
+
+    def fetch_events(self, request_list, np):
+        debug(f"{self.name} fetch_events()  {request_list}")
+        # XXX
+        # Send the events in request_list to the node who send this event.
+        #
+        # For simulation purpose the node fetch the missed events from the
+        # network pool which contains all the nodes and its events
+        result = []
+        for p in request_list:
+
+            debug(f"{self.name} request from the network: {p}")
+
+            # Request from the network
+            requested_event = np.request(p)
+            assert (requested_event != None)
+
+            # Add it to the orphan pool
+            self.orphan_pool.add_event(requested_event)
+            result.extend(requested_event.parents)
+
+        # Return parents of requested events
+        return result
+
+
+    def update_active_pool(self, events, visited):
+        debug(f"{self.name} update_active_pool()  {events}")
+        for event_hash in events:
+            # Check if it already visit this event
+            if event_hash in visited:
+                continue
+            visited.append(event_hash)
+
+            if self.active_pool.events.get(event_hash) != None:
+                continue
+
+            # Get the event from the orphan pool
+            event = self.orphan_pool.events.get(event_hash)
+
+            assert (event != None)
+
+            # Add it to the active pool
+            self.add_to_active_pool(event)
+
+            # Recursive call
+            # Climb up for the event parents
+            self.update_active_pool(event.parents, visited)
+
+    def add_to_active_pool(self, event):
+        # Add the event to active pool
+        self.active_pool.add_event(event)
+        # Update heads
+        self.update_heads(event)
+        # Remove event from orphan pool
+        self.orphan_pool.remove_event(event.hash())
 
     def get_event(self, event_id: EventId):
         # Check the active_pool
@@ -263,8 +295,8 @@ async def recv_loop(podm, node, peer, queue, np):
         if event == None:
             break
 
-        if random() <= podm:
-            logging.debug(f"{node.name} dropped: \n  {event}")
+        if random() < podm:
+            debug(f"{node.name} dropped: \n  {event}")
             continue
 
         node.receive_new_event(event, peer, np)
@@ -280,7 +312,7 @@ async def send_loop(nodes_n, max_delay, broadcast_attempt,  node):
         # Create new event with the last heads as parents
         event = Event(node.heads)
 
-        logging.debug(f"{node.name} broadcast event: \n {event}")
+        debug(f"{node.name} broadcast event: \n {event}")
         for _ in range(nodes_n):
             await node.queue.put(event)
             await node.queue.join()
@@ -289,13 +321,13 @@ async def send_loop(nodes_n, max_delay, broadcast_attempt,  node):
 """
 Run a simulation with the provided params:
     nodes_n: number of nodes
-    podm: probability of dropping messages (ex: 0.30 -> %30)
-    broadcast_attempt: number of messages each node should broadcast
-
+    podm: probability of dropping events (ex: 0.30 -> %30)
+    broadcast_attempt: number of events each node should broadcast
+    check: check if all nodes have the same graph
 """
 async def run(nodes_n=3, podm=0.30, broadcast_attempt=3, check=False):
 
-    logging.debug(f"Running simulation with nodes: {nodes_n}, podm: {podm},\
+    debug(f"Running simulation with nodes: {nodes_n}, podm: {podm},\
                   broadcast_attempt: {broadcast_attempt}")
 
     max_delay = round(math.log(nodes_n))
@@ -303,7 +335,7 @@ async def run(nodes_n=3, podm=0.30, broadcast_attempt=3, check=False):
 
     nodes = []
 
-    logging.info(f"Run {nodes_n} Nodes")
+    info(f"Run {nodes_n} Nodes")
 
     try:
 
@@ -342,7 +374,7 @@ async def run(nodes_n=3, podm=0.30, broadcast_attempt=3, check=False):
         if check:
 
             for node in nodes:
-                logging.debug(node)
+                debug(node)
 
             # Assert if all nodes share the same active pool graph
             assert (all(n.active_pool.events.keys() ==
@@ -352,34 +384,48 @@ async def run(nodes_n=3, podm=0.30, broadcast_attempt=3, check=False):
             assert (all(n.orphan_pool.events.keys() ==
                         nodes[0].orphan_pool.events.keys() for n in nodes))
 
+            # Assert if all heads are equal
+            assert (all(n.heads == nodes[0].heads for n in nodes))
+
         return nodes
 
     except asyncio.exceptions.TimeoutError:
-        logging.error("Broadcast TimeoutError")
+        error("Broadcast TimeoutError")
 
 
-async def main():
+async def main(sim_n=6, nodes_increase=False, podm_increase=False ):
+    # run the simulation `sim_n` times with increasing `podm` and `nodes_n`
 
-    # run the simulation `sim_n` times with a fixed `podm`
-    # and increase number of nodes by `sim_nodes_inc`
-    sim = []
-    sim_n = 5
-    sim_nodes_inc = 2
+    if nodes_increase:
+        podm_increase = False
 
     # number of nodes
-    nodes_n = 10
-    # probability of dropping messages
-    podm = 0.10
-    # number of messages each node should broadcast
-    broadcast_attempt = 10
+    nodes_n = 5
+    # probability of dropping events
+    podm = 0.20
+    # number of events each node should broadcast
+    broadcast_attempt = 5
 
-    for _ in range(sim_n):
-        nodes = await run(nodes_n, podm, broadcast_attempt)
-        sim.append(nodes)
-        nodes_n += sim_nodes_inc
+    sim_nodes_inc = int(nodes_n / 5)
+    sim_podm_inc = podm / 5 
 
+    sim = []
     nodes_n_list = []
-    msgs_synced = []
+    events_synced = []
+    podm_list = []
+
+    podm_tmp = podm
+    nodes_n_tmp = nodes_n
+    for _ in range(sim_n):
+        nodes = await run(nodes_n_tmp, podm_tmp, broadcast_attempt)
+        sim.append(nodes)
+        podm_list.append(podm_tmp)
+
+        if nodes_increase:
+             nodes_n_tmp += sim_nodes_inc
+
+        if podm_increase:
+            podm_tmp += sim_podm_inc
 
     for nodes in sim:
         nodes_n = len(nodes)
@@ -393,31 +439,46 @@ async def main():
         # Remove the genesis event
         del events["8aed642bf5118b9d3c859bd4be35ecac75b6e873cce34e7b6f554b06f75550d7"]
 
-        expect_msgs_synced = (nodes_n * broadcast_attempt)
-        actual_msgs_synced = 0
+        expect_events_synced = (nodes_n * broadcast_attempt)
+        actual_events_synced = 0
         for val in events.values():
             # if the event is fully synced with all nodes
             if val == nodes_n:
-                actual_msgs_synced += 1
+                actual_events_synced += 1
 
-        res = (actual_msgs_synced * 100) / expect_msgs_synced 
+        res = (actual_events_synced * 100) / expect_events_synced
 
-        msgs_synced.append(res)
+        events_synced.append(res)
 
-        logging.info(events)
-        logging.info(f"nodes_n: {nodes_n}")
-        logging.info(f"actual_msg_synced: {actual_msgs_synced}")
-        logging.info(f"expect_msgs_synced: {expect_msgs_synced}")
-        logging.info(f"res: %{res}")
+        info(events)
+        info(f"nodes_n: {nodes_n}")
+        info(f"actual_events_synced: {actual_events_synced}")
+        info(f"expect_events_synced: {expect_events_synced}")
+        info(f"res: %{res}")
+
 
     logging.disable()
-    plt.plot(nodes_n_list, msgs_synced)
-    plt.ylim(0, 100)
-    plt.title(
-        f"Event Graph simulation with %{podm * 100} probability of dropping messages")
-    plt.ylabel("Events sync percentage")
-    plt.xlabel("Number of nodes")
-    plt.show()
+
+    if nodes_increase:
+        plt.plot(nodes_n_list, events_synced)
+        plt.ylim(0, 100)
+
+        plt.title(f"Event Graph simulation with %{podm * 100} probability of dropping messages")
+
+        plt.ylabel("Events sync percentage")
+        plt.xlabel("Number of nodes")
+        plt.show()
+
+    if podm_increase: 
+        plt.plot(podm_list, events_synced)
+        plt.ylim(0, 100)
+
+        plt.title(f"Event Graph simulation with {nodes_n} nodes")
+
+        plt.ylabel("Events sync percentage")
+        plt.xlabel("Probability of dropping messages")
+        plt.show()
+
 
 
 def print_network_graph(nodes):
@@ -451,4 +512,5 @@ if __name__ == "__main__":
                         handlers=[logging.FileHandler("debug.log", mode="w"),
                                   logging.StreamHandler()])
 
-    asyncio.run(main())
+    asyncio.run(main(nodes_increase=True))
+
