@@ -1,0 +1,15 @@
+[package]
+name = "x3dh"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+anyhow = "1.0.56"
+sha2 = "0.10.6"
+rand = "0.7.3"
+crypto_api_chachapoly = "0.5.0"
+curve25519-dalek = "3.2.1"
+ed25519-dalek = "1.0.1"
+x25519-dalek = "1.2.0"
