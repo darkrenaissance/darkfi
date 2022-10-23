@@ -103,10 +103,8 @@ const TX_COIN3_CM_X_OFFSET: usize = 8;
 const TX_COIN3_CM_y_OFFSET: usize = 9;
 const TX_COIN4_CM_X_OFFSET: usize = 10;
 const TX_COIN4_CM_y_OFFSET: usize = 11;
-const TX_COIN1_CM_PATH_OFFSET: usize = 12;
-const TX_COIN2_CM_PATH_OFFSET: usize = 13;
-const TX_COIN1_SN_OFFSET: usize = 14;
-const TX_COIN2_SN_OFFSET: usize = 15;
+const TX_COIN1_SN_OFFSET: usize = 12;
+const TX_COIN2_SN_OFFSET: usize = 13;
 
 #[derive(Default, Debug)]
 pub struct TxContract {
@@ -304,8 +302,10 @@ impl Circuit<pallas::Base> for TxContract {
             config.advices[0],
             Value::known(-pallas::Base::one()),
         )?;
-
-
+        let root_cm = self.load_private(layouter.namespace(|| ""),
+                                        config.advices[0],
+                                        self.root_cm
+        )?;
         let coin1_root_sk = self.load_private(layouter.namespace(|| "root sk"),
                                               config.advices[0],
                                               self.coin1_root_sk
@@ -682,11 +682,8 @@ impl Circuit<pallas::Base> for TxContract {
         };
         let coin1_cm_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin1_cm_hash)?;
-        layouter.constrain_instance(
-            coin1_cm_root.cell(),
-            config.primary,
-            TX_COIN1_CM_PATH_OFFSET,
-        )?;
+        root_cm.constrain_equal(layouter.namespace(||""), &coin1_cm_root)?;
+
         // ==========
         // COIN2 PATH
         // ==========
@@ -720,11 +717,7 @@ impl Circuit<pallas::Base> for TxContract {
         };
         let coin2_cm_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin2_cm_hash)?;
-        layouter.constrain_instance(
-            coin2_cm_root.cell(),
-            config.primary,
-            TX_COIN2_CM_PATH_OFFSET,
-        )?;
+        root_cm.constrain_equal(layouter.namespace(||""), &coin2_cm_root)?;
         // =============
         // COIN1 sk root
         // =============
