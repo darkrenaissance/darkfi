@@ -103,11 +103,10 @@ const TX_COIN3_CM_X_OFFSET: usize = 8;
 const TX_COIN3_CM_y_OFFSET: usize = 9;
 const TX_COIN4_CM_X_OFFSET: usize = 10;
 const TX_COIN4_CM_y_OFFSET: usize = 11;
-const TX_ZERO_SUM_OFFSET: usize = 12;
-const TX_COIN1_CM_PATH_OFFSET: usize = 13;
-const TX_COIN2_CM_PATH_OFFSET: usize = 14;
-const TX_COIN1_SN_OFFSET: usize = 15;
-const TX_COIN2_SN_OFFSET: usize = 16;
+const TX_COIN1_CM_PATH_OFFSET: usize = 12;
+const TX_COIN2_CM_PATH_OFFSET: usize = 13;
+const TX_COIN1_SN_OFFSET: usize = 14;
+const TX_COIN2_SN_OFFSET: usize = 15;
 
 #[derive(Default, Debug)]
 pub struct TxContract {
@@ -300,6 +299,12 @@ impl Circuit<pallas::Base> for TxContract {
             config.advices[0],
             Value::known(pallas::Base::one()),
         )?;
+        let neg_one = self.load_private(
+            layouter.namespace(|| "one"),
+            config.advices[0],
+            Value::known(-pallas::Base::one()),
+        )?;
+
 
         let coin1_root_sk = self.load_private(layouter.namespace(|| "root sk"),
                                               config.advices[0],
@@ -642,15 +647,8 @@ impl Circuit<pallas::Base> for TxContract {
         )?;
 
         let v1pv2 = ar_chip.add(layouter.namespace(||""), &coin1_value, &coin2_value)?;
-        let neg_coin3_value = ar_chip.mul(layouter.namespace(||""), &neg_one, &coin3_value);
-        let v1pv2pv3 = ar_chip.add(layouter.namespace(||""), &v1pv2, &neg_coin3_value)?;
-        let neg_coin4_value = ar_chip.mul(layouter.namespace(||""), &neg_one, &coin4_value);
-        let v1pv2pv3pv4 = ar_chip.add(layouter.namespace(||""), &v1pv2pv3, &neg_coin4_value)?;
-        layouter.constrain_instance(
-            v1pv2pv3pv4.cell(),
-            config.primary,
-            TX_ZERO_SUM_OFFSET,
-        )?;
+        let v3pv4 = ar_chip.add(layouter.namespace(||""), &coin3_value, &coin4_value)?;
+        v1pv2.constrain_equal(layouter.namespace(||""), &v1pv2)?;
         // ==========
         // COIN1 PATH
         // ==========
@@ -730,6 +728,16 @@ impl Circuit<pallas::Base> for TxContract {
         // =============
         // COIN1 sk root
         // =============
+        let path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
+            self.coin1_sk_path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
+        let merkle_inputs = MerklePath::construct(
+            [config.merkle_chip_1(), config.merkle_chip_2()],
+            OrchardHashDomains::MerkleCrh,
+            self.coin1_sk_pos,
+            path,
+        );
+        let coin2_cm_root = merkle_inputs
+            .calculate_root(layouter.namespace(|| "calculate root"), coin1_sk)?;
         layouter.constrain_instance(
             coin1_root_sk.cell(),
             config.primary,
