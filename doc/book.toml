@@ -10,6 +10,7 @@ copy-fonts = true
 default-theme = "ayu"
 preferred-dark-theme = "ayu"
 theme = "theme"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
 
 [output.html.playground]
 runnable = false
@@ -21,4 +22,7 @@ runnable = false
 [preprocessor.toc]
 command = "mdbook-toc"
 renderer = ["html"]
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
 

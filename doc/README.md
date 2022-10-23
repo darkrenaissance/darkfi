@@ -12,4 +12,5 @@ For the mdbook-katex backend run:
 ```
 cargo install --git "https://github.com/lzanini/mdbook-katex"
 cargo install --git "https://github.com/badboy/mdbook-toc"
+cargo install --git "https://github.com/badboy/mdbook-mermaid"
 ```

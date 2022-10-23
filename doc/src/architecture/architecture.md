@@ -47,6 +47,20 @@ Deferred (future):
 
 ## Release Cycle
 
+```mermaid
+gantt
+    title Release Cycle
+    dateFormat  DD-MM-YYYY
+    axisFormat  %m-%y
+    section Phases
+    Dcon0            :done, d0, 01-01-2022, 01-04-2022
+    Dcon1            :      d1, after d0,   23-12-2022
+    Dcon2            :      d2, 23-08-2022, 23-02-2023
+    Dcon3            :      d3, after d2,   60d
+    Dcon4            :      d4, after d3,   14d
+    Dcon5            :      d5, after d4,   7d
+```
+
 <table>
     <tr>
         <th>Phase</th>
