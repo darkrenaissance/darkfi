@@ -103,9 +103,6 @@ const LEAD_COIN_SERIAL_NUMBER_OFFSET: usize = 8;
 const LEAD_Y_COMMIT_BASE_OFFSET: usize = 9;
 const LEAD_RHO_COMMIT_BASE_OFFSET: usize = 10;
 
-pub fn concat_u8(lhs: &[u8], rhs: &[u8]) -> Vec<u8> {
-    [lhs, rhs].concat()
-}
 
 #[derive(Default, Debug)]
 pub struct LeadContract {
@@ -522,6 +519,7 @@ impl Circuit<pallas::Base> for LeadContract {
             path,
         );
 
+        //TODO (fix) replace mul by hash
         let coin_commit_prod: AssignedCell<Fp, Fp> = {
             let coin_commit_coordinates = coin_commit.inner();
 
