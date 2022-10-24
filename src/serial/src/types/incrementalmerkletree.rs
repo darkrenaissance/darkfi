@@ -171,3 +171,56 @@ impl<T: Decodable + Ord + Clone + Hashable, const V: u8> Decodable
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{deserialize, serialize, SerialDecodable, SerialEncodable};
+    use incrementalmerkletree::{bridgetree::BridgeTree, Altitude, Hashable, Tree};
+
+    #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, SerialEncodable, SerialDecodable)]
+    struct Node(String);
+
+    impl Hashable for Node {
+        fn empty_leaf() -> Self {
+            Self("_".to_string())
+        }
+
+        fn combine(_: Altitude, a: &Self, b: &Self) -> Self {
+            Self(a.0.to_string() + &b.0)
+        }
+    }
+
+    #[test]
+    fn serialize_desrialize_inc_merkle_tree() {
+        const DEPTH: u8 = 8;
+
+        // Fill the tree with 100 leaves
+        let mut tree: BridgeTree<Node, DEPTH> = BridgeTree::new(100);
+        for i in 0..100 {
+            tree.append(&Node(format!("test{}", i)));
+            tree.witness();
+            tree.checkpoint();
+        }
+        let serial_tree = serialize(&tree);
+        let deserial_tree: BridgeTree<Node, DEPTH> = deserialize(&serial_tree).unwrap();
+
+        // Empty tree
+        let tree2: BridgeTree<Node, DEPTH> = BridgeTree::new(100);
+        let serial_tree2 = serialize(&tree2);
+        let deserial_tree2: BridgeTree<Node, DEPTH> = deserialize(&serial_tree2).unwrap();
+
+        // Max leaves
+        let mut tree3: BridgeTree<Node, DEPTH> = BridgeTree::new(100);
+        for i in 0..2_i32.pow(DEPTH as u32) {
+            tree3.append(&Node(format!("test{}", i)));
+            tree3.witness();
+            tree3.checkpoint();
+        }
+        let serial_tree3 = serialize(&tree3);
+        let deserial_tree3: BridgeTree<Node, DEPTH> = deserialize(&serial_tree3).unwrap();
+
+        assert!(tree == deserial_tree);
+        assert!(tree2 == deserial_tree2);
+        assert!(tree3 == deserial_tree3);
+    }
+}
