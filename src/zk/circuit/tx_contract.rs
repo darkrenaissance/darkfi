@@ -110,12 +110,15 @@ const TX_COIN2_SN_OFFSET: usize = 13;
 pub struct TxContract {
     // witness
     pub root_cm: Value<pallas::Base>, // root to coins commitment
+
     //
     pub coin1_root_sk: Value<pallas::Base>, // coins merkle tree secret key of coin1
+    pub coin1_sk: Value<pallas::Base>,
     pub coin1_sk_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to coin1 sk
     pub coin1_sk_pos: Value<u32>,
 
     pub coin2_root_sk: Value<pallas::Base>, // coins merkle tree secret key of coin2
+    pub coin2_sk: Value<pallas::Base>,
     pub coin2_sk_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to coin2 sk
     pub coin2_cm_pos: Value<u32>,
 
@@ -306,7 +309,13 @@ impl Circuit<pallas::Base> for TxContract {
                                         config.advices[0],
                                         self.root_cm
         )?;
-        let coin1_root_sk = self.load_private(layouter.namespace(|| "root sk"),
+
+        let coin1_sk = self.load_private(layouter.namespace(|| "root sk"),
+                                              config.advices[0],
+                                              self.coin1_sk
+        )?;
+
+        let coin1_root_sk = self.load_private(layouter.namespace(|| "root root sk"),
                                               config.advices[0],
                                               self.coin1_root_sk
         )?;
@@ -325,6 +334,11 @@ impl Circuit<pallas::Base> for TxContract {
         let coin1_cm_path = self.load_private(layouter.namespace(|| ""),
                                             config.advices[0],
                                             self.coin1_cm_path
+        )?;
+
+        let coin2_sk = self.load_private(layouter.namespace(|| "root sk"),
+                                         config.advices[0],
+                                         self.coin2_sk
         )?;
 
         let coin2_root_sk = self.load_private(layouter.namespace(|| "root sk"),
@@ -729,21 +743,23 @@ impl Circuit<pallas::Base> for TxContract {
             self.coin1_sk_pos,
             path,
         );
-        let coin2_cm_root = merkle_inputs
+        let coin1_cm_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin1_sk)?;
-        layouter.constrain_instance(
-            coin1_root_sk.cell(),
-            config.primary,
-            TX_COIN1_CM_ROOT_OFFSET,
-        )?;
+        coin1_cm_root.constrain_equal(layouter.namespace(||""), &coin1_root_sk)?;
         // =============
         // COIN2 sk root
         // =============
-        layouter.constrain_instance(
-            coin2_root_sk.cell(),
-            config.primary,
-            TX_COIN2_CM_ROOT_OFFSET,
-        )?;
+        let path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
+            self.coin2_sk_path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
+        let merkle_inputs = MerklePath::construct(
+            [config.merkle_chip_1(), config.merkle_chip_2()],
+            OrchardHashDomains::MerkleCrh,
+            self.coin2_sk_pos,
+            path,
+        );
+        let coin2_cm_root = merkle_inputs
+            .calculate_root(layouter.namespace(|| "calculate root"), coin2_sk)?;
+        coin2_cm_root.constrain_equal(layouter.namespace(||""), &coin2_root_sk)?;
         // ========
         // coin1 sn
         // ========
