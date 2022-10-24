@@ -15,6 +15,7 @@ use crate::{
         coin::OwnCoin,
         keypair::{PublicKey, SecretKey},
         leadcoin::LeadCoin,
+        lead_proof,
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr::SchnorrSecret,
     },
@@ -380,7 +381,17 @@ impl Stakeholder {
         let won: Vec<bool> = self.epoch.is_leader(sl, &mut winning_coin_idx);
         for i in 0..won.len() {
             let proof = if won[i] {
-                self.epoch.get_proof(sl, i, &self.get_leadprovkingkey())
+                let p = self.epoch.get_proof(sl, i, &self.get_leadprovkingkey());
+                // Sanity check for proof validity)
+                info!("================= Leader proof generated successfully, veryfing... =================");
+                let coin = self.epoch.get_coin(sl as usize, i);                
+                match lead_proof::verify_lead_proof(&self.get_leadverifyingkey(), &p, &coin.public_inputs()) {
+                    Ok(_) => info!("================= Proof veryfied succsessfully! ================="),
+                    Err(e) => error!("================= Error during leader proof verification: {} =================", e),
+                }
+                info!("====================================================================================");
+                /////////////////////////////////////////////
+                p
             } else {
                 Proof::new(vec![])
             };
