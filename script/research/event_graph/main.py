@@ -411,7 +411,7 @@ async def main(sim_n=6, nodes_increase=False, podm_increase=False):
         podm_increase = False
 
     # number of nodes
-    nodes_n = 10
+    nodes_n = 10 
     # probability of dropping events
     podm = 0.20
     # number of events each node should broadcast
@@ -477,7 +477,9 @@ async def main(sim_n=6, nodes_increase=False, podm_increase=False):
         plt.title(
             f"Event Graph simulation with %{podm * 100} probability of dropping messages")
 
-        plt.ylabel("Events sync percentage")
+        plt.ylabel(
+                f"Events sync percentage (each node broadcast {broadcast_attempt} events)")
+
         plt.xlabel("Number of nodes")
         plt.show()
 
@@ -487,7 +489,9 @@ async def main(sim_n=6, nodes_increase=False, podm_increase=False):
 
         plt.title(f"Event Graph simulation with {nodes_n} nodes")
 
-        plt.ylabel("Events sync percentage")
+
+        plt.ylabel(
+                f"Events sync percentage (each node broadcast {broadcast_attempt} events)")
         plt.xlabel("Probability of dropping messages")
         plt.show()
 
