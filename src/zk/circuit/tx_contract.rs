@@ -91,21 +91,6 @@ impl TxConfig {
     }
 }
 
-const TX_COIN1_PK_OFFSET: usize = 0;
-const TX_COIN1_SK_ROOT_OFFSET: usize = 1;
-const TX_COIN2_PK_OFFSET: usize = 2;
-const TX_COIN2_SK_ROOT_OFFSET: usize = 3;
-const TX_COIN1_CM_X_OFFSET: usize = 4;
-const TX_COIN1_CM_y_OFFSET: usize = 5;
-const TX_COIN2_CM_X_OFFSET: usize = 6;
-const TX_COIN2_CM_y_OFFSET: usize = 7;
-const TX_COIN3_CM_X_OFFSET: usize = 8;
-const TX_COIN3_CM_y_OFFSET: usize = 9;
-const TX_COIN4_CM_X_OFFSET: usize = 10;
-const TX_COIN4_CM_y_OFFSET: usize = 11;
-const TX_COIN1_SN_OFFSET: usize = 12;
-const TX_COIN2_SN_OFFSET: usize = 13;
-
 #[derive(Default, Debug)]
 pub struct TxContract {
     // witness
@@ -130,20 +115,26 @@ pub struct TxContract {
     pub coin1_value: Value<pallas::Base>,
     pub coin1_cm_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to coin1 cm
     pub coin1_cm_pos: Value<u32>,
+    pub coin1_sn: Value<pallas::Base>,
 
     pub coin2_nonce: Value<pallas::Base>,
     pub coin2_blind: Value<pallas::Scalar>,
     pub coin2_value: Value<pallas::Base>,
     pub coin2_cm_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to coin2 cm
     pub coin2_cm_pos: Value<u32>,
+    pub coin2_sn: Value<pallas::Base>,
 
     pub coin3_nonce: Value<pallas::Base>,
     pub coin3_blind: Value<pallas::Scalar>,
     pub coin3_value: Value<pallas::Base>,
+    pub coin3_cm_x: Value<pallas::Base>,
+    pub coin3_cm_y: Value<pallas::Base>,
 
     pub coin4_nonce: Value<pallas::Base>,
     pub coin4_blind: Value<pallas::Scalar>,
     pub coin4_value: Value<pallas::Base>,
+    pub coin4_cm_x: Value<pallas::Base>,
+    pub coin4_cm_y: Value<pallas::Base>,
 }
 
 impl UtilitiesInstructions<pallas::Base> for TxContract {
@@ -330,7 +321,10 @@ impl Circuit<pallas::Base> for TxContract {
                                             self.coin1_nonce
         )?;
 
-
+        let coin1_sn = self.load_private(layouter.namespace(|| ""),
+                                            config.advices[0],
+                                            self.coin1_sn
+        )?;
         let coin1_cm_path = self.load_private(layouter.namespace(|| ""),
                                             config.advices[0],
                                             self.coin1_cm_path
@@ -354,6 +348,11 @@ impl Circuit<pallas::Base> for TxContract {
         let coin2_nonce = self.load_private(layouter.namespace(|| ""),
                                             config.advices[0],
                                             self.coin2_nonce
+        )?;
+
+        let coin2_sn = self.load_private(layouter.namespace(|| ""),
+                                         config.advices[0],
+                                         self.coin2_sn
         )?;
 
         let coin2_cm_path = self.load_private(layouter.namespace(|| ""),
@@ -406,13 +405,14 @@ impl Circuit<pallas::Base> for TxContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
-
-        layouter.constrain_instance(
-            coin1_pk.cell(),
-            config.primary,
-            TX_COIN1_PK_OFFSET,
-        )?;
-
+        // instead of:
+        //layouter.constrain_instance(
+        //  coin1_pk.cell(),
+        //  config.primary,
+        //  TX_COIN1_PK_OFFSET,
+        //)?;
+        // coin1_pk is used in coin1_commit which is verified
+        // on path verification
         // ========
         // coin2 pk
         // ========
@@ -433,12 +433,14 @@ impl Circuit<pallas::Base> for TxContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
-
-        layouter.constrain_instance(
-            coin2_pk.cell(),
-            config.primary,
-            TX_COIN2_PK_OFFSET,
-        )?;
+        // instead of:
+        //layouter.constrain_instance(
+        //  coin2_pk.cell(),
+        //  config.primary,
+        //  TX_COIN2_PK_OFFSET,
+        //)?;
+        // coin2_pk is used in coin2_commit which is verified
+        // on path verification
         // ========
         // coin1 cm
         // ========
@@ -484,16 +486,18 @@ impl Circuit<pallas::Base> for TxContract {
         let coin1_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let coin1_commit_x: AssignedCell<Fp, Fp> = coin1_commit.inner().x();
         let coin1_commit_y: AssignedCell<Fp, Fp> = coin1_commit.inner().y();
-        layouter.constrain_instance(
-            coin1_commit_x.cell(),
-            config.primary,
-            TX_COIN1_CM_X_OFFSET,
-        )?;
-        layouter.constrain_instance(
-            coin1_commit_y.cell(),
-            config.primary,
-            TX_COIN1_CM_Y_OFFSET,
-        )?;
+        // instead of:
+        //layouter.constrain_instance(
+        //    coin1_commit_x.cell(),
+        //  config.primary,
+        //  TX_COIN1_CM_X_OFFSET,
+        //)?;
+        //layouter.constrain_instance(
+        //  coin1_commit_y.cell(),
+        //  config.primary,
+        //  TX_COIN1_CM_Y_OFFSET,
+        //)?;
+        // the path to coin1_commit_x, coin1_commit_y is verified.
         // ========
         // coin2 cm
         // ========
@@ -539,16 +543,18 @@ impl Circuit<pallas::Base> for TxContract {
         let coin2_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let coin2_commit_x: AssignedCell<Fp, Fp> = coin2_commit.inner().x();
         let coin2_commit_y: AssignedCell<Fp, Fp> = coin2_commit.inner().y();
-        layouter.constrain_instance(
-            coin2_commit_x.cell(),
-            config.primary,
-            TX_COIN2_CM_X_OFFSET,
-        )?;
-        layouter.constrain_instance(
-            coin2_commit_y.cell(),
-            config.primary,
-            TX_COIN2_CM_Y_OFFSET,
-        )?;
+        // instead of:
+        //layouter.constrain_instance(
+        //  coin2_commit_x.cell(),
+        //  config.primary,
+        //  TX_COIN2_CM_X_OFFSET,
+        //)?;
+        //layouter.constrain_instance(
+        //  coin2_commit_y.cell(),
+        //  config.primary,
+        //  TX_COIN2_CM_Y_OFFSET,
+        //)?;
+        // the path to coin2_commit_x, coin2_commit_y is verified
         // ========
         // coin3 cm
         // ========
@@ -594,16 +600,9 @@ impl Circuit<pallas::Base> for TxContract {
         let coin3_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let coin3_commit_x: AssignedCell<Fp, Fp> = coin3_commit.inner().x();
         let coin3_commit_y: AssignedCell<Fp, Fp> = coin3_commit.inner().y();
-        layouter.constrain_instance(
-            coin3_commit_x.cell(),
-            config.primary,
-            TX_COIN3_CM_X_OFFSET,
-        )?;
-        layouter.constrain_instance(
-            coin3_commit_y.cell(),
-            config.primary,
-            TX_COIN3_CM_Y_OFFSET,
-        )?;
+        coin3_commit_x.constrain_equal(layouter.namespace(||""), &coin3_cm_x);
+        coin3_commit_y.constrain_equal(layouter.namespace(||""), &coin3_cm_y);
+
         // ========
         // coin4 cm
         // ========
@@ -649,16 +648,8 @@ impl Circuit<pallas::Base> for TxContract {
         let coin4_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let coin4_commit_x: AssignedCell<Fp, Fp> = coin4_commit.inner().x();
         let coin4_commit_y: AssignedCell<Fp, Fp> = coin4_commit.inner().y();
-        layouter.constrain_instance(
-            coin4_commit_x.cell(),
-            config.primary,
-            TX_COIN4_CM_X_OFFSET,
-        )?;
-        layouter.constrain_instance(
-            coin4_commit_y.cell(),
-            config.primary,
-            TX_COIN4_CM_Y_OFFSET,
-        )?;
+        coin4_commit_x.constrain_equal(layouter.namespace(||""), &coin4_cm_x);
+        coin4_commit_y.constrain_equal(layouter.namespace(||""), &coin4_cm_y);
 
         let v1pv2 = ar_chip.add(layouter.namespace(||""), &coin1_value, &coin2_value)?;
         let v3pv4 = ar_chip.add(layouter.namespace(||""), &coin3_value, &coin4_value)?;
@@ -781,11 +772,7 @@ impl Circuit<pallas::Base> for TxContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
-        layouter.constrain_instance(
-            coin1_sn_commit.cell(),
-            config.primary,
-            TX_COIN1_SN_OFFSET,
-        )?;
+        coin1_sn_commit.constrain_equal(layouter.namespace(||""), &coin1_sn);
         // ========
         // coin2 sn
         // ========
@@ -807,10 +794,6 @@ impl Circuit<pallas::Base> for TxContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
-        layouter.constrain_instance(
-            coin2_sn_commit.cell(),
-            config.primary,
-            TX_COIN2_SN_OFFSET,
-        )?;
+        coin2_sn_commit.constrain_equal(layouter.namespace(||""), &coin2_sn);
     }
 }
