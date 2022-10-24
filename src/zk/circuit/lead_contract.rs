@@ -573,10 +573,10 @@ impl Circuit<pallas::Base> for LeadContract {
             y_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_y)?
         };
         let y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        let y_commit_base_y = y_commit.inner().x();
         let y_commit_base_x = y_commit.inner().x();
+        let y_commit_base_y = y_commit.inner().y();
         let y_commit_base: AssignedCell<Fp, Fp> = {
-            let y_coord = [y_commit_base_y, y_commit_base_x];
+            let y_coord = [y_commit_base_x, y_commit_base_y];
             let poseidon_hasher = PoseidonHash::<
                 _,
                 _,
@@ -606,8 +606,26 @@ impl Circuit<pallas::Base> for LeadContract {
             rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_rho)?
         };
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        let rho_commit_base = rho_commit.inner().x();
+        let rho_commit_x = rho_commit.inner().x();
+        let rho_commit_y = rho_commit.inner().y();
+        let rho_commit_base: AssignedCell<Fp, Fp> = {
+            let rho_coord = [rho_commit_x, rho_commit_y];
+            let poseidon_hasher = PoseidonHash::<
+                    _,
+                _,
+                poseidon::P128Pow5T3,
+                poseidon::ConstantLength<2>,
+                3,
+                2,
+                >::init(
+                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
+            )?;
 
+            let poseidon_output =
+                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), rho_coord)?;
+            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
+            poseidon_output
+        };
         let term1 =
             ar_chip.mul(layouter.namespace(|| "calculate term1"), &sigma1, &coin_value.clone())?;
 

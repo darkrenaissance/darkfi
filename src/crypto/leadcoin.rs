@@ -62,10 +62,20 @@ impl LeadCoin {
                 .hash(lottery_msg_input);
         //
         let po_y_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(y_mu));
-        let po_y = *po_y_pt.to_affine().coordinates().unwrap().x();
+        let po_y_x = *po_y_pt.to_affine().coordinates().unwrap().x();
+        let po_y_y = *po_y_pt.to_affine().coordinates().unwrap().y();
+        let y_coord_arr = [po_y_x, po_y_y];
+        let po_y: pallas::Base =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+            )
+            .hash(y_coord_arr);
         //
         let po_rho_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(rho_mu));
-        let po_rho = *po_rho_pt.to_affine().coordinates().unwrap().x();
+        let po_rho_x = *po_rho_pt.to_affine().coordinates().unwrap().x();
+        let po_rho_y = *po_rho_pt.to_affine().coordinates().unwrap().y();
+        let rho_coord_arr = [po_rho_x, po_rho_y];
+        let po_rho: pallas::Base =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(rho_coord_arr);
 
         let cm_pos = self.idx;
         let cm_root = {
