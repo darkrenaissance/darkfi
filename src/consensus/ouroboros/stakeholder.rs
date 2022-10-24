@@ -8,7 +8,7 @@ use crate::{
             utils::fbig2base,
             Epoch, EpochConsensus, SlotWorkspace, StakeholderState,
         },
-        Block, BlockInfo, LeadProof, Metadata,
+        BlockInfo, LeadProof, Metadata,
     },
     crypto::{
         address::Address,
@@ -18,7 +18,7 @@ use crate::{
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr::SchnorrSecret,
     },
-    net::{MessageSubscription, P2p, Settings, SettingsPtr},
+    net::{P2p, P2pPtr, Settings, SettingsPtr},
     node::state::state_transition,
     tx::{
         builder::{
@@ -37,7 +37,7 @@ use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{error, info};
 use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::rngs::OsRng;
-use smol::Executor;
+// use smol::Executor;
 use std::{fmt, thread, time::Duration};
 use url::Url;
 
@@ -66,6 +66,7 @@ pub struct Stakeholder {
 impl Stakeholder {
     pub async fn new(
         consensus: EpochConsensus,
+        net: P2pPtr,
         settings: Settings,
         rel_path: &str,
         id: i64,
@@ -85,7 +86,7 @@ impl Stakeholder {
         let lead_vk = VerifyingKey::build(k.unwrap(), &LeadContract::default());
         let mint_vk = VerifyingKey::build(k.unwrap(), &MintContract::default());
         let burn_vk = VerifyingKey::build(k.unwrap(), &BurnContract::default());
-        let p2p = P2p::new(settings.clone()).await;
+        // let p2p = P2p::new(settings.clone()).await;
         let workspace = SlotWorkspace::default();
         let clock = Clock::new(
             Some(consensus.get_epoch_len()),
@@ -102,7 +103,7 @@ impl Stakeholder {
         info!(target: LOG_T, "stakeholder constructed");
         Ok(Self {
             blockchain: bc,
-            net: p2p,
+            net,
             clock,
             ownedcoins: vec![], //TODO should be read from wallet db.
             epoch,
@@ -168,14 +169,14 @@ impl Stakeholder {
         settings.peers.clone()
     }
 
-    async fn init_network(&self) -> Result<()> {
-        info!(target: LOG_T, "init_network()");
-        let exec = Arc::new(Executor::new());
-        self.net.clone().start(exec.clone()).await?;
-        exec.spawn(self.net.clone().run(exec.clone())).detach();
-        info!(target: LOG_T, "net initialized");
-        Ok(())
-    }
+    // async fn init_network(&self) -> Result<()> {
+    //     info!(target: LOG_T, "init_network()");
+    //     let exec = Arc::new(Executor::new());
+    //     self.net.clone().start(exec.clone()).await?;
+    //     exec.spawn(self.net.clone().run(exec.clone())).detach();
+    //     info!(target: LOG_T, "net initialized");
+    //     Ok(())
+    // }
 
     pub fn get_net(&self) -> Arc<P2p> {
         info!(target: LOG_T, "get_net()");
@@ -225,30 +226,30 @@ impl Stakeholder {
     /// receive new messages, or blocks,
     /// validate the block proof, and the transactions,
     /// if so add the proof to metadata if stakeholder isn't the lead.
-    pub async fn sync_block(&self) {
-        info!(target: LOG_T, "syncing blocks");
-        for chanptr in self.net.channels().lock().await.values() {
-            let message_subsytem = chanptr.get_message_subsystem();
-            message_subsytem.add_dispatch::<BlockInfo>().await;
-            //TODO start channel if isn't started yet
-            //let info = chanptr.get_info();
-            let msg_sub: MessageSubscription<BlockInfo> =
-                chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
+    // pub async fn sync_block(&self) {
+    //     info!(target: LOG_T, "syncing blocks");
+    //     for chanptr in self.net.channels().lock().await.values() {
+    //         let message_subsytem = chanptr.get_message_subsystem();
+    //         message_subsytem.add_dispatch::<BlockInfo>().await;
+    //         //TODO start channel if isn't started yet
+    //         //let info = chanptr.get_info();
+    //         let msg_sub: MessageSubscription<BlockInfo> =
+    //             chanptr.subscribe_msg::<BlockInfo>().await.expect("missing blockinfo");
 
-            let res = msg_sub.receive().await.unwrap();
-            let blk: BlockInfo = (*res).to_owned();
-            //TODO validate the block proof, and transactions.
-            if self.valid_block(blk.clone()) {
-                let _len = self.blockchain.add(&[blk]);
-            } else {
-                error!(target: LOG_T, "received block is invalid!");
-            }
-        }
-    }
+    //         let res = msg_sub.receive().await.unwrap();
+    //         let blk: BlockInfo = (*res).to_owned();
+    //         //TODO validate the block proof, and transactions.
+    //         if self.valid_block(blk.clone()) {
+    //             let _len = self.blockchain.add(&[blk]);
+    //         } else {
+    //             error!(target: LOG_T, "received block is invalid!");
+    //         }
+    //     }
+    // }
 
     pub async fn background(&mut self, hardlimit: Option<u8>) {
         info!(target: LOG_T, "background");
-        let _ = self.init_network().await;
+        // let _ = self.init_network().await;
         let _ = self.clock.sync().await;
         let mut c: u8 = 0;
         let lim: u8 = hardlimit.unwrap_or(0);
@@ -287,13 +288,10 @@ impl Stakeholder {
                         let (block_info, _block_hash) = self.workspace.new_block();
                         //add the block to the blockchain
                         self.add_block(block_info.clone());
-                        let block: Block = Block::from(block_info.clone());
+                        // let block: Block = Block::from(block_info.clone());
                         // publish the block
                         //TODO (fix) before publishing the workspace tx root need to be set.
-                        let _ret = self.net.broadcast(block).await;
-                    } else {
-                        //
-                        self.sync_block().await;
+                        self.net.broadcast(block_info.clone()).await.unwrap();
                     }
                 }
                 Ticks::IDLE => continue,
@@ -301,7 +299,7 @@ impl Stakeholder {
                     error!(target: LOG_T, "clock/blockchain are out of sync");
                     // clock, and blockchain are out of sync
                     let _ = self.clock.sync().await;
-                    self.sync_block().await;
+                    // self.sync_block().await;
                 }
             }
             thread::sleep(Duration::from_millis(1000));
@@ -350,8 +348,7 @@ impl Stakeholder {
 
         let sigma1: pallas::Base = fbig2base(sigma1_fbig);
         info!("sigma1 base: {:?}", sigma1);
-        let sigma2_fbig =
-            (c.clone() / total_sigma.clone()).powf(two.clone()) * (field_p.clone() / two.clone());
+        let sigma2_fbig = (c / total_sigma).powf(two.clone()) * (field_p / two);
         info!("sigma2: {}", sigma2_fbig);
         let sigma2: pallas::Base = fbig2base(sigma2_fbig);
         info!("sigma2 base: {:?}", sigma2);
@@ -380,7 +377,7 @@ impl Stakeholder {
         self.workspace.set_e(e);
         self.workspace.set_st(st);
         let mut winning_coin_idx: usize = 0;
-        let won : Vec<bool> = self.epoch.is_leader(sl, &mut winning_coin_idx);
+        let won: Vec<bool> = self.epoch.is_leader(sl, &mut winning_coin_idx);
         for i in 0..won.len() {
             let proof = if won[i] {
                 self.epoch.get_proof(sl, i, &self.get_leadprovkingkey())
@@ -397,8 +394,8 @@ impl Stakeholder {
                 Metadata::new(sign, addr, self.get_eta().to_repr(), LeadProof::from(proof), vec![]);
             self.workspace.add_metadata(meta);
             if won[i] {
-                let owned_coin =
-                    self.finalize_coin(&self.epoch.get_coin(sl as usize, winning_coin_idx as usize));
+                let owned_coin = self
+                    .finalize_coin(&self.epoch.get_coin(sl as usize, winning_coin_idx as usize));
                 self.ownedcoins.push(owned_coin);
             }
         }

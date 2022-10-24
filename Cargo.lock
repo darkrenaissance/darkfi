@@ -1204,6 +1204,7 @@ dependencies = [
  "darkfi-sdk",
  "darkfi-serial",
  "dashu",
+ "easy-parallel",
  "ed25519-compact",
  "env_logger",
  "fast-socks5",
