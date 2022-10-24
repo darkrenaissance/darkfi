@@ -1,10 +1,8 @@
 //! HMAC simplementation.
-use sha2::{
-    digest::{
-        core_api::Block, crypto_common::BlockSizeUser, Digest, FixedOutput, Output, OutputSizeUser,
-        Update,
-    },
-    Sha256,
+//! https://en.wikipedia.org/wiki/Hmac
+use digest::{
+    core_api::Block, crypto_common::BlockSizeUser, Digest, FixedOutput, Output, OutputSizeUser,
+    Update,
 };
 
 const IPAD: u8 = 0x36;
@@ -21,7 +19,7 @@ fn get_der_key<D: Digest + BlockSizeUser + Clone>(key: &[u8]) -> Block<D> {
         return der_key
     }
 
-    let hash = Sha256::digest(key);
+    let hash = D::digest(key);
     // All commonly used hash functions have block size bigger than
     // output hash size, but to be extra rigorous we handle the
     // potential uncommon cases as well. The condition is calculated
@@ -36,6 +34,8 @@ fn get_der_key<D: Digest + BlockSizeUser + Clone>(key: &[u8]) -> Block<D> {
     der_key
 }
 
+/// HMAC for arbitrary hash functions that implement `Digest`
+/// and `BlockSizeUser` traits.
 #[derive(Clone)]
 pub struct Hmac<D: Digest + BlockSizeUser + Clone> {
     digest: D,
@@ -43,6 +43,7 @@ pub struct Hmac<D: Digest + BlockSizeUser + Clone> {
 }
 
 impl<D: Digest + BlockSizeUser + Clone> Hmac<D> {
+    /// Initialize a new `Hmac` with the given key.
     #[inline]
     pub fn new_from_slice(key: &[u8]) -> Self {
         let der_key = get_der_key::<D>(key);
@@ -63,6 +64,7 @@ impl<D: Digest + BlockSizeUser + Clone> Hmac<D> {
         Self { digest, opad_key }
     }
 
+    /// Finalize the HMAC
     pub fn finalize(self) -> Output<D> {
         Output::<D>::clone_from_slice(&self.finalize_fixed())
     }
@@ -82,6 +84,7 @@ impl<D: Digest + BlockSizeUser + Clone> OutputSizeUser for Hmac<D> {
 }
 
 impl<D: Digest + BlockSizeUser + Clone> Update for Hmac<D> {
+    /// Update the HMAC with the given data.
     fn update(&mut self, data: &[u8]) {
         self.digest.update(data);
     }
