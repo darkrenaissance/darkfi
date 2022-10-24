@@ -135,15 +135,14 @@ sled = {version = "0.34.7", optional = true}
 # big float
 dashu = { version = "0.2.0", git = "https://github.com/ertosns/dashu" } 
 
-# env logger
-env_logger = "0.9.1"
-easy-parallel = "3.2.0"
-
 [dev-dependencies]
 clap = {version = "3.2.20", features = ["derive"]}
 halo2_proofs = {version = "0.2.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
 halo2_gadgets = {version = "0.2.0", features = ["dev-graph", "test-dependencies"]}
 plotters = "0.3.4"
+env_logger = "0.9.1"
+easy-parallel = "3.2.0"
+
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
