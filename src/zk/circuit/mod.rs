@@ -7,5 +7,5 @@ pub use mint_contract::MintContract;
 pub mod lead_contract;
 pub use lead_contract::LeadContract;
 
-pub mod tx_contract;
-pub use tx_contract::TxContract;
+//pub mod tx_contract;
+//pub use tx_contract::TxContract;
