@@ -1,8 +1,9 @@
-use async_executor::Executor;
+// ANCHOR: protocol_dchat
 use async_std::sync::Arc;
 use async_trait::async_trait;
 use darkfi::{net, Result};
 use log::debug;
+use smol::Executor;
 
 use crate::dchatmsg::{DchatMsg, DchatMsgsBuffer};
 
@@ -11,7 +12,9 @@ pub struct ProtocolDchat {
     msg_sub: net::MessageSubscription<DchatMsg>,
     msgs: DchatMsgsBuffer,
 }
+// ANCHOR_END: protocol_dchat
 
+// ANCHOR: constructor
 impl ProtocolDchat {
     pub async fn init(channel: net::ChannelPtr, msgs: DchatMsgsBuffer) -> net::ProtocolBasePtr {
         debug!(target: "dchat", "ProtocolDchat::init() [START]");
@@ -27,7 +30,9 @@ impl ProtocolDchat {
             msgs,
         })
     }
+    // ANCHOR_END: constructor
 
+    // ANCHOR: receive
     async fn handle_receive_msg(self: Arc<Self>) -> Result<()> {
         debug!(target: "dchat", "ProtocolDchat::handle_receive_msg() [START]");
         while let Ok(msg) = self.msg_sub.receive().await {
@@ -37,10 +42,12 @@ impl ProtocolDchat {
 
         Ok(())
     }
+    // ANCHOR_END: receive
 }
 
 #[async_trait]
 impl net::ProtocolBase for ProtocolDchat {
+    // ANCHOR: start
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "dchat", "ProtocolDchat::ProtocolBase::start() [START]");
         self.jobsman.clone().start(executor.clone());
@@ -48,6 +55,7 @@ impl net::ProtocolBase for ProtocolDchat {
         debug!(target: "dchat", "ProtocolDchat::ProtocolBase::start() [STOP]");
         Ok(())
     }
+    // ANCHOR_END: start
 
     fn name(&self) -> &'static str {
         "ProtocolDchat"

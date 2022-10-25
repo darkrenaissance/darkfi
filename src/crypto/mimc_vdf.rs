@@ -14,6 +14,7 @@ pub const L_FERMAT_EXPONENT: &str =
 /// Calculates set of round constants to perform MiMC-calculation on.
 fn calculate_round_constants() -> [u64; 64] {
     let mut round_constants = [0u64; 64];
+    #[allow(clippy::needless_range_loop)]
     for i in 0usize..64 {
         round_constants[i] = (i.pow(7) ^ 42) as u64;
     }
@@ -49,7 +50,7 @@ fn backward_mimc(num_steps: u64, input: &BigUint) -> BigUint {
     let mut result = input.clone();
     for i in (1..num_steps).rev() {
         let round_constant = BigUint::from(round_constants[i as usize % round_constants.len()]);
-        result = BigUint::from(&result - &round_constant).modpow(&l_fermat_exp, &modulus);
+        result = (&result - &round_constant).modpow(&l_fermat_exp, &modulus);
     }
 
     result
@@ -57,16 +58,12 @@ fn backward_mimc(num_steps: u64, input: &BigUint) -> BigUint {
 
 /// Performs an Eval() step of the MiMC-based VDF
 pub fn eval(seed: &BigUint, num_steps: u64) -> BigUint {
-    let witness = backward_mimc(num_steps, &seed);
-
-    witness
+    backward_mimc(num_steps, seed)
 }
 
 /// Performs a Verify() step for the MiMC-based VDF result
 pub fn verify(seed: &BigUint, num_steps: u64, witness: &BigUint) -> bool {
-    let result = forward_mimc(num_steps, witness);
-
-    result == *seed
+    forward_mimc(num_steps, witness) == *seed
 }
 
 #[cfg(test)]

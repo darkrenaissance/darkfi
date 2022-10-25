@@ -1,29 +1,21 @@
 use std::fmt;
 
-use super::{
-    OuroborosMetadata, StakeholderMetadata, StreamletMetadata, BLOCK_MAGIC_BYTES, BLOCK_VERSION,
-};
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
+use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use pasta_curves::pallas;
 
-use crate::{
-    crypto::{constants::MERKLE_DEPTH, merkle_node::MerkleNode},
-    net,
-    tx::Transaction,
-    util::{
-        serial::{serialize, SerialDecodable, SerialEncodable},
-        time::Timestamp,
-    },
-};
+use super::{Metadata, BLOCK_MAGIC_BYTES, BLOCK_VERSION};
+use crate::{net, tx::Transaction, util::time::Timestamp};
 
-/// This struct represents a tuple of the form (version, state, epoch, slot, timestamp, merkle_root).
+/// This struct represents a tuple of the form (version, previous, epoch, slot, timestamp, merkle_root).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Header {
     /// Block version
     pub version: u8,
     /// Previous block hash
-    pub state: blake3::Hash,
+    pub previous: blake3::Hash,
     /// Epoch
     pub epoch: u64,
     /// Slot UID
@@ -36,14 +28,14 @@ pub struct Header {
 
 impl Header {
     pub fn new(
-        state: blake3::Hash,
+        previous: blake3::Hash,
         epoch: u64,
         slot: u64,
         timestamp: Timestamp,
         root: MerkleNode,
     ) -> Self {
         let version = *BLOCK_VERSION;
-        Self { version, state, epoch, slot, timestamp, root }
+        Self { version, previous, epoch, slot, timestamp, root }
     }
 
     /// Generate the genesis block.
@@ -67,7 +59,7 @@ impl Default for Header {
             0,
             0,
             Timestamp::current_time(),
-            MerkleNode(pallas::Base::zero()),
+            MerkleNode::from(pallas::Base::zero()),
         )
     }
 }
@@ -83,12 +75,8 @@ pub struct Block {
     pub header: blake3::Hash,
     /// Trasaction hashes
     pub txs: Vec<blake3::Hash>,
-    /// stakeholder metadata
-    pub m: StakeholderMetadata,
-    /// ouroboros block information,
-    pub om: OuroborosMetadata,
-    /// streamlet
-    pub sm: StreamletMetadata,
+    /// Metadata
+    pub metadata: Metadata,
 }
 
 impl net::Message for Block {
@@ -99,32 +87,27 @@ impl net::Message for Block {
 
 impl Block {
     pub fn new(
-        st: blake3::Hash,
-        e: u64,
-        sl: u64,
+        previous: blake3::Hash,
+        epoch: u64,
+        slot: u64,
         txs: Vec<blake3::Hash>,
         root: MerkleNode,
-        m: StakeholderMetadata,
-        om: OuroborosMetadata,
-        sm: StreamletMetadata,
+        metadata: Metadata,
     ) -> Self {
         let magic = *BLOCK_MAGIC_BYTES;
-        let ts = Timestamp::current_time();
-        let header = Header::new(st, e, sl, ts, root);
-        let headerhash = header.headerhash();
-        Self { magic, header: headerhash, txs, m, om, sm }
+        let timestamp = Timestamp::current_time();
+        let header = Header::new(previous, epoch, slot, timestamp, root);
+        let header = header.headerhash();
+        Self { magic, header, txs, metadata }
     }
 
     /// Generate the genesis block.
     pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
         let magic = *BLOCK_MAGIC_BYTES;
-        //let eta : [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
-        //let empty_lead_proof = TransactionLeadProof::default();
         let header = Header::genesis_header(genesis_ts, genesis_data);
-        let m = StakeholderMetadata::default();
-        let om = OuroborosMetadata::default();
-        let sm = StreamletMetadata::default();
-        Self { magic, header: header.headerhash(), txs: vec![], m, om, sm }
+        let header = header.headerhash();
+        let metadata = Metadata::default();
+        Self { magic, header, txs: vec![], metadata }
     }
 
     /// Calculate the block hash
@@ -157,25 +140,14 @@ pub struct BlockInfo {
     pub header: Header,
     /// Transactions payload
     pub txs: Vec<Transaction>,
-    /// stakeholder metadata,
-    pub m: StakeholderMetadata,
-    /// ouroboros metadata
-    pub om: OuroborosMetadata,
-    /// Proposal information used by Streamlet consensus
-    pub sm: StreamletMetadata,
+    /// Metadata,
+    pub metadata: Metadata,
 }
 
 impl Default for BlockInfo {
     fn default() -> Self {
         let magic = *BLOCK_MAGIC_BYTES;
-        Self {
-            magic,
-            header: Header::default(),
-            txs: vec![],
-            m: StakeholderMetadata::default(),
-            om: OuroborosMetadata::default(),
-            sm: StreamletMetadata::default(),
-        }
+        Self { magic, header: Header::default(), txs: vec![], metadata: Metadata::default() }
     }
 }
 
@@ -186,15 +158,9 @@ impl net::Message for BlockInfo {
 }
 
 impl BlockInfo {
-    pub fn new(
-        header: Header,
-        txs: Vec<Transaction>,
-        m: StakeholderMetadata,
-        om: OuroborosMetadata,
-        sm: StreamletMetadata,
-    ) -> Self {
+    pub fn new(header: Header, txs: Vec<Transaction>, metadata: Metadata) -> Self {
         let magic = *BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, m, om, sm }
+        Self { magic, header, txs, metadata }
     }
 
     /// Calculate the block hash
@@ -205,15 +171,13 @@ impl BlockInfo {
 }
 
 impl From<BlockInfo> for Block {
-    fn from(b: BlockInfo) -> Self {
-        let txids = b.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+    fn from(block_info: BlockInfo) -> Self {
+        let txs = block_info.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
         Self {
-            magic: b.magic,
-            header: b.header.headerhash(),
-            txs: txids,
-            m: b.m,
-            om: b.om,
-            sm: b.sm,
+            magic: block_info.magic,
+            header: block_info.header.headerhash(),
+            txs,
+            metadata: block_info.metadata,
         }
     }
 }
@@ -240,14 +204,8 @@ pub struct BlockProposal {
 
 impl BlockProposal {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        header: Header,
-        txs: Vec<Transaction>,
-        m: StakeholderMetadata,
-        om: OuroborosMetadata,
-        sm: StreamletMetadata,
-    ) -> Self {
-        let block = BlockInfo::new(header, txs, m, om, sm);
+    pub fn new(header: Header, txs: Vec<Transaction>, metadata: Metadata) -> Self {
+        let block = BlockInfo::new(header, txs, metadata);
         Self { block }
     }
 }
@@ -262,7 +220,7 @@ impl fmt::Display for BlockProposal {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_fmt(format_args!(
             "BlockProposal {{ leader addr: {}, hash: {}, epoch: {}, slot: {}, txs: {} }}",
-            self.block.m.address,
+            self.block.metadata.address,
             self.block.header.headerhash(),
             self.block.header.epoch,
             self.block.header.slot,
@@ -300,13 +258,13 @@ impl ProposalChain {
     /// excluding the genesis block proposal.
     /// Additional validity rules can be applied.
     pub fn check_proposal(&self, proposal: &BlockProposal, previous: &BlockProposal) -> bool {
-        if proposal.block.header.state == self.genesis_block {
+        if proposal.block.header.previous == self.genesis_block {
             debug!("check_proposal(): Genesis block proposal provided.");
             return false
         }
 
         let prev_hash = previous.block.header.headerhash();
-        if proposal.block.header.state != prev_hash ||
+        if proposal.block.header.previous != prev_hash ||
             proposal.block.header.slot <= previous.block.header.slot
         {
             debug!("check_proposal(): Provided proposal is invalid.");
@@ -333,16 +291,5 @@ impl ProposalChain {
         if self.check_proposal(proposal, self.proposals.last().unwrap()) {
             self.proposals.push(proposal.clone());
         }
-    }
-
-    /// Proposals chain notarization check.
-    pub fn notarized(&self) -> bool {
-        for proposal in &self.proposals {
-            if !proposal.block.sm.notarized {
-                return false
-            }
-        }
-
-        true
     }
 }

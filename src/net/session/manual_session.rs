@@ -1,15 +1,15 @@
 use async_std::sync::{Arc, Mutex, Weak};
 
-use async_executor::Executor;
 use async_trait::async_trait;
-use log::*;
+use log::{info, warn};
 use serde_json::json;
+use smol::Executor;
 use url::Url;
 
 use crate::{
-    net::TransportName,
+    net::transport::TransportName,
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
-    util::sleep,
+    util::async_util::sleep,
     Error, Result,
 };
 

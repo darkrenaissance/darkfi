@@ -1,4 +1,5 @@
 use async_std::sync::{Arc, Mutex};
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info};
@@ -8,13 +9,10 @@ use super::state::{state_transition, State};
 use crate::{
     crypto::{
         address::Address,
-        coin::Coin,
-        constants::MERKLE_DEPTH,
+        coin::{Coin, OwnCoin},
         keypair::{Keypair, PublicKey},
-        merkle_node::MerkleNode,
         proof::ProvingKey,
         types::DrkTokenId,
-        OwnCoin,
     },
     tx::{
         builder::{
@@ -23,8 +21,7 @@ use crate::{
         },
         Transaction,
     },
-    util::serial::Encodable,
-    wallet::walletdb::{Balances, WalletPtr},
+    wallet::walletdb::{Balance, Balances, WalletPtr},
     zk::circuit::{BurnContract, MintContract},
     ClientFailed, ClientResult, Result,
 };
@@ -130,12 +127,10 @@ impl Client {
 
         outputs.push(TransactionBuilderOutputInfo { value, token_id, public: pubkey });
         let builder = TransactionBuilder { clear_inputs, inputs, outputs };
-        let mut tx_data = vec![];
 
         let mint_pk = self.mint_pk.get_or_create(Client::build_mint_pk);
         let burn_pk = self.burn_pk.get_or_create(Client::build_burn_pk);
         let tx = builder.build(mint_pk, burn_pk)?;
-        tx.encode(&mut tx_data)?;
 
         // Check if state transition is valid before broadcasting
         debug!("build_slab_from_tx(): Checking if state transition is valid");
@@ -217,6 +212,10 @@ impl Client {
     pub async fn keygen(&self) -> Result<Address> {
         let kp = self.wallet.keygen().await?;
         Ok(Address::from(kp.public))
+    }
+
+    pub async fn get_balance(&self, token_id: DrkTokenId) -> Result<Option<Balance>> {
+        self.wallet.get_balance(token_id).await
     }
 
     pub async fn get_balances(&self) -> Result<Balances> {

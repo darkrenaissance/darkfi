@@ -1,5 +1,4 @@
-use std::io;
-
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::{
     plonk,
     plonk::{Circuit, SingleVerifier},
@@ -9,11 +8,7 @@ use halo2_proofs::{
 use pasta_curves::vesta;
 use rand::RngCore;
 
-use crate::{
-    crypto::types::DrkCircuitField,
-    util::serial::{encode_with_size, Decodable, Encodable, ReadExt, VarInt},
-    Result,
-};
+use crate::crypto::types::DrkCircuitField;
 
 // TODO: this API needs rework. It's not very good.
 // keygen_pk() takes a VerifyingKey by value,
@@ -51,7 +46,7 @@ impl ProvingKey {
     }
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Proof(Vec<u8>);
 
 impl AsRef<[u8]> for Proof {
@@ -67,7 +62,6 @@ impl Proof {
         mut rng: impl RngCore,
     ) -> std::result::Result<Self, plonk::Error> {
         let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
-        println!("creating plonk proof");
         plonk::create_proof(
             &pk.params,
             &pk.pk,
@@ -76,7 +70,6 @@ impl Proof {
             &mut rng,
             &mut transcript,
         )?;
-        println!("created plonk proof");
 
         Ok(Proof(transcript.finalize()))
     }
@@ -97,21 +90,6 @@ impl Proof {
     }
 }
 
-impl Encodable for Proof {
-    fn encode<S: io::Write>(&self, s: S) -> Result<usize> {
-        encode_with_size(self.as_ref(), s)
-    }
-}
-
-impl Decodable for Proof {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let len = VarInt::decode(&mut d)?.0 as usize;
-        let mut r = vec![0u8; len];
-        d.read_slice(&mut r)?;
-        Ok(Proof::new(r))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,8 +102,10 @@ mod tests {
             },
         },
         zk::circuit::MintContract,
+        Result,
     };
-    use group::ff::Field;
+    use darkfi_serial::{Decodable, Encodable};
+    use pasta_curves::group::ff::Field;
     use rand::rngs::OsRng;
 
     #[test]

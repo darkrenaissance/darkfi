@@ -3,7 +3,7 @@ use async_std::sync::{Arc, Mutex};
 use chrono::Utc;
 use log::{debug, error};
 
-use crate::{net, util, Result};
+use crate::{net, util::async_util, Result};
 
 mod consensus;
 mod consensus_candidate;
@@ -26,7 +26,7 @@ async fn prune_map<T: Clone + Eq + std::hash::Hash>(
     seen_duration: i64,
 ) {
     loop {
-        util::sleep(seen_duration as u64).await;
+        async_util::sleep(seen_duration as u64).await;
         debug!(target: "raft", "Pruning item in map");
 
         let now = Utc::now().timestamp();
@@ -40,7 +40,7 @@ async fn prune_map<T: Clone + Eq + std::hash::Hash>(
     }
 }
 
-async fn p2p_send_loop(receiver: async_channel::Receiver<NetMsg>, p2p: net::P2pPtr) -> Result<()> {
+async fn p2p_send_loop(receiver: smol::channel::Receiver<NetMsg>, p2p: net::P2pPtr) -> Result<()> {
     loop {
         let msg: NetMsg = receiver.recv().await?;
         if let Err(e) = p2p.broadcast(msg).await {

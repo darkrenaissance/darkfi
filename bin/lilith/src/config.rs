@@ -1,8 +1,6 @@
 use fxhash::FxHashMap;
 use log::{info, warn};
-use serde_derive::Deserialize;
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use toml::Value;
 use url::Url;
 
@@ -44,6 +42,8 @@ pub struct NetInfo {
     pub peers: Vec<Url>,
     /// Enable localnet hosts
     pub localnet: bool,
+    /// Enable channel log
+    pub channel_log: bool,
 }
 
 /// Parse a TOML string for any configured network and return
@@ -103,7 +103,13 @@ pub fn parse_configured_networks(data: &str) -> Result<FxHashMap<String, NetInfo
                     false
                 };
 
-                let net_info = NetInfo { port, seeds, peers, localnet };
+                let channel_log = if table.contains_key("channel_log") {
+                    table["channel_log"].as_bool().unwrap()
+                } else {
+                    false
+                };
+
+                let net_info = NetInfo { port, seeds, peers, localnet, channel_log };
                 ret.insert(name, net_info);
             }
         }

@@ -1,8 +1,13 @@
-use std::{process::exit, str::FromStr, time::Instant};
+use std::{
+    io::{stdin, Read},
+    path::PathBuf,
+    process::exit,
+    str::FromStr,
+    time::Instant,
+};
 
 use clap::{Parser, Subcommand};
 use prettytable::{format, row, Table};
-
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -12,11 +17,15 @@ use darkfi::{
     crypto::{address::Address, token_id},
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
-        cli::{get_log_config, get_log_level, progress_bar},
-        encode_base10, NetworkName,
+        cli::{fg_red, get_log_config, get_log_level, progress_bar},
+        net_name::NetworkName,
+        parse::encode_base10,
     },
     Result,
 };
+
+mod deploy_contract;
+use deploy_contract::create_deploy_data;
 
 #[derive(Parser)]
 #[clap(name = "drk", about = cli_desc!(), version)]
@@ -31,11 +40,11 @@ struct Args {
     endpoint: Url,
 
     #[clap(subcommand)]
-    command: DrkSubcommand,
+    command: Subcmd,
 }
 
 #[derive(Subcommand)]
-enum DrkSubcommand {
+enum Subcmd {
     /// Send a ping request to the RPC
     Ping,
 
@@ -93,6 +102,15 @@ enum DrkSubcommand {
         /// Token ID
         #[clap(short, long)]
         token_id: String,
+    },
+
+    /// Broadcast a given transaction from stdin
+    Broadcast,
+
+    /// Deploy a smart contract in the current directory or a given path.
+    DeployContract {
+        #[clap(long, default_value = ".")]
+        path: PathBuf,
     },
 }
 
@@ -224,6 +242,14 @@ impl Drk {
         println!("Success! Transaction ID: {}", rep);
         Ok(())
     }
+
+    async fn tx_broadcast(&self, transaction: String) -> Result<()> {
+        println!("Attempting to broadcast transaction from stdin...");
+        let req = JsonRequest::new("tx.broadcast", json!([transaction]));
+        let rep = self.rpc_client.request(req).await?;
+        println!("Success!\nTransaction ID: {}", rep);
+        Ok(())
+    }
 }
 
 #[async_std::main]
@@ -234,17 +260,24 @@ async fn main() -> Result<()> {
     let log_config = get_log_config();
     TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let rpc_client = RpcClient::new(args.endpoint).await?;
-    let drk = Drk { rpc_client };
-
     match args.command {
-        DrkSubcommand::Ping => drk.ping().await,
+        Subcmd::Ping => {
+            let rpc_client = RpcClient::new(args.endpoint).await?;
+            let drk = Drk { rpc_client };
+            drk.ping().await
+        }
 
-        DrkSubcommand::Airdrop { address, faucet_endpoint, amount, token_id } => {
+        Subcmd::Airdrop { address, faucet_endpoint, amount, token_id } => {
+            let rpc_client = RpcClient::new(args.endpoint).await?;
+            let drk = Drk { rpc_client };
+
             drk.airdrop(address, faucet_endpoint, amount, token_id).await
         }
 
-        DrkSubcommand::Wallet { keygen, balance, address, all_addresses } => {
+        Subcmd::Wallet { keygen, balance, address, all_addresses } => {
+            let rpc_client = RpcClient::new(args.endpoint).await?;
+            let drk = Drk { rpc_client };
+
             if keygen {
                 return drk.wallet_keygen().await
             }
@@ -265,10 +298,34 @@ async fn main() -> Result<()> {
             exit(2);
         }
 
-        DrkSubcommand::Transfer { recipient, amount, network, token_id } => {
+        Subcmd::Transfer { recipient, amount, network, token_id } => {
+            let rpc_client = RpcClient::new(args.endpoint).await?;
+            let drk = Drk { rpc_client };
+
             drk.tx_transfer(network, token_id, recipient, amount).await
         }
-    }?;
 
-    drk.close_connection().await
+        Subcmd::Broadcast => {
+            let rpc_client = RpcClient::new(args.endpoint).await?;
+            let drk = Drk { rpc_client };
+
+            let mut buf = String::new();
+            stdin().read_to_string(&mut buf)?;
+
+            drk.tx_broadcast(buf).await
+        }
+
+        Subcmd::DeployContract { path } => {
+            eprintln!("Trying to deploy the smart contract in {:?}", path);
+            let deploy_data = match create_deploy_data(&path) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!("{}: Failed to deploy smart contract: {}", fg_red("Error:"), e);
+                    exit(1);
+                }
+            };
+
+            Ok(())
+        }
+    }
 }

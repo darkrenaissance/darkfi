@@ -1,46 +1,42 @@
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode};
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
-use pasta_curves::pallas;
+use incrementalmerkletree::Hashable;
+use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 
 use crate::{
     crypto::{
-        constants::MERKLE_DEPTH_ORCHARD,
-        merkle_node::MerkleNode,
+        keypair::Keypair,
         util::{mod_r_p, pedersen_commitment_base},
     },
     zk::circuit::lead_contract::LeadContract,
 };
 
-use incrementalmerkletree::Hashable;
-
-use pasta_curves::{arithmetic::CurveAffine, group::Curve};
-
-//use halo2_proofs::arithmetic::CurveAffine;
-
-pub const LEAD_PUBLIC_INPUT_LEN: usize = 10;
+pub const LEAD_PUBLIC_INPUT_LEN: usize = 11;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
-    pub value: Option<pallas::Base>,                         // coin stake
-    pub cm: Option<pallas::Point>,                           // coin commitment
-    pub cm2: Option<pallas::Point>,                          // poured coin commitment
-    pub idx: u32,                                            // coin idex
-    pub sl: Option<pallas::Base>,                            // coin slot id
-    pub tau: Option<pallas::Base>,                           // coin time stamp
-    pub nonce: Option<pallas::Base>,                         // coin nonce
-    pub nonce_cm: Option<pallas::Base>,                      // coin nonce's commitment
-    pub sn: Option<pallas::Base>,                            // coin's serial number
-    pub pk: Option<pallas::Base>,                            // coin public key
-    pub root_cm: Option<pallas::Scalar>,                     // root of coin commitment
-    pub root_sk: Option<pallas::Base>,                       // coin's secret key
-    pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,    // path to the coin's commitment
+    pub value: Option<u64>,             // coin stake
+    pub cm: Option<pallas::Point>,      // coin commitment
+    pub cm2: Option<pallas::Point>,     // poured coin commitment
+    pub idx: u32,                       // coin idex
+    pub sl: Option<pallas::Base>,       // coin slot id
+    pub tau: Option<pallas::Base>,      // coin time stamp
+    pub nonce: Option<pallas::Base>,    // coin nonce
+    pub nonce_cm: Option<pallas::Base>, // coin nonce's commitment
+    pub sn: Option<pallas::Base>,       // coin's serial number
+    pub keypair: Option<Keypair>,
+    pub root_cm: Option<pallas::Scalar>, // root of coin commitment
+    pub root_sk: Option<pallas::Base>,   // coin's secret key
+    pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the coin's commitment
     pub path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the coin's secret key
-    pub c1_blind: Option<pallas::Scalar>,                    // coin opening
-    pub c2_blind: Option<pallas::Scalar>,                    // poured coin opening
+    pub c1_blind: Option<pallas::Scalar>, // coin opening
+    pub c2_blind: Option<pallas::Scalar>, // poured coin opening
     // election seeds
     pub y_mu: Option<pallas::Base>, // leader election nonce derived from eta at onset of epoch
     pub rho_mu: Option<pallas::Base>, // leader election nonce derived from eta at onset of epoch
-    pub sigma_scalar: Option<pallas::Base>,
+    pub sigma1: Option<pallas::Base>,
+    pub sigma2: Option<pallas::Base>,
 }
 
 impl LeadCoin {
@@ -53,7 +49,7 @@ impl LeadCoin {
 
         let po_cm = self.cm.unwrap().to_affine().coordinates().unwrap();
         let po_cm2 = self.cm2.unwrap().to_affine().coordinates().unwrap();
-        let po_pk = self.pk.unwrap();
+        let po_pk = self.keypair.unwrap().public.0.to_affine().coordinates().unwrap();
         let po_sn = self.sn.unwrap();
 
         let y_mu = self.y_mu.unwrap();
@@ -66,21 +62,27 @@ impl LeadCoin {
                 .hash(lottery_msg_input);
         //
         let po_y_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(y_mu));
-        let po_y = *po_y_pt.to_affine().coordinates().unwrap().x();
+        let po_y_x = *po_y_pt.to_affine().coordinates().unwrap().x();
+        let po_y_y = *po_y_pt.to_affine().coordinates().unwrap().y();
+        let y_coord_arr = [po_y_x, po_y_y];
+        let po_y: pallas::Base =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+            )
+            .hash(y_coord_arr);
         //
         let po_rho_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(rho_mu));
-        let po_rho = *po_rho_pt.to_affine().coordinates().unwrap().x();
-
-        let _zero = pallas::Base::from(0);
-
-        // ===============
+        let po_rho_x = *po_rho_pt.to_affine().coordinates().unwrap().x();
+        let po_rho_y = *po_rho_pt.to_affine().coordinates().unwrap().y();
+        let rho_coord_arr = [po_rho_x, po_rho_y];
+        let po_rho: pallas::Base =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(rho_coord_arr);
 
         let cm_pos = self.idx;
         let cm_root = {
             let pos: u32 = cm_pos;
             let c_cm_coordinates = self.cm.unwrap().to_affine().coordinates().unwrap();
             let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
-            let mut current = MerkleNode(c_cm_base);
+            let mut current = MerkleNode::from(c_cm_base);
             for (level, sibling) in self.path.unwrap().iter().enumerate() {
                 let level = level as u8;
                 current = if pos & (1 << level) == 0 {
@@ -97,8 +99,9 @@ impl LeadCoin {
             *po_cm2.x(),
             *po_cm2.y(),
             po_nonce,
-            cm_root.0,
-            po_pk,
+            cm_root.inner(),
+            *po_pk.x(),
+            *po_pk.y(),
             po_sn,
             po_y,
             po_rho,
@@ -111,14 +114,15 @@ impl LeadCoin {
     }
 
     pub fn create_contract(&self) -> LeadContract {
-        let contract = LeadContract {
+        LeadContract {
             path: Value::known(self.path.unwrap()),
+            sk: Value::known(self.keypair.unwrap().secret.inner()),
             root_sk: Value::known(self.root_sk.unwrap()),
             path_sk: Value::known(self.path_sk.unwrap()),
             coin_timestamp: Value::known(self.tau.unwrap()), //
             coin_nonce: Value::known(self.nonce.unwrap()),
             coin1_blind: Value::known(self.c1_blind.unwrap()),
-            value: Value::known(self.value.unwrap()),
+            value: Value::known(pallas::Base::from(self.value.unwrap())),
             coin2_blind: Value::known(self.c2_blind.unwrap()),
             cm_pos: Value::known(self.idx),
             //sn_c1: Value::known(self.sn.unwrap()),
@@ -126,8 +130,8 @@ impl LeadCoin {
             mau_rho: Value::known(mod_r_p(self.rho_mu.unwrap())),
             mau_y: Value::known(mod_r_p(self.y_mu.unwrap())),
             root_cm: Value::known(self.root_cm.unwrap()),
-            sigma_scalar: Value::known(self.sigma_scalar.unwrap()),
-        };
-        contract
+            sigma1: Value::known(self.sigma1.unwrap()),
+            sigma2: Value::known(self.sigma2.unwrap()),
+        }
     }
 }

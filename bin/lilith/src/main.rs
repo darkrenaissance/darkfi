@@ -1,9 +1,7 @@
 use std::path::Path;
 
-use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use futures_lite::future;
 use fxhash::{FxHashMap, FxHashSet};
 use log::{error, info, warn};
 use serde_json::{json, Value};
@@ -21,10 +19,8 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     util::{
-        cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
         file::{load_file, save_file},
-        path::get_config_path,
+        path::{expand_path, get_config_path},
     },
     Result,
 };
@@ -136,7 +132,7 @@ async fn spawn_network(
     info: NetInfo,
     urls: Vec<Url>,
     saved_hosts: Option<&FxHashSet<Url>>,
-    ex: Arc<Executor<'_>>,
+    ex: Arc<smol::Executor<'_>>,
 ) -> Result<Spawn> {
     let mut full_urls = Vec::new();
     for url in &urls {
@@ -150,6 +146,7 @@ async fn spawn_network(
         peers: info.peers,
         outbound_connections: 0,
         localnet: info.localnet,
+        channel_log: info.channel_log,
         app_version: None,
         ..Default::default()
     };
@@ -191,7 +188,7 @@ async fn spawn_network(
 }
 
 /// Retrieve saved hosts for provided networks
-fn load_hosts(path: &Path, networks: &Vec<String>) -> FxHashMap<String, FxHashSet<Url>> {
+fn load_hosts(path: &Path, networks: &[&str]) -> FxHashMap<String, FxHashSet<Url>> {
     let mut saved_hosts = FxHashMap::default();
     info!("Retrieving saved hosts from: {:?}", path);
     let contents = load_file(path);
@@ -202,7 +199,7 @@ fn load_hosts(path: &Path, networks: &Vec<String>) -> FxHashMap<String, FxHashSe
 
     for line in contents.unwrap().lines() {
         let data: Vec<&str> = line.split('\t').collect();
-        if networks.contains(&data[0].to_string()) {
+        if networks.contains(&data[0]) {
             let mut hosts = match saved_hosts.get(data[0]) {
                 Some(hosts) => hosts.clone(),
                 None => FxHashSet::default(),
@@ -243,11 +240,11 @@ fn save_hosts(path: &Path, spawns: FxHashMap<String, Vec<String>>) {
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // We use this handler to block this function after detaching all
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
-    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
     ctrlc::set_handler(move || {
         async_std::task::block_on(signal.send(())).unwrap();
     })
@@ -274,7 +271,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // Retrieve saved hosts for configured networks
     let full_path = expand_path(&args.hosts_file)?;
-    let saved_hosts = load_hosts(&full_path, &configured_nets.keys().cloned().collect());
+    let nets: Vec<&str> = configured_nets.keys().map(|x| x.as_str()).collect();
+    let saved_hosts = load_hosts(&full_path, &nets);
 
     // Spawn configured networks
     let mut spawns = vec![];

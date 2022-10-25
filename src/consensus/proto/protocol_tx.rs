@@ -1,8 +1,7 @@
 use async_std::sync::Arc;
-
-use async_executor::Executor;
 use async_trait::async_trait;
 use log::{debug, error};
+use smol::Executor;
 use url::Url;
 
 use crate::{

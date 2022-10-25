@@ -6,7 +6,7 @@ pointer to the `ProtocolJobsManager`. We'll also include the `DchatMsgsBuffer`
 in the struct as it will come in handy later on.
 
 ```rust
-{{#include ../../../../../example/dchat/src/protocol_dchat.rs:1:13}}
+{{#include ../../../../../example/dchat/src/protocol_dchat.rs:protocol_dchat}}
 ```
 
 Next we'll implement the trait `ProtocolBase`. `ProtocolBase` requires
@@ -14,8 +14,17 @@ two functions, `start()` and `name()`. In `start()` we will start up the
 `ProtocolJobsManager`. `name()` will return a `str` of the protocol name.
 
 ```rust
-{{#include ../../../../../example/dchat/src/protocol_dchat.rs:42:46}}
-{{#include ../../../../../example/dchat/src/protocol_dchat.rs:48::}}
+#[async_trait]
+impl net::ProtocolBase for ProtocolDchat {
+    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        self.jobsman.clone().start(executor.clone());
+        Ok(())
+    }
+
+    fn name(&self) -> &'static str {
+        "ProtocolDchat"
+    }
+}
 ```
 
 Once that's done, we'll need to create a `ProtocolDchat` constructor
@@ -28,8 +37,8 @@ We'll also initialize the `ProtocolJobsManager` and finally return a
 pointer to the protocol.
 
 ```rust
-{{#include ../../../../../example/dchat/src/protocol_dchat.rs:15:29}}
-{{#include ../../../../../example/dchat/src/protocol_dchat.rs:40}}
+{{#include ../../../../../example/dchat/src/protocol_dchat.rs:constructor}}
+}
 ```
 
 We're nearly there. But right now the protocol doesn't actually do
@@ -39,16 +48,12 @@ a message on our `MessageSubscription` and adds it to `DchatMsgsBuffer`.
 Put this inside the `ProtocolDchat` implementation:
 
 ```rust
-{{#include ../../../../../example/dchat/src/protocol_dchat.rs:31:39}}
+{{#include ../../../../../example/dchat/src/protocol_dchat.rs:receive}}
 ```
 
 As a final step, let's add that task to the `ProtocolJobManager` that is invoked
 in `start()`:
 
 ```rust
-{{#include ../../../../../example/dchat/src/protocol_dchat.rs:44}}
-        //...
-{{#include ../../../../../example/dchat/src/protocol_dchat.rs:47}}
-        //...
-{{#include ../../../../../example/dchat/src/protocol_dchat.rs:50}}
+{{#include ../../../../../example/dchat/src/protocol_dchat.rs:start}}
 ```

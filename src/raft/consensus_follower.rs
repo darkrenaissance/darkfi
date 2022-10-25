@@ -1,16 +1,13 @@
 use std::cmp::min;
 
+use darkfi_serial::{serialize, Decodable, Encodable};
 use log::debug;
-
-use crate::{
-    util::serial::{serialize, Decodable, Encodable},
-    Result,
-};
 
 use super::{
     primitives::{LogRequest, LogResponse, Logs, NetMsgMethod, Role, VoteRequest, VoteResponse},
     Raft,
 };
+use crate::Result;
 
 impl<T: Decodable + Encodable + Clone> Raft<T> {
     pub(super) async fn receive_vote_request(&mut self, vr: VoteRequest) -> Result<()> {

@@ -1,4 +1,3 @@
-use async_std::sync::{Arc, Mutex};
 use std::{
     env,
     fs::{create_dir_all, remove_dir_all},
@@ -6,27 +5,22 @@ use std::{
     path::Path,
 };
 
-use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use crypto_box::{
     aead::{Aead, AeadCore},
     SalsaBox, SecretKey,
 };
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{debug, error, info, warn};
-use smol::future;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
     async_daemonize, net,
     raft::{NetMsg, ProtocolRaft, Raft, RaftSettings},
     rpc::server::listen_and_serve,
-    util::{
-        cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
-        path::get_config_path,
-        serial::{deserialize, serialize, SerialDecodable, SerialEncodable},
-    },
+    util::path::expand_path,
     Error, Result,
 };
 
@@ -98,9 +92,9 @@ fn decrypt_task(encrypt_task: &EncryptedTask, salsa_box: &SalsaBox) -> TaudResul
 }
 
 async fn start_sync_loop(
-    broadcast_rcv: async_channel::Receiver<TaskInfo>,
-    raft_msgs_sender: async_channel::Sender<EncryptedTask>,
-    commits_recv: async_channel::Receiver<EncryptedTask>,
+    broadcast_rcv: smol::channel::Receiver<TaskInfo>,
+    raft_msgs_sender: smol::channel::Sender<EncryptedTask>,
+    commits_recv: smol::channel::Receiver<EncryptedTask>,
     datastore_path: std::path::PathBuf,
     workspaces: FxHashMap<String, SalsaBox>,
     mut rng: crypto_box::rand_core::OsRng,
@@ -131,7 +125,7 @@ async fn on_receive_task(
     workspaces: &FxHashMap<String, SalsaBox>,
 ) -> TaudResult<()> {
     for (workspace, salsa_box) in workspaces.iter() {
-        let task = decrypt_task(&task, &salsa_box);
+        let task = decrypt_task(task, salsa_box);
         if let Err(e) = task {
             info!("unable to decrypt the task: {}", e);
             continue
@@ -140,13 +134,13 @@ async fn on_receive_task(
         let mut task = task.unwrap();
         info!(target: "tau", "Save the task: ref: {}", task.ref_id);
         task.workspace = workspace.clone();
-        task.save(&datastore_path)?;
+        task.save(datastore_path)?;
     }
     Ok(())
 }
 
 async_daemonize!(realmain);
-async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     let datastore_path = expand_path(&settings.datastore)?;
 
     let nickname =
@@ -188,7 +182,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
         loop {
             println!("Name for the new workspace: ");
             let mut workspace = String::new();
-            stdin().read_line(&mut workspace).ok().expect("Failed to read line");
+            stdin().read_line(&mut workspace).expect("Failed to read line");
             let workspace = workspace.to_lowercase();
             let workspace = workspace.trim();
             if workspace.is_empty() && workspace.len() < 3 {
@@ -226,14 +220,14 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     let mut raft = Raft::<EncryptedTask>::new(raft_settings, seen_net_msgs.clone())?;
     let raft_id = raft.id();
 
-    let (broadcast_snd, broadcast_rcv) = async_channel::unbounded::<TaskInfo>();
+    let (broadcast_snd, broadcast_rcv) = smol::channel::unbounded::<TaskInfo>();
 
     //
     // P2p setup
     //
     let mut net_settings = settings.net.clone();
     net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
-    let (p2p_send_channel, p2p_recv_channel) = async_channel::unbounded::<NetMsg>();
+    let (p2p_send_channel, p2p_recv_channel) = smol::channel::unbounded::<NetMsg>();
 
     let p2p = net::P2p::new(net_settings.into()).await;
     let p2p = p2p.clone();
@@ -269,7 +263,7 @@ async fn realmain(settings: Args, executor: Arc<Executor<'_>>) -> Result<()> {
     //
     // Waiting Exit signal
     //
-    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
     ctrlc::set_handler(move || {
         warn!(target: "tau", "Catch exit signal");
         // cleaning up tasks running in the background

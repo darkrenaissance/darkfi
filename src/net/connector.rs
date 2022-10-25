@@ -1,15 +1,14 @@
-use async_std::sync::Arc;
 use std::{env, time::Duration};
 
+use async_std::sync::Arc;
 use log::error;
 use url::Url;
 
-use crate::{Error, Result};
-
 use super::{
-    Channel, ChannelPtr, SessionWeakPtr, SettingsPtr, TcpTransport, TorTransport, Transport,
-    TransportName,
+    transport::{TcpTransport, TorTransport, Transport, TransportName},
+    Channel, ChannelPtr, SessionWeakPtr, SettingsPtr,
 };
+use crate::{Error, Result};
 
 /// Create outbound socket connections.
 pub struct Connector {

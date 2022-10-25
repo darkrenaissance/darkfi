@@ -1,8 +1,7 @@
 use async_std::sync::Arc;
-
-use async_executor::Executor;
 use async_trait::async_trait;
 use log::{debug, error, info};
+use smol::Executor;
 use url::Url;
 
 use crate::{
@@ -63,22 +62,30 @@ impl ProtocolProposal {
 
             let proposal_copy = (*proposal).clone();
 
-            let vote = match self.state.write().await.receive_proposal(&proposal_copy).await {
-                Ok(v) => {
-                    if v.is_none() {
-                        debug!("ProtocolProposal::handle_receive_proposal(): Node didn't vote for proposed block.");
+            let mut state = self.state.write().await;
+
+            // Verify we have the proposal already
+            match state.find_proposal(&proposal_copy.block.header.headerhash()) {
+                Ok(p) => {
+                    if let Some(_) = p {
+                        debug!("ProtocolProposal::handle_receive_proposal(): Proposal already received.");
                         continue
                     }
-                    v.unwrap()
                 }
                 Err(e) => {
-                    debug!("ProtocolProposal::handle_receive_proposal(): error processing proposal: {}", e);
+                    error!(
+                        "ProtocolProposal::handle_receive_proposal(): find_proposal() failed: {}",
+                        e
+                    );
                     continue
                 }
             };
 
-            if let Err(e) = self.state.write().await.receive_vote(&vote).await {
-                error!("ProtocolProposal::handle_receive_proposal(): receive_vote error: {}", e);
+            if let Err(e) = state.receive_proposal(&proposal_copy).await {
+                error!(
+                    "ProtocolProposal::handle_receive_proposal(): receive_proposal error: {}",
+                    e
+                );
                 continue
             }
 
@@ -89,11 +96,6 @@ impl ProtocolProposal {
                     e
                 );
             };
-
-            // Broadcast vote
-            if let Err(e) = self.p2p.broadcast(vote).await {
-                error!("ProtocolProposal::handle_receive_proposal(): vote broadcast fail: {}", e);
-            }
         }
     }
 }

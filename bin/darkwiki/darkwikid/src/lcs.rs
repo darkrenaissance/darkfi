@@ -1,4 +1,4 @@
-use crate::{patch::OpMethod, str_to_chars};
+use crate::{patch::OpMethod, util::str_to_chars};
 
 pub struct Lcs<'a> {
     a: Vec<&'a str>,

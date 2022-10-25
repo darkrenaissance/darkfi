@@ -1,16 +1,16 @@
 use std::{process::exit, str::FromStr};
 
+use darkfi_sdk::crypto::MerkleNode;
+use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
 
 use darkfi::{
     crypto::{
         address::Address,
-        merkle_node::MerkleNode,
+        coin::OwnCoin,
         note::{EncryptedNote, Note},
-        OwnCoin,
     },
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
-    util::serial::{deserialize, serialize},
     Result,
 };
 
@@ -141,8 +141,8 @@ impl Rpc {
                 exit(1);
             }
 
-            let n = MerkleNode::from_bytes(&n.try_into().unwrap());
-            if n.is_some().unwrap_u8() == 0 {
+            let n = MerkleNode::from_bytes(n.try_into().unwrap());
+            if n.is_none() {
                 eprintln!("Error: Noncanonical bytes of MerkleNode");
                 exit(1);
             }

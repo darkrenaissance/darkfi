@@ -25,10 +25,10 @@ rpc_listen = "tcp://127.0.0.1:8340"
 consensus = true
 
 # P2P accept addresses for the consensus protocol
-consensus_p2p_accept = ["tls://127.0.0.1:8341"]
+consensus_p2p_accept = ["tcp://127.0.0.1:8341"]
 
 # P2P external addresses for the consensus protocol
-consensus_p2p_external = ["tls://127.0.0.1:8341"]
+consensus_p2p_external = ["tcp://127.0.0.1:8341"]
 
 # Connection slots for the consensus protocol
 #consensus_slots = 8
@@ -44,10 +44,10 @@ consensus_p2p_seed = ["tcp://127.0.0.1:33033"]
 #consensus_p2p_transports = ["tls", "tcp"]
 
 # P2P accept addresses for the syncing protocol
-sync_p2p_accept = ["tls://127.0.0.1:8342"]
+sync_p2p_accept = ["tcp://127.0.0.1:8342"]
 
 # P2P external addresses for the syncing protocol
-sync_p2p_external = ["tls://127.0.0.1:8342"]
+sync_p2p_external = ["tcp://127.0.0.1:8342"]
 
 # Connection slots for the syncing protocol
 #sync_slots = 8
@@ -63,6 +63,9 @@ sync_p2p_seed = ["tcp://127.0.0.1:33032"]
 
 # Enable localnet hosts
 localnet = true
+
+# Enable channel log
+channel_log = true
 
 # Whitelisted faucet public key
 faucet_pub = ["1z3JuN456MieHtpoF4cr5a1ntFF87L8Z3m2E5ACppFodFcjnLS"]

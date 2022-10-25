@@ -1,5 +1,7 @@
 # Anonymous Smart Contracts
 
+<!-- toc -->
+
 Every full node is a **verifier**.
 
 **Prover** is the person executing the smart contract function on their secret witness data.
@@ -23,6 +25,16 @@ contract Dao {
     ...
 }
 ```
+
+## Important Invariants
+
+1. The state of a contract (the contract member values) is globally readable but
+   *only* writable by that contract's functions.
+2. Transactions are atomic. If a subsequent contract function call fails then the earlier
+   ones are also invalid. The entire tx will be rolled back.
+3. `foo_contract::bar_func::validate::state_transition()` is able to access the entire
+   transaction to perform validation on its structure. It might need to enforce requirements
+   on the calldata of other function calls within the same tx. See `DAO::exec()`.
 
 ## Global Smart Contract State
 
@@ -79,19 +91,13 @@ the entire tx is rejected. Additionally some smart contracts might impose additi
 on the transaction's structure or other function calls (such as their call data).
 
 ```rust
-struct Transaction {
-    func_calls: Vec<FuncCall>
-}
+{{#include ../../../bin/dao/daod/src/util.rs:transaction}}
 ```
 
 Function calls represent mutations of the current active state to a new state.
 
 ```rust
-struct FuncCall {
-    contract_id: ContractId,
-    func_id: FuncId,
-    call_data: Box<dyn Any>,
-}
+{{#include ../../../bin/dao/daod/src/util.rs:funccall}}
 ```
 
 The `contract_id` corresponds to the top level module for the contract which
@@ -127,6 +133,7 @@ mod dao_contract {
             // So we know the tx is well formed.
 
             // we can elide this with macro magic
+            // dao_contract::mint::validate::CallData
             assert_eq((&**call_data).type_id(), TypeId::of::<CallData>());
             let func_call = func_call.call_data.downcast_ref::<CallData>();
 
@@ -172,6 +179,38 @@ The transaction verification pipeline roughly looks like this:
 2. Loop through all updates
     1. Lookup specific `apply()` function based off the `contract_id` and `func_id`.
     2. Call `apply(update)` to finalize the change.
+
+## ZK Proofs and Signatures
+
+Lets review again the format of transactions.
+
+```rust
+{{#include ../../../bin/dao/daod/src/util.rs:transaction}}
+```
+
+And corresponding function calls.
+
+```rust
+{{#include ../../../bin/dao/daod/src/util.rs:funccall}}
+```
+
+As we can see the ZK proofs and signatures are separate from the actuall `call_data` interpreted
+by `state_transition()`. They are both automatically verified by the VM.
+
+However for verification to work, the ZK proofs also need corresponding public values, and
+the signatures need the public keys. We do this in the `CallDataBase` trait by exporting these
+methods:
+
+```rust
+{{#include ../../../bin/dao/daod/src/util.rs:calldatabase_trait}}
+```
+
+These methods export the required values needed for the ZK proofs and signature verification
+from the actual call data itself.
+
+For signature verification, the data we are verifying is simply the entire transactions minus
+the actual signatures. That's why the signatures are a separate top level field in the
+transaction.
 
 ## Parallelisation Techniques
 

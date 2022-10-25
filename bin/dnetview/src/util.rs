@@ -1,15 +1,9 @@
-use crate::model::{ConnectInfo, Session};
-use darkfi::{util::serial, Result};
-use smol::Timer;
-use std::time::Duration;
+use darkfi::Result;
 
-/// Sleep for any number of milliseconds.
-pub async fn sleep(millis: u64) {
-    Timer::after(Duration::from_millis(millis)).await;
-}
+use crate::model::{ConnectInfo, Session};
 
 pub fn make_node_id(node_name: &String) -> Result<String> {
-    let mut id = serial::serialize_hex(node_name);
+    let mut id = hex::encode(node_name);
     id.insert_str(0, "NODE");
     Ok(id)
 }
@@ -32,13 +26,13 @@ pub fn make_session_id(node_id: &str, session: &Session) -> Result<String> {
         num += i as u64
     }
 
-    let mut id = serial::serialize_hex(&num);
+    let mut id = hex::encode(&num.to_ne_bytes());
     id.insert_str(0, "SESSION");
     Ok(id)
 }
 
 pub fn make_connect_id(id: &u64) -> Result<String> {
-    let mut id = serial::serialize_hex(id);
+    let mut id = hex::encode(&id.to_ne_bytes());
     id.insert_str(0, "CONNECT");
     Ok(id)
 }
@@ -58,7 +52,7 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
                 num += i as u64
             }
             num += count;
-            let mut id = serial::serialize_hex(&num);
+            let mut id = hex::encode(&num.to_ne_bytes());
             id.insert_str(0, "EMPTYIN");
             id
         }
@@ -71,7 +65,7 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
                 num += i as u64
             }
             num += count;
-            let mut id = serial::serialize_hex(&num);
+            let mut id = hex::encode(&num.to_ne_bytes());
             id.insert_str(0, "EMPTYOUT");
             id
         }
@@ -84,7 +78,7 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
                 num += i as u64
             }
             num += count;
-            let mut id = serial::serialize_hex(&num);
+            let mut id = hex::encode(&num.to_ne_bytes());
             id.insert_str(0, "EMPTYMAN");
             id
         }
@@ -97,7 +91,7 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
                 num += i as u64
             }
             num += count;
-            let mut id = serial::serialize_hex(&num);
+            let mut id = hex::encode(&num.to_ne_bytes());
             id.insert_str(0, "EMPTYOFF");
             id
         }

@@ -1,6 +1,6 @@
 use std::{fmt, str::FromStr};
 
-use darkfi::{util::Timestamp, Error, Result};
+use darkfi::{util::time::Timestamp, Error, Result};
 
 use crate::due_as_timestamp;
 

@@ -1,9 +1,36 @@
 [package]
-name = "drk-sdk"
+name = "darkfi-sdk"
 version = "0.3.0"
+homepage = "https://dark.fi"
+description = "SDK used for developing smart contracts on DarkFi"
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
 edition = "2021"
 
+[dependencies.darkfi-serial]
+path = "../serial"
+features = [
+    "derive",
+    "pasta_curves",
+]
+
 [dependencies]
-borsh = "0.9.3"
-thiserror = "1.0.34"
-wee_alloc = "0.4.5"
+# Error handling
+thiserror = "1.0.37"
+
+# Encoding
+bs58 = "0.4.0"
+
+# Cryptography
+pasta_curves = "0.4.0"
+incrementalmerkletree = "0.3.0"
+halo2_gadgets = "0.2.0"
+
+# Misc
+lazy_static = "1.4.0"
+subtle = "2.4.1"
+
+[dev-dependencies]
+halo2_proofs = "0.2.0"
+rand = "0.8.5"

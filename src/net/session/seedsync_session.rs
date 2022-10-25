@@ -1,14 +1,14 @@
+use std::time::Duration;
+
 use async_std::{
     future::timeout,
     sync::{Arc, Weak},
 };
-use futures::future;
-use std::time::Duration;
-
-use async_executor::Executor;
 use async_trait::async_trait;
+use futures::future::join_all;
 use log::*;
 use serde_json::json;
+use smol::Executor;
 use url::Url;
 
 use crate::Result;
@@ -76,7 +76,7 @@ impl SeedSyncSession {
                 }
             });
         }
-        future::join_all(tasks).await;
+        join_all(tasks).await;
 
         // Seed process complete
         if self.p2p().hosts().is_empty().await {

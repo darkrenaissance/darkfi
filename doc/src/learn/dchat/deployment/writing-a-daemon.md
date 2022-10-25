@@ -6,15 +6,28 @@ start building `dchat` by configuring our main function into a daemon that
 can run the p2p network.
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs::9}}
+{{#include ../../../../../example/dchat/src/main.rs:daemon_deps}}
 
-{{#include ../../../../../example/dchat/src/main.rs:25:26}}
+#[async_std::main]
+async fn main() -> Result<()> {
+    let ex = Arc::new(Executor::new());
+    let ex2 = ex.clone();
 
-{{#include ../../../../../example/dchat/src/main.rs:183:184}}
-{{#include ../../../../../example/dchat/src/main.rs:198:199}}
+    let nthreads = num_cpus::get();
+    let (signal, shutdown) = smol::channel::unbounded::<()>();
 
-{{#include ../../../../../example/dchat/src/main.rs:213:216}}
-{{#include ../../../../../example/dchat/src/main.rs:218:224}}
+    let (_, result) = Parallel::new()
+        .each(0..nthreads, |_| smol::future::block_on(ex2.run(shutdown.recv())))
+        .finish(|| {
+            smol::future::block_on(async move {
+                drop(signal);
+                Ok(())
+            })
+        });
+
+    result
+
+}
 ```
 
 We get the number of cpu cores using `num_cpus::get()` and spin up a

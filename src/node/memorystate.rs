@@ -1,11 +1,9 @@
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 
 use super::state::{ProgramState, State, StateUpdate};
-use crate::crypto::{
-    constants::MERKLE_DEPTH, keypair::PublicKey, merkle_node::MerkleNode, nullifier::Nullifier,
-    proof::VerifyingKey,
-};
+use crate::crypto::{keypair::PublicKey, proof::VerifyingKey};
 
 /// In-memory state extension for state transition validations
 #[derive(Clone)]
@@ -63,7 +61,7 @@ impl MemoryState {
 
         debug!(target: "state_apply", "(in-memory) Update Merkle tree and witnesses");
         for coin in update.coins {
-            let node = MerkleNode(coin.0);
+            let node = MerkleNode::from(coin.0);
             self.tree.append(&node);
             self.merkle_roots.push(self.tree.root(0).unwrap());
         }

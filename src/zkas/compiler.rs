@@ -1,11 +1,12 @@
 use std::str::Chars;
 
+use darkfi_serial::{serialize, VarInt};
+
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Witness},
     error::ErrorEmitter,
     types::StackType,
 };
-use crate::util::serial::{serialize, VarInt};
 
 /// Version of the binary
 pub const BINARY_VERSION: u8 = 2;
@@ -13,6 +14,7 @@ pub const BINARY_VERSION: u8 = 2;
 pub const MAGIC_BYTES: [u8; 4] = [0x0b, 0x01, 0xb1, 0x35];
 
 pub struct Compiler {
+    namespace: String,
     constants: Vec<Constant>,
     witnesses: Vec<Witness>,
     statements: Vec<Statement>,
@@ -25,6 +27,7 @@ impl Compiler {
     pub fn new(
         filename: &str,
         source: Chars,
+        namespace: String,
         constants: Vec<Constant>,
         witnesses: Vec<Witness>,
         statements: Vec<Statement>,
@@ -36,7 +39,7 @@ impl Compiler {
         let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
         let error = ErrorEmitter::new("Compiler", filename, lines);
 
-        Self { constants, witnesses, statements, literals, debug_info, error }
+        Self { namespace, constants, witnesses, statements, literals, debug_info, error }
     }
 
     pub fn compile(&self) -> Vec<u8> {
@@ -45,6 +48,9 @@ impl Compiler {
         // Write the magic bytes and version
         bincode.extend_from_slice(&MAGIC_BYTES);
         bincode.push(BINARY_VERSION);
+
+        // Write the circuit's namespace
+        bincode.extend_from_slice(&serialize(&self.namespace));
 
         // Temporaty stack vector for lookups
         let mut tmp_stack = vec![];
@@ -81,6 +87,7 @@ impl Compiler {
                 StatementType::Assign => tmp_stack.push(&i.lhs.as_ref().unwrap().name),
                 // In case of a simple call, we don't append anything to the stack
                 StatementType::Call => {}
+                // TODO: FIXME: unreachable is reached with missing semicolons in the code
                 _ => unreachable!(),
             }
 

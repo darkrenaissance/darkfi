@@ -7,9 +7,9 @@ use url::Url;
 
 use super::jsonrpc::{JsonRequest, JsonResult};
 use crate::{
-    net::{
-        transport::Transport, TcpTransport, TorTransport, TransportListener, TransportName,
-        TransportStream, UnixTransport,
+    net::transport::{
+        TcpTransport, TorTransport, Transport, TransportListener, TransportName, TransportStream,
+        UnixTransport,
     },
     Error, Result,
 };
@@ -31,7 +31,7 @@ async fn accept(
 ) -> Result<()> {
     loop {
         // Nasty size
-        let mut buf = vec![0; 2048 * 10];
+        let mut buf = vec![0; 8192 * 10];
 
         let n = match stream.read(&mut buf).await {
             Ok(n) if n == 0 => {

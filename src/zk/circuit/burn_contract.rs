@@ -1,3 +1,11 @@
+use darkfi_sdk::crypto::{
+    constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
+        util::gen_const_array,
+        NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
+    },
+    MerkleNode,
+};
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
@@ -22,18 +30,7 @@ use halo2_proofs::{
 };
 use pasta_curves::{pallas, Fp};
 
-use crate::{
-    crypto::{
-        constants::{
-            sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-            util::gen_const_array,
-            NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
-            MERKLE_DEPTH_ORCHARD,
-        },
-        merkle_node::MerkleNode,
-    },
-    zk::assign_free_advice,
-};
+use crate::zk::assign_free_advice;
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -97,7 +94,7 @@ const BURN_USERDATA_OFFSET: usize = 6;
 const BURN_SIGKEYX_OFFSET: usize = 7;
 const BURN_SIGKEYY_OFFSET: usize = 8;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct BurnContract {
     pub secret_key: Value<pallas::Base>,
     pub serial: Value<pallas::Base>,
@@ -539,14 +536,16 @@ mod tests {
         },
         Result,
     };
-    use group::{ff::Field, Curve};
     use halo2_gadgets::poseidon::{
         primitives as poseidon,
         primitives::{ConstantLength, P128Pow5T3},
     };
     use halo2_proofs::dev::{CircuitLayout, MockProver};
     use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-    use pasta_curves::arithmetic::CurveAffine;
+    use pasta_curves::{
+        arithmetic::CurveAffine,
+        group::{ff::Field, Curve},
+    };
     use rand::rngs::OsRng;
     use std::time::Instant;
 
@@ -585,19 +584,19 @@ mod tests {
         let coin1 = pallas::Base::random(&mut OsRng);
         let coin3 = pallas::Base::random(&mut OsRng);
 
-        tree.append(&MerkleNode(coin0));
+        tree.append(&MerkleNode::from(coin0));
         tree.witness();
-        tree.append(&MerkleNode(coin1));
-        tree.append(&MerkleNode(coin2));
+        tree.append(&MerkleNode::from(coin1));
+        tree.append(&MerkleNode::from(coin2));
         let leaf_pos = tree.witness().unwrap();
-        tree.append(&MerkleNode(coin3));
+        tree.append(&MerkleNode::from(coin3));
         tree.witness();
 
         let merkle_root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_pos, &merkle_root).unwrap();
         let leaf_pos: u64 = leaf_pos.into();
 
-        let nullifier = [secret.0, serial];
+        let nullifier = [secret.inner(), serial];
         let nullifier =
             poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(nullifier);
 
@@ -620,14 +619,14 @@ mod tests {
             *value_coords.y(),
             *token_coords.x(),
             *token_coords.y(),
-            merkle_root.0,
+            merkle_root.inner(),
             user_data_enc,
             *sig_coords.x(),
             *sig_coords.y(),
         ];
 
         let circuit = BurnContract {
-            secret_key: Value::known(secret.0),
+            secret_key: Value::known(secret.inner()),
             serial: Value::known(serial),
             value: Value::known(pallas::Base::from(value)),
             token: Value::known(token_id),
@@ -639,7 +638,7 @@ mod tests {
             spend_hook: Value::known(spend_hook),
             user_data: Value::known(user_data),
             user_data_blind: Value::known(user_data_blind),
-            sig_secret: Value::known(sig_secret.0),
+            sig_secret: Value::known(sig_secret.inner()),
         };
 
         use plotters::prelude::*;

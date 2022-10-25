@@ -18,6 +18,7 @@ The compiled binary blob has the following layout:
 ```
 MAGIC_BYTES
 BINARY_VERSION
+NAMESPACE
 .constant
 CONSTANT_TYPE CONSTANT_NAME 
 CONSTANT_TYPE CONSTANT_NAME 
@@ -39,8 +40,8 @@ TBD
 ```
 
 Integers in the binary are encoded using variable-integer encoding.
-See [`serial.rs`](https://github.com/darkrenaissance/darkfi/blob/master/src/util/serial.rs)
-for our Rust implementation.
+See the [`serial`](https://github.com/darkrenaissance/darkfi/blob/master/src/serial/src/lib.rs)
+crate and module for our Rust implementation.
 
 ## Sections
 
@@ -58,6 +59,20 @@ The binary code also contains the binary version to allow parsing
 potential different formats in the future.
 
 > `0x02`
+
+### `NAMESPACE`
+
+This sector after `MAGIC_BYTES` and `BINARY_VERSION` contains the
+reference namespace of the code. This is the namespace used in the
+source code, e.g.:
+
+```
+constant "MyNamespace" { ... }
+contract "MyNamespace" { ... }
+circuit  "MyNamespace" { ... }
+```
+
+The string is serialized with variable-integer encoding.
 
 ### `.constant`
 

@@ -1,10 +1,16 @@
 # Settings
 
-On production-ready software, you would usually configure your node
-using a config file or command line inputs. On dchat we are keeping
-things ultra simple. We pass a command line flag that is either `a` or
-`b`. If we pass `a` we will initialize an inbound node. If we pass `b`
-we will initialize an outbound node.
+To create an inbound and outbound node, we
+will need to configure them using `net` type called
+[Settings](https://github.com/darkrenaissance/darkfi/blob/master/src/net/settings.rs).
+This type consists of several settings that allow you to configure nodes
+in different ways.
+
+You would usually configure `Settings` using a config file or command
+line inputs. On dchat we are keeping things ultra simple. We pass a
+command line flag that is either `a` or `b`. If we pass `a` we will
+initialize the `Settings` for an inbound node. If we pass `b` we will
+initialize an outbound node.
 
 Here's how that works. We define two methods called `alice()` and
 `bob()`. `alice()` returns the `Settings` that will create an inbound

@@ -1,6 +1,6 @@
-use async_std::sync::Mutex;
 use std::{fs::create_dir_all, path::PathBuf};
 
+use async_std::sync::Mutex;
 use async_trait::async_trait;
 use crypto_box::SalsaBox;
 use fxhash::FxHashMap;
@@ -14,7 +14,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         server::RequestHandler,
     },
-    util::{expand_path, Timestamp},
+    util::{path::expand_path, time::Timestamp},
     Error,
 };
 
@@ -27,7 +27,7 @@ use crate::{
 
 pub struct JsonRpcInterface {
     dataset_path: PathBuf,
-    notify_queue_sender: async_channel::Sender<TaskInfo>,
+    notify_queue_sender: smol::channel::Sender<TaskInfo>,
     nickname: String,
     workspace: Mutex<String>,
     workspaces: FxHashMap<String, SalsaBox>,
@@ -78,7 +78,7 @@ impl RequestHandler for JsonRpcInterface {
 impl JsonRpcInterface {
     pub fn new(
         dataset_path: PathBuf,
-        notify_queue_sender: async_channel::Sender<TaskInfo>,
+        notify_queue_sender: smol::channel::Sender<TaskInfo>,
         nickname: String,
         workspaces: FxHashMap<String, SalsaBox>,
         p2p: net::P2pPtr,
@@ -351,18 +351,17 @@ impl JsonRpcInterface {
                 .map(|t| t.id)
                 .collect();
 
-        let task_ref_ids: Vec<String> =
-            MonthTasks::load_current_tasks(&self.dataset_path, ws.clone(), false)?
-                .into_iter()
-                .map(|t| t.ref_id)
-                .collect();
-
-        let imported_tasks = MonthTasks::load_current_tasks(&path, ws, true)?;
+        let imported_tasks = MonthTasks::load_current_tasks(&path, ws.clone(), true)?;
 
         for mut task in imported_tasks {
-            if task_ref_ids.contains(&task.ref_id) {
+            if MonthTasks::load_current_tasks(&self.dataset_path, ws.clone(), false)?
+                .into_iter()
+                .map(|t| t.ref_id)
+                .any(|x| x == task.ref_id)
+            {
                 continue
             }
+
             task.id = find_free_id(&task_ids);
             task_ids.push(task.id);
             self.notify_queue_sender.send(task).await.map_err(Error::from)?;

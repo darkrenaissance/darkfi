@@ -1,3 +1,4 @@
+use darkfi_serial::{deserialize, serialize};
 use fxhash::FxHashMap;
 use incrementalmerkletree::Tree;
 use log::error;
@@ -15,7 +16,6 @@ use darkfi::{
         ErrorCode::{InternalError, InvalidParams, ParseError},
         JsonError, JsonResponse, JsonResult,
     },
-    util::serial::{deserialize, serialize},
 };
 
 use super::Darkfid;
@@ -24,14 +24,19 @@ use crate::{server_error, RpcError};
 impl Darkfid {
     // RPCAPI:
     // Attempts to generate a new keypair and returns its address upon success.
+    //
     // --> {"jsonrpc": "2.0", "method": "wallet.keygen", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "1DarkFi...", "id": 1}
-    pub async fn keygen(&self, id: Value, _params: &[Value]) -> JsonResult {
+    pub async fn wallet_keygen(&self, id: Value, params: &[Value]) -> JsonResult {
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
         match self.client.keygen().await {
             Ok(a) => JsonResponse::new(json!(a.to_string()), id).into(),
             Err(e) => {
-                error!("Failed creating keypair: {}", e);
-                server_error(RpcError::Keygen, id)
+                error!("[RPC] wallet.keygen: Failed creating keypair: {}", e);
+                server_error(RpcError::Keygen, id, None)
             }
         }
     }
@@ -39,51 +44,63 @@ impl Darkfid {
     // RPCAPI:
     // Fetches public keys by given indexes from the wallet and returns it in an
     // encoded format. `-1` is supported to fetch all available keys.
+    //
     // --> {"jsonrpc": "2.0", "method": "wallet.get_addrs", "params": [1, 2], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["foo", "bar"], "id": 1}
-    pub async fn get_addrs(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_get_addrs(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
         let mut fetch_all = false;
-        for i in params {
-            if !i.is_i64() {
-                return server_error(RpcError::Nan, id)
+
+        for (i, elem) in params.iter().enumerate() {
+            if !elem.is_i64() {
+                error!("[RPC] wallet.get_addrs: Param {} is not i64", i);
+                return server_error(RpcError::NaN, id, Some(&format!("Param {} is not i64", i)))
             }
 
-            if i.as_i64() == Some(-1) {
+            if elem.as_i64() == Some(-1) {
+                if params.len() != 1 {
+                    return server_error(
+                        RpcError::ParseError,
+                        id,
+                        Some("-1 can only be used as a single param"),
+                    )
+                }
+
                 fetch_all = true;
                 break
             }
 
-            if i.as_i64() < Some(-1) {
-                return server_error(RpcError::LessThanNegOne, id)
+            if elem.as_i64() < Some(-1) {
+                return server_error(RpcError::LessThanNegOne, id, None)
             }
         }
 
         let keypairs = match self.client.get_keypairs().await {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed fetching keypairs: {}", e);
-                return server_error(RpcError::KeypairFetch, id)
+                error!("[RPC] wallet.get_addrs: Failed fetching keypairs: {}", e);
+                return server_error(RpcError::KeypairFetch, id, None)
             }
         };
 
-        let mut ret = vec![];
-
         if fetch_all {
-            ret = keypairs.iter().map(|x| Some(Address::from(x.public).to_string())).collect()
-        } else {
-            for i in params {
-                // This cast is safe on 64bit since we've already sorted out
-                // all negative cases above.
-                let idx = i.as_i64().unwrap() as usize;
-                if let Some(kp) = keypairs.get(idx) {
-                    ret.push(Some(Address::from(kp.public).to_string()));
-                } else {
-                    ret.push(None)
-                }
+            let ret: Vec<String> =
+                keypairs.iter().map(|x| Address::from(x.public).to_string()).collect();
+            return JsonResponse::new(json!(ret), id).into()
+        }
+
+        let mut ret = vec![];
+        for i in params {
+            // This cast is safe on 64bit since we've already sorted out
+            // all negative cases above.
+            let idx = i.as_i64().unwrap() as usize;
+            if let Some(kp) = keypairs.get(idx) {
+                ret.push(Some(Address::from(kp.public).to_string()));
+            } else {
+                ret.push(None)
             }
         }
 
@@ -93,9 +110,10 @@ impl Darkfid {
     // RPCAPI:
     // Exports the given keypair index.
     // Returns the encoded secret key upon success.
+    //
     // --> {"jsonrpc": "2.0", "method": "wallet.export_keypair", "params": [0], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "foobar", "id": 1}
-    pub async fn export_keypair(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_export_keypair(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_u64() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -103,8 +121,8 @@ impl Darkfid {
         let keypairs = match self.client.get_keypairs().await {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed fetching keypairs: {}", e);
-                return server_error(RpcError::KeypairFetch, id)
+                error!("[RPC] wallet.export_keypair: Failed fetching keypairs: {}", e);
+                return server_error(RpcError::KeypairFetch, id, None)
             }
         };
 
@@ -112,15 +130,16 @@ impl Darkfid {
             return JsonResponse::new(json!(kp.secret.to_bytes()), id).into()
         }
 
-        server_error(RpcError::KeypairNotFound, id)
+        server_error(RpcError::KeypairNotFound, id, None)
     }
 
     // RPCAPI:
     // Imports a given secret key into the wallet as a keypair.
     // Returns the public counterpart as the result upon success.
+    //
     // --> {"jsonrpc": "2.0", "method": "wallet.import_keypair", "params": ["foobar"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "pubfoobar", "id": 1}
-    pub async fn import_keypair(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_import_keypair(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -128,16 +147,16 @@ impl Darkfid {
         let bytes: [u8; 32] = match serde_json::from_str(params[0].as_str().unwrap()) {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed parsing secret key from string: {}", e);
-                return server_error(RpcError::InvalidKeypair, id)
+                error!("[RPC] wallet.import_keypair: Failed parsing secret key from string: {}", e);
+                return server_error(RpcError::InvalidKeypair, id, None)
             }
         };
 
         let secret = match SecretKey::from_bytes(bytes) {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed parsing secret key from string: {}", e);
-                return server_error(RpcError::InvalidKeypair, id)
+                error!("[RPC] wallet.import_keypair: Failed parsing secret key from string: {}", e);
+                return server_error(RpcError::InvalidKeypair, id, None)
             }
         };
 
@@ -145,13 +164,10 @@ impl Darkfid {
         let keypair = Keypair { secret, public };
         let address = Address::from(public).to_string();
 
-        match self.client.put_keypair(&keypair).await {
-            Ok(()) => {}
-            Err(e) => {
-                error!("Failed inserting keypair into wallet: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
+        if let Err(e) = self.client.put_keypair(&keypair).await {
+            error!("[RPC] wallet.import_keypair: Failed inserting keypair into wallet: {}", e);
+            return JsonError::new(InternalError, None, id).into()
+        }
 
         JsonResponse::new(json!(address), id).into()
     }
@@ -159,9 +175,10 @@ impl Darkfid {
     // RPCAPI:
     // Sets the default wallet address to the given index.
     // Returns `true` upon success.
+    //
     // --> {"jsonrpc": "2.0", "method": "wallet.set_default_address", "params": [2], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    pub async fn set_default_address(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_set_default_address(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_u64() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -171,23 +188,21 @@ impl Darkfid {
         let keypairs = match self.client.get_keypairs().await {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed fetching keypairs: {}", e);
-                return server_error(RpcError::KeypairFetch, id)
+                error!("[RPC] wallet.set_default_address: Failed fetching keypairs: {}", e);
+                return server_error(RpcError::KeypairFetch, id, None)
             }
         };
 
         if keypairs.len() as u64 != idx - 1 {
-            return server_error(RpcError::KeypairNotFound, id)
+            return server_error(RpcError::KeypairNotFound, id, None)
         }
 
         let kp = keypairs[idx as usize];
-        match self.client.set_default_keypair(&kp.public).await {
-            Ok(()) => {}
-            Err(e) => {
-                error!("Failed setting default keypair: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
+
+        if let Err(e) = self.client.set_default_keypair(&kp.public).await {
+            error!("[RPC] wallet.set_default_address: Failed setting default keypair: {}", e);
+            return JsonError::new(InternalError, None, id).into()
+        }
 
         JsonResponse::new(json!(true), id).into()
     }
@@ -195,13 +210,14 @@ impl Darkfid {
     // RPCAPI:
     // Queries the wallet for known tokens with active balances.
     // Returns a map of balances, indexed by the token ID.
+    //
     // --> {"jsonrpc": "2.0", "method": "wallet.get_balances", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [{"1Foobar...": 100}, {...}]", "id": 1}
-    pub async fn get_balances(&self, id: Value, _params: &[Value]) -> JsonResult {
+    pub async fn wallet_get_balances(&self, id: Value, _params: &[Value]) -> JsonResult {
         let balances = match self.client.get_balances().await {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed fetching balances from wallet: {}", e);
+                error!("[RPC] wallet.get_balances: Failed fetching balances from wallet: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -229,7 +245,7 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "wallet.get_coins_valtok", "params": [1234, "F00b4r...", true], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["coin", "data", ...], "id": 1}
-    pub async fn get_coins_valtok(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_get_coins_valtok(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 3 ||
             !params[0].is_u64() ||
             !params[1].is_string() ||
@@ -243,7 +259,7 @@ impl Darkfid {
         let token_id = match token_id::parse_b58(params[1].as_str().unwrap()) {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed parsing token_id from base58 string: {}", e);
+                error!("[RPC] wallet.get_coins_valtok: Failed parsing token_id from base58: {}", e);
                 return JsonError::new(ParseError, None, id).into()
             }
         };
@@ -251,7 +267,7 @@ impl Darkfid {
         let coins = match self.client.get_coins_valtok(value, token_id, unspent).await {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed fetching coins by valtok from wallet: {}", e);
+                error!("[RPC] wallet.get_coins_valtok: Failed fetching from wallet: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -263,9 +279,10 @@ impl Darkfid {
 
     // RPCAPI:
     // Query the state merkle tree for the merkle path of a given leaf position.
+    //
     // --> {"jsonrpc": "2.0", "method": "wallet.get_merkle_path", "params": [3], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["f091uf1...", "081ff0h10w1h0...", ...], "id": 1}
-    pub async fn get_merkle_path(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_get_merkle_path(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_u64() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -288,9 +305,10 @@ impl Darkfid {
     // RPCAPI:
     // Try to decrypt a given encrypted note with the secret keys
     // found in the wallet.
+    //
     // --> {"jsonrpc": "2.0", "method": "wallet.decrypt_note", params": [ciphertext], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "base58_encoded_plain_note", "id": 1}
-    pub async fn decrypt_note(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn wallet_decrypt_note(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -298,7 +316,7 @@ impl Darkfid {
         let bytes = match bs58::decode(params[0].as_str().unwrap()).into_vec() {
             Ok(v) => v,
             Err(e) => {
-                error!("decrypt_note(): Failed decoding base58 string: {}", e);
+                error!("[RPC] wallet.decrypt_note: Failed decoding base58 string: {}", e);
                 return JsonError::new(ParseError, None, id).into()
             }
         };
@@ -306,7 +324,7 @@ impl Darkfid {
         let enc_note = match deserialize(&bytes) {
             Ok(v) => v,
             Err(e) => {
-                error!("decrypt_note(): Failed deserializing bytes into EncryptedNote: {}", e);
+                error!("[RPC] wallet.decrypt_note: Failed deserializing into EncryptedNote: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -314,7 +332,7 @@ impl Darkfid {
         let keypairs = match self.client.get_keypairs().await {
             Ok(v) => v,
             Err(e) => {
-                error!("decrypt_note(): Failed fetching keypairs: {}", e);
+                error!("[RPC] wallet.decrypt_note: Failed fetching keypairs: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -326,6 +344,6 @@ impl Darkfid {
             }
         }
 
-        server_error(RpcError::DecryptionFailed, id)
+        server_error(RpcError::DecryptionFailed, id, None)
     }
 }

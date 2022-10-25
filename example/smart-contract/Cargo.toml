@@ -1,6 +1,8 @@
 [package]
 name = "smart-contract"
 version = "0.3.0"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
 edition = "2021"
 
 [workspace]
@@ -8,19 +10,21 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[dependencies]
-borsh = "0.9.3"
-drk-sdk = { path = "../../src/sdk" }
-
-[dependencies.pasta_curves]
-git = "https://github.com/darkrenaissance/pasta_curves"
-branch = "serialization-support"
-features = ["borsh"]
-
-[dev-dependencies]
-darkfi = { path = "../../", features = ["wasm-runtime"] }
-
 [profile.release]
 lto = true
 codegen-units = 1
 overflow-checks = true
+
+[dependencies]
+darkfi-sdk = { path = "../../src/sdk" }
+#darkfi = { path = "../../", features = [] }
+darkfi-serial = { path = "../../src/serial" }
+
+# We need to disable random using "custom" which makes the crate a noop
+# so the wasm32-unknown-unknown target is enabled.
+getrandom = { version = "0.2", features = ["custom"] }
+
+[dev-dependencies]
+darkfi = { path = "../../", features = ["wasm-runtime"] }
+simplelog = "0.12.0"
+

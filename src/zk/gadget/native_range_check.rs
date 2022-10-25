@@ -1,7 +1,9 @@
-use group::ff::{Field, PrimeFieldBits};
 use halo2_proofs::{
     circuit::{AssignedCell, Chip, Layouter, Region, Value},
-    pasta::pallas,
+    pasta::{
+        group::ff::{Field, PrimeFieldBits},
+        pallas,
+    },
     plonk,
     plonk::{Advice, Column, ConstraintSystem, Selector, TableColumn},
     poly::Rotation,
@@ -201,13 +203,12 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 mod tests {
     use super::*;
     use crate::zk::assign_free_advice;
-    use group::ff::PrimeField;
     use halo2_proofs::{
         circuit::floor_planner,
         dev::{CircuitLayout, MockProver},
         plonk::Circuit,
     };
-    use pasta_curves::arithmetic::FieldExt;
+    use pasta_curves::{arithmetic::FieldExt, group::ff::PrimeField};
 
     macro_rules! test_circuit {
         ($window_size:expr, $num_bits:expr, $num_windows:expr) => {

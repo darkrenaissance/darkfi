@@ -1,21 +1,17 @@
 use std::str::FromStr;
 
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use futures_lite::future;
 use log::{debug, error, info};
-use serde_derive::Deserialize;
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
     consensus::{
         proto::{
-            ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx,
-            ProtocolVote,
+            ProtocolKeepAlive, ProtocolParticipant, ProtocolProposal, ProtocolSync,
+            ProtocolSyncConsensus, ProtocolTx,
         },
         state::ValidatorStatePtr,
         task::{block_sync_task, proposal_task},
@@ -27,18 +23,14 @@ use darkfi::{
     net::P2pPtr,
     node::Client,
     rpc::{
+        clock_sync::check_clock,
         jsonrpc::{
             ErrorCode::{InvalidParams, MethodNotFound},
             JsonError, JsonRequest, JsonResult,
         },
         server::{listen_and_serve, RequestHandler},
     },
-    util::{
-        cli::{get_log_config, get_log_level, spawn_config},
-        expand_path,
-        path::get_config_path,
-        time::check_clock,
-    },
+    util::path::expand_path,
     wallet::walletdb::init_wallet,
     Error, Result,
 };
@@ -142,6 +134,10 @@ struct Args {
     localnet: bool,
 
     #[structopt(long)]
+    /// Enable channel log
+    channel_log: bool,
+
+    #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
     cashier_pub: Vec<String>,
 
@@ -172,6 +168,9 @@ mod rpc_misc;
 mod rpc_tx;
 mod rpc_wallet;
 
+// Internal methods
+mod internal;
+
 #[async_trait]
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
@@ -182,22 +181,52 @@ impl RequestHandler for Darkfid {
         let params = req.params.as_array().unwrap();
 
         match req.method.as_str() {
-            Some("ping") => return self.pong(req.id, params).await,
-            Some("clock") => return self.clock(req.id, params).await,
-            Some("blockchain.get_slot") => return self.get_slot(req.id, params).await,
-            Some("blockchain.merkle_roots") => return self.merkle_roots(req.id, params).await,
-            Some("tx.transfer") => return self.transfer(req.id, params).await,
-            Some("wallet.keygen") => return self.keygen(req.id, params).await,
-            Some("wallet.get_addrs") => return self.get_addrs(req.id, params).await,
-            Some("wallet.export_keypair") => return self.export_keypair(req.id, params).await,
-            Some("wallet.import_keypair") => return self.import_keypair(req.id, params).await,
-            Some("wallet.set_default_address") => {
-                return self.set_default_address(req.id, params).await
+            // =====================
+            // Miscellaneous methods
+            // =====================
+            Some("ping") => return self.misc_pong(req.id, params).await,
+            Some("clock") => return self.misc_clock(req.id, params).await,
+
+            // ==================
+            // Blockchain methods
+            // ==================
+            Some("blockchain.get_slot") => return self.blockchain_get_slot(req.id, params).await,
+            Some("blockchain.merkle_roots") => {
+                return self.blockchain_merkle_roots(req.id, params).await
             }
-            Some("wallet.get_balances") => return self.get_balances(req.id, params).await,
-            Some("wallet.get_coins_valtok") => return self.get_coins_valtok(req.id, params).await,
-            Some("wallet.get_merkle_path") => return self.get_merkle_path(req.id, params).await,
-            Some("wallet.decrypt_note") => return self.decrypt_note(req.id, params).await,
+
+            // ===================
+            // Transaction methods
+            // ===================
+            Some("tx.transfer") => return self.tx_transfer(req.id, params).await,
+            Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
+
+            // ==============
+            // Wallet methods
+            // ==============
+            Some("wallet.keygen") => return self.wallet_keygen(req.id, params).await,
+            Some("wallet.get_addrs") => return self.wallet_get_addrs(req.id, params).await,
+            Some("wallet.export_keypair") => {
+                return self.wallet_export_keypair(req.id, params).await
+            }
+            Some("wallet.import_keypair") => {
+                return self.wallet_import_keypair(req.id, params).await
+            }
+            Some("wallet.set_default_address") => {
+                return self.wallet_set_default_address(req.id, params).await
+            }
+            Some("wallet.get_balances") => return self.wallet_get_balances(req.id, params).await,
+            Some("wallet.get_coins_valtok") => {
+                return self.wallet_get_coins_valtok(req.id, params).await
+            }
+            Some("wallet.get_merkle_path") => {
+                return self.wallet_get_merkle_path(req.id, params).await
+            }
+            Some("wallet.decrypt_note") => return self.wallet_decrypt_note(req.id, params).await,
+
+            // ==============
+            // Invalid method
+            // ==============
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
@@ -224,7 +253,7 @@ impl Darkfid {
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     if args.consensus && args.clock_sync {
         // We verify that if peer/seed nodes are configured, their rpc config also exists
         if ((!args.consensus_p2p_peer.is_empty() && args.consensus_peer_rpc.is_empty()) ||
@@ -239,7 +268,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
         // We verify that the system clock is valid before initializing
         let peers = [&args.consensus_peer_rpc[..], &args.consensus_seed_rpc[..]].concat();
-        if (check_clock(peers).await).is_err() {
+        if (check_clock(&peers).await).is_err() {
             error!("System clock is invalid, terminating...");
             return Err(Error::InvalidClock)
         };
@@ -248,7 +277,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // We use this handler to block this function after detaching all
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
-    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
     ctrlc::set_handler(move || {
         async_std::task::block_on(signal.send(())).unwrap();
     })
@@ -258,6 +287,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
 
     // Initialize or open sled database
+    // TODO: Use proper OsPath here, not {}/{}
     let db_path = format!("{}/{}", expand_path(&args.database)?.to_str().unwrap(), args.chain);
     let sled_db = sled::open(&db_path)?;
 
@@ -312,6 +342,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             seeds: args.sync_p2p_seed.clone(),
             outbound_transports: net::settings::get_outbound_transports(args.sync_p2p_transports),
             localnet: args.localnet,
+            channel_log: args.channel_log,
             ..Default::default()
         };
 
@@ -357,6 +388,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
                     args.consensus_p2p_transports,
                 ),
                 localnet: args.localnet,
+                channel_log: args.channel_log,
                 ..Default::default()
             };
             let p2p = net::P2p::new(consensus_network_settings).await;
@@ -374,21 +406,15 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             registry
                 .register(net::SESSION_ALL, move |channel, p2p| {
                     let state = _state.clone();
-                    async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
+                    async move { ProtocolKeepAlive::init(channel, state, p2p).await.unwrap() }
                 })
                 .await;
 
             let _state = state.clone();
-            let _sync_p2p = sync_p2p.clone().unwrap();
             registry
                 .register(net::SESSION_ALL, move |channel, p2p| {
                     let state = _state.clone();
-                    let __sync_p2p = _sync_p2p.clone();
-                    async move {
-                        ProtocolVote::init(channel, state, __sync_p2p, p2p)
-                            .await
-                            .unwrap()
-                    }
+                    async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
                 })
                 .await;
 
@@ -448,7 +474,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         consensus_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
 
         info!("Starting consensus protocol task");
-        ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state)).detach();
+        let _ex = ex.clone();
+        ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state, _ex)).detach();
     } else {
         info!("Not starting consensus P2P network");
     }

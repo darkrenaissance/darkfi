@@ -1,3 +1,4 @@
+// ANCHOR: error
 use std::{error, fmt};
 
 #[derive(Debug, Clone)]
@@ -10,3 +11,4 @@ impl fmt::Display for ErrorMissingSpecifier {
 }
 
 impl error::Error for ErrorMissingSpecifier {}
+// ANCHOR_END: error

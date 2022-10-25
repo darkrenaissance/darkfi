@@ -9,7 +9,7 @@ handle to the p2p network contained in the `Dchat` struct. It will then
 call `register()` on the registry and pass the `ProtocolDchat` constructor.
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:86:97}}
+{{#include ../../../../../example/dchat/src/main.rs:register_protocol}}
 ```
 
 There's a lot going on here. `register()` takes a closure with two
@@ -40,33 +40,50 @@ in `main()` and pass it to `Dchat::new()`. Let's add `DchatMsgsBuffer` to the
 `Dchat` struct definition first.
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:13:16}}
-{{#include ../../../../../example/dchat/src/main.rs:18}}
-
-{{#include ../../../../../example/dchat/src/main.rs:28:36}}
-    //...
-{{#include ../../../../../example/dchat/src/main.rs:121}}
+{{#include ../../../../../example/dchat/src/main.rs:dchat}}
 ```
 
 And initialize it:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:183:184}}
+#[async_std::main]
+async fn main() -> Result<()> {
     //...
-{{#include ../../../../../example/dchat/src/main.rs:205}}
 
-    let mut dchat = Dchat::new(p2p, msgs);
+    let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
+
+    let mut dchat = Dchat::new(p2p.clone(), msgs);
+
     //...
-{{#include ../../../../../example/dchat/src/main.rs:224}}
+    let (_, result) = Parallel::new()
+        .each(0..nthreads, |_| smol::future::block_on(ex2.run(shutdown.recv())))
+        .finish(|| {
+            smol::future::block_on(async move {
+                dchat.start(ex3).await?;
+                drop(signal);
+                Ok(())
+            })
+        });
+
+    result
+}
 ```
 
 Finally, call `register_protocol()` in `dchat::start()`:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:99:105}}
-        self.p2p.clone().run(ex.clone()).await?;
+    async fn start(&mut self, ex: Arc<Executor<'_>>) -> Result<()> {
+        let ex2 = ex.clone();
 
-{{#include ../../../../../example/dchat/src/main.rs:110:114}}
+        self.register_protocol(self.recv_msgs.clone()).await?;
+        self.p2p.clone().start(ex.clone()).await?;
+        ex2.spawn(self.p2p.clone().run(ex.clone())).detach();
+
+        self.p2p.stop().await;
+
+        Ok(())
+    }
+
 ```
 Now try running Alice and Bob and seeing what debug output you get. Keep
 an eye out for the following:

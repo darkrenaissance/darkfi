@@ -2,7 +2,7 @@ use std::process::exit;
 
 use halo2_proofs::pasta::group::ff::PrimeField;
 
-use darkfi::{crypto::types::DrkTokenId, util::decode_base10, Result};
+use darkfi::{crypto::types::DrkTokenId, util::parse::decode_base10, Result};
 
 pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     let v: Vec<&str> = s.split(':').collect();

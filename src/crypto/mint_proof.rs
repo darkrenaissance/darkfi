@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve};
@@ -16,7 +17,6 @@ use crate::{
         },
         util::{pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
     },
-    util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::mint_contract::MintContract,
     Result,
 };

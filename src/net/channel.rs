@@ -1,5 +1,4 @@
 use async_std::sync::{Arc, Mutex};
-
 use futures::{
     io::{ReadHalf, WriteHalf},
     AsyncReadExt,
@@ -10,16 +9,16 @@ use serde_json::json;
 use smol::Executor;
 use url::Url;
 
-use crate::{
-    system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
-    util::NanoTimestamp,
-    Error, Result,
-};
-
 use super::{
     message,
     message_subscriber::{MessageSubscription, MessageSubsystem},
-    Session, SessionBitflag, SessionWeakPtr, TransportStream,
+    transport::TransportStream,
+    Session, SessionBitflag, SessionWeakPtr,
+};
+use crate::{
+    system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
+    util::time::NanoTimestamp,
+    Error, Result,
 };
 
 /// Atomic pointer to async channel.
@@ -31,31 +30,46 @@ struct ChannelInfo {
     last_msg: String,
     last_status: String,
     // Message log which is cleared on querying get_info
-    log: Mutex<Vec<(NanoTimestamp, String, String)>>,
+    log: Option<Mutex<Vec<(NanoTimestamp, String, String)>>>,
 }
 
 impl ChannelInfo {
-    fn new() -> Self {
+    fn new(channel_log: bool) -> Self {
+        let log = match channel_log {
+            true => Some(Mutex::new(Vec::new())),
+            false => None,
+        };
+
         Self {
             random_id: rand::thread_rng().gen(),
             remote_node_id: String::new(),
             last_msg: String::new(),
             last_status: String::new(),
-            log: Mutex::new(Vec::new()),
+            log,
         }
     }
 
+    // ANCHOR: get_info
     async fn get_info(&self) -> serde_json::Value {
-        let result = json!({
+        let log = match &self.log {
+            Some(l) => {
+                let mut lock = l.lock().await;
+                let ret = lock.clone();
+                *lock = Vec::new();
+                ret
+            }
+            None => vec![],
+        };
+
+        json!({
             "random_id": self.random_id,
             "remote_node_id": self.remote_node_id,
             "last_msg": self.last_msg,
             "last_status": self.last_status,
-            "log": self.log.lock().await.clone(),
-        });
-        self.log.lock().await.clear();
-        result
+            "log": log,
+        })
     }
+    // ANCHOR_END: get_info
 }
 
 /// Async channel for communication between nodes.
@@ -87,6 +101,8 @@ impl Channel {
         let message_subsystem = MessageSubsystem::new();
         Self::setup_dispatchers(&message_subsystem).await;
 
+        let channel_log = session.upgrade().unwrap().p2p().settings().channel_log;
+
         Arc::new(Self {
             reader,
             writer,
@@ -95,7 +111,7 @@ impl Channel {
             stop_subscriber: Subscriber::new(),
             receive_task: StoppableTask::new(),
             stopped: Mutex::new(false),
-            info: Mutex::new(ChannelInfo::new()),
+            info: Mutex::new(ChannelInfo::new(channel_log)),
             session,
         })
     }
@@ -211,7 +227,9 @@ impl Channel {
 
         {
             let info = &mut *self.info.lock().await;
-            info.log.lock().await.push((time, "send".to_string(), packet.command.clone()));
+            if let Some(l) = &info.log {
+                l.lock().await.push((time, "send".to_string(), packet.command.clone()));
+            };
         }
 
         let stream = &mut *self.writer.lock().await;
@@ -262,6 +280,7 @@ impl Channel {
         message_subsystem.add_dispatch::<message::PongMessage>().await;
         message_subsystem.add_dispatch::<message::GetAddrsMessage>().await;
         message_subsystem.add_dispatch::<message::AddrsMessage>().await;
+        message_subsystem.add_dispatch::<message::ExtAddrsMessage>().await;
     }
 
     /// Convenience function that returns the Message Subsystem.
@@ -302,7 +321,9 @@ impl Channel {
                 info.last_status = "recv".to_string();
                 let time = NanoTimestamp::current_time();
                 //let time = time::unix_timestamp()?;
-                info.log.lock().await.push((time, "recv".to_string(), packet.command.clone()));
+                if let Some(l) = &info.log {
+                    l.lock().await.push((time, "recv".to_string(), packet.command.clone()));
+                };
             }
 
             // Send result to our subscribers

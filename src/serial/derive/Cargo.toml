@@ -1,0 +1,19 @@
+[package]
+name = "darkfi-derive"
+version = "0.3.0"
+homepage = "https://dark.fi"
+description = "Crate for serialization derive macros"
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro-crate = "1.2.1"
+proc-macro2 = "1.0.46"
+syn = {version = "1.0.101", features = ["full", "fold"]}
+
+darkfi-derive-internal = {path = "../derive-internal"}

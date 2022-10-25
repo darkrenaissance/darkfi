@@ -5,7 +5,7 @@ use log::{debug, error};
 use rand::Rng;
 use smol::Executor;
 
-use crate::{util::sleep, Error, Result};
+use crate::{util::async_util::sleep, Error, Result};
 
 use super::{
     super::{message, message_subscriber::MessageSubscription, ChannelPtr, P2pPtr, SettingsPtr},

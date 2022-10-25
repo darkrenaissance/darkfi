@@ -1,26 +1,26 @@
+use std::time::Instant;
+
+use darkfi_sdk::crypto::{MerkleNode, Nullifier};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use rand::rngs::OsRng;
-use std::time::Instant;
 
 use super::{
-    nullifier::Nullifier,
     proof::{Proof, ProvingKey, VerifyingKey},
     util::{pedersen_commitment_base, pedersen_commitment_u64},
 };
 use crate::{
     crypto::{
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         types::{
             DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
             DrkUserDataBlind, DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
         },
         util::poseidon_hash,
     },
-    util::serial::{SerialDecodable, SerialEncodable},
     zk::circuit::burn_contract::BurnContract,
     Result,
 };
@@ -53,7 +53,7 @@ impl BurnRevealedValues {
         user_data_blind: DrkUserDataBlind,
         signature_secret: SecretKey,
     ) -> Self {
-        let nullifier = poseidon_hash::<2>([secret.0, serial]);
+        let nullifier = Nullifier::from(poseidon_hash::<2>([secret.inner(), serial]));
 
         let public_key = PublicKey::from_secret(secret);
         let coords = public_key.0.to_affine().coordinates().unwrap();
@@ -71,7 +71,7 @@ impl BurnRevealedValues {
 
         let merkle_root = {
             let position: u64 = leaf_position.into();
-            let mut current = MerkleNode(coin);
+            let mut current = MerkleNode::from(coin);
             for (level, sibling) in merkle_path.iter().enumerate() {
                 let level = level as u8;
                 current = if position & (1 << level) == 0 {
@@ -91,7 +91,7 @@ impl BurnRevealedValues {
         BurnRevealedValues {
             value_commit,
             token_commit,
-            nullifier: Nullifier(nullifier),
+            nullifier,
             merkle_root,
             spend_hook,
             user_data_enc,
@@ -102,7 +102,7 @@ impl BurnRevealedValues {
     pub fn make_outputs(&self) -> Vec<DrkCircuitField> {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
-        let merkle_root = self.merkle_root.0;
+        let merkle_root = self.merkle_root.inner();
         let user_data_enc = self.user_data_enc;
         let sig_coords = self.signature_public.0.to_affine().coordinates().unwrap();
 
@@ -156,7 +156,7 @@ pub fn create_burn_proof(
     let leaf_position: u64 = leaf_position.into();
 
     let c = BurnContract {
-        secret_key: Value::known(secret.0),
+        secret_key: Value::known(secret.inner()),
         serial: Value::known(serial),
         value: Value::known(DrkValue::from(value)),
         token: Value::known(token_id),
@@ -168,7 +168,7 @@ pub fn create_burn_proof(
         spend_hook: Value::known(spend_hook),
         user_data: Value::known(user_data),
         user_data_blind: Value::known(user_data_blind),
-        sig_secret: Value::known(signature_secret.0),
+        sig_secret: Value::known(signature_secret.inner()),
     };
 
     let start = Instant::now();

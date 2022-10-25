@@ -1,0 +1,29 @@
+[package]
+name = "darkfi-serial"
+version = "0.3.0"
+homepage = "https://dark.fi"
+description = "DarkFi serialization library"
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[dependencies]
+darkfi-derive = {path = "./derive", optional = true}
+futures-lite = {version = "1.12.0", optional = true}
+
+# Supported types for encoding
+blake3 = {version = "1.3.1", optional = true}
+fxhash = {version = "0.2.1", optional = true}
+incrementalmerkletree = {version = "0.3.0", optional = true}
+pasta_curves = {version = "0.4.0", optional = true}
+url = {version = "2.3.1", optional = true}
+
+[features]
+default = ["derive"]
+derive = ["darkfi-derive"]
+
+async = ["futures-lite"]
+collections = ["fxhash"]
+crypto = ["collections", "hash", "incrementalmerkletree", "pasta_curves"]
+hash = ["blake3"]

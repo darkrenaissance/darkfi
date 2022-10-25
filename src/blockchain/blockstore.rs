@@ -1,9 +1,8 @@
+use darkfi_serial::{deserialize, serialize};
+
 use crate::{
     consensus::{Block, Header},
-    util::{
-        serial::{deserialize, serialize},
-        time::Timestamp,
-    },
+    util::time::Timestamp,
     Error, Result,
 };
 

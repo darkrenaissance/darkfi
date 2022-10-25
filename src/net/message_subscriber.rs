@@ -1,15 +1,12 @@
 use async_std::sync::Mutex;
-use std::{any::Any, io, io::Cursor, sync::Arc};
+use std::{any::Any, io::Cursor, sync::Arc};
 
 use async_trait::async_trait;
 use fxhash::FxHashMap;
 use log::{debug, warn};
 use rand::Rng;
 
-use crate::{
-    util::serial::{Decodable, Encodable},
-    Error, Result,
-};
+use crate::{Error, Result};
 
 use super::message::Message;
 
@@ -21,7 +18,7 @@ type MessageResult<M> = Result<Arc<M>>;
 /// channel.
 pub struct MessageSubscription<M: Message> {
     id: MessageSubscriptionId,
-    recv_queue: async_channel::Receiver<MessageResult<M>>,
+    recv_queue: smol::channel::Receiver<MessageResult<M>>,
     parent: Arc<MessageDispatcher<M>>,
 }
 
@@ -54,7 +51,7 @@ trait MessageDispatcherInterface: Send + Sync {
 
 /// A dispatchers that is unique to every Message. Maintains a list of subscribers that are subscribed to that unique Message type and handles sending messages across these subscriptions.
 struct MessageDispatcher<M: Message> {
-    subs: Mutex<FxHashMap<MessageSubscriptionId, async_channel::Sender<MessageResult<M>>>>,
+    subs: Mutex<FxHashMap<MessageSubscriptionId, smol::channel::Sender<MessageResult<M>>>>,
 }
 
 impl<M: Message> MessageDispatcher<M> {
@@ -72,7 +69,7 @@ impl<M: Message> MessageDispatcher<M> {
     /// Subscribe to a channel. Assigns a new ID and adds it to the list of
     /// subscribers.
     pub async fn subscribe(self: Arc<Self>) -> MessageSubscription<M> {
-        let (sender, recvr) = async_channel::unbounded();
+        let (sender, recvr) = smol::channel::unbounded();
         let sub_id = Self::random_id();
         self.subs.lock().await.insert(sub_id, sender);
 
@@ -239,70 +236,68 @@ impl Default for MessageSubsystem {
 // Normall we would use the #[test] macro but cannot since it is async code
 // Instead we call it using smol::block_on() in the unit test code after this
 // func
-async fn _do_message_subscriber_test() {
-    struct MyVersionMessage {
-        x: u32,
-    }
-
-    impl Message for MyVersionMessage {
-        fn name() -> &'static str {
-            "verver"
-        }
-    }
-
-    impl Encodable for MyVersionMessage {
-        fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-            let mut len = 0;
-            len += self.x.encode(&mut s)?;
-            Ok(len)
-        }
-    }
-
-    impl Decodable for MyVersionMessage {
-        fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-            Ok(Self { x: Decodable::decode(&mut d)? })
-        }
-    }
-    println!("hello");
-
-    let subsystem = MessageSubsystem::new();
-    subsystem.add_dispatch::<MyVersionMessage>().await;
-
-    // subscribe
-    //   1. get dispatcher
-    //   2. cast to specific type
-    //   3. do sub, return sub
-    let sub = subsystem.subscribe::<MyVersionMessage>().await.unwrap();
-
-    let msg = MyVersionMessage { x: 110 };
-    let mut payload = Vec::new();
-    msg.encode(&mut payload).unwrap();
-
-    // receive message and publish
-    //   1. based on string, lookup relevant dispatcher interface
-    //   2. publish data there
-    subsystem.notify("verver", payload).await;
-
-    // receive
-    //    1. do a get easy
-    let msg2 = sub.receive().await.unwrap();
-    assert_eq!(msg2.x, 110);
-    println!("{}", msg2.x);
-
-    subsystem.trigger_error(Error::ChannelStopped).await;
-
-    let msg2 = sub.receive().await;
-    assert!(msg2.is_err());
-
-    sub.unsubscribe().await;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use darkfi_serial::{Decodable, Encodable};
+    use std::io;
 
-    #[test]
-    fn test_message_subscriber() {
-        smol::block_on(_do_message_subscriber_test());
+    #[async_std::test]
+    async fn message_subscriber_test() {
+        struct MyVersionMessage {
+            x: u32,
+        }
+
+        impl Message for MyVersionMessage {
+            fn name() -> &'static str {
+                "verver"
+            }
+        }
+
+        impl Encodable for MyVersionMessage {
+            fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
+                let mut len = 0;
+                len += self.x.encode(&mut s)?;
+                Ok(len)
+            }
+        }
+
+        impl Decodable for MyVersionMessage {
+            fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
+                Ok(Self { x: Decodable::decode(&mut d)? })
+            }
+        }
+        println!("hello");
+
+        let subsystem = MessageSubsystem::new();
+        subsystem.add_dispatch::<MyVersionMessage>().await;
+
+        // subscribe
+        //   1. get dispatcher
+        //   2. cast to specific type
+        //   3. do sub, return sub
+        let sub = subsystem.subscribe::<MyVersionMessage>().await.unwrap();
+
+        let msg = MyVersionMessage { x: 110 };
+        let mut payload = Vec::new();
+        msg.encode(&mut payload).unwrap();
+
+        // receive message and publish
+        //   1. based on string, lookup relevant dispatcher interface
+        //   2. publish data there
+        subsystem.notify("verver", payload).await;
+
+        // receive
+        //    1. do a get easy
+        let msg2 = sub.receive().await.unwrap();
+        assert_eq!(msg2.x, 110);
+        println!("{}", msg2.x);
+
+        subsystem.trigger_error(Error::ChannelStopped).await;
+
+        let msg2 = sub.receive().await;
+        assert!(msg2.is_err());
+
+        sub.unsubscribe().await;
     }
 }

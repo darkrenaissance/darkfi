@@ -1,15 +1,12 @@
 use std::{collections::HashMap, str::FromStr};
 
-use async_executor::Executor;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
-use futures_lite::future;
+use darkfi_serial::serialize;
 use log::{debug, error, info};
-use serde_derive::Deserialize;
 use serde_json::{json, Value};
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use darkfi::{
@@ -31,13 +28,7 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
-    util::{
-        cli::{get_log_config, get_log_level, spawn_config},
-        decode_base10, expand_path,
-        path::get_config_path,
-        serial::serialize,
-        sleep,
-    },
+    util::{async_util::sleep, parse::decode_base10, path::expand_path},
     wallet::walletdb::init_wallet,
     Error, Result,
 };
@@ -103,6 +94,10 @@ struct Args {
     #[structopt(long)]
     /// Enable localnet hosts
     localnet: bool,
+
+    #[structopt(long)]
+    /// Enable channel log
+    channel_log: bool,
 
     #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
@@ -174,6 +169,7 @@ impl Faucetd {
     // RPCAPI:
     // Processes an airdrop request and airdrops requested token and amount to address.
     // Returns the transaction ID upon success.
+    //
     // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42, "1F00b4r..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
     async fn airdrop(&self, id: Value, params: &[Value]) -> JsonResult {
@@ -302,11 +298,11 @@ async fn prune_airdrop_map(map: Arc<Mutex<HashMap<Address, i64>>>, timeout: i64)
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // We use this handler to block this function after detaching all
     // tasks, and to catch a shutdown signal, where we can clean up and
     // exit gracefully.
-    let (signal, shutdown) = async_channel::bounded::<()>(1);
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
     ctrlc::set_handler(move || {
         async_std::task::block_on(signal.send(())).unwrap();
     })
@@ -370,6 +366,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         seeds: args.sync_p2p_seed.clone(),
         outbound_transports: net::settings::get_outbound_transports(args.sync_p2p_transports),
         localnet: args.localnet,
+        channel_log: args.channel_log,
         ..Default::default()
     };
 

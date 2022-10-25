@@ -1,17 +1,16 @@
 // Example transaction flow
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{group::ff::Field, pallas};
 use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
-        constants::MERKLE_DEPTH,
+        coin::OwnCoin,
         keypair::{Keypair, PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
-        nullifier::Nullifier,
         proof::{ProvingKey, VerifyingKey},
-        OwnCoin, OwnCoins,
+        util::poseidon_hash,
     },
     node::state::{state_transition, ProgramState, StateUpdate},
     tx::builder::{
@@ -36,7 +35,7 @@ struct MemoryState {
     // spent. Maybe the spend field links to a tx hash:input index.
     // We should also keep track of the tx hash:output index where
     // this coin was received.
-    own_coins: OwnCoins,
+    own_coins: Vec<OwnCoin>,
     /// Verifying key for the mint zk circuit.
     mint_vk: VerifyingKey,
     /// Verifying key for the burn zk circuit.
@@ -86,7 +85,7 @@ impl MemoryState {
         // Update merkle tree and witnesses
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.into_iter()) {
             // Add the new coins to the Merkle tree
-            let node = MerkleNode(coin.0);
+            let node = MerkleNode::from(coin.0);
             self.tree.append(&node);
 
             // Keep track of all Merkle roots that have existed
@@ -95,7 +94,7 @@ impl MemoryState {
             // If it's our own coin, witness it and append to the vector.
             if let Some((note, secret)) = self.try_decrypt_note(enc_note) {
                 let leaf_position = self.tree.witness().unwrap();
-                let nullifier = Nullifier::new(secret, note.serial);
+                let nullifier = Nullifier::from(poseidon_hash::<2>([secret.inner(), note.serial]));
                 let own_coin = OwnCoin { coin, note, secret, nullifier, leaf_position };
                 self.own_coins.push(own_coin);
             }

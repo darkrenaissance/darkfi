@@ -22,6 +22,7 @@ earlier in Alice and Bob's settings.
 ```toml
 [network."dchat"]
 port = 50515
+localnet = true
 ```
 
 Now run `lilith`:

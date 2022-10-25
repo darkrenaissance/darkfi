@@ -1,4 +1,5 @@
 use crypto_api_chachapoly::ChachaPolyIetf;
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
 use crate::{
@@ -7,7 +8,6 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
     },
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable},
     Error, Result,
 };
 
@@ -57,7 +57,8 @@ impl EncryptedNote {
         let shared_secret = sapling_ka_agree(secret, &self.ephem_public);
         let key = kdf_sapling(&shared_secret, &self.ephem_public);
 
-        let mut plaintext = vec![0; self.ciphertext.len()];
+        let mut plaintext = vec![0; self.ciphertext.len() - AEAD_TAG_SIZE];
+
         assert_eq!(
             ChachaPolyIetf::aead_cipher()
                 .open_to(&mut plaintext, &self.ciphertext, &[], key.as_ref(), &[0u8; 12])
@@ -65,7 +66,8 @@ impl EncryptedNote {
             self.ciphertext.len() - AEAD_TAG_SIZE
         );
 
-        Note::decode(&plaintext[..])
+        let note = Note::decode(&plaintext[..])?;
+        Ok(note)
     }
 }
 
@@ -73,7 +75,7 @@ impl EncryptedNote {
 mod tests {
     use super::*;
     use crate::crypto::keypair::Keypair;
-    use group::ff::Field;
+    use pasta_curves::group::ff::Field;
 
     #[test]
     fn test_note_encdec() {

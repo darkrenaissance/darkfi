@@ -314,3 +314,13 @@ pub fn parse_configured_channels(data: &str) -> Result<FxHashMap<String, Channel
 
     Ok(ret)
 }
+
+pub fn get_current_time() -> u64 {
+    let start = std::time::SystemTime::now();
+    start
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_millis()
+        .try_into()
+        .unwrap()
+}

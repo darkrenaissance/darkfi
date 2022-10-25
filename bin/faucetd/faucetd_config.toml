@@ -42,6 +42,9 @@
 # Enable localnet hosts
 #localnet = true
 
+# Enable channel log
+#channel_log = true
+
 # Airdrop timeout limit in seconds
 #airdrop_timeout = 600
 

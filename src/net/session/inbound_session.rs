@@ -1,10 +1,10 @@
 use async_std::sync::{Arc, Mutex, Weak};
 
-use async_executor::Executor;
 use async_trait::async_trait;
 use fxhash::FxHashMap;
 use log::{error, info};
 use serde_json::json;
+use smol::Executor;
 use url::Url;
 
 use crate::{

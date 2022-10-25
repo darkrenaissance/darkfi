@@ -15,6 +15,8 @@ for the P2P IRC daemon.
 This project requires the Rust compiler to be installed. 
 Please visit [Rustup](https://rustup.rs/) for instructions.
 
+Minimum Rust version supported is **1.64.0**.
+
 The following dependencies are also required:
 
 |          Dependency          |   Debian-based   |   
@@ -84,7 +86,7 @@ in order for them to spawn a config file, which you can then review.
 ## Bash Completion
 This will add the options auto completion of `drk` and `darkfid`.
 ```shell
-% echo source $(pwd)/contrib/auto-complete >> ~/.bashrc
+% echo source \$(pwd)/contrib/auto-complete >> ~/.bashrc
 ```
 
 ### Examples and usage

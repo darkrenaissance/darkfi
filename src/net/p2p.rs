@@ -1,17 +1,17 @@
-use async_std::sync::{Arc, Mutex};
 use std::fmt;
 
-use async_executor::Executor;
-use futures::{select, try_join, FutureExt};
+use async_std::sync::{Arc, Mutex};
+use futures::{select, stream::FuturesUnordered, try_join, FutureExt, StreamExt, TryFutureExt};
 use fxhash::{FxHashMap, FxHashSet};
 use log::{debug, error, warn};
 use rand::Rng;
 use serde_json::json;
+use smol::Executor;
 use url::Url;
 
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
-    util::sleep,
+    util::async_util::sleep,
     Result,
 };
 
@@ -115,6 +115,7 @@ impl P2p {
         self_
     }
 
+    // ANCHOR: get_info
     pub async fn get_info(&self) -> serde_json::Value {
         // Building ext_addr_vec string
         let mut ext_addr_vec = vec![];
@@ -130,8 +131,10 @@ impl P2p {
             "state": self.state.lock().await.to_string(),
         })
     }
+    // ANCHOR_END: get_info
 
     /// Invoke startup and seeding sequence. Call from constructing thread.
+    // ANCHOR: start
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::start() [BEGIN]");
 
@@ -147,6 +150,7 @@ impl P2p {
         debug!(target: "net", "P2p::start() [END]");
         Ok(())
     }
+    // ANCHOR_END: start
 
     pub async fn session_manual(&self) -> Arc<ManualSession> {
         self.session_manual.lock().await.as_ref().unwrap().clone()
@@ -160,6 +164,7 @@ impl P2p {
 
     /// Runs the network. Starts inbound, outbound and manual sessions.
     /// Waits for a stop signal and stops the network if received.
+    // ANCHOR: run
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net", "P2p::run() [BEGIN]");
 
@@ -188,6 +193,7 @@ impl P2p {
         debug!(target: "net", "P2p::run() [END]");
         Ok(())
     }
+    // ANCHOR_END: run
 
     /// Wait for outbound connections to be established.
     pub async fn wait_for_outbound(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
@@ -275,7 +281,7 @@ impl P2p {
             // We use a timeout to eliminate the following cases:
             //  1. Network timeout
             //  2. Thread reaching the receiver after peer has signal it
-            let (timeout_s, timeout_r) = async_channel::unbounded::<()>();
+            let (timeout_s, timeout_r) = smol::channel::unbounded::<()>();
             executor
                 .spawn(async move {
                     sleep(timeout).await;
@@ -303,37 +309,78 @@ impl P2p {
         Ok(())
     }
 
+    // ANCHOR: stop
     pub async fn stop(&self) {
         self.stop_subscriber.notify(()).await
     }
+    // ANCHOR_END: stop
 
-    /// Broadcasts a message across all channels.
+    /// Broadcasts a message concurrently across all channels.
+    // ANCHOR: broadcast
     pub async fn broadcast<M: Message + Clone>(&self, message: M) -> Result<()> {
-        for channel in self.channels.lock().await.values() {
-            if let Err(e) = channel.send(message.clone()).await {
-                error!(
-                    "P2p::broadcast(): Broadcasting message to {} failed: {}",
+        let chans = self.channels.lock().await;
+        let iter = chans.values();
+        let mut futures = FuturesUnordered::new();
+
+        for channel in iter {
+            futures.push(channel.send(message.clone()).map_err(|e| {
+                format!(
+                    "P2P::broadcast: Broadcasting message to {} failed: {}",
                     channel.address(),
                     e
-                );
+                )
+            }));
+        }
+
+        if futures.is_empty() {
+            error!("P2P::broadcast: No connected channels found");
+            return Ok(())
+        }
+
+        while let Some(entry) = futures.next().await {
+            if let Err(e) = entry {
+                error!("{}", e);
             }
         }
+
         Ok(())
     }
+    // ANCHOR_END: broadcast
 
-    /// Broadcasts a message across all channels.
-    /// exclude channels provided in exclude_list
+    /// Broadcasts a message concurrently across all channels.
+    /// Excludes channels provided in `exclude_list`.
     pub async fn broadcast_with_exclude<M: Message + Clone>(
         &self,
         message: M,
         exclude_list: &[Url],
     ) -> Result<()> {
-        for channel in self.channels.lock().await.values() {
-            if exclude_list.contains(&channel.address()) {
-                continue
+        let chans = self.channels.lock().await;
+        let iter = chans.values();
+        let mut futures = FuturesUnordered::new();
+
+        for channel in iter {
+            if !exclude_list.contains(&channel.address()) {
+                futures.push(channel.send(message.clone()).map_err(|e| {
+                    format!(
+                        "P2P::broadcast_with_exclude: Broadcasting message to {} failed: {}",
+                        channel.address(),
+                        e
+                    )
+                }));
             }
-            channel.send(message.clone()).await?;
         }
+
+        if futures.is_empty() {
+            error!("P2P::broadcast_with_exclude: No connected channels found");
+            return Ok(())
+        }
+
+        while let Some(entry) = futures.next().await {
+            if let Err(e) = entry {
+                error!("{}", e);
+            }
+        }
+
         Ok(())
     }
 

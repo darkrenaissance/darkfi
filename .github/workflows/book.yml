@@ -34,6 +34,8 @@ jobs:
                 cargo install mdbook
                 export PATH="$HOME/.cargo/bin:$PATH"
                 cargo install --git "https://github.com/lzanini/mdbook-katex"
+                cargo install --git "https://github.com/badboy/mdbook-toc"
+                cargo install --git "https://github.com/badboy/mdbook-mermaid"
                 sudo apt -y install make
 
             - name: Compile and publish the book

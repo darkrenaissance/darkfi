@@ -26,6 +26,3 @@ a specified address.
 Loops through all the configured seeds and tries to connect to them
 using a `Connector`. Either connects successfully, fails with an error or
 times out.
-
-To create an inbound and outbound node, we will need to configure them
-using a type called `net::Settings`.

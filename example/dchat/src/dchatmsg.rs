@@ -1,9 +1,8 @@
+// ANCHOR: msg
 use async_std::sync::{Arc, Mutex};
 
-use darkfi::{
-    net,
-    util::serial::{SerialDecodable, SerialEncodable},
-};
+use darkfi::net;
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 pub type DchatMsgsBuffer = Arc<Mutex<Vec<DchatMsg>>>;
 
@@ -17,3 +16,4 @@ impl net::Message for DchatMsg {
 pub struct DchatMsg {
     pub msg: String,
 }
+// ANCHOR_END: msg

@@ -9,7 +9,7 @@ FROM ${OS_VER} as builder
 RUN dnf -y install cargo rustc gcc gcc-c++ kernel-headers cmake jq wget \
   pkg-config clang clang-libs llvm-libs \
   rust-libudev-devel rust-freetype-rs-devel \
-  rust-expat-sys-devel openssl-devel findutils
+  rust-expat-sys-devel openssl-devel findutils fontconfig-devel
 
 COPY . /opt/darkfi
 

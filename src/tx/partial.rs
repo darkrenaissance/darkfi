@@ -1,11 +1,10 @@
+use darkfi_serial::{SerialDecodable, SerialEncodable};
+
 use super::TransactionOutput;
-use crate::{
-    crypto::{
-        keypair::PublicKey,
-        types::{DrkTokenId, DrkValueBlind},
-        BurnRevealedValues, Proof,
-    },
-    util::serial::{SerialDecodable, SerialEncodable},
+use crate::crypto::{
+    keypair::PublicKey,
+    types::{DrkTokenId, DrkValueBlind},
+    BurnRevealedValues, Proof,
 };
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]

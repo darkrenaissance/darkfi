@@ -1,9 +1,10 @@
-use async_executor::Executor;
-use async_std::sync::{Arc, Mutex};
-use easy_parallel::Parallel;
-
 use std::{error, fs::File, io::stdin};
 
+// ANCHOR: daemon_deps
+use async_std::sync::{Arc, Mutex};
+use easy_parallel::Parallel;
+use smol::Executor;
+// ANCHOR_END: daemon_deps
 use log::debug;
 use simplelog::WriteLogger;
 use url::Url;
@@ -22,19 +23,24 @@ pub mod dchatmsg;
 pub mod protocol_dchat;
 pub mod rpc;
 
+// ANCHOR: error
 pub type Error = Box<dyn error::Error>;
 pub type Result<T> = std::result::Result<T, Error>;
+// ANCHOR_END: error
 
+// ANCHOR: dchat
 struct Dchat {
     p2p: net::P2pPtr,
     recv_msgs: DchatMsgsBuffer,
 }
+// ANCHOR_END: dchat
 
 impl Dchat {
     fn new(p2p: net::P2pPtr, recv_msgs: DchatMsgsBuffer) -> Self {
         Self { p2p, recv_msgs }
     }
 
+    // ANCHOR: menu
     async fn menu(&self) -> Result<()> {
         let mut buffer = String::new();
         let stdin = stdin();
@@ -82,7 +88,9 @@ impl Dchat {
             }
         }
     }
+    // ANCHOR_END: menu
 
+    // ANCHOR: register_protocol
     async fn register_protocol(&self, msgs: DchatMsgsBuffer) -> Result<()> {
         debug!(target: "dchat", "Dchat::register_protocol() [START]");
         let registry = self.p2p.protocol_registry();
@@ -95,7 +103,9 @@ impl Dchat {
         debug!(target: "dchat", "Dchat::register_protocol() [STOP]");
         Ok(())
     }
+    // ANCHOR_END: register_protocol
 
+    // ANCHOR: start
     async fn start(&mut self, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "dchat", "Dchat::start() [START]");
 
@@ -112,14 +122,18 @@ impl Dchat {
         debug!(target: "dchat", "Dchat::start() [STOP]");
         Ok(())
     }
+    // ANCHOR_END: start
 
+    // ANCHOR: send
     async fn send(&self, msg: String) -> Result<()> {
         let dchatmsg = DchatMsg { msg };
         self.p2p.broadcast(dchatmsg).await?;
         Ok(())
     }
+    // ANCHOR_END: send
 }
 
+// ANCHOR: app_settings
 #[derive(Clone, Debug)]
 struct AppSettings {
     accept_addr: Url,
@@ -131,7 +145,9 @@ impl AppSettings {
         Self { accept_addr, net }
     }
 }
+// ANCHOR_END: app_settings
 
+// ANCHOR: alice
 fn alice() -> Result<AppSettings> {
     let log_level = simplelog::LevelFilter::Debug;
     let log_config = simplelog::Config::default();
@@ -148,6 +164,7 @@ fn alice() -> Result<AppSettings> {
         inbound: vec![inbound],
         external_addr: vec![ext_addr],
         seeds: vec![seed],
+        localnet: true,
         ..Default::default()
     };
 
@@ -156,7 +173,9 @@ fn alice() -> Result<AppSettings> {
 
     Ok(settings)
 }
+// ANCHOR_END: alice
 
+// ANCHOR: bob
 fn bob() -> Result<AppSettings> {
     let log_level = simplelog::LevelFilter::Debug;
     let log_config = simplelog::Config::default();
@@ -171,6 +190,7 @@ fn bob() -> Result<AppSettings> {
         inbound: vec![],
         outbound_connections: 5,
         seeds: vec![seed],
+        localnet: true,
         ..Default::default()
     };
 
@@ -179,7 +199,9 @@ fn bob() -> Result<AppSettings> {
 
     Ok(settings)
 }
+// ANCHOR_END: bob
 
+// ANCHOR: main
 #[async_std::main]
 async fn main() -> Result<()> {
     let settings: Result<AppSettings> = match std::env::args().nth(1) {
@@ -195,9 +217,6 @@ async fn main() -> Result<()> {
 
     let p2p = net::P2p::new(settings.net).await;
 
-    let nthreads = num_cpus::get();
-    let (signal, shutdown) = async_channel::unbounded::<()>();
-
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();
     let ex3 = ex2.clone();
@@ -206,9 +225,14 @@ async fn main() -> Result<()> {
 
     let mut dchat = Dchat::new(p2p.clone(), msgs);
 
+    // ANCHOR: json_init
     let accept_addr = settings.accept_addr.clone();
     let rpc = Arc::new(JsonRpcInterface { addr: accept_addr.clone(), p2p });
     ex.spawn(async move { listen_and_serve(accept_addr.clone(), rpc).await }).detach();
+    // ANCHOR_END: json_init
+
+    let nthreads = num_cpus::get();
+    let (signal, shutdown) = smol::channel::unbounded::<()>();
 
     let (_, result) = Parallel::new()
         .each(0..nthreads, |_| smol::future::block_on(ex2.run(shutdown.recv())))
@@ -222,3 +246,4 @@ async fn main() -> Result<()> {
 
     result
 }
+// ANCHOR_END: main

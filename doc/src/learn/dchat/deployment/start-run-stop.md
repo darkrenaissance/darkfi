@@ -6,7 +6,7 @@ instance of the p2p network.
 Add the following to `main()`:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:196}}
+    let p2p = net::P2p::new(settings?).await;
 ```
 
 We will next create a `Dchat` struct that will store all the data required
@@ -29,22 +29,26 @@ takes an executor and runs three p2p methods, `p2p::start()`, `p2p::run()`,
 and `p2p::stop()`.
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:99:100}}
+    async fn start(&mut self, ex: Arc<Executor<'_>>) -> Result<()> {
+        let ex2 = ex.clone();
 
-{{#include ../../../../../example/dchat/src/main.rs:105}}
+        self.p2p.clone().start(ex.clone()).await?;
+        ex2.spawn(self.p2p.clone().run(ex.clone())).detach();
 
-        self.p2p.clone().run(ex.clone()).await?;
+        self.p2p.stop().await;
 
-{{#include ../../../../../example/dchat/src/main.rs:110:114}}
+        Ok(())
+    }
+
 ```
 Let's take a quick look at the underlying p2p methods we're using here.
 
 ## Start
 
-This is [start()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L129):
+This is [start()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L135):
 
 ```rust
-{{#include ../../../../../src/net/p2p.rs:129:143}}
+{{#include ../../../../../src/net/p2p.rs:start}}
 ```
 
 `start()` changes the `P2pState` to `P2pState::Start` and runs a [seed
@@ -60,10 +64,10 @@ the channel from the channel list.
 
 ## Run
 
-This is [run()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L157):
+This is [run()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L163):
 
 ```rust
-{{#include ../../../../../src/net/p2p.rs:157:184}}
+{{#include ../../../../../src/net/p2p.rs:run}}
 ```
 
 `run()` changes the P2pState to `P2pState::Run`. It then calls `start()`
@@ -83,10 +87,10 @@ is received.
 
 ## Stop
 
-This is [stop()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L186).
+This is [stop()](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L306).
 
 ```rust
-    {{#include ../../../../../src/net/p2p.rs:186:188}}
+    {{#include ../../../../../src/net/p2p.rs:stop}}
 ```
 
 `stop()` transmits a shutdown signal to all channels subscribed to the

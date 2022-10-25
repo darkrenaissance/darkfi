@@ -1,24 +1,18 @@
+use std::time::Duration;
+
 use async_std::{
     sync::{Arc, Mutex},
     task::sleep,
 };
-use std::time::Duration;
-
-use async_executor::Executor;
 use chrono::Utc;
+use darkfi_serial::{deserialize, serialize, Decodable, Encodable};
 use futures::{select, FutureExt};
 use fxhash::FxHashMap;
 use log::{debug, error, warn};
 use rand::{rngs::OsRng, Rng, RngCore};
+use smol::Executor;
 
-use crate::{
-    net,
-    util::{
-        gen_id,
-        serial::{deserialize, serialize, Decodable, Encodable},
-    },
-    Error, Result,
-};
+use crate::{net, util::gen_id, Error, Result};
 
 use super::{
     p2p_send_loop,
@@ -29,7 +23,7 @@ use super::{
     prune_map, DataStore, RaftSettings,
 };
 
-async fn send_loop(sender: async_channel::Sender<()>, timeout: Duration) -> Result<()> {
+async fn send_loop(sender: smol::channel::Sender<()>, timeout: Duration) -> Result<()> {
     loop {
         sleep(timeout).await;
         sender.send(()).await?;
@@ -81,14 +75,15 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let datastore = DataStore::new(settings.datastore_path.to_str().unwrap())?;
 
         // broadcasting channels
-        let msgs_channel = async_channel::unbounded::<T>();
-        let commits_channel = async_channel::unbounded::<T>();
+        let msgs_channel = smol::channel::unbounded::<T>();
+        let commits_channel = smol::channel::unbounded::<T>();
 
-        let p2p_sender = async_channel::unbounded::<NetMsg>();
+        let p2p_sender = smol::channel::unbounded::<NetMsg>();
 
         let id = match datastore.id.get_last()? {
             Some(_id) => _id,
             None => {
+                // FIXME: This should be a big number, like a hash.
                 let id = NodeId(gen_id(30));
                 datastore.id.insert(&id)?;
                 id
@@ -123,9 +118,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     pub async fn run(
         &mut self,
         p2p: net::P2pPtr,
-        p2p_recv_channel: async_channel::Receiver<NetMsg>,
+        p2p_recv_channel: smol::channel::Receiver<NetMsg>,
         executor: Arc<Executor<'_>>,
-        stop_signal: async_channel::Receiver<()>,
+        stop_signal: smol::channel::Receiver<()>,
     ) -> Result<()> {
         let p2p_send_task = executor.spawn(p2p_send_loop(self.p2p_sender.1.clone(), p2p.clone()));
 
@@ -135,11 +130,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let prune_nodes_id_task =
             executor.spawn(prune_map::<NodeId>(self.nodes.clone(), self.settings.prun_duration));
 
-        let mut rng = rand::thread_rng();
-
-        let (id_sx, id_rv) = async_channel::unbounded::<()>();
-        let (heartbeat_sx, heartbeat_rv) = async_channel::unbounded::<()>();
-        let (timeout_sx, timeout_rv) = async_channel::unbounded::<()>();
+        let (id_sx, id_rv) = smol::channel::unbounded::<()>();
+        let (heartbeat_sx, heartbeat_rv) = smol::channel::unbounded::<()>();
+        let (timeout_sx, timeout_rv) = smol::channel::unbounded::<()>();
 
         let id_timeout = Duration::from_secs(self.settings.id_timeout);
         let send_id_task = executor.spawn(send_loop(id_sx, id_timeout));
@@ -147,6 +140,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let heartbeat_timeout = Duration::from_millis(self.settings.heartbeat_timeout);
         let send_heartbeat_task = executor.spawn(send_loop(heartbeat_sx, heartbeat_timeout));
 
+        let rng = &mut OsRng;
         let timeout =
             Duration::from_secs(rng.gen_range(0..self.settings.timeout) + self.settings.timeout);
         let send_timeout_task = executor.spawn(send_loop(timeout_sx, timeout));
@@ -192,7 +186,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     /// Return async receiver channel which can be used to receive T Messages
     /// from raft consensus
     ///
-    pub fn receiver(&self) -> async_channel::Receiver<T> {
+    pub fn receiver(&self) -> smol::channel::Receiver<T> {
         self.commits_channel.1.clone()
     }
 
@@ -200,7 +194,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     /// Return async sender channel which can be used to broadcast T Messages
     /// to raft consensus
     ///
-    pub fn sender(&self) -> async_channel::Sender<T> {
+    pub fn sender(&self) -> smol::channel::Sender<T> {
         self.msgs_channel.0.clone()
     }
 

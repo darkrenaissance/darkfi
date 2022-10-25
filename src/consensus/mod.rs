@@ -4,17 +4,11 @@ pub use block::{Block, BlockInfo, BlockProposal, Header, ProposalChain};
 
 /// Consensus metadata
 pub mod metadata;
-pub use metadata::{
-    OuroborosMetadata, StakeholderMetadata, StreamletMetadata, TransactionLeadProof,
-};
+pub use metadata::{LeadProof, Metadata};
 
 /// Consensus participant
 pub mod participant;
-pub use participant::Participant;
-
-/// Consensus vote
-pub mod vote;
-pub use vote::Vote;
+pub use participant::{KeepAlive, Participant};
 
 /// Consensus state
 pub mod state;
@@ -28,6 +22,12 @@ pub mod proto;
 
 /// async tasks to utilize the protocols
 pub mod task;
+
+/// Lamport clock
+pub mod clock;
+pub use clock::{Clock, Ticks};
+
+pub mod ouroboros;
 
 use lazy_static::lazy_static;
 lazy_static! {

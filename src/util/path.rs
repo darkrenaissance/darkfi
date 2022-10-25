@@ -1,19 +1,90 @@
 use std::{
-    fs,
+    env,
+    ffi::{CStr, OsString},
+    fs, mem,
+    os::unix::prelude::OsStringExt,
     path::{Path, PathBuf},
+    ptr,
 };
 
 use crate::{Error, Result};
+
+/// Returns the path to the user's home directory.
+/// Use `$HOME`, fallbacks to `libc::getpwuid_r`, otherwise `None`.
+pub fn home_dir() -> Option<PathBuf> {
+    env::var_os("HOME")
+        .and_then(|h| if h.is_empty() { None } else { Some(h) })
+        .or_else(|| unsafe { home_fallback() })
+        .map(PathBuf::from)
+}
+
+/// Get the home directory from the passwd entry of the current user using
+/// `getpwuid_r(3)`. If it manages, returns an `OsString`, otherwise returns `None`.
+unsafe fn home_fallback() -> Option<OsString> {
+    let amt = match libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) {
+        n if n < 0 => 512 as usize,
+        n => n as usize,
+    };
+
+    let mut buf = Vec::with_capacity(amt);
+    let mut passwd: libc::passwd = mem::zeroed();
+    let mut result = ptr::null_mut();
+
+    let r = libc::getpwuid_r(
+        libc::getuid(),
+        &mut passwd,
+        buf.as_mut_ptr(),
+        buf.capacity(),
+        &mut result,
+    );
+
+    match r {
+        0 if !result.is_null() => {
+            let ptr = passwd.pw_dir as *const _;
+            let bytes = CStr::from_ptr(ptr).to_bytes();
+            if bytes.is_empty() {
+                return None
+            }
+
+            Some(OsStringExt::from_vec(bytes.to_vec()))
+        }
+
+        _ => None,
+    }
+}
+
+/// Returns `$XDG_CONFIG_HOME`, `$HOME/.config`, or `None`.
+pub fn config_dir() -> Option<PathBuf> {
+    env::var_os("XDG_CONFIG_HOME")
+        .and_then(is_absolute_path)
+        .or_else(|| home_dir().map(|h| h.join(".config")))
+}
+
+fn is_absolute_path(path: OsString) -> Option<PathBuf> {
+    let path = PathBuf::from(path);
+    if path.is_absolute() {
+        Some(path)
+    } else {
+        None
+    }
+}
 
 pub fn expand_path(path: &str) -> Result<PathBuf> {
     let ret: PathBuf;
 
     if path.starts_with("~/") {
-        let homedir = dirs::home_dir().unwrap();
-        let remains = PathBuf::from(path.strip_prefix("~/").unwrap());
-        ret = [homedir, remains].iter().collect();
+        if let Some(homedir) = home_dir() {
+            let remains = PathBuf::from(path.strip_prefix("~/").unwrap());
+            ret = [homedir, remains].iter().collect();
+        } else {
+            panic!("Could not fetch path for home directory");
+        }
     } else if path.starts_with('~') {
-        ret = dirs::home_dir().unwrap();
+        if let Some(homedir) = home_dir() {
+            ret = homedir
+        } else {
+            panic!("Could not fetch path for home directory");
+        }
     } else {
         ret = PathBuf::from(path);
     }
@@ -21,11 +92,12 @@ pub fn expand_path(path: &str) -> Result<PathBuf> {
     Ok(ret)
 }
 
+/// Join a path with `config_dir()/darkfi`.
 pub fn join_config_path(file: &Path) -> Result<PathBuf> {
     let mut path = PathBuf::new();
     let dfi_path = Path::new("darkfi");
 
-    if let Some(v) = dirs::config_dir() {
+    if let Some(v) = config_dir() {
         path.push(v);
     }
 

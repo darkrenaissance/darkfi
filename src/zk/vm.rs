@@ -1,3 +1,8 @@
+use darkfi_sdk::crypto::constants::{
+    sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
+    util::gen_const_array,
+    NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
+};
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
@@ -34,16 +39,9 @@ use super::{
         small_range_check::{SmallRangeCheckChip, SmallRangeCheckConfig},
     },
 };
-use crate::{
-    crypto::constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-        util::gen_const_array,
-        NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
-    },
-    zkas::{
-        types::{LitType, StackType},
-        Opcode, ZkBinary,
-    },
+use crate::zkas::{
+    types::{LitType, StackType},
+    Opcode, ZkBinary,
 };
 
 #[derive(Clone)]

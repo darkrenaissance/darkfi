@@ -1,7 +1,6 @@
 use chrono::Utc;
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use rand::{rngs::OsRng, RngCore};
-
-use darkfi::util::serial::{SerialDecodable, SerialEncodable};
 
 pub type PrivmsgId = u64;
 

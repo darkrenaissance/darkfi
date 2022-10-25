@@ -14,6 +14,9 @@ use super::{
 /// These can not be used anywhere except where they are expected.
 const KEYWORDS: [&str; 3] = ["constant", "contract", "circuit"];
 
+/// Forbidden namespaces
+const NOPE_NS: [&str; 4] = [".constant", ".literal", ".contract", ".circuit"];
+
 /// Valid EcFixedPoint constant names supported by the VM.
 const VALID_ECFIXEDPOINT: [&str; 1] = ["VALUE_COMMIT_RANDOM"];
 
@@ -38,7 +41,7 @@ impl Parser {
         Self { tokens, error }
     }
 
-    pub fn parse(&self) -> (Vec<Constant>, Vec<Witness>, Vec<Statement>) {
+    pub fn parse(&self) -> (String, Vec<Constant>, Vec<Witness>, Vec<Statement>) {
         // We use these to keep state while parsing.
         let mut namespace = None;
         let (mut declaring_constant, mut declared_constant) = (false, false);
@@ -50,8 +53,11 @@ impl Parser {
         let mut contract_tokens = vec![];
         let mut circuit_tokens = vec![];
 
+        // Tokens belonging to the current statement
         let mut circuit_stmt = vec![];
+        // All completed statements are pushed here
         let mut circuit_stmts = vec![];
+        // Contains constant and contract sections
         let mut ast_inner = IndexMap::new();
         let mut ast = IndexMap::new();
 
@@ -133,6 +139,13 @@ impl Parser {
                             );
                         }
                     } else {
+                        if NOPE_NS.contains(&$t[0].token.as_str()) {
+                            self.error.abort(
+                                &format!("'{}' cannot be a namespace.", $t[0].token),
+                                $t[0].line,
+                                $t[0].column,
+                            );
+                        }
                         namespace = Some($t[0].token.clone());
                     }
                 };
@@ -229,8 +242,10 @@ impl Parser {
                 self.check_section_structure("circuit", circuit_tokens.clone());
                 check_namespace!(circuit_tokens);
 
+                // Grab tokens for each statement
                 for i in circuit_tokens[2..circuit_tokens.len() - 1].iter() {
                     if i.token_type == TokenType::Semicolon {
+                        // Push completed statement to the stack
                         circuit_stmts.push(circuit_stmt.clone());
                         circuit_stmt = vec![];
                         continue
@@ -242,6 +257,8 @@ impl Parser {
                 declared_circuit = true;
             }
         }
+
+        // Tokens have been processed and ast is complete
 
         let ns = namespace.unwrap();
         ast.insert(ns.clone(), ast_inner);
@@ -273,9 +290,10 @@ impl Parser {
             self.error.abort("Circuit section is empty.", 0, 0);
         }
 
-        (constants, witnesses, statements)
+        (ns, constants, witnesses, statements)
     }
 
+    /// Routine checks on section structure
     fn check_section_structure(&self, section: &str, tokens: Vec<Token>) {
         if tokens[0].token_type != TokenType::String {
             self.error.abort(
@@ -328,7 +346,7 @@ impl Parser {
                     );
                 }
             }
-            _ => panic!(),
+            _ => unreachable!(),
         };
     }
 

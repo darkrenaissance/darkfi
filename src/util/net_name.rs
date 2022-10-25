@@ -1,11 +1,7 @@
-use std::str::FromStr;
+use std::{io, str::FromStr};
 
+use darkfi_serial::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    util::serial::{Decodable, Encodable},
-    Result,
-};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum NetworkName {
@@ -15,8 +11,8 @@ pub enum NetworkName {
     Ethereum,
 }
 
-impl std::fmt::Display for NetworkName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for NetworkName {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::DarkFi => {
                 write!(f, "DarkFi")
@@ -37,7 +33,7 @@ impl std::fmt::Display for NetworkName {
 impl FromStr for NetworkName {
     type Err = crate::Error;
 
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "drk" | "darkfi" => Ok(NetworkName::DarkFi),
             "sol" | "solana" => Ok(NetworkName::Solana),
@@ -49,7 +45,7 @@ impl FromStr for NetworkName {
 }
 
 impl Encodable for NetworkName {
-    fn encode<S: std::io::Write>(&self, s: S) -> Result<usize> {
+    fn encode<S: io::Write>(&self, s: S) -> core::result::Result<usize, io::Error> {
         let name = self.to_string();
         let len = name.encode(s)?;
         Ok(len)
@@ -57,9 +53,11 @@ impl Encodable for NetworkName {
 }
 
 impl Decodable for NetworkName {
-    fn decode<D: std::io::Read>(mut d: D) -> Result<Self> {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
         let name: String = Decodable::decode(&mut d)?;
-        let name = NetworkName::from_str(&name)?;
-        Ok(name)
+        match NetworkName::from_str(&name) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
+        }
     }
 }

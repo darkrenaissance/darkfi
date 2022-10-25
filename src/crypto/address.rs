@@ -1,18 +1,17 @@
-use std::{io, str::FromStr};
+use std::str::FromStr;
 
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use sha2::Digest;
 
-use crate::{
-    crypto::keypair::PublicKey,
-    util::serial::{Decodable, Encodable, ReadExt, WriteExt},
-    Error, Result,
-};
+use crate::{crypto::keypair::PublicKey, Error, Result};
 
 enum AddressType {
     Payment = 0,
 }
 
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Hash)]
+#[derive(
+    Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Hash, SerialEncodable, SerialDecodable,
+)]
 pub struct Address(pub [u8; 37]);
 
 impl Address {
@@ -78,21 +77,6 @@ impl From<PublicKey> for Address {
         payment_address.copy_from_slice(address.as_slice());
 
         Self(payment_address)
-    }
-}
-
-impl Encodable for Address {
-    fn encode<S: io::Write>(&self, mut s: S) -> Result<usize> {
-        s.write_slice(&self.0)?;
-        Ok(37)
-    }
-}
-
-impl Decodable for Address {
-    fn decode<D: io::Read>(mut d: D) -> Result<Self> {
-        let mut bytes = [0u8; 37];
-        d.read_slice(&mut bytes)?;
-        Ok(Self(bytes))
     }
 }
 

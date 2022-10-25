@@ -1,7 +1,7 @@
-use async_executor::Executor;
 use async_std::sync::Arc;
 use async_trait::async_trait;
 use log::{debug, error, info};
+use smol::Executor;
 
 use crate::{
     consensus::{

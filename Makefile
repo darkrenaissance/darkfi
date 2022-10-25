@@ -10,8 +10,7 @@ CARGO = cargo
 #RUSTFLAGS = -C target-cpu=native
 
 # Binaries to be built
-
-BINS = drk darkfid tau taud ircd dnetview darkotc darkwikid darkwiki
+BINS = drk darkfid tau taud ircd dnetview darkotc darkwikid darkwiki dao daod
 
 # Common dependencies which should force the binaries to be rebuilt
 BINDEPS = \
@@ -24,7 +23,8 @@ BINDEPS = \
 
 # ZK proofs to compile with zkas
 PROOFS = \
-	$(shell find bin/daod/proof -type f -name '*.zk') \
+	$(shell find bin/dao/daod/proof -type f -name '*.zk') \
+	$(shell find example/dao/proof -type f -name '*.zk') \
 	$(shell find proof -type f -name '*.zk') \
 	example/simple.zk
 
@@ -36,7 +36,7 @@ zkas: $(BINDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
 
-$(PROOFS_BIN): $(PROOFS)
+$(PROOFS_BIN): $(PROOFS) zkas
 	./zkas $(basename $@) -o $@
 
 token_lists:
@@ -65,8 +65,11 @@ test: token_lists zkas $(PROOFS_BIN) test-tx
 test-tx: zkas
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) run --release --features=node,zkas --example tx
 
-clean:
+cleanbin:
 	rm -f $(BINS)
+
+clean: cleanbin
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean
 
 install:
 	@for i in $(BINS); \
@@ -87,4 +90,4 @@ uninstall:
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
 
-.PHONY: all check fix clippy rustdoc test test-tx clean install uninstall
+.PHONY: all check fix clippy rustdoc test test-tx clean cleanbin install uninstall

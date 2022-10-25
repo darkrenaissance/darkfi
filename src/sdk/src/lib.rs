@@ -1,8 +1,17 @@
+pub use incrementalmerkletree;
+pub use pasta_curves as pasta;
+
+/// Entrypoint used for the wasm binaries
 pub mod entrypoint;
+
+/// Error handling
 pub mod error;
+
+/// Logging infrastructure
 pub mod log;
 
-// Set up global allocator by default
-#[cfg(target_arch = "wasm32")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+/// Crypto-related definitions
+pub mod crypto;
+
+/// Functions for state queries
+pub mod state;

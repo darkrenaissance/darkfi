@@ -1,3 +1,7 @@
+use darkfi_sdk::crypto::constants::{
+    sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
+    NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
+};
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
@@ -17,13 +21,7 @@ use halo2_proofs::{
     plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
 
-use crate::{
-    crypto::constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-        NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
-    },
-    zk::assign_free_advice,
-};
+use crate::zk::assign_free_advice;
 
 #[derive(Clone, Debug)]
 pub struct MintConfig {
@@ -52,7 +50,7 @@ const MINT_VALCOMY_OFFSET: usize = 2;
 const MINT_TOKCOMX_OFFSET: usize = 3;
 const MINT_TOKCOMY_OFFSET: usize = 4;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct MintContract {
     /// X coordinate for public key
     pub pub_x: Value<pallas::Base>,

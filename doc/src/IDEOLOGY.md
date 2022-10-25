@@ -1,1 +1,0 @@
-../../IDEOLOGY.md

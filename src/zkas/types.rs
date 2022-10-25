@@ -17,7 +17,7 @@ impl StackType {
 }
 
 /// Varable types supported by the zkas VM
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum VarType {
     /// Dummy intermediate type
@@ -77,7 +77,7 @@ impl VarType {
 }
 
 /// Literal types supported by the zkas VM
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum LitType {
     /// Dummy intermediate type

@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-
 use log::error;
 use serde_json::{json, Value};
 
@@ -14,8 +13,8 @@ use darkfi::{
 use crate::Patch;
 
 pub struct JsonRpcInterface {
-    sender: async_channel::Sender<(String, bool, Vec<String>)>,
-    receiver: async_channel::Receiver<Vec<Vec<Patch>>>,
+    sender: smol::channel::Sender<(String, bool, Vec<String>)>,
+    receiver: smol::channel::Receiver<Vec<Vec<Patch>>>,
 }
 
 #[async_trait]
@@ -55,8 +54,8 @@ fn printable_patches(
 
 impl JsonRpcInterface {
     pub fn new(
-        sender: async_channel::Sender<(String, bool, Vec<String>)>,
-        receiver: async_channel::Receiver<Vec<Vec<Patch>>>,
+        sender: smol::channel::Sender<(String, bool, Vec<String>)>,
+        receiver: smol::channel::Receiver<Vec<Vec<Patch>>>,
     ) -> Self {
         Self { sender, receiver }
     }

@@ -15,15 +15,13 @@ To use it, let's return to our `JsonRpcInterface` and add the following
 method:
 
 ```rust
-{{#include ../../../../../example/dchat/src/rpc.rs:45:52}}
+{{#include ../../../../../example/dchat/src/rpc.rs:get_info}}
 ```
 
 And add it to `handle_request()`:
 
 ```rust
-{{#include ../../../../../example/dchat/src/rpc.rs:21}}
-        //...
-{{#include ../../../../../example/dchat/src/rpc.rs:28:34}}
+{{#include ../../../../../example/dchat/src/rpc.rs:req_match}}
 ```
 
 This calls the p2p function `get_info()` and passes the returned data into a
@@ -36,7 +34,7 @@ calls which deliver info specific to a node, its inbound or outbound
 Here's what happens:
 
 ```rust
-{{#include ../../../../../src/net/p2p.rs:111:126}}
+{{#include ../../../../../src/net/p2p.rs:get_info}}
 ```
 
 Here we return two pieces of info that are unique to a node:
@@ -52,7 +50,7 @@ happens via a child struct called `ChannelInfo`.
 This is `ChannelInfo::get_info()`.
 
 ```rust
-{{#include ../../../../../src/net/channel.rs:48:58}}
+{{#include ../../../../../src/net/channel.rs:get_info}}
 ```
 
 `dnetview` uses the info returned from `Channel` and `Session` and

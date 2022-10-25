@@ -1,17 +1,18 @@
-use async_executor::Executor;
+use async_std::sync::Arc;
+
 use futures::{Future, FutureExt};
-use std::sync::Arc;
+use smol::Executor;
 
 pub type StoppableTaskPtr = Arc<StoppableTask>;
 
 pub struct StoppableTask {
-    stop_send: async_channel::Sender<()>,
-    stop_recv: async_channel::Receiver<()>,
+    stop_send: smol::channel::Sender<()>,
+    stop_recv: smol::channel::Receiver<()>,
 }
 
 impl StoppableTask {
     pub fn new() -> Arc<Self> {
-        let (stop_send, stop_recv) = async_channel::unbounded();
+        let (stop_send, stop_recv) = smol::channel::unbounded();
         Arc::new(Self { stop_send, stop_recv })
     }
 

@@ -1,8 +1,7 @@
-use crate::{
-    crypto::nullifier::Nullifier,
-    util::serial::{deserialize, serialize},
-    Result,
-};
+use darkfi_sdk::crypto::Nullifier;
+use darkfi_serial::{deserialize, serialize};
+
+use crate::Result;
 
 const SLED_NULLIFIER_TREE: &[u8] = b"_nullifiers";
 

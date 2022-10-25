@@ -1,18 +1,17 @@
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error};
 
 use crate::{
-    blockchain::{nfstore::NullifierStore, rootstore::RootStore},
+    blockchain::{nfstore::NullifierStore, rootstore::RootStore, Blockchain},
+    consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
     crypto::{
-        coin::Coin,
-        constants::MERKLE_DEPTH,
+        coin::{Coin, OwnCoin},
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         note::{EncryptedNote, Note},
-        nullifier::Nullifier,
         proof::VerifyingKey,
-        OwnCoin,
+        util::poseidon_hash,
     },
     tx::Transaction,
     wallet::walletdb::WalletPtr,
@@ -133,12 +132,28 @@ pub struct State {
 }
 
 impl State {
+    /// Create a dummy state
+    pub fn dummy() -> Result<Self> {
+        let db = sled::Config::new().temporary(true).open()?;
+        let bc = Blockchain::new(&db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
+        let mt = BridgeTree::<MerkleNode, 32>::new(100);
+        Ok(State {
+            tree: mt,
+            merkle_roots: bc.merkle_roots,
+            nullifiers: bc.nullifiers,
+            cashier_pubkeys: vec![],
+            faucet_pubkeys: vec![],
+            mint_vk: Lazy::new(),
+            burn_vk: Lazy::new(),
+        })
+    }
+
     /// Apply a [`StateUpdate`] to some state.
     pub async fn apply(
         &mut self,
         update: StateUpdate,
         secret_keys: Vec<SecretKey>,
-        notify: Option<async_channel::Sender<(PublicKey, u64)>>,
+        notify: Option<smol::channel::Sender<(PublicKey, u64)>>,
         wallet: WalletPtr,
     ) -> Result<()> {
         debug!(target: "state_apply", "Extend nullifier set");
@@ -149,7 +164,7 @@ impl State {
         debug!(target: "state_apply", "Update Merkle tree and witnesses");
         for (coin, enc_note) in update.coins.into_iter().zip(update.enc_notes.iter()) {
             // Add the new coins to the Merkle tree
-            let node = MerkleNode(coin.0);
+            let node = MerkleNode::from(coin.0);
             debug!("Current merkle tree: {:#?}", self.tree);
             self.tree.append(&node);
             debug!("Merkle tree after append: {:#?}", self.tree);
@@ -163,7 +178,8 @@ impl State {
                 if let Some(note) = State::try_decrypt_note(enc_note, *secret) {
                     debug!(target: "state_apply", "Received a coin: amount {}", note.value);
                     let leaf_position = self.tree.witness().unwrap();
-                    let nullifier = Nullifier::new(*secret, note.serial);
+                    let nullifier =
+                        Nullifier::from(poseidon_hash::<2>([secret.inner(), note.serial]));
                     let own_coin = OwnCoin {
                         coin,
                         note: note.clone(),

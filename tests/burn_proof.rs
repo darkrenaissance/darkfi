@@ -1,9 +1,8 @@
 use darkfi::{
     crypto::{
         keypair::{PublicKey, SecretKey},
-        merkle_node::MerkleNode,
         proof::{ProvingKey, VerifyingKey},
-        util::{pedersen_commitment_base, pedersen_commitment_u64},
+        util::{pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
         Proof,
     },
     zk::{
@@ -13,6 +12,7 @@ use darkfi::{
     zkas::decoder::ZkBinary,
     Result,
 };
+use darkfi_sdk::crypto::{MerkleNode, Nullifier};
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
@@ -60,12 +60,12 @@ fn burn_proof() -> Result<()> {
     let coin1 = pallas::Base::random(&mut OsRng);
     let coin3 = pallas::Base::random(&mut OsRng);
 
-    tree.append(&MerkleNode(coin0));
+    tree.append(&MerkleNode::from(coin0));
     tree.witness();
-    tree.append(&MerkleNode(coin1));
-    tree.append(&MerkleNode(coin2));
+    tree.append(&MerkleNode::from(coin1));
+    tree.append(&MerkleNode::from(coin2));
     let leaf_pos = tree.witness().unwrap();
-    tree.append(&MerkleNode(coin3));
+    tree.append(&MerkleNode::from(coin3));
     tree.witness();
 
     let root = tree.root(0).unwrap();
@@ -73,7 +73,7 @@ fn burn_proof() -> Result<()> {
     let leaf_pos: u64 = leaf_pos.into();
 
     let prover_witnesses = vec![
-        Witness::Base(Value::known(secret.0)),
+        Witness::Base(Value::known(secret.inner())),
         Witness::Base(Value::known(serial)),
         Witness::Base(Value::known(pallas::Base::from(value))),
         Witness::Base(Value::known(token_id)),
@@ -82,14 +82,11 @@ fn burn_proof() -> Result<()> {
         Witness::Scalar(Value::known(token_blind)),
         Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
         Witness::MerklePath(Value::known(merkle_path.try_into().unwrap())),
-        Witness::Base(Value::known(sig_secret.0)),
+        Witness::Base(Value::known(sig_secret.inner())),
     ];
 
     // Create the public inputs
-    let nullifier = [secret.0, serial];
-    let nullifier =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-            .hash(nullifier);
+    let nullifier = Nullifier::from(poseidon_hash::<2>([secret.inner(), serial]));
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
@@ -103,12 +100,12 @@ fn burn_proof() -> Result<()> {
     let merkle_root = tree.root(0).unwrap();
 
     let public_inputs = vec![
-        nullifier,
+        nullifier.inner(),
         *value_coords.x(),
         *value_coords.y(),
         *token_coords.x(),
         *token_coords.y(),
-        merkle_root.0,
+        merkle_root.inner(),
         *sig_coords.x(),
         *sig_coords.y(),
     ];

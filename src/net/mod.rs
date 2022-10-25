@@ -88,6 +88,9 @@ pub mod settings;
 /// Network transport implementations.
 pub mod transport;
 
+/// Network constants for various validations.
+pub mod constants;
+
 pub use acceptor::{Acceptor, AcceptorPtr};
 pub use channel::{Channel, ChannelPtr};
 pub use connector::Connector;
@@ -101,7 +104,3 @@ pub use session::{
     SESSION_OUTBOUND, SESSION_SEED,
 };
 pub use settings::{Settings, SettingsPtr};
-pub use transport::{
-    TcpTransport, TorTransport, Transport, TransportListener, TransportName, TransportStream,
-    UnixTransport,
-};

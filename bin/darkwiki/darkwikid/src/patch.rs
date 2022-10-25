@@ -1,14 +1,15 @@
 use std::{cmp::Ordering, io};
 
-use colored::Colorize;
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt};
+use dryoc::constants::CRYPTO_SECRETBOX_NONCEBYTES;
 use serde::{Deserialize, Serialize};
 
 use darkfi::util::{
-    serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Timestamp,
+    cli::{fg_green, fg_red},
+    time::Timestamp,
 };
 
-use crate::str_to_chars;
+use crate::util::str_to_chars;
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
 pub enum OpMethod {
@@ -19,6 +20,12 @@ pub enum OpMethod {
 
 #[derive(PartialEq, Eq, Serialize, Deserialize, Clone, Debug)]
 pub struct OpMethods(pub Vec<OpMethod>);
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct EncryptedPatch {
+    pub nonce: [u8; CRYPTO_SECRETBOX_NONCEBYTES],
+    pub ciphertext: Vec<u8>,
+}
 
 #[derive(PartialEq, Eq, SerialEncodable, SerialDecodable, Serialize, Deserialize, Clone, Debug)]
 pub struct Patch {
@@ -369,7 +376,7 @@ impl Patch {
 
     pub fn colorize(&self) -> String {
         if self.ops.0.is_empty() {
-            return format!("{}", self.base.green())
+            return fg_green(&self.base)
         }
 
         let mut st = vec![];
@@ -393,11 +400,11 @@ impl Patch {
                             deleted_part.push(s.to_string());
                         }
                     }
-                    colorized_str.push(format!("{}", deleted_part.join("").red()));
+                    colorized_str.push(fg_red(&deleted_part.join("")));
                 }
                 OpMethod::Insert(insert) => {
                     let chars = str_to_chars(insert);
-                    colorized_str.push(format!("{}", chars.join("").green()));
+                    colorized_str.push(fg_green(&chars.join("")))
                 }
             }
         }
@@ -407,7 +414,7 @@ impl Patch {
 }
 
 impl Decodable for OpMethod {
-    fn decode<D: io::Read>(mut d: D) -> darkfi::Result<Self> {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
         let com: u8 = Decodable::decode(&mut d)?;
         match com {
             0 => {
@@ -422,13 +429,13 @@ impl Decodable for OpMethod {
                 let i: u64 = Decodable::decode(&mut d)?;
                 Ok(Self::Retain(i))
             }
-            _ => Err(darkfi::Error::ParseFailed("Parse OpMethod failed")),
+            _ => Err(io::Error::new(io::ErrorKind::Other, "Parse OpMethod failed")),
         }
     }
 }
 
 impl Encodable for OpMethod {
-    fn encode<S: io::Write>(&self, mut s: S) -> darkfi::Result<usize> {
+    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
         let len: usize = match self {
             Self::Delete(i) => (0_u8).encode(&mut s)? + i.encode(&mut s)?,
             Self::Insert(t) => (1_u8).encode(&mut s)? + t.encode(&mut s)?,
@@ -439,7 +446,7 @@ impl Encodable for OpMethod {
 }
 
 impl Encodable for OpMethods {
-    fn encode<S: io::Write>(&self, mut s: S) -> darkfi::Result<usize> {
+    fn encode<S: io::Write>(&self, mut s: S) -> core::result::Result<usize, io::Error> {
         let mut len = 0;
         len += VarInt(self.0.len() as u64).encode(&mut s)?;
         for c in self.0.iter() {
@@ -450,7 +457,7 @@ impl Encodable for OpMethods {
 }
 
 impl Decodable for OpMethods {
-    fn decode<D: io::Read>(mut d: D) -> darkfi::Result<Self> {
+    fn decode<D: io::Read>(mut d: D) -> core::result::Result<Self, io::Error> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = Vec::with_capacity(len as usize);
         for _ in 0..len {
@@ -463,10 +470,8 @@ impl Decodable for OpMethods {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi::util::{
-        gen_id,
-        serial::{deserialize, serialize},
-    };
+    use darkfi::util::gen_id;
+    use darkfi_serial::{deserialize, serialize};
 
     #[test]
     fn test_to_string() {
@@ -507,7 +512,7 @@ mod tests {
         patch1.insert("ex");
         patch1.retain(7);
 
-        let mut patch2 = patch_init.clone();
+        let mut patch2 = patch_init;
         patch2.delete(4);
         patch2.insert("new");
         patch2.retain(13);
@@ -544,7 +549,7 @@ mod tests {
         patch1.insert("ex");
         patch1.retain(7);
 
-        let mut patch2 = patch_init.clone();
+        let mut patch2 = patch_init;
         patch2.delete(4);
         patch2.insert("new");
         patch2.retain(13);
@@ -565,7 +570,7 @@ mod tests {
         patch1.retain(13);
         patch1.insert(" world");
 
-        let mut patch2 = patch_init.clone();
+        let mut patch2 = patch_init;
         patch2.retain(1);
         patch2.delete(5);
         patch2.insert("this is the title");

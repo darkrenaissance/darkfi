@@ -1,11 +1,9 @@
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt};
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use log::debug;
 use url::Url;
 
-use crate::{
-    util::serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt},
-    Error, Result,
-};
+use crate::{Error, Result};
 
 const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
 
@@ -35,6 +33,12 @@ pub struct GetAddrsMessage {}
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct AddrsMessage {
     pub addrs: Vec<Url>,
+}
+
+/// Sends external address information to inbound connection.
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct ExtAddrsMessage {
+    pub ext_addrs: Vec<Url>,
 }
 
 /// Requests version information of outbound connection.
@@ -71,6 +75,12 @@ impl Message for GetAddrsMessage {
 impl Message for AddrsMessage {
     fn name() -> &'static str {
         "addr"
+    }
+}
+
+impl Message for ExtAddrsMessage {
+    fn name() -> &'static str {
+        "extaddr"
     }
 }
 

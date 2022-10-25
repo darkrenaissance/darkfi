@@ -1,14 +1,13 @@
+use darkfi_serial::{deserialize_partial, VarInt};
+
 use super::{compiler::MAGIC_BYTES, types::StackType, LitType, Opcode, VarType};
-use crate::{
-    util::serial::{deserialize_partial, VarInt},
-    Error::ZkasDecoderError as ZkasErr,
-    Result,
-};
+use crate::{Error::ZkasDecoderError as ZkasErr, Result};
 
 /// A ZkBinary decoded from compiled zkas code.
 /// This is used by the zkvm.
 #[derive(Clone, Debug)]
 pub struct ZkBinary {
+    pub namespace: String,
     pub constants: Vec<(VarType, String)>,
     pub literals: Vec<(LitType, String)>,
     pub witnesses: Vec<VarType>,
@@ -28,6 +27,9 @@ impl ZkBinary {
         }
 
         let _binary_version = &bytes[4];
+
+        // After the binary version, we're supposed to have the contract namespace
+        let (namespace, _) = deserialize_partial(&bytes[5..])?;
 
         let constants_offset = match find_subslice(bytes, b".constant") {
             Some(v) => v,
@@ -79,9 +81,10 @@ impl ZkBinary {
         let literals = ZkBinary::parse_literals(literals_section)?;
         let witnesses = ZkBinary::parse_contract(contract_section)?;
         let opcodes = ZkBinary::parse_circuit(circuit_section)?;
+
         // TODO: Debug info
 
-        Ok(Self { constants, literals, witnesses, opcodes })
+        Ok(Self { namespace, constants, literals, witnesses, opcodes })
     }
 
     fn parse_constants(bytes: &[u8]) -> Result<Vec<(VarType, String)>> {

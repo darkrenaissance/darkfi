@@ -67,14 +67,6 @@ pub enum Error {
     #[error(transparent)]
     TomlDeserializeError(#[from] toml::de::Error),
 
-    #[cfg(feature = "bincode")]
-    #[error("bincode decode error: {0}")]
-    BincodeDecodeError(String),
-
-    #[cfg(feature = "bincode")]
-    #[error("bincode encode error: {0}")]
-    BincodeEncodeError(String),
-
     #[cfg(feature = "bs58")]
     #[error(transparent)]
     Bs58DecodeError(#[from] bs58::decode::Error),
@@ -141,10 +133,6 @@ pub enum Error {
     #[error("tungstenite error: {0}")]
     TungsteniteError(String),
 
-    #[cfg(feature = "async-native-tls")]
-    #[error("async_native_tls error: {0}")]
-    AsyncNativeTlsError(String),
-
     #[error("Tor error: {0}")]
     TorError(String),
 
@@ -182,6 +170,10 @@ pub enum Error {
     #[cfg(feature = "futures-rustls")]
     #[error(transparent)]
     RustlsError(#[from] futures_rustls::rustls::Error),
+
+    #[cfg(feature = "futures-rustls")]
+    #[error("Invalid DNS Name {0}")]
+    RustlsInvalidDns(String),
 
     // =======================
     // Protocol-related errors
@@ -236,6 +228,9 @@ pub enum Error {
     #[error("Merkle tree already exists in wallet")]
     WalletTreeExists,
 
+    #[error("Wallet insufficient balance")]
+    WalletInsufficientBalance,
+
     // ===================
     // wasm runtime errors
     // ===================
@@ -268,11 +263,11 @@ pub enum Error {
     #[error("Infallible error: {0}")]
     InfallibleError(String),
 
-    #[cfg(feature = "async-channel")]
+    #[cfg(feature = "smol")]
     #[error("async_channel sender error: {0}")]
     AsyncChannelSendError(String),
 
-    #[cfg(feature = "async-channel")]
+    #[cfg(feature = "smol")]
     #[error("async_channel receiver error: {0}")]
     AsyncChannelRecvError(String),
 
@@ -319,8 +314,13 @@ pub enum Error {
     // ==============
     // DHT errors
     // ==============
+    // FIXME: This is out of context, be specific when writing errors.
     #[error("Did not find key")]
     UnknownKey,
+
+    // Catch-all
+    #[error("{0}")]
+    Custom(String),
 }
 
 /// Transaction verification errors
@@ -369,6 +369,9 @@ pub enum VerifyFailed {
 /// Client module errors
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ClientFailed {
+    #[error("IO error: {0}")]
+    Io(std::io::ErrorKind),
+
     #[error("Not enough value: {0}")]
     NotEnoughValue(u64),
 
@@ -403,6 +406,12 @@ impl From<VerifyFailed> for ClientFailed {
     }
 }
 
+impl From<std::io::Error> for ClientFailed {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err.kind())
+    }
+}
+
 #[cfg(feature = "async-std")]
 impl From<async_std::future::TimeoutError> for Error {
     fn from(_err: async_std::future::TimeoutError) -> Self {
@@ -434,24 +443,17 @@ impl From<()> for Error {
     }
 }
 
-#[cfg(feature = "async-channel")]
-impl<T> From<async_channel::SendError<T>> for Error {
-    fn from(err: async_channel::SendError<T>) -> Self {
+#[cfg(feature = "smol")]
+impl<T> From<smol::channel::SendError<T>> for Error {
+    fn from(err: smol::channel::SendError<T>) -> Self {
         Self::AsyncChannelSendError(err.to_string())
     }
 }
 
-#[cfg(feature = "async-channel")]
-impl From<async_channel::RecvError> for Error {
-    fn from(err: async_channel::RecvError) -> Self {
+#[cfg(feature = "smol")]
+impl From<smol::channel::RecvError> for Error {
+    fn from(err: smol::channel::RecvError) -> Self {
         Self::AsyncChannelRecvError(err.to_string())
-    }
-}
-
-#[cfg(feature = "async-native-tls")]
-impl From<async_native_tls::Error> for Error {
-    fn from(err: async_native_tls::Error) -> Self {
-        Self::AsyncNativeTlsError(err.to_string())
     }
 }
 
@@ -482,17 +484,10 @@ impl From<tungstenite::Error> for Error {
     }
 }
 
-#[cfg(feature = "bincode")]
-impl From<bincode::error::DecodeError> for Error {
-    fn from(err: bincode::error::DecodeError) -> Self {
-        Self::BincodeDecodeError(err.to_string())
-    }
-}
-
-#[cfg(feature = "bincode")]
-impl From<bincode::error::EncodeError> for Error {
-    fn from(err: bincode::error::EncodeError) -> Self {
-        Self::BincodeEncodeError(err.to_string())
+#[cfg(feature = "futures-rustls")]
+impl From<futures_rustls::rustls::client::InvalidDnsNameError> for Error {
+    fn from(err: futures_rustls::rustls::client::InvalidDnsNameError) -> Self {
+        Self::RustlsInvalidDns(err.to_string())
     }
 }
 

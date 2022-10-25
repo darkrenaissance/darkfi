@@ -1,15 +1,15 @@
-use async_std::sync::{Arc, Mutex, Weak};
 use std::fmt;
 
-use async_executor::Executor;
+use async_std::sync::{Arc, Mutex, Weak};
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
 use rand::seq::SliceRandom;
 use serde_json::{json, Value};
+use smol::Executor;
 use url::Url;
 
 use crate::{
-    net::{message, TransportName},
+    net::{message, transport::TransportName},
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     util::async_util,
     Error, Result,
@@ -203,7 +203,7 @@ impl OutboundSession {
                         continue
                     }
 
-                    self.clone().register_channel(channel.clone(), executor.clone()).await?;
+                    self.register_channel(channel.clone(), executor.clone()).await?;
 
                     // Channel is now connected but not yet setup
 
@@ -230,6 +230,9 @@ impl OutboundSession {
                 }
             }
         }
+
+        // Remove url from hosts
+        self.p2p().hosts().remove(&addr).await;
 
         {
             let info = &mut self.slot_info.lock().await[slot_number as usize];
@@ -323,18 +326,8 @@ impl OutboundSession {
 
         // Ask peer
         debug!(target: "net", "#{} Asking peer: {}", slot_number, channel.address());
-
-        // Communication setup
-        let response_sub = channel.subscribe_msg::<message::AddrsMessage>().await?;
         let get_addr_msg = message::GetAddrsMessage {};
-
-        // Executing request and waiting for response
         channel.send(get_addr_msg).await?;
-        let resp = response_sub.receive().await?;
-
-        // Store response data
-        debug!(target: "net", "#{} response: {:?}", slot_number, resp.addrs);
-        p2p.hosts().store(resp.addrs.clone()).await;
 
         p2p.stop_discovery().await;
 

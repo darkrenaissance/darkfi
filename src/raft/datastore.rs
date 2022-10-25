@@ -1,12 +1,10 @@
 use std::marker::PhantomData;
 
+use darkfi_serial::{deserialize, serialize, Decodable, Encodable};
 use log::debug;
 use sled::Batch;
 
-use crate::{
-    util::serial::{deserialize, serialize, Decodable, Encodable},
-    Error, Result,
-};
+use crate::{Error, Result};
 
 use super::primitives::{Log, NodeId};
 

@@ -53,6 +53,7 @@ fn main() {
     // Clean up tabs, and convert CRLF to LF.
     let source = source.replace('\t', "    ").replace("\r\n", "\n");
 
+    // ANCHOR: zkas
     // The lexer goes over the input file and separates its content into
     // tokens that get fed into a parser.
     let lexer = Lexer::new(filename, source.chars());
@@ -62,7 +63,7 @@ fn main() {
     // the initial AST, not caring much about the semantics, just enforcing
     // syntax and general structure.
     let parser = Parser::new(filename, source.chars(), tokens);
-    let (constants, witnesses, statements) = parser.parse();
+    let (namespace, constants, witnesses, statements) = parser.parse();
 
     // The analyzer goes through the initial AST provided by the parser and
     // converts return and variable types to their correct forms, and also
@@ -85,6 +86,7 @@ fn main() {
     let compiler = Compiler::new(
         filename,
         source.chars(),
+        namespace,
         analyzer.constants,
         analyzer.witnesses,
         analyzer.statements,
@@ -93,6 +95,7 @@ fn main() {
     );
 
     let bincode = compiler.compile();
+    // ANCHOR_END: zkas
 
     let output = match args.output {
         Some(o) => o,
