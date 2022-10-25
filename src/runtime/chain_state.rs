@@ -25,6 +25,7 @@ use crate::node::state::ProgramState;
 /// Try to read a `Nullifier` from the given pointer and check if it's
 /// an existing nullifier in the blockchain state machine.
 pub fn nullifier_exists(env: &Env, ptr: u32, len: u32) -> i32 {
+    /*
     if let Some(bytes) = env.memory.get_ref().unwrap().read(ptr, len as usize) {
         debug!(target: "wasm_runtime::nullifier_exists", "Read bytes: {:?}", bytes);
 
@@ -46,12 +47,14 @@ pub fn nullifier_exists(env: &Env, ptr: u32, len: u32) -> i32 {
     }
 
     error!(target: "wasm_runtime::nullifier_exists", "Failed to read bytes from VM memory");
+    */
     -2
 }
 
 /// Try to read a `MerkleNode` from the given pointer and check if it's
 /// a valid Merkle root in the chain's Merkle tree.
 pub fn is_valid_merkle(env: &Env, ptr: u32, len: u32) -> i32 {
+    /*
     if let Some(bytes) = env.memory.get_ref().unwrap().read(ptr, len as usize) {
         debug!(target: "wasm_runtime::is_valid_merkle", "Read bytes: {:?}", bytes);
 
@@ -73,5 +76,6 @@ pub fn is_valid_merkle(env: &Env, ptr: u32, len: u32) -> i32 {
     }
 
     error!(target: "wasm_runtime::is_valid_merkle", "Failed to read bytes from VM memory");
+    */
     -2
 }

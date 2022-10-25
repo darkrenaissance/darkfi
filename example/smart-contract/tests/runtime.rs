@@ -16,13 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::serialize;
 use darkfi::{
     node::{MemoryState, State},
     runtime::{util::serialize_payload, vm_runtime::Runtime},
     Result,
 };
-use darkfi_sdk::{pasta::pallas, crypto::nullifier::Nullifier};
+use darkfi_sdk::{crypto::nullifier::Nullifier, pasta::pallas};
+use darkfi_serial::serialize;
 
 use smart_contract::Args;
 

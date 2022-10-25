@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{deserialize, SerialDecodable, SerialEncodable};
 use darkfi_sdk::{
     crypto::Nullifier,
     entrypoint,
@@ -25,6 +24,7 @@ use darkfi_sdk::{
     pasta::pallas,
     state::nullifier_exists,
 };
+use darkfi_serial::{deserialize, SerialDecodable, SerialEncodable};
 
 // An example of deserializing the payload into a struct
 #[derive(SerialEncodable, SerialDecodable)]

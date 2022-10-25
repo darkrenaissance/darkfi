@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use wasmer::{Array, Memory, WasmPtr};
+use wasmer::{Memory, WasmPtr};
 
 use crate::{Error, Result};
 
@@ -27,6 +27,8 @@ pub trait MemoryManipulation {
 
 impl MemoryManipulation for Memory {
     fn write(&self, mem_offset: u32, value_slice: &[u8]) -> Result<()> {
+        // DISABLED
+        /*
         // Prepare WasmPtr
         let target_ptr: WasmPtr<u8, Array> = WasmPtr::new(mem_offset);
 
@@ -44,11 +46,15 @@ impl MemoryManipulation for Memory {
         for i in 0..value_slice.len() {
             guest_value_slice[i].set(value_slice[i]);
         }
+        */
 
         Ok(())
     }
 
     fn read(&self, mem_offset: u32, value_len: usize) -> Option<&[u8]> {
+        // TODO: use data_size() ?
+        // DISABLED
+        /*
         let memory_size = self.size().bytes().0;
 
         if mem_offset as usize + value_len > memory_size || mem_offset as usize >= memory_size {
@@ -57,6 +63,8 @@ impl MemoryManipulation for Memory {
 
         let ptr = unsafe { self.view::<u8>().as_ptr().add(mem_offset as usize) as *const u8 };
         unsafe { Some(std::slice::from_raw_parts(ptr, value_len)) }
+        */
+        None
     }
 }
 

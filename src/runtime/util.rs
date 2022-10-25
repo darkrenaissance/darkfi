@@ -36,6 +36,8 @@ pub fn serialize_payload(payload: &[u8]) -> Vec<u8> {
 /// Host function for logging strings.
 /// This is injected into the runtime with wasmer's `imports!` macro.
 pub(crate) fn drk_log(env: &Env, ptr: u32, len: u32) {
+    // DISABLED
+    /*
     if let Some(bytes) = env.memory.get_ref().unwrap().read(ptr, len as usize) {
         // Piece the string together
         let msg = match String::from_utf8(bytes.to_vec()) {
@@ -53,4 +55,5 @@ pub(crate) fn drk_log(env: &Env, ptr: u32, len: u32) {
     }
 
     error!(target: "wasm_runtime::drk_log", "Failed to read any bytes from VM memory");
+    */
 }
