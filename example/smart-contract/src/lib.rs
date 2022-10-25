@@ -1,4 +1,4 @@
-use darkfi::serial::{deserialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{deserialize, SerialDecodable, SerialEncodable};
 use darkfi_sdk::{
     crypto::Nullifier,
     entrypoint,
@@ -19,7 +19,7 @@ pub struct Args {
 // Through here, you can branch out into different functions inside
 // this library.
 entrypoint!(process_instruction);
-fn process_instruction(ix: &[u8]) -> ContractResult {
+fn process_instruction(_state: &[u8], ix: &[u8]) -> ContractResult {
     // Deserialize the payload into `Args`.
     let args: Args = deserialize(ix)?;
 

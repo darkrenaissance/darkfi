@@ -1,11 +1,10 @@
+use darkfi_serial::serialize;
 use darkfi::{
-    crypto::nullifier::Nullifier,
     node::{MemoryState, State},
     runtime::{util::serialize_payload, vm_runtime::Runtime},
-    serial::serialize,
     Result,
 };
-use darkfi_sdk::pasta::pallas;
+use darkfi_sdk::{pasta::pallas, crypto::nullifier::Nullifier};
 
 use smart_contract::Args;
 
