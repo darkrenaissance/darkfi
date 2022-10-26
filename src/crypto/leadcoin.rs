@@ -26,7 +26,7 @@ pub struct LeadCoin {
     pub nonce_cm: Option<pallas::Base>, // coin nonce's commitment
     pub sn: Option<pallas::Base>,       // coin's serial number
     pub keypair: Option<Keypair>,
-    pub root_cm: Option<pallas::Scalar>, // root of coin commitment
+    pub root_cm: Option<pallas::Base>, // root of coin commitment
     pub root_sk: Option<pallas::Base>,   // coin's secret key
     pub path: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the coin's commitment
     pub path_sk: Option<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to the coin's secret key
@@ -42,14 +42,8 @@ pub struct LeadCoin {
 impl LeadCoin {
     pub fn public_inputs_as_array(&self) -> [pallas::Base; LEAD_PUBLIC_INPUT_LEN] {
         let po_nonce = self.nonce_cm.unwrap();
-        let _po_tau = pedersen_commitment_base(self.tau.unwrap(), self.root_cm.unwrap())
-            .to_affine()
-            .coordinates()
-            .unwrap();
-
         let po_cm = self.cm.unwrap().to_affine().coordinates().unwrap();
         let po_pk = self.keypair.unwrap().public.0.to_affine().coordinates().unwrap();
-
         let y_mu = self.y_mu.unwrap();
         let rho_mu = self.rho_mu.unwrap();
         let root_sk = self.root_sk.unwrap();
@@ -58,7 +52,6 @@ impl LeadCoin {
         let lottery_msg: pallas::Base =
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
                 .hash(lottery_msg_input);
-        //
         let po_y_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(y_mu));
         let po_y_x = *po_y_pt.to_affine().coordinates().unwrap().x();
         let po_y_y = *po_y_pt.to_affine().coordinates().unwrap().y();
@@ -66,7 +59,6 @@ impl LeadCoin {
         let po_y: pallas::Base =
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
                 .hash(y_coord_arr);
-
         let cm_pos = self.idx;
         let cm_root = {
             let pos: u32 = cm_pos;

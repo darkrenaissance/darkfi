@@ -267,7 +267,7 @@ impl Epoch {
             nonce_cm: Some(c_seed2),
             sn: Some(c_sn),
             keypair: Some(keypair),
-            root_cm: Some(mod_r_p(c_root_cm.inner())),
+            root_cm: Some(c_root_cm.inner()),
             root_sk: Some(c_root_sk.inner()),
             path: Some(c_cm_path.as_slice().try_into().unwrap()),
             path_sk: Some(c_path_sk),

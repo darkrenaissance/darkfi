@@ -122,7 +122,7 @@ pub struct LeadContract {
     pub slot: Value<pallas::Base>,
     pub mau_rho: Value<pallas::Scalar>,
     pub mau_y: Value<pallas::Scalar>,
-    pub root_cm: Value<pallas::Scalar>,
+    pub root_cm: Value<pallas::Base>,
     pub sigma1: Value<pallas::Base>,
     pub sigma2: Value<pallas::Base>,
     //pub eta : Option<u32>,
@@ -311,9 +311,11 @@ impl Circuit<pallas::Base> for LeadContract {
         let _root_sk =
             self.load_private(layouter.namespace(|| "root sk"), config.advices[0], self.root_sk)?;
 
+        let root_cm = self.load_private(layouter.namespace(||""), config.advices[0], self.root_cm)?;
+
         // staking coin secret key
         let sk: AssignedCell<Fp, Fp> =
-            self.load_private(layouter.namespace(|| "sk"), config.advices[0], self.sk).unwrap();
+            self.load_private(layouter.namespace(|| "sk"), config.advices[0], self.sk)?;
 
         let sigma1 = self.load_private(
             layouter.namespace(|| "load sigma1 "),
@@ -535,9 +537,15 @@ impl Circuit<pallas::Base> for LeadContract {
             )?;
             res
         };
-        let computed_final_root = merkle_inputs
+
+        let coin_cm_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin_commit_prod)?;
 
+        layouter.assign_region(||"",
+                               |mut region| {
+                                   region.constrain_equal(coin_cm_root.cell(), root_cm.cell())
+                               }
+        );
         // lhs of the leader election lottery
         // *  y as COMIT(root_sk||nonce, mau_y)
         // beging the commitment to the coin's secret key, coin's nonce, and
@@ -663,30 +671,20 @@ impl Circuit<pallas::Base> for LeadContract {
 
         coin2_commit.constrain_equal(layouter.namespace(|| ""), &ref_coin2_cm)?;
 
-        /*
-        layouter.constrain_instance(
-            coin2_commit_x.cell(),
-            config.primary,
-            LEAD_COIN_COMMIT2_X_OFFSET,
-        )?;
-        // constrain coin's pub key y value
-        layouter.constrain_instance(
-            coin2_commit_y.cell(),
-            config.primary,
-            LEAD_COIN_COMMIT2_Y_OFFSET,
-        )?;
-         */
-
-        layouter.constrain_instance(coin2_nonce.cell(), config.primary, LEAD_COIN_NONCE2_OFFSET)?;
-
-        layouter.constrain_instance(
-            computed_final_root.cell(),
-            config.primary,
-            LEAD_COIN_COMMIT_PATH_OFFSET,
+        layouter.constrain_instance(coin2_nonce.cell(),
+                                    config.primary,
+                                    LEAD_COIN_NONCE2_OFFSET
         )?;
 
-        layouter.constrain_instance(coin_pk_x.cell(), config.primary, LEAD_COIN_PK_X_OFFSET)?;
-        layouter.constrain_instance(coin_pk_y.cell(), config.primary, LEAD_COIN_PK_Y_OFFSET)?;
+
+        layouter.constrain_instance(coin_pk_x.cell(),
+                                    config.primary,
+                                    LEAD_COIN_PK_X_OFFSET
+        )?;
+        layouter.constrain_instance(coin_pk_y.cell(),
+                                    config.primary,
+                                    LEAD_COIN_PK_Y_OFFSET
+        )?;
 
         layouter.assign_region(
             || "",
