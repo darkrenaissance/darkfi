@@ -95,14 +95,11 @@ impl LeadConfig {
 
 const LEAD_COIN_COMMIT_X_OFFSET: usize = 0;
 const LEAD_COIN_COMMIT_Y_OFFSET: usize = 1;
-//const LEAD_COIN_COMMIT2_X_OFFSET: usize = 2;
-//const LEAD_COIN_COMMIT2_Y_OFFSET: usize = 3;
 const LEAD_COIN_NONCE2_OFFSET: usize = 2;
 const LEAD_COIN_COMMIT_PATH_OFFSET: usize = 3;
 const LEAD_COIN_PK_X_OFFSET: usize = 4;
 const LEAD_COIN_PK_Y_OFFSET: usize = 5;
 const LEAD_Y_COMMIT_BASE_OFFSET: usize = 6;
-const LEAD_RHO_COMMIT_BASE_OFFSET: usize = 7;
 
 #[derive(Default, Debug)]
 pub struct LeadContract {
@@ -129,7 +126,7 @@ pub struct LeadContract {
     pub sigma1: Value<pallas::Base>,
     pub sigma2: Value<pallas::Base>,
     //pub eta : Option<u32>,
-    //pub rho : Option<u32>,
+    pub rho : Value<pallas::Point>,
     //pub h : Option<u32>, // hash of this data
     //pub ptr: Option<u32>, //hash of the previous block
 }
@@ -447,7 +444,7 @@ impl Circuit<pallas::Base> for LeadContract {
         let coin_commit_y: AssignedCell<Fp, Fp> = coin_commit.inner().y();
 
         // nonce2  =  PRF_{root_sk}(coin_nonce)
-        // poured coin derived nonce as a poseidon of the previous nonce, and
+        // poured coin nonce as a poseidon of the previous nonce, and
         // root of secret key.
         let coin2_nonce: AssignedCell<Fp, Fp> = {
             let poseidon_message = [coin_nonce.clone(), _root_sk.clone()];
@@ -581,9 +578,9 @@ impl Circuit<pallas::Base> for LeadContract {
             y_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_y)?
         };
         let y_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        let y_commit_base_x = y_commit.inner().x();
-        let y_commit_base_y = y_commit.inner().y();
         let y_commit_base: AssignedCell<Fp, Fp> = {
+            let y_commit_base_x = y_commit.inner().x();
+            let y_commit_base_y = y_commit.inner().y();
             let y_coord = [y_commit_base_x, y_commit_base_y];
             let poseidon_hasher = PoseidonHash::<
                 _,
@@ -614,26 +611,12 @@ impl Circuit<pallas::Base> for LeadContract {
             rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_rho)?
         };
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        let rho_commit_x = rho_commit.inner().x();
-        let rho_commit_y = rho_commit.inner().y();
-        let rho_commit_base: AssignedCell<Fp, Fp> = {
-            let rho_coord = [rho_commit_x, rho_commit_y];
-            let poseidon_hasher = PoseidonHash::<
-                    _,
-                _,
-                poseidon::P128Pow5T3,
-                poseidon::ConstantLength<2>,
-                3,
-                2,
-                >::init(
-                config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
-            )?;
-
-            let poseidon_output =
-                poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), rho_coord)?;
-            let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
-            poseidon_output
-        };
+        let rho = NonIdentityPoint::new(
+            ecc_chip.clone(),
+            layouter.namespace(|| "witness rho"),
+            self.rho.map(|x| x.to_affine()),
+        )?;
+        rho_commit.constrain_equal(layouter.namespace(||""),&rho)?;
         let term1 =
             ar_chip.mul(layouter.namespace(|| "calculate term1"), &sigma1, &coin_value.clone())?;
 
@@ -724,11 +707,6 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_Y_COMMIT_BASE_OFFSET,
         )?;
 
-        layouter.constrain_instance(
-            rho_commit_base.cell(),
-            config.primary,
-            LEAD_RHO_COMMIT_BASE_OFFSET,
-        )?;
 
         Ok(())
     }

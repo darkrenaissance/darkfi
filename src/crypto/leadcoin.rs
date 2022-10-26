@@ -12,7 +12,7 @@ use crate::{
     zk::circuit::lead_contract::LeadContract,
 };
 
-pub const LEAD_PUBLIC_INPUT_LEN: usize = 8;
+pub const LEAD_PUBLIC_INPUT_LEN: usize = 7;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
@@ -67,13 +67,7 @@ impl LeadCoin {
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
             )
             .hash(y_coord_arr);
-        //
-        let po_rho_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(rho_mu));
-        let po_rho_x = *po_rho_pt.to_affine().coordinates().unwrap().x();
-        let po_rho_y = *po_rho_pt.to_affine().coordinates().unwrap().y();
-        let rho_coord_arr = [po_rho_x, po_rho_y];
-        let po_rho: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(rho_coord_arr);
+
 
         let cm_pos = self.idx;
         let cm_root = {
@@ -99,7 +93,6 @@ impl LeadCoin {
             *po_pk.x(),
             *po_pk.y(),
             po_y,
-            po_rho,
         ];
         public_inputs
     }
@@ -109,6 +102,15 @@ impl LeadCoin {
     }
 
     pub fn create_contract(&self) -> LeadContract {
+        let rho_mu = self.rho_mu.unwrap();
+        let root_sk = self.root_sk.unwrap();
+        let nonce = self.nonce.unwrap();
+        let lottery_msg_input = [root_sk, nonce];
+        let lottery_msg: pallas::Base =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+            .hash(lottery_msg_input);
+        //
+        let rho_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(rho_mu));
         LeadContract {
             path: Value::known(self.path.unwrap()),
             sk: Value::known(self.keypair.unwrap().secret.inner()),
@@ -129,6 +131,7 @@ impl LeadCoin {
             root_cm: Value::known(self.root_cm.unwrap()),
             sigma1: Value::known(self.sigma1.unwrap()),
             sigma2: Value::known(self.sigma2.unwrap()),
+            rho: Value::known(rho_pt),
         }
     }
 }
