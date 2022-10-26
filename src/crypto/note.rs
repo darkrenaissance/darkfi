@@ -38,13 +38,9 @@ impl Note {
         let mut ciphertext = vec![0_u8; input_len + AEAD_TAG_SIZE];
         ciphertext[..input_len].copy_from_slice(&input);
 
-        let tag = ChaCha20Poly1305::new(key.as_ref().into())
-            .encrypt_in_place_detached([0u8; 12][..].into(), &[], &mut ciphertext[..input_len])
+        ChaCha20Poly1305::new(key.as_ref().into())
+            .encrypt_in_place([0u8; 12][..].into(), &[], &mut ciphertext)
             .unwrap();
-
-        ciphertext[input_len..].copy_from_slice(&tag);
-
-        assert_eq!(input_len + AEAD_TAG_SIZE, ciphertext.len());
 
         Ok(EncryptedNote { ciphertext, ephem_public })
     }
@@ -61,18 +57,16 @@ impl EncryptedNote {
         let shared_secret = sapling_ka_agree(secret, &self.ephem_public);
         let key = kdf_sapling(&shared_secret, &self.ephem_public);
 
-        let output_len = self.ciphertext.len() - AEAD_TAG_SIZE;
+        let ciphertext_len = self.ciphertext.len();
+        let mut plaintext = vec![0_u8; ciphertext_len];
+        plaintext.copy_from_slice(&self.ciphertext);
 
-        let mut plaintext = vec![0_u8; output_len];
-        plaintext.copy_from_slice(&self.ciphertext[..output_len]);
-
-        match ChaCha20Poly1305::new(key.as_ref().into()).decrypt_in_place_detached(
+        match ChaCha20Poly1305::new(key.as_ref().into()).decrypt_in_place(
             [0u8; 12][..].into(),
             &[],
             &mut plaintext,
-            self.ciphertext[output_len..].into(),
         ) {
-            Ok(()) => Ok(Note::decode(&plaintext[..])?),
+            Ok(()) => Ok(Note::decode(&plaintext[..ciphertext_len - AEAD_TAG_SIZE])?),
             Err(e) => Err(Error::NoteDecryptionFailed(e.to_string())),
         }
     }
