@@ -146,8 +146,8 @@ pub enum Error {
     #[error("halo2 plonk error: {0}")]
     PlonkError(String),
 
-    #[error("Unable to decrypt mint note")]
-    NoteDecryptionFailed,
+    #[error("Unable to decrypt mint note: {0}")]
+    NoteDecryptionFailed(String),
 
     #[error("No keypair file detected")]
     KeypairPathNotFound,

@@ -1,4 +1,4 @@
-use crypto_api_chachapoly::ChachaPolyIetf;
+use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
@@ -33,14 +33,18 @@ impl Note {
 
         let mut input = Vec::new();
         self.encode(&mut input)?;
+        let input_len = input.len();
 
-        let mut ciphertext = vec![0; input.len() + AEAD_TAG_SIZE];
-        assert_eq!(
-            ChachaPolyIetf::aead_cipher()
-                .seal_to(&mut ciphertext, &input, &[], key.as_ref(), &[0u8; 12])
-                .unwrap(),
-            input.len() + AEAD_TAG_SIZE
-        );
+        let mut ciphertext = vec![0_u8; input_len + AEAD_TAG_SIZE];
+        ciphertext[..input_len].copy_from_slice(&input);
+
+        let tag = ChaCha20Poly1305::new(key.as_ref().into())
+            .encrypt_in_place_detached([0u8; 12][..].into(), &[], &mut ciphertext[..input_len])
+            .unwrap();
+
+        ciphertext[input_len..].copy_from_slice(&tag);
+
+        assert_eq!(input_len + AEAD_TAG_SIZE, ciphertext.len());
 
         Ok(EncryptedNote { ciphertext, ephem_public })
     }
@@ -57,17 +61,20 @@ impl EncryptedNote {
         let shared_secret = sapling_ka_agree(secret, &self.ephem_public);
         let key = kdf_sapling(&shared_secret, &self.ephem_public);
 
-        let mut plaintext = vec![0; self.ciphertext.len() - AEAD_TAG_SIZE];
+        let output_len = self.ciphertext.len() - AEAD_TAG_SIZE;
 
-        assert_eq!(
-            ChachaPolyIetf::aead_cipher()
-                .open_to(&mut plaintext, &self.ciphertext, &[], key.as_ref(), &[0u8; 12])
-                .map_err(|_| Error::NoteDecryptionFailed)?,
-            self.ciphertext.len() - AEAD_TAG_SIZE
-        );
+        let mut plaintext = vec![0_u8; output_len];
+        plaintext.copy_from_slice(&self.ciphertext[..output_len]);
 
-        let note = Note::decode(&plaintext[..])?;
-        Ok(note)
+        match ChaCha20Poly1305::new(key.as_ref().into()).decrypt_in_place_detached(
+            [0u8; 12][..].into(),
+            &[],
+            &mut plaintext,
+            self.ciphertext[output_len..].into(),
+        ) {
+            Ok(()) => Ok(Note::decode(&plaintext[..])?),
+            Err(e) => Err(Error::NoteDecryptionFailed(e.to_string())),
+        }
     }
 }
 
