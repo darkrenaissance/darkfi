@@ -9,7 +9,7 @@ use darkfi_sdk::crypto::{
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointBaseField, ScalarFixed,
+        FixedPoint, FixedPointBaseField, ScalarFixed,NonIdentityPoint,
     },
     poseidon::{
         primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
@@ -36,6 +36,8 @@ use crate::zk::gadget::{
     less_than::{LessThanChip, LessThanConfig},
     native_range_check::NativeRangeCheckChip,
 };
+
+use pasta_curves::group::Curve;
 
 const WINDOW_SIZE: usize = 3;
 const NUM_OF_BITS: usize = 254;
@@ -93,16 +95,14 @@ impl LeadConfig {
 
 const LEAD_COIN_COMMIT_X_OFFSET: usize = 0;
 const LEAD_COIN_COMMIT_Y_OFFSET: usize = 1;
-const LEAD_COIN_COMMIT2_X_OFFSET: usize = 2;
-const LEAD_COIN_COMMIT2_Y_OFFSET: usize = 3;
-const LEAD_COIN_NONCE2_OFFSET: usize = 4;
-const LEAD_COIN_COMMIT_PATH_OFFSET: usize = 5;
-const LEAD_COIN_PK_X_OFFSET: usize = 6;
-const LEAD_COIN_PK_Y_OFFSET: usize = 7;
-const LEAD_COIN_SERIAL_NUMBER_OFFSET: usize = 8;
-const LEAD_Y_COMMIT_BASE_OFFSET: usize = 9;
-const LEAD_RHO_COMMIT_BASE_OFFSET: usize = 10;
-
+//const LEAD_COIN_COMMIT2_X_OFFSET: usize = 2;
+//const LEAD_COIN_COMMIT2_Y_OFFSET: usize = 3;
+const LEAD_COIN_NONCE2_OFFSET: usize = 2;
+const LEAD_COIN_COMMIT_PATH_OFFSET: usize = 3;
+const LEAD_COIN_PK_X_OFFSET: usize = 4;
+const LEAD_COIN_PK_Y_OFFSET: usize = 5;
+const LEAD_Y_COMMIT_BASE_OFFSET: usize = 6;
+const LEAD_RHO_COMMIT_BASE_OFFSET: usize = 7;
 
 #[derive(Default, Debug)]
 pub struct LeadContract {
@@ -114,8 +114,10 @@ pub struct LeadContract {
     pub coin_timestamp: Value<pallas::Base>,
     pub coin_nonce: Value<pallas::Base>,
     pub coin1_blind: Value<pallas::Scalar>,
+    pub coin1_sn: Value<pallas::Base>,
     pub value: Value<pallas::Base>,
     pub coin2_blind: Value<pallas::Scalar>,
+    pub coin2_commit: Value<pallas::Point>,
     // public advices
     pub cm_pos: Value<u32>,
     //
@@ -293,6 +295,12 @@ impl Circuit<pallas::Base> for LeadContract {
             layouter.namespace(|| "load coin nonce"),
             config.advices[0],
             self.coin_nonce,
+        )?;
+
+        let coin1_sn: AssignedCell<Fp, Fp> = self.load_private(
+            layouter.namespace(|| "load coin1 sn"),
+            config.advices[0],
+            self.coin1_sn,
         )?;
 
         // staking coin value
@@ -602,7 +610,7 @@ impl Circuit<pallas::Base> for LeadContract {
                 self.mau_rho,
             )?;
             let rho_commit_r =
-                FixedPoint::from_inner(ecc_chip, OrchardFixedBasesFull::ValueCommitR);
+                FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_rho)?
         };
         let rho_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
@@ -664,6 +672,21 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_Y_OFFSET,
         )?;
 
+
+        let ref_coin2_cm = NonIdentityPoint::new(
+            ecc_chip.clone(),
+            layouter.namespace(|| "witness coin2 cm"),
+            self.coin2_commit.map(|x| x.to_affine()),
+        )?;
+
+
+        coin2_commit.constrain_equal(
+            layouter.namespace(||""),
+            &ref_coin2_cm
+        )?;
+
+
+        /*
         layouter.constrain_instance(
             coin2_commit_x.cell(),
             config.primary,
@@ -675,6 +698,7 @@ impl Circuit<pallas::Base> for LeadContract {
             config.primary,
             LEAD_COIN_COMMIT2_Y_OFFSET,
         )?;
+         */
 
         layouter.constrain_instance(coin2_nonce.cell(), config.primary, LEAD_COIN_NONCE2_OFFSET)?;
 
@@ -687,12 +711,12 @@ impl Circuit<pallas::Base> for LeadContract {
         layouter.constrain_instance(coin_pk_x.cell(), config.primary, LEAD_COIN_PK_X_OFFSET)?;
         layouter.constrain_instance(coin_pk_y.cell(), config.primary, LEAD_COIN_PK_Y_OFFSET)?;
 
-        // constrain coin's pub key x value
-        layouter.constrain_instance(
-            sn_commit.cell(),
-            config.primary,
-            LEAD_COIN_SERIAL_NUMBER_OFFSET,
-        )?;
+        layouter.assign_region(||"",
+                               |mut region| {
+                                   region.constrain_equal(sn_commit.cell(),
+                                                          coin1_sn.cell())
+                               }
+        );
 
         layouter.constrain_instance(
             y_commit_base.cell(),

@@ -5,7 +5,7 @@ use url::Url;
 
 use darkfi::{
     consensus::ouroboros::{Epoch, EpochConsensus, Stakeholder},
-    crypto::leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN},
+    crypto::{lead_proof, leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN}},
     net::Settings,
 };
 
@@ -15,7 +15,7 @@ fn main() {
     let k: u32 = 13;
     //
 
-    //
+
     let _value = 33223; //static stake value
 
     //
@@ -50,13 +50,13 @@ fn main() {
 
     let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] = coin.public_inputs_as_array();
 
-    //let lead_pk = stakeholder.get_provkingkey();
-    //let lead_vk = stakeholder.get_verifyingkey();
+    let lead_pk = stakeholder.get_leadprovkingkey();
+    let lead_vk = stakeholder.get_leadverifyingkey();
 
-    //let proof = lead_proof::create_lead_proof(&lead_pk.clone(), coin.clone()).unwrap();
-    //lead_proof::verify_lead_proof(&lead_vk, &proof, &public_inputs);
+    let proof = lead_proof::create_lead_proof(&lead_pk.clone(), coin.clone()).unwrap();
+    lead_proof::verify_lead_proof(&lead_vk, &proof, &public_inputs);
 
     let prover = MockProver::run(k, &contract, vec![public_inputs.to_vec()]).unwrap();
     prover.assert_satisfied();
-    //assert_eq!(prover.verify(), Ok(()));
+    assert_eq!(prover.verify(), Ok(()));
 }

@@ -12,7 +12,7 @@ use crate::{
     zk::circuit::lead_contract::LeadContract,
 };
 
-pub const LEAD_PUBLIC_INPUT_LEN: usize = 11;
+pub const LEAD_PUBLIC_INPUT_LEN: usize = 8;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
@@ -48,9 +48,7 @@ impl LeadCoin {
             .unwrap();
 
         let po_cm = self.cm.unwrap().to_affine().coordinates().unwrap();
-        let po_cm2 = self.cm2.unwrap().to_affine().coordinates().unwrap();
         let po_pk = self.keypair.unwrap().public.0.to_affine().coordinates().unwrap();
-        let po_sn = self.sn.unwrap();
 
         let y_mu = self.y_mu.unwrap();
         let rho_mu = self.rho_mu.unwrap();
@@ -96,13 +94,10 @@ impl LeadCoin {
         let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] = [
             *po_cm.x(),
             *po_cm.y(),
-            *po_cm2.x(),
-            *po_cm2.y(),
             po_nonce,
             cm_root.inner(),
             *po_pk.x(),
             *po_pk.y(),
-            po_sn,
             po_y,
             po_rho,
         ];
@@ -122,8 +117,10 @@ impl LeadCoin {
             coin_timestamp: Value::known(self.tau.unwrap()), //
             coin_nonce: Value::known(self.nonce.unwrap()),
             coin1_blind: Value::known(self.c1_blind.unwrap()),
+            coin1_sn: Value::known(self.sn.unwrap()),
             value: Value::known(pallas::Base::from(self.value.unwrap())),
             coin2_blind: Value::known(self.c2_blind.unwrap()),
+            coin2_commit: Value::known(self.cm2.unwrap()),
             cm_pos: Value::known(self.idx),
             //sn_c1: Value::known(self.sn.unwrap()),
             slot: Value::known(self.sl.unwrap()),
