@@ -1,8 +1,8 @@
 //! https://signal.org/docs/specifications/x3dh/x3dh.pdf
 use std::collections::{HashMap, VecDeque};
 
+use aes_gcm_siv::{AeadInPlace, Aes256GcmSiv, KeyInit};
 use anyhow::Result;
-use crypto_api_chachapoly::ChachaPolyIetf;
 use rand::rngs::OsRng;
 use sha2::Sha256;
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
@@ -205,7 +205,10 @@ fn main() -> Result<()> {
 
     let message = b"ohai bob";
     let mut ciphertext = vec![0u8; message.len() + AEAD_TAG_SIZE];
-    ChachaPolyIetf::aead_cipher().seal_to(&mut ciphertext, message, &ad, &sk, &[0u8; 12]).unwrap();
+    ciphertext[..message.len()].copy_from_slice(message);
+
+    let nonce = [0u8; 12][..].into();
+    Aes256GcmSiv::new(&sk.into()).encrypt_in_place(nonce, &ad, &mut ciphertext).unwrap();
 
     let initial_message = InitialMessage {
         identity_key: alice_ik_public,
@@ -264,10 +267,13 @@ fn main() -> Result<()> {
     // Finally, Bob attempts to decrypt the initial ciphertext using SK and AD.
     // If the initial ciphertext fails to decrypt, Bob aborts the protocol and
     // deletes SK.
-    let mut plaintext = vec![0_u8; initial_message.ciphertext.len() - AEAD_TAG_SIZE];
-    ChachaPolyIetf::aead_cipher()
-        .open_to(&mut plaintext, &initial_message.ciphertext, &ad, &sk2, &[0u8; 12])
-        .unwrap();
+    let mut plaintext = vec![0_u8; initial_message.ciphertext.len()];
+    plaintext.copy_from_slice(&initial_message.ciphertext);
+
+    let nonce = [0u8; 12][..].into();
+    Aes256GcmSiv::new(&sk2.into()).decrypt_in_place(nonce, &ad, &mut plaintext).unwrap();
+    plaintext.resize(plaintext.len() - AEAD_TAG_SIZE, 0);
+
     assert_eq!(plaintext, message); // Just to confirm everything's correct
 
     // If the initial ciphertext decrypts successfully, the protocol is complete
