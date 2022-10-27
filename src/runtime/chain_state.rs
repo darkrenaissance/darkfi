@@ -49,7 +49,8 @@ pub fn nullifier_exists(mut env: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32
     */
 
     error!(target: "wasm_runtime::nullifier_exists", "Failed to read bytes from VM memory");
-    -2
+    //-2
+    0
 }
 
 /// Try to read a `MerkleNode` from the given pointer and check if it's
@@ -78,5 +79,6 @@ pub fn is_valid_merkle(mut env: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 
     */
 
     error!(target: "wasm_runtime::is_valid_merkle", "Failed to read bytes from VM memory");
-    -2
+    //-2
+    0
 }

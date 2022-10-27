@@ -25,7 +25,7 @@ use darkfi_sdk::entrypoint;
 use log::{debug, info};
 use wasmer::{
     imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
-    Memory, MemoryView, Module, Store, Value,
+    Memory, MemoryView, Module, Store, Value, WasmPtr,
 };
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::{
@@ -107,7 +107,8 @@ pub struct ExecutionResult {
 
 pub struct Runtime {
     pub instance: Instance,
-    pub env: FunctionEnv<Env>,
+    pub store: Store,
+    pub ctx: FunctionEnv<Env>,
 }
 
 impl Runtime {
@@ -146,26 +147,26 @@ impl Runtime {
         let state_machine = Arc::new(state_machine);
         let state_updates = Arc::new(Mutex::new(vec![]));
 
-        let env =
+        let ctx =
             FunctionEnv::new(&mut store, Env { logs, memory: None, state_machine, state_updates });
 
         let imports = imports! {
             "env" => {
                 "drk_log_" => Function::new_typed_with_env(
                     &mut store,
-                    &env,
+                    &ctx,
                     drk_log,
                 ),
 
                 "nullifier_exists_" => Function::new_typed_with_env(
                     &mut store,
-                    &env,
+                    &ctx,
                     nullifier_exists,
                 ),
 
                 "is_valid_merkle_" => Function::new_typed_with_env(
                     &mut store,
-                    &env,
+                    &ctx,
                     is_valid_merkle,
                 ),
             }
@@ -174,31 +175,39 @@ impl Runtime {
         debug!(target: "wasm_runtime::new", "Instantiating module");
         let instance = Instance::new(&mut store, &module, &imports)?;
 
-        let mut env_mut = env.as_mut(&mut store);
+        let mut env_mut = ctx.as_mut(&mut store);
         env_mut.memory = Some(instance.exports.get_with_generics(MEMORY)?);
 
-        Ok(Self { instance, env })
+        Ok(Self { instance, store, ctx })
     }
 
     /// Run the hardcoded `ENTRYPOINT` function with the given payload as input.
     pub fn run(&mut self, payload: &[u8]) -> Result<()> {
-        /*
+        // TODO: needs factoring
+        let mem_offset = self.guest_mem_alloc(payload.len())?;
+        {
+            let env = self.ctx.as_ref(&self.store);
+            let memory_view = env.memory_view(&self.store);
+            let ptr: WasmPtr<u8> = WasmPtr::new(mem_offset);
+            let slice = ptr.slice(&memory_view, payload.len() as u32).expect("FIXME FIXME FIXME");
+            slice.write_slice(payload).expect("FIXME FIXME FIXME");
+        }
+
         // Get module linear memory
-        let memory = self.memory()?;
+        //let memory = self.memory()?;
 
         // Retrieve ptr to pass data, and write the payload into the vm memory
-        let mem_offset = self.guest_mem_alloc(payload.len())?;
-        memory.write(mem_offset, payload)?;
+        //memory.write(mem_offset, payload)?;
 
         debug!(target: "wasm_runtime::run", "Getting entrypoint function");
         let entrypoint = self.instance.exports.get_function(ENTRYPOINT)?;
 
         debug!(target: "wasm_runtime::run", "Executing wasm");
-        let ret = match entrypoint.call(&[Value::I32(mem_offset as i32)]) {
-            Ok(v) => {
+        let ret = match entrypoint.call(&mut self.store, &[Value::I32(mem_offset as i32)]) {
+            Ok(retvals) => {
                 self.print_logs();
                 debug!(target: "wasm_runtime::run", "{}", self.gas_info());
-                v
+                retvals
             }
             Err(e) => {
                 self.print_logs();
@@ -220,16 +229,13 @@ impl Runtime {
             // _ => Err(ContractError(retval)),
             _ => todo!(),
         }
-        */
-        Ok(())
     }
 
     fn print_logs(&self) {
-        // DISABLED
-        /*let logs = self.env.logs.lock().unwrap();
+        let logs = self.ctx.as_ref(&self.store).logs.borrow();
         for msg in logs.iter() {
             debug!(target: "wasm_runtime::run", "Contract log: {}", msg);
-        }*/
+        }
     }
 
     fn gas_info(&self) -> String {
@@ -246,16 +252,18 @@ impl Runtime {
             }
         }
         */
-        "foo".to_string()
+        "(gas info temporarily disabled)".to_string()
     }
 
     /// Allocate some memory space on a wasm linear memory to allow direct rw.
-    fn guest_mem_alloc(&self, size: usize) -> Result<u32> {
-        // DISABLED
-        //let mem_alloc = self.instance.exports.get_function(WASM_MEM_ALLOC)?;
-        //let res_target_ptr = mem_alloc.call(&[Value::I32(size as i32)])?.to_vec();
-        //Ok(res_target_ptr[0].unwrap_i32() as u32)
-        Ok(0)
+    // TODO: we should maybe use memory.grow() instead which expands memory by pages
+    //       https://docs.rs/wasmer/3.0.0-rc.1/wasmer/struct.Memory.html#method.grow
+    // TODO: https://docs.rs/wasmer/3.0.0-rc.1/wasmer/constant.WASM_PAGE_SIZE.html
+    fn guest_mem_alloc(&mut self, size: usize) -> Result<u32> {
+        let mem_alloc_func = self.instance.exports.get_function(WASM_MEM_ALLOC)?;
+        let res_target_ptr =
+            mem_alloc_func.call(&mut self.store, &[Value::I32(size as i32)])?.to_vec();
+        Ok(res_target_ptr[0].unwrap_i32() as u32)
     }
 
     /// Retrieve linear memory from a wasm module and return its reference.

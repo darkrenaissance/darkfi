@@ -47,7 +47,7 @@ pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
             std::mem::drop(logs);
         },
         Err(_) => {
-            error!(target: "wasm_runtime::drk_log", "Failed to UTF-8 string from VM memory");
+            error!(target: "wasm_runtime::drk_log", "Failed to read UTF-8 string from VM memory");
         }
     }
 }
