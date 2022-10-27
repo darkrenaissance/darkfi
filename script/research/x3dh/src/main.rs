@@ -229,19 +229,23 @@ impl DoubleRatchetSessionState {
         ciphertext: &[u8],
         ad: &[u8],
     ) -> Vec<u8> {
-        if let Some(plaintext) = self.try_skipped_message_keys(header, ciphertext, ad) {
+        // We clone here so we don't have to worry about mutating the state before
+        // everything is correct.
+        let mut self_c = self.clone();
+
+        if let Some(plaintext) = self_c.try_skipped_message_keys(header, ciphertext, ad) {
             return plaintext
         }
 
-        if header.dh != self.dh_remote {
-            self.skip_message_keys(header.n);
-            self.dh_ratchet(header);
+        if header.dh != self_c.dh_remote {
+            self_c.skip_message_keys(header.n);
+            self_c.dh_ratchet(header);
         }
 
-        self.skip_message_keys(header.n);
-        let (chain_key, message_key) = kdf_ck(self.chain_key_recv);
-        self.chain_key_recv = chain_key;
-        self.n_recv += 1;
+        self_c.skip_message_keys(header.n);
+        let (chain_key, message_key) = kdf_ck(self_c.chain_key_recv);
+        self_c.chain_key_recv = chain_key;
+        self_c.n_recv += 1;
 
         let mut plaintext = vec![0u8; ciphertext.len()];
         plaintext.copy_from_slice(ciphertext);
@@ -255,6 +259,9 @@ impl DoubleRatchetSessionState {
         Aes256GcmSiv::new(&message_key.into())
             .decrypt_in_place(BLANK_NONCE.into(), &associated_data, &mut plaintext)
             .unwrap();
+
+        // Apply the state change
+        *self = self_c;
 
         plaintext.resize(plaintext.len() - AEAD_TAG_SIZE, 0);
         plaintext
@@ -594,31 +601,22 @@ fn main() -> Result<()> {
     let (header, ciphertext) = alice_ratchet_state.ratchet_encrypt(message_to_bob, &[]);
 
     // Alice sends it to Bob, and Bob decrypts.
-    // NOTE: We clone this structure so we can discard it if we're unable to decrypt.
-    let mut bob_ratchet_state_clone = bob_ratchet_state.clone();
-    let plaintext = bob_ratchet_state_clone.ratchet_decrypt(header, &ciphertext, &[]);
+    let plaintext = bob_ratchet_state.ratchet_decrypt(header, &ciphertext, &[]);
     assert_eq!(plaintext, message_to_bob);
-    // NOTE: And now if we managed, re replace it
-    // TODO: Fix this approach.
-    bob_ratchet_state = bob_ratchet_state_clone;
 
     let message_to_alice = b"hai alice, what's up?";
     let (header, ciphertext) = bob_ratchet_state.ratchet_encrypt(message_to_alice, &[]);
 
     // Bob replies to Alice.
-    let mut alice_ratchet_state_clone = alice_ratchet_state.clone();
-    let plaintext = alice_ratchet_state_clone.ratchet_decrypt(header, &ciphertext, &[]);
+    let plaintext = alice_ratchet_state.ratchet_decrypt(header, &ciphertext, &[]);
     assert_eq!(plaintext, message_to_alice);
-    alice_ratchet_state = alice_ratchet_state_clone;
 
     // Alice loves Bob.
     let message_to_bob = b"you schizo";
     let (header, ciphertext) = alice_ratchet_state.ratchet_encrypt(message_to_bob, &[]);
 
-    let mut bob_ratchet_state_clone = bob_ratchet_state.clone();
-    let plaintext = bob_ratchet_state_clone.ratchet_decrypt(header, &ciphertext, &[]);
+    let plaintext = bob_ratchet_state.ratchet_decrypt(header, &ciphertext, &[]);
     assert_eq!(plaintext, message_to_bob);
-    bob_ratchet_state = bob_ratchet_state_clone;
 
     // Let's try out of order
     let message_to_bob1 = b"hello";
@@ -627,23 +625,17 @@ fn main() -> Result<()> {
     let (header2, ciphertext2) = alice_ratchet_state.ratchet_encrypt(message_to_bob2, &[]);
 
     // Slow Bob
-    let mut bob_ratchet_state_clone = bob_ratchet_state.clone();
-    let plaintext = bob_ratchet_state_clone.ratchet_decrypt(header2, &ciphertext2, &[]);
+    let plaintext = bob_ratchet_state.ratchet_decrypt(header2, &ciphertext2, &[]);
     assert_eq!(plaintext, message_to_bob2);
-    bob_ratchet_state = bob_ratchet_state_clone;
 
-    let mut bob_ratchet_state_clone = bob_ratchet_state.clone();
-    let plaintext = bob_ratchet_state_clone.ratchet_decrypt(header1, &ciphertext1, &[]);
+    let plaintext = bob_ratchet_state.ratchet_decrypt(header1, &ciphertext1, &[]);
     assert_eq!(plaintext, message_to_bob1);
-    bob_ratchet_state = bob_ratchet_state_clone;
 
     let message_to_alice = b"weaponised autism";
     let (header, ciphertext) = bob_ratchet_state.ratchet_encrypt(message_to_alice, &[]);
 
-    let mut alice_ratchet_state_clone = alice_ratchet_state.clone();
-    let plaintext = alice_ratchet_state_clone.ratchet_decrypt(header, &ciphertext, &[]);
+    let plaintext = alice_ratchet_state.ratchet_decrypt(header, &ciphertext, &[]);
     assert_eq!(plaintext, message_to_alice);
-    //alice_ratchet_state = alice_ratchet_state_clone;
 
     Ok(())
 }
