@@ -12,7 +12,7 @@ use crate::{
     zk::circuit::lead_contract::LeadContract,
 };
 
-pub const LEAD_PUBLIC_INPUT_LEN: usize = 7;
+pub const LEAD_PUBLIC_INPUT_LEN: usize = 6;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
@@ -57,26 +57,16 @@ impl LeadCoin {
         let po_y_y = *po_y_pt.to_affine().coordinates().unwrap().y();
         let y_coord_arr = [po_y_x, po_y_y];
         let po_y: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(y_coord_arr);
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_coord_arr);
         let cm_pos = self.idx;
-        let cm_root = {
-            let pos: u32 = cm_pos;
-            let c_cm_coordinates = self.cm.unwrap().to_affine().coordinates().unwrap();
-            let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
-            let mut current = MerkleNode::from(c_cm_base);
-            for (level, sibling) in self.path.unwrap().iter().enumerate() {
-                let level = level as u8;
-                current = if pos & (1 << level) == 0 {
-                    MerkleNode::combine(level.into(), &current, sibling)
-                } else {
-                    MerkleNode::combine(level.into(), sibling, &current)
-                };
-            }
-            current
-        };
-        let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] =
-            [*po_cm.x(), *po_cm.y(), po_nonce, cm_root.inner(), *po_pk.x(), *po_pk.y(), po_y];
+        let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] = [
+            *po_cm.x(),
+            *po_cm.y(),
+            po_nonce,
+            *po_pk.x(),
+            *po_pk.y(),
+            po_y,
+        ];
         public_inputs
     }
 

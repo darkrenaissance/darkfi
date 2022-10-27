@@ -42,7 +42,6 @@ use pasta_curves::group::Curve;
 const WINDOW_SIZE: usize = 3;
 const NUM_OF_BITS: usize = 254;
 const NUM_OF_WINDOWS: usize = 85;
-
 const PRF_NULLIFIER_PREFIX: u64 = 0;
 
 #[derive(Clone, Debug)]
@@ -96,10 +95,9 @@ impl LeadConfig {
 const LEAD_COIN_COMMIT_X_OFFSET: usize = 0;
 const LEAD_COIN_COMMIT_Y_OFFSET: usize = 1;
 const LEAD_COIN_NONCE2_OFFSET: usize = 2;
-const LEAD_COIN_COMMIT_PATH_OFFSET: usize = 3;
-const LEAD_COIN_PK_X_OFFSET: usize = 4;
-const LEAD_COIN_PK_Y_OFFSET: usize = 5;
-const LEAD_Y_COMMIT_BASE_OFFSET: usize = 6;
+const LEAD_COIN_PK_X_OFFSET: usize = 3;
+const LEAD_COIN_PK_Y_OFFSET: usize = 4;
+const LEAD_Y_COMMIT_BASE_OFFSET: usize = 5;
 
 #[derive(Default, Debug)]
 pub struct LeadContract {
@@ -540,12 +538,6 @@ impl Circuit<pallas::Base> for LeadContract {
 
         let coin_cm_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin_commit_prod)?;
-
-        layouter.assign_region(||"",
-                               |mut region| {
-                                   region.constrain_equal(coin_cm_root.cell(), root_cm.cell())
-                               }
-        );
         // lhs of the leader election lottery
         // *  y as COMIT(root_sk||nonce, mau_y)
         // beging the commitment to the coin's secret key, coin's nonce, and
@@ -624,7 +616,6 @@ impl Circuit<pallas::Base> for LeadContract {
             layouter.namespace(|| "witness rho"),
             self.rho.map(|x| x.to_affine()),
         )?;
-        rho_commit.constrain_equal(layouter.namespace(|| ""), &rho)?;
         let term1 =
             ar_chip.mul(layouter.namespace(|| "calculate term1"), &sigma1, &coin_value.clone())?;
 
@@ -663,39 +654,46 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_Y_OFFSET,
         )?;
 
-        let ref_coin2_cm = NonIdentityPoint::new(
-            ecc_chip.clone(),
-            layouter.namespace(|| "witness coin2 cm"),
-            self.coin2_commit.map(|x| x.to_affine()),
+        layouter.constrain_instance(
+            coin2_nonce.cell(),
+            config.primary,
+            LEAD_COIN_NONCE2_OFFSET
         )?;
 
-        coin2_commit.constrain_equal(layouter.namespace(|| ""), &ref_coin2_cm)?;
-
-        layouter.constrain_instance(coin2_nonce.cell(),
-                                    config.primary,
-                                    LEAD_COIN_NONCE2_OFFSET
+        layouter.constrain_instance(
+            coin_pk_x.cell(),
+            config.primary,
+            LEAD_COIN_PK_X_OFFSET
         )?;
-
-
-        layouter.constrain_instance(coin_pk_x.cell(),
-                                    config.primary,
-                                    LEAD_COIN_PK_X_OFFSET
+        layouter.constrain_instance(
+            coin_pk_y.cell(),
+            config.primary,
+            LEAD_COIN_PK_Y_OFFSET
         )?;
-        layouter.constrain_instance(coin_pk_y.cell(),
-                                    config.primary,
-                                    LEAD_COIN_PK_Y_OFFSET
-        )?;
-
-        layouter.assign_region(
-            || "",
-            |mut region| region.constrain_equal(sn_commit.cell(), coin1_sn.cell()),
-        );
 
         layouter.constrain_instance(
             y_commit_base.cell(),
             config.primary,
             LEAD_Y_COMMIT_BASE_OFFSET,
         )?;
+
+        rho_commit.constrain_equal(
+            layouter.namespace(||""),
+            &rho
+        )?;
+        let ref_coin2_cm = NonIdentityPoint::new(
+            ecc_chip.clone(),
+            layouter.namespace(|| "witness coin2 cm"),
+            self.coin2_commit.map(|x| x.to_affine()),
+        )?;
+        coin2_commit.constrain_equal(
+            layouter.namespace(||""),
+            &ref_coin2_cm
+        )?;
+        layouter.assign_region(||"", |mut region| {
+            region.constrain_equal(sn_commit.cell(),coin1_sn.cell())?;
+            region.constrain_equal(coin_cm_root.cell(), root_cm.cell())
+        });
 
         Ok(())
     }
