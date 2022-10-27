@@ -309,7 +309,8 @@ impl Circuit<pallas::Base> for LeadContract {
         let _root_sk =
             self.load_private(layouter.namespace(|| "root sk"), config.advices[0], self.root_sk)?;
 
-        let root_cm = self.load_private(layouter.namespace(||""), config.advices[0], self.root_cm)?;
+        let root_cm =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.root_cm)?;
 
         // staking coin secret key
         let sk: AssignedCell<Fp, Fp> =
@@ -654,22 +655,10 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_Y_OFFSET,
         )?;
 
-        layouter.constrain_instance(
-            coin2_nonce.cell(),
-            config.primary,
-            LEAD_COIN_NONCE2_OFFSET
-        )?;
+        layouter.constrain_instance(coin2_nonce.cell(), config.primary, LEAD_COIN_NONCE2_OFFSET)?;
 
-        layouter.constrain_instance(
-            coin_pk_x.cell(),
-            config.primary,
-            LEAD_COIN_PK_X_OFFSET
-        )?;
-        layouter.constrain_instance(
-            coin_pk_y.cell(),
-            config.primary,
-            LEAD_COIN_PK_Y_OFFSET
-        )?;
+        layouter.constrain_instance(coin_pk_x.cell(), config.primary, LEAD_COIN_PK_X_OFFSET)?;
+        layouter.constrain_instance(coin_pk_y.cell(), config.primary, LEAD_COIN_PK_Y_OFFSET)?;
 
         layouter.constrain_instance(
             y_commit_base.cell(),
@@ -677,23 +666,20 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_Y_COMMIT_BASE_OFFSET,
         )?;
 
-        rho_commit.constrain_equal(
-            layouter.namespace(||""),
-            &rho
-        )?;
+        rho_commit.constrain_equal(layouter.namespace(|| ""), &rho)?;
         let ref_coin2_cm = NonIdentityPoint::new(
             ecc_chip.clone(),
             layouter.namespace(|| "witness coin2 cm"),
             self.coin2_commit.map(|x| x.to_affine()),
         )?;
-        coin2_commit.constrain_equal(
-            layouter.namespace(||""),
-            &ref_coin2_cm
-        )?;
-        layouter.assign_region(||"", |mut region| {
-            region.constrain_equal(sn_commit.cell(),coin1_sn.cell())?;
-            region.constrain_equal(coin_cm_root.cell(), root_cm.cell())
-        });
+        coin2_commit.constrain_equal(layouter.namespace(|| ""), &ref_coin2_cm)?;
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                region.constrain_equal(sn_commit.cell(), coin1_sn.cell())?;
+                region.constrain_equal(coin_cm_root.cell(), root_cm.cell())
+            },
+        );
 
         Ok(())
     }

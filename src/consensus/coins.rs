@@ -94,7 +94,7 @@ fn create_coins(
         seeds.push(rho);
     }
     let (sks, root_sks, path_sks) = create_coins_sks();
-
+    let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(*EPOCH_LENGTH as usize);
     // Leadcoins matrix were each row represents a slot and contains its competing coins.
     let mut coins: Vec<Vec<LeadCoin>> = vec![];
     for i in 0..*EPOCH_LENGTH {
@@ -113,6 +113,7 @@ fn create_coins(
                     path_sks[index],
                     seeds[index],
                     sks[index],
+                    &mut tree_cm,
                 );
                 slot_coins.push(coin);
             }
@@ -131,6 +132,7 @@ fn create_coins(
             path_sks[index],
             seeds[index],
             sks[index],
+            &mut tree_cm,
         );
         coins.push(vec![coin]);
     }
@@ -192,6 +194,7 @@ fn create_leadcoin(
     c_path_sk: [MerkleNode; MERKLE_DEPTH_ORCHARD],
     seed: u64,
     sk: SecretKey,
+    tree_cm: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
 ) -> LeadCoin {
     // keypair
     let keypair: Keypair = Keypair::new(sk);
@@ -200,7 +203,7 @@ fn create_leadcoin(
     let one = pallas::Base::one();
     let c_cm1_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
     let c_cm2_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
-    let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(*EPOCH_LENGTH as usize);
+
     let c_v = pallas::Base::from(value);
     // coin relative slot index in the epoch
     let c_sl = pallas::Base::from(u64::try_from(i).unwrap());
@@ -235,6 +238,21 @@ fn create_leadcoin(
     let leaf_position = tree_cm.witness();
     let c_root_cm = tree_cm.root(0).unwrap();
     let c_cm_path = tree_cm.authentication_path(leaf_position.unwrap(), &c_root_cm).unwrap();
+    /*
+    let c_root_cm = {
+        let mut current = MerkleNode::from(c_cm_base);
+        let pos = leaf_position.unwrap();
+        for (level, sibling) in c_cm_path.iter().enumerate() {
+            let level = level as u8;
+            current = if pos & (1 << level) == 0 {
+                MerkleNode::combine(level.into(), &current, sibling)
+            } else {
+                MerkleNode::combine(level.into(), sibling, &current)
+            };
+        }
+        current
+    };
+    */
 
     let coin_nonce2_msg = [c_seed, c_root_sk.inner()];
     let c_seed2: pallas::Base =
