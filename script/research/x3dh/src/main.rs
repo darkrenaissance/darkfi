@@ -4,7 +4,6 @@ use std::collections::{HashMap, VecDeque};
 
 use aes_gcm_siv::{AeadInPlace, Aes256GcmSiv, KeyInit};
 use anyhow::Result;
-use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use digest::Update;
 use rand::rngs::OsRng;
 use sha2::Sha256;
@@ -81,7 +80,7 @@ struct InitialMessage {
     pub ciphertext: Vec<u8>,
 }
 
-#[derive(Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Copy, Clone)]
 struct MessageHeader {
     /// Ratchet public key
     dh: X25519PublicKey,
@@ -95,6 +94,22 @@ impl MessageHeader {
     /// Creates a new message header containing the DH ratchet public key
     /// `dh` the previous chain length `pn`, and the message number `n`.
     pub fn new(dh: X25519PublicKey, pn: u64, n: u64) -> Self {
+        Self { dh, pn, n }
+    }
+
+    pub fn to_bytes(&self) -> [u8; 48] {
+        let mut ret = [0u8; 48];
+        ret[..32].copy_from_slice(&self.dh.to_bytes());
+        ret[32..40].copy_from_slice(&self.pn.to_le_bytes());
+        ret[40..].copy_from_slice(&self.pn.to_le_bytes());
+        ret
+    }
+
+    pub fn from_bytes(arr: [u8; 48]) -> Self {
+        let pk_bytes: [u8; 32] = arr[..32].try_into().unwrap();
+        let dh = X25519PublicKey::from(pk_bytes);
+        let pn = u64::from_le_bytes(arr[32..40].try_into().unwrap());
+        let n = u64::from_le_bytes(arr[40..].try_into().unwrap());
         Self { dh, pn, n }
     }
 }
@@ -172,7 +187,7 @@ impl DoubleRatchetSessionState {
 
         let mut associated_data = Vec::with_capacity(ad.len());
         associated_data.extend_from_slice(ad);
-        associated_data.extend_from_slice(&serialize(&header));
+        associated_data.extend_from_slice(&header.to_bytes());
 
         let mut ciphertext = vec![0u8; plaintext.len() + AEAD_TAG_SIZE];
         ciphertext[..plaintext.len()].copy_from_slice(plaintext);
@@ -231,7 +246,7 @@ impl DoubleRatchetSessionState {
         let mut plaintext = vec![0u8; ciphertext.len()];
         plaintext.copy_from_slice(ciphertext);
 
-        let header_bytes = serialize(&header);
+        let header_bytes = header.to_bytes();
         let mut associated_data = Vec::with_capacity(ad.len() + header_bytes.len());
         associated_data.extend_from_slice(ad);
         associated_data.extend_from_slice(&header_bytes);
@@ -255,7 +270,7 @@ impl DoubleRatchetSessionState {
             let mut plaintext = vec![0u8; ciphertext.len()];
             plaintext.copy_from_slice(ciphertext);
 
-            let header_bytes = serialize(&header);
+            let header_bytes = header.to_bytes();
             let mut associated_data = Vec::with_capacity(ad.len() + header_bytes.len());
             associated_data.extend_from_slice(ad);
             associated_data.extend_from_slice(&header_bytes);

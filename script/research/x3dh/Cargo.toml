@@ -14,4 +14,3 @@ aes-gcm-siv = "0.11.1"
 curve25519-dalek = "3.2.1"
 ed25519-dalek = "1.0.1"
 x25519-dalek = "1.2.0"
-darkfi-serial = {path = "../../../src/serial", features = ["derive", "x25519-dalek"]}
