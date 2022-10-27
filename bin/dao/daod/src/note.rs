@@ -47,7 +47,7 @@ impl EncryptedNote2 {
         assert_eq!(
             ChachaPolyIetf::aead_cipher()
                 .open_to(&mut plaintext, &self.ciphertext, &[], key.as_ref(), &[0u8; 12])
-                .map_err(|_| Error::NoteDecryptionFailed)?,
+                .map_err(|e| Error::NoteDecryptionFailed(e.to_string()))?,
             self.ciphertext.len() - AEAD_TAG_SIZE
         );
 
