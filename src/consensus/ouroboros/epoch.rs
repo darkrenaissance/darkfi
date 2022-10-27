@@ -1,8 +1,8 @@
 use crate::{
     consensus::ouroboros::{
         consts::{LOTTERY_HEAD_START, RADIX_BITS},
-        utils::{fbig2ibig},
-        types::{Float10},
+        types::Float10,
+        utils::fbig2ibig,
         EpochConsensus,
     },
     crypto::{
@@ -299,7 +299,9 @@ impl Epoch {
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
             let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
             let y_exp_hash: pallas::Base =
-                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_exp);
+                poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
+                )
+                .hash(y_exp);
             let y_coordinates = pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
                 .to_affine()
                 .coordinates()

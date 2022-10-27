@@ -9,7 +9,7 @@ use darkfi_sdk::crypto::{
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointBaseField, ScalarFixed,NonIdentityPoint,
+        FixedPoint, FixedPointBaseField, NonIdentityPoint, ScalarFixed,
     },
     poseidon::{
         primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
@@ -126,7 +126,7 @@ pub struct LeadContract {
     pub sigma1: Value<pallas::Base>,
     pub sigma2: Value<pallas::Base>,
     //pub eta : Option<u32>,
-    pub rho : Value<pallas::Point>,
+    pub rho: Value<pallas::Point>,
     //pub h : Option<u32>, // hash of this data
     //pub ptr: Option<u32>, //hash of the previous block
 }
@@ -616,7 +616,7 @@ impl Circuit<pallas::Base> for LeadContract {
             layouter.namespace(|| "witness rho"),
             self.rho.map(|x| x.to_affine()),
         )?;
-        rho_commit.constrain_equal(layouter.namespace(||""),&rho)?;
+        rho_commit.constrain_equal(layouter.namespace(|| ""), &rho)?;
         let term1 =
             ar_chip.mul(layouter.namespace(|| "calculate term1"), &sigma1, &coin_value.clone())?;
 
@@ -655,19 +655,13 @@ impl Circuit<pallas::Base> for LeadContract {
             LEAD_COIN_COMMIT_Y_OFFSET,
         )?;
 
-
         let ref_coin2_cm = NonIdentityPoint::new(
             ecc_chip.clone(),
             layouter.namespace(|| "witness coin2 cm"),
             self.coin2_commit.map(|x| x.to_affine()),
         )?;
 
-
-        coin2_commit.constrain_equal(
-            layouter.namespace(||""),
-            &ref_coin2_cm
-        )?;
-
+        coin2_commit.constrain_equal(layouter.namespace(|| ""), &ref_coin2_cm)?;
 
         /*
         layouter.constrain_instance(
@@ -694,11 +688,9 @@ impl Circuit<pallas::Base> for LeadContract {
         layouter.constrain_instance(coin_pk_x.cell(), config.primary, LEAD_COIN_PK_X_OFFSET)?;
         layouter.constrain_instance(coin_pk_y.cell(), config.primary, LEAD_COIN_PK_Y_OFFSET)?;
 
-        layouter.assign_region(||"",
-                               |mut region| {
-                                   region.constrain_equal(sn_commit.cell(),
-                                                          coin1_sn.cell())
-                               }
+        layouter.assign_region(
+            || "",
+            |mut region| region.constrain_equal(sn_commit.cell(), coin1_sn.cell()),
         );
 
         layouter.constrain_instance(
@@ -706,7 +698,6 @@ impl Circuit<pallas::Base> for LeadContract {
             config.primary,
             LEAD_Y_COMMIT_BASE_OFFSET,
         )?;
-
 
         Ok(())
     }

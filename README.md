@@ -7,7 +7,7 @@
 
 ## Connect to DarkFi IRC
 
-Follow the [installation instructions](https://darkrenaissance.github.io/darkfi/misc/ircd.html#installation)
+Follow the [installation instructions](https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html)
 for the P2P IRC daemon.
 
 ## Build

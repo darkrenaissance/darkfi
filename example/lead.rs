@@ -5,7 +5,10 @@ use url::Url;
 
 use darkfi::{
     consensus::ouroboros::{Epoch, EpochConsensus, Stakeholder},
-    crypto::{lead_proof, leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN}},
+    crypto::{
+        lead_proof,
+        leadcoin::{LeadCoin, LEAD_PUBLIC_INPUT_LEN},
+    },
     net::Settings,
 };
 
@@ -14,7 +17,6 @@ fn main() {
 
     let k: u32 = 13;
     //
-
 
     let _value = 33223; //static stake value
 

@@ -14,8 +14,8 @@ use crate::{
         address::Address,
         coin::OwnCoin,
         keypair::{PublicKey, SecretKey},
-        leadcoin::LeadCoin,
         lead_proof,
+        leadcoin::LeadCoin,
         proof::{Proof, ProvingKey, VerifyingKey},
         schnorr::SchnorrSecret,
     },
@@ -384,7 +384,7 @@ impl Stakeholder {
                 let p = self.epoch.get_proof(sl, i, &self.get_leadprovkingkey());
                 // Sanity check for proof validity)
                 info!("================= Leader proof generated successfully, veryfing... =================");
-                let coin = self.epoch.get_coin(sl as usize, i);                
+                let coin = self.epoch.get_coin(sl as usize, i);
                 match lead_proof::verify_lead_proof(&self.get_leadverifyingkey(), &p, &coin.public_inputs()) {
                     Ok(_) => info!("================= Proof veryfied succsessfully! ================="),
                     Err(e) => error!("================= Error during leader proof verification: {} =================", e),

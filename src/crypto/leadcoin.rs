@@ -64,10 +64,8 @@ impl LeadCoin {
         let po_y_y = *po_y_pt.to_affine().coordinates().unwrap().y();
         let y_coord_arr = [po_y_x, po_y_y];
         let po_y: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
-            )
-            .hash(y_coord_arr);
-
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+                .hash(y_coord_arr);
 
         let cm_pos = self.idx;
         let cm_root = {
@@ -85,15 +83,8 @@ impl LeadCoin {
             }
             current
         };
-        let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] = [
-            *po_cm.x(),
-            *po_cm.y(),
-            po_nonce,
-            cm_root.inner(),
-            *po_pk.x(),
-            *po_pk.y(),
-            po_y,
-        ];
+        let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] =
+            [*po_cm.x(), *po_cm.y(), po_nonce, cm_root.inner(), *po_pk.x(), *po_pk.y(), po_y];
         public_inputs
     }
 
@@ -108,7 +99,7 @@ impl LeadCoin {
         let lottery_msg_input = [root_sk, nonce];
         let lottery_msg: pallas::Base =
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-            .hash(lottery_msg_input);
+                .hash(lottery_msg_input);
         //
         let rho_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(rho_mu));
         LeadContract {
