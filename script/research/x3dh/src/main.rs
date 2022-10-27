@@ -603,6 +603,24 @@ fn main() -> Result<()> {
     let mut bob_ratchet_state_clone = bob_ratchet_state.clone();
     let plaintext = bob_ratchet_state_clone.ratchet_decrypt(header, &ciphertext, &[]);
     assert_eq!(plaintext, message_to_bob);
+    bob_ratchet_state = bob_ratchet_state_clone;
+
+    // Let's try out of order
+    let message_to_bob1 = b"hello";
+    let message_to_bob2 = b"jello";
+    let (header1, ciphertext1) = alice_ratchet_state.ratchet_encrypt(message_to_bob1, &[]);
+    let (header2, ciphertext2) = alice_ratchet_state.ratchet_encrypt(message_to_bob2, &[]);
+
+    // Slow Bob
+    let mut bob_ratchet_state_clone = bob_ratchet_state.clone();
+    let plaintext = bob_ratchet_state_clone.ratchet_decrypt(header2, &ciphertext2, &[]);
+    assert_eq!(plaintext, message_to_bob2);
+    bob_ratchet_state = bob_ratchet_state_clone;
+
+    let mut bob_ratchet_state_clone = bob_ratchet_state.clone();
+    let plaintext = bob_ratchet_state_clone.ratchet_decrypt(header1, &ciphertext1, &[]);
+    assert_eq!(plaintext, message_to_bob1);
+    //bob_ratchet_state = bob_ratchet_state_clone;
 
     Ok(())
 }
