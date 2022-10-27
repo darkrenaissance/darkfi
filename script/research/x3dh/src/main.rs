@@ -24,7 +24,9 @@ const AEAD_TAG_SIZE: usize = 16;
 const MESSAGE_KEY_CONSTANT: u8 = 0x01;
 const CHAIN_KEY_CONSTANT: u8 = 0x02;
 
-// What?
+const BLANK_NONCE: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+// wat do?
 const MAX_SKIP: u64 = 10;
 
 /// The server contains published identity keys and prekeys.
@@ -91,31 +93,29 @@ struct MessageHeader {
 
 impl MessageHeader {
     /// Creates a new message header containing the DH ratchet public key
-    /// from the keypair in `dh_pair`, the previous chain length `pn`, and
-    /// the message number `n`.
-    /// The returned header object contains ratchet public key `dh` and
-    /// integers `pn` and `n`.
-    pub fn new(dh_pair: X25519PublicKey, pn: u64, n: u64) -> Self {
-        Self { dh: dh_pair, pn, n }
+    /// `dh` the previous chain length `pn`, and the message number `n`.
+    pub fn new(dh: X25519PublicKey, pn: u64, n: u64) -> Self {
+        Self { dh, pn, n }
     }
 }
 
+#[derive(Clone)]
 struct DoubleRatchetSessionState {
-    /// DH ratchet key pair (the "sending" or "self" ratchet key)
+    /// DH ratchet key pair (the "sending" or "self" ratchet key) (DHs)
     pub dh_sending: (X25519PublicKey, X25519SecretKey),
-    /// DH ratchet public key (the "received" or "remote" key)
-    pub dh_remote: Option<X25519PublicKey>,
-    /// 32-byte root key
+    /// DH ratchet public key (the "received" or "remote" key) (DHr)
+    pub dh_remote: X25519PublicKey,
+    /// 32-byte root key (RK)
     pub root_key: [u8; 32],
-    /// 32-byte Chain Keys for sending
-    pub chain_keys_send: [u8; 32],
-    /// 32-byte Chain Keys for receiving
-    pub chain_keys_recv: [u8; 32],
-    /// Message numbers for sending
+    /// 32-byte Chain Key for sending (CKs)
+    pub chain_key_send: [u8; 32],
+    /// 32-byte Chain Key for receiving (CKr)
+    pub chain_key_recv: [u8; 32],
+    /// Message numbers for sending (Ns)
     pub n_send: u64,
-    /// Message numbers for receiving
+    /// Message numbers for receiving (Nr)
     pub n_recv: u64,
-    /// Number of messages in previous sending chain
+    /// Number of messages in previous sending chain (PN)
     pub n_prev: u64,
     /// Dictionary of skipped-over message keys, indexed by ratchet public
     /// key and message number. Raises an exception if too many elements
@@ -123,18 +123,39 @@ struct DoubleRatchetSessionState {
     pub mkskipped: HashMap<(X25519PublicKey, u64), [u8; 32]>,
 }
 
-/// HMAC with SHA-256 using `ck` as the HMAC key and using separate constants
-/// as input to produce the message key, and the next chain key.
+/// Returns a pair (32-byte chain key, 32-byte message key) as the output of
+/// applying a KDF keyed by a 32-byte chain key `ck` to some constant.
+/// HMAC with SHA256 is recommended, using `ck` as the HMAC key and using
+/// separate constants as input (e.g. a single byte 0x01 as input to produce
+/// the message key, and a single byte 0x02 as input to produce the next chain
+/// key.
 fn kdf_ck(ck: [u8; 32]) -> ([u8; 32], [u8; 32]) {
-    let mut hmac = Hmac::<Sha256>::new_from_slice(&ck);
-    hmac.update(&[MESSAGE_KEY_CONSTANT]);
-    let message_key = hmac.finalize();
-
     let mut hmac = Hmac::<Sha256>::new_from_slice(&ck);
     hmac.update(&[CHAIN_KEY_CONSTANT]);
     let chain_key = hmac.finalize();
 
-    (message_key.into(), chain_key.into())
+    let mut hmac = Hmac::<Sha256>::new_from_slice(&ck);
+    hmac.update(&[MESSAGE_KEY_CONSTANT]);
+    let message_key = hmac.finalize();
+
+    (chain_key.into(), message_key.into())
+}
+
+/// Returns a pair (32-byte root key, 32-byte chain key) as the output of
+/// applying a KDF keyed by a 32-byte root hey `rk` to a Diffie-Hellman
+/// output `dh_out`.
+/// This function is recommended to be implemented using HKDF with SHA256
+/// using `rk` as HKDF salt, `dh_out` as HKDF input key material, and an
+/// application-specific byte sequence as HKDF info. The info value should
+/// be chosen to be distinct from other uses of HKDF in the application.
+fn kdf_rk(rk: [u8; 32], dh_out: [u8; 32]) -> ([u8; 32], [u8; 32]) {
+    const KDF_RK_INFO: &[u8] = b"x3dh_double_ratchet_kdf_rk";
+
+    let (root_key, hkdf) = Hkdf::<Sha256>::extract(&rk, &dh_out);
+    let mut chain_key = [0u8; 32];
+    hkdf.expand(KDF_RK_INFO, &mut chain_key).unwrap();
+
+    (root_key.into(), chain_key)
 }
 
 impl DoubleRatchetSessionState {
@@ -144,8 +165,8 @@ impl DoubleRatchetSessionState {
     /// prepended to the header to form the associated data for the
     // underlying AEAD encryption.
     pub fn ratchet_encrypt(&mut self, plaintext: &[u8], ad: &[u8]) -> (MessageHeader, Vec<u8>) {
-        let (message_key, chain_key) = kdf_ck(self.chain_keys_send);
-        self.chain_keys_send = chain_key;
+        let (chain_key, message_key) = kdf_ck(self.chain_key_send);
+        self.chain_key_send = chain_key;
 
         let header = MessageHeader::new(self.dh_sending.0, self.n_prev, self.n_send);
 
@@ -162,10 +183,10 @@ impl DoubleRatchetSessionState {
         // * Derived from `mk` alongside an independent AEAD encryption key
         // * Derived as an additional output from HMAC
         // * Chosen randomly and transmitted
-        let nonce = [0u8; 12][..].into();
 
+        // ENCRYPT(message_key, plaintext, (AD || header))
         Aes256GcmSiv::new(&message_key.into())
-            .encrypt_in_place(nonce, &associated_data, &mut ciphertext)
+            .encrypt_in_place(BLANK_NONCE.into(), &associated_data, &mut ciphertext)
             .unwrap();
 
         self.n_send += 1;
@@ -197,21 +218,28 @@ impl DoubleRatchetSessionState {
             return plaintext
         }
 
-        if header.dh != self.dh_remote.unwrap() {
+        if header.dh != self.dh_remote {
             self.skip_message_keys(header.n);
             self.dh_ratchet(header);
         }
 
         self.skip_message_keys(header.n);
-        let (message_key, chain_key) = kdf_ck(self.chain_keys_recv);
-        self.chain_keys_recv = chain_key;
+        let (chain_key, message_key) = kdf_ck(self.chain_key_recv);
+        self.chain_key_recv = chain_key;
         self.n_recv += 1;
 
         let mut plaintext = vec![0u8; ciphertext.len()];
         plaintext.copy_from_slice(ciphertext);
 
-        let nonce = [0u8; 12][..].into();
-        Aes256GcmSiv::new(&message_key.into()).decrypt_in_place(nonce, ad, &mut plaintext).unwrap();
+        let header_bytes = serialize(&header);
+        let mut associated_data = Vec::with_capacity(ad.len() + header_bytes.len());
+        associated_data.extend_from_slice(ad);
+        associated_data.extend_from_slice(&header_bytes);
+
+        // DECRYPT(message_key, ciphertext, (AD || header))
+        Aes256GcmSiv::new(&message_key.into())
+            .decrypt_in_place(BLANK_NONCE.into(), &associated_data, &mut plaintext)
+            .unwrap();
 
         plaintext.resize(plaintext.len() - AEAD_TAG_SIZE, 0);
         plaintext
@@ -227,9 +255,14 @@ impl DoubleRatchetSessionState {
             let mut plaintext = vec![0u8; ciphertext.len()];
             plaintext.copy_from_slice(ciphertext);
 
-            let nonce = [0u8; 12][..].into();
+            let header_bytes = serialize(&header);
+            let mut associated_data = Vec::with_capacity(ad.len() + header_bytes.len());
+            associated_data.extend_from_slice(ad);
+            associated_data.extend_from_slice(&header_bytes);
+
+            // DECRYPT(message_key, ciphertext, (AD || header))
             Aes256GcmSiv::new(&message_key.into())
-                .decrypt_in_place(nonce, ad, &mut plaintext)
+                .decrypt_in_place(BLANK_NONCE.into(), &associated_data, &mut plaintext)
                 .unwrap();
 
             plaintext.resize(plaintext.len() - AEAD_TAG_SIZE, 0);
@@ -244,12 +277,11 @@ impl DoubleRatchetSessionState {
             panic!();
         }
 
-        if self.chain_keys_recv != [0u8; 32] {
+        if self.chain_key_recv != [0u8; 32] {
             while self.n_recv < until {
-                let (message_key, chain_key) = kdf_ck(self.chain_keys_recv);
-                self.chain_keys_recv = chain_key;
-
-                self.mkskipped.insert((self.dh_remote.unwrap(), self.n_recv), message_key);
+                let (chain_key, message_key) = kdf_ck(self.chain_key_recv);
+                self.chain_key_recv = chain_key;
+                self.mkskipped.insert((self.dh_remote, self.n_recv), message_key);
                 self.n_recv += 1;
             }
         }
@@ -259,21 +291,17 @@ impl DoubleRatchetSessionState {
         self.n_prev = self.n_send;
         self.n_send = 0;
         self.n_recv = 0;
-        self.dh_remote = Some(header.dh);
+        self.dh_remote = header.dh;
 
-        let hkdf_ikm = self.dh_sending.1.diffie_hellman(&self.dh_remote.unwrap());
-        let (rk, hkdf) = Hkdf::<Sha256>::extract(&self.root_key, &hkdf_ikm.to_bytes());
-        hkdf.expand(b"double_ratchet_x3dh", &mut self.chain_keys_recv).unwrap();
-        self.root_key = rk.into();
+        let hkdf_ikm = self.dh_sending.1.diffie_hellman(&self.dh_remote);
+        (self.root_key, self.chain_key_recv) = kdf_rk(self.root_key, hkdf_ikm.to_bytes());
 
         let dh_secret_new = X25519SecretKey::new(&mut OsRng);
         let dh_public_new = X25519PublicKey::from(&dh_secret_new);
         self.dh_sending = (dh_public_new, dh_secret_new);
 
-        let hkdf_ikm = self.dh_sending.1.diffie_hellman(&self.dh_remote.unwrap());
-        let (rk, hkdf) = Hkdf::<Sha256>::extract(&self.root_key, &hkdf_ikm.to_bytes());
-        hkdf.expand(b"double_ratchet_x3dh", &mut self.chain_keys_send).unwrap();
-        self.root_key = rk.into();
+        let hkdf_ikm = self.dh_sending.1.diffie_hellman(&self.dh_remote);
+        (self.root_key, self.chain_key_send) = kdf_rk(self.root_key, hkdf_ikm.to_bytes());
     }
 }
 
@@ -415,8 +443,9 @@ fn main() -> Result<()> {
     let mut ciphertext = vec![0u8; message.len() + AEAD_TAG_SIZE];
     ciphertext[..message.len()].copy_from_slice(message);
 
-    let nonce = [0u8; 12][..].into();
-    Aes256GcmSiv::new(&sk.into()).encrypt_in_place(nonce, &ad, &mut ciphertext).unwrap();
+    Aes256GcmSiv::new(&sk.into())
+        .encrypt_in_place(BLANK_NONCE.into(), &ad, &mut ciphertext)
+        .unwrap();
 
     let initial_message = InitialMessage {
         identity_key: alice_ik_public,
@@ -478,8 +507,9 @@ fn main() -> Result<()> {
     let mut plaintext = vec![0_u8; initial_message.ciphertext.len()];
     plaintext.copy_from_slice(&initial_message.ciphertext);
 
-    let nonce = [0u8; 12][..].into();
-    Aes256GcmSiv::new(&sk2.into()).decrypt_in_place(nonce, &ad, &mut plaintext).unwrap();
+    Aes256GcmSiv::new(&sk2.into())
+        .decrypt_in_place(BLANK_NONCE.into(), &ad, &mut plaintext)
+        .unwrap();
     plaintext.resize(plaintext.len() - AEAD_TAG_SIZE, 0);
 
     assert_eq!(plaintext, message); // Just to confirm everything's correct
@@ -513,20 +543,18 @@ fn main() -> Result<()> {
     // Alice:
     let alice_dh_secret = X25519SecretKey::new(&mut OsRng);
     let alice_dh_public = X25519PublicKey::from(&alice_dh_secret);
-    let alice_dh_remote = bob_keyset.signed_prekey;
+
     // The X3DH secret becomes the HKDF salt, and the ikm is the DH output
     // of Alice's DH secret and Bob's SPK_B.
     let hkdf_ikm = alice_dh_secret.diffie_hellman(&bob_keyset.signed_prekey);
-    let (alice_root_key, alice_hkdf) = Hkdf::<Sha256>::extract(&sk, &hkdf_ikm.to_bytes());
-    let mut alice_chain_key_send = [0_u8; 32];
-    alice_hkdf.expand(b"double_ratchet_x3dh", &mut alice_chain_key_send).unwrap();
+    let (root_key, chain_key_send) = kdf_rk(sk, hkdf_ikm.to_bytes());
 
-    let alice_ratchet_state = DoubleRatchetSessionState {
+    let mut alice_ratchet_state = DoubleRatchetSessionState {
         dh_sending: (alice_dh_public, alice_dh_secret),
-        dh_remote: Some(alice_dh_remote),
-        root_key: alice_root_key.into(),
-        chain_keys_send: alice_chain_key_send,
-        chain_keys_recv: [0u8; 32],
+        dh_remote: bob_keyset.signed_prekey,
+        root_key,
+        chain_key_send,
+        chain_key_recv: [0u8; 32],
         n_send: 0,
         n_recv: 0,
         n_prev: 0,
@@ -534,17 +562,47 @@ fn main() -> Result<()> {
     };
 
     // Bob:
-    let bob_ratchet_state = DoubleRatchetSessionState {
+    let mut bob_ratchet_state = DoubleRatchetSessionState {
         dh_sending: (bob_spk_public, bob_spk_secret),
-        dh_remote: None,
+        dh_remote: X25519PublicKey::from([0u8; 32]),
         root_key: sk,
-        chain_keys_send: [0u8; 32],
-        chain_keys_recv: [0u8; 32],
+        chain_key_send: [0u8; 32],
+        chain_key_recv: [0u8; 32],
         n_send: 0,
         n_recv: 0,
         n_prev: 0,
         mkskipped: HashMap::default(),
     };
+
+    // TODO: What kind of AD should be used?
+    let message_to_bob = b"hai bobz";
+    let (header, ciphertext) = alice_ratchet_state.ratchet_encrypt(message_to_bob, &[]);
+
+    // Alice sends it to Bob, and Bob decrypts.
+    // NOTE: We clone this structure so we can discard it if we're unable to decrypt.
+    let mut bob_ratchet_state_clone = bob_ratchet_state.clone();
+    let plaintext = bob_ratchet_state_clone.ratchet_decrypt(header, &ciphertext, &[]);
+    assert_eq!(plaintext, message_to_bob);
+    // NOTE: And now if we managed, re replace it
+    // TODO: Fix this approach.
+    bob_ratchet_state = bob_ratchet_state_clone;
+
+    let message_to_alice = b"hai alice, what's up?";
+    let (header, ciphertext) = bob_ratchet_state.ratchet_encrypt(message_to_alice, &[]);
+
+    // Bob replies to Alice.
+    let mut alice_ratchet_state_clone = alice_ratchet_state.clone();
+    let plaintext = alice_ratchet_state_clone.ratchet_decrypt(header, &ciphertext, &[]);
+    assert_eq!(plaintext, message_to_alice);
+    alice_ratchet_state = alice_ratchet_state_clone;
+
+    // Alice loves Bob.
+    let message_to_bob = b"you schizo";
+    let (header, ciphertext) = alice_ratchet_state.ratchet_encrypt(message_to_bob, &[]);
+
+    let mut bob_ratchet_state_clone = bob_ratchet_state.clone();
+    let plaintext = bob_ratchet_state_clone.ratchet_decrypt(header, &ciphertext, &[]);
+    assert_eq!(plaintext, message_to_bob);
 
     Ok(())
 }

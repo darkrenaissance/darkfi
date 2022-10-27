@@ -1,4 +1,4 @@
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, Read, Write};
 
 use x25519_dalek::PublicKey as X25519PublicKey;
 
