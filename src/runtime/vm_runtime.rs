@@ -16,13 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::{Arc, Mutex};
+use std::{
+    cell::RefCell,
+    sync::{Arc, Mutex},
+};
 
 use darkfi_sdk::entrypoint;
 use log::{debug, info};
 use wasmer::{
-    imports, wasmparser::Operator, CompilerConfig, Function, FunctionEnv, Instance,
-    Memory, Module, Store, Value,
+    imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
+    Memory, MemoryView, Module, Store, Value,
 };
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::{
@@ -50,16 +53,33 @@ pub const ENTRYPOINT: &str = "entrypoint";
 const GAS_LIMIT: u64 = 200000;
 
 /// The wasm vm runtime instantiated for every smart contract that runs.
-#[derive(Clone)]
 pub struct Env {
     /// Logs produced by the contract
-    pub logs: Arc<Mutex<Vec<String>>>,
+    pub logs: RefCell<Vec<String>>,
     /// Direct memory access to the VM
     pub memory: Option<Memory>,
     /// Cloned state machine living in memory
     pub state_machine: Arc<MemoryState>,
     /// State updates produced by the contract
     pub state_updates: Arc<Mutex<Vec<StateUpdate>>>,
+}
+
+impl Env {
+    /// Providers safe access to the memory
+    /// (it must be initialized before it can be used)
+    ///
+    ///     // ctx: FunctionEnvMut<Env>
+    ///     let env = ctx.data();
+    ///     let memory = env.memory_view(&ctx);
+    ///
+    pub fn memory_view<'a>(&'a self, store: &'a impl AsStoreRef) -> MemoryView<'a> {
+        self.memory().view(store)
+    }
+
+    /// Get memory, that needs to have been set fist
+    pub fn memory(&self) -> &Memory {
+        self.memory.as_ref().unwrap()
+    }
 }
 
 /*
@@ -87,7 +107,7 @@ pub struct ExecutionResult {
 
 pub struct Runtime {
     pub instance: Instance,
-    //pub env: Env,
+    pub env: FunctionEnv<Env>,
 }
 
 impl Runtime {
@@ -120,44 +140,44 @@ impl Runtime {
         debug!(target: "wasm_runtime::new", "Compiling module");
         let module = Module::new(&store, wasm_bytes)?;
 
+        // This section will need changing
         debug!(target: "wasm_runtime::new", "Importing functions");
-        let logs = Arc::new(Mutex::new(vec![]));
+        let logs = RefCell::new(vec![]);
         let state_machine = Arc::new(state_machine);
         let state_updates = Arc::new(Mutex::new(vec![]));
 
-        let env = FunctionEnv::new(&mut store, Env { logs, memory: None, state_machine, state_updates });
+        let env =
+            FunctionEnv::new(&mut store, Env { logs, memory: None, state_machine, state_updates });
 
         let imports = imports! {
             "env" => {
-                /*
                 "drk_log_" => Function::new_typed_with_env(
-                    &store,
-                    env.clone(),
+                    &mut store,
+                    &env,
                     drk_log,
                 ),
 
                 "nullifier_exists_" => Function::new_typed_with_env(
-                    &store,
-                    env.clone(),
+                    &mut store,
+                    &env,
                     nullifier_exists,
                 ),
 
                 "is_valid_merkle_" => Function::new_typed_with_env(
-                    &store,
-                    env.clone(),
+                    &mut store,
+                    &env,
                     is_valid_merkle,
                 ),
-                */
             }
         };
 
         debug!(target: "wasm_runtime::new", "Instantiating module");
         let instance = Instance::new(&mut store, &module, &imports)?;
 
-        //let mut env_mut = env.as_mut(&mut store);
-        //env_mut.memory = Some(instance.exports.get_with_generics_weak(MEMORY)?);
+        let mut env_mut = env.as_mut(&mut store);
+        env_mut.memory = Some(instance.exports.get_with_generics(MEMORY)?);
 
-        Ok(Self { instance /*, env */ })
+        Ok(Self { instance, env })
     }
 
     /// Run the hardcoded `ENTRYPOINT` function with the given payload as input.

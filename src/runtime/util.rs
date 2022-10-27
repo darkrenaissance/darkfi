@@ -17,6 +17,7 @@
  */
 
 use log::{error, warn};
+use wasmer::{FunctionEnvMut, AsStoreRef, WasmPtr};
 
 use super::{memory::MemoryManipulation, vm_runtime::Env};
 
@@ -35,25 +36,19 @@ pub fn serialize_payload(payload: &[u8]) -> Vec<u8> {
 
 /// Host function for logging strings.
 /// This is injected into the runtime with wasmer's `imports!` macro.
-pub(crate) fn drk_log(env: &Env, ptr: u32, len: u32) {
-    // DISABLED
-    /*
-    if let Some(bytes) = env.memory.get_ref().unwrap().read(ptr, len as usize) {
-        // Piece the string together
-        let msg = match String::from_utf8(bytes.to_vec()) {
-            Ok(v) => v,
-            Err(e) => {
-                warn!(target: "wasm_runtime", "Invalid UTF-8 string: {:?}", e);
-                return
-            }
-        };
+pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
+    let env = ctx.data();
+    let memory_view = env.memory_view(&ctx);
 
-        let mut logs = env.logs.lock().unwrap();
-        logs.push(msg);
-        std::mem::drop(logs);
-        return
+    match ptr.read_utf8_string(&memory_view, len) {
+        Ok(msg) => {
+            let mut logs = env.logs.borrow_mut();
+            logs.push(msg);
+            std::mem::drop(logs);
+        },
+        Err(_) => {
+            error!(target: "wasm_runtime::drk_log", "Failed to UTF-8 string from VM memory");
+        }
     }
-
-    error!(target: "wasm_runtime::drk_log", "Failed to read any bytes from VM memory");
-    */
 }
+
