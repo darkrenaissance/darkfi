@@ -620,7 +620,15 @@ fn main() -> Result<()> {
     let mut bob_ratchet_state_clone = bob_ratchet_state.clone();
     let plaintext = bob_ratchet_state_clone.ratchet_decrypt(header1, &ciphertext1, &[]);
     assert_eq!(plaintext, message_to_bob1);
-    //bob_ratchet_state = bob_ratchet_state_clone;
+    bob_ratchet_state = bob_ratchet_state_clone;
+
+    let message_to_alice = b"weaponised autism";
+    let (header, ciphertext) = bob_ratchet_state.ratchet_encrypt(message_to_alice, &[]);
+
+    let mut alice_ratchet_state_clone = alice_ratchet_state.clone();
+    let plaintext = alice_ratchet_state_clone.ratchet_decrypt(header, &ciphertext, &[]);
+    assert_eq!(plaintext, message_to_alice);
+    //alice_ratchet_state = alice_ratchet_state_clone;
 
     Ok(())
 }
