@@ -1,7 +1,5 @@
 pub mod consts;
 pub mod epochconsensus;
-pub mod types;
-pub mod utils;
 pub use epochconsensus::EpochConsensus;
 pub mod epoch;
 pub use epoch::Epoch;

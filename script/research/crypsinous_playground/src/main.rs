@@ -5,6 +5,7 @@ use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 
 use darkfi::{
     async_daemonize, cli_desc,
+    consensus::coins,
     crypto::{
         lead_proof,
         proof::{ProvingKey, VerifyingKey},
@@ -14,9 +15,6 @@ use darkfi::{
     zk::circuit::LeadContract,
     Result,
 };
-
-mod coins;
-mod utils;
 
 const CONFIG_FILE: &str = "crypsinous_playground_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../crypsinous_playground_config.toml");

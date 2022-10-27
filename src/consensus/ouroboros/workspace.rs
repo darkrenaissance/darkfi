@@ -3,7 +3,6 @@ use pasta_curves::pallas;
 
 use crate::{
     consensus::{BlockInfo, Header, Metadata},
-    crypto::proof::Proof,
     tx::Transaction,
     util::time::Timestamp,
 };

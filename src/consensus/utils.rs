@@ -1,11 +1,11 @@
-use crate::consensus::ouroboros::types::Float10;
+use super::Float10;
 use dashu::integer::{IBig, Sign};
 use log::{debug, info};
 use pasta_curves::pallas;
 //use pasta_curves::{group::ff::PrimeField};
 //use dashu::integer::{UBig};
 
-pub(crate) fn fbig2ibig(f: Float10) -> IBig {
+pub fn fbig2ibig(f: Float10) -> IBig {
     let rad = IBig::try_from(10).unwrap();
     let sig = f.repr().significand();
     let exp = f.repr().exponent();
@@ -15,7 +15,7 @@ pub(crate) fn fbig2ibig(f: Float10) -> IBig {
     val
 }
 /*
-pub(crate) fn base2ibig(base: pallas::Base) -> IBig {
+pub fn base2ibig(base: pallas::Base) -> IBig {
     //
     let byts: [u8; 32] = base.to_repr();
     let words: [u64; 4] = [
@@ -30,7 +30,7 @@ pub(crate) fn base2ibig(base: pallas::Base) -> IBig {
     ibig
 }
 */
-pub(crate) fn fbig2base(f: Float10) -> pallas::Base {
+pub fn fbig2base(f: Float10) -> pallas::Base {
     info!("fbig -> base (f): {}", f);
     let val: IBig = fbig2ibig(f);
     let (sign, word) = val.as_sign_words();
@@ -51,16 +51,16 @@ mod tests {
     use dashu::integer::IBig;
     use pasta_curves::pallas;
 
-    use crate::consensus::ouroboros::{
-        consts::RADIX_BITS,
+    use crate::consensus::{
         types::Float10,
-        utils::{base2ibig, fbig2base, fbig2ibig},
+        utils::{fbig2base, fbig2ibig},
+        RADIX_BITS,
     };
 
     #[test]
     fn dashu_fbig2ibig() {
         let f =
-            Float10::from_str_native("234234223.000").unwrap().with_precision(RADIX_BITS).value();
+            Float10::from_str_native("234234223.000").unwrap().with_precision(*RADIX_BITS).value();
         let i: IBig = fbig2ibig(f);
         let sig = IBig::from(234234223);
         assert_eq!(i, sig);

@@ -3,9 +3,7 @@ use crate::{
     consensus::{
         clock::{Clock, Ticks},
         ouroboros::{
-            consts::{LOG_T, P, RADIX_BITS, TREE_LEN},
-            types::Float10,
-            utils::fbig2base,
+            consts::{LOG_T, TREE_LEN},
             Epoch, EpochConsensus, SlotWorkspace, StakeholderState,
         },
         BlockInfo, LeadProof, Metadata,
@@ -16,7 +14,7 @@ use crate::{
         keypair::{PublicKey, SecretKey},
         lead_proof,
         leadcoin::LeadCoin,
-        proof::{Proof, ProvingKey, VerifyingKey},
+        proof::{ProvingKey, VerifyingKey},
         schnorr::SchnorrSecret,
     },
     net::{P2p, P2pPtr, Settings, SettingsPtr},
@@ -308,15 +306,6 @@ impl Stakeholder {
         }
     }
 
-    fn get_f(&self) -> Float10 {
-        //TODO (res) should be function of the frequency coins in prev epoch
-        // in the previous epoch.
-        let one: Float10 =
-            Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
-        let two: Float10 =
-            Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
-        one / two
-    }
     /// on the onset of the epoch, layout the new the competing coins
     /// assuming static stake during the epoch, enforced by the commitment to competing coins
     /// in the epoch's gen2esis data.
@@ -324,36 +313,7 @@ impl Stakeholder {
         info!(target: LOG_T, "[new epoch] {}", self);
         let eta = self.get_eta();
         let mut epoch = Epoch::new(self.epoch_consensus, eta);
-        // total stake
-        // let rel_sl = self.workspace.sl;
-        // let epochs = self.workspace.e;
-        // let epoch_len = self.epoch_consensus.get_epoch_len();
-        // let abs_sl = rel_sl + epochs * epoch_len;
-        //
-        let f = self.get_f().with_precision(RADIX_BITS).value();
-        let total_stake = self.epoch.consensus.total_stake(e, sl);
-        let one: Float10 =
-            Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
-        let two: Float10 =
-            Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
-        let field_p = Float10::from_str_native(P).unwrap().with_precision(RADIX_BITS).value();
-        let total_sigma =
-            Float10::try_from(total_stake).unwrap().with_precision(RADIX_BITS).value();
-        let x = one - f;
-        info!("x: {}", x);
-        // also ln small x should work normally.
-        let c = x.ln();
-        info!("c: {}", c);
-        let sigma1_fbig = c.clone() / total_sigma.clone() * field_p.clone();
-        info!("sigma1: {}", sigma1_fbig);
-
-        let sigma1: pallas::Base = fbig2base(sigma1_fbig);
-        info!("sigma1 base: {:?}", sigma1);
-        let sigma2_fbig = (c / total_sigma).powf(two.clone()) * (field_p / two);
-        info!("sigma2: {}", sigma2_fbig);
-        let sigma2: pallas::Base = fbig2base(sigma2_fbig);
-        info!("sigma2 base: {:?}", sigma2);
-        epoch.create_coins(sigma1, sigma2, self.ownedcoins.clone()); // set epoch interal fields working space with competing coins
+        epoch.create_coins(e, sl, &self.ownedcoins);
         self.epoch = epoch.clone();
     }
 
@@ -377,39 +337,38 @@ impl Stakeholder {
         self.workspace.set_sl(sl);
         self.workspace.set_e(e);
         self.workspace.set_st(st);
-        let mut winning_coin_idx: usize = 0;
-        let won: Vec<bool> = self.epoch.is_leader(sl, &mut winning_coin_idx);
-        for i in 0..won.len() {
-            let proof = if won[i] {
-                let p = self.epoch.get_proof(sl, i, &self.get_leadprovkingkey());
-                // Sanity check for proof validity)
-                info!("================= Leader proof generated successfully, veryfing... =================");
-                let coin = self.epoch.get_coin(sl as usize, i);
-                match lead_proof::verify_lead_proof(&self.get_leadverifyingkey(), &p, &coin.public_inputs()) {
-                    Ok(_) => info!("================= Proof veryfied succsessfully! ================="),
-                    Err(e) => error!("================= Error during leader proof verification: {} =================", e),
-                }
-                info!("====================================================================================");
-                /////////////////////////////////////////////
-                p
-            } else {
-                Proof::new(vec![])
-            };
-            self.workspace.add_leader(won[i]);
-            self.workspace.set_idx(winning_coin_idx);
-            let coin = self.epoch.get_coin(sl as usize, i);
-            let keypair = coin.keypair.unwrap();
-            let addr = Address::from(keypair.public);
-            let sign = keypair.secret.sign(proof.as_ref());
-            let meta =
-                Metadata::new(sign, addr, self.get_eta().to_repr(), LeadProof::from(proof), vec![]);
-            self.workspace.add_metadata(meta);
-            if won[i] {
-                let owned_coin = self
-                    .finalize_coin(&self.epoch.get_coin(sl as usize, winning_coin_idx as usize));
-                self.ownedcoins.push(owned_coin);
-            }
+
+        let (won, idx) = self.epoch.is_leader(sl);
+        info!("Lottery outcome: {}", won);
+        if !won {
+            return
         }
+        // TODO: Generate rewards transaction
+        info!("Winning coin index: {}", idx);
+        // Generating leader proof
+        let coin = self.epoch.get_coin(sl as usize, idx);
+        let proof = self.epoch.get_proof(sl, idx, &self.get_leadprovkingkey());
+        //Verifying generated proof against winning coin public inputs
+        info!("Leader proof generated successfully, veryfing...");
+        match lead_proof::verify_lead_proof(
+            &self.get_leadverifyingkey(),
+            &proof,
+            &coin.public_inputs(),
+        ) {
+            Ok(_) => info!("Proof veryfied succsessfully!"),
+            Err(e) => error!("Error during leader proof verification: {}", e),
+        }
+
+        self.workspace.add_leader(won);
+        self.workspace.set_idx(idx);
+        let keypair = coin.keypair.unwrap();
+        let addr = Address::from(keypair.public);
+        let sign = keypair.secret.sign(proof.as_ref());
+        let meta =
+            Metadata::new(sign, addr, self.get_eta().to_repr(), LeadProof::from(proof), vec![]);
+        self.workspace.add_metadata(meta);
+        let owned_coin = self.finalize_coin(&self.epoch.get_coin(sl as usize, idx as usize));
+        self.ownedcoins.push(owned_coin);
     }
 
     //TODO (res) validate the owncoin is the same winning leadcoin

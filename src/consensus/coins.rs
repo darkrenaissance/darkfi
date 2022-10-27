@@ -7,15 +7,18 @@ use pasta_curves::{
     group::{ff::PrimeField, Curve},
     pallas,
 };
-use rand::{thread_rng, Rng, rngs::OsRng};
+use rand::{rngs::OsRng, thread_rng, Rng};
 
-use darkfi::{
+use super::{
+    utils::fbig2base, Float10, EPOCH_LENGTH, LOTTERY_HEAD_START, P, PRF_NULLIFIER_PREFIX,
+    RADIX_BITS, REWARD,
+};
+use crate::{
     crypto::{
         coin::{Coin, OwnCoin},
         keypair::{Keypair, SecretKey},
         leadcoin::LeadCoin,
         note::Note,
-        
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
         util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
     },
@@ -24,47 +27,41 @@ use darkfi::{
 };
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode, Nullifier};
 
-use crate::utils::{Float10, fbig2base};
-
-// Epoch configuration
-const EPOCH_LENGTH: u64 = 10;
-const REWARD: u64 = 420;
-
-// TODO: Describe constant meaning in comment
-const RADIX_BITS: usize = 76;
-const P: &str = "28948022309329048855892746252171976963363056481941560715954676764349967630337";
-const LOTTERY_HEAD_START: u64 = 1;
-const PRF_NULLIFIER_PREFIX: u64 = 0;
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
 /// Retrieve previous epoch competing coins frequency.
 fn get_frequency() -> Float10 {
     //TODO: Actually retrieve frequency of coins from the previous epoch.
-    let one: Float10 = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
-    let two: Float10 = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
+    let one: Float10 = Float10::from_str_native("1").unwrap().with_precision(*RADIX_BITS).value();
+    let two: Float10 = Float10::from_str_native("2").unwrap().with_precision(*RADIX_BITS).value();
     one / two
 }
 
 /// Calculate nodes total stake for specific epoch and slot.
-fn total_stake(epoch: u64, slot: u64) -> u64 {    
-    (epoch * EPOCH_LENGTH + slot + 1) * REWARD
+fn total_stake(epoch: u64, slot: u64) -> u64 {
+    (epoch * *EPOCH_LENGTH + slot + 1) * *REWARD
 }
 
-/// Generate epoch competing coins. 
-pub fn create_epoch_coins(eta: pallas::Base, owned: &Vec<OwnCoin>, epoch: u64, slot: u64) -> Vec<Vec<LeadCoin>> {
+/// Generate epoch competing coins.
+pub fn create_epoch_coins(
+    eta: pallas::Base,
+    owned: &Vec<OwnCoin>,
+    epoch: u64,
+    slot: u64,
+) -> Vec<Vec<LeadCoin>> {
     info!("Creating coins for epoch: {}", epoch);
 
     // Retrieve previous epoch competing coins frequency
-    let frequency = get_frequency().with_precision(RADIX_BITS).value();
+    let frequency = get_frequency().with_precision(*RADIX_BITS).value();
     info!("Previous epoch frequency: {}", frequency);
-    
+
     // Generating sigmas
     let total_stake = total_stake(epoch, slot); // only used for fine tunning
-    info!("Node total stake: {}", total_stake);    
-    let one: Float10 = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
-    let two: Float10 = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
-    let field_p = Float10::from_str_native(P).unwrap().with_precision(RADIX_BITS).value();
-    let total_sigma = Float10::try_from(total_stake).unwrap().with_precision(RADIX_BITS).value();
+    info!("Node total stake: {}", total_stake);
+    let one: Float10 = Float10::from_str_native("1").unwrap().with_precision(*RADIX_BITS).value();
+    let two: Float10 = Float10::from_str_native("2").unwrap().with_precision(*RADIX_BITS).value();
+    let field_p = Float10::from_str_native(*P).unwrap().with_precision(*RADIX_BITS).value();
+    let total_sigma = Float10::try_from(total_stake).unwrap().with_precision(*RADIX_BITS).value();
     let x = one - frequency;
     info!("x: {}", x);
     let c = x.ln();
@@ -73,28 +70,34 @@ pub fn create_epoch_coins(eta: pallas::Base, owned: &Vec<OwnCoin>, epoch: u64, s
     info!("sigma1: {}", sigma1_fbig);
     let sigma1: pallas::Base = fbig2base(sigma1_fbig);
     info!("sigma1 base: {:?}", sigma1);
-    let sigma2_fbig = (c.clone() / total_sigma.clone()).powf(two.clone()) * (field_p.clone() / two.clone());
+    let sigma2_fbig =
+        (c.clone() / total_sigma.clone()).powf(two.clone()) * (field_p.clone() / two.clone());
     info!("sigma2: {}", sigma2_fbig);
     let sigma2: pallas::Base = fbig2base(sigma2_fbig);
     info!("sigma2 base: {:?}", sigma2);
-    
-    create_coins(eta, owned, sigma1, sigma2)  
+
+    create_coins(eta, owned, sigma1, sigma2)
 }
 
 /// Generate coins for provided sigmas.
 /// Note: the strategy here is single competing coin per slot.
-fn create_coins(eta: pallas::Base, owned: &Vec<OwnCoin>, sigma1: pallas::Base, sigma2: pallas::Base) -> Vec<Vec<LeadCoin>> {
+fn create_coins(
+    eta: pallas::Base,
+    owned: &Vec<OwnCoin>,
+    sigma1: pallas::Base,
+    sigma2: pallas::Base,
+) -> Vec<Vec<LeadCoin>> {
     let mut rng = thread_rng();
     let mut seeds: Vec<u64> = vec![];
-    for _i in 0..EPOCH_LENGTH {
+    for _i in 0..*EPOCH_LENGTH {
         let rho: u64 = rng.gen();
         seeds.push(rho);
-    }    
+    }
     let (sks, root_sks, path_sks) = create_coins_sks();
-    
+
     // Leadcoins matrix were each row represents a slot and contains its competing coins.
     let mut coins: Vec<Vec<LeadCoin>> = vec![];
-    for i in 0..EPOCH_LENGTH {
+    for i in 0..*EPOCH_LENGTH {
         let index = i as usize;
         // Use existing stake
         if !owned.is_empty() {
@@ -116,13 +119,13 @@ fn create_coins(eta: pallas::Base, owned: &Vec<OwnCoin>, sigma1: pallas::Base, s
             coins.push(slot_coins);
             continue
         }
-        
+
         // Compete with zero stake
         let coin = create_leadcoin(
             eta,
             sigma1,
             sigma2,
-            LOTTERY_HEAD_START,
+            *LOTTERY_HEAD_START,
             index,
             root_sks[index],
             path_sks[index],
@@ -131,26 +134,27 @@ fn create_coins(eta: pallas::Base, owned: &Vec<OwnCoin>, sigma1: pallas::Base, s
         );
         coins.push(vec![coin]);
     }
-    
+
     coins
 }
 
 /// Generate epoch coins secret keys.
-/// First slot coin secret key is sampled at random, 
+/// First slot coin secret key is sampled at random,
 /// while the secret keys of the rest slots derive from previous slot secret.
 /// Clarification:
 ///     sk[0] -> random,
 ///     sk[1] -> derive_function(sk[0]),
 ///     ...
 ///     sk[n] -> derive_function(sk[n-1]),
-fn create_coins_sks() -> (Vec<SecretKey>, Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>) {
+fn create_coins_sks() -> (Vec<SecretKey>, Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>)
+{
     let mut rng = thread_rng();
-    let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(EPOCH_LENGTH as usize);
+    let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(*EPOCH_LENGTH as usize);
     let mut sks: Vec<SecretKey> = vec![];
     let mut root_sks: Vec<MerkleNode> = vec![];
     let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
     let mut prev_sk_base: pallas::Base = pallas::Base::one();
-    for _i in 0..EPOCH_LENGTH {
+    for _i in 0..*EPOCH_LENGTH {
         let base: pallas::Point = if _i == 0 {
             pedersen_commitment_u64(1, pallas::Scalar::random(&mut rng))
         } else {
@@ -160,7 +164,9 @@ fn create_coins_sks() -> (Vec<SecretKey>, Vec<MerkleNode>, Vec<[MerkleNode; MERK
         let sk_x = *coord.x();
         let sk_y = *coord.y();
         let sk_coord_ar = [sk_x, sk_y];
-        let sk_base: pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(sk_coord_ar);
+        let sk_base: pallas::Base =
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+                .hash(sk_coord_ar);
         sks.push(SecretKey::from(sk_base));
         prev_sk_base = sk_base;
         let sk_bytes = sk_base.to_repr();
@@ -194,7 +200,7 @@ fn create_leadcoin(
     let one = pallas::Base::one();
     let c_cm1_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
     let c_cm2_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
-    let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(EPOCH_LENGTH as usize);
+    let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(*EPOCH_LENGTH as usize);
     let c_v = pallas::Base::from(value);
     // coin relative slot index in the epoch
     let c_sl = pallas::Base::from(u64::try_from(i).unwrap());
@@ -217,7 +223,7 @@ fn create_leadcoin(
             .hash(sn_msg);
 
     let coin_commit_msg_input =
-        [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed, one];
+        [pallas::Base::from(*PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed, one];
     let coin_commit_msg: pallas::Base =
         poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
             .hash(coin_commit_msg_input);
@@ -236,7 +242,7 @@ fn create_leadcoin(
             .hash(coin_nonce2_msg);
 
     let coin2_commit_msg_input =
-        [pallas::Base::from(PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed2, one];
+        [pallas::Base::from(*PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed2, one];
     let coin2_commit_msg: pallas::Base =
         poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
             .hash(coin2_commit_msg_input);
@@ -269,7 +275,10 @@ fn create_leadcoin(
     coin
 }
 
-fn create_coins_election_seeds(eta: pallas::Base, slot: pallas::Base) -> (pallas::Base, pallas::Base) {
+fn create_coins_election_seeds(
+    eta: pallas::Base,
+    slot: pallas::Base,
+) -> (pallas::Base, pallas::Base) {
     let election_seed_nonce: pallas::Base = pallas::Base::from(3);
     let election_seed_lead: pallas::Base = pallas::Base::from(22);
 
@@ -303,9 +312,8 @@ pub fn is_leader(slot: u64, epoch_coins: &Vec<Vec<LeadCoin>>) -> (bool, usize) {
     for (winning_idx, coin) in competing_coins.iter().enumerate() {
         let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
         let y_exp_hash: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
-            )
-            .hash(y_exp);
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+                .hash(y_exp);
         let y_coordinates = pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
             .to_affine()
             .coordinates()
@@ -315,9 +323,8 @@ pub fn is_leader(slot: u64, epoch_coins: &Vec<Vec<LeadCoin>>) -> (bool, usize) {
         let y_y: pallas::Base = *y_coordinates.y();
         let y_coord_arr = [y_x, y_y];
         let y: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init(
-            )
-            .hash(y_coord_arr);
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+                .hash(y_coord_arr);
         //
         let val_base = pallas::Base::from(coin.value.unwrap());
         let target_base =
@@ -327,14 +334,14 @@ pub fn is_leader(slot: u64, epoch_coins: &Vec<Vec<LeadCoin>>) -> (bool, usize) {
         if y >= target_base {
             continue
         }
-        
-        won = true;        
+
+        won = true;
         if coin.value.unwrap() > highest_stake {
             highest_stake = coin.value.unwrap();
             highest_stake_idx = winning_idx;
         }
     }
-    
+
     (won, highest_stake_idx)
 }
 
@@ -358,6 +365,6 @@ pub async fn generate_staking_coins(wallet: &WalletDb) -> Result<Vec<OwnCoin>> {
     let leaf_position: incrementalmerkletree::Position = 0.into();
     let coin = OwnCoin { coin, note, secret: keypair.secret, nullifier, leaf_position };
     wallet.put_own_coin(coin.clone()).await?;
-    
+
     Ok(vec![coin])
 }
