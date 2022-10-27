@@ -37,7 +37,7 @@ Collaborative wiki using peer-to-peer network and raft consensus.
 4 - For restore files having local changes to the original text: 
 
 ```shell
-% darkwiki resotre
+% darkwiki restore
 ```
 
 5 - For both `restore` and `update` commands, the flag `--dry-run` can show the changes without applying/publishing the patches
