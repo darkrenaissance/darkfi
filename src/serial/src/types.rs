@@ -14,3 +14,6 @@ mod pasta;
 
 #[cfg(feature = "url")]
 mod url;
+
+#[cfg(feature = "x25519-dalek")]
+mod x25519;
