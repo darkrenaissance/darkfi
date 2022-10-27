@@ -79,3 +79,9 @@
 * [Algebraic Number Theory](https://www.jmilne.org/math/CourseNotes/ANT.pdf)
   by Milne, are course notes written which are clear and concise.
 
+## Cryptography
+
+### ZK
+
+* [Proofs, Arguments, and Zero-Knowledge](https://people.cs.georgetown.edu/jthaler/ProofsArgsAndZK.pdf)
+  by Justin Thaler.
