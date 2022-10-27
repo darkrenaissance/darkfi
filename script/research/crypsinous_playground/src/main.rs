@@ -34,6 +34,10 @@ struct Args {
     #[structopt(long, default_value = "changeme")]
     /// Password for the wallet database
     wallet_pass: String,
+    
+    #[structopt(short, default_value = "1")]
+    /// How many epochs to simulate
+    epochs: u64,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -45,6 +49,14 @@ struct Args {
 // Other flows that happen through a slot, like broadcasting blocks or syncing are out of scope.
 async_daemonize!(realmain);
 async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()>  {
+
+    // Epochs sanity check
+    let epochs = args.epochs;
+    if epochs < 1 {
+        error!("Epochs must be a positive number.");
+        return Ok(());
+    }
+    info!("Simulation epochs: {}", epochs);
     
     // Initialize wallet that holds coins for staking
     let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
@@ -69,40 +81,38 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()>  {
     let proving_key = ProvingKey::build(k, &LeadContract::default());
     let verifying_key = VerifyingKey::build(k, &LeadContract::default());
     
-    // Simulating an epoch with 10 slots
-    let epoch = 0;
-    let slot = 0;
-    info!("Epoch {} started!", epoch);
-    
-    // Generating epoch coins
-    // TODO: Retrieve previous lead proof
-    let eta = pallas::Base::one();
-    let epoch_coins = coins::create_epoch_coins(eta, &owned, epoch, slot);
-    info!("Generated epoch_coins: {}", epoch_coins.len());    
-    for slot in 0..10 {
-        // Checking if slot leader
-        info!("Slot {} started!", slot);
-        let (won, idx) = coins::is_leader(slot, &epoch_coins);
-        info!("Lottery outcome: {}", won);
-        if !won {
-            continue
+    // Simulating epochs with 10 slots
+    for epoch in 0..epochs {
+        info!("Epoch {} started!", epoch);
+        // Generating epoch coins
+        // TODO: Retrieve previous lead proof
+        let eta = pallas::Base::one();
+        let epoch_coins = coins::create_epoch_coins(eta, &owned, epoch, 0);
+        info!("Generated epoch_coins: {}", epoch_coins.len());    
+        for slot in 0..10 {
+            // Checking if slot leader
+            info!("Slot {} started!", slot);
+            let (won, idx) = coins::is_leader(slot, &epoch_coins);
+            info!("Lottery outcome: {}", won);
+            if !won {
+                continue
+            }
+            // TODO: Generate rewards transaction
+            info!("Winning coin index: {}", idx);
+            // Generating leader proof
+            let coin = epoch_coins[slot as usize][idx];
+            let proof = lead_proof::create_lead_proof(&proving_key, coin);
+            if proof.is_err() {
+                error!("Error during leader proof creation: {}", proof.err().unwrap());
+                continue
+            }
+            //Verifying generated proof against winning coin public inputs
+            info!("Leader proof generated successfully, veryfing...");
+            match lead_proof::verify_lead_proof(&verifying_key, &proof.unwrap(), &coin.public_inputs()) {
+                Ok(_) => info!("Proof veryfied succsessfully!"),
+                Err(e) => error!("Error during leader proof verification: {}", e),
+            }            
         }
-        // TODO: Generate rewards transaction
-        info!("Winning coin index: {}", idx);
-        // Generating leader proof
-        let coin = epoch_coins[slot as usize][idx];
-        let proof = lead_proof::create_lead_proof(&proving_key, coin);
-        if proof.is_err() {
-            error!("Error during leader proof creation: {}", proof.err().unwrap());
-            continue
-        }
-        //Verifying generated proof against winning coin public inputs
-        info!("Leader proof generated successfully, veryfing...");
-        match lead_proof::verify_lead_proof(&verifying_key, &proof.unwrap(), &coin.public_inputs()) {
-            Ok(_) => info!("Proof veryfied succsessfully!"),
-            Err(e) => error!("Error during leader proof verification: {}", e),
-        }
-        
     }
     
     Ok(()) 

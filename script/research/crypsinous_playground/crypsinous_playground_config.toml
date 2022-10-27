@@ -11,3 +11,6 @@
 
 # Password for the wallet database
 #wallet_pass = "changeme"
+
+# How many epochs to simulate
+#epochs = 1
