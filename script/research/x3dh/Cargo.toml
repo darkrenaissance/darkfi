@@ -6,7 +6,6 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-anyhow = "1.0.56"
 sha3 = "0.10.6"
 digest = "0.10.5"
 rand = "0.7.3"

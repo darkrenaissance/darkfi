@@ -3,7 +3,6 @@
 use std::collections::{HashMap, VecDeque};
 
 use aes_gcm_siv::{AeadInPlace, Aes256GcmSiv, KeyInit};
-use anyhow::Result;
 use digest::Update;
 use rand::rngs::OsRng;
 use sha3::Sha3_256;
@@ -405,7 +404,7 @@ impl DoubleRatchetSessionState {
     }
 }
 
-fn main() -> Result<()> {
+fn main() {
     // The "server" contains published identity keys and prekeys.
     let mut server = Server::default();
 
@@ -726,6 +725,4 @@ fn main() -> Result<()> {
     let (enc_header, ciphertext) = brs.ratchet_encrypt(message_to_alice, &[]);
     let plaintext = ars.ratchet_decrypt(&enc_header, &ciphertext, &[]);
     assert_eq!(plaintext, message_to_alice);
-
-    Ok(())
 }
