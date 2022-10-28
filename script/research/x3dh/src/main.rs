@@ -22,6 +22,8 @@ const AEAD_TAG_SIZE: usize = 16;
 const MESSAGE_KEY_CONSTANT: u8 = 0x01;
 const CHAIN_KEY_CONSTANT: u8 = 0x02;
 
+const X3DH_INIT_INFO: &[u8] = b"x3dh_double_ratchet_init";
+
 const BLANK_NONCE: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 // wat do?
@@ -500,7 +502,6 @@ fn main() {
     //   domain separation with XEdDSA.
     // - HKDF salt = A zero-filled byte sequence equal to the hash output length.
     // - HKDF info - The info parameter.
-    let info = b"x3dh_info";
     let salt = [0u8; 32];
     let mut ikm = vec![0xFF; 32];
     ikm.extend_from_slice(&dh1.to_bytes());
@@ -512,10 +513,11 @@ fn main() {
 
     let hkdf = Hkdf::<Sha3_256>::new(&salt, &ikm);
     let mut sk = [0u8; 32];
-    hkdf.expand(info.as_ref(), &mut sk).unwrap();
+    hkdf.expand(X3DH_INIT_INFO, &mut sk).unwrap();
 
     // After calculating SK, Alice deletes her ephemeral private key and the
     // DH outputs.
+    // TODO: Actually erase
     drop(alice_ek_secret);
     drop(dh1);
     drop(dh2);
@@ -579,7 +581,6 @@ fn main() {
         dh4 = Some(opk.diffie_hellman(&initial_message.ephemeral_key));
     }
 
-    let info = b"x3dh_info";
     let salt = [0u8; 32];
     let mut ikm = vec![0xFF; 32];
     ikm.extend_from_slice(&dh1.to_bytes());
@@ -589,9 +590,11 @@ fn main() {
         ikm.extend_from_slice(&opk_dh.to_bytes());
     }
 
+    // TODO: Erase ephemeral data
+
     let hkdf = Hkdf::<Sha3_256>::new(&salt, &ikm);
     let mut sk2 = [0u8; 32];
-    hkdf.expand(info.as_ref(), &mut sk2).unwrap();
+    hkdf.expand(X3DH_INIT_INFO, &mut sk2).unwrap();
     assert_eq!(sk, sk2); // Just to confirm everything's correct
 
     // Bob then constructs the AD byte sequence using IK_A and IK_B
