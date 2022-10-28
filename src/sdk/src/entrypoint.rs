@@ -64,24 +64,3 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> &'a [u8] {
     instruction_data
 }
 
-/// Allocate a piece of memory in the wasm VM
-#[no_mangle]
-#[cfg(target_arch = "wasm32")]
-extern "C" fn __drkruntime_mem_alloc(size: usize) -> *mut u8 {
-    let align = std::mem::align_of::<usize>();
-
-    if let Ok(layout) = std::alloc::Layout::from_size_align(size, align) {
-        unsafe {
-            if layout.size() > 0 {
-                let ptr = std::alloc::alloc(layout);
-                if !ptr.is_null() {
-                    return ptr
-                }
-            } else {
-                return align as *mut u8
-            }
-        }
-    }
-
-    std::process::abort();
-}

@@ -25,7 +25,7 @@ use darkfi_sdk::entrypoint;
 use log::{debug, info};
 use wasmer::{
     imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
-    Memory, MemoryView, Module, Store, Value, WasmPtr,
+    Memory, MemoryView, Module, Pages, Store, Value, WasmPtr, WASM_PAGE_SIZE,
 };
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::{
@@ -43,8 +43,6 @@ use crate::{
     Result,
 };
 
-/// Function name in our wasm module that allows us to allocate some memory.
-const WASM_MEM_ALLOC: &str = "__drkruntime_mem_alloc";
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
 /// Hardcoded entrypoint function of a contract
@@ -183,27 +181,16 @@ impl Runtime {
 
     /// Run the hardcoded `ENTRYPOINT` function with the given payload as input.
     pub fn run(&mut self, payload: &[u8]) -> Result<()> {
-        // TODO: needs factoring
-        let mem_offset = self.guest_mem_alloc(payload.len())?;
-        {
-            let env = self.ctx.as_ref(&self.store);
-            let memory_view = env.memory_view(&self.store);
-            let ptr: WasmPtr<u8> = WasmPtr::new(mem_offset);
-            let slice = ptr.slice(&memory_view, payload.len() as u32).expect("FIXME FIXME FIXME");
-            slice.write_slice(payload).expect("FIXME FIXME FIXME");
-        }
+        let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
+        self.set_memory_page_size(pages_required as u32);
 
-        // Get module linear memory
-        //let memory = self.memory()?;
-
-        // Retrieve ptr to pass data, and write the payload into the vm memory
-        //memory.write(mem_offset, payload)?;
+        self.copy_to_memory(payload)?;
 
         debug!(target: "wasm_runtime::run", "Getting entrypoint function");
         let entrypoint = self.instance.exports.get_function(ENTRYPOINT)?;
 
         debug!(target: "wasm_runtime::run", "Executing wasm");
-        let ret = match entrypoint.call(&mut self.store, &[Value::I32(mem_offset as i32)]) {
+        let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
             Ok(retvals) => {
                 self.print_logs();
                 debug!(target: "wasm_runtime::run", "{}", self.gas_info());
@@ -255,19 +242,35 @@ impl Runtime {
         "(gas info temporarily disabled)".to_string()
     }
 
-    /// Allocate some memory space on a wasm linear memory to allow direct rw.
-    // TODO: we should maybe use memory.grow() instead which expands memory by pages
-    //       https://docs.rs/wasmer/3.0.0-rc.1/wasmer/struct.Memory.html#method.grow
-    // TODO: https://docs.rs/wasmer/3.0.0-rc.1/wasmer/constant.WASM_PAGE_SIZE.html
-    fn guest_mem_alloc(&mut self, size: usize) -> Result<u32> {
-        let mem_alloc_func = self.instance.exports.get_function(WASM_MEM_ALLOC)?;
-        let res_target_ptr =
-            mem_alloc_func.call(&mut self.store, &[Value::I32(size as i32)])?.to_vec();
-        Ok(res_target_ptr[0].unwrap_i32() as u32)
+    /// Set the memory page size
+    fn set_memory_page_size(&mut self, pages: u32) {
+        // Grab memory by value
+        let memory = self.take_memory();
+        // Modify the memory
+        memory.grow(&mut self.store, Pages(pages));
+        // Replace the memory back again
+        self.ctx.as_mut(&mut self.store).memory = Some(memory);
+    }
+    /// Take Memory by value. Needed to modify the Memory object
+    /// Will panic if memory isn't set.
+    fn take_memory(&mut self) -> Memory {
+        let env_memory = &mut self.ctx.as_mut(&mut self.store).memory;
+        let memory = std::mem::replace(env_memory, None);
+        memory.expect("memory should be set")
     }
 
-    /// Retrieve linear memory from a wasm module and return its reference.
-    fn memory(&self) -> Result<&Memory> {
-        Ok(self.instance.exports.get_memory(MEMORY)?)
+    /// Copy payload to the start of the memory
+    fn copy_to_memory(&self, payload: &[u8]) -> Result<()> {
+        // Get the memory view
+        let env = self.ctx.as_ref(&self.store);
+        let memory_view = env.memory_view(&self.store);
+
+        // Pointer to offset 0
+        let ptr: WasmPtr<u8> = WasmPtr::new(0);
+
+        // Write to the slice
+        let slice = ptr.slice(&memory_view, payload.len() as u32).expect("FIXME FIXME FIXME");
+        slice.write_slice(payload).expect("FIXME FIXME FIXME");
+        Ok(())
     }
 }
