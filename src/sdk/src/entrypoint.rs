@@ -32,10 +32,9 @@ macro_rules! entrypoint {
         /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
-            //let (state, instruction_data) = $crate::entrypoint::deserialize(input);
             let instruction_data = $crate::entrypoint::deserialize(input);
 
-            match $process_instruction(/*&state, */ &instruction_data) {
+            match $process_instruction(&instruction_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
@@ -45,22 +44,13 @@ macro_rules! entrypoint {
 
 /// Deserialize a given payload in `entrypoint`
 /// # Safety
-//pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a [u8], &'a [u8]) {
 pub unsafe fn deserialize<'a>(input: *mut u8) -> &'a [u8] {
     let mut offset: usize = 0;
-
-    /*
-    let state_data_len = *(input.add(offset) as *const u64) as usize;
-    offset += size_of::<u64>();
-    let state_data = { from_raw_parts(input.add(offset), state_data_len) };
-    offset += state_data_len;
-    */
 
     let instruction_data_len = *(input.add(offset) as *const u64) as usize;
     offset += size_of::<u64>();
     let instruction_data = { from_raw_parts(input.add(offset), instruction_data_len) };
 
-    //(state_data, instruction_data)
     instruction_data
 }
 

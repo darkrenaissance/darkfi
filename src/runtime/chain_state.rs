@@ -48,7 +48,7 @@ pub fn nullifier_exists(mut env: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32
     }
     */
 
-    error!(target: "wasm_runtime::nullifier_exists", "Failed to read bytes from VM memory");
+    //error!(target: "wasm_runtime::nullifier_exists", "Failed to read bytes from VM memory");
     //-2
     0
 }
@@ -78,7 +78,7 @@ pub fn is_valid_merkle(mut env: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 
     }
     */
 
-    error!(target: "wasm_runtime::is_valid_merkle", "Failed to read bytes from VM memory");
+    //error!(target: "wasm_runtime::is_valid_merkle", "Failed to read bytes from VM memory");
     //-2
     0
 }
