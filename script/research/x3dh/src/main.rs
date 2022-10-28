@@ -102,7 +102,7 @@ impl MessageHeader {
         let mut ret = [0u8; 48];
         ret[..32].copy_from_slice(&self.dh.to_bytes());
         ret[32..40].copy_from_slice(&self.pn.to_le_bytes());
-        ret[40..].copy_from_slice(&self.pn.to_le_bytes());
+        ret[40..].copy_from_slice(&self.n.to_le_bytes());
         ret
     }
 
