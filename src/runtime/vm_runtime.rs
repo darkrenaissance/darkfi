@@ -63,7 +63,7 @@ pub struct Env {
 }
 
 impl Env {
-    /// Providers safe access to the memory
+    /// Provide safe access to the memory
     /// (it must be initialized before it can be used)
     ///
     ///     // ctx: FunctionEnvMut<Env>
@@ -79,19 +79,6 @@ impl Env {
         self.memory.as_ref().unwrap()
     }
 }
-
-/*
-impl WasmerEnv for Env {
-    fn init_with_instance(
-        &mut self,
-        instance: &Instance,
-    ) -> std::result::Result<(), HostEnvInitError> {
-        let memory: Memory = instance.exports.get_with_generics_weak(MEMORY)?;
-        self.memory.initialize(memory);
-        Ok(())
-    }
-}
-*/
 
 /// The result of the VM execution
 pub struct ExecutionResult {
