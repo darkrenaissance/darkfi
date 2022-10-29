@@ -9,7 +9,7 @@ use darkfi_sdk::crypto::{
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointBaseField, ScalarFixed,
+        FixedPoint, FixedPointBaseField, ScalarFixed, NonIdentityPoint,
     },
     poseidon::{
         primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
@@ -36,6 +36,7 @@ use crate::zk::gadget::{
     less_than::{LessThanChip, LessThanConfig},
     native_range_check::NativeRangeCheckChip,
 };
+use pasta_curves::group::Curve;
 
 const WINDOW_SIZE: usize = 3;
 const NUM_OF_BITS: usize = 254;
@@ -95,21 +96,12 @@ impl TxConfig {
 pub struct TxContract {
     // witness
     pub root_cm: Value<pallas::Base>, // root to coins commitment
-
     //
     pub coin1_root_sk: Value<pallas::Base>, // coins merkle tree secret key of coin1
     pub coin1_sk: Value<pallas::Base>,
     pub coin1_sk_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to coin1 sk
     pub coin1_sk_pos: Value<u32>,
-
-    pub coin2_root_sk: Value<pallas::Base>, // coins merkle tree secret key of coin2
-    pub coin2_sk: Value<pallas::Base>,
-    pub coin2_sk_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to coin2 sk
-    pub coin2_cm_pos: Value<u32>,
-
-    pub coin3_pk: Value<pallas::Point>,
-    pub coin4_pk: VAlue<pallas::Point>,
-
+    //
     pub coin1_nonce: Value<pallas::Base>,
     pub coin1_blind: Value<pallas::Scalar>,
     pub coin1_value: Value<pallas::Base>,
@@ -117,6 +109,11 @@ pub struct TxContract {
     pub coin1_cm_pos: Value<u32>,
     pub coin1_sn: Value<pallas::Base>,
 
+    pub coin2_root_sk: Value<pallas::Base>, // coins merkle tree secret key of coin2
+    pub coin2_sk: Value<pallas::Base>,
+    pub coin2_sk_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, // path to coin2 sk
+    pub coin2_sk_pos: Value<u32>,
+    //
     pub coin2_nonce: Value<pallas::Base>,
     pub coin2_blind: Value<pallas::Scalar>,
     pub coin2_value: Value<pallas::Base>,
@@ -124,17 +121,17 @@ pub struct TxContract {
     pub coin2_cm_pos: Value<u32>,
     pub coin2_sn: Value<pallas::Base>,
 
+    pub coin3_pk: Value<pallas::Base>,
     pub coin3_nonce: Value<pallas::Base>,
     pub coin3_blind: Value<pallas::Scalar>,
     pub coin3_value: Value<pallas::Base>,
-    pub coin3_cm_x: Value<pallas::Base>,
-    pub coin3_cm_y: Value<pallas::Base>,
+    pub coin3_cm: Value<pallas::Point>,
 
+    pub coin4_pk: Value<pallas::Base>,
     pub coin4_nonce: Value<pallas::Base>,
     pub coin4_blind: Value<pallas::Scalar>,
     pub coin4_value: Value<pallas::Base>,
-    pub coin4_cm_x: Value<pallas::Base>,
-    pub coin4_cm_y: Value<pallas::Base>,
+    pub coin4_cm: Value<pallas::Point>,
 }
 
 impl UtilitiesInstructions<pallas::Base> for TxContract {
@@ -325,10 +322,6 @@ impl Circuit<pallas::Base> for TxContract {
                                             config.advices[0],
                                             self.coin1_sn
         )?;
-        let coin1_cm_path = self.load_private(layouter.namespace(|| ""),
-                                            config.advices[0],
-                                            self.coin1_cm_path
-        )?;
 
         let coin2_sk = self.load_private(layouter.namespace(|| "root sk"),
                                          config.advices[0],
@@ -355,14 +348,14 @@ impl Circuit<pallas::Base> for TxContract {
                                          self.coin2_sn
         )?;
 
-        let coin2_cm_path = self.load_private(layouter.namespace(|| ""),
-                                              config.advices[0],
-                                              self.coin2_cm_path
-        )?;
-
         let coin3_value = self.load_private(layouter.namespace(|| ""),
                                             config.advices[0],
                                             self.coin3_value
+        )?;
+
+        let coin3_pk = self.load_private(layouter.namespace(|| ""),
+                                            config.advices[0],
+                                            self.coin3_pk
         )?;
 
         let coin3_nonce = self.load_private(layouter.namespace(|| ""),
@@ -370,10 +363,20 @@ impl Circuit<pallas::Base> for TxContract {
                                             self.coin3_nonce
         )?;
 
+        let ref_coin3_cm = NonIdentityPoint::new(
+            ecc_chip.clone(),
+            layouter.namespace(|| "witness coin3 cm"),
+            self.coin3_cm.map(|x| x.to_affine()),
+        )?;
 
         let coin4_value = self.load_private(layouter.namespace(|| ""),
                                             config.advices[0],
                                             self.coin4_value
+        )?;
+
+        let coin4_pk = self.load_private(layouter.namespace(|| ""),
+                                         config.advices[0],
+                                         self.coin4_pk
         )?;
 
         let coin4_nonce = self.load_private(layouter.namespace(|| ""),
@@ -381,6 +384,11 @@ impl Circuit<pallas::Base> for TxContract {
                                             self.coin4_nonce
         )?;
 
+        let ref_coin4_cm = NonIdentityPoint::new(
+            ecc_chip.clone(),
+            layouter.namespace(|| "witness coin4 cm"),
+            self.coin4_cm.map(|x| x.to_affine()),
+        )?;
         // ===========
         // proof
         // ===========
@@ -483,7 +491,7 @@ impl Circuit<pallas::Base> for TxContract {
                 FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), coin1_blind)?
         };
-        let coin1_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
+        let coin1_commit = com1.add(layouter.namespace(|| "nonce commit"), &blind)?;
         let coin1_commit_x: AssignedCell<Fp, Fp> = coin1_commit.inner().x();
         let coin1_commit_y: AssignedCell<Fp, Fp> = coin1_commit.inner().y();
         // instead of:
@@ -598,10 +606,7 @@ impl Circuit<pallas::Base> for TxContract {
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), coin3_blind)?
         };
         let coin3_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        let coin3_commit_x: AssignedCell<Fp, Fp> = coin3_commit.inner().x();
-        let coin3_commit_y: AssignedCell<Fp, Fp> = coin3_commit.inner().y();
-        coin3_commit_x.constrain_equal(layouter.namespace(||""), &coin3_cm_x);
-        coin3_commit_y.constrain_equal(layouter.namespace(||""), &coin3_cm_y);
+        coin3_commit.constrain_equal(layouter.namespace(||""), &ref_coin3_cm);
 
         // ========
         // coin4 cm
@@ -645,15 +650,12 @@ impl Circuit<pallas::Base> for TxContract {
                 FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), coin4_blind)?
         };
-        let coin4_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        let coin4_commit_x: AssignedCell<Fp, Fp> = coin4_commit.inner().x();
-        let coin4_commit_y: AssignedCell<Fp, Fp> = coin4_commit.inner().y();
-        coin4_commit_x.constrain_equal(layouter.namespace(||""), &coin4_cm_x);
-        coin4_commit_y.constrain_equal(layouter.namespace(||""), &coin4_cm_y);
+        let coin4_commit = com2.add(layouter.namespace(|| " commit"), &blind)?;
+        coin4_commit.constrain_equal(layouter.namespace(||""), &ref_coin4_cm);
 
-        let v1pv2 = ar_chip.add(layouter.namespace(||""), &coin1_value, &coin2_value)?;
-        let v3pv4 = ar_chip.add(layouter.namespace(||""), &coin3_value, &coin4_value)?;
-        v1pv2.constrain_equal(layouter.namespace(||""), &v1pv2)?;
+        let v1pv2: AssignedCell<Fp, Fp> = ar_chip.add(layouter.namespace(||""), &coin1_value, &coin2_value)?;
+        let v3pv4: AssignedCell<Fp, Fp> = ar_chip.add(layouter.namespace(||""), &coin3_value, &coin4_value)?;
+
         // ==========
         // COIN1 PATH
         // ==========
@@ -687,7 +689,6 @@ impl Circuit<pallas::Base> for TxContract {
         };
         let coin1_cm_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin1_cm_hash)?;
-        root_cm.constrain_equal(layouter.namespace(||""), &coin1_cm_root)?;
 
         // ==========
         // COIN2 PATH
@@ -722,7 +723,7 @@ impl Circuit<pallas::Base> for TxContract {
         };
         let coin2_cm_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin2_cm_hash)?;
-        root_cm.constrain_equal(layouter.namespace(||""), &coin2_cm_root)?;
+
         // =============
         // COIN1 sk root
         // =============
@@ -734,9 +735,9 @@ impl Circuit<pallas::Base> for TxContract {
             self.coin1_sk_pos,
             path,
         );
-        let coin1_cm_root = merkle_inputs
+        let coin1_sk_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin1_sk)?;
-        coin1_cm_root.constrain_equal(layouter.namespace(||""), &coin1_root_sk)?;
+
         // =============
         // COIN2 sk root
         // =============
@@ -748,9 +749,9 @@ impl Circuit<pallas::Base> for TxContract {
             self.coin2_sk_pos,
             path,
         );
-        let coin2_cm_root = merkle_inputs
+        let coin2_sk_root = merkle_inputs
             .calculate_root(layouter.namespace(|| "calculate root"), coin2_sk)?;
-        coin2_cm_root.constrain_equal(layouter.namespace(||""), &coin2_root_sk)?;
+
         // ========
         // coin1 sn
         // ========
@@ -772,7 +773,7 @@ impl Circuit<pallas::Base> for TxContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
-        coin1_sn_commit.constrain_equal(layouter.namespace(||""), &coin1_sn);
+
         // ========
         // coin2 sn
         // ========
@@ -794,6 +795,18 @@ impl Circuit<pallas::Base> for TxContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
-        coin2_sn_commit.constrain_equal(layouter.namespace(||""), &coin2_sn);
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                region.constrain_equal(v1pv2.cell(), v3pv4.cell())?;
+                region.constrain_equal(root_cm.cell(), coin1_cm_root.cell())?;
+                region.constrain_equal(root_cm.cell(), coin2_cm_root.cell())?;
+                region.constrain_equal(coin1_sk_root.cell(), coin1_root_sk.cell())?;
+                region.constrain_equal(coin2_sk_root.cell(), coin2_root_sk.cell())?;
+                region.constrain_equal(coin1_sn_commit.cell(), coin1_sn.cell())?;
+                region.constrain_equal(coin2_sn_commit.cell(), coin2_sn.cell())
+            },
+        );
+        Ok(())
     }
 }

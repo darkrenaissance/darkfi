@@ -1,7 +1,6 @@
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode};
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
-use incrementalmerkletree::Hashable;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 
 use crate::{

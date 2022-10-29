@@ -32,7 +32,6 @@ use pasta_curves::{pallas, Fp};
 
 use crate::zk::gadget::{
     arithmetic::{ArithChip, ArithConfig, ArithInstruction},
-    //even_bits::{EvenBitsChip, EvenBitsConfig, EvenBitsLookup},
     less_than::{LessThanChip, LessThanConfig},
     native_range_check::NativeRangeCheckChip,
 };
