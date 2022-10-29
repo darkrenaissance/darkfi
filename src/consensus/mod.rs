@@ -73,6 +73,9 @@ lazy_static! {
 
     /// Quarantine duration, in slots
     pub static ref QUARANTINE_DURATION: u64 = 5;
+    
+    /// Leader proof rows number
+    pub static ref LEADER_PROOF_K: u32 = 13;
 
     // TODO: Describe constants meaning in comment
     pub static ref RADIX_BITS: usize = 76;

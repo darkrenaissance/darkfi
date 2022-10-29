@@ -31,12 +31,14 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
             // Node verifies response came from a participating node.
             // Extra validations can be added here.
             let response = response_sub.receive().await?;
-            if response.consensus.participants.is_empty() {
+            if response.participants.is_empty() {
                 warn!("Retrieved consensus state from a new node, retrying...");
                 continue
             }
             // Node stores response data.
-            state.write().await.consensus = response.consensus.clone();
+            let mut lock = state.write().await;
+            lock.consensus.proposals = response.proposals.clone();
+            lock.consensus.participants = response.participants.clone();
 
             break
         }

@@ -12,11 +12,12 @@ use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info, warn};
+use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, Header, KeepAlive, LeadProof, Metadata, Participant,
-    ProposalChain, DELTA, EPOCH_LENGTH, QUARANTINE_DURATION,
+    Block, BlockInfo, BlockProposal, coins, Header, KeepAlive, LeadProof, Metadata, Participant,
+    ProposalChain, DELTA, EPOCH_LENGTH, QUARANTINE_DURATION, LEADER_PROOF_K,
 };
 
 use crate::{
@@ -24,6 +25,9 @@ use crate::{
     crypto::{
         address::Address,
         keypair::{PublicKey, SecretKey},
+        leadcoin::LeadCoin,
+        lead_proof,
+        proof::{ProvingKey, VerifyingKey},
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
     net,
@@ -33,11 +37,12 @@ use crate::{
     },
     tx::Transaction,
     util::time::Timestamp,
+    zk::circuit::LeadContract,
     Result,
 };
 
 /// This struct represents the information required by the consensus algorithm
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug)]
 pub struct ConsensusState {
     /// Genesis block creation timestamp
     pub genesis_ts: Timestamp,
@@ -51,6 +56,10 @@ pub struct ConsensusState {
     pub pending_participants: Vec<Participant>,
     /// Last slot participants where refreshed
     pub refreshed: u64,
+    /// Current epoch
+    pub epoch: u64,
+    /// Current epoch competing coins
+    pub coins: Vec<Vec<LeadCoin>>,
 }
 
 impl ConsensusState {
@@ -65,6 +74,8 @@ impl ConsensusState {
             participants: BTreeMap::new(),
             pending_participants: vec![],
             refreshed: 0,
+            epoch: 0,
+            coins: vec![],
         })
     }
 }
@@ -86,7 +97,8 @@ impl net::Message for ConsensusRequest {
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ConsensusResponse {
     /// Hot/live data used by the consensus algorithm
-    pub consensus: ConsensusState,
+    pub proposals: Vec<ProposalChain>,
+    pub participants: BTreeMap<Address, Participant>,
 }
 
 impl net::Message for ConsensusResponse {
@@ -104,6 +116,10 @@ pub struct ValidatorState {
     pub address: Address,
     /// Secret key, to sign messages
     pub secret: SecretKey,
+    /// Leader proof proving key
+    pub proving_key: ProvingKey,
+    /// Leader proof verifying key
+    pub verifying_key: VerifyingKey,
     /// Node public key
     pub public: PublicKey,
     /// Hot/Live data used by the consensus algorithm
@@ -131,6 +147,9 @@ impl ValidatorState {
     ) -> Result<ValidatorStatePtr> {
         let secret = SecretKey::random(&mut OsRng);
         let public = PublicKey::from_secret(secret);
+        info!("Generating leader proof keys with k: {}", *LEADER_PROOF_K);
+        let proving_key = ProvingKey::build(*LEADER_PROOF_K, &LeadContract::default());
+        let verifying_key = VerifyingKey::build(*LEADER_PROOF_K, &LeadContract::default());
         let consensus = ConsensusState::new(genesis_ts, genesis_data)?;
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
         let unconfirmed_txs = vec![];
@@ -155,6 +174,8 @@ impl ValidatorState {
             address,
             secret,
             public,
+            proving_key,
+            verifying_key,
             consensus,
             blockchain,
             state_machine,
@@ -235,6 +256,7 @@ impl ValidatorState {
     /// Calculates seconds until next Nth slot starting time.
     /// Slots duration is configured using the delta value.
     pub fn next_n_slot_start(&self, n: u64) -> Duration {
+        assert!(n > 0);
         let start_time = NaiveDateTime::from_timestamp(self.consensus.genesis_ts.0, 0);
         let current_slot = self.current_slot() + n;
         let next_slot_start = (current_slot * (2 * *DELTA)) + (start_time.timestamp() as u64);
@@ -243,6 +265,21 @@ impl ValidatorState {
         let diff = next_slot_start - current_time;
 
         Duration::new(diff.num_seconds().try_into().unwrap(), 0)
+    }
+    
+    /// Calculate slots until next Nth epoch.
+    /// Epoch duration is configured using the EPOCH_LENGTH value.
+    pub fn slots_to_next_n_epoch(&self, n: u64) -> u64 {
+        assert!(n > 0);
+        let epoch_length = *EPOCH_LENGTH;
+        let relavite_slot = self.current_slot() % epoch_length;
+        let slots_till_next_epoch = epoch_length - relavite_slot;
+        ((n - 1) * epoch_length) + slots_till_next_epoch
+    }
+    
+    /// Calculates seconds until next Nth epoch starting time.
+    pub fn next_n_epoch_start(&self, n: u64) -> Duration {
+        self.next_n_slot_start(self.slots_to_next_n_epoch(n))
     }
 
     /// Set participating slot to next.
@@ -266,17 +303,36 @@ impl ValidatorState {
         // the same key in calculated position.
         self.consensus.participants.iter().nth(pos as usize).unwrap().1.clone()
     }
+    
+    /// Check if new epoch has started, to create new epoch coins.
+    /// Returns flag to signify if epoch has changed and vector of
+    /// new epoch competing coins.
+    pub async fn epoch_changed(&mut self) -> Result<(bool, Vec<Vec<LeadCoin>>)> {
+        let slot = self.current_slot();
+        let epoch = self.slot_epoch(slot);
+        let check = epoch > self.consensus.epoch;
+        if epoch <= self.consensus.epoch {
+            return Ok((false, vec![]))
+        }
+        // TODO: Retrieve previous lead proof
+        let eta = pallas::Base::one();
+        // Retrieving nodes wallet coins
+        let owned = self.client.get_own_coins().await?;
+        // TODO: slot parameter should be absolute slot, not relative.
+        // At start of epoch, relative slot is 0.
+        self.consensus.coins = coins::create_epoch_coins(eta, &owned, epoch, 0);
+        Ok((true, self.consensus.coins.clone()))      
+    }
 
-    /// Check if we're the current slot leader
-    pub fn is_slot_leader(&mut self) -> bool {
-        let address = self.address;
-        address == self.slot_leader().address
+    /// Wrapper for coins::is_leader
+    pub fn is_slot_leader(&self) -> (bool, usize) { 
+        coins::is_leader(self.current_slot(), &self.consensus.coins)
     }
 
     /// Generate a block proposal for the current slot, containing all
     /// unconfirmed transactions. Proposal extends the longest fork
     /// chain the node is holding.
-    pub fn propose(&self) -> Result<Option<BlockProposal>> {
+    pub fn propose(&self, idx: usize) -> Result<Option<BlockProposal>> {
         let slot = self.current_slot();
         let (prev_hash, index) = self.longest_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
@@ -293,14 +349,14 @@ impl ValidatorState {
             Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
         let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
-        // TODO: Replace with correct proof
+        // TODO: Retrieve previous lead proof
         let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
-        let proof = LeadProof::default();
+        // Generating leader proof
+        let coin = self.consensus.coins[slot as usize][idx];
+        let proof = lead_proof::create_lead_proof(&self.proving_key, coin)?;
         let participants = self.consensus.participants.values().cloned().collect();
-        let metadata = Metadata::new(signed_proposal, self.address, eta, proof, participants);
-
-        // TODO: [PLACEHOLDER] Add balance proof creation
-        // TODO: [PLACEHOLDER] Add crypsinous leader proof creation (to replace balance proof)
+        let metadata = Metadata::new(signed_proposal, self.address, eta, LeadProof::from(proof), participants);
+        
         // TODO: [PLACEHOLDER] Add rewards calculation (proof?)
         // TODO: [PLACEHOLDER] Create and add rewards transaction
         Ok(Some(BlockProposal::new(header, unproposed_txs, metadata)))
@@ -376,7 +432,9 @@ impl ValidatorState {
 
         // Node refreshes participants records
         self.refresh_participants()?;
-
+        
+        // TODO: retrieve leader from participants list
+        // TODO: validate provided proof using known coins
         let mut leader = self.slot_leader();
         if leader.address != proposal.block.metadata.address {
             warn!(
@@ -737,6 +795,8 @@ impl ValidatorState {
             participants: BTreeMap::new(),
             pending_participants: vec![],
             refreshed: 0,
+            epoch: 0,
+            coins: vec![],
         };
 
         self.consensus = consensus;
