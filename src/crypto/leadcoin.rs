@@ -12,7 +12,7 @@ use crate::{
     zk::circuit::lead_contract::LeadContract,
 };
 
-pub const LEAD_PUBLIC_INPUT_LEN: usize = 6;
+pub const LEAD_PUBLIC_INPUT_LEN: usize = 4;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LeadCoin {
@@ -42,7 +42,6 @@ pub struct LeadCoin {
 impl LeadCoin {
     pub fn public_inputs_as_array(&self) -> [pallas::Base; LEAD_PUBLIC_INPUT_LEN] {
         let po_nonce = self.nonce_cm.unwrap();
-        let po_cm = self.cm.unwrap().to_affine().coordinates().unwrap();
         let po_pk = self.keypair.unwrap().public.0.to_affine().coordinates().unwrap();
         let y_mu = self.y_mu.unwrap();
         let rho_mu = self.rho_mu.unwrap();
@@ -61,7 +60,7 @@ impl LeadCoin {
                 .hash(y_coord_arr);
         let cm_pos = self.idx;
         let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] =
-            [*po_cm.x(), *po_cm.y(), po_nonce, *po_pk.x(), *po_pk.y(), po_y];
+             [po_nonce, *po_pk.x(), *po_pk.y(), po_y];
         public_inputs
     }
 

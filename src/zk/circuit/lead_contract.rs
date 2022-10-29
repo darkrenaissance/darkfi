@@ -92,12 +92,10 @@ impl LeadConfig {
     }
 }
 
-const LEAD_COIN_COMMIT_X_OFFSET: usize = 0;
-const LEAD_COIN_COMMIT_Y_OFFSET: usize = 1;
-const LEAD_COIN_NONCE2_OFFSET: usize = 2;
-const LEAD_COIN_PK_X_OFFSET: usize = 3;
-const LEAD_COIN_PK_Y_OFFSET: usize = 4;
-const LEAD_Y_COMMIT_BASE_OFFSET: usize = 5;
+const LEAD_COIN_NONCE2_OFFSET: usize = 0;
+const LEAD_COIN_PK_X_OFFSET: usize = 1;
+const LEAD_COIN_PK_Y_OFFSET: usize = 2;
+const LEAD_Y_COMMIT_BASE_OFFSET: usize = 3;
 
 #[derive(Default, Debug)]
 pub struct LeadContract {
@@ -441,8 +439,6 @@ impl Circuit<pallas::Base> for LeadContract {
         };
 
         let coin_commit = com.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        let coin_commit_x: AssignedCell<Fp, Fp> = coin_commit.inner().x();
-        let coin_commit_y: AssignedCell<Fp, Fp> = coin_commit.inner().y();
 
         // nonce2  =  PRF_{root_sk}(coin_nonce)
         // poured coin nonce as a poseidon of the previous nonce, and
@@ -511,8 +507,6 @@ impl Circuit<pallas::Base> for LeadContract {
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), coin2_blind)?
         };
         let coin2_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        let coin2_commit_x: AssignedCell<Fp, Fp> = coin2_commit.inner().x();
-        let coin2_commit_y: AssignedCell<Fp, Fp> = coin2_commit.inner().y();
 
         // path is valid path to staked coin's commitment
         let path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
@@ -640,19 +634,6 @@ impl Circuit<pallas::Base> for LeadContract {
             target,
             0,
             true,
-        )?;
-
-        layouter.constrain_instance(
-            coin_commit_x.cell(),
-            config.primary,
-            LEAD_COIN_COMMIT_X_OFFSET,
-        )?;
-
-        // constrain coin's pub key y value
-        layouter.constrain_instance(
-            coin_commit_y.cell(),
-            config.primary,
-            LEAD_COIN_COMMIT_Y_OFFSET,
         )?;
 
         layouter.constrain_instance(coin2_nonce.cell(), config.primary, LEAD_COIN_NONCE2_OFFSET)?;
