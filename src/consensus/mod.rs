@@ -64,8 +64,15 @@ lazy_static! {
     pub static ref BLOCK_INFO_MAGIC_BYTES: [u8; 4] = [0x90, 0x44, 0xf1, 0xf6];
 
     // Epoch configuration
+    /// Slots in an epoch
     pub static ref EPOCH_LENGTH: u64 = 10;
+    /// Block leader reward
     pub static ref REWARD: u64 = 420;
+    /// `2 * DELTA` represents slot time
+    pub static ref DELTA: u64 = 20;
+    
+    /// Quarantine duration, in slots
+    pub static ref QUARANTINE_DURATION: u64 = 5;
 
     // TODO: Describe constants meaning in comment
     pub static ref RADIX_BITS: usize = 76;

@@ -5,7 +5,7 @@ use rand::Rng;
 use smol::Executor;
 
 use crate::{
-    consensus::{state::QUARANTINE_DURATION, KeepAlive, ValidatorStatePtr},
+    consensus::{QUARANTINE_DURATION, KeepAlive, ValidatorStatePtr},
     crypto::schnorr::SchnorrSecret,
     net::P2pPtr,
     util::async_util::sleep,
@@ -21,7 +21,7 @@ pub async fn keep_alive_task(
     ex.spawn(async move {
         loop {
             // Pick a random slot in range: next slot + QUARANTINE_DURATION, exluding first and last
-            let slot = rand::thread_rng().gen_range(2..QUARANTINE_DURATION);
+            let slot = rand::thread_rng().gen_range(2..*QUARANTINE_DURATION);
             let seconds = state.read().await.next_n_slot_start(slot).as_secs();
             debug!("keep_alive_task: Waiting for next {} slots ({} sec)", slot, seconds);
 

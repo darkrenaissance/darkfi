@@ -16,7 +16,7 @@ use rand::rngs::OsRng;
 
 use super::{
     Block, BlockInfo, BlockProposal, Header, KeepAlive, LeadProof, Metadata, Participant,
-    ProposalChain,
+    ProposalChain, EPOCH_LENGTH, DELTA, QUARANTINE_DURATION,
 };
 
 use crate::{
@@ -35,13 +35,6 @@ use crate::{
     util::time::Timestamp,
     Result,
 };
-
-/// `2 * DELTA` represents slot time
-pub const DELTA: u64 = 20;
-/// Slots in an epoch
-pub const EPOCH_SLOTS: u64 = 10;
-/// Quarantine duration, in slots
-pub const QUARANTINE_DURATION: u64 = 5;
 
 /// This struct represents the information required by the consensus algorithm
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -207,15 +200,15 @@ impl ValidatorState {
     }
 
     /// Calculates the epoch of the provided slot.
-    /// Epoch duration is configured using the `EPOCH_SLOTS` value.
+    /// Epoch duration is configured using the `EPOCH_LENGTH` value.
     pub fn slot_epoch(&self, slot: u64) -> u64 {
-        slot / EPOCH_SLOTS
+        slot / *EPOCH_LENGTH
     }
 
     /// Calculates current slot, based on elapsed time from the genesis block.
     /// Slot duration is configured using the `DELTA` value.
     pub fn current_slot(&self) -> u64 {
-        self.consensus.genesis_ts.elapsed() / (2 * DELTA)
+        self.consensus.genesis_ts.elapsed() / (2 * *DELTA)
     }
 
     /// Finds the last slot a proposal or block was generated.
@@ -244,7 +237,7 @@ impl ValidatorState {
     pub fn next_n_slot_start(&self, n: u64) -> Duration {
         let start_time = NaiveDateTime::from_timestamp(self.consensus.genesis_ts.0, 0);
         let current_slot = self.current_slot() + n;
-        let next_slot_start = (current_slot * (2 * DELTA)) + (start_time.timestamp() as u64);
+        let next_slot_start = (current_slot * (2 * *DELTA)) + (start_time.timestamp() as u64);
         let next_slot_start = NaiveDateTime::from_timestamp(next_slot_start as i64, 0);
         let current_time = NaiveDateTime::from_timestamp(Utc::now().timestamp(), 0);
         let diff = next_slot_start - current_time;
@@ -674,7 +667,7 @@ impl ValidatorState {
         self.consensus.pending_participants = vec![];
 
         let mut inactive = Vec::new();
-        let low_bound = current - QUARANTINE_DURATION;
+        let low_bound = current - *QUARANTINE_DURATION;
 
         debug!(
             "refresh_participants(): Node {} checking slots range: {} -> {}",
