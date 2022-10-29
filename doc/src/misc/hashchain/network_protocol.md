@@ -123,5 +123,5 @@ The protocol broadcasts the `Event` to the network after adding it to the
 For the `Event` to be successfully added to the `Model`, the protocol checks if
 the previous `Event`'s hash inside the `Event` exists in the `Model`.
 
-In case the check for previous `Event` failed, the protocol
+In case the previous `Event` check fails, the protocol
 sends a `GetData` message requesting the previous `Event`.
