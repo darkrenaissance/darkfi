@@ -133,7 +133,7 @@ sqlx = {version = "0.6.2", features = ["runtime-async-std-native-tls", "sqlite"]
 sled = {version = "0.34.7", optional = true}
 
 # big float
-dashu = { version = "0.2.0", git = "https://github.com/ertosns/dashu" } 
+dashu = { version = "0.2.0", git = "https://github.com/ertosns/dashu", optional=true } 
 
 [dev-dependencies]
 clap = {version = "3.2.20", features = ["derive"]}
@@ -174,6 +174,7 @@ blockchain = [
     "tx",
     "node",
     "util",
+    "dep:dashu",
 ]
 
 crypto = [
