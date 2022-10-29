@@ -1,7 +1,7 @@
 from hashlib import sha256
-from datetime import datetime
-from random import randint, random
+from random import randint, random, getrandbits
 from collections import Counter
+import time
 import math
 import asyncio
 import logging
@@ -9,10 +9,19 @@ from logging import debug, error, info
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 
 
 EventId = str
 EventIds = list[EventId]
+
+
+def ntp_request() -> float:
+    # add random clock drift
+    if bool(getrandbits(1)):
+        return time.time() + randint(0, 10)
+    else:
+        return time.time() - randint(0, 10)
 
 
 class NetworkPool:
@@ -30,7 +39,7 @@ class NetworkPool:
 
 class Event:
     def __init__(self, parents: EventIds):
-        self.timestamp = datetime.now().timestamp
+        self.timestamp = ntp_request()
         self.parents = sorted(parents)
 
     def set_timestamp(self, timestamp):
@@ -55,18 +64,6 @@ class Event:
         return res
 
 
-"""
-# Graph Example
- E1: []
- E2: [E1]
- E3: [E1]
- E4: [E3]
- E5: [E3]
- E6: [E4, E5]
- E7: [E4]
- E8: [E2]
-
-"""
 class Graph:
     def __init__(self):
         self.events = dict()
@@ -75,12 +72,11 @@ class Graph:
         self.events[event.hash()] = event
 
     def remove_event(self, event_id: EventId):
-        if self.events.get(event_id) != None:
-            del self.events[event_id]
+        self.events.pop(event_id, None)
 
     # Check if given events are exist in the graph
     # return a list of missing events
-    def check(self, events: EventIds) -> EventIds:
+    def check_events(self, events: EventIds) -> EventIds:
         return [e for e in events if self.events.get(e) == None]
 
     def __str__(self):
@@ -91,33 +87,64 @@ class Graph:
 
 
 class Node:
-    def __init__(self, name: str, queue):
+    def __init__(self, name: str, queue, max_time_diff):
         self.name = name
         self.orphan_pool = Graph()
         self.active_pool = Graph()
         self.queue = queue
+        self.max_time_diff = max_time_diff
+        # Pruned events from active pool
+        self.pruned_events = []
+
+        # These variables are for the demonstration purpose
+        self.unpruned_active_pool = Graph()
+        self.unpruned_orphan_pool = Graph()
 
         # The active pool should always start with one event
         genesis_event = Event([])
         genesis_event.set_timestamp(0.0)
-        self.genesis_event = genesis_event
         self.active_pool.add_event(genesis_event)
 
-        # On the initialization make the root node as head
+        # On the initialization add the genesis event to both heads and tails
+        # list
+        self.tails = [genesis_event.hash()]
         self.heads = [genesis_event.hash()]
 
-    # Remove the heads if they are parents of the event
-    def remove_heads(self, event):
+    def update_tails(self, event):
+        event_hash = event.hash()
+
+        if event_hash in self.tails:
+            return
+
+        # Remove tails if they are parents of the given event
+        for p in event.parents:
+            if p in self.tails:
+                self.tails.remove(p)
+
+        # Add the event to tails
+        self.tails.append(event_hash)
+        self.tails = sorted(self.tails)
+
+    def update_heads(self, event):
+        event_hash = event.hash()
+
+        if event_hash in self.heads:
+            return
+
+        # Remove heads if they are parents of the given event
         for p in event.parents:
             if p in self.heads:
                 self.heads.remove(p)
 
-    # Add the event to heads
-    def update_heads(self, event):
-        event_hash = event.hash()
-        self.remove_heads(event)
+        # Add the event to heads
         self.heads.append(event_hash)
         self.heads = sorted(self.heads)
+
+    # On create new event
+    def new_event(self):
+        # Pruning old events from active pool
+        self.prune_old_events()
+        return Event(self.heads)
 
     # On receive new event
     def receive_new_event(self, event: Event, peer, np):
@@ -128,16 +155,25 @@ class Node:
         if not event.parents:
             return
 
+        # XXX Reject old event
+        # no need for this simulation
+        # if self.is_old_event(event):
+        #   return
+
         # Reject event already exist in active pool
-        if not self.active_pool.check([event_hash]):
+        if not self.active_pool.check_events([event_hash]):
             return
 
         # Reject event already exist in orphan pool
-        if not self.orphan_pool.check([event_hash]):
+        if not self.orphan_pool.check_events([event_hash]):
             return
 
         # Add the new event to the orphan pool
         self.orphan_pool.add_event(event)
+        self.unpruned_orphan_pool.add_event(event)
+
+        # Pruning old events from active pool
+        self.prune_old_events()
 
         # This function is the core of syncing algorithm
         #
@@ -148,9 +184,9 @@ class Node:
     def relink_orphan(self, orphan, np):
         # Check if the parents of the orphan
         # are not missing from active pool
-        missing_parents = self.active_pool.check(orphan.parents)
+        missing_parents = self.active_pool.check_events(orphan.parents)
         if missing_parents:
-            # Check the missing parents from orphan pool and sync with the 
+            # Check the missing parents from orphan pool and sync with the
             # network for missing ones
             self.check_and_sync(list(missing_parents), np)
 
@@ -159,7 +195,9 @@ class Node:
             self.add_linked_events_to_active_pool(missing_parents, [])
 
             # Check again that the parents of the orphan are in the active pool
-            missing_parents = self.active_pool.check(orphan.parents)
+            missing_parents = self.active_pool.check_events(orphan.parents)
+            missing_parents = [p for p in missing_parents if p not in
+                               self.pruned_events]
             assert (not missing_parents)
 
             # Add the event to active pool
@@ -167,25 +205,72 @@ class Node:
         else:
             self.add_to_active_pool(orphan)
 
-        # Last stage is cleaning up the orphan pool
+        # Last stage, Cleaning up the orphan pool:
+        #  - Remove orphan if it is too old according to MAX_TIME_DIFF
+        #  - Move orphan to active pool if it doesn't have any missing parents
         self.clean_orphan_pool()
+
+    def prune_old_events(self):
+        debug(f"{self.name} prune_old_events()")
+
+        # old events in active pool
+        oe_active_p = [eh for eh, ev in self.active_pool.events.items() if
+                       self.is_old_event(ev)]
+
+        if not oe_active_p:
+            return
+
+        # Remove the old events in active pool
+        for eh in oe_active_p:
+            self.active_pool.remove_event(eh)
+            self.pruned_events.append(eh)
+
+            # Remove old events from heads
+            if eh in self.heads:
+                self.heads.remove(eh)
+
+            # Remove old events from tails
+            if eh in self.tails:
+                self.tails.remove(eh)
+
+        for event in self.active_pool.events.values():
+
+            # Check if the event parents are old events
+            old_parents = [e for e in oe_active_p if e in event.parents]
+
+            if not old_parents:
+                continue
+
+            # Add the event to tails if it has only old events as parents
+            if len(event.parents) == len(old_parents):
+                self.update_tails(event)
 
     def clean_orphan_pool(self):
         debug(f"{self.name} clean_orphan_pool()")
         while True:
-            remove_list = []
-            for orphan in self.orphan_pool.events.values():
-                # Move the orphan to active pool if it doesn't have missing 
+            active_list = []
+            old_events = []
+            for oh, orphan in self.orphan_pool.events.items():
+
+                if self.is_old_event(orphan):
+                    old_events.append(oh)
+                    continue
+
+                # Move the orphan to active pool if it doesn't have missing
                 # parents in active pool
-                missing_parents = self.active_pool.check(orphan.parents)
+                missing_parents = self.active_pool.check_events(orphan.parents)
 
                 if not missing_parents:
-                    remove_list.append(orphan)
+                    active_list.append(orphan)
 
-            if not remove_list:
+            for oh in old_events:
+                self.orphan_pool.remove_event(oh)
+                self.pruned_events.append(oh)
+
+            if not active_list:
                 break
 
-            for ev in remove_list:
+            for ev in active_list:
                 self.add_to_active_pool(ev)
 
     def check_and_sync(self, missing_events, np):
@@ -217,8 +302,13 @@ class Node:
             event = self.orphan_pool.events.get(event_hash)
             if event == None:
                 # Check first if it's not in the active pool
-                if self.active_pool.events.get(event_hash) == None:
-                    request_list.append(event_hash)
+                if self.active_pool.events.get(event_hash) != None:
+                    continue
+                if event_hash in self.pruned_events:
+                    continue
+
+                request_list.append(event_hash)
+
             else:
                 # Recursive call
                 # Climb up for the event parents
@@ -238,10 +328,15 @@ class Node:
 
             # Request from the network
             requested_event = np.request(p)
-            assert (requested_event != None)
+
+            if requested_event == None:
+                if p not in self.pruned_events:
+                    self.pruned_events.append(p)
+                continue
 
             # Add it to the orphan pool
             self.orphan_pool.add_event(requested_event)
+            self.unpruned_orphan_pool.add_event(requested_event)
             result.extend(requested_event.parents)
 
         # Return parents of requested events
@@ -256,6 +351,9 @@ class Node:
             visited.append(event_hash)
 
             if self.active_pool.events.get(event_hash) != None:
+                continue
+
+            if event_hash in self.pruned_events:
                 continue
 
             # Get the event from the orphan pool
@@ -273,11 +371,15 @@ class Node:
     def add_to_active_pool(self, event):
         # Add the event to active pool
         self.active_pool.add_event(event)
+        self.unpruned_active_pool.add_event(event)
+
         # Update heads
         self.update_heads(event)
         # Remove event from orphan pool
         self.orphan_pool.remove_event(event.hash())
+        self.unpruned_orphan_pool.remove_event(event.hash())
 
+    # Get an event from orphan pool or active pool
     def get_event(self, event_id: EventId):
         # Check the active_pool
         event = self.active_pool.events.get(event_id)
@@ -287,15 +389,31 @@ class Node:
 
         return event
 
+    # Check if the event is too old from now, by subtracting current timestamp
+    # from event timestamp, it must be more than `max_time_diff' to be consider
+    # old event
+    def is_old_event(self, event: Event):
+        # Ignore genesis event
+        if event.timestamp == 0.0:
+            return False
+
+        current_timestamp = ntp_request()
+        diff = current_timestamp - event.timestamp
+        if diff > self.max_time_diff:
+            return True
+        return False
+
     def __str__(self):
         return f"""
 	        \n Name: {self.name}
 	        \n Active Pool: {self.active_pool}
 	        \n Orphan Pool: {self.orphan_pool}
-	        \n Heads: {self.heads}"""
+	        \n Pruned Events: {self.pruned_events}
+	        \n Heads: {self.heads}
+	        \n Tails: {self.tails}"""
 
 
-# Each node has nodes_n of this function running in the background
+# Each node has `nodes_n` of this function running in the background
 # for receiving events from each node separately
 async def recv_loop(podm, node, peer, queue, np):
     while True:
@@ -321,7 +439,7 @@ async def send_loop(nodes_n, max_delay, broadcast_attempt,  node):
         await asyncio.sleep(randint(0, max_delay))
 
         # Create new event with the last heads as parents
-        event = Event(node.heads)
+        event = node.new_event()
 
         debug(f"{node.name} broadcast event: \n {event}")
         for _ in range(nodes_n):
@@ -334,14 +452,20 @@ Run a simulation with the provided params:
     nodes_n: number of nodes
     podm: probability of dropping events (ex: 0.30 -> %30)
     broadcast_attempt: number of events each node should broadcast
+    max_time_diff: a max difference in time to detect an old event 
     check: check if all nodes have the same graph
 """
-async def run(nodes_n=3, podm=0.30, broadcast_attempt=3, check=False):
+
+
+async def run(nodes_n=3, podm=0.30, broadcast_attempt=3, max_time_diff=180.0,
+              check=False, max_delay=None):
 
     debug(f"Running simulation with nodes: {nodes_n}, podm: {podm},\
                   broadcast_attempt: {broadcast_attempt}")
 
-    max_delay = round(math.log(nodes_n))
+    if max_delay == None:
+        max_delay = round(math.log(nodes_n))
+
     broadcast_timeout = nodes_n * broadcast_attempt * max_delay
 
     nodes = []
@@ -350,16 +474,16 @@ async def run(nodes_n=3, podm=0.30, broadcast_attempt=3, check=False):
 
     try:
 
-        # Initialize nodes_n nodes
+        # Initialize `nodes_n` nodes
         for i in range(nodes_n):
             queue = asyncio.Queue()
-            node = Node(f"Node{i}", queue)
+            node = Node(f"Node{i}", queue, max_time_diff)
             nodes.append(node)
 
         # Initialize NetworkPool contains all nodes
         np = NetworkPool(nodes)
 
-        # Initialize nodes_n * nodes_n coroutine tasks for receiving events
+        # Initialize `nodes_n` * `nodes_n` coroutine tasks for receiving events
         # Each node listen to all queues from the running nodes
         recv_tasks = []
         for node in nodes:
@@ -398,40 +522,65 @@ async def run(nodes_n=3, podm=0.30, broadcast_attempt=3, check=False):
             # Assert if all heads are equal
             assert (all(n.heads == nodes[0].heads for n in nodes))
 
+            # Assert if all tails are equal
+            assert (all(n.tails == nodes[0].tails for n in nodes))
+
         return nodes
 
     except asyncio.exceptions.TimeoutError:
         error("Broadcast TimeoutError")
 
 
-async def main(sim_n=6, nodes_increase=False, podm_increase=False):
-    # run the simulation `sim_n` times with increasing `podm` and `nodes_n`
+async def main(sim_n=6, nodes_increase=False, podm_increase=False,
+               time_diff_decrease=False):
+
+    # run the simulation `sim_n` times, while enabling one of these params:
+    #  - increasing `podm`
+    #  - increasing `nodes_n`
+    #  - decreasing `max_time_diff`
 
     if nodes_increase:
         podm_increase = False
+        time_diff_decrease = False
+
+    if podm_increase:
+        time_diff_decrease = False
 
     # number of nodes
-    nodes_n = 10 
+    nodes_n = 100
     # probability of dropping events
-    podm = 0.20
+    podm = 0.0
+    # a max difference in time to detect an old event
+    max_time_diff = 60  # seconds
     # number of events each node should broadcast
     broadcast_attempt = 10
 
+    # Number of nodes get increase in each simulation
     sim_nodes_inc = int(nodes_n / 5)
+    # A value get add to `podm` in each simulation
     sim_podm_inc = podm / 5
+    # A value get subtract from `max_time_diff` in each simulation
+    sim_diff_time_dec = max_time_diff / 10
 
-    sim = []
-    nodes_n_list = []
-    events_synced = []
+    # Contains the nodes for each simulation
+    simulations = []
+
+    # Contains the `podm` variables for each simulation
     podm_list = []
+
+    # Contains the `max_time_diff` variables for each simulation
+    mtd_list = []
 
     podm_tmp = podm
     nodes_n_tmp = nodes_n
+    time_diff_tmp = max_time_diff
 
     for _ in range(sim_n):
-        nodes = await run(nodes_n_tmp, podm_tmp, broadcast_attempt)
-        sim.append(nodes)
+        nodes = await run(nodes_n_tmp, podm_tmp, broadcast_attempt,
+                          max_time_diff=time_diff_tmp)
+        simulations.append(nodes)
         podm_list.append(podm_tmp)
+        mtd_list.append(time_diff_tmp)
 
         if nodes_increase:
             nodes_n_tmp += sim_nodes_inc
@@ -439,85 +588,138 @@ async def main(sim_n=6, nodes_increase=False, podm_increase=False):
         if podm_increase:
             podm_tmp += sim_podm_inc
 
-    for nodes in sim:
+        if time_diff_decrease:
+            time_diff_tmp -= sim_diff_time_dec
+
+    # Numbers of nodes for each simulation
+    nodes_n_list = []
+    # Synced events percentage for each simulation
+    events_synced_perc = []
+    # Number of events in active pool for each simulations
+    active_events = []
+    # Number of events in pruned events list for each simulations
+    pruned_events = []
+
+    for nodes in simulations:
         nodes_n = len(nodes)
 
         nodes_n_list.append(nodes_n)
 
         events = Counter()
+        p_events = Counter()
         for node in nodes:
             events.update(list(node.active_pool.events.keys()))
+            p_events.update(node.pruned_events)
 
-        # Remove the genesis event
-        del events[node.genesis_event]
+        expect_events_synced = (nodes_n * broadcast_attempt) + 1
 
-        expect_events_synced = (nodes_n * broadcast_attempt)
         actual_events_synced = 0
         for val in events.values():
-            # if the event is fully synced with all nodes
+            # If the event is fully synced with all nodes
             if val == nodes_n:
                 actual_events_synced += 1
 
+        pruned_events_synced = 0
+        for val in p_events.values():
+            # If the pruned event is fully synced with all nodes
+            if val == nodes_n:
+                pruned_events_synced += 1
+
         res = (actual_events_synced * 100) / expect_events_synced
+        events_synced_perc.append(res)
 
-        events_synced.append(res)
+        active_events.append(actual_events_synced)
+        pruned_events.append(pruned_events_synced)
 
-        info(events)
         info(f"nodes_n: {nodes_n}")
         info(f"actual_events_synced: {actual_events_synced}")
         info(f"expect_events_synced: {expect_events_synced}")
+        info(f"pruned_events_synced: {pruned_events_synced}")
         info(f"res: %{res}")
 
+    # Disable logging for matplotlib
     logging.disable()
 
     if nodes_increase:
-        plt.plot(nodes_n_list, events_synced)
+        plt.plot(nodes_n_list, events_synced_perc)
         plt.ylim(0, 100)
 
         plt.title(
             f"Event Graph simulation with %{podm * 100} probability of dropping messages")
 
         plt.ylabel(
-                f"Events sync percentage (each node broadcast {broadcast_attempt} events)")
+            f"Events sync percentage (each node broadcast {broadcast_attempt} events)")
 
         plt.xlabel("Number of nodes")
         plt.show()
+        return
 
     if podm_increase:
-        plt.plot(podm_list, events_synced)
+        plt.plot(podm_list, events_synced_perc)
         plt.ylim(0, 100)
 
         plt.title(f"Event Graph simulation with {nodes_n} nodes")
 
-
         plt.ylabel(
-                f"Events sync percentage (each node broadcast {broadcast_attempt} events)")
+            f"Events sync percentage (each node broadcast {broadcast_attempt} events)")
         plt.xlabel("Probability of dropping messages")
         plt.show()
+        return
+
+    if time_diff_decrease:
+
+        x = np.arange(len(mtd_list))  # the label locations
+        width = 0.35  # the width of the bars
+
+        fig, ax = plt.subplots()
+        rects1 = ax.bar(x - width/2, active_events, width, label='Active')
+        rects2 = ax.bar(x + width/2, pruned_events, width, label='Pruned')
+
+        plt.title(
+            f"Event Graph simulation with %{podm * 100} probability of dropping messages, and {nodes_n} nodes")
+
+        plt.ylabel(
+            f"Number of events broadcasted during the simulation (each node broadcast {broadcast_attempt} events)")
+
+        plt.xlabel("A time duration to detect old events (in seconds)")
+
+        plt.ylim(0, (broadcast_attempt * nodes_n) + 1)
+        ax.set_xticks(x, mtd_list)
+        ax.legend()
+
+        ax.bar_label(rects1, padding=3)
+        ax.bar_label(rects2, padding=3)
+
+        fig.tight_layout()
+
+        plt.show()
+        return
 
 
-def print_network_graph(nodes):
-    for (i, node) in enumerate(nodes):
-        graph = nx.Graph()
+def print_network_graph(node, unpruned=False):
+    logging.disable()
+    graph = nx.Graph()
 
+    if unpruned:
+        for (h, ev) in node.unpruned_active_pool.events.items():
+            graph.add_node(h[:5])
+            graph.add_edges_from([(h[:5], p[:5]) for p in ev.parents])
+    else:
         for (h, ev) in node.active_pool.events.items():
             graph.add_node(h[:5])
             graph.add_edges_from([(h[:5], p[:5]) for p in ev.parents])
 
-        colors = []
+    colors = []
 
-        node_heads = [h[:5] for h in node.heads]
+    for n in graph.nodes():
+        if any(n == t[:5] for t in node.tails):
+            colors.append("red")
+        elif any(n == h[:5] for h in node.heads):
+            colors.append("yellow")
+        else:
+            colors.append("#697aff")
 
-        for n in graph.nodes():
-            if n == "8aed6":
-                colors.append("red")
-            elif n in node_heads:
-                colors.append("yellow")
-            else:
-                colors.append("blue")
-
-        plt.figure(i)
-        nx.draw_networkx(graph, with_labels=True, node_color=colors)
+    nx.draw_networkx(graph, with_labels=True, node_color=colors)
 
     plt.show()
 
@@ -527,5 +729,10 @@ if __name__ == "__main__":
                         handlers=[logging.FileHandler("debug.log", mode="w"),
                                   logging.StreamHandler()])
 
-    #asyncio.run(run(nodes_n=3, podm=0, broadcast_attempt=3, check=True))
-    asyncio.run(main(nodes_increase=True))
+    # nodes = asyncio.run(run(nodes_n=10, podm=0, broadcast_attempt=4,
+    #                       max_time_diff=30, max_delay=7))
+
+    # print_network_graph(nodes[0])
+    # print_network_graph(nodes[0], unpruned=True)
+
+    asyncio.run(main(time_diff_decrease=True))
