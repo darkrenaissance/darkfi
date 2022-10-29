@@ -16,7 +16,7 @@ use rand::rngs::OsRng;
 
 use super::{
     Block, BlockInfo, BlockProposal, Header, KeepAlive, LeadProof, Metadata, Participant,
-    ProposalChain, EPOCH_LENGTH, DELTA, QUARANTINE_DURATION,
+    ProposalChain, DELTA, EPOCH_LENGTH, QUARANTINE_DURATION,
 };
 
 use crate::{

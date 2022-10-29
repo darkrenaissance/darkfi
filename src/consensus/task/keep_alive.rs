@@ -5,7 +5,7 @@ use rand::Rng;
 use smol::Executor;
 
 use crate::{
-    consensus::{QUARANTINE_DURATION, KeepAlive, ValidatorStatePtr},
+    consensus::{KeepAlive, ValidatorStatePtr, QUARANTINE_DURATION},
     crypto::schnorr::SchnorrSecret,
     net::P2pPtr,
     util::async_util::sleep,

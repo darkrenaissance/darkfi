@@ -70,7 +70,7 @@ lazy_static! {
     pub static ref REWARD: u64 = 420;
     /// `2 * DELTA` represents slot time
     pub static ref DELTA: u64 = 20;
-    
+
     /// Quarantine duration, in slots
     pub static ref QUARANTINE_DURATION: u64 = 5;
 
