@@ -19,7 +19,7 @@ Inventory vectors notify other nodes about objects they have or data which is be
 
 | Description   | Data Type            | Comments                   |
 |-------------- | -------------------- | -------------------------- |
-| invs          | `Vec<[u8; 32]>`      | Inventory items            |
+| invs          | Vec`<[u8; 32]>`      | Inventory items            |
 
 ### Receiving an `Inv` message
 
@@ -97,9 +97,9 @@ leaves in the `Model`'s tree; otherwise, the protocol sends `Event`s which are t
 This prevents receiving duplicate objects.
 The list contains only 2^16 ids.
 
-| Description | Data Type      | Comments                      |
-|-------------|--------------- |------------------------------ |
-| Ids         | Vec            | Contains objects ids          |
+| Description | Data Type       | Comments                      |
+| ----------- | --------------- |------------------------------ |
+| Ids         | Vec<`ObjectId`> | Contains objects ids          |
 
 ## Receiving a new `Event`
 
