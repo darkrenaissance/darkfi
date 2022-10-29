@@ -1,7 +1,8 @@
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+use pasta_curves::pallas;
 
 use crate::{
-    crypto::{address::Address, keypair::PublicKey, schnorr::Signature},
+    crypto::{address::Address, keypair::PublicKey},
     net,
 };
 
@@ -13,37 +14,22 @@ pub struct Participant {
     pub public_key: PublicKey,
     /// Node wallet address
     pub address: Address,
-    /// Last slot node send a keep alive message
-    pub seen: u64,
-    /// Slot participant was quarantined by the node
-    pub quarantined: Option<u64>,
+    /// Node current epoch competing coins public inputs
+    pub coins: Vec<Vec<Vec<pallas::Base>>>,
 }
 
 impl Participant {
-    pub fn new(public_key: PublicKey, address: Address, joined: u64) -> Self {
-        Self { public_key, address, seen: joined, quarantined: None }
+    pub fn new(
+        public_key: PublicKey,
+        address: Address,
+        coins: Vec<Vec<Vec<pallas::Base>>>,
+    ) -> Self {
+        Self { public_key, address, coins }
     }
 }
 
 impl net::Message for Participant {
     fn name() -> &'static str {
         "participant"
-    }
-}
-
-/// Struct represending a keep alive message, containing signed slot for validation
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct KeepAlive {
-    /// Node address
-    pub address: Address,
-    /// Slot message was send
-    pub slot: u64,
-    /// Slot signature
-    pub signature: Signature,
-}
-
-impl net::Message for KeepAlive {
-    fn name() -> &'static str {
-        "keepalive"
     }
 }

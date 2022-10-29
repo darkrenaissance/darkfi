@@ -1,10 +1,8 @@
 use std::time::Duration;
 
-use async_std::sync::Arc;
 use log::{debug, error, info};
-use smol::Executor;
 
-use super::{consensus_sync_task, keep_alive_task};
+use super::consensus_sync_task;
 use crate::{
     consensus::{Participant, ValidatorStatePtr},
     net::P2pPtr,
@@ -12,14 +10,7 @@ use crate::{
 };
 
 /// async task used for participating in the consensus protocol
-pub async fn proposal_task(
-    consensus_p2p: P2pPtr,
-    sync_p2p: P2pPtr,
-    state: ValidatorStatePtr,
-    ex: Arc<Executor<'_>>,
-) {
-    // TODO: [PLACEHOLDER] Add balance proof creation
-
+pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: ValidatorStatePtr) {
     // Node waits just before the current or next epoch end, so it can
     // start syncing latest state.
     let mut seconds_until_next_epoch = state.read().await.next_n_epoch_start(1);
@@ -41,38 +32,16 @@ pub async fn proposal_task(
 
     // Node syncs its consensus state
     if let Err(e) = consensus_sync_task(consensus_p2p.clone(), state.clone()).await {
-        error!("Failed syncing consensus state: {}. Quitting consensus.", e);
+        error!("consensus: Failed syncing consensus state: {}. Quitting consensus.", e);
         // TODO: Perhaps notify over a channel in order to
         // stop consensus p2p protocols.
         return
     };
-    
-    // TODO: change participation logic
-    // nodes will broadcast a Participants message on the start or end
-    // of each epoch, containing their coins public inputs.
-    // Only these nodes will be considered valid.
-    // Node signals the network that it will start participating
-    let public = state.read().await.public;
-    let address = state.read().await.address;
-    let cur_slot = state.read().await.current_slot();
-    let participant = Participant::new(public, address, cur_slot);
-    state.write().await.append_participant(participant.clone());
-
-    match consensus_p2p.broadcast(participant).await {
-        Ok(()) => info!("consensus: Participation message broadcasted successfully."),
-        Err(e) => error!("Failed broadcasting consensus participation: {}", e),
-    }
-
-    // Node initiates the background task to send keep alive messages
-    match keep_alive_task(consensus_p2p.clone(), state.clone(), ex).await {
-        Ok(()) => info!("consensus: Keep alive background task initiated successfully."),
-        Err(e) => error!("Failed to initiate keep alive background task: {}", e),
-    }
 
     // Node modifies its participating slot to next.
     match state.write().await.set_participating() {
         Ok(()) => info!("consensus: Node will start participating in the next slot"),
-        Err(e) => error!("Failed to set participation slot: {}", e),
+        Err(e) => error!("consensus: Failed to set participation slot: {}", e),
     }
 
     loop {
@@ -80,18 +49,36 @@ pub async fn proposal_task(
         info!("consensus: Waiting for next slot ({} sec)", seconds_next_slot);
         sleep(seconds_next_slot).await;
 
-        // Node refreshes participants records
-        match state.write().await.refresh_participants() {
-            Ok(()) => debug!("Participants refreshed successfully."),
-            Err(e) => error!("Failed refreshing consensus participants: {}", e),
-        }
-        
         // Node checks if epoch has changed, to broadcast a new participation message
         match state.write().await.epoch_changed().await {
-            Ok((broadcast, coins)) => {
-                if broadcast {
-                    //TODO: broadcast new participation message
-                    //TODO: sleep 2 seconds so all nodes can have the new epoch participants
+            Ok(changed) => {
+                if changed {
+                    let lock = state.read().await;
+                    info!("consensus: New epoch started: {}", lock.current_epoch());
+                    let public = lock.public;
+                    let address = lock.address;
+                    let mut coins = vec![];
+                    for slot_coins in &lock.consensus.coins {
+                        let mut slot_coins_inputs = vec![];
+                        for slot_coin in slot_coins {
+                            slot_coins_inputs.push(slot_coin.public_inputs());
+                        }
+                        coins.push(slot_coins_inputs);
+                    }
+                    let participant = Participant::new(public, address, coins);
+                    state.write().await.append_participant(participant.clone());
+
+                    match consensus_p2p.broadcast(participant).await {
+                        Ok(()) => {
+                            info!("consensus: Participation message broadcasted successfully.")
+                        }
+                        Err(e) => {
+                            error!("consensus: Failed broadcasting consensus participation: {}", e)
+                        }
+                    }
+                    // Node sleeps 2 seconds so all nodes can have the new epoch participants
+                    //TODO: optimize this
+                    sleep(2).await;
                 }
             }
             Err(e) => {
@@ -99,16 +86,12 @@ pub async fn proposal_task(
                 continue
             }
         };
-        
+
         // Node checks if it's the slot leader to generate a new proposal
         // for that slot.
         let lock = state.read().await;
         let (won, idx) = lock.is_slot_leader();
-        let result = if won {
-            lock.propose(idx)
-        } else {
-            Ok(None)
-        };
+        let result = if won { lock.propose(idx) } else { Ok(None) };
 
         let proposal = match result {
             Ok(prop) => {

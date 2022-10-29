@@ -364,8 +364,15 @@ impl Stakeholder {
         let keypair = coin.keypair.unwrap();
         let addr = Address::from(keypair.public);
         let sign = keypair.secret.sign(proof.as_ref());
-        let meta =
-            Metadata::new(sign, addr, self.get_eta().to_repr(), LeadProof::from(proof), vec![]);
+        let meta = Metadata::new(
+            sign,
+            addr,
+            coin.public_inputs(),
+            idx,
+            self.get_eta().to_repr(),
+            LeadProof::from(proof),
+            vec![],
+        );
         self.workspace.add_metadata(meta);
         let owned_coin = self.finalize_coin(&self.epoch.get_coin(sl as usize, idx as usize));
         self.ownedcoins.push(owned_coin);

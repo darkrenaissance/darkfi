@@ -8,7 +8,7 @@ pub use metadata::{LeadProof, Metadata};
 
 /// Consensus participant
 pub mod participant;
-pub use participant::{KeepAlive, Participant};
+pub use participant::Participant;
 
 /// Consensus state
 pub mod state;
@@ -66,14 +66,13 @@ lazy_static! {
     // Epoch configuration
     /// Slots in an epoch
     pub static ref EPOCH_LENGTH: u64 = 10;
+
     /// Block leader reward
     pub static ref REWARD: u64 = 420;
+
     /// `2 * DELTA` represents slot time
     pub static ref DELTA: u64 = 20;
 
-    /// Quarantine duration, in slots
-    pub static ref QUARANTINE_DURATION: u64 = 5;
-    
     /// Leader proof rows number
     pub static ref LEADER_PROOF_K: u32 = 13;
 

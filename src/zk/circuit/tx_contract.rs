@@ -9,7 +9,7 @@ use darkfi_sdk::crypto::{
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointBaseField, ScalarFixed, NonIdentityPoint,
+        FixedPoint, FixedPointBaseField, NonIdentityPoint, ScalarFixed,
     },
     poseidon::{
         primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
@@ -269,13 +269,11 @@ impl Circuit<pallas::Base> for TxContract {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
-
         let less_than_chip = config.lessthan_chip();
-        NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
-            ::load_k_table(
-                &mut layouter,
-                config.lessthan_config.k_values_table,
-            )?;
+        NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::load_k_table(
+            &mut layouter,
+            config.lessthan_config.k_values_table,
+        )?;
         SinsemillaChip::load(config.sinsemilla_config_1.clone(), &mut layouter)?;
         let ecc_chip = config.ecc_chip();
         let ar_chip = config.arith_chip();
@@ -293,75 +291,53 @@ impl Circuit<pallas::Base> for TxContract {
             config.advices[0],
             Value::known(-pallas::Base::one()),
         )?;
-        let root_cm = self.load_private(layouter.namespace(|| ""),
-                                        config.advices[0],
-                                        self.root_cm
+        let root_cm =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.root_cm)?;
+
+        let coin1_sk =
+            self.load_private(layouter.namespace(|| "root sk"), config.advices[0], self.coin1_sk)?;
+
+        let coin1_root_sk = self.load_private(
+            layouter.namespace(|| "root root sk"),
+            config.advices[0],
+            self.coin1_root_sk,
         )?;
 
-        let coin1_sk = self.load_private(layouter.namespace(|| "root sk"),
-                                              config.advices[0],
-                                              self.coin1_sk
+        let coin1_value =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin1_value)?;
+
+        let coin1_nonce =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin1_nonce)?;
+
+        let coin1_sn =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin1_sn)?;
+
+        let coin2_sk =
+            self.load_private(layouter.namespace(|| "root sk"), config.advices[0], self.coin2_sk)?;
+
+        let coin2_root_sk = self.load_private(
+            layouter.namespace(|| "root sk"),
+            config.advices[0],
+            self.coin2_root_sk,
         )?;
 
-        let coin1_root_sk = self.load_private(layouter.namespace(|| "root root sk"),
-                                              config.advices[0],
-                                              self.coin1_root_sk
-        )?;
+        let coin2_value =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin2_value)?;
 
-        let coin1_value = self.load_private(layouter.namespace(|| ""),
-                                            config.advices[0],
-                                            self.coin1_value
-        )?;
+        let coin2_nonce =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin2_nonce)?;
 
-        let coin1_nonce = self.load_private(layouter.namespace(|| ""),
-                                            config.advices[0],
-                                            self.coin1_nonce
-        )?;
+        let coin2_sn =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin2_sn)?;
 
-        let coin1_sn = self.load_private(layouter.namespace(|| ""),
-                                            config.advices[0],
-                                            self.coin1_sn
-        )?;
+        let coin3_value =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin3_value)?;
 
-        let coin2_sk = self.load_private(layouter.namespace(|| "root sk"),
-                                         config.advices[0],
-                                         self.coin2_sk
-        )?;
+        let coin3_pk =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin3_pk)?;
 
-        let coin2_root_sk = self.load_private(layouter.namespace(|| "root sk"),
-                                              config.advices[0],
-                                              self.coin2_root_sk
-        )?;
-
-        let coin2_value = self.load_private(layouter.namespace(|| ""),
-                                              config.advices[0],
-                                              self.coin2_value
-        )?;
-
-        let coin2_nonce = self.load_private(layouter.namespace(|| ""),
-                                            config.advices[0],
-                                            self.coin2_nonce
-        )?;
-
-        let coin2_sn = self.load_private(layouter.namespace(|| ""),
-                                         config.advices[0],
-                                         self.coin2_sn
-        )?;
-
-        let coin3_value = self.load_private(layouter.namespace(|| ""),
-                                            config.advices[0],
-                                            self.coin3_value
-        )?;
-
-        let coin3_pk = self.load_private(layouter.namespace(|| ""),
-                                            config.advices[0],
-                                            self.coin3_pk
-        )?;
-
-        let coin3_nonce = self.load_private(layouter.namespace(|| ""),
-                                            config.advices[0],
-                                            self.coin3_nonce
-        )?;
+        let coin3_nonce =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin3_nonce)?;
 
         let ref_coin3_cm = NonIdentityPoint::new(
             ecc_chip.clone(),
@@ -369,20 +345,14 @@ impl Circuit<pallas::Base> for TxContract {
             self.coin3_cm.map(|x| x.to_affine()),
         )?;
 
-        let coin4_value = self.load_private(layouter.namespace(|| ""),
-                                            config.advices[0],
-                                            self.coin4_value
-        )?;
+        let coin4_value =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin4_value)?;
 
-        let coin4_pk = self.load_private(layouter.namespace(|| ""),
-                                         config.advices[0],
-                                         self.coin4_pk
-        )?;
+        let coin4_pk =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin4_pk)?;
 
-        let coin4_nonce = self.load_private(layouter.namespace(|| ""),
-                                            config.advices[0],
-                                            self.coin4_nonce
-        )?;
+        let coin4_nonce =
+            self.load_private(layouter.namespace(|| ""), config.advices[0], self.coin4_nonce)?;
 
         let ref_coin4_cm = NonIdentityPoint::new(
             ecc_chip.clone(),
@@ -399,13 +369,13 @@ impl Circuit<pallas::Base> for TxContract {
         let coin1_pk: AssignedCell<Fp, Fp> = {
             let poseidon_message = [one.clone(), coin1_root_sk.clone()];
             let poseidon_hasher = PoseidonHash::<
-                    _,
+                _,
                 _,
                 poseidon::P128Pow5T3,
                 poseidon::ConstantLength<2>,
                 3,
                 2,
-                >::init(
+            >::init(
                 config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
             let poseidon_output =
@@ -427,13 +397,13 @@ impl Circuit<pallas::Base> for TxContract {
         let coin2_pk: AssignedCell<Fp, Fp> = {
             let poseidon_message = [one.clone(), coin2_root_sk.clone()];
             let poseidon_hasher = PoseidonHash::<
-                    _,
+                _,
                 _,
                 poseidon::P128Pow5T3,
                 poseidon::ConstantLength<2>,
                 3,
                 2,
-                >::init(
+            >::init(
                 config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
             let poseidon_output =
@@ -454,12 +424,8 @@ impl Circuit<pallas::Base> for TxContract {
         // ========
         let com1 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
-                let poseidon_message = [
-                    coin1_pk.clone(),
-                    coin1_value.clone(),
-                    coin1_nonce.clone(),
-                    one.clone()
-                ];
+                let poseidon_message =
+                    [coin1_pk.clone(), coin1_value.clone(), coin1_nonce.clone(), one.clone()];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
@@ -511,12 +477,8 @@ impl Circuit<pallas::Base> for TxContract {
         // ========
         let com2 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
-                let poseidon_message = [
-                    coin2_pk.clone(),
-                    coin2_value.clone(),
-                    coin2_nonce.clone(),
-                    one.clone()
-                ];
+                let poseidon_message =
+                    [coin2_pk.clone(), coin2_value.clone(), coin2_nonce.clone(), one.clone()];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
@@ -568,12 +530,8 @@ impl Circuit<pallas::Base> for TxContract {
         // ========
         let com3 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
-                let poseidon_message = [
-                    coin3_pk.clone(),
-                    coin3_value.clone(),
-                    coin3_nonce.clone(),
-                    one.clone()
-                ];
+                let poseidon_message =
+                    [coin3_pk.clone(), coin3_value.clone(), coin3_nonce.clone(), one.clone()];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
@@ -606,19 +564,15 @@ impl Circuit<pallas::Base> for TxContract {
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), coin3_blind)?
         };
         let coin3_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        coin3_commit.constrain_equal(layouter.namespace(||""), &ref_coin3_cm);
+        coin3_commit.constrain_equal(layouter.namespace(|| ""), &ref_coin3_cm);
 
         // ========
         // coin4 cm
         // ========
         let com4 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
-                let poseidon_message = [
-                    coin4_pk.clone(),
-                    coin4_value.clone(),
-                    coin4_nonce.clone(),
-                    one.clone()
-                ];
+                let poseidon_message =
+                    [coin4_pk.clone(), coin4_value.clone(), coin4_nonce.clone(), one.clone()];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
@@ -651,10 +605,12 @@ impl Circuit<pallas::Base> for TxContract {
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), coin4_blind)?
         };
         let coin4_commit = com2.add(layouter.namespace(|| " commit"), &blind)?;
-        coin4_commit.constrain_equal(layouter.namespace(||""), &ref_coin4_cm);
+        coin4_commit.constrain_equal(layouter.namespace(|| ""), &ref_coin4_cm);
 
-        let v1pv2: AssignedCell<Fp, Fp> = ar_chip.add(layouter.namespace(||""), &coin1_value, &coin2_value)?;
-        let v3pv4: AssignedCell<Fp, Fp> = ar_chip.add(layouter.namespace(||""), &coin3_value, &coin4_value)?;
+        let v1pv2: AssignedCell<Fp, Fp> =
+            ar_chip.add(layouter.namespace(|| ""), &coin1_value, &coin2_value)?;
+        let v3pv4: AssignedCell<Fp, Fp> =
+            ar_chip.add(layouter.namespace(|| ""), &coin3_value, &coin4_value)?;
 
         // ==========
         // COIN1 PATH
@@ -672,13 +628,13 @@ impl Circuit<pallas::Base> for TxContract {
         let coin1_cm_hash: AssignedCell<Fp, Fp> = {
             let poseidon_message = [coin1_commit_x.clone(), coin1_commit_y.clone()];
             let poseidon_hasher = PoseidonHash::<
-                    _,
+                _,
                 _,
                 poseidon::P128Pow5T3,
                 poseidon::ConstantLength<2>,
                 3,
                 2,
-                >::init(
+            >::init(
                 config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
@@ -687,8 +643,8 @@ impl Circuit<pallas::Base> for TxContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
-        let coin1_cm_root = merkle_inputs
-            .calculate_root(layouter.namespace(|| "calculate root"), coin1_cm_hash)?;
+        let coin1_cm_root =
+            merkle_inputs.calculate_root(layouter.namespace(|| "calculate root"), coin1_cm_hash)?;
 
         // ==========
         // COIN2 PATH
@@ -706,13 +662,13 @@ impl Circuit<pallas::Base> for TxContract {
         let coin2_cm_hash: AssignedCell<Fp, Fp> = {
             let poseidon_message = [coin2_commit_x.clone(), coin2_commit_y.clone()];
             let poseidon_hasher = PoseidonHash::<
-                    _,
+                _,
                 _,
                 poseidon::P128Pow5T3,
                 poseidon::ConstantLength<2>,
                 3,
                 2,
-                >::init(
+            >::init(
                 config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
@@ -721,8 +677,8 @@ impl Circuit<pallas::Base> for TxContract {
             let poseidon_output: AssignedCell<Fp, Fp> = poseidon_output;
             poseidon_output
         };
-        let coin2_cm_root = merkle_inputs
-            .calculate_root(layouter.namespace(|| "calculate root"), coin2_cm_hash)?;
+        let coin2_cm_root =
+            merkle_inputs.calculate_root(layouter.namespace(|| "calculate root"), coin2_cm_hash)?;
 
         // =============
         // COIN1 sk root
@@ -735,8 +691,8 @@ impl Circuit<pallas::Base> for TxContract {
             self.coin1_sk_pos,
             path,
         );
-        let coin1_sk_root = merkle_inputs
-            .calculate_root(layouter.namespace(|| "calculate root"), coin1_sk)?;
+        let coin1_sk_root =
+            merkle_inputs.calculate_root(layouter.namespace(|| "calculate root"), coin1_sk)?;
 
         // =============
         // COIN2 sk root
@@ -749,8 +705,8 @@ impl Circuit<pallas::Base> for TxContract {
             self.coin2_sk_pos,
             path,
         );
-        let coin2_sk_root = merkle_inputs
-            .calculate_root(layouter.namespace(|| "calculate root"), coin2_sk)?;
+        let coin2_sk_root =
+            merkle_inputs.calculate_root(layouter.namespace(|| "calculate root"), coin2_sk)?;
 
         // ========
         // coin1 sn
@@ -758,13 +714,13 @@ impl Circuit<pallas::Base> for TxContract {
         let coin1_sn_commit: AssignedCell<Fp, Fp> = {
             let poseidon_message = [coin1_nonce.clone(), coin1_root_sk.clone()];
             let poseidon_hasher = PoseidonHash::<
-                    _,
+                _,
                 _,
                 poseidon::P128Pow5T3,
                 poseidon::ConstantLength<2>,
                 3,
                 2,
-                >::init(
+            >::init(
                 config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 
@@ -780,13 +736,13 @@ impl Circuit<pallas::Base> for TxContract {
         let coin2_sn_commit: AssignedCell<Fp, Fp> = {
             let poseidon_message = [coin2_nonce.clone(), coin2_root_sk.clone()];
             let poseidon_hasher = PoseidonHash::<
-                    _,
+                _,
                 _,
                 poseidon::P128Pow5T3,
                 poseidon::ConstantLength<2>,
                 3,
                 2,
-                >::init(
+            >::init(
                 config.poseidon_chip(), layouter.namespace(|| "Poseidon init")
             )?;
 

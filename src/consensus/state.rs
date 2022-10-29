@@ -16,8 +16,8 @@ use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
 use super::{
-    Block, BlockInfo, BlockProposal, coins, Header, KeepAlive, LeadProof, Metadata, Participant,
-    ProposalChain, DELTA, EPOCH_LENGTH, QUARANTINE_DURATION, LEADER_PROOF_K,
+    coins, Block, BlockInfo, BlockProposal, Header, LeadProof, Metadata, Participant,
+    ProposalChain, DELTA, EPOCH_LENGTH, LEADER_PROOF_K,
 };
 
 use crate::{
@@ -25,8 +25,8 @@ use crate::{
     crypto::{
         address::Address,
         keypair::{PublicKey, SecretKey},
-        leadcoin::LeadCoin,
         lead_proof,
+        leadcoin::LeadCoin,
         proof::{ProvingKey, VerifyingKey},
         schnorr::{SchnorrPublic, SchnorrSecret},
     },
@@ -220,6 +220,11 @@ impl ValidatorState {
         true
     }
 
+    /// Calculates current epoch.
+    pub fn current_epoch(&self) -> u64 {
+        self.slot_epoch(self.current_slot())
+    }
+
     /// Calculates the epoch of the provided slot.
     /// Epoch duration is configured using the `EPOCH_LENGTH` value.
     pub fn slot_epoch(&self, slot: u64) -> u64 {
@@ -230,6 +235,11 @@ impl ValidatorState {
     /// Slot duration is configured using the `DELTA` value.
     pub fn current_slot(&self) -> u64 {
         self.consensus.genesis_ts.elapsed() / (2 * *DELTA)
+    }
+
+    /// Calculates the relative number of the provided slot.
+    pub fn relative_slot(&self, slot: u64) -> u64 {
+        slot % *EPOCH_LENGTH
     }
 
     /// Finds the last slot a proposal or block was generated.
@@ -266,17 +276,15 @@ impl ValidatorState {
 
         Duration::new(diff.num_seconds().try_into().unwrap(), 0)
     }
-    
+
     /// Calculate slots until next Nth epoch.
     /// Epoch duration is configured using the EPOCH_LENGTH value.
     pub fn slots_to_next_n_epoch(&self, n: u64) -> u64 {
         assert!(n > 0);
-        let epoch_length = *EPOCH_LENGTH;
-        let relavite_slot = self.current_slot() % epoch_length;
-        let slots_till_next_epoch = epoch_length - relavite_slot;
-        ((n - 1) * epoch_length) + slots_till_next_epoch
+        let slots_till_next_epoch = *EPOCH_LENGTH - self.relative_slot(self.current_slot());
+        ((n - 1) * *EPOCH_LENGTH) + slots_till_next_epoch
     }
-    
+
     /// Calculates seconds until next Nth epoch starting time.
     pub fn next_n_epoch_start(&self, n: u64) -> Duration {
         self.next_n_slot_start(self.slots_to_next_n_epoch(n))
@@ -291,6 +299,8 @@ impl ValidatorState {
     /// Find slot leader, using a simple hash method.
     /// Leader calculation is based on how many nodes are participating
     /// in the network.
+    /// Note: leaving this for future usage
+    /// TODO: if not used, participants BTreeMap can become a HashSet
     pub fn slot_leader(&mut self) -> Participant {
         let slot = self.current_slot();
         // DefaultHasher is used to hash the slot number
@@ -303,16 +313,14 @@ impl ValidatorState {
         // the same key in calculated position.
         self.consensus.participants.iter().nth(pos as usize).unwrap().1.clone()
     }
-    
+
     /// Check if new epoch has started, to create new epoch coins.
     /// Returns flag to signify if epoch has changed and vector of
     /// new epoch competing coins.
-    pub async fn epoch_changed(&mut self) -> Result<(bool, Vec<Vec<LeadCoin>>)> {
-        let slot = self.current_slot();
-        let epoch = self.slot_epoch(slot);
-        let check = epoch > self.consensus.epoch;
+    pub async fn epoch_changed(&mut self) -> Result<bool> {
+        let epoch = self.current_epoch();
         if epoch <= self.consensus.epoch {
-            return Ok((false, vec![]))
+            return Ok(false)
         }
         // TODO: Retrieve previous lead proof
         let eta = pallas::Base::one();
@@ -321,11 +329,11 @@ impl ValidatorState {
         // TODO: slot parameter should be absolute slot, not relative.
         // At start of epoch, relative slot is 0.
         self.consensus.coins = coins::create_epoch_coins(eta, &owned, epoch, 0);
-        Ok((true, self.consensus.coins.clone()))      
+        Ok(true)
     }
 
     /// Wrapper for coins::is_leader
-    pub fn is_slot_leader(&self) -> (bool, usize) { 
+    pub fn is_slot_leader(&self) -> (bool, usize) {
         coins::is_leader(self.current_slot(), &self.consensus.coins)
     }
 
@@ -355,8 +363,16 @@ impl ValidatorState {
         let coin = self.consensus.coins[slot as usize][idx];
         let proof = lead_proof::create_lead_proof(&self.proving_key, coin)?;
         let participants = self.consensus.participants.values().cloned().collect();
-        let metadata = Metadata::new(signed_proposal, self.address, eta, LeadProof::from(proof), participants);
-        
+        let metadata = Metadata::new(
+            signed_proposal,
+            self.address,
+            coin.public_inputs(),
+            idx,
+            eta,
+            LeadProof::from(proof),
+            participants,
+        );
+
         // TODO: [PLACEHOLDER] Add rewards calculation (proof?)
         // TODO: [PLACEHOLDER] Create and add rewards transaction
         Ok(Some(BlockProposal::new(header, unproposed_txs, metadata)))
@@ -430,25 +446,38 @@ impl ValidatorState {
             None => return Ok(None),
         }
 
-        // Node refreshes participants records
-        self.refresh_participants()?;
-        
-        // TODO: retrieve leader from participants list
-        // TODO: validate provided proof using known coins
-        let mut leader = self.slot_leader();
-        if leader.address != proposal.block.metadata.address {
+        let leader = self.consensus.participants.get(&proposal.block.metadata.address);
+        if leader.is_none() {
             warn!(
-                "Received proposal not from slot leader ({}), but from ({})",
-                leader.address, proposal.block.metadata.address
+                "receive_proposal(): Received proposal from unknown node: ({})",
+                proposal.block.metadata.address
             );
             return Ok(None)
+        }
+        let leader = leader.unwrap();
+
+        let public_inputs = &leader.coins[current as usize][proposal.block.metadata.winning_index];
+        if public_inputs != &proposal.block.metadata.public_inputs {
+            warn!("receive_proposal(): Received proposal public inputs are invalid.");
+            return Ok(None)
+        }
+
+        match proposal.block.metadata.proof.verify(&self.verifying_key, &public_inputs) {
+            Ok(_) => info!("receive_proposal(): Proof veryfied succsessfully!"),
+            Err(e) => {
+                error!("receive_proposal(): Error during leader proof verification: {}", e);
+                return Ok(None)
+            }
         }
 
         if !leader.public_key.verify(
             proposal.block.header.headerhash().as_bytes(),
             &proposal.block.metadata.signature,
         ) {
-            warn!("Proposer ({}) signature could not be verified", proposal.block.metadata.address);
+            warn!(
+                "receive_proposal(): Proposer ({}) signature could not be verified",
+                proposal.block.metadata.address
+            );
             return Ok(None)
         }
 
@@ -466,21 +495,9 @@ impl ValidatorState {
             }
         }
 
-        // TODO: [PLACEHOLDER] Add balance proof validation
-        // TODO: [PLACEHOLDER] Add crypsinous proof validation (to replace balance proof)
         // TODO: [PLACEHOLDER] Add rewards validation
 
-        if current > leader.seen {
-            leader.seen = current;
-        }
-
-        // Invalidating quarantine
-        leader.quarantined = None;
-
-        self.consensus.participants.insert(leader.address, leader);
-
         let index = self.find_extended_chain_index(&proposal)?;
-
         if index == -2 {
             return Ok(None)
         }
@@ -498,7 +515,7 @@ impl ValidatorState {
                         to_broadcast = v;
                     }
                     Err(e) => {
-                        error!("consensus: Block finalization failed: {}", e);
+                        error!("receive_proposal(): Block finalization failed: {}", e);
                         return Err(e)
                     }
                 }
@@ -650,137 +667,10 @@ impl ValidatorState {
             return false
         }
 
-        // TODO: [PLACEHOLDER] Add balance proof validation
+        // TODO: [PLACEHOLDER] don't blintly trust the public inputs/validate them
 
         self.consensus.pending_participants.push(participant);
         true
-    }
-
-    /// Update participant seen.
-    pub fn participant_keep_alive(&mut self, keep_alive: KeepAlive) -> bool {
-        match self.consensus.participants.get(&keep_alive.address) {
-            None => {
-                warn!(
-                    "Keep alive message from unknown participant: {}",
-                    keep_alive.address.to_string()
-                );
-                false
-            }
-            Some(participant) => {
-                let current = self.current_slot();
-                if current != keep_alive.slot {
-                    warn!("keep alive message slot is not current one for: {}", keep_alive.address);
-                    return false
-                }
-
-                let serialized = serialize(&current);
-                if !participant.public_key.verify(&serialized, &keep_alive.signature) {
-                    warn!(
-                        "Keep alive message signature could not be verified for: {}",
-                        keep_alive.address
-                    );
-                    return false
-                }
-
-                // TODO: [PLACEHOLDER] Add balance proof validation
-
-                // Updating participant last seen slot
-                let mut participant = participant.clone();
-                participant.seen = current;
-
-                // Invalidating quarantine
-                participant.quarantined = None;
-
-                self.consensus.participants.insert(participant.address, participant);
-
-                true
-            }
-        }
-    }
-
-    /// Refresh the participants map, to retain only the active ones.
-    /// Active nodes are considered those that their last seen slot is
-    /// in range: [current_slot - QUARANTINE_DURATION, current_slot]
-    /// Inactive nodes are marked as quarantined, so they can be removed if
-    /// they are in quarantine more than the predifined quarantine period.
-    pub fn refresh_participants(&mut self) -> Result<()> {
-        // Node checks if it should refresh its participants list
-        let current = self.current_slot();
-        if current <= self.consensus.refreshed {
-            debug!("refresh_participants(): Participants have been refreshed this slot.");
-            return Ok(())
-        }
-
-        debug!("refresh_participants(): Adding pending participants");
-        for participant in &self.consensus.pending_participants {
-            self.consensus.participants.insert(participant.address, participant.clone());
-        }
-
-        if self.consensus.pending_participants.is_empty() {
-            debug!(
-                "refresh_participants(): Didn't manage to add any participant, pending were empty."
-            );
-        }
-
-        self.consensus.pending_participants = vec![];
-
-        let mut inactive = Vec::new();
-        let low_bound = current - *QUARANTINE_DURATION;
-
-        debug!(
-            "refresh_participants(): Node {} checking slots range: {} -> {}",
-            self.address, low_bound, current
-        );
-
-        let leader = self.slot_leader();
-        for (index, participant) in self.consensus.participants.iter_mut() {
-            match participant.quarantined {
-                Some(slot) => {
-                    if slot < low_bound {
-                        warn!(
-                            "refresh_participants(): Removing participant: {} (seen {}, quarantined {})",
-                            participant.address,
-                            participant.seen,
-                            slot
-                        );
-                        inactive.push(*index);
-                    }
-                }
-                None => {
-                    // Slot leader is always quarantined, to cover the case they become inactive the slot before
-                    // becoming the leader. This can be used for slashing in the future.
-                    if participant.address == leader.address {
-                        debug!(
-                            "refresh_participants(): Quaranteening leader: {} (seen {})",
-                            participant.address, participant.seen
-                        );
-                        participant.quarantined = Some(current);
-                        continue
-                    }
-                    if participant.seen < low_bound {
-                        warn!(
-                            "refresh_participants(): Quaranteening participant: {} (seen {})",
-                            participant.address, participant.seen
-                        );
-                        participant.quarantined = Some(current);
-                    }
-                }
-            }
-        }
-
-        for index in inactive {
-            self.consensus.participants.remove(&index);
-        }
-
-        if self.consensus.participants.is_empty() {
-            // If no nodes are active, node becomes a single node network.
-            let participant = Participant::new(self.public, self.address, self.current_slot());
-            self.consensus.participants.insert(participant.address, participant);
-        }
-
-        self.consensus.refreshed = current;
-
-        Ok(())
     }
 
     /// Utility function to reset the current consensus state.

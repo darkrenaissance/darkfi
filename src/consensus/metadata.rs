@@ -1,4 +1,5 @@
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
 use super::Participant;
@@ -22,6 +23,10 @@ pub struct Metadata {
     pub signature: Signature,
     /// Block owner address
     pub address: Address,
+    /// Block owner slot competing coins public inputs
+    pub public_inputs: Vec<pallas::Base>,
+    /// Block owner winning coin index
+    pub winning_index: usize,
     /// Response of global random oracle, or it's emulation.
     pub eta: [u8; 32],
     /// Leader NIZK proof
@@ -35,10 +40,12 @@ impl Default for Metadata {
         let keypair = Keypair::random(&mut OsRng);
         let address = Address::from(keypair.public);
         let signature = Signature::dummy();
+        let public_inputs = vec![];
+        let winning_index = 0;
         let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
         let proof = LeadProof::default();
         let participants = vec![];
-        Self { signature, address, eta, proof, participants }
+        Self { signature, address, public_inputs, winning_index, eta, proof, participants }
     }
 }
 
@@ -46,11 +53,13 @@ impl Metadata {
     pub fn new(
         signature: Signature,
         address: Address,
+        public_inputs: Vec<pallas::Base>,
+        winning_index: usize,
         eta: [u8; 32],
         proof: LeadProof,
         participants: Vec<Participant>,
     ) -> Self {
-        Self { signature, address, eta, proof, participants }
+        Self { signature, address, public_inputs, winning_index, eta, proof, participants }
     }
 }
 
@@ -67,8 +76,8 @@ impl LeadProof {
         Self { proof }
     }
 
-    pub fn verify(&self, vk: VerifyingKey, public_inputs: &[DrkCircuitField]) -> VerifyResult<()> {
-        lead_proof::verify_lead_proof(&vk, &self.proof, public_inputs)
+    pub fn verify(&self, vk: &VerifyingKey, public_inputs: &[DrkCircuitField]) -> VerifyResult<()> {
+        lead_proof::verify_lead_proof(vk, &self.proof, public_inputs)
     }
 }
 

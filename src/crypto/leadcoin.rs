@@ -59,7 +59,7 @@ impl LeadCoin {
                 .hash(y_coord_arr);
         let cm_pos = self.idx;
         let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] =
-             [po_nonce, *po_pk.x(), *po_pk.y(), po_y];
+            [po_nonce, *po_pk.x(), *po_pk.y(), po_y];
         public_inputs
     }
 

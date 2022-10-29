@@ -111,7 +111,7 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()>  {
             match lead_proof::verify_lead_proof(&verifying_key, &proof.unwrap(), &coin.public_inputs()) {
                 Ok(_) => info!("Proof veryfied succsessfully!"),
                 Err(e) => error!("Error during leader proof verification: {}", e),
-            }            
+            }
         }
     }
     

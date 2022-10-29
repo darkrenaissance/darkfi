@@ -45,7 +45,7 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
 
                 last = last_received;
             }
-        },
+        }
         None => warn!("Node is not connected to other nodes"),
     };
 
