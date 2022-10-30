@@ -1,6 +1,8 @@
 [package]
 name = "dhtd"
 version = "0.3.0"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies.darkfi]

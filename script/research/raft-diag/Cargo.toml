@@ -1,9 +1,10 @@
 [package]
 name = "raft-diag"
 version = "0.1.0"
+authors = ["darkfi <dev@dark.fi>"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
 
 [dependencies]
 darkfi = {path = "../../../", features = ["raft"]}
@@ -34,6 +35,3 @@ structopt = "0.3.26"
 hex = "0.4.3"
 bs58 = "0.4.0"
 toml = "0.5.9"
-
-[workspace]
-

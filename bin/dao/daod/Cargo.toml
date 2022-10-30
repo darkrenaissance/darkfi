@@ -1,6 +1,11 @@
 [package]
 name = "daod"
 version = "0.3.0"
+homepage = "https://dark.fi"
+description = "DarkFi DAO daemon"
+authors = ["darkfi <dev@dark.fi>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]

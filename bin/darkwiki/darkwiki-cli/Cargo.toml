@@ -1,22 +1,15 @@
 [package]
 name = "darkwiki"
-description = ""
+description = "CLI utility for interacting with darkwikid"
 version = "0.4.0"
 edition = "2021"
 authors = ["darkfi <dev@dark.fi>"]
 license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
-keywords = []
-categories = []
-
-
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 darkfi = {path = "../../../", features = ["rpc"]}
-
 
 # Async
 smol = "1.2.5"
@@ -35,8 +28,3 @@ url = "2.3.1"
 serde = {version = "1.0.145", features = ["derive"]}
 serde_json = "1.0.85"
 structopt = "0.3.26"
-
-
-
-
-

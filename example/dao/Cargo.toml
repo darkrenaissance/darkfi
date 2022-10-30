@@ -2,6 +2,8 @@
 name = "dao"
 version = "0.3.0"
 edition = "2021"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
 
 [dependencies]
 darkfi = {path = "../../", features = ["rpc", "crypto", "tx", "node"]}

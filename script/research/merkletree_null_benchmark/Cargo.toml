@@ -1,10 +1,13 @@
 [package]
 name = "merkletree_null_benchmark"
 version = "0.1.0"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
 edition = "2021"
 
-[dependencies]
+[workspace]
 
+[dependencies]
 darkfi = {path="../../../", features=["node"]}
 darkfi-sdk = {path="../../../src/sdk"}
 darkfi-serial = {path="../../../src/serial"}
@@ -14,6 +17,3 @@ pasta_curves = "0.4.0"
 incrementalmerkletree = "0.3.0"
 
 serde_json = "1.0.87"
-
-[workspace]
-

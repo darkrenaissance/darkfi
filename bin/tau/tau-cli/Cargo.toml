@@ -7,8 +7,6 @@ authors = ["darkfi <dev@dark.fi>"]
 license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
-keywords = []
-categories = ["command-line-utilities"]
 
 [dependencies]
 async-std = {version = "1.12.0", features = ["attributes"]}

@@ -7,8 +7,6 @@ authors = ["darkfi <dev@dark.fi>"]
 license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
-keywords = []
-categories = []
 
 [dependencies]
 darkfi = {path = "../../", features = ["net", "rpc"]}

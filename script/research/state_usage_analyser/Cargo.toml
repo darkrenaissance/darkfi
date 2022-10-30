@@ -1,7 +1,11 @@
 [package]
 name = "state_usage_analyser"
 version = "0.3.0"
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
 edition = "2021"
+
+[workspace]
 
 [dependencies]
 async-std = {version = "1.12.0", features = ["attributes"]}
@@ -14,5 +18,3 @@ pasta_curves = "0.4.0"
 rand = "0.8.5"
 serde = {version = "1.0.145", features = ["derive"]}
 sled = "0.34.7"
-
-[workspace]

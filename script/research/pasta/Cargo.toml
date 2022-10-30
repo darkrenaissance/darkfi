@@ -1,7 +1,8 @@
 [package]
 name = "pasta"
 version = "0.3.0"
-authors = ["narodnik <x@x.org>"]
+authors = ["darkfi <dev@dark.fi>"]
+license = "AGPL-3.0-only"
 edition = "2018"
 
 [workspace]
@@ -15,4 +16,3 @@ rand = "0.8.5"
 [[bin]]
 name = "pasta"
 path = "main.rs"
-
