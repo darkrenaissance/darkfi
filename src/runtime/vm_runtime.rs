@@ -212,10 +212,8 @@ impl Runtime {
         }
     }
 
-    fn gas_info(&self) -> String {
-        // DISABLED
-        /*
-        let remaining_points = get_remaining_points(&self.instance);
+    fn gas_info(&mut self) -> String {
+        let remaining_points = get_remaining_points(&mut self.store, &self.instance);
 
         match remaining_points {
             MeteringPoints::Remaining(rem) => {
@@ -225,8 +223,6 @@ impl Runtime {
                 format!("Gas fully exhausted: {}/{}", GAS_LIMIT + 1, GAS_LIMIT)
             }
         }
-        */
-        "(gas info temporarily disabled)".to_string()
     }
 
     /// Set the memory page size
