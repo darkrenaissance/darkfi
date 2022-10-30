@@ -334,7 +334,7 @@ impl ValidatorState {
 
     /// Wrapper for coins::is_leader
     pub fn is_slot_leader(&self) -> (bool, usize) {
-        coins::is_leader(self.current_slot(), &self.consensus.coins)
+        coins::is_leader(self.relative_slot(self.current_slot()), &self.consensus.coins)
     }
 
     /// Generate a block proposal for the current slot, containing all
@@ -360,7 +360,7 @@ impl ValidatorState {
         // TODO: Retrieve previous lead proof
         let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
         // Generating leader proof
-        let coin = self.consensus.coins[slot as usize][idx];
+        let coin = self.consensus.coins[self.relative_slot(slot) as usize][idx];
         let proof = lead_proof::create_lead_proof(&self.proving_key, coin)?;
         let participants = self.consensus.participants.values().cloned().collect();
         let metadata = Metadata::new(

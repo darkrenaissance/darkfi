@@ -50,15 +50,15 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         sleep(seconds_next_slot).await;
 
         // Node checks if epoch has changed, to broadcast a new participation message
-        match state.write().await.epoch_changed().await {
+        let epoch_changed = state.write().await.epoch_changed().await;
+        match epoch_changed {
             Ok(changed) => {
                 if changed {
-                    let lock = state.read().await;
-                    info!("consensus: New epoch started: {}", lock.current_epoch());
-                    let public = lock.public;
-                    let address = lock.address;
+                    info!("consensus: New epoch started: {}", state.read().await.current_epoch());
+                    let public = state.read().await.public;
+                    let address = state.read().await.address;
                     let mut coins = vec![];
-                    for slot_coins in &lock.consensus.coins {
+                    for slot_coins in &state.read().await.consensus.coins {
                         let mut slot_coins_inputs = vec![];
                         for slot_coin in slot_coins {
                             slot_coins_inputs.push(slot_coin.public_inputs());
@@ -89,10 +89,8 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
 
         // Node checks if it's the slot leader to generate a new proposal
         // for that slot.
-        let lock = state.read().await;
-        let (won, idx) = lock.is_slot_leader();
-        let result = if won { lock.propose(idx) } else { Ok(None) };
-
+        let (won, idx) = state.read().await.is_slot_leader();
+        let result = if won { state.read().await.propose(idx) } else { Ok(None) };
         let proposal = match result {
             Ok(prop) => {
                 if prop.is_none() {
