@@ -185,6 +185,7 @@ class Node:
         # Check if the parents of the orphan
         # are not missing from active pool
         missing_parents = self.active_pool.check_events(orphan.parents)
+        missing_parents = self.check_pruned_events(missing_parents) 
         if missing_parents:
             # Check the missing parents from orphan pool and sync with the
             # network for missing ones
@@ -196,8 +197,7 @@ class Node:
 
             # Check again that the parents of the orphan are in the active pool
             missing_parents = self.active_pool.check_events(orphan.parents)
-            missing_parents = [p for p in missing_parents if p not in
-                               self.pruned_events]
+            missing_parents = self.check_pruned_events(missing_parents) 
             assert (not missing_parents)
 
             # Add the event to active pool
@@ -206,7 +206,7 @@ class Node:
             self.add_to_active_pool(orphan)
 
         # Last stage, Cleaning up the orphan pool:
-        #  - Remove orphan if it is too old according to MAX_TIME_DIFF
+        #  - Remove orphan if it is too old according to `max_time_diff`
         #  - Move orphan to active pool if it doesn't have any missing parents
         self.clean_orphan_pool()
 
@@ -236,14 +236,15 @@ class Node:
         for event in self.active_pool.events.values():
 
             # Check if the event parents are old events
-            old_parents = [e for e in oe_active_p if e in event.parents]
+            parents = self.check_pruned_events(event.parents) 
 
-            if not old_parents:
+            if parents:
                 continue
-
+                
             # Add the event to tails if it has only old events as parents
-            if len(event.parents) == len(old_parents):
-                self.update_tails(event)
+            self.update_tails(event)
+
+
 
     def clean_orphan_pool(self):
         debug(f"{self.name} clean_orphan_pool()")
@@ -259,6 +260,7 @@ class Node:
                 # Move the orphan to active pool if it doesn't have missing
                 # parents in active pool
                 missing_parents = self.active_pool.check_events(orphan.parents)
+                missing_parents = self.check_pruned_events(missing_parents) 
 
                 if not missing_parents:
                     active_list.append(orphan)
@@ -304,11 +306,12 @@ class Node:
                 # Check first if it's not in the active pool
                 if self.active_pool.events.get(event_hash) != None:
                     continue
+
+                # Check if it's not in pruned events
                 if event_hash in self.pruned_events:
                     continue
 
                 request_list.append(event_hash)
-
             else:
                 # Recursive call
                 # Climb up for the event parents
@@ -389,6 +392,10 @@ class Node:
 
         return event
 
+    # Clean up the given events from pruned events
+    def check_pruned_events(self, events):
+        return [ev for ev in events if ev not in self.pruned_events]
+
     # Check if the event is too old from now, by subtracting current timestamp
     # from event timestamp, it must be more than `max_time_diff' to be consider
     # old event
@@ -455,8 +462,6 @@ Run a simulation with the provided params:
     max_time_diff: a max difference in time to detect an old event 
     check: check if all nodes have the same graph
 """
-
-
 async def run(nodes_n=3, podm=0.30, broadcast_attempt=3, max_time_diff=180.0,
               check=False, max_delay=None):
 
@@ -729,8 +734,8 @@ if __name__ == "__main__":
                         handlers=[logging.FileHandler("debug.log", mode="w"),
                                   logging.StreamHandler()])
 
-    # nodes = asyncio.run(run(nodes_n=10, podm=0, broadcast_attempt=4,
-    #                       max_time_diff=30, max_delay=7))
+    # nodes = asyncio.run(run(nodes_n=14, podm=0, broadcast_attempt=4,
+    #                     max_time_diff=30,check=True))
 
     # print_network_graph(nodes[0])
     # print_network_graph(nodes[0], unpruned=True)
