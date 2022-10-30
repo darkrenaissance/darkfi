@@ -17,7 +17,6 @@
  */
 
 use darkfi::{
-    node::{MemoryState, State},
     runtime::{util::serialize_payload, vm_runtime::Runtime},
     Result,
 };
@@ -41,16 +40,16 @@ fn run_contract() -> Result<()> {
     // =============================================================
     // Build a ledger state so the runtime has something to work on
     // =============================================================
-    let state_machine = State::dummy()?;
+    //let state_machine = State::dummy()?;
 
     // Add a nullifier to the nullifier set. (This is checked by the contract)
-    state_machine.nullifiers.insert(&[Nullifier::from(pallas::Base::from(0x10))])?;
+    //state_machine.nullifiers.insert(&[Nullifier::from(pallas::Base::from(0x10))])?;
 
     // ================================================================
     // Load the wasm binary into memory and create an execution runtime
     // ================================================================
     let wasm_bytes = std::fs::read("contract.wasm")?;
-    let mut runtime = Runtime::new(&wasm_bytes, MemoryState::new(state_machine))?;
+    let mut runtime = Runtime::new(&wasm_bytes)?;
 
     // =============================================
     // Build some kind of payload to show an example

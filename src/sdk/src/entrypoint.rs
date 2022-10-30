@@ -53,4 +53,3 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> &'a [u8] {
 
     instruction_data
 }
-

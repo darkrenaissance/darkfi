@@ -287,8 +287,16 @@ pub enum Error {
     WasmerInstantiationError(String),
 
     #[cfg(feature = "wasm-runtime")]
+    #[error("wasm memory error")]
+    WasmerMemoryError,
+
+    #[cfg(feature = "wasm-runtime")]
     #[error("wasm runtime out of memory")]
     WasmerOomError,
+
+    #[cfg(feature = "wasm-runtime")]
+    #[error("contract execution error")]
+    ContractExecError(u64),
 
     // ====================
     // Miscellaneous errors

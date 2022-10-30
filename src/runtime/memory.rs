@@ -16,42 +16,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use wasmer::{Memory, WasmPtr};
+use wasmer::{MemoryView, WasmPtr};
 
 use crate::{Error, Result};
 
 pub trait MemoryManipulation {
-    fn write(&self, mem_offset: u32, value_slice: &[u8]) -> Result<()>;
-    fn read(&self, mem_offset: u32, value_len: usize) -> Option<&[u8]>;
+    fn write_slice(&self, value_slice: &[u8], mem_offset: u32) -> Result<()>;
+    fn read_slice(&self, value_len: usize, mem_offset: u32) -> Option<&[u8]>;
 }
 
-impl MemoryManipulation for Memory {
-    fn write(&self, mem_offset: u32, value_slice: &[u8]) -> Result<()> {
-        // DISABLED
-        /*
+impl<'a> MemoryManipulation for MemoryView<'a> {
+    fn write_slice(&self, value_slice: &[u8], mem_offset: u32) -> Result<()> {
         // Prepare WasmPtr
-        let target_ptr: WasmPtr<u8, Array> = WasmPtr::new(mem_offset);
+        let ptr: WasmPtr<u8> = WasmPtr::new(mem_offset);
 
-        // Allocate necessary memory space on guest
-        let guest_value_slice = match target_ptr.deref(self, 0, value_slice.len() as u32) {
-            Some(slice) => slice,
-            None => [].to_vec(),
-        };
+        // Write to the slice
+        let slice = ptr.slice(self, value_slice.len() as u32).map_err(|_| Error::WasmerOomError)?;
 
-        if guest_value_slice.is_empty() {
-            return Err(Error::WasmerOomError)
-        }
-
-        // Copy bytes to guest
-        for i in 0..value_slice.len() {
-            guest_value_slice[i].set(value_slice[i]);
-        }
-        */
-
-        Ok(())
+        slice.write_slice(value_slice).map_err(|_| Error::WasmerOomError)
     }
 
-    fn read(&self, mem_offset: u32, value_len: usize) -> Option<&[u8]> {
+    fn read_slice(&self, value_len: usize, mem_offset: u32) -> Option<&[u8]> {
         // TODO: use data_size() ?
         // DISABLED
         /*

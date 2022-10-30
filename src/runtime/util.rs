@@ -17,7 +17,7 @@
  */
 
 use log::{error, warn};
-use wasmer::{FunctionEnvMut, AsStoreRef, WasmPtr};
+use wasmer::{AsStoreRef, FunctionEnvMut, WasmPtr};
 
 use super::{memory::MemoryManipulation, vm_runtime::Env};
 
@@ -45,10 +45,9 @@ pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
             let mut logs = env.logs.borrow_mut();
             logs.push(msg);
             std::mem::drop(logs);
-        },
+        }
         Err(_) => {
             error!(target: "wasm_runtime::drk_log", "Failed to read UTF-8 string from VM memory");
         }
     }
 }
-

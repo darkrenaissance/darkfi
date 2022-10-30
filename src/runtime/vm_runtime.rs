@@ -38,10 +38,7 @@ use super::{
     memory::MemoryManipulation,
     util::drk_log,
 };
-use crate::{
-    node::{state::StateUpdate, MemoryState},
-    Result,
-};
+use crate::{Error, Result};
 
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
@@ -56,10 +53,6 @@ pub struct Env {
     pub logs: RefCell<Vec<String>>,
     /// Direct memory access to the VM
     pub memory: Option<Memory>,
-    /// Cloned state machine living in memory
-    pub state_machine: Arc<MemoryState>,
-    /// State updates produced by the contract
-    pub state_updates: Arc<Mutex<Vec<StateUpdate>>>,
 }
 
 impl Env {
@@ -86,8 +79,6 @@ pub struct ExecutionResult {
     pub exitcode: u8,
     /// Logs written from the wasm program
     pub logs: Vec<String>,
-    /// State machine updates produced by the wasm program
-    pub state_updates: Vec<StateUpdate>,
 }
 
 pub struct Runtime {
@@ -98,7 +89,7 @@ pub struct Runtime {
 
 impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
-    pub fn new(wasm_bytes: &[u8], state_machine: MemoryState) -> Result<Self> {
+    pub fn new(wasm_bytes: &[u8]) -> Result<Self> {
         info!(target: "warm_runtime::new", "Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
         // the wasm module execution. It should return the cost of the operator
@@ -129,11 +120,8 @@ impl Runtime {
         // This section will need changing
         debug!(target: "wasm_runtime::new", "Importing functions");
         let logs = RefCell::new(vec![]);
-        let state_machine = Arc::new(state_machine);
-        let state_updates = Arc::new(Mutex::new(vec![]));
 
-        let ctx =
-            FunctionEnv::new(&mut store, Env { logs, memory: None, state_machine, state_updates });
+        let ctx = FunctionEnv::new(&mut store, Env { logs, memory: None });
 
         let imports = imports! {
             "env" => {
@@ -169,7 +157,7 @@ impl Runtime {
     /// Run the hardcoded `ENTRYPOINT` function with the given payload as input.
     pub fn run(&mut self, payload: &[u8]) -> Result<()> {
         let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
-        self.set_memory_page_size(pages_required as u32);
+        self.set_memory_page_size(pages_required as u32)?;
 
         self.copy_to_memory(payload)?;
 
@@ -200,8 +188,7 @@ impl Runtime {
 
         match retval {
             entrypoint::SUCCESS => Ok(()),
-            // _ => Err(ContractError(retval)),
-            _ => todo!(),
+            _ => Err(Error::ContractExecError(retval)),
         }
     }
 
@@ -226,13 +213,14 @@ impl Runtime {
     }
 
     /// Set the memory page size
-    fn set_memory_page_size(&mut self, pages: u32) {
+    fn set_memory_page_size(&mut self, pages: u32) -> Result<()> {
         // Grab memory by value
         let memory = self.take_memory();
         // Modify the memory
-        memory.grow(&mut self.store, Pages(pages));
+        memory.grow(&mut self.store, Pages(pages)).map_err(|_| Error::WasmerMemoryError)?;
         // Replace the memory back again
         self.ctx.as_mut(&mut self.store).memory = Some(memory);
+        Ok(())
     }
     /// Take Memory by value. Needed to modify the Memory object
     /// Will panic if memory isn't set.
@@ -247,13 +235,6 @@ impl Runtime {
         // Get the memory view
         let env = self.ctx.as_ref(&self.store);
         let memory_view = env.memory_view(&self.store);
-
-        // Pointer to offset 0
-        let ptr: WasmPtr<u8> = WasmPtr::new(0);
-
-        // Write to the slice
-        let slice = ptr.slice(&memory_view, payload.len() as u32).expect("FIXME FIXME FIXME");
-        slice.write_slice(payload).expect("FIXME FIXME FIXME");
-        Ok(())
+        memory_view.write_slice(payload, 0)
     }
 }
