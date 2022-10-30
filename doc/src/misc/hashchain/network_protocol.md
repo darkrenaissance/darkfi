@@ -19,7 +19,7 @@ Inventory vectors notify other nodes about objects they have or data
 which is being requested.
 
 | Description   | Data Type            | Comments                   |
-|-------------- | -------------------- | -------------------------- |
+| ------------- | -------------------- | -------------------------- |
 | invs          | `Vec<[u8; 32]>`      | Inventory items            |
 
 ### Receiving an `Inv` message
@@ -52,7 +52,7 @@ been read.
 ## GetData
 
 | Description   | Data Type            | Comments                   |
-|-------------- | -------------------- | -------------------------- |
+| ------------- | -------------------- | -------------------------- |
 | events        | Vec<`EventId`>       | A list of `EventId`s       |
 
 ### Receiving a `GetData` message
@@ -63,7 +63,7 @@ requested `Event`s in `GetData` message.
 ## UnreadEvents
 
 | Description | Data Type                   | Comments                                                                             |
-|-------------|---------------------------- | -------------------------------------------------------------------------------------|
+| ------------| --------------------------- | ------------------------------------------------------------------------------------ |
 | Messages    | HashMap<`EventId`, `Event`> | Hold all the `Event`s that have broadcasted to other nodes but haven't confirmed yet |
 
 ### Add new `Event` to `UnreadEvents`
@@ -83,7 +83,7 @@ until the state of `Event` updates to read.
 ## SyncEvent
 
 | Description | Data Type       | Comments                      |
-|-------------|---------------- |------------------------------ |
+| ------------| --------------- | ----------------------------- |
 | Leaves      | Vec<`EventId`>  | Hash of `Event`s              |
 
 ### Synchronization
@@ -104,7 +104,7 @@ This prevents receiving duplicate objects.
 The list contains only 2^16 ids.
 
 | Description | Data Type       | Comments                      |
-| ----------- | --------------- |------------------------------ |
+| ----------- | --------------- | ----------------------------- |
 | Ids         | Vec<`ObjectId`> | Contains objects ids          |
 
 ## Receiving a new `Event`
