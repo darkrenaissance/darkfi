@@ -19,7 +19,7 @@ Inventory vectors notify other nodes about objects they have or data which is be
 
 | Description   | Data Type            | Comments                   |
 |-------------- | -------------------- | -------------------------- |
-| invs          | Vec`<[u8; 32]>`      | Inventory items            |
+| invs          | `Vec<[u8; 32]>`      | Inventory items            |
 
 ### Receiving an `Inv` message
 
