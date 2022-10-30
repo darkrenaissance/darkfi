@@ -288,11 +288,11 @@ pub enum Error {
 
     #[cfg(feature = "wasm-runtime")]
     #[error("wasm memory error")]
-    WasmerMemoryError,
+    WasmerMemoryError(String),
 
     #[cfg(feature = "wasm-runtime")]
     #[error("wasm runtime out of memory")]
-    WasmerOomError,
+    WasmerOomError(String),
 
     #[cfg(feature = "wasm-runtime")]
     #[error("contract execution error")]
@@ -576,3 +576,18 @@ impl From<wasmer::InstantiationError> for Error {
         Self::WasmerInstantiationError(err.to_string())
     }
 }
+
+#[cfg(feature = "wasm-runtime")]
+impl From<wasmer::MemoryAccessError> for Error {
+    fn from(err: wasmer::MemoryAccessError) -> Self {
+        Self::WasmerMemoryError(err.to_string())
+    }
+}
+
+#[cfg(feature = "wasm-runtime")]
+impl From<wasmer::MemoryError> for Error {
+    fn from(err: wasmer::MemoryError) -> Self {
+        Self::WasmerOomError(err.to_string())
+    }
+}
+

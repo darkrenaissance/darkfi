@@ -217,7 +217,7 @@ impl Runtime {
         // Grab memory by value
         let memory = self.take_memory();
         // Modify the memory
-        memory.grow(&mut self.store, Pages(pages)).map_err(|_| Error::WasmerMemoryError)?;
+        memory.grow(&mut self.store, Pages(pages))?;
         // Replace the memory back again
         self.ctx.as_mut(&mut self.store).memory = Some(memory);
         Ok(())

@@ -31,9 +31,9 @@ impl<'a> MemoryManipulation for MemoryView<'a> {
         let ptr: WasmPtr<u8> = WasmPtr::new(mem_offset);
 
         // Write to the slice
-        let slice = ptr.slice(self, value_slice.len() as u32).map_err(|_| Error::WasmerOomError)?;
+        let slice = ptr.slice(self, value_slice.len() as u32)?;
 
-        slice.write_slice(value_slice).map_err(|_| Error::WasmerOomError)
+        Ok(slice.write_slice(value_slice)?)
     }
 
     fn read_slice(&self, value_len: usize, mem_offset: u32) -> Option<&[u8]> {
