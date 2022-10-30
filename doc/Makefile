@@ -1,24 +1,32 @@
 .POSIX:
 
 DARKFID_JSONRPC = src/clients/darkfid_jsonrpc.md
+CASHIERD_JSONRPC = src/clients/cashierd_jsonrpc.md
+FAUCETD_JSONRPC = src/clients/faucetd_jsonrpc.md
 
-all:
-	echo "# darkfid JSON-RPC API" > $(DARKFID_JSONRPC)
-	for i in blockchain tx wallet misc; do \
-		echo "## $$i methods" >> $(DARKFID_JSONRPC);\
-		./build_jsonrpc.py ../bin/darkfid/src/rpc_$$i.rs >> $(DARKFID_JSONRPC);\
-	done
+JSONRPC = \
+	$(DARKFID_JSONRPC) \
+	$(CASHIERD_JSONRPC) \
+	$(FAUCETD_JSONRPC)
 
-	echo "# cashierd JSON-RPC API" > src/clients/cashierd_jsonrpc.md
-	./build_jsonrpc.py ../bin/cashierd/src/main.rs \
-		>> src/clients/cashierd_jsonrpc.md
-
-	echo "# faucetd JSON-RPC API" > src/clients/faucetd_jsonrpc.md
-	./build_jsonrpc.py ../bin/faucetd/src/main.rs \
-		>> src/clients/faucetd_jsonrpc.md
-
+all: $(JSONRPC)
 	mdbook build
 	cp -f theme/logo* book/html/
+
+$(DARKFID_JSONRPC):
+	@echo "# darkfid JSON-RPC API" > $@
+	@for i in blockchain tx wallet misc; do \
+		echo "## $$i methods" >> $@ ;\
+		./build_jsonrpc.py ../bin/darkfid/src/rpc_$$i.rs >> $@ ;\
+	done
+
+$(CASHIERD_JSONRPC):
+	@echo "# cashierd JSON-RPC API" > $@
+	@./build_jsonrpc.py ../bin/cashierd/src/main.rs >> $@
+
+$(FAUCETD_JSONRPC):
+	@echo "# faucetd JSON-RPC API" > $@
+	@./build_jsonrpc.py ../bin/faucetd/src/main.rs >> $@
 
 clean:
 	rm -rf book
@@ -26,4 +34,4 @@ clean:
 github: all
 	ghp-import -m "Generate mdbook" -b gh-pages book/html
 
-.PHONY: all clean github
+.PHONY: $(JSONRPC) all clean github
