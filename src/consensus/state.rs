@@ -442,7 +442,7 @@ impl ValidatorState {
             }
             None => return Ok(None),
         }
-        
+
         let leader = self.consensus.participants.get(&proposal.block.metadata.address);
         if leader.is_none() {
             warn!(
@@ -453,7 +453,8 @@ impl ValidatorState {
         }
         let leader = leader.unwrap();
 
-        let public_inputs = &leader.coins[self.relative_slot(current) as usize][proposal.block.metadata.winning_index];
+        let public_inputs = &leader.coins[self.relative_slot(current) as usize]
+            [proposal.block.metadata.winning_index];
         if public_inputs != &proposal.block.metadata.public_inputs {
             warn!("receive_proposal(): Received proposal public inputs are invalid.");
             return Err(Error::InvalidPublicInputsError)
@@ -463,7 +464,7 @@ impl ValidatorState {
             Ok(_) => info!("receive_proposal(): Proof veryfied succsessfully!"),
             Err(e) => {
                 error!("receive_proposal(): Error during leader proof verification: {}", e);
-                return Err(Error::LeaderProofVerificationError);
+                return Err(Error::LeaderProofVerificationError)
             }
         }
 
