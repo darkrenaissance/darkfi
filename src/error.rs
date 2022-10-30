@@ -192,6 +192,21 @@ pub enum Error {
 
     #[error("JSON-RPC error: {0}")]
     JsonRpcError(String),
+    
+    #[error("Received proposal from unknown node")]
+    UnknownNodeError,
+    
+    #[error("Public inputs are invalid")]
+    InvalidPublicInputsError,
+    
+    #[error("Error during leader proof verification")]
+    LeaderProofVerificationError,
+    
+    #[error("Signature could not be verified")]
+    InvalidSignatureError,
+    
+    #[error("State transition failed")]
+    StateTransitionError,
 
     // ===============
     // Database errors

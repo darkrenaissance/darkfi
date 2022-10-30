@@ -39,7 +39,9 @@ fn get_frequency() -> Float10 {
 
 /// Calculate nodes total stake for specific epoch and slot.
 fn total_stake(epoch: u64, slot: u64) -> u64 {
-    (epoch * *EPOCH_LENGTH + slot + 1) * *REWARD
+    // TODO: fix this
+    //(epoch * *EPOCH_LENGTH + slot + 1) * *REWARD
+    *REWARD
 }
 
 /// Generate epoch competing coins.

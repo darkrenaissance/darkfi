@@ -43,8 +43,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
             break
         }
     } else {
-        warn!("Node is not connected to other nodes, resetting consensus state.");
-        state.write().await.reset_consensus_state()?;
+        warn!("Node is not connected to other nodes");
     }
 
     info!("Consensus state synced!");

@@ -38,7 +38,7 @@ use crate::{
     tx::Transaction,
     util::time::Timestamp,
     zk::circuit::LeadContract,
-    Result,
+    Error, Result,
 };
 
 /// This struct represents the information required by the consensus algorithm
@@ -52,8 +52,6 @@ pub struct ConsensusState {
     pub proposals: Vec<ProposalChain>,
     /// Validators currently participating in the consensus
     pub participants: BTreeMap<Address, Participant>,
-    /// Validators to be added on the next slot as participants
-    pub pending_participants: Vec<Participant>,
     /// Last slot participants where refreshed
     pub refreshed: u64,
     /// Current epoch
@@ -72,7 +70,6 @@ impl ConsensusState {
             genesis_block,
             proposals: vec![],
             participants: BTreeMap::new(),
-            pending_participants: vec![],
             refreshed: 0,
             epoch: 0,
             coins: vec![],
@@ -445,28 +442,28 @@ impl ValidatorState {
             }
             None => return Ok(None),
         }
-
+        
         let leader = self.consensus.participants.get(&proposal.block.metadata.address);
         if leader.is_none() {
             warn!(
                 "receive_proposal(): Received proposal from unknown node: ({})",
                 proposal.block.metadata.address
             );
-            return Ok(None)
+            return Err(Error::UnknownNodeError)
         }
         let leader = leader.unwrap();
 
-        let public_inputs = &leader.coins[current as usize][proposal.block.metadata.winning_index];
+        let public_inputs = &leader.coins[self.relative_slot(current) as usize][proposal.block.metadata.winning_index];
         if public_inputs != &proposal.block.metadata.public_inputs {
             warn!("receive_proposal(): Received proposal public inputs are invalid.");
-            return Ok(None)
+            return Err(Error::InvalidPublicInputsError)
         }
 
         match proposal.block.metadata.proof.verify(&self.verifying_key, &public_inputs) {
             Ok(_) => info!("receive_proposal(): Proof veryfied succsessfully!"),
             Err(e) => {
                 error!("receive_proposal(): Error during leader proof verification: {}", e);
-                return Ok(None)
+                return Err(Error::LeaderProofVerificationError);
             }
         }
 
@@ -478,7 +475,7 @@ impl ValidatorState {
                 "receive_proposal(): Proposer ({}) signature could not be verified",
                 proposal.block.metadata.address
             );
-            return Ok(None)
+            return Err(Error::InvalidSignatureError)
         }
 
         debug!("receive_proposal(): Starting state transition validation");
@@ -491,7 +488,7 @@ impl ValidatorState {
             }
             Err(e) => {
                 warn!("receive_proposal(): State transition fail: {}", e);
-                return Ok(None)
+                return Err(Error::StateTransitionError)
             }
         }
 
@@ -661,36 +658,16 @@ impl ValidatorState {
         Ok(finalized)
     }
 
-    /// Append a new participant to the pending participants list.
+    /// Append a new participant to the participants list.
     pub fn append_participant(&mut self, participant: Participant) -> bool {
-        if self.consensus.pending_participants.contains(&participant) {
-            return false
+        if let Some(p) = self.consensus.participants.get(&participant.address) {
+            if p == &participant {
+                return false
+            }
         }
-
         // TODO: [PLACEHOLDER] don't blintly trust the public inputs/validate them
-
-        self.consensus.pending_participants.push(participant);
+        self.consensus.participants.insert(participant.address, participant);
         true
-    }
-
-    /// Utility function to reset the current consensus state.
-    pub fn reset_consensus_state(&mut self) -> Result<()> {
-        let genesis_ts = self.consensus.genesis_ts;
-        let genesis_block = self.consensus.genesis_block;
-
-        let consensus = ConsensusState {
-            genesis_ts,
-            genesis_block,
-            proposals: vec![],
-            participants: BTreeMap::new(),
-            pending_participants: vec![],
-            refreshed: 0,
-            epoch: 0,
-            coins: vec![],
-        };
-
-        self.consensus = consensus;
-        Ok(())
     }
 
     // ==========================
