@@ -352,8 +352,9 @@ impl JsonRpcInterface {
             Ok(key) => match client.money_wallets.get(&key) {
                 Some(wallet) => {
                     let balance = wallet.balances().unwrap();
-                    if balance.get("GOV").is_some() {
-                        *balance.get("GOV").unwrap()
+                    let token_id = bs58::encode((*GOV_ID).to_repr()).into_string();
+                    if balance.get(&token_id).is_some() {
+                        *balance.get(&token_id).unwrap()
                     } else {
                         error!("Balance is empty");
                         0
@@ -418,6 +419,7 @@ impl JsonRpcInterface {
             Ok(bulla) => match client.exec_proposal(bulla) {
                 Ok(_) => JsonResponse::new(json!("Proposal executed successfully."), id).into(),
                 Err(e) => {
+                    // Reject proposal instead of returning error?
                     error!("Failed executing proposal: {}", e);
                     return server_error(RpcError::Exec, id)
                 }

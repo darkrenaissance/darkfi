@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Instant};
 
-use darkfi_sdk::crypto::MerkleNode;
 use fxhash::FxHashMap;
+use group::ff::PrimeField;
 use incrementalmerkletree::{Position, Tree};
 use log::debug;
 use pasta_curves::{
@@ -25,6 +25,7 @@ use darkfi::{
     zkas::ZkBinary,
     Error, Result,
 };
+use darkfi_sdk::crypto::MerkleNode;
 
 mod contract;
 mod error;
@@ -315,7 +316,6 @@ impl Client {
         Ok(())
     }
 
-    // TODO: Change these into errors instead of expects.
     fn validate(&mut self, tx: &Transaction) -> DaoResult<()> {
         debug!(target: "dao_demo::client::validate()", "commencing validate sequence");
         let mut updates = vec![];
@@ -624,18 +624,13 @@ impl DaoWallet {
         Ok(())
     }
 
-    // TODO: Make this a HashMap<TokenID, u64>
-    // only parse it to a String in the cli.
     fn balances(&self) -> Result<FxHashMap<String, u64>> {
         let mut ret: FxHashMap<String, u64> = FxHashMap::default();
         for (coin, is_spent) in &self.own_coins {
             if *is_spent {}
-            if coin.note.token_id == *DRK_ID {
-                let id = "DRK".to_owned();
-                ret.insert(id, coin.note.value);
-            } else if coin.note.token_id == *GOV_ID {
-                let id = "GOV".to_owned();
-                ret.insert(id, coin.note.value);
+            if coin.note.token_id == *DRK_ID || coin.note.token_id == *GOV_ID {
+                let token_id = bs58::encode(coin.note.token_id.to_repr()).into_string();
+                ret.insert(token_id, coin.note.value);
             }
         }
         Ok(ret)
@@ -690,7 +685,6 @@ impl DaoWallet {
         &self.vote_notes
     }
 
-    // TODO: Explicit error handling.
     fn get_treasury_path(
         &self,
         own_coin: &OwnCoin,
@@ -889,18 +883,13 @@ impl MoneyWallet {
         Ok(())
     }
 
-    // TODO: Make this a HashMap<TokenID, u64>
-    // only parse it to a String in the cli.
     fn balances(&self) -> Result<FxHashMap<String, u64>> {
         let mut ret: FxHashMap<String, u64> = FxHashMap::default();
         for (coin, is_spent) in &self.own_coins {
             if *is_spent {}
-            if coin.note.token_id == *DRK_ID {
-                let id = "DRK".to_owned();
-                ret.insert(id, coin.note.value);
-            } else if coin.note.token_id == *GOV_ID {
-                let id = "GOV".to_owned();
-                ret.insert(id, coin.note.value);
+            if coin.note.token_id == *DRK_ID || coin.note.token_id == *GOV_ID {
+                let token_id = bs58::encode(coin.note.token_id.to_repr()).into_string();
+                ret.insert(token_id, coin.note.value);
             }
         }
         Ok(ret)
