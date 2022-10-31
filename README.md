@@ -5,6 +5,23 @@
 [![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-informational?logo=minutemailer&logoColor=white&style=flat-square)](https://dark.fi/manifesto.html)
 [![Book - mdbook](https://img.shields.io/badge/Book-mdbook-orange?logo=gitbook&logoColor=white&style=flat-square)](https://darkrenaissance.github.io/darkfi)
 
+## About DarkFi
+
+DarkFi is a new Layer 1 blockchain, designed with anonymity at the
+forefront. It offers flexible private primitives that can be wielded
+to create any kind of application. DarkFi aims to make anonymous
+engineering highly accessible to developers.
+
+DarkFi uses advances in zero-knowledge cryptography and includes a
+contracting language and developer toolkits to create uncensorable
+code.
+
+In the open air of a fully dark, anonymous system, cryptocurrency has
+the potential to birth new technological concepts centered around
+sovereignty. This can be a creative, regenerative space - the dawn of
+a Dark Renaissance.
+
+
 ## Connect to DarkFi IRC
 
 Follow the [installation instructions](https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html)
