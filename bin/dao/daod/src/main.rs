@@ -23,7 +23,7 @@ use darkfi::{
     rpc::server::listen_and_serve,
     zk::circuit::{BurnContract, MintContract},
     zkas::ZkBinary,
-    Result,
+    Error, Result,
 };
 
 mod contract;
@@ -248,7 +248,7 @@ impl Client {
 
         self.validate(&tx)?;
         // Only witness the value once the transaction is confirmed.
-        self.dao_wallet.update_witness(&mut self.states).unwrap();
+        self.dao_wallet.update_witness(&mut self.states)?;
 
         // Retrieve DAO bulla from the state.
         let dao_bulla = {
@@ -285,10 +285,13 @@ impl Client {
     ) -> DaoResult<()> {
         self.dao_wallet.track(&mut self.states)?;
 
-        let tx = self
-            .cashier_wallet
-            .mint(token_id, token_supply, self.dao_wallet.bullas[0].0, recipient, &self.zk_bins)
-            .unwrap();
+        let tx = self.cashier_wallet.mint(
+            token_id,
+            token_supply,
+            self.dao_wallet.bullas[0].0,
+            recipient,
+            &self.zk_bins,
+        )?;
 
         self.validate(&tx)?;
         self.update_wallets()?;
@@ -305,7 +308,7 @@ impl Client {
         // let wallet = self.money_wallets.get(&nym).unwrap();
         // let addr = wallet.get_public_key();
 
-        let tx = self.cashier_wallet.airdrop(value, token_id, addr, &self.zk_bins).unwrap();
+        let tx = self.cashier_wallet.airdrop(value, token_id, addr, &self.zk_bins)?;
         self.validate(&tx)?;
         self.update_wallets()?;
 
@@ -377,11 +380,10 @@ impl Client {
     }
 
     fn update_wallets(&mut self) -> DaoResult<()> {
-        let state = self.states.lookup_mut::<money::State>(*money::CONTRACT_ID);
-        if state.is_none() {
-            return Err(DaoError::StateNotFound)
-        }
-        let state = state.unwrap();
+        let state = self
+            .states
+            .lookup_mut::<money::State>(*money::CONTRACT_ID)
+            .ok_or(DaoError::StateNotFound)?;
 
         let dao_coins = state.wallet_cache.get_received(&self.dao_wallet.keypair.secret);
         for coin in dao_coins {
@@ -502,7 +504,7 @@ impl Client {
         self.validate(&tx)?;
         self.update_wallets()?;
 
-        self.dao_wallet.store_vote(&tx).unwrap();
+        self.dao_wallet.store_vote(&tx)?;
 
         Ok(())
     }
@@ -518,10 +520,13 @@ impl Client {
         }
         let dao_params = self.dao_wallet.params[0].clone();
 
-        let tx = self
-            .dao_wallet
-            .exec_tx(proposal, bulla, dao_params, &self.zk_bins, &mut self.states)
-            .unwrap();
+        let tx = self.dao_wallet.exec_tx(
+            proposal,
+            bulla,
+            dao_params,
+            &self.zk_bins,
+            &mut self.states,
+        )?;
 
         self.validate(&tx)?;
         self.update_wallets()?;
@@ -574,11 +579,10 @@ impl DaoWallet {
     }
 
     fn track(&self, states: &mut StateRegistry) -> DaoResult<()> {
-        let state = states.lookup_mut::<money::State>(*money::CONTRACT_ID);
-        if state.is_none() {
-            return Err(DaoError::StateNotFound)
-        }
-        let state = state.unwrap();
+        let state = states
+            .lookup_mut::<money::State>(*money::CONTRACT_ID)
+            .ok_or(DaoError::StateNotFound)?;
+
         state.wallet_cache.track(self.keypair.secret);
         Ok(())
     }
@@ -612,12 +616,10 @@ impl DaoWallet {
     }
 
     fn update_witness(&mut self, states: &mut StateRegistry) -> DaoResult<()> {
-        let state = states.lookup_mut::<dao::State>(*dao::CONTRACT_ID);
-        if state.is_none() {
-            return Err(DaoError::StateNotFound)
-        }
-        let state = state.unwrap();
-        let path = state.dao_tree.witness().unwrap();
+        let state =
+            states.lookup_mut::<dao::State>(*dao::CONTRACT_ID).ok_or(DaoError::StateNotFound)?;
+
+        let path = state.dao_tree.witness().ok_or(Error::Custom("Tree is empty".to_owned()))?;
         self.leaf_position = path;
         Ok(())
     }
@@ -646,8 +648,7 @@ impl DaoWallet {
             let call_data = call_data.downcast_ref::<dao::propose::validate::CallData>().unwrap();
 
             let header = &call_data.header;
-            let note: dao::propose::wallet::Note =
-                header.enc_note.decrypt(&self.keypair.secret).unwrap();
+            let note: dao::propose::wallet::Note = header.enc_note.decrypt(&self.keypair.secret)?;
 
             // Return the proposal info
             (note.proposal, call_data.header.proposal_bulla)
@@ -672,8 +673,7 @@ impl DaoWallet {
             let call_data = call_data.downcast_ref::<dao::vote::validate::CallData>().unwrap();
 
             let header = &call_data.header;
-            let note: dao::vote::wallet::Note =
-                header.enc_note.decrypt(&self.keypair.secret).unwrap();
+            let note: dao::vote::wallet::Note = header.enc_note.decrypt(&self.keypair.secret)?;
             note
         };
 
@@ -695,13 +695,21 @@ impl DaoWallet {
         &self,
         own_coin: &OwnCoin,
         states: &StateRegistry,
-    ) -> Result<(Position, Vec<MerkleNode>)> {
+    ) -> DaoResult<(Position, Vec<MerkleNode>)> {
         let (money_leaf_position, money_merkle_path) = {
-            let state = states.lookup::<money::State>(*money::CONTRACT_ID).unwrap();
+            let state = states
+                .lookup::<money::State>(*money::CONTRACT_ID)
+                .ok_or(DaoError::StateNotFound)?;
+
             let tree = &state.tree;
             let leaf_position = own_coin.leaf_position.clone();
-            let root = tree.root(0).unwrap();
-            let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+            let root = tree.root(0).ok_or(Error::Custom(
+                "Not enough checkpoints available to reach the requested checkpoint depth."
+                    .to_owned(),
+            ))?;
+            let merkle_path = tree
+                .authentication_path(leaf_position, &root)
+                .ok_or(Error::Custom("No available authentication path to that position or if the root does not correspond to a checkpointed root of the tree".to_owned()))?;
             (leaf_position, merkle_path)
         };
 
@@ -715,7 +723,7 @@ impl DaoWallet {
         dao_params: DaoParams,
         zk_bins: &ZkContractTable,
         states: &mut StateRegistry,
-    ) -> Result<Transaction> {
+    ) -> DaoResult<Transaction> {
         let dao_bulla = self.bullas[0].clone();
 
         let mut inputs = Vec::new();
@@ -788,7 +796,7 @@ impl DaoWallet {
             }
         };
 
-        let transfer_func_call = builder.build(zk_bins).unwrap();
+        let transfer_func_call = builder.build(zk_bins)?;
 
         let mut yes_votes_value = 0;
         let mut yes_votes_blind = pallas::Scalar::from(0);
@@ -873,11 +881,10 @@ impl MoneyWallet {
     // }
 
     fn track(&self, states: &mut StateRegistry) -> DaoResult<()> {
-        let state = states.lookup_mut::<money::State>(*money::CONTRACT_ID);
-        if state.is_none() {
-            return Err(DaoError::StateNotFound)
-        }
-        let state = state.unwrap();
+        let state = states
+            .lookup_mut::<money::State>(*money::CONTRACT_ID)
+            .ok_or(DaoError::StateNotFound)?;
+
         state.wallet_cache.track(self.keypair.secret);
         Ok(())
     }
@@ -908,7 +915,7 @@ impl MoneyWallet {
         dao_leaf_position: Position,
         zk_bins: &ZkContractTable,
         states: &mut StateRegistry,
-    ) -> Result<Transaction> {
+    ) -> DaoResult<Transaction> {
         let mut inputs = Vec::new();
 
         for (coin, is_spent) in &self.own_coins {
@@ -931,10 +938,18 @@ impl MoneyWallet {
         }
 
         let (dao_merkle_path, dao_merkle_root) = {
-            let state = states.lookup::<dao::State>(*dao::CONTRACT_ID).unwrap();
+            let state =
+                states.lookup::<dao::State>(*dao::CONTRACT_ID).ok_or(DaoError::StateNotFound)?;
             let tree = &state.dao_tree;
-            let root = tree.root(0).unwrap();
-            let merkle_path = tree.authentication_path(dao_leaf_position, &root).unwrap();
+            let root = tree.root(0).ok_or(Error::Custom(
+                "Not enough checkpoints available to reach the requested checkpoint depth."
+                    .to_owned(),
+            ))?;
+            let merkle_path = tree.authentication_path(dao_leaf_position, &root)
+            .ok_or(Error::Custom(
+                "No available authentication path to that position or if the root does not correspond to a checkpointed root of the tree"
+                .to_owned()
+            ))?;
             (merkle_path, root)
         };
 
@@ -968,13 +983,22 @@ impl MoneyWallet {
         &self,
         states: &StateRegistry,
         own_coin: &OwnCoin,
-    ) -> Result<(Position, Vec<MerkleNode>)> {
+    ) -> DaoResult<(Position, Vec<MerkleNode>)> {
         let (money_leaf_position, money_merkle_path) = {
-            let state = states.lookup::<money::State>(*money::CONTRACT_ID).unwrap();
+            let state = states
+                .lookup::<money::State>(*money::CONTRACT_ID)
+                .ok_or(DaoError::StateNotFound)?;
+
             let tree = &state.tree;
             let leaf_position = own_coin.leaf_position.clone();
-            let root = tree.root(0).unwrap();
-            let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+            let root = tree.root(0).ok_or(Error::Custom(
+                "Not enough checkpoints available to reach the requested checkpoint depth."
+                    .to_owned(),
+            ))?;
+            let merkle_path = tree.authentication_path(leaf_position, &root).ok_or(Error::Custom(
+                "No available authentication path to that position or the root does not correspond to a checkpointed root of the tree"
+                .to_owned()
+            ))?;
             (leaf_position, merkle_path)
         };
 
@@ -1032,13 +1056,13 @@ impl MoneyWallet {
 }
 
 async fn start_rpc(client: Client) -> Result<()> {
-    let rpc_addr = Url::parse("tcp://127.0.0.1:7777").unwrap();
+    let rpc_addr = Url::parse("tcp://127.0.0.1:7777")?;
 
     let rpc_client = JsonRpcInterface::new(client);
 
     let rpc_interface = Arc::new(rpc_client);
 
-    listen_and_serve(rpc_addr, rpc_interface).await.unwrap();
+    listen_and_serve(rpc_addr, rpc_interface).await?;
     Ok(())
 }
 
@@ -1073,8 +1097,7 @@ impl CashierWallet {
         let user_data = dao_bulla;
         let value = token_supply;
 
-        let tx =
-            self.transfer_tx(value, token_id, spend_hook, user_data, recipient, zk_bins).unwrap();
+        let tx = self.transfer_tx(value, token_id, spend_hook, user_data, recipient, zk_bins)?;
 
         Ok(tx)
     }
@@ -1107,7 +1130,7 @@ impl CashierWallet {
                 }],
             }
         };
-        let func_call = builder.build(zk_bins).unwrap();
+        let func_call = builder.build(zk_bins)?;
         let func_calls = vec![func_call];
 
         let signatures = sign(vec![self.signature_secret], &func_calls);
@@ -1125,8 +1148,7 @@ impl CashierWallet {
         let spend_hook = DrkSpendHook::from(0);
         let user_data = DrkUserData::from(0);
 
-        let tx =
-            self.transfer_tx(value, token_id, spend_hook, user_data, recipient, zk_bins).unwrap();
+        let tx = self.transfer_tx(value, token_id, spend_hook, user_data, recipient, zk_bins)?;
 
         Ok(tx)
     }
@@ -1139,13 +1161,12 @@ async fn main() -> Result<()> {
         simplelog::Config::default(),
         TerminalMode::Mixed,
         ColorChoice::Auto,
-    )
-    .unwrap();
+    )?;
 
     let mut client = Client::new();
     client.init()?;
 
-    start_rpc(client).await.unwrap();
+    start_rpc(client).await?;
 
     Ok(())
 }
