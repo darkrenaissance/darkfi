@@ -2,7 +2,7 @@
 name = "dao"
 version = "0.3.0"
 edition = "2021"
-authors = ["darkfi <dev@dark.fi>"]
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
 license = "AGPL-3.0-only"
 
 [dependencies]

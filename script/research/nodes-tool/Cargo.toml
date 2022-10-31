@@ -1,7 +1,7 @@
 [package]
 name = "nodes-tool"
 version = "0.3.0"
-authors = ["darkfi <dev@dark.fi>"]
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
 license = "AGPL-3.0-only"
 edition = "2021"
 
