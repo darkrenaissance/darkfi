@@ -77,6 +77,8 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         a: Column<Advice>,
         b: Column<Advice>,
         a_offset: Column<Advice>,
+        z1: Column<Advice>,
+        z2: Column<Advice>,
         k_values_table: TableColumn,
     ) -> LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS> {
         let s_lt = meta.selector();
@@ -84,20 +86,21 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         meta.enable_equality(a);
         meta.enable_equality(b);
         meta.enable_equality(a_offset);
+        meta.enable_equality(z1);
+        meta.enable_equality(z2);
 
         // configure range check for `a` and `offset`
-        let z = meta.advice_column();
         let range_a_config =
             NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::configure(
                 meta,
-                z,
+                z1,
                 k_values_table,
             );
-        let z = meta.advice_column();
+
         let range_a_offset_config =
             NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::configure(
                 meta,
-                z,
+                z2,
                 k_values_table,
             );
 
@@ -277,6 +280,8 @@ mod tests {
                     let a = meta.advice_column();
                     let b = meta.advice_column();
                     let a_offset = meta.advice_column();
+                    let z1 = meta.advice_column();
+                    let z2 = meta.advice_column();
 
                     let k_values_table = meta.lookup_table_column();
 
@@ -289,6 +294,8 @@ mod tests {
                             a,
                             b,
                             a_offset,
+                            z1,
+                            z2,
                             k_values_table,
                         ),
                         w,

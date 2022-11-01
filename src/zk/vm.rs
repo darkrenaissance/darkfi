@@ -243,11 +243,18 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let k_values_table_253 = meta.lookup_table_column();
         let native_253_range_check_config =
             NativeRangeCheckChip::<3, 253, 85>::configure(meta, advices[8], k_values_table_253);
+
+        // TODO: FIXME: Configure these better, this is just a stop-gap
+        let z1 = meta.advice_column();
+        let z2 = meta.advice_column();
+
         let lessthan_config = LessThanChip::<3, 253, 85>::configure(
             meta,
             advices[6],
             advices[7],
             advices[8],
+            z1,
+            z2,
             k_values_table_253,
         );
 

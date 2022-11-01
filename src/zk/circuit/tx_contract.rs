@@ -257,11 +257,17 @@ impl Circuit<pallas::Base> for TxContract {
             let constants = meta.fixed_column();
             meta.enable_constant(constants);
 
+            // TODO: FIXME: Configure these better, this is just a stop-gap
+            let z1 = meta.advice_column();
+            let z2 = meta.advice_column();
+
             LessThanChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::configure(
                 meta,
                 a,
                 b,
                 a_offset,
+                z1,
+                z2,
                 k_values_table,
             )
         };
@@ -582,7 +588,7 @@ impl Circuit<pallas::Base> for TxContract {
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), coin3_blind)?
         };
         let coin3_commit = com2.add(layouter.namespace(|| "nonce commit"), &blind)?;
-        coin3_commit.constrain_equal(layouter.namespace(|| ""), &ref_coin3_cm);
+        coin3_commit.constrain_equal(layouter.namespace(|| ""), &ref_coin3_cm)?;
 
         // ========
         // coin4 cm
@@ -623,7 +629,7 @@ impl Circuit<pallas::Base> for TxContract {
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), coin4_blind)?
         };
         let coin4_commit = com2.add(layouter.namespace(|| " commit"), &blind)?;
-        coin4_commit.constrain_equal(layouter.namespace(|| ""), &ref_coin4_cm);
+        coin4_commit.constrain_equal(layouter.namespace(|| ""), &ref_coin4_cm)?;
 
         let v1pv2: AssignedCell<Fp, Fp> =
             ar_chip.add(layouter.namespace(|| ""), &coin1_value, &coin2_value)?;
@@ -780,7 +786,7 @@ impl Circuit<pallas::Base> for TxContract {
                 region.constrain_equal(coin1_sn_commit.cell(), coin1_sn.cell())?;
                 region.constrain_equal(coin2_sn_commit.cell(), coin2_sn.cell())
             },
-        );
+        )?;
         Ok(())
     }
 }

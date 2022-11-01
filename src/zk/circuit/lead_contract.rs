@@ -44,17 +44,15 @@ use halo2_gadgets::{
 };
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
+    pasta::{group::Curve, pallas, Fp},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance as InstanceColumn},
 };
-use pasta_curves::{pallas, Fp};
 
 use crate::zk::gadget::{
     arithmetic::{ArithChip, ArithConfig, ArithInstruction},
     less_than::{LessThanChip, LessThanConfig},
     native_range_check::NativeRangeCheckChip,
 };
-
-use pasta_curves::group::Curve;
 
 const WINDOW_SIZE: usize = 3;
 const NUM_OF_BITS: usize = 254;
@@ -75,7 +73,6 @@ pub struct LeadConfig {
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
 
     lessthan_config: LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>,
-
     arith_config: ArithConfig,
 }
 
@@ -261,6 +258,9 @@ impl Circuit<pallas::Base> for LeadContract {
             let b = meta.advice_column();
             let a_offset = meta.advice_column();
 
+            let z1 = meta.advice_column();
+            let z2 = meta.advice_column();
+
             let constants = meta.fixed_column();
             meta.enable_constant(constants);
 
@@ -269,6 +269,8 @@ impl Circuit<pallas::Base> for LeadContract {
                 a,
                 b,
                 a_offset,
+                z1,
+                z2,
                 k_values_table,
             )
         };
@@ -692,7 +694,7 @@ impl Circuit<pallas::Base> for LeadContract {
                 region.constrain_equal(sn_commit.cell(), coin1_sn.cell())?;
                 region.constrain_equal(coin_cm_root.cell(), root_cm.cell())
             },
-        );
+        )?;
 
         Ok(())
     }

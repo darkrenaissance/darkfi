@@ -67,13 +67,8 @@ pub fn fbig2base(f: Float10) -> pallas::Base {
 #[cfg(test)]
 mod tests {
     use dashu::integer::IBig;
-    use pasta_curves::pallas;
 
-    use crate::consensus::{
-        types::Float10,
-        utils::{fbig2base, fbig2ibig},
-        RADIX_BITS,
-    };
+    use crate::consensus::{types::Float10, utils::fbig2ibig, RADIX_BITS};
 
     #[test]
     fn dashu_fbig2ibig() {
