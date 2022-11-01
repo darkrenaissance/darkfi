@@ -30,7 +30,7 @@ use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info, warn};
-use pasta_curves::pallas;
+use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::rngs::OsRng;
 
 use super::{
@@ -337,8 +337,7 @@ impl ValidatorState {
         if epoch <= self.consensus.epoch {
             return Ok(false)
         }
-        // TODO: Retrieve previous lead proof
-        let eta = pallas::Base::one();
+        let eta = self.get_eta();
         // Retrieving nodes wallet coins
         let owned = self.client.get_own_coins().await?;
         // TODO: slot parameter should be absolute slot, not relative.
@@ -372,8 +371,7 @@ impl ValidatorState {
             Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
         let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
-        // TODO: Retrieve previous lead proof
-        let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
+        let eta = self.get_eta().to_repr();
         // Generating leader proof
         let coin = self.consensus.coins[self.relative_slot(slot) as usize][idx];
         let proof = lead_proof::create_lead_proof(&self.proving_key, coin)?;
@@ -679,6 +677,17 @@ impl ValidatorState {
         // TODO: [PLACEHOLDER] don't blintly trust the public inputs/validate them
         self.consensus.participants.insert(participant.address, participant);
         true
+    }
+
+    /// Utility function to extract leader selection lottery randomness(eta),
+    /// defined as the hash of the previous lead proof converted to pallas base.
+    fn get_eta(&self) -> pallas::Base {
+        let proof_tx_hash = self.blockchain.get_last_proof_hash().unwrap();
+        let mut bytes: [u8; 32] = *proof_tx_hash.as_bytes();
+        // read first 254 bits
+        bytes[30] = 0;
+        bytes[31] = 0;
+        pallas::Base::from_repr(bytes).unwrap()
     }
 
     // ==========================
