@@ -461,6 +461,12 @@ impl ValidatorState {
             None => return Ok(None),
         }
 
+        // Check if proposal extends any existing fork chains
+        let index = self.find_extended_chain_index(&proposal)?;
+        if index == -2 {
+            return Err(Error::ExtendedChainIndexNotFoundError)
+        }
+
         let leader = self.consensus.participants.get(&proposal.block.metadata.address);
         if leader.is_none() {
             warn!(
@@ -513,11 +519,6 @@ impl ValidatorState {
 
         // TODO: [PLACEHOLDER] Add rewards validation
 
-        let index = self.find_extended_chain_index(&proposal)?;
-        if index == -2 {
-            return Ok(None)
-        }
-
         let mut to_broadcast = vec![];
         match index {
             -1 => {
@@ -554,21 +555,15 @@ impl ValidatorState {
             }
 
             if proposal.block.header.previous == last.block.header.previous &&
-                proposal.block.header.slot == last.block.header.slot
-            {
-                debug!("find_extended_chain_index(): Proposal already received");
-                return Ok(-2)
-            }
-
-            if proposal.block.header.previous == last.block.header.previous &&
                 proposal.block.header.slot > last.block.header.slot
             {
                 fork = Some(chain.clone());
+                break
             }
         }
 
         if let Some(mut chain) = fork {
-            debug!("Proposal to fork a forkchain was received.");
+            debug!("find_extended_chain_index(): Proposal to fork a forkchain was received.");
             chain.proposals.pop(); // removing last block to create the fork
             if !chain.proposals.is_empty() {
                 // if len is 0 we will verify against blockchain last block
@@ -587,20 +582,17 @@ impl ValidatorState {
     }
 
     /// Search the chains we're holding for the given proposal.
-    pub fn find_proposal(
-        &mut self,
-        input_proposal: &blake3::Hash,
-    ) -> Result<Option<(&mut BlockProposal, i64)>> {
-        for (index, chain) in &mut self.consensus.proposals.iter_mut().enumerate() {
-            for proposal in chain.proposals.iter_mut().rev() {
+    pub fn proposal_exists(&self, input_proposal: &blake3::Hash) -> bool {
+        for chain in self.consensus.proposals.iter() {
+            for proposal in chain.proposals.iter() {
                 let proposal_hash = proposal.block.header.headerhash();
                 if input_proposal == &proposal_hash {
-                    return Ok(Some((proposal, index as i64)))
+                    return true
                 }
             }
         }
 
-        Ok(None)
+        false
     }
 
     /// Remove provided transactions vector from unconfirmed_txs if they exist.

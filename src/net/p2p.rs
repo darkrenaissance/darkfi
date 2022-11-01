@@ -491,9 +491,10 @@ impl P2p {
         *self.discovery.lock().await = false;
     }
 
-    /// Retrieves a random connected channel
+    /// Retrieves a random connected channel, exluding seeds
     pub async fn random_channel(self: Arc<Self>) -> Option<Arc<Channel>> {
-        let channels_map = self.channels().lock().await;
+        let mut channels_map = self.channels().lock().await.clone();
+        channels_map.retain(|c, _| !self.settings.seeds.contains(&c));
         let mut values = channels_map.values();
 
         if values.len() == 0 {

@@ -226,6 +226,9 @@ pub enum Error {
     #[error("State transition failed")]
     StateTransitionError,
 
+    #[error("Check if proposal extends any existing fork chains failed")]
+    ExtendedChainIndexNotFoundError,
+
     // ===============
     // Database errors
     // ===============

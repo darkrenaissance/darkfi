@@ -116,24 +116,42 @@ const LEAD_Y_COMMIT_BASE_OFFSET: usize = 3;
 
 #[derive(Default, Debug)]
 pub struct LeadContract {
-    pub path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, /// path of coin1 commitment
-    pub sk: Value<pallas::Base>, /// coin secret key
-    pub root_sk: Value<pallas::Base>, /// root to secret key
-    pub path_sk: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>, /// path to the secret key rooted by `root_sk`
-    pub coin_timestamp: Value<pallas::Base>, /// $\tau$ or coin index
-    pub coin_nonce: Value<pallas::Base>, /// coin nonce $\rho_{c1}$
-    pub coin1_blind: Value<pallas::Scalar>, /// coin blind r
-    pub coin1_sn: Value<pallas::Base>, /// coin serial number
-    pub value: Value<pallas::Base>, /// coin value
-    pub coin2_blind: Value<pallas::Scalar>, /// coin2 blind r2
-    pub coin2_commit: Value<pallas::Point>, /// coin2 commitment
-    pub cm_pos: Value<u32>, /// coin position in the merkle tree
-    pub slot: Value<pallas::Base>, /// slot index
-    pub mau_rho: Value<pallas::Scalar>, /// random value derived from eta used for constraining \rho
-    pub mau_y: Value<pallas::Scalar>, /// random value derived from eta used for calculating y
-    pub root_cm: Value<pallas::Base>, /// root to commitment in the mekle tree
-    pub sigma1: Value<pallas::Base>, /// first coefficient in 1-term T (target function) approximation
-    pub sigma2: Value<pallas::Base>, /// second coefficient in 2-term T (target function) approximation
+    pub path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
+    /// path of coin1 commitment
+    pub sk: Value<pallas::Base>,
+    /// coin secret key
+    pub root_sk: Value<pallas::Base>,
+    /// root to secret key
+    pub path_sk: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
+    /// path to the secret key rooted by `root_sk`
+    pub coin_timestamp: Value<pallas::Base>,
+    /// $\tau$ or coin index
+    pub coin_nonce: Value<pallas::Base>,
+    /// coin nonce $\rho_{c1}$
+    pub coin1_blind: Value<pallas::Scalar>,
+    /// coin blind r
+    pub coin1_sn: Value<pallas::Base>,
+    /// coin serial number
+    pub value: Value<pallas::Base>,
+    /// coin value
+    pub coin2_blind: Value<pallas::Scalar>,
+    /// coin2 blind r2
+    pub coin2_commit: Value<pallas::Point>,
+    /// coin2 commitment
+    pub cm_pos: Value<u32>,
+    /// coin position in the merkle tree
+    pub slot: Value<pallas::Base>,
+    /// slot index
+    pub mau_rho: Value<pallas::Scalar>,
+    /// random value derived from eta used for constraining \rho
+    pub mau_y: Value<pallas::Scalar>,
+    /// random value derived from eta used for calculating y
+    pub root_cm: Value<pallas::Base>,
+    /// root to commitment in the mekle tree
+    pub sigma1: Value<pallas::Base>,
+    /// first coefficient in 1-term T (target function) approximation
+    pub sigma2: Value<pallas::Base>,
+    /// second coefficient in 2-term T (target function) approximation
     /// constrained nonce $\rho$
     pub rho: Value<pallas::Point>,
     //pub eta : Option<u32>,
