@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_serial::serialize;
 use log::debug;
 
 use crate::{
@@ -26,9 +27,6 @@ use crate::{
 
 pub mod blockstore;
 pub use blockstore::{BlockOrderStore, BlockStore, HeaderStore};
-
-pub mod metadatastore;
-pub use metadatastore::MetadataStore;
 
 pub mod nfstore;
 pub use nfstore::NullifierStore;
@@ -52,8 +50,6 @@ pub struct Blockchain {
     pub order: BlockOrderStore,
     /// Transactions sled tree
     pub transactions: TxStore,
-    /// Metadata sled tree
-    pub metadata: MetadataStore,
     /// Nullifiers sled tree
     pub nullifiers: NullifierStore,
     /// Merkle roots sled tree
@@ -68,12 +64,11 @@ impl Blockchain {
         let headers = HeaderStore::new(db, genesis_ts, genesis_data)?;
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
-        let metadata = MetadataStore::new(db, genesis_ts, genesis_data)?;
         let transactions = TxStore::new(db)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
 
-        Ok(Self { headers, blocks, order, transactions, metadata, nullifiers, merkle_roots })
+        Ok(Self { headers, blocks, order, transactions, nullifiers, merkle_roots })
     }
 
     /// Insert a given slice of [`BlockInfo`] into the blockchain database.
@@ -100,9 +95,6 @@ impl Blockchain {
 
             // Store block order
             self.order.insert(&[block.header.slot], &[headerhash[0]])?;
-
-            // Store ouroboros metadata
-            self.metadata.insert(&[headerhash[0]], &[block.metadata.clone()])?;
 
             // NOTE: The nullifiers and Merkle roots are applied in the state
             // transition apply function.
@@ -170,8 +162,11 @@ impl Blockchain {
         self.order.get_last()
     }
 
+    /// Retrieve last finalized block leader proof hash.
     pub fn get_last_proof_hash(&self) -> Result<blake3::Hash> {
-        let (hash, _) = self.metadata.get_last().unwrap();
+        let (slot, _) = self.last().unwrap();
+        let block = &self.get_blocks_by_slot(&vec![slot]).unwrap()[0];
+        let hash = blake3::hash(&serialize(&block.metadata.proof));
         Ok(hash)
     }
 }
