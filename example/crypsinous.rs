@@ -179,7 +179,7 @@ async fn start(args: NetCli, ex: Arc<Executor<'_>>) -> Result<()> {
     let epoch_consensus = EpochConsensus::new(Some(slots), Some(epochs), Some(ticks), Some(reward));
 
     //proof's number of rows
-    let k: u32 = 13;
+    let k: u32 = 11;
     let path = args.path.clone();
     let id = Timestamp::current_time().0;
 

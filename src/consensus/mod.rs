@@ -92,7 +92,7 @@ lazy_static! {
     pub static ref DELTA: u64 = 20;
 
     /// Leader proof rows number
-    pub static ref LEADER_PROOF_K: u32 = 13;
+    pub static ref LEADER_PROOF_K: u32 = 11;
 
     // TODO: Describe constants meaning in comment
     pub static ref RADIX_BITS: usize = 76;

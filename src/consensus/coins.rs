@@ -221,6 +221,7 @@ fn create_leadcoin(
     //random commitment blinding values
     let mut rng = thread_rng();
     let one = pallas::Base::one();
+    let zero = pallas::Base::zero();
     let c_cm1_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
     let c_cm2_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
 
@@ -240,9 +241,9 @@ fn create_leadcoin(
     let c_pk_y = c_pk_coord.y();
 
     let c_seed = pallas::Base::from(seed);
-    let sn_msg = [c_seed, c_root_sk.inner()];
+    let sn_msg = [c_seed, c_root_sk.inner(), zero.clone(), one.clone()];
     let c_sn: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init()
             .hash(sn_msg);
 
     let coin_commit_msg_input =
@@ -252,7 +253,9 @@ fn create_leadcoin(
             .hash(coin_commit_msg_input);
     let c_cm: pallas::Point = pedersen_commitment_base(coin_commit_msg, c_cm1_blind);
     let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
-    let c_cm_base: pallas::Base = c_cm_coordinates.x() * c_cm_coordinates.y();
+    let c_cm_msg = [*c_cm_coordinates.x(), *c_cm_coordinates.y()];
+    let c_cm_base: pallas::Base =
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(c_cm_msg);
     let c_cm_node = MerkleNode::from(c_cm_base);
     tree_cm.append(&c_cm_node.clone());
     let leaf_position = tree_cm.witness();
@@ -274,9 +277,9 @@ fn create_leadcoin(
     };
     */
 
-    let coin_nonce2_msg = [c_seed, c_root_sk.inner()];
+    let coin_nonce2_msg = [c_seed, c_root_sk.inner(), one.clone(), one.clone()];
     let c_seed2: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init()
             .hash(coin_nonce2_msg);
 
     let coin2_commit_msg_input =

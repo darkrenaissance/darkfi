@@ -96,23 +96,21 @@ impl LeadCoin {
         //
         let rho_pt: pallas::Point = pedersen_commitment_base(lottery_msg, mod_r_p(rho_mu));
         LeadContract {
-            path: Value::known(self.path.unwrap()),
-            sk: Value::known(self.keypair.unwrap().secret.inner()),
-            root_sk: Value::known(self.root_sk.unwrap()),
-            path_sk: Value::known(self.path_sk.unwrap()),
-            coin_timestamp: Value::known(self.tau.unwrap()), //
-            coin_nonce: Value::known(self.nonce.unwrap()),
+            coin1_commit_merkle_path: Value::known(self.path.unwrap()),
+            coin1_commit_root: Value::known(self.root_cm.unwrap()),
+            coin1_commit_leaf_pos: Value::known(self.idx),
+            coin1_sk: Value::known(self.keypair.unwrap().secret.inner()),
+            coin1_sk_root: Value::known(self.root_sk.unwrap()),
+            coin1_sk_merkle_path: Value::known(self.path_sk.unwrap()),
+            coin1_timestamp: Value::known(self.tau.unwrap()), //
+            coin1_nonce: Value::known(self.nonce.unwrap()),
             coin1_blind: Value::known(self.c1_blind.unwrap()),
-            coin1_sn: Value::known(self.sn.unwrap()),
-            value: Value::known(pallas::Base::from(self.value.unwrap())),
+            coin1_serial: Value::known(self.sn.unwrap()),
+            coin1_value: Value::known(pallas::Base::from(self.value.unwrap())),
             coin2_blind: Value::known(self.c2_blind.unwrap()),
             coin2_commit: Value::known(self.cm2.unwrap()),
-            cm_pos: Value::known(self.idx),
-            //sn_c1: Value::known(self.sn.unwrap()),
-            slot: Value::known(self.sl.unwrap()),
             mau_rho: Value::known(mod_r_p(self.rho_mu.unwrap())),
             mau_y: Value::known(mod_r_p(self.y_mu.unwrap())),
-            root_cm: Value::known(self.root_cm.unwrap()),
             sigma1: Value::known(self.sigma1.unwrap()),
             sigma2: Value::known(self.sigma2.unwrap()),
             rho: Value::known(rho_pt),
