@@ -17,7 +17,7 @@
  */
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     sync::{Arc, Mutex},
 };
 
@@ -34,21 +34,36 @@ use wasmer_middlewares::{
 };
 
 use super::{
-    chain_state::{is_valid_merkle, nullifier_exists},
+    chain_state::{set_update, is_valid_merkle, nullifier_exists},
     memory::MemoryManipulation,
     util::drk_log,
 };
-use crate::{Error, Result};
+use crate::{crypto::contract_id::ContractId, Error, Result};
 
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
+/// Hardcoded setup function of a contract
+pub const INITIALIZE: &str = "__initialize";
 /// Hardcoded entrypoint function of a contract
-pub const ENTRYPOINT: &str = "entrypoint";
+pub const ENTRYPOINT: &str = "__entrypoint";
+/// Hardcoded apply function of a contract
+pub const UPDATE: &str = "__update";
 /// Gas limit for a contract
 const GAS_LIMIT: u64 = 200000;
 
+pub enum ContractSection {
+    Null,
+    Deploy,
+    Exec,
+    Update,
+}
+
 /// The wasm vm runtime instantiated for every smart contract that runs.
 pub struct Env {
+    pub contract_id: ContractId,
+    pub contract_section: ContractSection,
+    pub contract_update: Cell<Option<(u8, Vec<u8>)>>,
+    //pub func_id:
     /// Logs produced by the contract
     pub logs: RefCell<Vec<String>>,
     /// Direct memory access to the VM
@@ -73,14 +88,6 @@ impl Env {
     }
 }
 
-/// The result of the VM execution
-pub struct ExecutionResult {
-    /// The exit code returned by the wasm program
-    pub exitcode: u8,
-    /// Logs written from the wasm program
-    pub logs: Vec<String>,
-}
-
 pub struct Runtime {
     pub instance: Instance,
     pub store: Store,
@@ -89,7 +96,7 @@ pub struct Runtime {
 
 impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
-    pub fn new(wasm_bytes: &[u8]) -> Result<Self> {
+    pub fn new(wasm_bytes: &[u8], contract_id: ContractId) -> Result<Self> {
         info!(target: "warm_runtime::new", "Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
         // the wasm module execution. It should return the cost of the operator
@@ -121,7 +128,16 @@ impl Runtime {
         debug!(target: "wasm_runtime::new", "Importing functions");
         let logs = RefCell::new(vec![]);
 
-        let ctx = FunctionEnv::new(&mut store, Env { logs, memory: None });
+        let ctx = FunctionEnv::new(
+            &mut store,
+            Env {
+                contract_id,
+                contract_section: ContractSection::Null,
+                contract_update: Cell::new(None),
+                logs,
+                memory: None,
+            },
+        );
 
         let imports = imports! {
             "env" => {
@@ -142,6 +158,12 @@ impl Runtime {
                     &ctx,
                     is_valid_merkle,
                 ),
+
+                "set_update_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    set_update,
+                ),
             }
         };
 
@@ -154,8 +176,47 @@ impl Runtime {
         Ok(Self { instance, store, ctx })
     }
 
+    pub fn deploy(&mut self) -> Result<()> {
+        let mut env_mut = self.ctx.as_mut(&mut self.store);
+        env_mut.contract_section = ContractSection::Deploy;
+
+        debug!(target: "wasm_runtime::run", "Getting initialize function");
+        let entrypoint = self.instance.exports.get_function(INITIALIZE)?;
+
+        debug!(target: "wasm_runtime::run", "Executing wasm");
+        let ret = match entrypoint.call(&mut self.store, &[]) {
+            Ok(retvals) => {
+                self.print_logs();
+                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                retvals
+            }
+            Err(e) => {
+                self.print_logs();
+                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                // WasmerRuntimeError panics are handled here. Return from run() immediately.
+                return Err(e.into())
+            }
+        };
+
+        debug!(target: "wasm_runtime::run", "wasm executed successfully");
+        debug!(target: "wasm_runtime::run", "Contract returned: {:?}", ret[0]);
+
+        let retval = match ret[0] {
+            Value::I64(v) => v as u64,
+            _ => unreachable!(),
+        };
+
+        match retval {
+            entrypoint::SUCCESS => Ok(()),
+            _ => Err(Error::ContractInitError(retval)),
+        }
+    }
+
     /// Run the hardcoded `ENTRYPOINT` function with the given payload as input.
-    pub fn run(&mut self, payload: &[u8]) -> Result<()> {
+    pub fn exec(&mut self, payload: &[u8]) -> Result<()> {
+        let mut env_mut = self.ctx.as_mut(&mut self.store);
+        env_mut.contract_section = ContractSection::Exec;
+
         let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
         self.set_memory_page_size(pages_required as u32)?;
 
@@ -191,6 +252,42 @@ impl Runtime {
         match retval {
             entrypoint::SUCCESS => Ok(()),
             _ => Err(Error::ContractExecError(retval)),
+        }
+    }
+
+    pub fn apply(&mut self) -> Result<()> {
+        let mut env_mut = self.ctx.as_mut(&mut self.store);
+        env_mut.contract_section = ContractSection::Update;
+
+        debug!(target: "wasm_runtime::run", "Getting initialize function");
+        let entrypoint = self.instance.exports.get_function(INITIALIZE)?;
+
+        debug!(target: "wasm_runtime::run", "Executing wasm");
+        let ret = match entrypoint.call(&mut self.store, &[]) {
+            Ok(retvals) => {
+                self.print_logs();
+                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                retvals
+            }
+            Err(e) => {
+                self.print_logs();
+                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                // WasmerRuntimeError panics are handled here. Return from run() immediately.
+                return Err(e.into())
+            }
+        };
+
+        debug!(target: "wasm_runtime::run", "wasm executed successfully");
+        debug!(target: "wasm_runtime::run", "Contract returned: {:?}", ret[0]);
+
+        let retval = match ret[0] {
+            Value::I64(v) => v as u64,
+            _ => unreachable!(),
+        };
+
+        match retval {
+            entrypoint::SUCCESS => Ok(()),
+            _ => Err(Error::ContractInitError(retval)),
         }
     }
 

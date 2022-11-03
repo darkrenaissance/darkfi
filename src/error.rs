@@ -295,6 +295,10 @@ pub enum Error {
     WasmerOomError(String),
 
     #[cfg(feature = "wasm-runtime")]
+    #[error("contract initialize error")]
+    ContractInitError(u64),
+
+    #[cfg(feature = "wasm-runtime")]
     #[error("contract execution error")]
     ContractExecError(u64),
 
@@ -590,4 +594,3 @@ impl From<wasmer::MemoryError> for Error {
         Self::WasmerOomError(err.to_string())
     }
 }
-

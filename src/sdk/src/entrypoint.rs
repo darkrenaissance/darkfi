@@ -21,6 +21,20 @@ use std::{mem::size_of, slice::from_raw_parts};
 /// Success exit code for a contract
 pub const SUCCESS: u64 = 0;
 
+#[macro_export]
+macro_rules! initialize {
+    ($process_init:ident) => {
+        /// # Safety
+        #[no_mangle]
+        pub unsafe extern "C" fn __initialize() -> u64 {
+            match $process_init() {
+                Ok(()) => $crate::entrypoint::SUCCESS,
+                Err(e) => e.into(),
+            }
+        }
+    };
+}
+
 /// This macro is used to flag the contract entrypoint function.
 /// All contracts must provide such a function and accept a payload.
 ///
@@ -31,10 +45,24 @@ macro_rules! entrypoint {
     ($process_instruction:ident) => {
         /// # Safety
         #[no_mangle]
-        pub unsafe extern "C" fn entrypoint(input: *mut u8) -> u64 {
+        pub unsafe extern "C" fn __entrypoint(input: *mut u8) -> u64 {
             let instruction_data = $crate::entrypoint::deserialize(input);
 
             match $process_instruction(&instruction_data) {
+                Ok(()) => $crate::entrypoint::SUCCESS,
+                Err(e) => e.into(),
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! update_state {
+    ($process_update:ident) => {
+        /// # Safety
+        #[no_mangle]
+        pub unsafe extern "C" fn __update() -> u64 {
+            match $process_update() {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }

@@ -255,7 +255,8 @@ fn create_leadcoin(
     let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
     let c_cm_msg = [*c_cm_coordinates.x(), *c_cm_coordinates.y()];
     let c_cm_base: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(c_cm_msg);
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
+            .hash(c_cm_msg);
     let c_cm_node = MerkleNode::from(c_cm_base);
     tree_cm.append(&c_cm_node.clone());
     let leaf_position = tree_cm.witness();

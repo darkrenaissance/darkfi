@@ -60,7 +60,6 @@ use crate::zk::{
     },
 };
 
-
 /// Public input offset for the lead coin C2 nonce
 const LEADCOIN_C2_NONCE_OFFSET: usize = 0;
 /// Public input offset for lead coin public key X coordinate
@@ -449,8 +448,6 @@ impl Circuit<pallas::Base> for LeadContract {
             coin_pk_commit_v.mul(layouter.namespace(|| "coin_1sk * NullifierK"), coin1_sk)?
         };
 
-
-
         // Coin `c1` serial number:
         // sn=PRF_{root_sk}(nonce)
         // Coin's serial number is derived from coin nonce (sampled at random)
@@ -468,8 +465,6 @@ impl Circuit<pallas::Base> for LeadContract {
                 .hash(layouter.namespace(|| "sn_commit poseidon hash"), poseidon_message)?;
             poseidon_output.into()
         };
-
-
 
         // ==============================
         // Commitment to the staking coin
@@ -536,8 +531,6 @@ impl Circuit<pallas::Base> for LeadContract {
             coin1_commit_hash,
         )?;
 
-
-
         // ===========================
         // Derivation of coin2's nonce
         // ===========================
@@ -554,7 +547,6 @@ impl Circuit<pallas::Base> for LeadContract {
                 .hash(layouter.namespace(|| "coin2_nonce poseidon hash"), poseidon_message)?;
             poseidon_output.into()
         };
-
 
         // ================
         // Coin2 commitment
@@ -598,8 +590,6 @@ impl Circuit<pallas::Base> for LeadContract {
             layouter.namespace(|| "coin2_commitment_v + coin2_commitment_r"),
             &coin2_commitment_r,
         )?;
-
-
 
         // ==================================
         // lhs of the leader election lottery
@@ -654,12 +644,10 @@ impl Circuit<pallas::Base> for LeadContract {
                 layouter.namespace(|| "mau_rho scalar"),
                 self.mau_rho,
             )?;
-            let rho_commit_r =
-                FixedPoint::from_inner(ecc_chip.clone(), ValueCommitR);
+            let rho_commit_r = FixedPoint::from_inner(ecc_chip.clone(), ValueCommitR);
             rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_rho)?
         };
         let rho_commit = lottery_commit_v.add(layouter.namespace(|| "nonce commit"), &rho_cm)?;
-
 
         // Calculate term1 and term2 for the lottery
         let term1 = arith_chip.mul(
@@ -682,7 +670,6 @@ impl Circuit<pallas::Base> for LeadContract {
         let target =
             arith_chip.add(layouter.namespace(|| "target = term1 + term2"), &term1, &term2)?;
 
-
         // Constrain y < target
         lessthan_chip.copy_less_than(
             layouter.namespace(|| "y < target"),
@@ -691,7 +678,6 @@ impl Circuit<pallas::Base> for LeadContract {
             0,
             true,
         )?;
-
 
         // Constrain derived `sn_commit` to be equal to witnessed `coin1_serial`.
         layouter.assign_region(
@@ -703,7 +689,8 @@ impl Circuit<pallas::Base> for LeadContract {
         );
 
         // Constrain equality between witnessed and derived commitment
-        coin2_commitment.constrain_equal(layouter.namespace(|| "coin2_commit equality"), &coin2_commit)?;
+        coin2_commitment
+            .constrain_equal(layouter.namespace(|| "coin2_commit equality"), &coin2_commit)?;
 
         // Constrain derived rho_commit to witnessed rho
         rho_commit.constrain_equal(layouter.namespace(|| "rho equality"), &rho)?;
@@ -754,7 +741,8 @@ mod tests {
         let root = root.titled("Lead Circuit Layout", ("sans-serif", 60)).unwrap();
         CircuitLayout::default()
             //.view_width(0..10)
-            .render(k, &circuit, &root).unwrap();
+            .render(k, &circuit, &root)
+            .unwrap();
 
         Ok(())
     }

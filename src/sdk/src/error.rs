@@ -35,6 +35,9 @@ pub enum ContractError {
     #[error("IO error: {0}")]
     IoError(String),
 
+    #[error("Error setting update")]
+    SetUpdateError,
+
     #[error("Error checking if nullifier exists")]
     NullifierExistCheck,
 
@@ -52,15 +55,17 @@ macro_rules! to_builtin {
 
 pub const CUSTOM_ZERO: u64 = to_builtin!(1);
 pub const INTERNAL_ERROR: u64 = to_builtin!(2);
-pub const IO_ERROR: u64 = to_builtin!(3);
-pub const NULLIFIER_EXIST_CHECK: u64 = to_builtin!(4);
-pub const VALID_MERKLE_CHECK: u64 = to_builtin!(5);
+pub const SET_UPDATE_ERROR: u64 = to_builtin!(3);
+pub const IO_ERROR: u64 = to_builtin!(4);
+pub const NULLIFIER_EXIST_CHECK: u64 = to_builtin!(5);
+pub const VALID_MERKLE_CHECK: u64 = to_builtin!(6);
 
 impl From<ContractError> for u64 {
     fn from(err: ContractError) -> Self {
         match err {
             ContractError::Internal => INTERNAL_ERROR,
             ContractError::IoError(_) => IO_ERROR,
+            ContractError::SetUpdateError => SET_UPDATE_ERROR,
             ContractError::NullifierExistCheck => NULLIFIER_EXIST_CHECK,
             ContractError::ValidMerkleCheck => VALID_MERKLE_CHECK,
             ContractError::Custom(error) => {
@@ -79,6 +84,7 @@ impl From<u64> for ContractError {
         match error {
             CUSTOM_ZERO => Self::Custom(0),
             INTERNAL_ERROR => Self::Internal,
+            SET_UPDATE_ERROR => Self::SetUpdateError,
             IO_ERROR => Self::IoError("Unknown".to_string()),
             NULLIFIER_EXIST_CHECK => Self::NullifierExistCheck,
             VALID_MERKLE_CHECK => Self::ValidMerkleCheck,

@@ -29,6 +29,16 @@ use super::{
 #[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct ContractId(pallas::Base);
 
+impl ContractId {
+    pub fn new(contract_id: pallas::Base) -> Self {
+        Self(contract_id)
+    }
+
+    pub fn inner(&self) -> pallas::Base {
+        self.0
+    }
+}
+
 /// Derive a ContractId given a secret deploy key.
 pub fn derive_contract_id(deploy_key: SecretKey) -> ContractId {
     let public_key = PublicKey::from_secret(deploy_key);

@@ -17,13 +17,14 @@
  */
 
 use darkfi::{
+    crypto::contract_id::ContractId,
     runtime::{util::serialize_payload, vm_runtime::Runtime},
     Result,
 };
 use darkfi_sdk::{crypto::nullifier::Nullifier, pasta::pallas};
 use darkfi_serial::serialize;
 
-use smart_contract::Args;
+use smart_contract::FooArgs;
 
 #[test]
 fn run_contract() -> Result<()> {
@@ -48,16 +49,31 @@ fn run_contract() -> Result<()> {
     // Load the wasm binary into memory and create an execution runtime
     // ================================================================
     let wasm_bytes = std::fs::read("contract.wasm")?;
-    let mut runtime = Runtime::new(&wasm_bytes)?;
+    let contract_id = ContractId::new(pallas::Base::from(1));
+    let mut runtime = Runtime::new(&wasm_bytes, contract_id)?;
+
+    runtime.deploy()?;
 
     // =============================================
     // Build some kind of payload to show an example
     // =============================================
-    let args = Args { a: 777, b: 666 };
-    let payload = serialize(&args);
+    let args = FooArgs { a: 777, b: 666 };
+    // Prepend the func id
+    let mut payload = vec![0x00];
+    payload.extend_from_slice(&serialize(&args));
 
     // ============================================================
     // Serialize the payload into the runtime format and execute it
     // ============================================================
-    runtime.run(&serialize_payload(&payload))
+    //let update = runtime.exec(&serialize_payload(&payload))?;
+
+    //runtime.apply(update);
+    //Ok(())
+
+    //runtime.exec(&serialize_payload(&payload))?;
+
+    //runtime.apply()?;
+
+    Ok(())
 }
+
