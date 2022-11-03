@@ -36,7 +36,6 @@ fn run_contract() -> Result<()> {
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
     )?;
-
     // =============================================================
     // Build a ledger state so the runtime has something to work on
     // =============================================================

@@ -65,3 +65,4 @@ fn process_instruction(ix: &[u8]) -> ContractResult {
 
     Ok(())
 }
+

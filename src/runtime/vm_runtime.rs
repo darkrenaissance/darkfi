@@ -165,6 +165,7 @@ impl Runtime {
         let entrypoint = self.instance.exports.get_function(ENTRYPOINT)?;
 
         debug!(target: "wasm_runtime::run", "Executing wasm");
+        // We pass 0 to entrypoint() which is the location of the payload data in the memory
         let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
             Ok(retvals) => {
                 self.print_logs();
