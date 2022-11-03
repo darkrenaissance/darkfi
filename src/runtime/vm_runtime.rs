@@ -175,6 +175,7 @@ impl Runtime {
             Err(e) => {
                 self.print_logs();
                 debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                // WasmerRuntimeError panics are handled here. Return from run() immediately.
                 return Err(e.into())
             }
         };
