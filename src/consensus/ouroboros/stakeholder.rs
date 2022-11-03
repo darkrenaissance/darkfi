@@ -365,7 +365,7 @@ impl Stakeholder {
         info!("Winning coin index: {}", idx);
         // Generating leader proof
         let coin = self.epoch.get_coin(sl as usize, idx);
-        let proof = self.epoch.get_proof(sl, idx, &self.get_leadprovkingkey());
+        let proof = self.epoch.get_proof(sl as usize, idx, &self.get_leadprovkingkey());
         //Verifying generated proof against winning coin public inputs
         info!("Leader proof generated successfully, veryfing...");
         match lead_proof::verify_lead_proof(

@@ -44,6 +44,7 @@ use crate::{
     Result,
 };
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode, Nullifier};
+use incrementalmerkletree::Hashable;
 
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
@@ -117,10 +118,11 @@ fn create_coins(
     let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(*EPOCH_LENGTH as usize);
     // Leadcoins matrix were each row represents a slot and contains its competing coins.
     let mut coins: Vec<Vec<LeadCoin>> = vec![];
-    for i in 0..*EPOCH_LENGTH {
-        let index = i as usize;
-        // Use existing stake
-        if !owned.is_empty() {
+
+    // Use existing stake
+    if !owned.is_empty() {
+        for i in 0..*EPOCH_LENGTH {
+            let index = i as usize;
             let mut slot_coins = vec![];
             for elem in owned {
                 let coin = create_leadcoin(
@@ -140,23 +142,25 @@ fn create_coins(
             coins.push(slot_coins);
             continue
         }
-
-        // Compete with zero stake
-        let coin = create_leadcoin(
-            eta,
-            sigma1,
-            sigma2,
-            *LOTTERY_HEAD_START,
-            index,
-            root_sks[index],
-            path_sks[index],
-            seeds[index],
-            sks[index],
-            &mut tree_cm,
-        );
-        coins.push(vec![coin]);
+    } else {
+        for i in 0..*EPOCH_LENGTH {
+            let index = i as usize;
+            // Compete with zero stake
+            let coin = create_leadcoin(
+                eta,
+                sigma1,
+                sigma2,
+                *LOTTERY_HEAD_START,
+                index,
+                root_sks[index],
+                path_sks[index],
+                seeds[index],
+                sks[index],
+                &mut tree_cm,
+            );
+            coins.push(vec![coin]);
+        }
     }
-
     coins
 }
 
@@ -262,13 +266,14 @@ fn create_leadcoin(
     let leaf_position = tree_cm.witness();
     let c_root_cm = tree_cm.root(0).unwrap();
     let c_cm_path = tree_cm.authentication_path(leaf_position.unwrap(), &c_root_cm).unwrap();
+
     /*
     let c_root_cm = {
         let mut current = MerkleNode::from(c_cm_base);
         let pos = leaf_position.unwrap();
         for (level, sibling) in c_cm_path.iter().enumerate() {
             let level = level as u8;
-            current = if pos & (1 << level) == 0 {
+            current = if i & (1 << level) == 0 {
                 MerkleNode::combine(level.into(), &current, sibling)
             } else {
                 MerkleNode::combine(level.into(), sibling, &current)
@@ -277,6 +282,7 @@ fn create_leadcoin(
         current
     };
     */
+
 
     let coin_nonce2_msg = [c_seed, c_root_sk.inner(), one.clone(), one.clone()];
     let c_seed2: pallas::Base =
@@ -327,13 +333,11 @@ fn create_coins_election_seeds(
     // mu_rho
     let nonce_mu_msg = [election_seed_nonce, eta, slot];
     let nonce_mu: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init()
-            .hash(nonce_mu_msg);
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(nonce_mu_msg);
     // mu_y
     let lead_mu_msg = [election_seed_lead, eta, slot];
     let lead_mu: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init()
-            .hash(lead_mu_msg);
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(lead_mu_msg);
     (lead_mu, nonce_mu)
 }
 
@@ -373,12 +377,12 @@ pub fn is_leader(slot: u64, epoch_coins: &Vec<Vec<LeadCoin>>) -> (bool, usize) {
             coin.sigma1.unwrap() * val_base + coin.sigma2.unwrap() * val_base * val_base;
         info!("y: {:?}", y);
         info!("T: {:?}", target_base);
-        if y >= target_base {
-            continue
+        let first_winning = y < target_base;
+        if first_winning && !won {
+            highest_stake_idx = winning_idx;
         }
-
-        won = true;
-        if coin.value.unwrap() > highest_stake {
+        won |= first_winning;
+        if won && coin.value.unwrap() > highest_stake {
             highest_stake = coin.value.unwrap();
             highest_stake_idx = winning_idx;
         }

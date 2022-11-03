@@ -82,10 +82,9 @@ impl Epoch {
     /// * `pk` - proving key
     /// returns  the of proof of the winning coin of slot `sl` at index `idx` with
     /// proving key `pk`
-    pub fn get_proof(&self, sl: u64, idx: usize, pk: &ProvingKey) -> Proof {
+    pub fn get_proof(&self, sl: usize, idx: usize, pk: &ProvingKey) -> Proof {
         info!("get_proof");
-        let competing_coins: &Vec<LeadCoin> = &self.coins.clone()[sl as usize];
-        let coin = competing_coins[idx];
+        let coin = self.get_coin(sl, idx);
         lead_proof::create_lead_proof(pk, coin).unwrap()
     }
 }

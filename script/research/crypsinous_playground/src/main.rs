@@ -52,7 +52,7 @@ struct Args {
     #[structopt(long, default_value = "changeme")]
     /// Password for the wallet database
     wallet_pass: String,
-    
+
     #[structopt(short, default_value = "1")]
     /// How many epochs to simulate
     epochs: u64,
@@ -75,15 +75,15 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()>  {
         return Ok(());
     }
     info!("Simulation epochs: {}", epochs);
-    
+
     // Initialize wallet that holds coins for staking
     let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
-    
+
     // Initialize client
     let client = Arc::new(Client::new(wallet.clone()).await?);
-    
+
     // Retrieving nodes wallet coins
-    let mut owned = client.get_own_coins().await?;    
+    let mut owned = client.get_own_coins().await?;
     // If node holds no coins in its wallet, we generate some new staking coins
     if owned.is_empty() {
         info!("Node wallet is empty, generating new staking coins...");
@@ -93,12 +93,12 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()>  {
     // owned = vec![];
     info!("Node coins: {:?}", owned);
 
-    // Generating leader proof keys    
-    let k: u32 = 13; // Proof rows number
+    // Generating leader proof keys
+    let k: u32 = 11; // Proof rows number
     info!("Generating proof keys with k: {}", k);
     let proving_key = ProvingKey::build(k, &LeadContract::default());
     let verifying_key = VerifyingKey::build(k, &LeadContract::default());
-    
+
     // Simulating epochs with 10 slots
     for epoch in 0..epochs {
         info!("Epoch {} started!", epoch);
@@ -106,7 +106,7 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()>  {
         // TODO: Retrieve previous lead proof
         let eta = pallas::Base::one();
         let epoch_coins = coins::create_epoch_coins(eta, &owned, epoch, 0);
-        info!("Generated epoch_coins: {}", epoch_coins.len());    
+        info!("Generated epoch_coins: {}", epoch_coins.len());
         for slot in 0..10 {
             // Checking if slot leader
             info!("Slot {} started!", slot);
@@ -132,6 +132,6 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()>  {
             }
         }
     }
-    
-    Ok(()) 
+
+    Ok(())
 }

@@ -669,6 +669,8 @@ impl Circuit<pallas::Base> for LeadContract {
         // Calculate lottery target
         let target =
             arith_chip.add(layouter.namespace(|| "target = term1 + term2"), &term1, &term2)?;
+        let T: Value<pallas::Base> = target.value().cloned();
+        let y: Value<pallas::Base> = y_commit_base.value().cloned();
 
         // Constrain y < target
         lessthan_chip.copy_less_than(
@@ -680,13 +682,21 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
         // Constrain derived `sn_commit` to be equal to witnessed `coin1_serial`.
+
+        layouter.assign_region(
+            || "coin1_cm_root equality",
+            |mut region| {
+                region.constrain_equal(coin1_cm_root.cell(), coin1_commit_root.cell())
+            },
+        )?;
+
         layouter.assign_region(
             || "sn_commit equality",
             |mut region| {
-                region.constrain_equal(sn_commit.cell(), coin1_serial.cell())?;
-                region.constrain_equal(coin1_cm_root.cell(), coin1_commit_root.cell())
+                region.constrain_equal(sn_commit.cell(), coin1_serial.cell())
             },
-        );
+        )?;
+
 
         // Constrain equality between witnessed and derived commitment
         coin2_commitment
@@ -719,6 +729,7 @@ impl Circuit<pallas::Base> for LeadContract {
             config.primary,
             LEADCOIN_Y_BASE_OFFSET,
         )?;
+
         Ok(())
     }
 }

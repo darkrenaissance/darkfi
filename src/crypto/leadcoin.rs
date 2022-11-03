@@ -36,7 +36,7 @@ pub struct LeadCoin {
     pub value: Option<u64>,             // coin stake
     pub cm: Option<pallas::Point>,      // coin commitment
     pub cm2: Option<pallas::Point>,     // poured coin commitment
-    pub idx: u32,                       // coin idex
+    pub idx: u32,                       // coin index
     pub sl: Option<pallas::Base>,       // coin slot id
     pub tau: Option<pallas::Base>,      // coin time stamp
     pub nonce: Option<pallas::Base>,    // coin nonce
@@ -73,11 +73,14 @@ impl LeadCoin {
         let po_y_y = *po_y_pt.to_affine().coordinates().unwrap().y();
         let y_coord_arr = [po_y_x, po_y_y];
         let po_y: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(y_coord_arr);
-        let cm_pos = self.idx;
+            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(y_coord_arr);
         let public_inputs: [pallas::Base; LEAD_PUBLIC_INPUT_LEN] =
-            [po_nonce, *po_pk.x(), *po_pk.y(), po_y];
+            [
+                po_nonce,
+                *po_pk.x(),
+                *po_pk.y(),
+                po_y
+            ];
         public_inputs
     }
 
