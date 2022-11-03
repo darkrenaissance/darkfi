@@ -35,18 +35,6 @@ pub fn set_update(update_data: &[u8]) -> Result<(), ContractError> {
     unimplemented!();
 }
 
-pub fn get_update() -> Result<(u8, Vec<u8>), ContractError> {
-    #[cfg(target_arch = "wasm32")]
-    // get_update_ needs to take a buffer?
-    // get pointer for contract_update
-    // piece back into (u8, Vec<u8>)
-    // return
-    return Ok((0, vec![]));
-
-    #[cfg(not(target_arch = "wasm32"))]
-    unimplemented!();
-}
-
 pub fn nullifier_exists(nullifier: &Nullifier) -> Result<bool, ContractError> {
     #[cfg(target_arch = "wasm32")]
     unsafe {

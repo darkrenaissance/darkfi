@@ -18,14 +18,14 @@
 
 use std::{
     cell::{Cell, RefCell},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use darkfi_sdk::entrypoint;
 use log::{debug, info};
 use wasmer::{
     imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
-    Memory, MemoryView, Module, Pages, Store, Value, WasmPtr, WASM_PAGE_SIZE,
+    Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
 };
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::{
@@ -34,9 +34,9 @@ use wasmer_middlewares::{
 };
 
 use super::{
-    chain_state::{set_update, is_valid_merkle, nullifier_exists},
+    chain_state::{is_valid_merkle, nullifier_exists, set_update},
     memory::MemoryManipulation,
-    util::drk_log,
+    util::{drk_log, serialize_payload},
 };
 use crate::{crypto::contract_id::ContractId, Error, Result};
 
@@ -260,10 +260,23 @@ impl Runtime {
         env_mut.contract_section = ContractSection::Update;
 
         debug!(target: "wasm_runtime::run", "Getting initialize function");
-        let entrypoint = self.instance.exports.get_function(INITIALIZE)?;
+        let entrypoint = self.instance.exports.get_function(UPDATE)?;
+
+        let update_data = env_mut.contract_update.take().unwrap();
+        // FIXME: Less realloc
+        let mut payload = vec![update_data.0];
+        payload.extend_from_slice(&update_data.1);
+        let payload = serialize_payload(&payload);
+
+        // TODO: Test if this works when state update is larger than the initial payload
+        // The question is if we need to allocate more memory or if it's ok to just
+        // overwrite from zero (and even if overwrite - is there enough space?)
+        let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
+        //self.set_memory_page_size(pages_required as u32)?;
+        self.copy_to_memory(&payload)?;
 
         debug!(target: "wasm_runtime::run", "Executing wasm");
-        let ret = match entrypoint.call(&mut self.store, &[]) {
+        let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
             Ok(retvals) => {
                 self.print_logs();
                 debug!(target: "wasm_runtime::run", "{}", self.gas_info());
@@ -331,6 +344,7 @@ impl Runtime {
 
     /// Copy payload to the start of the memory
     fn copy_to_memory(&self, payload: &[u8]) -> Result<()> {
+        // TODO: Maybe should write to first zero memory and return the pointer/offset?
         // Get the memory view
         let env = self.ctx.as_ref(&self.store);
         let memory_view = env.memory_view(&self.store);

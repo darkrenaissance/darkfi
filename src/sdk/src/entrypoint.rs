@@ -61,8 +61,10 @@ macro_rules! update_state {
     ($process_update:ident) => {
         /// # Safety
         #[no_mangle]
-        pub unsafe extern "C" fn __update() -> u64 {
-            match $process_update() {
+        pub unsafe extern "C" fn __update(input: *mut u8) -> u64 {
+            let update_data = $crate::entrypoint::deserialize(input);
+
+            match $process_update(&update_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }

@@ -65,9 +65,9 @@ fn run_contract() -> Result<()> {
     // ============================================================
     // Serialize the payload into the runtime format and execute it
     // ============================================================
-    //let update = runtime.exec(&serialize_payload(&payload))?;
+    runtime.exec(&serialize_payload(&payload))?;
 
-    //runtime.apply(update);
+    runtime.apply()?;
     //Ok(())
 
     //runtime.exec(&serialize_payload(&payload))?;
@@ -76,4 +76,3 @@ fn run_contract() -> Result<()> {
 
     Ok(())
 }
-

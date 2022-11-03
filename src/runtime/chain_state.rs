@@ -26,7 +26,7 @@ use super::{
 };
 use crate::node::state::ProgramState;
 
-pub(crate) fn set_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+pub(super) fn set_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Exec => {
@@ -35,7 +35,7 @@ pub(crate) fn set_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
             // FIXME: make me preettty!
             let slice = ptr.slice(&memory_view, len);
             if slice.is_err() {
-                return -2;
+                return -2
             }
             let slice = slice.unwrap();
 
@@ -53,36 +53,21 @@ pub(crate) fn set_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
             };
             //
 
+            // FIXME: Shouldn't assert here, but rather return an error.
+            // An assert would make the host panic.
             assert!(env.contract_update.take().is_none());
             let func_id = update_data[0];
             let update_data = &update_data[1..];
             env.contract_update.set(Some((func_id, update_data.to_vec())));
             0
         }
-        _ => {
-            -1
-        }
-    }
-}
-
-pub(crate) fn get_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
-    let env = ctx.data();
-    match env.contract_section {
-        ContractSection::Update => {
-           let memory_view = env.memory_view(&ctx);
-
-
-
-           0
-
-        }
-        _ => { -1 }
+        _ => -1,
     }
 }
 
 /// Try to read a `Nullifier` from the given pointer and check if it's
 /// an existing nullifier in the blockchain state machine.
-pub fn nullifier_exists(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 {
+pub(super) fn nullifier_exists(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Null => {
@@ -127,7 +112,7 @@ pub fn nullifier_exists(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32
 
 /// Try to read a `MerkleNode` from the given pointer and check if it's
 /// a valid Merkle root in the chain's Merkle tree.
-pub fn is_valid_merkle(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 {
+pub(super) fn is_valid_merkle(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 {
     /*
     if let Some(bytes) = env.memory.get_ref().unwrap().read(ptr, len as usize) {
         debug!(target: "wasm_runtime::is_valid_merkle", "Read bytes: {:?}", bytes);

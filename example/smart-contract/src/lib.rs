@@ -1,10 +1,11 @@
 use darkfi_sdk::{
     crypto::Nullifier,
-    initialize, entrypoint, update_state,
+    entrypoint,
     error::{ContractError, ContractResult},
-    msg,
+    initialize, msg,
     pasta::pallas,
-    state::{set_update, nullifier_exists},
+    state::{nullifier_exists, set_update},
+    update_state,
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
@@ -41,7 +42,7 @@ pub struct BarArgs {
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct FooUpdate {
     pub name: String,
-    pub y: u32
+    pub y: u32,
 }
 
 initialize!(init_contract);
@@ -68,10 +69,7 @@ fn process_instruction(ix: &[u8]) -> ContractResult {
             // ...
             let args: FooArgs = deserialize(tx_data)?;
             // ...
-            let update = FooUpdate {
-                name: "john_doe".to_string(),
-                y: 110
-            };
+            let update = FooUpdate { name: "john_doe".to_string(), y: 110 };
 
             let mut update_data = vec![Function::Foo as u8];
             update_data.extend_from_slice(&serialize(&update));
@@ -115,20 +113,16 @@ fn process_instruction(ix: &[u8]) -> ContractResult {
 }
 
 update_state!(process_update);
-fn process_update() -> ContractResult {
+fn process_update(update_data: &[u8]) -> ContractResult {
     msg!("Make update!");
 
-    /*
-    let (func_id, update_data) = get_update()?;
-
-    match Function::from(func_id) {
+    match Function::from(update_data[0]) {
         Function::Foo => {
-            let update: FooUpdate = deserialize(update_data)?;
+            let update: FooUpdate = deserialize(&update_data[1..])?;
             // update.apply()
         }
-        _ => unreachable!()
-    };
-    */
+        _ => unreachable!(),
+    }
 
     Ok(())
 }
@@ -140,4 +134,3 @@ fn process_update() -> ContractResult {
 //fn apply(update) {
 //    // writes happen here
 //}
-
