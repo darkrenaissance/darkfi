@@ -141,68 +141,68 @@ impl Runtime {
         );
 
         let imports = imports! {
-                "env" => {
-                    "drk_log_" => Function::new_typed_with_env(
-                        &mut store,
-                        &ctx,
-                        import::util::drk_log,
-                    ),
+            "env" => {
+                "drk_log_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::drk_log,
+                ),
 
-                    "nullifier_exists_" => Function::new_typed_with_env(
-                        &mut store,
-                        &ctx,
-                        import::chain_state::nullifier_exists,
-                    ),
+                "nullifier_exists_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::chain_state::nullifier_exists,
+                ),
 
-                    "is_valid_merkle_" => Function::new_typed_with_env(
-                        &mut store,
-                        &ctx,
-                        import::chain_state::is_valid_merkle,
-                    ),
+                "is_valid_merkle_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::chain_state::is_valid_merkle,
+                ),
 
-                    "set_update_" => Function::new_typed_with_env(
-                        &mut store,
-                        &ctx,
-                        import::chain_state::set_update,
-                    ),
+                "set_update_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::chain_state::set_update,
+                ),
 
-                    "db_init_" => Function::new_typed_with_env(
-                        &mut store,
-                        &ctx,
-                        import::db::db_init,
-                    ),
+                "db_init_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_init,
+                ),
 
-                    "db_lookup_" => Function::new_typed_with_env(
-                        &mut store,
-                        &ctx,
-                        import::db::db_lookup,
-                    ),
+                "db_lookup_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_lookup,
+                ),
 
-                    "db_get_" => Function::new_typed_with_env(
-                        &mut store,
-                        &ctx,
-                        import::db::db_get,
-                    ),
+                "db_get_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_get,
+                ),
 
-                    "db_begin_tx_" => Function::new_typed_with_env(
-                        &mut store,
-                        &ctx,
-                        import::db::db_begin_tx,
-                    ),
+                "db_begin_tx_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_begin_tx,
+                ),
 
-                    "db_set_" => Function::new_typed_with_env(
-                        &mut store,
-                        &ctx,
-                        import::db::db_set,
-                    ),
+                "db_set_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_set,
+                ),
 
-                    "db_end_tx_" => Function::new_typed_with_env(
-                        &mut store,
-                        &ctx,
-                        import::db::db_end_tx,
-                    ),
-                }
-            };
+                "db_end_tx_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_end_tx,
+                ),
+            }
+        };
 
         debug!(target: "wasm_runtime::new", "Instantiating module");
         let instance = Instance::new(&mut store, &module, &imports)?;

@@ -6,9 +6,10 @@ use darkfi_sdk::{
     initialize, msg,
     pasta::pallas,
     state::{nullifier_exists, set_update},
+    tx::Transaction,
     update_state,
 };
-use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable, ReadExt, Decodable};
 
 /// Available functions for this contract.
 /// We identify them with the first byte passed in through the payload.
@@ -30,7 +31,7 @@ impl From<u8> for Function {
 
 // An example of deserializing the payload into a struct
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct FooArgs {
+pub struct FooCallData {
     pub a: u64,
     pub b: u64,
 }
@@ -71,7 +72,9 @@ fn process_instruction(ix: &[u8]) -> ContractResult {
         Function::Foo => {
             let tx_data = &ix[1..];
             // ...
-            let args: FooArgs = deserialize(tx_data)?;
+            let (func_call_index, tx): (u32, Transaction) = deserialize(tx_data)?;
+            let call_data: FooCallData = deserialize(&tx.func_calls[func_call_index as usize].call_data)?;
+            msg!("call_data {{ a: {}, b: {} }}", call_data.a, call_data.b);
             // ...
             let update = FooUpdate { name: "john_doe".to_string(), age: 110 };
 
@@ -82,6 +85,7 @@ fn process_instruction(ix: &[u8]) -> ContractResult {
 
             // Example: try to get a value from the db
             let db_handle = db_lookup("wagies")?;
+            // FIXME: this is just empty right now
             let age_data = db_get(db_handle, "jason_gulag".as_bytes())?;
             msg!("wagie age data: {:?}", age_data);
         }

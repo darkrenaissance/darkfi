@@ -36,7 +36,7 @@ pub fn db_lookup(db_name: &str) -> GenericResult<DbHandle> {
                     unreachable!();
                 }
                 Ok(handle as u32)
-            },
+            }
             -1 => Err(ContractError::CallerAccessDenied),
             -2 => Err(ContractError::DbNotFound),
         }

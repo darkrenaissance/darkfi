@@ -31,7 +31,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
                 }
                 Err(_) => {
                     error!(target: "wasm_runtime::drk_log", "Failed to read UTF-8 string from VM memory");
-                    return -2;
+                    return -2
                 }
             }
             0
@@ -56,11 +56,11 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32
             match ptr.read_utf8_string(&memory_view, len) {
                 Ok(db_name) => {
                     // db_name = blake3_hash(contract_id, db_name)
-                    return 110;
+                    return 110
                 }
                 Err(_) => {
                     error!(target: "wasm_runtime::drk_log", "Failed to read UTF-8 string from VM memory");
-                    return -2;
+                    return -2
                 }
             }
             0

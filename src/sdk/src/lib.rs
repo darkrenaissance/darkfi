@@ -36,3 +36,6 @@ pub mod crypto;
 
 /// Functions for state queries
 pub mod state;
+
+/// Transaction structure
+pub mod tx;
