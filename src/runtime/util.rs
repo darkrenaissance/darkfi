@@ -16,11 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::{error, warn};
-use wasmer::{AsStoreRef, FunctionEnvMut, WasmPtr};
-
-use super::{memory::MemoryManipulation, vm_runtime::Env};
-
 /// Serialize contract payload to format accepted by the runtime entrypoint.
 /// We keep the same payload as a slice of bytes, and prepend it with a
 /// little-endian u64 to tell the payload's length.
@@ -32,22 +27,4 @@ pub fn serialize_payload(payload: &[u8]) -> Vec<u8> {
     out.extend_from_slice(payload);
 
     out
-}
-
-/// Host function for logging strings.
-/// This is injected into the runtime with wasmer's `imports!` macro.
-pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
-    let env = ctx.data();
-    let memory_view = env.memory_view(&ctx);
-
-    match ptr.read_utf8_string(&memory_view, len) {
-        Ok(msg) => {
-            let mut logs = env.logs.borrow_mut();
-            logs.push(msg);
-            std::mem::drop(logs);
-        }
-        Err(_) => {
-            error!(target: "wasm_runtime::drk_log", "Failed to read UTF-8 string from VM memory");
-        }
-    }
 }

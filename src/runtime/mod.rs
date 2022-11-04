@@ -25,5 +25,5 @@ pub(crate) mod memory;
 /// Utility functions
 pub mod util;
 
-/// Host functions for querying blockchain state through `MemoryState`
-pub(crate) mod chain_state;
+/// Imported host functions
+pub(crate) mod import;

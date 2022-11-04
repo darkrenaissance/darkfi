@@ -20,13 +20,15 @@ use darkfi_sdk::crypto::{MerkleNode, Nullifier};
 use log::{debug, error};
 use wasmer::{AsStoreRef, FunctionEnvMut, WasmPtr};
 
-use super::{
-    memory::MemoryManipulation,
-    vm_runtime::{ContractSection, Env},
+use crate::{
+    node::state::ProgramState,
+    runtime::{
+        memory::MemoryManipulation,
+        vm_runtime::{ContractSection, Env},
+    },
 };
-use crate::node::state::ProgramState;
 
-pub(super) fn set_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+pub(crate) fn set_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Exec => {
@@ -67,7 +69,7 @@ pub(super) fn set_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
 
 /// Try to read a `Nullifier` from the given pointer and check if it's
 /// an existing nullifier in the blockchain state machine.
-pub(super) fn nullifier_exists(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 {
+pub(crate) fn nullifier_exists(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Null => {
@@ -112,7 +114,7 @@ pub(super) fn nullifier_exists(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32)
 
 /// Try to read a `MerkleNode` from the given pointer and check if it's
 /// a valid Merkle root in the chain's Merkle tree.
-pub(super) fn is_valid_merkle(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 {
+pub(crate) fn is_valid_merkle(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 {
     /*
     if let Some(bytes) = env.memory.get_ref().unwrap().read(ptr, len as usize) {
         debug!(target: "wasm_runtime::is_valid_merkle", "Read bytes: {:?}", bytes);

@@ -34,9 +34,10 @@ use wasmer_middlewares::{
 };
 
 use super::{
-    chain_state::{is_valid_merkle, nullifier_exists, set_update},
+    import,
+    //chain_state::{is_valid_merkle, nullifier_exists, set_update},
     memory::MemoryManipulation,
-    util::{drk_log, serialize_payload},
+    util::serialize_payload,
 };
 use crate::{crypto::contract_id::ContractId, Error, Result};
 
@@ -144,25 +145,25 @@ impl Runtime {
                 "drk_log_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
-                    drk_log,
+                    import::util::drk_log,
                 ),
 
                 "nullifier_exists_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
-                    nullifier_exists,
+                    import::chain_state::nullifier_exists,
                 ),
 
                 "is_valid_merkle_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
-                    is_valid_merkle,
+                    import::chain_state::is_valid_merkle,
                 ),
 
                 "set_update_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
-                    set_update,
+                    import::chain_state::set_update,
                 ),
             }
         };
