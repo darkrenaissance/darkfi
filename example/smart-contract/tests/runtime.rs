@@ -16,11 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{crypto::contract_id::ContractId, runtime::vm_runtime::Runtime, Result};
-use darkfi_sdk::{
-    pasta::pallas,
-    tx::FuncCall
+use darkfi::{
+    blockchain::Blockchain,
+    consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
+    crypto::contract_id::ContractId,
+    runtime::vm_runtime::Runtime,
+    Result,
 };
+use darkfi_sdk::{pasta::pallas, tx::FuncCall};
 use darkfi_serial::{serialize, Encodable, WriteExt};
 
 use smart_contract::{FooCallData, Function};
@@ -36,20 +39,20 @@ fn run_contract() -> Result<()> {
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
     )?;
-    // =============================================================
-    // Build a ledger state so the runtime has something to work on
-    // =============================================================
-    //let state_machine = State::dummy()?;
 
-    // Add a nullifier to the nullifier set. (This is checked by the contract)
-    //state_machine.nullifiers.insert(&[Nullifier::from(pallas::Base::from(0x10))])?;
+    // =============================
+    // Initialize a dummy blockchain
+    // =============================
+    // TODO: This blockchain interface should perhaps be ValidatorState and Mutex/RwLock.
+    let db = sled::Config::new().temporary(true).open()?;
+    let blockchain = Blockchain::new(&db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
 
     // ================================================================
     // Load the wasm binary into memory and create an execution runtime
     // ================================================================
     let wasm_bytes = std::fs::read("contract.wasm")?;
     let contract_id = ContractId::new(pallas::Base::from(1));
-    let mut runtime = Runtime::new(&wasm_bytes, contract_id)?;
+    let mut runtime = Runtime::new(&wasm_bytes, blockchain, contract_id)?;
 
     // Deploy function to initialize the smart contract state.
     // Here we pass an empty payload, but it's possible to feed in arbitrary data.
@@ -59,9 +62,9 @@ fn run_contract() -> Result<()> {
     // Build some kind of payload to show an example
     // =============================================
     let func_calls = vec![FuncCall {
-            contract_id: pallas::Base::from(110),
-            func_id: pallas::Base::from(4),
-            call_data: serialize(&FooCallData { a: 777, b: 666 }),
+        contract_id: pallas::Base::from(110),
+        func_id: pallas::Base::from(4),
+        call_data: serialize(&FooCallData { a: 777, b: 666 }),
     }];
     let func_call_index: u32 = 0;
 

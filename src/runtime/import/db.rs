@@ -19,7 +19,22 @@
 use log::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::runtime::vm_runtime::{ContractSection, Env};
+use crate::{
+    crypto::contract_id::ContractId,
+    runtime::vm_runtime::{ContractSection, Env},
+};
+
+/// Internal wasm runtime API for sled trees
+pub struct DbHandle {
+    contract_id: ContractId,
+    tree: sled::Tree,
+}
+
+impl DbHandle {
+    pub fn new(contract_id: ContractId, tree: sled::Tree) -> Self {
+        Self { contract_id, tree }
+    }
+}
 
 /// Only deploy() can call this. Creates a new database instance for this contract.
 ///
@@ -31,23 +46,32 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Deploy => {
-            let env = ctx.data();
             let memory_view = env.memory_view(&ctx);
+            let db = &env.blockchain.sled_db;
+            let contracts = &env.blockchain.contracts;
+            let contract_id = &env.contract_id;
 
-            match ptr.read_utf8_string(&memory_view, len) {
-                Ok(db_name) => {
-                    // TODO:
-                    // * db_name = blake3_hash(contract_id, db_name)
-                    // * create db_name sled database
-                }
-                Err(_) => {
-                    error!(target: "wasm_runtime::drk_log", "Failed to read UTF-8 string from VM memory");
+            let Ok(db_name) = ptr.read_utf8_string(&memory_view, len) else {
+                error!(target: "wasm_runtime::db_init", "Failed to read string from VM memory");
+                return -2
+            };
+
+            let tree_handle = match contracts.init(db, contract_id, &db_name) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_init", "Failed to init db: {}", e);
                     return -2
                 }
-            }
-            0
+            };
+
+            let mut db_handles = env.db_handles.borrow_mut();
+            db_handles.push(DbHandle::new(*contract_id, tree_handle));
+            return (db_handles.len() - 1) as i32
         }
-        _ => -1,
+        _ => {
+            error!(target: "wasm_runtime::db_init", "db_init called in unauthorized section");
+            return -1
+        }
     }
 }
 

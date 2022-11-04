@@ -33,12 +33,8 @@ use wasmer_middlewares::{
     Metering,
 };
 
-use super::{
-    import,
-    //chain_state::{is_valid_merkle, nullifier_exists, set_update},
-    memory::MemoryManipulation,
-};
-use crate::{crypto::contract_id::ContractId, Error, Result};
+use super::{import, import::db::DbHandle, memory::MemoryManipulation};
+use crate::{blockchain::Blockchain, crypto::contract_id::ContractId, Error, Result};
 
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
@@ -60,10 +56,16 @@ pub enum ContractSection {
 
 /// The wasm vm runtime instantiated for every smart contract that runs.
 pub struct Env {
+    /// Blockchain access
+    pub blockchain: Blockchain,
+    /// sled tree handles used with `db_*`
+    pub db_handles: RefCell<Vec<DbHandle>>,
+    /// The contract ID being executed
     pub contract_id: ContractId,
+    /// The contract section being executed
     pub contract_section: ContractSection,
+    /// State update produced by a smart contract function call
     pub contract_update: Cell<Option<(u8, Vec<u8>)>>,
-    //pub func_id:
     /// Logs produced by the contract
     pub logs: RefCell<Vec<String>>,
     /// Direct memory access to the VM
@@ -96,7 +98,7 @@ pub struct Runtime {
 
 impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
-    pub fn new(wasm_bytes: &[u8], contract_id: ContractId) -> Result<Self> {
+    pub fn new(wasm_bytes: &[u8], blockchain: Blockchain, contract_id: ContractId) -> Result<Self> {
         info!(target: "warm_runtime::new", "Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
         // the wasm module execution. It should return the cost of the operator
@@ -124,13 +126,17 @@ impl Runtime {
         debug!(target: "wasm_runtime::new", "Compiling module");
         let module = Module::new(&store, wasm_bytes)?;
 
-        // This section will need changing
-        debug!(target: "wasm_runtime::new", "Importing functions");
+        // Initialize data
+        let db_handles = RefCell::new(vec![]);
         let logs = RefCell::new(vec![]);
+
+        debug!(target: "wasm_runtime::new", "Importing functions");
 
         let ctx = FunctionEnv::new(
             &mut store,
             Env {
+                blockchain,
+                db_handles,
                 contract_id,
                 contract_section: ContractSection::Null,
                 contract_update: Cell::new(None),

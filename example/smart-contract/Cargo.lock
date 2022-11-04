@@ -2601,6 +2601,7 @@ dependencies = [
  "darkfi-serial",
  "getrandom",
  "simplelog",
+ "sled",
 ]
 
 [[package]]
