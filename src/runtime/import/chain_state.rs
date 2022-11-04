@@ -34,30 +34,18 @@ pub(crate) fn set_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         ContractSection::Exec => {
             let memory_view = env.memory_view(&ctx);
 
-            // FIXME: make me preettty!
-            let slice = ptr.slice(&memory_view, len);
-            if slice.is_err() {
+            let Ok(slice) = ptr.slice(&memory_view, len) else {
                 return -2
-            }
-            let slice = slice.unwrap();
+            };
 
-            // FIXME: make me double pretty
-            // before:
-            //let update_data = slice.read_to_vec();
-            //if update_data.is_err() {
-            //    return -2;
-            //}
-            //let update_data = update_data.unwrap();
-
-            // after:
             let Ok(update_data) = slice.read_to_vec() else {
                 return -2;
             };
-            //
 
-            // FIXME: Shouldn't assert here, but rather return an error.
-            // An assert would make the host panic.
-            assert!(env.contract_update.take().is_none());
+            // This function should only ever be called once on the runtime.
+            if !env.contract_update.take().is_none() {
+                return -3
+            }
             let func_id = update_data[0];
             let update_data = &update_data[1..];
             env.contract_update.set(Some((func_id, update_data.to_vec())));

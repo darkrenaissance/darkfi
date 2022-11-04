@@ -43,6 +43,9 @@ pub enum ContractError {
 
     #[error("Error checking merkle root validity")]
     ValidMerkleCheck,
+
+    #[error("Update already set")]
+    UpdateAlreadySet,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -59,6 +62,7 @@ pub const SET_UPDATE_ERROR: u64 = to_builtin!(3);
 pub const IO_ERROR: u64 = to_builtin!(4);
 pub const NULLIFIER_EXIST_CHECK: u64 = to_builtin!(5);
 pub const VALID_MERKLE_CHECK: u64 = to_builtin!(6);
+pub const UPDATE_ALREADY_SET: u64 = to_builtin!(7);
 
 impl From<ContractError> for u64 {
     fn from(err: ContractError) -> Self {
@@ -68,6 +72,7 @@ impl From<ContractError> for u64 {
             ContractError::SetUpdateError => SET_UPDATE_ERROR,
             ContractError::NullifierExistCheck => NULLIFIER_EXIST_CHECK,
             ContractError::ValidMerkleCheck => VALID_MERKLE_CHECK,
+            ContractError::UpdateAlreadySet => UPDATE_ALREADY_SET,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -88,6 +93,7 @@ impl From<u64> for ContractError {
             IO_ERROR => Self::IoError("Unknown".to_string()),
             NULLIFIER_EXIST_CHECK => Self::NullifierExistCheck,
             VALID_MERKLE_CHECK => Self::ValidMerkleCheck,
+            UPDATE_ALREADY_SET => Self::UpdateAlreadySet,
             _ => Self::Custom(error as u32),
         }
     }

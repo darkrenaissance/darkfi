@@ -27,6 +27,7 @@ pub fn set_update(update_data: &[u8]) -> Result<(), ContractError> {
         return match set_update_(update_data.as_ptr(), update_data.len() as u32) {
             0 => Ok(()),
             -1 => Err(ContractError::SetUpdateError),
+            -2 => Err(ContractError::UpdateAlreadySet),
             _ => unreachable!(),
         }
     }
