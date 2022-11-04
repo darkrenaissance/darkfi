@@ -255,6 +255,15 @@ pub enum Error {
     #[error("Block {0} metadata not found in database")]
     BlockMetadataNotFound(String),
 
+    #[error("Contract {0} not found in database")]
+    ContractNotFound(String),
+
+    #[error("Contract state tree not found")]
+    ContractStateNotFound,
+
+    #[error("Contract already initialized")]
+    ContractAlreadyInitialized,
+
     // =============
     // Wallet errors
     // =============

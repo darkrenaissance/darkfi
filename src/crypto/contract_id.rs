@@ -17,7 +17,7 @@
  */
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use pasta_curves::pallas;
+use pasta_curves::{group::ff::PrimeField, pallas};
 
 use super::{
     keypair::{PublicKey, SecretKey},
@@ -36,6 +36,18 @@ impl ContractId {
 
     pub fn inner(&self) -> pallas::Base {
         self.0
+    }
+
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_repr()
+    }
+}
+
+impl std::fmt::Display for ContractId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // base58 encoding
+        let contractid: String = bs58::encode(self.0.to_repr()).into_string();
+        write!(f, "{}", contractid)
     }
 }
 

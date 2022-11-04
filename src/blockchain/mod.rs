@@ -40,8 +40,13 @@ pub use statestore::StateStore;
 pub mod txstore;
 pub use txstore::TxStore;
 
-/// Structure holding all sled trees that comprise the concept of Blockchain.
+pub mod contractstore;
+pub use contractstore::ContractStore;
+
+/// Structure holding all sled trees that define the concept of Blockchain.
 pub struct Blockchain {
+    /// Main pointer to the sled db connection
+    pub sled_db: sled::Db,
     /// Headers sled tree
     pub headers: HeaderStore,
     /// Blocks sled tree
@@ -54,6 +59,8 @@ pub struct Blockchain {
     pub nullifiers: NullifierStore,
     /// Merkle roots sled tree
     pub merkle_roots: RootStore,
+    /// Contract states
+    pub contracts: ContractStore,
 }
 
 impl Blockchain {
@@ -67,8 +74,18 @@ impl Blockchain {
         let transactions = TxStore::new(db)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
+        let contracts = ContractStore::new(db)?;
 
-        Ok(Self { headers, blocks, order, transactions, nullifiers, merkle_roots })
+        Ok(Self {
+            sled_db: db.clone(),
+            headers,
+            blocks,
+            order,
+            transactions,
+            nullifiers,
+            merkle_roots,
+            contracts,
+        })
     }
 
     /// Insert a given slice of [`BlockInfo`] into the blockchain database.
