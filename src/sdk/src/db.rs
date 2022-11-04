@@ -1,4 +1,4 @@
-use super::error::GenericResult;
+use super::error::{ContractError, GenericResult};
 
 type DbHandle = u32;
 type TxHandle = u32;
