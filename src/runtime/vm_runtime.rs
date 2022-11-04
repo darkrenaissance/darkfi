@@ -172,6 +172,12 @@ impl Runtime {
                         import::db::db_init,
                     ),
 
+                    "db_lookup_" => Function::new_typed_with_env(
+                        &mut store,
+                        &ctx,
+                        import::db::db_lookup,
+                    ),
+
                     "db_get_" => Function::new_typed_with_env(
                         &mut store,
                         &ctx,
@@ -239,6 +245,8 @@ impl Runtime {
 
         match retval {
             entrypoint::SUCCESS => Ok(()),
+            // FIXME: we should be able to see the error returned from the contract
+            // We can put sdk::Error inside of this.
             _ => Err(Error::ContractInitError(retval)),
         }
     }

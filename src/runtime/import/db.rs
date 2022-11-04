@@ -40,15 +40,44 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
     }
 }
 
+/// Everyone can call this. Lookups up a database handle from its name.
+///
+/// ```
+///     type DbHandle = u32;
+///     db_lookup(db_name) -> DbHandle
+/// ```
+pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+    let env = ctx.data();
+    match env.contract_section {
+        ContractSection::Deploy | ContractSection::Exec | ContractSection::Update => {
+            let env = ctx.data();
+            let memory_view = env.memory_view(&ctx);
+
+            match ptr.read_utf8_string(&memory_view, len) {
+                Ok(db_name) => {
+                    // db_name = blake3_hash(contract_id, db_name)
+                    return 110;
+                }
+                Err(_) => {
+                    error!(target: "wasm_runtime::drk_log", "Failed to read UTF-8 string from VM memory");
+                    return -2;
+                }
+            }
+            0
+        }
+        _ => -1,
+    }
+}
+
 /// Everyone can call this. Will read a key from the key-value store.
 ///
 /// ```
 ///     value = db_get(db_handle, key);
 /// ```
-pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>) -> i32 {
     let env = ctx.data();
     match env.contract_section {
-        ContractSection::Update => 0,
+        ContractSection::Exec => 0,
         _ => -1,
     }
 }
@@ -58,10 +87,10 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
 /// ```
 ///     tx_handle = db_begin_tx();
 /// ```
-pub(crate) fn db_begin_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+pub(crate) fn db_begin_tx(mut ctx: FunctionEnvMut<Env>) -> i32 {
     let env = ctx.data();
     match env.contract_section {
-        ContractSection::Update => 0,
+        ContractSection::Deploy | ContractSection::Update => 0,
         _ => -1,
     }
 }
@@ -71,10 +100,10 @@ pub(crate) fn db_begin_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
 /// ```
 ///     db_set(tx_handle, key, value);
 /// ```
-pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>) -> i32 {
     let env = ctx.data();
     match env.contract_section {
-        ContractSection::Update => 0,
+        ContractSection::Deploy | ContractSection::Update => 0,
         _ => -1,
     }
 }
@@ -84,10 +113,10 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
 /// ```
 ///     db_end_tx(db_handle, tx_handle);
 /// ```
-pub(crate) fn db_end_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+pub(crate) fn db_end_tx(mut ctx: FunctionEnvMut<Env>) -> i32 {
     let env = ctx.data();
     match env.contract_section {
-        ContractSection::Update => 0,
+        ContractSection::Deploy | ContractSection::Update => 0,
         _ => -1,
     }
 }

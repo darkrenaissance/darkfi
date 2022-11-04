@@ -53,6 +53,9 @@ pub enum ContractError {
 
     #[error("Caller access was denied")]
     CallerAccessDenied,
+
+    #[error("Db not found")]
+    DbNotFound,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -72,6 +75,7 @@ pub const VALID_MERKLE_CHECK: u64 = to_builtin!(6);
 pub const UPDATE_ALREADY_SET: u64 = to_builtin!(7);
 pub const DB_INIT_FAILED: u64 = to_builtin!(8);
 pub const CALLER_ACCESS_DENIED: u64 = to_builtin!(9);
+pub const DB_NOT_FOUND: u64 = to_builtin!(10);
 
 impl From<ContractError> for u64 {
     fn from(err: ContractError) -> Self {
@@ -84,6 +88,7 @@ impl From<ContractError> for u64 {
             ContractError::UpdateAlreadySet => UPDATE_ALREADY_SET,
             ContractError::DbInitFailed => DB_INIT_FAILED,
             ContractError::CallerAccessDenied => CALLER_ACCESS_DENIED,
+            ContractError::DbNotFound => DB_NOT_FOUND,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -107,6 +112,7 @@ impl From<u64> for ContractError {
             UPDATE_ALREADY_SET => Self::UpdateAlreadySet,
             DB_INIT_FAILED => Self::DbInitFailed,
             CALLER_ACCESS_DENIED => Self::CallerAccessDenied,
+            DB_NOT_FOUND => Self::DbNotFound,
             _ => Self::Custom(error as u32),
         }
     }

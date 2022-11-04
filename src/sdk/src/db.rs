@@ -12,15 +12,33 @@ type TxHandle = u32;
 ///     type DbHandle = u32;
 ///     db_init(db_name) -> DbHandle
 /// ```
-pub fn db_init(db_name: &str) -> GenericResult<DbHandle> {
-    // FIXME: how do I return the u32 db handle from db_init?
-    // I also want the status (whether an error occurred or success).
+pub fn db_init(db_name: &str) -> GenericResult<()> {
     #[cfg(target_arch = "wasm32")]
     unsafe {
-        return match db_init_(message.as_ptr(), message.len() as u32) {
-            0 => Ok(110),
+        return match db_init_(db_name.as_ptr(), db_name.len() as u32) {
+            0 => Ok(()),
             -1 => Err(ContractError::CallerAccessDenied),
-            -2 => Err(ContractError::DbInitFailed)
+            -2 => Err(ContractError::DbInitFailed),
+            _ => unreachable!(),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    todo!("{}", db_name);
+}
+
+pub fn db_lookup(db_name: &str) -> GenericResult<DbHandle> {
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        return match db_lookup_(db_name.as_ptr(), db_name.len() as u32) {
+            handle => {
+                if handle < 0 {
+                    unreachable!();
+                }
+                Ok(handle as u32)
+            },
+            -1 => Err(ContractError::CallerAccessDenied),
+            -2 => Err(ContractError::DbNotFound),
         }
     }
 
@@ -34,7 +52,17 @@ pub fn db_init(db_name: &str) -> GenericResult<DbHandle> {
 ///     value = db_get(db_handle, key);
 /// ```
 pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Vec<u8>> {
-    Ok(Vec::new())
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        return match db_get_() {
+            0 => Ok(Vec::new()),
+            -1 => Err(ContractError::CallerAccessDenied),
+            _ => unreachable!(),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    todo!("db_get");
 }
 
 /// Only update() can call this. Starts an atomic transaction.
@@ -43,7 +71,17 @@ pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Vec<u8>> {
 ///     tx_handle = db_begin_tx();
 /// ```
 pub fn db_begin_tx() -> GenericResult<TxHandle> {
-    Ok(4)
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        return match db_begin_tx_() {
+            0 => Ok(4),
+            -1 => Err(ContractError::CallerAccessDenied),
+            _ => unreachable!(),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    todo!("db_begin_tx");
 }
 
 /// Only update() can call this. Set a value within the transaction.
@@ -53,7 +91,17 @@ pub fn db_begin_tx() -> GenericResult<TxHandle> {
 /// ```
 pub fn db_set(tx_handle: TxHandle, key: &[u8], value: Vec<u8>) -> GenericResult<()> {
     // Check entry for tx_handle is not None
-    Ok(())
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        return match db_set_() {
+            0 => Ok(()),
+            -1 => Err(ContractError::CallerAccessDenied),
+            _ => unreachable!(),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    todo!("db_set");
 }
 
 /// Only update() can call this. This writes the atomic tx to the database.
@@ -63,7 +111,17 @@ pub fn db_set(tx_handle: TxHandle, key: &[u8], value: Vec<u8>) -> GenericResult<
 /// ```
 pub fn db_end_tx(db_handle: DbHandle, tx_handle: TxHandle) -> GenericResult<()> {
     // Don't forget to set the entry for the tx in the table to empty.
-    Ok(())
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        return match db_end_tx_() {
+            0 => Ok(()),
+            -1 => Err(ContractError::CallerAccessDenied),
+            _ => unreachable!(),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    todo!("db_end_tx");
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -73,7 +131,8 @@ extern "C" {
     fn nullifier_exists_(ptr: *const u8, len: u32) -> i32;
     fn is_valid_merkle_(ptr: *const u8, len: u32) -> i32;
 
-    fn db_init_(ptr: *const u8, len: usize) -> i32;
+    fn db_init_(ptr: *const u8, len: u32) -> i32;
+    fn db_lookup_(ptr: *const u8, len: u32) -> i32;
     fn db_get_() -> i32;
     fn db_begin_tx_() -> i32;
     fn db_set_() -> i32;

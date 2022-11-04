@@ -1,5 +1,6 @@
 use darkfi_sdk::{
     crypto::Nullifier,
+    db::{db_init, db_lookup, db_get, db_begin_tx, db_set, db_end_tx},
     entrypoint,
     error::{ContractError, ContractResult},
     initialize, msg,
@@ -42,19 +43,22 @@ pub struct BarArgs {
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct FooUpdate {
     pub name: String,
-    pub y: u32,
+    pub age: u32,
 }
 
 initialize!(init_contract);
 fn init_contract() -> ContractResult {
-    // db_exists(field_name) -> bool
-    // db_delete(field_name)
-    //     panics if NAME does not exist
-    //     abort deployment
-    // db_create(field_name)
-    //
-    // internal_db_name = blake3_hash(contract_id, field_name)
-    msg!("init!");
+    msg!("wakeup wagies!");
+    db_init("wagies")?;
+
+    // Lets write a value in there
+    let tx_handle = db_begin_tx()?;
+    db_set(tx_handle, "jason_gulag".as_bytes(), serialize(&110))?;
+    let db_handle = db_lookup("wagies")?;
+    db_end_tx(db_handle, tx_handle)?;
+
+    // Host will clear delete the batches array after calling this func.
+
     Ok(())
 }
 
@@ -69,12 +73,17 @@ fn process_instruction(ix: &[u8]) -> ContractResult {
             // ...
             let args: FooArgs = deserialize(tx_data)?;
             // ...
-            let update = FooUpdate { name: "john_doe".to_string(), y: 110 };
+            let update = FooUpdate { name: "john_doe".to_string(), age: 110 };
 
             let mut update_data = vec![Function::Foo as u8];
             update_data.extend_from_slice(&serialize(&update));
             set_update(&update_data)?;
             msg!("update is set!");
+
+            // Example: try to get a value from the db
+            let db_handle = db_lookup("wagies")?;
+            let age_data = db_get(db_handle, "jason_gulag".as_bytes())?;
+            msg!("wagie age data: {:?}", age_data);
         }
         Function::Bar => {
             let tx_data = &ix[1..];
@@ -119,7 +128,12 @@ fn process_update(update_data: &[u8]) -> ContractResult {
     match Function::from(update_data[0]) {
         Function::Foo => {
             let update: FooUpdate = deserialize(&update_data[1..])?;
-            // update.apply()
+
+            // Write the wagie to the db
+            let tx_handle = db_begin_tx()?;
+            db_set(tx_handle, update.name.as_bytes(), serialize(&update.age))?;
+            let db_handle = db_lookup("wagies")?;
+            db_end_tx(db_handle, tx_handle)?;
         }
         _ => unreachable!(),
     }
