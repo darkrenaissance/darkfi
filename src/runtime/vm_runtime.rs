@@ -259,9 +259,6 @@ impl Runtime {
         let mut env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Update;
 
-        debug!(target: "wasm_runtime::run", "Getting initialize function");
-        let entrypoint = self.instance.exports.get_function(UPDATE)?;
-
         let update_data = env_mut.contract_update.take().unwrap();
         // FIXME: Less realloc
         let mut payload = vec![update_data.0];
@@ -272,8 +269,11 @@ impl Runtime {
         // The question is if we need to allocate more memory or if it's ok to just
         // overwrite from zero (and even if overwrite - is there enough space?)
         let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
-        //self.set_memory_page_size(pages_required as u32)?;
+        self.set_memory_page_size(pages_required as u32)?;
         self.copy_to_memory(&payload)?;
+
+        debug!(target: "wasm_runtime::run", "Getting initialize function");
+        let entrypoint = self.instance.exports.get_function(UPDATE)?;
 
         debug!(target: "wasm_runtime::run", "Executing wasm");
         let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
