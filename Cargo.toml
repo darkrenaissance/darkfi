@@ -361,7 +361,7 @@ required-features = ["crypto"]
 
 [[example]]
 name = "dao"
-path = "example/dao/src/dao.rs"
+path = "example/dao/src/main.rs"
 required-features = ["crypto", "rpc"]
 
 [[example]]
