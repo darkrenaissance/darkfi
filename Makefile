@@ -65,6 +65,9 @@ test: token_lists zkas $(PROOFS_BIN) test-tx
 test-tx: zkas
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) run --release --features=node,zkas --example tx
 
+test-dao: zkas
+	RUSTFLAGS="$(RUSTFLAGS)" RUST_LOG=debug $(CARGO) run --release --features=crypto,rpc --example dao
+
 cleanbin:
 	rm -f $(BINS)
 
