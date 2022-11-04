@@ -18,6 +18,7 @@
 
 use std::result::Result as ResultGeneric;
 
+pub type GenericResult<T> = ResultGeneric<T, ContractError>;
 pub type ContractResult = ResultGeneric<(), ContractError>;
 
 /// Error codes available in the contract.
@@ -46,6 +47,12 @@ pub enum ContractError {
 
     #[error("Update already set")]
     UpdateAlreadySet,
+
+    #[error("Db init failed")]
+    DbInitFailed,
+
+    #[error("Caller access was denied")]
+    CallerAccessDenied,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -63,6 +70,8 @@ pub const IO_ERROR: u64 = to_builtin!(4);
 pub const NULLIFIER_EXIST_CHECK: u64 = to_builtin!(5);
 pub const VALID_MERKLE_CHECK: u64 = to_builtin!(6);
 pub const UPDATE_ALREADY_SET: u64 = to_builtin!(7);
+pub const DB_INIT_FAILED: u64 = to_builtin!(8);
+pub const CALLER_ACCESS_DENIED: u64 = to_builtin!(9);
 
 impl From<ContractError> for u64 {
     fn from(err: ContractError) -> Self {
@@ -73,6 +82,8 @@ impl From<ContractError> for u64 {
             ContractError::NullifierExistCheck => NULLIFIER_EXIST_CHECK,
             ContractError::ValidMerkleCheck => VALID_MERKLE_CHECK,
             ContractError::UpdateAlreadySet => UPDATE_ALREADY_SET,
+            ContractError::DbInitFailed => DB_INIT_FAILED,
+            ContractError::CallerAccessDenied => CALLER_ACCESS_DENIED,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -94,6 +105,8 @@ impl From<u64> for ContractError {
             NULLIFIER_EXIST_CHECK => Self::NullifierExistCheck,
             VALID_MERKLE_CHECK => Self::ValidMerkleCheck,
             UPDATE_ALREADY_SET => Self::UpdateAlreadySet,
+            DB_INIT_FAILED => Self::DbInitFailed,
+            CALLER_ACCESS_DENIED => Self::CallerAccessDenied,
             _ => Self::Custom(error as u32),
         }
     }

@@ -19,6 +19,9 @@
 pub use incrementalmerkletree;
 pub use pasta_curves as pasta;
 
+/// Database functions
+pub mod db;
+
 /// Entrypoint used for the wasm binaries
 pub mod entrypoint;
 
