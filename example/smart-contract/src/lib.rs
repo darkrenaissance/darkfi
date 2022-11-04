@@ -4,7 +4,7 @@ use darkfi_sdk::{
     error::ContractResult,
     initialize, msg,
     state::set_update,
-    tx::Transaction,
+    tx::FuncCall,
     update_state,
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
@@ -70,9 +70,9 @@ fn process_instruction(ix: &[u8]) -> ContractResult {
         Function::Foo => {
             let tx_data = &ix[1..];
             // ...
-            let (func_call_index, tx): (u32, Transaction) = deserialize(tx_data)?;
+            let (func_call_index, func_calls): (u32, Vec<FuncCall>) = deserialize(tx_data)?;
             let call_data: FooCallData =
-                deserialize(&tx.func_calls[func_call_index as usize].call_data)?;
+                deserialize(&func_calls[func_call_index as usize].call_data)?;
             msg!("call_data {{ a: {}, b: {} }}", call_data.a, call_data.b);
             // ...
             let update = FooUpdate { name: "john_doe".to_string(), age: 110 };

@@ -19,7 +19,7 @@
 use darkfi::{crypto::contract_id::ContractId, runtime::vm_runtime::Runtime, Result};
 use darkfi_sdk::{
     pasta::pallas,
-    tx::{FuncCall, Transaction},
+    tx::FuncCall
 };
 use darkfi_serial::{serialize, Encodable, WriteExt};
 
@@ -58,15 +58,11 @@ fn run_contract() -> Result<()> {
     // =============================================
     // Build some kind of payload to show an example
     // =============================================
-    let tx = Transaction {
-        func_calls: vec![FuncCall {
+    let func_calls = vec![FuncCall {
             contract_id: pallas::Base::from(110),
             func_id: pallas::Base::from(4),
             call_data: serialize(&FooCallData { a: 777, b: 666 }),
-            proofs: Vec::new(),
-        }],
-        signatures: Vec::new(),
-    };
+    }];
     let func_call_index: u32 = 0;
 
     let mut payload = Vec::new();
@@ -74,7 +70,7 @@ fn run_contract() -> Result<()> {
     payload.write_u8(Function::Foo as u8)?;
     // Write the actual payload data
     payload.write_u32(func_call_index)?;
-    tx.encode(&mut payload)?;
+    func_calls.encode(&mut payload)?;
 
     // ============================================================
     // Serialize the payload into the runtime format and execute it
