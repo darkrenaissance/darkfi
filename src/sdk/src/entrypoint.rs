@@ -22,51 +22,32 @@ use std::{mem::size_of, slice::from_raw_parts};
 pub const SUCCESS: u64 = 0;
 
 #[macro_export]
-macro_rules! initialize {
-    ($process_init:ident) => {
+macro_rules! define_contract {
+    (init: $init_func:ident, exec: $exec_func:ident, apply: $apply_func:ident) => {
         /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn __initialize(input: *mut u8) -> u64 {
             let instruction_data = $crate::entrypoint::deserialize(input);
 
-            match $process_init(&instruction_data) {
+            match $init_func(&instruction_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
         }
-    };
-}
-
-/// This macro is used to flag the contract entrypoint function.
-/// All contracts must provide such a function and accept a payload.
-///
-/// The payload is a slice of u8 prepended with a little-endian u64
-/// that tells the slice's length.
-#[macro_export]
-macro_rules! entrypoint {
-    ($process_instruction:ident) => {
-        /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn __entrypoint(input: *mut u8) -> u64 {
             let instruction_data = $crate::entrypoint::deserialize(input);
 
-            match $process_instruction(&instruction_data) {
+            match $exec_func(&instruction_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
         }
-    };
-}
-
-#[macro_export]
-macro_rules! update_state {
-    ($process_update:ident) => {
-        /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn __update(input: *mut u8) -> u64 {
             let update_data = $crate::entrypoint::deserialize(input);
 
-            match $process_update(&update_data) {
+            match $apply_func(&update_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
