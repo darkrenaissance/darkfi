@@ -360,7 +360,7 @@ pub fn is_leader(slot: u64, epoch_coins: &Vec<Vec<LeadCoin>>) -> (bool, usize) {
         let y_exp_hash: pallas::Base =
             poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
                 .hash(y_exp);
-        let y_coordinates = pedersen_commitment_base(coin.y_mu.unwrap(), mod_r_p(y_exp_hash))
+        let y_coordinates = pedersen_commitment_base(y_exp_hash, mod_r_p(coin.y_mu.unwrap()))
             .to_affine()
             .coordinates()
             .unwrap();
