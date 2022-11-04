@@ -1,3 +1,4 @@
 [Dcon2] - yyyy-mm-dd
-	* doc/: improved formatting and reorganized the structure.
+	* wasm: merge branch and implement prototype working smart contracts.
+	* doc: improved formatting and reorganized the structure.
 
