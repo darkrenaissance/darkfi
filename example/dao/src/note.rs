@@ -1,22 +1,4 @@
-/* This file is part of DarkFi (https://dark.fi)
- *
- * Copyright (C) 2020-2022 Dyne.org foundation
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
-use crypto_api_chachapoly::ChachaPolyIetf;
+use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -38,14 +20,14 @@ pub fn encrypt<T: Encodable>(note: &T, public: &PublicKey) -> Result<EncryptedNo
 
     let mut input = Vec::new();
     note.encode(&mut input)?;
+    let input_len = input.len();
 
-    let mut ciphertext = vec![0; input.len() + AEAD_TAG_SIZE];
-    assert_eq!(
-        ChachaPolyIetf::aead_cipher()
-            .seal_to(&mut ciphertext, &input, &[], key.as_ref(), &[0u8; 12])
-            .unwrap(),
-        input.len() + AEAD_TAG_SIZE
-    );
+    let mut ciphertext = vec![0_u8; input_len + AEAD_TAG_SIZE];
+    ciphertext[..input_len].copy_from_slice(&input);
+
+    ChaCha20Poly1305::new(key.as_ref().into())
+        .encrypt_in_place([0u8; 12][..].into(), &[], &mut ciphertext)
+        .unwrap();
 
     Ok(EncryptedNote2 { ciphertext, ephem_public })
 }
@@ -61,15 +43,20 @@ impl EncryptedNote2 {
         let shared_secret = sapling_ka_agree(secret, &self.ephem_public);
         let key = kdf_sapling(&shared_secret, &self.ephem_public);
 
-        let mut plaintext = vec![0; self.ciphertext.len()];
-        assert_eq!(
-            ChachaPolyIetf::aead_cipher()
-                .open_to(&mut plaintext, &self.ciphertext, &[], key.as_ref(), &[0u8; 12])
-                .map_err(|_| Error::NoteDecryptionFailed)?,
-            self.ciphertext.len() - AEAD_TAG_SIZE
-        );
+        let ciphertext_len = self.ciphertext.len();
+        let mut plaintext = vec![0_u8; ciphertext_len];
+        plaintext.copy_from_slice(&self.ciphertext);
 
-        T::decode(&plaintext[..]).map_err(Error::from)
+        match ChaCha20Poly1305::new(key.as_ref().into()).decrypt_in_place(
+            [0u8; 12][..].into(),
+            &[],
+            &mut plaintext,
+        ) {
+            Ok(()) => {
+                Ok(T::decode(&plaintext[..ciphertext_len - AEAD_TAG_SIZE]).map_err(Error::from)?)
+            }
+            Err(e) => Err(Error::NoteDecryptionFailed(e.to_string())),
+        }
     }
 }
 
