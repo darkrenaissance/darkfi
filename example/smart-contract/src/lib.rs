@@ -1,15 +1,13 @@
 use darkfi_sdk::{
-    crypto::Nullifier,
-    db::{db_init, db_lookup, db_get, db_begin_tx, db_set, db_end_tx},
+    db::{db_begin_tx, db_end_tx, db_get, db_init, db_lookup, db_set},
     entrypoint,
-    error::{ContractError, ContractResult},
+    error::ContractResult,
     initialize, msg,
-    pasta::pallas,
-    state::{nullifier_exists, set_update},
+    state::set_update,
     tx::Transaction,
     update_state,
 };
-use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable, ReadExt, Decodable};
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 /// Available functions for this contract.
 /// We identify them with the first byte passed in through the payload.
@@ -48,7 +46,7 @@ pub struct FooUpdate {
 }
 
 initialize!(init_contract);
-fn init_contract() -> ContractResult {
+fn init_contract(_ix: &[u8]) -> ContractResult {
     msg!("wakeup wagies!");
     db_init("wagies")?;
 
@@ -73,7 +71,8 @@ fn process_instruction(ix: &[u8]) -> ContractResult {
             let tx_data = &ix[1..];
             // ...
             let (func_call_index, tx): (u32, Transaction) = deserialize(tx_data)?;
-            let call_data: FooCallData = deserialize(&tx.func_calls[func_call_index as usize].call_data)?;
+            let call_data: FooCallData =
+                deserialize(&tx.func_calls[func_call_index as usize].call_data)?;
             msg!("call_data {{ a: {}, b: {} }}", call_data.a, call_data.b);
             // ...
             let update = FooUpdate { name: "john_doe".to_string(), age: 110 };

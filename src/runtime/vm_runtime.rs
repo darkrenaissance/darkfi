@@ -37,7 +37,6 @@ use super::{
     import,
     //chain_state::{is_valid_merkle, nullifier_exists, set_update},
     memory::MemoryManipulation,
-    util::serialize_payload,
 };
 use crate::{crypto::contract_id::ContractId, Error, Result};
 
@@ -213,30 +212,46 @@ impl Runtime {
         Ok(Self { instance, store, ctx })
     }
 
-    pub fn deploy(&mut self) -> Result<()> {
+    /// This function runs when a smart contract is initially deployed, or re-deployed.
+    /// The runtime will look for an [`INITIALIZE`] symbol in the wasm code, and execute
+    /// it if found. Optionally, it is possible to pass in a payload for any kind of special
+    /// instructions the developer wants to manage in the initialize function.
+    /// This process is supposed to set up the sled db trees for storing the smart contract
+    /// state, and it can create, delete, modify, read, and write to databases it's allowed to.
+    /// The permissions for this are handled by the `ContractId` in the sled db API so we
+    /// assume that the contract is only able to do write operations on its own sled trees.
+    pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
         let mut env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Deploy;
 
-        debug!(target: "wasm_runtime::run", "Getting initialize function");
+        // Serialize the payload for the format the wasm runtime is expecting.
+        let payload = Self::serialize_payload(payload);
+
+        // Allocate enough memory for the payload and copy it into the memory.
+        let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
+        self.set_memory_page_size(pages_required as u32)?;
+        self.copy_to_memory(&payload)?;
+
+        debug!(target: "wasm_runtime::deploy", "Getting initialize function");
         let entrypoint = self.instance.exports.get_function(INITIALIZE)?;
 
-        debug!(target: "wasm_runtime::run", "Executing wasm");
-        let ret = match entrypoint.call(&mut self.store, &[]) {
+        debug!(target: "wasm_runtime::deploy", "Executing wasm");
+        let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
             Ok(retvals) => {
                 self.print_logs();
-                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                debug!(target: "wasm_runtime::deploy", "{}", self.gas_info());
                 retvals
             }
             Err(e) => {
                 self.print_logs();
-                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                debug!(target: "wasm_runtime::deploy", "{}", self.gas_info());
                 // WasmerRuntimeError panics are handled here. Return from run() immediately.
                 return Err(e.into())
             }
         };
 
-        debug!(target: "wasm_runtime::run", "wasm executed successfully");
-        debug!(target: "wasm_runtime::run", "Contract returned: {:?}", ret[0]);
+        debug!(target: "wasm_runtime::deploy", "wasm executed successfully");
+        debug!(target: "wasm_runtime::deploy", "Contract returned: {:?}", ret[0]);
 
         let retval = match ret[0] {
             Value::I64(v) => v as u64,
@@ -251,37 +266,43 @@ impl Runtime {
         }
     }
 
-    /// Run the hardcoded `ENTRYPOINT` function with the given payload as input.
+    /// This funcion runs when someone wants to execute a smart contract.
+    /// The runtime will look for an [`ENTRYPOINT`] symbol in the wasm code, and
+    /// execute it if found. A payload is also passed as an instruction that can
+    /// be used inside the vm by the runtime.
     pub fn exec(&mut self, payload: &[u8]) -> Result<()> {
         let mut env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Exec;
 
+        // Serialize the payload for the format the wasm runtime is expecting.
+        let payload = Self::serialize_payload(payload);
+
+        // Allocate enough memory for the payload and copy it into the memory.
         let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
         self.set_memory_page_size(pages_required as u32)?;
+        self.copy_to_memory(&payload)?;
 
-        self.copy_to_memory(payload)?;
-
-        debug!(target: "wasm_runtime::run", "Getting entrypoint function");
+        debug!(target: "wasm_runtime::exec", "Getting entrypoint function");
         let entrypoint = self.instance.exports.get_function(ENTRYPOINT)?;
 
-        debug!(target: "wasm_runtime::run", "Executing wasm");
+        debug!(target: "wasm_runtime::exec", "Executing wasm");
         // We pass 0 to entrypoint() which is the location of the payload data in the memory
         let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
             Ok(retvals) => {
                 self.print_logs();
-                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                debug!(target: "wasm_runtime::exec", "{}", self.gas_info());
                 retvals
             }
             Err(e) => {
                 self.print_logs();
-                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                debug!(target: "wasm_runtime::exec", "{}", self.gas_info());
                 // WasmerRuntimeError panics are handled here. Return from run() immediately.
                 return Err(e.into())
             }
         };
 
-        debug!(target: "wasm_runtime::run", "wasm executed successfully");
-        debug!(target: "wasm_runtime::run", "Contract returned: {:?}", ret[0]);
+        debug!(target: "wasm_runtime::exec", "wasm executed successfully");
+        debug!(target: "wasm_runtime::exec", "Contract returned: {:?}", ret[0]);
 
         let retval = match ret[0] {
             Value::I64(v) => v as u64,
@@ -294,43 +315,48 @@ impl Runtime {
         }
     }
 
+    /// This function runs after successful execution of [`exec`] and tries to
+    /// apply the state change to the sled databases.
+    /// The runtime will lok for an [`UPDATE`] symbol in the wasm code, and execute
+    /// it if found. The function does not take an arbitrary payload, but just takes
+    /// a state update from `env` and passes it into the wasm runtime.
     pub fn apply(&mut self) -> Result<()> {
         let mut env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Update;
 
+        // Take the update data from env, and serialize it for the format the wasm
+        // runtime is expecting.
         let update_data = env_mut.contract_update.take().unwrap();
-        // FIXME: Less realloc
-        let mut payload = vec![update_data.0];
+        let mut payload = Vec::with_capacity(1 + update_data.1.len());
+        payload.extend_from_slice(&[update_data.0]);
         payload.extend_from_slice(&update_data.1);
-        let payload = serialize_payload(&payload);
+        let payload = Self::serialize_payload(&payload);
 
-        // TODO: Test if this works when state update is larger than the initial payload
-        // The question is if we need to allocate more memory or if it's ok to just
-        // overwrite from zero (and even if overwrite - is there enough space?)
+        // Allocate enough memory for the payload and copy it into the memory.
         let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
         self.set_memory_page_size(pages_required as u32)?;
         self.copy_to_memory(&payload)?;
 
-        debug!(target: "wasm_runtime::run", "Getting initialize function");
+        debug!(target: "wasm_runtime::apply", "Getting update function");
         let entrypoint = self.instance.exports.get_function(UPDATE)?;
 
-        debug!(target: "wasm_runtime::run", "Executing wasm");
+        debug!(target: "wasm_runtime::apply", "Executing wasm");
         let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
             Ok(retvals) => {
                 self.print_logs();
-                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                debug!(target: "wasm_runtime::apply", "{}", self.gas_info());
                 retvals
             }
             Err(e) => {
                 self.print_logs();
-                debug!(target: "wasm_runtime::run", "{}", self.gas_info());
+                debug!(target: "wasm_runtime::apply", "{}", self.gas_info());
                 // WasmerRuntimeError panics are handled here. Return from run() immediately.
                 return Err(e.into())
             }
         };
 
-        debug!(target: "wasm_runtime::run", "wasm executed successfully");
-        debug!(target: "wasm_runtime::run", "Contract returned: {:?}", ret[0]);
+        debug!(target: "wasm_runtime::apply", "wasm executed successfully");
+        debug!(target: "wasm_runtime::apply", "Contract returned: {:?}", ret[0]);
 
         let retval = match ret[0] {
             Value::I64(v) => v as u64,
@@ -388,5 +414,16 @@ impl Runtime {
         let env = self.ctx.as_ref(&self.store);
         let memory_view = env.memory_view(&self.store);
         memory_view.write_slice(payload, 0)
+    }
+
+    /// Serialize contract payload to the format accepted by the runtime functions.
+    /// We keep the same payload as a slice of bytes, and prepend it with a
+    /// little-endian u64 to tell the payload's length.
+    fn serialize_payload(payload: &[u8]) -> Vec<u8> {
+        let payload_len = payload.len();
+        let mut out = Vec::with_capacity(8 + payload_len);
+        out.extend_from_slice(&(payload_len as u64).to_le_bytes());
+        out.extend_from_slice(payload);
+        out
     }
 }

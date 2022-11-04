@@ -1,7 +1,4 @@
-use super::{
-    crypto::{MerkleNode, Nullifier},
-    error::{ContractError, GenericResult},
-};
+use super::error::GenericResult;
 
 type DbHandle = u32;
 type TxHandle = u32;

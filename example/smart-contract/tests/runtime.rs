@@ -16,15 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{
-    crypto::contract_id::ContractId,
-    runtime::{util::serialize_payload, vm_runtime::Runtime},
-    Result,
+use darkfi::{crypto::contract_id::ContractId, runtime::vm_runtime::Runtime, Result};
+use darkfi_sdk::{
+    pasta::pallas,
+    tx::{FuncCall, Transaction},
 };
-use darkfi_sdk::{crypto::nullifier::Nullifier, pasta::pallas, tx::{Transaction, FuncCall}};
 use darkfi_serial::{serialize, Encodable, WriteExt};
 
-use smart_contract::FooCallData;
+use smart_contract::{FooCallData, Function};
 
 #[test]
 fn run_contract() -> Result<()> {
@@ -52,43 +51,40 @@ fn run_contract() -> Result<()> {
     let contract_id = ContractId::new(pallas::Base::from(1));
     let mut runtime = Runtime::new(&wasm_bytes, contract_id)?;
 
-    runtime.deploy()?;
+    // Deploy function to initialize the smart contract state.
+    // Here we pass an empty payload, but it's possible to feed in arbitrary data.
+    runtime.deploy(&[])?;
 
     // =============================================
     // Build some kind of payload to show an example
     // =============================================
     let tx = Transaction {
-        func_calls: vec![
-            FuncCall {
-                contract_id: pallas::Base::from(110),
-                func_id: pallas::Base::from(4),
-                call_data: serialize(&FooCallData { a: 777, b: 666 }),
-                proofs: Vec::new()
-            }
-        ],
-        signatures: Vec::new()
+        func_calls: vec![FuncCall {
+            contract_id: pallas::Base::from(110),
+            func_id: pallas::Base::from(4),
+            call_data: serialize(&FooCallData { a: 777, b: 666 }),
+            proofs: Vec::new(),
+        }],
+        signatures: Vec::new(),
     };
     let func_call_index: u32 = 0;
 
     let mut payload = Vec::new();
-    // Prepend the func id = 0x00
     // Selects which path executes in the contract.
-    payload.write_u8(0x00);
+    payload.write_u8(Function::Foo as u8)?;
     // Write the actual payload data
-    payload.write_u32(func_call_index);
+    payload.write_u32(func_call_index)?;
     tx.encode(&mut payload)?;
 
     // ============================================================
     // Serialize the payload into the runtime format and execute it
     // ============================================================
-    runtime.exec(&serialize_payload(&payload))?;
+    runtime.exec(&payload)?;
 
+    // =====================================================
+    // If exec was successful, try to apply the state change
+    // =====================================================
     runtime.apply()?;
-    //Ok(())
-
-    //runtime.exec(&serialize_payload(&payload))?;
-
-    //runtime.apply()?;
 
     Ok(())
 }

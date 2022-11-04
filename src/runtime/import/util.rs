@@ -1,7 +1,7 @@
-use log::{error, warn};
-use wasmer::{AsStoreRef, FunctionEnvMut, WasmPtr};
+use log::error;
+use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::runtime::{memory::MemoryManipulation, vm_runtime::Env};
+use crate::runtime::vm_runtime::Env;
 
 /// Host function for logging strings.
 /// This is injected into the runtime with wasmer's `imports!` macro.

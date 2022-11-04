@@ -16,17 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{MerkleNode, Nullifier};
-use log::{debug, error};
-use wasmer::{AsStoreRef, FunctionEnvMut, WasmPtr};
+use log::debug;
+use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::{
-    node::state::ProgramState,
-    runtime::{
-        memory::MemoryManipulation,
-        vm_runtime::{ContractSection, Env},
-    },
-};
+use crate::runtime::vm_runtime::{ContractSection, Env};
 
 pub(crate) fn set_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();

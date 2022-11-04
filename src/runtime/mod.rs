@@ -22,8 +22,5 @@ pub mod vm_runtime;
 /// VM memory access (read/write)
 pub(crate) mod memory;
 
-/// Utility functions
-pub mod util;
-
 /// Imported host functions
 pub(crate) mod import;

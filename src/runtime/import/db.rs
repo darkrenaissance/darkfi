@@ -1,14 +1,7 @@
-use darkfi_sdk::crypto::{MerkleNode, Nullifier};
-use log::{debug, error};
-use wasmer::{AsStoreRef, FunctionEnvMut, WasmPtr};
+use log::error;
+use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::{
-    node::state::ProgramState,
-    runtime::{
-        memory::MemoryManipulation,
-        vm_runtime::{ContractSection, Env},
-    },
-};
+use crate::runtime::vm_runtime::{ContractSection, Env};
 
 /// Only deploy() can call this. Creates a new database instance for this contract.
 ///

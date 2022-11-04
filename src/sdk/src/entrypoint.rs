@@ -26,8 +26,10 @@ macro_rules! initialize {
     ($process_init:ident) => {
         /// # Safety
         #[no_mangle]
-        pub unsafe extern "C" fn __initialize() -> u64 {
-            match $process_init() {
+        pub unsafe extern "C" fn __initialize(input: *mut u8) -> u64 {
+            let instruction_data = $crate::entrypoint::deserialize(input);
+
+            match $process_init(&instruction_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }

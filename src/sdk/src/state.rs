@@ -18,7 +18,7 @@
 
 use super::{
     crypto::{MerkleNode, Nullifier},
-    error::{ContractError, ContractResult},
+    error::ContractError,
 };
 
 pub fn set_update(update_data: &[u8]) -> Result<(), ContractError> {

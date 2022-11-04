@@ -18,7 +18,7 @@
 
 use wasmer::{MemoryView, WasmPtr};
 
-use crate::{Error, Result};
+use crate::Result;
 
 pub trait MemoryManipulation {
     fn write_slice(&self, value_slice: &[u8], mem_offset: u32) -> Result<()>;

@@ -1,8 +1,5 @@
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use pasta_curves::{
-    group::ff::{Field, PrimeField},
-    pallas,
-};
+use pasta_curves::pallas;
 
 type ContractId = pallas::Base;
 type FuncId = pallas::Base;
