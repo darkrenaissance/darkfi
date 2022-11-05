@@ -142,9 +142,7 @@ impl ZkContractTable {
 // ANCHOR: transaction
 pub struct Transaction {
     pub func_calls: Vec<FuncCall>,
-    // TODO: this is wrong. It should be Vec<Vec<Signature>>
-    // each Vec<Signature> correspond to ONE function call
-    pub signatures: Vec<Signature>,
+    pub signatures: Vec<Vec<Signature>>,
     // pub proofs: Vec<Proof>,
 }
 // ANCHOR_END: transaction
@@ -193,12 +191,12 @@ impl Transaction {
 
     pub fn verify_sigs(&self) {
         let mut unsigned_tx_data = vec![];
-        for (i, (func_call, signature)) in
+        for (i, (func_call, signatures)) in
             self.func_calls.iter().zip(self.signatures.clone()).enumerate()
         {
             func_call.encode(&mut unsigned_tx_data).expect("failed to encode data");
             let signature_pub_keys = func_call.call_data.signature_public_keys();
-            for signature_pub_key in signature_pub_keys {
+            for (signature_pub_key, signature) in signature_pub_keys.iter().zip(signatures) {
                 let verify_result = signature_pub_key.verify(&unsigned_tx_data[..], &signature);
                 assert!(verify_result, "verify sigs[{}] failed", i);
             }
@@ -207,12 +205,10 @@ impl Transaction {
     }
 }
 
-pub fn sign(signature_secrets: Vec<SecretKey>, func_calls: &Vec<FuncCall>) -> Vec<Signature> {
+pub fn sign(signature_secrets: Vec<SecretKey>, func_call: &FuncCall) -> Vec<Signature> {
     let mut signatures = vec![];
     let mut unsigned_tx_data = vec![];
-    for (_i, (signature_secret, func_call)) in
-        signature_secrets.iter().zip(func_calls.iter()).enumerate()
-    {
+    for signature_secret in signature_secrets {
         func_call.encode(&mut unsigned_tx_data).expect("failed to encode data");
         let signature = signature_secret.sign(&unsigned_tx_data[..]);
         signatures.push(signature);

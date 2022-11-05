@@ -629,7 +629,12 @@ impl DaoWallet {
         let func_call = builder.build(zk_bins);
         let func_calls = vec![func_call];
 
-        let signatures = sign(vec![self.signature_secret], &func_calls);
+        let mut signatures = vec![];
+        for func_call in &func_calls {
+            let sig = sign(vec![self.signature_secret], func_call);
+            signatures.push(sig);
+        }
+
         Transaction { func_calls, signatures }
     }
 
@@ -871,7 +876,12 @@ impl DaoWallet {
         let exec_func_call = builder.build(zk_bins);
         let func_calls = vec![transfer_func_call, exec_func_call];
 
-        let signatures = sign(vec![tx_signature_secret, exec_signature_secret], &func_calls);
+        let mut signatures = vec![];
+        for func_call in &func_calls {
+            let sig = sign(vec![self.signature_secret], func_call);
+            signatures.push(sig);
+        }
+
         Ok(Transaction { func_calls, signatures })
     }
 }
@@ -982,7 +992,12 @@ impl MoneyWallet {
         let func_call = builder.build(zk_bins);
         let func_calls = vec![func_call];
 
-        let signatures = sign(vec![self.signature_secret], &func_calls);
+        let mut signatures = vec![];
+        for func_call in &func_calls {
+            let sig = sign(vec![self.signature_secret], func_call);
+            signatures.push(sig);
+        }
+
         Ok(Transaction { func_calls, signatures })
     }
 
@@ -1057,7 +1072,12 @@ impl MoneyWallet {
         let func_call = builder.build(zk_bins);
         let func_calls = vec![func_call];
 
-        let signatures = sign(vec![self.signature_secret], &func_calls);
+        let mut signatures = vec![];
+        for func_call in &func_calls {
+            let sig = sign(vec![self.signature_secret], func_call);
+            signatures.push(sig);
+        }
+
         Ok(Transaction { func_calls, signatures })
     }
 }
@@ -1140,7 +1160,12 @@ impl CashierWallet {
         let func_call = builder.build(zk_bins)?;
         let func_calls = vec![func_call];
 
-        let signatures = sign(vec![self.signature_secret], &func_calls);
+        let mut signatures = vec![];
+        for func_call in &func_calls {
+            let sig = sign(vec![self.signature_secret], func_call);
+            signatures.push(sig);
+        }
+
         Ok(Transaction { func_calls, signatures })
     }
 
