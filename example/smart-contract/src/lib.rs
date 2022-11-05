@@ -37,8 +37,8 @@ pub struct FooCallData {
 impl FooCallData {
     //fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)>;
 
-    fn get_metadata(&self) {
-    }
+    //fn get_metadata(&self) {
+    //}
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
@@ -75,13 +75,13 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     Ok(())
 }
 
-fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
+fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
     match Function::from(ix[0]) {
         Function::Foo => {
             let tx_data = &ix[1..];
             // ...
             let (func_call_index, func_calls): (u32, Vec<FuncCall>) = deserialize(tx_data)?;
-            let call_data: FooCallData =
+            let _call_data: FooCallData =
                 deserialize(&func_calls[func_call_index as usize].call_data)?;
 
             // Convert call_data to halo2 public inputs
@@ -97,7 +97,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
 // This is the main entrypoint function where the payload is fed.
 // Through here, you can branch out into different functions inside
 // this library.
-fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
+fn process_instruction(_cid: ContractId, ix: &[u8]) -> ContractResult {
     match Function::from(ix[0]) {
         Function::Foo => {
             let tx_data = &ix[1..];
@@ -123,40 +123,14 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         Function::Bar => {
             let tx_data = &ix[1..];
             // ...
-            let args: BarArgs = deserialize(tx_data)?;
+            let _args: BarArgs = deserialize(tx_data)?;
         }
     }
-    /*
-    msg!("Hello from the VM runtime!");
-    // Deserialize the payload into `Args`.
-    let args: Args = deserialize(ix)?;
-    msg!("deserializing payload worked");
-
-    if args.a < args.b {
-        // Returning custom errors
-        return Err(ContractError::Custom(69))
-    }
-
-    let sum = args.a + args.b;
-    // Publicly logged messages
-    msg!("Hello from the VM runtime!");
-    msg!("Sum: {:?}", sum);
-
-    // Querying of ledger state available from the VM host
-    let nf = Nullifier::from(pallas::Base::from(0x10));
-    msg!("Contract Nullifier: {:?}", nf);
-
-    if nullifier_exists(&nf)? {
-        msg!("Nullifier exists");
-    } else {
-        msg!("Nullifier doesn't exist");
-    }
-    */
 
     Ok(())
 }
 
-fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
+fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
     msg!("Make update!");
 
     match Function::from(update_data[0]) {
@@ -175,10 +149,3 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
     Ok(())
 }
 
-//fn state_transition() -> Result<StateUpdate> {
-//    // read only
-//}
-//
-//fn apply(update) {
-//    // writes happen here
-//}

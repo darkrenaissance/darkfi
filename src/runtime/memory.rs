@@ -36,7 +36,7 @@ impl<'a> MemoryManipulation for MemoryView<'a> {
         Ok(slice.write_slice(value_slice)?)
     }
 
-    fn read_slice(&self, value_len: usize, mem_offset: u32) -> Option<&[u8]> {
+    fn read_slice(&self, _value_len: usize, _mem_offset: u32) -> Option<&[u8]> {
         // TODO: use data_size() ?
         // DISABLED
         /*

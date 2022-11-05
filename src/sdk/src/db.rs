@@ -137,11 +137,6 @@ pub fn db_end_tx(db_handle: DbHandle, tx_handle: TxHandle) -> GenericResult<()> 
 
 #[cfg(target_arch = "wasm32")]
 extern "C" {
-    fn get_update_() -> i32;
-    fn set_update_(ptr: *const u8, len: u32) -> i32;
-    fn nullifier_exists_(ptr: *const u8, len: u32) -> i32;
-    fn is_valid_merkle_(ptr: *const u8, len: u32) -> i32;
-
     fn db_init_(ptr: *const u8, len: u32) -> i32;
     fn db_lookup_(ptr: *const u8, len: u32) -> i32;
     fn db_get_() -> i32;

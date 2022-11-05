@@ -23,7 +23,7 @@ use crate::runtime::vm_runtime::{ContractSection, Env};
 
 /// Host function for logging strings.
 /// This is injected into the runtime with wasmer's `imports!` macro.
-pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
+pub(crate) fn drk_log(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
     let env = ctx.data();
     let memory_view = env.memory_view(&ctx);
 
@@ -39,7 +39,7 @@ pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
     }
 }
 
-pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Exec => {

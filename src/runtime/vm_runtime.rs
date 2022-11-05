@@ -39,20 +39,16 @@ use crate::{blockchain::Blockchain, Error, Result};
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
 
-/// Hardcoded setup function of a contract
-const INITIALIZE: &str = "__initialize";
-/// Hardcoded entrypoint function of a contract
-const ENTRYPOINT: &str = "__entrypoint";
-/// Hardcoded apply function of a contract
-const UPDATE: &str = "__update";
-
 /// Gas limit for a contract
 const GAS_LIMIT: u64 = 200000;
 
 #[derive(Clone, Copy)]
 pub enum ContractSection {
+    /// Setup function of a contract
     Deploy,
+    /// Entrypoint function of a contract
     Exec,
+    /// Apply function of a contract
     Update,
     Null,
 }
@@ -165,18 +161,6 @@ impl Runtime {
                     &mut store,
                     &ctx,
                     import::util::drk_log,
-                ),
-
-                "nullifier_exists_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::chain_state::nullifier_exists,
-                ),
-
-                "is_valid_merkle_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::chain_state::is_valid_merkle,
                 ),
 
                 "set_return_data_" => Function::new_typed_with_env(
@@ -300,57 +284,6 @@ impl Runtime {
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
         let _ = self.call(ContractSection::Deploy, payload)?;
         Ok(())
-        /*
-        let mut env_mut = self.ctx.as_mut(&mut self.store);
-        env_mut.contract_section = ContractSection::Deploy;
-        assert!(env_mut.contract_return_data.take().is_none());
-        env_mut.contract_return_data.set(None);
-
-        // Serialize the payload for the format the wasm runtime is expecting.
-        let payload = Self::serialize_payload(&env_mut.contract_id, payload);
-
-        // Allocate enough memory for the payload and copy it into the memory.
-        let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
-        self.set_memory_page_size(pages_required as u32)?;
-        self.copy_to_memory(&payload)?;
-
-        debug!(target: "wasm_runtime::deploy", "Getting initialize function");
-        let entrypoint = self.instance.exports.get_function(INITIALIZE)?;
-
-        debug!(target: "wasm_runtime::deploy", "Executing wasm");
-        let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
-            Ok(retvals) => {
-                self.print_logs();
-                debug!(target: "wasm_runtime::deploy", "{}", self.gas_info());
-                retvals
-            }
-            Err(e) => {
-                self.print_logs();
-                debug!(target: "wasm_runtime::deploy", "{}", self.gas_info());
-                // WasmerRuntimeError panics are handled here. Return from run() immediately.
-                return Err(e.into())
-            }
-        };
-
-        debug!(target: "wasm_runtime::deploy", "wasm executed successfully");
-        debug!(target: "wasm_runtime::deploy", "Contract returned: {:?}", ret[0]);
-
-        let mut env_mut = self.ctx.as_mut(&mut self.store);
-        env_mut.contract_section = ContractSection::Null;
-        let retdata = env_mut.contract_return_data.take();
-
-        let retval = match ret[0] {
-            Value::I64(v) => v as u64,
-            _ => unreachable!(),
-        };
-
-        match retval {
-            entrypoint::SUCCESS => Ok(()),
-            // FIXME: we should be able to see the error returned from the contract
-            // We can put sdk::Error inside of this.
-            _ => Err(Error::ContractInitError(retval)),
-        }
-        */
     }
 
     /// This funcion runs when someone wants to execute a smart contract.
@@ -359,52 +292,6 @@ impl Runtime {
     /// be used inside the vm by the runtime.
     pub fn exec(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
         self.call(ContractSection::Exec, payload)
-        /*
-        let mut env_mut = self.ctx.as_mut(&mut self.store);
-        env_mut.contract_section = ContractSection::Exec;
-        assert!(env_mut.contract_return_data.take().is_none());
-        env_mut.contract_return_data.set(None);
-
-        // Serialize the payload for the format the wasm runtime is expecting.
-        let payload = Self::serialize_payload(&env_mut.contract_id, payload);
-
-        // Allocate enough memory for the payload and copy it into the memory.
-        let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
-        self.set_memory_page_size(pages_required as u32)?;
-        self.copy_to_memory(&payload)?;
-
-        debug!(target: "wasm_runtime::exec", "Getting entrypoint function");
-        let entrypoint = self.instance.exports.get_function(ENTRYPOINT)?;
-
-        debug!(target: "wasm_runtime::exec", "Executing wasm");
-        // We pass 0 to entrypoint() which is the location of the payload data in the memory
-        let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
-            Ok(retvals) => {
-                self.print_logs();
-                debug!(target: "wasm_runtime::exec", "{}", self.gas_info());
-                retvals
-            }
-            Err(e) => {
-                self.print_logs();
-                debug!(target: "wasm_runtime::exec", "{}", self.gas_info());
-                // WasmerRuntimeError panics are handled here. Return from run() immediately.
-                return Err(e.into())
-            }
-        };
-
-        debug!(target: "wasm_runtime::exec", "wasm executed successfully");
-        debug!(target: "wasm_runtime::exec", "Contract returned: {:?}", ret[0]);
-
-        let retval = match ret[0] {
-            Value::I64(v) => v as u64,
-            _ => unreachable!(),
-        };
-
-        match retval {
-            entrypoint::SUCCESS => Ok(()),
-            _ => Err(Error::ContractExecError(retval)),
-        }
-        */
     }
 
     /// This function runs after successful execution of [`exec`] and tries to
@@ -415,57 +302,6 @@ impl Runtime {
     pub fn apply(&mut self, update: &[u8]) -> Result<()> {
         let _ = self.call(ContractSection::Update, update)?;
         Ok(())
-        /*
-        let mut env_mut = self.ctx.as_mut(&mut self.store);
-        env_mut.contract_section = ContractSection::Update;
-        assert!(env_mut.contract_return_data.take().is_none());
-        env_mut.contract_return_data.set(None);
-
-        // Take the update data from env, and serialize it for the format the wasm
-        // runtime is expecting.
-        // FIXME: Can panic
-        let update_data = env_mut.contract_update.take().unwrap();
-        let mut payload = Vec::with_capacity(1 + update_data.1.len());
-        payload.extend_from_slice(&[update_data.0]);
-        payload.extend_from_slice(&update_data.1);
-        let payload = Self::serialize_payload(&env_mut.contract_id, &payload);
-
-        // Allocate enough memory for the payload and copy it into the memory.
-        let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
-        self.set_memory_page_size(pages_required as u32)?;
-        self.copy_to_memory(&payload)?;
-
-        debug!(target: "wasm_runtime::apply", "Getting update function");
-        let entrypoint = self.instance.exports.get_function(UPDATE)?;
-
-        debug!(target: "wasm_runtime::apply", "Executing wasm");
-        let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
-            Ok(retvals) => {
-                self.print_logs();
-                debug!(target: "wasm_runtime::apply", "{}", self.gas_info());
-                retvals
-            }
-            Err(e) => {
-                self.print_logs();
-                debug!(target: "wasm_runtime::apply", "{}", self.gas_info());
-                // WasmerRuntimeError panics are handled here. Return from run() immediately.
-                return Err(e.into())
-            }
-        };
-
-        debug!(target: "wasm_runtime::apply", "wasm executed successfully");
-        debug!(target: "wasm_runtime::apply", "Contract returned: {:?}", ret[0]);
-
-        let retval = match ret[0] {
-            Value::I64(v) => v as u64,
-            _ => unreachable!(),
-        };
-
-        match retval {
-            entrypoint::SUCCESS => Ok(()),
-            _ => Err(Error::ContractInitError(retval)),
-        }
-        */
     }
 
     fn print_logs(&self) {

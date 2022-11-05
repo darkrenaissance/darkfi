@@ -103,7 +103,7 @@ impl VarInt {
 
             _ => {
                 AsyncWriteExt::write_u8(stream, 0xFF).await?;
-                AsyncWriteExt::write_u64(stream, self.0 as u64).await?;
+                AsyncWriteExt::write_u64(stream, self.0).await?;
                 Ok(9)
             }
         }
