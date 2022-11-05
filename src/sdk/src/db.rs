@@ -1,3 +1,5 @@
+use darkfi_serial::Encodable;
+
 use super::{
     crypto::ContractId,
     error::{ContractError, GenericResult},
@@ -15,13 +17,12 @@ type TxHandle = u32;
 pub fn db_init(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle> {
     #[cfg(target_arch = "wasm32")]
     unsafe {
-        println!("sdk/src/db.rs:db_init() BEGIN");
-        let ret = db_init_(
-            //contract_id.to_bytes().as_ptr(),
-            //32_u32,
-            db_name.as_ptr(),
-            db_name.len() as u32,
-        );
+        let mut len = 0;
+        let mut buf = vec![];
+        len += contract_id.encode(&mut buf)?;
+        len += db_name.to_string().encode(&mut buf)?;
+
+        let ret = db_init_(buf.as_ptr(), len as u32);
 
         if ret < 0 {
             match ret {

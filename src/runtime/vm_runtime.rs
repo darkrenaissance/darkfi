@@ -22,6 +22,7 @@ use std::{
 };
 
 use darkfi_sdk::{crypto::ContractId, entrypoint};
+use darkfi_serial::serialize;
 use log::{debug, info};
 use wasmer::{
     imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
@@ -257,7 +258,7 @@ impl Runtime {
         env_mut.contract_section = ContractSection::Null;
         let retdata = match env_mut.contract_return_data.take() {
             Some(retdata) => retdata,
-            None => Vec::new()
+            None => Vec::new(),
         };
 
         let retval = match ret[0] {
@@ -355,7 +356,7 @@ impl Runtime {
     /// We keep the same payload as a slice of bytes, and prepend it with a
     /// little-endian u64 to tell the payload's length.
     fn serialize_payload(cid: &ContractId, payload: &[u8]) -> Vec<u8> {
-        let ser_cid = cid.to_bytes();
+        let ser_cid = serialize(cid);
         let payload_len = payload.len();
         let mut out = Vec::with_capacity(ser_cid.len() + 8 + payload_len);
         out.extend_from_slice(&ser_cid);

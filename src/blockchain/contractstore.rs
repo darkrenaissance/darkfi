@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::crypto::ContractId;
-use darkfi_serial::deserialize;
+use darkfi_serial::{deserialize, serialize};
 
 use crate::{
     Error::{ContractAlreadyInitialized, ContractNotFound, ContractStateNotFound},
@@ -41,7 +41,7 @@ impl ContractStore {
         contract_id: &ContractId,
         tree_name: &str,
     ) -> Result<sled::Tree> {
-        let contract_id_bytes = contract_id.to_bytes();
+        let contract_id_bytes = serialize(contract_id);
 
         // If the db was never initialized, it should not be in here.
         if self.0.contains_key(&contract_id_bytes)? {
@@ -67,7 +67,7 @@ impl ContractStore {
         contract_id: &ContractId,
         tree_name: &str,
     ) -> Result<sled::Tree> {
-        let contract_id_bytes = contract_id.to_bytes();
+        let contract_id_bytes = serialize(contract_id);
 
         // A guard to make sure we went through init()
         if !self.0.contains_key(&contract_id_bytes)? {

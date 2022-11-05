@@ -17,7 +17,9 @@
  */
 
 use darkfi_sdk::crypto::ContractId;
+use darkfi_serial::{deserialize, Decodable};
 use log::error;
+use std::io::Cursor;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::runtime::vm_runtime::{ContractSection, Env};
@@ -49,30 +51,39 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
             let contracts = &env.blockchain.contracts;
             let contract_id = &env.contract_id;
 
-            /*
-            let Ok(cid_slice) = cid_ptr.slice(&memory_view, 32) else {
-                error!(target: "wasm_runtime::db_init", "Failed to read contract id from ptr");
+            let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
+                error!(target: "wasm_runtime::db_init", "Failed to make slice from ptr");
                 return -2
             };
 
-            let Ok(cid_bytes) = cid_slice.read_to_vec() else {
-                error!(target: "wasm_runtime::db_init", "Failed to read slice to vec in db_init");
+            let mut buf = vec![0_u8; len as usize];
+            if let Err(e) = mem_slice.read_slice(&mut buf) {
+                error!(target: "wasm_runtime::db_init", "Failed to read from memory slice");
                 return -2
             };
 
-            // FIXME: Could panic
-            let cid = ContractId::from_bytes(cid_bytes.try_into().unwrap());
+            let mut buf_reader = Cursor::new(buf);
+
+            let cid: ContractId = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_init", "Failed to decode ContractId: {}", e);
+                    return -2
+                }
+            };
+
+            let db_name: String = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_init", "Failed to decode db_name: {}", e);
+                    return -2
+                }
+            };
 
             if &cid != contract_id {
                 error!(target: "wasm_runtime::db_init", "Unauthorized ContractId for db_init");
                 return -1
             }
-            */
-
-            let Ok(db_name) = ptr.read_utf8_string(&memory_view, len) else {
-                error!(target: "wasm_runtime::db_init", "Failed to read string from VM memory");
-                return -2
-            };
 
             let tree_handle = match contracts.init(db, contract_id, &db_name) {
                 Ok(v) => v,
@@ -134,12 +145,12 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>) -> i32 {
     }
 }
 
-/// Only update() can call this. Starts an atomic transaction.
+/// Only update() can call this. Set a value within the transaction.
 ///
 /// ```
-///     tx_handle = db_begin_tx();
+///     db_set(tx_handle, key, value);
 /// ```
-pub(crate) fn db_begin_tx(ctx: FunctionEnvMut<Env>) -> i32 {
+pub(crate) fn db_set(ctx: FunctionEnvMut<Env>) -> i32 {
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Deploy | ContractSection::Update => 0,
@@ -147,12 +158,12 @@ pub(crate) fn db_begin_tx(ctx: FunctionEnvMut<Env>) -> i32 {
     }
 }
 
-/// Only update() can call this. Set a value within the transaction.
+/// Only update() can call this. Starts an atomic transaction.
 ///
 /// ```
-///     db_set(tx_handle, key, value);
+///     tx_handle = db_begin_tx();
 /// ```
-pub(crate) fn db_set(ctx: FunctionEnvMut<Env>) -> i32 {
+pub(crate) fn db_begin_tx(ctx: FunctionEnvMut<Env>) -> i32 {
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Deploy | ContractSection::Update => 0,

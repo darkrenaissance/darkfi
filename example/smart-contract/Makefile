@@ -36,4 +36,4 @@ test: all
 clean:
 	rm -f $(PROOF_BIN) $(WASM_BIN)
 
-.PHONY: all test clean
+.PHONY: $(WASM_BIN) all test clean

@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::PrimeField, pallas};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct ContractId(pallas::Base);
 
 impl ContractId {
@@ -28,10 +29,6 @@ impl ContractId {
 
     pub fn inner(&self) -> pallas::Base {
         self.0
-    }
-
-    pub fn to_bytes(&self) -> [u8; 32] {
-        self.0.to_repr()
     }
 
     pub fn from_bytes(x: [u8; 32]) -> Self {

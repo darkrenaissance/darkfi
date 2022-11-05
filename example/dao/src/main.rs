@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::TypeId, time::Instant};
+use std::{any::{Any, TypeId}, time::Instant};
 
 use incrementalmerkletree::Tree;
 use log::debug;
@@ -29,6 +29,7 @@ use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
+        coin::Coin,
         keypair::{Keypair, PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
         types::{DrkSpendHook, DrkUserData, DrkValue},
@@ -1052,8 +1053,7 @@ async fn main() -> Result<()> {
                 serial: dao_serial,
                 coin_blind: dao_coin_blind,
                 spend_hook: *dao::exec::FUNC_ID,
-                // TODO: should be DAO bulla
-                user_data: proposal_bulla,
+                user_data: dao_bulla.0,
             },
         ],
     };
@@ -1062,7 +1062,7 @@ async fn main() -> Result<()> {
 
     let builder = dao::exec::wallet::Builder {
         proposal,
-        dao: dao_params,
+        dao: dao_params.clone(),
         yes_votes_value,
         all_votes_value,
         yes_votes_blind,
@@ -1103,6 +1103,45 @@ async fn main() -> Result<()> {
         assert_eq!(input.revealed.spend_hook, *dao::exec::FUNC_ID);
         let user_data_enc = poseidon_hash::<2>([dao_bulla.0, user_data_blind]);
         assert_eq!(input.revealed.user_data_enc, user_data_enc);
+
+        let dao_pubkey_coords = dao_params.public_key.0.to_affine().coordinates().unwrap();
+        let coin_1 = Coin(poseidon_hash::<8>([
+            *dao_pubkey_coords.x(),
+            *dao_pubkey_coords.y(),
+            pallas::Base::from(xdrk_supply - 1000),
+            xdrk_token_id,
+            dao_serial,
+            *dao::exec::FUNC_ID,
+            dao_bulla.0,
+            dao_coin_blind
+        ]));
+        debug!("coin_1: {:?}", coin_1);
+
+        let money_transfer_call_data = tx.func_calls[0].call_data.as_any();
+        let money_transfer_call_data =
+            money_transfer_call_data.downcast_ref::<money::transfer::validate::CallData>();
+        let money_transfer_call_data = money_transfer_call_data.unwrap();
+        assert_eq!(
+            money_transfer_call_data.type_id(),
+            TypeId::of::<money::transfer::validate::CallData>()
+        );
+        assert_eq!(money_transfer_call_data.outputs.len(), 2);
+        let money_transfer_coin_1 = &money_transfer_call_data.outputs[1].revealed.coin;
+        debug!("money::transfer() coin 1 = {:?}", money_transfer_coin_1);
+
+        let dao_exec_call_data = tx.func_calls[1].call_data.as_any();
+        let dao_exec_call_data =
+            dao_exec_call_data.downcast_ref::<dao::exec::validate::CallData>();
+        let dao_exec_call_data = dao_exec_call_data.unwrap();
+        assert_eq!(
+            dao_exec_call_data.type_id(),
+            TypeId::of::<dao::exec::validate::CallData>()
+        );
+        let dao_exec_coin_1 = &dao_exec_call_data.coin_1;
+        debug!("dao::exec() coin 1 = {:?}", dao_exec_coin_1);
+
+        assert_eq!(coin_1, *money_transfer_coin_1);
+        assert_eq!(coin_1, Coin(*dao_exec_coin_1));
     }
 
     //// Validator

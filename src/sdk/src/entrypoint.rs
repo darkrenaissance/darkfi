@@ -84,5 +84,8 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (ContractId, &'a [u8]) {
     offset += size_of::<u64>();
     let instruction_data = { from_raw_parts(input.add(offset), instruction_data_len) };
 
+    // FIXME: ContractId recovery should use proper serialization, and also
+    //        there should be a Result<>; we can match on it in the macros
+    //        above and return errors if needed.
     (ContractId::from_bytes(contract_id_slice.try_into().unwrap()), instruction_data)
 }
