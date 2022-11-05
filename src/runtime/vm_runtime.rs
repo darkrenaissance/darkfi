@@ -282,7 +282,19 @@ impl Runtime {
     /// The permissions for this are handled by the `ContractId` in the sled db API so we
     /// assume that the contract is only able to do write operations on its own sled trees.
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
+        debug!("deploy: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
+
+        // If the above didn't fail, we write the batches.
+        // TODO: Make all the writes atomic in a transaction over all trees.
+        let env_mut = self.ctx.as_mut(&mut self.store);
+        for (idx, db) in env_mut.db_handles.get_mut().iter().enumerate() {
+            let batch = env_mut.db_batches.borrow()[idx].clone();
+            db.apply_batch(batch)?;
+            db.flush()?;
+            drop(db);
+        }
+
         Ok(())
     }
 
@@ -291,6 +303,7 @@ impl Runtime {
     /// execute it if found. A payload is also passed as an instruction that can
     /// be used inside the vm by the runtime.
     pub fn exec(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
+        debug!("exec: {:?}", payload);
         self.call(ContractSection::Exec, payload)
     }
 
@@ -300,6 +313,7 @@ impl Runtime {
     /// it if found. The function does not take an arbitrary payload, but just takes
     /// a state update from `env` and passes it into the wasm runtime.
     pub fn apply(&mut self, update: &[u8]) -> Result<()> {
+        debug!("apply: {:?}", update);
         let _ = self.call(ContractSection::Update, update)?;
 
         // If the above didn't fail, we write the batches.
@@ -308,6 +322,8 @@ impl Runtime {
         for (idx, db) in env_mut.db_handles.get_mut().iter().enumerate() {
             let batch = env_mut.db_batches.borrow()[idx].clone();
             db.apply_batch(batch)?;
+            db.flush()?;
+            drop(db);
         }
 
         Ok(())
@@ -338,15 +354,16 @@ impl Runtime {
     }
 
     /// Set the memory page size
-    fn set_memory_page_size(&mut self, pages: u32) -> Result<()> {
+    fn set_memory_page_size(&mut self, pages: u32) -> Result<Pages> {
         // Grab memory by value
         let memory = self.take_memory();
         // Modify the memory
-        memory.grow(&mut self.store, Pages(pages))?;
+        let ret = memory.grow(&mut self.store, Pages(pages))?;
         // Replace the memory back again
         self.ctx.as_mut(&mut self.store).memory = Some(memory);
-        Ok(())
+        Ok(ret)
     }
+
     /// Take Memory by value. Needed to modify the Memory object
     /// Will panic if memory isn't set.
     fn take_memory(&mut self) -> Memory {

@@ -1,6 +1,6 @@
 use darkfi_sdk::{
     crypto::ContractId,
-    db::{db_begin_tx, db_end_tx, db_get, db_init, db_lookup, db_set},
+    db::{db_get, db_init, db_lookup, db_set},
     define_contract,
     error::ContractResult,
     msg,
@@ -72,8 +72,6 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     let wagies_handle = db_init(cid, "wagies")?;
     db_set(wagies_handle, &serialize(&"jason_gulag".to_string()), &serialize(&110))?;
 
-    //let db_handle = db_lookup("wagies")?;
-
     Ok(())
 }
 
@@ -126,16 +124,16 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
 // This is the main entrypoint function where the payload is fed.
 // Through here, you can branch out into different functions inside
 // this library.
-fn process_instruction(_cid: ContractId, ix: &[u8]) -> ContractResult {
+fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     match Function::from(ix[0]) {
         Function::Foo => {
             let tx_data = &ix[1..];
             // ...
             let (func_call_index, func_calls): (u32, Vec<FuncCall>) = deserialize(tx_data)?;
-            //let call_data: FooCallData =
-            //    deserialize(&func_calls[func_call_index as usize].call_data)?;
-            //msg!("call_data {{ a: {}, b: {} }}", call_data.a, call_data.b);
-            //// ...
+            let call_data: FooCallData =
+                deserialize(&func_calls[func_call_index as usize].call_data)?;
+            msg!("call_data {{ a: {}, b: {} }}", call_data.a, call_data.b);
+            // ...
             let update = FooUpdate { name: "john_doe".to_string(), age: 110 };
 
             let mut update_data = vec![Function::Foo as u8];
@@ -144,10 +142,14 @@ fn process_instruction(_cid: ContractId, ix: &[u8]) -> ContractResult {
             msg!("update is set!");
 
             // Example: try to get a value from the db
-            //let db_handle = db_lookup("wagies")?;
-            //// FIXME: this is just empty right now
-            //let age_data = db_get(db_handle, "jason_gulag".as_bytes())?;
-            //msg!("wagie age data: {:?}", age_data);
+            let db_handle = db_lookup(cid, "wagies")?;
+
+            if let Some(age_data) = db_get(db_handle, &serialize(&"jason_gulag".to_string()))? {
+                let age_data: u32 = deserialize(&age_data)?;
+                msg!("wagie age data: {}", age_data);
+            } else {
+                msg!("didn't find wagie age data");
+            }
         }
         Function::Bar => {
             let tx_data = &ix[1..];
@@ -165,7 +167,7 @@ fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
     match Function::from(update_data[0]) {
         Function::Foo => {
             msg!("fooupp");
-            //let update: FooUpdate = deserialize(&update_data[1..])?;
+            let update: FooUpdate = deserialize(&update_data[1..])?;
 
             // Write the wagie to the db
             //let tx_handle = db_begin_tx()?;
@@ -173,10 +175,7 @@ fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
             //let db_handle = db_lookup("wagies")?;
             //db_end_tx(db_handle, tx_handle)?;
         }
-        //_ => unreachable!(),
-        _ => {
-            msg!("other branch");
-        }
+        _ => unreachable!(),
     }
 
     msg!("process_update() finished");
