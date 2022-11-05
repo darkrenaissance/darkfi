@@ -4,8 +4,8 @@ use darkfi_sdk::{
     define_contract,
     error::ContractResult,
     msg,
-    state::set_update,
     tx::FuncCall,
+    util::set_return_data,
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
@@ -34,6 +34,13 @@ pub struct FooCallData {
     pub b: u64,
 }
 
+impl FooCallData {
+    //fn zk_public_values(&self) -> Vec<(String, Vec<DrkCircuitField>)>;
+
+    fn get_metadata(&self) {
+    }
+}
+
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct BarArgs {
     pub x: u32,
@@ -45,7 +52,13 @@ pub struct FooUpdate {
     pub age: u32,
 }
 
-define_contract!(init: init_contract, exec: process_instruction, apply: process_update);
+define_contract!(
+    init: init_contract,
+    exec: process_instruction,
+    apply: process_update,
+
+    metadata: get_metadata
+);
 
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     msg!("wakeup wagies!");
@@ -59,6 +72,25 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 
     // Host will clear delete the batches array after calling this func.
 
+    Ok(())
+}
+
+fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
+    match Function::from(ix[0]) {
+        Function::Foo => {
+            let tx_data = &ix[1..];
+            // ...
+            let (func_call_index, func_calls): (u32, Vec<FuncCall>) = deserialize(tx_data)?;
+            let call_data: FooCallData =
+                deserialize(&func_calls[func_call_index as usize].call_data)?;
+
+            // Convert call_data to halo2 public inputs
+            // Pass this to the env
+        }
+        Function::Bar => {
+            // ...
+        }
+    }
     Ok(())
 }
 
@@ -79,7 +111,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             let mut update_data = vec![Function::Foo as u8];
             update_data.extend_from_slice(&serialize(&update));
-            set_update(&update_data)?;
+            set_return_data(&update_data)?;
             msg!("update is set!");
 
             // Example: try to get a value from the db

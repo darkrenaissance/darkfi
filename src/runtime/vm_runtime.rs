@@ -38,20 +38,34 @@ use crate::{blockchain::Blockchain, Error, Result};
 
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
+
 /// Hardcoded setup function of a contract
-pub const INITIALIZE: &str = "__initialize";
+const INITIALIZE: &str = "__initialize";
 /// Hardcoded entrypoint function of a contract
-pub const ENTRYPOINT: &str = "__entrypoint";
+const ENTRYPOINT: &str = "__entrypoint";
 /// Hardcoded apply function of a contract
-pub const UPDATE: &str = "__update";
+const UPDATE: &str = "__update";
+
 /// Gas limit for a contract
 const GAS_LIMIT: u64 = 200000;
 
+#[derive(Clone, Copy)]
 pub enum ContractSection {
-    Null,
     Deploy,
     Exec,
     Update,
+    Null,
+}
+
+impl ContractSection {
+    fn name(&self) -> &str {
+        match self {
+            Self::Deploy => "__initialize",
+            Self::Exec => "__entrypoint",
+            Self::Update => "__update",
+            Self::Null => unreachable!(),
+        }
+    }
 }
 
 /// The wasm vm runtime instantiated for every smart contract that runs.
@@ -65,7 +79,7 @@ pub struct Env {
     /// The contract section being executed
     pub contract_section: ContractSection,
     /// State update produced by a smart contract function call
-    pub contract_update: Cell<Option<(u8, Vec<u8>)>>,
+    pub contract_return_data: Cell<Option<Vec<u8>>>,
     /// Logs produced by the contract
     pub logs: RefCell<Vec<String>>,
     /// Direct memory access to the VM
@@ -139,7 +153,7 @@ impl Runtime {
                 db_handles,
                 contract_id,
                 contract_section: ContractSection::Null,
-                contract_update: Cell::new(None),
+                contract_return_data: Cell::new(None),
                 logs,
                 memory: None,
             },
@@ -165,10 +179,10 @@ impl Runtime {
                     import::chain_state::is_valid_merkle,
                 ),
 
-                "set_update_" => Function::new_typed_with_env(
+                "set_return_data_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
-                    import::chain_state::set_update,
+                    import::util::set_return_data,
                 ),
 
                 "db_init_" => Function::new_typed_with_env(
@@ -218,6 +232,63 @@ impl Runtime {
         Ok(Self { instance, store, ctx })
     }
 
+    fn call(&mut self, section: ContractSection, payload: &[u8]) -> Result<Vec<u8>> {
+        debug!(target: "runtime", "Calling {} method", section.name());
+
+        let mut env_mut = self.ctx.as_mut(&mut self.store);
+        env_mut.contract_section = section;
+        assert!(env_mut.contract_return_data.take().is_none());
+        env_mut.contract_return_data.set(None);
+
+        // Serialize the payload for the format the wasm runtime is expecting.
+        let payload = Self::serialize_payload(&env_mut.contract_id, payload);
+
+        // Allocate enough memory for the payload and copy it into the memory.
+        let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
+        self.set_memory_page_size(pages_required as u32)?;
+        self.copy_to_memory(&payload)?;
+
+        debug!(target: "runtime", "Getting initialize function");
+        let entrypoint = self.instance.exports.get_function(section.name())?;
+
+        debug!(target: "runtime", "Executing wasm");
+        let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
+            Ok(retvals) => {
+                self.print_logs();
+                debug!(target: "runtime", "{}", self.gas_info());
+                retvals
+            }
+            Err(e) => {
+                self.print_logs();
+                debug!(target: "runtime", "{}", self.gas_info());
+                // WasmerRuntimeError panics are handled here. Return from run() immediately.
+                return Err(e.into())
+            }
+        };
+
+        debug!(target: "runtime", "wasm executed successfully");
+        debug!(target: "runtime", "Contract returned: {:?}", ret[0]);
+
+        let mut env_mut = self.ctx.as_mut(&mut self.store);
+        env_mut.contract_section = ContractSection::Null;
+        let retdata = match env_mut.contract_return_data.take() {
+            Some(retdata) => retdata,
+            None => Vec::new()
+        };
+
+        let retval = match ret[0] {
+            Value::I64(v) => v as u64,
+            _ => unreachable!(),
+        };
+
+        match retval {
+            entrypoint::SUCCESS => Ok(retdata),
+            // FIXME: we should be able to see the error returned from the contract
+            // We can put sdk::Error inside of this.
+            _ => Err(Error::ContractInitError(retval)),
+        }
+    }
+
     /// This function runs when a smart contract is initially deployed, or re-deployed.
     /// The runtime will look for an [`INITIALIZE`] symbol in the wasm code, and execute
     /// it if found. Optionally, it is possible to pass in a payload for any kind of special
@@ -227,8 +298,13 @@ impl Runtime {
     /// The permissions for this are handled by the `ContractId` in the sled db API so we
     /// assume that the contract is only able to do write operations on its own sled trees.
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
+        let _ = self.call(ContractSection::Deploy, payload)?;
+        Ok(())
+        /*
         let mut env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Deploy;
+        assert!(env_mut.contract_return_data.take().is_none());
+        env_mut.contract_return_data.set(None);
 
         // Serialize the payload for the format the wasm runtime is expecting.
         let payload = Self::serialize_payload(&env_mut.contract_id, payload);
@@ -259,6 +335,10 @@ impl Runtime {
         debug!(target: "wasm_runtime::deploy", "wasm executed successfully");
         debug!(target: "wasm_runtime::deploy", "Contract returned: {:?}", ret[0]);
 
+        let mut env_mut = self.ctx.as_mut(&mut self.store);
+        env_mut.contract_section = ContractSection::Null;
+        let retdata = env_mut.contract_return_data.take();
+
         let retval = match ret[0] {
             Value::I64(v) => v as u64,
             _ => unreachable!(),
@@ -270,15 +350,20 @@ impl Runtime {
             // We can put sdk::Error inside of this.
             _ => Err(Error::ContractInitError(retval)),
         }
+        */
     }
 
     /// This funcion runs when someone wants to execute a smart contract.
     /// The runtime will look for an [`ENTRYPOINT`] symbol in the wasm code, and
     /// execute it if found. A payload is also passed as an instruction that can
     /// be used inside the vm by the runtime.
-    pub fn exec(&mut self, payload: &[u8]) -> Result<()> {
+    pub fn exec(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
+        self.call(ContractSection::Exec, payload)
+        /*
         let mut env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Exec;
+        assert!(env_mut.contract_return_data.take().is_none());
+        env_mut.contract_return_data.set(None);
 
         // Serialize the payload for the format the wasm runtime is expecting.
         let payload = Self::serialize_payload(&env_mut.contract_id, payload);
@@ -319,6 +404,7 @@ impl Runtime {
             entrypoint::SUCCESS => Ok(()),
             _ => Err(Error::ContractExecError(retval)),
         }
+        */
     }
 
     /// This function runs after successful execution of [`exec`] and tries to
@@ -326,9 +412,14 @@ impl Runtime {
     /// The runtime will lok for an [`UPDATE`] symbol in the wasm code, and execute
     /// it if found. The function does not take an arbitrary payload, but just takes
     /// a state update from `env` and passes it into the wasm runtime.
-    pub fn apply(&mut self) -> Result<()> {
+    pub fn apply(&mut self, update: &[u8]) -> Result<()> {
+        let _ = self.call(ContractSection::Update, update)?;
+        Ok(())
+        /*
         let mut env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Update;
+        assert!(env_mut.contract_return_data.take().is_none());
+        env_mut.contract_return_data.set(None);
 
         // Take the update data from env, and serialize it for the format the wasm
         // runtime is expecting.
@@ -374,12 +465,13 @@ impl Runtime {
             entrypoint::SUCCESS => Ok(()),
             _ => Err(Error::ContractInitError(retval)),
         }
+        */
     }
 
     fn print_logs(&self) {
         let logs = self.ctx.as_ref(&self.store).logs.borrow();
         for msg in logs.iter() {
-            debug!(target: "wasm_runtime::print_logs", "Contract log: {}", msg);
+            debug!(target: "runtime", "Contract log: {}", msg);
         }
     }
 

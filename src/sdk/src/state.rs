@@ -21,21 +21,6 @@ use super::{
     error::ContractError,
 };
 
-pub fn set_update(update_data: &[u8]) -> Result<(), ContractError> {
-    #[cfg(target_arch = "wasm32")]
-    unsafe {
-        return match set_update_(update_data.as_ptr(), update_data.len() as u32) {
-            0 => Ok(()),
-            -1 => Err(ContractError::SetUpdateError),
-            -2 => Err(ContractError::UpdateAlreadySet),
-            _ => unreachable!(),
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    unimplemented!();
-}
-
 pub fn nullifier_exists(nullifier: &Nullifier) -> Result<bool, ContractError> {
     #[cfg(target_arch = "wasm32")]
     unsafe {
@@ -74,8 +59,6 @@ pub fn is_valid_merkle(merkle_root: &MerkleNode) -> Result<bool, ContractError> 
 
 #[cfg(target_arch = "wasm32")]
 extern "C" {
-    fn get_update_() -> i32;
-    fn set_update_(ptr: *const u8, len: u32) -> i32;
     fn nullifier_exists_(ptr: *const u8, len: u32) -> i32;
     fn is_valid_merkle_(ptr: *const u8, len: u32) -> i32;
 }

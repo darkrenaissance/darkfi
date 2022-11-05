@@ -25,7 +25,12 @@ pub const SUCCESS: u64 = 0;
 
 #[macro_export]
 macro_rules! define_contract {
-    (init: $init_func:ident, exec: $exec_func:ident, apply: $apply_func:ident) => {
+    (
+        init: $init_func:ident,
+        exec: $exec_func:ident,
+        apply: $apply_func:ident,
+        metadata: $metadata_func:ident
+    ) => {
         /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn __initialize(input: *mut u8) -> u64 {
@@ -50,6 +55,15 @@ macro_rules! define_contract {
             let (contract_id, update_data) = $crate::entrypoint::deserialize(input);
 
             match $apply_func(contract_id, &update_data) {
+                Ok(()) => $crate::entrypoint::SUCCESS,
+                Err(e) => e.into(),
+            }
+        }
+        #[no_mangle]
+        pub unsafe extern "C" fn __get_metadata(input: *mut u8) -> u64 {
+            let (contract_id, instruction_data) = $crate::entrypoint::deserialize(input);
+
+            match $metadata_func(contract_id, &instruction_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }

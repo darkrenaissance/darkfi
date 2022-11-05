@@ -145,6 +145,7 @@ pub struct Transaction {
     // TODO: this is wrong. It should be Vec<Vec<Signature>>
     // each Vec<Signature> correspond to ONE function call
     pub signatures: Vec<Signature>,
+    // pub proofs: Vec<Proof>,
 }
 // ANCHOR_END: transaction
 

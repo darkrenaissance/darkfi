@@ -77,12 +77,12 @@ fn run_contract() -> Result<()> {
     // ============================================================
     // Serialize the payload into the runtime format and execute it
     // ============================================================
-    runtime.exec(&payload)?;
+    let update = runtime.exec(&payload)?;
 
     // =====================================================
     // If exec was successful, try to apply the state change
     // =====================================================
-    runtime.apply()?;
+    runtime.apply(&update)?;
 
     Ok(())
 }

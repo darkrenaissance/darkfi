@@ -39,3 +39,7 @@ pub mod state;
 
 /// Transaction structure
 pub mod tx;
+
+/// Utilities
+pub mod util;
+

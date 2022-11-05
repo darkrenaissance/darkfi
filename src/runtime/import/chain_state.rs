@@ -21,33 +21,6 @@ use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::runtime::vm_runtime::{ContractSection, Env};
 
-pub(crate) fn set_update(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
-    let env = ctx.data();
-    match env.contract_section {
-        ContractSection::Exec => {
-            let memory_view = env.memory_view(&ctx);
-
-            let Ok(slice) = ptr.slice(&memory_view, len) else {
-                return -2
-            };
-
-            let Ok(update_data) = slice.read_to_vec() else {
-                return -2;
-            };
-
-            // This function should only ever be called once on the runtime.
-            if !env.contract_update.take().is_none() {
-                return -3
-            }
-            let func_id = update_data[0];
-            let update_data = &update_data[1..];
-            env.contract_update.set(Some((func_id, update_data.to_vec())));
-            0
-        }
-        _ => -1,
-    }
-}
-
 /// Try to read a `Nullifier` from the given pointer and check if it's
 /// an existing nullifier in the blockchain state machine.
 pub(crate) fn nullifier_exists(mut ctx: FunctionEnvMut<Env>, ptr: u32, len: u32) -> i32 {
