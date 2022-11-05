@@ -260,12 +260,14 @@ fn create_leadcoin(
     let c_cm_msg = [*c_cm_coordinates.x(), *c_cm_coordinates.y()];
     let c_cm_base: pallas::Base =
         poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-            .hash(c_cm_msg);
+        .hash(c_cm_msg);
     let c_cm_node = MerkleNode::from(c_cm_base);
     tree_cm.append(&c_cm_node.clone());
-    let leaf_position = tree_cm.witness();
+    let leaf_position = tree_cm.witness().unwrap();
+    let leaf_position_usize : usize = leaf_position.into();
+    //info!("leaf position odd parity: {:?}", leaf_position.is_odd());
     let c_root_cm = tree_cm.root(0).unwrap();
-    let c_cm_path = tree_cm.authentication_path(leaf_position.unwrap(), &c_root_cm).unwrap();
+    let c_cm_path = tree_cm.authentication_path(leaf_position, &c_root_cm).unwrap();
 
     /*
     let c_root_cm = {
@@ -301,7 +303,7 @@ fn create_leadcoin(
         value: Some(value),
         cm: Some(c_cm),
         cm2: Some(c_cm2),
-        idx: u32::try_from(i).unwrap(), //TODO should be abs slot
+        idx: u32::try_from(leaf_position_usize).unwrap(), //TODO should be abs slot
         sl: Some(c_sl),
         tau: Some(c_tau),
         nonce: Some(c_seed),

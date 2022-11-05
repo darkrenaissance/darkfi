@@ -59,6 +59,7 @@ use crate::zk::{
         native_range_check::NativeRangeCheckChip,
     },
 };
+use log::info;
 
 /// Public input offset for the lead coin C2 nonce
 const LEADCOIN_C2_NONCE_OFFSET: usize = 0;
@@ -672,6 +673,8 @@ impl Circuit<pallas::Base> for LeadContract {
         let T: Value<pallas::Base> = target.value().cloned();
         let y: Value<pallas::Base> = y_commit_base.value().cloned();
 
+        info!("y: {:?}", y);
+        info!("T: {:?}", T);
         // Constrain y < target
         lessthan_chip.copy_less_than(
             layouter.namespace(|| "y < target"),
@@ -680,23 +683,33 @@ impl Circuit<pallas::Base> for LeadContract {
             0,
             true,
         )?;
-
         // Constrain derived `sn_commit` to be equal to witnessed `coin1_serial`.
-
+        info!("coin1 cm root LHS: {:?}", coin1_cm_root.value());
+        info!("coin1 cm root RHS: {:?}", coin1_commit_root.value());
         layouter.assign_region(
             || "coin1_cm_root equality",
             |mut region| region.constrain_equal(coin1_cm_root.cell(), coin1_commit_root.cell()),
         )?;
-
+        info!("coin1 serial commit LHS: {:?}", sn_commit.value());
+        info!("coin1 serial commit RHS: {:?}", coin1_serial.value());
         layouter.assign_region(
             || "sn_commit equality",
             |mut region| region.constrain_equal(sn_commit.cell(), coin1_serial.cell()),
         )?;
 
+
+        info!("coin2_commit LHS: x {:?}", coin2_commitment.inner().x());
+        info!("coin2_commit LHS: y {:?}", coin2_commitment.inner().y());
+        info!("coin2_commit RHS: x {:?}", coin2_commit.inner().x());
+        info!("coin2_commit RHS: y {:?}", coin2_commit.inner().y());
         // Constrain equality between witnessed and derived commitment
         coin2_commitment
             .constrain_equal(layouter.namespace(|| "coin2_commit equality"), &coin2_commit)?;
 
+        info!("rho commit LHS: x {:?}", rho_commit.inner().x());
+        info!("rho commit LHS: y {:?}", rho_commit.inner().y());
+        info!("rho commit RHS: x {:?}", rho.inner().x());
+        info!("rho commit RHS: y {:?}", rho.inner().y());
         // Constrain derived rho_commit to witnessed rho
         rho_commit.constrain_equal(layouter.namespace(|| "rho equality"), &rho)?;
 
