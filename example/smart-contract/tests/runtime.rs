@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::io::Cursor;
 use darkfi::{
     blockchain::Blockchain,
     consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
@@ -23,7 +24,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{crypto::ContractId, pasta::pallas, tx::FuncCall};
-use darkfi_serial::{serialize, Encodable, WriteExt};
+use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
 
 use smart_contract::{FooCallData, Function};
 
@@ -83,6 +84,14 @@ fn run_contract() -> Result<()> {
     // If exec was successful, try to apply the state change
     // =====================================================
     runtime.apply(&update)?;
+
+    // =====================================================
+    // Verify ZK proofs and signatures
+    // =====================================================
+    let metadata = runtime.metadata(&payload)?;
+    let mut decoder = Cursor::new(&metadata);
+    let zk_public_values: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
+    let signature_public_keys: Vec<pallas::Point> = Decodable::decode(decoder)?;
 
     Ok(())
 }

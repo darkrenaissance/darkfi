@@ -6,8 +6,9 @@ use darkfi_sdk::{
     msg,
     tx::FuncCall,
     util::set_return_data,
+    pasta::pallas
 };
-use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable, Encodable};
 
 /// Available functions for this contract.
 /// We identify them with the first byte passed in through the payload.
@@ -84,6 +85,42 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             let (func_call_index, func_calls): (u32, Vec<FuncCall>) = deserialize(tx_data)?;
             let _call_data: FooCallData =
                 deserialize(&func_calls[func_call_index as usize].call_data)?;
+
+            let zk_public_values = vec![
+                (
+                    "DaoProposeInput".to_string(),
+                    vec![
+                        pallas::Base::from(110),
+                        pallas::Base::from(4)
+                    ]
+                ),
+                (
+                    "DaoProposeInput".to_string(),
+                    vec![
+                        pallas::Base::from(7),
+                        pallas::Base::from(4)
+                    ]
+                ),
+                (
+                    "DaoProposeMain".to_string(),
+                    vec![
+                        pallas::Base::from(1),
+                        pallas::Base::from(3),
+                        pallas::Base::from(5),
+                        pallas::Base::from(7)
+                    ]
+                )
+            ];
+
+            let signature_public_keys: Vec<pallas::Point> = vec![
+                //pallas::Point::identity()
+            ];
+
+            let mut metadata = Vec::new();
+            zk_public_values.encode(&mut metadata)?;
+            signature_public_keys.encode(&mut metadata)?;
+            set_return_data(&metadata)?;
+            msg!("metadata returned!");
 
             // Convert call_data to halo2 public inputs
             // Pass this to the env

@@ -42,7 +42,7 @@ pub(crate) fn drk_log(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
 pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
-        ContractSection::Exec => {
+        ContractSection::Exec | ContractSection::Metadata => {
             let memory_view = env.memory_view(&ctx);
 
             let Ok(slice) = ptr.slice(&memory_view, len) else {

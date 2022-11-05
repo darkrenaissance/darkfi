@@ -51,6 +51,8 @@ pub enum ContractSection {
     Exec,
     /// Apply function of a contract
     Update,
+    /// Metadata
+    Metadata,
     /// Placeholder state before any initialization
     Null,
 }
@@ -61,6 +63,7 @@ impl ContractSection {
             Self::Deploy => "__initialize",
             Self::Exec => "__entrypoint",
             Self::Update => "__update",
+            Self::Metadata => "__metadata",
             Self::Null => unreachable!(),
         }
     }
@@ -226,7 +229,7 @@ impl Runtime {
         self.set_memory_page_size(pages_required as u32)?;
         self.copy_to_memory(&payload)?;
 
-        debug!(target: "runtime", "Getting initialize function");
+        debug!(target: "runtime", "Getting {} function", section.name());
         let entrypoint = self.instance.exports.get_function(section.name())?;
 
         debug!(target: "runtime", "Executing wasm");
@@ -305,6 +308,10 @@ impl Runtime {
         }
 
         Ok(())
+    }
+
+    pub fn metadata(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
+        self.call(ContractSection::Metadata, payload)
     }
 
     fn print_logs(&self) {

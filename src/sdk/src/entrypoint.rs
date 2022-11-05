@@ -60,7 +60,7 @@ macro_rules! define_contract {
             }
         }
         #[no_mangle]
-        pub unsafe extern "C" fn __get_metadata(input: *mut u8) -> u64 {
+        pub unsafe extern "C" fn __metadata(input: *mut u8) -> u64 {
             let (contract_id, instruction_data) = $crate::entrypoint::deserialize(input);
 
             match $metadata_func(contract_id, &instruction_data) {
