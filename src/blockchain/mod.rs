@@ -41,6 +41,7 @@ pub mod contractstore;
 pub use contractstore::ContractStore;
 
 /// Structure holding all sled trees that define the concept of Blockchain.
+#[derive(Clone)]
 pub struct Blockchain {
     /// Main pointer to the sled db connection
     pub sled_db: sled::Db,

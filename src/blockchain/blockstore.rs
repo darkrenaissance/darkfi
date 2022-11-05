@@ -196,6 +196,7 @@ impl BlockStore {
 /// The `BlockOrderStore` is a `sled` tree storing the order of the
 /// blockchain's slots, where the key is the slot uid, and the value is
 /// the block's headers' hash. [`BlockStore`] can be queried with this hash.
+#[derive(Clone)]
 pub struct BlockOrderStore(sled::Tree);
 
 impl BlockOrderStore {

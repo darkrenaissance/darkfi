@@ -52,11 +52,14 @@ fn run_contract() -> Result<()> {
     // ================================================================
     let wasm_bytes = std::fs::read("contract.wasm")?;
     let contract_id = ContractId::new(pallas::Base::from(1));
-    let mut runtime = Runtime::new(&wasm_bytes, blockchain, contract_id)?;
+    let mut runtime = Runtime::new(&wasm_bytes, blockchain.clone(), contract_id)?;
 
     // Deploy function to initialize the smart contract state.
     // Here we pass an empty payload, but it's possible to feed in arbitrary data.
     runtime.deploy(&[])?;
+
+    // This is another call so we instantiate a new runtime.
+    let mut runtime = Runtime::new(&wasm_bytes, blockchain, contract_id)?;
 
     // =============================================
     // Build some kind of payload to show an example

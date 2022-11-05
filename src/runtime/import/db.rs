@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::crypto::ContractId;
-use darkfi_serial::{deserialize, Decodable};
+use darkfi_serial::Decodable;
 use log::error;
 use std::io::Cursor;
 use wasmer::{FunctionEnvMut, WasmPtr};
@@ -38,8 +38,21 @@ impl DbHandle {
         Self { contract_id, tree }
     }
 
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        if let Some(v) = self.tree.get(key)? {
+            return Ok(Some(v.to_vec()))
+        };
+
+        Ok(None)
+    }
+
     pub fn apply_batch(&self, batch: sled::Batch) -> Result<()> {
         Ok(self.tree.apply_batch(batch)?)
+    }
+
+    pub fn flush(&self) -> Result<()> {
+        let _ = self.tree.flush()?;
+        Ok(())
     }
 }
 
@@ -89,22 +102,23 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
 
             // TODO: Ensure we've read the entire buffer above.
 
-            if &cid != contract_id {
-                error!(target: "wasm_runtime::db_init", "Unauthorized ContractId for db_init");
-                return -1
-            }
-
-            let tree_handle = match contracts.init(db, contract_id, &db_name) {
+            let tree_handle = match contracts.init(db, &cid, &db_name) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::db_init", "Failed to init db: {}", e);
+                    error!(target: "wasm_runtime:db_lookup", "Failed to init db: {}", e);
                     return -2
                 }
             };
 
+            // TODO: Make sure we don't duplicate the DbHandle in the vec.
+            //       It should behave like an ordered set.
+            // In `lookup()` we also create a `sled::Batch`. This is done for
+            // some simplicity reasons, and also for possible future changes.
+            // However, we make sure that unauthorized writes are not available
+            // from other functions that interface with the databases.
             let mut db_handles = env.db_handles.borrow_mut();
             let mut db_batches = env.db_batches.borrow_mut();
-            db_handles.push(DbHandle::new(*contract_id, tree_handle));
+            db_handles.push(DbHandle::new(cid, tree_handle));
             db_batches.push(sled::Batch::default());
             return (db_handles.len() - 1) as i32
         }
@@ -125,34 +139,65 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Deploy | ContractSection::Exec | ContractSection::Update => {
-            let env = ctx.data();
             let memory_view = env.memory_view(&ctx);
+            let db = &env.blockchain.sled_db;
+            let contracts = &env.blockchain.contracts;
 
-            match ptr.read_utf8_string(&memory_view, len) {
-                Ok(db_name) => {
-                    // db_name = blake3_hash(contract_id, db_name)
-                    return 110
-                }
-                Err(_) => {
-                    error!(target: "wasm_runtime::drk_log", "Failed to read UTF-8 string from VM memory");
+            let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
+                error!(target: "wasm_runtime::db_lookup", "Failed to make slice from ptr");
+                return -2
+            };
+
+            let mut buf = vec![0_u8; len as usize];
+            if let Err(e) = mem_slice.read_slice(&mut buf) {
+                error!(target: "wasm_runtime::db_lookup", "Failed to read from memory slice: {}", e);
+                return -2
+            };
+
+            let mut buf_reader = Cursor::new(buf);
+
+            let cid: ContractId = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_lookup", "Failed to decode ContractId: {}", e);
                     return -2
                 }
-            }
-        }
-        _ => -1,
-    }
-}
+            };
 
-/// Everyone can call this. Will read a key from the key-value store.
-///
-/// ```
-///     value = db_get(db_handle, key);
-/// ```
-pub(crate) fn db_get(ctx: FunctionEnvMut<Env>) -> i32 {
-    let env = ctx.data();
-    match env.contract_section {
-        ContractSection::Exec => 0,
-        _ => -1,
+            let db_name: String = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_lookup", "Failed to decode db_name: {}", e);
+                    return -2
+                }
+            };
+
+            // TODO: Ensure we've read the entire buffer above.
+
+            let tree_handle = match contracts.lookup(db, &cid, &db_name) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime:db_lookup", "Failed to lookup db: {}", e);
+                    return -2
+                }
+            };
+
+            // TODO: Make sure we don't duplicate the DbHandle in the vec.
+            //       It should behave like an ordered set.
+            // In `lookup()` we also create a `sled::Batch`. This is done for
+            // some simplicity reasons, and also for possible future changes.
+            // However, we make sure that unauthorized writes are not available
+            // from other functions that interface with the databases.
+            let mut db_handles = env.db_handles.borrow_mut();
+            let mut db_batches = env.db_batches.borrow_mut();
+            db_handles.push(DbHandle::new(cid, tree_handle));
+            db_batches.push(sled::Batch::default());
+            return (db_handles.len() - 1) as i32
+        }
+        _ => {
+            error!(target: "wasm_runtime::db_lookup", "db_lookup called in unauthorized section");
+            return -1
+        }
     }
 }
 
@@ -174,7 +219,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 
             let mut buf = vec![0_u8; len as usize];
             if let Err(e) = mem_slice.read_slice(&mut buf) {
-                error!(target: "wasm_runtime:db_set", "Failed to read from memory slice");
+                error!(target: "wasm_runtime:db_set", "Failed to read from memory slice: {}", e);
                 return -2
             };
 
@@ -184,7 +229,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
             let db_handle: u32 = match Decodable::decode(&mut buf_reader) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::db_set", "Failed to decode DbHandle");
+                    error!(target: "wasm_runtime::db_set", "Failed to decode DbHandle: {}", e);
                     return -2
                 }
             };
@@ -193,7 +238,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
             let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::db_set", "Failed to decode key vec");
+                    error!(target: "wasm_runtime::db_set", "Failed to decode key vec: {}", e);
                     return -2
                 }
             };
@@ -201,7 +246,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
             let value: Vec<u8> = match Decodable::decode(&mut buf_reader) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::db_set", "Failed to decode value vec");
+                    error!(target: "wasm_runtime::db_set", "Failed to decode value vec: {}", e);
                     return -2
                 }
             };
@@ -226,6 +271,82 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
             }
 
             db_batch.insert(key, value);
+
+            0
+        }
+        _ => -1,
+    }
+}
+
+/// Everyone can call this. Will read a key from the key-value store.
+///
+/// ```
+///     value = db_get(db_handle, key);
+/// ```
+pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+    let env = ctx.data();
+    match env.contract_section {
+        ContractSection::Deploy | ContractSection::Exec | ContractSection::Update => {
+            let memory_view = env.memory_view(&ctx);
+            let db = &env.blockchain.sled_db;
+            let contracts = &env.blockchain.contracts;
+
+            let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
+                error!(target: "wasm_runtime::db_get", "Failed to make slice from ptr");
+                return -2
+            };
+
+            let mut buf = vec![0_u8; len as usize];
+            if let Err(e) = mem_slice.read_slice(&mut buf) {
+                error!(target: "wasm_runtime::db_get", "Failed to read from memory slice: {}", e);
+                return -2
+            };
+
+            let mut buf_reader = Cursor::new(buf);
+
+            // FIXME: There's a type DbHandle=u32, but this should maybe be renamed
+            let db_handle: u32 = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_get", "Failed to decode DbHandle: {}", e);
+                    return -2
+                }
+            };
+            let db_handle = db_handle as usize;
+
+            let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_get", "Failed to decode key from vec: {}", e);
+                    return -2
+                }
+            };
+
+            // TODO: Ensure we've read the entire buffer above.
+
+            let db_handles = env.db_handles.borrow();
+            let db_batches = env.db_batches.borrow();
+
+            if db_handles.len() <= db_handle || db_batches.len() <= db_handle {
+                error!(target: "wasm_runtime::db_get", "Requested DbHandle that is out of bounds");
+                return -2
+            }
+
+            let handle_idx = db_handle;
+            let db_handle = &db_handles[handle_idx];
+
+            let ret = match db_handle.get(&key) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_get", "Internal error getting from tree");
+                    return -2
+                }
+            };
+
+            if ret.is_none() {
+                log::debug!("returned empty vec");
+                return -3
+            }
 
             0
         }
