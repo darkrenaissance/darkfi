@@ -172,9 +172,9 @@ pub fn state_transition(
     if money_transfer_call_data.outputs[0].revealed.coin != Coin(call_data.coin_0) {
         return Err(Error::InvalidOutput)
     }
-    if money_transfer_call_data.outputs[1].revealed.coin != Coin(call_data.coin_1) {
-        return Err(Error::InvalidOutput)
-    }
+    //if money_transfer_call_data.outputs[1].revealed.coin != Coin(call_data.coin_1) {
+    //    return Err(Error::InvalidOutput)
+    //}
 
     // 2. sum of Money::transfer() calldata input_value_commits == our input value commit
     let mut input_value_commits = pallas::Point::identity();
