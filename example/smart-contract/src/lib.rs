@@ -56,13 +56,16 @@ define_contract!(
     init: init_contract,
     exec: process_instruction,
     apply: process_update,
-
     metadata: get_metadata
 );
 
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     msg!("wakeup wagies!");
     db_init(cid, "wagies")?;
+    // TODO: If the deploy execution fails, whatever is initialized with db_init
+    //       should be deleted from sled afterwards. There's no way to create a
+    //       tree but only apply the creation when we're done, so db_init creates
+    //       it and upon failure it should delete it
 
     // Lets write a value in there
     let tx_handle = db_begin_tx()?;
@@ -148,4 +151,3 @@ fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
 
     Ok(())
 }
-
