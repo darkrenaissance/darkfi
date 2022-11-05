@@ -74,9 +74,7 @@ impl ContractStore {
             return Err(ContractNotFound(contract_id.to_string()))
         }
 
-        let Some(state_pointers) = self.0.get(&contract_id_bytes)? else {
-            return Err(ContractNotFound(contract_id.to_string()))
-        };
+        let state_pointers =  self.0.get(&contract_id_bytes)?.unwrap();
 
         let state_pointers: Vec<[u8; 32]> = deserialize(&state_pointers)?;
 
