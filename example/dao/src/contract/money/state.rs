@@ -16,69 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi::crypto::keypair::PublicKey;
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-
-use darkfi::crypto::{
-    coin::Coin,
-    keypair::{PublicKey, SecretKey},
-};
-
-use super::transfer;
-use crate::note::EncryptedNote2;
+use incrementalmerkletree::bridgetree::BridgeTree;
 
 type MerkleTree = BridgeTree<MerkleNode, MERKLE_DEPTH>;
-
-pub struct OwnCoin {
-    pub coin: Coin,
-    pub note: transfer::wallet::Note,
-    pub leaf_position: incrementalmerkletree::Position,
-}
-
-pub struct WalletCache {
-    // Normally this would be a HashMap, but SecretKey is not Hash-able
-    // TODO: This can be HashableBase
-    cache: Vec<(SecretKey, Vec<OwnCoin>)>,
-}
-
-impl WalletCache {
-    pub fn new() -> Self {
-        Self { cache: Vec::new() }
-    }
-
-    /// Must be called at the start to begin tracking received coins for this secret.
-    pub fn track(&mut self, secret: SecretKey) {
-        self.cache.push((secret, Vec::new()));
-    }
-
-    /// Get all coins received by this secret key
-    /// track() must be called on this secret before calling this or the function will panic.
-    pub fn get_received(&mut self, secret: &SecretKey) -> Vec<OwnCoin> {
-        for (other_secret, own_coins) in self.cache.iter_mut() {
-            if *secret == *other_secret {
-                // clear own_coins vec, and return current contents
-                return std::mem::replace(own_coins, Vec::new())
-            }
-        }
-        panic!("you forget to track() this secret!");
-    }
-
-    pub fn try_decrypt_note(
-        &mut self,
-        coin: Coin,
-        ciphertext: EncryptedNote2,
-        tree: &mut MerkleTree,
-    ) {
-        // Loop through all our secret keys...
-        for (secret, own_coins) in self.cache.iter_mut() {
-            // .. attempt to decrypt the note ...
-            if let Ok(note) = ciphertext.decrypt(secret) {
-                let leaf_position = tree.witness().expect("coin should be in tree");
-                own_coins.push(OwnCoin { coin, note, leaf_position });
-            }
-        }
-    }
-}
 
 /// The state machine, held in memory.
 pub struct State {
@@ -95,8 +37,6 @@ pub struct State {
 
     /// Public key of the faucet
     pub faucet_signature_public: PublicKey,
-
-    pub wallet_cache: WalletCache,
 }
 
 impl State {
@@ -110,7 +50,6 @@ impl State {
             nullifiers: vec![],
             cashier_signature_public,
             faucet_signature_public,
-            wallet_cache: WalletCache::new(),
         })
     }
 

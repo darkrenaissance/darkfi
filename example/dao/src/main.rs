@@ -21,7 +21,7 @@ use std::{
     time::Instant,
 };
 
-use incrementalmerkletree::Tree;
+use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use pasta_curves::{
     arithmetic::CurveAffine,
@@ -41,6 +41,7 @@ use darkfi::{
     zk::circuit::{BurnContract, MintContract},
     zkas::decoder::ZkBinary,
 };
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 
 mod contract;
 mod error;
@@ -49,8 +50,63 @@ mod util;
 
 use crate::{
     contract::{dao, example, money},
+    note::EncryptedNote2,
     util::{sign, StateRegistry, Transaction, ZkContractTable},
 };
+
+type MerkleTree = BridgeTree<MerkleNode, MERKLE_DEPTH>;
+
+pub struct OwnCoin {
+    pub coin: Coin,
+    pub note: money::transfer::wallet::Note,
+    pub leaf_position: incrementalmerkletree::Position,
+}
+
+pub struct WalletCache {
+    // Normally this would be a HashMap, but SecretKey is not Hash-able
+    // TODO: This can be HashableBase
+    cache: Vec<(SecretKey, Vec<OwnCoin>)>,
+    /// The entire Merkle tree state
+    tree: MerkleTree,
+}
+
+impl WalletCache {
+    pub fn new() -> Self {
+        Self { cache: Vec::new(), tree: MerkleTree::new(100) }
+    }
+
+    /// Must be called at the start to begin tracking received coins for this secret.
+    pub fn track(&mut self, secret: SecretKey) {
+        self.cache.push((secret, Vec::new()));
+    }
+
+    /// Get all coins received by this secret key
+    /// track() must be called on this secret before calling this or the function will panic.
+    pub fn get_received(&mut self, secret: &SecretKey) -> Vec<OwnCoin> {
+        for (other_secret, own_coins) in self.cache.iter_mut() {
+            if *secret == *other_secret {
+                // clear own_coins vec, and return current contents
+                return std::mem::replace(own_coins, Vec::new())
+            }
+        }
+        panic!("you forget to track() this secret!");
+    }
+
+    pub fn try_decrypt_note(&mut self, coin: Coin, ciphertext: &EncryptedNote2) {
+        // Add the new coins to the Merkle tree
+        let node = MerkleNode::from(coin.0);
+        self.tree.append(&node);
+
+        // Loop through all our secret keys...
+        for (secret, own_coins) in self.cache.iter_mut() {
+            // .. attempt to decrypt the note ...
+            if let Ok(note) = ciphertext.decrypt(secret) {
+                let leaf_position = self.tree.witness().expect("coin should be in tree");
+                own_coins.push(OwnCoin { coin, note, leaf_position });
+            }
+        }
+    }
+}
 
 // TODO: Anonymity leaks in this proof of concept:
 //
@@ -199,6 +255,9 @@ async fn main() -> Result<()> {
     let faucet_signature_secret = SecretKey::random(&mut OsRng);
     let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
 
+    // We use this to receive coins
+    let mut cache = WalletCache::new();
+
     ///////////////////////////////////////////////////
 
     let money_state = money::state::State::new(cashier_signature_public, faucet_signature_public);
@@ -297,8 +356,7 @@ async fn main() -> Result<()> {
     ///////////////////////////////////////////////////
     debug!(target: "demo", "Stage 2. Minting treasury token");
 
-    let state = states.lookup_mut::<money::State>(*money::CONTRACT_ID).unwrap();
-    state.wallet_cache.track(dao_keypair.secret);
+    cache.track(dao_keypair.secret);
 
     //// Wallet
 
@@ -371,9 +429,22 @@ async fn main() -> Result<()> {
 
     //// Wallet
     // DAO reads the money received from the encrypted note
+    {
+        assert_eq!(tx.func_calls.len(), 1);
+        let func_call = &tx.func_calls[0];
+        let call_data = func_call.call_data.as_any();
+        assert_eq!((*call_data).type_id(), TypeId::of::<money::transfer::validate::CallData>());
+        let call_data = call_data.downcast_ref::<money::transfer::validate::CallData>().unwrap();
 
-    let state = states.lookup_mut::<money::State>(*money::CONTRACT_ID).unwrap();
-    let mut recv_coins = state.wallet_cache.get_received(&dao_keypair.secret);
+        for output in &call_data.outputs {
+            let coin = &output.revealed.coin;
+            let enc_note = &output.enc_note;
+
+            cache.try_decrypt_note(coin.clone(), enc_note);
+        }
+    }
+
+    let mut recv_coins = cache.get_received(&dao_keypair.secret);
     assert_eq!(recv_coins.len(), 1);
     let dao_recv_coin = recv_coins.pop().unwrap();
     let treasury_note = dao_recv_coin.note;
@@ -413,10 +484,9 @@ async fn main() -> Result<()> {
     // Hodler 3: the tiebreaker
     let gov_keypair_3 = Keypair::random(&mut OsRng);
 
-    let state = states.lookup_mut::<money::State>(*money::CONTRACT_ID).unwrap();
-    state.wallet_cache.track(gov_keypair_1.secret);
-    state.wallet_cache.track(gov_keypair_2.secret);
-    state.wallet_cache.track(gov_keypair_3.secret);
+    cache.track(gov_keypair_1.secret);
+    cache.track(gov_keypair_2.secret);
+    cache.track(gov_keypair_3.secret);
 
     let gov_keypairs = vec![gov_keypair_1, gov_keypair_2, gov_keypair_3];
 
@@ -502,13 +572,26 @@ async fn main() -> Result<()> {
     tx.verify_sigs();
 
     //// Wallet
+    {
+        assert_eq!(tx.func_calls.len(), 1);
+        let func_call = &tx.func_calls[0];
+        let call_data = func_call.call_data.as_any();
+        assert_eq!((*call_data).type_id(), TypeId::of::<money::transfer::validate::CallData>());
+        let call_data = call_data.downcast_ref::<money::transfer::validate::CallData>().unwrap();
+
+        for output in &call_data.outputs {
+            let coin = &output.revealed.coin;
+            let enc_note = &output.enc_note;
+
+            cache.try_decrypt_note(coin.clone(), enc_note);
+        }
+    }
 
     let mut gov_recv = vec![None, None, None];
     // Check that each person received one coin
     for (i, key) in gov_keypairs.iter().enumerate() {
         let gov_recv_coin = {
-            let state = states.lookup_mut::<money::State>(*money::CONTRACT_ID).unwrap();
-            let mut recv_coins = state.wallet_cache.get_received(&key.secret);
+            let mut recv_coins = cache.get_received(&key.secret);
             assert_eq!(recv_coins.len(), 1);
             let recv_coin = recv_coins.pop().unwrap();
             let note = &recv_coin.note;
@@ -565,8 +648,7 @@ async fn main() -> Result<()> {
     let user_keypair = Keypair::random(&mut OsRng);
 
     let (money_leaf_position, money_merkle_path) = {
-        let state = states.lookup::<money::State>(*money::CONTRACT_ID).unwrap();
-        let tree = &state.tree;
+        let tree = &cache.tree;
         let leaf_position = gov_recv[0].leaf_position;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
@@ -710,8 +792,7 @@ async fn main() -> Result<()> {
     // User 1: YES
 
     let (money_leaf_position, money_merkle_path) = {
-        let state = states.lookup::<money::State>(*money::CONTRACT_ID).unwrap();
-        let tree = &state.tree;
+        let tree = &cache.tree;
         let leaf_position = gov_recv[0].leaf_position;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
@@ -802,8 +883,7 @@ async fn main() -> Result<()> {
     // User 2: NO
 
     let (money_leaf_position, money_merkle_path) = {
-        let state = states.lookup::<money::State>(*money::CONTRACT_ID).unwrap();
-        let tree = &state.tree;
+        let tree = &cache.tree;
         let leaf_position = gov_recv[1].leaf_position;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
@@ -893,8 +973,7 @@ async fn main() -> Result<()> {
     // User 3: YES
 
     let (money_leaf_position, money_merkle_path) = {
-        let state = states.lookup::<money::State>(*money::CONTRACT_ID).unwrap();
-        let tree = &state.tree;
+        let tree = &cache.tree;
         let leaf_position = gov_recv[2].leaf_position;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
@@ -1056,8 +1135,7 @@ async fn main() -> Result<()> {
     let exec_signature_secret = SecretKey::random(&mut OsRng);
 
     let (treasury_leaf_position, treasury_merkle_path) = {
-        let state = states.lookup::<money::State>(*money::CONTRACT_ID).unwrap();
-        let tree = &state.tree;
+        let tree = &cache.tree;
         let leaf_position = dao_recv_coin.leaf_position;
         let root = tree.root(0).unwrap();
         let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();

@@ -66,15 +66,13 @@ impl UpdateBase for Update {
         state.nullifiers.append(&mut self.nullifiers);
 
         //// Update merkle tree and witnesses
-        for (coin, enc_note) in self.coins.into_iter().zip(self.enc_notes.into_iter()) {
+        for coin in self.coins {
             // Add the new coins to the Merkle tree
             let node = MerkleNode::from(coin.0);
             state.tree.append(&node);
 
             // Keep track of all Merkle roots that have existed
             state.merkle_roots.push(state.tree.root(0).unwrap());
-
-            state.wallet_cache.try_decrypt_note(coin, enc_note, &mut state.tree);
         }
     }
 }
