@@ -89,7 +89,12 @@ pub async fn example() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign([signature_secret].to_vec(), &func_calls);
+    let mut signatures = vec![];
+    for func_call in &func_calls {
+        let sign = sign([signature_secret].to_vec(), func_call);
+        signatures.push(sign);
+    }
+
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -230,7 +235,12 @@ async fn main() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign([signature_secret].to_vec(), &func_calls);
+    let mut signatures = vec![];
+    for func_call in &func_calls {
+        let sign = sign([signature_secret].to_vec(), func_call);
+        signatures.push(sign);
+    }
+
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -327,7 +337,12 @@ async fn main() -> Result<()> {
     let func_call = builder.build(&zk_bins)?;
     let func_calls = vec![func_call];
 
-    let signatures = sign([cashier_signature_secret].to_vec(), &func_calls);
+    let mut signatures = vec![];
+    for func_call in &func_calls {
+        let sign = sign([cashier_signature_secret].to_vec(), func_call);
+        signatures.push(sign);
+    }
+
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -454,7 +469,12 @@ async fn main() -> Result<()> {
     let func_call = builder.build(&zk_bins)?;
     let func_calls = vec![func_call];
 
-    let signatures = sign([cashier_signature_secret].to_vec(), &func_calls);
+    let mut signatures = vec![];
+    for func_call in &func_calls {
+        let sign = sign([cashier_signature_secret].to_vec(), func_call);
+        signatures.push(sign);
+    }
+
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -602,7 +622,12 @@ async fn main() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign([signature_secret].to_vec(), &func_calls);
+    let mut signatures = vec![];
+    for func_call in &func_calls {
+        let sign = sign([signature_secret].to_vec(), func_call);
+        signatures.push(sign);
+    }
+
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -723,7 +748,12 @@ async fn main() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign([signature_secret].to_vec(), &func_calls);
+    let mut signatures = vec![];
+    for func_call in &func_calls {
+        let sign = sign([signature_secret].to_vec(), func_call);
+        signatures.push(sign);
+    }
+
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -809,7 +839,12 @@ async fn main() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign([signature_secret].to_vec(), &func_calls);
+    let mut signatures = vec![];
+    for func_call in &func_calls {
+        let sign = sign([signature_secret].to_vec(), func_call);
+        signatures.push(sign);
+    }
+
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -895,7 +930,12 @@ async fn main() -> Result<()> {
     let func_call = builder.build(&zk_bins);
     let func_calls = vec![func_call];
 
-    let signatures = sign([signature_secret].to_vec(), &func_calls);
+    let mut signatures = vec![];
+    for func_call in &func_calls {
+        let sign = sign([signature_secret].to_vec(), func_call);
+        signatures.push(sign);
+    }
+
     let tx = Transaction { func_calls, signatures };
 
     //// Validator
@@ -1082,7 +1122,12 @@ async fn main() -> Result<()> {
     let exec_func_call = builder.build(&zk_bins);
     let func_calls = vec![transfer_func_call, exec_func_call];
 
-    let signatures = sign([tx_signature_secret, exec_signature_secret].to_vec(), &func_calls);
+    let mut signatures = vec![];
+    for func_call in &func_calls {
+        let sign = sign([signature_secret].to_vec(), func_call);
+        signatures.push(sign);
+    }
+
     let tx = Transaction { func_calls, signatures };
 
     {
