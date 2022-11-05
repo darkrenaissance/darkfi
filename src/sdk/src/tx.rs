@@ -10,4 +10,3 @@ pub struct FuncCall {
     pub func_id: FuncId,
     pub call_data: Vec<u8>,
 }
-

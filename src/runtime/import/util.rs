@@ -63,4 +63,3 @@ pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
         _ => -1,
     }
 }
-

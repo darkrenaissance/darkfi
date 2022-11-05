@@ -283,7 +283,6 @@ fn create_leadcoin(
     };
     */
 
-
     let coin_nonce2_msg = [c_seed, c_root_sk.inner(), one.clone(), one.clone()];
     let c_seed2: pallas::Base =
         poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init()
@@ -333,11 +332,13 @@ fn create_coins_election_seeds(
     // mu_rho
     let nonce_mu_msg = [election_seed_nonce, eta, slot];
     let nonce_mu: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(nonce_mu_msg);
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init()
+            .hash(nonce_mu_msg);
     // mu_y
     let lead_mu_msg = [election_seed_lead, eta, slot];
     let lead_mu: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init().hash(lead_mu_msg);
+        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init()
+            .hash(lead_mu_msg);
     (lead_mu, nonce_mu)
 }
 

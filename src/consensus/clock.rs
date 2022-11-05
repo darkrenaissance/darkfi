@@ -96,7 +96,7 @@ impl Clock {
     async fn ticking(&self) -> bool {
         let (abs, rel, _) = self.tick_time().await;
         debug!("abs time to genesis ticks: {}, rel ticks: {}", abs, rel);
-        rel < (self.tick_len)*2 / 3
+        rel < (self.tick_len) * 2 / 3
     }
 
     pub async fn sync(&mut self) -> Result<()> {

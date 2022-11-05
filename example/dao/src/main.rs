@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::{Any, TypeId}, time::Instant};
+use std::{
+    any::{Any, TypeId},
+    time::Instant,
+};
 
 use incrementalmerkletree::Tree;
 use log::debug;
@@ -1113,7 +1116,7 @@ async fn main() -> Result<()> {
             dao_serial,
             *dao::exec::FUNC_ID,
             dao_bulla.0,
-            dao_coin_blind
+            dao_coin_blind,
         ]));
         debug!("coin_1: {:?}", coin_1);
 
@@ -1130,13 +1133,9 @@ async fn main() -> Result<()> {
         debug!("money::transfer() coin 1 = {:?}", money_transfer_coin_1);
 
         let dao_exec_call_data = tx.func_calls[1].call_data.as_any();
-        let dao_exec_call_data =
-            dao_exec_call_data.downcast_ref::<dao::exec::validate::CallData>();
+        let dao_exec_call_data = dao_exec_call_data.downcast_ref::<dao::exec::validate::CallData>();
         let dao_exec_call_data = dao_exec_call_data.unwrap();
-        assert_eq!(
-            dao_exec_call_data.type_id(),
-            TypeId::of::<dao::exec::validate::CallData>()
-        );
+        assert_eq!(dao_exec_call_data.type_id(), TypeId::of::<dao::exec::validate::CallData>());
         let dao_exec_coin_1 = &dao_exec_call_data.coin_1;
         debug!("dao::exec() coin 1 = {:?}", dao_exec_coin_1);
 

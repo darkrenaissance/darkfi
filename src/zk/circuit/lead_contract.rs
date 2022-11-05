@@ -685,18 +685,13 @@ impl Circuit<pallas::Base> for LeadContract {
 
         layouter.assign_region(
             || "coin1_cm_root equality",
-            |mut region| {
-                region.constrain_equal(coin1_cm_root.cell(), coin1_commit_root.cell())
-            },
+            |mut region| region.constrain_equal(coin1_cm_root.cell(), coin1_commit_root.cell()),
         )?;
 
         layouter.assign_region(
             || "sn_commit equality",
-            |mut region| {
-                region.constrain_equal(sn_commit.cell(), coin1_serial.cell())
-            },
+            |mut region| region.constrain_equal(sn_commit.cell(), coin1_serial.cell()),
         )?;
-
 
         // Constrain equality between witnessed and derived commitment
         coin2_commitment
