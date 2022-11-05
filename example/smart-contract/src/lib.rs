@@ -1,10 +1,11 @@
 use darkfi_sdk::{
+    crypto::ContractId,
     db::{db_begin_tx, db_end_tx, db_get, db_init, db_lookup, db_set},
+    define_contract,
     error::ContractResult,
     msg,
     state::set_update,
     tx::FuncCall,
-    define_contract,
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
@@ -44,15 +45,11 @@ pub struct FooUpdate {
     pub age: u32,
 }
 
-define_contract!(
-    init: init_contract,
-    exec: process_instruction,
-    apply: process_update
-);
+define_contract!(init: init_contract, exec: process_instruction, apply: process_update);
 
-fn init_contract(_ix: &[u8]) -> ContractResult {
+fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     msg!("wakeup wagies!");
-    db_init("wagies")?;
+    db_init(cid, "wagies")?;
 
     // Lets write a value in there
     let tx_handle = db_begin_tx()?;
@@ -68,7 +65,7 @@ fn init_contract(_ix: &[u8]) -> ContractResult {
 // This is the main entrypoint function where the payload is fed.
 // Through here, you can branch out into different functions inside
 // this library.
-fn process_instruction(ix: &[u8]) -> ContractResult {
+fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     match Function::from(ix[0]) {
         Function::Foo => {
             let tx_data = &ix[1..];
@@ -127,7 +124,7 @@ fn process_instruction(ix: &[u8]) -> ContractResult {
     Ok(())
 }
 
-fn process_update(update_data: &[u8]) -> ContractResult {
+fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
     msg!("Make update!");
 
     match Function::from(update_data[0]) {

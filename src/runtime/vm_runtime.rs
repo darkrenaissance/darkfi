@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
 };
 
-use darkfi_sdk::entrypoint;
+use darkfi_sdk::{crypto::ContractId, entrypoint};
 use log::{debug, info};
 use wasmer::{
     imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
@@ -34,7 +34,7 @@ use wasmer_middlewares::{
 };
 
 use super::{import, import::db::DbHandle, memory::MemoryManipulation};
-use crate::{blockchain::Blockchain, crypto::contract_id::ContractId, Error, Result};
+use crate::{blockchain::Blockchain, Error, Result};
 
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
@@ -231,7 +231,7 @@ impl Runtime {
         env_mut.contract_section = ContractSection::Deploy;
 
         // Serialize the payload for the format the wasm runtime is expecting.
-        let payload = Self::serialize_payload(payload);
+        let payload = Self::serialize_payload(&env_mut.contract_id, payload);
 
         // Allocate enough memory for the payload and copy it into the memory.
         let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
@@ -281,7 +281,7 @@ impl Runtime {
         env_mut.contract_section = ContractSection::Exec;
 
         // Serialize the payload for the format the wasm runtime is expecting.
-        let payload = Self::serialize_payload(payload);
+        let payload = Self::serialize_payload(&env_mut.contract_id, payload);
 
         // Allocate enough memory for the payload and copy it into the memory.
         let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
@@ -332,11 +332,12 @@ impl Runtime {
 
         // Take the update data from env, and serialize it for the format the wasm
         // runtime is expecting.
+        // FIXME: Can panic
         let update_data = env_mut.contract_update.take().unwrap();
         let mut payload = Vec::with_capacity(1 + update_data.1.len());
         payload.extend_from_slice(&[update_data.0]);
         payload.extend_from_slice(&update_data.1);
-        let payload = Self::serialize_payload(&payload);
+        let payload = Self::serialize_payload(&env_mut.contract_id, &payload);
 
         // Allocate enough memory for the payload and copy it into the memory.
         let pages_required = payload.len() / WASM_PAGE_SIZE + 1;
@@ -378,7 +379,7 @@ impl Runtime {
     fn print_logs(&self) {
         let logs = self.ctx.as_ref(&self.store).logs.borrow();
         for msg in logs.iter() {
-            debug!(target: "wasm_runtime::run", "Contract log: {}", msg);
+            debug!(target: "wasm_runtime::print_logs", "Contract log: {}", msg);
         }
     }
 
@@ -425,9 +426,11 @@ impl Runtime {
     /// Serialize contract payload to the format accepted by the runtime functions.
     /// We keep the same payload as a slice of bytes, and prepend it with a
     /// little-endian u64 to tell the payload's length.
-    fn serialize_payload(payload: &[u8]) -> Vec<u8> {
+    fn serialize_payload(cid: &ContractId, payload: &[u8]) -> Vec<u8> {
+        let ser_cid = cid.to_bytes();
         let payload_len = payload.len();
-        let mut out = Vec::with_capacity(8 + payload_len);
+        let mut out = Vec::with_capacity(ser_cid.len() + 8 + payload_len);
+        out.extend_from_slice(&ser_cid);
         out.extend_from_slice(&(payload_len as u64).to_le_bytes());
         out.extend_from_slice(payload);
         out

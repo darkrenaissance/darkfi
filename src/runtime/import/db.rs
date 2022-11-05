@@ -16,13 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::crypto::ContractId;
 use log::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::{
-    crypto::contract_id::ContractId,
-    runtime::vm_runtime::{ContractSection, Env},
-};
+use crate::runtime::vm_runtime::{ContractSection, Env};
 
 /// Internal wasm runtime API for sled trees
 pub struct DbHandle {
@@ -50,6 +48,26 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
             let db = &env.blockchain.sled_db;
             let contracts = &env.blockchain.contracts;
             let contract_id = &env.contract_id;
+
+            /*
+            let Ok(cid_slice) = cid_ptr.slice(&memory_view, 32) else {
+                error!(target: "wasm_runtime::db_init", "Failed to read contract id from ptr");
+                return -2
+            };
+
+            let Ok(cid_bytes) = cid_slice.read_to_vec() else {
+                error!(target: "wasm_runtime::db_init", "Failed to read slice to vec in db_init");
+                return -2
+            };
+
+            // FIXME: Could panic
+            let cid = ContractId::from_bytes(cid_bytes.try_into().unwrap());
+
+            if &cid != contract_id {
+                error!(target: "wasm_runtime::db_init", "Unauthorized ContractId for db_init");
+                return -1
+            }
+            */
 
             let Ok(db_name) = ptr.read_utf8_string(&memory_view, len) else {
                 error!(target: "wasm_runtime::db_init", "Failed to read string from VM memory");
@@ -98,7 +116,6 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32
                     return -2
                 }
             }
-            0
         }
         _ => -1,
     }

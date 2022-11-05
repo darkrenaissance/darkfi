@@ -1,4 +1,7 @@
-use super::error::{ContractError, GenericResult};
+use super::{
+    crypto::ContractId,
+    error::{ContractError, GenericResult},
+};
 
 type DbHandle = u32;
 type TxHandle = u32;
@@ -9,19 +12,30 @@ type TxHandle = u32;
 ///     type DbHandle = u32;
 ///     db_init(db_name) -> DbHandle
 /// ```
-pub fn db_init(db_name: &str) -> GenericResult<()> {
+pub fn db_init(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle> {
     #[cfg(target_arch = "wasm32")]
     unsafe {
-        return match db_init_(db_name.as_ptr(), db_name.len() as u32) {
-            0 => Ok(()),
-            -1 => Err(ContractError::CallerAccessDenied),
-            -2 => Err(ContractError::DbInitFailed),
-            _ => unreachable!(),
+        println!("sdk/src/db.rs:db_init() BEGIN");
+        let ret = db_init_(
+            //contract_id.to_bytes().as_ptr(),
+            //32_u32,
+            db_name.as_ptr(),
+            db_name.len() as u32,
+        );
+
+        if ret < 0 {
+            match ret {
+                -1 => return Err(ContractError::CallerAccessDenied),
+                -2 => return Err(ContractError::DbInitFailed),
+                _ => unimplemented!(),
+            }
         }
+
+        return Ok(ret as u32)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    todo!("{}", db_name);
+    unimplemented!()
 }
 
 pub fn db_lookup(db_name: &str) -> GenericResult<DbHandle> {

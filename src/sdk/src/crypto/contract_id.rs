@@ -16,26 +16,34 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod address;
-pub mod burn_proof;
-pub mod coin;
-pub mod diffie_hellman;
-pub mod keypair;
-pub mod mint_proof;
-pub mod note;
-pub mod proof;
-pub mod schnorr;
-pub mod token_id;
-pub mod token_list;
-pub mod types;
-pub mod util;
+use pasta_curves::{group::ff::PrimeField, pallas};
 
-/// VDF (Verifiable Delay Function) using MiMC
-pub mod mimc_vdf;
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct ContractId(pallas::Base);
 
-pub use burn_proof::BurnRevealedValues;
-pub use mint_proof::MintRevealedValues;
-pub use proof::Proof;
+impl ContractId {
+    pub fn new(contract_id: pallas::Base) -> Self {
+        Self(contract_id)
+    }
 
-pub mod lead_proof;
-pub mod leadcoin;
+    pub fn inner(&self) -> pallas::Base {
+        self.0
+    }
+
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_repr()
+    }
+
+    pub fn from_bytes(x: [u8; 32]) -> Self {
+        // FIXME: Handle Option
+        Self(pallas::Base::from_repr(x).unwrap())
+    }
+}
+
+impl std::fmt::Display for ContractId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // base58 encoding
+        let contractid: String = bs58::encode(self.0.to_repr()).into_string();
+        write!(f, "{}", contractid)
+    }
+}

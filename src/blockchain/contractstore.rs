@@ -16,10 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::deserialize;
 
 use crate::{
-    crypto::contract_id::ContractId,
     Error::{ContractAlreadyInitialized, ContractNotFound, ContractStateNotFound},
     Result,
 };

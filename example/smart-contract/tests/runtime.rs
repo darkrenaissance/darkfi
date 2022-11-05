@@ -19,11 +19,10 @@
 use darkfi::{
     blockchain::Blockchain,
     consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
-    crypto::contract_id::ContractId,
     runtime::vm_runtime::Runtime,
     Result,
 };
-use darkfi_sdk::{pasta::pallas, tx::FuncCall};
+use darkfi_sdk::{crypto::ContractId, pasta::pallas, tx::FuncCall};
 use darkfi_serial::{serialize, Encodable, WriteExt};
 
 use smart_contract::{FooCallData, Function};

@@ -34,9 +34,6 @@ pub use nfstore::NullifierStore;
 pub mod rootstore;
 pub use rootstore::RootStore;
 
-pub mod statestore;
-pub use statestore::StateStore;
-
 pub mod txstore;
 pub use txstore::TxStore;
 

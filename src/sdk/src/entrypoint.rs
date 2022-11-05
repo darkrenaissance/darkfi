@@ -18,6 +18,8 @@
 
 use std::{mem::size_of, slice::from_raw_parts};
 
+use crate::crypto::ContractId;
+
 /// Success exit code for a contract
 pub const SUCCESS: u64 = 0;
 
@@ -27,27 +29,27 @@ macro_rules! define_contract {
         /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn __initialize(input: *mut u8) -> u64 {
-            let instruction_data = $crate::entrypoint::deserialize(input);
+            let (contract_id, instruction_data) = $crate::entrypoint::deserialize(input);
 
-            match $init_func(&instruction_data) {
+            match $init_func(contract_id, &instruction_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
         }
         #[no_mangle]
         pub unsafe extern "C" fn __entrypoint(input: *mut u8) -> u64 {
-            let instruction_data = $crate::entrypoint::deserialize(input);
+            let (contract_id, instruction_data) = $crate::entrypoint::deserialize(input);
 
-            match $exec_func(&instruction_data) {
+            match $exec_func(contract_id, &instruction_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
         }
         #[no_mangle]
         pub unsafe extern "C" fn __update(input: *mut u8) -> u64 {
-            let update_data = $crate::entrypoint::deserialize(input);
+            let (contract_id, update_data) = $crate::entrypoint::deserialize(input);
 
-            match $apply_func(&update_data) {
+            match $apply_func(contract_id, &update_data) {
                 Ok(()) => $crate::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
@@ -57,12 +59,16 @@ macro_rules! define_contract {
 
 /// Deserialize a given payload in `entrypoint`
 /// # Safety
-pub unsafe fn deserialize<'a>(input: *mut u8) -> &'a [u8] {
+pub unsafe fn deserialize<'a>(input: *mut u8) -> (ContractId, &'a [u8]) {
     let mut offset: usize = 0;
+
+    let contract_id_len = 32;
+    let contract_id_slice = { from_raw_parts(input.add(offset), contract_id_len) };
+    offset += contract_id_len;
 
     let instruction_data_len = *(input.add(offset) as *const u64) as usize;
     offset += size_of::<u64>();
     let instruction_data = { from_raw_parts(input.add(offset), instruction_data_len) };
 
-    instruction_data
+    (ContractId::from_bytes(contract_id_slice.try_into().unwrap()), instruction_data)
 }

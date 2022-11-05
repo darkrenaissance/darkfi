@@ -27,6 +27,13 @@
 //! If you feel like trying, please help out with this migration, but do
 //! it properly, with care, and write documentation while you're at it.
 
+/// Cryptographic constants
+pub mod constants;
+
+/// Contract ID definitions and methods
+pub mod contract_id;
+pub use contract_id::ContractId;
+
 /// Merkle node definitions
 pub mod merkle_node;
 pub use merkle_node::MerkleNode;
@@ -37,6 +44,3 @@ pub use nullifier::Nullifier;
 
 /// Pedersen commitment utilities
 pub mod pedersen;
-
-/// Cryptographic constants
-pub mod constants;
