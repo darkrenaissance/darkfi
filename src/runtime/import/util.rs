@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::error;
+use log::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::runtime::vm_runtime::{ContractSection, Env};
@@ -39,27 +39,27 @@ pub(crate) fn drk_log(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
     }
 }
 
-pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Exec | ContractSection::Metadata => {
             let memory_view = env.memory_view(&ctx);
 
             let Ok(slice) = ptr.slice(&memory_view, len) else {
-                return -2
+                return darkfi_sdk::error::INTERNAL_ERROR
             };
 
-            let Ok(update_data) = slice.read_to_vec() else {
-                return -2;
+            let Ok(return_data) = slice.read_to_vec() else {
+                return darkfi_sdk::error::INTERNAL_ERROR
             };
 
             // This function should only ever be called once on the runtime.
             if !env.contract_return_data.take().is_none() {
-                return -3
+                return darkfi_sdk::error::SET_RETVAL_ERROR
             }
-            env.contract_return_data.set(Some(update_data));
+            env.contract_return_data.set(Some(return_data));
             0
         }
-        _ => -1,
+        _ => darkfi_sdk::error::CALLER_ACCESS_DENIED,
     }
 }

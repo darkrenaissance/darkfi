@@ -697,7 +697,6 @@ impl Circuit<pallas::Base> for LeadContract {
             |mut region| region.constrain_equal(sn_commit.cell(), coin1_serial.cell()),
         )?;
 
-
         info!("coin2_commit LHS: x {:?}", coin2_commitment.inner().x());
         info!("coin2_commit LHS: y {:?}", coin2_commitment.inner().y());
         info!("coin2_commit RHS: x {:?}", coin2_commit.inner().x());

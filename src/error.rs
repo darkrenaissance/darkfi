@@ -305,6 +305,10 @@ pub enum Error {
 
     #[cfg(feature = "wasm-runtime")]
     #[error("contract initialize error")]
+    ContractError(darkfi_sdk::error::ContractError),
+
+    #[cfg(feature = "wasm-runtime")]
+    #[error("contract initialize error")]
     ContractInitError(u64),
 
     #[cfg(feature = "wasm-runtime")]
@@ -601,5 +605,12 @@ impl From<wasmer::MemoryAccessError> for Error {
 impl From<wasmer::MemoryError> for Error {
     fn from(err: wasmer::MemoryError) -> Self {
         Self::WasmerOomError(err.to_string())
+    }
+}
+
+#[cfg(feature = "wasm-runtime")]
+impl From<darkfi_sdk::error::ContractError> for Error {
+    fn from(err: darkfi_sdk::error::ContractError) -> Self {
+        Self::ContractError(err)
     }
 }

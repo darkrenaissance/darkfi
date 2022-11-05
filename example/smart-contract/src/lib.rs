@@ -4,11 +4,11 @@ use darkfi_sdk::{
     define_contract,
     error::ContractResult,
     msg,
+    pasta::pallas,
     tx::FuncCall,
     util::set_return_data,
-    pasta::pallas
 };
-use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable, Encodable};
+use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
 
 /// Available functions for this contract.
 /// We identify them with the first byte passed in through the payload.
@@ -89,27 +89,18 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             let zk_public_values = vec![
                 (
                     "DaoProposeInput".to_string(),
-                    vec![
-                        pallas::Base::from(110),
-                        pallas::Base::from(4)
-                    ]
+                    vec![pallas::Base::from(110), pallas::Base::from(4)],
                 ),
-                (
-                    "DaoProposeInput".to_string(),
-                    vec![
-                        pallas::Base::from(7),
-                        pallas::Base::from(4)
-                    ]
-                ),
+                ("DaoProposeInput".to_string(), vec![pallas::Base::from(7), pallas::Base::from(4)]),
                 (
                     "DaoProposeMain".to_string(),
                     vec![
                         pallas::Base::from(1),
                         pallas::Base::from(3),
                         pallas::Base::from(5),
-                        pallas::Base::from(7)
-                    ]
-                )
+                        pallas::Base::from(7),
+                    ],
+                ),
             ];
 
             let signature_public_keys: Vec<pallas::Point> = vec![
@@ -141,10 +132,10 @@ fn process_instruction(_cid: ContractId, ix: &[u8]) -> ContractResult {
             let tx_data = &ix[1..];
             // ...
             let (func_call_index, func_calls): (u32, Vec<FuncCall>) = deserialize(tx_data)?;
-            let call_data: FooCallData =
-                deserialize(&func_calls[func_call_index as usize].call_data)?;
-            msg!("call_data {{ a: {}, b: {} }}", call_data.a, call_data.b);
-            // ...
+            //let call_data: FooCallData =
+            //    deserialize(&func_calls[func_call_index as usize].call_data)?;
+            //msg!("call_data {{ a: {}, b: {} }}", call_data.a, call_data.b);
+            //// ...
             let update = FooUpdate { name: "john_doe".to_string(), age: 110 };
 
             let mut update_data = vec![Function::Foo as u8];
@@ -153,10 +144,10 @@ fn process_instruction(_cid: ContractId, ix: &[u8]) -> ContractResult {
             msg!("update is set!");
 
             // Example: try to get a value from the db
-            let db_handle = db_lookup("wagies")?;
-            // FIXME: this is just empty right now
-            let age_data = db_get(db_handle, "jason_gulag".as_bytes())?;
-            msg!("wagie age data: {:?}", age_data);
+            //let db_handle = db_lookup("wagies")?;
+            //// FIXME: this is just empty right now
+            //let age_data = db_get(db_handle, "jason_gulag".as_bytes())?;
+            //msg!("wagie age data: {:?}", age_data);
         }
         Function::Bar => {
             let tx_data = &ix[1..];
@@ -169,11 +160,12 @@ fn process_instruction(_cid: ContractId, ix: &[u8]) -> ContractResult {
 }
 
 fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
-    msg!("Make update!");
+    msg!("Make 1 update!");
 
     match Function::from(update_data[0]) {
         Function::Foo => {
-            let update: FooUpdate = deserialize(&update_data[1..])?;
+            msg!("fooupp");
+            //let update: FooUpdate = deserialize(&update_data[1..])?;
 
             // Write the wagie to the db
             //let tx_handle = db_begin_tx()?;
@@ -181,8 +173,12 @@ fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
             //let db_handle = db_lookup("wagies")?;
             //db_end_tx(db_handle, tx_handle)?;
         }
-        _ => unreachable!(),
+        //_ => unreachable!(),
+        _ => {
+            msg!("other branch");
+        }
     }
 
+    msg!("process_update() finished");
     Ok(())
 }

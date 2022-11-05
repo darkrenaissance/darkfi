@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::Cursor;
 use darkfi::{
     blockchain::Blockchain,
     consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
@@ -25,6 +24,7 @@ use darkfi::{
 };
 use darkfi_sdk::{crypto::ContractId, pasta::pallas, tx::FuncCall};
 use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
+use std::io::Cursor;
 
 use smart_contract::{FooCallData, Function};
 

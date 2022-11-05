@@ -22,7 +22,7 @@ pub type GenericResult<T> = ResultGeneric<T, ContractError>;
 pub type ContractResult = ResultGeneric<(), ContractError>;
 
 /// Error codes available in the contract.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum ContractError {
     /// Allows on-chain programs to implement contract-specific error types and
     /// see them returned by the runtime. A contract-specific error may be any
@@ -36,8 +36,8 @@ pub enum ContractError {
     #[error("IO error: {0}")]
     IoError(String),
 
-    #[error("Error setting update")]
-    SetUpdateError,
+    #[error("Error setting return value")]
+    SetRetvalError,
 
     #[error("Error checking if nullifier exists")]
     NullifierExistCheck,
@@ -62,31 +62,30 @@ pub enum ContractError {
 }
 
 /// Builtin return values occupy the upper 32 bits
-const BUILTIN_BIT_SHIFT: usize = 32;
 macro_rules! to_builtin {
     ($error:expr) => {
-        ($error as u64) << BUILTIN_BIT_SHIFT
+        i64::MIN + $error
     };
 }
 
-pub const CUSTOM_ZERO: u64 = to_builtin!(1);
-pub const INTERNAL_ERROR: u64 = to_builtin!(2);
-pub const SET_UPDATE_ERROR: u64 = to_builtin!(3);
-pub const IO_ERROR: u64 = to_builtin!(4);
-pub const NULLIFIER_EXIST_CHECK: u64 = to_builtin!(5);
-pub const VALID_MERKLE_CHECK: u64 = to_builtin!(6);
-pub const UPDATE_ALREADY_SET: u64 = to_builtin!(7);
-pub const DB_INIT_FAILED: u64 = to_builtin!(8);
-pub const CALLER_ACCESS_DENIED: u64 = to_builtin!(9);
-pub const DB_NOT_FOUND: u64 = to_builtin!(10);
-pub const DB_SET_FAILED: u64 = to_builtin!(11);
+pub const CUSTOM_ZERO: i64 = to_builtin!(1);
+pub const INTERNAL_ERROR: i64 = to_builtin!(2);
+pub const SET_RETVAL_ERROR: i64 = to_builtin!(3);
+pub const IO_ERROR: i64 = to_builtin!(4);
+pub const NULLIFIER_EXIST_CHECK: i64 = to_builtin!(5);
+pub const VALID_MERKLE_CHECK: i64 = to_builtin!(6);
+pub const UPDATE_ALREADY_SET: i64 = to_builtin!(7);
+pub const DB_INIT_FAILED: i64 = to_builtin!(8);
+pub const CALLER_ACCESS_DENIED: i64 = to_builtin!(9);
+pub const DB_NOT_FOUND: i64 = to_builtin!(10);
+pub const DB_SET_FAILED: i64 = to_builtin!(11);
 
-impl From<ContractError> for u64 {
+impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
         match err {
             ContractError::Internal => INTERNAL_ERROR,
             ContractError::IoError(_) => IO_ERROR,
-            ContractError::SetUpdateError => SET_UPDATE_ERROR,
+            ContractError::SetRetvalError => SET_RETVAL_ERROR,
             ContractError::NullifierExistCheck => NULLIFIER_EXIST_CHECK,
             ContractError::ValidMerkleCheck => VALID_MERKLE_CHECK,
             ContractError::UpdateAlreadySet => UPDATE_ALREADY_SET,
@@ -98,19 +97,19 @@ impl From<ContractError> for u64 {
                 if error == 0 {
                     CUSTOM_ZERO
                 } else {
-                    error as u64
+                    error as i64
                 }
             }
         }
     }
 }
 
-impl From<u64> for ContractError {
-    fn from(error: u64) -> Self {
+impl From<i64> for ContractError {
+    fn from(error: i64) -> Self {
         match error {
             CUSTOM_ZERO => Self::Custom(0),
             INTERNAL_ERROR => Self::Internal,
-            SET_UPDATE_ERROR => Self::SetUpdateError,
+            SET_RETVAL_ERROR => Self::SetRetvalError,
             IO_ERROR => Self::IoError("Unknown".to_string()),
             NULLIFIER_EXIST_CHECK => Self::NullifierExistCheck,
             VALID_MERKLE_CHECK => Self::ValidMerkleCheck,

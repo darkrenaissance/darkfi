@@ -258,7 +258,7 @@ impl Runtime {
         };
 
         let retval = match ret[0] {
-            Value::I64(v) => v as u64,
+            Value::I64(v) => v,
             _ => unreachable!(),
         };
 
@@ -266,7 +266,10 @@ impl Runtime {
             entrypoint::SUCCESS => Ok(retdata),
             // FIXME: we should be able to see the error returned from the contract
             // We can put sdk::Error inside of this.
-            _ => Err(Error::ContractInitError(retval)),
+            _ => {
+                let err = darkfi_sdk::error::ContractError::from(retval);
+                Err(Error::ContractError(err))
+            }
         }
     }
 
