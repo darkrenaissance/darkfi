@@ -77,6 +77,33 @@ pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Vec<u8>> {
     todo!("db_get");
 }
 
+/// Only update() can call this. Set a value within the transaction.
+///
+/// ```
+///     db_set(tx_handle, key, value);
+/// ```
+pub fn db_set(db_handle: DbHandle, key: &[u8], value: &[u8]) -> GenericResult<()> {
+    // Check entry for tx_handle is not None
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        let mut len = 0;
+        let mut buf = vec![];
+        len += db_handle.encode(&mut buf)?;
+        len += key.to_vec().encode(&mut buf)?;
+        len += value.to_vec().encode(&mut buf)?;
+
+        return match db_set_(buf.as_ptr(), len as u32) {
+            0 => Ok(()),
+            -1 => Err(ContractError::CallerAccessDenied),
+            -2 => Err(ContractError::DbSetFailed),
+            _ => unreachable!(),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    todo!("db_set");
+}
+
 /// Only update() can call this. Starts an atomic transaction.
 ///
 /// ```
@@ -94,26 +121,6 @@ pub fn db_begin_tx() -> GenericResult<TxHandle> {
 
     #[cfg(not(target_arch = "wasm32"))]
     todo!("db_begin_tx");
-}
-
-/// Only update() can call this. Set a value within the transaction.
-///
-/// ```
-///     db_set(tx_handle, key, value);
-/// ```
-pub fn db_set(tx_handle: TxHandle, key: &[u8], value: Vec<u8>) -> GenericResult<()> {
-    // Check entry for tx_handle is not None
-    #[cfg(target_arch = "wasm32")]
-    unsafe {
-        return match db_set_() {
-            0 => Ok(()),
-            -1 => Err(ContractError::CallerAccessDenied),
-            _ => unreachable!(),
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    todo!("db_set");
 }
 
 /// Only update() can call this. This writes the atomic tx to the database.
@@ -142,6 +149,6 @@ extern "C" {
     fn db_lookup_(ptr: *const u8, len: u32) -> i32;
     fn db_get_() -> i32;
     fn db_begin_tx_() -> i32;
-    fn db_set_() -> i32;
+    fn db_set_(ptr: *const u8, len: u32) -> i32;
     fn db_end_tx_() -> i32;
 }

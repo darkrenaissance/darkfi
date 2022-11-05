@@ -61,19 +61,17 @@ define_contract!(
 
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     msg!("wakeup wagies!");
-    db_init(cid, "wagies")?;
+
+    // Initialize a state tree. db_init will fail if the tree already exists.
+    // Otherwise, it will return a `DbHandle` that can be used further on.
     // TODO: If the deploy execution fails, whatever is initialized with db_init
     //       should be deleted from sled afterwards. There's no way to create a
     //       tree but only apply the creation when we're done, so db_init creates
     //       it and upon failure it should delete it
+    let wagies_handle = db_init(cid, "wagies")?;
+    db_set(wagies_handle, &serialize(&"jason_gulag".to_string()), &serialize(&110))?;
 
-    // Lets write a value in there
-    let tx_handle = db_begin_tx()?;
-    db_set(tx_handle, "jason_gulag".as_bytes(), serialize(&110))?;
-    let db_handle = db_lookup("wagies")?;
-    db_end_tx(db_handle, tx_handle)?;
-
-    // Host will clear delete the batches array after calling this func.
+    //let db_handle = db_lookup("wagies")?;
 
     Ok(())
 }
@@ -141,10 +139,10 @@ fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
             let update: FooUpdate = deserialize(&update_data[1..])?;
 
             // Write the wagie to the db
-            let tx_handle = db_begin_tx()?;
-            db_set(tx_handle, update.name.as_bytes(), serialize(&update.age))?;
-            let db_handle = db_lookup("wagies")?;
-            db_end_tx(db_handle, tx_handle)?;
+            //let tx_handle = db_begin_tx()?;
+            //db_set(tx_handle, &serialize(&update.name), &serialize(&update.age))?;
+            //let db_handle = db_lookup("wagies")?;
+            //db_end_tx(db_handle, tx_handle)?;
         }
         _ => unreachable!(),
     }

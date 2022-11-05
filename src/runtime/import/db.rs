@@ -22,7 +22,10 @@ use log::error;
 use std::io::Cursor;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::runtime::vm_runtime::{ContractSection, Env};
+use crate::{
+    runtime::vm_runtime::{ContractSection, Env},
+    Result,
+};
 
 /// Internal wasm runtime API for sled trees
 pub struct DbHandle {
@@ -33,6 +36,10 @@ pub struct DbHandle {
 impl DbHandle {
     pub fn new(contract_id: ContractId, tree: sled::Tree) -> Self {
         Self { contract_id, tree }
+    }
+
+    pub fn apply_batch(&self, batch: sled::Batch) -> Result<()> {
+        Ok(self.tree.apply_batch(batch)?)
     }
 }
 
@@ -58,7 +65,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
 
             let mut buf = vec![0_u8; len as usize];
             if let Err(e) = mem_slice.read_slice(&mut buf) {
-                error!(target: "wasm_runtime::db_init", "Failed to read from memory slice");
+                error!(target: "wasm_runtime::db_init", "Failed to read from memory slice: {}", e);
                 return -2
             };
 
@@ -80,6 +87,8 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
                 }
             };
 
+            // TODO: Ensure we've read the entire buffer above.
+
             if &cid != contract_id {
                 error!(target: "wasm_runtime::db_init", "Unauthorized ContractId for db_init");
                 return -1
@@ -94,7 +103,9 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
             };
 
             let mut db_handles = env.db_handles.borrow_mut();
+            let mut db_batches = env.db_batches.borrow_mut();
             db_handles.push(DbHandle::new(*contract_id, tree_handle));
+            db_batches.push(sled::Batch::default());
             return (db_handles.len() - 1) as i32
         }
         _ => {
@@ -150,36 +161,74 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>) -> i32 {
 /// ```
 ///     db_set(tx_handle, key, value);
 /// ```
-pub(crate) fn db_set(ctx: FunctionEnvMut<Env>) -> i32 {
+pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
-        ContractSection::Deploy | ContractSection::Update => 0,
-        _ => -1,
-    }
-}
+        ContractSection::Deploy | ContractSection::Update => {
+            let memory_view = env.memory_view(&ctx);
 
-/// Only update() can call this. Starts an atomic transaction.
-///
-/// ```
-///     tx_handle = db_begin_tx();
-/// ```
-pub(crate) fn db_begin_tx(ctx: FunctionEnvMut<Env>) -> i32 {
-    let env = ctx.data();
-    match env.contract_section {
-        ContractSection::Deploy | ContractSection::Update => 0,
-        _ => -1,
-    }
-}
+            let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
+                error!(target: "wasm_runtime::db_set", "Failed to make slice from ptr");
+                return -2
+            };
 
-/// Only update() can call this. This writes the atomic tx to the database.
-///
-/// ```
-///     db_end_tx(db_handle, tx_handle);
-/// ```
-pub(crate) fn db_end_tx(ctx: FunctionEnvMut<Env>) -> i32 {
-    let env = ctx.data();
-    match env.contract_section {
-        ContractSection::Deploy | ContractSection::Update => 0,
+            let mut buf = vec![0_u8; len as usize];
+            if let Err(e) = mem_slice.read_slice(&mut buf) {
+                error!(target: "wasm_runtime:db_set", "Failed to read from memory slice");
+                return -2
+            };
+
+            let mut buf_reader = Cursor::new(buf);
+
+            // FIXME: There's a type DbHandle=u32, but this should maybe be renamed
+            let db_handle: u32 = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_set", "Failed to decode DbHandle");
+                    return -2
+                }
+            };
+            let db_handle = db_handle as usize;
+
+            let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_set", "Failed to decode key vec");
+                    return -2
+                }
+            };
+
+            let value: Vec<u8> = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_set", "Failed to decode value vec");
+                    return -2
+                }
+            };
+
+            // TODO: Ensure we've read the entire buffer above.
+
+            let db_handles = env.db_handles.borrow();
+            let mut db_batches = env.db_batches.borrow_mut();
+
+            if db_handles.len() <= db_handle || db_batches.len() <= db_handle {
+                error!(target: "wasm_runtime::db_set", "Requested DbHandle that is out of bounds");
+                return -2
+            }
+
+            let handle_idx = db_handle;
+            let db_handle = &db_handles[handle_idx];
+            let db_batch = &mut db_batches[handle_idx];
+
+            if db_handle.contract_id != env.contract_id {
+                error!(target: "wasm_runtime::db_set", "Unauthorized to write to DbHandle");
+                return -1
+            }
+
+            db_batch.insert(key, value);
+
+            0
+        }
         _ => -1,
     }
 }

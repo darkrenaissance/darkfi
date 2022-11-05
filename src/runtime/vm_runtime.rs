@@ -51,6 +51,7 @@ pub enum ContractSection {
     Exec,
     /// Apply function of a contract
     Update,
+    /// Placeholder state before any initialization
     Null,
 }
 
@@ -71,6 +72,8 @@ pub struct Env {
     pub blockchain: Blockchain,
     /// sled tree handles used with `db_*`
     pub db_handles: RefCell<Vec<DbHandle>>,
+    /// sled tree batches, indexed the same as `db_handles`.
+    pub db_batches: RefCell<Vec<sled::Batch>>,
     /// The contract ID being executed
     pub contract_id: ContractId,
     /// The contract section being executed
@@ -110,7 +113,7 @@ pub struct Runtime {
 impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
     pub fn new(wasm_bytes: &[u8], blockchain: Blockchain, contract_id: ContractId) -> Result<Self> {
-        info!(target: "warm_runtime::new", "Instantiating a new runtime");
+        info!(target: "wasm_runtime::new", "Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
         // the wasm module execution. It should return the cost of the operator
         // that it received as its first argument.
@@ -139,6 +142,7 @@ impl Runtime {
 
         // Initialize data
         let db_handles = RefCell::new(vec![]);
+        let db_batches = RefCell::new(vec![]);
         let logs = RefCell::new(vec![]);
 
         debug!(target: "wasm_runtime::new", "Importing functions");
@@ -148,6 +152,7 @@ impl Runtime {
             Env {
                 blockchain,
                 db_handles,
+                db_batches,
                 contract_id,
                 contract_section: ContractSection::Null,
                 contract_return_data: Cell::new(None),
@@ -188,22 +193,10 @@ impl Runtime {
                     import::db::db_get,
                 ),
 
-                "db_begin_tx_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::db::db_begin_tx,
-                ),
-
                 "db_set_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
                     import::db::db_set,
-                ),
-
-                "db_end_tx_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::db::db_end_tx,
                 ),
             }
         };
@@ -302,6 +295,15 @@ impl Runtime {
     /// a state update from `env` and passes it into the wasm runtime.
     pub fn apply(&mut self, update: &[u8]) -> Result<()> {
         let _ = self.call(ContractSection::Update, update)?;
+
+        // If the above didn't fail, we write the batches.
+        // TODO: Make all the writes atomic in a transaction over all trees.
+        let env_mut = self.ctx.as_mut(&mut self.store);
+        for (idx, db) in env_mut.db_handles.get_mut().iter().enumerate() {
+            let batch = env_mut.db_batches.borrow()[idx].clone();
+            db.apply_batch(batch)?;
+        }
+
         Ok(())
     }
 
@@ -353,8 +355,8 @@ impl Runtime {
     }
 
     /// Serialize contract payload to the format accepted by the runtime functions.
-    /// We keep the same payload as a slice of bytes, and prepend it with a
-    /// little-endian u64 to tell the payload's length.
+    /// We keep the same payload as a slice of bytes, and prepend it with a ContractId,
+    /// and then a little-endian u64 to tell the payload's length.
     fn serialize_payload(cid: &ContractId, payload: &[u8]) -> Vec<u8> {
         let ser_cid = serialize(cid);
         let payload_len = payload.len();
