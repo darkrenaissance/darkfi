@@ -54,6 +54,10 @@ lazy_static! {
 pub struct MerkleNode(pallas::Base);
 
 impl MerkleNode {
+    pub fn new(v: pallas::Base) -> Self {
+        Self(v)
+    }
+
     /// Reference the raw inner base field element
     pub fn inner(&self) -> pallas::Base {
         self.0

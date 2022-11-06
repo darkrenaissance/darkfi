@@ -34,6 +34,9 @@ pub mod log;
 /// Crypto-related definitions
 pub mod crypto;
 
+/// Merkle
+pub mod merkle;
+
 /// Transaction structure
 pub mod tx;
 

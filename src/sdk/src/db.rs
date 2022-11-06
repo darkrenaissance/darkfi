@@ -6,7 +6,7 @@ use super::{
     util::{get_object_bytes, get_object_size},
 };
 
-type DbHandle = u32;
+pub type DbHandle = u32;
 type TxHandle = u32;
 
 /// Only deploy() can call this. Creates a new database instance for this contract.

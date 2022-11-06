@@ -6,5 +6,5 @@ use super::crypto::ContractId;
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct ContractCall {
     pub contract_id: ContractId,
-    pub calldata: Vec<u8>,
+    pub data: Vec<u8>,
 }

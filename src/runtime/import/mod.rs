@@ -19,5 +19,8 @@
 /// Host functions for interacting with db backend
 pub(crate) mod db;
 
+/// Host functions for merkle tree functions
+pub(crate) mod merkle;
+
 /// Host functions for utilities
 pub(crate) mod util;

@@ -73,8 +73,6 @@ pub fn deserialize<T: Decodable>(data: &[u8]) -> Result<T, Error> {
 
 /// Extensions of `Write` to encode data as per Bitcoin consensus.
 pub trait WriteExt {
-    /// Output a platform-specific unsigned int (DANGEROUS AND UNDEFINED)
-    fn write_usize(&mut self, v: usize) -> Result<(), Error>;
     /// Output a 128-bit unsigned int
     fn write_u128(&mut self, v: u128) -> Result<(), Error>;
     /// Output a 64-bit unsigned int
@@ -86,8 +84,6 @@ pub trait WriteExt {
     /// Output an 8-bit unsigned int
     fn write_u8(&mut self, v: u8) -> Result<(), Error>;
 
-    /// Output a platform-specific signed int (DANGEROUS AND UNDEFINED)
-    fn write_isize(&mut self, v: isize) -> Result<(), Error>;
     /// Output a 128-bit signed int
     fn write_i128(&mut self, v: i128) -> Result<(), Error>;
     /// Output a 64-bit signed int
@@ -113,8 +109,6 @@ pub trait WriteExt {
 
 /// Extensions of `Read` to decode data as per Bitcoin consensus.
 pub trait ReadExt {
-    /// Read a platform-specific unsigned int (DANGEROUS AND UNDEFINED)
-    fn read_usize(&mut self) -> Result<usize, Error>;
     /// Read a 128-bit unsigned int
     fn read_u128(&mut self) -> Result<u128, Error>;
     /// Read a 64-bit unsigned int
@@ -126,8 +120,6 @@ pub trait ReadExt {
     /// Read an 8-bit unsigned int
     fn read_u8(&mut self) -> Result<u8, Error>;
 
-    /// Read a platform-specific signed int (DANGEROUS AND UNDEFINED)
-    fn read_isize(&mut self) -> Result<isize, Error>;
     /// Read a 128-bit signed int
     fn read_i128(&mut self) -> Result<i128, Error>;
     /// Read a 64-bit signed int
@@ -173,12 +165,10 @@ macro_rules! decoder_fn {
 }
 
 impl<W: Write> WriteExt for W {
-    encoder_fn!(write_usize, usize, usize_to_array_le);
     encoder_fn!(write_u128, u128, u128_to_array_le);
     encoder_fn!(write_u64, u64, u64_to_array_le);
     encoder_fn!(write_u32, u32, u32_to_array_le);
     encoder_fn!(write_u16, u16, u16_to_array_le);
-    encoder_fn!(write_isize, isize, isize_to_array_le);
     encoder_fn!(write_i128, i128, i128_to_array_le);
     encoder_fn!(write_i64, i64, i64_to_array_le);
     encoder_fn!(write_i32, i32, i32_to_array_le);
@@ -205,12 +195,10 @@ impl<W: Write> WriteExt for W {
 }
 
 impl<R: Read> ReadExt for R {
-    decoder_fn!(read_usize, usize, slice_to_usize_le, usize::BITS as usize / 8);
     decoder_fn!(read_u128, u128, slice_to_u128_le, 16);
     decoder_fn!(read_u64, u64, slice_to_u64_le, 8);
     decoder_fn!(read_u32, u32, slice_to_u32_le, 4);
     decoder_fn!(read_u16, u16, slice_to_u16_le, 2);
-    decoder_fn!(read_isize, isize, slice_to_isize_le, isize::BITS as usize / 8);
     decoder_fn!(read_i128, i128, slice_to_i128_le, 16);
     decoder_fn!(read_i64, i64, slice_to_i64_le, 8);
     decoder_fn!(read_i32, i32, slice_to_i32_le, 4);
@@ -264,14 +252,12 @@ impl_int_encodable!(u16, read_u16, write_u16);
 impl_int_encodable!(u32, read_u32, write_u32);
 impl_int_encodable!(u64, read_u64, write_u64);
 impl_int_encodable!(u128, read_u128, write_u128);
-impl_int_encodable!(usize, read_usize, write_usize);
 
 impl_int_encodable!(i8, read_i8, write_i8);
 impl_int_encodable!(i16, read_i16, write_i16);
 impl_int_encodable!(i32, read_i32, write_i32);
 impl_int_encodable!(i64, read_i64, write_i64);
 impl_int_encodable!(i128, read_i128, write_i128);
-impl_int_encodable!(isize, read_isize, write_isize);
 
 /// Variable-integer encoding
 #[derive(Debug, PartialEq, Eq)]
@@ -397,6 +383,21 @@ macro_rules! encode_payload {
 }
 
 // Implementations for some primitive types.
+impl Encodable for usize {
+    #[inline]
+    fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize, Error> {
+        s.write_u64(*self as u64)?;
+        Ok(8)
+    }
+}
+
+impl Decodable for usize {
+    #[inline]
+    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+        Ok(ReadExt::read_u64(&mut d)? as usize)
+    }
+}
+
 impl Encodable for f64 {
     #[inline]
     fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize, Error> {

@@ -29,7 +29,7 @@ use crate::{
 
 /// Internal wasm runtime API for sled trees
 pub struct DbHandle {
-    contract_id: ContractId,
+    pub contract_id: ContractId,
     tree: sled::Tree,
 }
 

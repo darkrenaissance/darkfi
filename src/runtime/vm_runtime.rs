@@ -222,6 +222,12 @@ impl Runtime {
                     &ctx,
                     import::util::get_object_size,
                 ),
+
+                "merkle_add_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::merkle::merkle_add,
+                ),
             }
         };
 

@@ -174,6 +174,7 @@ pub async fn example() -> Result<()> {
 }
 
 pub async fn schema() -> Result<()> {
+    /*
     // Example smart contract
     //// TODO: this will be moved to a different file
     example().await?;
@@ -1288,7 +1289,7 @@ pub async fn schema() -> Result<()> {
     tx.verify_sigs();
 
     //// Wallet
+    */
 
     Ok(())
 }
-
