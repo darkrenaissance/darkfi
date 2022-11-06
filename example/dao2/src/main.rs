@@ -238,19 +238,12 @@ async fn main() -> BoxResult<()> {
 
         let calls = vec![ContractCall { contract_id: dao_contract_id, data: calldata }];
 
-        //let mut payload = Vec::new();
-        ////// Write the actual payload data
-        //let call_index = 0;
-        //payload.write_u32(call_index)?;
-        //func_calls.encode(&mut payload)?;
-
         let signatures = vec![];
         //for func_call in &func_calls {
         //    let sign = sign([signature_secret].to_vec(), func_call);
         //    signatures.push(sign);
         //}
 
-        //let tx = Transaction { func_calls, signatures };
         let proofs = vec![dao_mint_proofs];
 
         Transaction { calls, proofs, signatures }
