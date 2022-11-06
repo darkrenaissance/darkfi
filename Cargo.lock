@@ -1302,6 +1302,7 @@ dependencies = [
 name = "darkfi-sdk"
 version = "0.3.0"
 dependencies = [
+ "blake3",
  "bs58",
  "darkfi-serial",
  "halo2_gadgets",

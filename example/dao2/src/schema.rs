@@ -192,9 +192,6 @@ pub async fn schema() -> Result<()> {
     let dao_approval_ratio_quot = 1;
     let dao_approval_ratio_base = 2;
 
-    // Lookup table for smart contract states
-    let mut states = StateRegistry::new();
-
     // Initialize ZK binary table
     let mut zk_bins = ZkContractTable::new();
 
@@ -252,13 +249,16 @@ pub async fn schema() -> Result<()> {
 
     ///////////////////////////////////////////////////
 
+    // Lookup table for smart contract states
+    let mut states = StateRegistry::new();
+
     let money_state = money::state::State::new(cashier_signature_public, faucet_signature_public);
     states.register(*money::CONTRACT_ID, money_state);
 
-    /////////////////////////////////////////////////////
-
     let dao_state = dao::State::new();
     states.register(*dao::CONTRACT_ID, dao_state);
+
+    /////////////////////////////////////////////////////
 
     /////////////////////////////////////////////////////
     ////// Create the DAO bulla

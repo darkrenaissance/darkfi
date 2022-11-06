@@ -42,8 +42,9 @@ async fn main() -> BoxResult<()> {
     )?;
 
     println!("wakie wakie young wagie");
-    schema::schema().await?;
-    return Ok(());
+
+    //schema::schema().await?;
+    //return Ok(());
 
     // =============================
     // Initialize a dummy blockchain
