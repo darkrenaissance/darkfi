@@ -122,7 +122,7 @@ impl JsonRpcInterface {
             }
             Err(e) => {
                 error!("Failed to create DAO: {}", e);
-                return server_error(RpcError::Create, id)
+                server_error(RpcError::Create, id)
             }
         }
     }
@@ -206,12 +206,12 @@ impl JsonRpcInterface {
                 }
                 None => {
                     error!("No wallet found for provided key");
-                    return server_error(RpcError::Balance, id)
+                    server_error(RpcError::Balance, id)
                 }
             },
             Err(_) => {
                 error!("Could not parse PublicKey from string");
-                return server_error(RpcError::Parse, id)
+                server_error(RpcError::Parse, id)
             }
         }
     }
@@ -238,12 +238,12 @@ impl JsonRpcInterface {
                 Ok(_) => JsonResponse::new(json!("DAO treasury minted successfully."), id).into(),
                 Err(e) => {
                     error!("Failed to mint treasury: {}", e);
-                    return server_error(RpcError::Mint, id)
+                    server_error(RpcError::Mint, id)
                 }
             },
             Err(_) => {
                 error!("Failed to parse PublicKey from String");
-                return server_error(RpcError::Parse, id)
+                server_error(RpcError::Parse, id)
             }
         }
     }
@@ -266,7 +266,7 @@ impl JsonRpcInterface {
             }
             Err(e) => {
                 error!("Failed to airdrop tokens: {}", e);
-                return server_error(RpcError::Keygen, id)
+                server_error(RpcError::Keygen, id)
             }
         }
     }
@@ -294,12 +294,12 @@ impl JsonRpcInterface {
                 Ok(_) => JsonResponse::new(json!("Tokens airdropped successfully."), id).into(),
                 Err(e) => {
                     error!("Failed to airdrop tokens: {}", e);
-                    return server_error(RpcError::Airdrop, id)
+                    server_error(RpcError::Airdrop, id)
                 }
             },
             Err(_) => {
                 error!("Failed parsing PublicKey from String");
-                return server_error(RpcError::Parse, id)
+                server_error(RpcError::Parse, id)
             }
         }
     }
@@ -350,7 +350,7 @@ impl JsonRpcInterface {
             }
             Err(e) => {
                 error!("Failed to make Proposal: {}", e);
-                return server_error(RpcError::Propose, id)
+                server_error(RpcError::Propose, id)
             }
         }
     }
@@ -412,12 +412,12 @@ impl JsonRpcInterface {
                 }
                 Err(e) => {
                     error!("Failed casting vote: {}", e);
-                    return server_error(RpcError::Vote, id)
+                    server_error(RpcError::Vote, id)
                 }
             },
             Err(_) => {
                 error!("Failed parsing PublicKey from String");
-                return server_error(RpcError::Parse, id)
+                server_error(RpcError::Parse, id)
             }
         }
     }
@@ -439,12 +439,12 @@ impl JsonRpcInterface {
                 Err(e) => {
                     // Reject proposal instead of returning error?
                     error!("Failed executing proposal: {}", e);
-                    return server_error(RpcError::Exec, id)
+                    server_error(RpcError::Exec, id)
                 }
             },
             Err(e) => {
                 error!("Failed parsing bulla: {}", e);
-                return server_error(RpcError::Parse, id)
+                server_error(RpcError::Parse, id)
             }
         }
     }

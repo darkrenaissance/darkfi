@@ -449,7 +449,7 @@ impl Circuit<pallas::Base> for TxContract {
         let com1 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
                 let poseidon_message =
-                    [coin1_pk.clone(), coin1_value.clone(), coin1_nonce.clone(), one.clone()];
+                    [coin1_pk, coin1_value.clone(), coin1_nonce.clone(), one.clone()];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
@@ -502,7 +502,7 @@ impl Circuit<pallas::Base> for TxContract {
         let com2 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
                 let poseidon_message =
-                    [coin2_pk.clone(), coin2_value.clone(), coin2_nonce.clone(), one.clone()];
+                    [coin2_pk, coin2_value.clone(), coin2_nonce.clone(), one.clone()];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
@@ -555,7 +555,7 @@ impl Circuit<pallas::Base> for TxContract {
         let _com3 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
                 let poseidon_message =
-                    [coin3_pk.clone(), coin3_value.clone(), coin3_nonce.clone(), one.clone()];
+                    [coin3_pk, coin3_value.clone(), coin3_nonce, one.clone()];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
@@ -596,7 +596,7 @@ impl Circuit<pallas::Base> for TxContract {
         let _com4 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
                 let poseidon_message =
-                    [coin4_pk.clone(), coin4_value.clone(), coin4_nonce.clone(), one.clone()];
+                    [coin4_pk, coin4_value.clone(), coin4_nonce, one];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
@@ -625,7 +625,7 @@ impl Circuit<pallas::Base> for TxContract {
                 self.coin4_blind,
             )?;
             let coin_commit_r =
-                FixedPoint::from_inner(ecc_chip.clone(), OrchardFixedBasesFull::ValueCommitR);
+                FixedPoint::from_inner(ecc_chip, OrchardFixedBasesFull::ValueCommitR);
             coin_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), coin4_blind)?
         };
         let coin4_commit = com2.add(layouter.namespace(|| " commit"), &blind)?;
@@ -650,7 +650,7 @@ impl Circuit<pallas::Base> for TxContract {
         );
 
         let coin1_cm_hash: AssignedCell<Fp, Fp> = {
-            let poseidon_message = [coin1_commit_x.clone(), coin1_commit_y.clone()];
+            let poseidon_message = [coin1_commit_x, coin1_commit_y];
             let poseidon_hasher = PoseidonHash::<
                 _,
                 _,
@@ -684,7 +684,7 @@ impl Circuit<pallas::Base> for TxContract {
         );
 
         let coin2_cm_hash: AssignedCell<Fp, Fp> = {
-            let poseidon_message = [coin2_commit_x.clone(), coin2_commit_y.clone()];
+            let poseidon_message = [coin2_commit_x, coin2_commit_y];
             let poseidon_hasher = PoseidonHash::<
                 _,
                 _,
@@ -736,7 +736,7 @@ impl Circuit<pallas::Base> for TxContract {
         // coin1 sn
         // ========
         let coin1_sn_commit: AssignedCell<Fp, Fp> = {
-            let poseidon_message = [coin1_nonce.clone(), coin1_root_sk.clone()];
+            let poseidon_message = [coin1_nonce, coin1_root_sk.clone()];
             let poseidon_hasher = PoseidonHash::<
                 _,
                 _,
@@ -758,7 +758,7 @@ impl Circuit<pallas::Base> for TxContract {
         // coin2 sn
         // ========
         let coin2_sn_commit: AssignedCell<Fp, Fp> = {
-            let poseidon_message = [coin2_nonce.clone(), coin2_root_sk.clone()];
+            let poseidon_message = [coin2_nonce, coin2_root_sk.clone()];
             let poseidon_hasher = PoseidonHash::<
                 _,
                 _,

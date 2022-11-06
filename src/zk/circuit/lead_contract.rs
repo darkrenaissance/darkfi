@@ -457,14 +457,14 @@ impl Circuit<pallas::Base> for LeadContract {
             // For derivation here, we append one 0 and one 1 to the hashed message.
             // TODO: Add these constants to ouroboros/consts.rs
             let poseidon_message =
-                [coin1_nonce.clone(), coin1_sk_root.clone(), zero.clone(), one.clone()];
+                [coin1_nonce.clone(), coin1_sk_root.clone(), zero, one.clone()];
             let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<4>, 3, 2>::init(
                 config.poseidon_chip(),
                 layouter.namespace(|| "sn_commit poseidon init"),
             )?;
-            let poseidon_output = poseidon_hasher
-                .hash(layouter.namespace(|| "sn_commit poseidon hash"), poseidon_message)?;
-            poseidon_output.into()
+            
+            poseidon_hasher
+                .hash(layouter.namespace(|| "sn_commit poseidon hash"), poseidon_message)?
         };
 
         // ==============================
@@ -487,9 +487,9 @@ impl Circuit<pallas::Base> for LeadContract {
                         config.poseidon_chip(),
                         layouter.namespace(|| "nullifier poseidon init"),
                     )?;
-                let poseidon_output = poseidon_hasher
-                    .hash(layouter.namespace(|| "nullifier poseidon hash"), poseidon_message)?;
-                poseidon_output.into()
+                
+                poseidon_hasher
+                    .hash(layouter.namespace(|| "nullifier poseidon hash"), poseidon_message)?
             };
 
             let v = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
@@ -522,9 +522,9 @@ impl Circuit<pallas::Base> for LeadContract {
                 config.poseidon_chip(),
                 layouter.namespace(|| "coin1_commit_hash poseidon init"),
             )?;
-            let poseidon_output = poseidon_hasher
-                .hash(layouter.namespace(|| "coin1_commit_hash poseidon hash"), poseidon_message)?;
-            poseidon_output.into()
+            
+            poseidon_hasher
+                .hash(layouter.namespace(|| "coin1_commit_hash poseidon hash"), poseidon_message)?
         };
 
         let coin1_cm_root = merkle_inputs.calculate_root(
@@ -544,9 +544,9 @@ impl Circuit<pallas::Base> for LeadContract {
                 config.poseidon_chip(),
                 layouter.namespace(|| "coin2_nonce poseidon init"),
             )?;
-            let poseidon_output = poseidon_hasher
-                .hash(layouter.namespace(|| "coin2_nonce poseidon hash"), poseidon_message)?;
-            poseidon_output.into()
+            
+            poseidon_hasher
+                .hash(layouter.namespace(|| "coin2_nonce poseidon hash"), poseidon_message)?
         };
 
         // ================
@@ -564,18 +564,18 @@ impl Circuit<pallas::Base> for LeadContract {
                     coin_pk.inner().y(),
                     coin1_value.clone(),
                     coin2_nonce.clone(),
-                    one.clone(), // Used here because of poseidon odd-n bug
+                    one, // Used here because of poseidon odd-n bug
                 ];
                 let poseidon_hasher =
                     PoseidonHash::<_, _, P128Pow5T3, ConstantLength<6>, 3, 2>::init(
                         config.poseidon_chip(),
                         layouter.namespace(|| "coin2_commitment_v poseidon init"),
                     )?;
-                let poseidon_output = poseidon_hasher.hash(
+                
+                poseidon_hasher.hash(
                     layouter.namespace(|| "coin2_commitment_v poseidon hash"),
                     poseidon_message,
-                )?;
-                poseidon_output.into()
+                )?
             };
 
             let v = FixedPointBaseField::from_inner(ecc_chip.clone(), NullifierK);
@@ -599,16 +599,16 @@ impl Circuit<pallas::Base> for LeadContract {
         // Commitment to the coin's secret key, coin's nonce, and random value
         // derived from the epoch sampled random eta.
         let lottery_commit_msg: AssignedCell<pallas::Base, pallas::Base> = {
-            let poseidon_message = [coin1_sk_root.clone(), coin1_nonce.clone()];
+            let poseidon_message = [coin1_sk_root, coin1_nonce];
             let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<2>, 3, 2>::init(
                 config.poseidon_chip(),
                 layouter.namespace(|| "lottery_commit_msg poseidon init"),
             )?;
-            let poseidon_output = poseidon_hasher.hash(
+            
+            poseidon_hasher.hash(
                 layouter.namespace(|| "lottery_commit_msg poseidon hash"),
                 poseidon_message,
-            )?;
-            poseidon_output.into()
+            )?
         };
 
         let lottery_commit_v = {
@@ -631,11 +631,11 @@ impl Circuit<pallas::Base> for LeadContract {
                 config.poseidon_chip(),
                 layouter.namespace(|| "lottery_commit coords poseidon init"),
             )?;
-            let poseidon_output = poseidon_hasher.hash(
+            
+            poseidon_hasher.hash(
                 layouter.namespace(|| "lottery_commit coords poseidon hash"),
                 poseidon_message,
-            )?;
-            poseidon_output.into()
+            )?
         };
 
         // y_commit also becomes V of the following pedersen commitment for rho
@@ -645,7 +645,7 @@ impl Circuit<pallas::Base> for LeadContract {
                 layouter.namespace(|| "mau_rho scalar"),
                 self.mau_rho,
             )?;
-            let rho_commit_r = FixedPoint::from_inner(ecc_chip.clone(), ValueCommitR);
+            let rho_commit_r = FixedPoint::from_inner(ecc_chip, ValueCommitR);
             rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_rho)?
         };
         let rho_commit = lottery_commit_v.add(layouter.namespace(|| "nonce commit"), &rho_cm)?;
@@ -736,7 +736,7 @@ impl Circuit<pallas::Base> for LeadContract {
         // Constrain y < target
         lessthan_chip.copy_less_than(
             layouter.namespace(|| "y < target"),
-            y_commit_base.clone(),
+            y_commit_base,
             target,
             0,
             true,

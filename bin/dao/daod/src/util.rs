@@ -168,7 +168,7 @@ impl Transaction {
                 match zk_bins.lookup(key).unwrap() {
                     ZkContractInfo::Binary(info) => {
                         let verifying_key = &info.verifying_key;
-                        let verify_result = proof.verify(&verifying_key, public_vals);
+                        let verify_result = proof.verify(verifying_key, public_vals);
                         if verify_result.is_err() {
                             return Err(DaoError::VerifyProofFailed(i, key.to_string()))
                         }
@@ -176,7 +176,7 @@ impl Transaction {
                     }
                     ZkContractInfo::Native(info) => {
                         let verifying_key = &info.verifying_key;
-                        let verify_result = proof.verify(&verifying_key, public_vals);
+                        let verify_result = proof.verify(verifying_key, public_vals);
                         if verify_result.is_err() {
                             return Err(DaoError::VerifyProofFailed(i, key.to_string()))
                         }

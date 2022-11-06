@@ -460,7 +460,7 @@ impl ValidatorState {
         }
 
         // Check if proposal extends any existing fork chains
-        let index = self.find_extended_chain_index(&proposal)?;
+        let index = self.find_extended_chain_index(proposal)?;
         if index == -2 {
             return Err(Error::ExtendedChainIndexNotFoundError)
         }
@@ -482,7 +482,7 @@ impl ValidatorState {
             return Err(Error::InvalidPublicInputsError)
         }
 
-        match proposal.block.metadata.proof.verify(&self.verifying_key, &public_inputs) {
+        match proposal.block.metadata.proof.verify(&self.verifying_key, public_inputs) {
             Ok(_) => info!("receive_proposal(): Proof veryfied succsessfully!"),
             Err(e) => {
                 error!("receive_proposal(): Error during leader proof verification: {}", e);
@@ -524,7 +524,7 @@ impl ValidatorState {
                 self.consensus.proposals.push(pc);
             }
             _ => {
-                self.consensus.proposals[index as usize].add(&proposal);
+                self.consensus.proposals[index as usize].add(proposal);
                 match self.chain_finalization(index).await {
                     Ok(v) => {
                         to_broadcast = v;

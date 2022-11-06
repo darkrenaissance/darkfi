@@ -197,9 +197,9 @@ mod tests {
         let mut clock = Clock::new(Some(9), Some(9), Some(9), vec![]);
         //
         let tick: Ticks = block_on(clock.ticks());
-        assert_eq!(matches!(tick, Ticks::GENESIS { e: 0, sl: 0 }), true);
+        assert!(matches!(tick, Ticks::GENESIS { e: 0, sl: 0 }));
         thread::sleep(Duration::from_millis(3000));
         let tock: Ticks = block_on(clock.ticks());
-        assert_eq!(matches!(tock, Ticks::TOCKS), true);
+        assert!(matches!(tock, Ticks::TOCKS));
     }
 }

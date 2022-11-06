@@ -41,7 +41,7 @@ impl ContractId {
     pub fn hash_state_id(&self, tree_name: &str) -> [u8; 32] {
         let mut hasher = blake3::Hasher::new();
         hasher.update(&serialize(self));
-        hasher.update(&tree_name.as_bytes());
+        hasher.update(tree_name.as_bytes());
         let id = hasher.finalize();
         *id.as_bytes()
     }

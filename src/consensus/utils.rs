@@ -54,14 +54,12 @@ pub fn fbig2base(f: Float10) -> pallas::Base {
     let (sign, word) = val.as_sign_words();
     //TODO (res) set pallas base sign, i.e sigma1 is negative.
     let mut words: [u64; 4] = [0, 0, 0, 0];
-    for i in 0..word.len() {
-        words[i] = word[i];
-    }
-    let base = match sign {
+    words[..word.len()].copy_from_slice(word);
+
+    match sign {
         Sign::Positive => pallas::Base::from_raw(words),
         Sign::Negative => pallas::Base::from_raw(words).neg(),
-    };
-    base
+    }
 }
 
 #[cfg(test)]

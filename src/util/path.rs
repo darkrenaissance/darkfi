@@ -40,7 +40,7 @@ pub fn home_dir() -> Option<PathBuf> {
 /// `getpwuid_r(3)`. If it manages, returns an `OsString`, otherwise returns `None`.
 unsafe fn home_fallback() -> Option<OsString> {
     let amt = match libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) {
-        n if n < 0 => 512 as usize,
+        n if n < 0 => 512_usize,
         n => n as usize,
     };
 

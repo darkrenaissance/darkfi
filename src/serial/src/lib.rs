@@ -865,7 +865,7 @@ mod tests {
         let ts0_n = deserialize::<TestStruct0>(&ts0_s).unwrap();
         assert_eq!(foo, ts0_n.foo);
         assert_eq!(bar, ts0_n.bar);
-        assert_eq!(baz.clone(), ts0_n.baz);
+        assert_eq!(baz, ts0_n.baz);
         assert_eq!(ts0, ts0_n);
         assert_eq!(ts0_n, TestStruct0 { foo, bar, baz: baz.clone() });
 
@@ -873,6 +873,6 @@ mod tests {
         let ts1_s = serialize(&ts1);
         let ts1_n = deserialize::<TestStruct1>(&ts1_s).unwrap();
         assert_eq!(ts1, ts1_n);
-        assert_eq!(ts1_n, TestStruct1(baz.clone()));
+        assert_eq!(ts1_n, TestStruct1(baz));
     }
 }

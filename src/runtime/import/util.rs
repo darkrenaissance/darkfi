@@ -54,7 +54,7 @@ pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
             };
 
             // This function should only ever be called once on the runtime.
-            if !env.contract_return_data.take().is_none() {
+            if env.contract_return_data.take().is_some() {
                 return darkfi_sdk::error::SET_RETVAL_ERROR
             }
             env.contract_return_data.set(Some(return_data));
@@ -123,7 +123,7 @@ pub(crate) fn get_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: 
     };
 
     // Put the result in the VM
-    if let Err(e) = slice.write_slice(&obj) {
+    if let Err(e) = slice.write_slice(obj) {
         error!(target: "wasm_runtime::get_object_bytes", "Failed to write to memory slice: {}", e);
         return -4
     };

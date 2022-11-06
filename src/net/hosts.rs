@@ -477,16 +477,10 @@ mod tests {
     #[test]
     fn test_is_valid_onion() {
         // Valid onion
-        assert_eq!(
-            is_valid_onion("facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd.onion"),
-            true
-        );
+        assert!(is_valid_onion("facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd.onion"),);
         // Valid onion without .onion suffix
-        assert_eq!(
-            is_valid_onion("facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd"),
-            true
-        );
+        assert!(is_valid_onion("facebookwkhpilnemxj7asaniu7vnjjbiltxjqhye3mhbshg7kx5tfyd"),);
         // Invalid onion
-        assert_eq!(is_valid_onion("facebook.com"), false);
+        assert!(!is_valid_onion("facebook.com"));
     }
 }

@@ -91,7 +91,7 @@ pub fn create_epoch_coins(
     let sigma1: pallas::Base = fbig2base(sigma1_fbig);
     info!("sigma1 base: {:?}", sigma1);
     let sigma2_fbig =
-        (c.clone() / total_sigma.clone()).powf(two.clone()) * (field_p.clone() / two.clone());
+        (c / total_sigma).powf(two.clone()) * (field_p / two);
     info!("sigma2: {}", sigma2_fbig);
     let sigma2: pallas::Base = fbig2base(sigma2_fbig);
     info!("sigma2 base: {:?}", sigma2);
@@ -247,7 +247,7 @@ fn create_leadcoin(
     info!("coin pk [{}] y: {:?}", i, c_pk_y);
 
     let c_seed = pallas::Base::from(seed);
-    let sn_msg = [c_seed, c_root_sk.inner(), zero.clone(), one.clone()];
+    let sn_msg = [c_seed, c_root_sk.inner(), zero, one];
     let c_sn: pallas::Base =
         poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init()
             .hash(sn_msg);
@@ -287,7 +287,7 @@ fn create_leadcoin(
     };
     */
 
-    let coin_nonce2_msg = [c_seed, c_root_sk.inner(), one.clone(), one.clone()];
+    let coin_nonce2_msg = [c_seed, c_root_sk.inner(), one, one];
     let c_seed2: pallas::Base =
         poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init()
             .hash(coin_nonce2_msg);

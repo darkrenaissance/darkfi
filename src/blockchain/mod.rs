@@ -180,7 +180,7 @@ impl Blockchain {
     /// Retrieve last finalized block leader proof hash.
     pub fn get_last_proof_hash(&self) -> Result<blake3::Hash> {
         let (slot, _) = self.last().unwrap();
-        let block = &self.get_blocks_by_slot(&vec![slot]).unwrap()[0];
+        let block = &self.get_blocks_by_slot(&[slot]).unwrap()[0];
         let hash = blake3::hash(&serialize(&block.metadata.proof));
         Ok(hash)
     }

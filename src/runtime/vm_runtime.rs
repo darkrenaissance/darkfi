@@ -262,7 +262,7 @@ impl Runtime {
         let entrypoint = self.instance.exports.get_function(section.name())?;
 
         debug!(target: "runtime", "Executing wasm");
-        let ret = match entrypoint.call(&mut self.store, &[Value::I32(0 as i32)]) {
+        let ret = match entrypoint.call(&mut self.store, &[Value::I32(0_i32)]) {
             Ok(retvals) => {
                 self.print_logs();
                 debug!(target: "runtime", "{}", self.gas_info());
@@ -321,7 +321,6 @@ impl Runtime {
             let batch = env_mut.db_batches.borrow()[idx].clone();
             db.apply_batch(batch)?;
             db.flush()?;
-            drop(db);
         }
 
         Ok(())
@@ -352,7 +351,6 @@ impl Runtime {
             let batch = env_mut.db_batches.borrow()[idx].clone();
             db.apply_batch(batch)?;
             db.flush()?;
-            drop(db);
         }
 
         Ok(())
@@ -397,7 +395,7 @@ impl Runtime {
     /// Will panic if memory isn't set.
     fn take_memory(&mut self) -> Memory {
         let env_memory = &mut self.ctx.as_mut(&mut self.store).memory;
-        let memory = std::mem::replace(env_memory, None);
+        let memory = env_memory.take();
         memory.expect("memory should be set")
     }
 

@@ -345,7 +345,7 @@ impl Client {
 
             if func_call.func_id == *money::transfer::FUNC_ID {
                 debug!("money_contract::transfer::state_transition()");
-                match money::transfer::validate::state_transition(&self.states, idx, &tx) {
+                match money::transfer::validate::state_transition(&self.states, idx, tx) {
                     Ok(update) => {
                         updates.push(update);
                     }
@@ -353,7 +353,7 @@ impl Client {
                 }
             } else if func_call.func_id == *dao::mint::FUNC_ID {
                 debug!("dao_contract::mint::state_transition()");
-                match dao::mint::validate::state_transition(&self.states, idx, &tx) {
+                match dao::mint::validate::state_transition(&self.states, idx, tx) {
                     Ok(update) => {
                         updates.push(update);
                     }
@@ -361,7 +361,7 @@ impl Client {
                 }
             } else if func_call.func_id == *dao::propose::FUNC_ID {
                 debug!(target: "demo", "dao_contract::propose::state_transition()");
-                match dao::propose::validate::state_transition(&self.states, idx, &tx) {
+                match dao::propose::validate::state_transition(&self.states, idx, tx) {
                     Ok(update) => {
                         updates.push(update);
                     }
@@ -369,7 +369,7 @@ impl Client {
                 }
             } else if func_call.func_id == *dao::vote::FUNC_ID {
                 debug!(target: "demo", "dao_contract::vote::state_transition()");
-                match dao::vote::validate::state_transition(&self.states, idx, &tx) {
+                match dao::vote::validate::state_transition(&self.states, idx, tx) {
                     Ok(update) => {
                         updates.push(update);
                     }
@@ -377,7 +377,7 @@ impl Client {
                 }
             } else if func_call.func_id == *dao::exec::FUNC_ID {
                 debug!("dao_contract::exec::state_transition()");
-                match dao::exec::validate::state_transition(&self.states, idx, &tx) {
+                match dao::exec::validate::state_transition(&self.states, idx, tx) {
                     Ok(update) => {
                         updates.push(update);
                     }
@@ -473,7 +473,7 @@ impl Client {
         let sender_wallet = sender_wallet.unwrap();
 
         let tx = sender_wallet.propose_tx(
-            params.clone(),
+            params,
             recipient,
             token_id,
             amount,
@@ -719,7 +719,7 @@ impl DaoWallet {
                 .ok_or(DaoError::StateNotFound)?;
 
             let tree = &state.tree;
-            let leaf_position = own_coin.leaf_position.clone();
+            let leaf_position = own_coin.leaf_position;
             let root = tree.root(0).ok_or(Error::Custom(
                 "Not enough checkpoints available to reach the requested checkpoint depth."
                     .to_owned(),
@@ -760,12 +760,12 @@ impl DaoWallet {
         let user_data = pallas::Base::from(0);
 
         for (coin, is_spent) in &self.own_coins {
-            let is_spent = is_spent.clone();
+            let is_spent = *is_spent;
             if is_spent {
                 continue
             }
             let (treasury_leaf_position, treasury_merkle_path) =
-                self.get_treasury_path(&coin, states)?;
+                self.get_treasury_path(coin, states)?;
 
             let input_value = coin.note.value;
 
@@ -856,8 +856,8 @@ impl DaoWallet {
 
         let builder = {
             dao::exec::wallet::Builder {
-                proposal: proposal.clone(),
-                dao: dao_params.clone(),
+                proposal,
+                dao: dao_params,
                 yes_votes_value,
                 all_votes_value,
                 yes_votes_blind,
@@ -936,11 +936,11 @@ impl MoneyWallet {
         let mut inputs = Vec::new();
 
         for (coin, is_spent) in &self.own_coins {
-            let is_spent = is_spent.clone();
+            let is_spent = *is_spent;
             if is_spent {
                 continue
             }
-            let (money_leaf_position, money_merkle_path) = self.get_path(&states, &coin).unwrap();
+            let (money_leaf_position, money_merkle_path) = self.get_path(states, coin).unwrap();
 
             let input = {
                 dao::propose::wallet::BuilderInput {
@@ -983,7 +983,7 @@ impl MoneyWallet {
         let builder = dao::propose::wallet::Builder {
             inputs,
             proposal,
-            dao: params.clone(),
+            dao: params,
             dao_leaf_position,
             dao_merkle_path,
             dao_merkle_root,
@@ -1012,7 +1012,7 @@ impl MoneyWallet {
                 .ok_or(DaoError::StateNotFound)?;
 
             let tree = &state.tree;
-            let leaf_position = own_coin.leaf_position.clone();
+            let leaf_position = own_coin.leaf_position;
             let root = tree.root(0).ok_or(Error::Custom(
                 "Not enough checkpoints available to reach the requested checkpoint depth."
                     .to_owned(),
@@ -1041,7 +1041,7 @@ impl MoneyWallet {
 
         // We must prove we have sufficient governance tokens in order to vote.
         for (coin, _is_spent) in &self.own_coins {
-            let (money_leaf_position, money_merkle_path) = self.get_path(states, &coin).unwrap();
+            let (money_leaf_position, money_merkle_path) = self.get_path(states, coin).unwrap();
 
             let input = {
                 dao::vote::wallet::BuilderInput {
@@ -1064,8 +1064,8 @@ impl MoneyWallet {
                 },
                 // For this demo votes are encrypted for the DAO.
                 vote_keypair: dao_keypair,
-                proposal: proposal.clone(),
-                dao: dao_params.clone(),
+                proposal,
+                dao: dao_params,
             }
         };
 

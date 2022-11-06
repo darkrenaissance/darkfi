@@ -1,10 +1,8 @@
 use halo2_proofs::{
-    arithmetic::FieldExt,
-    circuit::{floor_planner, AssignedCell, Chip, Layouter, Region, Value},
-    dev::{CircuitLayout, MockProver},
+    circuit::{floor_planner, Layouter, Value},
+    dev::{MockProver},
     pasta::pallas,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Selector, TableColumn},
-    poly::Rotation,
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error},
 };
 
 use darkfi::{
@@ -17,7 +15,6 @@ use darkfi::{
         less_than::{LessThanChip, LessThanConfig},
         native_range_check::NativeRangeCheckChip,
     },
-    VerifyFailed,
 };
 use log::{error, info};
 use rand::rngs::OsRng;
@@ -113,7 +110,7 @@ fn simple_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
         }
         Err(e) => {
             error!("verification failed: {}", e);
-            return Err(e)
+            Err(e)
         }
     }
 }
@@ -143,7 +140,7 @@ fn fullrange_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
         }
         Err(e) => {
             error!("verification failed: {}", e);
-            return Err(e)
+            Err(e)
         }
     }
 }
@@ -151,6 +148,6 @@ fn fullrange_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
 fn main() {
     env_logger::init();
     let k = 11;
-    let res_simple = simple_lessthan(k).unwrap();
-    let res_fullrange = fullrange_lessthan(k).unwrap();
+    simple_lessthan(k).unwrap();
+    fullrange_lessthan(k).unwrap();
 }

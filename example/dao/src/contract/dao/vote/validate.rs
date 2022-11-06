@@ -74,7 +74,7 @@ impl CallDataBase for CallData {
         let mut zk_publics = Vec::new();
         let mut all_votes_commit = pallas::Point::identity();
 
-        assert!(self.inputs.len() > 0, "inputs length cannot be zero");
+        assert!(!self.inputs.is_empty(), "inputs length cannot be zero");
         for input in &self.inputs {
             all_votes_commit += input.vote_commit;
             let value_coords = input.vote_commit.to_affine().coordinates().unwrap();
@@ -158,7 +158,7 @@ pub fn state_transition(
     let func_call = &parent_tx.func_calls[func_call_index];
     let call_data = func_call.call_data.as_any();
 
-    assert_eq!((&*call_data).type_id(), TypeId::of::<CallData>());
+    assert_eq!((*call_data).type_id(), TypeId::of::<CallData>());
     let call_data = call_data.downcast_ref::<CallData>();
 
     // This will be inside wasm so unwrap is fine.

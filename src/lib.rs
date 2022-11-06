@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//#![feature(let_else)]
+
 pub mod error;
 pub use error::{ClientFailed, ClientResult, Error, Result, VerifyFailed, VerifyResult};
 

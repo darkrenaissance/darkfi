@@ -96,8 +96,8 @@ mod tests {
 
         let witness = eval(&challenge, steps);
         assert!(verify(&challenge, steps, &witness));
-        assert_eq!(false, verify(&(&challenge - 1_u64), steps, &witness));
-        assert_eq!(false, verify(&challenge, steps - 1, &witness));
-        assert_eq!(false, verify(&challenge, steps, &(&witness - 1_u64)));
+        assert!(!verify(&(&challenge - 1_u64), steps, &witness));
+        assert!(!verify(&challenge, steps - 1, &witness));
+        assert!(!verify(&challenge, steps, &(&witness - 1_u64)));
     }
 }

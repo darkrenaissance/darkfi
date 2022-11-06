@@ -121,11 +121,11 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
             let mut db_batches = env.db_batches.borrow_mut();
             db_handles.push(DbHandle::new(cid, tree_handle));
             db_batches.push(sled::Batch::default());
-            return (db_handles.len() - 1) as i32
+            (db_handles.len() - 1) as i32
         }
         _ => {
             error!(target: "wasm_runtime::db_init", "db_init called in unauthorized section");
-            return -1
+            -1
         }
     }
 }
@@ -191,11 +191,11 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
             let mut db_batches = env.db_batches.borrow_mut();
             db_handles.push(DbHandle::new(cid, tree_handle));
             db_batches.push(sled::Batch::default());
-            return (db_handles.len() - 1) as i32
+            (db_handles.len() - 1) as i32
         }
         _ => {
             error!(target: "wasm_runtime::db_lookup", "db_lookup called in unauthorized section");
-            return -1
+            -1
         }
     }
 }
