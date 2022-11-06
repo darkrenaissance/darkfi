@@ -61,13 +61,30 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     Ok(())
 }
 fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
-    let zk_public_values: Vec<(String, Vec<pallas::Base>)> = Vec::new();
-    let signature_public_keys: Vec<pallas::Point> = Vec::new();
+    let (call_idx, call): (u32, Vec<ContractCall>) = deserialize(ix)?;
 
-    let mut metadata = Vec::new();
-    zk_public_values.encode(&mut metadata)?;
-    signature_public_keys.encode(&mut metadata)?;
-    set_return_data(&metadata)?;
+    assert!(call_idx < call.len() as u32);
+    let self_ = &call[call_idx as usize];
+
+    match DaoFunction::from(self_.data[0]) {
+        DaoFunction::Mint => {
+            let data = &self_.data[1..];
+            let params: DaoMintParams = deserialize(data)?;
+
+            let zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![
+                ("dao-mint".to_string(), vec![params.dao_bulla.0])
+            ];
+            let signature_public_keys: Vec<pallas::Point> = Vec::new();
+
+            let mut metadata = Vec::new();
+            zk_public_values.encode(&mut metadata)?;
+            signature_public_keys.encode(&mut metadata)?;
+            set_return_data(&metadata)?;
+        }
+        DaoFunction::Foo => {
+            unimplemented!();
+        }
+    }
 
     Ok(())
 }
