@@ -21,7 +21,7 @@ use std::{io, iter};
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_gadgets::sinsemilla::primitives::HashDomain;
-use incrementalmerkletree::{bridgetree::BridgeTree, Altitude, Hashable, Tree};
+use incrementalmerkletree::{bridgetree::BridgeTree, Altitude, Hashable};
 use lazy_static::lazy_static;
 use pasta_curves::{
     group::ff::{PrimeField, PrimeFieldBits},

@@ -58,7 +58,7 @@ pub enum ContractSection {
 }
 
 impl ContractSection {
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         match self {
             Self::Deploy => "__initialize",
             Self::Exec => "__entrypoint",

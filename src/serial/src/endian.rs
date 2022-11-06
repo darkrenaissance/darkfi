@@ -81,15 +81,15 @@ define_slice_to_le!(slice_to_u16_le, u16);
 define_slice_to_le!(slice_to_u32_le, u32);
 define_slice_to_le!(slice_to_u64_le, u64);
 define_slice_to_le!(slice_to_u128_le, u128);
-define_slice_to_le!(slice_to_usize_le, usize);
-define_slice_to_le!(slice_to_isize_le, isize);
+//define_slice_to_le!(slice_to_usize_le, usize);
+//define_slice_to_le!(slice_to_isize_le, isize);
 
 define_le_to_array!(u16_to_array_le, u16, 2);
 define_le_to_array!(u32_to_array_le, u32, 4);
 define_le_to_array!(u64_to_array_le, u64, 8);
 define_le_to_array!(u128_to_array_le, u128, 16);
-define_le_to_array!(usize_to_array_le, usize, usize::BITS as usize / 8);
-define_le_to_array!(isize_to_array_le, isize, isize::BITS as usize / 8);
+//define_le_to_array!(usize_to_array_le, usize, usize::BITS as usize / 8);
+//define_le_to_array!(isize_to_array_le, isize, isize::BITS as usize / 8);
 
 #[inline]
 pub fn i16_to_array_le(val: i16) -> [u8; 2] {

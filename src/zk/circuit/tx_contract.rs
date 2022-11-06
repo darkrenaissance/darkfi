@@ -60,11 +60,11 @@ const WINDOW_SIZE: usize = 3;
 const NUM_OF_BITS: usize = 254;
 const NUM_OF_WINDOWS: usize = 85;
 
-const PRF_NULLIFIER_PREFIX: u64 = 0;
+//const PRF_NULLIFIER_PREFIX: u64 = 0;
 
 #[derive(Clone, Debug)]
 pub struct TxConfig {
-    primary: Column<InstanceColumn>,
+    _primary: Column<InstanceColumn>,
     advices: [Column<Advice>; 10],
     ecc_config: EccConfig<OrchardFixedBases>,
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
@@ -275,7 +275,7 @@ impl Circuit<pallas::Base> for TxContract {
         let arith_config = ArithChip::configure(meta, advices[7], advices[8], advices[6]);
 
         TxConfig {
-            primary,
+            _primary: primary,
             advices,
             ecc_config,
             poseidon_config,
@@ -293,7 +293,7 @@ impl Circuit<pallas::Base> for TxContract {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
-        let less_than_chip = config.lessthan_chip();
+        let _less_than_chip = config.lessthan_chip();
         NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::load_k_table(
             &mut layouter,
             config.lessthan_config.k_values_table,
@@ -310,7 +310,7 @@ impl Circuit<pallas::Base> for TxContract {
             config.advices[0],
             Value::known(pallas::Base::one()),
         )?;
-        let neg_one = self.load_private(
+        let _neg_one = self.load_private(
             layouter.namespace(|| "one"),
             config.advices[0],
             Value::known(-pallas::Base::one()),
@@ -552,7 +552,7 @@ impl Circuit<pallas::Base> for TxContract {
         // ========
         // coin3 cm
         // ========
-        let com3 = {
+        let _com3 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
                 let poseidon_message =
                     [coin3_pk.clone(), coin3_value.clone(), coin3_nonce.clone(), one.clone()];
@@ -593,7 +593,7 @@ impl Circuit<pallas::Base> for TxContract {
         // ========
         // coin4 cm
         // ========
-        let com4 = {
+        let _com4 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
                 let poseidon_message =
                     [coin4_pk.clone(), coin4_value.clone(), coin4_nonce.clone(), one.clone()];

@@ -184,7 +184,7 @@ mod tests {
         assert!((1..2).contains(&ttg));
     }
 
-    fn clock_ticking() {
+    fn _clock_ticking() {
         let clock = Clock::new(Some(9), Some(9), Some(9), vec![]);
         //block th for 3 secs
         thread::sleep(Duration::from_millis(1000));
@@ -193,7 +193,7 @@ mod tests {
         assert!(block_on(clock.ticking()));
     }
 
-    fn clock_ticks() {
+    fn _clock_ticks() {
         let mut clock = Clock::new(Some(9), Some(9), Some(9), vec![]);
         //
         let tick: Ticks = block_on(clock.ticks());

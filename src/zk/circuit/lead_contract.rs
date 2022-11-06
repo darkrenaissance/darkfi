@@ -81,7 +81,7 @@ pub struct LeadConfig {
     poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
     sinsemilla_config_1:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    sinsemilla_config_2:
+    _sinsemilla_config_2:
         SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     merkle_config_2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
@@ -303,7 +303,7 @@ impl Circuit<pallas::Base> for LeadContract {
             ecc_config,
             poseidon_config,
             sinsemilla_config_1,
-            sinsemilla_config_2,
+            _sinsemilla_config_2: sinsemilla_config_2,
             merkle_config_1,
             merkle_config_2,
             lessthan_config,
@@ -357,10 +357,10 @@ impl Circuit<pallas::Base> for LeadContract {
             self.coin1_sk_root,
         )?;
 
-        let coin1_sk_merkle_path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
+        let _coin1_sk_merkle_path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
             self.coin1_sk_merkle_path.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
-        let coin1_timestamp = assign_free_advice(
+        let _coin1_timestamp = assign_free_advice(
             layouter.namespace(|| "witness coin1_timestamp"),
             config.advices[8],
             self.coin1_timestamp,
@@ -402,7 +402,7 @@ impl Circuit<pallas::Base> for LeadContract {
             self.coin2_commit.as_ref().map(|cm| cm.to_affine()),
         )?;
 
-        let mau_rho = ScalarFixed::new(
+        let _mau_rho = ScalarFixed::new(
             ecc_chip.clone(),
             layouter.namespace(|| "witness mau_rho"),
             self.mau_rho,
@@ -670,11 +670,11 @@ impl Circuit<pallas::Base> for LeadContract {
         // Calculate lottery target
         let target =
             arith_chip.add(layouter.namespace(|| "target = term1 + term2"), &term1, &term2)?;
-        let T: Value<pallas::Base> = target.value().cloned();
+        let t: Value<pallas::Base> = target.value().cloned();
         let y: Value<pallas::Base> = y_commit_base.value().cloned();
 
         info!("y: {:?}", y);
-        info!("T: {:?}", T);
+        info!("T: {:?}", t);
 
         // Constrain derived `sn_commit` to be equal to witnessed `coin1_serial`.
         info!("coin1 cm root LHS: {:?}", coin1_cm_root.value());

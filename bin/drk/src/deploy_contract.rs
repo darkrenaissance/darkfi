@@ -29,7 +29,7 @@ use rand::{rngs::OsRng, RngCore};
 use darkfi::{
     crypto::keypair::SecretKey,
     node::{MemoryState, State},
-    runtime::vm_runtime::{Runtime, ENTRYPOINT},
+    runtime::vm_runtime::Runtime,
     util::cli::{fg_green, fg_red},
     zkas::ZkBinary,
     Error, Result,
@@ -140,6 +140,7 @@ pub fn create_deploy_data(path: &Path) -> Result<()> {
         return Err(Error::Custom("Found no valid ZK circuits".to_string()))
     }
 
+    /* FIXME
     // Validate wasm binary. We inspect the bincode and try to load it into
     // the wasm runtime. If loaded, we then look for the `ENTRYPOINT` function
     // which we hardcode into our sdk and runtime and is the canonical way to
@@ -159,7 +160,8 @@ pub fn create_deploy_data(path: &Path) -> Result<()> {
     };
 
     eprintln!("Looking for entrypoint function inside the wasm");
-    if let Err(e) = runtime.instance.exports.get_function(ENTRYPOINT) {
+    let cs = ContractSection::Exec;
+    if let Err(e) = runtime.instance.exports.get_function(cs.name()) {
         eprintln!("{} Could not find entrypoint function", fg_red("Error:"));
         return Err(e.into())
     }
@@ -171,6 +173,7 @@ pub fn create_deploy_data(path: &Path) -> Result<()> {
     for circuit in circuits {
         total_bytes += circuit.len();
     }
+    */
 
     // TODO: Return the data back to the main function, and work further in creating
     // a transaction and broadcasting it.

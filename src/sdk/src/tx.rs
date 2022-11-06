@@ -1,5 +1,4 @@
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use pasta_curves::pallas;
 
 use super::crypto::ContractId;
 

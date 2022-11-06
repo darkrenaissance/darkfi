@@ -44,7 +44,6 @@ use crate::{
     Result,
 };
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode, Nullifier};
-use incrementalmerkletree::Hashable;
 
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
@@ -57,7 +56,7 @@ fn get_frequency() -> Float10 {
 }
 
 /// Calculate nodes total stake for specific epoch and slot.
-fn total_stake(epoch: u64, slot: u64) -> u64 {
+fn total_stake(_epoch: u64, _slot: u64) -> u64 {
     // TODO: fix this
     //(epoch * *EPOCH_LENGTH + slot + 1) * *REWARD
     *REWARD

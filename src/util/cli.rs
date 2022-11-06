@@ -120,7 +120,7 @@ pub fn get_log_config() -> simplelog::Config {
 /// ```
 ///
 /// Example usage:
-/// ```no_run
+/// ```
 /// use async_std::sync::Arc;
 //  use darkfi::{async_daemonize, cli_desc, Result};
 /// use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};

@@ -1,16 +1,14 @@
+use std::io::Cursor;
+
 use darkfi_sdk::{
     crypto::{constants::MERKLE_DEPTH, MerkleNode},
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
 };
-use darkfi_serial::{deserialize, serialize, Decodable, Encodable, ReadExt, WriteExt};
+use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
 use log::{debug, error};
-use std::io::Cursor;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
-use crate::{
-    runtime::vm_runtime::{ContractSection, Env},
-    Result,
-};
+use crate::runtime::vm_runtime::{ContractSection, Env};
 
 type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
 
@@ -86,14 +84,14 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let db_info = &db_handles[handle_idx];
             let db_info_batch = &mut db_batches[handle_idx];
             let handle_idx = db_roots;
-            let db_roots = &db_handles[handle_idx];
+            //let db_roots = &db_handles[handle_idx];
 
             // Read the current tree
 
             let ret = match db_info.get(&key) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::merkle_add", "Internal error getting from tree");
+                    error!(target: "wasm_runtime::merkle_add", "Internal error getting from tree: {}", e);
                     return -2
                 }
             };
@@ -118,14 +116,14 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let set_size: u32 = match Decodable::decode(&mut decoder) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::merkle_add", "Unable to read set size");
+                    error!(target: "wasm_runtime::merkle_add", "Unable to read set size: {}", e);
                     return -2
                 }
             };
             let mut tree: MerkleTree = match Decodable::decode(&mut decoder) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::merkle_add", "Unable to deserialize tree");
+                    error!(target: "wasm_runtime::merkle_add", "Unable to deserialize tree: {}", e);
                     return -2
                 }
             };

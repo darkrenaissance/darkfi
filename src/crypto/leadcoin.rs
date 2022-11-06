@@ -61,7 +61,7 @@ impl LeadCoin {
         let po_nonce = self.nonce_cm.unwrap();
         let po_pk = self.keypair.unwrap().public.0.to_affine().coordinates().unwrap();
         let y_mu = self.y_mu.unwrap();
-        let rho_mu = self.rho_mu.unwrap();
+        let _rho_mu = self.rho_mu.unwrap();
         let root_sk = self.root_sk.unwrap();
         let nonce = self.nonce.unwrap();
         let lottery_msg_input = [root_sk, nonce];

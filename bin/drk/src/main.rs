@@ -18,7 +18,6 @@
 
 use std::{
     io::{stdin, Read},
-    path::PathBuf,
     process::exit,
     str::FromStr,
     time::Instant,
@@ -35,15 +34,15 @@ use darkfi::{
     crypto::{address::Address, token_id},
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
-        cli::{fg_red, get_log_config, get_log_level, progress_bar},
+        cli::{get_log_config, get_log_level, progress_bar},
         net_name::NetworkName,
         parse::encode_base10,
     },
     Result,
 };
 
-mod deploy_contract;
-use deploy_contract::create_deploy_data;
+//mod deploy_contract;
+//use deploy_contract::create_deploy_data;
 
 #[derive(Parser)]
 #[clap(name = "drk", about = cli_desc!(), version)]
@@ -124,12 +123,11 @@ enum Subcmd {
 
     /// Broadcast a given transaction from stdin
     Broadcast,
-
-    /// Deploy a smart contract in the current directory or a given path.
-    DeployContract {
-        #[clap(long, default_value = ".")]
-        path: PathBuf,
-    },
+    // Deploy a smart contract in the current directory or a given path.
+    //DeployContract {
+    //    #[clap(long, default_value = ".")]
+    //    path: PathBuf,
+    //},
 }
 
 struct Drk {
@@ -137,7 +135,7 @@ struct Drk {
 }
 
 impl Drk {
-    async fn close_connection(&self) -> Result<()> {
+    async fn _close_connection(&self) -> Result<()> {
         self.rpc_client.close().await
     }
 
@@ -331,19 +329,19 @@ async fn main() -> Result<()> {
             stdin().read_to_string(&mut buf)?;
 
             drk.tx_broadcast(buf).await
-        }
+        } /*
+          Subcmd::DeployContract { path } => {
+              eprintln!("Trying to deploy the smart contract in {:?}", path);
+              let deploy_data = match create_deploy_data(&path) {
+                  Ok(v) => v,
+                  Err(e) => {
+                      eprintln!("{}: Failed to deploy smart contract: {}", fg_red("Error:"), e);
+                      exit(1);
+                  }
+              };
 
-        Subcmd::DeployContract { path } => {
-            eprintln!("Trying to deploy the smart contract in {:?}", path);
-            let deploy_data = match create_deploy_data(&path) {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("{}: Failed to deploy smart contract: {}", fg_red("Error:"), e);
-                    exit(1);
-                }
-            };
-
-            Ok(())
-        }
+              Ok(())
+          }
+          */
     }
 }

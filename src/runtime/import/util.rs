@@ -16,12 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::{debug, error};
-use std::io::Cursor;
+use log::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::runtime::vm_runtime::{ContractSection, Env};
-use darkfi_serial::ReadExt;
 
 /// Host function for logging strings.
 /// This is injected into the runtime with wasmer's `imports!` macro.
@@ -69,9 +67,6 @@ pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
 pub(crate) fn put_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let env = ctx.data();
     let memory_view = env.memory_view(&ctx);
-    let db = &env.blockchain.sled_db;
-    let contracts = &env.blockchain.contracts;
-    let contract_id = &env.contract_id;
 
     //debug!(target: "wasm_runtime::diagnostic", "diagnostic:");
     //let pages = memory_view.size().0;
@@ -140,7 +135,7 @@ pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     // Get the slice, where we will read the size of the buffer
 
     let env = ctx.data();
-    let memory_view = env.memory_view(&ctx);
+    //let memory_view = env.memory_view(&ctx);
 
     // Get the object from env
 

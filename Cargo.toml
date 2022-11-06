@@ -10,6 +10,7 @@ edition = "2021"
 
 [lib]
 name = "darkfi"
+doctest = false
 
 #[profile.release]
 #debug = true
@@ -366,11 +367,6 @@ path = "example/dao/src/main.rs"
 required-features = ["crypto", "rpc"]
 
 [[example]]
-name = "lead"
-path = "example/lead.rs"
-required-features = ["node"]
-
-[[example]]
 name = "crypsinous"
 path = "example/crypsinous.rs"
 required-features = ["node"]
@@ -378,4 +374,4 @@ required-features = ["node"]
 [[example]]
 name = "lessthan"
 path = "example/less_than.rs"
-required_features = ["node"]
+required-features = ["node"]

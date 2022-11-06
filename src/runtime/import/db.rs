@@ -16,10 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::io::Cursor;
+
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::Decodable;
-use log::error;
-use std::io::Cursor;
+use log::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::{
@@ -57,11 +58,6 @@ impl DbHandle {
 }
 
 /// Only deploy() can call this. Creates a new database instance for this contract.
-///
-/// ```
-///     type DbHandle = u32;
-///     db_init(db_name) -> DbHandle
-/// ```
 pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
@@ -102,6 +98,11 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
 
             // TODO: Ensure we've read the entire buffer above.
 
+            if &cid != contract_id {
+                error!(target: "wasm_runtime::db_init", "Unauthorized ContractId for db_init");
+                return -1
+            }
+
             let tree_handle = match contracts.init(db, &cid, &db_name) {
                 Ok(v) => v,
                 Err(e) => {
@@ -130,11 +131,6 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
 }
 
 /// Everyone can call this. Lookups up a database handle from its name.
-///
-/// ```
-///     type DbHandle = u32;
-///     db_lookup(db_name) -> DbHandle
-/// ```
 pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
@@ -205,10 +201,6 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
 }
 
 /// Only update() can call this. Set a value within the transaction.
-///
-/// ```
-///     db_set(tx_handle, key, value);
-/// ```
 pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
@@ -282,17 +274,11 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 }
 
 /// Everyone can call this. Will read a key from the key-value store.
-///
-/// ```
-///     value = db_get(db_handle, key);
-/// ```
 pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Exec | ContractSection::Metadata => {
             let memory_view = env.memory_view(&ctx);
-            let db = &env.blockchain.sled_db;
-            let contracts = &env.blockchain.contracts;
 
             let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
                 error!(target: "wasm_runtime::db_get", "Failed to make slice from ptr");
@@ -328,9 +314,8 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
             // TODO: Ensure we've read the entire buffer above.
 
             let db_handles = env.db_handles.borrow();
-            let db_batches = env.db_batches.borrow();
 
-            if db_handles.len() <= db_handle || db_batches.len() <= db_handle {
+            if db_handles.len() <= db_handle {
                 error!(target: "wasm_runtime::db_get", "Requested DbHandle that is out of bounds");
                 return -2
             }
@@ -341,13 +326,13 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
             let ret = match db_handle.get(&key) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::db_get", "Internal error getting from tree");
+                    error!(target: "wasm_runtime::db_get", "Internal error getting from tree: {}", e);
                     return -2
                 }
             };
 
             let Some(return_data) = ret else {
-                log::debug!("returned empty vec");
+                debug!("returned empty vec");
                 return -3
             };
 

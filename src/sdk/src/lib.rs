@@ -19,6 +19,7 @@
 pub use incrementalmerkletree;
 pub use pasta_curves as pasta;
 
+#[cfg(target_arch = "wasm32")]
 /// Database functions
 pub mod db;
 
@@ -34,6 +35,7 @@ pub mod log;
 /// Crypto-related definitions
 pub mod crypto;
 
+#[cfg(target_arch = "wasm32")]
 /// Merkle
 pub mod merkle;
 
