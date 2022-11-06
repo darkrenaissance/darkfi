@@ -15,6 +15,7 @@ WASM_BIN = \
 BIN = dao
 
 all: $(WASM_BIN) $(BIN)
+	@./dao
 
 dao: $(WASM_SRC) $(SRC)
 	$(CARGO) build --release --bin $@
