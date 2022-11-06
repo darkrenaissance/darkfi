@@ -283,7 +283,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 /// ```
 ///     value = db_get(db_handle, key);
 /// ```
-pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let env = ctx.data();
     match env.contract_section {
         ContractSection::Deploy | ContractSection::Exec | ContractSection::Update => {
@@ -343,12 +343,15 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
                 }
             };
 
-            if ret.is_none() {
+            let Some(return_data) = ret else {
                 log::debug!("returned empty vec");
                 return -3
-            }
+            };
 
-            0
+            // Copy Vec<u8> to the VM
+            let mut objects = env.objects.borrow_mut();
+            objects.push(return_data);
+            (objects.len() - 1) as i64
         }
         _ => -1,
     }

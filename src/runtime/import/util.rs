@@ -17,9 +17,11 @@
  */
 
 use log::{debug, error};
+use std::io::Cursor;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::runtime::vm_runtime::{ContractSection, Env};
+use darkfi_serial::ReadExt;
 
 /// Host function for logging strings.
 /// This is injected into the runtime with wasmer's `imports!` macro.
@@ -62,4 +64,92 @@ pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
         }
         _ => darkfi_sdk::error::CALLER_ACCESS_DENIED,
     }
+}
+
+pub(crate) fn put_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
+    let env = ctx.data();
+    let memory_view = env.memory_view(&ctx);
+    let db = &env.blockchain.sled_db;
+    let contracts = &env.blockchain.contracts;
+    let contract_id = &env.contract_id;
+
+    //debug!(target: "wasm_runtime::diagnostic", "diagnostic:");
+    //let pages = memory_view.size().0;
+    //debug!(target: "wasm_runtime::diagnostic", "    pages: {}", pages);
+
+    let Ok(slice) = ptr.slice(&memory_view, len) else {
+        error!(target: "wasm_runtime::diagnostic", "Failed to make slice from ptr");
+        return -2
+    };
+
+    let mut buf = vec![0_u8; len as usize];
+    if let Err(e) = slice.read_slice(&mut buf) {
+        error!(target: "wasm_runtime::diagnostic", "Failed to read from memory slice: {}", e);
+        return -2
+    };
+
+    // There would be a serious problem if this is zero.
+    // The number of pages is calculated as a quantity X + 1 where X >= 0
+    //assert!(pages > 0);
+
+    //debug!(target: "wasm_runtime::diagnostic", "    memory: {:02x?}", &buf[0..32]);
+    //debug!(target: "wasm_runtime::diagnostic", "            {:x?}", &buf[32..64]);
+
+    //debug!(target: "wasm_runtime::diagnostic", "    ptr location: {}", ptr.offset());
+
+    let mut objects = env.objects.borrow_mut();
+    objects.push(buf);
+    let obj_idx = objects.len() - 1;
+
+    obj_idx as i64
+}
+
+pub(crate) fn get_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: u32) -> i64 {
+    // Get the slice, where we will read the size of the buffer
+
+    let env = ctx.data();
+    let memory_view = env.memory_view(&ctx);
+
+    // Get the object from env
+
+    let objects = env.objects.borrow();
+    if idx as usize >= objects.len() {
+        error!(target: "wasm_runtime::get_object_bytes", "Tried to access object out of bounds");
+        return -5
+    }
+    let obj = &objects[idx as usize];
+
+    // Read N bytes from the object and write onto the ptr.
+
+    // We need to re-read the slice, since in the first run, we just read n
+    let Ok(slice) = ptr.slice(&memory_view, obj.len() as u32) else {
+        error!(target: "wasm_runtime::get_object_bytes", "Failed to make slice from ptr");
+        return -2
+    };
+
+    // Put the result in the VM
+    if let Err(e) = slice.write_slice(&obj) {
+        error!(target: "wasm_runtime::get_object_bytes", "Failed to write to memory slice: {}", e);
+        return -4
+    };
+
+    0
+}
+
+pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
+    // Get the slice, where we will read the size of the buffer
+
+    let env = ctx.data();
+    let memory_view = env.memory_view(&ctx);
+
+    // Get the object from env
+
+    let objects = env.objects.borrow();
+    if idx as usize >= objects.len() {
+        error!(target: "wasm_runtime::get_object_bytes", "Tried to access object out of bounds");
+        return -5
+    }
+
+    let obj = &objects[idx as usize];
+    obj.len() as i64
 }

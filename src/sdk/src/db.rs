@@ -3,6 +3,7 @@ use darkfi_serial::Encodable;
 use super::{
     crypto::ContractId,
     error::{ContractError, GenericResult},
+    util::{get_object_bytes, get_object_size},
 };
 
 type DbHandle = u32;
@@ -71,13 +72,13 @@ pub fn db_lookup(contract_id: ContractId, db_name: &str) -> GenericResult<DbHand
 /// ```
 pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Option<Vec<u8>>> {
     #[cfg(target_arch = "wasm32")]
-    unsafe {
+    {
         let mut len = 0;
         let mut buf = vec![];
         len += db_handle.encode(&mut buf)?;
         len += key.to_vec().encode(&mut buf)?;
 
-        let ret = db_get_(buf.as_ptr(), len as u32);
+        let ret = unsafe { db_get_(buf.as_ptr(), len as u32) };
 
         if ret < 0 {
             match ret {
@@ -88,7 +89,12 @@ pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Option<Vec<u8>>>
             }
         }
 
-        Ok(Some(vec![]))
+        let obj = ret as u32;
+        let obj_size = get_object_size(obj);
+        let mut buf = vec![0u8; obj_size as usize];
+        get_object_bytes(&mut buf, obj);
+
+        Ok(Some(buf))
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -126,6 +132,6 @@ pub fn db_set(db_handle: DbHandle, key: &[u8], value: &[u8]) -> GenericResult<()
 extern "C" {
     fn db_init_(ptr: *const u8, len: u32) -> i32;
     fn db_lookup_(ptr: *const u8, len: u32) -> i32;
-    fn db_get_(ptr: *const u8, len: u32) -> i32;
+    fn db_get_(ptr: *const u8, len: u32) -> i64;
     fn db_set_(ptr: *const u8, len: u32) -> i32;
 }

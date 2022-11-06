@@ -6,9 +6,9 @@ use darkfi_sdk::{
     msg,
     pasta::pallas,
     tx::FuncCall,
-    util::set_return_data,
+    util::{set_return_data, put_object_bytes, get_object_bytes, get_object_size},
 };
-use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable, WriteExt, ReadExt};
 
 /// Available functions for this contract.
 /// We identify them with the first byte passed in through the payload.
@@ -125,6 +125,19 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
 // Through here, you can branch out into different functions inside
 // this library.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
+    msg!("process_instruction():");
+    msg!("    ix: {:x?}", ix);
+    msg!("    cid: {:x?}", cid);
+
+    //let bytes = [0xde, 0xad, 0xbe, 0xef];
+    let bytes = [0x3a, 0x14, 0x15, 0x92, 0x63, 0x35];
+    let obj = put_object_bytes(&bytes);
+    let obj_size = get_object_size(obj as u32);
+    msg!("    obj_size: {}", obj_size);
+    let mut buf = vec![0u8; obj_size as usize];
+    get_object_bytes(&mut buf, obj as u32);
+    msg!("    buf (bytes): {:x?}", &buf);
+
     match Function::from(ix[0]) {
         Function::Foo => {
             let tx_data = &ix[1..];
@@ -158,12 +171,14 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
     }
 
+    msg!("process_instruction() [END]");
     Ok(())
 }
 
 fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
     msg!("Make 1 update!");
 
+    /*
     match Function::from(update_data[0]) {
         Function::Foo => {
             msg!("fooupp");
@@ -177,6 +192,7 @@ fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
         }
         _ => unreachable!(),
     }
+    */
 
     msg!("process_update() finished");
     Ok(())

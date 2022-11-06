@@ -87,6 +87,8 @@ pub struct Env {
     pub logs: RefCell<Vec<String>>,
     /// Direct memory access to the VM
     pub memory: Option<Memory>,
+    /// Object store for transferring memory from the host to VM
+    pub objects: RefCell<Vec<Vec<u8>>>,
 }
 
 impl Env {
@@ -161,6 +163,7 @@ impl Runtime {
                 contract_return_data: Cell::new(None),
                 logs,
                 memory: None,
+                objects: RefCell::new(vec![]),
             },
         );
 
@@ -201,6 +204,24 @@ impl Runtime {
                     &ctx,
                     import::db::db_set,
                 ),
+
+                "put_object_bytes_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::put_object_bytes,
+                ),
+
+                "get_object_bytes_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_object_bytes,
+                ),
+
+                "get_object_size_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_object_size,
+                ),
             }
         };
 
@@ -220,6 +241,8 @@ impl Runtime {
         env_mut.contract_section = section;
         assert!(env_mut.contract_return_data.take().is_none());
         env_mut.contract_return_data.set(None);
+        // Clear the logs
+        let _ = env_mut.logs.take();
 
         // Serialize the payload for the format the wasm runtime is expecting.
         let payload = Self::serialize_payload(&env_mut.contract_id, payload);
