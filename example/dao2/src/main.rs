@@ -4,15 +4,33 @@ use darkfi::{
     runtime::vm_runtime::Runtime,
     Result,
 };
-use darkfi_sdk::{crypto::ContractId, pasta::pallas, tx::FuncCall};
-use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
+use darkfi_sdk::{crypto::ContractId, pasta::pallas, tx::ContractCall};
+use darkfi_serial::{serialize, deserialize, Decodable, Encodable, WriteExt};
 use std::io::Cursor;
 
-use dao_contract::DaoFunction;
+use dao_contract::{DaoFunction, DaoMintParams};
 
-fn main() -> Result<()> {
-    println!("wakie wakie young wagie");
+mod contract;
+mod error;
+mod note;
+mod schema;
+mod util;
 
+fn show_dao_state(chain: &Blockchain, contract_id: &ContractId) -> Result<()> {
+    let db = chain.contracts.lookup(&chain.sled_db, contract_id, "wagies")?;
+    for obj in db.iter() {
+        let (key, value) = obj.unwrap();
+        let name: String = deserialize(&key)?;
+        let age: u32 = deserialize(&value)?;
+        println!("{}: {}", name, age);
+    }
+    Ok(())
+}
+
+type BoxResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+#[async_std::main]
+async fn main() -> BoxResult<()> {
     // Debug log configuration
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
@@ -22,6 +40,10 @@ fn main() -> Result<()> {
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
     )?;
+
+    println!("wakie wakie young wagie");
+    schema::schema().await?;
+    return Ok(());
 
     // =============================
     // Initialize a dummy blockchain
@@ -34,33 +56,36 @@ fn main() -> Result<()> {
     // Load the wasm binary into memory and create an execution runtime
     // ================================================================
     let wasm_bytes = std::fs::read("dao_contract.wasm")?;
-    let contract_id = ContractId::from(pallas::Base::from(1));
-    let mut runtime = Runtime::new(&wasm_bytes, blockchain.clone(), contract_id)?;
+    let dao_contract_id = ContractId::from(pallas::Base::from(1));
+    let mut runtime = Runtime::new(&wasm_bytes, blockchain.clone(), dao_contract_id)?;
 
     // Deploy function to initialize the smart contract state.
     // Here we pass an empty payload, but it's possible to feed in arbitrary data.
     runtime.deploy(&[])?;
 
     // This is another call so we instantiate a new runtime.
-    let mut runtime = Runtime::new(&wasm_bytes, blockchain, contract_id)?;
+    let mut runtime = Runtime::new(&wasm_bytes, blockchain.clone(), dao_contract_id)?;
 
     // =============================================
     // Build some kind of payload to show an example
     // =============================================
-    let func_calls = vec![FuncCall {
-        contract_id: pallas::Base::from(110),
-        func_id: pallas::Base::from(4),
-        //call_data: serialize(&FooCallData { a: 777, b: 666 }),
-        call_data: Vec::new()
+    // Write the actual call data
+    let mut calldata = Vec::new();
+    // Selects which path executes in the contract.
+    calldata.write_u8(DaoFunction::Mint as u8)?;
+    let params = DaoMintParams { a: 777, b: 666 };
+    params.encode(&mut calldata)?;
+
+    let func_calls = vec![ContractCall {
+        contract_id: dao_contract_id,
+        calldata
     }];
-    let func_call_index: u32 = 0;
 
     let mut payload = Vec::new();
-    // Selects which path executes in the contract.
-    //payload.write_u8(Function::Foo as u8)?;
     //// Write the actual payload data
-    //payload.write_u32(func_call_index)?;
-    //func_calls.encode(&mut payload)?;
+    let call_index = 0;
+    payload.write_u32(call_index)?;
+    func_calls.encode(&mut payload)?;
 
     // ============================================================
     // Serialize the payload into the runtime format and execute it
@@ -79,6 +104,8 @@ fn main() -> Result<()> {
     let mut decoder = Cursor::new(&metadata);
     let zk_public_values: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
     let signature_public_keys: Vec<pallas::Point> = Decodable::decode(decoder)?;
+
+    show_dao_state(&blockchain, &dao_contract_id)?;
 
     Ok(())
 }

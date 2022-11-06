@@ -5,7 +5,7 @@ use darkfi_sdk::{
     error::ContractResult,
     msg,
     pasta::pallas,
-    tx::FuncCall,
+    tx::ContractCall,
     util::{set_return_data, put_object_bytes, get_object_bytes, get_object_size},
 };
 use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable, WriteExt, ReadExt};
@@ -13,10 +13,13 @@ use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEn
 #[repr(u8)]
 pub enum DaoFunction {
     Foo = 0x00,
+    Mint = 0x01,
 }
 
-fn foo() {
-    println!("foo");
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct DaoMintParams {
+    pub a: u32,
+    pub b: u32
 }
 
 define_contract!(
@@ -27,29 +30,13 @@ define_contract!(
 );
 
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
+    let db_handle = db_init(cid, "wagies")?;
+
     Ok(())
 }
 fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
-    let zk_public_values = vec![
-        (
-            "DaoProposeInput".to_string(),
-            vec![pallas::Base::from(110), pallas::Base::from(4)],
-        ),
-        ("DaoProposeInput".to_string(), vec![pallas::Base::from(7), pallas::Base::from(4)]),
-        (
-            "DaoProposeMain".to_string(),
-            vec![
-                pallas::Base::from(1),
-                pallas::Base::from(3),
-                pallas::Base::from(5),
-                pallas::Base::from(7),
-            ],
-        ),
-    ];
-
-    let signature_public_keys: Vec<pallas::Point> = vec![
-        //pallas::Point::identity()
-    ];
+    let zk_public_values: Vec<(String, Vec<pallas::Base>)> = Vec::new();
+    let signature_public_keys: Vec<pallas::Point> = Vec::new();
 
     let mut metadata = Vec::new();
     zk_public_values.encode(&mut metadata)?;
@@ -61,6 +48,8 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     Ok(())
 }
-fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
+fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
+    let db_handle = db_lookup(cid, "wagies")?;
+    db_set(db_handle, &serialize(&"jason_gulag".to_string()), &serialize(&110))?;
     Ok(())
 }
