@@ -163,6 +163,12 @@ impl FromStr for PublicKey {
     }
 }
 
+impl From<pallas::Point> for PublicKey {
+    fn from(x: pallas::Point) -> Self {
+        Self(x)
+    }
+}
+
 impl TryFrom<Address> for PublicKey {
     type Error = Error;
     fn try_from(address: Address) -> Result<Self> {
