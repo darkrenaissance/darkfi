@@ -554,8 +554,7 @@ impl Circuit<pallas::Base> for TxContract {
         // ========
         let _com3 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
-                let poseidon_message =
-                    [coin3_pk, coin3_value.clone(), coin3_nonce, one.clone()];
+                let poseidon_message = [coin3_pk, coin3_value.clone(), coin3_nonce, one.clone()];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,
@@ -595,8 +594,7 @@ impl Circuit<pallas::Base> for TxContract {
         // ========
         let _com4 = {
             let nullifier2_msg: AssignedCell<Fp, Fp> = {
-                let poseidon_message =
-                    [coin4_pk, coin4_value.clone(), coin4_nonce, one];
+                let poseidon_message = [coin4_pk, coin4_value.clone(), coin4_nonce, one];
                 let poseidon_hasher = PoseidonHash::<
                     _,
                     _,

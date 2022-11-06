@@ -456,13 +456,12 @@ impl Circuit<pallas::Base> for LeadContract {
         let sn_commit: AssignedCell<pallas::Base, pallas::Base> = {
             // For derivation here, we append one 0 and one 1 to the hashed message.
             // TODO: Add these constants to ouroboros/consts.rs
-            let poseidon_message =
-                [coin1_nonce.clone(), coin1_sk_root.clone(), zero, one.clone()];
+            let poseidon_message = [coin1_nonce.clone(), coin1_sk_root.clone(), zero, one.clone()];
             let poseidon_hasher = PoseidonHash::<_, _, P128Pow5T3, ConstantLength<4>, 3, 2>::init(
                 config.poseidon_chip(),
                 layouter.namespace(|| "sn_commit poseidon init"),
             )?;
-            
+
             poseidon_hasher
                 .hash(layouter.namespace(|| "sn_commit poseidon hash"), poseidon_message)?
         };
@@ -487,7 +486,7 @@ impl Circuit<pallas::Base> for LeadContract {
                         config.poseidon_chip(),
                         layouter.namespace(|| "nullifier poseidon init"),
                     )?;
-                
+
                 poseidon_hasher
                     .hash(layouter.namespace(|| "nullifier poseidon hash"), poseidon_message)?
             };
@@ -522,7 +521,7 @@ impl Circuit<pallas::Base> for LeadContract {
                 config.poseidon_chip(),
                 layouter.namespace(|| "coin1_commit_hash poseidon init"),
             )?;
-            
+
             poseidon_hasher
                 .hash(layouter.namespace(|| "coin1_commit_hash poseidon hash"), poseidon_message)?
         };
@@ -544,7 +543,7 @@ impl Circuit<pallas::Base> for LeadContract {
                 config.poseidon_chip(),
                 layouter.namespace(|| "coin2_nonce poseidon init"),
             )?;
-            
+
             poseidon_hasher
                 .hash(layouter.namespace(|| "coin2_nonce poseidon hash"), poseidon_message)?
         };
@@ -571,7 +570,7 @@ impl Circuit<pallas::Base> for LeadContract {
                         config.poseidon_chip(),
                         layouter.namespace(|| "coin2_commitment_v poseidon init"),
                     )?;
-                
+
                 poseidon_hasher.hash(
                     layouter.namespace(|| "coin2_commitment_v poseidon hash"),
                     poseidon_message,
@@ -604,11 +603,9 @@ impl Circuit<pallas::Base> for LeadContract {
                 config.poseidon_chip(),
                 layouter.namespace(|| "lottery_commit_msg poseidon init"),
             )?;
-            
-            poseidon_hasher.hash(
-                layouter.namespace(|| "lottery_commit_msg poseidon hash"),
-                poseidon_message,
-            )?
+
+            poseidon_hasher
+                .hash(layouter.namespace(|| "lottery_commit_msg poseidon hash"), poseidon_message)?
         };
 
         let lottery_commit_v = {
@@ -631,7 +628,7 @@ impl Circuit<pallas::Base> for LeadContract {
                 config.poseidon_chip(),
                 layouter.namespace(|| "lottery_commit coords poseidon init"),
             )?;
-            
+
             poseidon_hasher.hash(
                 layouter.namespace(|| "lottery_commit coords poseidon hash"),
                 poseidon_message,

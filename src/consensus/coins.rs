@@ -90,8 +90,7 @@ pub fn create_epoch_coins(
     info!("sigma1: {}", sigma1_fbig);
     let sigma1: pallas::Base = fbig2base(sigma1_fbig);
     info!("sigma1 base: {:?}", sigma1);
-    let sigma2_fbig =
-        (c / total_sigma).powf(two.clone()) * (field_p / two);
+    let sigma2_fbig = (c / total_sigma).powf(two.clone()) * (field_p / two);
     info!("sigma2: {}", sigma2_fbig);
     let sigma2: pallas::Base = fbig2base(sigma2_fbig);
     info!("sigma2 base: {:?}", sigma2);

@@ -1,6 +1,6 @@
 use halo2_proofs::{
     circuit::{floor_planner, Layouter, Value},
-    dev::{MockProver},
+    dev::MockProver,
     pasta::pallas,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error},
 };
