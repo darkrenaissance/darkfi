@@ -165,9 +165,9 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             }
         }
         Function::Bar => {
-            let tx_data = &ix[1..];
+            //let tx_data = &ix[1..];
             // ...
-            let _args: BarArgs = deserialize(tx_data)?;
+            //let _args: BarArgs = deserialize(tx_data)?;
         }
     }
 
@@ -178,7 +178,6 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
     msg!("Make 1 update!");
 
-    /*
     match Function::from(update_data[0]) {
         Function::Foo => {
             msg!("fooupp");
@@ -190,9 +189,9 @@ fn process_update(_cid: ContractId, update_data: &[u8]) -> ContractResult {
             //let db_handle = db_lookup("wagies")?;
             //db_end_tx(db_handle, tx_handle)?;
         }
-        _ => unreachable!(),
+        Function::Bar => {
+        }
     }
-    */
 
     msg!("process_update() finished");
     Ok(())

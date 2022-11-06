@@ -286,7 +286,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let env = ctx.data();
     match env.contract_section {
-        ContractSection::Deploy | ContractSection::Exec | ContractSection::Update => {
+        ContractSection::Exec => {
             let memory_view = env.memory_view(&ctx);
             let db = &env.blockchain.sled_db;
             let contracts = &env.blockchain.contracts;
