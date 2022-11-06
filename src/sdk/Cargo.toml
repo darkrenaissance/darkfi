@@ -23,9 +23,10 @@ thiserror = "1.0.37"
 bs58 = "0.4.0"
 
 # Cryptography
-pasta_curves = "0.4.0"
-incrementalmerkletree = "0.3.0"
+blake3 = "1.3.1"
 halo2_gadgets = "0.2.0"
+incrementalmerkletree = "0.3.0"
+pasta_curves = "0.4.0"
 
 # Misc
 lazy_static = "1.4.0"
