@@ -90,7 +90,7 @@ impl Transaction {
             self.signatures.iter().zip(sigpub_table.iter()).enumerate()
         {
             for (signature_pub_key, signature) in signature_public_keys.iter().zip(signatures) {
-                let signature_pub_key = PublicKey(*signature_pub_key);
+                let signature_pub_key = PublicKey::from(*signature_pub_key);
                 let verify_result = signature_pub_key.verify(&unsigned_tx_data[..], &signature);
                 assert!(verify_result, "verify sigs[{}] failed", i);
             }
