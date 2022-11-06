@@ -675,14 +675,7 @@ impl Circuit<pallas::Base> for LeadContract {
 
         info!("y: {:?}", y);
         info!("T: {:?}", T);
-        // Constrain y < target
-        lessthan_chip.copy_less_than(
-            layouter.namespace(|| "y < target"),
-            y_commit_base.clone(),
-            target,
-            0,
-            true,
-        )?;
+
         // Constrain derived `sn_commit` to be equal to witnessed `coin1_serial`.
         info!("coin1 cm root LHS: {:?}", coin1_cm_root.value());
         info!("coin1 cm root RHS: {:?}", coin1_commit_root.value());
@@ -712,6 +705,8 @@ impl Circuit<pallas::Base> for LeadContract {
         // Constrain derived rho_commit to witnessed rho
         rho_commit.constrain_equal(layouter.namespace(|| "rho equality"), &rho)?;
 
+        info!("coin pk: x {:?}", coin_pk.inner().x());
+        info!("coin pk: y {:?}", coin_pk.inner().y());
         // Constrain coin's public key coordinates with public inputs
         layouter.constrain_instance(
             coin_pk.inner().x().cell(),
@@ -723,6 +718,7 @@ impl Circuit<pallas::Base> for LeadContract {
             config.primary,
             LEADCOIN_PK_Y_OFFSET,
         )?;
+        info!("coin2 nonce: {:?}", coin2_nonce);
         // Constrain coin2_nonce with associated public input
         layouter.constrain_instance(
             coin2_nonce.cell(),
@@ -735,6 +731,15 @@ impl Circuit<pallas::Base> for LeadContract {
             y_commit_base.cell(),
             config.primary,
             LEADCOIN_Y_BASE_OFFSET,
+        )?;
+
+        // Constrain y < target
+        lessthan_chip.copy_less_than(
+            layouter.namespace(|| "y < target"),
+            y_commit_base.clone(),
+            target,
+            0,
+            true,
         )?;
 
         Ok(())

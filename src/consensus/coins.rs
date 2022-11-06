@@ -239,10 +239,13 @@ fn create_leadcoin(
 
     //let coin_pk_msg = [c_tau, c_root_sk.inner()];
     //let c_pk: pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_pk_msg);
+
     let c_pk: pallas::Point = keypair.public.0;
     let c_pk_coord = c_pk.to_affine().coordinates().unwrap();
     let c_pk_x = c_pk_coord.x();
     let c_pk_y = c_pk_coord.y();
+    info!("coin pk [{}] x: {:?}", i, c_pk_x);
+    info!("coin pk [{}] y: {:?}", i, c_pk_y);
 
     let c_seed = pallas::Base::from(seed);
     let sn_msg = [c_seed, c_root_sk.inner(), zero.clone(), one.clone()];
@@ -289,7 +292,7 @@ fn create_leadcoin(
     let c_seed2: pallas::Base =
         poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init()
             .hash(coin_nonce2_msg);
-
+    info!("coin2 seed [{}] : {:?}", i, c_seed2);
     let coin2_commit_msg_input =
         [pallas::Base::from(*PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed2, one];
     let coin2_commit_msg: pallas::Base =
