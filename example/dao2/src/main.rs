@@ -14,7 +14,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, ContractId, MerkleNode},
+    crypto::{constants::MERKLE_DEPTH, ContractId, MerkleNode, MerkleTree},
     tx::ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
@@ -50,14 +50,19 @@ mod tx;
 mod util;
 
 fn show_dao_state(chain: &Blockchain, contract_id: &ContractId) -> Result<()> {
-    let db = chain.contracts.lookup(&chain.sled_db, contract_id, "info")?;
-    match db.get(&serialize(&"dao_tree".to_string())).expect("dao_tree") {
-        Some(value) => {
-            debug!(target: "demo", "DAO tree: {} bytes", value.len());
-        }
-        None => {
-            error!(target: "demo", "Missing DAO tree");
-        }
+    let db_info = chain.contracts.lookup(&chain.sled_db, contract_id, "info")?;
+    let value = db_info.get(&serialize(&"dao_tree".to_string())).expect("dao_tree").unwrap();
+    let mut decoder = Cursor::new(&value);
+    let set_size: u32 = Decodable::decode(&mut decoder)?;
+    let tree: MerkleTree = Decodable::decode(decoder)?;
+    debug!(target: "demo", "DAO tree: {} bytes", value.len());
+    debug!(target: "demo", "set size: {}", set_size);
+
+    let db_roots = chain.contracts.lookup(&chain.sled_db, contract_id, "dao_roots")?;
+    for i in 0..set_size {
+        let root = db_roots.get(&serialize(&i)).expect("dao_roots").unwrap();
+        let root: MerkleNode = deserialize(&root)?;
+        debug!(target: "demo", "root {}: {:?}", i, root);
     }
 
     Ok(())

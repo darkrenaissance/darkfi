@@ -36,7 +36,7 @@ pub use contract_id::ContractId;
 
 /// Merkle node definitions
 pub mod merkle_node;
-pub use merkle_node::MerkleNode;
+pub use merkle_node::{MerkleNode, MerkleTree};
 
 /// Nullifier definitions
 pub mod nullifier;

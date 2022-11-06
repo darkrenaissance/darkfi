@@ -1,20 +1,17 @@
 use darkfi_sdk::{
-    crypto::{ContractId, constants::MERKLE_DEPTH, MerkleNode, Nullifier},
+    crypto::{constants::MERKLE_DEPTH, ContractId, MerkleNode, MerkleTree, Nullifier},
     db::{db_get, db_init, db_lookup, db_set},
     define_contract,
     error::ContractResult,
-    msg,
     merkle::merkle_add,
+    msg,
     pasta::pallas,
     tx::ContractCall,
     util::{get_object_bytes, get_object_size, put_object_bytes, set_return_data},
-    incrementalmerkletree::{bridgetree::BridgeTree, Tree}
 };
 use darkfi_serial::{
     deserialize, serialize, Encodable, ReadExt, SerialDecodable, SerialEncodable, WriteExt,
 };
-
-type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoBulla(pub pallas::Base);
@@ -52,11 +49,14 @@ define_contract!(
 );
 
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
-    let db_handle = db_init(cid, "info")?;
+    let info_db = db_init(cid, "info")?;
+    let roots_db = db_init(cid, "dao_roots")?;
 
     let dao_tree = MerkleTree::new(100);
-    let dao_tree_data = serialize(&dao_tree);
-    db_set(db_handle, &serialize(&"dao_tree".to_string()), &dao_tree_data)?;
+    let mut dao_tree_data = Vec::new();
+    dao_tree_data.write_u32(0)?;
+    dao_tree.encode(&mut dao_tree_data)?;
+    db_set(info_db, &serialize(&"dao_tree".to_string()), &dao_tree_data)?;
 
     Ok(())
 }
@@ -105,9 +105,15 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             let data = &update_data[1..];
             let update: DaoMintUpdate = deserialize(data)?;
 
-            let db_handle = db_lookup(cid, "info")?;
+            let db_info = db_lookup(cid, "info")?;
+            let db_roots = db_lookup(cid, "dao_roots")?;
             let node = MerkleNode::new(update.dao_bulla.0);
-            merkle_add(db_handle, &serialize(&"dao_tree".to_string()), &node)?;
+            merkle_add(
+                db_info,
+                db_roots,
+                &serialize(&"dao_tree".to_string()),
+                &node,
+            )?;
         }
         DaoFunction::Foo => {
             unimplemented!();

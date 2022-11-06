@@ -21,7 +21,7 @@ use std::{io, iter};
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_gadgets::sinsemilla::primitives::HashDomain;
-use incrementalmerkletree::{Altitude, Hashable};
+use incrementalmerkletree::{bridgetree::BridgeTree, Altitude, Hashable, Tree};
 use lazy_static::lazy_static;
 use pasta_curves::{
     group::ff::{PrimeField, PrimeFieldBits},
@@ -31,15 +31,17 @@ use subtle::{Choice, ConditionallySelectable};
 
 use crate::crypto::constants::{
     sinsemilla::{i2lebsp_k, L_ORCHARD_MERKLE, MERKLE_CRH_PERSONALIZATION},
-    MERKLE_DEPTH_ORCHARD,
+    MERKLE_DEPTH,
 };
+
+pub type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
 
 lazy_static! {
     static ref UNCOMMITTED_ORCHARD: pallas::Base = pallas::Base::from(2);
     static ref EMPTY_ROOTS: Vec<MerkleNode> = {
         iter::empty()
             .chain(Some(MerkleNode::empty_leaf()))
-            .chain((0..MERKLE_DEPTH_ORCHARD).scan(MerkleNode::empty_leaf(), |state, l| {
+            .chain((0..MERKLE_DEPTH).scan(MerkleNode::empty_leaf(), |state, l| {
                 let l = l as u8;
                 *state = MerkleNode::combine(l.into(), state, state);
                 Some(*state)

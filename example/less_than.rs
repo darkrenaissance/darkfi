@@ -1,27 +1,30 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Chip, Layouter, Region, Value},
-    pasta::pallas,
-    plonk::{Circuit, Advice, Column, ConstraintSystem, Error, Expression, Selector, TableColumn},
-    poly::Rotation,
-    circuit::{floor_planner},
+    circuit::{floor_planner, AssignedCell, Chip, Layouter, Region, Value},
     dev::{CircuitLayout, MockProver},
+    pasta::pallas,
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Selector, TableColumn},
+    poly::Rotation,
 };
-
 
 use darkfi::{
-    consensus::{utils::{fbig2base}, types::Float10},
-    crypto::{Proof, proof::{ProvingKey, VerifyingKey}, },
-    zk::gadget::{native_range_check::{NativeRangeCheckChip},
-                 less_than::{LessThanChip, LessThanConfig}},
-    VerifyFailed
+    consensus::{types::Float10, utils::fbig2base},
+    crypto::{
+        proof::{ProvingKey, VerifyingKey},
+        Proof,
+    },
+    zk::gadget::{
+        less_than::{LessThanChip, LessThanConfig},
+        native_range_check::NativeRangeCheckChip,
+    },
+    VerifyFailed,
 };
-use log::{info, error};
+use log::{error, info};
 use rand::rngs::OsRng;
 
-const WINDOW_SIZE : usize= 3;
-const NUM_BITS : usize = 253;
-const NUM_WINDOWS : usize =85;
+const WINDOW_SIZE: usize = 3;
+const NUM_BITS: usize = 253;
+const NUM_WINDOWS: usize = 85;
 
 #[derive(Default)]
 struct LessThanCircuit {
@@ -30,8 +33,7 @@ struct LessThanCircuit {
 }
 
 impl Circuit<pallas::Base> for LessThanCircuit {
-    type Config =
-        (LessThanConfig<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>, Column<Advice>);
+    type Config = (LessThanConfig<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>, Column<Advice>);
     type FloorPlanner = floor_planner::V1;
 
     fn without_witnesses(&self) -> Self {
@@ -73,9 +75,7 @@ impl Circuit<pallas::Base> for LessThanCircuit {
         mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
         let less_than_chip =
-            LessThanChip::<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>::construct(
-                config.0.clone(),
-            );
+            LessThanChip::<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>::construct(config.0.clone());
 
         NativeRangeCheckChip::<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>::load_k_table(
             &mut layouter,
@@ -93,16 +93,16 @@ impl Circuit<pallas::Base> for LessThanCircuit {
     }
 }
 
-fn simple_lessthan (k: u32) -> Result<(), halo2_proofs::plonk::Error>{
-    let y : pallas::Base = pallas::Base::zero();
-    let t : pallas::Base = pallas::Base::one();
+fn simple_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
+    let y: pallas::Base = pallas::Base::zero();
+    let t: pallas::Base = pallas::Base::one();
     let circuit = LessThanCircuit { a: Value::known(y), b: Value::known(t) };
 
     let prover = MockProver::run(k, &circuit, vec![]).unwrap();
     prover.assert_satisfied();
     assert!(prover.verify().is_ok());
 
-    let public_inputs : Vec<pallas::Base> = vec![];
+    let public_inputs: Vec<pallas::Base> = vec![];
     let pk = ProvingKey::build(k, &LessThanCircuit::default());
     let vk = VerifyingKey::build(k, &LessThanCircuit::default());
     let proof = Proof::create(&pk, &[circuit], &public_inputs, &mut OsRng)?;
@@ -110,7 +110,7 @@ fn simple_lessthan (k: u32) -> Result<(), halo2_proofs::plonk::Error>{
         Ok(()) => {
             info!("proof verified");
             Ok(())
-        },
+        }
         Err(e) => {
             error!("verification failed: {}", e);
             return Err(e)
@@ -118,11 +118,13 @@ fn simple_lessthan (k: u32) -> Result<(), halo2_proofs::plonk::Error>{
     }
 }
 
-fn fullrange_lessthan (k: u32) -> Result<(), halo2_proofs::plonk::Error> {
-    let y_str : &'static str = "0x057eaec1c805d808f70c4e2d2f173c72d091e9c9f78b11dddf52d072c30951ad";
-    let t_str : &'static str = "0x2cb8d8aec6766dc83595602e3050b0b908191bbe59dcc3d1e2b7020a37339a14";
-    let y : pallas::Base = fbig2base(Float10::from_str_native(y_str).unwrap().with_precision(74).value());
-    let t : pallas::Base = fbig2base(Float10::from_str_native(t_str).unwrap().with_precision(74).value());
+fn fullrange_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
+    let y_str: &'static str = "0x057eaec1c805d808f70c4e2d2f173c72d091e9c9f78b11dddf52d072c30951ad";
+    let t_str: &'static str = "0x2cb8d8aec6766dc83595602e3050b0b908191bbe59dcc3d1e2b7020a37339a14";
+    let y: pallas::Base =
+        fbig2base(Float10::from_str_native(y_str).unwrap().with_precision(74).value());
+    let t: pallas::Base =
+        fbig2base(Float10::from_str_native(t_str).unwrap().with_precision(74).value());
 
     let circuit = LessThanCircuit { a: Value::known(y), b: Value::known(t) };
 
@@ -130,7 +132,7 @@ fn fullrange_lessthan (k: u32) -> Result<(), halo2_proofs::plonk::Error> {
     prover.assert_satisfied();
     assert!(prover.verify().is_ok());
 
-    let public_inputs : Vec<pallas::Base> = vec![];
+    let public_inputs: Vec<pallas::Base> = vec![];
     let pk = ProvingKey::build(k, &LessThanCircuit::default());
     let vk = VerifyingKey::build(k, &LessThanCircuit::default());
     let proof = Proof::create(&pk, &[circuit], &public_inputs, &mut OsRng)?;
@@ -138,7 +140,7 @@ fn fullrange_lessthan (k: u32) -> Result<(), halo2_proofs::plonk::Error> {
         Ok(()) => {
             info!("proof verified");
             Ok(())
-        },
+        }
         Err(e) => {
             error!("verification failed: {}", e);
             return Err(e)
@@ -146,7 +148,7 @@ fn fullrange_lessthan (k: u32) -> Result<(), halo2_proofs::plonk::Error> {
     }
 }
 
-fn main ()  {
+fn main() {
     env_logger::init();
     let k = 11;
     let res_simple = simple_lessthan(k).unwrap();
