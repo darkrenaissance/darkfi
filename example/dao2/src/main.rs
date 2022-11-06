@@ -253,6 +253,8 @@ async fn main() -> BoxResult<()> {
 
     // We can do all exec(), zk proof checks and signature verifies in parallel.
     let mut updates = vec![];
+    let mut zkpublic_table = vec![];
+    let mut sigpub_table = vec![];
     // Validate all function calls in the tx
     for (idx, call) in tx.calls.iter().enumerate() {
         // So then the verifier will lookup the corresponding state_transition and apply
@@ -272,6 +274,16 @@ async fn main() -> BoxResult<()> {
                     Runtime::new(&dao_wasm_bytes, blockchain.clone(), dao_contract_id)?;
                 let update = runtime.exec(&payload)?;
                 updates.push(update);
+
+                let metadata = runtime.metadata(&payload)?;
+                let mut decoder = Cursor::new(&metadata);
+                let zk_public_values: Vec<(String, Vec<pallas::Base>)> =
+                    Decodable::decode(&mut decoder)?;
+                let signature_public_keys: Vec<pallas::Point> =
+                    Decodable::decode(&mut decoder)?;
+
+                zkpublic_table.push(zk_public_values);
+                sigpub_table.push(signature_public_keys);
             }
             money_contract_id => {
                 debug!(target: "demo", "Money::exec() contract called");
@@ -279,12 +291,22 @@ async fn main() -> BoxResult<()> {
                     Runtime::new(&money_wasm_bytes, blockchain.clone(), money_contract_id)?;
                 let update = runtime.exec(&payload)?;
                 updates.push(update);
+
+                let metadata = runtime.metadata(&payload)?;
+                let mut decoder = Cursor::new(&metadata);
+                let zk_public_values: Vec<(String, Vec<pallas::Base>)> =
+                    Decodable::decode(&mut decoder)?;
+                let signature_public_keys: Vec<pallas::Point> =
+                    Decodable::decode(&mut decoder)?;
+
+                zkpublic_table.push(zk_public_values);
+                sigpub_table.push(signature_public_keys);
             }
             _ => {}
         }
     }
 
-    //tx.zk_verify(&zk_bins).unwrap();
+    tx.zk_verify(&zk_bins, &zkpublic_table)?;
     //tx.verify_sigs();
 
     // Now we finished verification stage, just apply all changes
