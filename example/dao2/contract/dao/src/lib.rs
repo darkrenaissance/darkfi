@@ -71,9 +71,8 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             let data = &self_.data[1..];
             let params: DaoMintParams = deserialize(data)?;
 
-            let zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![
-                ("dao-mint".to_string(), vec![params.dao_bulla.0])
-            ];
+            let zk_public_values: Vec<(String, Vec<pallas::Base>)> =
+                vec![("dao-mint".to_string(), vec![params.dao_bulla.0])];
             let signature_public_keys: Vec<pallas::Point> = Vec::new();
 
             let mut metadata = Vec::new();
@@ -125,12 +124,7 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             let db_info = db_lookup(cid, "info")?;
             let db_roots = db_lookup(cid, "dao_roots")?;
             let node = MerkleNode::new(update.dao_bulla.0);
-            merkle_add(
-                db_info,
-                db_roots,
-                &serialize(&"dao_tree".to_string()),
-                &node,
-            )?;
+            merkle_add(db_info, db_roots, &serialize(&"dao_tree".to_string()), &node)?;
         }
         DaoFunction::Foo => {
             unimplemented!();
