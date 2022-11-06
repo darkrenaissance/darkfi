@@ -1,5 +1,5 @@
 [package]
-name = "dao"
+name = "dao-example"
 version = "0.3.0"
 edition = "2021"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
@@ -8,6 +8,7 @@ license = "AGPL-3.0-only"
 [dependencies]
 darkfi = {path = "../../", features = ["rpc", "crypto", "tx", "node"]}
 darkfi-serial = {path = "../../src/serial"}
+darkfi-sdk = {path = "../../src/sdk"}
 
 # Async
 smol = "1.2.5"
@@ -30,7 +31,7 @@ pasta_curves = "0.4.0"
 halo2_gadgets = "0.2.0"
 halo2_proofs = "0.2.0"
 rand = "0.8.5"
-crypto_api_chachapoly = "0.5.0"
+chacha20poly1305 = "0.10.1"
 group = "0.12.0"
 
 # Encoding and parsing
@@ -41,3 +42,4 @@ fxhash = "0.2.1"
 # Utilities
 lazy_static = "1.4.0"
 url = "2.3.1"
+env_logger = "0.9.1"

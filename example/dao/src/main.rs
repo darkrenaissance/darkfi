@@ -54,7 +54,7 @@ use crate::{
     util::{sign, StateRegistry, Transaction, ZkContractTable},
 };
 
-type MerkleTree = BridgeTree<MerkleNode, MERKLE_DEPTH>;
+type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
 
 pub struct OwnCoin {
     pub coin: Coin,

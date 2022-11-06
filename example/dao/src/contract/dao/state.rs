@@ -28,7 +28,7 @@ use crate::util::HashableBase;
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoBulla(pub pallas::Base);
 
-type MerkleTree = BridgeTree<MerkleNode, MERKLE_DEPTH>;
+type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
 
 pub struct ProposalVotes {
     // TODO: might be more logical to have 'yes_votes_commit' and 'no_votes_commit'

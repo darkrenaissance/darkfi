@@ -20,7 +20,7 @@ use darkfi::crypto::keypair::PublicKey;
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
 use incrementalmerkletree::bridgetree::BridgeTree;
 
-type MerkleTree = BridgeTree<MerkleNode, MERKLE_DEPTH>;
+type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
 
 /// The state machine, held in memory.
 pub struct State {

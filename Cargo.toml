@@ -44,6 +44,7 @@ members = [
     "src/serial/derive-internal",
 
     "example/dchat",
+    "example/dao",
 ]
 
 [dependencies]
