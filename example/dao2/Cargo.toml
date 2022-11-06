@@ -10,3 +10,7 @@ members = [
     "contract/money",
     "contract/dao",
 ]
+
+[dependencies]
+dao-contract = {path = "contract/dao"}
+money-contract = {path = "contract/money"}
