@@ -1,3 +1,21 @@
+/* This file is part of DarkFi (https://dark.fi)
+ *
+ * Copyright (C) 2020-2022 Dyne.org foundation
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 use darkfi_serial::Encodable;
 
 use super::{
@@ -7,7 +25,6 @@ use super::{
 };
 
 pub type DbHandle = u32;
-type TxHandle = u32;
 
 /// Only deploy() can call this. Creates a new database instance for this contract.
 ///
@@ -16,7 +33,6 @@ type TxHandle = u32;
 ///     db_init(db_name) -> DbHandle
 /// ```
 pub fn db_init(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle> {
-    #[cfg(target_arch = "wasm32")]
     unsafe {
         let mut len = 0;
         let mut buf = vec![];
@@ -35,13 +51,9 @@ pub fn db_init(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle
 
         return Ok(ret as u32)
     }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    unimplemented!()
 }
 
 pub fn db_lookup(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle> {
-    #[cfg(target_arch = "wasm32")]
     unsafe {
         let mut len = 0;
         let mut buf = vec![];
@@ -60,9 +72,6 @@ pub fn db_lookup(contract_id: ContractId, db_name: &str) -> GenericResult<DbHand
 
         return Ok(ret as u32)
     }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    unimplemented!()
 }
 
 /// Everyone can call this. Will read a key from the key-value store.
@@ -71,34 +80,28 @@ pub fn db_lookup(contract_id: ContractId, db_name: &str) -> GenericResult<DbHand
 ///     value = db_get(db_handle, key);
 /// ```
 pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Option<Vec<u8>>> {
-    #[cfg(target_arch = "wasm32")]
-    {
-        let mut len = 0;
-        let mut buf = vec![];
-        len += db_handle.encode(&mut buf)?;
-        len += key.to_vec().encode(&mut buf)?;
+    let mut len = 0;
+    let mut buf = vec![];
+    len += db_handle.encode(&mut buf)?;
+    len += key.to_vec().encode(&mut buf)?;
 
-        let ret = unsafe { db_get_(buf.as_ptr(), len as u32) };
+    let ret = unsafe { db_get_(buf.as_ptr(), len as u32) };
 
-        if ret < 0 {
-            match ret {
-                -1 => return Err(ContractError::CallerAccessDenied),
-                -2 => return Err(ContractError::DbGetFailed),
-                -3 => return Ok(None),
-                _ => unimplemented!(),
-            }
+    if ret < 0 {
+        match ret {
+            -1 => return Err(ContractError::CallerAccessDenied),
+            -2 => return Err(ContractError::DbGetFailed),
+            -3 => return Ok(None),
+            _ => unimplemented!(),
         }
-
-        let obj = ret as u32;
-        let obj_size = get_object_size(obj);
-        let mut buf = vec![0u8; obj_size as usize];
-        get_object_bytes(&mut buf, obj);
-
-        Ok(Some(buf))
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    unimplemented!()
+    let obj = ret as u32;
+    let obj_size = get_object_size(obj);
+    let mut buf = vec![0u8; obj_size as usize];
+    get_object_bytes(&mut buf, obj);
+
+    Ok(Some(buf))
 }
 
 /// Only update() can call this. Set a value within the transaction.
@@ -108,7 +111,6 @@ pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Option<Vec<u8>>>
 /// ```
 pub fn db_set(db_handle: DbHandle, key: &[u8], value: &[u8]) -> GenericResult<()> {
     // Check entry for tx_handle is not None
-    #[cfg(target_arch = "wasm32")]
     unsafe {
         let mut len = 0;
         let mut buf = vec![];
@@ -123,12 +125,8 @@ pub fn db_set(db_handle: DbHandle, key: &[u8], value: &[u8]) -> GenericResult<()
             _ => unreachable!(),
         }
     }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    unimplemented!()
 }
 
-#[cfg(target_arch = "wasm32")]
 extern "C" {
     fn db_init_(ptr: *const u8, len: u32) -> i32;
     fn db_lookup_(ptr: *const u8, len: u32) -> i32;

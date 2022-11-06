@@ -140,3 +140,9 @@ impl From<std::io::Error> for ContractError {
         Self::IoError(format!("{}", err))
     }
 }
+
+impl From<bs58::decode::Error> for ContractError {
+    fn from(err: bs58::decode::Error) -> Self {
+        Self::IoError(format!("{}", err))
+    }
+}

@@ -30,6 +30,13 @@
 /// Cryptographic constants
 pub mod constants;
 
+/// Miscellaneous utilities
+pub mod util;
+
+/// Keypairs, secret keys, and public keys
+pub mod keypair;
+pub use keypair::{Keypair, PublicKey, SecretKey};
+
 /// Contract ID definitions and methods
 pub mod contract_id;
 pub use contract_id::ContractId;
@@ -44,3 +51,6 @@ pub use nullifier::Nullifier;
 
 /// Pedersen commitment utilities
 pub mod pedersen;
+
+/// Schnorr signature traits
+pub mod schnorr;
