@@ -1,5 +1,5 @@
 use log::debug;
-use darkfi::{crypto::{schnorr::Signature, Proof}, Result, VerifyFailed::ProofVerifyFailed};
+use darkfi::{crypto::{schnorr::{SchnorrPublic, Signature}, Proof, keypair::PublicKey}, Result, VerifyFailed::ProofVerifyFailed};
 use darkfi_sdk::{tx::ContractCall, pasta::pallas};
 
 use crate::{
@@ -78,20 +78,24 @@ impl Transaction {
         Ok(())
     }
 
-    pub fn verify_sigs(&self) {
-        //let mut unsigned_tx_data = vec![];
-        /*
-        for (i, (func_call, signatures)) in
-            self.func_calls.iter().zip(self.signatures.clone()).enumerate()
+    pub fn verify_sigs(&self, sigpub_table: &Vec<Vec<pallas::Point>>) -> Result<()> {
+        //let mut tx_data = Vec::new();
+        //self.calls.encode(&mut tx_data)?;
+        //self.proofs.encode(&mut tx_data)?;
+        // Hash it and use the hash as the signing data
+
+        let mut unsigned_tx_data = vec![0xde, 0xad, 0xbe, 0xef];
+
+        for (i, (signatures, signature_public_keys)) in
+            self.signatures.iter().zip(sigpub_table.iter()).enumerate()
         {
-            func_call.encode(&mut unsigned_tx_data).expect("failed to encode data");
-            let signature_pub_keys = func_call.call_data.signature_public_keys();
-            for (signature_pub_key, signature) in signature_pub_keys.iter().zip(signatures) {
+            for (signature_pub_key, signature) in signature_public_keys.iter().zip(signatures) {
+                let signature_pub_key = PublicKey(*signature_pub_key);
                 let verify_result = signature_pub_key.verify(&unsigned_tx_data[..], &signature);
                 assert!(verify_result, "verify sigs[{}] failed", i);
             }
             debug!(target: "demo", "verify_sigs({}) passed", i);
         }
-        */
+        Ok(())
     }
 }
