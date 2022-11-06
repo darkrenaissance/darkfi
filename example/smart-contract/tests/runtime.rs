@@ -51,7 +51,7 @@ fn run_contract() -> Result<()> {
     // Load the wasm binary into memory and create an execution runtime
     // ================================================================
     let wasm_bytes = std::fs::read("contract.wasm")?;
-    let contract_id = ContractId::new(pallas::Base::from(1));
+    let contract_id = ContractId::from(pallas::Base::from(1));
     let mut runtime = Runtime::new(&wasm_bytes, blockchain.clone(), contract_id)?;
 
     // Deploy function to initialize the smart contract state.

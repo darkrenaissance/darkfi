@@ -19,18 +19,18 @@
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::PrimeField, pallas};
 
+/// ContractId represents an on-chain identifier for a certain
+/// smart contract.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct ContractId(pallas::Base);
 
 impl ContractId {
-    pub fn new(contract_id: pallas::Base) -> Self {
-        Self(contract_id)
-    }
-
+    /// Get the inner `pallas::Base` element.
     pub fn inner(&self) -> pallas::Base {
         self.0
     }
 
+    /// Create a `ContractId` object from given bytes.
     pub fn from_bytes(x: [u8; 32]) -> Self {
         // FIXME: Handle Option
         Self(pallas::Base::from_repr(x).unwrap())
@@ -44,6 +44,12 @@ impl ContractId {
         hasher.update(&tree_name.as_bytes());
         let id = hasher.finalize();
         *id.as_bytes()
+    }
+}
+
+impl From<pallas::Base> for ContractId {
+    fn from(x: pallas::Base) -> Self {
+        Self(x)
     }
 }
 
