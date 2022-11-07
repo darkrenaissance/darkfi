@@ -83,6 +83,81 @@ fn show_money_state(chain: &Blockchain, contract_id: &ContractId) -> Result<()> 
 
 type BoxResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+fn validate(
+    tx: &Transaction,
+    dao_wasm_bytes: &[u8],
+    dao_contract_id: ContractId,
+    money_wasm_bytes: &[u8],
+    money_contract_id: ContractId,
+    blockchain: &Blockchain,
+    zk_bins: &ZkContractTable,
+) -> Result<()> {
+    // ContractId is not Hashable so put them in a Vec and do linear scan
+    let wasm_bytes_lookup = vec![
+        (dao_contract_id, "DAO", dao_wasm_bytes),
+        (money_contract_id, "Money", money_wasm_bytes),
+    ];
+
+    // We can do all exec(), zk proof checks and signature verifies in parallel.
+    let mut updates = vec![];
+    let mut zkpublic_table = vec![];
+    let mut sigpub_table = vec![];
+    // Validate all function calls in the tx
+    for (idx, call) in tx.calls.iter().enumerate() {
+        // So then the verifier will lookup the corresponding state_transition and apply
+        // functions based off the func_id
+
+        // Write the actual payload data
+        let mut payload = Vec::new();
+        // Call index
+        payload.write_u32(idx as u32)?;
+        // Actuall calldata
+        tx.calls.encode(&mut payload)?;
+
+        // Lookup the wasm bytes
+        let (_, contract_name, wasm_bytes) =
+            wasm_bytes_lookup.iter().find(|(id, _name, _bytes)| *id == call.contract_id).unwrap();
+        debug!(target: "demo", "{}::exec() contract called", contract_name);
+
+        let mut runtime = Runtime::new(wasm_bytes, blockchain.clone(), call.contract_id)?;
+        let update = runtime.exec(&payload)?;
+        updates.push(update);
+
+        let metadata = runtime.metadata(&payload)?;
+        let mut decoder = Cursor::new(&metadata);
+        let zk_public_values: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
+        let signature_public_keys: Vec<pallas::Point> = Decodable::decode(&mut decoder)?;
+
+        zkpublic_table.push(zk_public_values);
+        sigpub_table.push(signature_public_keys);
+    }
+
+    tx.zk_verify(&zk_bins, &zkpublic_table)?;
+    //tx.verify_sigs();
+
+    // Now we finished verification stage, just apply all changes
+    assert_eq!(tx.calls.len(), updates.len());
+    for (call, update) in tx.calls.iter().zip(updates.iter()) {
+        match call.contract_id {
+            dao_contract_id => {
+                debug!(target: "demo", "DAO::apply() contract called");
+                let mut runtime =
+                    Runtime::new(&dao_wasm_bytes, blockchain.clone(), dao_contract_id)?;
+                runtime.apply(&update)?;
+            }
+            money_contract_id => {
+                debug!(target: "demo", "Money::apply() contract called");
+                let mut runtime =
+                    Runtime::new(&money_wasm_bytes, blockchain.clone(), money_contract_id)?;
+                runtime.apply(&update)?;
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
 #[async_std::main]
 async fn main() -> BoxResult<()> {
     // Debug log configuration
@@ -253,81 +328,16 @@ async fn main() -> BoxResult<()> {
 
     //// Validator
 
-    // We can do all exec(), zk proof checks and signature verifies in parallel.
-    let mut updates = vec![];
-    let mut zkpublic_table = vec![];
-    let mut sigpub_table = vec![];
-    // Validate all function calls in the tx
-    for (idx, call) in tx.calls.iter().enumerate() {
-        // So then the verifier will lookup the corresponding state_transition and apply
-        // functions based off the func_id
-
-        // Write the actual payload data
-        let mut payload = Vec::new();
-        // Call index
-        payload.write_u32(idx as u32)?;
-        // Actuall calldata
-        tx.calls.encode(&mut payload)?;
-
-        match call.contract_id {
-            dao_contract_id => {
-                debug!(target: "demo", "DAO::exec() contract called");
-                let mut runtime =
-                    Runtime::new(&dao_wasm_bytes, blockchain.clone(), dao_contract_id)?;
-                let update = runtime.exec(&payload)?;
-                updates.push(update);
-
-                let metadata = runtime.metadata(&payload)?;
-                let mut decoder = Cursor::new(&metadata);
-                let zk_public_values: Vec<(String, Vec<pallas::Base>)> =
-                    Decodable::decode(&mut decoder)?;
-                let signature_public_keys: Vec<pallas::Point> = Decodable::decode(&mut decoder)?;
-
-                zkpublic_table.push(zk_public_values);
-                sigpub_table.push(signature_public_keys);
-            }
-            money_contract_id => {
-                debug!(target: "demo", "Money::exec() contract called");
-                let mut runtime =
-                    Runtime::new(&money_wasm_bytes, blockchain.clone(), money_contract_id)?;
-                let update = runtime.exec(&payload)?;
-                updates.push(update);
-
-                let metadata = runtime.metadata(&payload)?;
-                let mut decoder = Cursor::new(&metadata);
-                let zk_public_values: Vec<(String, Vec<pallas::Base>)> =
-                    Decodable::decode(&mut decoder)?;
-                let signature_public_keys: Vec<pallas::Point> = Decodable::decode(&mut decoder)?;
-
-                zkpublic_table.push(zk_public_values);
-                sigpub_table.push(signature_public_keys);
-            }
-            _ => {}
-        }
-    }
-
-    tx.zk_verify(&zk_bins, &zkpublic_table)?;
-    //tx.verify_sigs();
-
-    // Now we finished verification stage, just apply all changes
-    assert_eq!(tx.calls.len(), updates.len());
-    for (call, update) in tx.calls.iter().zip(updates.iter()) {
-        match call.contract_id {
-            dao_contract_id => {
-                debug!(target: "demo", "DAO::apply() contract called");
-                let mut runtime =
-                    Runtime::new(&dao_wasm_bytes, blockchain.clone(), dao_contract_id)?;
-                runtime.apply(&update)?;
-            }
-            money_contract_id => {
-                debug!(target: "demo", "Money::apply() contract called");
-                let mut runtime =
-                    Runtime::new(&money_wasm_bytes, blockchain.clone(), money_contract_id)?;
-                runtime.apply(&update)?;
-            }
-            _ => {}
-        }
-    }
+    validate(
+        &tx,
+        &dao_wasm_bytes,
+        dao_contract_id,
+        &money_wasm_bytes,
+        money_contract_id,
+        &blockchain,
+        &zk_bins,
+    )
+    .expect("validate failed");
 
     /////////////////////////////////////////////////
     // Old stuff
