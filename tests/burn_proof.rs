@@ -19,7 +19,6 @@
 use darkfi::{
     crypto::{
         proof::{ProvingKey, VerifyingKey},
-        util::poseidon_hash,
         Proof,
     },
     zk::{
@@ -31,7 +30,7 @@ use darkfi::{
 };
 use darkfi_sdk::crypto::{
     pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-    MerkleNode, Nullifier, PublicKey, SecretKey,
+    poseidon_hash, MerkleNode, Nullifier, PublicKey, SecretKey,
 };
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;

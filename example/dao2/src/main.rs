@@ -5,7 +5,6 @@ use darkfi::{
         coin::Coin,
         proof::{ProvingKey, VerifyingKey},
         types::{DrkSpendHook, DrkUserData, DrkValue},
-        util::poseidon_hash,
     },
     runtime::vm_runtime::Runtime,
     zk::circuit::{BurnContract, MintContract},
@@ -14,8 +13,8 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{
-        constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, ContractId, Keypair,
-        MerkleNode, MerkleTree, PublicKey, SecretKey,
+        constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, poseidon_hash, ContractId,
+        Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey,
     },
     tx::ContractCall,
 };

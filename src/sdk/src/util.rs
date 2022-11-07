@@ -20,7 +20,7 @@ use super::error::ContractError;
 
 pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
     unsafe {
-        return match set_return_data_(data.as_ptr(), data.len() as u32) {
+        match set_return_data_(data.as_ptr(), data.len() as u32) {
             0 => Ok(()),
             errcode => Err(ContractError::from(errcode)),
         }
@@ -28,15 +28,15 @@ pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
 }
 
 pub fn put_object_bytes(data: &[u8]) -> i64 {
-    unsafe { return put_object_bytes_(data.as_ptr(), data.len() as u32) }
+    unsafe { put_object_bytes_(data.as_ptr(), data.len() as u32) }
 }
 
 pub fn get_object_bytes(data: &mut [u8], object_index: u32) -> i64 {
-    unsafe { return get_object_bytes_(data.as_mut_ptr(), object_index as u32) }
+    unsafe { get_object_bytes_(data.as_mut_ptr(), object_index as u32) }
 }
 
 pub fn get_object_size(object_index: u32) -> i64 {
-    unsafe { return get_object_size_(object_index as u32) }
+    unsafe { get_object_size_(object_index as u32) }
 }
 
 extern "C" {

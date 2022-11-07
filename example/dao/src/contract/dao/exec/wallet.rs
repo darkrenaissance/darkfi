@@ -16,14 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{pedersen::pedersen_commitment_u64, SecretKey};
+use darkfi_sdk::crypto::{pedersen::pedersen_commitment_u64, poseidon_hash, SecretKey};
 use halo2_proofs::circuit::Value;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
 use darkfi::{
-    crypto::{util::poseidon_hash, Proof},
+    crypto::Proof,
     zk::vm::{Witness, ZkCircuit},
 };
 

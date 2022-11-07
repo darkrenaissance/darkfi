@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier, PublicKey, SecretKey};
+use darkfi_sdk::crypto::{
+    constants::MERKLE_DEPTH, poseidon_hash, MerkleNode, Nullifier, PublicKey, SecretKey,
+};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error};
@@ -28,7 +30,6 @@ use crate::{
         coin::{Coin, OwnCoin},
         note::{EncryptedNote, Note},
         proof::VerifyingKey,
-        util::poseidon_hash,
     },
     tx::Transaction,
     wallet::walletdb::WalletPtr,

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::Any, collections::HashMap, hash::Hasher};
+use std::{any::Any, collections::HashMap};
 
 use darkfi_sdk::crypto::{
     schnorr::{SchnorrPublic, SchnorrSecret, Signature},
@@ -67,16 +67,6 @@ lazy_static! {
 // Governance tokens that are airdropped to users to operate the DAO.
 lazy_static! {
     pub static ref GOV_ID: pallas::Base = pallas::Base::random(&mut OsRng);
-}
-
-#[derive(Eq, PartialEq, Debug)]
-pub struct HashableBase(pub pallas::Base);
-
-impl std::hash::Hash for HashableBase {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let bytes = self.0.to_repr();
-        bytes.hash(state);
-    }
 }
 
 #[derive(Clone)]
@@ -263,7 +253,7 @@ pub trait CallDataBase {
 type GenericContractState = Box<dyn Any + Send>;
 
 pub struct StateRegistry {
-    pub states: HashMap<HashableBase, GenericContractState>,
+    pub states: HashMap<[u8; 32], GenericContractState>,
 }
 
 impl StateRegistry {
@@ -273,15 +263,15 @@ impl StateRegistry {
 
     pub fn register(&mut self, contract_id: ContractId, state: GenericContractState) {
         debug!(target: "StateRegistry::register()", "contract_id: {:?}", contract_id);
-        self.states.insert(HashableBase(contract_id), state);
+        self.states.insert(contract_id.to_repr(), state);
     }
 
     pub fn lookup_mut<'a, S: 'static>(&'a mut self, contract_id: ContractId) -> Option<&'a mut S> {
-        self.states.get_mut(&HashableBase(contract_id)).and_then(|state| state.downcast_mut())
+        self.states.get_mut(&contract_id.to_repr()).and_then(|state| state.downcast_mut())
     }
 
     pub fn lookup<'a, S: 'static>(&'a self, contract_id: ContractId) -> Option<&'a S> {
-        self.states.get(&HashableBase(contract_id)).and_then(|state| state.downcast_ref())
+        self.states.get(&contract_id.to_repr()).and_then(|state| state.downcast_ref())
     }
 }
 

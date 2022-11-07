@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{mem::size_of, slice::from_raw_parts};
+use core::{mem::size_of, slice::from_raw_parts};
 
 use crate::crypto::ContractId;
 
@@ -72,6 +72,7 @@ macro_rules! define_contract {
 }
 
 /// Deserialize a given payload in `entrypoint`
+/// The return values from this are the input values for the above defined functions.
 /// # Safety
 pub unsafe fn deserialize<'a>(input: *mut u8) -> (ContractId, &'a [u8]) {
     let mut offset: usize = 0;
@@ -84,8 +85,9 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (ContractId, &'a [u8]) {
     offset += size_of::<u64>();
     let instruction_data = { from_raw_parts(input.add(offset), instruction_data_len) };
 
-    // FIXME: ContractId recovery should use proper serialization, and also
-    //        there should be a Result<>; we can match on it in the macros
-    //        above and return errors if needed.
-    (ContractId::from_bytes(contract_id_slice.try_into().unwrap()), instruction_data)
+    let contract_id = ContractId::from_bytes(contract_id_slice.try_into().unwrap());
+    // We unwrap here because if this panics, something's wrong in the runtime:
+    let contract_id = contract_id.unwrap();
+
+    (contract_id, instruction_data)
 }

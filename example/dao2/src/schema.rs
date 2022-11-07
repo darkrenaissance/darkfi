@@ -22,8 +22,8 @@ use std::{
 };
 
 use darkfi_sdk::crypto::{
-    constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, Keypair, MerkleNode, PublicKey,
-    SecretKey,
+    constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode,
+    PublicKey, SecretKey,
 };
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
@@ -35,7 +35,6 @@ use darkfi::{
         coin::Coin,
         proof::{ProvingKey, VerifyingKey},
         types::{DrkSpendHook, DrkUserData, DrkValue},
-        util::poseidon_hash,
     },
     zk::circuit::{BurnContract, MintContract},
     zkas::decoder::ZkBinary,

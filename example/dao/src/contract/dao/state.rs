@@ -21,9 +21,10 @@ use std::{any::Any, collections::HashMap};
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use pasta_curves::{group::Group, pallas};
-
-use crate::util::HashableBase;
+use pasta_curves::{
+    group::{ff::PrimeField, Group},
+    pallas,
+};
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoBulla(pub pallas::Base);
@@ -55,7 +56,7 @@ pub struct State {
     //proposal_bullas: Vec<pallas::Base>,
     pub proposal_tree: MerkleTree,
     pub proposal_roots: Vec<MerkleNode>,
-    pub proposal_votes: HashMap<HashableBase, ProposalVotes>,
+    pub proposal_votes: HashMap<[u8; 32], ProposalVotes>,
 }
 
 impl State {
@@ -84,7 +85,7 @@ impl State {
         self.proposal_tree.append(&node);
         self.proposal_roots.push(self.proposal_tree.root(0).unwrap());
         self.proposal_votes.insert(
-            HashableBase(bulla),
+            bulla.to_repr(),
             ProposalVotes {
                 yes_votes_commit: pallas::Point::identity(),
                 all_votes_commit: pallas::Point::identity(),
@@ -94,13 +95,13 @@ impl State {
     }
 
     pub fn lookup_proposal_votes(&self, proposal_bulla: pallas::Base) -> Option<&ProposalVotes> {
-        self.proposal_votes.get(&HashableBase(proposal_bulla))
+        self.proposal_votes.get(&proposal_bulla.to_repr())
     }
     pub fn lookup_proposal_votes_mut(
         &mut self,
         proposal_bulla: pallas::Base,
     ) -> Option<&mut ProposalVotes> {
-        self.proposal_votes.get_mut(&HashableBase(proposal_bulla))
+        self.proposal_votes.get_mut(&proposal_bulla.to_repr())
     }
 
     pub fn is_valid_dao_merkle(&self, root: &MerkleNode) -> bool {

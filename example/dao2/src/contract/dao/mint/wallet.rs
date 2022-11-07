@@ -16,13 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{PublicKey, SecretKey};
+use darkfi_sdk::crypto::{poseidon_hash, PublicKey, SecretKey};
 use halo2_proofs::circuit::Value;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
 use darkfi::{
-    crypto::{util::poseidon_hash, Proof},
+    crypto::Proof,
     zk::vm::{Witness, ZkCircuit},
 };
 

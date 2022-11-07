@@ -199,7 +199,7 @@ impl JsonRpcInterface {
         let nym = nym.unwrap();
 
         match PublicKey::from_str(nym) {
-            Ok(key) => match client.money_wallets.get(&key) {
+            Ok(key) => match client.money_wallets.get(&key.to_bytes()) {
                 Some(wallet) => {
                     let balance = wallet.balances().unwrap();
                     JsonResponse::new(json!(balance), id).into()
@@ -260,7 +260,7 @@ impl JsonRpcInterface {
 
         match money_wallet.track(&mut client.states) {
             Ok(_) => {
-                client.money_wallets.insert(keypair.public, money_wallet);
+                client.money_wallets.insert(keypair.public.to_bytes(), money_wallet);
                 //let addr: String = bs58::encode(keypair.public.to_bytes()).into_string();
                 let addr: String = keypair.public.to_string();
                 JsonResponse::new(json!(addr), id).into()
@@ -368,7 +368,7 @@ impl JsonRpcInterface {
         let addr = addr.unwrap();
 
         let balance = match PublicKey::from_str(addr) {
-            Ok(key) => match client.money_wallets.get(&key) {
+            Ok(key) => match client.money_wallets.get(&key.to_bytes()) {
                 Some(wallet) => {
                     let balance = wallet.balances().unwrap();
                     let token_id = bs58::encode((*GOV_ID).to_repr()).into_string();

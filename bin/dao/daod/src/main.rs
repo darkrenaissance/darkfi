@@ -22,7 +22,6 @@ use darkfi::{
     crypto::{
         proof::{ProvingKey, VerifyingKey},
         types::{DrkSpendHook, DrkUserData, DrkValue},
-        util::poseidon_hash,
     },
     rpc::server::listen_and_serve,
     zk::circuit::{BurnContract, MintContract},
@@ -30,7 +29,7 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_sdk::crypto::{
-    pedersen::pedersen_commitment_u64, Keypair, MerkleNode, PublicKey, SecretKey,
+    pedersen::pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, PublicKey, SecretKey,
 };
 use fxhash::FxHashMap;
 use group::ff::PrimeField;
@@ -166,7 +165,7 @@ use crate::{
 
 pub struct Client {
     dao_wallet: DaoWallet,
-    money_wallets: FxHashMap<PublicKey, MoneyWallet>,
+    money_wallets: FxHashMap<[u8; 32], MoneyWallet>,
     cashier_wallet: CashierWallet,
     states: StateRegistry,
     zk_bins: ZkContractTable,
@@ -426,7 +425,7 @@ impl Client {
             debug!("DAO received a coin worth {} xDRK", note.value);
         }
 
-        for (_key, wallet) in &mut self.money_wallets {
+        for wallet in self.money_wallets.values_mut() {
             let coins = state.wallet_cache.get_received(&wallet.keypair.secret);
             for coin in coins {
                 let note = coin.note.clone();
@@ -465,7 +464,7 @@ impl Client {
         // To be able to make a proposal, we must prove we have ownership
         // of governance tokens, and that the quantity of governance
         // tokens is within the accepted proposer limit.
-        let sender_wallet = self.money_wallets.get_mut(&sender);
+        let sender_wallet = self.money_wallets.get_mut(&sender.to_bytes());
         if sender_wallet.is_none() {
             return Err(DaoError::NoWalletFound)
         }
@@ -502,7 +501,7 @@ impl Client {
         let dao_params = self.dao_wallet.params[0].clone();
         let dao_keypair = self.dao_wallet.keypair;
 
-        let voter_wallet = self.money_wallets.get_mut(&pubkey);
+        let voter_wallet = self.money_wallets.get_mut(&pubkey.to_bytes());
         if voter_wallet.is_none() {
             return Err(DaoError::NoWalletFound)
         }
@@ -641,7 +640,8 @@ impl DaoWallet {
         let state =
             states.lookup_mut::<dao::State>(*dao::CONTRACT_ID).ok_or(DaoError::StateNotFound)?;
 
-        let path = state.dao_tree.witness().ok_or(Error::Custom("Tree is empty".to_owned()))?;
+        let path =
+            state.dao_tree.witness().ok_or_else(|| Error::Custom("Tree is empty".to_owned()))?;
         self.leaf_position = path;
         Ok(())
     }
@@ -719,13 +719,15 @@ impl DaoWallet {
 
             let tree = &state.tree;
             let leaf_position = own_coin.leaf_position;
-            let root = tree.root(0).ok_or(Error::Custom(
-                "Not enough checkpoints available to reach the requested checkpoint depth."
-                    .to_owned(),
-            ))?;
+            let root = tree.root(0).ok_or_else(|| {
+                Error::Custom(
+                    "Not enough checkpoints available to reach the requested checkpoint depth."
+                        .to_owned(),
+                )
+            })?;
             let merkle_path = tree
                 .authentication_path(leaf_position, &root)
-                .ok_or(Error::Custom("No available authentication path to that position or if the root does not correspond to a checkpointed root of the tree".to_owned()))?;
+                .ok_or_else(|| Error::Custom("No available authentication path to that position or if the root does not correspond to a checkpointed root of the tree".to_owned()))?;
             (leaf_position, merkle_path)
         };
 
@@ -957,12 +959,14 @@ impl MoneyWallet {
             let state =
                 states.lookup::<dao::State>(*dao::CONTRACT_ID).ok_or(DaoError::StateNotFound)?;
             let tree = &state.dao_tree;
-            let root = tree.root(0).ok_or(Error::Custom(
-                "Not enough checkpoints available to reach the requested checkpoint depth."
-                    .to_owned(),
-            ))?;
+            let root = tree.root(0).ok_or_else(|| {
+                Error::Custom(
+                    "Not enough checkpoints available to reach the requested checkpoint depth."
+                        .to_owned(),
+                )
+            })?;
             let merkle_path = tree.authentication_path(dao_leaf_position, &root)
-            .ok_or(Error::Custom(
+            .ok_or_else(|| Error::Custom(
                 "No available authentication path to that position or if the root does not correspond to a checkpointed root of the tree"
                 .to_owned()
             ))?;
@@ -1012,11 +1016,13 @@ impl MoneyWallet {
 
             let tree = &state.tree;
             let leaf_position = own_coin.leaf_position;
-            let root = tree.root(0).ok_or(Error::Custom(
-                "Not enough checkpoints available to reach the requested checkpoint depth."
-                    .to_owned(),
-            ))?;
-            let merkle_path = tree.authentication_path(leaf_position, &root).ok_or(Error::Custom(
+            let root = tree.root(0).ok_or_else(|| {
+                Error::Custom(
+                    "Not enough checkpoints available to reach the requested checkpoint depth."
+                        .to_owned(),
+                )
+            })?;
+            let merkle_path = tree.authentication_path(leaf_position, &root).ok_or_else(|| Error::Custom(
                 "No available authentication path to that position or the root does not correspond to a checkpointed root of the tree"
                 .to_owned()
             ))?;

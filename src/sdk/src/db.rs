@@ -49,7 +49,7 @@ pub fn db_init(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle
             }
         }
 
-        return Ok(ret as u32)
+        Ok(ret as u32)
     }
 }
 
@@ -70,7 +70,7 @@ pub fn db_lookup(contract_id: ContractId, db_name: &str) -> GenericResult<DbHand
             }
         }
 
-        return Ok(ret as u32)
+        Ok(ret as u32)
     }
 }
 
@@ -118,7 +118,7 @@ pub fn db_set(db_handle: DbHandle, key: &[u8], value: &[u8]) -> GenericResult<()
         len += key.to_vec().encode(&mut buf)?;
         len += value.to_vec().encode(&mut buf)?;
 
-        return match db_set_(buf.as_ptr(), len as u32) {
+        match db_set_(buf.as_ptr(), len as u32) {
             0 => Ok(()),
             -1 => Err(ContractError::CallerAccessDenied),
             -2 => Err(ContractError::DbSetFailed),

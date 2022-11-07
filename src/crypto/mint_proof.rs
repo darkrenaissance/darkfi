@@ -21,7 +21,7 @@ use std::time::Instant;
 use darkfi_sdk::{
     crypto::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-        PublicKey,
+        poseidon_hash, PublicKey,
     },
     pasta::{arithmetic::CurveAffine, group::Curve},
 };
@@ -38,7 +38,6 @@ use crate::{
             DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
             DrkValue, DrkValueBlind, DrkValueCommit,
         },
-        util::poseidon_hash,
     },
     zk::circuit::mint_contract::MintContract,
     Result,

@@ -21,7 +21,7 @@ use std::time::Instant;
 use darkfi_sdk::{
     crypto::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-        MerkleNode, Nullifier, PublicKey, SecretKey,
+        poseidon_hash, MerkleNode, Nullifier, PublicKey, SecretKey,
     },
     incrementalmerkletree::Hashable,
     pasta::{arithmetic::CurveAffine, group::Curve},
@@ -33,12 +33,9 @@ use rand::rngs::OsRng;
 
 use super::proof::{Proof, ProvingKey, VerifyingKey};
 use crate::{
-    crypto::{
-        types::{
-            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
-            DrkUserDataBlind, DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
-        },
-        util::poseidon_hash,
+    crypto::types::{
+        DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
+        DrkUserDataBlind, DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
     },
     zk::circuit::burn_contract::BurnContract,
     Result,

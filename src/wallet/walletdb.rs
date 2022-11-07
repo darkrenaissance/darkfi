@@ -534,11 +534,8 @@ impl WalletDb {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::{
-        types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
-        util::poseidon_hash,
-    };
-    use darkfi_sdk::crypto::MerkleNode;
+    use crate::crypto::types::{DrkCoinBlind, DrkSerial, DrkValueBlind};
+    use darkfi_sdk::crypto::{poseidon_hash, MerkleNode};
     use incrementalmerkletree::Tree;
     use pasta_curves::{group::ff::Field, pallas};
     use rand::rngs::OsRng;

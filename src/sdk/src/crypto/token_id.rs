@@ -16,20 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::PrimeField, pallas};
 
 use super::{poseidon_hash, PublicKey, SecretKey};
 use crate::error::ContractError;
 
-/// ContractId represents an on-chain identifier for a certain smart contract.
+/// TokenId represents an on-chain identifier for a certain token.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct ContractId(pallas::Base);
+pub struct TokenId(pallas::Base);
 
-impl ContractId {
-    /// Derive a contract ID from a `SecretKey` (deploy key)
-    pub fn derive(deploy_key: SecretKey) -> Self {
-        let public_key = PublicKey::from_secret(deploy_key);
+impl TokenId {
+    /// Derives a `TokenId` given a `SecretKey` (mint authority)
+    pub fn derive(mint_authority: SecretKey) -> Self {
+        let public_key = PublicKey::from_secret(mint_authority);
         let (x, y) = public_key.xy();
         let hash = poseidon_hash::<2>([x, y]);
         Self(hash)
@@ -40,42 +40,33 @@ impl ContractId {
         self.0
     }
 
-    /// Create a `ContractId` object from given bytes.
+    /// Create a `TokenId` object from given bytes, erroring if the input
+    /// bytes are noncanonical.
     pub fn from_bytes(x: [u8; 32]) -> Result<Self, ContractError> {
         match pallas::Base::from_repr(x).into() {
             Some(v) => Ok(Self(v)),
-            None => Err(ContractError::IoError(
-                "Failed to instantiate ContractId from bytes".to_string(),
-            )),
+            None => {
+                Err(ContractError::IoError("Failed to instantiate TokenId from bytes".to_string()))
+            }
         }
-    }
-
-    /// `blake3(self || tree_name)` is used in datbases to have a
-    /// fixed-size name for a contract's state db.
-    pub fn hash_state_id(&self, tree_name: &str) -> [u8; 32] {
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(&serialize(self));
-        hasher.update(tree_name.as_bytes());
-        let id = hasher.finalize();
-        *id.as_bytes()
     }
 }
 
-impl From<pallas::Base> for ContractId {
+impl From<pallas::Base> for TokenId {
     fn from(x: pallas::Base) -> Self {
         Self(x)
     }
 }
 
-impl core::fmt::Display for ContractId {
+impl core::fmt::Display for TokenId {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         // Base58 encoding
-        let contractid: String = bs58::encode(self.0.to_repr()).into_string();
-        write!(f, "{}", contractid)
+        let tokenid: String = bs58::encode(self.0.to_repr()).into_string();
+        write!(f, "{}", tokenid)
     }
 }
 
-impl TryFrom<&str> for ContractId {
+impl TryFrom<&str> for TokenId {
     type Error = ContractError;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
@@ -83,7 +74,7 @@ impl TryFrom<&str> for ContractId {
             Ok(v) => {
                 if v.len() != 32 {
                     return Err(ContractError::IoError(
-                        "Decoded bs58 string for ContractId is not 32 bytes long".to_string(),
+                        "Decoded bs58 string for TokenId is not 32 bytes long".to_string(),
                     ))
                 }
 
@@ -91,7 +82,7 @@ impl TryFrom<&str> for ContractId {
             }
             Err(e) => {
                 return Err(ContractError::IoError(format!(
-                    "Failed to decode bs58 for ContractId: {}",
+                    "Failed to decode bs58 for TokenId: {}",
                     e
                 )))
             }
@@ -99,9 +90,7 @@ impl TryFrom<&str> for ContractId {
 
         match pallas::Base::from_repr(bytes).into() {
             Some(v) => Ok(Self(v)),
-            None => {
-                Err(ContractError::IoError("Bytes for ContractId are noncanonical".to_string()))
-            }
+            None => Err(ContractError::IoError("Bytes for TokenId are noncanonical".to_string())),
         }
     }
 }

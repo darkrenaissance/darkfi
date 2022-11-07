@@ -22,7 +22,7 @@ use darkfi_sdk::crypto::PublicKey;
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{Curve, Group},
+    group::{ff::PrimeField, Curve, Group},
     pallas,
 };
 
@@ -33,7 +33,7 @@ use darkfi::{
 
 use crate::{
     contract::{dao, dao::CONTRACT_ID, money},
-    util::{CallDataBase, HashableBase, StateRegistry, Transaction, UpdateBase},
+    util::{CallDataBase, StateRegistry, Transaction, UpdateBase},
 };
 
 type Result<T> = std::result::Result<T, Error>;
@@ -189,7 +189,7 @@ pub fn state_transition(
     // 3. get the ProposalVote from DAO::State
     let state =
         states.lookup::<dao::State>(*CONTRACT_ID).expect("Return type is not of type State");
-    let proposal_votes = state.proposal_votes.get(&HashableBase(call_data.proposal)).unwrap();
+    let proposal_votes = state.proposal_votes.get(&call_data.proposal.to_repr()).unwrap();
 
     // 4. check yes_votes_commit is the same as in ProposalVote
     if proposal_votes.yes_votes_commit != call_data.yes_votes_commit {
@@ -213,6 +213,6 @@ impl UpdateBase for Update {
         let state = states
             .lookup_mut::<dao::State>(*CONTRACT_ID)
             .expect("Return type is not of type State");
-        state.proposal_votes.remove(&HashableBase(self.proposal)).unwrap();
+        state.proposal_votes.remove(&self.proposal.to_repr()).unwrap();
     }
 }

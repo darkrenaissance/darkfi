@@ -22,11 +22,11 @@ use num_bigint::BigUint;
 use num_traits::Num;
 
 /// Modulus of prime field 2^256 - 2^32 * 351 + 1
-pub const MODULUS: &str =
+const MODULUS: &str =
     "115792089237316195423570985008687907853269984665640564039457584006405596119041";
 
 /// An exponent to perform inverse of x^3 on prime field based on Fermat's Little Theorem
-pub const L_FERMAT_EXPONENT: &str =
+const L_FERMAT_EXPONENT: &str =
     "77194726158210796949047323339125271902179989777093709359638389337603730746027";
 
 /// Calculates set of round constants to perform MiMC-calculation on.

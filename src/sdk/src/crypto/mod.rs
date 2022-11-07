@@ -46,6 +46,10 @@ pub use address::Address;
 pub mod contract_id;
 pub use contract_id::ContractId;
 
+/// Token ID definitions and methods
+pub mod token_id;
+pub use token_id::TokenId;
+
 /// Merkle node definitions
 pub mod merkle_node;
 pub use merkle_node::{MerkleNode, MerkleTree};

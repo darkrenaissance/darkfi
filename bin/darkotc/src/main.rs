@@ -551,7 +551,7 @@ async fn sign_tx(endpoint: Url, data: &str) -> Result<Transaction> {
         exit(1);
     }
 
-    tx.inputs[idx_to_sign].signature = signature.clone();
+    tx.inputs[idx_to_sign].signature = signature;
     Ok(tx)
 }
 

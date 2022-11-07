@@ -20,6 +20,7 @@ use darkfi_sdk::{
     crypto::{
         constants::MERKLE_DEPTH_ORCHARD,
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+        poseidon_hash,
         util::mod_r_p,
         Keypair, MerkleNode, Nullifier, SecretKey,
     },
@@ -45,7 +46,6 @@ use crate::{
         leadcoin::LeadCoin,
         note::Note,
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
-        util::poseidon_hash,
     },
     wallet::walletdb::WalletDb,
     Result,

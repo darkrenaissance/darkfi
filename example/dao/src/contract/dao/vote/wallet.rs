@@ -17,7 +17,8 @@
  */
 
 use darkfi_sdk::crypto::{
-    pedersen::pedersen_commitment_u64, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
+    pedersen::pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, Nullifier, PublicKey,
+    SecretKey,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
@@ -31,7 +32,7 @@ use pasta_curves::{
 use rand::rngs::OsRng;
 
 use darkfi::{
-    crypto::{util::poseidon_hash, Proof},
+    crypto::Proof,
     zk::vm::{Witness, ZkCircuit},
 };
 

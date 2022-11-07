@@ -119,7 +119,7 @@ impl PublicKey {
     /// Derive a new `PublicKey` object given a `SecretKey`
     pub fn from_secret(s: SecretKey) -> Self {
         let p = NullifierK.generator() * mod_r_p(s.inner());
-        Self(pallas::Point::from(p))
+        Self(p)
     }
 
     /// Instantiate a `PublicKey` given 32 bytes. Returns an error
@@ -129,6 +129,11 @@ impl PublicKey {
             Some(k) => Ok(Self(k)),
             None => Err(ContractError::IoError("Could not convert bytes to PublicKey".to_string())),
         }
+    }
+
+    /// Downcast the `PublicKey` to 32 bytes of `pallas::Point`
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_bytes()
     }
 
     /// Fetch the `x` coordinate of this `PublicKey`
@@ -151,13 +156,6 @@ impl PublicKey {
 impl From<pallas::Point> for PublicKey {
     fn from(x: pallas::Point) -> Self {
         Self(x)
-    }
-}
-
-impl core::hash::Hash for PublicKey {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        let bytes = self.0.to_affine().to_bytes();
-        bytes.hash(state);
     }
 }
 

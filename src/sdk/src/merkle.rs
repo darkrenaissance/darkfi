@@ -36,7 +36,8 @@ pub fn merkle_add(
     len += db_roots.encode(&mut buf)?;
     len += key.to_vec().encode(&mut buf)?;
     len += coin.encode(&mut buf)?;
-    return match unsafe { merkle_add_(buf.as_ptr(), len as u32) } {
+
+    match unsafe { merkle_add_(buf.as_ptr(), len as u32) } {
         0 => Ok(()),
         -1 => Err(ContractError::CallerAccessDenied),
         -2 => Err(ContractError::DbSetFailed),
