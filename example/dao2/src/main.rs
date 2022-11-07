@@ -334,6 +334,45 @@ async fn main() -> BoxResult<()> {
     )
     .expect("validate failed");
 
+    // Wallet stuff
+
+    // In your wallet, wait until you see the tx confirmed before doing anything below
+    // So for example keep track of tx hash
+    //
+    // We also need to loop through all newly added items to the validator node
+    // and repeat the same for our local merkle tree. The order of added items
+    // to local merkle trees must be the same.
+    //
+    // One way to do this would be that .apply() keeps an in-memory per block
+    // list of the order txs were applied. So then we can repeat the same order
+    // for our local wallet trees.
+    //
+    //   [ tx1, tx2, ... ]
+    //
+    // So the wallets know these are the new txs and this was the order they
+    // were applied to the state in.
+    // State updates are atomic so this will always be linear.
+    //
+    // When we see our DAO bulla, we call .witness()
+
+    // We need to witness() the value in our local merkle tree
+    let dao_bulla = {
+        assert_eq!(tx.calls.len(), 1);
+        let calldata = &tx.calls[0].data;
+        let params_data = &calldata[1..];
+        let params: DaoMintParams = Decodable::decode(params_data)?;
+        params.dao_bulla.clone()
+    };
+
+    let mut dao_tree = MerkleTree::new(100);
+    let dao_leaf_position = {
+        let node = MerkleNode::from(dao_bulla.0);
+        dao_tree.append(&node);
+        dao_tree.witness().unwrap()
+    };
+
+    debug!(target: "demo", "Create DAO bulla: {:?}", dao_bulla.0);
+
     /////////////////////////////////////////////////
     // Old stuff
     /////////////////////////////////////////////////
