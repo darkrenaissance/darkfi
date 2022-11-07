@@ -57,14 +57,15 @@ fn show_dao_state(chain: &Blockchain, contract_id: &ContractId) -> Result<()> {
     let mut decoder = Cursor::new(&value);
     let set_size: u32 = Decodable::decode(&mut decoder)?;
     let tree: MerkleTree = Decodable::decode(decoder)?;
-    debug!(target: "demo", "DAO tree: {} bytes", value.len());
-    debug!(target: "demo", "set size: {}", set_size);
+    debug!(target: "demo", "DAO state:");
+    debug!(target: "demo", "    tree: {} bytes", value.len());
+    debug!(target: "demo", "    set size: {}", set_size);
 
     let db_roots = chain.contracts.lookup(&chain.sled_db, contract_id, "dao_roots")?;
     for i in 0..set_size {
         let root = db_roots.get(&serialize(&i)).expect("dao_roots").unwrap();
         let root: MerkleNode = deserialize(&root)?;
-        debug!(target: "demo", "root {}: {:?}", i, root);
+        debug!(target: "demo", "    root {}: {:?}", i, root);
     }
 
     Ok(())
@@ -72,11 +73,12 @@ fn show_dao_state(chain: &Blockchain, contract_id: &ContractId) -> Result<()> {
 
 fn show_money_state(chain: &Blockchain, contract_id: &ContractId) -> Result<()> {
     let db = chain.contracts.lookup(&chain.sled_db, contract_id, "wagies")?;
+    debug!(target: "demo", "Money state:");
     for obj in db.iter() {
         let (key, value) = obj.unwrap();
         let name: String = deserialize(&key)?;
         let age: u32 = deserialize(&value)?;
-        println!("{}: {}", name, age);
+        debug!(target: "demo", "    {}: {}", name, age);
     }
     Ok(())
 }
