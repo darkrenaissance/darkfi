@@ -138,21 +138,14 @@ fn validate(
     // Now we finished verification stage, just apply all changes
     assert_eq!(tx.calls.len(), updates.len());
     for (call, update) in tx.calls.iter().zip(updates.iter()) {
-        match call.contract_id {
-            dao_contract_id => {
-                debug!(target: "demo", "DAO::apply() contract called");
-                let mut runtime =
-                    Runtime::new(&dao_wasm_bytes, blockchain.clone(), dao_contract_id)?;
-                runtime.apply(&update)?;
-            }
-            money_contract_id => {
-                debug!(target: "demo", "Money::apply() contract called");
-                let mut runtime =
-                    Runtime::new(&money_wasm_bytes, blockchain.clone(), money_contract_id)?;
-                runtime.apply(&update)?;
-            }
-            _ => {}
-        }
+        // Lookup the wasm bytes
+        let (_, contract_name, wasm_bytes) =
+            wasm_bytes_lookup.iter().find(|(id, _name, _bytes)| *id == call.contract_id).unwrap();
+        debug!(target: "demo", "{}::apply() contract called", contract_name);
+
+        let mut runtime = Runtime::new(wasm_bytes, blockchain.clone(), call.contract_id)?;
+
+        runtime.apply(&update)?;
     }
 
     Ok(())
