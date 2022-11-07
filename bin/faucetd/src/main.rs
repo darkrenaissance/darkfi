@@ -21,6 +21,7 @@ use std::{collections::HashMap, str::FromStr};
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
+use darkfi_sdk::crypto::{Address, PublicKey};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use serde_json::{json, Value};
@@ -35,7 +36,7 @@ use darkfi::{
         ValidatorState, ValidatorStatePtr, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
         TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
     },
-    crypto::{address::Address, keypair::PublicKey, token_id},
+    crypto::token_id,
     net,
     net::P2pPtr,
     node::Client,

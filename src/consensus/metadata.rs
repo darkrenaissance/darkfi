@@ -16,19 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::{
+    crypto::{schnorr::Signature, Address, Keypair},
+    pasta::pallas,
+};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
 use super::Participant;
 use crate::{
     crypto::{
-        address::Address,
-        keypair::Keypair,
         lead_proof,
         leadcoin::LeadCoin,
         proof::{Proof, ProvingKey, VerifyingKey},
-        schnorr::Signature,
         types::*,
     },
     VerifyResult,

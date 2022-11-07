@@ -22,6 +22,12 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
+use darkfi_sdk::crypto::{
+    pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+    schnorr,
+    schnorr::SchnorrSecret,
+    PublicKey, SecretKey,
+};
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use halo2_proofs::{arithmetic::Field, pasta::group::ff::PrimeField};
 use rand::rngs::OsRng;
@@ -31,18 +37,14 @@ use darkfi::{
     cli_desc,
     crypto::{
         burn_proof::{create_burn_proof, verify_burn_proof},
-        keypair::{PublicKey, SecretKey},
         mint_proof::{create_mint_proof, verify_mint_proof},
         note::{EncryptedNote, Note},
         proof::{ProvingKey, VerifyingKey},
-        schnorr,
-        schnorr::SchnorrSecret,
         token_id,
         types::{
             DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
             DrkValueBlind,
         },
-        util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
     rpc::client::RpcClient,
@@ -273,7 +275,7 @@ async fn init_swap(
         value_blind: recv_value_blind,
         token_blind: recv_token_blind,
         // Here we store our secret key we used for signing
-        memo: signature_secret.to_bytes().to_vec(),
+        memo: serialize(&signature_secret),
     };
     let encrypted_note = note.encrypt(&our_pubk)?;
 
@@ -568,7 +570,7 @@ fn try_sign_tx(note: &Note, tx_data: &[u8]) -> Result<schnorr::Signature> {
     };
 
     eprintln!("Signing transaction...");
-    let signature = secret.sign(tx_data);
+    let signature = secret.sign(&mut OsRng, tx_data);
     Ok(signature)
 }
 

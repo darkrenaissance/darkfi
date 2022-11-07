@@ -37,6 +37,10 @@ pub mod util;
 pub mod keypair;
 pub use keypair::{Keypair, PublicKey, SecretKey};
 
+/// Address definitions
+pub mod address;
+pub use address::Address;
+
 /// Contract ID definitions and methods
 pub mod contract_id;
 pub use contract_id::ContractId;

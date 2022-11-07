@@ -19,7 +19,9 @@
 use std::{fs::create_dir_all, path::Path, str::FromStr, time::Duration};
 
 use async_std::sync::Arc;
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
+use darkfi_sdk::crypto::{
+    constants::MERKLE_DEPTH, Address, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
+};
 use darkfi_serial::{deserialize, serialize};
 use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, error, info, LevelFilter};
@@ -32,9 +34,7 @@ use sqlx::{
 
 use crate::{
     crypto::{
-        address::Address,
         coin::{Coin, OwnCoin},
-        keypair::{Keypair, PublicKey, SecretKey},
         note::Note,
         types::DrkTokenId,
     },

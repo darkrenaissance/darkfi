@@ -17,13 +17,13 @@
  */
 
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
+use darkfi_sdk::crypto::{PublicKey, SecretKey};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
 use crate::{
     crypto::{
         diffie_hellman::{kdf_sapling, sapling_ka_agree},
-        keypair::{PublicKey, SecretKey},
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
     },
     Error, Result,
@@ -93,8 +93,7 @@ impl EncryptedNote {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::keypair::Keypair;
-    use pasta_curves::group::ff::Field;
+    use darkfi_sdk::{crypto::Keypair, pasta::group::ff::Field};
 
     #[test]
     fn test_note_encdec() {

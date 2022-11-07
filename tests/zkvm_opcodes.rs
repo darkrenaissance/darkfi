@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::MerkleNode;
+use darkfi_sdk::crypto::{pedersen::pedersen_commitment_u64, MerkleNode, PublicKey, SecretKey};
 use halo2_gadgets::poseidon::{
     primitives as poseidon,
     primitives::{ConstantLength, P128Pow5T3},
@@ -32,9 +32,7 @@ use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
     crypto::{
-        keypair::{PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
-        util::pedersen_commitment_u64,
         Proof,
     },
     zk::{
@@ -100,17 +98,10 @@ fn zkvm_opcodes() -> Result<()> {
     let d = poseidon::Hash::<_, P128Pow5T3, ConstantLength<4>, 3, 2>::init().hash(d_m);
 
     let public = PublicKey::from_secret(SecretKey::from(secret));
-    let public_coords = public.0.to_affine().coordinates().unwrap();
+    let (pub_x, pub_y) = public.xy();
 
-    let public_inputs = vec![
-        *value_coords.x(),
-        *value_coords.y(),
-        c2,
-        d,
-        root.inner(),
-        *public_coords.x(),
-        *public_coords.y(),
-    ];
+    let public_inputs =
+        vec![*value_coords.x(), *value_coords.y(), c2, d, root.inner(), pub_x, pub_y];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
     let proving_key = ProvingKey::build(13, &circuit);

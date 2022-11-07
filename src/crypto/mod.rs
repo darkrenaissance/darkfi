@@ -16,15 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod address;
 pub mod burn_proof;
 pub mod coin;
 pub mod diffie_hellman;
-pub mod keypair;
 pub mod mint_proof;
 pub mod note;
 pub mod proof;
-pub mod schnorr;
 pub mod token_id;
 pub mod token_list;
 pub mod types;

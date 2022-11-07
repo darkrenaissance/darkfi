@@ -18,6 +18,12 @@
 
 use std::io;
 
+use darkfi_sdk::crypto::{
+    pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+    schnorr,
+    schnorr::SchnorrPublic,
+    PublicKey,
+};
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable, VarInt};
 use log::error;
 use pasta_curves::group::Group;
@@ -25,14 +31,10 @@ use pasta_curves::group::Group;
 use crate::{
     crypto::{
         burn_proof::verify_burn_proof,
-        keypair::PublicKey,
         mint_proof::verify_mint_proof,
         note::EncryptedNote,
         proof::VerifyingKey,
-        schnorr,
-        schnorr::SchnorrPublic,
         types::{DrkTokenId, DrkValueBlind, DrkValueCommit},
-        util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
     Result, VerifyFailed, VerifyResult,

@@ -18,9 +18,8 @@
 
 use darkfi::{
     crypto::{
-        keypair::{PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
-        util::{pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
+        util::poseidon_hash,
         Proof,
     },
     zk::{
@@ -30,7 +29,10 @@ use darkfi::{
     zkas::decoder::ZkBinary,
     Result,
 };
-use darkfi_sdk::crypto::{MerkleNode, Nullifier};
+use darkfi_sdk::crypto::{
+    pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+    MerkleNode, Nullifier, PublicKey, SecretKey,
+};
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
@@ -63,9 +65,8 @@ fn burn_proof() -> Result<()> {
 
     // Build the coin
     let coin2 = {
-        let coords = PublicKey::from_secret(secret).0.to_affine().coordinates().unwrap();
-        let messages =
-            [*coords.x(), *coords.y(), pallas::Base::from(value), token_id, serial, coin_blind];
+        let (pub_x, pub_y) = PublicKey::from_secret(secret).xy();
+        let messages = [pub_x, pub_y, pallas::Base::from(value), token_id, serial, coin_blind];
 
         poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
             .hash(messages)
@@ -113,7 +114,7 @@ fn burn_proof() -> Result<()> {
     let token_coords = token_commit.to_affine().coordinates().unwrap();
 
     let sig_pubkey = PublicKey::from_secret(sig_secret);
-    let sig_coords = sig_pubkey.0.to_affine().coordinates().unwrap();
+    let (sig_x, sig_y) = sig_pubkey.xy();
 
     let merkle_root = tree.root(0).unwrap();
 
@@ -124,8 +125,8 @@ fn burn_proof() -> Result<()> {
         *token_coords.x(),
         *token_coords.y(),
         merkle_root.inner(),
-        *sig_coords.x(),
-        *sig_coords.y(),
+        sig_x,
+        sig_y,
     ];
 
     // Create the circuit

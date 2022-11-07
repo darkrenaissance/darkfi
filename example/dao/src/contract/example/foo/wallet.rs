@@ -19,14 +19,12 @@
 use log::debug;
 use rand::rngs::OsRng;
 
+use darkfi_sdk::crypto::{PublicKey, SecretKey};
 use halo2_proofs::circuit::Value;
 use pasta_curves::pallas;
 
 use darkfi::{
-    crypto::{
-        keypair::{PublicKey, SecretKey},
-        Proof,
-    },
+    crypto::Proof,
     zk::vm::{Witness, ZkCircuit},
 };
 

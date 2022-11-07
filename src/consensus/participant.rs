@@ -16,13 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{SerialDecodable, SerialEncodable};
-use pasta_curves::pallas;
-
-use crate::{
-    crypto::{address::Address, keypair::PublicKey},
-    net,
+use darkfi_sdk::{
+    crypto::{Address, PublicKey},
+    pasta::pallas,
 };
+use darkfi_serial::{SerialDecodable, SerialEncodable};
+
+use crate::net;
 
 /// This struct represents a tuple of the form:
 /// (`public_key`, `node_address`, `last_slot_seen`,`slot_quarantined`)

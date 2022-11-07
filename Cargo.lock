@@ -1302,6 +1302,7 @@ dependencies = [
 name = "darkfi-sdk"
 version = "0.3.0"
 dependencies = [
+ "blake2b_simd",
  "blake3",
  "bs58",
  "darkfi-serial",
@@ -1311,6 +1312,8 @@ dependencies = [
  "lazy_static",
  "pasta_curves",
  "rand",
+ "rand_core 0.6.4",
+ "sha2 0.10.6",
  "subtle",
  "thiserror",
 ]
@@ -1675,6 +1678,7 @@ dependencies = [
  "bs58",
  "clap 3.2.23",
  "darkfi",
+ "darkfi-sdk",
  "indicatif",
  "log",
  "pasta_curves",
@@ -1885,6 +1889,7 @@ dependencies = [
  "chrono",
  "ctrlc",
  "darkfi",
+ "darkfi-sdk",
  "darkfi-serial",
  "easy-parallel",
  "hex",
@@ -4656,6 +4661,7 @@ dependencies = [
  "clap 3.2.23",
  "ctrlc",
  "darkfi",
+ "darkfi-sdk",
  "indicatif",
  "num_cpus",
  "rand",

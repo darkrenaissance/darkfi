@@ -16,6 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{fmt, thread, time::Duration};
+
+use async_std::sync::Arc;
+use darkfi_sdk::{
+    crypto::{
+        constants::MERKLE_DEPTH, schnorr::SchnorrSecret, Address, MerkleNode, PublicKey, SecretKey,
+    },
+    incrementalmerkletree::bridgetree::BridgeTree,
+    pasta::{group::ff::PrimeField, pallas},
+};
+use halo2_proofs::arithmetic::Field;
+use log::{error, info};
+use rand::rngs::OsRng;
+use url::Url;
+
 use crate::{
     blockchain::Blockchain,
     consensus::{
@@ -27,13 +42,10 @@ use crate::{
         BlockInfo, LeadProof, Metadata,
     },
     crypto::{
-        address::Address,
         coin::OwnCoin,
-        keypair::{PublicKey, SecretKey},
         lead_proof,
         leadcoin::LeadCoin,
         proof::{ProvingKey, VerifyingKey},
-        schnorr::SchnorrSecret,
     },
     net::{P2p, P2pPtr, Settings, SettingsPtr},
     node::state::state_transition,
@@ -47,16 +59,6 @@ use crate::{
     zk::circuit::{BurnContract, LeadContract, MintContract},
     Result,
 };
-use async_std::sync::Arc;
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
-use halo2_proofs::arithmetic::Field;
-use incrementalmerkletree::bridgetree::BridgeTree;
-use log::{error, info};
-use pasta_curves::{group::ff::PrimeField, pallas};
-use rand::rngs::OsRng;
-// use smol::Executor;
-use std::{fmt, thread, time::Duration};
-use url::Url;
 
 pub struct Stakeholder {
     pub blockchain: Blockchain, // stakeholder view of the blockchain
@@ -381,7 +383,7 @@ impl Stakeholder {
         self.workspace.set_idx(idx);
         let keypair = coin.keypair.unwrap();
         let addr = Address::from(keypair.public);
-        let sign = keypair.secret.sign(proof.as_ref());
+        let sign = keypair.secret.sign(&mut OsRng, proof.as_ref());
         let meta = Metadata::new(
             sign,
             addr,

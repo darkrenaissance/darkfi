@@ -18,21 +18,22 @@
 
 use std::time::Instant;
 
-use darkfi_sdk::crypto::{MerkleNode, Nullifier};
+use darkfi_sdk::{
+    crypto::{
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+        MerkleNode, Nullifier, PublicKey, SecretKey,
+    },
+    incrementalmerkletree::Hashable,
+    pasta::{arithmetic::CurveAffine, group::Curve},
+};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
-use incrementalmerkletree::Hashable;
 use log::debug;
-use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use rand::rngs::OsRng;
 
-use super::{
-    proof::{Proof, ProvingKey, VerifyingKey},
-    util::{pedersen_commitment_base, pedersen_commitment_u64},
-};
+use super::proof::{Proof, ProvingKey, VerifyingKey};
 use crate::{
     crypto::{
-        keypair::{PublicKey, SecretKey},
         types::{
             DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
             DrkUserDataBlind, DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
@@ -74,11 +75,11 @@ impl BurnRevealedValues {
         let nullifier = Nullifier::from(poseidon_hash::<2>([secret.inner(), serial]));
 
         let public_key = PublicKey::from_secret(secret);
-        let coords = public_key.0.to_affine().coordinates().unwrap();
+        let (pub_x, pub_y) = public_key.xy();
 
         let coin = poseidon_hash::<8>([
-            *coords.x(),
-            *coords.y(),
+            pub_x,
+            pub_y,
             DrkValue::from(value),
             token_id,
             serial,
@@ -122,7 +123,7 @@ impl BurnRevealedValues {
         let token_coords = self.token_commit.to_affine().coordinates().unwrap();
         let merkle_root = self.merkle_root.inner();
         let user_data_enc = self.user_data_enc;
-        let sig_coords = self.signature_public.0.to_affine().coordinates().unwrap();
+        let (sig_x, sig_y) = self.signature_public.xy();
 
         vec![
             self.nullifier.inner(),
@@ -132,8 +133,8 @@ impl BurnRevealedValues {
             *token_coords.y(),
             merkle_root,
             user_data_enc,
-            *sig_coords.x(),
-            *sig_coords.y(),
+            sig_x,
+            sig_y,
         ]
     }
 }

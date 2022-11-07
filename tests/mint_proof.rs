@@ -18,9 +18,7 @@
 
 use darkfi::{
     crypto::{
-        keypair::PublicKey,
         proof::{ProvingKey, VerifyingKey},
-        util::{pedersen_commitment_base, pedersen_commitment_u64},
         Proof,
     },
     zk::{
@@ -29,6 +27,10 @@ use darkfi::{
     },
     zkas::decoder::ZkBinary,
     Result,
+};
+use darkfi_sdk::crypto::{
+    pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+    PublicKey, SecretKey,
 };
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
@@ -56,12 +58,12 @@ fn mint_proof() -> Result<()> {
     let token_blind = pallas::Scalar::random(&mut OsRng);
     let serial = pallas::Base::random(&mut OsRng);
     let coin_blind = pallas::Base::random(&mut OsRng);
-    let public_key = PublicKey::random(&mut OsRng);
-    let coords = public_key.0.to_affine().coordinates().unwrap();
+    let public_key = PublicKey::from_secret(SecretKey::random(&mut OsRng));
+    let (pub_x, pub_y) = public_key.xy();
 
     let prover_witnesses = vec![
-        Witness::Base(Value::known(*coords.x())),
-        Witness::Base(Value::known(*coords.y())),
+        Witness::Base(Value::known(pub_x)),
+        Witness::Base(Value::known(pub_y)),
         Witness::Base(Value::known(pallas::Base::from(value))),
         Witness::Base(Value::known(token_id)),
         Witness::Base(Value::known(serial)),
@@ -71,7 +73,7 @@ fn mint_proof() -> Result<()> {
     ];
 
     // Create the public inputs
-    let msgs = [*coords.x(), *coords.y(), pallas::Base::from(value), token_id, serial, coin_blind];
+    let msgs = [pub_x, pub_y, pallas::Base::from(value), token_id, serial, coin_blind];
     let coin = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
         .hash(msgs);
 

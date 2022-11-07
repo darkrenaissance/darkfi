@@ -16,13 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier, PublicKey, SecretKey};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 
-use darkfi::crypto::{
-    coin::Coin,
-    keypair::{PublicKey, SecretKey},
-};
+use darkfi::crypto::coin::Coin;
 
 use super::transfer;
 use crate::note::EncryptedNote2;

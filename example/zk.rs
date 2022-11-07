@@ -21,7 +21,6 @@
 use darkfi::{
     crypto::{
         proof::{ProvingKey, VerifyingKey},
-        util::pedersen_commitment_u64,
         Proof,
     },
     zk::{
@@ -31,6 +30,7 @@ use darkfi::{
     zkas::decoder::ZkBinary,
     Result,
 };
+use darkfi_sdk::crypto::pedersen::pedersen_commitment_u64;
 use halo2_proofs::circuit::Value;
 use pasta_curves::{
     arithmetic::CurveAffine,

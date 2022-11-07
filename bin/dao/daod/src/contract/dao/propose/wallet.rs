@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::MerkleNode;
+use darkfi_sdk::crypto::{pedersen::pedersen_commitment_u64, MerkleNode, PublicKey, SecretKey};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
 use incrementalmerkletree::Hashable;
@@ -28,11 +28,7 @@ use pasta_curves::{
 use rand::rngs::OsRng;
 
 use darkfi::{
-    crypto::{
-        keypair::{PublicKey, SecretKey},
-        util::{pedersen_commitment_u64, poseidon_hash},
-        Proof,
-    },
+    crypto::{util::poseidon_hash, Proof},
     zk::vm::{Witness, ZkCircuit},
 };
 
@@ -110,7 +106,7 @@ impl Builder {
             let leaf_pos: u64 = input.leaf_position.into();
 
             let prover_witnesses = vec![
-                Witness::Base(Value::known(input.secret.0)),
+                Witness::Base(Value::known(input.secret.inner())),
                 Witness::Base(Value::known(note.serial)),
                 Witness::Base(Value::known(pallas::Base::from(0))),
                 Witness::Base(Value::known(pallas::Base::from(0))),
@@ -121,15 +117,15 @@ impl Builder {
                 Witness::Base(Value::known(gov_token_blind)),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
-                Witness::Base(Value::known(input.signature_secret.0)),
+                Witness::Base(Value::known(input.signature_secret.inner())),
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
-            let coords = public_key.0.to_affine().coordinates().unwrap();
+            let (pub_x, pub_y) = public_key.xy();
 
             let coin = poseidon_hash::<8>([
-                *coords.x(),
-                *coords.y(),
+                pub_x,
+                pub_y,
                 pallas::Base::from(note.value),
                 note.token_id,
                 note.serial,
@@ -158,15 +154,15 @@ impl Builder {
             let value_commit = pedersen_commitment_u64(note.value, funds_blind);
             let value_coords = value_commit.to_affine().coordinates().unwrap();
 
-            let sigpub_coords = signature_public.0.to_affine().coordinates().unwrap();
+            let (sig_x, sig_y) = signature_public.xy();
 
             let public_inputs = vec![
                 *value_coords.x(),
                 *value_coords.y(),
                 token_commit,
                 merkle_root.inner(),
-                *sigpub_coords.x(),
-                *sigpub_coords.y(),
+                sig_x,
+                sig_y,
             ];
             let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
 
@@ -185,9 +181,7 @@ impl Builder {
 
         let token_commit = poseidon_hash::<2>([self.dao.gov_token_id, gov_token_blind]);
 
-        let proposal_dest_coords = self.proposal.dest.0.to_affine().coordinates().unwrap();
-        let proposal_dest_x = *proposal_dest_coords.x();
-        let proposal_dest_y = *proposal_dest_coords.y();
+        let (proposal_dest_x, proposal_dest_y) = self.proposal.dest.xy();
 
         let proposal_amount = pallas::Base::from(self.proposal.amount);
 
@@ -196,7 +190,7 @@ impl Builder {
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
 
-        let dao_pubkey_coords = self.dao.public_key.0.to_affine().coordinates().unwrap();
+        let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
 
         let dao_bulla = poseidon_hash::<8>([
             dao_proposer_limit,
@@ -204,8 +198,8 @@ impl Builder {
             dao_approval_ratio_quot,
             dao_approval_ratio_base,
             self.dao.gov_token_id,
-            *dao_pubkey_coords.x(),
-            *dao_pubkey_coords.y(),
+            dao_pub_x,
+            dao_pub_y,
             self.dao.bulla_blind,
         ]);
 
@@ -249,8 +243,8 @@ impl Builder {
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.dao.gov_token_id)),
-            Witness::Base(Value::known(*dao_pubkey_coords.x())),
-            Witness::Base(Value::known(*dao_pubkey_coords.y())),
+            Witness::Base(Value::known(dao_pub_x)),
+            Witness::Base(Value::known(dao_pub_y)),
             Witness::Base(Value::known(self.dao.bulla_blind)),
             Witness::Uint32(Value::known(dao_leaf_position.try_into().unwrap())),
             Witness::MerklePath(Value::known(self.dao_merkle_path.try_into().unwrap())),

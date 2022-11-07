@@ -18,17 +18,20 @@
 
 use std::any::{Any, TypeId};
 
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{Curve, Group},
-    pallas,
-};
-
-use darkfi::{
-    crypto::{coin::Coin, keypair::PublicKey, types::DrkCircuitField},
-    Error as DarkFiError,
+use darkfi_sdk::{
+    crypto::PublicKey,
+    pasta::{
+        arithmetic::CurveAffine,
+        group::{Curve, Group},
+        pallas,
+    },
 };
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
+
+use darkfi::{
+    crypto::{coin::Coin, types::DrkCircuitField},
+    Error as DarkFiError,
+};
 
 use crate::{
     contract::{dao, dao::CONTRACT_ID, money},

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier, PublicKey, SecretKey};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error};
@@ -26,7 +26,6 @@ use crate::{
     consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
     crypto::{
         coin::{Coin, OwnCoin},
-        keypair::{PublicKey, SecretKey},
         note::{EncryptedNote, Note},
         proof::VerifyingKey,
         util::poseidon_hash,

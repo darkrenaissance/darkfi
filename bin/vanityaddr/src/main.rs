@@ -19,17 +19,12 @@
 use std::{process::exit, sync::mpsc::channel};
 
 use clap::Parser;
+use darkfi_sdk::crypto::{Address, Keypair, SecretKey};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::rngs::OsRng;
 use rayon::prelude::*;
 
-use darkfi::{
-    cli_desc,
-    crypto::{
-        address::Address,
-        keypair::{Keypair, SecretKey},
-    },
-};
+use darkfi::cli_desc;
 
 #[derive(Parser)]
 #[clap(name = "vanityaddr", about = cli_desc!(), version)]

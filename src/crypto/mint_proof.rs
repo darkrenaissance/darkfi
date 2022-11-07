@@ -18,22 +18,27 @@
 
 use std::time::Instant;
 
+use darkfi_sdk::{
+    crypto::{
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+        PublicKey,
+    },
+    pasta::{arithmetic::CurveAffine, group::Curve},
+};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
 use log::debug;
-use pasta_curves::{arithmetic::CurveAffine, group::Curve};
 use rand::rngs::OsRng;
 
 use crate::{
     crypto::{
         coin::Coin,
-        keypair::PublicKey,
         proof::{Proof, ProvingKey, VerifyingKey},
         types::{
             DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
             DrkValue, DrkValueBlind, DrkValueCommit,
         },
-        util::{pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
+        util::poseidon_hash,
     },
     zk::circuit::mint_contract::MintContract,
     Result,
@@ -62,11 +67,11 @@ impl MintRevealedValues {
         let value_commit = pedersen_commitment_u64(value, value_blind);
         let token_commit = pedersen_commitment_base(token_id, token_blind);
 
-        let coords = public_key.0.to_affine().coordinates().unwrap();
+        let (pub_x, pub_y) = public_key.xy();
 
         let coin = poseidon_hash::<8>([
-            *coords.x(),
-            *coords.y(),
+            pub_x,
+            pub_y,
             DrkValue::from(value),
             token_id,
             serial,
@@ -117,11 +122,11 @@ pub fn create_mint_proof(
         public_key,
     );
 
-    let coords = public_key.0.to_affine().coordinates().unwrap();
+    let (pub_x, pub_y) = public_key.xy();
 
     let c = MintContract {
-        pub_x: Value::known(*coords.x()),
-        pub_y: Value::known(*coords.y()),
+        pub_x: Value::known(pub_x),
+        pub_y: Value::known(pub_y),
         value: Value::known(DrkValue::from(value)),
         token: Value::known(token_id),
         serial: Value::known(serial),

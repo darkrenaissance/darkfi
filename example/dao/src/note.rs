@@ -17,16 +17,14 @@
  */
 
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
+use darkfi_sdk::crypto::{PublicKey, SecretKey};
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
 use darkfi::{
-    crypto::{
-        diffie_hellman::{kdf_sapling, sapling_ka_agree},
-        keypair::{PublicKey, SecretKey},
-    },
+    crypto::diffie_hellman::{kdf_sapling, sapling_ka_agree},
     Error, Result,
 };
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
 pub const AEAD_TAG_SIZE: usize = 16;
 
@@ -81,10 +79,8 @@ impl EncryptedNote2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi::crypto::{
-        keypair::Keypair,
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
-    };
+    use darkfi::crypto::types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind};
+    use darkfi_sdk::crypto::Keypair;
     use group::ff::Field;
 
     #[test]

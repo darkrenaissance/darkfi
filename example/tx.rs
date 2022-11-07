@@ -17,7 +17,9 @@
  */
 
 // Example transaction flow
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
+use darkfi_sdk::crypto::{
+    constants::MERKLE_DEPTH, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
+};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{group::ff::Field, pallas};
 use rand::rngs::OsRng;
@@ -25,7 +27,6 @@ use rand::rngs::OsRng;
 use darkfi::{
     crypto::{
         coin::OwnCoin,
-        keypair::{Keypair, PublicKey, SecretKey},
         note::{EncryptedNote, Note},
         proof::{ProvingKey, VerifyingKey},
         util::poseidon_hash,

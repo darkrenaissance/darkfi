@@ -16,11 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::Nullifier;
+use darkfi_sdk::{
+    crypto::{Nullifier, SecretKey},
+    pasta::{group::ff::PrimeField, pallas},
+};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use pasta_curves::{group::ff::PrimeField, pallas};
 
-use super::{keypair::SecretKey, note::Note};
+use super::note::Note;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, SerialEncodable, SerialDecodable)]
 pub struct Coin(pub pallas::Base);

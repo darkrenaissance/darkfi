@@ -547,12 +547,14 @@ mod tests {
     use super::*;
     use crate::{
         crypto::{
-            keypair::{PublicKey, SecretKey},
             proof::{ProvingKey, VerifyingKey},
-            util::{pedersen_commitment_base, pedersen_commitment_u64},
             Proof,
         },
         Result,
+    };
+    use darkfi_sdk::crypto::{
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+        PublicKey, SecretKey,
     };
     use halo2_gadgets::poseidon::{
         primitives as poseidon,
@@ -582,11 +584,11 @@ mod tests {
         let sig_secret = SecretKey::random(&mut OsRng);
 
         let coin2 = {
-            let coords = PublicKey::from_secret(secret).0.to_affine().coordinates().unwrap();
+            let (pub_x, pub_y) = PublicKey::from_secret(secret).xy();
 
             let msg = [
-                *coords.x(),
-                *coords.y(),
+                pub_x,
+                pub_y,
                 pallas::Base::from(value),
                 token_id,
                 serial,
@@ -629,7 +631,7 @@ mod tests {
             poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(user_data_enc);
 
         let sig_pubkey = PublicKey::from_secret(sig_secret);
-        let sig_coords = sig_pubkey.0.to_affine().coordinates().unwrap();
+        let (sig_x, sig_y) = sig_pubkey.xy();
 
         let public_inputs = vec![
             nullifier,
@@ -639,8 +641,8 @@ mod tests {
             *token_coords.y(),
             merkle_root.inner(),
             user_data_enc,
-            *sig_coords.x(),
-            *sig_coords.y(),
+            sig_x,
+            sig_y,
         ];
 
         let circuit = BurnContract {

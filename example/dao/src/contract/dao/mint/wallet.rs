@@ -16,16 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::crypto::{PublicKey, SecretKey};
 use halo2_proofs::circuit::Value;
-use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
 use darkfi::{
-    crypto::{
-        keypair::{PublicKey, SecretKey},
-        util::poseidon_hash,
-        Proof,
-    },
+    crypto::{util::poseidon_hash, Proof},
     zk::vm::{Witness, ZkCircuit},
 };
 
@@ -65,7 +62,7 @@ impl Builder {
         let dao_approval_ratio_quot = pallas::Base::from(self.dao_approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao_approval_ratio_base);
 
-        let dao_pubkey_coords = self.dao_pubkey.0.to_affine().coordinates().unwrap();
+        let (dao_pub_x, dao_pub_y) = self.dao_pubkey.xy();
 
         let dao_bulla = poseidon_hash::<8>([
             dao_proposer_limit,
@@ -73,8 +70,8 @@ impl Builder {
             dao_approval_ratio_quot,
             dao_approval_ratio_base,
             self.gov_token_id,
-            *dao_pubkey_coords.x(),
-            *dao_pubkey_coords.y(),
+            dao_pub_x,
+            dao_pub_y,
             self.dao_bulla_blind,
         ]);
         let dao_bulla = DaoBulla(dao_bulla);
@@ -93,8 +90,8 @@ impl Builder {
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.gov_token_id)),
-            Witness::Base(Value::known(*dao_pubkey_coords.x())),
-            Witness::Base(Value::known(*dao_pubkey_coords.y())),
+            Witness::Base(Value::known(dao_pub_x)),
+            Witness::Base(Value::known(dao_pub_y)),
             Witness::Base(Value::known(self.dao_bulla_blind)),
         ];
         let public_inputs = vec![dao_bulla.0];

@@ -20,6 +20,7 @@ use std::str::FromStr;
 
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
+use darkfi_sdk::crypto::{Address, PublicKey};
 use log::{debug, error, info};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
@@ -35,7 +36,6 @@ use darkfi::{
         ValidatorState, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
         TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
     },
-    crypto::{address::Address, keypair::PublicKey},
     net,
     net::P2pPtr,
     node::Client,

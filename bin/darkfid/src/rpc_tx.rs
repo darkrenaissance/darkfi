@@ -18,12 +18,13 @@
 
 use std::str::FromStr;
 
+use darkfi_sdk::crypto::{Address, PublicKey};
 use darkfi_serial::{deserialize, serialize};
 use log::{error, warn};
 use serde_json::{json, Value};
 
 use darkfi::{
-    crypto::{address::Address, keypair::PublicKey, token_id},
+    crypto::token_id,
     rpc::jsonrpc::{ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
     tx::Transaction,
 };

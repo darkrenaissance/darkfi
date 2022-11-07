@@ -21,11 +21,14 @@ use std::{
     time::Instant,
 };
 
+use darkfi_sdk::crypto::{
+    constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, Keypair, MerkleNode, PublicKey,
+    SecretKey,
+};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::Field, Curve, Group},
+    group::{ff::Field, Group},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -33,15 +36,13 @@ use rand::rngs::OsRng;
 use darkfi::{
     crypto::{
         coin::Coin,
-        keypair::{Keypair, PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
         types::{DrkSpendHook, DrkUserData, DrkValue},
-        util::{pedersen_commitment_u64, poseidon_hash},
+        util::poseidon_hash,
     },
     zk::circuit::{BurnContract, MintContract},
     zkas::decoder::ZkBinary,
 };
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 
 mod contract;
 mod error;
@@ -451,10 +452,10 @@ async fn main() -> Result<()> {
 
     // Check the actual coin received is valid before accepting it
 
-    let coords = dao_keypair.public.0.to_affine().coordinates().unwrap();
+    let (pub_x, pub_y) = dao_keypair.public.xy();
     let coin = poseidon_hash::<8>([
-        *coords.x(),
-        *coords.y(),
+        pub_x,
+        pub_y,
         DrkValue::from(treasury_note.value),
         treasury_note.token_id,
         treasury_note.serial,
@@ -601,10 +602,10 @@ async fn main() -> Result<()> {
             assert_eq!(note.spend_hook, pallas::Base::from(0));
             assert_eq!(note.user_data, pallas::Base::from(0));
 
-            let coords = key.public.0.to_affine().coordinates().unwrap();
+            let (pub_x, pub_y) = key.public.xy();
             let coin = poseidon_hash::<8>([
-                *coords.x(),
-                *coords.y(),
+                pub_x,
+                pub_y,
                 DrkValue::from(note.value),
                 note.token_id,
                 note.serial,
@@ -1230,10 +1231,10 @@ async fn main() -> Result<()> {
         let user_data_enc = poseidon_hash::<2>([dao_bulla.0, user_data_blind]);
         assert_eq!(input.revealed.user_data_enc, user_data_enc);
 
-        let dao_pubkey_coords = dao_params.public_key.0.to_affine().coordinates().unwrap();
+        let (dao_pub_x, dao_pub_y) = dao_params.public_key.xy();
         let coin_1 = Coin(poseidon_hash::<8>([
-            *dao_pubkey_coords.x(),
-            *dao_pubkey_coords.y(),
+            dao_pub_x,
+            dao_pub_y,
             pallas::Base::from(xdrk_supply - 1000),
             xdrk_token_id,
             dao_serial,

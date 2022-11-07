@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier, PublicKey};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 
 use super::state::{ProgramState, State, StateUpdate};
-use crate::crypto::{keypair::PublicKey, proof::VerifyingKey};
+use crate::crypto::proof::VerifyingKey;
 
 /// In-memory state extension for state transition validations
 #[derive(Clone)]

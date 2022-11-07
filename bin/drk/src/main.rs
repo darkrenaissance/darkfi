@@ -24,6 +24,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
+use darkfi_sdk::crypto::Address;
 use prettytable::{format, row, Table};
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
@@ -31,7 +32,7 @@ use url::Url;
 
 use darkfi::{
     cli_desc,
-    crypto::{address::Address, token_id},
+    crypto::token_id,
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
         cli::{get_log_config, get_log_level, progress_bar},

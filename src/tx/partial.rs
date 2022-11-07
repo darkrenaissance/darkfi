@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::crypto::PublicKey;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use super::TransactionOutput;
 use crate::crypto::{
-    keypair::PublicKey,
     types::{DrkTokenId, DrkValueBlind},
     BurnRevealedValues, Proof,
 };

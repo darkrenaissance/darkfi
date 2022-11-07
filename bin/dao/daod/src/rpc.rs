@@ -16,21 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Mutex;
 use std::{str::FromStr, sync::Arc};
 
+use async_std::sync::Mutex;
 use async_trait::async_trait;
+use darkfi_sdk::crypto::{Keypair, PublicKey, SecretKey};
 use log::{debug, error};
 use pasta_curves::group::ff::PrimeField;
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
 
-use darkfi::{
-    crypto::keypair::{Keypair, PublicKey, SecretKey},
-    rpc::{
-        jsonrpc::{ErrorCode::*, JsonError, JsonRequest, JsonResponse, JsonResult},
-        server::RequestHandler,
-    },
+use darkfi::rpc::{
+    jsonrpc::{ErrorCode::*, JsonError, JsonRequest, JsonResponse, JsonResult},
+    server::RequestHandler,
 };
 
 use crate::{
@@ -132,7 +130,8 @@ impl JsonRpcInterface {
     async fn get_dao_addr(&self, id: Value, _params: &[Value]) -> JsonResult {
         let client = self.client.lock().await;
         let pubkey = client.dao_wallet.get_public_key();
-        let addr: String = bs58::encode(pubkey.to_bytes()).into_string();
+        //let addr: String = bs58::encode(pubkey.to_bytes()).into_string();
+        let addr: String = pubkey.to_string();
         JsonResponse::new(json!(addr), id).into()
     }
 
@@ -164,7 +163,8 @@ impl JsonRpcInterface {
             let amount = proposal.amount;
             let token_id = proposal.token_id;
             let token_id: String = bs58::encode(token_id.to_repr()).into_string();
-            let dest: String = bs58::encode(dest.to_bytes()).into_string();
+            //let dest: String = bs58::encode(dest.to_bytes()).into_string();
+            let dest = dest.to_string();
             proposal_data.push((dest, amount, token_id));
         }
 
@@ -261,7 +261,8 @@ impl JsonRpcInterface {
         match money_wallet.track(&mut client.states) {
             Ok(_) => {
                 client.money_wallets.insert(keypair.public, money_wallet);
-                let addr: String = bs58::encode(keypair.public.to_bytes()).into_string();
+                //let addr: String = bs58::encode(keypair.public.to_bytes()).into_string();
+                let addr: String = keypair.public.to_string();
                 JsonResponse::new(json!(addr), id).into()
             }
             Err(e) => {

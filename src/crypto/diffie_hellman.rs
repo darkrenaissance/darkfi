@@ -17,12 +17,8 @@
  */
 
 use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
+use darkfi_sdk::crypto::{util::mod_r_p, PublicKey, SecretKey};
 use pasta_curves::group::{cofactor::CofactorGroup, GroupEncoding, Wnaf};
-
-use crate::crypto::{
-    keypair::{PublicKey, SecretKey},
-    util::mod_r_p,
-};
 
 pub const KDF_SAPLING_PERSONALIZATION: &[u8; 16] = b"DarkFiSaplingKDF";
 
@@ -43,7 +39,7 @@ pub fn sapling_ka_agree(esk: &SecretKey, pk_d: &PublicKey) -> PublicKey {
     // notes on chain.
     let esk_s = mod_r_p(esk.inner());
     let mut wnaf = Wnaf::new();
-    PublicKey(wnaf.scalar(&esk_s).base(pk_d.0).clear_cofactor())
+    PublicKey::from(wnaf.scalar(&esk_s).base(pk_d.inner()).clear_cofactor())
 }
 
 /// Sapling KDF for note encryption.
@@ -54,7 +50,7 @@ pub fn kdf_sapling(dhsecret: &PublicKey, epk: &PublicKey) -> Blake2bHash {
         .hash_length(32)
         .personal(KDF_SAPLING_PERSONALIZATION)
         .to_state()
-        .update(&dhsecret.0.to_bytes())
-        .update(&epk.0.to_bytes())
+        .update(&dhsecret.inner().to_bytes())
+        .update(&epk.inner().to_bytes())
         .finalize()
 }

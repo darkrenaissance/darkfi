@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::crypto::{Address, Keypair, PublicKey, SecretKey};
 use darkfi_serial::{deserialize, serialize};
 use fxhash::FxHashMap;
 use incrementalmerkletree::Tree;
@@ -24,11 +25,7 @@ use pasta_curves::group::ff::PrimeField;
 use serde_json::{json, Value};
 
 use darkfi::{
-    crypto::{
-        address::Address,
-        keypair::{Keypair, PublicKey, SecretKey},
-        token_id,
-    },
+    crypto::token_id,
     node::State,
     rpc::jsonrpc::{
         ErrorCode::{InternalError, InvalidParams, ParseError},
@@ -145,7 +142,7 @@ impl Darkfid {
         };
 
         if let Some(kp) = keypairs.get(params[0].as_u64().unwrap() as usize) {
-            return JsonResponse::new(json!(kp.secret.to_bytes()), id).into()
+            return JsonResponse::new(json!(serialize(&kp.secret)), id).into()
         }
 
         server_error(RpcError::KeypairNotFound, id, None)

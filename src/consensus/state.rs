@@ -25,7 +25,11 @@ use std::{
 
 use async_std::sync::{Arc, Mutex, RwLock};
 use chrono::{NaiveDateTime, Utc};
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
+use darkfi_sdk::crypto::{
+    constants::MERKLE_DEPTH,
+    schnorr::{SchnorrPublic, SchnorrSecret},
+    Address, MerkleNode, PublicKey, SecretKey,
+};
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
@@ -41,12 +45,9 @@ use super::{
 use crate::{
     blockchain::Blockchain,
     crypto::{
-        address::Address,
-        keypair::{PublicKey, SecretKey},
         lead_proof,
         leadcoin::LeadCoin,
         proof::{ProvingKey, VerifyingKey},
-        schnorr::{SchnorrPublic, SchnorrSecret},
     },
     net,
     node::{
@@ -370,7 +371,7 @@ impl ValidatorState {
         let header =
             Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
-        let signed_proposal = self.secret.sign(&header.headerhash().as_bytes()[..]);
+        let signed_proposal = self.secret.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
         let eta = self.get_eta().to_repr();
         // Generating leader proof
         let coin = self.consensus.coins[self.relative_slot(slot) as usize][idx];

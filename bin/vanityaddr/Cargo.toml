@@ -13,6 +13,7 @@ bs58 = "0.4.0"
 clap = {version = "3.2.20", features = ["derive"]}
 ctrlc = "3.2.3"
 darkfi = {path = "../../", features = ["crypto"]}
+darkfi-sdk = {path = "../../src/sdk"}
 indicatif = "0.17.1"
 num_cpus = "1.13.1"
 rand = "0.8.5"

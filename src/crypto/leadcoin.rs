@@ -16,18 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode};
+use darkfi_sdk::{
+    crypto::{
+        constants::MERKLE_DEPTH_ORCHARD, pedersen::pedersen_commitment_base, util::mod_r_p,
+        Keypair, MerkleNode,
+    },
+    pasta::{arithmetic::CurveAffine, group::Curve, pallas},
+};
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::circuit::Value;
-use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 
-use crate::{
-    crypto::{
-        keypair::Keypair,
-        util::{mod_r_p, pedersen_commitment_base},
-    },
-    zk::circuit::lead_contract::LeadContract,
-};
+use crate::zk::circuit::lead_contract::LeadContract;
 
 pub const LEAD_PUBLIC_INPUT_LEN: usize = 4;
 
@@ -59,7 +58,7 @@ pub struct LeadCoin {
 impl LeadCoin {
     pub fn public_inputs_as_array(&self) -> [pallas::Base; LEAD_PUBLIC_INPUT_LEN] {
         let po_nonce = self.nonce_cm.unwrap();
-        let po_pk = self.keypair.unwrap().public.0.to_affine().coordinates().unwrap();
+        let po_pk = self.keypair.unwrap().public.inner().to_affine().coordinates().unwrap();
         let y_mu = self.y_mu.unwrap();
         let _rho_mu = self.rho_mu.unwrap();
         let root_sk = self.root_sk.unwrap();

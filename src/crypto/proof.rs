@@ -113,7 +113,6 @@ mod tests {
     use super::*;
     use crate::{
         crypto::{
-            keypair::PublicKey,
             mint_proof::create_mint_proof,
             types::{
                 DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkValueBlind,
@@ -122,8 +121,11 @@ mod tests {
         zk::circuit::MintContract,
         Result,
     };
+    use darkfi_sdk::{
+        crypto::{PublicKey, SecretKey},
+        pasta::group::ff::Field,
+    };
     use darkfi_serial::{Decodable, Encodable};
-    use pasta_curves::group::ff::Field;
     use rand::rngs::OsRng;
 
     #[test]
@@ -136,7 +138,7 @@ mod tests {
         let spend_hook = DrkSpendHook::random(&mut OsRng);
         let user_data = DrkUserData::random(&mut OsRng);
         let coin_blind = DrkCoinBlind::random(&mut OsRng);
-        let public_key = PublicKey::random(&mut OsRng);
+        let public_key = PublicKey::from_secret(SecretKey::random(&mut OsRng));
 
         let pk = ProvingKey::build(11, &MintContract::default());
         let (proof, _) = create_mint_proof(

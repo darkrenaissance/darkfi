@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::MerkleNode;
+use darkfi_sdk::crypto::{schnorr::SchnorrSecret, MerkleNode, PublicKey, SecretKey};
 use darkfi_serial::serialize;
 use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
@@ -28,11 +28,9 @@ use super::{
 use crate::{
     crypto::{
         burn_proof::create_burn_proof,
-        keypair::{PublicKey, SecretKey},
         mint_proof::create_mint_proof,
         note::Note,
         proof::ProvingKey,
-        schnorr::SchnorrSecret,
         types::{
             DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
             DrkValueBlind,
@@ -202,7 +200,7 @@ impl TransactionBuilder {
         let mut clear_inputs = vec![];
         for (input, info) in partial_tx.clear_inputs.into_iter().zip(self.clear_inputs) {
             let secret = info.signature_secret;
-            let signature = secret.sign(&unsigned_tx_data);
+            let signature = secret.sign(&mut OsRng, &unsigned_tx_data);
             let input = TransactionClearInput::from_partial(input, signature);
             clear_inputs.push(input);
         }
@@ -211,7 +209,7 @@ impl TransactionBuilder {
         for (input, signature_secret) in
             partial_tx.inputs.into_iter().zip(signature_secrets.into_iter())
         {
-            let signature = signature_secret.sign(&unsigned_tx_data);
+            let signature = signature_secret.sign(&mut OsRng, &unsigned_tx_data);
             let input = TransactionInput::from_partial(input, signature);
             inputs.push(input);
         }

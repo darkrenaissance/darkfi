@@ -32,6 +32,7 @@ halo2_gadgets = "0.2.0"
 incrementalmerkletree = "0.3.0"
 pasta_curves = "0.4.0"
 rand_core = "0.6.4"
+sha2 = "0.10.6"
 
 # Misc
 lazy_static = "1.4.0"

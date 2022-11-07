@@ -18,32 +18,31 @@
 
 use std::{sync::Arc, time::Instant};
 
-use fxhash::FxHashMap;
-use group::ff::PrimeField;
-use incrementalmerkletree::{Position, Tree};
-use log::debug;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::Field, Curve, Group},
-    pallas,
-};
-use rand::rngs::OsRng;
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
-use url::Url;
-
 use darkfi::{
     crypto::{
-        keypair::{Keypair, PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
         types::{DrkSpendHook, DrkUserData, DrkValue},
-        util::{pedersen_commitment_u64, poseidon_hash},
+        util::poseidon_hash,
     },
     rpc::server::listen_and_serve,
     zk::circuit::{BurnContract, MintContract},
     zkas::ZkBinary,
     Error, Result,
 };
-use darkfi_sdk::crypto::MerkleNode;
+use darkfi_sdk::crypto::{
+    pedersen::pedersen_commitment_u64, Keypair, MerkleNode, PublicKey, SecretKey,
+};
+use fxhash::FxHashMap;
+use group::ff::PrimeField;
+use incrementalmerkletree::{Position, Tree};
+use log::debug;
+use pasta_curves::{
+    group::{ff::Field, Group},
+    pallas,
+};
+use rand::rngs::OsRng;
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use url::Url;
 
 mod contract;
 mod error;
@@ -406,11 +405,11 @@ impl Client {
         let dao_coins = state.wallet_cache.get_received(&self.dao_wallet.keypair.secret);
         for coin in dao_coins {
             let note = coin.note.clone();
-            let coords = self.dao_wallet.keypair.public.0.to_affine().coordinates().unwrap();
+            let (pub_x, pub_y) = self.dao_wallet.keypair.public.xy();
 
             let coin_hash = poseidon_hash::<8>([
-                *coords.x(),
-                *coords.y(),
+                pub_x,
+                pub_y,
                 DrkValue::from(note.value),
                 note.token_id,
                 note.serial,
@@ -431,11 +430,11 @@ impl Client {
             let coins = state.wallet_cache.get_received(&wallet.keypair.secret);
             for coin in coins {
                 let note = coin.note.clone();
-                let coords = wallet.keypair.public.0.to_affine().coordinates().unwrap();
+                let (pub_x, pub_y) = wallet.keypair.public.xy();
 
                 let coin_hash = poseidon_hash::<8>([
-                    *coords.x(),
-                    *coords.y(),
+                    pub_x,
+                    pub_y,
                     DrkValue::from(note.value),
                     note.token_id,
                     note.serial,

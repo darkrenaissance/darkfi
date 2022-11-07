@@ -370,12 +370,14 @@ mod tests {
     use super::*;
     use crate::{
         crypto::{
-            keypair::PublicKey,
             proof::{ProvingKey, VerifyingKey},
-            util::{pedersen_commitment_base, pedersen_commitment_u64},
             Proof,
         },
         Result,
+    };
+    use darkfi_sdk::crypto::{
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+        PublicKey, SecretKey,
     };
     use halo2_gadgets::poseidon::{
         primitives as poseidon,
@@ -400,14 +402,14 @@ mod tests {
         let token_blind = pallas::Scalar::random(&mut OsRng);
         let serial = pallas::Base::random(&mut OsRng);
         let coin_blind = pallas::Base::random(&mut OsRng);
-        let public_key = PublicKey::random(&mut OsRng);
-        let coords = public_key.0.to_affine().coordinates().unwrap();
+        let public_key = PublicKey::from_secret(SecretKey::random(&mut OsRng));
+        let (pub_x, pub_y) = public_key.xy();
         let spend_hook = pallas::Base::random(&mut OsRng);
         let user_data = pallas::Base::random(&mut OsRng);
 
         let msg = [
-            *coords.x(),
-            *coords.y(),
+            pub_x,
+            pub_y,
             pallas::Base::from(value),
             token_id,
             serial,
@@ -427,8 +429,8 @@ mod tests {
             vec![coin, *value_coords.x(), *value_coords.y(), *token_coords.x(), *token_coords.y()];
 
         let circuit = MintContract {
-            pub_x: Value::known(*coords.x()),
-            pub_y: Value::known(*coords.y()),
+            pub_x: Value::known(pub_x),
+            pub_y: Value::known(pub_y),
             value: Value::known(pallas::Base::from(value)),
             token: Value::known(token_id),
             serial: Value::known(serial),

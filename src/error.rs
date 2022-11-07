@@ -303,7 +303,8 @@ pub enum Error {
     #[error("wasm runtime out of memory")]
     WasmerOomError(String),
 
-    #[cfg(feature = "wasm-runtime")]
+    // TODO: FIXME: The strings are wrong
+    #[cfg(feature = "darkfi-sdk")]
     #[error("contract initialize error")]
     ContractError(darkfi_sdk::error::ContractError),
 
@@ -608,7 +609,7 @@ impl From<wasmer::MemoryError> for Error {
     }
 }
 
-#[cfg(feature = "wasm-runtime")]
+#[cfg(feature = "darkfi-sdk")]
 impl From<darkfi_sdk::error::ContractError> for Error {
     fn from(err: darkfi_sdk::error::ContractError) -> Self {
         Self::ContractError(err)

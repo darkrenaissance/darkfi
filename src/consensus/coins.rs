@@ -16,15 +16,23 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::{
+    crypto::{
+        constants::MERKLE_DEPTH_ORCHARD,
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+        util::mod_r_p,
+        Keypair, MerkleNode, Nullifier, SecretKey,
+    },
+    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
+    pasta::{
+        arithmetic::CurveAffine,
+        group::{ff::PrimeField, Curve},
+        pallas,
+    },
+};
 use halo2_gadgets::poseidon::primitives as poseidon;
 use halo2_proofs::arithmetic::Field;
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::info;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::PrimeField, Curve},
-    pallas,
-};
 use rand::{rngs::OsRng, thread_rng, Rng};
 
 use super::{
@@ -34,16 +42,14 @@ use super::{
 use crate::{
     crypto::{
         coin::{Coin, OwnCoin},
-        keypair::{Keypair, SecretKey},
         leadcoin::LeadCoin,
         note::Note,
         types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
-        util::{mod_r_p, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash},
+        util::poseidon_hash,
     },
     wallet::walletdb::WalletDb,
     Result,
 };
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH_ORCHARD, MerkleNode, Nullifier};
 
 const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 
@@ -238,7 +244,7 @@ fn create_leadcoin(
     //let coin_pk_msg = [c_tau, c_root_sk.inner()];
     //let c_pk: pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_pk_msg);
 
-    let c_pk: pallas::Point = keypair.public.0;
+    let c_pk: pallas::Point = keypair.public.inner();
     let c_pk_coord = c_pk.to_affine().coordinates().unwrap();
     let c_pk_x = c_pk_coord.x();
     let c_pk_y = c_pk_coord.y();

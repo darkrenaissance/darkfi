@@ -18,13 +18,12 @@
 
 use std::{process::exit, str::FromStr};
 
-use darkfi_sdk::crypto::MerkleNode;
+use darkfi_sdk::crypto::{Address, MerkleNode};
 use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
 
 use darkfi::{
     crypto::{
-        address::Address,
         coin::OwnCoin,
         note::{EncryptedNote, Note},
     },
