@@ -52,6 +52,7 @@
               lockFile = ../Cargo.lock;
               outputHashes = {
                 "term_grid-0.2.0" = "sha256-wl4ZlFjY34xPuMpXdX1a/g9YUomKLIYp2U8r9/goti0=";
+                "dashu-0.2.0" = "sha256-gD1eb0N6sxEm6vpaQWqdodRGPvAlsPcV2Jxp63VQZZ4=";
               };
             };
             nativeBuildInputs = myNativeBuildInputs;
