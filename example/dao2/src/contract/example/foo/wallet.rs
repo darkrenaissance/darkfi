@@ -16,17 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::crypto::{PublicKey, SecretKey};
+use halo2_proofs::circuit::Value;
 use log::debug;
+use pasta_curves::pallas;
 use rand::rngs::OsRng;
 
-use halo2_proofs::circuit::Value;
-use pasta_curves::pallas;
-
 use darkfi::{
-    crypto::{
-        keypair::{PublicKey, SecretKey},
-        Proof,
-    },
+    crypto::Proof,
     zk::vm::{Witness, ZkCircuit},
 };
 

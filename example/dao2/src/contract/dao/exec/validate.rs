@@ -18,6 +18,8 @@
 
 use std::any::{Any, TypeId};
 
+use darkfi_sdk::crypto::PublicKey;
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use pasta_curves::{
     arithmetic::CurveAffine,
     group::{Curve, Group},
@@ -25,10 +27,9 @@ use pasta_curves::{
 };
 
 use darkfi::{
-    crypto::{coin::Coin, keypair::PublicKey, types::DrkCircuitField},
+    crypto::{coin::Coin, types::DrkCircuitField},
     Error as DarkFiError,
 };
-use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{
     contract::{dao, dao::CONTRACT_ID, money},

@@ -18,6 +18,11 @@
 
 use std::{any::Any, collections::HashMap, hash::Hasher};
 
+use darkfi_sdk::crypto::{
+    schnorr::{SchnorrPublic, SchnorrSecret, Signature},
+    PublicKey, SecretKey,
+};
+use darkfi_serial::Encodable;
 use lazy_static::lazy_static;
 use log::debug;
 use pasta_curves::{
@@ -28,16 +33,13 @@ use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
-        keypair::{PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
-        schnorr::{SchnorrPublic, SchnorrSecret, Signature},
         types::DrkCircuitField,
         Proof,
     },
     zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::decoder::ZkBinary,
 };
-use darkfi_serial::Encodable;
 
 use crate::error::{DaoError, DaoResult};
 
@@ -206,7 +208,7 @@ pub fn sign(signature_secrets: Vec<SecretKey>, func_call: &FuncCall) -> Vec<Sign
     let mut unsigned_tx_data = vec![];
     for signature_secret in signature_secrets {
         func_call.encode(&mut unsigned_tx_data).expect("failed to encode data");
-        let signature = signature_secret.sign(&unsigned_tx_data[..]);
+        let signature = signature_secret.sign(&mut OsRng, &unsigned_tx_data[..]);
         signatures.push(signature);
     }
     signatures

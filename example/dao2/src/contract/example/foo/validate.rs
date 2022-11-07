@@ -18,13 +18,10 @@
 
 use std::any::{Any, TypeId};
 
-use pasta_curves::pallas;
-
-use darkfi::{
-    crypto::{keypair::PublicKey, types::DrkCircuitField},
-    Error as DarkFiError,
-};
+use darkfi::{crypto::types::DrkCircuitField, Error as DarkFiError};
+use darkfi_sdk::crypto::PublicKey;
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
+use pasta_curves::pallas;
 
 use crate::{
     contract::example::{state::State, CONTRACT_ID},

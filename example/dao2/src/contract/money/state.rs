@@ -16,8 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::crypto::keypair::PublicKey;
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier};
+use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode, Nullifier, PublicKey};
 use incrementalmerkletree::bridgetree::BridgeTree;
 
 type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;

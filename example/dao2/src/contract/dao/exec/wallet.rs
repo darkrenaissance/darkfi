@@ -16,17 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::crypto::{pedersen::pedersen_commitment_u64, SecretKey};
 use halo2_proofs::circuit::Value;
 use log::debug;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
 use darkfi::{
-    crypto::{
-        keypair::SecretKey,
-        util::{pedersen_commitment_u64, poseidon_hash},
-        Proof,
-    },
+    crypto::{util::poseidon_hash, Proof},
     zk::vm::{Witness, ZkCircuit},
 };
 
@@ -59,7 +56,7 @@ impl Builder {
         debug!(target: "dao_contract::exec::wallet::Builder", "build()");
         let mut proofs = vec![];
 
-        let proposal_dest_coords = self.proposal.dest.0.to_affine().coordinates().unwrap();
+        let (proposal_dest_x, proposal_dest_y) = self.proposal.dest.xy();
 
         let proposal_amount = pallas::Base::from(self.proposal.amount);
 
@@ -68,7 +65,7 @@ impl Builder {
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
 
-        let dao_pubkey_coords = self.dao.public_key.0.to_affine().coordinates().unwrap();
+        let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
 
         let user_spend_hook = pallas::Base::from(0);
         let user_data = pallas::Base::from(0);
@@ -81,14 +78,14 @@ impl Builder {
             dao_approval_ratio_quot,
             dao_approval_ratio_base,
             self.dao.gov_token_id,
-            *dao_pubkey_coords.x(),
-            *dao_pubkey_coords.y(),
+            dao_pub_x,
+            dao_pub_y,
             self.dao.bulla_blind,
         ]);
 
         let proposal_bulla = poseidon_hash::<8>([
-            *proposal_dest_coords.x(),
-            *proposal_dest_coords.y(),
+            proposal_dest_x,
+            proposal_dest_y,
             proposal_amount,
             self.proposal.serial,
             self.proposal.token_id,
@@ -99,8 +96,8 @@ impl Builder {
         ]);
 
         let coin_0 = poseidon_hash::<8>([
-            *proposal_dest_coords.x(),
-            *proposal_dest_coords.y(),
+            proposal_dest_x,
+            proposal_dest_y,
             proposal_amount,
             self.proposal.token_id,
             self.proposal.serial,
@@ -110,8 +107,8 @@ impl Builder {
         ]);
 
         let coin_1 = poseidon_hash::<8>([
-            *dao_pubkey_coords.x(),
-            *dao_pubkey_coords.y(),
+            dao_pub_x,
+            dao_pub_y,
             change,
             self.proposal.token_id,
             self.dao_serial,
@@ -141,8 +138,8 @@ impl Builder {
         let prover_witnesses = vec![
             //
             // proposal params
-            Witness::Base(Value::known(*proposal_dest_coords.x())),
-            Witness::Base(Value::known(*proposal_dest_coords.y())),
+            Witness::Base(Value::known(proposal_dest_x)),
+            Witness::Base(Value::known(proposal_dest_y)),
             Witness::Base(Value::known(proposal_amount)),
             Witness::Base(Value::known(self.proposal.serial)),
             Witness::Base(Value::known(self.proposal.token_id)),
@@ -153,8 +150,8 @@ impl Builder {
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.dao.gov_token_id)),
-            Witness::Base(Value::known(*dao_pubkey_coords.x())),
-            Witness::Base(Value::known(*dao_pubkey_coords.y())),
+            Witness::Base(Value::known(dao_pub_x)),
+            Witness::Base(Value::known(dao_pub_y)),
             Witness::Base(Value::known(self.dao.bulla_blind)),
             // votes
             Witness::Base(Value::known(pallas::Base::from(self.yes_votes_value))),

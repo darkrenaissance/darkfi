@@ -1,16 +1,12 @@
 use darkfi_sdk::{
     crypto::ContractId,
-    db::{db_get, db_init, db_lookup, db_set},
+    db::{db_init, db_lookup, db_set},
     define_contract,
     error::ContractResult,
-    msg,
     pasta::pallas,
-    tx::ContractCall,
-    util::{get_object_bytes, get_object_size, put_object_bytes, set_return_data},
+    util::set_return_data,
 };
-use darkfi_serial::{
-    deserialize, serialize, Encodable, ReadExt, SerialDecodable, SerialEncodable, WriteExt,
-};
+use darkfi_serial::{serialize, Encodable, SerialDecodable, SerialEncodable};
 
 #[repr(u8)]
 pub enum MoneyFunction {

@@ -18,7 +18,10 @@
 
 use std::any::{Any, TypeId};
 
-use darkfi_sdk::crypto::{MerkleNode, Nullifier};
+use darkfi_sdk::crypto::{
+    pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+    MerkleNode, Nullifier, PublicKey,
+};
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::Tree;
 use log::{debug, error};
@@ -27,9 +30,7 @@ use pasta_curves::{group::Group, pallas};
 use darkfi::{
     crypto::{
         coin::Coin,
-        keypair::PublicKey,
         types::{DrkCircuitField, DrkTokenId, DrkValueBlind, DrkValueCommit},
-        util::{pedersen_commitment_base, pedersen_commitment_u64},
         BurnRevealedValues, MintRevealedValues,
     },
     Error as DarkFiError,

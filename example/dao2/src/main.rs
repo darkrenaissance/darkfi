@@ -3,10 +3,9 @@ use darkfi::{
     consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
     crypto::{
         coin::Coin,
-        keypair::{Keypair, PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
         types::{DrkSpendHook, DrkUserData, DrkValue},
-        util::{pedersen_commitment_u64, poseidon_hash},
+        util::poseidon_hash,
     },
     runtime::vm_runtime::Runtime,
     zk::circuit::{BurnContract, MintContract},
@@ -14,7 +13,10 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, ContractId, MerkleNode, MerkleTree},
+    crypto::{
+        constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, ContractId, Keypair,
+        MerkleNode, MerkleTree, PublicKey, SecretKey,
+    },
     tx::ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
@@ -22,7 +24,7 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, error};
 use pasta_curves::{
     arithmetic::CurveAffine,
-    group::{ff::Field, Curve, Group},
+    group::{ff::Field, Curve},
     pallas,
 };
 use rand::rngs::OsRng;
@@ -279,8 +281,7 @@ async fn main() -> BoxResult<()> {
                 let mut decoder = Cursor::new(&metadata);
                 let zk_public_values: Vec<(String, Vec<pallas::Base>)> =
                     Decodable::decode(&mut decoder)?;
-                let signature_public_keys: Vec<pallas::Point> =
-                    Decodable::decode(&mut decoder)?;
+                let signature_public_keys: Vec<pallas::Point> = Decodable::decode(&mut decoder)?;
 
                 zkpublic_table.push(zk_public_values);
                 sigpub_table.push(signature_public_keys);
@@ -296,8 +297,7 @@ async fn main() -> BoxResult<()> {
                 let mut decoder = Cursor::new(&metadata);
                 let zk_public_values: Vec<(String, Vec<pallas::Base>)> =
                     Decodable::decode(&mut decoder)?;
-                let signature_public_keys: Vec<pallas::Point> =
-                    Decodable::decode(&mut decoder)?;
+                let signature_public_keys: Vec<pallas::Point> = Decodable::decode(&mut decoder)?;
 
                 zkpublic_table.push(zk_public_values);
                 sigpub_table.push(signature_public_keys);

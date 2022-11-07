@@ -18,7 +18,8 @@
 
 use std::any::{Any, TypeId};
 
-use darkfi::crypto::{keypair::PublicKey, types::DrkCircuitField};
+use darkfi::crypto::types::DrkCircuitField;
+use darkfi_sdk::crypto::PublicKey;
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{

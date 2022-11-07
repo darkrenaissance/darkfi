@@ -1,4 +1,4 @@
-dao
+/dao
 *.wasm
 *.zk.bin
 target/

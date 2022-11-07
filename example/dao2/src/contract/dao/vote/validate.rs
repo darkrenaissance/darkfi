@@ -18,7 +18,7 @@
 
 use std::any::{Any, TypeId};
 
-use darkfi_sdk::crypto::{MerkleNode, Nullifier};
+use darkfi_sdk::crypto::{MerkleNode, Nullifier, PublicKey};
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use log::error;
 use pasta_curves::{
@@ -27,10 +27,7 @@ use pasta_curves::{
     pallas,
 };
 
-use darkfi::{
-    crypto::{keypair::PublicKey, types::DrkCircuitField},
-    Error as DarkFiError,
-};
+use darkfi::{crypto::types::DrkCircuitField, Error as DarkFiError};
 
 use crate::{
     contract::{dao, dao::State as DaoState, money, money::state::State as MoneyState},
@@ -79,7 +76,7 @@ impl CallDataBase for CallData {
             all_votes_commit += input.vote_commit;
             let value_coords = input.vote_commit.to_affine().coordinates().unwrap();
 
-            let sigpub_coords = input.signature_public.0.to_affine().coordinates().unwrap();
+            let (sig_x, sig_y) = input.signature_public.xy();
 
             zk_publics.push((
                 "dao-vote-burn".to_string(),
@@ -89,8 +86,8 @@ impl CallDataBase for CallData {
                     *value_coords.y(),
                     self.header.token_commit,
                     input.merkle_root.inner(),
-                    *sigpub_coords.x(),
-                    *sigpub_coords.y(),
+                    sig_x,
+                    sig_y,
                 ],
             ));
         }

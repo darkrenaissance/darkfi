@@ -1,12 +1,19 @@
+use darkfi::{crypto::Proof, Result, VerifyFailed::ProofVerifyFailed};
+use darkfi_sdk::{
+    crypto::{
+        schnorr::{SchnorrPublic, Signature},
+        PublicKey,
+    },
+    pasta::pallas,
+    tx::ContractCall,
+};
 use log::debug;
-use darkfi::{crypto::{schnorr::{SchnorrPublic, Signature}, Proof, keypair::PublicKey}, Result, VerifyFailed::ProofVerifyFailed};
-use darkfi_sdk::{tx::ContractCall, pasta::pallas};
 
 use crate::{
     contract::{dao, example, money},
     note::EncryptedNote2,
     schema::WalletCache,
-    util::{sign, StateRegistry, ZkContractTable, ZkContractInfo},
+    util::{sign, StateRegistry, ZkContractInfo, ZkContractTable},
 };
 
 macro_rules! zip {
@@ -27,7 +34,11 @@ impl Transaction {
     /// Verify ZK contracts for the entire tx
     /// In real code, we could parallelize this for loop
     /// TODO: fix use of unwrap with Result type stuff
-    pub fn zk_verify(&self, zk_bins: &ZkContractTable, zkpub_table: &Vec<Vec<(String, Vec<pallas::Base>)>>) -> Result<()> {
+    pub fn zk_verify(
+        &self,
+        zk_bins: &ZkContractTable,
+        zkpub_table: &Vec<Vec<(String, Vec<pallas::Base>)>>,
+    ) -> Result<()> {
         assert_eq!(
             self.calls.len(),
             self.proofs.len(),
@@ -51,9 +62,7 @@ impl Transaction {
                 pubvals.len()
             );
 
-            for (i, (proof, (key, public_vals))) in
-                proofs.iter().zip(pubvals.iter()).enumerate()
-            {
+            for (i, (proof, (key, public_vals))) in proofs.iter().zip(pubvals.iter()).enumerate() {
                 match zk_bins.lookup(key).unwrap() {
                     ZkContractInfo::Binary(info) => {
                         let verifying_key = &info.verifying_key;

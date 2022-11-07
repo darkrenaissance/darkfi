@@ -21,27 +21,25 @@ use std::{
     time::Instant,
 };
 
+use darkfi_sdk::crypto::{
+    constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, Keypair, MerkleNode, PublicKey,
+    SecretKey,
+};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::Field, Curve, Group},
-    pallas,
-};
+use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::{
         coin::Coin,
-        keypair::{Keypair, PublicKey, SecretKey},
         proof::{ProvingKey, VerifyingKey},
         types::{DrkSpendHook, DrkUserData, DrkValue},
-        util::{pedersen_commitment_u64, poseidon_hash},
+        util::poseidon_hash,
     },
     zk::circuit::{BurnContract, MintContract},
     zkas::decoder::ZkBinary,
 };
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 
 use crate::{
     contract::{dao, example, money},

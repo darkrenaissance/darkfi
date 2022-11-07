@@ -970,6 +970,7 @@ dependencies = [
 name = "darkfi-sdk"
 version = "0.3.0"
 dependencies = [
+ "blake2b_simd",
  "blake3",
  "bs58",
  "darkfi-serial",
@@ -977,6 +978,8 @@ dependencies = [
  "incrementalmerkletree",
  "lazy_static",
  "pasta_curves",
+ "rand_core",
+ "sha2",
  "subtle",
  "thiserror",
 ]

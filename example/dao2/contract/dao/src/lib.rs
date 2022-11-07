@@ -1,16 +1,16 @@
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, ContractId, MerkleNode, MerkleTree, Nullifier},
-    db::{db_get, db_init, db_lookup, db_set},
+    crypto::{ContractId, MerkleNode, MerkleTree},
+    db::{db_init, db_lookup, db_set},
     define_contract,
     error::ContractResult,
     merkle::merkle_add,
     msg,
     pasta::pallas,
     tx::ContractCall,
-    util::{get_object_bytes, get_object_size, put_object_bytes, set_return_data},
+    util::set_return_data,
 };
 use darkfi_serial::{
-    deserialize, serialize, Encodable, ReadExt, SerialDecodable, SerialEncodable, WriteExt,
+    deserialize, serialize, Encodable, SerialDecodable, SerialEncodable, WriteExt,
 };
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
@@ -103,8 +103,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update = DaoMintUpdate { dao_bulla: params.dao_bulla };
 
             let mut update_data = Vec::new();
-            update_data.write_u8(DaoFunction::Mint as u8);
-            update.encode(&mut update_data);
+            update_data.write_u8(DaoFunction::Mint as u8)?;
+            update.encode(&mut update_data)?;
             set_return_data(&update_data)?;
             msg!("update is set!");
         }
