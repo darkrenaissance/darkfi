@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use halo2_gadgets::poseidon::primitives as poseidon;
 use pasta_curves::{arithmetic::FieldExt, group::ff::PrimeField, pallas};
 
 /// Hash `a` and `b` together with a prefix `persona` and return a `pallas::Scalar`
@@ -34,4 +35,10 @@ pub fn hash_to_scalar(persona: &[u8], a: &[u8], b: &[u8]) -> pallas::Scalar {
 /// scalar field.
 pub fn mod_r_p(x: pallas::Base) -> pallas::Scalar {
     pallas::Scalar::from_repr(x.to_repr()).unwrap()
+}
+
+/// Wrapper around poseidon in `halo2_gadgets`
+pub fn poseidon_hash<const N: usize>(messages: [pallas::Base; N]) -> pallas::Base {
+    poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<N>, 3, 2>::init()
+        .hash(messages)
 }

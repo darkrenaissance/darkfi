@@ -19,12 +19,22 @@
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::PrimeField, pallas};
 
+use super::{poseidon_hash, PublicKey, SecretKey};
+
 /// ContractId represents an on-chain identifier for a certain
 /// smart contract.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct ContractId(pallas::Base);
 
 impl ContractId {
+    /// Derive a contract ID from a `SecretKey` (deploy key)
+    pub fn derive(deploy_key: SecretKey) -> Self {
+        let public_key = PublicKey::from_secret(deploy_key);
+        let (x, y) = public_key.xy();
+        let hash = poseidon_hash::<2>([x, y]);
+        Self(hash)
+    }
+
     /// Get the inner `pallas::Base` element.
     pub fn inner(&self) -> pallas::Base {
         self.0

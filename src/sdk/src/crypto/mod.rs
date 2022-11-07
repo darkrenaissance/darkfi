@@ -32,6 +32,7 @@ pub mod constants;
 
 /// Miscellaneous utilities
 pub mod util;
+pub use util::poseidon_hash;
 
 /// Keypairs, secret keys, and public keys
 pub mod keypair;
