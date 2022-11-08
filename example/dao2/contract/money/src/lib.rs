@@ -103,8 +103,11 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             let params: MoneyTransferParams = deserialize(data)?;
 
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = Vec::new();
-            let signature_public_keys: Vec<pallas::Point> = Vec::new();
+            let mut signature_public_keys: Vec<pallas::Point> = Vec::new();
 
+            for input in &params.clear_inputs {
+                signature_public_keys.push(input.signature_public.inner());
+            }
             for input in &params.inputs {
                 let value_coords = input.value_commit.to_affine().coordinates().unwrap();
                 let token_coords = input.token_commit.to_affine().coordinates().unwrap();
@@ -124,6 +127,8 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
                         sig_y,
                     ]
                 ));
+
+                signature_public_keys.push(input.signature_public.inner());
             }
             for output in &params.outputs {
                 let value_coords = output.value_commit.to_affine().coordinates().unwrap();

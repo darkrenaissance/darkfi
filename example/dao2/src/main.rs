@@ -136,7 +136,7 @@ fn validate(
     }
 
     tx.zk_verify(&zk_bins, &zkpublic_table)?;
-    //tx.verify_sigs();
+    tx.verify_sigs(&sigpub_table);
 
     // Now we finished verification stage, just apply all changes
     assert_eq!(tx.calls.len(), updates.len());

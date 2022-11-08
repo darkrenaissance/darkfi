@@ -1,4 +1,5 @@
 use darkfi::{crypto::Proof, Result, VerifyFailed::ProofVerifyFailed};
+use darkfi_serial::Encodable;
 use darkfi_sdk::{
     crypto::{
         schnorr::{SchnorrPublic, Signature},
@@ -88,19 +89,18 @@ impl Transaction {
     }
 
     pub fn verify_sigs(&self, sigpub_table: &Vec<Vec<pallas::Point>>) -> Result<()> {
-        //let mut tx_data = Vec::new();
-        //self.calls.encode(&mut tx_data)?;
-        //self.proofs.encode(&mut tx_data)?;
-        // Hash it and use the hash as the signing data
-
-        let mut unsigned_tx_data = vec![0xde, 0xad, 0xbe, 0xef];
+        let mut tx_data = Vec::new();
+        self.calls.encode(&mut tx_data)?;
+        self.proofs.encode(&mut tx_data)?;
+        // TODO: Hash it and use the hash as the signing data
+        // let sighash = ...
 
         for (i, (signatures, signature_public_keys)) in
             self.signatures.iter().zip(sigpub_table.iter()).enumerate()
         {
             for (signature_pub_key, signature) in signature_public_keys.iter().zip(signatures) {
                 let signature_pub_key = PublicKey::from(*signature_pub_key);
-                let verify_result = signature_pub_key.verify(&unsigned_tx_data[..], &signature);
+                let verify_result = signature_pub_key.verify(&tx_data[..], &signature);
                 assert!(verify_result, "verify sigs[{}] failed", i);
             }
             debug!(target: "demo", "verify_sigs({}) passed", i);
