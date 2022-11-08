@@ -36,28 +36,21 @@ Minimum Rust version supported is **1.65.0 (stable)**.
 
 The following dependencies are also required:
 
-|          Dependency          |   Debian-based   |   
-|------------------------------|------------------|
-| gcc, gcc-c++, kernel headers | build-essential  | 
-| cmake                        | cmake            |
-| jq                           | jq               |
-| wget                         | wget             | 
-| pkg-config                   | pkg-config       | 
-| clang                        | clang            | 
-| clang libs                   | libclang-dev     | 
-| llvm libs                    | llvm-dev         | 
-| udev libs                    | libudev-dev      |
-| freetype2 libs               | libfreetype6-dev |
-| expat xml lib                | libexpat1-dev    |
+|   Dependency   |   Debian-based   |   
+|----------------|------------------|
+| git            | git              |
+| make           | make             |
+| jq             | jq               |
+| gcc            | gcc              |
+| pkg-config     | pkg-config       |
+| openssl libs   | openssl-dev      |
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the
 following to install the required dependencies:
 
 ```shell
 # apt-get update
-# apt-get install -y build-essential cmake jq wget pkg-config \
-    clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
-    libexpat1-dev
+# apt-get install -y git make jq gcc pkg-config openssl-dev
 ```
 
 Alternatively, users can try using the automated script under `contrib`
