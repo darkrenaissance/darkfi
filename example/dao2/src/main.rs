@@ -15,6 +15,7 @@ use darkfi_sdk::{
     crypto::{
         constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, poseidon_hash, ContractId,
         Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId,
+        schnorr::SchnorrSecret,
     },
     tx::ContractCall,
 };
@@ -34,13 +35,14 @@ use std::{
 };
 
 use dao_contract::{DaoFunction, DaoMintParams};
+use money_contract::{MoneyFunction, MoneyTransferParams};
 
 use crate::{
     contract::{dao, example, money},
     note::EncryptedNote2,
     schema::WalletCache,
     tx::Transaction,
-    util::{sign, StateRegistry, ZkContractTable},
+    util::{StateRegistry, ZkContractTable},
 };
 
 mod contract;
@@ -414,7 +416,28 @@ async fn main() -> BoxResult<()> {
                 user_data,
             }],
         };
-        let (params, dao_mint_proofs) = builder.build(&zk_bins)?;
+        let (params, proofs) = builder.build(&zk_bins)?;
+
+        // Write the actual call data
+        let mut calldata = Vec::new();
+        // Selects which path executes in the contract.
+        calldata.write_u8(MoneyFunction::Transfer as u8)?;
+        params.encode(&mut calldata)?;
+
+        let calls = vec![ContractCall { contract_id: money_contract_id, data: calldata }];
+
+        let proofs = vec![proofs];
+
+        // We sign everything
+        let mut unsigned_tx_data = vec![];
+        calls.encode(&mut unsigned_tx_data)?;
+        proofs.encode(&mut unsigned_tx_data)?;
+        let signature = cashier_signature_secret.sign(&mut OsRng, &unsigned_tx_data[..]);
+
+        // Our tx has a single contract call which itself has a single input
+        let signatures = vec![vec![signature]];
+
+        Transaction { calls, proofs, signatures }
     };
 
 
