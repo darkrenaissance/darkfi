@@ -177,6 +177,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let data = &self_.data[1..];
             let params: MoneyTransferParams = deserialize(data)?;
 
+            // TODO: implement state_transition() checks here
+
             let update = MoneyTransferUpdate {
                 nullifiers: params.inputs.iter().map(|input| input.nullifier).collect(),
                 coins: params.outputs.iter().map(|output| output.coin).collect(),
