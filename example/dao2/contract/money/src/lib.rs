@@ -4,7 +4,7 @@ use darkfi_sdk::{
     define_contract,
     msg,
     error::ContractResult,
-    pasta::pallas,
+    pasta::{pallas, group::Curve, arithmetic::CurveAffine},
     tx::ContractCall,
     util::set_return_data,
 };
@@ -92,14 +92,61 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     Ok(())
 }
 fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
-    let zk_public_values: Vec<(String, Vec<pallas::Base>)> = Vec::new();
-    let signature_public_keys: Vec<pallas::Point> = Vec::new();
+    let (call_idx, call): (u32, Vec<ContractCall>) = deserialize(ix)?;
 
-    let mut metadata = Vec::new();
-    zk_public_values.encode(&mut metadata)?;
-    signature_public_keys.encode(&mut metadata)?;
-    set_return_data(&metadata)?;
+    assert!(call_idx < call.len() as u32);
+    let self_ = &call[call_idx as usize];
 
+    match MoneyFunction::from(self_.data[0]) {
+        MoneyFunction::Transfer => {
+            let data = &self_.data[1..];
+            let params: MoneyTransferParams = deserialize(data)?;
+
+            let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = Vec::new();
+            let signature_public_keys: Vec<pallas::Point> = Vec::new();
+
+            for input in &params.inputs {
+                let value_coords = input.value_commit.to_affine().coordinates().unwrap();
+                let token_coords = input.token_commit.to_affine().coordinates().unwrap();
+                let (sig_x, sig_y) = input.signature_public.xy();
+
+                zk_public_values.push((
+                    "money-transfer-burn".to_string(),
+                    vec![
+                        input.nullifier,
+                        *value_coords.x(),
+                        *value_coords.y(),
+                        *token_coords.x(),
+                        *token_coords.y(),
+                        input.merkle_root,
+                        input.user_data_enc,
+                        sig_x,
+                        sig_y,
+                    ]
+                ));
+            }
+            for output in &params.outputs {
+                let value_coords = output.value_commit.to_affine().coordinates().unwrap();
+                let token_coords = output.token_commit.to_affine().coordinates().unwrap();
+
+                zk_public_values.push((
+                    "money-transfer-mint".to_string(),
+                    vec![
+                        output.coin,
+                        *value_coords.x(),
+                        *value_coords.y(),
+                        *token_coords.x(),
+                        *token_coords.y(),
+                    ]
+                ));
+            }
+
+            let mut metadata = Vec::new();
+            zk_public_values.encode(&mut metadata)?;
+            signature_public_keys.encode(&mut metadata)?;
+            set_return_data(&metadata)?;
+        }
+    }
     Ok(())
 }
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
@@ -110,6 +157,9 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
     match MoneyFunction::from(self_.data[0]) {
         MoneyFunction::Transfer => {
+            let data = &self_.data[1..];
+            let params: MoneyTransferParams = deserialize(data)?;
+
             let update = MoneyTransferUpdate {};
 
             let mut update_data = Vec::new();

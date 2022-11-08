@@ -41,7 +41,7 @@ use crate::{blockchain::Blockchain, Error, Result};
 const MEMORY: &str = "memory";
 
 /// Gas limit for a contract
-const GAS_LIMIT: u64 = 200000;
+const GAS_LIMIT: u64 = 200000000;
 
 #[derive(Clone, Copy)]
 pub enum ContractSection {

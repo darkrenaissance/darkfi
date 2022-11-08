@@ -440,6 +440,18 @@ async fn main() -> BoxResult<()> {
         Transaction { calls, proofs, signatures }
     };
 
+    //// Validator
+
+    validate(
+        &tx,
+        &dao_wasm_bytes,
+        dao_contract_id,
+        &money_wasm_bytes,
+        money_contract_id,
+        &blockchain,
+        &zk_bins,
+    )
+    .expect("validate failed");
 
     //let func_call = builder.build(&zk_bins)?;
     //let func_calls = vec![func_call];
