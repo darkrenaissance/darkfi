@@ -22,8 +22,6 @@ pub mod diffie_hellman;
 pub mod mint_proof;
 pub mod note;
 pub mod proof;
-pub mod token_id;
-pub mod token_list;
 pub mod types;
 
 /// VDF (Verifiable Delay Function) using MiMC
