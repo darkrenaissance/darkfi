@@ -1,9 +1,10 @@
 use darkfi_sdk::{
-    crypto::{ContractId, PublicKey},
+    crypto::{ContractId, PublicKey, MerkleNode, MerkleTree},
     db::{db_init, db_lookup, db_set},
     define_contract,
     msg,
     error::ContractResult,
+    merkle::merkle_add,
     pasta::{pallas, group::Curve, arithmetic::CurveAffine},
     tx::ContractCall,
     util::set_return_data,
@@ -35,8 +36,10 @@ pub struct MoneyTransferParams {
 }
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct MoneyTransferUpdate {
-    // nullifiers
-    // coins
+    /// Nullifiers
+    pub nullifiers: Vec<pallas::Base>,
+    /// Coins
+    pub coins: Vec<pallas::Base>
 }
 
 /// A transaction's clear input
@@ -87,7 +90,16 @@ define_contract!(
 );
 
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
-    let db_handle = db_init(cid, "wagies")?;
+    let info_db = db_init(cid, "info")?;
+    let _ = db_init(cid, "coin_roots")?;
+
+    let coin_tree = MerkleTree::new(100);
+    let mut coin_tree_data = Vec::new();
+    coin_tree_data.write_u32(0)?;
+    coin_tree.encode(&mut coin_tree_data)?;
+    db_set(info_db, &serialize(&"coin_tree".to_string()), &coin_tree_data)?;
+
+    let _ = db_init(cid, "nulls")?;
 
     Ok(())
 }
@@ -165,7 +177,10 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let data = &self_.data[1..];
             let params: MoneyTransferParams = deserialize(data)?;
 
-            let update = MoneyTransferUpdate {};
+            let update = MoneyTransferUpdate {
+                nullifiers: params.inputs.iter().map(|input| input.nullifier).collect(),
+                coins: params.outputs.iter().map(|output| output.coin).collect(),
+            };
 
             let mut update_data = Vec::new();
             update_data.write_u8(MoneyFunction::Transfer as u8)?;
@@ -179,8 +194,19 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
     match MoneyFunction::from(update_data[0]) {
         MoneyFunction::Transfer => {
-            let db_handle = db_lookup(cid, "wagies")?;
-            db_set(db_handle, &serialize(&"jason_gulag".to_string()), &serialize(&110))?;
+            let data = &update_data[1..];
+            let update: MoneyTransferUpdate = deserialize(data)?;
+
+            let db_info = db_lookup(cid, "info")?;
+            let db_nulls = db_lookup(cid, "nulls")?;
+            for nullifier in update.nullifiers {
+                db_set(db_nulls, &serialize(&nullifier), &[])?;
+            }
+            let db_roots = db_lookup(cid, "coin_roots")?;
+            for coin in update.coins {
+                let node = MerkleNode::new(coin);
+                merkle_add(db_info, db_roots, &serialize(&"coin_tree".to_string()), &node)?;
+            }
         }
     }
 

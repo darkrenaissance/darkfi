@@ -73,13 +73,27 @@ fn show_dao_state(chain: &Blockchain, contract_id: &ContractId) -> Result<()> {
 }
 
 fn show_money_state(chain: &Blockchain, contract_id: &ContractId) -> Result<()> {
-    let db = chain.contracts.lookup(&chain.sled_db, contract_id, "wagies")?;
+    let db_info = chain.contracts.lookup(&chain.sled_db, contract_id, "info")?;
+    let value = db_info.get(&serialize(&"coin_tree".to_string())).expect("coin_tree").unwrap();
+    let mut decoder = Cursor::new(&value);
+    let set_size: u32 = Decodable::decode(&mut decoder)?;
+    let tree: MerkleTree = Decodable::decode(decoder)?;
     debug!(target: "demo", "Money state:");
-    for obj in db.iter() {
+    debug!(target: "demo", "    tree: {} bytes", value.len());
+    debug!(target: "demo", "    set size: {}", set_size);
+
+    let db_roots = chain.contracts.lookup(&chain.sled_db, contract_id, "coin_roots")?;
+    for i in 0..set_size {
+        let root = db_roots.get(&serialize(&i)).expect("coin_roots").unwrap();
+        let root: MerkleNode = deserialize(&root)?;
+        debug!(target: "demo", "    root {}: {:?}", i, root);
+    }
+
+    let db_nulls = chain.contracts.lookup(&chain.sled_db, contract_id, "info")?;
+    debug!(target: "demo", "    nullifiers:");
+    for obj in db_nulls.iter() {
         let (key, value) = obj.unwrap();
-        let name: String = deserialize(&key)?;
-        let age: u32 = deserialize(&value)?;
-        debug!(target: "demo", "    {}: {}", name, age);
+        debug!(target: "demo", "        {:02x?}", &key[..]);
     }
     Ok(())
 }
@@ -136,7 +150,7 @@ fn validate(
     }
 
     tx.zk_verify(&zk_bins, &zkpublic_table)?;
-    tx.verify_sigs(&sigpub_table);
+    tx.verify_sigs(&sigpub_table)?;
 
     // Now we finished verification stage, just apply all changes
     assert_eq!(tx.calls.len(), updates.len());
@@ -453,16 +467,7 @@ async fn main() -> BoxResult<()> {
     )
     .expect("validate failed");
 
-    //let func_call = builder.build(&zk_bins)?;
-    //let func_calls = vec![func_call];
-
-    //let mut signatures = vec![];
-    //for func_call in &func_calls {
-    //    let sign = sign([cashier_signature_secret].to_vec(), func_call);
-    //    signatures.push(sign);
-    //}
-
-    //let tx = Transaction { func_calls, signatures };
+    // Wallet stuff
 
     ///////////////////////////////////////////////////
 
