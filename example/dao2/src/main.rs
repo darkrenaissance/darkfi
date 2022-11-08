@@ -197,7 +197,6 @@ async fn main() -> BoxResult<()> {
     let zk_dao_mint_bin = ZkBinary::decode(zk_dao_mint_bincode)?;
     zk_bins.add_contract("dao-mint".to_string(), zk_dao_mint_bin, 13);
 
-    /*
     debug!(target: "demo", "Loading money-transfer contracts");
     {
         let start = Instant::now();
@@ -216,6 +215,7 @@ async fn main() -> BoxResult<()> {
         zk_bins.add_native("money-transfer-mint".to_string(), mint_pk, mint_vk);
         zk_bins.add_native("money-transfer-burn".to_string(), burn_pk, burn_vk);
     }
+    /*
     debug!(target: "demo", "Loading dao-propose-main.zk");
     let zk_dao_propose_main_bincode = include_bytes!("../proof/dao-propose-main.zk.bin");
     let zk_dao_propose_main_bin = ZkBinary::decode(zk_dao_propose_main_bincode)?;
@@ -235,13 +235,13 @@ async fn main() -> BoxResult<()> {
     let zk_dao_exec_bincode = include_bytes!("../proof/dao-exec.zk.bin");
     let zk_dao_exec_bin = ZkBinary::decode(zk_dao_exec_bincode)?;
     zk_bins.add_contract("dao-exec".to_string(), zk_dao_exec_bin, 13);
+    */
 
     // State for money contracts
     let cashier_signature_secret = SecretKey::random(&mut OsRng);
     let cashier_signature_public = PublicKey::from_secret(cashier_signature_secret);
     let faucet_signature_secret = SecretKey::random(&mut OsRng);
     let faucet_signature_public = PublicKey::from_secret(faucet_signature_secret);
-    */
 
     // We use this to receive coins
     let mut cache = WalletCache::new();
@@ -372,60 +372,64 @@ async fn main() -> BoxResult<()> {
 
     debug!(target: "demo", "Create DAO bulla: {:?}", dao_bulla.0);
 
-    /////////////////////////////////////////////////
-    // Old stuff
-    /////////////////////////////////////////////////
-    /*
-    let wasm_bytes = std::fs::read("dao_contract.wasm")?;
-    let dao_contract_id = ContractId::from(pallas::Base::from(1));
-    let mut runtime = Runtime::new(&wasm_bytes, blockchain.clone(), dao_contract_id)?;
+    ///////////////////////////////////////////////////
+    //// Mint the initial supply of treasury token
+    //// and send it all to the DAO directly
+    ///////////////////////////////////////////////////
+    debug!(target: "demo", "Stage 2. Minting treasury token");
 
-    // Deploy function to initialize the smart contract state.
-    // Here we pass an empty payload, but it's possible to feed in arbitrary data.
-    runtime.deploy(&[])?;
+    cache.track(dao_keypair.secret);
 
-    // This is another call so we instantiate a new runtime.
-    let mut runtime = Runtime::new(&wasm_bytes, blockchain.clone(), dao_contract_id)?;
+    //// Wallet
 
-    // =============================================
-    // Build some kind of payload to show an example
-    // =============================================
-    // Write the actual call data
-    let mut calldata = Vec::new();
-    // Selects which path executes in the contract.
-    calldata.write_u8(DaoFunction::Mint as u8)?;
-    let params = DaoMintParams { a: 777, b: 666 };
-    params.encode(&mut calldata)?;
+    // Address of deployed contract in our example is dao::exec::FUNC_ID
+    // This field is public, you can see it's being sent to a DAO
+    // but nothing else is visible.
+    //
+    // In the python code we wrote:
+    //
+    //   spend_hook = b"0xdao_ruleset"
+    //
+    let spend_hook = *dao::exec::FUNC_ID;
+    let tx = {
+        // The user_data can be a simple hash of the items passed into the ZK proof
+        // up to corresponding linked ZK proof to interpret however they need.
+        // In out case, it's the bulla for the DAO
+        let user_data = dao_bulla.0;
 
-    let func_calls = vec![ContractCall {
-        contract_id: dao_contract_id,
-        calldata
-    }];
+        let builder = money::transfer::wallet::Builder {
+            clear_inputs: vec![money::transfer::wallet::BuilderClearInputInfo {
+                value: xdrk_supply,
+                token_id: xdrk_token_id,
+                signature_secret: cashier_signature_secret,
+            }],
+            inputs: vec![],
+            outputs: vec![money::transfer::wallet::BuilderOutputInfo {
+                value: xdrk_supply,
+                token_id: xdrk_token_id,
+                public: dao_keypair.public,
+                serial: pallas::Base::random(&mut OsRng),
+                coin_blind: pallas::Base::random(&mut OsRng),
+                spend_hook,
+                user_data,
+            }],
+        };
+        let (params, dao_mint_proofs) = builder.build(&zk_bins)?;
+    };
 
-    let mut payload = Vec::new();
-    //// Write the actual payload data
-    let call_index = 0;
-    payload.write_u32(call_index)?;
-    func_calls.encode(&mut payload)?;
 
-    // ============================================================
-    // Serialize the payload into the runtime format and execute it
-    // ============================================================
-    let update = runtime.exec(&payload)?;
+    //let func_call = builder.build(&zk_bins)?;
+    //let func_calls = vec![func_call];
 
-    // =====================================================
-    // If exec was successful, try to apply the state change
-    // =====================================================
-    runtime.apply(&update)?;
+    //let mut signatures = vec![];
+    //for func_call in &func_calls {
+    //    let sign = sign([cashier_signature_secret].to_vec(), func_call);
+    //    signatures.push(sign);
+    //}
 
-    // =====================================================
-    // Verify ZK proofs and signatures
-    // =====================================================
-    let metadata = runtime.metadata(&payload)?;
-    let mut decoder = Cursor::new(&metadata);
-    let zk_public_values: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
-    let signature_public_keys: Vec<pallas::Point> = Decodable::decode(decoder)?;
-    */
+    //let tx = Transaction { func_calls, signatures };
+
+    ///////////////////////////////////////////////////
 
     show_dao_state(&blockchain, &dao_contract_id)?;
     show_money_state(&blockchain, &money_contract_id)?;

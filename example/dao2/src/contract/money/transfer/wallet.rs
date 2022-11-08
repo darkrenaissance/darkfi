@@ -28,17 +28,16 @@ use darkfi::{
         types::{
             DrkCoinBlind, DrkSerial, DrkSpendHook, DrkUserData, DrkUserDataBlind, DrkValueBlind,
         },
+        Proof
     },
     Result,
 };
 
+use money_contract::{MoneyFunction, MoneyTransferParams, ClearInput, Input, Output};
+
 use crate::{
-    contract::money::{
-        transfer::validate::{CallData, ClearInput, Input, Output},
-        CONTRACT_ID,
-    },
     note,
-    util::{FuncCall, ZkContractInfo, ZkContractTable},
+    util::{ZkContractInfo, ZkContractTable},
 };
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
@@ -108,7 +107,7 @@ impl Builder {
         total
     }
 
-    pub fn build(self, zk_bins: &ZkContractTable) -> Result<FuncCall> {
+    pub fn build(self, zk_bins: &ZkContractTable) -> Result<(MoneyTransferParams, Vec<Proof>)> {
         assert!(self.clear_inputs.len() + self.inputs.len() > 0);
 
         let mut clear_inputs = vec![];
@@ -164,7 +163,15 @@ impl Builder {
             )?;
             proofs.push(burn_proof);
 
-            let input = Input { revealed };
+            let input = Input {
+                value_commit: revealed.value_commit,
+                token_commit: revealed.token_commit,
+                nullifier: revealed.nullifier.inner(),
+                merkle_root: revealed.merkle_root.inner(),
+                spend_hook: revealed.spend_hook,
+                user_data_enc: revealed.user_data_enc,
+                signature_public: revealed.signature_public,
+            };
             inputs.push(input);
         }
 
@@ -217,19 +224,20 @@ impl Builder {
                 token_blind,
             };
 
-            let encrypted_note = note::encrypt(&note, &output.public)?;
+            //let encrypted_note = note::encrypt(&note, &output.public)?;
 
-            let output = Output { revealed, enc_note: encrypted_note };
+            let output = Output {
+                value_commit: revealed.value_commit,
+                token_commit: revealed.token_commit,
+                coin: revealed.coin.0,
+            };
             outputs.push(output);
         }
 
-        let call_data = CallData { clear_inputs, inputs, outputs };
+        //let call_data = CallData { clear_inputs, inputs, outputs };
 
-        Ok(FuncCall {
-            contract_id: *CONTRACT_ID,
-            func_id: *super::FUNC_ID,
-            call_data: Box::new(call_data),
-            proofs,
-        })
+        Ok((MoneyTransferParams {
+            clear_inputs, inputs, outputs
+        }, proofs))
     }
 }

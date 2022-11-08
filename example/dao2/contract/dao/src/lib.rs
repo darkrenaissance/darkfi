@@ -50,7 +50,7 @@ define_contract!(
 
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     let info_db = db_init(cid, "info")?;
-    let roots_db = db_init(cid, "dao_roots")?;
+    let _ = db_init(cid, "dao_roots")?;
 
     let dao_tree = MerkleTree::new(100);
     let mut dao_tree_data = Vec::new();
