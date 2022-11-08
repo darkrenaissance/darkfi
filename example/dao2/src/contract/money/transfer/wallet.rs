@@ -118,7 +118,7 @@ impl Builder {
 
             let clear_input = ClearInput {
                 value: input.value,
-                token_id: input.token_id,
+                token_id: input.token_id.inner(),
                 value_blind,
                 token_blind,
                 signature_public,
