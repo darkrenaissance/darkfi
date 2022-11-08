@@ -8,9 +8,9 @@ edition = "2018"
 [workspace]
 
 [dependencies]
-pasta_curves = "0.4.0"
-ff = "0.12.0"
-group = "0.12.0"
+pasta_curves = "0.4.1"
+ff = "0.12.1"
+group = "0.12.1"
 rand = "0.8.5"
 
 [[bin]]

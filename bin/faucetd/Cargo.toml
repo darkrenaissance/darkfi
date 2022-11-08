@@ -10,7 +10,7 @@ edition = "2021"
 
 [dependencies]
 async-std = "1.12.0"
-async-trait = "0.1.57"
+async-trait = "0.1.58"
 blake3 = "1.3.1"
 bs58 = "0.4.0"
 chrono = "0.4.22"
@@ -23,13 +23,13 @@ hex = "0.4.3"
 lazy-init = "0.5.1"
 log = "0.4.17"
 rand = "0.8.5"
-serde_json = "1.0.85"
+serde_json = "1.0.87"
 simplelog = "0.12.0"
 sled = "0.34.7"
 smol = "1.2.5"
 url = "2.3.1"
 
 # Argument parsing
-serde = {version = "1.0.145", features = ["derive"]}
+serde = {version = "1.0.147", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"

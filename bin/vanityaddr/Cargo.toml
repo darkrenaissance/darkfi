@@ -15,6 +15,6 @@ ctrlc = "3.2.3"
 darkfi = {path = "../../", features = ["crypto"]}
 darkfi-sdk = {path = "../../src/sdk"}
 indicatif = "0.17.1"
-num_cpus = "1.13.1"
+num_cpus = "1.14.0"
 rand = "0.8.5"
 rayon = "1.5.3"

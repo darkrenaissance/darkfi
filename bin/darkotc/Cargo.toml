@@ -18,5 +18,5 @@ darkfi-serial = {path = "../../src/serial"}
 halo2_proofs = "0.2.0"
 halo2_gadgets = "0.2.0"
 rand = "0.8.5"
-serde_json = "1.0.85"
+serde_json = "1.0.87"
 url = "2.3.1"

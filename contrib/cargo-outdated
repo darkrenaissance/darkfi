@@ -21,10 +21,18 @@ CRATESIO_INDEX = join(getenv("HOME"), ".cache", "crates.io-index")
 PICKLE_CACHE = join(getenv("HOME"), ".cache", "cargo-outdated.pickle")
 
 # Set of packages that are ignored by this tool
-IGNORES = {"drk-sdk", "darkfi", "darkfi-derive", "darkfi-derive-internal"}
+IGNORES = {
+    "darkfi-serial",
+    "darkfi-sdk",
+    "darkfi",
+    "darkfi-derive",
+    "darkfi-derive-internal",
+    "dao-contract",
+    "money-contract",
+}
 
 # Yanked releases from crates.io to ignore
-YANKED = {"socket2": ["0.4.5"]}
+YANKED = {}
 
 # Cached paths for metadata to not have to search through the crates index
 METADATA_PATHS = {}
@@ -101,7 +109,7 @@ def check_dep(name, data):
     else:
         raise ValueError(f"Invalid dependency: {name}")
 
-    if semver.compare(local_version, metadata["vers"], loose=True) < 0:
+    if semver.compare(local_version, metadata["vers"]) < 0:
         name = metadata["name"]
         vers = metadata["vers"]
 

@@ -14,18 +14,18 @@ dashu = { version = "0.2.0", git = "https://github.com/ertosns/dashu" }
 halo2_gadgets = "0.2.0"
 halo2_proofs = "0.2.0"
 incrementalmerkletree = "0.3.0"
-pasta_curves = "0.4.0"
+pasta_curves = "0.4.1"
 
 # Async
 async-std = "1.12.0"
-async-trait = "0.1.57"
+async-trait = "0.1.58"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 easy-parallel = "3.2.0"
 smol = "1.2.5"
 
 # Argument parsing
-serde = "1.0.145"
-serde_derive = "1.0.145"
+serde = "1.0.147"
+serde_derive = "1.0.147"
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

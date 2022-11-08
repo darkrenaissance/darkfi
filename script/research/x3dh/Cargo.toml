@@ -8,10 +8,10 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-sha3 = "0.10.6"
+sha2 = "0.10.6"
 digest = "0.10.5"
-rand = "0.7.3"
+rand = "0.8.5"
 aes-gcm-siv = "0.11.1"
-curve25519-dalek = "3.2.1"
+curve25519-dalek = "4.0.0-pre.2"
 ed25519-dalek = "1.0.1"
-x25519-dalek = "1.2.0"
+x25519-dalek = "2.0.0-pre.1"

@@ -21,7 +21,9 @@
 use curve25519_dalek::{
     constants::ED25519_BASEPOINT_POINT, montgomery::MontgomeryPoint, scalar::Scalar,
 };
-use ed25519_dalek::{Digest, PublicKey as Ed25519PublicKey, Sha512, Signature, Verifier};
+use digest::Digest;
+use ed25519_dalek::{PublicKey as Ed25519PublicKey, Signature, Verifier};
+use sha2::Sha512;
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
 
 pub trait XeddsaSigner {

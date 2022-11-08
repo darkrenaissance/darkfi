@@ -15,4 +15,4 @@ darkfi-serial = { path = "../../../../src/serial" }
 # We need to disable random using "custom" which makes the crate a noop
 # so the wasm32-unknown-unknown target is enabled.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.2", features = ["custom"] }
+getrandom = { version = "0.2.8", features = ["custom"] }

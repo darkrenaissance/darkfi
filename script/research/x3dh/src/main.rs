@@ -23,7 +23,7 @@ use std::collections::{HashMap, VecDeque};
 use aes_gcm_siv::{AeadInPlace, Aes256GcmSiv, KeyInit};
 use digest::Update;
 use rand::rngs::OsRng;
-use sha3::Sha3_256;
+use sha2::Sha256;
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
 
 mod hkdf;
@@ -173,11 +173,11 @@ impl MessageHeader {
 /// the message key, and a single byte 0x02 as input to produce the next chain
 /// key.
 fn kdf_ck(ck: [u8; 32]) -> ([u8; 32], [u8; 32]) {
-    let mut hmac = Hmac::<Sha3_256>::new_from_slice(&ck);
+    let mut hmac = Hmac::<Sha256>::new_from_slice(&ck);
     hmac.update(&[CHAIN_KEY_CONSTANT]);
     let chain_key = hmac.finalize();
 
-    let mut hmac = Hmac::<Sha3_256>::new_from_slice(&ck);
+    let mut hmac = Hmac::<Sha256>::new_from_slice(&ck);
     hmac.update(&[MESSAGE_KEY_CONSTANT]);
     let message_key = hmac.finalize();
 
@@ -195,11 +195,11 @@ fn kdf_rk(rk: [u8; 32], dh_out: [u8; 32]) -> ([u8; 32], [u8; 32], [u8; 32]) {
     const KDF_RK_INFO: &[u8] = b"x3dh_double_ratchet_kdf_rk";
     const KDF_HE_INFO: &[u8] = b"x3dh_double_ratchet_kdf_rk_he";
 
-    let (_root_key, hkdf) = Hkdf::<Sha3_256>::extract(&rk, &dh_out);
+    let (_root_key, hkdf) = Hkdf::<Sha256>::extract(&rk, &dh_out);
     let mut chain_key = [0u8; 32];
     hkdf.expand(KDF_RK_INFO, &mut chain_key).unwrap();
 
-    let (root_key, hkdf) = Hkdf::<Sha3_256>::extract(&rk, &dh_out);
+    let (root_key, hkdf) = Hkdf::<Sha256>::extract(&rk, &dh_out);
     let mut next_header_key = [0u8; 32];
     hkdf.expand(KDF_HE_INFO, &mut next_header_key).unwrap();
 
@@ -529,7 +529,7 @@ fn main() {
         ikm.extend_from_slice(&opk_dh.to_bytes());
     }
 
-    let hkdf = Hkdf::<Sha3_256>::new(&salt, &ikm);
+    let hkdf = Hkdf::<Sha256>::new(&salt, &ikm);
     let mut sk = [0u8; 32];
     hkdf.expand(X3DH_INIT_INFO, &mut sk).unwrap();
 
@@ -610,7 +610,7 @@ fn main() {
 
     // TODO: Erase ephemeral data
 
-    let hkdf = Hkdf::<Sha3_256>::new(&salt, &ikm);
+    let hkdf = Hkdf::<Sha256>::new(&salt, &ikm);
     let mut sk2 = [0u8; 32];
     hkdf.expand(X3DH_INIT_INFO, &mut sk2).unwrap();
     assert_eq!(sk, sk2); // Just to confirm everything's correct
