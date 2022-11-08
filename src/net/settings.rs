@@ -31,22 +31,41 @@ pub type SettingsPtr = Arc<Settings>;
 /// Default settings for the network. Can be manually configured.
 #[derive(Clone, Debug)]
 pub struct Settings {
+    /// P2P accept addresses node listens to for inbound connections
     pub inbound: Vec<Url>,
+    /// Outbound connection slots number
     pub outbound_connections: u32,
+    /// Manual connections retry limit, 0 for forever looping
     pub manual_attempt_limit: u32,
+    /// Seed connection establishment timeout
     pub seed_query_timeout_seconds: u32,
+    /// Connection establishment timeout
     pub connect_timeout_seconds: u32,
+    /// Exchange versions (handshake) timeout
     pub channel_handshake_seconds: u32,
+    /// Ping-pong exhange execution interval
     pub channel_heartbeat_seconds: u32,
+    /// Try to fill an outbound slot interval
     pub outbound_retry_seconds: u64,
+    /// P2P external addresses node advertises so other peers can reach us
+    /// and connect to us, as long us inbound addresses are also configured
     pub external_addr: Vec<Url>,
+    /// Peer nodes to manually connect to
     pub peers: Vec<Url>,
+    /// Seed nodes to connect to for peers retrieval and/or advertising our own
+    /// external address
     pub seeds: Vec<Url>,
+    /// Only used for debugging. Compromises privacy when set.
     pub node_id: String,
+    /// Application version, used for verification between peers
     pub app_version: Option<String>,
+    /// Prefered transports for outbound connections
     pub outbound_transports: Vec<TransportName>,
+    /// Allow localnet hosts
     pub localnet: bool,
+    /// Enable peer discovery
     pub peer_discovery: bool,
+    /// Enable channel logging
     pub channel_log: bool,
 }
 
@@ -78,47 +97,62 @@ impl Default for Settings {
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[structopt()]
 pub struct SettingsOpt {
-    /// P2P accept addresses
+    /// P2P accept addresses node listens to for inbound connections
     #[serde(default)]
     #[structopt(long = "accept")]
     pub inbound: Vec<Url>,
 
-    /// Connection slots
+    /// Outbound connection slots number
     #[structopt(long = "slots")]
     pub outbound_connections: Option<u32>,
 
-    /// P2P external addresses
+    /// P2P external addresses node advertises so other peers can reach us
+    /// and connect to us, as long us inbound addresses are also configured
     #[serde(default)]
     #[structopt(long)]
     pub external_addr: Vec<Url>,
 
-    /// Peer nodes to connect to
+    /// Peer nodes to manually connect to
     #[serde(default)]
     #[structopt(long)]
     pub peers: Vec<Url>,
 
-    /// Seed nodes to connect to
+    /// Seed nodes to connect to for peers retrieval and/or advertising our own
+    /// external address
     #[serde(default)]
     #[structopt(long)]
     pub seeds: Vec<Url>,
 
+    /// Manual connections retry limit
     #[structopt(skip)]
     pub manual_attempt_limit: Option<u32>,
+
+    /// Seed connection establishment timeout
     #[structopt(skip)]
     pub seed_query_timeout_seconds: Option<u32>,
+
+    /// Connection establishment timeout
     #[structopt(skip)]
     pub connect_timeout_seconds: Option<u32>,
+
+    /// Exchange versions (handshake) timeout
     #[structopt(skip)]
     pub channel_handshake_seconds: Option<u32>,
+
+    /// Ping-pong exhange execution interval
     #[structopt(skip)]
     pub channel_heartbeat_seconds: Option<u32>,
+
+    /// Try to fill an outbound slot interval
     #[structopt(skip)]
     pub outbound_retry_seconds: Option<u64>,
 
+    /// Only used for debugging. Compromises privacy when set.
     #[serde(default)]
     #[structopt(skip)]
     pub node_id: String,
 
+    /// Application version, used for verification between peers
     #[serde(default)]
     #[structopt(skip)]
     pub app_version: Option<String>,
@@ -128,7 +162,7 @@ pub struct SettingsOpt {
     #[structopt(long = "transports")]
     pub outbound_transports: Vec<String>,
 
-    /// Enable localnet hosts
+    /// Allow localnet hosts
     #[serde(default)]
     #[structopt(long)]
     pub localnet: bool,
@@ -138,7 +172,7 @@ pub struct SettingsOpt {
     #[structopt(long)]
     pub peer_discovery: bool,
 
-    /// Enable channel log
+    /// Enable channel logging
     #[serde(default)]
     #[structopt(long)]
     pub channel_log: bool,
