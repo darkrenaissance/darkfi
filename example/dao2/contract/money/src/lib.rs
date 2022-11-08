@@ -205,6 +205,8 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             let db_roots = db_lookup(cid, "coin_roots")?;
             for coin in update.coins {
                 let node = MerkleNode::new(coin);
+                // TODO: merkle_add() should take a list of coins and batch add them
+                // for efficiency
                 merkle_add(db_info, db_roots, &serialize(&"coin_tree".to_string()), &node)?;
             }
         }

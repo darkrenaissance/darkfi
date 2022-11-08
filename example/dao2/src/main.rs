@@ -469,6 +469,50 @@ async fn main() -> BoxResult<()> {
 
     // Wallet stuff
 
+    // DAO reads the money received from the encrypted note
+    {
+        assert_eq!(tx.calls.len(), 1);
+        let calldata = &tx.calls[0].data;
+        let params_data = &calldata[1..];
+        let params: MoneyTransferParams = Decodable::decode(params_data)?;
+
+        for output in params.outputs {
+            let coin = output.coin;
+            let enc_note = note::EncryptedNote2 {
+                ciphertext: output.ciphertext,
+                ephem_public: output.ephem_public
+            };
+
+            let coin = Coin(coin);
+            cache.try_decrypt_note(coin, &enc_note);
+        }
+    }
+
+    let mut recv_coins = cache.get_received(&dao_keypair.secret);
+    assert_eq!(recv_coins.len(), 1);
+    let dao_recv_coin = recv_coins.pop().unwrap();
+    let treasury_note = dao_recv_coin.note;
+
+    // Check the actual coin received is valid before accepting it
+
+    let coords = dao_keypair.public.inner().to_affine().coordinates().unwrap();
+    let coin = poseidon_hash::<8>([
+        *coords.x(),
+        *coords.y(),
+        DrkValue::from(treasury_note.value),
+        treasury_note.token_id.inner(),
+        treasury_note.serial,
+        treasury_note.spend_hook,
+        treasury_note.user_data,
+        treasury_note.coin_blind,
+    ]);
+    assert_eq!(coin, dao_recv_coin.coin.0);
+
+    assert_eq!(treasury_note.spend_hook, *dao::exec::FUNC_ID);
+    assert_eq!(treasury_note.user_data, dao_bulla.0);
+
+    debug!("DAO received a coin worth {} xDRK", treasury_note.value);
+
     ///////////////////////////////////////////////////
 
     show_dao_state(&blockchain, &dao_contract_id)?;
