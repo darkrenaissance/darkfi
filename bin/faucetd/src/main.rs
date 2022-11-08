@@ -21,7 +21,7 @@ use std::{collections::HashMap, str::FromStr};
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
-use darkfi_sdk::crypto::{Address, PublicKey};
+use darkfi_sdk::crypto::{Address, PublicKey, TokenId};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use serde_json::{json, Value};
@@ -36,7 +36,6 @@ use darkfi::{
         ValidatorState, ValidatorStatePtr, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
         TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
     },
-    crypto::token_id,
     net,
     net::P2pPtr,
     node::Client,
@@ -236,10 +235,10 @@ impl Faucetd {
 
         // Here we allow the faucet to mint arbitrary token IDs.
         // TODO: Revert this to native token when we have contracts for minting tokens.
-        let token_id = match token_id::parse_b58(params[2].as_str().unwrap()) {
+        let token_id = match TokenId::try_from(params[2].as_str().unwrap()) {
             Ok(v) => v,
-            Err(_) => {
-                error!("airdrop(): Failed parsing token id from string");
+            Err(e) => {
+                error!("airdrop(): Failed parsing TokenID from string: {}", e);
                 return server_error(RpcError::ParseError, id)
             }
         };

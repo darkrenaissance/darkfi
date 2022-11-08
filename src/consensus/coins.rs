@@ -22,7 +22,7 @@ use darkfi_sdk::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
         poseidon_hash,
         util::mod_r_p,
-        Keypair, MerkleNode, Nullifier, SecretKey,
+        Keypair, MerkleNode, Nullifier, SecretKey, TokenId,
     },
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{
@@ -45,7 +45,7 @@ use crate::{
         coin::{Coin, OwnCoin},
         leadcoin::LeadCoin,
         note::Note,
-        types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind},
+        types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
     },
     wallet::walletdb::WalletDb,
     Result,
@@ -404,7 +404,7 @@ pub fn is_leader(slot: u64, epoch_coins: &Vec<Vec<LeadCoin>>) -> (bool, usize) {
 /// Generate staking coins for provided wallet.
 pub async fn generate_staking_coins(wallet: &WalletDb) -> Result<Vec<OwnCoin>> {
     let keypair = wallet.get_default_keypair().await?;
-    let token_id = DrkTokenId::random(&mut OsRng);
+    let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
     let value = 420;
     let serial = DrkSerial::random(&mut OsRng);
     let note = Note {

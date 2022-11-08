@@ -21,7 +21,7 @@ use std::time::Instant;
 use darkfi_sdk::{
     crypto::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-        poseidon_hash, MerkleNode, Nullifier, PublicKey, SecretKey,
+        poseidon_hash, MerkleNode, Nullifier, PublicKey, SecretKey, TokenId,
     },
     incrementalmerkletree::Hashable,
     pasta::{arithmetic::CurveAffine, group::Curve},
@@ -34,8 +34,8 @@ use rand::rngs::OsRng;
 use super::proof::{Proof, ProvingKey, VerifyingKey};
 use crate::{
     crypto::types::{
-        DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
-        DrkUserDataBlind, DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
+        DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkUserData, DrkUserDataBlind,
+        DrkUserDataEnc, DrkValue, DrkValueBlind, DrkValueCommit,
     },
     zk::circuit::burn_contract::BurnContract,
     Result,
@@ -56,7 +56,7 @@ impl BurnRevealedValues {
     #[allow(clippy::too_many_arguments)]
     pub fn compute(
         value: u64,
-        token_id: DrkTokenId,
+        token_id: TokenId,
         value_blind: DrkValueBlind,
         token_blind: DrkValueBlind,
         serial: DrkSerial,
@@ -78,7 +78,7 @@ impl BurnRevealedValues {
             pub_x,
             pub_y,
             DrkValue::from(value),
-            token_id,
+            token_id.inner(),
             serial,
             spend_hook,
             user_data,
@@ -102,7 +102,7 @@ impl BurnRevealedValues {
         let user_data_enc = poseidon_hash::<2>([user_data, user_data_blind]);
 
         let value_commit = pedersen_commitment_u64(value, value_blind);
-        let token_commit = pedersen_commitment_base(token_id, token_blind);
+        let token_commit = pedersen_commitment_base(token_id.inner(), token_blind);
 
         BurnRevealedValues {
             value_commit,
@@ -140,7 +140,7 @@ impl BurnRevealedValues {
 pub fn create_burn_proof(
     pk: &ProvingKey,
     value: u64,
-    token_id: DrkTokenId,
+    token_id: TokenId,
     value_blind: DrkValueBlind,
     token_blind: DrkValueBlind,
     serial: DrkSerial,
@@ -175,7 +175,7 @@ pub fn create_burn_proof(
         secret_key: Value::known(secret.inner()),
         serial: Value::known(serial),
         value: Value::known(DrkValue::from(value)),
-        token: Value::known(token_id),
+        token: Value::known(token_id.inner()),
         coin_blind: Value::known(coin_blind),
         value_blind: Value::known(value_blind),
         token_blind: Value::known(token_blind),

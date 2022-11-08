@@ -20,7 +20,7 @@ use std::{any::Any, collections::HashMap};
 
 use darkfi_sdk::crypto::{
     schnorr::{SchnorrPublic, SchnorrSecret, Signature},
-    PublicKey, SecretKey,
+    PublicKey, SecretKey, TokenId,
 };
 use darkfi_serial::Encodable;
 use lazy_static::lazy_static;
@@ -61,12 +61,12 @@ pub fn parse_b58(s: &str) -> std::result::Result<pallas::Base, darkfi::Error> {
 
 // The token of the DAO treasury.
 lazy_static! {
-    pub static ref DRK_ID: pallas::Base = pallas::Base::random(&mut OsRng);
+    pub static ref DRK_ID: TokenId = TokenId::from(pallas::Base::random(&mut OsRng));
 }
 
 // Governance tokens that are airdropped to users to operate the DAO.
 lazy_static! {
-    pub static ref GOV_ID: pallas::Base = pallas::Base::random(&mut OsRng);
+    pub static ref GOV_ID: TokenId = TokenId::from(pallas::Base::random(&mut OsRng));
 }
 
 #[derive(Clone)]

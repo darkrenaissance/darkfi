@@ -22,6 +22,7 @@ use async_std::sync::Arc;
 use darkfi_sdk::{
     crypto::{
         constants::MERKLE_DEPTH, schnorr::SchnorrSecret, Address, MerkleNode, PublicKey, SecretKey,
+        TokenId,
     },
     incrementalmerkletree::bridgetree::BridgeTree,
     pasta::{group::ff::PrimeField, pallas},
@@ -414,7 +415,7 @@ impl Stakeholder {
             secrets: vec![keypair.secret],
         };
 
-        let token_id = pallas::Base::random(&mut OsRng);
+        let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
         let builder = TransactionBuilder {
             clear_inputs: vec![TransactionBuilderClearInputInfo {
                 value: coin.value.unwrap(),

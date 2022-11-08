@@ -22,7 +22,7 @@ use darkfi_sdk::crypto::{
     pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
     schnorr,
     schnorr::SchnorrPublic,
-    PublicKey,
+    PublicKey, TokenId,
 };
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable, VarInt};
 use log::error;
@@ -34,7 +34,7 @@ use crate::{
         mint_proof::verify_mint_proof,
         note::EncryptedNote,
         proof::VerifyingKey,
-        types::{DrkTokenId, DrkValueBlind, DrkValueCommit},
+        types::{DrkValueBlind, DrkValueCommit},
         BurnRevealedValues, MintRevealedValues, Proof,
     },
     Result, VerifyFailed, VerifyResult,
@@ -60,7 +60,7 @@ pub struct TransactionClearInput {
     /// Input's value (amount)
     pub value: u64,
     /// Input's token ID
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     /// Blinding factor for `value`
     pub value_blind: DrkValueBlind,
     /// Blinding factor for `token_id`
@@ -192,7 +192,8 @@ impl Transaction {
 
         failed = failed ||
             self.clear_inputs.iter().any(|input| {
-                pedersen_commitment_base(input.token_id, input.token_blind) != token_commit_value
+                pedersen_commitment_base(input.token_id.inner(), input.token_blind) !=
+                    token_commit_value
             });
         !failed
     }

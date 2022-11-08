@@ -23,7 +23,7 @@ use std::{
 
 use darkfi_sdk::crypto::{
     constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode,
-    PublicKey, SecretKey,
+    PublicKey, SecretKey, TokenId,
 };
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
@@ -194,11 +194,11 @@ async fn main() -> Result<()> {
 
     // Money parameters
     let xdrk_supply = 1_000_000;
-    let xdrk_token_id = pallas::Base::random(&mut OsRng);
+    let xdrk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
     // Governance token parameters
     let gdrk_supply = 1_000_000;
-    let gdrk_token_id = pallas::Base::random(&mut OsRng);
+    let gdrk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
     // DAO parameters
     let dao_proposer_limit = 110;
@@ -462,7 +462,7 @@ async fn main() -> Result<()> {
         pub_x,
         pub_y,
         DrkValue::from(treasury_note.value),
-        treasury_note.token_id,
+        treasury_note.token_id.inner(),
         treasury_note.serial,
         treasury_note.spend_hook,
         treasury_note.user_data,
@@ -612,7 +612,7 @@ async fn main() -> Result<()> {
                 pub_x,
                 pub_y,
                 DrkValue::from(note.value),
-                note.token_id,
+                note.token_id.inner(),
                 note.serial,
                 note.spend_hook,
                 note.user_data,
@@ -1241,7 +1241,7 @@ async fn main() -> Result<()> {
             dao_pub_x,
             dao_pub_y,
             pallas::Base::from(xdrk_supply - 1000),
-            xdrk_token_id,
+            xdrk_token_id.inner(),
             dao_serial,
             *dao::exec::FUNC_ID,
             dao_bulla.0,

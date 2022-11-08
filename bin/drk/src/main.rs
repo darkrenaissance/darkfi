@@ -24,7 +24,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use darkfi_sdk::crypto::Address;
+use darkfi_sdk::crypto::{Address, TokenId};
 use prettytable::{format, row, Table};
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
@@ -32,7 +32,6 @@ use url::Url;
 
 use darkfi::{
     cli_desc,
-    crypto::token_id,
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::{
         cli::{get_log_config, get_log_level, progress_bar},
@@ -166,7 +165,7 @@ impl Drk {
         };
 
         // Check if token ID is valid base58
-        if token_id::parse_b58(&token_id).is_err() {
+        if TokenId::try_from(token_id.as_str()).is_err() {
             eprintln!("Error: Invalid Token ID passed as argument.");
             exit(1);
         }

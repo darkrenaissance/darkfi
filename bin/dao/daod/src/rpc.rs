@@ -20,9 +20,11 @@ use std::{str::FromStr, sync::Arc};
 
 use async_std::sync::Mutex;
 use async_trait::async_trait;
-use darkfi_sdk::crypto::{Keypair, PublicKey, SecretKey};
+use darkfi_sdk::{
+    crypto::{Keypair, PublicKey, SecretKey},
+    pasta::group::ff::PrimeField,
+};
 use log::{debug, error};
-use pasta_curves::group::ff::PrimeField;
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
 
@@ -161,8 +163,7 @@ impl JsonRpcInterface {
         for proposal in proposals {
             let dest = proposal.dest;
             let amount = proposal.amount;
-            let token_id = proposal.token_id;
-            let token_id: String = bs58::encode(token_id.to_repr()).into_string();
+            let token_id = format!("{}", proposal.token_id);
             //let dest: String = bs58::encode(dest.to_bytes()).into_string();
             let dest = dest.to_string();
             proposal_data.push((dest, amount, token_id));
@@ -371,7 +372,7 @@ impl JsonRpcInterface {
             Ok(key) => match client.money_wallets.get(&key.to_bytes()) {
                 Some(wallet) => {
                     let balance = wallet.balances().unwrap();
-                    let token_id = bs58::encode((*GOV_ID).to_repr()).into_string();
+                    let token_id = format!("{}", *GOV_ID);
                     if balance.get(&token_id).is_some() {
                         *balance.get(&token_id).unwrap()
                     } else {

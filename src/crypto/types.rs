@@ -22,7 +22,6 @@ use pasta_curves::pallas;
 
 pub type DrkCircuitField = pallas::Base;
 
-pub type DrkTokenId = pallas::Base;
 pub type DrkValue = pallas::Base;
 pub type DrkSerial = pallas::Base;
 

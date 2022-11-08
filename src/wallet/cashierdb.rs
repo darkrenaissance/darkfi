@@ -30,7 +30,6 @@ use crate::{
     crypto::{
         keypair::{Keypair, PublicKey, SecretKey},
         merkle_node::MerkleNode,
-        types::DrkTokenId,
     },
     util::{
         serial::{deserialize, serialize},
@@ -51,14 +50,14 @@ pub struct TokenKey {
 pub struct WithdrawToken {
     pub token_public_key: Vec<u8>,
     pub network: NetworkName,
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     pub mint_address: String,
 }
 
 pub struct DepositToken {
     pub drk_public_key: PublicKey,
     pub token_key: TokenKey,
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     pub mint_address: String,
 }
 
@@ -212,7 +211,7 @@ impl CashierDb {
         d_key_public: &PublicKey,
         d_key_secret: &SecretKey,
         network: &NetworkName,
-        token_id: &DrkTokenId,
+        token_id: TokenId,
         mint_address: String,
     ) -> Result<()> {
         debug!("Writing withdraw keys to database");
@@ -250,7 +249,7 @@ impl CashierDb {
         token_key_secret: &[u8],
         token_key_public: &[u8],
         network: &NetworkName,
-        token_id: &DrkTokenId,
+        token_id: TokenId,
         mint_address: String,
     ) -> Result<()> {
         debug!("Writing deposit keys to database");
@@ -514,7 +513,7 @@ mod tests {
         let token_addr_public = serialize(&String::from("mxVFsFW5N4mu1HPkxPttorvocvzeZ7KZyk"));
 
         let keypair = Keypair::random(&mut OsRng);
-        let token_id = DrkTokenId::random(&mut OsRng);
+        let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
         let network = NetworkName::Bitcoin;
 

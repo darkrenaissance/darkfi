@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{schnorr::SchnorrSecret, MerkleNode, PublicKey, SecretKey};
+use darkfi_sdk::crypto::{schnorr::SchnorrSecret, MerkleNode, PublicKey, SecretKey, TokenId};
 use darkfi_serial::serialize;
 use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
@@ -32,8 +32,7 @@ use crate::{
         note::Note,
         proof::ProvingKey,
         types::{
-            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
-            DrkValueBlind,
+            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkUserData, DrkUserDataBlind, DrkValueBlind,
         },
     },
     Result,
@@ -47,7 +46,7 @@ pub struct TransactionBuilder {
 
 pub struct TransactionBuilderClearInputInfo {
     pub value: u64,
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     pub signature_secret: SecretKey,
 }
 
@@ -60,7 +59,7 @@ pub struct TransactionBuilderInputInfo {
 
 pub struct TransactionBuilderOutputInfo {
     pub value: u64,
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     pub public: PublicKey,
 }
 

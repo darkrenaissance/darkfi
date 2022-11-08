@@ -19,6 +19,7 @@
 // Example transaction flow
 use darkfi_sdk::crypto::{
     constants::MERKLE_DEPTH, poseidon_hash, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
+    TokenId,
 };
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use pasta_curves::{group::ff::Field, pallas};
@@ -158,7 +159,7 @@ fn main() -> Result<()> {
         secrets: vec![keypair.secret],
     };
 
-    let token_id = pallas::Base::random(&mut OsRng);
+    let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
     let builder = TransactionBuilder {
         clear_inputs: vec![TransactionBuilderClearInputInfo {

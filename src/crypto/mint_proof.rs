@@ -21,7 +21,7 @@ use std::time::Instant;
 use darkfi_sdk::{
     crypto::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-        poseidon_hash, PublicKey,
+        poseidon_hash, PublicKey, TokenId,
     },
     pasta::{arithmetic::CurveAffine, group::Curve},
 };
@@ -35,8 +35,8 @@ use crate::{
         coin::Coin,
         proof::{Proof, ProvingKey, VerifyingKey},
         types::{
-            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData,
-            DrkValue, DrkValueBlind, DrkValueCommit,
+            DrkCircuitField, DrkCoinBlind, DrkSerial, DrkSpendHook, DrkUserData, DrkValue,
+            DrkValueBlind, DrkValueCommit,
         },
     },
     zk::circuit::mint_contract::MintContract,
@@ -54,7 +54,7 @@ impl MintRevealedValues {
     #[allow(clippy::too_many_arguments)]
     pub fn compute(
         value: u64,
-        token_id: DrkTokenId,
+        token_id: TokenId,
         value_blind: DrkValueBlind,
         token_blind: DrkValueBlind,
         serial: DrkSerial,
@@ -64,7 +64,7 @@ impl MintRevealedValues {
         public_key: PublicKey,
     ) -> Self {
         let value_commit = pedersen_commitment_u64(value, value_blind);
-        let token_commit = pedersen_commitment_base(token_id, token_blind);
+        let token_commit = pedersen_commitment_base(token_id.inner(), token_blind);
 
         let (pub_x, pub_y) = public_key.xy();
 
@@ -72,7 +72,7 @@ impl MintRevealedValues {
             pub_x,
             pub_y,
             DrkValue::from(value),
-            token_id,
+            token_id.inner(),
             serial,
             spend_hook,
             user_data,
@@ -100,7 +100,7 @@ impl MintRevealedValues {
 pub fn create_mint_proof(
     pk: &ProvingKey,
     value: u64,
-    token_id: DrkTokenId,
+    token_id: TokenId,
     value_blind: DrkValueBlind,
     token_blind: DrkValueBlind,
     serial: DrkSerial,
@@ -127,7 +127,7 @@ pub fn create_mint_proof(
         pub_x: Value::known(pub_x),
         pub_y: Value::known(pub_y),
         value: Value::known(DrkValue::from(value)),
-        token: Value::known(token_id),
+        token: Value::known(token_id.inner()),
         serial: Value::known(serial),
         coin_blind: Value::known(coin_blind),
         spend_hook: Value::known(spend_hook),

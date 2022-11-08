@@ -119,7 +119,7 @@ impl Builder {
                 Witness::Base(Value::known(pallas::Base::from(0))),
                 Witness::Base(Value::known(pallas::Base::from(0))),
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
-                Witness::Base(Value::known(note.token_id)),
+                Witness::Base(Value::known(note.token_id.inner())),
                 Witness::Base(Value::known(note.coin_blind)),
                 Witness::Scalar(Value::known(vote_value_blind)),
                 Witness::Base(Value::known(gov_token_blind)),
@@ -135,7 +135,7 @@ impl Builder {
                 pub_x,
                 pub_y,
                 pallas::Base::from(note.value),
-                note.token_id,
+                note.token_id.inner(),
                 note.serial,
                 pallas::Base::from(0),
                 pallas::Base::from(0),
@@ -156,7 +156,7 @@ impl Builder {
                 current
             };
 
-            let token_commit = poseidon_hash::<2>([note.token_id, gov_token_blind]);
+            let token_commit = poseidon_hash::<2>([note.token_id.inner(), gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
             let nullifier = poseidon_hash::<2>([input.secret.inner(), note.serial]);
@@ -192,7 +192,7 @@ impl Builder {
             inputs.push(input);
         }
 
-        let token_commit = poseidon_hash::<2>([self.dao.gov_token_id, gov_token_blind]);
+        let token_commit = poseidon_hash::<2>([self.dao.gov_token_id.inner(), gov_token_blind]);
 
         let (proposal_dest_x, proposal_dest_y) = self.proposal.dest.xy();
 
@@ -210,7 +210,7 @@ impl Builder {
             dao_quorum,
             dao_approval_ratio_quot,
             dao_approval_ratio_base,
-            self.dao.gov_token_id,
+            self.dao.gov_token_id.inner(),
             dao_pub_x,
             dao_pub_y,
             self.dao.bulla_blind,
@@ -221,7 +221,7 @@ impl Builder {
             proposal_dest_y,
             proposal_amount,
             self.proposal.serial,
-            self.proposal.token_id,
+            self.proposal.token_id.inner(),
             dao_bulla,
             self.proposal.blind,
             // @tmp-workaround
@@ -252,14 +252,14 @@ impl Builder {
             Witness::Base(Value::known(proposal_dest_y)),
             Witness::Base(Value::known(proposal_amount)),
             Witness::Base(Value::known(self.proposal.serial)),
-            Witness::Base(Value::known(self.proposal.token_id)),
+            Witness::Base(Value::known(self.proposal.token_id.inner())),
             Witness::Base(Value::known(self.proposal.blind)),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
-            Witness::Base(Value::known(self.dao.gov_token_id)),
+            Witness::Base(Value::known(self.dao.gov_token_id.inner())),
             Witness::Base(Value::known(dao_pub_x)),
             Witness::Base(Value::known(dao_pub_y)),
             Witness::Base(Value::known(self.dao.bulla_blind)),

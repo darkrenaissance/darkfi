@@ -14,7 +14,7 @@ use darkfi::{
 use darkfi_sdk::{
     crypto::{
         constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, poseidon_hash, ContractId,
-        Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey,
+        Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId,
     },
     tx::ContractCall,
 };
@@ -177,11 +177,11 @@ async fn main() -> BoxResult<()> {
 
     // Money parameters
     let xdrk_supply = 1_000_000;
-    let xdrk_token_id = pallas::Base::random(&mut OsRng);
+    let xdrk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
     // Governance token parameters
     let gdrk_supply = 1_000_000;
-    let gdrk_token_id = pallas::Base::random(&mut OsRng);
+    let gdrk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
     // DAO parameters
     let dao_proposer_limit = 110;

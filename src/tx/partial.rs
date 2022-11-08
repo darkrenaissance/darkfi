@@ -16,14 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::PublicKey;
+use darkfi_sdk::crypto::{PublicKey, TokenId};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use super::TransactionOutput;
-use crate::crypto::{
-    types::{DrkTokenId, DrkValueBlind},
-    BurnRevealedValues, Proof,
-};
+use crate::crypto::{types::DrkValueBlind, BurnRevealedValues, Proof};
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct PartialTransaction {
@@ -35,7 +32,7 @@ pub struct PartialTransaction {
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 pub struct PartialTransactionClearInput {
     pub value: u64,
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     pub value_blind: DrkValueBlind,
     pub token_blind: DrkValueBlind,
     pub signature_public: PublicKey,

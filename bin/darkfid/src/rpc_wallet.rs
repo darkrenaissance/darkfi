@@ -16,16 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{Address, Keypair, PublicKey, SecretKey};
+use darkfi_sdk::crypto::{Address, Keypair, PublicKey, SecretKey, TokenId};
 use darkfi_serial::{deserialize, serialize};
 use fxhash::FxHashMap;
 use incrementalmerkletree::Tree;
 use log::error;
-use pasta_curves::group::ff::PrimeField;
 use serde_json::{json, Value};
 
 use darkfi::{
-    crypto::token_id,
     node::State,
     rpc::jsonrpc::{
         ErrorCode::{InternalError, InvalidParams, ParseError},
@@ -241,7 +239,7 @@ impl Darkfid {
         let mut ret: FxHashMap<String, u64> = FxHashMap::default();
 
         for balance in balances.list {
-            let token_id = bs58::encode(balance.token_id.to_repr()).into_string();
+            let token_id = format!("{}", TokenId::from(balance.token_id));
             let mut amount = balance.value;
 
             if let Some(prev) = ret.get(&token_id) {
@@ -271,7 +269,7 @@ impl Darkfid {
 
         let value = params[0].as_u64().unwrap();
         let unspent = params[2].as_bool().unwrap();
-        let token_id = match token_id::parse_b58(params[1].as_str().unwrap()) {
+        let token_id = match TokenId::try_from(params[1].as_str().unwrap()) {
             Ok(v) => v,
             Err(e) => {
                 error!("[RPC] wallet.get_coins_valtok: Failed parsing token_id from base58: {}", e);

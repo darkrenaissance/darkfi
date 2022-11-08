@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{poseidon_hash, PublicKey, SecretKey};
+use darkfi_sdk::crypto::{poseidon_hash, PublicKey, SecretKey, TokenId};
 use halo2_proofs::circuit::Value;
 use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
 use rand::rngs::OsRng;
@@ -39,7 +39,7 @@ pub struct DaoParams {
     pub quorum: u64,
     pub approval_ratio_quot: u64,
     pub approval_ratio_base: u64,
-    pub gov_token_id: pallas::Base,
+    pub gov_token_id: TokenId,
     pub public_key: PublicKey,
     pub bulla_blind: pallas::Base,
 }
@@ -49,7 +49,7 @@ pub struct Builder {
     pub dao_quorum: u64,
     pub dao_approval_ratio_quot: u64,
     pub dao_approval_ratio_base: u64,
-    pub gov_token_id: pallas::Base,
+    pub gov_token_id: TokenId,
     pub dao_pubkey: PublicKey,
     pub dao_bulla_blind: pallas::Base,
     pub signature_secret: SecretKey,
@@ -71,7 +71,7 @@ impl Builder {
             dao_quorum,
             dao_approval_ratio_quot,
             dao_approval_ratio_base,
-            self.gov_token_id,
+            self.gov_token_id.inner(),
             dao_pub_x,
             dao_pub_y,
             self.dao_bulla_blind,
@@ -91,7 +91,7 @@ impl Builder {
             Witness::Base(Value::known(dao_quorum)),
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
-            Witness::Base(Value::known(self.gov_token_id)),
+            Witness::Base(Value::known(self.gov_token_id.inner())),
             Witness::Base(Value::known(dao_pub_x)),
             Witness::Base(Value::known(dao_pub_y)),
             Witness::Base(Value::known(self.dao_bulla_blind)),

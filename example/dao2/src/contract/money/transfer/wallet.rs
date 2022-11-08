@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{MerkleNode, PublicKey, SecretKey};
+use darkfi_sdk::crypto::{MerkleNode, PublicKey, SecretKey, TokenId};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::group::ff::Field;
 use rand::rngs::OsRng;
@@ -26,8 +26,7 @@ use darkfi::{
         burn_proof::create_burn_proof,
         mint_proof::create_mint_proof,
         types::{
-            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
-            DrkValueBlind,
+            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkUserData, DrkUserDataBlind, DrkValueBlind,
         },
     },
     Result,
@@ -46,7 +45,7 @@ use crate::{
 pub struct Note {
     pub serial: DrkSerial,
     pub value: u64,
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     pub spend_hook: DrkSpendHook,
     pub user_data: DrkUserData,
     pub coin_blind: DrkCoinBlind,
@@ -62,7 +61,7 @@ pub struct Builder {
 
 pub struct BuilderClearInputInfo {
     pub value: u64,
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     pub signature_secret: SecretKey,
 }
 
@@ -78,7 +77,7 @@ pub struct BuilderInputInfo {
 
 pub struct BuilderOutputInfo {
     pub value: u64,
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     pub public: PublicKey,
     pub serial: DrkSerial,
     pub coin_blind: DrkCoinBlind,

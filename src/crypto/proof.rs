@@ -114,16 +114,14 @@ mod tests {
     use crate::{
         crypto::{
             mint_proof::create_mint_proof,
-            types::{
-                DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkValueBlind,
-            },
+            types::{DrkCoinBlind, DrkSerial, DrkSpendHook, DrkUserData, DrkValueBlind},
         },
         zk::circuit::MintContract,
         Result,
     };
     use darkfi_sdk::{
-        crypto::{PublicKey, SecretKey},
-        pasta::group::ff::Field,
+        crypto::{PublicKey, SecretKey, TokenId},
+        pasta::{group::ff::Field, pallas},
     };
     use darkfi_serial::{Decodable, Encodable};
     use rand::rngs::OsRng;
@@ -131,7 +129,7 @@ mod tests {
     #[test]
     fn test_proof_serialization() -> Result<()> {
         let value = 110_u64;
-        let token_id = DrkTokenId::random(&mut OsRng);
+        let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
         let value_blind = DrkValueBlind::random(&mut OsRng);
         let token_blind = DrkValueBlind::random(&mut OsRng);
         let serial = DrkSerial::random(&mut OsRng);

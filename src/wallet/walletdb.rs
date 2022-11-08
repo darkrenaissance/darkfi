@@ -20,12 +20,11 @@ use std::{fs::create_dir_all, path::Path, str::FromStr, time::Duration};
 
 use async_std::sync::Arc;
 use darkfi_sdk::crypto::{
-    constants::MERKLE_DEPTH, Address, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
+    constants::MERKLE_DEPTH, Address, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey, TokenId,
 };
 use darkfi_serial::{deserialize, serialize};
 use incrementalmerkletree::bridgetree::BridgeTree;
 use log::{debug, error, info, LevelFilter};
-use pasta_curves::group::ff::PrimeField;
 use rand::rngs::OsRng;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode},
@@ -36,7 +35,6 @@ use crate::{
     crypto::{
         coin::{Coin, OwnCoin},
         note::Note,
-        types::DrkTokenId,
     },
     util::path::expand_path,
     Error::{WalletEmptyPassword, WalletTreeExists},
@@ -47,7 +45,7 @@ pub type WalletPtr = Arc<WalletDb>;
 
 #[derive(Clone, Debug)]
 pub struct Balance {
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     pub value: u64,
     pub nullifier: Nullifier,
 }
@@ -300,14 +298,10 @@ impl WalletDb {
     pub async fn get_coins_valtok(
         &self,
         value: u64,
-        token_id: DrkTokenId,
+        token_id: TokenId,
         unspent: bool,
     ) -> Result<Vec<OwnCoin>> {
-        debug!(
-            "Querying for coins with value {} and token_id {}",
-            value,
-            bs58::encode(token_id.to_repr()).into_string()
-        );
+        debug!("Querying for coins with value {} and token_id {}", value, token_id,);
 
         let mut conn = self.conn.acquire().await?;
         let rows = match unspent {
@@ -436,7 +430,7 @@ impl WalletDb {
         Ok(())
     }
 
-    pub async fn get_balance(&self, token_id: DrkTokenId) -> Result<Option<Balance>> {
+    pub async fn get_balance(&self, token_id: TokenId) -> Result<Option<Balance>> {
         debug!("Getting balance of token ID");
 
         let is_spent = 0;
@@ -487,7 +481,7 @@ impl WalletDb {
         Ok(Balances { list })
     }
 
-    pub async fn get_token_id(&self) -> Result<Vec<DrkTokenId>> {
+    pub async fn get_token_id(&self) -> Result<Vec<TokenId>> {
         debug!("Getting token ID");
         let is_spent = 0;
 
@@ -506,7 +500,7 @@ impl WalletDb {
         Ok(token_ids)
     }
 
-    pub async fn token_id_exists(&self, token_id: DrkTokenId) -> Result<bool> {
+    pub async fn token_id_exists(&self, token_id: TokenId) -> Result<bool> {
         debug!("Checking if token ID exists");
 
         let is_spent = 0;
@@ -542,7 +536,7 @@ mod tests {
 
     const WPASS: &str = "darkfi";
 
-    fn dummy_coin(s: &SecretKey, v: u64, t: &DrkTokenId) -> OwnCoin {
+    fn dummy_coin(s: &SecretKey, v: u64, t: &TokenId) -> OwnCoin {
         let serial = DrkSerial::random(&mut OsRng);
         let note = Note {
             serial,
@@ -575,7 +569,7 @@ mod tests {
         // put_keypair()
         wallet.put_keypair(&keypair).await?;
 
-        let token_id = DrkTokenId::random(&mut OsRng);
+        let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
         let c0 = dummy_coin(&keypair.secret, 69, &token_id);
         let c1 = dummy_coin(&keypair.secret, 420, &token_id);

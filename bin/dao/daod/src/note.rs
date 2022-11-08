@@ -17,13 +17,16 @@
  */
 
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
-use darkfi_sdk::crypto::{PublicKey, SecretKey};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
 use darkfi::{
     crypto::diffie_hellman::{kdf_sapling, sapling_ka_agree},
     Error, Result,
+};
+use darkfi_sdk::{
+    crypto::{PublicKey, SecretKey},
+    pasta::pallas,
 };
 
 pub const AEAD_TAG_SIZE: usize = 16;
@@ -79,9 +82,11 @@ impl EncryptedNote2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi::crypto::types::{DrkCoinBlind, DrkSerial, DrkTokenId, DrkValueBlind};
-    use darkfi_sdk::crypto::Keypair;
-    use group::ff::Field;
+    use darkfi::crypto::types::{DrkCoinBlind, DrkSerial, DrkValueBlind};
+    use darkfi_sdk::{
+        crypto::{Keypair, TokenId},
+        pasta::group::ff::Field,
+    };
 
     #[test]
     fn test_note_encdec() {
@@ -89,7 +94,7 @@ mod tests {
         struct MyNote {
             serial: DrkSerial,
             value: u64,
-            token_id: DrkTokenId,
+            token_id: TokenId,
             coin_blind: DrkCoinBlind,
             value_blind: DrkValueBlind,
             token_blind: DrkValueBlind,
@@ -98,7 +103,7 @@ mod tests {
         let note = MyNote {
             serial: DrkSerial::random(&mut OsRng),
             value: 110,
-            token_id: DrkTokenId::random(&mut OsRng),
+            token_id: TokenId::from(pallas::Base::random(&mut OsRng)),
             coin_blind: DrkCoinBlind::random(&mut OsRng),
             value_blind: DrkValueBlind::random(&mut OsRng),
             token_blind: DrkValueBlind::random(&mut OsRng),

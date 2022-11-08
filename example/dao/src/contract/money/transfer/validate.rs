@@ -20,7 +20,7 @@ use std::any::{Any, TypeId};
 
 use darkfi_sdk::crypto::{
     pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-    MerkleNode, Nullifier, PublicKey,
+    MerkleNode, Nullifier, PublicKey, TokenId,
 };
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::Tree;
@@ -30,7 +30,7 @@ use pasta_curves::{group::Group, pallas};
 use darkfi::{
     crypto::{
         coin::Coin,
-        types::{DrkCircuitField, DrkTokenId, DrkValueBlind, DrkValueCommit},
+        types::{DrkCircuitField, DrkValueBlind, DrkValueCommit},
         BurnRevealedValues, MintRevealedValues,
     },
     Error as DarkFiError,
@@ -285,7 +285,8 @@ impl CallData {
 
         failed = failed ||
             self.clear_inputs.iter().any(|input| {
-                pedersen_commitment_base(input.token_id, input.token_blind) != token_commit_value
+                pedersen_commitment_base(input.token_id.inner(), input.token_blind) !=
+                    token_commit_value
             });
         !failed
     }
@@ -297,7 +298,7 @@ pub struct ClearInput {
     /// Input's value (amount)
     pub value: u64,
     /// Input's token ID
-    pub token_id: DrkTokenId,
+    pub token_id: TokenId,
     /// Blinding factor for `value`
     pub value_blind: DrkValueBlind,
     /// Blinding factor for `token_id`

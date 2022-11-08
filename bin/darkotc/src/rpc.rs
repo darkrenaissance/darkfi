@@ -18,7 +18,7 @@
 
 use std::{process::exit, str::FromStr};
 
-use darkfi_sdk::crypto::{Address, MerkleNode};
+use darkfi_sdk::crypto::{Address, MerkleNode, TokenId};
 use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
 
@@ -38,7 +38,7 @@ pub struct Rpc {
 
 impl Rpc {
     /// Fetch wallet balance of given token ID and return its u64 representation.
-    pub async fn balance_of(&self, token_id: &str) -> Result<u64> {
+    pub async fn balance_of(&self, token_id: TokenId) -> Result<u64> {
         let req = JsonRequest::new("wallet.get_balances", json!([]));
         let rep = self.rpc_client.request(req).await?;
 
@@ -48,7 +48,7 @@ impl Rpc {
         }
 
         for i in rep.as_object().unwrap().keys() {
-            if i == token_id {
+            if TokenId::try_from(i.as_str()).unwrap() == token_id {
                 if let Some(balance) = rep[i].as_u64() {
                     return Ok(balance)
                 }
@@ -84,8 +84,11 @@ impl Rpc {
     }
 
     /// Query wallet for unspent coins in wallet matching value and token_id.
-    pub async fn get_coins_valtok(&self, value: u64, token_id: &str) -> Result<Vec<OwnCoin>> {
-        let req = JsonRequest::new("wallet.get_coins_valtok", json!([value, token_id, true]));
+    pub async fn get_coins_valtok(&self, value: u64, token_id: TokenId) -> Result<Vec<OwnCoin>> {
+        let req = JsonRequest::new(
+            "wallet.get_coins_valtok",
+            json!([value, format!("{}", token_id), true]),
+        );
         let rep = self.rpc_client.request(req).await?;
 
         if !rep.is_array() {

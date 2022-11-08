@@ -26,10 +26,10 @@ use darkfi_sdk::crypto::{
     pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
     schnorr,
     schnorr::SchnorrSecret,
-    PublicKey, SecretKey,
+    PublicKey, SecretKey, TokenId,
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
-use halo2_proofs::{arithmetic::Field, pasta::group::ff::PrimeField};
+use halo2_proofs::arithmetic::Field;
 use rand::rngs::OsRng;
 use url::Url;
 
@@ -40,10 +40,8 @@ use darkfi::{
         mint_proof::{create_mint_proof, verify_mint_proof},
         note::{EncryptedNote, Note},
         proof::{ProvingKey, VerifyingKey},
-        token_id,
         types::{
-            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkTokenId, DrkUserData, DrkUserDataBlind,
-            DrkValueBlind,
+            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkUserData, DrkUserDataBlind, DrkValueBlind,
         },
         BurnRevealedValues, MintRevealedValues, Proof,
     },
@@ -115,7 +113,7 @@ struct PartialSwapData {
     /// Value of the coin to be received
     mint_value: u64,
     /// Token ID of the coin to be received
-    mint_token: DrkTokenId,
+    mint_token: TokenId,
     /// Blinding factor for the minted value pedersen commitment
     mint_value_blind: DrkValueBlind,
     /// Blinding factor for the minted token ID pedersen commitment
@@ -127,7 +125,7 @@ struct PartialSwapData {
     /// Value of the coin to be sent
     burn_value: u64,
     /// Token ID of the coin to be sent
-    burn_token: DrkTokenId,
+    burn_token: TokenId,
     /// Blinding factor for the burned value pedersen commitment
     burn_value_blind: DrkValueBlind,
     /// Blinding factor for the burned token ID pedersen commitment
@@ -146,7 +144,7 @@ struct SwapData {
 
 async fn init_swap(
     endpoint: Url,
-    token_pair: (String, String),
+    token_pair: (TokenId, TokenId),
     value_pair: (u64, u64),
 ) -> Result<PartialSwapData> {
     let rpc_client = match RpcClient::new(endpoint).await {
@@ -159,11 +157,10 @@ async fn init_swap(
     let rpc = Rpc { rpc_client };
 
     // TODO: Implement metadata for decimals, don't hardcode.
-    let tp = (token_id::parse_b58(&token_pair.0)?, token_id::parse_b58(&token_pair.1)?);
     let vp = value_pair;
 
     // Connect to darkfid and see if there's available funds.
-    let balance = rpc.balance_of(&token_pair.0).await?;
+    let balance = rpc.balance_of(token_pair.0).await?;
     if balance < vp.0 {
         eprintln!(
             "Error: There's not enough balance for token \"{}\" in your wallet.",
@@ -180,7 +177,7 @@ async fn init_swap(
     // TODO: Maybe this should be done by the user beforehand?
 
     // Find a coin to spend. We can find multiple, but we'll pick the first one.
-    let coins = rpc.get_coins_valtok(vp.0, &token_pair.0).await?;
+    let coins = rpc.get_coins_valtok(vp.0, token_pair.0).await?;
     if coins.is_empty() {
         eprintln!("Error: Did not manage to find a coin with enough value to spend.");
         exit(1);
@@ -219,7 +216,7 @@ async fn init_swap(
     let (mint_proof, mint_revealed) = create_mint_proof(
         &mint_pk,
         vp.1,
-        tp.1,
+        token_pair.1,
         recv_value_blind,
         recv_token_blind,
         recv_serial,
@@ -251,7 +248,7 @@ async fn init_swap(
     let (burn_proof, burn_revealed) = create_burn_proof(
         &burn_pk,
         vp.0,
-        tp.0,
+        token_pair.0,
         coin.note.value_blind,
         coin.note.token_blind,
         coin.note.serial,
@@ -270,7 +267,7 @@ async fn init_swap(
     let note = Note {
         serial: recv_serial,
         value: vp.1,
-        token_id: tp.1,
+        token_id: token_pair.1,
         coin_blind: recv_coin_blind,
         value_blind: recv_value_blind,
         token_blind: recv_token_blind,
@@ -285,12 +282,12 @@ async fn init_swap(
         mint_proof,
         mint_revealed,
         mint_value: vp.1,
-        mint_token: tp.1,
+        mint_token: token_pair.1,
         mint_value_blind: recv_value_blind,
         mint_token_blind: recv_token_blind,
         burn_proof,
         burn_value: vp.0,
-        burn_token: tp.0,
+        burn_token: token_pair.0,
         burn_revealed,
         burn_value_blind: coin.note.value_blind,
         burn_token_blind: coin.note.token_blind,
@@ -341,13 +338,13 @@ fn inspect_partial(data: &str) -> Result<()> {
     let burn_value_valid = pedersen_commitment_u64(sd.burn_value, sd.burn_value_blind) ==
         sd.burn_revealed.value_commit;
 
-    let burn_token_valid = pedersen_commitment_base(sd.burn_token, sd.burn_token_blind) ==
+    let burn_token_valid = pedersen_commitment_base(sd.burn_token.inner(), sd.burn_token_blind) ==
         sd.burn_revealed.token_commit;
 
     let mint_value_valid = pedersen_commitment_u64(sd.mint_value, sd.mint_value_blind) ==
         sd.mint_revealed.value_commit;
 
-    let mint_token_valid = pedersen_commitment_base(sd.mint_token, sd.mint_token_blind) ==
+    let mint_token_valid = pedersen_commitment_base(sd.mint_token.inner(), sd.mint_token_blind) ==
         sd.mint_revealed.token_commit;
 
     let mut valid = true;
@@ -403,16 +400,8 @@ fn inspect_partial(data: &str) -> Result<()> {
 
     eprintln!("========================================");
 
-    eprintln!(
-        "Mint: {} {}",
-        encode_base10(sd.mint_value, 8),
-        bs58::encode(sd.mint_token.to_repr()).into_string()
-    );
-    eprintln!(
-        "Burn: {} {}",
-        encode_base10(sd.burn_value, 8),
-        bs58::encode(sd.burn_token.to_repr()).into_string()
-    );
+    eprintln!("Mint: {} {}", encode_base10(sd.mint_value, 8), sd.mint_token);
+    eprintln!("Burn: {} {}", encode_base10(sd.burn_value, 8), sd.burn_token);
 
     eprint!("\nThe ZK proofs and commitments inspected are ");
     if !valid {

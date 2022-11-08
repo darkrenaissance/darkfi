@@ -18,13 +18,12 @@
 
 use std::str::FromStr;
 
-use darkfi_sdk::crypto::{Address, PublicKey};
+use darkfi_sdk::crypto::{Address, PublicKey, TokenId};
 use darkfi_serial::{deserialize, serialize};
 use log::{error, warn};
 use serde_json::{json, Value};
 
 use darkfi::{
-    crypto::token_id,
     rpc::jsonrpc::{ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
     tx::Transaction,
 };
@@ -77,7 +76,7 @@ impl Darkfid {
             }
         };
 
-        let token_id = match token_id::parse_b58(token) {
+        let token_id = match TokenId::try_from(token) {
             Ok(v) => v,
             Err(e) => {
                 error!("[RPC] tx.transfer: Failed parsing Token ID from string: {}", e);

@@ -17,18 +17,18 @@
  */
 
 use async_std::sync::{Arc, Mutex};
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, Address, Keypair, MerkleNode, PublicKey};
+use darkfi_sdk::crypto::{
+    constants::MERKLE_DEPTH, Address, Keypair, MerkleNode, PublicKey, TokenId,
+};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use lazy_init::Lazy;
 use log::{debug, error, info};
-use pasta_curves::group::ff::PrimeField;
 
 use super::state::{state_transition, State};
 use crate::{
     crypto::{
         coin::{Coin, OwnCoin},
         proof::ProvingKey,
-        types::DrkTokenId,
     },
     tx::{
         builder::{
@@ -79,7 +79,7 @@ impl Client {
         &self,
         pubkey: PublicKey,
         value: u64,
-        token_id: DrkTokenId,
+        token_id: TokenId,
         clear_input: bool,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<(Transaction, Vec<Coin>)> {
@@ -163,15 +163,11 @@ impl Client {
         &self,
         pubkey: PublicKey,
         amount: u64,
-        token_id: DrkTokenId,
+        token_id: TokenId,
         clear_input: bool,
         state: Arc<Mutex<State>>,
     ) -> ClientResult<Transaction> {
-        debug!(
-            "send(): Sending {} {} tokens",
-            amount,
-            bs58::encode(token_id.to_repr()).into_string()
-        );
+        debug!("send(): Sending {} {} tokens", amount, token_id);
 
         if amount == 0 {
             return Err(ClientFailed::InvalidAmount(0))
@@ -230,7 +226,7 @@ impl Client {
         Ok(Address::from(kp.public))
     }
 
-    pub async fn get_balance(&self, token_id: DrkTokenId) -> Result<Option<Balance>> {
+    pub async fn get_balance(&self, token_id: TokenId) -> Result<Option<Balance>> {
         self.wallet.get_balance(token_id).await
     }
 
@@ -241,7 +237,7 @@ impl Client {
     pub async fn get_coins_valtok(
         &self,
         value: u64,
-        token_id: DrkTokenId,
+        token_id: TokenId,
         unspent: bool,
     ) -> Result<Vec<OwnCoin>> {
         self.wallet.get_coins_valtok(value, token_id, unspent).await

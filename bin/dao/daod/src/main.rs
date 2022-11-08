@@ -18,6 +18,12 @@
 
 use std::{sync::Arc, time::Instant};
 
+use fxhash::FxHashMap;
+use log::debug;
+use rand::rngs::OsRng;
+use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
+use url::Url;
+
 use darkfi::{
     crypto::{
         proof::{ProvingKey, VerifyingKey},
@@ -30,18 +36,13 @@ use darkfi::{
 };
 use darkfi_sdk::crypto::{
     pedersen::pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, PublicKey, SecretKey,
+    TokenId,
 };
-use fxhash::FxHashMap;
-use group::ff::PrimeField;
 use incrementalmerkletree::{Position, Tree};
-use log::debug;
 use pasta_curves::{
     group::{ff::Field, Group},
     pallas,
 };
-use rand::rngs::OsRng;
-use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
-use url::Url;
 
 mod contract;
 mod error;
@@ -252,7 +253,7 @@ impl Client {
         dao_quorum: u64,
         dao_approval_ratio_quot: u64,
         dao_approval_ratio_base: u64,
-        token_id: pallas::Base,
+        token_id: TokenId,
     ) -> DaoResult<pallas::Base> {
         let tx = self.dao_wallet.mint_tx(
             dao_proposer_limit,
@@ -296,7 +297,7 @@ impl Client {
 
     fn mint_treasury(
         &mut self,
-        token_id: pallas::Base,
+        token_id: TokenId,
         token_supply: u64,
         recipient: PublicKey,
     ) -> DaoResult<()> {
@@ -316,12 +317,7 @@ impl Client {
         Ok(())
     }
 
-    fn airdrop_user(
-        &mut self,
-        value: u64,
-        token_id: pallas::Base,
-        addr: PublicKey,
-    ) -> DaoResult<()> {
+    fn airdrop_user(&mut self, value: u64, token_id: TokenId, addr: PublicKey) -> DaoResult<()> {
         // let wallet = self.money_wallets.get(&nym).unwrap();
         // let addr = wallet.get_public_key();
 
@@ -410,7 +406,7 @@ impl Client {
                 pub_x,
                 pub_y,
                 DrkValue::from(note.value),
-                note.token_id,
+                note.token_id.inner(),
                 note.serial,
                 note.spend_hook,
                 note.user_data,
@@ -435,7 +431,7 @@ impl Client {
                     pub_x,
                     pub_y,
                     DrkValue::from(note.value),
-                    note.token_id,
+                    note.token_id.inner(),
                     note.serial,
                     note.spend_hook,
                     note.user_data,
@@ -453,7 +449,7 @@ impl Client {
     fn propose(
         &mut self,
         recipient: PublicKey,
-        token_id: pallas::Base,
+        token_id: TokenId,
         amount: u64,
         sender: PublicKey,
     ) -> DaoResult<pallas::Base> {
@@ -610,7 +606,7 @@ impl DaoWallet {
         dao_quorum: u64,
         dao_approval_ratio_quot: u64,
         dao_approval_ratio_base: u64,
-        token_id: pallas::Base,
+        token_id: TokenId,
         zk_bins: &ZkContractTable,
     ) -> Transaction {
         debug!(target: "dao-demo::dao::mint_tx()", "START");
@@ -651,7 +647,7 @@ impl DaoWallet {
         for (coin, is_spent) in &self.own_coins {
             if *is_spent {}
             if coin.note.token_id == *DRK_ID || coin.note.token_id == *GOV_ID {
-                let token_id = bs58::encode(coin.note.token_id.to_repr()).into_string();
+                let token_id = format!("{}", coin.note.token_id);
                 ret.insert(token_id, coin.note.value);
             }
         }
@@ -917,7 +913,7 @@ impl MoneyWallet {
         for (coin, is_spent) in &self.own_coins {
             if *is_spent {}
             if coin.note.token_id == *DRK_ID || coin.note.token_id == *GOV_ID {
-                let token_id = bs58::encode(coin.note.token_id.to_repr()).into_string();
+                let token_id = format!("{}", coin.note.token_id);
                 ret.insert(token_id, coin.note.value);
             }
         }
@@ -928,7 +924,7 @@ impl MoneyWallet {
         &mut self,
         params: DaoParams,
         recipient: PublicKey,
-        token_id: pallas::Base,
+        token_id: TokenId,
         amount: u64,
         dao_leaf_position: Position,
         zk_bins: &ZkContractTable,
@@ -1119,7 +1115,7 @@ impl CashierWallet {
 
     fn mint(
         &mut self,
-        token_id: pallas::Base,
+        token_id: TokenId,
         token_supply: u64,
         dao_bulla: pallas::Base,
         recipient: PublicKey,
@@ -1137,7 +1133,7 @@ impl CashierWallet {
     fn transfer_tx(
         &self,
         value: u64,
-        token_id: pallas::Base,
+        token_id: TokenId,
         spend_hook: pallas::Base,
         user_data: pallas::Base,
         recipient: PublicKey,
@@ -1177,7 +1173,7 @@ impl CashierWallet {
     fn airdrop(
         &mut self,
         value: u64,
-        token_id: pallas::Base,
+        token_id: TokenId,
         recipient: PublicKey,
         zk_bins: &ZkContractTable,
     ) -> Result<Transaction> {

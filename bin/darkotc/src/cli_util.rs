@@ -18,9 +18,8 @@
 
 use std::process::exit;
 
-use halo2_proofs::pasta::group::ff::PrimeField;
-
-use darkfi::{crypto::types::DrkTokenId, util::parse::decode_base10, Result};
+use darkfi::{util::parse::decode_base10, Result};
+use darkfi_sdk::crypto::TokenId;
 
 pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     let v: Vec<&str> = s.split(':').collect();
@@ -41,7 +40,7 @@ pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     Ok((val0.unwrap(), val1.unwrap()))
 }
 
-pub fn parse_token_pair(s: &str) -> Result<(String, String)> {
+pub fn parse_token_pair(s: &str) -> Result<(TokenId, TokenId)> {
     let v: Vec<&str> = s.split(':').collect();
     if v.len() != 2 {
         eprintln!("Invalid token pair. Use a pair such as:");
@@ -49,8 +48,8 @@ pub fn parse_token_pair(s: &str) -> Result<(String, String)> {
         exit(1);
     }
 
-    let tok0 = bs58::decode(v[0]).into_vec();
-    let tok1 = bs58::decode(v[1]).into_vec();
+    let tok0 = TokenId::try_from(v[0]);
+    let tok1 = TokenId::try_from(v[1]);
 
     if tok0.is_err() || tok1.is_err() {
         eprintln!("Invalid token pair. Use a pair such as:");
@@ -58,19 +57,5 @@ pub fn parse_token_pair(s: &str) -> Result<(String, String)> {
         exit(1);
     }
 
-    if tok0.as_ref().unwrap().len() != 32 ||
-        DrkTokenId::from_repr(tok0.unwrap().try_into().unwrap()).is_some().unwrap_u8() == 0
-    {
-        eprintln!("Error: {} is not a valid token ID", v[0]);
-        exit(1);
-    }
-
-    if tok1.as_ref().unwrap().len() != 32 ||
-        DrkTokenId::from_repr(tok1.unwrap().try_into().unwrap()).is_some().unwrap_u8() == 0
-    {
-        eprintln!("Error: {} is not a valid token ID", v[1]);
-        exit(1);
-    }
-
-    Ok((v[0].to_string(), v[1].to_string()))
+    Ok((tok0.unwrap(), tok1.unwrap()))
 }
