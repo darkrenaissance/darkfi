@@ -74,8 +74,9 @@ pub struct Output {
     pub value_commit: pallas::Point,
     pub token_commit: pallas::Point,
     pub coin: pallas::Base,
-    ///// The encrypted note
-    //pub enc_note: EncryptedNote2,
+    /// The encrypted note ciphertext
+    pub ciphertext: Vec<u8>,
+    pub ephem_public: PublicKey,
 }
 
 define_contract!(

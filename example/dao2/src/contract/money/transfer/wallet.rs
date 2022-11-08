@@ -224,17 +224,17 @@ impl Builder {
                 token_blind,
             };
 
-            //let encrypted_note = note::encrypt(&note, &output.public)?;
+            let encrypted_note = note::encrypt(&note, &output.public)?;
 
             let output = Output {
                 value_commit: revealed.value_commit,
                 token_commit: revealed.token_commit,
                 coin: revealed.coin.0,
+                ciphertext: encrypted_note.ciphertext,
+                ephem_public: encrypted_note.ephem_public,
             };
             outputs.push(output);
         }
-
-        //let call_data = CallData { clear_inputs, inputs, outputs };
 
         Ok((MoneyTransferParams {
             clear_inputs, inputs, outputs
