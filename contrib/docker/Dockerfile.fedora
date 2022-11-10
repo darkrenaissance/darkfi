@@ -1,19 +1,33 @@
 
-# Use: docker build . -t darkfi:fedora -f ./contrib/docker/Dockerfile.fedora
-#   optionally with: --build-arg OS_VER=fedora:35
+# Use: docker build . --pull --network=host -t darkfi:fedora -f ./contrib/docker/Dockerfile.fedora
+#   optionally with: --build-arg OS_VER=fedora:36 --build-arg RUST_VER=nightly
 
-ARG OS_VER=fedora:36  # fedora:35
+ARG RUST_VER=1.65       # stable nightly beta
+ARG OS_VER=fedora:37    # fedora:36
 
-FROM ${OS_VER} as builder
+FROM ${OS_VER} as rust_builder
 
-RUN dnf -y install cargo rustc gcc gcc-c++ kernel-headers cmake jq wget \
+ARG RUST_VER
+
+RUN dnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
   pkg-config clang clang-libs llvm-libs \
-  rust-libudev-devel rust-freetype-rs-devel \
-  rust-expat-sys-devel openssl-devel findutils fontconfig-devel
+  openssl-devel findutils fontconfig-devel \
+  lato-fonts
 
-COPY . /opt/darkfi
+## TODO ?? ?? cargo rustc rust-libudev-devel rust-freetype-rs-devel rust-expat-sys-devel
+
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
+
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+RUN cargo search whatever  # creates .cargo cache
+
+# 2. stage
+FROM rust_builder as builder
 
 WORKDIR /opt/darkfi
+
+COPY . /opt/darkfi
 
 RUN make clean
 
@@ -21,15 +35,13 @@ RUN rm -rf ./target/*
 
 RUN bash -c 'make -j test &&  make -j all'
 
-# 2. stage
+# 3. stage
 FROM ${OS_VER}
 
-COPY --from=builder /opt/darkfi/darkfid /opt/darkfi/
-COPY --from=builder /opt/darkfi/dnetview /opt/darkfi/
-COPY --from=builder /opt/darkfi/drk /opt/darkfi/
-COPY --from=builder /opt/darkfi/ircd /opt/darkfi/
-COPY --from=builder /opt/darkfi/tau /opt/darkfi/
-COPY --from=builder /opt/darkfi/taud /opt/darkfi/
-COPY --from=builder /opt/darkfi/zkas /opt/darkfi/
+RUN dnf -y install openssl lato-fonts
 
 WORKDIR /opt/darkfi
+
+COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid /opt/darkfi/tau /opt/darkfi/taud \
+  /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/darkotc /opt/darkfi/darkwikid \
+  /opt/darkfi/darkwiki /opt/darkfi/zkas /opt/darkfi/dao /opt/darkfi/daod ./

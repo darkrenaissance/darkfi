@@ -1,8 +1,8 @@
 
 # Use: docker build . --network=host --pull -t darkfi:ubuntu -f ./contrib/docker/Dockerfile.ubuntu
-#   optionally with: --build-arg BUILD_OS_VER=20.04 --build-arg RUST_VER=1.64
+#   optionally with: --build-arg BUILD_OS_VER=20.04 --build-arg RUST_VER=1.65
 
-ARG RUST_VER=1.65       # stable nightly beta 1.64
+ARG RUST_VER=1.65       # stable nightly beta
 ARG BUILD_OS_VER=22.04  # 20.04
 ARG RUN_OS_VER=${BUILD_OS_VER}
 ARG REPOSITORY=ubuntu
@@ -22,13 +22,12 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 RUN cargo search whatever  # creates .cargo cache
 
-FROM rust_builder
-
-RUN mkdir /opt/darkfi
-
-COPY . /opt/darkfi
+# 2. stage
+FROM rust_builder as builder
 
 WORKDIR /opt/darkfi
+
+COPY . /opt/darkfi
 
 RUN make clean
 
@@ -36,7 +35,7 @@ RUN rm -rf ./target/*
 
 RUN bash -c 'make -j test &&  make -j all'
 
-# 2. stage
+# 3. stage
 FROM ${REPOSITORY}:${RUN_OS_VER}
 
 RUN apt-get -y update && apt-get install -y openssl fonts-lato \
@@ -46,5 +45,5 @@ WORKDIR /opt/darkfi
 
 COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid /opt/darkfi/tau /opt/darkfi/taud \
   /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/darkotc /opt/darkfi/darkwikid \
-  /opt/darkfi/darkwiki /opt/darkfi/zkas  ./
+  /opt/darkfi/darkwiki /opt/darkfi/zkas /opt/darkfi/dao /opt/darkfi/daod ./
 
