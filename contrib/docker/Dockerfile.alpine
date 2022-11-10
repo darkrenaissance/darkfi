@@ -1,8 +1,8 @@
 # Use: docker build . -t darkfi:alpine${alpine_ver}_rust${rust_ver} -f ./contrib/docker/Dockerfile.alpine
 #   optionally with: --build-arg ALPINE_VER=$alpine_ver --build-arg RUST_VER=$rust_ver
-# The wallet test fail problem (see below) was the same for alpine {3.14,3.15,3.16} and rust {1.60,1.61,1.62}
+# The wallet test fail problem (see below) was the same for alpine 3.16 and rust 1.65
 
-ARG RUST_VER=1.64
+ARG RUST_VER=1.65
 ARG ALPINE_VER=3.16
 
 FROM rust:${RUST_VER}-alpine${ALPINE_VER}

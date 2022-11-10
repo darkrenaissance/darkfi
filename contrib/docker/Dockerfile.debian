@@ -1,9 +1,9 @@
 
 # Use: docker build . -t darkfi:debian -f ./contrib/docker/Dockerfile.debian
-#   optionally with: --build-arg BUILD_OS_VER=slim-buster --build-arg RUN_OS_VER=buster-slim --build-arg RUST_VER=1.60
+#   optionally with: --build-arg BUILD_OS_VER=slim-buster --build-arg RUN_OS_VER=buster-slim --build-arg RUST_VER=1.65
 #   rust nightly with: BUILD_OS_VER=bullseye-slim RUN_OS_VER=bullseye-slim RUST_VER=nightly REPOSITORY=rustlang/rust
 
-ARG RUST_VER=1.64  # 1.60 1.61 1.62
+ARG RUST_VER=1.65  #
 ARG BUILD_OS_VER=slim-bullseye  # slim-buster
 ARG RUN_OS_VER=bullseye-slim    # buster-slim
 ARG REPOSITORY=rust             # rustlang/rust
@@ -32,12 +32,8 @@ FROM debian:${RUN_OS_VER}
 RUN apt-get -y update && apt-get install -y openssl fonts-lato \
   && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /opt/darkfi/darkfid /opt/darkfi/
-COPY --from=builder /opt/darkfi/dnetview /opt/darkfi/
-COPY --from=builder /opt/darkfi/drk /opt/darkfi/
-COPY --from=builder /opt/darkfi/ircd /opt/darkfi/
-COPY --from=builder /opt/darkfi/tau /opt/darkfi/
-COPY --from=builder /opt/darkfi/taud /opt/darkfi/
-COPY --from=builder /opt/darkfi/zkas /opt/darkfi/
-
 WORKDIR /opt/darkfi
+
+COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid /opt/darkfi/tau /opt/darkfi/taud \
+  /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/darkotc /opt/darkfi/darkwikid \
+  /opt/darkfi/darkwiki /opt/darkfi/zkas /opt/darkfi/dao /opt/darkfi/daod ./

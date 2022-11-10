@@ -37,7 +37,7 @@ setup_xbps() {
 }
 
 setup_dnf() {
-	dnf_deps="git make jq gcc pkg-config openssl-devel findutils"
+	dnf_deps="git make jq gcc pkg-config openssl-devel findutils lato-fonts"
 	$1 install -y "$dnf_deps" || return 1
 }
 
