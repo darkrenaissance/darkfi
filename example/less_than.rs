@@ -1,9 +1,32 @@
+/* This file is part of DarkFi (https://dark.fi)
+ *
+ * Copyright (C) 2020-2022 Dyne.org foundation
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+// cargo run --release --example lesthan --all-features
 use halo2_proofs::{
     circuit::{floor_planner, Layouter, Value},
     dev::MockProver,
-    pasta::pallas,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error},
+    pasta::{pallas, vesta},
+    plonk,
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, SingleVerifier},
+    transcript::{Blake2bRead, Blake2bWrite},
 };
+use log::{error, info};
+use rand::rngs::OsRng;
 
 use darkfi::{
     consensus::{types::Float10, utils::fbig2base},
@@ -16,8 +39,6 @@ use darkfi::{
         native_range_check::NativeRangeCheckChip,
     },
 };
-use log::{error, info};
-use rand::rngs::OsRng;
 
 const WINDOW_SIZE: usize = 3;
 const NUM_BITS: usize = 253;
@@ -34,35 +55,39 @@ impl Circuit<pallas::Base> for LessThanCircuit {
     type FloorPlanner = floor_planner::V1;
 
     fn without_witnesses(&self) -> Self {
-        Self { a: Value::unknown(), b: Value::unknown() }
+        Self::default()
     }
 
     fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
-        let w = meta.advice_column();
-        meta.enable_equality(w);
+        let advices = [
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+            meta.advice_column(),
+        ];
 
-        let a = meta.advice_column();
-        let b = meta.advice_column();
-        let a_offset = meta.advice_column();
-        let z1 = meta.advice_column();
-        let z2 = meta.advice_column();
-
-        let k_values_table = meta.lookup_table_column();
+        for advice in advices.iter() {
+            meta.enable_equality(*advice);
+        }
 
         let constants = meta.fixed_column();
         meta.enable_constant(constants);
 
+        let k_values_table = meta.lookup_table_column();
+
         (
             LessThanChip::<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>::configure(
                 meta,
-                a,
-                b,
-                a_offset,
-                z1,
-                z2,
+                advices[1],
+                advices[2],
+                advices[3],
+                advices[4],
+                advices[5],
                 k_values_table,
             ),
-            w,
+            advices[0],
         )
     }
 
@@ -86,33 +111,33 @@ impl Circuit<pallas::Base> for LessThanCircuit {
             0,
             true,
         )?;
+
         Ok(())
     }
 }
 
 fn simple_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
-    let y: pallas::Base = pallas::Base::zero();
-    let t: pallas::Base = pallas::Base::one();
-    let circuit = LessThanCircuit { a: Value::known(y), b: Value::known(t) };
+    let circuit = LessThanCircuit {
+        a: Value::known(pallas::Base::from(0)),
+        b: Value::known(pallas::Base::from(1)),
+    };
 
     let prover = MockProver::run(k, &circuit, vec![]).unwrap();
     prover.assert_satisfied();
-    assert!(prover.verify().is_ok());
 
-    let public_inputs: Vec<pallas::Base> = vec![];
+    // Prover:
     let pk = ProvingKey::build(k, &LessThanCircuit::default());
+    let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
+    plonk::create_proof(&pk.params, &pk.pk, &[circuit], &[&[]], &mut OsRng, &mut transcript)?;
+    let proof = transcript.finalize();
+
+    // Verifier:
     let vk = VerifyingKey::build(k, &LessThanCircuit::default());
-    let proof = Proof::create(&pk, &[circuit], &public_inputs, &mut OsRng)?;
-    match proof.verify(&vk, &public_inputs) {
-        Ok(()) => {
-            info!("proof verified");
-            Ok(())
-        }
-        Err(e) => {
-            error!("verification failed: {}", e);
-            Err(e)
-        }
-    }
+    let strategy = SingleVerifier::new(&vk.params);
+    let mut transcript = Blake2bRead::init(&proof[..]);
+    plonk::verify_proof(&vk.params, &vk.vk, strategy, &[&[]], &mut transcript)?;
+
+    Ok(())
 }
 
 fn fullrange_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
