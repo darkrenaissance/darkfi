@@ -541,7 +541,7 @@ impl ValidatorState {
             }
             _ => {
                 self.consensus.proposals[index as usize].add(proposal);
-                match self.chain_finalization(index).await {
+                match self.chain_finalization(index as usize).await {
                     Ok(v) => {
                         to_broadcast = v;
                     }
@@ -621,14 +621,14 @@ impl ValidatorState {
 
     /// Provided an index, the node checks if the chain can be finalized.
     /// Consensus finalization logic:
-    /// - If the node has observed the creation of 3 proposals in a fork chain,
-    ///   it finalizes (appends to canonical blockchain) all proposals up to the last one.
+    /// - If the node has observed the creation of 3 proposals in a fork chain and no other
+    ///   forks exists at same or greater height, it finalizes (appends to canonical blockchain)
+    ///   all proposals up to the last one.
     /// When fork chain proposals are finalized, the rest of fork chains not
     /// starting by those proposals are removed.
-    pub async fn chain_finalization(&mut self, chain_index: i64) -> Result<Vec<BlockInfo>> {
-        let chain = &mut self.consensus.proposals[chain_index as usize];
-
-        if chain.proposals.len() < 3 {
+    pub async fn chain_finalization(&mut self, chain_index: usize) -> Result<Vec<BlockInfo>> {
+        let length = self.consensus.proposals[chain_index].proposals.len();
+        if length < 3 {
             debug!(
                 "chain_finalization(): Less than 3 proposals in chain {}, nothing to finalize",
                 chain_index
@@ -636,7 +636,18 @@ impl ValidatorState {
             return Ok(vec![])
         }
 
-        let bound = chain.proposals.len() - 1;
+        for (i, c) in self.consensus.proposals.iter().enumerate() {
+            if i == chain_index {
+                continue
+            }
+            if c.proposals.len() >= length {
+                debug!("chain_finalization(): Same or greater length fork chain exists, nothing to finalize");
+                return Ok(vec![])
+            }
+        }
+
+        let chain = &mut self.consensus.proposals[chain_index];
+        let bound = length - 1;
         let mut finalized = vec![];
         for proposal in &mut chain.proposals[..bound] {
             finalized.push(proposal.clone().into());
