@@ -70,11 +70,8 @@ the spend proofs of the old coins $sn_{c_1},sn_{c_2}$ are revealed.
 ### NIZK proof $\pi$
 for the circuit inputs, and witnesses
 
-\begin{math}
-x = (\{cm_{c_3},cm_{c_4}\},\{sn_{c_1},sn_{c_2}\},\tau,root) \\
-w = (root_{sk_{c_1}^{COIN}},path_{sk_{c_1}^{COIN}},root_{sk_{c_2}^{COIN}},path_{sk_{c_2}^{COIN}},pk_{c_3}^{COIN},pk_{c_4}^{COIN},(\rho_{c_1},r_{c_1},v_1,path_1),(\rho_{c_2},r_{c_2},v_2,path_2),
-\\(\rho_{c_1},r_{c_1},v_1,path_1))
-\end{math}
+$$x = (\{cm_{c_3},cm_{c_4}\},\{sn_{c_1},sn_{c_2}\},\tau,root)$$
+$$w = (root_{sk_{c_1}^{COIN}},path_{sk_{c_1}^{COIN}},root_{sk_{c_2}^{COIN}},path_{sk_{c_2}^{COIN}},pk_{c_3}^{COIN},pk_{c_4}^{COIN},(\rho_{c_1},r_{c_1},v_1,path_1),(\rho_{c_2},r_{c_2},v_2,path_2),(\rho_{c_1},r_{c_1},v_1,path_1))$$
 
 $\pi$ is a proof for the following transfer statement using zerocash pouring mechanism.
 
