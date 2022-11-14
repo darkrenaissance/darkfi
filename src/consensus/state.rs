@@ -435,7 +435,7 @@ impl ValidatorState {
         }
 
         let hash = match longest {
-            Some(chain) => chain.proposals.last().unwrap().block.header.headerhash(),
+            Some(chain) => chain.proposals.last().unwrap().header,
             None => self.blockchain.last()?.1,
         };
 
@@ -460,12 +460,7 @@ impl ValidatorState {
             None => return Ok(None),
         }
 
-        // Check if proposal extends any existing fork chains
-        let index = self.find_extended_chain_index(proposal)?;
-        if index == -2 {
-            return Err(Error::ExtendedChainIndexNotFoundError)
-        }
-
+        // Check if leader is a known consensus participant
         let leader = self.consensus.participants.get(&proposal.block.metadata.address);
         if leader.is_none() {
             warn!(
@@ -476,6 +471,17 @@ impl ValidatorState {
         }
         let leader = leader.unwrap();
 
+        // Check if proposal header matches actual one
+        let proposal_header = proposal.block.header.headerhash();
+        if proposal.header != proposal_header {
+            warn!(
+                "receive_proposal(): Received proposal contains missmatched headers: {} - {}",
+                proposal.header, proposal_header
+            );
+            return Err(Error::ProposalHeadersMissmatchError)
+        }
+
+        // Verify proposal winning coin public inputs match known ones
         let public_inputs = &leader.coins[self.relative_slot(current) as usize]
             [proposal.block.metadata.winning_index];
         if public_inputs != &proposal.block.metadata.public_inputs {
@@ -483,6 +489,7 @@ impl ValidatorState {
             return Err(Error::InvalidPublicInputsError)
         }
 
+        // Verify proposal leader proof
         match proposal.block.metadata.proof.verify(&self.verifying_key, public_inputs) {
             Ok(_) => info!("receive_proposal(): Proof veryfied succsessfully!"),
             Err(e) => {
@@ -491,10 +498,9 @@ impl ValidatorState {
             }
         }
 
-        if !leader.public_key.verify(
-            proposal.block.header.headerhash().as_bytes(),
-            &proposal.block.metadata.signature,
-        ) {
+        // Verify proposal signature is valid based on leader known valid key
+        if !leader.public_key.verify(proposal.header.as_bytes(), &proposal.block.metadata.signature)
+        {
             warn!(
                 "receive_proposal(): Proposer ({}) signature could not be verified",
                 proposal.block.metadata.address
@@ -502,6 +508,14 @@ impl ValidatorState {
             return Err(Error::InvalidSignatureError)
         }
 
+        // Check if proposal extends any existing fork chains
+        let index = self.find_extended_chain_index(proposal)?;
+        if index == -2 {
+            return Err(Error::ExtendedChainIndexNotFoundError)
+        }
+
+        // Validate state transition against canonical state
+        // TODO: This should be validated against fork state
         debug!("receive_proposal(): Starting state transition validation");
         let canon_state_clone = self.state_machine.lock().await.clone();
         let mem_state = MemoryState::new(canon_state_clone);
@@ -518,6 +532,7 @@ impl ValidatorState {
 
         // TODO: [PLACEHOLDER] Add rewards validation
 
+        // Check if proposal fork has can be finalized, to broadcast those blocks
         let mut to_broadcast = vec![];
         match index {
             -1 => {
@@ -546,7 +561,7 @@ impl ValidatorState {
         let mut fork = None;
         for (index, chain) in self.consensus.proposals.iter().enumerate() {
             let last = chain.proposals.last().unwrap();
-            let hash = last.block.header.headerhash();
+            let hash = last.header;
             if proposal.block.header.previous == hash &&
                 proposal.block.header.slot > last.block.header.slot
             {
@@ -584,8 +599,7 @@ impl ValidatorState {
     pub fn proposal_exists(&self, input_proposal: &blake3::Hash) -> bool {
         for chain in self.consensus.proposals.iter() {
             for proposal in chain.proposals.iter() {
-                let proposal_hash = proposal.block.header.headerhash();
-                if input_proposal == &proposal_hash {
+                if input_proposal == &proposal.header {
                     return true
                 }
             }

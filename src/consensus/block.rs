@@ -216,6 +216,8 @@ impl net::Message for BlockResponse {
 /// This struct represents a block proposal, used for consensus.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockProposal {
+    /// Block header hash
+    pub header: blake3::Hash,
     /// Block data
     pub block: BlockInfo,
 }
@@ -224,13 +226,16 @@ impl BlockProposal {
     #[allow(clippy::too_many_arguments)]
     pub fn new(header: Header, txs: Vec<Transaction>, metadata: Metadata) -> Self {
         let block = BlockInfo::new(header, txs, metadata);
-        Self { block }
+        let header = block.header.headerhash();
+        Self { header, block }
     }
 }
 
 impl PartialEq for BlockProposal {
     fn eq(&self, other: &Self) -> bool {
-        self.block.header == other.block.header && self.block.txs == other.block.txs
+        self.header == other.header &&
+            self.block.header == other.block.header &&
+            self.block.txs == other.block.txs
     }
 }
 
@@ -239,7 +244,7 @@ impl fmt::Display for BlockProposal {
         formatter.write_fmt(format_args!(
             "BlockProposal {{ leader addr: {}, hash: {}, epoch: {}, slot: {}, txs: {} }}",
             self.block.metadata.address,
-            self.block.header.headerhash(),
+            self.header,
             self.block.header.epoch,
             self.block.header.slot,
             self.block.txs.len()
@@ -281,8 +286,7 @@ impl ProposalChain {
             return false
         }
 
-        let prev_hash = previous.block.header.headerhash();
-        if proposal.block.header.previous != prev_hash ||
+        if proposal.block.header.previous != previous.header ||
             proposal.block.header.slot <= previous.block.header.slot
         {
             debug!("check_proposal(): Provided proposal is invalid.");
