@@ -21,15 +21,17 @@ pub mod coin;
 pub mod diffie_hellman;
 pub mod mint_proof;
 pub mod note;
-pub mod proof;
 pub mod types;
 
 /// VDF (Verifiable Delay Function) using MiMC
 pub mod mimc_vdf;
 
+/// Halo2 proof API abstractions
+pub mod proof;
+pub use proof::Proof;
+
 pub use burn_proof::BurnRevealedValues;
 pub use mint_proof::MintRevealedValues;
-pub use proof::Proof;
 
 pub mod lead_proof;
 pub mod leadcoin;

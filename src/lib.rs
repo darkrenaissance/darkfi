@@ -54,6 +54,9 @@ pub mod system;
 #[cfg(feature = "tx")]
 pub mod tx;
 
+#[cfg(feature = "tx")]
+pub mod tx2;
+
 #[cfg(feature = "util")]
 pub mod util;
 

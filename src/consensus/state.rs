@@ -196,7 +196,6 @@ impl ValidatorState {
         let mut runtime = Runtime::new(&money_contract_wasm_bincode[..], blockchain.clone(), cid)?;
         runtime.deploy(&[])?;
         info!("Deployed Money Contract with ID: {}", cid);
-
         // -----END ARTIFACT-----
 
         let address = client.wallet.get_default_address().await?;
@@ -543,7 +542,7 @@ impl ValidatorState {
                 "receive_proposal(): Proposer ({}) signature could not be verified",
                 proposal.block.metadata.address
             );
-            return Err(Error::InvalidSignatureError)
+            return Err(Error::InvalidSignature)
         }
 
         // Check if proposal extends any existing fork chains

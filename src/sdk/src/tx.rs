@@ -20,7 +20,9 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use super::crypto::ContractId;
 
-#[derive(SerialEncodable, SerialDecodable)]
+/// A ContractCall is the part of a transaction that executes a certain
+/// `contract_id` with `data` as the call's payload.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ContractCall {
     pub contract_id: ContractId,
     pub data: Vec<u8>,

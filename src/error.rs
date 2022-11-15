@@ -221,7 +221,7 @@ pub enum Error {
     LeaderProofVerificationError,
 
     #[error("Signature could not be verified")]
-    InvalidSignatureError,
+    InvalidSignature,
 
     #[error("State transition failed")]
     StateTransitionError,
