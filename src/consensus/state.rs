@@ -344,6 +344,7 @@ impl ValidatorState {
         // TODO: slot parameter should be absolute slot, not relative.
         // At start of epoch, relative slot is 0.
         self.consensus.coins = coins::create_epoch_coins(eta, &owned, epoch, 0);
+        self.consensus.epoch = epoch;
         Ok(true)
     }
 
