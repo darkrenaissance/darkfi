@@ -16,3 +16,7 @@ darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
 # so the wasm32-unknown-unknown target is enabled.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["custom"] }
+
+[features]
+default = []
+no-entrypoint = []

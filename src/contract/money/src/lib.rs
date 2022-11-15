@@ -48,6 +48,7 @@ impl From<u8> for MoneyFunction {
 pub mod state;
 use state::{MoneyTransferParams, MoneyTransferUpdate};
 
+#[cfg(not(feature = "no-entrypoint"))]
 define_contract!(
     init: init_contract,
     exec: process_instruction,
