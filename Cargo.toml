@@ -44,6 +44,8 @@ members = [
     "src/serial/derive",
     "src/serial/derive-internal",
 
+    "src/contract/money",
+
     "example/dchat",
     "example/dao",
 ]

@@ -42,6 +42,10 @@ pub use keypair::{Keypair, PublicKey, SecretKey};
 pub mod address;
 pub use address::Address;
 
+/// Coin definitions and methods
+pub mod coin;
+pub use coin::Coin;
+
 /// Contract ID definitions and methods
 pub mod contract_id;
 pub use contract_id::ContractId;
