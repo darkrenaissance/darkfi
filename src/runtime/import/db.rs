@@ -47,6 +47,10 @@ impl DbHandle {
         Ok(None)
     }
 
+    pub fn contains_key(&self, key: &[u8]) -> Result<bool> {
+        self.tree.contains_key(key)
+    }
+
     pub fn apply_batch(&self, batch: sled::Batch) -> Result<()> {
         Ok(self.tree.apply_batch(batch)?)
     }
@@ -342,5 +346,75 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
             (objects.len() - 1) as i64
         }
         _ => -1,
+    }
+}
+
+/// Everyone can call this. Will check if a given db contains given key.
+pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+    let env = ctx.data();
+    match env.contract_section {
+        ContractSection::Deploy |
+        ContractSection::Exec |
+        ContractSection::Update |
+        ContractSection::Metadata => {
+            let memory_view = env.memory_view(&ctx);
+
+            let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
+                error!(target: "wasm_runtime::db_contains_key", "Failed to make slice from ptr");
+                return -2
+            };
+
+            let mut buf = vec![0_u8; len as usize];
+            if let Err(e) = mem_slice.read_slice(&mut buf) {
+                error!(target: "wasm_runtime:db_contains_key", "Failed to read from memory slice: {}", e);
+                return -2
+            };
+
+            let mut buf_reader = Cursor::new(buf);
+
+            // FIXME: There's a type DbHandle=u32, but this should maybe be renamed
+            let db_handle: u32 = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_contains_key", "Failed to decode DbHandle: {}", e);
+                    return -2
+                }
+            };
+            let db_handle = db_handle as usize;
+
+            let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_contains_key", "Failed to decode key vec: {}", e);
+                    return -2
+                }
+            };
+
+            // TODO: Ensure we've read the entire buffer above.
+
+            let db_handles = env.db_handles.borrow();
+
+            if db_handles.len() <= db_handle {
+                error!(target: "wasm_runtime::db_contains_key", "Requested DbHandle that is out of bounds");
+                return -2
+            }
+
+            let handle_idx = db_handle;
+            let db_handle = &db_handles[handle_idx];
+
+            match db_handle.contains_key(&key) {
+                Ok(v) => {
+                    if v {
+                        return 1
+                    } else {
+                        return 0
+                    }
+                }
+                Err(e) => {
+                    error!(target: "wasm_runtime::db_contains_key", "sled.tree.contains_key failed: {}", e);
+                    return -2
+                }
+            }
+        }
     }
 }

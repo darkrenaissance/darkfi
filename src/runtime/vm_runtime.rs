@@ -199,6 +199,12 @@ impl Runtime {
                     import::db::db_get,
                 ),
 
+                "db_contains_key_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_contains_key,
+                ),
+
                 "db_set_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,

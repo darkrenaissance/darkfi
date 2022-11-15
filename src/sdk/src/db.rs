@@ -104,6 +104,30 @@ pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Option<Vec<u8>>>
     Ok(Some(buf))
 }
 
+/// Everyone can call this. Checks if a key is contained in the key-value store.
+///
+/// ```
+/// if db_contains_key(db_handle, key) {
+///     println!("true");
+/// }
+/// ```
+pub fn db_contains_key(db_handle: DbHandle, key: &[u8]) -> GenericResult<bool> {
+    let mut len = 0;
+    let mut buf = vec![];
+    len += db_handle.encode(&mut buf)?;
+    len += key.to_vec().encode(&mut buf)?;
+
+    let ret = unsafe { db_contains_key_(buf.as_ptr(), len as u32) };
+
+    match ret {
+        0 => return Ok(false),
+        1 => return Ok(true),
+        -1 => return Err(ContractError::CallerAccessDenied),
+        -2 => return Err(ContractError::DbContainsKeyFailed),
+        _ => unimplemented!(),
+    }
+}
+
 /// Only update() can call this. Set a value within the transaction.
 ///
 /// ```
@@ -131,5 +155,6 @@ extern "C" {
     fn db_init_(ptr: *const u8, len: u32) -> i32;
     fn db_lookup_(ptr: *const u8, len: u32) -> i32;
     fn db_get_(ptr: *const u8, len: u32) -> i64;
+    fn db_contains_key_(ptr: *const u8, len: u32) -> i32;
     fn db_set_(ptr: *const u8, len: u32) -> i32;
 }
