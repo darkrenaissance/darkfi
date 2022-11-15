@@ -18,7 +18,13 @@
 
 use std::io::Cursor;
 
-use darkfi_sdk::crypto::ContractId;
+use darkfi_sdk::{
+    crypto::ContractId,
+    db::{
+        CALLER_ACCESS_DENIED, DB_CONTAINS_KEY_FAILED, DB_GET_FAILED, DB_INIT_FAILED,
+        DB_LOOKUP_FAILED, DB_SET_FAILED, DB_SUCCESS,
+    },
+};
 use darkfi_serial::Decodable;
 use log::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
@@ -73,13 +79,13 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
 
             let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
                 error!(target: "wasm_runtime::db_init", "Failed to make slice from ptr");
-                return -2
+                return DB_INIT_FAILED
             };
 
             let mut buf = vec![0_u8; len as usize];
             if let Err(e) = mem_slice.read_slice(&mut buf) {
                 error!(target: "wasm_runtime::db_init", "Failed to read from memory slice: {}", e);
-                return -2
+                return DB_INIT_FAILED
             };
 
             let mut buf_reader = Cursor::new(buf);
@@ -88,7 +94,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_init", "Failed to decode ContractId: {}", e);
-                    return -2
+                    return DN_INIT_FAILED
                 }
             };
 
@@ -96,7 +102,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_init", "Failed to decode db_name: {}", e);
-                    return -2
+                    return DB_INIT_FAILED
                 }
             };
 
@@ -104,14 +110,14 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
 
             if &cid != contract_id {
                 error!(target: "wasm_runtime::db_init", "Unauthorized ContractId for db_init");
-                return -1
+                return CALLER_ACCESS_DENIED
             }
 
             let tree_handle = match contracts.init(db, &cid, &db_name) {
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime:db_lookup", "Failed to init db: {}", e);
-                    return -2
+                    return DB_INIT_FAILED
                 }
             };
 
@@ -129,7 +135,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
         }
         _ => {
             error!(target: "wasm_runtime::db_init", "db_init called in unauthorized section");
-            -1
+            CALLER_ACCESS_DENIED
         }
     }
 }
@@ -148,13 +154,13 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
 
             let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
                 error!(target: "wasm_runtime::db_lookup", "Failed to make slice from ptr");
-                return -2
+                return DB_LOOKUP_FAILED
             };
 
             let mut buf = vec![0_u8; len as usize];
             if let Err(e) = mem_slice.read_slice(&mut buf) {
                 error!(target: "wasm_runtime::db_lookup", "Failed to read from memory slice: {}", e);
-                return -2
+                return DB_LOOKUP_FAILED
             };
 
             let mut buf_reader = Cursor::new(buf);
@@ -163,7 +169,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_lookup", "Failed to decode ContractId: {}", e);
-                    return -2
+                    return DB_LOOKUP_FAILED
                 }
             };
 
@@ -171,7 +177,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_lookup", "Failed to decode db_name: {}", e);
-                    return -2
+                    return DB_LOOKUP_FAILED
                 }
             };
 
@@ -181,7 +187,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime:db_lookup", "Failed to lookup db: {}", e);
-                    return -2
+                    return DB_LOOKUP_FAILED
                 }
             };
 
@@ -199,7 +205,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
         }
         _ => {
             error!(target: "wasm_runtime::db_lookup", "db_lookup called in unauthorized section");
-            -1
+            CALLER_ACCESS_DENIED
         }
     }
 }
@@ -213,13 +219,13 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 
             let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
                 error!(target: "wasm_runtime::db_set", "Failed to make slice from ptr");
-                return -2
+                return DB_SET_FAILED
             };
 
             let mut buf = vec![0_u8; len as usize];
             if let Err(e) = mem_slice.read_slice(&mut buf) {
                 error!(target: "wasm_runtime:db_set", "Failed to read from memory slice: {}", e);
-                return -2
+                return DB_SET_FAILED
             };
 
             let mut buf_reader = Cursor::new(buf);
@@ -229,7 +235,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_set", "Failed to decode DbHandle: {}", e);
-                    return -2
+                    return DB_SET_FAILED
                 }
             };
             let db_handle = db_handle as usize;
@@ -238,7 +244,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_set", "Failed to decode key vec: {}", e);
-                    return -2
+                    return DB_SET_FAILED
                 }
             };
 
@@ -246,7 +252,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_set", "Failed to decode value vec: {}", e);
-                    return -2
+                    return DB_SET_FAILED
                 }
             };
 
@@ -257,7 +263,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 
             if db_handles.len() <= db_handle || db_batches.len() <= db_handle {
                 error!(target: "wasm_runtime::db_set", "Requested DbHandle that is out of bounds");
-                return -2
+                return DB_SET_FAILED
             }
 
             let handle_idx = db_handle;
@@ -266,14 +272,14 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 
             if db_handle.contract_id != env.contract_id {
                 error!(target: "wasm_runtime::db_set", "Unauthorized to write to DbHandle");
-                return -1
+                return CALLER_ACCESS_DENIED
             }
 
             db_batch.insert(key, value);
 
-            0
+            DB_SUCCESS
         }
-        _ => -1,
+        _ => CALLER_ACCESS_DENIED,
     }
 }
 
@@ -286,13 +292,13 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
 
             let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
                 error!(target: "wasm_runtime::db_get", "Failed to make slice from ptr");
-                return -2
+                return DB_GET_FAILED
             };
 
             let mut buf = vec![0_u8; len as usize];
             if let Err(e) = mem_slice.read_slice(&mut buf) {
                 error!(target: "wasm_runtime::db_get", "Failed to read from memory slice: {}", e);
-                return -2
+                return DB_GET_FAILED
             };
 
             let mut buf_reader = Cursor::new(buf);
@@ -302,7 +308,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_get", "Failed to decode DbHandle: {}", e);
-                    return -2
+                    return DB_GET_FAILED
                 }
             };
             let db_handle = db_handle as usize;
@@ -311,7 +317,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_get", "Failed to decode key from vec: {}", e);
-                    return -2
+                    return DB_GET_FAILED
                 }
             };
 
@@ -321,7 +327,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
 
             if db_handles.len() <= db_handle {
                 error!(target: "wasm_runtime::db_get", "Requested DbHandle that is out of bounds");
-                return -2
+                return DB_GET_FAILED
             }
 
             let handle_idx = db_handle;
@@ -331,13 +337,13 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_get", "Internal error getting from tree: {}", e);
-                    return -2
+                    return DB_GET_FAILED
                 }
             };
 
             let Some(return_data) = ret else {
                 debug!("returned empty vec");
-                return -3
+                return -127
             };
 
             // Copy Vec<u8> to the VM
@@ -345,7 +351,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
             objects.push(return_data);
             (objects.len() - 1) as i64
         }
-        _ => -1,
+        _ => CALLER_ACCESS_DENIED,
     }
 }
 
@@ -361,13 +367,13 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
 
             let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
                 error!(target: "wasm_runtime::db_contains_key", "Failed to make slice from ptr");
-                return -2
+                return DB_CONTAINS_KEY_FAILED
             };
 
             let mut buf = vec![0_u8; len as usize];
             if let Err(e) = mem_slice.read_slice(&mut buf) {
                 error!(target: "wasm_runtime:db_contains_key", "Failed to read from memory slice: {}", e);
-                return -2
+                return DB_CONTAINS_KEY_FAILED
             };
 
             let mut buf_reader = Cursor::new(buf);
@@ -377,7 +383,7 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_contains_key", "Failed to decode DbHandle: {}", e);
-                    return -2
+                    return DB_CONTAINS_KEY_FAILED
                 }
             };
             let db_handle = db_handle as usize;
@@ -386,7 +392,7 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "wasm_runtime::db_contains_key", "Failed to decode key vec: {}", e);
-                    return -2
+                    return DB_CONTAINS_KEY_FAILED
                 }
             };
 
@@ -396,7 +402,7 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
 
             if db_handles.len() <= db_handle {
                 error!(target: "wasm_runtime::db_contains_key", "Requested DbHandle that is out of bounds");
-                return -2
+                return DB_CONTAINS_KEY_FAILED
             }
 
             let handle_idx = db_handle;
@@ -405,14 +411,14 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
             match db_handle.contains_key(&key) {
                 Ok(v) => {
                     if v {
-                        return 1
+                        return 1 // true
                     } else {
-                        return 0
+                        return 0 // false
                     }
                 }
                 Err(e) => {
                     error!(target: "wasm_runtime::db_contains_key", "sled.tree.contains_key failed: {}", e);
-                    return -2
+                    return DB_CONTAINS_KEY_FAILED
                 }
             }
         }

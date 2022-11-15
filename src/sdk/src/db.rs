@@ -26,6 +26,14 @@ use super::{
 
 pub type DbHandle = u32;
 
+pub const DB_SUCCESS: i32 = 0;
+pub const CALLER_ACCESS_DENIED: i32 = -1;
+pub const DB_INIT_FAILED: i32 = -2;
+pub const DB_LOOKUP_FAILED: i32 = -3;
+pub const DB_GET_FAILED: i32 = -4;
+pub const DB_CONTAINS_KEY_FAILED: i32 = -5;
+pub const DB_SET_FAILED: i32 = -6;
+
 /// Only deploy() can call this. Creates a new database instance for this contract.
 ///
 /// ```
@@ -43,8 +51,8 @@ pub fn db_init(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle
 
         if ret < 0 {
             match ret {
-                -1 => return Err(ContractError::CallerAccessDenied),
-                -2 => return Err(ContractError::DbInitFailed),
+                CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
+                DB_INIT_FAILED => return Err(ContractError::DbInitFailed),
                 _ => unimplemented!(),
             }
         }
@@ -64,8 +72,8 @@ pub fn db_lookup(contract_id: ContractId, db_name: &str) -> GenericResult<DbHand
 
         if ret < 0 {
             match ret {
-                -1 => return Err(ContractError::CallerAccessDenied),
-                -2 => return Err(ContractError::DbLookupFailed),
+                CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
+                DB_LOOKUP_FAILED => return Err(ContractError::DbLookupFailed),
                 _ => unimplemented!(),
             }
         }
@@ -88,10 +96,10 @@ pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Option<Vec<u8>>>
     let ret = unsafe { db_get_(buf.as_ptr(), len as u32) };
 
     if ret < 0 {
-        match ret {
-            -1 => return Err(ContractError::CallerAccessDenied),
-            -2 => return Err(ContractError::DbGetFailed),
-            -3 => return Ok(None),
+        match ret as i32 {
+            CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
+            DB_GET_FAILED => return Err(ContractError::DbGetFailed),
+            -127 => return Ok(None),
             _ => unimplemented!(),
         }
     }
@@ -120,10 +128,10 @@ pub fn db_contains_key(db_handle: DbHandle, key: &[u8]) -> GenericResult<bool> {
     let ret = unsafe { db_contains_key_(buf.as_ptr(), len as u32) };
 
     match ret {
+        CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
+        DB_CONTAINS_KEY_FAILED => return Err(ContractError::DbContainsKeyFailed),
         0 => return Ok(false),
         1 => return Ok(true),
-        -1 => return Err(ContractError::CallerAccessDenied),
-        -2 => return Err(ContractError::DbContainsKeyFailed),
         _ => unimplemented!(),
     }
 }
@@ -143,9 +151,9 @@ pub fn db_set(db_handle: DbHandle, key: &[u8], value: &[u8]) -> GenericResult<()
         len += value.to_vec().encode(&mut buf)?;
 
         match db_set_(buf.as_ptr(), len as u32) {
-            0 => Ok(()),
-            -1 => Err(ContractError::CallerAccessDenied),
-            -2 => Err(ContractError::DbSetFailed),
+            CALLER_ACCESS_DENIED => Err(ContractError::CallerAccessDenied),
+            DB_SET_FAILED => Err(ContractError::DbSetFailed),
+            DB_SUCCESS => Ok(()),
             _ => unreachable!(),
         }
     }
