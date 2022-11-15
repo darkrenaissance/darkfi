@@ -368,6 +368,8 @@ impl Stakeholder {
         info!("Winning coin index: {}", idx);
         // Generating leader proof
         let coin = self.epoch.get_coin(sl as usize, idx);
+        // TODO: Generate new LeadCoin from newlly minted coin, will reuse original coin for now
+        //let coin2 = something();
         let proof = self.epoch.get_proof(sl as usize, idx, &self.get_leadprovkingkey());
         //Verifying generated proof against winning coin public inputs
         info!("Leader proof generated successfully, veryfing...");
@@ -389,7 +391,9 @@ impl Stakeholder {
             sign,
             addr,
             coin.public_inputs(),
+            coin.public_inputs(),
             idx,
+            coin.sn.unwrap(),
             self.get_eta().to_repr(),
             LeadProof::from(proof),
             vec![],

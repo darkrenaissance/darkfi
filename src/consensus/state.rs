@@ -356,7 +356,7 @@ impl ValidatorState {
     /// Generate a block proposal for the current slot, containing all
     /// unconfirmed transactions. Proposal extends the longest fork
     /// chain the node is holding.
-    pub fn propose(&self, idx: usize) -> Result<Option<BlockProposal>> {
+    pub fn propose(&mut self, idx: usize) -> Result<Option<BlockProposal>> {
         let slot = self.current_slot();
         let (prev_hash, index) = self.longest_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
@@ -375,18 +375,25 @@ impl ValidatorState {
         let signed_proposal = self.secret.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
         let eta = self.get_eta().to_repr();
         // Generating leader proof
-        let coin = self.consensus.coins[self.relative_slot(slot) as usize][idx];
+        let relative_slot = self.relative_slot(slot) as usize;
+        let coin = self.consensus.coins[relative_slot][idx];
+        // TODO: Generate new LeadCoin from newlly minted coin, will reuse original coin for now
+        //let coin2 = something();
         let proof = lead_proof::create_lead_proof(&self.proving_key, coin)?;
         let participants = self.consensus.participants.values().cloned().collect();
         let metadata = Metadata::new(
             signed_proposal,
             self.address,
             coin.public_inputs(),
+            coin.public_inputs(),
             idx,
+            coin.sn.unwrap(),
             eta,
             LeadProof::from(proof),
             participants,
         );
+        // TODO: replace old coin with new coin
+        self.consensus.coins[relative_slot][idx] = coin;
 
         // TODO: [PLACEHOLDER] Add rewards calculation (proof?)
         // TODO: [PLACEHOLDER] Create and add rewards transaction
@@ -470,7 +477,7 @@ impl ValidatorState {
             );
             return Err(Error::UnknownNodeError)
         }
-        let leader = leader.unwrap();
+        let mut leader = leader.unwrap().clone();
 
         // Check if proposal header matches actual one
         let proposal_header = proposal.block.header.headerhash();
@@ -489,6 +496,8 @@ impl ValidatorState {
             warn!("receive_proposal(): Received proposal public inputs are invalid.");
             return Err(Error::InvalidPublicInputsError)
         }
+
+        // TODO: Verify winning coin serial number
 
         // Verify proposal leader proof
         match proposal.block.metadata.proof.verify(&self.verifying_key, public_inputs) {
@@ -532,6 +541,12 @@ impl ValidatorState {
         }
 
         // TODO: [PLACEHOLDER] Add rewards validation
+        // TODO: Append serial to merkle tree
+
+        // Replacing participants public inputs with the newlly minted ones
+        leader.coins[self.relative_slot(current) as usize][proposal.block.metadata.winning_index] =
+            proposal.block.metadata.new_public_inputs.clone();
+        self.append_participant(leader);
 
         // Check if proposal fork has can be finalized, to broadcast those blocks
         let mut to_broadcast = vec![];

@@ -43,8 +43,12 @@ pub struct Metadata {
     pub address: Address,
     /// Block owner slot competing coins public inputs
     pub public_inputs: Vec<pallas::Base>,
+    /// Block owner newlly minted coin public inputs
+    pub new_public_inputs: Vec<pallas::Base>,
     /// Block owner winning coin index
     pub winning_index: usize,
+    /// Block owner winning coin serial number
+    pub serial_number: pallas::Base,
     /// Response of global random oracle, or it's emulation.
     pub eta: [u8; 32],
     /// Leader NIZK proof
@@ -59,11 +63,23 @@ impl Default for Metadata {
         let address = Address::from(keypair.public);
         let signature = Signature::dummy();
         let public_inputs = vec![];
+        let new_public_inputs = vec![];
         let winning_index = 0;
+        let serial_number = pallas::Base::from(0);
         let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
         let proof = LeadProof::default();
         let participants = vec![];
-        Self { signature, address, public_inputs, winning_index, eta, proof, participants }
+        Self {
+            signature,
+            address,
+            public_inputs,
+            new_public_inputs,
+            winning_index,
+            serial_number,
+            eta,
+            proof,
+            participants,
+        }
     }
 }
 
@@ -72,12 +88,24 @@ impl Metadata {
         signature: Signature,
         address: Address,
         public_inputs: Vec<pallas::Base>,
+        new_public_inputs: Vec<pallas::Base>,
         winning_index: usize,
+        serial_number: pallas::Base,
         eta: [u8; 32],
         proof: LeadProof,
         participants: Vec<Participant>,
     ) -> Self {
-        Self { signature, address, public_inputs, winning_index, eta, proof, participants }
+        Self {
+            signature,
+            address,
+            public_inputs,
+            new_public_inputs,
+            winning_index,
+            serial_number,
+            eta,
+            proof,
+            participants,
+        }
     }
 }
 

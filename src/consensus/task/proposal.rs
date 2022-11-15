@@ -108,7 +108,7 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         // Node checks if it's the slot leader to generate a new proposal
         // for that slot.
         let (won, idx) = state.read().await.is_slot_leader();
-        let result = if won { state.read().await.propose(idx) } else { Ok(None) };
+        let result = if won { state.write().await.propose(idx) } else { Ok(None) };
         let proposal = match result {
             Ok(prop) => {
                 if prop.is_none() {
@@ -135,11 +135,13 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
                 }
                 // Broadcast finalized blocks info, if any:
                 if let Some(blocks) = to_broadcast {
-                    info!("consensus: Broadcasting finalized blocks");
-                    for info in blocks {
-                        match sync_p2p.broadcast(info).await {
-                            Ok(()) => info!("consensus: Broadcasted block"),
-                            Err(e) => error!("consensus: Failed broadcasting block: {}", e),
+                    if blocks.len() > 0 {
+                        info!("consensus: Broadcasting finalized blocks");
+                        for info in blocks {
+                            match sync_p2p.broadcast(info).await {
+                                Ok(()) => info!("consensus: Broadcasted block"),
+                                Err(e) => error!("consensus: Failed broadcasting block: {}", e),
+                            }
                         }
                     }
                 } else {
