@@ -1,5 +1,4 @@
 use darkfi::{crypto::Proof, Result, VerifyFailed::ProofVerifyFailed};
-use darkfi_serial::Encodable;
 use darkfi_sdk::{
     crypto::{
         schnorr::{SchnorrPublic, Signature},
@@ -8,6 +7,7 @@ use darkfi_sdk::{
     pasta::pallas,
     tx::ContractCall,
 };
+use darkfi_serial::Encodable;
 use log::debug;
 
 use crate::{

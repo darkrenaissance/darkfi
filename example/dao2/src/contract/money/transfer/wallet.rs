@@ -28,12 +28,12 @@ use darkfi::{
         types::{
             DrkCoinBlind, DrkSerial, DrkSpendHook, DrkUserData, DrkUserDataBlind, DrkValueBlind,
         },
-        Proof
+        Proof,
     },
     Result,
 };
 
-use money_contract::{MoneyFunction, MoneyTransferParams, ClearInput, Input, Output};
+use money_contract::{ClearInput, Input, MoneyFunction, MoneyTransferParams, Output};
 
 use crate::{
     note,
@@ -236,8 +236,6 @@ impl Builder {
             outputs.push(output);
         }
 
-        Ok((MoneyTransferParams {
-            clear_inputs, inputs, outputs
-        }, proofs))
+        Ok((MoneyTransferParams { clear_inputs, inputs, outputs }, proofs))
     }
 }

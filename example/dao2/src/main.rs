@@ -13,9 +13,9 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{
-        constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, poseidon_hash, ContractId,
-        Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId,
-        schnorr::SchnorrSecret,
+        constants::MERKLE_DEPTH, pedersen::pedersen_commitment_u64, poseidon_hash,
+        schnorr::SchnorrSecret, ContractId, Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey,
+        TokenId,
     },
     tx::ContractCall,
 };
@@ -480,7 +480,7 @@ async fn main() -> BoxResult<()> {
             let coin = output.coin;
             let enc_note = note::EncryptedNote2 {
                 ciphertext: output.ciphertext,
-                ephem_public: output.ephem_public
+                ephem_public: output.ephem_public,
             };
 
             let coin = Coin(coin);

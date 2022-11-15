@@ -1,15 +1,17 @@
 use darkfi_sdk::{
-    crypto::{ContractId, PublicKey, MerkleNode, MerkleTree},
+    crypto::{ContractId, MerkleNode, MerkleTree, PublicKey},
     db::{db_init, db_lookup, db_set},
     define_contract,
-    msg,
     error::ContractResult,
     merkle::merkle_add,
-    pasta::{pallas, group::Curve, arithmetic::CurveAffine},
+    msg,
+    pasta::{arithmetic::CurveAffine, group::Curve, pallas},
     tx::ContractCall,
     util::set_return_data,
 };
-use darkfi_serial::{serialize, Encodable, SerialDecodable, SerialEncodable, WriteExt, deserialize};
+use darkfi_serial::{
+    deserialize, serialize, Encodable, SerialDecodable, SerialEncodable, WriteExt,
+};
 
 #[repr(u8)]
 pub enum MoneyFunction {
@@ -39,7 +41,7 @@ pub struct MoneyTransferUpdate {
     /// Nullifiers
     pub nullifiers: Vec<pallas::Base>,
     /// Coins
-    pub coins: Vec<pallas::Base>
+    pub coins: Vec<pallas::Base>,
 }
 
 /// A transaction's clear input
@@ -137,7 +139,7 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
                         input.user_data_enc,
                         sig_x,
                         sig_y,
-                    ]
+                    ],
                 ));
 
                 signature_public_keys.push(input.signature_public.inner());
@@ -154,7 +156,7 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
                         *value_coords.y(),
                         *token_coords.x(),
                         *token_coords.y(),
-                    ]
+                    ],
                 ));
             }
 
