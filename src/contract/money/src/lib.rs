@@ -75,7 +75,10 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization. Note that the tree should then be called "zkas".
     // The lookups can then be done by `contract_id+zkas+namespace`.
-    let zkas_db = db_init(cid, ZKAS_TREE)?;
+    let zkas_db = match db_lookup(cid, ZKAS_TREE) {
+        Ok(v) => v,
+        Err(_) => db_init(cid, ZKAS_TREE)?,
+    };
     let mint_bincode = include_bytes!("../proof/mint.zk.bin");
     let burn_bincode = include_bytes!("../proof/burn.zk.bin");
 
@@ -90,26 +93,37 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     db_set(zkas_db, &serialize(&mint_namespace), &mint_bincode[..])?;
     db_set(zkas_db, &serialize(&burn_namespace), &burn_bincode[..])?;
     */
-
     db_set(zkas_db, &serialize(&ZKAS_MINT_NS.to_string()), &mint_bincode[..])?;
     db_set(zkas_db, &serialize(&ZKAS_BURN_NS.to_string()), &burn_bincode[..])?;
 
     // Set up a database tree to hold Merkle roots
-    let _ = db_init(cid, COIN_ROOTS_TREE)?;
+    let _ = match db_lookup(cid, COIN_ROOTS_TREE) {
+        Ok(v) => v,
+        Err(_) => db_init(cid, COIN_ROOTS_TREE)?,
+    };
 
     // Set up a database tree to hold nullifiers
-    let _ = db_init(cid, NULLIFIERS_TREE)?;
+    let _ = match db_lookup(cid, NULLIFIERS_TREE) {
+        Ok(v) => v,
+        Err(_) => db_init(cid, NULLIFIERS_TREE)?,
+    };
 
     // Set up a database tree for arbitrary data
-    let info_db = db_init(cid, INFO_TREE)?;
+    let info_db = match db_lookup(cid, INFO_TREE) {
+        Ok(v) => v,
+        Err(_) => {
+            let info_db = db_init(cid, INFO_TREE)?;
+            // Add a Merkle tree to the info db:
+            let coin_tree = MerkleTree::new(100);
+            let mut coin_tree_data = vec![];
+            // TODO: FIXME: What is this write_u32 doing here?
+            coin_tree_data.write_u32(0)?;
+            coin_tree.encode(&mut coin_tree_data)?;
 
-    // Add a Merkle tree to the info db:
-    let coin_tree = MerkleTree::new(100);
-    let mut coin_tree_data = vec![];
-    // TODO: FIXME: What is this write_u32 doing here?
-    coin_tree_data.write_u32(0)?;
-    coin_tree.encode(&mut coin_tree_data)?;
-    db_set(info_db, &serialize(&COIN_MERKLE_TREE.to_string()), &coin_tree_data)?;
+            db_set(info_db, &serialize(&COIN_MERKLE_TREE.to_string()), &coin_tree_data)?;
+            info_db
+        }
+    };
 
     // Whitelisted faucets
     let faucet_pubkeys: Vec<PublicKey> = vec![];
