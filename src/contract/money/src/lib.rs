@@ -56,7 +56,7 @@ define_contract!(
 );
 
 // These are the different sled trees that will be created
-pub const ZKAS_TREE: &str = "zkas";
+pub const ZKAS_TREE: &str = "zkas"; // <-- This should be a constant in darkfi-sdk
 pub const COIN_ROOTS_TREE: &str = "coin_roots";
 pub const NULLIFIERS_TREE: &str = "nullifiers";
 pub const INFO_TREE: &str = "info";
