@@ -425,6 +425,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Witness::Scalar(w) => {
+                    // NOTE: Because the type in `halo2_gadgets` does not have a `Clone`
+                    //       impl, we push scalars as-is to the stack. They get witnessed
+                    //       when they get used.
                     debug!("Pushing Scalar to stack index {}", stack.len());
                     stack.push(StackVar::Scalar(*w));
                 }

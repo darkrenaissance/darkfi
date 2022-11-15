@@ -20,7 +20,7 @@
 use darkfi_sdk::crypto::{constants::OrchardFixedBases, MerkleNode};
 use halo2_gadgets::ecc::{chip::EccChip, FixedPoint, FixedPointBaseField, FixedPointShort, Point};
 use halo2_proofs::circuit::{AssignedCell, Value};
-use pasta_curves::{pallas, EpAffine};
+use pasta_curves::pallas;
 
 use crate::zkas::{decoder::ZkBinary, types::VarType};
 
@@ -77,74 +77,24 @@ pub enum StackVar {
     Uint64(Value<u64>),
 }
 
-impl From<StackVar> for Point<pallas::Affine, EccChip<OrchardFixedBases>> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::EcPoint(v) => v,
-            _ => unimplemented!(),
+macro_rules! impl_from {
+    ($variant:ident, $fortype:ty) => {
+        impl From<StackVar> for $fortype {
+            fn from(value: StackVar) -> Self {
+                match value {
+                    StackVar::$variant(v) => v,
+                    _ => unreachable!(),
+                }
+            }
         }
-    }
+    };
 }
 
-impl From<StackVar> for FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::EcFixedPoint(v) => v,
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl From<StackVar> for Value<pallas::Scalar> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::Scalar(v) => v,
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl From<StackVar> for AssignedCell<pallas::Base, pallas::Base> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::Base(v) => v,
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl From<StackVar> for Value<u32> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::Uint32(v) => v,
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl From<StackVar> for Value<[pallas::Base; 32]> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::MerklePath(v) => v,
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl From<StackVar> for FixedPointShort<EpAffine, EccChip<OrchardFixedBases>> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::EcFixedPointShort(v) => v,
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl From<StackVar> for FixedPointBaseField<EpAffine, EccChip<OrchardFixedBases>> {
-    fn from(value: StackVar) -> Self {
-        match value {
-            StackVar::EcFixedPointBase(v) => v,
-            _ => unimplemented!(),
-        }
-    }
-}
+impl_from!(EcPoint, Point<pallas::Affine, EccChip<OrchardFixedBases>>);
+impl_from!(EcFixedPoint, FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>);
+impl_from!(EcFixedPointShort, FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>>);
+impl_from!(EcFixedPointBase, FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>);
+impl_from!(Scalar, Value<pallas::Scalar>);
+impl_from!(Base, AssignedCell<pallas::Base, pallas::Base>);
+impl_from!(Uint32, Value<u32>);
+impl_from!(MerklePath, Value<[pallas::Base; 32]>);
