@@ -5,15 +5,31 @@ constant "Burn" {
 }
 
 contract "Burn" {
+	# Secret key used to derive nullifier and coin's public key
 	Base secret,
+	# Unique serial number corresponding to this coin
 	Base serial,
+	# The value of this coin
 	Base value,
+	# The token ID
 	Base token,
+	# Random blinding factor for coin
 	Base coin_blind,
+	# Allows composing this ZK proof to invoke other contracts
+	Base spend_hook,
+	# Data passed from this coin to the invoked contract
+	Base user_data,
+	# Blinding factor for the encrypted user_data
+	Base user_data_blind,
+	# Random blinding factor for value commitment
 	Scalar value_blind,
+	# Random blinding factor for the token ID
 	Scalar token_blind,
+	# Leaf position of the coin in the Merkle tree of coins
 	Uint32 leaf_pos,
+	# Merkle path to the coin
 	MerklePath path,
+	# Secret key used to derive public key for the tx signature
 	Base signature_secret,
 }
 
@@ -28,10 +44,8 @@ circuit "Burn" {
 	value_commit = ec_add(vcv, vcr);
 	# Since value_commit is a curve point, we fetch its coordinates
 	# and constrain them:
-	value_commit_x = ec_get_x(value_commit);
-	value_commit_y = ec_get_y(value_commit);
-	constrain_instance(value_commit_x);
-	constrain_instance(value_commit_y);
+	constrain_instance(ec_get_x(value_commit));
+	constrain_instance(ec_get_y(value_commit));
 
 	# Pedersen commitment for coin's token ID
 	tcv = ec_mul_base(token, NULLIFIER_K);
@@ -39,20 +53,31 @@ circuit "Burn" {
 	token_commit = ec_add(tcv, tcr);
 	# Since token_commit is also a curve point, we'll do the same
 	# coordinate dance:
-	token_commit_x = ec_get_x(token_commit);
-	token_commit_y = ec_get_y(token_commit);
-	constrain_instance(token_commit_x);
-	constrain_instance(token_commit_y);
+	constrain_instance(ec_get_x(token_commit));
+	constrain_instance(ec_get_y(token_commit));
 
 	# Coin hash
 	pub = ec_mul_base(secret, NULLIFIER_K);
 	pub_x = ec_get_x(pub);
 	pub_y = ec_get_y(pub);
-	C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
+	C = poseidon_hash(
+		pub_x,
+		pub_y,
+		value,
+		token,
+		serial,
+		spend_hook,
+		user_data,
+		coin_blind,
+	);
 
 	# Merkle root
 	root = merkle_root(leaf_pos, path, C);
 	constrain_instance(root);
+
+	# Export user_data
+	user_data_enc = poseidon_hash(user_data, user_data_blind);
+	constrain_instance(user_data_enc);
 
 	# Finally, we derive a public key for the signature and
 	# constrain its coordinates:
