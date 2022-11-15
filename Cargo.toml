@@ -160,6 +160,7 @@ async-runtime = [
 blockchain = [
     "blake3",
     "chrono",
+    "dashu",
     "halo2_gadgets",
     "halo2_proofs",
     "incrementalmerkletree",
@@ -178,7 +179,7 @@ blockchain = [
     "tx",
     "node",
     "util",
-    "dep:dashu",
+    "wasm-runtime",
 ]
 
 crypto = [

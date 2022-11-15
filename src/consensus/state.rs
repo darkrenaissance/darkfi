@@ -28,7 +28,7 @@ use chrono::{NaiveDateTime, Utc};
 use darkfi_sdk::crypto::{
     constants::MERKLE_DEPTH,
     schnorr::{SchnorrPublic, SchnorrSecret},
-    Address, MerkleNode, PublicKey, SecretKey,
+    Address, ContractId, MerkleNode, PublicKey, SecretKey,
 };
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
@@ -54,6 +54,7 @@ use crate::{
         state::{state_transition, ProgramState, StateUpdate},
         Client, MemoryState, State,
     },
+    runtime::vm_runtime::Runtime,
     tx::Transaction,
     util::time::Timestamp,
     zk::circuit::LeadContract,
@@ -170,6 +171,33 @@ impl ValidatorState {
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
         let unconfirmed_txs = vec![];
         let participating = None;
+
+        // -----BEGIN ARTIFACT: WASM INTEGRATION-----
+        // This is the current place where this stuff is being done, and very loosely.
+        // We initialize and "deploy" _native_ contracts here - currently the money contract.
+        // Eventually, the crypsinous consensus should be a native contract like payments are.
+        // This means the previously existing Blockchain state will be a bit different and is
+        // going to have to be changed.
+        // When the `Blockchain` object is created, it doesn't care whether it already has
+        // data or not. If there's existing data it will just open the necessary db and trees,
+        // and give back what it has. This means, on subsequent runs our native contracts will
+        // already be in a deployed state. So what we do here is a "re-deployment". This kind
+        // of operation should only modify the contract's state in case it wasn't deployed
+        // before (meaning the initial run). Otherwise, it shouldn't touch anything, or just
+        // potentially update the database schemas or whatever is necessary. Here it's
+        // transparent and generic, and the entire logic for this db protection is supposed to
+        // be in the `init` function of the contract, so look there for a reference of the
+        // databases and the state.
+        info!("ValidatorState::new(): Deploying \"money contract\"");
+        let money_contract_wasm_bincode = include_bytes!("../contract/money/money_contract.wasm");
+        // XXX: FIXME: This ID should be something that does not solve the pallas curve equation,
+        //             and/or just hardcoded and forbidden in non-native contract deployment.
+        let cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let mut runtime = Runtime::new(&money_contract_wasm_bincode[..], blockchain.clone(), cid)?;
+        runtime.deploy(&[])?;
+        info!("Deployed Money Contract with ID: {}", cid);
+
+        // -----END ARTIFACT-----
 
         let address = client.wallet.get_default_address().await?;
         let state_machine = Arc::new(Mutex::new(State {

@@ -32,6 +32,9 @@ PROOFS_BIN = $(PROOFS:=.bin)
 
 all: zkas $(PROOFS_BIN) $(BINS)
 
+contracts: zkas
+	$(MAKE) -C src/contract/money
+
 zkas: $(BINDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
@@ -42,7 +45,7 @@ $(PROOFS_BIN): $(PROOFS) zkas
 token_lists:
 	$(MAKE) -C contrib/token all
 
-$(BINS): token_lists $(BINDEPS)
+$(BINS): token_lists contracts $(BINDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
 
