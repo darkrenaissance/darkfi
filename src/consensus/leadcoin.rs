@@ -18,8 +18,10 @@
 
 use darkfi_sdk::{
     crypto::{
-        pedersen::pedersen_commitment_base, poseidon_hash, util::mod_r_p, MerkleNode, PublicKey,
-        SecretKey,
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+        poseidon_hash,
+        util::mod_r_p,
+        MerkleNode, PublicKey, SecretKey,
     },
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
 };
@@ -28,7 +30,7 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use rand::rngs::OsRng;
 
-use super::constants::PRF_NULLIFIER_PREFIX;
+use super::constants::{EPOCH_LENGTH, PRF_NULLIFIER_PREFIX};
 use crate::{
     crypto::{proof::ProvingKey, Proof},
     zk::circuit::LeadContract,
@@ -270,5 +272,59 @@ impl LeadCoin {
         };
 
         Ok(Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?)
+    }
+}
+
+/// This struct holds the secrets for creating LeadCoins during one epoch.
+pub struct LeadCoinSecrets {
+    pub secret_keys: Vec<SecretKey>,
+    pub merkle_roots: Vec<MerkleNode>,
+    pub merkle_paths: Vec<[MerkleNode; MERKLE_DEPTH_LEADCOIN]>,
+}
+
+impl LeadCoinSecrets {
+    /// Generate epoch coins secret keys.
+    /// First clot coin secret key is sampled at random, while the secret keys of the
+    /// remaining slots derive from the previous slot secret.
+    /// Clarification:
+    /// ```plaintext
+    /// sk[0] -> random,
+    /// sk[1] -> derive_function(sk[0]),
+    /// ...
+    /// sk[n] -> derive_function(sk[n-1]),
+    /// ```
+    pub fn generate() -> Self {
+        let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(EPOCH_LENGTH);
+        let mut sks = Vec::with_capacity(EPOCH_LENGTH);
+        let mut root_sks = Vec::with_capacity(EPOCH_LENGTH);
+        let mut path_sks = Vec::with_capacity(EPOCH_LENGTH);
+
+        let mut prev_sk = SecretKey::from(pallas::Base::one());
+
+        for i in 0..EPOCH_LENGTH {
+            let secret = if i == 0 {
+                pedersen_commitment_u64(1, pallas::Scalar::random(&mut OsRng))
+            } else {
+                pedersen_commitment_u64(1, mod_r_p(prev_sk.inner()))
+            };
+
+            let secret_coords = secret.to_affine().coordinates().unwrap();
+            let secret_msg = [*secret_coords.x(), *secret_coords.y()];
+            let secret_key = SecretKey::from(poseidon_hash(secret_msg));
+
+            sks.push(secret_key);
+            prev_sk = secret_key;
+
+            let node = MerkleNode::from(secret_key.inner());
+            tree.append(&node);
+            let leaf_pos = tree.witness().unwrap();
+            let root = tree.root(0).unwrap();
+            let path = tree.authentication_path(leaf_pos, &root).unwrap();
+
+            root_sks.push(root);
+            path_sks.push(path.try_into().unwrap());
+        }
+
+        Self { secret_keys: sks, merkle_roots: root_sks, merkle_paths: path_sks }
     }
 }

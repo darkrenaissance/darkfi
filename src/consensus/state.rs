@@ -23,36 +23,42 @@ use std::{
     time::Duration,
 };
 
-use async_std::sync::{Arc, Mutex, RwLock};
+use async_std::sync::{Arc, RwLock};
 use chrono::{NaiveDateTime, Utc};
 use darkfi_sdk::crypto::{
     constants::MERKLE_DEPTH,
+    pedersen::pedersen_commitment_base,
+    poseidon_hash,
     schnorr::{SchnorrPublic, SchnorrSecret},
-    Address, ContractId, MerkleNode, PublicKey, SecretKey,
+    util::mod_r_p,
+    ContractId, MerkleNode, PublicKey, SecretKey,
 };
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use lazy_init::Lazy;
 use log::{debug, error, info, warn};
-use pasta_curves::{group::ff::PrimeField, pallas};
-use rand::rngs::OsRng;
+use pasta_curves::{
+    arithmetic::CurveAffine,
+    group::{ff::PrimeField, Curve},
+    pallas,
+};
+use rand::{rngs::OsRng, thread_rng, Rng};
 
 use super::{
-    coins, leadcoin::LeadCoin, Block, BlockInfo, BlockProposal, Header, LeadProof, Metadata,
-    Participant, ProposalChain, DELTA, EPOCH_LENGTH, LEADER_PROOF_K,
+    constants::{DELTA, EPOCH_LENGTH, LEADER_PROOF_K, LOTTERY_HEAD_START, P, RADIX_BITS, REWARD},
+    leadcoin::{LeadCoin, LeadCoinSecrets},
+    utils::fbig2base,
+    Block, BlockInfo, BlockProposal, Float10, Header, LeadProof, Metadata, Participant,
+    ProposalChain,
 };
 
 use crate::{
     blockchain::Blockchain,
     crypto::proof::{ProvingKey, VerifyingKey},
     net,
-    node::{
-        state::{state_transition, ProgramState, StateUpdate},
-        Client, MemoryState, State,
-    },
     runtime::vm_runtime::Runtime,
     tx::Transaction,
     util::time::Timestamp,
+    wallet::WalletPtr,
     zk::circuit::LeadContract,
     Error, Result,
 };
@@ -67,7 +73,7 @@ pub struct ConsensusState {
     /// Fork chains containing block proposals
     pub proposals: Vec<ProposalChain>,
     /// Validators currently participating in the consensus
-    pub participants: BTreeMap<Address, Participant>,
+    pub participants: BTreeMap<[u8; 32], Participant>,
     /// Last slot participants where refreshed
     pub refreshed: u64,
     /// Current epoch
@@ -100,7 +106,7 @@ impl ConsensusState {
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusRequest {
     /// Validator wallet address
-    pub address: Address,
+    pub public_key: PublicKey,
 }
 
 impl net::Message for ConsensusRequest {
@@ -114,7 +120,7 @@ impl net::Message for ConsensusRequest {
 pub struct ConsensusResponse {
     /// Hot/live data used by the consensus algorithm
     pub proposals: Vec<ProposalChain>,
-    pub participants: BTreeMap<Address, Participant>,
+    pub participants: BTreeMap<[u8; 32], Participant>,
 }
 
 impl net::Message for ConsensusResponse {
@@ -128,28 +134,24 @@ pub type ValidatorStatePtr = Arc<RwLock<ValidatorState>>;
 
 /// This struct represents the state of a validator node.
 pub struct ValidatorState {
-    /// Node wallet address
-    pub address: Address,
-    /// Secret key, to sign messages
-    pub secret: SecretKey,
+    /// Node wallet public key
+    pub public_key: PublicKey,
+    /// Secret key used to sign messages
+    pub secret_key: SecretKey,
     /// Leader proof proving key
-    pub proving_key: ProvingKey,
+    pub lead_proving_key: ProvingKey,
     /// Leader proof verifying key
-    pub verifying_key: VerifyingKey,
-    /// Node public key
-    pub public: PublicKey,
+    pub lead_verifying_key: VerifyingKey,
     /// Hot/Live data used by the consensus algorithm
     pub consensus: ConsensusState,
     /// Canonical (finalized) blockchain
     pub blockchain: Blockchain,
-    /// Canonical state machine
-    pub state_machine: Arc<Mutex<State>>,
-    /// Client providing wallet access
-    pub client: Arc<Client>,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Transaction>,
     /// Participating start slot
     pub participating: Option<u64>,
+    /// Wallet interface
+    pub wallet: WalletPtr,
 }
 
 impl ValidatorState {
@@ -157,15 +159,28 @@ impl ValidatorState {
         db: &sled::Db, // <-- TODO: Avoid this with some wrapping, sled should only be in blockchain
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
-        client: Arc<Client>,
+        wallet: WalletPtr,
         cashier_pubkeys: Vec<PublicKey>,
         faucet_pubkeys: Vec<PublicKey>,
     ) -> Result<ValidatorStatePtr> {
-        let secret = SecretKey::random(&mut OsRng);
-        let public = PublicKey::from_secret(secret);
-        info!("Generating leader proof keys with k: {}", *LEADER_PROOF_K);
-        let proving_key = ProvingKey::build(*LEADER_PROOF_K, &LeadContract::default());
-        let verifying_key = VerifyingKey::build(*LEADER_PROOF_K, &LeadContract::default());
+        info!("Initializing ValidatorState");
+
+        info!("Initializing wallet tables for consensus");
+        // TODO: TESTNET: The stuff is kept entirely in memory for now, this should be written
+        //                into the wallet when necessary.
+        let consensus_tree_init_query = include_str!("../../script/sql/consensus_tree.sql");
+        let consensus_keys_init_query = include_str!("../../script/sql/consensus_keys.sql");
+        // TODO: TESTNET: consensus coin table
+        wallet.exec_sql(consensus_tree_init_query).await?;
+        wallet.exec_sql(consensus_keys_init_query).await?;
+
+        let secret_key = SecretKey::random(&mut OsRng);
+        let public_key = PublicKey::from_secret(secret_key);
+
+        info!("Generating leader proof keys with k: {}", LEADER_PROOF_K);
+        let lead_proving_key = ProvingKey::build(LEADER_PROOF_K, &LeadContract::default());
+        let lead_verifying_key = VerifyingKey::build(LEADER_PROOF_K, &LeadContract::default());
+
         let consensus = ConsensusState::new(genesis_ts, genesis_data)?;
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
         let unconfirmed_txs = vec![];
@@ -187,17 +202,20 @@ impl ValidatorState {
         // transparent and generic, and the entire logic for this db protection is supposed to
         // be in the `init` function of the contract, so look there for a reference of the
         // databases and the state.
-        info!("ValidatorState::new(): Deploying \"money contract\"");
+        info!("ValidatorState::new(): Deploying \"money_contract.wasm\"");
         let money_contract_wasm_bincode = include_bytes!("../contract/money/money_contract.wasm");
         // XXX: FIXME: This ID should be something that does not solve the pallas curve equation,
         //             and/or just hardcoded and forbidden in non-native contract deployment.
         let cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
         let mut runtime = Runtime::new(&money_contract_wasm_bincode[..], blockchain.clone(), cid)?;
+        // TODO: Faucet/Cashier keys as init payload
         runtime.deploy(&[])?;
         info!("Deployed Money Contract with ID: {}", cid);
         // -----END ARTIFACT-----
 
-        let address = client.wallet.get_default_address().await?;
+        // Implement consensus wallet/client
+        // FIXME TESTNET: let address = client.wallet.get_default_address().await?;
+        /*
         let state_machine = Arc::new(Mutex::new(State {
             tree: client.get_tree().await?,
             merkle_roots: blockchain.merkle_roots.clone(),
@@ -207,23 +225,22 @@ impl ValidatorState {
             mint_vk: Lazy::new(),
             burn_vk: Lazy::new(),
         }));
+        */
 
         // Create zk proof verification keys
-        let _ = state_machine.lock().await.mint_vk();
-        let _ = state_machine.lock().await.burn_vk();
+        //let _ = state_machine.lock().await.mint_vk();
+        //let _ = state_machine.lock().await.burn_vk();
 
         let state = Arc::new(RwLock::new(ValidatorState {
-            address,
-            secret,
-            public,
-            proving_key,
-            verifying_key,
+            public_key,
+            secret_key,
+            lead_proving_key,
+            lead_verifying_key,
             consensus,
             blockchain,
-            state_machine,
-            client,
             unconfirmed_txs,
             participating,
+            wallet,
         }));
 
         Ok(state)
@@ -247,15 +264,7 @@ impl ValidatorState {
         }
 
         debug!("append_tx(): Starting state transition validation");
-        let canon_state_clone = self.state_machine.lock().await.clone();
-        let mem_state = MemoryState::new(canon_state_clone);
-        match Self::validate_state_transitions(mem_state, &[tx.clone()]) {
-            Ok(_) => debug!("append_tx(): State transition valid"),
-            Err(e) => {
-                warn!("append_tx(): State transition fail: {}", e);
-                return false
-            }
-        }
+        // TODO TESTNET: Verify sigs, execute wasm, verify zk proofs
 
         debug!("append_tx(): Appended tx to mempool");
         self.unconfirmed_txs.push(tx);
@@ -270,7 +279,7 @@ impl ValidatorState {
     /// Calculates the epoch of the provided slot.
     /// Epoch duration is configured using the `EPOCH_LENGTH` value.
     pub fn slot_epoch(&self, slot: u64) -> u64 {
-        slot / EPOCH_LENGTH
+        slot / EPOCH_LENGTH as u64
     }
 
     /// Calculates current slot, based on elapsed time from the genesis block.
@@ -281,7 +290,7 @@ impl ValidatorState {
 
     /// Calculates the relative number of the provided slot.
     pub fn relative_slot(&self, slot: u64) -> u64 {
-        slot % EPOCH_LENGTH
+        slot % EPOCH_LENGTH as u64
     }
 
     /// Finds the last slot a proposal or block was generated.
@@ -323,8 +332,8 @@ impl ValidatorState {
     /// Epoch duration is configured using the EPOCH_LENGTH value.
     pub fn slots_to_next_n_epoch(&self, n: u64) -> u64 {
         assert!(n > 0);
-        let slots_till_next_epoch = EPOCH_LENGTH - self.relative_slot(self.current_slot());
-        ((n - 1) * EPOCH_LENGTH) + slots_till_next_epoch
+        let slots_till_next_epoch = EPOCH_LENGTH as u64 - self.relative_slot(self.current_slot());
+        ((n - 1) * EPOCH_LENGTH as u64) + slots_till_next_epoch
     }
 
     /// Calculates seconds until next Nth epoch starting time.
@@ -366,18 +375,160 @@ impl ValidatorState {
         }
         let eta = self.get_eta();
         // Retrieving nodes wallet coins
-        let owned = self.client.get_own_coins().await?;
+        // FIXME TESTNET: let owned = self.client.get_own_coins().await?;
+        //let owned = vec![];
         // TODO: slot parameter should be absolute slot, not relative.
         // At start of epoch, relative slot is 0.
-        self.consensus.coins = coins::create_epoch_coins(eta, &owned, epoch, 0);
+        self.consensus.coins = self.create_epoch_coins(eta, epoch, 0).await?;
         self.consensus.epoch = epoch;
         self.consensus.epoch_eta = eta;
         Ok(true)
     }
 
-    /// Wrapper for coins::is_leader
+    /// Generate epoch-competing coins
+    async fn create_epoch_coins(
+        &self,
+        eta: pallas::Base,
+        epoch: u64,
+        slot: u64,
+    ) -> Result<Vec<Vec<LeadCoin>>> {
+        info!("Consensus: Creating coins for epoch: {}", epoch);
+
+        // Retrieve previous epoch-competing coins' frequency
+        let frequency = Self::get_frequency().with_precision(RADIX_BITS).value();
+        info!("Consensus: Previous epoch frequency: {}", frequency);
+
+        // Generate sigmas
+        let total_stake = Self::total_stake(epoch, slot); // Only used for fine-tuning
+
+        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+        let two = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
+        let field_p = Float10::from_str_native(P).unwrap().with_precision(RADIX_BITS).value();
+        let total_sigma =
+            Float10::try_from(total_stake).unwrap().with_precision(RADIX_BITS).value();
+
+        let x = one - frequency;
+        let c = x.ln();
+
+        let sigma1_fbig = c.clone() / total_sigma.clone() * field_p.clone();
+        let sigma1 = fbig2base(sigma1_fbig);
+
+        let sigma2_fbig = (c / total_sigma).powf(two.clone()) * (field_p / two);
+        let sigma2 = fbig2base(sigma2_fbig);
+
+        self.create_coins(eta, sigma1, sigma2).await
+    }
+
+    /// Generate coins for provided sigmas.
+    /// NOTE: The strategy here is having a single competing coin per slot.
+    async fn create_coins(
+        &self,
+        eta: pallas::Base,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
+    ) -> Result<Vec<Vec<LeadCoin>>> {
+        let mut rng = thread_rng();
+
+        let mut seeds: Vec<u64> = Vec::with_capacity(EPOCH_LENGTH);
+        for _ in 0..EPOCH_LENGTH {
+            seeds.push(rng.gen());
+        }
+
+        let epoch_secrets = LeadCoinSecrets::generate();
+
+        let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(EPOCH_LENGTH);
+        // LeadCoin matrix where each row represents a slot and contains its competing coins.
+        let mut coins: Vec<Vec<LeadCoin>> = Vec::with_capacity(EPOCH_LENGTH);
+
+        // TODO: TESTNET: Here we would look into the wallet to find coins we're able to use.
+        //                The wallet has specific tables for consensus coins.
+        // TODO: TESTNET: Token ID still has to be enforced properly in the consensus.
+
+        // Temporarily, we compete with zero stake
+        for i in 0..EPOCH_LENGTH {
+            let coin = LeadCoin::new(
+                eta,
+                sigma1,
+                sigma2,
+                LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
+                i,
+                epoch_secrets.merkle_roots[i],
+                epoch_secrets.merkle_paths[i],
+                seeds[i],
+                epoch_secrets.secret_keys[i],
+                &mut tree_cm,
+            );
+
+            coins.push(vec![coin]);
+        }
+
+        Ok(coins)
+    }
+
+    fn total_stake(epoch: u64, slot: u64) -> u64 {
+        // TODO: Fix this
+        // (epoch * EPOCH_LENGTH + slot + 1) * REWARD
+        REWARD
+    }
+
+    fn get_frequency() -> Float10 {
+        // TODO: Actually retrieve frequency of coins from the previous epoch.
+        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+        let two = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
+        one / two
+    }
+
+    /// Check that the provided participant/stakeholder coins win the slot lottery.
+    /// If the stakeholder has multiple competing winning coins, only the highest value
+    /// coin is selected, since the stakeholder can't give more than one proof per block/slot.
+    /// * `slot` - slot relative index
+    /// * `epoch_coins` - stakeholder's epoch coins
+    /// Returns: (check: bool, idx: usize) where idx is the winning coin's index
     pub fn is_slot_leader(&self) -> (bool, usize) {
-        coins::is_leader(self.relative_slot(self.current_slot()), &self.consensus.coins)
+        // Slot relative index
+        let slot = self.relative_slot(self.current_slot());
+        // Stakeholder's epoch coins
+        let coins = &self.consensus.coins;
+
+        info!("Consensus::is_leader(): slot: {}, coins len: {}", slot, coins.len());
+        assert!((slot as usize) < coins.len());
+
+        let competing_coins = &coins[slot as usize];
+
+        let mut won = false;
+        let mut highest_stake = 0;
+        let mut highest_stake_idx = 0;
+
+        for (winning_idx, coin) in competing_coins.iter().enumerate() {
+            let y_exp = [coin.coin1_sk_root.inner(), coin.nonce];
+            let y_exp_hash = poseidon_hash(y_exp);
+            let y_coords = pedersen_commitment_base(y_exp_hash, mod_r_p(coin.y_mu))
+                .to_affine()
+                .coordinates()
+                .unwrap();
+
+            let y_coords = [*y_coords.x(), *y_coords.y()];
+            let y = poseidon_hash(y_coords);
+
+            let value = pallas::Base::from(coin.value);
+            let target = coin.sigma1 * value + coin.sigma2 * value * value;
+
+            info!("Consensus::is_leader(): y = {:?}", y);
+            info!("Consensus::is_leader(): T = {:?}", target);
+
+            let first_winning = y < target;
+            if first_winning && !won {
+                highest_stake_idx = winning_idx;
+            }
+
+            won |= first_winning;
+            if won && coin.value > highest_stake {
+                highest_stake = coin.value;
+                highest_stake_idx = winning_idx;
+            }
+        }
+
+        (won, highest_stake_idx)
     }
 
     /// Generate a block proposal for the current slot, containing all
@@ -399,18 +550,18 @@ impl ValidatorState {
         let header =
             Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
-        let signed_proposal = self.secret.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
+        let signed_proposal = self.secret_key.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
         let eta = self.consensus.epoch_eta.to_repr();
         // Generating leader proof
         let relative_slot = self.relative_slot(slot) as usize;
         let coin = self.consensus.coins[relative_slot][idx];
         // TODO: Generate new LeadCoin from newlly minted coin, will reuse original coin for now
         //let coin2 = something();
-        let proof = coin.create_lead_proof(&self.proving_key)?;
+        let proof = coin.create_lead_proof(&self.lead_proving_key)?;
         let participants = self.consensus.participants.values().cloned().collect();
         let metadata = Metadata::new(
             signed_proposal,
-            self.address,
+            self.public_key,
             coin.public_inputs(),
             coin.public_inputs(),
             idx,
@@ -495,31 +646,29 @@ impl ValidatorState {
             None => return Ok(None),
         }
 
+        let md = &proposal.block.metadata;
+        let hdr = &proposal.block.header;
+
         // Check if leader is a known consensus participant
-        let leader = self.consensus.participants.get(&proposal.block.metadata.address);
-        if leader.is_none() {
-            warn!(
-                "receive_proposal(): Received proposal from unknown node: ({})",
-                proposal.block.metadata.address
-            );
+        let Some(leader) = self.consensus.participants.get(&md.public_key.to_bytes()) else {
+            warn!("receive_proposal(): Received proposal from unknown node: ({})", md.public_key);
             return Err(Error::UnknownNodeError)
-        }
-        let mut leader = leader.unwrap().clone();
+        };
+        let mut leader = leader.clone();
 
         // Check if proposal header matches actual one
-        let proposal_header = proposal.block.header.headerhash();
+        let proposal_header = hdr.headerhash();
         if proposal.header != proposal_header {
             warn!(
-                "receive_proposal(): Received proposal contains missmatched headers: {} - {}",
+                "receive_proposal(): Received proposal contains mismatched headers: {} - {}",
                 proposal.header, proposal_header
             );
             return Err(Error::ProposalHeadersMissmatchError)
         }
 
         // Verify proposal winning coin public inputs match known ones
-        let public_inputs = &leader.coins[self.relative_slot(current) as usize]
-            [proposal.block.metadata.winning_index];
-        if public_inputs != &proposal.block.metadata.public_inputs {
+        let public_inputs = &leader.coins[self.relative_slot(current) as usize][md.winning_index];
+        if public_inputs != &md.public_inputs {
             warn!("receive_proposal(): Received proposal public inputs are invalid.");
             return Err(Error::InvalidPublicInputsError)
         }
@@ -527,53 +676,36 @@ impl ValidatorState {
         // TODO: Verify winning coin serial number
 
         // Verify proposal leader proof
-        match proposal.block.metadata.proof.verify(&self.verifying_key, public_inputs) {
-            Ok(_) => info!("receive_proposal(): Proof veryfied succsessfully!"),
-            Err(e) => {
-                error!("receive_proposal(): Error during leader proof verification: {}", e);
-                return Err(Error::LeaderProofVerificationError)
-            }
-        }
+        if let Err(e) = md.proof.verify(&self.lead_verifying_key, public_inputs) {
+            error!("receive_proposal(): Error during leader proof verification: {}", e);
+            return Err(Error::LeaderProofVerification)
+        };
+        info!("receive_proposal(): Leader proof verified successfully!");
 
         // Verify proposal signature is valid based on leader known valid key
-        if !leader.public_key.verify(proposal.header.as_bytes(), &proposal.block.metadata.signature)
-        {
-            warn!(
-                "receive_proposal(): Proposer ({}) signature could not be verified",
-                proposal.block.metadata.address
-            );
+        if !leader.public_key.verify(proposal.header.as_bytes(), &md.signature) {
+            warn!("receive_proposal(): Proposer {} signature could not be verified", md.public_key);
             return Err(Error::InvalidSignature)
         }
 
         // Check if proposal extends any existing fork chains
         let index = self.find_extended_chain_index(proposal)?;
         if index == -2 {
-            return Err(Error::ExtendedChainIndexNotFoundError)
+            return Err(Error::ExtendedChainIndexNotFound)
         }
 
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
         debug!("receive_proposal(): Starting state transition validation");
-        let canon_state_clone = self.state_machine.lock().await.clone();
-        let mem_state = MemoryState::new(canon_state_clone);
-
-        match Self::validate_state_transitions(mem_state, &proposal.block.txs) {
-            Ok(_) => {
-                debug!("receive_proposal(): State transition valid")
-            }
-            Err(e) => {
-                warn!("receive_proposal(): State transition fail: {}", e);
-                return Err(Error::StateTransitionError)
-            }
-        }
+        // TODO TESTNET: Verify sigs in block's transactions, execute wasm, verify zkps
 
         // TODO: [PLACEHOLDER] Add rewards validation
         // TODO: Append serial to merkle tree
 
         // Replacing participants public inputs with the newlly minted ones
-        leader.coins[self.relative_slot(current) as usize][proposal.block.metadata.winning_index] =
-            proposal.block.metadata.new_public_inputs.clone();
-        self.append_participant(leader);
+        leader.coins[self.relative_slot(current) as usize][md.winning_index] =
+            md.new_public_inputs.clone();
+        self.append_participant(&leader);
 
         // Check if proposal fork has can be finalized, to broadcast those blocks
         let mut to_broadcast = vec![];
@@ -709,13 +841,9 @@ impl ValidatorState {
 
         for proposal in &finalized {
             // TODO: Is this the right place? We're already doing this in protocol_sync.
-            // TODO: These state transitions have already been checked.
+            // TODO: These state transitions have already been checked. (I wrote this, but where?)
             debug!(target: "consensus", "Applying state transition for finalized block");
-            let canon_state_clone = self.state_machine.lock().await.clone();
-            let mem_st = MemoryState::new(canon_state_clone);
-            let state_updates = Self::validate_state_transitions(mem_st, &proposal.txs)?;
-            self.update_canon_state(state_updates, None).await?;
-            self.remove_txs(proposal.txs.clone())?;
+            // TODO TESTNET: verify all sigs, execute wasm, verify zkps in proposal.txs (see git diff)
         }
 
         let last_block = *blockhashes.last().unwrap();
@@ -737,14 +865,14 @@ impl ValidatorState {
     }
 
     /// Append a new participant to the participants list.
-    pub fn append_participant(&mut self, participant: Participant) -> bool {
-        if let Some(p) = self.consensus.participants.get(&participant.address) {
-            if p == &participant {
+    pub fn append_participant(&mut self, participant: &Participant) -> bool {
+        if let Some(p) = self.consensus.participants.get(&participant.public_key.to_bytes()) {
+            if p == participant {
                 return false
             }
         }
         // TODO: [PLACEHOLDER] don't blintly trust the public inputs/validate them
-        self.consensus.participants.insert(participant.address, participant);
+        self.consensus.participants.insert(participant.public_key.to_bytes(), participant.clone());
         true
     }
 
@@ -762,28 +890,25 @@ impl ValidatorState {
     // ==========================
     // State transition functions
     // ==========================
+    // TODO TESTNET: Write down all cases below
+    // State transition checks should be happening in the following cases for a sync node:
+    // 1) When a finalized block is received
+    // 2) When a transaction is being broadcasted to us
+    // State transition checks should be happening in the following cases for a consensus participating node:
+    // 1) When a finalized block is received
+    // 2) When a transaction is being broadcasted to us
+    // ==========================
 
     /// Validate and append to canonical state received blocks.
     pub async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         // Verify state transitions for all blocks and their respective transactions.
         debug!("receive_blocks(): Starting state transition validations");
-        let mut canon_updates = vec![];
-        let canon_state_clone = self.state_machine.lock().await.clone();
-        let mut mem_state = MemoryState::new(canon_state_clone);
-        for block in blocks {
-            let mut state_updates =
-                Self::validate_state_transitions(mem_state.clone(), &block.txs)?;
+        // TODO TESTNET: verify sigs, execute wasm, verify zkps (see git diff)
 
-            for update in &state_updates {
-                mem_state.apply(update.clone());
-            }
-
-            canon_updates.append(&mut state_updates);
-        }
         debug!("receive_blocks(): All state transitions passed");
 
         debug!("receive_blocks(): Updating canon state");
-        self.update_canon_state(canon_updates, None).await?;
+        //self.update_canon_state(canon_updates, None).await?;
 
         debug!("receive_blocks(): Appending blocks to ledger");
         self.blockchain.add(blocks)?;
@@ -847,6 +972,7 @@ impl ValidatorState {
         Ok(())
     }
 
+    /*
     /// Validate state transitions for given transactions and state and
     /// return a vector of [`StateUpdate`]
     pub fn validate_state_transitions(
@@ -870,7 +996,9 @@ impl ValidatorState {
 
         Ok(ret)
     }
+    */
 
+    /*
     /// Apply a vector of [`StateUpdate`] to the canonical state.
     pub async fn update_canon_state(
         &self,
@@ -893,4 +1021,5 @@ impl ValidatorState {
         debug!("update_canon_state(): Successfully applied state updates");
         Ok(())
     }
+    */
 }

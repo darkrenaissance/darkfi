@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{Address, PublicKey},
-    pasta::pallas,
-};
+use darkfi_sdk::{crypto::PublicKey, pasta::pallas};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::net;
@@ -30,19 +27,13 @@ use crate::net;
 pub struct Participant {
     /// Node public key
     pub public_key: PublicKey,
-    /// Node wallet address
-    pub address: Address,
     /// Node current epoch competing coins public inputs
     pub coins: Vec<Vec<Vec<pallas::Base>>>,
 }
 
 impl Participant {
-    pub fn new(
-        public_key: PublicKey,
-        address: Address,
-        coins: Vec<Vec<Vec<pallas::Base>>>,
-    ) -> Self {
-        Self { public_key, address, coins }
+    pub fn new(public_key: PublicKey, coins: Vec<Vec<Vec<pallas::Base>>>) -> Self {
+        Self { public_key, coins }
     }
 }
 

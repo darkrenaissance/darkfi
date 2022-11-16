@@ -43,7 +43,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
             let response_sub = channel.subscribe_msg::<ConsensusResponse>().await?;
 
             // Node creates a `ConsensusRequest` and sends it
-            let request = ConsensusRequest { address: state.read().await.address };
+            let request = ConsensusRequest { public_key: state.read().await.public_key };
             channel.send(request).await?;
 
             // Node verifies response came from a participating node.
@@ -53,6 +53,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
                 warn!("Retrieved consensus state from a new node, retrying...");
                 continue
             }
+
             // Node stores response data.
             let mut lock = state.write().await;
             lock.consensus.proposals = response.proposals.clone();

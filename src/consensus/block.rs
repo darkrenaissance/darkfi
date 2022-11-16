@@ -246,7 +246,7 @@ impl fmt::Display for BlockProposal {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_fmt(format_args!(
             "BlockProposal {{ leader addr: {}, hash: {}, epoch: {}, slot: {}, txs: {} }}",
-            self.block.metadata.address,
+            self.block.metadata.public_key,
             self.header,
             self.block.header.epoch,
             self.block.header.slot,

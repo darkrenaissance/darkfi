@@ -44,7 +44,7 @@ pub const BLOCK_MAGIC_BYTES: [u8; 4] = [0x11, 0x6d, 0x75, 0x1f];
 pub const BLOCK_INFO_MAGIC_BYTES: [u8; 4] = [0x90, 0x44, 0xf1, 0xf6];
 
 /// Number of slots in one epoch
-pub const EPOCH_LENGTH: u64 = 10;
+pub const EPOCH_LENGTH: usize = 10;
 
 /// Block leader reward
 pub const REWARD: u64 = 420;

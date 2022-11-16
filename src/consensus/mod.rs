@@ -45,9 +45,6 @@ pub mod task;
 pub mod clock;
 pub use clock::{Clock, Ticks};
 
-/// Ouroboros Crypsinous consensus coins functions
-pub mod coins;
-
 /// Consensus participation coin functions and definitions
 pub mod leadcoin;
 
@@ -58,5 +55,5 @@ pub use types::Float10;
 /// Utility functions
 pub mod utils;
 
-// Wallet functions
-//pub mod wallet;
+/// Wallet functions
+pub mod wallet;

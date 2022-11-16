@@ -75,12 +75,9 @@ impl ProtocolParticipant {
 
             debug!("ProtocolParticipant::handle_receive_participant() recv: {:?}", participant);
 
-            let participant_copy = (*participant).clone();
-
-            if self.state.write().await.append_participant(participant_copy.clone()) {
-                if let Err(e) =
-                    self.p2p.broadcast_with_exclude(participant_copy, &exclude_list).await
-                {
+            if self.state.write().await.append_participant(&participant) {
+                let p = (*participant).clone();
+                if let Err(e) = self.p2p.broadcast_with_exclude(p, &exclude_list).await {
                     error!("ProtocolParticipant::handle_receive_participant(): p2p broadcast failed: {}", e);
                 };
             }

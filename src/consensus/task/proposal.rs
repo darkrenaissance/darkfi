@@ -73,8 +73,7 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
             Ok(changed) => {
                 if changed {
                     info!("consensus: New epoch started: {}", state.read().await.current_epoch());
-                    let public = state.read().await.public;
-                    let address = state.read().await.address;
+                    let public_key = state.read().await.public_key;
                     let mut coins = vec![];
                     for slot_coins in &state.read().await.consensus.coins {
                         let mut slot_coins_inputs = vec![];
@@ -83,8 +82,8 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
                         }
                         coins.push(slot_coins_inputs);
                     }
-                    let participant = Participant::new(public, address, coins);
-                    state.write().await.append_participant(participant.clone());
+                    let participant = Participant::new(public_key, coins);
+                    state.write().await.append_participant(&participant);
 
                     match consensus_p2p.broadcast(participant).await {
                         Ok(()) => {

@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{schnorr::Signature, Address, Keypair},
+    crypto::{schnorr::Signature, Keypair, PublicKey},
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -38,8 +38,8 @@ use crate::{
 pub struct Metadata {
     /// Block owner signature
     pub signature: Signature,
-    /// Block owner address
-    pub address: Address,
+    /// Block owner public_key
+    pub public_key: PublicKey,
     /// Block owner slot competing coins public inputs
     pub public_inputs: Vec<pallas::Base>,
     /// Block owner newlly minted coin public inputs
@@ -56,10 +56,10 @@ pub struct Metadata {
     pub participants: Vec<Participant>,
 }
 
+// FIXME: Why do we even need default() ?
 impl Default for Metadata {
     fn default() -> Self {
         let keypair = Keypair::random(&mut OsRng);
-        let address = Address::from(keypair.public);
         let signature = Signature::dummy();
         let public_inputs = vec![];
         let new_public_inputs = vec![];
@@ -70,7 +70,7 @@ impl Default for Metadata {
         let participants = vec![];
         Self {
             signature,
-            address,
+            public_key: keypair.public,
             public_inputs,
             new_public_inputs,
             winning_index,
@@ -85,7 +85,7 @@ impl Default for Metadata {
 impl Metadata {
     pub fn new(
         signature: Signature,
-        address: Address,
+        public_key: PublicKey,
         public_inputs: Vec<pallas::Base>,
         new_public_inputs: Vec<pallas::Base>,
         winning_index: usize,
@@ -96,7 +96,7 @@ impl Metadata {
     ) -> Self {
         Self {
             signature,
-            address,
+            public_key,
             public_inputs,
             new_public_inputs,
             winning_index,
