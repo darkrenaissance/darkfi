@@ -38,10 +38,6 @@ pub use util::poseidon_hash;
 pub mod keypair;
 pub use keypair::{Keypair, PublicKey, SecretKey};
 
-/// Address definitions
-pub mod address;
-pub use address::Address;
-
 /// Coin definitions and methods
 pub mod coin;
 pub use coin::Coin;
