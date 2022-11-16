@@ -270,18 +270,18 @@ impl ValidatorState {
     /// Calculates the epoch of the provided slot.
     /// Epoch duration is configured using the `EPOCH_LENGTH` value.
     pub fn slot_epoch(&self, slot: u64) -> u64 {
-        slot / *EPOCH_LENGTH
+        slot / EPOCH_LENGTH
     }
 
     /// Calculates current slot, based on elapsed time from the genesis block.
     /// Slot duration is configured using the `DELTA` value.
     pub fn current_slot(&self) -> u64 {
-        self.consensus.genesis_ts.elapsed() / (2 * *DELTA)
+        self.consensus.genesis_ts.elapsed() / (2 * DELTA)
     }
 
     /// Calculates the relative number of the provided slot.
     pub fn relative_slot(&self, slot: u64) -> u64 {
-        slot % *EPOCH_LENGTH
+        slot % EPOCH_LENGTH
     }
 
     /// Finds the last slot a proposal or block was generated.
@@ -311,7 +311,7 @@ impl ValidatorState {
         assert!(n > 0);
         let start_time = NaiveDateTime::from_timestamp(self.consensus.genesis_ts.0, 0);
         let current_slot = self.current_slot() + n;
-        let next_slot_start = (current_slot * (2 * *DELTA)) + (start_time.timestamp() as u64);
+        let next_slot_start = (current_slot * (2 * DELTA)) + (start_time.timestamp() as u64);
         let next_slot_start = NaiveDateTime::from_timestamp(next_slot_start as i64, 0);
         let current_time = NaiveDateTime::from_timestamp(Utc::now().timestamp(), 0);
         let diff = next_slot_start - current_time;
@@ -323,8 +323,8 @@ impl ValidatorState {
     /// Epoch duration is configured using the EPOCH_LENGTH value.
     pub fn slots_to_next_n_epoch(&self, n: u64) -> u64 {
         assert!(n > 0);
-        let slots_till_next_epoch = *EPOCH_LENGTH - self.relative_slot(self.current_slot());
-        ((n - 1) * *EPOCH_LENGTH) + slots_till_next_epoch
+        let slots_till_next_epoch = EPOCH_LENGTH - self.relative_slot(self.current_slot());
+        ((n - 1) * EPOCH_LENGTH) + slots_till_next_epoch
     }
 
     /// Calculates seconds until next Nth epoch starting time.

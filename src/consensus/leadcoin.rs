@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 use darkfi_sdk::{
     crypto::{
         pedersen::pedersen_commitment_base, poseidon_hash, util::mod_r_p, MerkleNode, PublicKey,
@@ -27,7 +28,7 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use rand::rngs::OsRng;
 
-use super::PRF_NULLIFIER_PREFIX;
+use super::constants::PRF_NULLIFIER_PREFIX;
 use crate::{
     crypto::{proof::ProvingKey, Proof},
     zk::circuit::LeadContract,
@@ -130,7 +131,7 @@ impl LeadCoin {
 
         // Derive input for the commitment of coin1
         let coin1_commit_msg = [
-            pallas::Base::from(*PRF_NULLIFIER_PREFIX),
+            pallas::Base::from(PRF_NULLIFIER_PREFIX),
             coin_pk_x,
             coin_pk_y,
             pallas::Base::from(value),
@@ -165,7 +166,7 @@ impl LeadCoin {
 
         // Derive input for the commitment of coin2
         let coin2_commit_msg = [
-            pallas::Base::from(*PRF_NULLIFIER_PREFIX),
+            pallas::Base::from(PRF_NULLIFIER_PREFIX),
             coin_pk_x,
             coin_pk_y,
             pallas::Base::from(value),
@@ -268,7 +269,6 @@ impl LeadCoin {
             rho: Value::known(rho),
         };
 
-        let proof = Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?;
-        Ok(proof)
+        Ok(Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?)
     }
 }

@@ -24,7 +24,10 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use pasta_curves::pallas;
 
-use super::{Metadata, BLOCK_MAGIC_BYTES, BLOCK_VERSION};
+use super::{
+    constants::{BLOCK_MAGIC_BYTES, BLOCK_VERSION},
+    Metadata,
+};
 use crate::{net, tx::Transaction, util::time::Timestamp};
 
 /// This struct represents a tuple of the form (version, previous, epoch, slot, timestamp, merkle_root).
@@ -52,7 +55,7 @@ impl Header {
         timestamp: Timestamp,
         root: MerkleNode,
     ) -> Self {
-        let version = *BLOCK_VERSION;
+        let version = BLOCK_VERSION;
         Self { version, previous, epoch, slot, timestamp, root }
     }
 
@@ -112,7 +115,7 @@ impl Block {
         root: MerkleNode,
         metadata: Metadata,
     ) -> Self {
-        let magic = *BLOCK_MAGIC_BYTES;
+        let magic = BLOCK_MAGIC_BYTES;
         let timestamp = Timestamp::current_time();
         let header = Header::new(previous, epoch, slot, timestamp, root);
         let header = header.headerhash();
@@ -121,7 +124,7 @@ impl Block {
 
     /// Generate the genesis block.
     pub fn genesis_block(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
-        let magic = *BLOCK_MAGIC_BYTES;
+        let magic = BLOCK_MAGIC_BYTES;
         let header = Header::genesis_header(genesis_ts, genesis_data);
         let header = header.headerhash();
         let metadata = Metadata::default();
@@ -164,7 +167,7 @@ pub struct BlockInfo {
 
 impl Default for BlockInfo {
     fn default() -> Self {
-        let magic = *BLOCK_MAGIC_BYTES;
+        let magic = BLOCK_MAGIC_BYTES;
         Self { magic, header: Header::default(), txs: vec![], metadata: Metadata::default() }
     }
 }
@@ -177,7 +180,7 @@ impl net::Message for BlockInfo {
 
 impl BlockInfo {
     pub fn new(header: Header, txs: Vec<Transaction>, metadata: Metadata) -> Self {
-        let magic = *BLOCK_MAGIC_BYTES;
+        let magic = BLOCK_MAGIC_BYTES;
         Self { magic, header, txs, metadata }
     }
 

@@ -37,8 +37,10 @@ use log::info;
 use rand::{rngs::OsRng, thread_rng, Rng};
 
 use super::{
-    leadcoin::LeadCoin, utils::fbig2base, Float10, EPOCH_LENGTH, LOTTERY_HEAD_START, P, RADIX_BITS,
-    REWARD,
+    constants::{EPOCH_LENGTH, LOTTERY_HEAD_START, P, RADIX_BITS, REWARD},
+    leadcoin::LeadCoin,
+    utils::fbig2base,
+    Float10,
 };
 use crate::{
     crypto::{
@@ -55,16 +57,16 @@ const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
 /// Retrieve previous epoch competing coins frequency.
 fn get_frequency() -> Float10 {
     //TODO: Actually retrieve frequency of coins from the previous epoch.
-    let one: Float10 = Float10::from_str_native("1").unwrap().with_precision(*RADIX_BITS).value();
-    let two: Float10 = Float10::from_str_native("2").unwrap().with_precision(*RADIX_BITS).value();
+    let one: Float10 = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+    let two: Float10 = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
     one / two
 }
 
 /// Calculate nodes total stake for specific epoch and slot.
 fn total_stake(_epoch: u64, _slot: u64) -> u64 {
     // TODO: fix this
-    //(epoch * *EPOCH_LENGTH + slot + 1) * *REWARD
-    *REWARD
+    //(epoch * EPOCH_LENGTH + slot + 1) * REWARD
+    REWARD
 }
 
 /// Generate epoch competing coins.
@@ -77,16 +79,16 @@ pub fn create_epoch_coins(
     info!("Creating coins for epoch: {}", epoch);
 
     // Retrieve previous epoch competing coins frequency
-    let frequency = get_frequency().with_precision(*RADIX_BITS).value();
+    let frequency = get_frequency().with_precision(RADIX_BITS).value();
     info!("Previous epoch frequency: {}", frequency);
 
     // Generating sigmas
     let total_stake = total_stake(epoch, slot); // only used for fine tunning
     info!("Node total stake: {}", total_stake);
-    let one: Float10 = Float10::from_str_native("1").unwrap().with_precision(*RADIX_BITS).value();
-    let two: Float10 = Float10::from_str_native("2").unwrap().with_precision(*RADIX_BITS).value();
-    let field_p = Float10::from_str_native(*P).unwrap().with_precision(*RADIX_BITS).value();
-    let total_sigma = Float10::try_from(total_stake).unwrap().with_precision(*RADIX_BITS).value();
+    let one: Float10 = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+    let two: Float10 = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
+    let field_p = Float10::from_str_native(P).unwrap().with_precision(RADIX_BITS).value();
+    let total_sigma = Float10::try_from(total_stake).unwrap().with_precision(RADIX_BITS).value();
     let x = one - frequency;
     info!("x: {}", x);
     let c = x.ln();
@@ -113,18 +115,18 @@ fn create_coins(
 ) -> Vec<Vec<LeadCoin>> {
     let mut rng = thread_rng();
     let mut seeds: Vec<u64> = vec![];
-    for _i in 0..*EPOCH_LENGTH {
+    for _i in 0..EPOCH_LENGTH {
         let rho: u64 = rng.gen();
         seeds.push(rho);
     }
     let (sks, root_sks, path_sks) = create_coins_sks();
-    let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(*EPOCH_LENGTH as usize);
+    let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(EPOCH_LENGTH as usize);
     // Leadcoins matrix were each row represents a slot and contains its competing coins.
     let mut coins: Vec<Vec<LeadCoin>> = vec![];
 
     // Use existing stake
     if !owned.is_empty() {
-        for i in 0..*EPOCH_LENGTH {
+        for i in 0..EPOCH_LENGTH {
             let index = i as usize;
             let mut slot_coins = vec![];
             for elem in owned {
@@ -146,14 +148,14 @@ fn create_coins(
             continue
         }
     } else {
-        for i in 0..*EPOCH_LENGTH {
+        for i in 0..EPOCH_LENGTH {
             let index = i as usize;
             // Compete with zero stake
             let coin = LeadCoin::new(
                 eta,
                 sigma1,
                 sigma2,
-                *LOTTERY_HEAD_START,
+                LOTTERY_HEAD_START,
                 index,
                 root_sks[index],
                 path_sks[index],
@@ -178,12 +180,12 @@ fn create_coins(
 fn create_coins_sks() -> (Vec<SecretKey>, Vec<MerkleNode>, Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]>)
 {
     let mut rng = thread_rng();
-    let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(*EPOCH_LENGTH as usize);
+    let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(EPOCH_LENGTH as usize);
     let mut sks: Vec<SecretKey> = vec![];
     let mut root_sks: Vec<MerkleNode> = vec![];
     let mut path_sks: Vec<[MerkleNode; MERKLE_DEPTH_ORCHARD]> = vec![];
     let mut prev_sk_base: pallas::Base = pallas::Base::one();
-    for _i in 0..*EPOCH_LENGTH {
+    for _i in 0..EPOCH_LENGTH {
         let base: pallas::Point = if _i == 0 {
             pedersen_commitment_u64(1, pallas::Scalar::random(&mut rng))
         } else {
