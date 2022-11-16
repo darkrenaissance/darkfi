@@ -15,7 +15,7 @@ blake3 = "1.3.1"
 bs58 = "0.4.0"
 chrono = "0.4.22"
 ctrlc = { version = "3.2.3", features = ["termination"] }
-darkfi = {path = "../../", features = ["blockchain", "wallet", "rpc", "net", "node"]}
+darkfi = {path = "../../", features = ["blockchain", "wallet", "rpc", "net"]}
 darkfi-sdk = {path = "../../src/sdk"}
 darkfi-serial = {path = "../../src/serial"}
 easy-parallel = "3.2.0"

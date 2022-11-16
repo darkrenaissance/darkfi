@@ -9,7 +9,7 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-darkfi = {path = "../../../", features = ["rpc", "crypto", "tx", "node"]}
+darkfi = {path = "../../../", features = ["rpc", "crypto", "tx"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = {path = "../../../src/serial"}
 

@@ -16,12 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{
-    consensus::ValidatorState,
-    node::{state::StateUpdate, MemoryState},
-    tx::Transaction,
-    Result,
-};
+use darkfi::{tx2::Transaction, Result};
 
 use super::Darkfid;
 

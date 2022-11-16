@@ -10,8 +10,8 @@ ZKAS_SRC = $(shell find proof -type f -name '*.zk')
 # wasm source files
 WASM_SRC = \
 	$(shell find src -type f) \
-	$(shell find ../../sdk/src -type f) \
-	$(shell find ../../serial/src -type f)
+	$(shell find ../../sdk -type f) \
+	$(shell find ../../serial -type f)
 
 # zkas circuit bin files
 ZKAS_BIN = $(ZKAS_SRC:=.bin)
@@ -34,4 +34,4 @@ clean:
 	rm -f $(ZKAS_BIN) $(WASM_BIN)
 
 # We always rebuild the wasm no matter what
-.PHONY: $(WASM_BIN) all test clean
+.PHONY: all test clean

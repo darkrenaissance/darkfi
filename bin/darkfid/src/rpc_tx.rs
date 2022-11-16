@@ -25,7 +25,7 @@ use serde_json::{json, Value};
 
 use darkfi::{
     rpc::jsonrpc::{ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
-    tx::Transaction,
+    tx2::Transaction,
 };
 
 use super::Darkfid;

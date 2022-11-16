@@ -6,7 +6,7 @@ authors = ["Dyne.org foundation <foundation@dyne.org>"]
 license = "AGPL-3.0-only"
 
 [dependencies]
-darkfi = {path = "../../", features = ["rpc", "crypto", "tx", "node"]}
+darkfi = {path = "../../", features = ["rpc", "crypto", "tx"]}
 darkfi-serial = {path = "../../src/serial"}
 darkfi-sdk = {path = "../../src/sdk"}
 

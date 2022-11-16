@@ -20,25 +20,27 @@ use std::str::FromStr;
 
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use darkfi_sdk::crypto::{Address, PublicKey};
-use log::{debug, error, info};
+use darkfi_sdk::crypto::PublicKey;
+use log::{error, info};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
     consensus::{
+        constants::{
+            MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
+            TESTNET_GENESIS_TIMESTAMP,
+        },
         proto::{
             ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx,
         },
         state::ValidatorStatePtr,
         task::{block_sync_task, proposal_task},
-        ValidatorState, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
-        TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
+        ValidatorState,
     },
     net,
     net::P2pPtr,
-    node::Client,
     rpc::{
         clock_sync::check_clock,
         jsonrpc::{
@@ -155,11 +157,11 @@ struct Args {
     channel_log: bool,
 
     #[structopt(long)]
-    /// Whitelisted cashier address (repeatable flag)
+    /// Whitelisted cashier public key (repeatable flag)
     cashier_pub: Vec<String>,
 
     #[structopt(long)]
-    /// Whitelisted faucet address (repeatable flag)
+    /// Whitelisted faucet public key (repeatable flag)
     faucet_pub: Vec<String>,
 
     #[structopt(long)]
@@ -175,18 +177,17 @@ pub struct Darkfid {
     synced: Mutex<bool>, // AtomicBool is weird in Arc
     _consensus_p2p: Option<P2pPtr>,
     sync_p2p: Option<P2pPtr>,
-    client: Arc<Client>,
     validator_state: ValidatorStatePtr,
 }
 
 // JSON-RPC methods
 mod rpc_blockchain;
 mod rpc_misc;
-mod rpc_tx;
-mod rpc_wallet;
+//mod rpc_tx;
+//mod rpc_wallet;
 
 // Internal methods
-mod internal;
+//mod internal;
 
 #[async_trait]
 impl RequestHandler for Darkfid {
@@ -215,12 +216,15 @@ impl RequestHandler for Darkfid {
             // ===================
             // Transaction methods
             // ===================
+            /*
             Some("tx.transfer") => return self.tx_transfer(req.id, params).await,
             Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
+            */
 
             // ==============
             // Wallet methods
             // ==============
+            /*
             Some("wallet.keygen") => return self.wallet_keygen(req.id, params).await,
             Some("wallet.get_addrs") => return self.wallet_get_addrs(req.id, params).await,
             Some("wallet.export_keypair") => {
@@ -240,7 +244,7 @@ impl RequestHandler for Darkfid {
                 return self.wallet_get_merkle_path(req.id, params).await
             }
             Some("wallet.decrypt_note") => return self.wallet_decrypt_note(req.id, params).await,
-
+            */
             // ==============
             // Invalid method
             // ==============
@@ -254,18 +258,8 @@ impl Darkfid {
         validator_state: ValidatorStatePtr,
         consensus_p2p: Option<P2pPtr>,
         sync_p2p: Option<P2pPtr>,
-    ) -> Result<Self> {
-        debug!("Waiting for validator state lock");
-        let client = validator_state.read().await.client.clone();
-        debug!("Released validator state lock");
-
-        Ok(Self {
-            synced: Mutex::new(false),
-            _consensus_p2p: consensus_p2p,
-            sync_p2p,
-            client,
-            validator_state,
-        })
+    ) -> Self {
+        Self { synced: Mutex::new(false), _consensus_p2p: consensus_p2p, sync_p2p, validator_state }
     }
 }
 
@@ -318,23 +312,17 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         }
     };
 
-    // TODO: sqldb init cleanup
-    // Initialize Client
-    let client = Arc::new(Client::new(wallet).await?);
-
     // Parse cashier addresses
     let mut cashier_pubkeys = vec![];
     for i in args.cashier_pub {
-        let addr = Address::from_str(&i)?;
-        let pk = PublicKey::try_from(addr)?;
+        let pk = PublicKey::from_str(&i)?;
         cashier_pubkeys.push(pk);
     }
 
     // Parse fauced addresses
     let mut faucet_pubkeys = vec![];
     for i in args.faucet_pub {
-        let addr = Address::from_str(&i)?;
-        let pk = PublicKey::try_from(addr)?;
+        let pk = PublicKey::from_str(&i)?;
         faucet_pubkeys.push(pk);
     }
 
@@ -343,7 +331,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         &sled_db,
         genesis_ts,
         genesis_data,
-        client,
+        wallet,
         cashier_pubkeys,
         faucet_pubkeys,
     )
@@ -440,7 +428,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     };
 
     // Initialize program state
-    let darkfid = Darkfid::new(state.clone(), consensus_p2p.clone(), sync_p2p.clone()).await?;
+    let darkfid = Darkfid::new(state.clone(), consensus_p2p.clone(), sync_p2p.clone()).await;
     let darkfid = Arc::new(darkfid);
 
     // JSON-RPC server

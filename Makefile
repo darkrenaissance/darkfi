@@ -32,12 +32,12 @@ PROOFS_BIN = $(PROOFS:=.bin)
 
 all: zkas $(PROOFS_BIN) $(BINS)
 
-contracts: zkas
-	$(MAKE) -C src/contract/money
-
 zkas: $(BINDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
+
+contracts: zkas
+	$(MAKE) -C src/contract/money
 
 $(PROOFS_BIN): $(PROOFS) zkas
 	./zkas $(basename $@) -o $@
@@ -96,4 +96,4 @@ uninstall:
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
 
-.PHONY: all check fix clippy rustdoc test test-tx clean cleanbin install uninstall
+.PHONY: all contracts check fix clippy rustdoc test test-tx clean cleanbin install uninstall
