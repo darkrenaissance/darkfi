@@ -172,9 +172,9 @@ async fn start(args: NetCli, ex: Arc<Executor<'_>>) -> Result<()> {
     p2p.clone().start(ex.clone()).await?;
     ex2.spawn(p2p.clone().run(ex.clone())).detach();
 
-    let slots = 10;
-    let epochs = 6;
-    let ticks = 30;
+    let slots = 3;
+    let epochs = 3;
+    let ticks = 3;
     let reward = 1;
     let epoch_consensus = EpochConsensus::new(Some(slots), Some(epochs), Some(ticks), Some(reward));
 

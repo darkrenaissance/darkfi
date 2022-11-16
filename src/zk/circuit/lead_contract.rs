@@ -731,7 +731,7 @@ impl Circuit<pallas::Base> for LeadContract {
             y_commit_base,
             target,
             0,
-            true,
+            false,
         )?;
 
         Ok(())

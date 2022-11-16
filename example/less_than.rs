@@ -29,7 +29,7 @@ use log::{error, info};
 use rand::rngs::OsRng;
 
 use darkfi::{
-    consensus::{types::Float10, utils::fbig2base},
+    consensus::{types::Float10, utils::fbig2base, RADIX_BITS},
     crypto::{
         proof::{ProvingKey, VerifyingKey},
         Proof,
@@ -141,12 +141,12 @@ fn simple_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
 }
 
 fn fullrange_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
-    let y_str: &'static str = "0x057eaec1c805d808f70c4e2d2f173c72d091e9c9f78b11dddf52d072c30951ad";
-    let t_str: &'static str = "0x2cb8d8aec6766dc83595602e3050b0b908191bbe59dcc3d1e2b7020a37339a14";
+    let y_str: &'static str = "2485393101277319054866673974886504690592360759087472860138246047042221199789";
+    let t_str: &'static str = "20228360686725123198855333388287068776098384779255635716769234906173337213460";
     let y: pallas::Base =
-        fbig2base(Float10::from_str_native(y_str).unwrap().with_precision(74).value());
+        fbig2base(Float10::from_str_native(y_str).unwrap().with_precision(*RADIX_BITS).value());
     let t: pallas::Base =
-        fbig2base(Float10::from_str_native(t_str).unwrap().with_precision(74).value());
+        fbig2base(Float10::from_str_native(t_str).unwrap().with_precision(*RADIX_BITS).value());
 
     let circuit = LessThanCircuit { a: Value::known(y), b: Value::known(t) };
 
@@ -157,17 +157,14 @@ fn fullrange_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
     let public_inputs: Vec<pallas::Base> = vec![];
     let pk = ProvingKey::build(k, &LessThanCircuit::default());
     let vk = VerifyingKey::build(k, &LessThanCircuit::default());
-    let proof = Proof::create(&pk, &[circuit], &public_inputs, &mut OsRng)?;
-    match proof.verify(&vk, &public_inputs) {
-        Ok(()) => {
-            info!("proof verified");
-            Ok(())
-        }
-        Err(e) => {
-            error!("verification failed: {}", e);
-            Err(e)
-        }
-    }
+    let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
+    plonk::create_proof(&pk.params, &pk.pk, &[circuit], &[&[]], &mut OsRng, &mut transcript)?;
+    let proof = transcript.finalize();
+    let strategy = SingleVerifier::new(&vk.params);
+    let mut transcript = Blake2bRead::init(&proof[..]);
+    plonk::verify_proof(&vk.params, &vk.vk, strategy, &[&[]], &mut transcript)?;
+
+    Ok(())
 }
 
 fn main() {
