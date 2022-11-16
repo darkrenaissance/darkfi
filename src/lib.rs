@@ -39,8 +39,8 @@ pub mod dht;
 #[cfg(feature = "net")]
 pub mod net;
 
-#[cfg(feature = "node")]
-pub mod node;
+//#[cfg(feature = "node")]
+//pub mod node;
 
 #[cfg(feature = "raft")]
 pub mod raft;
