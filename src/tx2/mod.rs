@@ -21,6 +21,7 @@ use darkfi_sdk::{
         schnorr::{SchnorrPublic, Signature},
         PublicKey,
     },
+    pasta::pallas,
     tx::ContractCall,
 };
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
@@ -42,12 +43,12 @@ pub struct Transaction {
 
 impl Transaction {
     /// Verify ZK proofs for the entire transaction.
-    pub fn verify_zkps(&self) -> Result<()> {
+    pub fn verify_zkps(&self, zkp_table: Vec<Vec<(String, Vec<pallas::Base>)>>) -> Result<()> {
         Ok(())
     }
 
     /// Verify Schnorr signatures for the entire transaction.
-    pub fn verify_sigs(&self, pub_table: &[&[PublicKey]]) -> Result<()> {
+    pub fn verify_sigs(&self, pub_table: Vec<Vec<PublicKey>>) -> Result<()> {
         let tx_data = self.encode_without_sigs()?;
         let data_hash = blake3::hash(&tx_data);
 

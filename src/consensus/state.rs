@@ -16,10 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// TODO: Use sets instead of vectors where possible.
 use std::{
     collections::{hash_map::DefaultHasher, BTreeMap},
     hash::{Hash, Hasher},
+    io::Cursor,
     time::Duration,
 };
 
@@ -33,7 +33,7 @@ use darkfi_sdk::crypto::{
     util::mod_r_p,
     ContractId, MerkleNode, PublicKey, SecretKey,
 };
-use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, WriteExt};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, error, info, warn};
 use pasta_curves::{
@@ -207,28 +207,10 @@ impl ValidatorState {
         //             and/or just hardcoded and forbidden in non-native contract deployment.
         let cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
         let mut runtime = Runtime::new(&money_contract_wasm_bincode[..], blockchain.clone(), cid)?;
-        // TODO: Faucet/Cashier keys as init payload
+        // TODO: TESTNET: Faucet/Cashier keys as init payload
         runtime.deploy(&[])?;
         info!("Deployed Money Contract with ID: {}", cid);
         // -----END ARTIFACT-----
-
-        // Implement consensus wallet/client
-        // FIXME TESTNET: let address = client.wallet.get_default_address().await?;
-        /*
-        let state_machine = Arc::new(Mutex::new(State {
-            tree: client.get_tree().await?,
-            merkle_roots: blockchain.merkle_roots.clone(),
-            nullifiers: blockchain.nullifiers.clone(),
-            cashier_pubkeys,
-            faucet_pubkeys,
-            mint_vk: Lazy::new(),
-            burn_vk: Lazy::new(),
-        }));
-        */
-
-        // Create zk proof verification keys
-        //let _ = state_machine.lock().await.mint_vk();
-        //let _ = state_machine.lock().await.burn_vk();
 
         let state = Arc::new(RwLock::new(ValidatorState {
             public_key,
@@ -263,7 +245,10 @@ impl ValidatorState {
         }
 
         debug!("append_tx(): Starting state transition validation");
-        // TODO TESTNET: Verify sigs, execute wasm, verify zk proofs
+        if let Err(e) = self.verify_transactions(&[tx.clone()]) {
+            error!("append_tx(): Failed to verify transaction: {}", e);
+            return false
+        };
 
         debug!("append_tx(): Appended tx to mempool");
         self.unconfirmed_txs.push(tx);
@@ -373,9 +358,6 @@ impl ValidatorState {
             return Ok(false)
         }
         let eta = self.get_eta();
-        // Retrieving nodes wallet coins
-        // FIXME TESTNET: let owned = self.client.get_own_coins().await?;
-        //let owned = vec![];
         // TODO: slot parameter should be absolute slot, not relative.
         // At start of epoch, relative slot is 0.
         self.consensus.coins = self.create_epoch_coins(eta, epoch, 0).await?;
@@ -698,7 +680,10 @@ impl ValidatorState {
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
         debug!("receive_proposal(): Starting state transition validation");
-        // TODO TESTNET: Verify sigs in block's transactions, execute wasm, verify zkps
+        if let Err(e) = self.verify_transactions(&proposal.block.txs) {
+            error!("receive_proposal(): Transaction verifications failed: {}", e);
+            return Err(e.into())
+        };
 
         // TODO: [PLACEHOLDER] Add rewards validation
         // TODO: Append serial to merkle tree
@@ -843,8 +828,13 @@ impl ValidatorState {
         for proposal in &finalized {
             // TODO: Is this the right place? We're already doing this in protocol_sync.
             // TODO: These state transitions have already been checked. (I wrote this, but where?)
+            // TODO: FIXME: The state transitions have already been written, they have to be in memory
+            //              until this point.
             debug!(target: "consensus", "Applying state transition for finalized block");
-            // TODO TESTNET: verify all sigs, execute wasm, verify zkps in proposal.txs (see git diff)
+            if let Err(e) = self.verify_transactions(&proposal.txs) {
+                error!(target: "consensus", "Finalized block transaction verifications failed: {}", e);
+                return Err(e)
+            }
         }
 
         let last_block = *blockhashes.last().unwrap();
@@ -904,13 +894,14 @@ impl ValidatorState {
     pub async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         // Verify state transitions for all blocks and their respective transactions.
         debug!("receive_blocks(): Starting state transition validations");
-        // TODO TESTNET: verify sigs, execute wasm, verify zkps (see git diff)
+        for block in blocks {
+            if let Err(e) = self.verify_transactions(&block.txs) {
+                error!("receive_blocks(): Transaction verifications failed: {}", e);
+                return Err(e)
+            }
+        }
 
         debug!("receive_blocks(): All state transitions passed");
-
-        debug!("receive_blocks(): Updating canon state");
-        //self.update_canon_state(canon_updates, None).await?;
-
         debug!("receive_blocks(): Appending blocks to ledger");
         self.blockchain.add(blocks)?;
 
@@ -973,54 +964,91 @@ impl ValidatorState {
         Ok(())
     }
 
-    /*
-    /// Validate state transitions for given transactions and state and
-    /// return a vector of [`StateUpdate`]
-    pub fn validate_state_transitions(
-        state: MemoryState,
-        txs: &[Transaction],
-    ) -> Result<Vec<StateUpdate>> {
-        let mut ret = vec![];
-        let mut st = state;
+    /// Validate signatures, wasm execution, and zk proofs for given transactions.
+    /// If all of those succeed, try to execute a state update for the contract calls.
+    /// Currently the verifications are sequential, and the function will fail if any
+    /// of the verifications fail.
+    /// TODO: FIXME: TESTNET: The state changes should be in memory until a block with
+    ///                       it is finalized. Another option is to not apply and just
+    ///                       run this again when we see a finalized block (and apply
+    ///                       the update at that point). #finalization
+    pub fn verify_transactions(&self, txs: &[Transaction]) -> Result<()> {
+        debug!("Verifying {} transaction(s)", txs.len());
+        for tx in txs {
+            // Table of public inputs used for ZK proof verification
+            let mut zkp_table = vec![];
+            // Table of public keys used for signature verification
+            let mut sig_table = vec![];
+            // State updates produced by contract execution
+            let mut updates = vec![];
 
-        for (i, tx) in txs.iter().enumerate() {
-            let update = match state_transition(&st, tx.clone()) {
-                Ok(v) => v,
-                Err(e) => {
-                    warn!("validate_state_transition(): Failed for tx {}: {}", i, e);
-                    return Err(e.into())
-                }
-            };
-            st.apply(update.clone());
-            ret.push(update);
+            // Iterate over all calls to get the metadata
+            for (idx, call) in tx.calls.iter().enumerate() {
+                debug!("Working on call {}", idx);
+                // Check if the called contract exist as bincode.
+                let bincode = self.blockchain.wasm_bincode.get(call.contract_id)?;
+                debug!("Found wasm bincode for {}", call.contract_id);
+
+                // Write the actual payload data
+                let mut payload = vec![];
+                payload.write_u32(idx as u32)?; // Call index
+                tx.calls.encode(&mut payload)?; // Actual call_data
+
+                // Instantiate the wasm runtime
+                // TODO: Sum up the gas fees of these calls and instantiations
+                let mut runtime =
+                    Runtime::new(&bincode, self.blockchain.clone(), call.contract_id)?;
+
+                // Perform the execution to fetch verification metadata
+                debug!("Executing \"metadata\" call");
+                let metadata = runtime.metadata(&payload)?;
+                let mut decoder = Cursor::new(&metadata);
+                let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
+                let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
+                // TODO: Make sure we've read all the data above
+                zkp_table.push(zkp_pub);
+                sig_table.push(sig_pub);
+                debug!("Successfully executed \"metadata\" call");
+
+                // Execute the contract call
+                debug!("Executing \"exec\" call");
+                let update = runtime.exec(&payload)?;
+                updates.push(update);
+                debug!("Successfully executed \"exec\" call");
+            }
+
+            // Verify the Schnorr signatures with the public keys given to us from
+            // the metadata call.
+            debug!("Verifying transaction signatures");
+            tx.verify_sigs(sig_table)?;
+            debug!("Signatures verified successfully!");
+
+            // Finally, verify the ZK proofs
+            debug!("Verifying transaction ZK proofs");
+            tx.verify_zkps(zkp_table)?;
+            debug!("Transaction ZK proofs verified successfully!");
+
+            // When the verification stage has passed, just apply all the changes.
+            // TODO: FIXME: This writes directly to the database. Instead it should live
+            //              in memory until things get finalized. (Search #finalization
+            //              for additional notes).
+            // TODO: We instantiate new runtimes here, so pick up the gas fees from
+            //       the previous runs and sum them all together.
+            debug!("Performing state updates");
+            assert!(tx.calls.len() == updates.len());
+            for (call, update) in tx.calls.iter().zip(updates.iter()) {
+                // Do the bincode lookups again
+                let bincode = self.blockchain.wasm_bincode.get(call.contract_id)?;
+                debug!("Found wasm bincode for {}", call.contract_id);
+
+                let mut runtime =
+                    Runtime::new(&bincode, self.blockchain.clone(), call.contract_id)?;
+
+                debug!("Executing \"apply\" call");
+                runtime.apply(&update)?;
+            }
         }
 
-        Ok(ret)
-    }
-    */
-
-    /*
-    /// Apply a vector of [`StateUpdate`] to the canonical state.
-    pub async fn update_canon_state(
-        &self,
-        updates: Vec<StateUpdate>,
-        notify: Option<smol::channel::Sender<(PublicKey, u64)>>,
-    ) -> Result<()> {
-        let secret_keys: Vec<SecretKey> =
-            self.client.get_keypairs().await?.iter().map(|x| x.secret).collect();
-
-        debug!("update_canon_state(): Acquiring state machine lock");
-        let mut state = self.state_machine.lock().await;
-        for update in updates {
-            state
-                .apply(update, secret_keys.clone(), notify.clone(), self.client.wallet.clone())
-                .await?;
-        }
-        drop(state);
-        debug!("update_canon_state(): Dropped state machine lock");
-
-        debug!("update_canon_state(): Successfully applied state updates");
         Ok(())
     }
-    */
 }
