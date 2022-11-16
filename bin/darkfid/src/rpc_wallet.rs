@@ -16,8 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{Keypair, PublicKey, SecretKey, TokenId};
-use log::error;
+use log::{debug, error};
 use serde_json::{json, Value};
 use sqlx::Row;
 
@@ -30,7 +29,6 @@ use darkfi::{
 };
 
 use super::Darkfid;
-use crate::{server_error, RpcError};
 
 impl Darkfid {
     // RPCAPI:
@@ -106,7 +104,7 @@ impl Darkfid {
                         Ok(v) => v,
                         Err(e) => {
                             error!("[RPC] wallet.query_row_single: {}", e);
-                            return JsonError::new(InternalError, None, id).into()
+                            return JsonError::new(ParseError, None, id).into()
                         }
                     };
 
@@ -118,7 +116,7 @@ impl Darkfid {
                         Ok(v) => v,
                         Err(e) => {
                             error!("[RPC] wallet.query_row_single: {}", e);
-                            return JsonError::new(InternalError, None, id).into()
+                            return JsonError::new(ParseError, None, id).into()
                         }
                     };
 
@@ -130,5 +128,26 @@ impl Darkfid {
         }
 
         JsonResponse::new(json!(ret), id).into()
+    }
+
+    // RPCAPI:
+    // Executes an arbitrary SQL query on the wallet, and returns `true` on success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "wallet.exec_sql", "params": ["CREATE TABLE ..."], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
+    pub async fn wallet_exec_sql(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let query = params[0].as_str().unwrap();
+        debug!("Executing SQL query: {}", query);
+
+        if let Err(e) = self.wallet.exec_sql(query).await {
+            error!("[RPC] wallet.exec_sql: Error executing query: {}", e);
+            return JsonError::new(InternalError, None, id).into()
+        }
+
+        JsonResponse::new(json!(true), id).into()
     }
 }
