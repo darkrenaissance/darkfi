@@ -48,7 +48,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     util::path::expand_path,
-    wallet::walletdb::init_wallet,
+    wallet::{walletdb::init_wallet, WalletPtr},
     Error, Result,
 };
 
@@ -175,6 +175,7 @@ pub struct Darkfid {
     synced: Mutex<bool>, // AtomicBool is weird in Arc
     _consensus_p2p: Option<P2pPtr>,
     sync_p2p: Option<P2pPtr>,
+    wallet: WalletPtr,
     validator_state: ValidatorStatePtr,
 }
 
@@ -182,7 +183,7 @@ pub struct Darkfid {
 mod rpc_blockchain;
 mod rpc_misc;
 //mod rpc_tx;
-//mod rpc_wallet;
+mod rpc_wallet;
 
 // Internal methods
 //mod internal;
@@ -256,8 +257,15 @@ impl Darkfid {
         validator_state: ValidatorStatePtr,
         consensus_p2p: Option<P2pPtr>,
         sync_p2p: Option<P2pPtr>,
+        wallet: WalletPtr,
     ) -> Self {
-        Self { synced: Mutex::new(false), _consensus_p2p: consensus_p2p, sync_p2p, validator_state }
+        Self {
+            synced: Mutex::new(false),
+            _consensus_p2p: consensus_p2p,
+            sync_p2p,
+            wallet,
+            validator_state,
+        }
     }
 }
 
@@ -329,7 +337,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         &sled_db,
         genesis_ts,
         genesis_data,
-        wallet,
+        wallet.clone(),
         cashier_pubkeys,
         faucet_pubkeys,
     )
@@ -418,7 +426,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     };
 
     // Initialize program state
-    let darkfid = Darkfid::new(state.clone(), consensus_p2p.clone(), sync_p2p.clone()).await;
+    let darkfid =
+        Darkfid::new(state.clone(), consensus_p2p.clone(), sync_p2p.clone(), wallet.clone()).await;
     let darkfid = Arc::new(darkfid);
 
     // JSON-RPC server

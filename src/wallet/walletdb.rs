@@ -37,6 +37,27 @@ pub async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletP
     Ok(wallet)
 }
 
+/// Types we want to allow to query from the SQL wallet
+#[repr(u8)]
+pub enum QueryType {
+    /// Integer gets decoded into u64,
+    Integer = 0x00,
+    /// Blob gets decoded into Vec<u8>,
+    Blob = 0x01,
+    /// Last type, increment this when you add new types.
+    Last = 0x02,
+}
+
+impl From<u8> for QueryType {
+    fn from(x: u8) -> Self {
+        match x {
+            0x00 => Self::Integer,
+            0x01 => Self::Blob,
+            _ => unimplemented!(),
+        }
+    }
+}
+
 /// Structure representing base wallet operations.
 /// Additional operations can be implemented by trait extensions.
 pub struct WalletDb {
