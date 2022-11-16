@@ -18,7 +18,6 @@ BINDEPS = \
 	$(shell find bin/*/src -type f) \
 	$(shell find bin -type f -name '*.toml') \
 	$(shell find src -type f) \
-	$(shell find script/sql -type f) \
 	$(shell find contrib/token -type f)
 
 # ZK proofs to compile with zkas
