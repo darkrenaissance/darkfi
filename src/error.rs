@@ -218,7 +218,7 @@ pub enum Error {
     InvalidPublicInputsError,
 
     #[error("Error during leader proof verification")]
-    LeaderProofVerificationError,
+    LeaderProofVerification,
 
     #[error("Signature could not be verified")]
     InvalidSignature,
@@ -227,7 +227,7 @@ pub enum Error {
     StateTransitionError,
 
     #[error("Check if proposal extends any existing fork chains failed")]
-    ExtendedChainIndexNotFoundError,
+    ExtendedChainIndexNotFound,
 
     #[error("Proposal contains missmatched headers")]
     ProposalHeadersMissmatchError,
@@ -310,6 +310,10 @@ pub enum Error {
     #[cfg(feature = "darkfi-sdk")]
     #[error("contract initialize error")]
     ContractError(darkfi_sdk::error::ContractError),
+
+    #[cfg(feature = "wasm-runtime")]
+    #[error("contract wasm bincode not found")]
+    WasmBincodeNotFound,
 
     #[cfg(feature = "wasm-runtime")]
     #[error("contract initialize error")]

@@ -38,7 +38,7 @@ pub mod txstore;
 pub use txstore::TxStore;
 
 pub mod contractstore;
-pub use contractstore::ContractStore;
+pub use contractstore::{ContractStateStore, WasmStore};
 
 /// Structure holding all sled trees that define the concept of Blockchain.
 #[derive(Clone)]
@@ -58,7 +58,9 @@ pub struct Blockchain {
     /// Merkle roots sled tree
     pub merkle_roots: RootStore,
     /// Contract states
-    pub contracts: ContractStore,
+    pub contracts: ContractStateStore,
+    /// Wasm bincodes
+    pub wasm_bincode: WasmStore,
 }
 
 impl Blockchain {
@@ -70,7 +72,8 @@ impl Blockchain {
         let transactions = TxStore::new(db)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
-        let contracts = ContractStore::new(db)?;
+        let contracts = ContractStateStore::new(db)?;
+        let wasm_bincode = WasmStore::new(db)?;
 
         Ok(Self {
             sled_db: db.clone(),
@@ -81,6 +84,7 @@ impl Blockchain {
             nullifiers,
             merkle_roots,
             contracts,
+            wasm_bincode,
         })
     }
 
