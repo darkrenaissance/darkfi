@@ -19,7 +19,7 @@
 use std::{path::Path, str::FromStr, time::Duration};
 
 use async_std::{fs::create_dir_all, sync::Arc};
-use log::{error, info, LevelFilter};
+use log::{debug, error, info, LevelFilter};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode},
     ConnectOptions, SqlitePool,
@@ -80,7 +80,7 @@ impl WalletDb {
         }
 
         let mut connect_opts = SqliteConnectOptions::from_str(path)?
-            .pragma("key", password.to_string())
+            //.pragma("key", password.to_string())
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Off);
 
@@ -95,10 +95,11 @@ impl WalletDb {
 
     /// This function executes a given SQL query, but isn't able to return anything.
     /// Therefore it's best to use it for initializing a table or similar things.
-    pub async fn exec_sql(&self, sql_query: &str) -> Result<()> {
+    pub async fn exec_sql(&self, query: &str) -> Result<()> {
         info!("walletdb: Executing SQL query");
+        debug!("\n{}", query);
         let mut conn = self.conn.acquire().await?;
-        sqlx::query(sql_query).execute(&mut conn).await?;
+        sqlx::query(query).execute(&mut conn).await?;
         Ok(())
     }
 }
