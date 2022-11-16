@@ -32,6 +32,3 @@ pub use proof::Proof;
 
 pub use burn_proof::BurnRevealedValues;
 pub use mint_proof::MintRevealedValues;
-
-pub mod lead_proof;
-pub mod leadcoin;

@@ -21,17 +21,16 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+use log::error;
 use rand::rngs::OsRng;
 
-use super::Participant;
+use super::{leadcoin::LeadCoin, Participant};
 use crate::{
     crypto::{
-        lead_proof,
-        leadcoin::LeadCoin,
         proof::{Proof, ProvingKey, VerifyingKey},
         types::*,
     },
-    VerifyResult,
+    Result,
 };
 
 /// This struct represents [`Block`](super::Block) information used by the consensus protocol.
@@ -118,12 +117,17 @@ pub struct LeadProof {
 
 impl LeadProof {
     pub fn new(pk: &ProvingKey, coin: LeadCoin) -> Self {
-        let proof = lead_proof::create_lead_proof(pk, coin).unwrap();
+        let proof = coin.create_lead_proof(pk).unwrap();
         Self { proof }
     }
 
-    pub fn verify(&self, vk: &VerifyingKey, public_inputs: &[DrkCircuitField]) -> VerifyResult<()> {
-        lead_proof::verify_lead_proof(vk, &self.proof, public_inputs)
+    pub fn verify(&self, vk: &VerifyingKey, public_inputs: &[DrkCircuitField]) -> Result<()> {
+        if let Err(e) = self.proof.verify(vk, public_inputs) {
+            error!("Verification of consensus lead proof failed: {}", e);
+            return Err(e.into())
+        }
+
+        Ok(())
     }
 }
 

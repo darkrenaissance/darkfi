@@ -30,7 +30,7 @@ use crate::{crypto::Proof, Error, Result};
 
 /// A Transaction contains an arbitrary number of `ContractCall` objects,
 /// along with corresponding ZK proofs and Schnorr signatures.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Transaction {
     /// Calls executed in this transaction
     pub calls: Vec<ContractCall>,

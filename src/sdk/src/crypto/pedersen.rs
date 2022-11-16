@@ -16,14 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::constants::{
-    fixed_bases::{
-        VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES, VALUE_COMMITMENT_V_BYTES,
-    },
-    NullifierK,
-};
 use halo2_gadgets::ecc::chip::FixedPoint;
-use pasta_curves::{arithmetic::CurveExt, group::ff::PrimeField, pallas};
+use pasta_curves::{arithmetic::CurveExt, pallas};
+
+use super::{
+    constants::{
+        fixed_bases::{
+            VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES, VALUE_COMMITMENT_V_BYTES,
+        },
+        NullifierK,
+    },
+    util::mod_r_p,
+};
 
 pub type ValueBlind = pallas::Scalar;
 pub type ValueCommit = pallas::Point;
@@ -46,12 +50,4 @@ pub fn pedersen_commitment_u64(value: u64, blind: ValueBlind) -> ValueCommit {
     let R = hasher(&VALUE_COMMITMENT_R_BYTES);
 
     V * mod_r_p(pallas::Base::from(value)) + R * blind
-}
-
-/// Converts from pallas::Base to pallas::Scalar (aka $x \pmod{r_\mathbb{P}}$).
-///
-/// This requires no modular reduction because Pallas' base field is smaller than its
-/// scalar field.
-pub fn mod_r_p(x: pallas::Base) -> pallas::Scalar {
-    pallas::Scalar::from_repr(x.to_repr()).unwrap()
 }

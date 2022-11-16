@@ -38,17 +38,13 @@ use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::rngs::OsRng;
 
 use super::{
-    coins, Block, BlockInfo, BlockProposal, Header, LeadProof, Metadata, Participant,
-    ProposalChain, DELTA, EPOCH_LENGTH, LEADER_PROOF_K,
+    coins, leadcoin::LeadCoin, Block, BlockInfo, BlockProposal, Header, LeadProof, Metadata,
+    Participant, ProposalChain, DELTA, EPOCH_LENGTH, LEADER_PROOF_K,
 };
 
 use crate::{
     blockchain::Blockchain,
-    crypto::{
-        lead_proof,
-        leadcoin::LeadCoin,
-        proof::{ProvingKey, VerifyingKey},
-    },
+    crypto::proof::{ProvingKey, VerifyingKey},
     net,
     node::{
         state::{state_transition, ProgramState, StateUpdate},
@@ -410,7 +406,7 @@ impl ValidatorState {
         let coin = self.consensus.coins[relative_slot][idx];
         // TODO: Generate new LeadCoin from newlly minted coin, will reuse original coin for now
         //let coin2 = something();
-        let proof = lead_proof::create_lead_proof(&self.proving_key, coin)?;
+        let proof = coin.create_lead_proof(&self.proving_key)?;
         let participants = self.consensus.participants.values().cloned().collect();
         let metadata = Metadata::new(
             signed_proposal,
@@ -418,7 +414,7 @@ impl ValidatorState {
             coin.public_inputs(),
             coin.public_inputs(),
             idx,
-            coin.sn.unwrap(),
+            coin.sn,
             eta,
             LeadProof::from(proof),
             participants,

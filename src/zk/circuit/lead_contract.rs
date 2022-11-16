@@ -152,9 +152,9 @@ pub struct LeadContract {
     /// `coin_2` pedersen commitment point
     pub coin2_commit: Value<pallas::Point>,
     /// Random value derived from `eta` used for constraining `rho`
-    pub mau_rho: Value<pallas::Scalar>,
+    pub rho_mu: Value<pallas::Scalar>,
     /// Random value derived from `eta` used for calculating `y`.
-    pub mau_y: Value<pallas::Scalar>,
+    pub y_mu: Value<pallas::Scalar>,
     /// First coefficient in 1-term T (target function) approximation.
     /// sigma1 and sigma2 is not the capital sigma from the paper, but
     /// the whole coefficient multiplied with the absolute stake.
@@ -402,14 +402,14 @@ impl Circuit<pallas::Base> for LeadContract {
             self.coin2_commit.as_ref().map(|cm| cm.to_affine()),
         )?;
 
-        let _mau_rho = ScalarFixed::new(
+        let rho_mu = ScalarFixed::new(
             ecc_chip.clone(),
-            layouter.namespace(|| "witness mau_rho"),
-            self.mau_rho,
+            layouter.namespace(|| "witness rho_mu"),
+            self.rho_mu,
         )?;
 
-        let mau_y =
-            ScalarFixed::new(ecc_chip.clone(), layouter.namespace(|| "witness mau_y"), self.mau_y)?;
+        let y_mu =
+            ScalarFixed::new(ecc_chip.clone(), layouter.namespace(|| "witness y_mu"), self.y_mu)?;
 
         let sigma1 = assign_free_advice(
             layouter.namespace(|| "witness sigma1"),
@@ -594,7 +594,7 @@ impl Circuit<pallas::Base> for LeadContract {
         // ==================================
         // lhs of the leader election lottery
         // ==================================
-        // * y as Commit(root_sk||nonce, mau_y)
+        // * y as Commit(root_sk||nonce, y_mu)
         // Commitment to the coin's secret key, coin's nonce, and random value
         // derived from the epoch sampled random eta.
         let lottery_commit_msg: AssignedCell<pallas::Base, pallas::Base> = {
@@ -615,7 +615,7 @@ impl Circuit<pallas::Base> for LeadContract {
 
         let (lottery_commit_r, _) = {
             let r = FixedPoint::from_inner(ecc_chip.clone(), ValueCommitR);
-            r.mul(layouter.namespace(|| "mau_y * ValueCommitR"), mau_y)?
+            r.mul(layouter.namespace(|| "y_mu * ValueCommitR"), y_mu)?
         };
 
         let y_commit = lottery_commit_v
@@ -637,13 +637,8 @@ impl Circuit<pallas::Base> for LeadContract {
 
         // y_commit also becomes V of the following pedersen commitment for rho
         let (rho_cm, _) = {
-            let mau_rho = ScalarFixed::new(
-                ecc_chip.clone(),
-                layouter.namespace(|| "mau_rho scalar"),
-                self.mau_rho,
-            )?;
             let rho_commit_r = FixedPoint::from_inner(ecc_chip, ValueCommitR);
-            rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), mau_rho)?
+            rho_commit_r.mul(layouter.namespace(|| "coin serial number commit R"), rho_mu)?
         };
         let rho_commit = lottery_commit_v.add(layouter.namespace(|| "nonce commit"), &rho_cm)?;
 

@@ -62,8 +62,6 @@ pub struct Blockchain {
 }
 
 impl Blockchain {
-    //FIXME why the blockchain taking genesis_data on the constructor as a hash?
-    //genesis data are supposed to be a a hash?
     /// Instantiate a new `Blockchain` with the given `sled` database.
     pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let headers = HeaderStore::new(db, genesis_ts, genesis_data)?;
@@ -94,6 +92,7 @@ impl Blockchain {
     pub fn add(&self, blocks: &[BlockInfo]) -> Result<Vec<blake3::Hash>> {
         let mut ret = Vec::with_capacity(blocks.len());
 
+        // TODO: Make db writes here completely atomic
         for block in blocks {
             // Store transactions
             let _tx_hashes = self.transactions.insert(&block.txs)?;
@@ -103,16 +102,11 @@ impl Blockchain {
             ret.push(headerhash[0]);
 
             // Store block
-            //let _block = Block::new(headerhash[0], tx_hashes, block.m.clone());
-            //self.blocks.insert(&[_block])?;
             let blk: Block = Block::from(block.clone());
             self.blocks.insert(&[blk])?;
 
             // Store block order
             self.order.insert(&[block.header.slot], &[headerhash[0]])?;
-
-            // NOTE: The nullifiers and Merkle roots are applied in the state
-            // transition apply function.
         }
 
         Ok(ret)

@@ -22,7 +22,7 @@ use super::crypto::ContractId;
 
 /// A ContractCall is the part of a transaction that executes a certain
 /// `contract_id` with `data` as the call's payload.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct ContractCall {
     pub contract_id: ContractId,
     pub data: Vec<u8>,

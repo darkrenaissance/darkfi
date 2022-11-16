@@ -22,7 +22,7 @@ use darkfi_sdk::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
         poseidon_hash,
         util::mod_r_p,
-        Keypair, MerkleNode, Nullifier, SecretKey, TokenId,
+        MerkleNode, Nullifier, SecretKey, TokenId,
     },
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{
@@ -37,13 +37,12 @@ use log::info;
 use rand::{rngs::OsRng, thread_rng, Rng};
 
 use super::{
-    utils::fbig2base, Float10, EPOCH_LENGTH, LOTTERY_HEAD_START, P, PRF_NULLIFIER_PREFIX,
-    RADIX_BITS, REWARD,
+    leadcoin::LeadCoin, utils::fbig2base, Float10, EPOCH_LENGTH, LOTTERY_HEAD_START, P, RADIX_BITS,
+    REWARD,
 };
 use crate::{
     crypto::{
         coin::{Coin, OwnCoin},
-        leadcoin::LeadCoin,
         note::Note,
         types::{DrkCoinBlind, DrkSerial, DrkValueBlind},
     },
@@ -129,7 +128,7 @@ fn create_coins(
             let index = i as usize;
             let mut slot_coins = vec![];
             for elem in owned {
-                let coin = create_leadcoin(
+                let coin = LeadCoin::new(
                     eta,
                     sigma1,
                     sigma2,
@@ -150,7 +149,7 @@ fn create_coins(
         for i in 0..*EPOCH_LENGTH {
             let index = i as usize;
             // Compete with zero stake
-            let coin = create_leadcoin(
+            let coin = LeadCoin::new(
                 eta,
                 sigma1,
                 sigma2,
@@ -211,146 +210,6 @@ fn create_coins_sks() -> (Vec<SecretKey>, Vec<MerkleNode>, Vec<[MerkleNode; MERK
     (sks, root_sks, path_sks)
 }
 
-/// Generate lead coin for provided sigmas and secret keys.
-fn create_leadcoin(
-    eta: pallas::Base,
-    sigma1: pallas::Base,
-    sigma2: pallas::Base,
-    value: u64,
-    i: usize,
-    c_root_sk: MerkleNode,
-    c_path_sk: [MerkleNode; MERKLE_DEPTH_ORCHARD],
-    seed: u64,
-    sk: SecretKey,
-    tree_cm: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
-) -> LeadCoin {
-    // keypair
-    let keypair: Keypair = Keypair::new(sk);
-    //random commitment blinding values
-    let mut rng = thread_rng();
-    let one = pallas::Base::one();
-    let zero = pallas::Base::zero();
-    let c_cm1_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
-    let c_cm2_blind: DrkValueBlind = pallas::Scalar::random(&mut rng);
-
-    let c_v = pallas::Base::from(value);
-    // coin relative slot index in the epoch
-    let c_sl = pallas::Base::from(u64::try_from(i).unwrap());
-    //
-    //let's assume it's sl for simplicity
-    let c_tau = pallas::Base::from(u64::try_from(i).unwrap());
-    //
-
-    //let coin_pk_msg = [c_tau, c_root_sk.inner()];
-    //let c_pk: pallas::Base = poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init().hash(coin_pk_msg);
-
-    let c_pk: pallas::Point = keypair.public.inner();
-    let c_pk_coord = c_pk.to_affine().coordinates().unwrap();
-    let c_pk_x = c_pk_coord.x();
-    let c_pk_y = c_pk_coord.y();
-    info!("coin pk [{}] x: {:?}", i, c_pk_x);
-    info!("coin pk [{}] y: {:?}", i, c_pk_y);
-
-    let c_seed = pallas::Base::from(seed);
-    let sn_msg = [c_seed, c_root_sk.inner(), zero, one];
-    let c_sn: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init()
-            .hash(sn_msg);
-
-    let coin_commit_msg_input =
-        [pallas::Base::from(*PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed, one];
-    let coin_commit_msg: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
-            .hash(coin_commit_msg_input);
-    let c_cm: pallas::Point = pedersen_commitment_base(coin_commit_msg, c_cm1_blind);
-    let c_cm_coordinates = c_cm.to_affine().coordinates().unwrap();
-    let c_cm_msg = [*c_cm_coordinates.x(), *c_cm_coordinates.y()];
-    let c_cm_base: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-            .hash(c_cm_msg);
-    let c_cm_node = MerkleNode::from(c_cm_base);
-    tree_cm.append(&c_cm_node.clone());
-    let leaf_position = tree_cm.witness().unwrap();
-    let leaf_position_usize: usize = leaf_position.into();
-    //info!("leaf position odd parity: {:?}", leaf_position.is_odd());
-    let c_root_cm = tree_cm.root(0).unwrap();
-    let c_cm_path = tree_cm.authentication_path(leaf_position, &c_root_cm).unwrap();
-
-    /*
-    let c_root_cm = {
-        let mut current = MerkleNode::from(c_cm_base);
-        let pos = leaf_position.unwrap();
-        for (level, sibling) in c_cm_path.iter().enumerate() {
-            let level = level as u8;
-            current = if i & (1 << level) == 0 {
-                MerkleNode::combine(level.into(), &current, sibling)
-            } else {
-                MerkleNode::combine(level.into(), sibling, &current)
-            };
-        }
-        current
-    };
-    */
-
-    let coin_nonce2_msg = [c_seed, c_root_sk.inner(), one, one];
-    let c_seed2: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<4>, 3, 2>::init()
-            .hash(coin_nonce2_msg);
-    info!("coin2 seed [{}] : {:?}", i, c_seed2);
-    let coin2_commit_msg_input =
-        [pallas::Base::from(*PRF_NULLIFIER_PREFIX), *c_pk_x, *c_pk_y, c_v, c_seed2, one];
-    let coin2_commit_msg: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<6>, 3, 2>::init()
-            .hash(coin2_commit_msg_input);
-    let c_cm2 = pedersen_commitment_base(coin2_commit_msg, c_cm2_blind);
-
-    // election seeds
-    let (y_mu, rho_mu) = create_coins_election_seeds(eta, c_sl);
-    let coin = LeadCoin {
-        value: Some(value),
-        cm: Some(c_cm),
-        cm2: Some(c_cm2),
-        idx: u32::try_from(leaf_position_usize).unwrap(), //TODO should be abs slot
-        sl: Some(c_sl),
-        tau: Some(c_tau),
-        nonce: Some(c_seed),
-        nonce_cm: Some(c_seed2),
-        sn: Some(c_sn),
-        keypair: Some(keypair),
-        root_cm: Some(c_root_cm.inner()),
-        root_sk: Some(c_root_sk.inner()),
-        path: Some(c_cm_path.as_slice().try_into().unwrap()),
-        path_sk: Some(c_path_sk),
-        c1_blind: Some(c_cm1_blind),
-        c2_blind: Some(c_cm2_blind),
-        y_mu: Some(y_mu),
-        rho_mu: Some(rho_mu),
-        sigma1: Some(sigma1),
-        sigma2: Some(sigma2),
-    };
-    coin
-}
-
-fn create_coins_election_seeds(
-    eta: pallas::Base,
-    slot: pallas::Base,
-) -> (pallas::Base, pallas::Base) {
-    let election_seed_nonce: pallas::Base = pallas::Base::from(3);
-    let election_seed_lead: pallas::Base = pallas::Base::from(22);
-
-    // mu_rho
-    let nonce_mu_msg = [election_seed_nonce, eta, slot];
-    let nonce_mu: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init()
-            .hash(nonce_mu_msg);
-    // mu_y
-    let lead_mu_msg = [election_seed_lead, eta, slot];
-    let lead_mu: pallas::Base =
-        poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<3>, 3, 2>::init()
-            .hash(lead_mu_msg);
-    (lead_mu, nonce_mu)
-}
-
 /// Check that the provided participant/stakeholder coins win the slot lottery.
 /// If the stakeholder have multiple competing winning coins, only the highest value coin is selected,
 /// since the stakeholder can't give more than a proof per block(slot).
@@ -366,11 +225,9 @@ pub fn is_leader(slot: u64, epoch_coins: &Vec<Vec<LeadCoin>>) -> (bool, usize) {
     let mut highest_stake = 0;
     let mut highest_stake_idx: usize = 0;
     for (winning_idx, coin) in competing_coins.iter().enumerate() {
-        let y_exp = [coin.root_sk.unwrap(), coin.nonce.unwrap()];
-        let y_exp_hash: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(y_exp);
-        let y_coordinates = pedersen_commitment_base(y_exp_hash, mod_r_p(coin.y_mu.unwrap()))
+        let y_exp = [coin.coin1_sk_root.inner(), coin.nonce];
+        let y_exp_hash = poseidon_hash(y_exp);
+        let y_coordinates = pedersen_commitment_base(y_exp_hash, mod_r_p(coin.y_mu))
             .to_affine()
             .coordinates()
             .unwrap();
@@ -378,13 +235,10 @@ pub fn is_leader(slot: u64, epoch_coins: &Vec<Vec<LeadCoin>>) -> (bool, usize) {
         let y_x: pallas::Base = *y_coordinates.x();
         let y_y: pallas::Base = *y_coordinates.y();
         let y_coord_arr = [y_x, y_y];
-        let y: pallas::Base =
-            poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<2>, 3, 2>::init()
-                .hash(y_coord_arr);
+        let y = poseidon_hash(y_coord_arr);
         //
-        let val_base = pallas::Base::from(coin.value.unwrap());
-        let target_base =
-            coin.sigma1.unwrap() * val_base + coin.sigma2.unwrap() * val_base * val_base;
+        let val_base = pallas::Base::from(coin.value);
+        let target_base = coin.sigma1 * val_base + coin.sigma2 * val_base * val_base;
         info!("y: {:?}", y);
         info!("T: {:?}", target_base);
         let first_winning = y < target_base;
@@ -392,8 +246,8 @@ pub fn is_leader(slot: u64, epoch_coins: &Vec<Vec<LeadCoin>>) -> (bool, usize) {
             highest_stake_idx = winning_idx;
         }
         won |= first_winning;
-        if won && coin.value.unwrap() > highest_stake {
-            highest_stake = coin.value.unwrap();
+        if won && coin.value > highest_stake {
+            highest_stake = coin.value;
             highest_stake_idx = winning_idx;
         }
     }
