@@ -29,7 +29,7 @@ use crate::{
         ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
-    tx::Transaction,
+    tx2::Transaction,
     Result,
 };
 

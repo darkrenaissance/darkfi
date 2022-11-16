@@ -56,7 +56,7 @@ use crate::{
     crypto::proof::{ProvingKey, VerifyingKey},
     net,
     runtime::vm_runtime::Runtime,
-    tx::Transaction,
+    tx2::Transaction,
     util::time::Timestamp,
     wallet::WalletPtr,
     zk::circuit::LeadContract,
@@ -166,13 +166,12 @@ impl ValidatorState {
         info!("Initializing ValidatorState");
 
         info!("Initializing wallet tables for consensus");
-        // TODO: TESTNET: The stuff is kept entirely in memory for now, this should be written
-        //                into the wallet when necessary.
-        let consensus_tree_init_query = include_str!("../../script/sql/consensus_tree.sql");
-        let consensus_keys_init_query = include_str!("../../script/sql/consensus_keys.sql");
-        // TODO: TESTNET: consensus coin table
-        wallet.exec_sql(consensus_tree_init_query).await?;
-        wallet.exec_sql(consensus_keys_init_query).await?;
+        // TODO: TESTNET: The stuff is kept entirely in memory for now, what should we write
+        //                to disk/wallet?
+        //let consensus_tree_init_query = include_str!("../../script/sql/consensus_tree.sql");
+        //let consensus_keys_init_query = include_str!("../../script/sql/consensus_keys.sql");
+        //wallet.exec_sql(consensus_tree_init_query).await?;
+        //wallet.exec_sql(consensus_keys_init_query).await?;
 
         let secret_key = SecretKey::random(&mut OsRng);
         let public_key = PublicKey::from_secret(secret_key);
@@ -540,12 +539,14 @@ impl ValidatorState {
         let unproposed_txs = self.unproposed_txs(index);
 
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        /* TODO: FIXME: TESTNET:
         for tx in &unproposed_txs {
             for output in &tx.outputs {
                 tree.append(&MerkleNode::from(output.revealed.coin.0));
                 tree.witness();
             }
         }
+        */
         let root = tree.root(0).unwrap();
         let header =
             Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
