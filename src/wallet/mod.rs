@@ -16,5 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//pub mod cashierdb;
+/// Main wallet primitives, extendable by traits.
 pub mod walletdb;
+pub use walletdb::{WalletDb, WalletPtr};
