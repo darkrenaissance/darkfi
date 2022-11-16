@@ -30,7 +30,7 @@ use pasta_curves::{
 };
 use rand_core::{CryptoRng, RngCore};
 
-use super::{constants::NullifierK, util::mod_r_p, Address};
+use super::{constants::NullifierK, util::mod_r_p};
 use crate::error::ContractError;
 
 /// Keypair structure holding a `SecretKey` and its respective `PublicKey`
@@ -179,15 +179,5 @@ impl core::fmt::Display for PublicKey {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let disp: String = bs58::encode(self.0.to_bytes()).into_string();
         write!(f, "{}", disp)
-    }
-}
-
-impl TryFrom<Address> for PublicKey {
-    type Error = ContractError;
-
-    fn try_from(address: Address) -> Result<Self, Self::Error> {
-        let mut bytes = [0u8; 32];
-        bytes.copy_from_slice(&address.inner()[1..33]);
-        Self::from_bytes(bytes)
     }
 }
