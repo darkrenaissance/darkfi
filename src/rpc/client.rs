@@ -81,13 +81,13 @@ impl RpcClient {
                 let resp_id = r.id.as_u64();
                 if resp_id.is_none() {
                     let e = JsonError::new(ErrorCode::InvalidId, None, r.id);
-                    self.stop_signal.send(()).await?;
+                    //self.stop_signal.send(()).await?;
                     return Err(Error::JsonRpcError(e.error.message.to_string()))
                 }
 
                 if resp_id.unwrap() != req_id {
                     let e = JsonError::new(ErrorCode::InvalidId, None, r.id);
-                    self.stop_signal.send(()).await?;
+                    //self.stop_signal.send(()).await?;
                     return Err(Error::JsonRpcError(e.error.message.to_string()))
                 }
 
@@ -97,13 +97,13 @@ impl RpcClient {
             JsonResult::Error(e) => {
                 debug!(target: "jsonrpc-client", "<-- {}", serde_json::to_string(&e)?);
                 // Close the server connection
-                self.stop_signal.send(()).await?;
+                //self.stop_signal.send(()).await?;
                 Err(Error::JsonRpcError(e.error.message.to_string()))
             }
             JsonResult::Notification(n) => {
                 debug!(target: "jsonrpc-client", "<-- {}", serde_json::to_string(&n)?);
                 // Close the server connection
-                self.stop_signal.send(()).await?;
+                //self.stop_signal.send(()).await?;
                 Err(Error::JsonRpcError("Unexpected reply".to_string()))
             }
         }
