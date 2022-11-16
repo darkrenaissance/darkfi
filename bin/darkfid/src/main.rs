@@ -219,31 +219,13 @@ impl RequestHandler for Darkfid {
             Some("tx.transfer") => return self.tx_transfer(req.id, params).await,
             Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
             */
-
             // ==============
             // Wallet methods
             // ==============
-            /*
-            Some("wallet.keygen") => return self.wallet_keygen(req.id, params).await,
-            Some("wallet.get_addrs") => return self.wallet_get_addrs(req.id, params).await,
-            Some("wallet.export_keypair") => {
-                return self.wallet_export_keypair(req.id, params).await
+            Some("wallet.exec_sql") => return self.wallet_exec_sql(req.id, params).await,
+            Some("wallet.query_row_single") => {
+                return self.wallet_query_row_single(req.id, params).await
             }
-            Some("wallet.import_keypair") => {
-                return self.wallet_import_keypair(req.id, params).await
-            }
-            Some("wallet.set_default_address") => {
-                return self.wallet_set_default_address(req.id, params).await
-            }
-            Some("wallet.get_balances") => return self.wallet_get_balances(req.id, params).await,
-            Some("wallet.get_coins_valtok") => {
-                return self.wallet_get_coins_valtok(req.id, params).await
-            }
-            Some("wallet.get_merkle_path") => {
-                return self.wallet_get_merkle_path(req.id, params).await
-            }
-            Some("wallet.decrypt_note") => return self.wallet_decrypt_note(req.id, params).await,
-            */
             // ==============
             // Invalid method
             // ==============
@@ -480,9 +462,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     print!("\r");
     info!("Caught termination signal, cleaning up and exiting...");
 
-    info!("Flushing database...");
+    info!("Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
     info!("Flushed {} bytes", flushed_bytes);
+
+    info!("Closing wallet connection...");
+    wallet.conn.close().await;
+    info!("Closed wallet connection");
 
     Ok(())
 }

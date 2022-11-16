@@ -24,13 +24,15 @@ use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
 /// Please sort them sensefully.
 pub enum RpcError {
     // Wallet/Key-related errors
+    NoRowsFoundInWallet = -32101,
+    /*
     Keygen = -32101,
     KeypairFetch = -32102,
     KeypairNotFound = -32103,
     InvalidKeypair = -32104,
     InvalidAddressParam = -32105,
     DecryptionFailed = -32106,
-
+    */
     // Transaction-related errors
     TxBuildFail = -32110,
     TxBroadcastFail = -32111,
@@ -49,12 +51,15 @@ pub enum RpcError {
 fn to_tuple(e: RpcError) -> (i64, String) {
     let msg = match e {
         // Wallet/Key-related errors
+        RpcError::NoRowsFoundInWallet => "No queried rows found in wallet",
+        /*
         RpcError::Keygen => "Failed generating keypair",
         RpcError::KeypairFetch => "Failed fetching keypairs from wallet",
         RpcError::KeypairNotFound => "Keypair not found",
         RpcError::InvalidKeypair => "Invalid keypair",
         RpcError::InvalidAddressParam => "Invalid address parameter",
         RpcError::DecryptionFailed => "Decryption failed",
+        */
         // Transaction-related errors
         RpcError::TxBuildFail => "Failed building transaction",
         RpcError::TxBroadcastFail => "Failed broadcasting transaction",

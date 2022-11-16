@@ -28,7 +28,7 @@ use darkfi::{
     wallet::walletdb::QueryType,
 };
 
-use super::Darkfid;
+use super::{error::RpcError, server_error, Darkfid};
 
 impl Darkfid {
     // RPCAPI:
@@ -51,8 +51,6 @@ impl Darkfid {
     // --> {"jsonrpc": "2.0", "method": "wallet.query_row_single", "params": [...], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["va", "lu", "es", ...], "id": 1}
     pub async fn wallet_query_row_single(&self, id: Value, params: &[Value]) -> JsonResult {
-        // TODO: Better errors
-
         // We need at least 3 params for something we want to fetch, and we want them in pairs.
         // Also the first param should be a String
         if params.len() < 3 || params[1..].len() % 2 != 0 || !params[0].is_string() {
@@ -90,7 +88,7 @@ impl Darkfid {
             Ok(v) => v,
             Err(e) => {
                 error!("[RPC] wallet.query_row_single: Failed to execute SQL query: {}", e);
-                return JsonError::new(InternalError, None, id).into()
+                return server_error(RpcError::NoRowsFoundInWallet, id, None)
             }
         };
 
@@ -132,21 +130,69 @@ impl Darkfid {
 
     // RPCAPI:
     // Executes an arbitrary SQL query on the wallet, and returns `true` on success.
+    // `params[1..]` can optionally be provided in pairs like in `wallet.query_row_single`.
     //
     // --> {"jsonrpc": "2.0", "method": "wallet.exec_sql", "params": ["CREATE TABLE ..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
     pub async fn wallet_exec_sql(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 || !params[0].is_string() {
+        if params.is_empty() || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        if params.len() > 1 && params[1..].len() % 2 != 0 {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
         let query = params[0].as_str().unwrap();
         debug!("Executing SQL query: {}", query);
+        let mut query = sqlx::query(query);
 
-        if let Err(e) = self.wallet.exec_sql(query).await {
-            error!("[RPC] wallet.exec_sql: Error executing query: {}", e);
-            return JsonError::new(InternalError, None, id).into()
+        for pair in params[1..].chunks(2) {
+            if !pair[0].is_u64() || pair[0].as_u64().unwrap() >= QueryType::Last as u64 {
+                return JsonError::new(InvalidParams, None, id).into()
+            }
+
+            let typ = (pair[0].as_u64().unwrap() as u8).into();
+            match typ {
+                QueryType::Integer => {
+                    let val: i32 = match serde_json::from_value(pair[1].clone()) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("[RPC] wallet.exec_sql: Failed casting value to i32: {}", e);
+                            return JsonError::new(ParseError, None, id).into()
+                        }
+                    };
+
+                    query = query.bind(val);
+                }
+                QueryType::Blob => {
+                    let val: Vec<u8> = match serde_json::from_value(pair[1].clone()) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("[RPC] wallet.exec_sql: Failed casting value to Vec<u8>: {}", e);
+                            return JsonError::new(ParseError, None, id).into()
+                        }
+                    };
+
+                    query = query.bind(val);
+                }
+                _ => return JsonError::new(InvalidParams, None, id).into(),
+            }
         }
+
+        // Get a wallet connection
+        let mut conn = match self.wallet.conn.acquire().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("[RPC] wallet.exec_sql: Failed to acquire wallet connection: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        if let Err(e) = query.execute(&mut conn).await {
+            error!("[RPC] wallet.exec_sql: Failed to execute sql query: {}", e);
+            return JsonError::new(InternalError, None, id).into()
+        };
 
         JsonResponse::new(json!(true), id).into()
     }
