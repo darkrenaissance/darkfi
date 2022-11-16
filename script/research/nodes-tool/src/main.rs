@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
 use std::{fs::File, io::Write};
 
 use darkfi::{
@@ -27,13 +26,11 @@ use darkfi::{
     },
     consensus::{
         block::{Block, BlockProposal, Header, ProposalChain},
+        constants::TESTNET_GENESIS_HASH_BYTES,
         metadata::Metadata,
-        participant::Participant,
-        state::{ConsensusState, ValidatorState},
-        TESTNET_GENESIS_HASH_BYTES,
+        state::{ConsensusState, ValidatorState},        
     },
-    node::Client,
-    tx::Transaction,
+    tx2::Transaction,
     util::{path::expand_path, time::Timestamp},
     wallet::walletdb::init_wallet,
     Result,
@@ -43,31 +40,14 @@ use darkfi_serial::serialize;
 
 // TODO: Add missing fields
 #[derive(Debug)]
-struct ParticipantInfo {
-    _address: String,
-}
-
-impl ParticipantInfo {
-    pub fn new(participant: &Participant) -> ParticipantInfo {
-        let _address = participant.address.to_string();
-        ParticipantInfo { _address }
-    }
-}
-
-#[derive(Debug)]
 struct MetadataInfo {
-    _address: String,
-    _participants: Vec<ParticipantInfo>,
+    _public_key: String,
 }
 
 impl MetadataInfo {
     pub fn new(metadata: &Metadata) -> MetadataInfo {
-        let _address = metadata.address.to_string();
-        let mut _participants = Vec::new();
-        for participant in &metadata.participants {
-            _participants.push(ParticipantInfo::new(&participant));
-        }
-        MetadataInfo { _address, _participants }
+        let _public_key = metadata.public_key.to_string();
+        MetadataInfo { _public_key }
     }
 }
 
@@ -294,17 +274,15 @@ impl BlockchainInfo {
 
 #[derive(Debug)]
 struct StateInfo {
-    _address: String,
     _consensus: ConsensusInfo,
     _blockchain: BlockchainInfo,
 }
 
 impl StateInfo {
     pub fn new(state: &ValidatorState) -> StateInfo {
-        let _address = state.address.to_string();
         let _consensus = ConsensusInfo::new(&state.consensus);
         let _blockchain = BlockchainInfo::new(&state.blockchain);
-        StateInfo { _address, _consensus, _blockchain }
+        StateInfo { _consensus, _blockchain }
     }
 }
 
@@ -315,18 +293,16 @@ async fn generate(name: &str, folder: &str) -> Result<()> {
     // Initialize or load wallet
     let path = folder.to_owned() + "/wallet.db";
     let wallet = init_wallet(&path, &pass).await?;
-    let client = Arc::new(Client::new(wallet.clone()).await?);
-    let address = wallet.get_default_address().await?;
 
     // Initialize or load sled database
     let path = folder.to_owned() + "/blockchain/testnet";
     let db_path = expand_path(&path).unwrap();
     let sled_db = sled::open(&db_path)?;
 
-    // Data export
-    println!("Exporting data for {:?} - {:?}", name, address.to_string());
+    // Data export    
     let state =
-        ValidatorState::new(&sled_db, genesis_ts, genesis_data, client, vec![], vec![]).await?;
+        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet, vec![], vec![]).await?;
+    println!("Exporting data for {:?}", name);
     let info = StateInfo::new(&*state.read().await);
     let info_string = format!("{:#?}", info);
     let path = name.to_owned() + "_testnet_db";

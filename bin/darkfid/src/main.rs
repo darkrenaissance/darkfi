@@ -32,9 +32,7 @@ use darkfi::{
             MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
             TESTNET_GENESIS_TIMESTAMP,
         },
-        proto::{
-            ProtocolParticipant, ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx,
-        },
+        proto::{ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx},
         state::ValidatorStatePtr,
         task::{block_sync_task, proposal_task},
         ValidatorState,
@@ -398,14 +396,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
             };
             let p2p = net::P2p::new(consensus_network_settings).await;
             let registry = p2p.protocol_registry();
-
-            let _state = state.clone();
-            registry
-                .register(net::SESSION_ALL, move |channel, p2p| {
-                    let state = _state.clone();
-                    async move { ProtocolParticipant::init(channel, state, p2p).await.unwrap() }
-                })
-                .await;
 
             let _state = state.clone();
             registry

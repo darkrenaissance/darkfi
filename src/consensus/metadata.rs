@@ -24,7 +24,7 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::error;
 use rand::rngs::OsRng;
 
-use super::{leadcoin::LeadCoin, Participant};
+use super::leadcoin::LeadCoin;
 use crate::{
     crypto::{
         proof::{Proof, ProvingKey, VerifyingKey},
@@ -39,21 +39,15 @@ pub struct Metadata {
     /// Block owner signature
     pub signature: Signature,
     /// Block owner public_key
-    pub public_key: PublicKey,
+    pub public_key: PublicKey, // TODO: remove this(to be derived by proof)
     /// Block owner slot competing coins public inputs
     pub public_inputs: Vec<pallas::Base>,
-    /// Block owner newlly minted coin public inputs
-    pub new_public_inputs: Vec<pallas::Base>,
     /// Block owner winning coin index
     pub winning_index: usize,
-    /// Block owner winning coin serial number
-    pub serial_number: pallas::Base,
     /// Response of global random oracle, or it's emulation.
     pub eta: [u8; 32],
     /// Leader NIZK proof
     pub proof: LeadProof,
-    /// Nodes participating in the consensus process
-    pub participants: Vec<Participant>,
 }
 
 // FIXME: Why do we even need default() ?
@@ -62,23 +56,10 @@ impl Default for Metadata {
         let keypair = Keypair::random(&mut OsRng);
         let signature = Signature::dummy();
         let public_inputs = vec![];
-        let new_public_inputs = vec![];
         let winning_index = 0;
-        let serial_number = pallas::Base::from(0);
         let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
         let proof = LeadProof::default();
-        let participants = vec![];
-        Self {
-            signature,
-            public_key: keypair.public,
-            public_inputs,
-            new_public_inputs,
-            winning_index,
-            serial_number,
-            eta,
-            proof,
-            participants,
-        }
+        Self { signature, public_key: keypair.public, public_inputs, winning_index, eta, proof }
     }
 }
 
@@ -87,24 +68,11 @@ impl Metadata {
         signature: Signature,
         public_key: PublicKey,
         public_inputs: Vec<pallas::Base>,
-        new_public_inputs: Vec<pallas::Base>,
         winning_index: usize,
-        serial_number: pallas::Base,
         eta: [u8; 32],
         proof: LeadProof,
-        participants: Vec<Participant>,
     ) -> Self {
-        Self {
-            signature,
-            public_key,
-            public_inputs,
-            new_public_inputs,
-            winning_index,
-            serial_number,
-            eta,
-            proof,
-            participants,
-        }
+        Self { signature, public_key, public_inputs, winning_index, eta, proof }
     }
 }
 

@@ -16,12 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{hash_map::DefaultHasher, BTreeMap},
-    hash::{Hash, Hasher},
-    io::Cursor,
-    time::Duration,
-};
+use std::{io::Cursor, time::Duration};
 
 use async_std::sync::{Arc, RwLock};
 use chrono::{NaiveDateTime, Utc};
@@ -31,7 +26,7 @@ use darkfi_sdk::crypto::{
     poseidon_hash,
     schnorr::{SchnorrPublic, SchnorrSecret},
     util::mod_r_p,
-    ContractId, MerkleNode, PublicKey, SecretKey,
+    ContractId, MerkleNode, PublicKey,
 };
 use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, WriteExt};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
@@ -47,8 +42,7 @@ use super::{
     constants::{DELTA, EPOCH_LENGTH, LEADER_PROOF_K, LOTTERY_HEAD_START, P, RADIX_BITS, REWARD},
     leadcoin::{LeadCoin, LeadCoinSecrets},
     utils::fbig2base,
-    Block, BlockInfo, BlockProposal, Float10, Header, LeadProof, Metadata, Participant,
-    ProposalChain,
+    Block, BlockInfo, BlockProposal, Float10, Header, LeadProof, Metadata, ProposalChain,
 };
 
 use crate::{
@@ -72,10 +66,6 @@ pub struct ConsensusState {
     pub genesis_block: blake3::Hash,
     /// Fork chains containing block proposals
     pub proposals: Vec<ProposalChain>,
-    /// Validators currently participating in the consensus
-    pub participants: BTreeMap<[u8; 32], Participant>,
-    /// Last slot participants where refreshed
-    pub refreshed: u64,
     /// Current epoch
     pub epoch: u64,
     /// Current epoch eta
@@ -93,8 +83,6 @@ impl ConsensusState {
             genesis_ts,
             genesis_block,
             proposals: vec![],
-            participants: BTreeMap::new(),
-            refreshed: 0,
             epoch: 0,
             epoch_eta: pallas::Base::one(),
             coins: vec![],
@@ -104,10 +92,7 @@ impl ConsensusState {
 
 /// Auxiliary structure used for consensus syncing.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
-pub struct ConsensusRequest {
-    /// Validator wallet address
-    pub public_key: PublicKey,
-}
+pub struct ConsensusRequest {}
 
 impl net::Message for ConsensusRequest {
     fn name() -> &'static str {
@@ -120,7 +105,6 @@ impl net::Message for ConsensusRequest {
 pub struct ConsensusResponse {
     /// Hot/live data used by the consensus algorithm
     pub proposals: Vec<ProposalChain>,
-    pub participants: BTreeMap<[u8; 32], Participant>,
 }
 
 impl net::Message for ConsensusResponse {
@@ -134,10 +118,6 @@ pub type ValidatorStatePtr = Arc<RwLock<ValidatorState>>;
 
 /// This struct represents the state of a validator node.
 pub struct ValidatorState {
-    /// Node wallet public key
-    pub public_key: PublicKey,
-    /// Secret key used to sign messages
-    pub secret_key: SecretKey,
     /// Leader proof proving key
     pub lead_proving_key: ProvingKey,
     /// Leader proof verifying key
@@ -172,9 +152,6 @@ impl ValidatorState {
         //let consensus_keys_init_query = include_str!("../../script/sql/consensus_keys.sql");
         //wallet.exec_sql(consensus_tree_init_query).await?;
         //wallet.exec_sql(consensus_keys_init_query).await?;
-
-        let secret_key = SecretKey::random(&mut OsRng);
-        let public_key = PublicKey::from_secret(secret_key);
 
         info!("Generating leader proof keys with k: {}", LEADER_PROOF_K);
         let lead_proving_key = ProvingKey::build(LEADER_PROOF_K, &LeadContract::default());
@@ -213,8 +190,6 @@ impl ValidatorState {
         // -----END ARTIFACT-----
 
         let state = Arc::new(RwLock::new(ValidatorState {
-            public_key,
-            secret_key,
             lead_proving_key,
             lead_verifying_key,
             consensus,
@@ -329,24 +304,6 @@ impl ValidatorState {
     pub fn set_participating(&mut self) -> Result<()> {
         self.participating = Some(self.current_slot() + 1);
         Ok(())
-    }
-
-    /// Find slot leader, using a simple hash method.
-    /// Leader calculation is based on how many nodes are participating
-    /// in the network.
-    /// Note: leaving this for future usage
-    /// TODO: if not used, participants BTreeMap can become a HashSet
-    pub fn slot_leader(&mut self) -> Participant {
-        let slot = self.current_slot();
-        // DefaultHasher is used to hash the slot number
-        // because it produces a number string which then can be modulated by the len.
-        // blake3 produces alphanumeric
-        let mut hasher = DefaultHasher::new();
-        slot.hash(&mut hasher);
-        let pos = hasher.finish() % (self.consensus.participants.len() as u64);
-        // Since BTreeMap orders by key in asceding order, each node will have
-        // the same key in calculated position.
-        self.consensus.participants.iter().nth(pos as usize).unwrap().1.clone()
     }
 
     /// Check if new epoch has started, to create new epoch coins.
@@ -530,10 +487,7 @@ impl ValidatorState {
         }
         */
         let root = tree.root(0).unwrap();
-        let header =
-            Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
-        let signed_proposal = self.secret_key.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
         let eta = self.consensus.epoch_eta.to_repr();
         // Generating leader proof
         let relative_slot = self.relative_slot(slot) as usize;
@@ -541,17 +495,21 @@ impl ValidatorState {
         // TODO: Generate new LeadCoin from newlly minted coin, will reuse original coin for now
         //let coin2 = something();
         let proof = coin.create_lead_proof(&self.lead_proving_key)?;
-        let participants = self.consensus.participants.values().cloned().collect();
+
+        // Signing using coin
+        let secret_key = coin.secret_key;
+        let header =
+            Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
+        let signed_proposal = secret_key.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
+        let public_key = PublicKey::from_secret(secret_key);
+
         let metadata = Metadata::new(
             signed_proposal,
-            self.public_key,
-            coin.public_inputs(),
+            public_key,
             coin.public_inputs(),
             idx,
-            coin.sn,
             eta,
             LeadProof::from(proof),
-            participants,
         );
         // TODO: replace old coin with new coin
         self.consensus.coins[relative_slot][idx] = coin;
@@ -629,15 +587,17 @@ impl ValidatorState {
             None => return Ok(None),
         }
 
+        // TODO: proposal should contain encrypted block info
+        // we decrypt and check blockhash/headerhash is not tampered with
         let md = &proposal.block.metadata;
         let hdr = &proposal.block.header;
 
-        // Check if leader is a known consensus participant
-        let Some(leader) = self.consensus.participants.get(&md.public_key.to_bytes()) else {
-            warn!("receive_proposal(): Received proposal from unknown node: ({})", md.public_key);
-            return Err(Error::UnknownNodeError)
-        };
-        let mut leader = leader.clone();
+        // Verify proposal signature is valid based on producer public key
+        // TODO: derive public key from proof
+        if !md.public_key.verify(proposal.header.as_bytes(), &md.signature) {
+            warn!("receive_proposal(): Proposer {} signature could not be verified", md.public_key);
+            return Err(Error::InvalidSignature)
+        }
 
         // Check if proposal header matches actual one
         let proposal_header = hdr.headerhash();
@@ -649,27 +609,14 @@ impl ValidatorState {
             return Err(Error::ProposalHeadersMissmatchError)
         }
 
-        // Verify proposal winning coin public inputs match known ones
-        let public_inputs = &leader.coins[self.relative_slot(current) as usize][md.winning_index];
-        if public_inputs != &md.public_inputs {
-            warn!("receive_proposal(): Received proposal public inputs are invalid.");
-            return Err(Error::InvalidPublicInputsError)
-        }
-
-        // TODO: Verify winning coin serial number
-
         // Verify proposal leader proof
-        if let Err(e) = md.proof.verify(&self.lead_verifying_key, public_inputs) {
+        if let Err(e) = md.proof.verify(&self.lead_verifying_key, &md.public_inputs) {
             error!("receive_proposal(): Error during leader proof verification: {}", e);
             return Err(Error::LeaderProofVerification)
         };
         info!("receive_proposal(): Leader proof verified successfully!");
 
-        // Verify proposal signature is valid based on leader known valid key
-        if !leader.public_key.verify(proposal.header.as_bytes(), &md.signature) {
-            warn!("receive_proposal(): Proposer {} signature could not be verified", md.public_key);
-            return Err(Error::InvalidSignature)
-        }
+        // TODO: Verify proposal public inputs
 
         // Check if proposal extends any existing fork chains
         let index = self.find_extended_chain_index(proposal)?;
@@ -686,12 +633,6 @@ impl ValidatorState {
         };
 
         // TODO: [PLACEHOLDER] Add rewards validation
-        // TODO: Append serial to merkle tree
-
-        // Replacing participants public inputs with the newlly minted ones
-        leader.coins[self.relative_slot(current) as usize][md.winning_index] =
-            md.new_public_inputs.clone();
-        self.append_participant(&leader);
 
         // Check if proposal fork has can be finalized, to broadcast those blocks
         let mut to_broadcast = vec![];
@@ -853,18 +794,6 @@ impl ValidatorState {
         }
 
         Ok(finalized)
-    }
-
-    /// Append a new participant to the participants list.
-    pub fn append_participant(&mut self, participant: &Participant) -> bool {
-        if let Some(p) = self.consensus.participants.get(&participant.public_key.to_bytes()) {
-            if p == participant {
-                return false
-            }
-        }
-        // TODO: [PLACEHOLDER] don't blintly trust the public inputs/validate them
-        self.consensus.participants.insert(participant.public_key.to_bytes(), participant.clone());
-        true
     }
 
     /// Utility function to extract leader selection lottery randomness(eta),

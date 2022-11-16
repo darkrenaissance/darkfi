@@ -27,10 +27,6 @@ pub mod constants;
 pub mod metadata;
 pub use metadata::{LeadProof, Metadata};
 
-/// Consensus participant
-pub mod participant;
-pub use participant::Participant;
-
 /// Consensus state
 pub mod state;
 pub use state::{ValidatorState, ValidatorStatePtr};

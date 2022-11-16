@@ -21,11 +21,7 @@ use std::time::Duration;
 use log::{debug, error, info};
 
 use super::consensus_sync_task;
-use crate::{
-    consensus::{Participant, ValidatorStatePtr},
-    net::P2pPtr,
-    util::async_util::sleep,
-};
+use crate::{consensus::ValidatorStatePtr, net::P2pPtr, util::async_util::sleep};
 
 /// async task used for participating in the consensus protocol
 pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: ValidatorStatePtr) {
@@ -73,7 +69,6 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
             Ok(changed) => {
                 if changed {
                     info!("consensus: New epoch started: {}", state.read().await.current_epoch());
-                    let public_key = state.read().await.public_key;
                     let mut coins = vec![];
                     for slot_coins in &state.read().await.consensus.coins {
                         let mut slot_coins_inputs = vec![];
@@ -82,20 +77,6 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
                         }
                         coins.push(slot_coins_inputs);
                     }
-                    let participant = Participant::new(public_key, coins);
-                    state.write().await.append_participant(&participant);
-
-                    match consensus_p2p.broadcast(participant).await {
-                        Ok(()) => {
-                            info!("consensus: Participation message broadcasted successfully.")
-                        }
-                        Err(e) => {
-                            error!("consensus: Failed broadcasting consensus participation: {}", e)
-                        }
-                    }
-                    // Node sleeps 2 seconds so all nodes can have the new epoch participants
-                    //TODO: optimize this
-                    sleep(2).await;
                 }
             }
             Err(e) => {

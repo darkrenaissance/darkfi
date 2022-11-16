@@ -16,10 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Participant announce protocol
-mod protocol_participant;
-pub use protocol_participant::ProtocolParticipant;
-
 /// Block proposal protocol
 mod protocol_proposal;
 pub use protocol_proposal::ProtocolProposal;

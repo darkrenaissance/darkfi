@@ -141,8 +141,10 @@ fn simple_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
 }
 
 fn fullrange_lessthan(k: u32) -> Result<(), halo2_proofs::plonk::Error> {
-    let y_str: &'static str = "2485393101277319054866673974886504690592360759087472860138246047042221199789";
-    let t_str: &'static str = "20228360686725123198855333388287068776098384779255635716769234906173337213460";
+    let y_str: &'static str =
+        "2485393101277319054866673974886504690592360759087472860138246047042221199789";
+    let t_str: &'static str =
+        "20228360686725123198855333388287068776098384779255635716769234906173337213460";
     let y: pallas::Base =
         fbig2base(Float10::from_str_native(y_str).unwrap().with_precision(*RADIX_BITS).value());
     let t: pallas::Base =
