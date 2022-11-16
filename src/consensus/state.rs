@@ -76,6 +76,8 @@ pub struct ConsensusState {
     pub refreshed: u64,
     /// Current epoch
     pub epoch: u64,
+    /// Current epoch eta
+    pub epoch_eta: pallas::Base,
     /// Current epoch competing coins
     pub coins: Vec<Vec<LeadCoin>>,
 }
@@ -92,6 +94,7 @@ impl ConsensusState {
             participants: BTreeMap::new(),
             refreshed: 0,
             epoch: 0,
+            epoch_eta: pallas::Base::one(),
             coins: vec![],
         })
     }
@@ -372,6 +375,7 @@ impl ValidatorState {
         // At start of epoch, relative slot is 0.
         self.consensus.coins = coins::create_epoch_coins(eta, &owned, epoch, 0);
         self.consensus.epoch = epoch;
+        self.consensus.epoch_eta = eta;
         Ok(true)
     }
 
@@ -400,7 +404,7 @@ impl ValidatorState {
             Header::new(prev_hash, self.slot_epoch(slot), slot, Timestamp::current_time(), root);
 
         let signed_proposal = self.secret.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
-        let eta = self.get_eta().to_repr();
+        let eta = self.consensus.epoch_eta.to_repr();
         // Generating leader proof
         let relative_slot = self.relative_slot(slot) as usize;
         let coin = self.consensus.coins[relative_slot][idx];
