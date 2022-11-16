@@ -79,6 +79,8 @@ pub struct Env {
     pub db_batches: RefCell<Vec<sled::Batch>>,
     /// The contract ID being executed
     pub contract_id: ContractId,
+    /// The compiled wasm bincode being executed,
+    pub contract_bincode: Vec<u8>,
     /// The contract section being executed
     pub contract_section: ContractSection,
     /// State update produced by a smart contract function call
@@ -159,6 +161,7 @@ impl Runtime {
                 db_handles,
                 db_batches,
                 contract_id,
+                contract_bincode: wasm_bytes.to_vec(),
                 contract_section: ContractSection::Null,
                 contract_return_data: Cell::new(None),
                 logs,
@@ -328,6 +331,9 @@ impl Runtime {
             db.apply_batch(batch)?;
             db.flush()?;
         }
+
+        // Update the wasm bincode in the WasmStore
+        env_mut.blockchain.wasm_bincode.insert(env_mut.contract_id, &env_mut.contract_bincode)?;
 
         Ok(())
     }
