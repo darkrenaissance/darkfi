@@ -2,16 +2,8 @@
 
 ## Overview
 
-DarkFi's current blockchain is based on Streamlet, a very simple consensus
-system based on voting between the participating parties. The blockchain
-is currently in the devnet phase and has no concept of a consensus token.
-
-Darkfi is actively working to upgrade its consensus to Ouroboros
-Crypsinous, a privacy focused proof-of-stake algorithm. To accommodate
-this transition it has designed its data structures to be easy to upgrade.
-
-Below is a specification of how DarkFi's current blockchain achieves
-consensus.
+Darkfi is based off Ouroboros Crypsinous, a privacy focused proof-of-stake algorithm.
+Below is a specification of how DarkFi's current blockchain achieves consensus.
 
 ## Blockchain
 
@@ -260,10 +252,7 @@ R is the epoch length in terms of slots.
 # Appendix
 
 This section gives further details about the structures that will
-be used by the protocol. Since the Streamlet consensus protocol will
-be used at early stages of development, we created hybrid structures
-to enable seamless transition from Stremlet to Ouroboros Crypsinous,
-without the need of forking the blockchain.
+be used by the protocol.
 
 ## Blockchain
 
@@ -293,23 +282,12 @@ without the need of forking the blockchain.
 | `txs`      | `Vec<blake3Hash>` | Transaction hashes                 |
 | `metadata` | `Metadata`        | Additional block information       |
 
-
-## BlockInfo
-
-|   Field    |        Type         |            Description                           |
-|------------|---------------------|--------------------------------------------------|
-| `magic`    | `u8`                | Magic bytes                                      |
-| `header`   | `Header`            | Header data                                      |
-| `txs`      | `Vec<Transaction>`  | Transaction payload                              |
-| `metadata` | `Metadata`          | Additional block information                     |
-| `sm`       | `StreamletMetadata` | Proposal information used by Streamlet consensus |
-
-
 ## Metadata
 
-|    Field       |         Type        |                  Description                 |
-|----------------|---------------------|----------------------------------------------|
-| `proof`        | `VRFOutput`         | Proof the stakeholder is the block owner     |
-| `rand_seed`    | `Seed`              | Random seed for the VRF                      |
-| `signature`    | `Signature`         | Block owner signature                        |
-| `address`      | `Address`           | Block owner address                          |
+| Field           | Type                | Description                                         |
+|-----------------|---------------------|-----------------------------------------------------|
+| `signature`     | `Signature`         | Block owner signature                               |
+| `public_inputs` | `Vec<pallas::Base>` | Nizk proof public inputs                            |
+| `serial_number` | `pallas::Base`      | competing coin's nullifier                          |
+| `eta`           | `[u8; 32]`          | randomness from the previous epoch                  |
+| `proof`         | `Vec<u8>`           | Nizk $\pi$ Proof the stakeholder is the block owner |
