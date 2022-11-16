@@ -1,4 +1,0 @@
-CREATE TABLE IF NOT EXISTS tree(
-	tree BLOB NOT NULL
-);
-
