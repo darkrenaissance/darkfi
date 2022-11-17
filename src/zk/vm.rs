@@ -744,6 +744,35 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         .small_range_check(layouter.namespace(|| "copy boolean check"), w)?;
                 }
 
+                Opcode::ConstrainEqualBase => {
+                    debug!("Executing `ConstrainEqualBase{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let lhs: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = stack[args[1].1].clone().into();
+
+                    layouter.assign_region(
+                        || "constrain witnessed base equality",
+                        |mut region| region.constrain_equal(lhs.cell(), rhs.cell()),
+                    )?;
+                }
+
+                Opcode::ConstrainEqualPoint => {
+                    debug!("Executing `ConstrainEqualPoint{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        stack[args[0].1].clone().into();
+
+                    let rhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        stack[args[1].1].clone().into();
+
+                    lhs.constrain_equal(
+                        layouter.namespace(|| "constrain ec point equality"),
+                        &rhs,
+                    )?;
+                }
+
                 Opcode::ConstrainInstance => {
                     debug!("Executing `ConstrainInstance{:?}` opcode", opcode.1);
                     let args = &opcode.1;

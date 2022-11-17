@@ -70,6 +70,12 @@ pub enum Opcode {
     /// Check if a field element fits in a boolean (Either 0 or 1)
     BoolCheck = 0x52,
 
+    /// Constrain equality of two Base field elements inside the circuit
+    ConstrainEqualBase = 0xe0,
+
+    /// Constrain equality of two EcPoint elements inside the circuit
+    ConstrainEqualPoint = 0xe1,
+
     /// Constrain a Base field element to a circuit's public input
     ConstrainInstance = 0xf0,
 
@@ -95,6 +101,8 @@ impl Opcode {
             "range_check" => Some(Self::RangeCheck),
             "less_than" => Some(Self::LessThan),
             "bool_check" => Some(Self::BoolCheck),
+            "constrain_equal_base" => Some(Self::ConstrainEqualBase),
+            "constrain_equal_point" => Some(Self::ConstrainEqualPoint),
             "constrain_instance" => Some(Self::ConstrainInstance),
             "debug" => Some(Self::DebugPrint),
             _ => None,
@@ -118,6 +126,8 @@ impl Opcode {
             0x50 => Some(Self::RangeCheck),
             0x51 => Some(Self::LessThan),
             0x52 => Some(Self::BoolCheck),
+            0xe0 => Some(Self::ConstrainEqualBase),
+            0xe1 => Some(Self::ConstrainEqualPoint),
             0xf0 => Some(Self::ConstrainInstance),
             0xff => Some(Self::DebugPrint),
             _ => None,
@@ -165,6 +175,10 @@ impl Opcode {
             Opcode::LessThan => (vec![], vec![VarType::Base, VarType::Base]),
 
             Opcode::BoolCheck => (vec![], vec![VarType::Base]),
+
+            Opcode::ConstrainEqualBase => (vec![], vec![VarType::Base, VarType::Base]),
+
+            Opcode::ConstrainEqualPoint => (vec![], vec![VarType::EcPoint, VarType::EcPoint]),
 
             Opcode::ConstrainInstance => (vec![], vec![VarType::Base]),
 

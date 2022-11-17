@@ -42,9 +42,11 @@ local instruction = token('instruction', word_match{
   'ec_add', 'ec_mul', 'ec_mul_base', 'ec_mul_short',
   'ec_get_x', 'ec_get_y',
   'base_add', 'base_mul', 'base_sub', 'greater_than',
-  'poseidon_hash', 'merkle_root', 'constrain_instance',
+  'poseidon_hash', 'merkle_root',
   'range_check', 'less_than', 'bool_check',
   'witness_base',
+  'constrain_equal_base', 'constrain_equal_point',
+  'constrain_instance',
 })
 
 -- Identifiers.

@@ -28,12 +28,20 @@ circuit "Opcodes" {
 	constrain_instance(ec_get_x(value_commit));
 	constrain_instance(ec_get_y(value_commit));
 
+	vcv2 = ec_mul_short(value, VALUE_COMMIT_VALUE);
+	vcr2 = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+	value_commit_2 = ec_add(vcv2, vcr2);
+	constrain_equal_point(value_commit, value_commit2);
+
 	one = witness_base(1);
 	c = poseidon_hash(one, blind);
 	constrain_instance(c);
 
 	d = poseidon_hash(one, blind, ec_get_x(value_commit), ec_get_y(value_commit));
 	constrain_instance(d);
+
+	d2 = poseidon_hash(one, blind, ec_get_x(value_commit2), ec_get_y(value_commit2));
+	constrain_equal_base(d, d2);
 
 	range_check(64, a);
 	range_check(253, b);
