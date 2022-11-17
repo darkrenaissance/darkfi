@@ -47,7 +47,7 @@ Base c4_value,
 EcPoint c4_cm,
 }
 
-circuit "tx {
+circuit "tx" {
 # coin (1) pk/public key
 c1_pk = poseidon_hash(PREFIX_PK, c1_root_sk);
 constrain_instance(c1_pk);
