@@ -23,8 +23,8 @@ Base sigma2
 }
 
 circuit "Lead" {
-ONE = witness_base(2);
 ZERO = witness_base(0);
+ONE = witness_base(1);
 PREFIX_EVL = witness_base(2);
 PREFIX_SEED = witness_base(3);
 PREFIX_CM = witness_base(4);
