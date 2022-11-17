@@ -239,27 +239,30 @@ impl LeadCoin {
 
         let pubkey = PublicKey::from_secret(self.secret_key);
         let (pub_x, pub_y) = pubkey.xy();
-        let c2_cm = self.coin2_commitment.coordinates().unwrap();
+        let c2_cm = self.coin2_commitment.to_affine().coordinates().unwrap();
+
         // rho
         // Initialize circuit with witnesses
         let lottery_msg_input = [self.coin1_sk_root.inner(), self.nonce];
         let lottery_msg = poseidon_hash(lottery_msg_input);
         let rho = pedersen_commitment_base(lottery_msg, mod_r_p(self.rho_mu));
-        let rho_coord = rho.coordinates().unwrap();
+        let rho_coord = rho.to_affine().coordinates().unwrap();
         vec![
             self.coin1_commitment_root.inner(),
             self.sn,
-            *c2_cm.x(), *c2_cm.y(),
-            *rho_coord.x(), *rho_coord.y(),
+            *c2_cm.x(),
+            *c2_cm.y(),
+            *rho_coord.x(),
+            *rho_coord.y(),
             self.nonce_cm,
-             pub_x, pub_y,
-             y
+            pub_x,
+            pub_y,
+            y,
         ]
     }
 
     /// Try to create a ZK proof of consensus leadership
     pub fn create_lead_proof(&self, pk: &ProvingKey) -> Result<Proof> {
-
         let circuit = LeadContract {
             coin1_commit_merkle_path: Value::known(self.coin1_commitment_merkle_path),
             coin1_commit_leaf_pos: Value::known(self.idx),
@@ -271,7 +274,7 @@ impl LeadCoin {
             coin1_blind: Value::known(self.coin1_blind),
             coin1_value: Value::known(pallas::Base::from(self.value)),
             coin2_blind: Value::known(self.coin2_blind),
-            coin2_commit: Value::known(self.coin2_commitment),
+            //coin2_commit: Value::known(self.coin2_commitment),
             rho_mu: Value::known(mod_r_p(self.rho_mu)),
             y_mu: Value::known(mod_r_p(self.y_mu)),
             sigma1: Value::known(self.sigma1),
