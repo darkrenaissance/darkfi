@@ -32,13 +32,13 @@ Base c3_pk,
 Base c3_rho,
 Scalar c3_opening,
 Base c3_value,
-EcPoint c3_cm,
+EcPoint c3_cm_ref,
 
 Base c4_pk,
 Base c4_rho,
 Scalar c4_opening,
 Base c4_value,
-EcPoint c4_cm,
+EcPoint c4_cm_ref,
 }
 
 circuit "tx" {
@@ -79,19 +79,13 @@ c3_cm_msg = poseidon_hash(PREFIX_CM, c3_pk, c3_value, c3_rho);
 c3_cm_v = ec_mul_short(c3_cm_msg, VALUE_COMMIT_VALUE);
 c3_cm_r = ec_mul(c3_opening, VALUE_COMMIT_RANDOM);
 c3_cm = ec_add(c3_cm_v, c3_cm_r);
-c3_cm_x = ec_get_x(c3_cm);
-constrain_instance(c3_cm_x);
-c3_cm_y = ec_get_y(c3_cm);
-constrain_instance(c3_cm_y);
+constrain_equal_point(c3_cm, c3_cm_ref);
 # coin (4) cm/commitment
 c4_cm_msg = poseidon_hash(PREFIX_CM, c4_pk, c4_value, c4_rho);
 c4_cm_v = ec_mul_short(c4_cm_msg, VALUE_COMMIT_VALUE);
 c4_cm_r = ec_mul(c4_opening, VALUE_COMMIT_RANDOM);
 c4_cm = ec_add(c4_cm_v, c4_cm_r);
-c4_cm_x = ec_get_x(c4_cm);
-constrain_instance(c4_cm_x);
-c4_cm_y = ec_get_y(c4_cm);
-constrain_instance(c4_cm_y);
+constrain_equal_point(c4_cm, c4_cm_ref);
 v1v2 = base_add(c1_value, c2_value);
 v2v3 = base_add(v3_value, v4_value);
 constrain_equal_base(v1v2, v2v3);
