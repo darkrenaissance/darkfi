@@ -48,8 +48,8 @@ async fn accept(
     rh: Arc<impl RequestHandler + 'static>,
 ) -> Result<()> {
     loop {
-        // Nasty size
-        let mut buf = vec![0; 8192 * 10];
+        // FIXME: Nasty size. 8M
+        let mut buf = vec![0; 1024 * 8192];
 
         let n = match stream.read(&mut buf).await {
             Ok(n) if n == 0 => {

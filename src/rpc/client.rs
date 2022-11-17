@@ -199,8 +199,8 @@ impl RpcClient {
         let read_timeout = Duration::from_secs(30);
 
         loop {
-            // Nasty size
-            let mut buf = vec![0; 2048 * 10];
+            // FIXME: Nasty size. 8M
+            let mut buf = vec![0; 1024 * 8192];
 
             select! {
                 data = data_recv.recv().fuse() => {
