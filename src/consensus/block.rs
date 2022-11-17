@@ -28,7 +28,7 @@ use super::{
     constants::{BLOCK_MAGIC_BYTES, BLOCK_VERSION},
     Metadata,
 };
-use crate::{net, tx2::Transaction, util::time::Timestamp};
+use crate::{net, tx::Transaction, util::time::Timestamp};
 
 /// This struct represents a tuple of the form (version, previous, epoch, slot, timestamp, merkle_root).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]

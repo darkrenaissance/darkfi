@@ -1338,9 +1338,14 @@ dependencies = [
 name = "darkfi-money-contract"
 version = "0.3.0"
 dependencies = [
+ "chacha20poly1305",
+ "darkfi",
  "darkfi-sdk",
  "darkfi-serial",
  "getrandom 0.2.8",
+ "halo2_proofs",
+ "log",
+ "rand",
 ]
 
 [[package]]
@@ -1941,6 +1946,7 @@ dependencies = [
  "easy-parallel",
  "hex",
  "lazy-init",
+ "libsqlite3-sys",
  "log",
  "rand",
  "serde",
@@ -1948,6 +1954,7 @@ dependencies = [
  "simplelog",
  "sled",
  "smol",
+ "sqlx",
  "structopt",
  "structopt-toml",
  "url",

@@ -50,7 +50,7 @@ use crate::{
     crypto::proof::{ProvingKey, VerifyingKey},
     net,
     runtime::vm_runtime::Runtime,
-    tx2::Transaction,
+    tx::Transaction,
     util::time::Timestamp,
     wallet::WalletPtr,
     zk::circuit::LeadContract,

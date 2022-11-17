@@ -49,7 +49,7 @@ pub mod rpc;
 pub mod system;
 
 #[cfg(feature = "tx")]
-pub mod tx2;
+pub mod tx;
 
 #[cfg(feature = "util")]
 pub mod util;

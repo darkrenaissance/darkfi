@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{tx2::Transaction, Result};
+use darkfi::{tx::Transaction, Result};
 
 use super::Darkfid;
 
