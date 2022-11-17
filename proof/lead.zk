@@ -22,13 +22,13 @@ Base c1_rho,
 Scalar c1_opening,
 Base value,
 Scalar c2_opening,
-Scalar rho_mu,
-Scalar y_mu,
+Scalar rho_opening,
+Scalar y_opening,
 Base sigam1,
 Base sigma2
 }
 
-Circuit "Lead" {
+circuit "Lead" {
 # coin (1) pk
 pk = poseidon_hash(PREFIX_PK, c1_sk_root, c1_tau, ZERO);
 constrain_instance(pk);
@@ -66,7 +66,7 @@ constrain_instance(sn);
 seed = poseidon_hash(PREFIX_SEED, c1_sk_root, c1_rho, ZERO);
 # y
 y_v = ec_mul_short(seed, VALUE_COMMIT_VALUE);
-y_r = ec_mul(y_mu, VALUE_COMMIT_RANDOM);
+y_r = ec_mul(y_opening, VALUE_COMMIT_RANDOM);
 y = ec_add(y_v, y_r);
 y_x = ec_get_x(y);
 y_y = ec_get_y(y);
@@ -74,7 +74,7 @@ constrain_instance(y_x);
 constrain_instance(y_y);
 # rho
 rho_v = ec_mul_short(seed, VALUE_COMMIT_VALUE);
-rho_r = ec_mul(rho_mu, VALUE_COMMIT_RANDOM);
+rho_r = ec_mul(rho_opening, VALUE_COMMIT_RANDOM);
 rho = ec_add(rho_v, rho_r);
 rho_x = ec_get_x(rho);
 rho_y = ec_get_y(rho);
