@@ -303,30 +303,23 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         }
     };
 
-    // Parse cashier addresses
-    let mut cashier_pubkeys = vec![];
+    // Parse faucet addresses
+    let mut faucet_pubkeys = vec![];
+
     for i in args.cashier_pub {
         let pk = PublicKey::from_str(&i)?;
-        cashier_pubkeys.push(pk);
+        faucet_pubkeys.push(pk);
     }
 
-    // Parse fauced addresses
-    let mut faucet_pubkeys = vec![];
     for i in args.faucet_pub {
         let pk = PublicKey::from_str(&i)?;
         faucet_pubkeys.push(pk);
     }
 
     // Initialize validator state
-    let state = ValidatorState::new(
-        &sled_db,
-        genesis_ts,
-        genesis_data,
-        wallet.clone(),
-        cashier_pubkeys,
-        faucet_pubkeys,
-    )
-    .await?;
+    let state =
+        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet.clone(), faucet_pubkeys)
+            .await?;
 
     let sync_p2p = {
         info!("Registering block sync P2P protocols...");

@@ -140,7 +140,6 @@ impl ValidatorState {
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
         wallet: WalletPtr,
-        cashier_pubkeys: Vec<PublicKey>,
         faucet_pubkeys: Vec<PublicKey>,
     ) -> Result<ValidatorStatePtr> {
         info!("Initializing ValidatorState");
@@ -184,8 +183,10 @@ impl ValidatorState {
         //             and/or just hardcoded and forbidden in non-native contract deployment.
         let cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
         let mut runtime = Runtime::new(&money_contract_wasm_bincode[..], blockchain.clone(), cid)?;
-        // TODO: TESTNET: Faucet/Cashier keys as init payload
-        runtime.deploy(&[])?;
+        // The faucet pubkeys are pubkeys which are allowed to create clear inputs in the
+        // money contract.
+        let payload = serialize(&faucet_pubkeys);
+        runtime.deploy(&payload)?;
         info!("Deployed Money Contract with ID: {}", cid);
         // -----END ARTIFACT-----
 

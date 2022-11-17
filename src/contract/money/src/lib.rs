@@ -72,7 +72,11 @@ pub const ZKAS_MINT_NS: &str = "Mint";
 pub const ZKAS_BURN_NS: &str = "Burn";
 
 /// This function runs when the contract is (re)deployed and initialized.
-fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
+fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
+    // The payload for now contains a vector of `PublicKey` used to
+    // whitelist faucets that can create clear inputs.
+    let faucet_pubkeys: Vec<PublicKey> = deserialize(ix)?;
+
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization. Note that the tree should then be called "zkas".
     // The lookups can then be done by `contract_id+zkas+namespace`.
@@ -127,7 +131,6 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     };
 
     // Whitelisted faucets
-    let faucet_pubkeys: Vec<PublicKey> = vec![];
     db_set(info_db, &serialize(&FAUCET_PUBKEYS.to_string()), &serialize(&faucet_pubkeys))?;
 
     Ok(())
