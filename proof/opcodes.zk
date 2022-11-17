@@ -30,7 +30,7 @@ circuit "Opcodes" {
 
 	vcv2 = ec_mul_short(value, VALUE_COMMIT_VALUE);
 	vcr2 = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
-	value_commit_2 = ec_add(vcv2, vcr2);
+	value_commit2 = ec_add(vcv2, vcr2);
 	constrain_equal_point(value_commit, value_commit2);
 
 	one = witness_base(1);
