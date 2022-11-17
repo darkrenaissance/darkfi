@@ -2,12 +2,6 @@ constant "Lead" {
 EcFixedPointShort VALUE_COMMIT_VALUE,
 EcFixedPoint VALUE_COMMIT_RANDOM,
 EcFixedPointBase NULLIFIER_K,
-Base PREFIX_CM,
-Base PREFIX_PK,
-Base PREFIX_EVL,
-BASE PREFIX_SEED,
-Base ONE,
-Base ZERO,
 }
 
 contract "Lead" {
@@ -29,6 +23,13 @@ Base sigma2
 }
 
 circuit "Lead" {
+ONE = witness_base(2);
+ZERO = witness_base(0);
+PREFIX_EVL = witness_base(2);
+PREFIX_SEED = witness_base(3);
+PREFIX_CM = witness_base(4);
+PREFIX_PK = witness_base(5);
+
 # coin (1) pk
 pk = poseidon_hash(PREFIX_PK, c1_sk_root, c1_tau, ZERO);
 constrain_instance(pk);
