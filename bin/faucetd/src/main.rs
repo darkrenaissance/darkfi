@@ -18,27 +18,39 @@
 
 use std::{collections::HashMap, str::FromStr};
 
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::{Arc, Mutex, RwLock};
 use async_trait::async_trait;
 use chrono::Utc;
-use darkfi_sdk::crypto::{Address, PublicKey, TokenId};
-use darkfi_serial::serialize;
+use darkfi::{
+    crypto::proof::{ProvingKey, VerifyingKey},
+    zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
+    zkas::ZkBinary,
+};
+use darkfi_sdk::{
+    crypto::{constants::MERKLE_DEPTH, ContractId, MerkleNode, PublicKey, TokenId},
+    incrementalmerkletree::bridgetree::BridgeTree,
+    pasta::{group::ff::PrimeField, pallas},
+};
+use darkfi_serial::{deserialize, serialize};
 use log::{debug, error, info};
 use serde_json::{json, Value};
+use sqlx::Row;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
     consensus::{
+        constants::{
+            MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
+            TESTNET_GENESIS_TIMESTAMP,
+        },
         proto::{ProtocolSync, ProtocolTx},
         task::block_sync_task,
-        ValidatorState, ValidatorStatePtr, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
-        TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
+        ValidatorState, ValidatorStatePtr,
     },
     net,
     net::P2pPtr,
-    node::Client,
     rpc::{
         jsonrpc::{
             ErrorCode::{InternalError, InvalidParams, MethodNotFound},
@@ -47,12 +59,46 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     util::{async_util::sleep, parse::decode_base10, path::expand_path},
-    wallet::walletdb::init_wallet,
+    wallet::{walletdb::init_wallet, WalletPtr},
     Error, Result,
 };
 
 mod error;
 use error::{server_error, RpcError};
+
+// TODO: FIXME:
+// Find a way to have these constants be deterministic for the actual
+// contract. e.g. they could be prefixed with the contract_id in order
+// not to have collisions happen. This is because right now it's easy
+// to overwrite any table in the wallet if the developer doesn't take
+// care of it. The wallet's SQL schema comes from the money contract
+// and here we just hardcode it. There should be a nice way to parse
+// the schema and fill some map.
+const MONEY_INFO_TABLE: &str = "money_info";
+const MONEY_INFO_COL_LAST_SCANNED_SLOT: &str = "last_scanned_slot";
+
+const MONEY_TREE_TABLE: &str = "money_tree";
+const MONEY_TREE_COL_TREE: &str = "tree";
+
+const MONEY_KEYS_TABLE: &str = "money_keys";
+const MONEY_KEYS_COL_KEY_ID: &str = "key_id";
+const MONEY_KEYS_COL_IS_DEFAULT: &str = "is_default";
+const MONEY_KEYS_COL_PUBLIC: &str = "public";
+const MONEY_KEYS_COL_SECRET: &str = "secret";
+
+const MONEY_COINS_TABLE: &str = "money_coins";
+const MONEY_COINS_COL_COIN: &str = "coin";
+const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
+const MONEY_COINS_COL_SERIAL: &str = "serial";
+const MONEY_COINS_COL_VALUE: &str = "value";
+const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
+const MONEY_COINS_COL_COIN_BLIND: &str = "coin_blind";
+const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
+const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
+const MONEY_COINS_COL_SECRET: &str = "secret";
+const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
+const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
+const MONEY_COINS_COL_MEMO: &str = "memo";
 
 const CONFIG_FILE: &str = "faucetd_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../faucetd_config.toml");
@@ -141,11 +187,14 @@ struct Args {
 pub struct Faucetd {
     synced: Mutex<bool>, // AtomicBool is weird in Arc
     sync_p2p: P2pPtr,
-    client: Arc<Client>,
     validator_state: ValidatorStatePtr,
+    wallet: WalletPtr,
+    merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     airdrop_timeout: i64,
     airdrop_limit: u64,
-    airdrop_map: Arc<Mutex<HashMap<Address, i64>>>,
+    airdrop_map: Arc<Mutex<HashMap<[u8; 32], i64>>>,
+    proving_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, ProvingKey)>>>>,
+    verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
 }
 
 #[async_trait]
@@ -168,20 +217,117 @@ impl Faucetd {
     pub async fn new(
         validator_state: ValidatorStatePtr,
         sync_p2p: P2pPtr,
+        wallet: WalletPtr,
         timeout: i64,
         limit: u64,
     ) -> Result<Self> {
-        let client = validator_state.read().await.client.clone();
+        // Here we initialize the wallet for the money contract.
+        let merkle_tree = Self::initialize_wallet(wallet.clone()).await?;
 
-        Ok(Self {
+        // This is kinda bad, but whatever. The hashmaps hold proving and verifying
+        // keys for various zk circuits. They should be periodically pruned because
+        // of memory issues.
+        let proving_keys = Arc::new(RwLock::new(HashMap::new()));
+        let verifying_keys = Arc::new(RwLock::new(HashMap::new()));
+
+        // For now we'll create the keys for the money contract
+        // FIXME: This hardcoded shit (see consensus/state.rs)
+        let cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let zkas_tree = String::from("zkas");
+        let zkas_mint_ns = String::from("Mint");
+        let zkas_burn_ns = String::from("Burn");
+
+        // Do a lookup for the money contract's zkas database and fetch the circuits.
+        let blockchain = { validator_state.read().await.blockchain.clone() };
+        let db_handle = blockchain.contracts.lookup(&blockchain.sled_db, &cid, &zkas_tree)?;
+
+        // TODO: Handle possible panic of these Option unwraps
+        let mint_zkbin = db_handle.get(&serialize(&zkas_mint_ns))?.unwrap();
+        let burn_zkbin = db_handle.get(&serialize(&zkas_burn_ns))?.unwrap();
+
+        let mint_zkbin = ZkBinary::decode(&mint_zkbin)?;
+        let burn_zkbin = ZkBinary::decode(&burn_zkbin)?;
+
+        let k = 13;
+        let mint_witnesses = empty_witnesses(&mint_zkbin);
+        let burn_witnesses = empty_witnesses(&burn_zkbin);
+
+        let mint_circuit = ZkCircuit::new(mint_witnesses, mint_zkbin);
+        let burn_circuit = ZkCircuit::new(burn_witnesses, burn_zkbin);
+
+        info!("Creating mint circuit proving and verifying keys");
+        let mint_provingkey = ProvingKey::build(k, &mint_circuit);
+        let mint_verifyingkey = VerifyingKey::build(k, &mint_circuit);
+        info!("Creating burn circuit proving and verifying keys");
+        let burn_verifyingkey = VerifyingKey::build(k, &burn_circuit);
+        let burn_provingkey = ProvingKey::build(k, &burn_circuit);
+
+        {
+            let provingkeys = vec![
+                (zkas_mint_ns.clone(), mint_provingkey),
+                (zkas_burn_ns.clone(), burn_provingkey),
+            ];
+            let mut proving_keys_w = proving_keys.write().await;
+            proving_keys_w.insert(cid.inner().to_repr(), provingkeys);
+        }
+
+        {
+            let verifyingkeys = vec![
+                (zkas_mint_ns.clone(), mint_verifyingkey),
+                (zkas_burn_ns.clone(), burn_verifyingkey),
+            ];
+            let mut verifying_keys_w = verifying_keys.write().await;
+            verifying_keys_w.insert(cid.inner().to_repr(), verifyingkeys);
+        }
+
+        let faucetd = Self {
             synced: Mutex::new(false),
             sync_p2p,
-            client,
             validator_state,
+            wallet,
+            merkle_tree,
             airdrop_timeout: timeout,
             airdrop_limit: limit,
             airdrop_map: Arc::new(Mutex::new(HashMap::new())),
-        })
+            proving_keys,
+            verifying_keys,
+        };
+
+        Ok(faucetd)
+    }
+
+    async fn initialize_wallet(wallet: WalletPtr) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
+        // Perform wallet initialization for the money contract
+        let wallet_schema = include_str!("../../../src/contract/money/wallet.sql");
+
+        // Get a wallet connection
+        info!("Acquiring wallet connection");
+        let mut conn = wallet.conn.acquire().await?;
+
+        info!("Initializing wallet schema");
+        sqlx::query(wallet_schema).execute(&mut conn).await?;
+
+        let query = format!("SELECT * FROM {}", MONEY_TREE_COL_TREE);
+        let merkle_tree = match sqlx::query(&query).fetch_one(&mut conn).await {
+            Ok(t) => {
+                info!("Merkle tree already exists");
+                let tree = deserialize(t.get(MONEY_TREE_COL_TREE))?;
+                tree
+            }
+            Err(_) => {
+                let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+                let tree_bytes = serialize(&tree);
+                let query = format!(
+                    "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1)",
+                    MONEY_TREE_TABLE, MONEY_TREE_TABLE, MONEY_TREE_COL_TREE
+                );
+                sqlx::query(&query).bind(tree_bytes).execute(&mut conn).await?;
+                info!("Successfully initialized Merkle tree");
+                tree
+            }
+        };
+
+        Ok(merkle_tree)
     }
 
     // RPCAPI:
@@ -204,18 +350,10 @@ impl Faucetd {
             return JsonError::new(InternalError, None, id).into()
         }
 
-        let address = match Address::from_str(params[0].as_str().unwrap()) {
+        let pubkey = match PublicKey::from_str(params[0].as_str().unwrap()) {
             Ok(v) => v,
-            Err(_) => {
-                error!("airdrop(): Failed parsing address from string");
-                return server_error(RpcError::ParseError, id)
-            }
-        };
-
-        let pubkey = match PublicKey::try_from(address) {
-            Ok(v) => v,
-            Err(_) => {
-                error!("airdrop(): Failed parsing PublicKey from Address");
+            Err(e) => {
+                error!("airdrop(): Failed parsing PublicKey from String: {}", e);
                 return server_error(RpcError::ParseError, id)
             }
         };
@@ -246,13 +384,16 @@ impl Faucetd {
         // Check if there as a previous airdrop and the timeout has passed.
         let now = Utc::now().timestamp();
         let map = self.airdrop_map.lock().await;
-        if let Some(last_airdrop) = map.get(&address) {
+        if let Some(last_airdrop) = map.get(&pubkey.to_bytes()) {
             if now - last_airdrop <= self.airdrop_timeout {
                 return server_error(RpcError::TimeLimitReached, id)
             }
         };
         drop(map);
 
+        // Create airdrop transaction
+
+        /*
         let tx = match self
             .client
             .build_transaction(
@@ -279,18 +420,20 @@ impl Faucetd {
                 return JsonError::new(InternalError, None, id).into()
             }
         }
+        */
 
         // Add/Update this airdrop into the hashmap
         let mut map = self.airdrop_map.lock().await;
-        map.insert(address, now);
+        map.insert(pubkey.to_bytes(), now);
         drop(map);
 
-        let tx_hash = blake3::hash(&serialize(&tx)).to_hex().as_str().to_string();
+        //let tx_hash = blake3::hash(&serialize(&tx)).to_hex().as_str().to_string();
+        let tx_hash = "foo";
         JsonResponse::new(json!(tx_hash), id).into()
     }
 }
 
-async fn prune_airdrop_map(map: Arc<Mutex<HashMap<Address, i64>>>, timeout: i64) {
+async fn prune_airdrop_map(map: Arc<Mutex<HashMap<[u8; 32], i64>>>, timeout: i64) {
     loop {
         sleep(timeout as u64).await;
         debug!("Pruning airdrop map");
@@ -330,6 +473,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
 
     // Initialize or open sled database
+    // TODO: Use proper OsPath here, not {}/{}
     let db_path = format!("{}/{}", expand_path(&args.database)?.to_str().unwrap(), args.chain);
     let sled_db = sled::open(&db_path)?;
 
@@ -343,36 +487,23 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         }
     };
 
-    // TODO: sqldb init cleanup
-    // Initialize client
-    let client = Arc::new(Client::new(wallet.clone()).await?);
+    // Parse faucet addresses
+    let mut faucet_pubkeys = vec![];
 
-    // Parse cashier addresses
-    let mut cashier_pubkeys = vec![];
     for i in args.cashier_pub {
-        let addr = Address::from_str(&i)?;
-        let pk = PublicKey::try_from(addr)?;
-        cashier_pubkeys.push(pk);
+        let pk = PublicKey::from_str(&i)?;
+        faucet_pubkeys.push(pk);
     }
 
-    // Parse faucet addresses
-    let mut faucet_pubkeys = vec![wallet.get_default_keypair().await?.public];
     for i in args.faucet_pub {
-        let addr = Address::from_str(&i)?;
-        let pk = PublicKey::try_from(addr)?;
+        let pk = PublicKey::from_str(&i)?;
         faucet_pubkeys.push(pk);
     }
 
     // Initialize validator state
-    let state = ValidatorState::new(
-        &sled_db,
-        genesis_ts,
-        genesis_data,
-        client,
-        cashier_pubkeys,
-        faucet_pubkeys,
-    )
-    .await?;
+    let state =
+        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet.clone(), faucet_pubkeys)
+            .await?;
 
     // P2P network. The faucet doesn't participate in consensus, so we only
     // build the sync protocol.
@@ -412,8 +543,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let airdrop_limit = decode_base10(&args.airdrop_limit, 8, true)?;
 
     // Initialize program state
-    let faucetd =
-        Faucetd::new(state.clone(), sync_p2p.clone(), airdrop_timeout, airdrop_limit).await?;
+    let faucetd = Faucetd::new(
+        state.clone(),
+        sync_p2p.clone(),
+        wallet.clone(),
+        airdrop_timeout,
+        airdrop_limit,
+    )
+    .await?;
     let faucetd = Arc::new(faucetd);
 
     // Task to periodically clean up the hashmap of airdrops.
