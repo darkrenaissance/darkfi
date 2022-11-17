@@ -26,10 +26,7 @@ use rand::rngs::OsRng;
 
 use super::leadcoin::LeadCoin;
 use crate::{
-    crypto::{
-        proof::{Proof, ProvingKey, VerifyingKey},
-        types::*,
-    },
+    crypto::proof::{Proof, ProvingKey, VerifyingKey},
     Result,
 };
 
@@ -89,7 +86,7 @@ impl LeadProof {
         Self { proof }
     }
 
-    pub fn verify(&self, vk: &VerifyingKey, public_inputs: &[DrkCircuitField]) -> Result<()> {
+    pub fn verify(&self, vk: &VerifyingKey, public_inputs: &[pallas::Base]) -> Result<()> {
         if let Err(e) = self.proof.verify(vk, public_inputs) {
             error!("Verification of consensus lead proof failed: {}", e);
             return Err(e.into())

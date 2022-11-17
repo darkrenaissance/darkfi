@@ -16,19 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod burn_proof;
-pub mod coin;
-pub mod diffie_hellman;
-pub mod mint_proof;
-pub mod note;
-pub mod types;
-
 /// VDF (Verifiable Delay Function) using MiMC
 pub mod mimc_vdf;
 
 /// Halo2 proof API abstractions
 pub mod proof;
 pub use proof::Proof;
-
-pub use burn_proof::BurnRevealedValues;
-pub use mint_proof::MintRevealedValues;

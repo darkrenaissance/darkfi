@@ -87,7 +87,8 @@ pub struct Output {
     /// Pedersen commitment for the output's token ID
     pub token_commit: ValueCommit,
     /// Minted coin
-    pub coin: Coin,
+    pub coin: pallas::Base,
+    //pub coin: Coin,
     /// The encrypted note ciphertext
     pub ciphertext: Vec<u8>,
     /// The ephemeral public key

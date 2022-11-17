@@ -23,10 +23,8 @@ use halo2_proofs::{
     poly::commitment::Params,
     transcript::{Blake2bRead, Blake2bWrite},
 };
-use pasta_curves::vesta;
+use pasta_curves::{pallas, vesta};
 use rand::RngCore;
-
-use crate::crypto::types::DrkCircuitField;
 
 // TODO: this API needs rework. It's not very good.
 // keygen_pk() takes a VerifyingKey by value,
@@ -42,7 +40,7 @@ pub struct VerifyingKey {
 }
 
 impl VerifyingKey {
-    pub fn build(k: u32, c: &impl Circuit<DrkCircuitField>) -> Self {
+    pub fn build(k: u32, c: &impl Circuit<pallas::Base>) -> Self {
         let params = Params::new(k);
         let vk = plonk::keygen_vk(&params, c).unwrap();
         VerifyingKey { params, vk }
@@ -56,7 +54,7 @@ pub struct ProvingKey {
 }
 
 impl ProvingKey {
-    pub fn build(k: u32, c: &impl Circuit<DrkCircuitField>) -> Self {
+    pub fn build(k: u32, c: &impl Circuit<pallas::Base>) -> Self {
         let params = Params::new(k);
         let vk = plonk::keygen_vk(&params, c).unwrap();
         let pk = plonk::keygen_pk(&params, vk, c).unwrap();
@@ -75,8 +73,8 @@ impl AsRef<[u8]> for Proof {
 impl Proof {
     pub fn create(
         pk: &ProvingKey,
-        circuits: &[impl Circuit<DrkCircuitField>],
-        instances: &[DrkCircuitField],
+        circuits: &[impl Circuit<pallas::Base>],
+        instances: &[pallas::Base],
         mut rng: impl RngCore,
     ) -> std::result::Result<Self, plonk::Error> {
         let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
@@ -95,7 +93,7 @@ impl Proof {
     pub fn verify(
         &self,
         vk: &VerifyingKey,
-        instances: &[DrkCircuitField],
+        instances: &[pallas::Base],
     ) -> std::result::Result<(), plonk::Error> {
         let strategy = SingleVerifier::new(&vk.params);
         let mut transcript = Blake2bRead::init(&self.0[..]);
@@ -111,14 +109,7 @@ impl Proof {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        crypto::{
-            mint_proof::create_mint_proof,
-            types::{DrkCoinBlind, DrkSerial, DrkSpendHook, DrkUserData, DrkValueBlind},
-        },
-        zk::circuit::MintContract,
-        Result,
-    };
+    use crate::{crypto::mint_proof::create_mint_proof, zk::circuit::MintContract, Result};
     use darkfi_sdk::{
         crypto::{PublicKey, SecretKey, TokenId},
         pasta::{group::ff::Field, pallas},
@@ -130,12 +121,12 @@ mod tests {
     fn test_proof_serialization() -> Result<()> {
         let value = 110_u64;
         let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
-        let value_blind = DrkValueBlind::random(&mut OsRng);
-        let token_blind = DrkValueBlind::random(&mut OsRng);
-        let serial = DrkSerial::random(&mut OsRng);
-        let spend_hook = DrkSpendHook::random(&mut OsRng);
-        let user_data = DrkUserData::random(&mut OsRng);
-        let coin_blind = DrkCoinBlind::random(&mut OsRng);
+        let value_blind = ValueBlind::random(&mut OsRng);
+        let token_blind = ValueBlind::random(&mut OsRng);
+        let serial = pallas::Base::random(&mut OsRng);
+        let spend_hook = pallas::Base::random(&mut OsRng);
+        let user_data = pallas::Base::random(&mut OsRng);
+        let coin_blind = pallas::Base::random(&mut OsRng);
         let public_key = PublicKey::from_secret(SecretKey::random(&mut OsRng));
 
         let pk = ProvingKey::build(11, &MintContract::default());

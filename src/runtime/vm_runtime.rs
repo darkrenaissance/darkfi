@@ -320,7 +320,8 @@ impl Runtime {
     /// The permissions for this are handled by the `ContractId` in the sled db API so we
     /// assume that the contract is only able to do write operations on its own sled trees.
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
-        debug!("deploy: {:?}", payload);
+        info!("[wasm-runtime] Running deploy");
+        debug!("[wasm-runtime] payload: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
 
         // If the above didn't fail, we write the batches.

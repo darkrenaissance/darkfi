@@ -128,10 +128,10 @@ pub fn db_contains_key(db_handle: DbHandle, key: &[u8]) -> GenericResult<bool> {
     let ret = unsafe { db_contains_key_(buf.as_ptr(), len as u32) };
 
     match ret {
-        CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
-        DB_CONTAINS_KEY_FAILED => return Err(ContractError::DbContainsKeyFailed),
-        0 => return Ok(false),
-        1 => return Ok(true),
+        CALLER_ACCESS_DENIED => Err(ContractError::CallerAccessDenied),
+        DB_CONTAINS_KEY_FAILED => Err(ContractError::DbContainsKeyFailed),
+        0 => Ok(false),
+        1 => Ok(true),
         _ => unimplemented!(),
     }
 }

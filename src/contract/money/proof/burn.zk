@@ -5,26 +5,26 @@ constant "Burn" {
 }
 
 contract "Burn" {
-	# Secret key used to derive nullifier and coin's public key
-	Base secret,
-	# Unique serial number corresponding to this coin
-	Base serial,
 	# The value of this coin
 	Base value,
 	# The token ID
 	Base token,
-	# Random blinding factor for coin
-	Base coin_blind,
+	# Random blinding factor for value commitment
+	Scalar value_blind,
+	# Random blinding factor for the token ID
+	Scalar token_blind,
+	# Unique serial number corresponding to this coin
+	Base serial,
 	# Allows composing this ZK proof to invoke other contracts
 	Base spend_hook,
 	# Data passed from this coin to the invoked contract
 	Base user_data,
 	# Blinding factor for the encrypted user_data
 	Base user_data_blind,
-	# Random blinding factor for value commitment
-	Scalar value_blind,
-	# Random blinding factor for the token ID
-	Scalar token_blind,
+	# Random blinding factor for coin
+	Base coin_blind,
+	# Secret key used to derive nullifier and coin's public key
+	Base secret,
 	# Leaf position of the coin in the Merkle tree of coins
 	Uint32 leaf_pos,
 	# Merkle path to the coin

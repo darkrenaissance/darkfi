@@ -30,6 +30,9 @@
 /// Cryptographic constants
 pub mod constants;
 
+/// Diffie-Hellman techniques
+pub mod diffie_hellman;
+
 /// Miscellaneous utilities
 pub mod util;
 pub use util::poseidon_hash;

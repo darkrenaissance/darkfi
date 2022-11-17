@@ -17,9 +17,8 @@
  */
 
 use darkfi_sdk::{
-    crypto::{ContractId, MerkleNode, MerkleTree, PublicKey},
+    crypto::{Coin, ContractId, MerkleNode, MerkleTree, PublicKey},
     db::{db_contains_key, db_get, db_init, db_lookup, db_set},
-    define_contract,
     error::{ContractError, ContractResult},
     merkle::merkle_add,
     msg,
@@ -48,8 +47,12 @@ impl From<u8> for MoneyFunction {
 pub mod state;
 use state::{MoneyTransferParams, MoneyTransferUpdate};
 
+#[cfg(feature = "client")]
+/// Transaction building API for clients interacting with this contract.
+pub mod client;
+
 #[cfg(not(feature = "no-entrypoint"))]
-define_contract!(
+darkfi_sdk::define_contract!(
     init: init_contract,
     exec: process_instruction,
     apply: process_update,
@@ -185,7 +188,8 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
                 zk_public_values.push((
                     ZKAS_MINT_NS.to_string(),
                     vec![
-                        output.coin.inner(),
+                        //output.coin.inner(),
+                        output.coin,
                         *value_coords.x(),
                         *value_coords.y(),
                         *token_coords.x(),
@@ -266,13 +270,16 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             }
 
             // Newly created coins for this transaction are in the outputs.
-            let new_coins = Vec::with_capacity(params.outputs.len());
+            let mut new_coins = Vec::with_capacity(params.outputs.len());
             for (i, output) in params.outputs.iter().enumerate() {
                 // TODO: Should we have coins in a sled tree too to check dupes?
-                if new_coins.contains(&output.coin) {
+                if new_coins.contains(&Coin::from(output.coin)) {
                     msg!("[Transfer] Error: Duplicate coin found in output {}", i);
                     return Err(ContractError::Custom(23))
                 }
+
+                // FIXME: Needs some work on types and their place within all these libraries
+                new_coins.push(Coin::from(output.coin))
             }
 
             // Create a state update

@@ -39,9 +39,6 @@ pub mod dht;
 #[cfg(feature = "net")]
 pub mod net;
 
-//#[cfg(feature = "node")]
-//pub mod node;
-
 #[cfg(feature = "raft")]
 pub mod raft;
 
@@ -50,9 +47,6 @@ pub mod rpc;
 
 #[cfg(feature = "system")]
 pub mod system;
-
-#[cfg(feature = "tx")]
-pub mod tx;
 
 #[cfg(feature = "tx")]
 pub mod tx2;
