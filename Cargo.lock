@@ -1941,6 +1941,7 @@ dependencies = [
  "chrono",
  "ctrlc",
  "darkfi",
+ "darkfi-money-contract",
  "darkfi-sdk",
  "darkfi-serial",
  "easy-parallel",

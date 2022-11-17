@@ -24,13 +24,15 @@ pub enum RpcError {
     AmountExceedsLimit = -32107,
     TimeLimitReached = -32108,
     ParseError = -32109,
+    InternalError = -32110,
 }
 
 fn to_tuple(e: RpcError) -> (i64, String) {
     let msg = match e {
-        RpcError::AmountExceedsLimit => "Amount requested is higher than the faucet limit.",
-        RpcError::TimeLimitReached => "Timeout not expired. Try again later.",
-        RpcError::ParseError => "Parse error.",
+        RpcError::AmountExceedsLimit => "Amount requested is higher than the faucet limit",
+        RpcError::TimeLimitReached => "Timeout not expired, try again later",
+        RpcError::ParseError => "Parse error",
+        RpcError::InternalError => "Internal error",
     };
 
     (e as i64, msg.to_string())

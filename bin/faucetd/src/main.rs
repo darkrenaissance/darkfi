@@ -22,17 +22,24 @@ use async_std::sync::{Arc, Mutex, RwLock};
 use async_trait::async_trait;
 use chrono::Utc;
 use darkfi::{
-    crypto::proof::{ProvingKey, VerifyingKey},
+    crypto::proof::ProvingKey,
+    tx::Transaction,
     zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::ZkBinary,
 };
+use darkfi_money_contract::client::build_transfer_tx;
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, ContractId, MerkleNode, PublicKey, TokenId},
+    crypto::{
+        constants::MERKLE_DEPTH, schnorr::SchnorrSecret, ContractId, Keypair, MerkleNode,
+        PublicKey, TokenId,
+    },
     incrementalmerkletree::bridgetree::BridgeTree,
     pasta::{group::ff::PrimeField, pallas},
+    tx::ContractCall,
 };
-use darkfi_serial::{deserialize, serialize};
+use darkfi_serial::{deserialize, serialize, Encodable};
 use log::{debug, error, info};
+use rand::rngs::OsRng;
 use serde_json::{json, Value};
 use sqlx::Row;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
@@ -74,31 +81,31 @@ use error::{server_error, RpcError};
 // care of it. The wallet's SQL schema comes from the money contract
 // and here we just hardcode it. There should be a nice way to parse
 // the schema and fill some map.
-const MONEY_INFO_TABLE: &str = "money_info";
-const MONEY_INFO_COL_LAST_SCANNED_SLOT: &str = "last_scanned_slot";
+//const MONEY_INFO_TABLE: &str = "money_info";
+//const MONEY_INFO_COL_LAST_SCANNED_SLOT: &str = "last_scanned_slot";
 
 const MONEY_TREE_TABLE: &str = "money_tree";
 const MONEY_TREE_COL_TREE: &str = "tree";
 
 const MONEY_KEYS_TABLE: &str = "money_keys";
-const MONEY_KEYS_COL_KEY_ID: &str = "key_id";
+//const MONEY_KEYS_COL_KEY_ID: &str = "key_id";
 const MONEY_KEYS_COL_IS_DEFAULT: &str = "is_default";
 const MONEY_KEYS_COL_PUBLIC: &str = "public";
 const MONEY_KEYS_COL_SECRET: &str = "secret";
 
-const MONEY_COINS_TABLE: &str = "money_coins";
-const MONEY_COINS_COL_COIN: &str = "coin";
-const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
-const MONEY_COINS_COL_SERIAL: &str = "serial";
-const MONEY_COINS_COL_VALUE: &str = "value";
-const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
-const MONEY_COINS_COL_COIN_BLIND: &str = "coin_blind";
-const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
-const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
-const MONEY_COINS_COL_SECRET: &str = "secret";
-const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
-const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
-const MONEY_COINS_COL_MEMO: &str = "memo";
+//const MONEY_COINS_TABLE: &str = "money_coins";
+//const MONEY_COINS_COL_COIN: &str = "coin";
+//const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
+//const MONEY_COINS_COL_SERIAL: &str = "serial";
+//const MONEY_COINS_COL_VALUE: &str = "value";
+//const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
+//const MONEY_COINS_COL_COIN_BLIND: &str = "coin_blind";
+//const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
+//const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
+//const MONEY_COINS_COL_SECRET: &str = "secret";
+//const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
+//const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
+//const MONEY_COINS_COL_MEMO: &str = "memo";
 
 const CONFIG_FILE: &str = "faucetd_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../faucetd_config.toml");
@@ -188,13 +195,13 @@ pub struct Faucetd {
     synced: Mutex<bool>, // AtomicBool is weird in Arc
     sync_p2p: P2pPtr,
     validator_state: ValidatorStatePtr,
-    wallet: WalletPtr,
+    keypair: Keypair,
+    _wallet: WalletPtr,
     merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     airdrop_timeout: i64,
     airdrop_limit: u64,
     airdrop_map: Arc<Mutex<HashMap<[u8; 32], i64>>>,
     proving_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, ProvingKey)>>>>,
-    verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
 }
 
 #[async_trait]
@@ -224,11 +231,9 @@ impl Faucetd {
         // Here we initialize the wallet for the money contract.
         let merkle_tree = Self::initialize_wallet(wallet.clone()).await?;
 
-        // This is kinda bad, but whatever. The hashmaps hold proving and verifying
-        // keys for various zk circuits. They should be periodically pruned because
-        // of memory issues.
+        // This is kinda bad, but whatever. The hashmaps hold proving keys for
+        // the money contract
         let proving_keys = Arc::new(RwLock::new(HashMap::new()));
-        let verifying_keys = Arc::new(RwLock::new(HashMap::new()));
 
         // For now we'll create the keys for the money contract
         // FIXME: This hardcoded shit (see consensus/state.rs)
@@ -255,11 +260,9 @@ impl Faucetd {
         let mint_circuit = ZkCircuit::new(mint_witnesses, mint_zkbin);
         let burn_circuit = ZkCircuit::new(burn_witnesses, burn_zkbin);
 
-        info!("Creating mint circuit proving and verifying keys");
+        info!("Creating mint circuit proving key");
         let mint_provingkey = ProvingKey::build(k, &mint_circuit);
-        let mint_verifyingkey = VerifyingKey::build(k, &mint_circuit);
-        info!("Creating burn circuit proving and verifying keys");
-        let burn_verifyingkey = VerifyingKey::build(k, &burn_circuit);
+        info!("Creating burn circuit proving key");
         let burn_provingkey = ProvingKey::build(k, &burn_circuit);
 
         {
@@ -271,26 +274,21 @@ impl Faucetd {
             proving_keys_w.insert(cid.inner().to_repr(), provingkeys);
         }
 
-        {
-            let verifyingkeys = vec![
-                (zkas_mint_ns.clone(), mint_verifyingkey),
-                (zkas_burn_ns.clone(), burn_verifyingkey),
-            ];
-            let mut verifying_keys_w = verifying_keys.write().await;
-            verifying_keys_w.insert(cid.inner().to_repr(), verifyingkeys);
-        }
+        // Get or create an initial keypair for signing transactions
+        let keypair = Self::initialize_keypair(wallet.clone()).await?;
+        info!("Faucet pubkey: {}", keypair.public);
 
         let faucetd = Self {
             synced: Mutex::new(false),
             sync_p2p,
             validator_state,
-            wallet,
+            keypair,
+            _wallet: wallet,
             merkle_tree,
             airdrop_timeout: timeout,
             airdrop_limit: limit,
             airdrop_map: Arc::new(Mutex::new(HashMap::new())),
             proving_keys,
-            verifying_keys,
         };
 
         Ok(faucetd)
@@ -328,6 +326,46 @@ impl Faucetd {
         };
 
         Ok(merkle_tree)
+    }
+
+    async fn initialize_keypair(wallet: WalletPtr) -> Result<Keypair> {
+        let mut conn = wallet.conn.acquire().await?;
+
+        let query = format!(
+            "SELECT {}, {} FROM {};",
+            MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE
+        );
+        let keypair = match sqlx::query(&query).fetch_one(&mut conn).await {
+            Ok(row) => {
+                let public = deserialize(row.get(MONEY_KEYS_COL_PUBLIC))?;
+                let secret = deserialize(row.get(MONEY_KEYS_COL_SECRET))?;
+                Keypair { public, secret }
+            }
+            Err(_) => {
+                let keypair = Keypair::random(&mut OsRng);
+                let is_default = 0;
+                let public_bytes = serialize(&keypair.public);
+                let secret_bytes = serialize(&keypair.secret);
+                let query = format!(
+                    "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3)",
+                    MONEY_KEYS_TABLE,
+                    MONEY_KEYS_COL_IS_DEFAULT,
+                    MONEY_KEYS_COL_PUBLIC,
+                    MONEY_KEYS_COL_SECRET
+                );
+                sqlx::query(&query)
+                    .bind(is_default)
+                    .bind(public_bytes)
+                    .bind(secret_bytes)
+                    .execute(&mut conn)
+                    .await?;
+
+                info!("Wrote keypair to wallet");
+                keypair
+            }
+        };
+
+        Ok(keypair)
     }
 
     // RPCAPI:
@@ -391,26 +429,76 @@ impl Faucetd {
         };
         drop(map);
 
-        // Create airdrop transaction
+        // Get zk stuff for transaction
+        let cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let (mint_zkbin, mint_pk, burn_zkbin, burn_pk) = {
+            // FIXME: This hardcoded shit (see consensus/state.rs)
+            // FIXME: Unwraps, should also be solved when above is solved.
+            let zkas_tree = String::from("zkas");
+            let zkas_mint_ns = String::from("Mint");
+            let zkas_burn_ns = String::from("Burn");
 
-        /*
-        let tx = match self
-            .client
-            .build_transaction(
-                pubkey,
-                amount,
-                token_id,
-                true,
-                self.validator_state.read().await.state_machine.clone(),
-            )
-            .await
-        {
+            // Do a lookup for the money contract's zkas database and fetch the circuits.
+            let blockchain = { self.validator_state.read().await.blockchain.clone() };
+            let db_handle =
+                blockchain.contracts.lookup(&blockchain.sled_db, &cid, &zkas_tree).unwrap();
+
+            // TODO: Handle possible panic of these Option unwraps
+            let mint_zkbin = db_handle.get(&serialize(&zkas_mint_ns)).unwrap().unwrap();
+            let burn_zkbin = db_handle.get(&serialize(&zkas_burn_ns)).unwrap().unwrap();
+
+            let mint_zkbin = ZkBinary::decode(&mint_zkbin).unwrap();
+            let burn_zkbin = ZkBinary::decode(&burn_zkbin).unwrap();
+
+            let proving_keys_r = self.proving_keys.read().await;
+            let (mint_pk, burn_pk) = match proving_keys_r.get(&cid.inner().to_repr()) {
+                Some(arr) => {
+                    let mint_pk = arr.iter().find(|x| x.0 == zkas_mint_ns).unwrap();
+                    let burn_pk = arr.iter().find(|x| x.0 == zkas_burn_ns).unwrap();
+                    (mint_pk.1.clone(), burn_pk.1.clone())
+                }
+                None => {
+                    todo!("Create proving keys");
+                }
+            };
+
+            (mint_zkbin, mint_pk, burn_zkbin, burn_pk)
+        };
+
+        // Create money contract params and proofs
+        let (params, proofs, secret_keys) = match build_transfer_tx(
+            &self.keypair,
+            &pubkey,
+            amount,
+            token_id,
+            &[],
+            &self.merkle_tree,
+            &mint_zkbin,
+            &mint_pk,
+            &burn_zkbin,
+            &burn_pk,
+            true,
+        ) {
             Ok(v) => v,
             Err(e) => {
-                error!("airdrop(): Failed building transaction: {}", e);
-                return JsonError::new(InternalError, None, id).into()
+                error!("Failed to build transfer tx params: {}", e);
+                return server_error(RpcError::InternalError, id)
             }
         };
+
+        // Build transaction
+        let calls = vec![ContractCall { contract_id: cid, data: serialize(&params) }];
+        let proofs = vec![proofs];
+        let mut signatures = vec![];
+        let mut encoded_tx = vec![];
+        calls.encode(&mut encoded_tx).unwrap();
+        proofs.encode(&mut encoded_tx).unwrap();
+        for secret in secret_keys {
+            let signature = secret.sign(&mut OsRng, &encoded_tx);
+            signatures.push(signature);
+        }
+
+        let tx = Transaction { calls, proofs, signatures: vec![signatures] };
 
         // Broadcast transaction to the network.
         match self.sync_p2p.broadcast(tx.clone()).await {
@@ -420,15 +508,13 @@ impl Faucetd {
                 return JsonError::new(InternalError, None, id).into()
             }
         }
-        */
 
         // Add/Update this airdrop into the hashmap
         let mut map = self.airdrop_map.lock().await;
         map.insert(pubkey.to_bytes(), now);
         drop(map);
 
-        //let tx_hash = blake3::hash(&serialize(&tx)).to_hex().as_str().to_string();
-        let tx_hash = "foo";
+        let tx_hash = blake3::hash(&serialize(&tx)).to_hex().as_str().to_string();
         JsonResponse::new(json!(tx_hash), id).into()
     }
 }

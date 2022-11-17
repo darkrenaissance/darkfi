@@ -18,6 +18,7 @@ ctrlc = { version = "3.2.3", features = ["termination"] }
 darkfi = {path = "../../", features = ["blockchain", "wallet", "rpc", "net", "zkas", "crypto"]}
 darkfi-serial = {path = "../../src/serial"}
 darkfi-sdk = {path = "../../src/sdk"}
+darkfi-money-contract = {path = "../../src/contract/money", features = ["no-entrypoint", "client"]}
 easy-parallel = "3.2.0"
 hex = "0.4.3"
 lazy-init = "0.5.1"

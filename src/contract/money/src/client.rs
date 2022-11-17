@@ -449,8 +449,9 @@ pub fn build_transfer_tx(
     keypair: &Keypair,
     pubkey: &PublicKey,
     value: u64,
-    coins: Vec<OwnCoin>,
-    tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    token_id: TokenId,
+    coins: &[OwnCoin],
+    tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
     mint_zkbin: &ZkBinary,
     mint_pk: &ProvingKey,
     burn_zkbin: &ZkBinary,
@@ -462,7 +463,6 @@ pub fn build_transfer_tx(
     assert!(!coins.is_empty());
     // Ensure the coins given to us are all of the same token_id.
     // The money contract base transfer doesn't allow conversions.
-    let token_id = coins[0].note.token_id;
     for coin in coins.iter() {
         assert_eq!(token_id, coin.note.token_id);
     }
@@ -652,6 +652,7 @@ pub fn build_transfer_tx(
 
     // Now we should have all the params, zk proofs, and signature secrets.
     // We return it all and let the caller deal with it.
+    // TODO: Return also spent coins
 
     Ok((params, zk_proofs, signature_secrets))
 }
