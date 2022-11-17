@@ -53,3 +53,5 @@ pub mod utils;
 
 /// Wallet functions
 pub mod wallet;
+
+pub mod ouroboros;

@@ -61,14 +61,26 @@ use crate::zk::{
 };
 use log::info;
 
+/// public input offset for lead coin 1 commitment root.
+const LEADCOIN_COIN1_COMMIT_ROOT_OFFSET: usize = 0;
+/// public input offset for lead coin 1 nullifier.
+const LEADCOIN_COIN1_NULLIFIER_ROOT_OFFSET: usize = 1;
+/// public input offset for coin2 commitment x coordinate.
+const LEADCOIN_COIN2_COMMITMENT_X_OFFSET: usize = 2;
+/// public input offset for coin2 commitment y coordinate.
+const LEADCOIN_COIN2_COMMITMENT_Y_OFFSET: usize = 3;
+/// public input offset for rho commitment x coordinate.
+const LEADCOIN_RHO_COMMITMENT_X_OFFSET: usize = 4;
+/// public input offset for rho commitment y coordinate.
+const LEADCOIN_RHO_COMMITMENT_Y_OFFSET: usize = 5;
 /// Public input offset for the lead coin C2 nonce
-const LEADCOIN_C2_NONCE_OFFSET: usize = 0;
+const LEADCOIN_C2_NONCE_OFFSET: usize = 6;
 /// Public input offset for lead coin public key X coordinate
-const LEADCOIN_PK_X_OFFSET: usize = 1;
+const LEADCOIN_PK_X_OFFSET: usize = 7;
 /// Public input offset for lead coin public key Y coordinate
-const LEADCOIN_PK_Y_OFFSET: usize = 2;
+const LEADCOIN_PK_Y_OFFSET: usize = 8;
 /// Public input offset for the lottery target lhs
-const LEADCOIN_Y_BASE_OFFSET: usize = 3;
+const LEADCOIN_Y_BASE_OFFSET: usize = 9;
 /// Derivation prefix for the nullifier PRF
 const PRF_NULLIFIER_PREFIX: u64 = 0;
 
@@ -124,8 +136,6 @@ impl LeadConfig {
 pub struct LeadContract {
     /// Merkle path to the commitment for `coin_1`
     pub coin1_commit_merkle_path: Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>,
-    /// Merkle root to the commitment of `coin_1` in the Merkle tree of commitments
-    pub coin1_commit_root: Value<pallas::Base>,
     /// `coin_1` leaf position in the Merkle tree of coin commitments
     pub coin1_commit_leaf_pos: Value<u32>,
     /// `coin_1` secret key.
@@ -143,14 +153,10 @@ pub struct LeadContract {
     pub coin1_nonce: Value<pallas::Base>,
     /// Blinding factor for the commitment of `coin_1`
     pub coin1_blind: Value<pallas::Scalar>,
-    /// Serial number for `coin_1`
-    pub coin1_serial: Value<pallas::Base>,
     /// Value of `coin_1`
     pub coin1_value: Value<pallas::Base>,
     /// Blinding factor for the commitment of `coin_2`
     pub coin2_blind: Value<pallas::Scalar>,
-    /// `coin_2` pedersen commitment point
-    pub coin2_commit: Value<pallas::Point>,
     /// Random value derived from `eta` used for constraining `rho`
     pub rho_mu: Value<pallas::Scalar>,
     /// Random value derived from `eta` used for calculating `y`.
@@ -161,8 +167,6 @@ pub struct LeadContract {
     pub sigma1: Value<pallas::Base>,
     /// Second coefficient in 2-term T (target function) approximation
     pub sigma2: Value<pallas::Base>,
-    /// Constrained nonce `rho`.
-    pub rho: Value<pallas::Point>,
 }
 
 impl Circuit<pallas::Base> for LeadContract {
@@ -339,11 +343,13 @@ impl Circuit<pallas::Base> for LeadContract {
             .coin1_commit_merkle_path
             .map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
+        /*
         let coin1_commit_root = assign_free_advice(
             layouter.namespace(|| "witness coin_commitment_root"),
             config.advices[8],
             self.coin1_commit_root,
-        )?;
+    )?;
+        */
 
         let coin1_sk = assign_free_advice(
             layouter.namespace(|| "witness coin1_sk"),
@@ -378,11 +384,13 @@ impl Circuit<pallas::Base> for LeadContract {
             self.coin1_blind,
         )?;
 
+        /*
         let coin1_serial = assign_free_advice(
             layouter.namespace(|| "witness coin1_serial"),
             config.advices[8],
             self.coin1_serial,
-        )?;
+    )?;
+        */
 
         let coin1_value = assign_free_advice(
             layouter.namespace(|| "witness coin1_value"),
@@ -396,11 +404,13 @@ impl Circuit<pallas::Base> for LeadContract {
             self.coin2_blind,
         )?;
 
+        /*
         let coin2_commit = NonIdentityPoint::new(
             ecc_chip.clone(),
             layouter.namespace(|| "witness coin2_commit"),
             self.coin2_commit.as_ref().map(|cm| cm.to_affine()),
         )?;
+        */
 
         let rho_mu = ScalarFixed::new(
             ecc_chip.clone(),
@@ -423,11 +433,13 @@ impl Circuit<pallas::Base> for LeadContract {
             self.sigma2,
         )?;
 
+        /*
         let rho = NonIdentityPoint::new(
             ecc_chip.clone(),
             layouter.namespace(|| "witness rho"),
             self.rho.as_ref().map(|cm| cm.to_affine()),
-        )?;
+    )?;
+        */
 
         let zero = assign_free_advice(
             layouter.namespace(|| "witness constant zero"),
@@ -670,33 +682,71 @@ impl Circuit<pallas::Base> for LeadContract {
 
         // Constrain derived `sn_commit` to be equal to witnessed `coin1_serial`.
         info!("coin1 cm root LHS: {:?}", coin1_cm_root.value());
+        /*
         info!("coin1 cm root RHS: {:?}", coin1_commit_root.value());
         layouter.assign_region(
-            || "coin1_cm_root equality",
-            |mut region| region.constrain_equal(coin1_cm_root.cell(), coin1_commit_root.cell()),
+        || "coin1_cm_root equality",
+        |mut region| region.constrain_equal(coin1_cm_root.cell(), coin1_commit_root.cell()),
+    )?;
+         */
+        layouter.constrain_instance(
+            coin1_cm_root.cell(),
+            config.primary,
+            LEADCOIN_COIN1_COMMIT_ROOT_OFFSET,
         )?;
         info!("coin1 serial commit LHS: {:?}", sn_commit.value());
+        /*
         info!("coin1 serial commit RHS: {:?}", coin1_serial.value());
         layouter.assign_region(
-            || "sn_commit equality",
-            |mut region| region.constrain_equal(sn_commit.cell(), coin1_serial.cell()),
+        || "sn_commit equality",
+        |mut region| region.constrain_equal(sn_commit.cell(), coin1_serial.cell()),
+    )?;
+         */
+        layouter.constrain_instance(
+            sn_commit.cell(),
+            config.primary,
+            LEADCOIN_COIN1_NULLIFIER_ROOT_OFFSET,
         )?;
 
         info!("coin2_commit LHS: x {:?}", coin2_commitment.inner().x());
         info!("coin2_commit LHS: y {:?}", coin2_commitment.inner().y());
+        // Constrain equality between witnessed and derived commitment
+        /*
         info!("coin2_commit RHS: x {:?}", coin2_commit.inner().x());
         info!("coin2_commit RHS: y {:?}", coin2_commit.inner().y());
-        // Constrain equality between witnessed and derived commitment
         coin2_commitment
-            .constrain_equal(layouter.namespace(|| "coin2_commit equality"), &coin2_commit)?;
+        .constrain_equal(layouter.namespace(|| "coin2_commit equality"), &coin2_commit)?;
+         */
+        layouter.constrain_instance(
+            coin2_commitment.inner().x().cell(),
+            config.primary,
+            LEADCOIN_COIN2_COMMITMENT_X_OFFSET,
+        )?;
+        layouter.constrain_instance(
+            coin2_commitment.inner().y().cell(),
+            config.primary,
+            LEADCOIN_COIN2_COMMITMENT_Y_OFFSET,
+        )?;
 
         info!("rho commit LHS: x {:?}", rho_commit.inner().x());
         info!("rho commit LHS: y {:?}", rho_commit.inner().y());
+
+        // Constrain derived rho_commit to witnessed rho
+        /*
         info!("rho commit RHS: x {:?}", rho.inner().x());
         info!("rho commit RHS: y {:?}", rho.inner().y());
-        // Constrain derived rho_commit to witnessed rho
         rho_commit.constrain_equal(layouter.namespace(|| "rho equality"), &rho)?;
-
+        */
+        layouter.constrain_instance(
+            rho_commit.inner().x().cell(),
+            config.primary,
+            LEADCOIN_RHO_COMMITMENT_X_OFFSET,
+        )?;
+        layouter.constrain_instance(
+            rho_commit.inner().y().cell(),
+            config.primary,
+            LEADCOIN_RHO_COMMITMENT_Y_OFFSET,
+        )?;
         info!("coin pk: x {:?}", coin_pk.inner().x());
         info!("coin pk: y {:?}", coin_pk.inner().y());
         // Constrain coin's public key coordinates with public inputs
