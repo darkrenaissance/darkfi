@@ -129,6 +129,100 @@ impl Darkfid {
     }
 
     // RPCAPI:
+    // Attempts to query for all available rows in a given table.
+    // The parameters given contain paired metadata so we know how to decode the SQL data.
+    // They're the same as above in `wallet.query_row_single`.
+    // If there are any values found, they will be returned in a paired array. If not, an
+    // empty array will be returned.
+    //
+    // --> {"jsonrpc": "2.0", "method": "wallet.query_row_multi", "params": [...], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [["va", "lu"], ["es", "es"], ...], "id": 1}
+    pub async fn wallet_query_row_multi(&self, id: Value, params: &[Value]) -> JsonResult {
+        // We need at least 3 params for something we want to fetch, and we want them in pairs.
+        // Also the first param (the query) should be a String.
+        if params.len() < 3 || params[1..].len() % 2 != 0 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        // The remaining pairs should be typed properly too
+        let mut types: Vec<QueryType> = vec![];
+        let mut names: Vec<&str> = vec![];
+        for pair in params[1..].chunks(2) {
+            if !pair[0].is_u64() || !pair[1].is_string() {
+                return JsonError::new(InvalidParams, None, id).into()
+            }
+
+            let typ = pair[0].as_u64().unwrap();
+            if typ >= QueryType::Last as u64 {
+                return JsonError::new(InvalidParams, None, id).into()
+            }
+
+            types.push((typ as u8).into());
+            names.push(pair[1].as_str().unwrap());
+        }
+
+        // Get a wallet connection
+        let mut conn = match self.wallet.conn.acquire().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("[RPC] wallet.query_row_multi: Failed to acquire wallet connection: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        // Execute the query and see if we find any rows
+        let rows = match sqlx::query(params[0].as_str().unwrap()).fetch_all(&mut conn).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("[RPC] wallet.query_row_multi: Failed to execute SQL query: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        debug!("[RPC] wallet.query_row_multi: Found {} rows", rows.len());
+
+        // Try to decode whatever we've found
+        let mut ret: Vec<Vec<Value>> = vec![];
+
+        for row in rows {
+            let mut row_ret: Vec<Value> = vec![];
+            for (typ, col) in types.iter().zip(names.clone()) {
+                match typ {
+                    QueryType::Integer => {
+                        let value: i32 = match row.try_get(col) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                error!("[RPC] wallet.query_row_multi: {}", e);
+                                return JsonError::new(ParseError, None, id).into()
+                            }
+                        };
+
+                        row_ret.push(json!(value));
+                    }
+
+                    QueryType::Blob => {
+                        let value: Vec<u8> = match row.try_get(col) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                error!("[RPC] wallet.query_row_multi: {}", e);
+                                return JsonError::new(ParseError, None, id).into()
+                            }
+                        };
+
+                        row_ret.push(json!(value));
+                    }
+
+                    _ => unreachable!(),
+                }
+            }
+
+            ret.push(row_ret);
+        }
+
+        JsonResponse::new(json!(ret), id).into()
+    }
+
+    // RPCAPI:
     // Executes an arbitrary SQL query on the wallet, and returns `true` on success.
     // `params[1..]` can optionally be provided in pairs like in `wallet.query_row_single`.
     //

@@ -226,6 +226,9 @@ impl RequestHandler for Darkfid {
             Some("wallet.query_row_single") => {
                 return self.wallet_query_row_single(req.id, params).await
             }
+            Some("wallet.query_row_multi") => {
+                return self.wallet_query_row_multi(req.id, params).await
+            }
             // ==============
             // Invalid method
             // ==============
