@@ -26,13 +26,13 @@ use url::Url;
 
 use darkfi::{
     consensus::{
+        constants::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
         ouroboros::{EpochConsensus, Stakeholder},
         proto::{ProtocolSync, ProtocolTx},
-        ValidatorState, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
+        ValidatorState,
     },
     net,
     net::Settings,
-    node::Client,
     util::{path::expand_path, time::Timestamp},
     wallet::walletdb::init_wallet,
     Result,
@@ -125,26 +125,13 @@ async fn start(args: NetCli, ex: Arc<Executor<'_>>) -> Result<()> {
     // Initialize validator state
     let (genesis_ts, genesis_data) = (*TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES);
 
-    // TODO: sqldb init cleanup
-    // Initialize client
-    let client = Arc::new(Client::new(wallet.clone()).await?);
-
-    // Parse cashier addresses
-    let cashier_pubkeys = vec![wallet.get_default_keypair().await?.public];
-
-    // Parse faucet addresses
-    let faucet_pubkeys = vec![wallet.get_default_keypair().await?.public];
+    // Parse faucet addresses (not needed here probably)
+    let faucet_pubkeys = vec![];
 
     // Initialize validator state
-    let state = ValidatorState::new(
-        &sled_db,
-        genesis_ts,
-        genesis_data,
-        client,
-        cashier_pubkeys,
-        faucet_pubkeys,
-    )
-    .await?;
+    let state =
+        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet.clone(), faucet_pubkeys)
+            .await?;
 
     let registry = p2p.protocol_registry();
 
