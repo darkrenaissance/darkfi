@@ -94,7 +94,7 @@ c4_cm_y = ec_get_y(c4_cm);
 constrain_instance(c4_cm_y);
 v1v2 = base_add(c1_value, c2_value);
 v2v3 = base_add(v3_value, v4_value);
-constrain_equal(v1v2, v2v3);
+constrain_equal_base(v1v2, v2v3);
 # root of path to coin1 commitment at given position
 c1_root = merkle_root(c1_cm_pos, c1_cm_path, c1_cm_hash);
 constrain_instance(c1_root);
