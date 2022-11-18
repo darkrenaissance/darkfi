@@ -294,18 +294,18 @@ impl LeadCoin {
         let rho_coord = rho.to_affine().coordinates().unwrap();
         vec![
             pk,
-            c2_rho,
-            *c1_cm.x(),
-            *c1_cm.y(),
-            *c2_cm.x(),
-            *c2_cm.y(),
-            self.coin1_commitment_root.inner(),
-            self.coin1_sk_root.inner(),
-            self.sn,
-            *y_coords.x(),
-            *y_coords.y(),
-            *rho_coord.x(),
-            *rho_coord.y(),
+            //c2_rho,
+            //*c1_cm.x(),
+            //*c1_cm.y(),
+            //*c2_cm.x(),
+            //*c2_cm.y(),
+            //self.coin1_commitment_root.inner(),
+            //self.coin1_sk_root.inner(),
+            //self.sn,
+            //*y_coords.x(),
+            //*y_coords.y(),
+            //*rho_coord.x(),
+            //*rho_coord.y(),
         ]
     }
 

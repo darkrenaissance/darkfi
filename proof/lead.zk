@@ -34,60 +34,60 @@ circuit "Lead" {
         pk = poseidon_hash(PREFIX_PK, c1_sk_root, c1_tau, ZERO);
         constrain_instance(pk);
         # coin (2) rho/nonce 
-        c2_rho = poseidon_hash(PREFIX_EVL, c1_sk_root, c1_rho, ZERO);
-        constrain_instance(c2_rho);
+        #c2_rho = poseidon_hash(PREFIX_EVL, c1_sk_root, c1_rho, ZERO);
+        #constrain_instance(c2_rho);
         # coin (1) cm/commitment
-        c1_cm_msg = poseidon_hash(PREFIX_CM, pk, value, c1_rho);
-        c1_cm_v = ec_mul_short(c1_cm_msg, VALUE_COMMIT_VALUE);
-        c1_cm_r = ec_mul(c1_opening, VALUE_COMMIT_RANDOM);
-        c1_cm = ec_add(c1_cm_v, c1_cm_r);
-        c1_cm_x = ec_get_x(c1_cm);
-        c1_cm_y = ec_get_y(c1_cm);
-        c1_cm_hash = poseidon_hash(c1_cm_x, c1_cm_y);
-        constrain_instance(c1_cm_x);
-        constrain_instance(c1_cm_y);
+        #c1_cm_msg = poseidon_hash(PREFIX_CM, pk, value, c1_rho);
+        #c1_cm_v = ec_mul_short(c1_cm_msg, VALUE_COMMIT_VALUE);
+        #c1_cm_r = ec_mul(c1_opening, VALUE_COMMIT_RANDOM);
+        #c1_cm = ec_add(c1_cm_v, c1_cm_r);
+        #c1_cm_x = ec_get_x(c1_cm);
+        #c1_cm_y = ec_get_y(c1_cm);
+        #c1_cm_hash = poseidon_hash(c1_cm_x, c1_cm_y);
+        #constrain_instance(c1_cm_x);
+        #constrain_instance(c1_cm_y);
         # coin (2) cm/commitment
-        c2_cm_msg = poseidon_hash(PREFIX_CM, pk, value, c2_rho);
-        c2_cm_v = ec_mul_short(c2_cm_msg, VALUE_COMMIT_VALUE);
-        c2_cm_r = ec_mul(c2_opening, VALUE_COMMIT_RANDOM);
-        c2_cm = ec_add(c2_cm_v, c2_cm_r);
-        c2_cm_x = ec_get_x(c2_cm);
-        c2_cm_y = ec_get_y(c2_cm);
-        constrain_instance(c2_cm_x);
-        constrain_instance(c2_cm_y);
+        #c2_cm_msg = poseidon_hash(PREFIX_CM, pk, value, c2_rho);
+        #c2_cm_v = ec_mul_short(c2_cm_msg, VALUE_COMMIT_VALUE);
+        #c2_cm_r = ec_mul(c2_opening, VALUE_COMMIT_RANDOM);
+        #c2_cm = ec_add(c2_cm_v, c2_cm_r);
+        #c2_cm_x = ec_get_x(c2_cm);
+        #c2_cm_y = ec_get_y(c2_cm);
+        #constrain_instance(c2_cm_x);
+        #constrain_instance(c2_cm_y);
         # root of path to burnt coin commitment at given pos
-        root = merkle_root(c1_cm_pos, c1_cm_path, c1_cm_hash);
-        constrain_instance(root);
+        #root = merkle_root(c1_cm_pos, c1_cm_path, c1_cm_hash);
+        #constrain_instance(root);
         # root of path at c1_sk_pos
-        root_sk = merkle_root(c1_sk_pos, c1_sk_path, c1_sk);
-        constrain_instance(root_sk);
+        #root_sk = merkle_root(c1_sk_pos, c1_sk_path, c1_sk);
+        #constrain_instance(root_sk);
         # coin (1) sn/nullifier
-        sn = poseidon_hash(PREFIX_SN, c1_sk_root, c1_rho, ZERO);
-        constrain_instance(sn);
+        #sn = poseidon_hash(PREFIX_SN, c1_sk_root, c1_rho, ZERO);
+        #constrain_instance(sn);
         # lottery seed
-        seed = poseidon_hash(PREFIX_SEED, c1_sk_root, c1_rho, ZERO);
+        #seed = poseidon_hash(PREFIX_SEED, c1_sk_root, c1_rho, ZERO);
         # y
-        y_v = ec_mul_short(seed, VALUE_COMMIT_VALUE);
-        y_r = ec_mul(y_opening, VALUE_COMMIT_RANDOM);
-        y = ec_add(y_v, y_r);
-        y_x = ec_get_x(y);
-        y_y = ec_get_y(y);
-        y_hash = poseidon_hash(y_x, y_y);
-        constrain_instance(y_x);
-        constrain_instance(y_y);
+        #y_v = ec_mul_short(seed, VALUE_COMMIT_VALUE);
+        #y_r = ec_mul(y_opening, VALUE_COMMIT_RANDOM);
+        #y = ec_add(y_v, y_r);
+        #y_x = ec_get_x(y);
+        #y_y = ec_get_y(y);
+        #y_hash = poseidon_hash(y_x, y_y);
+        #constrain_instance(y_x);
+        #constrain_instance(y_y);
         # rho
-        rho_v = ec_mul_short(seed, VALUE_COMMIT_VALUE);
-        rho_r = ec_mul(rho_opening, VALUE_COMMIT_RANDOM);
-        rho = ec_add(rho_v, rho_r);
-        rho_x = ec_get_x(rho);
-        rho_y = ec_get_y(rho);
-        constrain_instance(rho_x);
-        constrain_instance(rho_y);
+        #rho_v = ec_mul_short(seed, VALUE_COMMIT_VALUE);
+        #rho_r = ec_mul(rho_opening, VALUE_COMMIT_RANDOM);
+        #rho = ec_add(rho_v, rho_r);
+        #rho_x = ec_get_x(rho);
+        #rho_y = ec_get_y(rho);
+        #constrain_instance(rho_x);
+        #constrain_instance(rho_y);
         # target
-        term1 =  base_mul(sigma1, value);
-        term2_1 = base_mul(sigma2, value);
-        term2 = base_mul(term2_1, value);
-        target = base_add(term1, term2);
+        #term1 =  base_mul(sigma1, value);
+        #term2_1 = base_mul(sigma2, value);
+        #term2 = base_mul(term2_1, value);
+        #target = base_add(term1, term2);
         # lottery
-        less_than(y_hash, target);
+        #less_than(y_hash, target);
 }
