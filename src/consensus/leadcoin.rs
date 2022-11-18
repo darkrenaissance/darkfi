@@ -24,6 +24,8 @@ use darkfi_sdk::{
         MerkleNode, PublicKey, SecretKey,
     },
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
+    zk::{vm::ZkCircuit, vm_stack::Witness},
+    zkas::ZkBinary,
 };
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
@@ -33,7 +35,6 @@ use rand::rngs::OsRng;
 use super::constants::{EPOCH_LENGTH, PRF_NULLIFIER_PREFIX};
 use crate::{
     crypto::{proof::ProvingKey, Proof},
-    zk::circuit::LeadContract,
     Result,
 };
 
@@ -66,6 +67,8 @@ pub struct LeadCoin {
     pub coin1_commitment_root: MerkleNode,
     /// Merkle root of the `coin1` secret key
     pub coin1_sk_root: MerkleNode,
+    /// coin1 sk position in merkle tree
+    pub coin1_sk_pos: u32,
     /// Merkle path to the coin1's commitment
     pub coin1_commitment_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
     /// Merkle path to the secret key of `coin1`
@@ -229,58 +232,67 @@ impl LeadCoin {
     /// Create a vector of `pallas::Base` elements from the `LeadCoin` to be
     /// used as public inputs for the ZK proof.
     pub fn public_inputs(&self) -> Vec<pallas::Base> {
-        let lottery_msg_input = [self.coin1_sk_root.inner(), self.nonce];
-        let lottery_msg = poseidon_hash(lottery_msg_input);
-
-        let y = pedersen_commitment_base(lottery_msg, mod_r_p(self.y_mu));
-        let y_coords = y.to_affine().coordinates().unwrap();
-        let y_coords = [*y_coords.x(), *y_coords.y()];
-        let y = poseidon_hash(y_coords);
-
-        let pubkey = PublicKey::from_secret(self.secret_key);
-        let (pub_x, pub_y) = pubkey.xy();
-        let c2_cm = self.coin2_commitment.to_affine().coordinates().unwrap();
-
+        let prefix_evl = pallas::Base::from(2);
+        let prefix_pk = pallas::Base::from(4);
+        let prefix_pk = pallas::Base::from(5);
+        let zero = pallas::Base::zero();
+        // pk
+        let pk_msg = [prefix_pk, self.coin1_sk_root, self.coin1_timestamp, zero];
+        let pk = poseidon_hash(pk_msg);
         // rho
-        // Initialize circuit with witnesses
-        let lottery_msg_input = [self.coin1_sk_root.inner(), self.nonce];
-        let lottery_msg = poseidon_hash(lottery_msg_input);
-        let rho = pedersen_commitment_base(lottery_msg, mod_r_p(self.rho_mu));
+        let rho_msg = [prefix_evl, self.coin1_sk_root, self.coin1_nonce, zero];
+        let c2_rho = poseidon_hash(rho_msg);
+        // coin 1-2 cm/commitment
+        let c1_cm = self.coin1_commitment.to_affine().coordinates().unwrap();
+        let c2_cm = self.coin2_commitment.to_affine().coordinates().unwrap();
+        // lottery seed
+        let seed_msg = [self.coin1_sk_root.inner(), self.nonce];
+        let seed = poseidon_hash(seed_msg);
+        // y
+        let y = pedersen_commitment_base(seed, mod_r_p(self.y_mu));
+        let y_coords = y.to_affine().coordinates().unwrap();
+        // rho
+        let rho = pedersen_commitment_base(seed, mod_r_p(self.rho_mu));
         let rho_coord = rho.to_affine().coordinates().unwrap();
         vec![
-            self.coin1_commitment_root.inner(),
-            self.sn,
+            pk,
+            c2_rho,
+            *c1_cm.x(),
+            *c1_cm.y(),
             *c2_cm.x(),
             *c2_cm.y(),
+            self.coin1_commitment_root.inner(),
+            self.coin1_sk_root.inner(),
+            self.sn,
+            *y_coords.x(),
+            *y_coords.y(),
             *rho_coord.x(),
             *rho_coord.y(),
-            self.nonce_cm,
-            pub_x,
-            pub_y,
-            y,
         ]
     }
 
     /// Try to create a ZK proof of consensus leadership
     pub fn create_lead_proof(&self, pk: &ProvingKey) -> Result<Proof> {
-        let circuit = LeadContract {
-            coin1_commit_merkle_path: Value::known(self.coin1_commitment_merkle_path),
-            coin1_commit_leaf_pos: Value::known(self.idx),
-            coin1_sk: Value::known(self.secret_key.inner()),
-            coin1_sk_root: Value::known(self.coin1_sk_root.inner()),
-            coin1_sk_merkle_path: Value::known(self.coin1_sk_merkle_path),
-            coin1_timestamp: Value::known(self.tau),
-            coin1_nonce: Value::known(self.nonce),
-            coin1_blind: Value::known(self.coin1_blind),
-            coin1_value: Value::known(pallas::Base::from(self.value)),
-            coin2_blind: Value::known(self.coin2_blind),
-            //coin2_commit: Value::known(self.coin2_commitment),
-            rho_mu: Value::known(mod_r_p(self.rho_mu)),
-            y_mu: Value::known(mod_r_p(self.y_mu)),
-            sigma1: Value::known(self.sigma1),
-            sigma2: Value::known(self.sigma2),
-        };
-
+        let bincode = include_bytes!("../../proof/lead.zk.bin");
+        let zkbin = ZkBinary::decode(bincode)?;
+        let prover_witnesses = vec![
+            Witness::Base(Value::known(self.coin1_commitment_merkle_path)),
+            Witness::Base(Value::known(self.idx)),
+            Witness::Base(Value::known(self.coin1_sk_pos)),
+            Witness::Base(Value::known(self.secret_key.inner())),
+            Witness::Base(Value::known(self.coin1_sk_root.inner())),
+            Witness::Base(Value::known(self.coin1_sk_merkle_path)),
+            Witness::Base(Value::known(self.tau)),
+            Witness::Base(Value::known(self.nonce)),
+            Witness::Base(Value::known(self.coin1_blind)),
+            Witness::Base(Value::known(pallas::Base::from(self.value))),
+            Witness::Base(Value::known(self.coin2_blind)),
+            Witness::Base(Value::known(mod_r_p(self.rho_mu))),
+            Witness::Base(Value::known(mod_r_p(self.y_mu))),
+            Witness::Base(Value::known(self.sigma1)),
+            Witness::Base(Value::known(self.sigma2)),
+        ];
+        let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
         Ok(Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?)
     }
 }
