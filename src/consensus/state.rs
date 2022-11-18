@@ -50,12 +50,13 @@ use super::{
 use crate::{
     blockchain::Blockchain,
     crypto::proof::{ProvingKey, VerifyingKey},
+    zk::{vm::ZkCircuit, vm_stack::{empty_witnesses}},
+    zkas::ZkBinary,
     net,
     runtime::vm_runtime::Runtime,
     tx::Transaction,
     util::time::Timestamp,
     wallet::WalletPtr,
-    zk::circuit::LeadContract,
     Error, Result,
 };
 
@@ -154,8 +155,12 @@ impl ValidatorState {
         //wallet.exec_sql(consensus_keys_init_query).await?;
 
         info!("Generating leader proof keys with k: {}", LEADER_PROOF_K);
-        let lead_proving_key = ProvingKey::build(LEADER_PROOF_K, &LeadContract::default());
-        let lead_verifying_key = VerifyingKey::build(LEADER_PROOF_K, &LeadContract::default());
+        let bincode = include_bytes!("../../proof/lead.zk.bin");
+        let zkbin = ZkBinary::decode(bincode)?;
+        let void_witnesses = empty_witnesses(&zkbin);
+        let circuit = ZkCircuit::new(void_witnesses, zkbin);
+        let lead_proving_key = ProvingKey::build(LEADER_PROOF_K, &circuit);
+        let lead_verifying_key = VerifyingKey::build(LEADER_PROOF_K, &circuit);
 
         let consensus = ConsensusState::new(genesis_ts, genesis_data)?;
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;

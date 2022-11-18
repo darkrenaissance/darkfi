@@ -48,6 +48,8 @@ use crate::{
         leadcoin::LeadCoin,
         proof::{ProvingKey, VerifyingKey},
     },
+    zk::{vm::ZkCircuit, vm_stack::{empty_witnesses}},
+    zkas::ZkBinary,
     net::{P2p, P2pPtr, Settings, SettingsPtr},
     node::state::state_transition,
     tx::{
@@ -57,7 +59,6 @@ use crate::{
         Transaction,
     },
     util::{path::expand_path, time::Timestamp},
-    zk::circuit::{BurnContract, LeadContract, MintContract},
     Result,
 };
 
@@ -69,11 +70,7 @@ pub struct Stakeholder {
     pub epoch: Epoch,                    // current epoch
     pub epoch_consensus: EpochConsensus, // configuration for the epoch
     pub lead_pk: ProvingKey,
-    pub mint_pk: ProvingKey,
-    pub burn_pk: ProvingKey,
     pub lead_vk: VerifyingKey,
-    pub mint_vk: VerifyingKey,
-    pub burn_vk: VerifyingKey,
     pub playing: bool,
     pub workspace: SlotWorkspace,
     pub id: i64,
@@ -99,13 +96,12 @@ impl Stakeholder {
         let bc = Blockchain::new(&db, ts, genesis_hash).unwrap();
         let eta = pallas::Base::one();
         let epoch = Epoch::new(consensus, eta);
-
-        let lead_pk = ProvingKey::build(k.unwrap(), &LeadContract::default());
-        let mint_pk = ProvingKey::build(k.unwrap(), &MintContract::default());
-        let burn_pk = ProvingKey::build(k.unwrap(), &BurnContract::default());
-        let lead_vk = VerifyingKey::build(k.unwrap(), &LeadContract::default());
-        let mint_vk = VerifyingKey::build(k.unwrap(), &MintContract::default());
-        let burn_vk = VerifyingKey::build(k.unwrap(), &BurnContract::default());
+        let bincode = include_bytes!("../../../proof/lead.zk.bin");
+        let zkbin = ZkBinary::decode(bincode)?;
+        let void_witnesses = empty_witnesses(&zkbin);
+        let circuit = ZkCircuit::new(void_witnesses, zkbin);
+        let lead_pk = ProvingKey::build(LEADER_PROOF_K, &circuit);
+        let lead_vk = VerifyingKey::build(LEADER_PROOF_K, &circuit);
         // let p2p = P2p::new(settings.clone()).await;
         let workspace = SlotWorkspace::default();
         let clock = Clock::new(
@@ -129,11 +125,7 @@ impl Stakeholder {
             epoch,
             epoch_consensus: consensus,
             lead_pk,
-            mint_pk,
-            burn_pk,
             lead_vk,
-            mint_vk,
-            burn_vk,
             playing: true,
             workspace,
             id,
