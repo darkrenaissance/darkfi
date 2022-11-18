@@ -24,8 +24,6 @@ use darkfi_sdk::{
         MerkleNode, PublicKey, SecretKey,
     },
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
-    zk::{vm::ZkCircuit, vm_stack::Witness},
-    zkas::ZkBinary,
 };
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
@@ -36,6 +34,8 @@ use super::constants::{EPOCH_LENGTH, PRF_NULLIFIER_PREFIX};
 use crate::{
     crypto::{proof::ProvingKey, Proof},
     Result,
+    zk::{vm::ZkCircuit, vm_stack::Witness},
+    zkas::ZkBinary,
 };
 
 pub const MERKLE_DEPTH_LEADCOIN: usize = 32;
@@ -106,6 +106,8 @@ impl LeadCoin {
         slot_index: usize,
         // Merkle root of the `coin_1` secret key in the Merkle tree of secret keys
         coin1_sk_root: MerkleNode,
+        // sk pos
+        coin1_sk_pos: u32,
         // Merkle path to the secret key of `coin_1` in the Merkle tree of secret keys
         coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
         // what's seed supposed to be?
@@ -201,6 +203,7 @@ impl LeadCoin {
             sn: c_sn,
             coin1_commitment_root,
             coin1_sk_root,
+            coin1_sk_pos,
             coin1_commitment_merkle_path: coin1_commitment_merkle_path.try_into().unwrap(),
             coin1_sk_merkle_path,
             coin1_blind,
@@ -237,10 +240,10 @@ impl LeadCoin {
         let prefix_pk = pallas::Base::from(5);
         let zero = pallas::Base::zero();
         // pk
-        let pk_msg = [prefix_pk, self.coin1_sk_root, self.coin1_timestamp, zero];
+        let pk_msg = [prefix_pk, self.coin1_sk_root.inner(), self.tau, zero];
         let pk = poseidon_hash(pk_msg);
         // rho
-        let rho_msg = [prefix_evl, self.coin1_sk_root, self.coin1_nonce, zero];
+        let rho_msg = [prefix_evl, self.coin1_sk_root.inner(), nonce, zero];
         let c2_rho = poseidon_hash(rho_msg);
         // coin 1-2 cm/commitment
         let c1_cm = self.coin1_commitment.to_affine().coordinates().unwrap();
@@ -276,19 +279,19 @@ impl LeadCoin {
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode)?;
         let prover_witnesses = vec![
-            Witness::Base(Value::known(self.coin1_commitment_merkle_path)),
-            Witness::Base(Value::known(self.idx)),
-            Witness::Base(Value::known(self.coin1_sk_pos)),
+            Witness::MerklePath(Value::known(self.coin1_commitment_merkle_path)),
+            Witness::Uint32(Value::known(self.idx)),
+            Witness::Uint32(Value::known(self.coin1_sk_pos)),
             Witness::Base(Value::known(self.secret_key.inner())),
             Witness::Base(Value::known(self.coin1_sk_root.inner())),
-            Witness::Base(Value::known(self.coin1_sk_merkle_path)),
+            Witness::MerklePath(Value::known(self.coin1_sk_merkle_path)),
             Witness::Base(Value::known(self.tau)),
             Witness::Base(Value::known(self.nonce)),
-            Witness::Base(Value::known(self.coin1_blind)),
+            Witness::Scalar(Value::known(self.coin1_blind)),
             Witness::Base(Value::known(pallas::Base::from(self.value))),
-            Witness::Base(Value::known(self.coin2_blind)),
-            Witness::Base(Value::known(mod_r_p(self.rho_mu))),
-            Witness::Base(Value::known(mod_r_p(self.y_mu))),
+            Witness::Scalar(Value::known(self.coin2_blind)),
+            Witness::Scalar(Value::known(mod_r_p(self.rho_mu))),
+            Witness::Scalar(Value::known(mod_r_p(self.y_mu))),
             Witness::Base(Value::known(self.sigma1)),
             Witness::Base(Value::known(self.sigma2)),
         ];
