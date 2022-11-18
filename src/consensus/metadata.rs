@@ -22,7 +22,6 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::error;
-use rand::rngs::OsRng;
 
 use super::leadcoin::LeadCoin;
 use crate::{
@@ -47,10 +46,10 @@ pub struct Metadata {
     pub proof: LeadProof,
 }
 
-// FIXME: Why do we even need default() ?
 impl Default for Metadata {
+    /// Default Metadata used in genesis block generation
     fn default() -> Self {
-        let keypair = Keypair::random(&mut OsRng);
+        let keypair = Keypair::default();
         let signature = Signature::dummy();
         let public_inputs = vec![];
         let winning_index = 0;

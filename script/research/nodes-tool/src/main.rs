@@ -301,7 +301,7 @@ async fn generate(name: &str, folder: &str) -> Result<()> {
 
     // Data export    
     let state =
-        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet, vec![], vec![]).await?;
+        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet, vec![]).await?;
     println!("Exporting data for {:?}", name);
     let info = StateInfo::new(&*state.read().await);
     let info_string = format!("{:#?}", info);

@@ -39,7 +39,9 @@ use pasta_curves::{
 use rand::{rngs::OsRng, thread_rng, Rng};
 
 use super::{
-    constants::{DELTA, EPOCH_LENGTH, LEADER_PROOF_K, LOTTERY_HEAD_START, P, RADIX_BITS, REWARD},
+    constants::{
+        EPOCH_LENGTH, LEADER_PROOF_K, LOTTERY_HEAD_START, P, RADIX_BITS, REWARD, SLOT_TIME,
+    },
     leadcoin::{LeadCoin, LeadCoinSecrets},
     utils::fbig2base,
     Block, BlockInfo, BlockProposal, Float10, Header, LeadProof, Metadata, ProposalChain,
@@ -76,8 +78,7 @@ pub struct ConsensusState {
 
 impl ConsensusState {
     pub fn new(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
-        let genesis_block =
-            blake3::hash(&serialize(&Block::genesis_block(genesis_ts, genesis_data)));
+        let genesis_block = Block::genesis_block(genesis_ts, genesis_data).blockhash();
 
         Ok(Self {
             genesis_ts,
@@ -243,9 +244,9 @@ impl ValidatorState {
     }
 
     /// Calculates current slot, based on elapsed time from the genesis block.
-    /// Slot duration is configured using the `DELTA` value.
+    /// Slot duration is configured using the `SLOT_TIME` constant.
     pub fn current_slot(&self) -> u64 {
-        self.consensus.genesis_ts.elapsed() / (2 * DELTA)
+        self.consensus.genesis_ts.elapsed() / SLOT_TIME
     }
 
     /// Calculates the relative number of the provided slot.
@@ -275,12 +276,12 @@ impl ValidatorState {
     }
 
     /// Calculates seconds until next Nth slot starting time.
-    /// Slots duration is configured using the delta value.
+    /// Slots duration is configured using the SLOT_TIME constant.
     pub fn next_n_slot_start(&self, n: u64) -> Duration {
         assert!(n > 0);
         let start_time = NaiveDateTime::from_timestamp(self.consensus.genesis_ts.0, 0);
         let current_slot = self.current_slot() + n;
-        let next_slot_start = (current_slot * (2 * DELTA)) + (start_time.timestamp() as u64);
+        let next_slot_start = (current_slot * SLOT_TIME) + (start_time.timestamp() as u64);
         let next_slot_start = NaiveDateTime::from_timestamp(next_slot_start as i64, 0);
         let current_time = NaiveDateTime::from_timestamp(Utc::now().timestamp(), 0);
         let diff = next_slot_start - current_time;
@@ -563,33 +564,27 @@ impl ValidatorState {
         }
 
         let hash = match longest {
-            Some(chain) => chain.proposals.last().unwrap().header,
+            Some(chain) => chain.proposals.last().unwrap().hash,
             None => self.blockchain.last()?.1,
         };
 
         Ok((hash, index))
     }
 
-    /// Given a proposal, the node verify its sender (slot leader), finds which blockchain
-    /// it extends and check if it can be finalized. If the proposal extends
-    /// the canonical blockchain, a new fork chain is created.
-    pub async fn receive_proposal(
-        &mut self,
-        proposal: &BlockProposal,
-    ) -> Result<Option<Vec<BlockInfo>>> {
+    /// Given a proposal, the node verify its sender (slot leader) and finds which blockchain
+    /// it extends. If the proposal extends the canonical blockchain, a new fork chain is created.
+    pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<()> {
         let current = self.current_slot();
         // Node hasn't started participating
         match self.participating {
             Some(start) => {
                 if current < start {
-                    return Ok(None)
+                    return Ok(())
                 }
             }
-            None => return Ok(None),
+            None => return Ok(()),
         }
 
-        // TODO: proposal should contain encrypted block info
-        // we decrypt and check blockhash/headerhash is not tampered with
         let md = &proposal.block.metadata;
         let hdr = &proposal.block.header;
 
@@ -598,6 +593,16 @@ impl ValidatorState {
         if !md.public_key.verify(proposal.header.as_bytes(), &md.signature) {
             warn!("receive_proposal(): Proposer {} signature could not be verified", md.public_key);
             return Err(Error::InvalidSignature)
+        }
+
+        // Check if proposal hash matches actual one
+        let proposal_hash = proposal.block.blockhash();
+        if proposal.hash != proposal_hash {
+            warn!(
+                "receive_proposal(): Received proposal contains mismatched hashes: {} - {}",
+                proposal.hash, proposal_hash
+            );
+            return Err(Error::ProposalHashesMissmatchError)
         }
 
         // Check if proposal header matches actual one
@@ -635,8 +640,7 @@ impl ValidatorState {
 
         // TODO: [PLACEHOLDER] Add rewards validation
 
-        // Check if proposal fork has can be finalized, to broadcast those blocks
-        let mut to_broadcast = vec![];
+        // Extend corresponding chain
         match index {
             -1 => {
                 let pc = ProposalChain::new(self.consensus.genesis_block, proposal.clone());
@@ -644,65 +648,65 @@ impl ValidatorState {
             }
             _ => {
                 self.consensus.proposals[index as usize].add(proposal);
-                match self.chain_finalization(index as usize).await {
-                    Ok(v) => {
-                        to_broadcast = v;
-                    }
-                    Err(e) => {
-                        error!("receive_proposal(): Block finalization failed: {}", e);
-                        return Err(e)
-                    }
-                }
             }
         };
 
-        Ok(Some(to_broadcast))
+        Ok(())
     }
 
-    /// Given a proposal, find the index of the chain it extends.
+    /// Given a proposal, find the index of the fork chain it extends.
     pub fn find_extended_chain_index(&mut self, proposal: &BlockProposal) -> Result<i64> {
-        let mut fork = None;
-        for (index, chain) in self.consensus.proposals.iter().enumerate() {
-            let last = chain.proposals.last().unwrap();
-            let hash = last.header;
-            if proposal.block.header.previous == hash &&
-                proposal.block.header.slot > last.block.header.slot
-            {
-                return Ok(index as i64)
+        // We iterate through all forks to find which fork to extend
+        let mut chain_index = -1;
+        let mut prop_index = 0;
+        for (c_index, chain) in self.consensus.proposals.iter().enumerate() {
+            // Traverse proposals in reverse
+            for (p_index, prop) in chain.proposals.iter().enumerate().rev() {
+                if proposal.block.header.previous == prop.hash {
+                    chain_index = c_index as i64;
+                    prop_index = p_index;
+                    break
+                }
             }
-
-            if proposal.block.header.previous == last.block.header.previous &&
-                proposal.block.header.slot > last.block.header.slot
-            {
-                fork = Some(chain.clone());
+            if chain_index != -1 {
                 break
             }
         }
 
-        if let Some(mut chain) = fork {
-            debug!("find_extended_chain_index(): Proposal to fork a forkchain was received.");
-            chain.proposals.pop(); // removing last block to create the fork
-            if !chain.proposals.is_empty() {
-                // if len is 0 we will verify against blockchain last block
-                self.consensus.proposals.push(chain);
-                return Ok(self.consensus.proposals.len() as i64 - 1)
+        // If no fork was found, we check with canonical
+        if chain_index == -1 {
+            let (last_slot, last_block) = self.blockchain.last()?;
+            if proposal.block.header.previous != last_block ||
+                proposal.block.header.slot <= last_slot
+            {
+                debug!("find_extended_chain_index(): Proposal doesn't extend any known chain");
+                return Ok(-2)
             }
+
+            // Proposal extends canonical chain
+            return Ok(-1)
         }
 
-        let (last_slot, last_block) = self.blockchain.last()?;
-        if proposal.block.header.previous != last_block || proposal.block.header.slot <= last_slot {
-            debug!("find_extended_chain_index(): Proposal doesn't extend any known chain");
-            return Ok(-2)
+        // Found fork chain
+        let chain = &self.consensus.proposals[chain_index as usize];
+        // Proposal extends fork at last proposal
+        if prop_index == (chain.proposals.len() - 1) {
+            return Ok(chain_index)
         }
 
-        Ok(-1)
+        debug!("find_extended_chain_index(): Proposal to fork a forkchain was received.");
+        let mut chain = self.consensus.proposals[chain_index as usize].clone();
+        // We keep all proposals until the one it extends
+        chain.proposals.drain((prop_index + 1)..);
+        self.consensus.proposals.push(chain);
+        Ok(self.consensus.proposals.len() as i64 - 1)
     }
 
     /// Search the chains we're holding for the given proposal.
     pub fn proposal_exists(&self, input_proposal: &blake3::Hash) -> bool {
         for chain in self.consensus.proposals.iter() {
             for proposal in chain.proposals.iter() {
-                if input_proposal == &proposal.header {
+                if input_proposal == &proposal.hash {
                     return true
                 }
             }
@@ -722,42 +726,65 @@ impl ValidatorState {
         Ok(())
     }
 
-    /// Provided an index, the node checks if the chain can be finalized.
+    /// Node checks if any of the fork chains can be finalized.
     /// Consensus finalization logic:
     /// - If the node has observed the creation of 3 proposals in a fork chain and no other
     ///   forks exists at same or greater height, it finalizes (appends to canonical blockchain)
     ///   all proposals up to the last one.
-    /// When fork chain proposals are finalized, the rest of fork chains not
-    /// starting by those proposals are removed.
-    pub async fn chain_finalization(&mut self, chain_index: usize) -> Result<Vec<BlockInfo>> {
-        let length = self.consensus.proposals[chain_index].proposals.len();
-        if length < 3 {
-            debug!(
-                "chain_finalization(): Less than 3 proposals in chain {}, nothing to finalize",
-                chain_index
-            );
-            return Ok(vec![])
-        }
-
-        for (i, c) in self.consensus.proposals.iter().enumerate() {
-            if i == chain_index {
+    /// When fork chain proposals are finalized, the rest of fork chains are removed.
+    pub async fn chain_finalization(&mut self) -> Result<Vec<BlockInfo>> {
+        // First we find longest chain without any other forks at same height
+        let mut chain_index = -1;
+        let mut max_length = 0;
+        for (index, chain) in self.consensus.proposals.iter().enumerate() {
+            let length = chain.proposals.len();
+            // Ignore forks with less that 3 blocks
+            if length < 3 {
                 continue
             }
-            if c.proposals.len() >= length {
-                debug!("chain_finalization(): Same or greater length fork chain exists, nothing to finalize");
-                return Ok(vec![])
+            // Check if less than max
+            if length < max_length {
+                continue
             }
+            // Check if same length as max
+            if length == max_length {
+                // Setting chain_index so we know we have multiple
+                // forks at same length.
+                chain_index = -2;
+                continue
+            }
+            // Set chain as max
+            chain_index = index as i64;
+            max_length = length;
         }
 
-        let chain = &mut self.consensus.proposals[chain_index];
-        let bound = length - 1;
-        let mut finalized = vec![];
-        for proposal in &mut chain.proposals[..bound] {
+        // Check if we found any fork to finalize
+        match chain_index {
+            -2 => {
+                debug!("chain_finalization(): Eligible forks with same heigh exist, nothing to finalize");
+                return Ok(vec![])
+            }
+            -1 => {
+                debug!("chain_finalization(): All chains have less than 3 proposals, nothing to finalize");
+                return Ok(vec![])
+            }
+            _ => debug!("chain_finalization(): Chain {} can be finalized!", chain_index),
+        }
+
+        // Starting finalization
+        let mut chain = self.consensus.proposals[chain_index as usize].clone();
+
+        // Retrieving proposals to finalize
+        let bound = max_length - 1;
+        let mut finalized: Vec<BlockInfo> = vec![];
+        for proposal in &chain.proposals[..bound] {
             finalized.push(proposal.clone().into());
         }
 
-        chain.proposals.drain(0..bound);
+        // Removing finalized proposals from chain
+        chain.proposals.drain(..bound);
 
+        // Adding finalized proposals to canonical
         info!("consensus: Adding {} finalized block to canonical chain.", finalized.len());
         let blockhashes = match self.blockchain.add(&finalized) {
             Ok(v) => v,
@@ -767,6 +794,7 @@ impl ValidatorState {
             }
         };
 
+        // Validating state transitions
         for proposal in &finalized {
             // TODO: Is this the right place? We're already doing this in protocol_sync.
             // TODO: These state transitions have already been checked. (I wrote this, but where?)
@@ -779,20 +807,9 @@ impl ValidatorState {
             }
         }
 
-        let last_block = *blockhashes.last().unwrap();
-        let last_slot = finalized.last().unwrap().header.slot;
-
-        let mut dropped = vec![];
-        for chain in self.consensus.proposals.iter() {
-            let first = chain.proposals.first().unwrap();
-            if first.block.header.previous != last_block || first.block.header.slot <= last_slot {
-                dropped.push(chain.clone());
-            }
-        }
-
-        for chain in dropped {
-            self.consensus.proposals.retain(|c| *c != chain);
-        }
+        // Removing rest forks
+        self.consensus.proposals = vec![];
+        self.consensus.proposals.push(chain);
 
         Ok(finalized)
     }

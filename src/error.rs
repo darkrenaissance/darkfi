@@ -232,6 +232,9 @@ pub enum Error {
     #[error("Check if proposal extends any existing fork chains failed")]
     ExtendedChainIndexNotFound,
 
+    #[error("Proposal contains missmatched hashes")]
+    ProposalHashesMissmatchError,
+
     #[error("Proposal contains missmatched headers")]
     ProposalHeadersMissmatchError,
 

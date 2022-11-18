@@ -29,7 +29,7 @@ const SLED_BLOCK_TREE: &[u8] = b"_blocks";
 const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
 
 /// The `HeaderStore` is a `sled` tree storing all the blockchain's blocks' headers
-/// where the key is the headers's hash, and value is the serialized header.
+/// where the key is the headers' hash, and value is the serialized header.
 #[derive(Clone)]
 pub struct HeaderStore(sled::Tree);
 
@@ -115,7 +115,7 @@ impl HeaderStore {
 }
 
 /// The `BlockStore` is a `sled` tree storing all the blockchain's blocks
-/// where the key is the block's headers' hash, and value is the serialized block.
+/// where the key is the blocks' hash, and value is the serialized block.
 #[derive(Clone)]
 pub struct BlockStore(sled::Tree);
 
@@ -135,32 +135,42 @@ impl BlockStore {
 
     /// Insert a slice of [`Block`] into the store. With sled, the
     /// operation is done as a batch.
-    /// The block's header is used as the key, while value is the serialized [`Block`] itself.
-    pub fn insert(&self, blocks: &[Block]) -> Result<()> {
+    /// The block are hashed with BLAKE3 and this blockhash is used as
+    /// the key, while value is the serialized [`Block`] itself.
+    /// On success, the function returns the block hashes in the same order.
+    pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
+        let mut ret = Vec::with_capacity(blocks.len());
         let mut batch = sled::Batch::default();
 
         for block in blocks {
-            batch.insert(block.header.as_bytes(), serialize(block));
+            let serialized = serialize(block);
+            let blockhash = blake3::hash(&serialized);
+            batch.insert(blockhash.as_bytes(), serialized);
+            ret.push(blockhash);
         }
 
         self.0.apply_batch(batch)?;
-        Ok(())
+        Ok(ret)
     }
 
-    /// Check if the blockstore contains a given headerhash.
-    pub fn contains(&self, headerhash: &blake3::Hash) -> Result<bool> {
-        Ok(self.0.contains_key(headerhash.as_bytes())?)
+    /// Check if the blockstore contains a given blockhash.
+    pub fn contains(&self, blockhash: &blake3::Hash) -> Result<bool> {
+        Ok(self.0.contains_key(blockhash.as_bytes())?)
     }
 
-    /// Fetch given headerhashes from the blockstore.
+    /// Fetch given blockhashhashes from the blockstore.
     /// The resulting vector contains `Option`, which is `Some` if the block
     /// was found in the blockstore, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
     /// case at least one block was not found.
-    pub fn get(&self, headerhashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Block>>> {
-        let mut ret = Vec::with_capacity(headerhashes.len());
+    pub fn get(
+        &self,
+        blockhashhashes: &[blake3::Hash],
+        strict: bool,
+    ) -> Result<Vec<Option<Block>>> {
+        let mut ret = Vec::with_capacity(blockhashhashes.len());
 
-        for hash in headerhashes {
+        for hash in blockhashhashes {
             if let Some(found) = self.0.get(hash.as_bytes())? {
                 let block = deserialize(&found)?;
                 ret.push(Some(block));
@@ -177,7 +187,7 @@ impl BlockStore {
     }
 
     /// Retrieve all blocks from the blockstore in the form of a tuple
-    /// (`headerhash`, `block`).
+    /// (`blockhash`, `block`).
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Block)>> {
         let mut blocks = vec![];
@@ -195,7 +205,7 @@ impl BlockStore {
 
 /// The `BlockOrderStore` is a `sled` tree storing the order of the
 /// blockchain's slots, where the key is the slot uid, and the value is
-/// the block's headers' hash. [`BlockStore`] can be queried with this hash.
+/// the blocks' hash. [`BlockStore`] can be queried with this hash.
 #[derive(Clone)]
 pub struct BlockOrderStore(sled::Tree);
 
@@ -208,15 +218,15 @@ impl BlockOrderStore {
         // In case the store is empty, initialize it with the genesis block.
         if store.0.is_empty() {
             let genesis_block = Block::genesis_block(genesis_ts, genesis_data);
-            store.insert(&[0], &[genesis_block.header])?;
+            store.insert(&[0], &[genesis_block.blockhash()])?;
         }
 
         Ok(store)
     }
 
-    /// Insert a slice of slots and headerhashes into the store. With sled, the
+    /// Insert a slice of slots and blockhashes into the store. With sled, the
     /// operation is done as a batch.
-    /// The block slot is used as the key, and the headerhash is used as value.
+    /// The block slot is used as the key, and the blockhash is used as value.
     pub fn insert(&self, slots: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
         assert_eq!(slots.len(), hashes.len());
         let mut batch = sled::Batch::default();
@@ -259,7 +269,7 @@ impl BlockOrderStore {
     }
 
     /// Retrieve all slots from the blockorderstore in the form of a tuple
-    /// (`slot`, `headerhash`).
+    /// (`slot`, `blockhash`).
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<(u64, blake3::Hash)>> {
         let mut slots = vec![];
@@ -288,8 +298,8 @@ impl BlockOrderStore {
             if let Some(found) = self.0.get_gt(key.to_be_bytes())? {
                 let key_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
                 key = u64::from_be_bytes(key_bytes);
-                let header_hash = deserialize(&found.1)?;
-                ret.push(header_hash);
+                let blockhash = deserialize(&found.1)?;
+                ret.push(blockhash);
                 counter += 1;
                 continue
             }
@@ -299,7 +309,7 @@ impl BlockOrderStore {
         Ok(ret)
     }
 
-    /// Fetch the last block headerhash in the tree, based on the `Ord`
+    /// Fetch the last blockhash in the tree, based on the `Ord`
     /// implementation for `Vec<u8>`. This should not be able to
     /// fail because we initialize the store with the genesis block.
     pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {

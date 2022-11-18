@@ -81,7 +81,7 @@ impl ProtocolProposal {
             let proposal_copy = (*proposal).clone();
 
             // Verify we have the proposal already
-            if self.state.read().await.proposal_exists(&proposal_copy.header) {
+            if self.state.read().await.proposal_exists(&proposal_copy.hash) {
                 debug!("ProtocolProposal::handle_receive_proposal(): Proposal already received.");
                 continue
             }

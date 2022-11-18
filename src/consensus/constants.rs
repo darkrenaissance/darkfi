@@ -46,11 +46,11 @@ pub const BLOCK_INFO_MAGIC_BYTES: [u8; 4] = [0x90, 0x44, 0xf1, 0xf6];
 /// Number of slots in one epoch
 pub const EPOCH_LENGTH: usize = 10;
 
+/// Slot time in seconds
+pub const SLOT_TIME: u64 = 20;
+
 /// Block leader reward
 pub const REWARD: u64 = 420;
-
-/// `2 * DELTA` represents slot time
-pub const DELTA: u64 = 20;
 
 /// Leader proofs k for zk proof rows (rows=2^k)
 pub const LEADER_PROOF_K: u32 = 11;

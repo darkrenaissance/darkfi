@@ -99,18 +99,18 @@ impl Blockchain {
         // TODO: Make db writes here completely atomic
         for block in blocks {
             // Store transactions
-            let _tx_hashes = self.transactions.insert(&block.txs)?;
+            self.transactions.insert(&block.txs)?;
 
             // Store header
-            let headerhash = self.headers.insert(&[block.header.clone()])?;
-            ret.push(headerhash[0]);
+            self.headers.insert(&[block.header.clone()])?;
 
             // Store block
             let blk: Block = Block::from(block.clone());
-            self.blocks.insert(&[blk])?;
+            let blockhash = self.blocks.insert(&[blk])?;
+            ret.push(blockhash[0]);
 
             // Store block order
-            self.order.insert(&[block.header.slot], &[headerhash[0]])?;
+            self.order.insert(&[block.header.slot], &[blockhash[0]])?;
         }
 
         Ok(ret)
@@ -126,19 +126,21 @@ impl Blockchain {
         // TODO: Check if we have all transactions
 
         // Check provided info produces the same hash
-        Ok(blockhash == block.header.headerhash())
+        Ok(blockhash == block.blockhash())
     }
 
     /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them are not found.
     pub fn get_blocks_by_hash(&self, hashes: &[blake3::Hash]) -> Result<Vec<BlockInfo>> {
         let mut ret = Vec::with_capacity(hashes.len());
 
-        let headers = self.headers.get(hashes, true)?;
         let blocks = self.blocks.get(hashes, true)?;
 
-        for (i, header) in headers.iter().enumerate() {
-            let header = header.clone().unwrap();
-            let block = blocks[i].clone().unwrap();
+        for (i, block) in blocks.iter().enumerate() {
+            let block = block.clone().unwrap();
+
+            let headers = self.headers.get(&[block.header], true)?;
+            // Since we used strict get, its safe to unwrap here
+            let header = headers[0].clone().unwrap();
 
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
@@ -177,8 +179,10 @@ impl Blockchain {
 
     /// Retrieve last finalized block leader proof hash.
     pub fn get_last_proof_hash(&self) -> Result<blake3::Hash> {
-        let (slot, _) = self.last().unwrap();
-        let block = &self.get_blocks_by_slot(&[slot]).unwrap()[0];
+        let (_, hash) = self.last().unwrap();
+        let blocks = self.blocks.get(&[hash], true)?;
+        // Since we used strict get, its safe to unwrap here
+        let block = blocks[0].clone().unwrap();
         let hash = blake3::hash(&serialize(&block.metadata.proof));
         Ok(hash)
     }

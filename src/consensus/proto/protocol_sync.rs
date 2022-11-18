@@ -123,10 +123,7 @@ impl ProtocolSync {
                 }
             };
 
-            info!(
-                "ProtocolSync::handle_receive_block(): Received block: {}",
-                info.header.headerhash()
-            );
+            info!("ProtocolSync::handle_receive_block(): Received block: {}", info.blockhash());
 
             debug!("ProtocolSync::handle_receive_block(): Processing received block");
             let info_copy = (*info).clone();

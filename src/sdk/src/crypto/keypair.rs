@@ -52,6 +52,15 @@ impl Keypair {
     }
 }
 
+impl Default for Keypair {
+    /// Default Keypair used in genesis block generation
+    fn default() -> Self {
+        let secret = SecretKey::from(pallas::Base::from(42));
+        let public = PublicKey::from_secret(secret);
+        Self { secret, public }
+    }
+}
+
 /// Structure holding a secret key, wrapping a `pallas::Base` element.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, SerialEncodable, SerialDecodable)]
 pub struct SecretKey(pallas::Base);

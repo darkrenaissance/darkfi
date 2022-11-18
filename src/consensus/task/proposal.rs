@@ -25,14 +25,14 @@ use crate::{consensus::ValidatorStatePtr, net::P2pPtr, util::async_util::sleep};
 
 /// async task used for participating in the consensus protocol
 pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: ValidatorStatePtr) {
-    // Node waits just before the current or next epoch end, so it can
+    // Node waits just before the current or next epoch last finalization syncing period, so it can
     // start syncing latest state.
     let mut seconds_until_next_epoch = state.read().await.next_n_epoch_start(1);
-    let one_sec = Duration::new(1, 0);
+    let three_secs = Duration::new(3, 0);
 
     loop {
-        if seconds_until_next_epoch > one_sec {
-            seconds_until_next_epoch -= one_sec;
+        if seconds_until_next_epoch > three_secs {
+            seconds_until_next_epoch -= three_secs;
             break
         }
 
@@ -59,11 +59,39 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
     }
 
     loop {
+        // Node sleeps until finalization sync period start (2 seconds before next slot)
+        let seconds_sync_period =
+            (state.read().await.next_n_slot_start(1) - Duration::new(2, 0)).as_secs();
+        info!("consensus: Waiting for finalization sync period ({} sec)", seconds_sync_period);
+        sleep(seconds_sync_period).await;
+
+        // Check if any forks can be finalized
+        match state.write().await.chain_finalization().await {
+            Ok(to_broadcast) => {
+                // Broadcast finalized blocks info, if any:
+                if to_broadcast.len() > 0 {
+                    info!("consensus: Broadcasting finalized blocks");
+                    for info in to_broadcast {
+                        match sync_p2p.broadcast(info).await {
+                            Ok(()) => info!("consensus: Broadcasted block"),
+                            Err(e) => error!("consensus: Failed broadcasting block: {}", e),
+                        }
+                    }
+                } else {
+                    info!("consensus: No finalized blocks to broadcast");
+                }
+            }
+            Err(e) => {
+                error!("consensus: Finalization check failed: {}", e);
+            }
+        }
+
+        // Node sleeps until next slot
         let seconds_next_slot = state.read().await.next_n_slot_start(1).as_secs();
         info!("consensus: Waiting for next slot ({} sec)", seconds_next_slot);
         sleep(seconds_next_slot).await;
 
-        // Node checks if epoch has changed, to broadcast a new participation message
+        // Node checks if epoch has changed, to generate new epoch coins
         let epoch_changed = state.write().await.epoch_changed().await;
         match epoch_changed {
             Ok(changed) => {
@@ -103,29 +131,16 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
             }
         };
 
+        // Node stores the proposal and broadcast to rest nodes
         info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
         debug!("consensus: Full proposal: {:?}", proposal);
         match state.write().await.receive_proposal(&proposal).await {
-            Ok(to_broadcast) => {
-                info!("consensus: Block proposal  saved successfully");
-                // Broadcast block to other consensus nodes
+            Ok(()) => {
+                info!("consensus: Block proposal saved successfully");
+                // Broadcast proposal to other consensus nodes
                 match consensus_p2p.broadcast(proposal).await {
                     Ok(()) => info!("consensus: Proposal broadcasted successfully"),
                     Err(e) => error!("consensus: Failed broadcasting proposal: {}", e),
-                }
-                // Broadcast finalized blocks info, if any:
-                if let Some(blocks) = to_broadcast {
-                    if blocks.len() > 0 {
-                        info!("consensus: Broadcasting finalized blocks");
-                        for info in blocks {
-                            match sync_p2p.broadcast(info).await {
-                                Ok(()) => info!("consensus: Broadcasted block"),
-                                Err(e) => error!("consensus: Failed broadcasting block: {}", e),
-                            }
-                        }
-                    }
-                } else {
-                    info!("consensus: No finalized blocks to broadcast");
                 }
             }
             Err(e) => {

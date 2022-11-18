@@ -344,12 +344,12 @@ impl Circuit<pallas::Base> for LeadContract {
             .map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
         /*
-        let coin1_commit_root = assign_free_advice(
-            layouter.namespace(|| "witness coin_commitment_root"),
-            config.advices[8],
-            self.coin1_commit_root,
-    )?;
-        */
+            let coin1_commit_root = assign_free_advice(
+                layouter.namespace(|| "witness coin_commitment_root"),
+                config.advices[8],
+                self.coin1_commit_root,
+        )?;
+            */
 
         let coin1_sk = assign_free_advice(
             layouter.namespace(|| "witness coin1_sk"),
@@ -385,12 +385,12 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
         /*
-        let coin1_serial = assign_free_advice(
-            layouter.namespace(|| "witness coin1_serial"),
-            config.advices[8],
-            self.coin1_serial,
-    )?;
-        */
+            let coin1_serial = assign_free_advice(
+                layouter.namespace(|| "witness coin1_serial"),
+                config.advices[8],
+                self.coin1_serial,
+        )?;
+            */
 
         let coin1_value = assign_free_advice(
             layouter.namespace(|| "witness coin1_value"),
@@ -434,12 +434,12 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
 
         /*
-        let rho = NonIdentityPoint::new(
-            ecc_chip.clone(),
-            layouter.namespace(|| "witness rho"),
-            self.rho.as_ref().map(|cm| cm.to_affine()),
-    )?;
-        */
+            let rho = NonIdentityPoint::new(
+                ecc_chip.clone(),
+                layouter.namespace(|| "witness rho"),
+                self.rho.as_ref().map(|cm| cm.to_affine()),
+        )?;
+            */
 
         let zero = assign_free_advice(
             layouter.namespace(|| "witness constant zero"),
@@ -683,12 +683,12 @@ impl Circuit<pallas::Base> for LeadContract {
         // Constrain derived `sn_commit` to be equal to witnessed `coin1_serial`.
         info!("coin1 cm root LHS: {:?}", coin1_cm_root.value());
         /*
-        info!("coin1 cm root RHS: {:?}", coin1_commit_root.value());
-        layouter.assign_region(
-        || "coin1_cm_root equality",
-        |mut region| region.constrain_equal(coin1_cm_root.cell(), coin1_commit_root.cell()),
-    )?;
-         */
+            info!("coin1 cm root RHS: {:?}", coin1_commit_root.value());
+            layouter.assign_region(
+            || "coin1_cm_root equality",
+            |mut region| region.constrain_equal(coin1_cm_root.cell(), coin1_commit_root.cell()),
+        )?;
+             */
         layouter.constrain_instance(
             coin1_cm_root.cell(),
             config.primary,
@@ -696,12 +696,12 @@ impl Circuit<pallas::Base> for LeadContract {
         )?;
         info!("coin1 serial commit LHS: {:?}", sn_commit.value());
         /*
-        info!("coin1 serial commit RHS: {:?}", coin1_serial.value());
-        layouter.assign_region(
-        || "sn_commit equality",
-        |mut region| region.constrain_equal(sn_commit.cell(), coin1_serial.cell()),
-    )?;
-         */
+            info!("coin1 serial commit RHS: {:?}", coin1_serial.value());
+            layouter.assign_region(
+            || "sn_commit equality",
+            |mut region| region.constrain_equal(sn_commit.cell(), coin1_serial.cell()),
+        )?;
+             */
         layouter.constrain_instance(
             sn_commit.cell(),
             config.primary,
