@@ -68,8 +68,8 @@ circuit "tx" {
         constrain_instance(c4_cm_x);
         c4_cm_y = ec_get_y(c4_cm);
         constrain_instance(c4_cm_y);
-        v2v3 = base_add(c3_value, c4_value);
-        constrain_equal_base(c1_value, v3v4);
+        outval = base_add(c3_value, c4_value);
+        constrain_equal_base(c1_value, outval);
         # root of path to coin1 commitment at given position
         c1_root = merkle_root(c1_cm_pos, c1_cm_path, c1_cm_hash);
         constrain_instance(c1_root);
