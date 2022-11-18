@@ -41,6 +41,36 @@ use crate::{
 pub const MERKLE_DEPTH_LEADCOIN: usize = 32;
 pub const MERKLE_DEPTH: u8 = 32;
 
+
+#[derive(Debug, Clone)]
+pub struct TransferStx {
+    /// commitments [coin3_commitment, coin4_commitment]
+    pub commitments: [pallas::Point; 2],
+    /// nullifiers coin1_nullifier
+    pub nullifier: pallas::Base,
+    /// sk coin pos
+    pub tau: pallas::Base,
+    /// root to coin's commitments
+    pub root: MerkleNode,
+    /// transfer proof
+    pub proof: Proof,
+}
+
+/// transfered leadcoin is poured into two coins,
+/// first coin is transfered poured coin.
+/// second coin is the change returning to sender, or different address.
+#[derive(Debug, Clone, Copy)]
+pub struct PouredCoin {
+    /// poured coin public key
+    pub pk: pallas::Base,
+    /// poured coin nonce
+    pub rho: pallas::Base,
+    /// poured coin commitment opening
+    pub opening: pallas::Scalar,
+    /// poured coin value
+    pub value: u64,
+}
+
 // TODO: Unify item names with the names in the ZK proof (those are more descriptive)
 /// Structure representing the consensus leader coin
 #[derive(Debug, Clone, Copy)]
@@ -65,6 +95,8 @@ pub struct LeadCoin {
     pub sn: pallas::Base,
     /// Merkle root of coin1 commitment
     pub coin1_commitment_root: MerkleNode,
+    /// coin1 sk
+    pub coin1_sk: pallas::Base,
     /// Merkle root of the `coin1` secret key
     pub coin1_sk_root: MerkleNode,
     /// coin1 sk position in merkle tree
@@ -104,6 +136,8 @@ impl LeadCoin {
         value: u64,
         // Slot index in the epock
         slot_index: usize,
+        // coin1 sk
+        coin1_sk: pallas::Base,
         // Merkle root of the `coin_1` secret key in the Merkle tree of secret keys
         coin1_sk_root: MerkleNode,
         // sk pos
@@ -202,6 +236,7 @@ impl LeadCoin {
             nonce_cm: coin2_seed,
             sn: c_sn,
             coin1_commitment_root,
+            coin1_sk,
             coin1_sk_root,
             coin1_sk_pos: u32::try_from(usize::from(coin1_sk_pos)).unwrap(),
             coin1_commitment_merkle_path: coin1_commitment_merkle_path.try_into().unwrap(),
@@ -278,7 +313,7 @@ impl LeadCoin {
     pub fn create_lead_proof(&self, pk: &ProvingKey) -> Result<Proof> {
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode)?;
-        let prover_witnesses = vec![
+        let witnesses = vec![
             Witness::MerklePath(Value::known(self.coin1_commitment_merkle_path)),
             Witness::Uint32(Value::known(self.idx)),
             Witness::Uint32(Value::known(self.coin1_sk_pos)),
@@ -293,12 +328,79 @@ impl LeadCoin {
             Witness::Scalar(Value::known(mod_r_p(self.rho_mu))),
             Witness::Scalar(Value::known(mod_r_p(self.y_mu))),
             Witness::Base(Value::known(self.sigma1)),
-            Witness::Base(Value::known(self.sigma2)),
+            Witness::Base(Value::known(self.sigma2))
         ];
-        let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+        let circuit = ZkCircuit::new(witnesses, zkbin.clone());
         Ok(Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?)
     }
+
+    pub fn create_xfer_proof(&self,
+                             pk: &ProvingKey,
+                             change_coin: PouredCoin,
+                             transfered_coin: PouredCoin) -> Result<TransferStx> {
+        assert!(change_coin.value+transfered_coin.value==self.value
+                && self.value>0);
+        let zero = pallas::Base::zero();
+        let prefix_cm = pallas::Base::from(4);
+        let bincode = include_bytes!("../../proof/tx.zk.bin");
+        let zkbin = ZkBinary::decode(bincode)?;
+        let retval = pallas::Base::from(change_coin.value);
+        let xferval = pallas::Base::from(transfered_coin.value);
+        let pos : u32 = self.idx;
+        let value = pallas::Base::from(self.value);
+        let witnesses = vec![
+            // coin (1) burned coin
+            Witness::Base(Value::known(self.coin1_commitment_root.inner())),
+            Witness::Base(Value::known(self.coin1_sk_root.inner())),
+            Witness::Base(Value::known(self.coin1_sk)),
+            Witness::MerklePath(Value::known(self.coin1_sk_merkle_path)),
+            Witness::Uint32(Value::known(self.coin1_sk_pos)),
+            Witness::Base(Value::known(self.nonce)),
+            Witness::Scalar(Value::known(self.coin1_blind)),
+            Witness::Base(Value::known(value)),
+            Witness::MerklePath(Value::known(self.coin1_commitment_merkle_path)),
+            Witness::Uint32(Value::known(pos)),
+            Witness::Base(Value::known(self.sn)),
+            // coin (3)
+            Witness::Base(Value::known(change_coin.pk)),
+            Witness::Base(Value::known(change_coin.rho)),
+            Witness::Scalar(Value::known(change_coin.opening)),
+            Witness::Base(Value::known(retval)),
+            // coin (4)
+            Witness::Base(Value::known(transfered_coin.pk)),
+            Witness::Base(Value::known(transfered_coin.rho)),
+            Witness::Scalar(Value::known(transfered_coin.opening)),
+            Witness::Base(Value::known(xferval)),
+        ];
+        let circuit = ZkCircuit::new(witnesses, zkbin.clone());
+        let proof = Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?;
+        let cm3_msg_in = [prefix_cm,
+                          change_coin.pk,
+                          pallas::Base::from(change_coin.value),
+                          change_coin.rho,
+        ];
+        let cm3_msg = poseidon_hash(cm3_msg_in);
+        let cm3 = pedersen_commitment_base(cm3_msg, change_coin.opening);
+        let cm4_msg_in = [prefix_cm,
+                          transfered_coin.pk,
+                          pallas::Base::from(transfered_coin.value),
+                          transfered_coin.rho,
+        ];
+        let cm4_msg = poseidon_hash(cm4_msg_in);
+        let cm4 = pedersen_commitment_base(cm4_msg, transfered_coin.opening);
+        let tx  = TransferStx {
+            commitments: [cm3, cm4],
+            nullifier: self.sn,
+            tau: self.tau,
+            root: self.coin1_commitment_root,
+            proof: proof
+        };
+        Ok(tx)
+    }
 }
+
+
+
 
 /// This struct holds the secrets for creating LeadCoins during one epoch.
 pub struct LeadCoinSecrets {

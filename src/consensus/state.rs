@@ -397,6 +397,7 @@ impl ValidatorState {
                 sigma2,
                 LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
                 i,
+                epoch_secrets.secret_keys[i].inner(),
                 epoch_secrets.merkle_roots[i],
                 i, //TODO same as idx now for simplicity.
                 epoch_secrets.merkle_paths[i],
