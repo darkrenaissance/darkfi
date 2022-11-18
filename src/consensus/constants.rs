@@ -53,7 +53,7 @@ pub const SLOT_TIME: u64 = 20;
 pub const REWARD: u64 = 420;
 
 /// Leader proofs k for zk proof rows (rows=2^k)
-pub const LEADER_PROOF_K: u32 = 11;
+pub const LEADER_PROOF_K: u32 = 13;
 
 // TODO: Describe these constants
 pub const RADIX_BITS: usize = 76;
