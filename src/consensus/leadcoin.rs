@@ -33,9 +33,9 @@ use rand::rngs::OsRng;
 use super::constants::{EPOCH_LENGTH, PRF_NULLIFIER_PREFIX};
 use crate::{
     crypto::{proof::ProvingKey, Proof},
-    Result,
     zk::{vm::ZkCircuit, vm_stack::Witness},
     zkas::ZkBinary,
+    Result,
 };
 
 pub const MERKLE_DEPTH_LEADCOIN: usize = 32;
@@ -203,7 +203,7 @@ impl LeadCoin {
             sn: c_sn,
             coin1_commitment_root,
             coin1_sk_root,
-            coin1_sk_pos: u32::try_from(usize::from(coin1_sk_pos )).unwrap(),
+            coin1_sk_pos: u32::try_from(usize::from(coin1_sk_pos)).unwrap(),
             coin1_commitment_merkle_path: coin1_commitment_merkle_path.try_into().unwrap(),
             coin1_sk_merkle_path,
             coin1_blind,

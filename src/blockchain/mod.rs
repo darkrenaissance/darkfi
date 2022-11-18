@@ -135,8 +135,8 @@ impl Blockchain {
 
         let blocks = self.blocks.get(hashes, true)?;
 
-        for (i, block) in blocks.iter().enumerate() {
-            let block = block.clone().unwrap();
+        for block in blocks {
+            let block = block.unwrap();
 
             let headers = self.headers.get(&[block.header], true)?;
             // Since we used strict get, its safe to unwrap here

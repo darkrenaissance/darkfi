@@ -50,13 +50,13 @@ use super::{
 use crate::{
     blockchain::Blockchain,
     crypto::proof::{ProvingKey, VerifyingKey},
-    zk::{vm::ZkCircuit, vm_stack::{empty_witnesses}},
-    zkas::ZkBinary,
     net,
     runtime::vm_runtime::Runtime,
     tx::Transaction,
     util::time::Timestamp,
     wallet::WalletPtr,
+    zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
+    zkas::ZkBinary,
     Error, Result,
 };
 
