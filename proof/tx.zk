@@ -42,7 +42,7 @@ circuit "tx" {
         constrain_instance(c1_pk);
         # coin (1) cm/commitment
         c1_cm_msg = poseidon_hash(PREFIX_CM, c1_pk, c1_value, c1_rho);
-        c1_cm_v = ec_mul_short(c1_cm_msg, VALUE_COMMIT_VALUE);
+        c1_cm_v = ec_mul_base(c1_cm_msg, NULLIFIER_K);
         c1_cm_r = ec_mul(c1_opening, VALUE_COMMIT_RANDOM);
         c1_cm = ec_add(c1_cm_v, c1_cm_r);
         c1_cm_x = ec_get_x(c1_cm);
@@ -52,7 +52,7 @@ circuit "tx" {
         constrain_instance(c1_cm_y);
         # coin (3) cm/commitment
         c3_cm_msg = poseidon_hash(PREFIX_CM, c3_pk, c3_value, c3_rho);
-        c3_cm_v = ec_mul_short(c3_cm_msg, VALUE_COMMIT_VALUE);
+        c3_cm_v = ec_mul_base(c3_cm_msg, NULLIFIER_K);
         c3_cm_r = ec_mul(c3_opening, VALUE_COMMIT_RANDOM);
         c3_cm = ec_add(c3_cm_v, c3_cm_r);
         c3_cm_x = ec_get_x(c3_cm);
@@ -61,7 +61,7 @@ circuit "tx" {
         constrain_instance(c3_cm_y);
         # coin (4) cm/commitment
         c4_cm_msg = poseidon_hash(PREFIX_CM, c4_pk, c4_value, c4_rho);
-        c4_cm_v = ec_mul_short(c4_cm_msg, VALUE_COMMIT_VALUE);
+        c4_cm_v = ec_mul_base(c4_cm_msg, NULLIFIER_K);
         c4_cm_r = ec_mul(c4_opening, VALUE_COMMIT_RANDOM);
         c4_cm = ec_add(c4_cm_v, c4_cm_r);
         c4_cm_x = ec_get_x(c4_cm);
