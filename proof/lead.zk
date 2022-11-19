@@ -35,7 +35,6 @@ circuit "Lead" {
         constrain_instance(pk);
         # coin (2) rho/nonce 
         c2_rho = poseidon_hash(PREFIX_EVL, c1_sk_root, c1_rho, ZERO);
-        constrain_instance(c2_rho);
         # coin (1) cm/commitment
         c1_cm_msg = poseidon_hash(PREFIX_CM, pk, value, c1_rho);
         c1_cm_v = ec_mul_base(c1_cm_msg, NULLIFIER_K);
