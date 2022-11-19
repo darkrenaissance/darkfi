@@ -30,7 +30,7 @@ use darkfi::{
         metadata::Metadata,
         state::{ConsensusState, ValidatorState},        
     },
-    tx2::Transaction,
+    tx::Transaction,
     util::{path::expand_path, time::Timestamp},
     wallet::walletdb::init_wallet,
     Result,
