@@ -730,7 +730,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         a,
                         b,
                         0,
-                        true,
+                        false,
                     )?;
                 }
 

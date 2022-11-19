@@ -151,76 +151,69 @@ impl LeadCoin {
         // Merkle tree of coin commitments
         coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
     ) -> Self {
+        let zero = pallas::Base::zero();
+        let one = pallas::Base::one();
+        let prefix_evl = pallas::Base::from(2);
+        let prefix_seed = pallas::Base::from(3);
+        let prefix_cm = pallas::Base::from(4);
+        let prefix_pk = pallas::Base::from(5);
+        let prefix_sn = pallas::Base::from(6);
         // Generate random blinding values for commitments:
         let coin1_blind = pallas::Scalar::random(&mut OsRng);
         let coin2_blind = pallas::Scalar::random(&mut OsRng);
-
-        // Derive a public key from the secret key
-        let public_key = PublicKey::from_secret(secret_key);
-        let (coin_pk_x, coin_pk_y) = public_key.xy();
-        debug!("coin_pk[{}] x: {:?}", slot_index, coin_pk_x);
-        debug!("coin_pk[{}] y: {:?}", slot_index, coin_pk_y);
-
-        // Derive a nullifier
-        let sn_msg = [
-            pallas::Base::from(seed),
+        let tau = pallas::Base::from(slot_index as u64);
+        // pk
+        let pk_msg = [prefix_pk, coin1_sk_root.inner(), tau, zero];
+        let pk = poseidon_hash(pk_msg);
+        // Derive the nonce for coin2
+        let coin2_nonce_msg = [
+            prefix_evl,
             coin1_sk_root.inner(),
-            pallas::Base::zero(),
-            pallas::Base::one(),
+            pallas::Base::from(seed),
+            zero,
         ];
-        let c_sn = poseidon_hash(sn_msg);
-
+        let coin2_seed = poseidon_hash(coin2_nonce_msg);
+        debug!("coin2_seed[{}]: {:?}", slot_index, coin2_seed);
         // Derive input for the commitment of coin1
         let coin1_commit_msg = [
-            pallas::Base::from(PRF_NULLIFIER_PREFIX),
-            coin_pk_x,
-            coin_pk_y,
+            prefix_cm,
+            pk,
             pallas::Base::from(value),
             pallas::Base::from(seed),
-            pallas::Base::one(),
         ];
-        let coin1_commit_v = poseidon_hash(coin1_commit_msg);
-
         // Create commitment to coin1
+        let coin1_commit_v = poseidon_hash(coin1_commit_msg);
         let coin1_commitment = pedersen_commitment_base(coin1_commit_v, coin1_blind);
         // Hash its coordinates to get a base field element
         let c1_cm_coords = coin1_commitment.to_affine().coordinates().unwrap();
         let c1_base_msg = [*c1_cm_coords.x(), *c1_cm_coords.y()];
         let coin1_commitment_base = poseidon_hash(c1_base_msg);
-
         // Append the element to the Merkle tree
         coin_commitment_tree.append(&MerkleNode::from(coin1_commitment_base));
         let leaf_pos = coin_commitment_tree.witness().unwrap();
         let coin1_commitment_root = coin_commitment_tree.root(0).unwrap();
         let coin1_commitment_merkle_path =
             coin_commitment_tree.authentication_path(leaf_pos, &coin1_commitment_root).unwrap();
-
-        // Derive the nonce for coin2
-        let coin2_nonce_msg = [
-            pallas::Base::from(seed),
-            coin1_sk_root.inner(),
-            pallas::Base::one(),
-            pallas::Base::one(),
-        ];
-        let coin2_seed = poseidon_hash(coin2_nonce_msg);
-        debug!("coin2_seed[{}]: {:?}", slot_index, coin2_seed);
-
         // Derive input for the commitment of coin2
         let coin2_commit_msg = [
-            pallas::Base::from(PRF_NULLIFIER_PREFIX),
-            coin_pk_x,
-            coin_pk_y,
+            prefix_cm,
+            pk,
             pallas::Base::from(value),
-            coin2_seed,
-            pallas::Base::one(),
+            pallas::Base::from(coin2_seed),
         ];
         let coin2_commit_v = poseidon_hash(coin2_commit_msg);
-
         // Create commitment to coin2
         let coin2_commitment = pedersen_commitment_base(coin2_commit_v, coin2_blind);
-
         // Derive election seeds
         let (y_mu, rho_mu) = Self::election_seeds(eta, pallas::Base::from(slot_index as u64));
+        // Derive a nullifier
+        let sn_msg = [
+            prefix_sn,
+            coin1_sk_root.inner(),
+            pallas::Base::from(seed),
+            zero
+        ];
+        let c_sn = poseidon_hash(sn_msg);
 
         // Return the object
         Self {
@@ -231,7 +224,7 @@ impl LeadCoin {
             idx: u32::try_from(usize::from(leaf_pos)).unwrap(),
             sl: pallas::Base::from(slot_index as u64),
             // Assume tau is sl for simplicity
-            tau: pallas::Base::from(slot_index as u64),
+            tau: tau,
             nonce: pallas::Base::from(seed),
             nonce_cm: coin2_seed,
             sn: c_sn,
@@ -270,10 +263,11 @@ impl LeadCoin {
     /// Create a vector of `pallas::Base` elements from the `LeadCoin` to be
     /// used as public inputs for the ZK proof.
     pub fn public_inputs(&self) -> Vec<pallas::Base> {
-        let prefix_evl = pallas::Base::from(2);
-        let prefix_pk = pallas::Base::from(4);
-        let prefix_pk = pallas::Base::from(5);
         let zero = pallas::Base::zero();
+        let prefix_evl = pallas::Base::from(2);
+        let prefix_seed = pallas::Base::from(3);
+        let prefix_pk = pallas::Base::from(5);
+
         // pk
         let pk_msg = [prefix_pk, self.coin1_sk_root.inner(), self.tau, zero];
         let pk = poseidon_hash(pk_msg);
@@ -284,7 +278,7 @@ impl LeadCoin {
         let c1_cm = self.coin1_commitment.to_affine().coordinates().unwrap();
         let c2_cm = self.coin2_commitment.to_affine().coordinates().unwrap();
         // lottery seed
-        let seed_msg = [self.coin1_sk_root.inner(), self.nonce];
+        let seed_msg = [prefix_seed, self.coin1_sk_root.inner(), self.nonce, zero];
         let seed = poseidon_hash(seed_msg);
         // y
         let y = pedersen_commitment_base(seed, mod_r_p(self.y_mu));
@@ -294,18 +288,18 @@ impl LeadCoin {
         let rho_coord = rho.to_affine().coordinates().unwrap();
         vec![
             pk,
-            //c2_rho,
-            //*c1_cm.x(),
-            //*c1_cm.y(),
-            //*c2_cm.x(),
-            //*c2_cm.y(),
-            //self.coin1_commitment_root.inner(),
-            //self.coin1_sk_root.inner(),
-            //self.sn,
-            //*y_coords.x(),
-            //*y_coords.y(),
-            //*rho_coord.x(),
-            //*rho_coord.y(),
+            c2_rho,
+            *c1_cm.x(),
+            *c1_cm.y(),
+            *c2_cm.x(),
+            *c2_cm.y(),
+            self.coin1_commitment_root.inner(),
+            self.coin1_sk_root.inner(),
+            self.sn,
+            *y_coords.x(),
+            *y_coords.y(),
+            *rho_coord.x(),
+            *rho_coord.y(),
         ]
     }
 
