@@ -1,0 +1,73 @@
+## darkfid configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+# Chain to use (testnet, mainnet)
+chain = "testnet"
+
+# Path to the wallet database
+wallet_path = "darkfid4/wallet.db"
+
+# Password for the wallet database
+wallet_pass = "changeme"
+
+# Path to the blockchain database directory
+database = "darkfid4/blockchain"
+
+# JSON-RPC listen url
+rpc_listen = "tcp://127.0.0.1:8740"
+
+# Participate in the consensus protocol
+consensus = true
+
+# P2P accept addresses for the consensus protocol
+consensus_p2p_accept = ["tcp://127.0.0.1:8741"]
+
+# P2P external addresses for the consensus protocol
+consensus_p2p_external = ["tcp://127.0.0.1:8741"]
+
+# Connection slots for the consensus protocol
+#consensus_slots = 8
+
+# Connection slots for the consensus protocol
+#consensus_p2p_seed = []
+
+# Peers to connect to for the consensus protocol
+consensus_p2p_peer = ["tcp://127.0.0.1:8341", "tcp://127.0.0.1:8441", "tcp://127.0.0.1:8541", "tcp://127.0.0.1:8641"]
+
+# Prefered transports of outbound connections for the consensus protocol
+#consensus_p2p_transports = ["tls", "tcp"]
+
+# P2P accept addresses for the syncing protocol
+sync_p2p_accept = ["tcp://127.0.0.1:8742"]
+
+# P2P external addresses for the syncing protocol
+sync_p2p_external = ["tcp://127.0.0.1:8742"]
+
+# Connection slots for the syncing protocol
+#sync_slots = 8
+
+# Seed nodes to connect to for the syncing protocol
+#sync_p2p_seed = []
+
+# Peers to connect to for the syncing protocol
+sync_p2p_peer = ["tcp://127.0.0.1:8342", "tcp://127.0.0.1:8442", "tcp://127.0.0.1:8542", "tcp://127.0.0.1:8642"]
+
+# Prefered transports of outbound connections for the syncing protocol
+#sync_p2p_transports = ["tls", "tcp"]
+
+# Enable localnet hosts
+localnet = true
+
+# Enable channel log
+channel_log = true
+
+# Whitelisted faucet public key
+#faucet_pub = []
+
+# Verify system clock is correct
+#clock_sync = true
