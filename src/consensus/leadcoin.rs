@@ -382,7 +382,10 @@ impl LeadCoin {
     pub fn create_xfer_proof(&self,
                              pk: &ProvingKey,
                              change_coin: TxRcpt,
-                             transfered_coin: TxRcpt) -> Result<TransferStx> {
+                             change_pk: pallas::Base, //change coin public key
+                             transfered_coin: TxRcpt
+                             transfered_pk: pallas::Base // recipient coin's public key
+    ) -> Result<TransferStx> {
         assert!(change_coin.value+transfered_coin.value==self.value
                 && self.value>0);
         let bincode = include_bytes!("../../proof/tx.zk.bin");
@@ -405,12 +408,12 @@ impl LeadCoin {
             Witness::Uint32(Value::known(pos)),
             Witness::Base(Value::known(self.sn)),
             // coin (3)
-            Witness::Base(Value::known(change_coin.pk)),
+            Witness::Base(Value::known(change_pk)),
             Witness::Base(Value::known(change_coin.rho)),
             Witness::Scalar(Value::known(change_coin.opening)),
             Witness::Base(Value::known(retval)),
             // coin (4)
-            Witness::Base(Value::known(transfered_coin.pk)),
+            Witness::Base(Value::known(transfered_pk)),
             Witness::Base(Value::known(transfered_coin.rho)),
             Witness::Scalar(Value::known(transfered_coin.opening)),
             Witness::Base(Value::known(xferval)),
@@ -418,14 +421,14 @@ impl LeadCoin {
         let circuit = ZkCircuit::new(witnesses, zkbin.clone());
         let proof = Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?;
         let cm3_msg_in = [pallas::Base::from(PREFIX_CM),
-                          change_coin.pk,
+                          change_pk,
                           pallas::Base::from(change_coin.value),
                           change_coin.rho,
         ];
         let cm3_msg = poseidon_hash(cm3_msg_in);
         let cm3 = pedersen_commitment_base(cm3_msg, change_coin.opening);
         let cm4_msg_in = [pallas::Base::from(PREFIX_CM),
-                          transfered_coin.pk,
+                          transfered_pk,
                           pallas::Base::from(transfered_coin.value),
                           transfered_coin.rho,
         ];

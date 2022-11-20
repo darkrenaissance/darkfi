@@ -25,14 +25,11 @@ use crate::{
 };
 use crypto_api_chachapoly::ChachaPolyIetf;
 
-
 /// transfered leadcoin is rcpt into two coins,
 /// first coin is transfered rcpt coin.
 /// second coin is the change returning to sender, or different address.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct TxRcpt {
-    /// rcpt coin public key
-    pub pk: pallas::Base,
     /// rcpt coin nonce
     pub rho: pallas::Base,
     /// rcpt coin commitment opening
@@ -42,7 +39,7 @@ pub struct TxRcpt {
 }
 
 
-pub const PLAINTEXT_SIZE: usize = 32 + 32 + 32 + 8;
+pub const PLAINTEXT_SIZE: usize = 32 + 32 + 8;
 pub const AEAD_TAG_SIZE: usize = 16;
 pub const CIPHER_SIZE: usize = PLAINTEXT_SIZE + AEAD_TAG_SIZE;
 
