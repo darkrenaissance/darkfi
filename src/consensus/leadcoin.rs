@@ -32,6 +32,7 @@ use rand::rngs::OsRng;
 
 use super::constants::{EPOCH_LENGTH};
 use crate::{
+    consensus::{TxRcpt,EncryptedTxRcpt},
     crypto::{proof::ProvingKey, Proof},
     zk::{vm::ZkCircuit, vm_stack::Witness},
     zkas::ZkBinary,
@@ -62,21 +63,6 @@ pub struct TransferStx {
     pub proof: Proof,
 }
 
-/// transfered leadcoin is poured into two coins,
-/// first coin is transfered poured coin.
-/// second coin is the change returning to sender, or different address.
-#[derive(Debug, Clone, Copy)]
-pub struct PouredCoin {
-    /// poured coin public key
-    pub pk: pallas::Base,
-    /// poured coin nonce
-    pub rho: pallas::Base,
-    /// poured coin commitment opening
-    pub opening: pallas::Scalar,
-    /// poured coin value
-    pub value: u64,
-}
-
 // TODO: Unify item names with the names in the ZK proof (those are more descriptive)
 /// Structure representing the consensus leader coin
 #[derive(Debug, Clone, Copy)]
@@ -85,7 +71,7 @@ pub struct LeadCoin {
     pub value: u64,
     /// Commitment for coin1
     pub coin1_commitment: pallas::Point,
-    /// Commitment for coin2 (poured coin)
+    /// Commitment for coin2 (rcpt coin)
     pub coin2_commitment: pallas::Point,
     /// Coin index
     pub idx: u32,
@@ -395,8 +381,8 @@ impl LeadCoin {
 
     pub fn create_xfer_proof(&self,
                              pk: &ProvingKey,
-                             change_coin: PouredCoin,
-                             transfered_coin: PouredCoin) -> Result<TransferStx> {
+                             change_coin: TxRcpt,
+                             transfered_coin: TxRcpt) -> Result<TransferStx> {
         assert!(change_coin.value+transfered_coin.value==self.value
                 && self.value>0);
         let bincode = include_bytes!("../../proof/tx.zk.bin");
