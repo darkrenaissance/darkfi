@@ -1045,6 +1045,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto_api"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f855e87e75a4799e18b8529178adcde6fd4f97c1449ff4821e747ff728bb102"
+
+[[package]]
+name = "crypto_api_chachapoly"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b63ae1025a6981f91b70bdcf11827189f49b01aaa3720115b330cd325d1c3809"
+dependencies = [
+ "crypto_api",
+]
+
+[[package]]
 name = "crypto_box"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1261,6 +1276,7 @@ dependencies = [
  "chacha20poly1305",
  "chrono",
  "clap 3.2.23",
+ "crypto_api_chachapoly",
  "darkfi-derive",
  "darkfi-derive-internal",
  "darkfi-sdk",

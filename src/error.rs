@@ -196,6 +196,9 @@ pub enum Error {
     #[error("Invalid DNS Name {0}")]
     RustlsInvalidDns(String),
 
+    #[error("unable to decrypt rcpt")]
+    TxRcptDecryptionError,
+
     // =======================
     // Protocol-related errors
     // =======================

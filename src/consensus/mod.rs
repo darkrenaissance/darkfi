@@ -57,3 +57,6 @@ pub mod wallet;
 /// received transaction.
 pub mod rcpt;
 pub use rcpt::{TxRcpt,EncryptedTxRcpt};
+
+pub mod tx;
+pub use tx::Tx;

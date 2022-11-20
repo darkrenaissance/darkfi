@@ -1,5 +1,6 @@
 use darkfi_sdk::{
     crypto::{
+        keypair::{PublicKey},
         diffie_hellman::{kdf_sapling, sapling_ka_agree},
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
         poseidon_hash,
@@ -15,13 +16,13 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use rand::rngs::OsRng;
 
+use darkfi_serial::{Encodable, Decodable, SerialDecodable, SerialEncodable};
 use super::constants::{EPOCH_LENGTH};
 use crate::{
     crypto::{proof::ProvingKey, Proof},
     zk::{vm::ZkCircuit, vm_stack::Witness},
     zkas::ZkBinary,
-    serial::darkfi_derive::{SerialDecodable, SerialEncodable};
-    Result,
+    Result, Error,
 };
 use crypto_api_chachapoly::ChachaPolyIetf;
 
@@ -52,7 +53,7 @@ impl TxRcpt {
         let key = kdf_sapling(&shared_secret, &ephem_public);
 
         let mut input = Vec::new();
-        self.encode(&mut input)?;
+        self.encode(&mut input).unwrap();
 
         let mut ciphertext = [0u8; CIPHER_SIZE];
         assert_eq!(
@@ -62,7 +63,7 @@ impl TxRcpt {
             CIPHER_SIZE
         );
 
-        Ok(EncryptedTxRcpt { ciphertext, ephem_public })
+        EncryptedTxRcpt { ciphertext, ephem_public }
     }
 }
 
@@ -74,7 +75,7 @@ pub struct EncryptedTxRcpt {
 }
 
 impl EncryptedTxRcpt {
-    pub fn decrypt(&self, secret: &SecretKey) -> Result<TxRcpt> {
+    pub fn decrypt(&self, secret: &SecretKey) -> TxRcpt {
         let shared_secret = sapling_ka_agree(secret, &self.ephem_public);
         let key = kdf_sapling(&shared_secret, &self.ephem_public);
 
@@ -82,10 +83,10 @@ impl EncryptedTxRcpt {
         assert_eq!(
             ChachaPolyIetf::aead_cipher()
                 .open_to(&mut plaintext, &self.ciphertext, &[], key.as_ref(), &[0u8; 12])
-                .map_err(|_| Error::NoteDecryptionFailed)?,
+                .map_err(|_| Error::TxRcptDecryptionError).unwrap(),
             PLAINTEXT_SIZE
         );
 
-        TxRcpt::decode(&plaintext[..])
+        TxRcpt::decode(&plaintext[..]).unwrap()
     }
 }

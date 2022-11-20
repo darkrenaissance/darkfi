@@ -38,6 +38,7 @@ use crate::{
     zkas::ZkBinary,
     Result,
 };
+use darkfi_serial::{Encodable, Decodable, SerialDecodable, SerialEncodable};
 
 pub const MERKLE_DEPTH_LEADCOIN: usize = 32;
 pub const MERKLE_DEPTH: u8 = 32;
@@ -49,10 +50,12 @@ pub const PREFIX_CM: u64 = 4;
 pub const PREFIX_PK: u64 = 5;
 pub const PREFIX_SN: u64 = 6;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
 pub struct TransferStx {
-    /// commitments [coin3_commitment, coin4_commitment]
-    pub commitments: [pallas::Point; 2],
+    /// coin3_commitment in zk
+    pub change_coin_commitment: pallas::Point,
+    /// coin4_commitment in zk
+    pub transfered_coin_commitment: pallas::Point,
     /// nullifiers coin1_nullifier
     pub nullifier: pallas::Base,
     /// sk coin pos
@@ -383,7 +386,7 @@ impl LeadCoin {
                              pk: &ProvingKey,
                              change_coin: TxRcpt,
                              change_pk: pallas::Base, //change coin public key
-                             transfered_coin: TxRcpt
+                             transfered_coin: TxRcpt,
                              transfered_pk: pallas::Base // recipient coin's public key
     ) -> Result<TransferStx> {
         assert!(change_coin.value+transfered_coin.value==self.value
@@ -435,7 +438,8 @@ impl LeadCoin {
         let cm4_msg = poseidon_hash(cm4_msg_in);
         let cm4 = pedersen_commitment_base(cm4_msg, transfered_coin.opening);
         let tx  = TransferStx {
-            commitments: [cm3, cm4],
+            change_coin_commitment: cm3,
+            transfered_coin_commitment: cm4,
             nullifier: self.sn,
             tau: self.tau,
             root: self.coin1_commitment_root,
