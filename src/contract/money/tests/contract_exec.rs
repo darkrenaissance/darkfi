@@ -166,15 +166,18 @@ async fn money_contract_execution() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
     tx.signatures = vec![sigs];
 
+    // Get our ZK verifying keys in place for the tx verification
+    let vks = verifying_keys.get(&contract_id.inner().to_repr()).unwrap();
+
     // Let's first execute this transaction for the faucet to see if it passes.
     // Then Alice gets the tx and also executes it.
     info!("Executing transaction on the faucet's blockchain db");
-    verify_transaction(&faucet_blockchain, &tx)?;
+    verify_transaction(&faucet_blockchain, vks, &tx)?;
     info!("Adding coin to faucet's Merkle tree");
     faucet_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
 
     info!("Executing transaction on Alice's blockchain db");
-    verify_transaction(&alice_blockchain, &tx)?;
+    verify_transaction(&alice_blockchain, vks, &tx)?;
     // TODO: FIXME: Actually have a look at the `merkle_add` calls
     alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
     let leaf_position = alice_merkle_tree.witness().unwrap();
@@ -227,12 +230,12 @@ async fn money_contract_execution() -> Result<()> {
     tx.signatures = vec![sigs];
 
     info!("Executing transaction on the faucet's blockchain db");
-    verify_transaction(&faucet_blockchain, &tx)?;
+    verify_transaction(&faucet_blockchain, vks, &tx)?;
     info!("Adding coin to faucet's Merkle tree");
     faucet_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
 
     info!("Executing transaction on Alice's blockchain db");
-    verify_transaction(&alice_blockchain, &tx)?;
+    verify_transaction(&alice_blockchain, vks, &tx)?;
     // TODO: FIXME: Actually have a look at the `merkle_add` calls
     alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
     let leaf_position = alice_merkle_tree.witness().unwrap();
@@ -283,18 +286,22 @@ async fn money_contract_execution() -> Result<()> {
     tx.signatures = vec![sigs];
 
     info!("Executing transaction on the faucet's blockchain db");
-    verify_transaction(&faucet_blockchain, &tx)?;
+    verify_transaction(&faucet_blockchain, vks, &tx)?;
     info!("Adding coin to faucet's Merkle tree");
     faucet_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
     info!("Executing transaction on Alice's blockchain db");
-    verify_transaction(&alice_blockchain, &tx)?;
+    verify_transaction(&alice_blockchain, vks, &tx)?;
     // TODO: FIXME: Actually have a look at the `merkle_add` calls
     alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
 
     Ok(())
 }
 
-fn verify_transaction(blockchain: &Blockchain, tx: &Transaction) -> Result<()> {
+fn verify_transaction(
+    blockchain: &Blockchain,
+    verifying_keys: &[(String, VerifyingKey)],
+    tx: &Transaction,
+) -> Result<()> {
     info!("Begin transcation verification");
     // Table of public inputs used for ZK proof verification
     let mut zkp_table = vec![];
@@ -336,7 +343,7 @@ fn verify_transaction(blockchain: &Blockchain, tx: &Transaction) -> Result<()> {
     info!("Signatures verified successfully");
 
     info!("Verifying transaction ZK proofs");
-    tx.verify_zkps(zkp_table)?;
+    tx.verify_zkps(verifying_keys, zkp_table)?;
     info!("Transaction ZK proofs verified successfully");
 
     // After the verification stage has passed, just apply all the changes.

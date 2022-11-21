@@ -333,7 +333,10 @@ impl TransferMintRevealed {
         //       calls in the zkas code.
         vec![
             self.coin.inner(),
-            *valcom_coords.x() * tokcom_coords.y() * valcom_coords.x() * tokcom_coords.y(),
+            *valcom_coords.x(),
+            *valcom_coords.y(),
+            *tokcom_coords.x(),
+            *tokcom_coords.y(),
         ]
     }
 }

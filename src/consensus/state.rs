@@ -979,7 +979,8 @@ impl ValidatorState {
 
             // Finally, verify the ZK proofs
             debug!("Verifying transaction ZK proofs");
-            tx.verify_zkps(zkp_table)?;
+            // FIXME XXX:
+            tx.verify_zkps(&[], zkp_table)?;
             debug!("Transaction ZK proofs verified successfully!");
 
             // When the verification stage has passed, just apply all the changes.

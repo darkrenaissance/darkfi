@@ -28,7 +28,17 @@ use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use log::{debug, error};
 use rand::{CryptoRng, RngCore};
 
-use crate::{crypto::Proof, Error, Result};
+use crate::{
+    crypto::{proof::VerifyingKey, Proof},
+    Error, Result, VerifyFailed,
+};
+
+macro_rules! zip {
+    ($x:expr) => ($x);
+    ($x:expr, $($y:expr), +) => (
+        $x.iter().zip(zip!($($y), +))
+    )
+}
 
 /// A Transaction contains an arbitrary number of `ContractCall` objects,
 /// along with corresponding ZK proofs and Schnorr signatures.
@@ -44,7 +54,37 @@ pub struct Transaction {
 
 impl Transaction {
     /// Verify ZK proofs for the entire transaction.
-    pub fn verify_zkps(&self, zkp_table: Vec<Vec<(String, Vec<pallas::Base>)>>) -> Result<()> {
+    pub fn verify_zkps(
+        &self,
+        verifying_keys: &[(String, VerifyingKey)],
+        zkp_table: Vec<Vec<(String, Vec<pallas::Base>)>>,
+    ) -> Result<()> {
+        // TODO: Are we sure we should assert here?
+        assert_eq!(self.calls.len(), self.proofs.len());
+        assert_eq!(self.calls.len(), zkp_table.len());
+
+        for (call, (proofs, pubvals)) in zip!(self.calls, self.proofs, zkp_table) {
+            assert_eq!(proofs.len(), pubvals.len());
+
+            for (i, (proof, (zk_ns, public_vals))) in proofs.iter().zip(pubvals.iter()).enumerate()
+            {
+                if let Some(vk) = verifying_keys.iter().find(|x| &x.0 == zk_ns) {
+                    // We have a verifying key for this
+                    debug!("public inputs: {:#?}", public_vals);
+                    if let Err(e) = proof.verify(&vk.1, public_vals) {
+                        error!("Failed verifying zk proof: {}", e);
+                        return Err(VerifyFailed::ProofVerifyFailed(e.to_string()).into())
+                    }
+                } else {
+                    return Err(VerifyFailed::ProofVerifyFailed(format!(
+                        "Verifying key for {} circuit does not exist",
+                        zk_ns
+                    ))
+                    .into())
+                }
+            }
+        }
+
         Ok(())
     }
 
