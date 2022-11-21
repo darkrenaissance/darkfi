@@ -24,8 +24,13 @@ the DarkFi wallet.
 
 We do this using the following process:
 
-Let $v$ be the coin's value. Generate random $r_C$, $r_V$ and serial
+Let $v$ be the coin's value. 
+Generate 3 random numbers $r_C$, $r_V$ and serial
 $\rho$.
+ * $r_C$ : used in creating commitment
+ * $r_V$ : used in creating value commitment
+ * serial $\rho$ : Unique secret serial number corresponding to this coin,
+  used for the nullifier $N$ in the burn phase
 
 Create a commitment to these parameters in zero-knowledge:
 
@@ -46,7 +51,7 @@ relies on a $N$ nullifier, which we create  using the secret key $x$
 for the public key $P$. Nullifiers are unique per coin and prevent
 double spending. $R$ is the Merkle root. $v$ is the coin's value.
 
-Generate a random number $r_V$.
+Create a Nullifier $N$ using secret key $x$ and serial $\rho$
 
 $$ N = H(x, \rho) $$
 
