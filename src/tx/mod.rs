@@ -18,14 +18,15 @@
 
 use darkfi_sdk::{
     crypto::{
-        schnorr::{SchnorrPublic, Signature},
-        PublicKey,
+        schnorr::{SchnorrPublic, SchnorrSecret, Signature},
+        PublicKey, SecretKey,
     },
     pasta::pallas,
     tx::ContractCall,
 };
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use log::{debug, error};
+use rand::{CryptoRng, RngCore};
 
 use crate::{crypto::Proof, Error, Result};
 
@@ -51,11 +52,13 @@ impl Transaction {
     pub fn verify_sigs(&self, pub_table: Vec<Vec<PublicKey>>) -> Result<()> {
         let tx_data = self.encode_without_sigs()?;
         let data_hash = blake3::hash(&tx_data);
+        debug!("tx.verify_sigs: data_hash: {:?}", data_hash.as_bytes());
 
         assert!(pub_table.len() == self.signatures.len());
 
         for (i, (sigs, pubkeys)) in self.signatures.iter().zip(pub_table.iter()).enumerate() {
             for (pubkey, signature) in pubkeys.iter().zip(sigs) {
+                debug!("Verifying signature with public key: {}", pubkey);
                 if !pubkey.verify(&data_hash.as_bytes()[..], &signature) {
                     error!("tx::verify_sigs[{}] failed to verify", i);
                     return Err(Error::InvalidSignature)
@@ -65,6 +68,26 @@ impl Transaction {
         }
 
         Ok(())
+    }
+
+    /// Create Schnorr signatures for the entire transaction.
+    pub fn create_sigs(
+        &self,
+        rng: &mut (impl CryptoRng + RngCore),
+        secret_keys: &[SecretKey],
+    ) -> Result<Vec<Signature>> {
+        let tx_data = self.encode_without_sigs()?;
+        let data_hash = blake3::hash(&tx_data);
+        debug!("tx.create_sigs: data_hash: {:?}", data_hash.as_bytes());
+
+        let mut sigs = vec![];
+        for secret in secret_keys {
+            debug!("Creating signature with public key: {}", PublicKey::from_secret(*secret));
+            let signature = secret.sign(rng, &data_hash.as_bytes()[..]);
+            sigs.push(signature);
+        }
+
+        Ok(sigs)
     }
 
     /// Encode the object into a byte vector for signing

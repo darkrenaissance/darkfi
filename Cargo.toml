@@ -170,6 +170,7 @@ blockchain = [
     "pasta_curves",
     "rand",
     "sled",
+    "sqlx",
     "url",
     "crypto_api_chachapoly",
 
@@ -180,6 +181,7 @@ blockchain = [
     "net",
     "tx",
     "util",
+    "wallet",
     "wasm-runtime",
 ]
 
@@ -319,6 +321,7 @@ wasm-runtime = [
     "wasmer-compiler-singlepass",
     "wasmer-middlewares",
 
+    "blockchain",
     "darkfi-sdk",
 ]
 

@@ -49,10 +49,14 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use halo2_proofs::{arithmetic::Field, circuit::Value};
-use log::{debug, error};
+use log::{debug, error, info};
 use rand::rngs::OsRng;
 
 use crate::state::{ClearInput, Input, MoneyTransferParams, Output};
+
+// Wallet SQL table constant names
+pub const MONEY_TREE_TABLE: &str = "money_tree";
+pub const MONEY_TREE_COL_TREE: &str = "tree";
 
 /// Byte length of the AEAD tag of the chacha20 cipher used for note encryption
 pub const AEAD_TAG_SIZE: usize = 16;
@@ -145,12 +149,13 @@ impl Note {
 #[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct EncryptedNote {
     /// Ciphertext of the encrypted `Note`
-    ciphertext: Vec<u8>,
+    pub ciphertext: Vec<u8>,
     /// Ephemeral public key created at the time of encrypting the note
-    ephem_public: PublicKey,
+    pub ephem_public: PublicKey,
 }
 
 impl EncryptedNote {
+    /// Attempt to decrypt an `EncryptedNote` given a secret key.
     pub fn decrypt(&self, secret: &SecretKey) -> Result<Note> {
         let shared_secret = sapling_ka_agree(secret, &self.ephem_public);
         let key = kdf_sapling(&shared_secret, &self.ephem_public);
@@ -460,7 +465,9 @@ pub fn build_transfer_tx(
 ) -> Result<(MoneyTransferParams, Vec<Proof>, Vec<SecretKey>)> {
     debug!("Building money contract transaction");
     assert!(value != 0);
-    assert!(!coins.is_empty());
+    if !clear_input {
+        assert!(!coins.is_empty());
+    }
     // Ensure the coins given to us are all of the same token_id.
     // The money contract base transfer doesn't allow conversions.
     for coin in coins.iter() {
@@ -548,7 +555,7 @@ pub fn build_transfer_tx(
     let mut output_blinds = vec![];
     let mut zk_proofs = vec![];
 
-    for input in inputs {
+    for (i, input) in inputs.iter().enumerate() {
         let value_blind = ValueBlind::random(&mut OsRng);
         input_blinds.push(value_blind);
 
@@ -560,6 +567,7 @@ pub fn build_transfer_tx(
         let user_data = pallas::Base::zero();
         let user_data_blind = pallas::Base::random(&mut OsRng);
 
+        info!("Creating transfer burn proof for input {}", i);
         let (proof, revealed) = create_transfer_burn_proof(
             burn_zkbin,
             burn_pk,
@@ -574,7 +582,7 @@ pub fn build_transfer_tx(
             input.note.coin_blind,
             input.secret,
             input.leaf_position,
-            input.merkle_path,
+            input.merkle_path.clone(),
             signature_secret,
         )?;
 
@@ -610,6 +618,7 @@ pub fn build_transfer_tx(
         let spend_hook = pallas::Base::zero();
         let user_data = pallas::Base::zero();
 
+        info!("Creating transfer mint proof for output {}", i);
         let (proof, revealed) = create_transfer_mint_proof(
             mint_zkbin,
             mint_pk,
