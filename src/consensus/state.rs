@@ -396,7 +396,7 @@ impl ValidatorState {
                 sigma1,
                 sigma2,
                 LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
-                i,
+                i as u64,
                 epoch_secrets.secret_keys[i].inner(),
                 epoch_secrets.merkle_roots[i],
                 i, //TODO same as idx now for simplicity.
@@ -486,6 +486,8 @@ impl ValidatorState {
         let (prev_hash, index) = self.longest_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
 
+        // TODO: [PLACEHOLDER] Create and add rewards transaction
+
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
         /* TODO: FIXME: TESTNET:
         for tx in &unproposed_txs {
@@ -497,12 +499,10 @@ impl ValidatorState {
         */
         let root = tree.root(0).unwrap();
 
-        let eta = self.consensus.epoch_eta.to_repr();
+        let eta = self.consensus.epoch_eta;
         // Generating leader proof
         let relative_slot = self.relative_slot(slot) as usize;
         let coin = self.consensus.coins[relative_slot][idx];
-        // TODO: Generate new LeadCoin from newlly minted coin, will reuse original coin for now
-        //let coin2 = something();
         let proof = coin.create_lead_proof(&self.lead_proving_key)?;
 
         // Signing using coin
@@ -516,15 +516,14 @@ impl ValidatorState {
             signed_proposal,
             public_key,
             coin.public_inputs(),
-            idx,
-            eta,
+            eta.to_repr(),
             LeadProof::from(proof),
         );
-        // TODO: replace old coin with new coin
-        self.consensus.coins[relative_slot][idx] = coin;
+        // Replacing old coin with the derived coin
+        // TODO: do we need that? on next epoch we replace everything
+        // how is this going to get reused?
+        self.consensus.coins[relative_slot][idx] = coin.derive_coin(eta, relative_slot as u64);
 
-        // TODO: [PLACEHOLDER] Add rewards calculation (proof?)
-        // TODO: [PLACEHOLDER] Create and add rewards transaction
         Ok(Some(BlockProposal::new(header, unproposed_txs, metadata)))
     }
 

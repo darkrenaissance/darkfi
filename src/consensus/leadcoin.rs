@@ -113,8 +113,8 @@ impl LeadCoin {
         sigma2: pallas::Base,
         // Stake value
         value: u64,
-        // Slot index in the epock
-        slot_index: usize,
+        // Slot index in the epoch
+        slot_index: u64,
         // coin1 sk
         coin1_sk: pallas::Base,
         // Merkle root of the `coin_1` secret key in the Merkle tree of secret keys
@@ -133,7 +133,7 @@ impl LeadCoin {
         // Generate random blinding values for commitments:
         let coin1_blind = pallas::Scalar::random(&mut OsRng);
         let coin2_blind = pallas::Scalar::random(&mut OsRng);
-        let tau = pallas::Base::from(slot_index as u64);
+        let tau = pallas::Base::from(slot_index);
         // pk
         let pk_msg =
             [pallas::Base::from(PREFIX_PK), coin1_sk_root.inner(), tau, pallas::Base::from(ZERO)];
@@ -178,7 +178,7 @@ impl LeadCoin {
         // Create commitment to coin2
         let coin2_commitment = pedersen_commitment_base(coin2_commit_v, coin2_blind);
         // Derive election seeds
-        let (y_mu, rho_mu) = Self::election_seeds(eta, pallas::Base::from(slot_index as u64));
+        let (y_mu, rho_mu) = Self::election_seeds(eta, pallas::Base::from(slot_index));
         // Derive a nullifier
         let sn_msg = [
             pallas::Base::from(PREFIX_SN),
@@ -195,7 +195,7 @@ impl LeadCoin {
             coin2_commitment,
             // TODO: Should be abs slot
             idx: u32::try_from(usize::from(leaf_pos)).unwrap(),
-            sl: pallas::Base::from(slot_index as u64),
+            sl: pallas::Base::from(slot_index),
             // Assume tau is sl for simplicity
             tau,
             nonce: pallas::Base::from(seed),
@@ -314,7 +314,8 @@ impl LeadCoin {
     }
     /// the new coin to be minted after the current coin is spent
     /// in lottery.
-    pub fn derive_coin(&self, eta: pallas::Base, slot: pallas::Base) -> LeadCoin {
+    pub fn derive_coin(&self, eta: pallas::Base, slot: u64) -> LeadCoin {
+        let tau = pallas::Base::from(slot);
         let mut derived = self.clone();
         let pk = self.pk();
         let rho = self.derived_rho();
@@ -326,7 +327,7 @@ impl LeadCoin {
         derived.coin1_blind = derived.coin2_blind;
         derived.coin2_blind = blind;
         // update random mau_y, mau_rho in case epoch is changed
-        let (y_mu, rho_mu) = Self::election_seeds(eta, slot);
+        let (y_mu, rho_mu) = Self::election_seeds(eta, tau);
         derived.y_mu = y_mu;
         derived.rho_mu = rho_mu;
         derived

@@ -38,8 +38,6 @@ pub struct Metadata {
     pub public_key: PublicKey, // TODO: remove this(to be derived by proof)
     /// Block owner slot competing coins public inputs
     pub public_inputs: Vec<pallas::Base>,
-    /// Block owner winning coin index
-    pub winning_index: usize,
     /// Response of global random oracle, or it's emulation.
     pub eta: [u8; 32],
     /// Leader NIZK proof
@@ -52,10 +50,9 @@ impl Default for Metadata {
         let keypair = Keypair::default();
         let signature = Signature::dummy();
         let public_inputs = vec![];
-        let winning_index = 0;
         let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
         let proof = LeadProof::default();
-        Self { signature, public_key: keypair.public, public_inputs, winning_index, eta, proof }
+        Self { signature, public_key: keypair.public, public_inputs, eta, proof }
     }
 }
 
@@ -64,11 +61,10 @@ impl Metadata {
         signature: Signature,
         public_key: PublicKey,
         public_inputs: Vec<pallas::Base>,
-        winning_index: usize,
         eta: [u8; 32],
         proof: LeadProof,
     ) -> Self {
-        Self { signature, public_key, public_inputs, winning_index, eta, proof }
+        Self { signature, public_key, public_inputs, eta, proof }
     }
 }
 
