@@ -17,15 +17,15 @@
  */
 
 use darkfi_sdk::{
-    pasta::{arithmetic::CurveAffine, group::Curve, pallas},
     crypto::MerkleNode,
+    pasta::{arithmetic::CurveAffine, group::Curve, pallas},
 };
 
 use crate::{
     crypto::{proof::VerifyingKey, Proof},
-    Result, Error,
+    Error, Result,
 };
-use darkfi_serial::{Encodable, Decodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
 pub struct TransferStx {
@@ -50,9 +50,8 @@ pub struct TransferStx {
 }
 
 impl TransferStx {
-
     /// verify the transfer proof.
-    pub fn verify(&self, vk: VerifyingKey)  -> Result<()> {
+    pub fn verify(&self, vk: VerifyingKey) -> Result<()> {
         if let Err(e) = self.proof.verify(&vk, &self.public_inputs()) {
             return Err(Error::TransferTxVerification)
         }

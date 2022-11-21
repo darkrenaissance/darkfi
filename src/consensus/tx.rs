@@ -1,7 +1,5 @@
-use darkfi_serial::{Encodable, Decodable, SerialDecodable, SerialEncodable};
-use crate::{
-    consensus::{EncryptedTxRcpt, TransferStx},
-};
+use crate::consensus::{EncryptedTxRcpt, TransferStx};
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
 /// transfer transaction
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
@@ -12,7 +10,7 @@ pub struct Tx {
 
 impl Tx {
     /// verify transfer transaction
-    pub fn verify(&self) -> bool{
+    pub fn verify(&self) -> bool {
         //TODO: verify tx
         true
     }

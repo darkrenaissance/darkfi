@@ -16,34 +16,31 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-
 use darkfi_sdk::{
     crypto::{
-        keypair::{PublicKey},
         diffie_hellman::{kdf_sapling, sapling_ka_agree},
+        keypair::PublicKey,
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
         poseidon_hash,
         util::mod_r_p,
         MerkleNode, SecretKey,
     },
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
-
-
 };
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use rand::rngs::OsRng;
 
-use darkfi_serial::{Encodable, Decodable, SerialDecodable, SerialEncodable};
-use super::constants::{EPOCH_LENGTH};
+use super::constants::EPOCH_LENGTH;
 use crate::{
     crypto::{proof::ProvingKey, Proof},
     zk::{vm::ZkCircuit, vm_stack::Witness},
     zkas::ZkBinary,
-    Result, Error,
+    Error, Result,
 };
 use crypto_api_chachapoly::ChachaPolyIetf;
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
 /// transfered leadcoin is rcpt into two coins,
 /// first coin is transfered rcpt coin.
@@ -57,7 +54,6 @@ pub struct TxRcpt {
     /// rcpt coin value
     pub value: u64,
 }
-
 
 pub const PLAINTEXT_SIZE: usize = 32 + 32 + 8;
 pub const AEAD_TAG_SIZE: usize = 16;
@@ -86,7 +82,6 @@ impl TxRcpt {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct EncryptedTxRcpt {
     ciphertext: [u8; CIPHER_SIZE],
@@ -102,7 +97,8 @@ impl EncryptedTxRcpt {
         assert_eq!(
             ChachaPolyIetf::aead_cipher()
                 .open_to(&mut plaintext, &self.ciphertext, &[], key.as_ref(), &[0u8; 12])
-                .map_err(|_| Error::TxRcptDecryptionError).unwrap(),
+                .map_err(|_| Error::TxRcptDecryptionError)
+                .unwrap(),
             PLAINTEXT_SIZE
         );
 

@@ -30,27 +30,25 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::debug;
 use rand::rngs::OsRng;
 
-use super::constants::{EPOCH_LENGTH};
+use super::constants::EPOCH_LENGTH;
 use crate::{
-    consensus::{TxRcpt,EncryptedTxRcpt,TransferStx},
+    consensus::{EncryptedTxRcpt, TransferStx, TxRcpt},
     crypto::{proof::ProvingKey, Proof},
     zk::{vm::ZkCircuit, vm_stack::Witness},
     zkas::ZkBinary,
-    Result, Error,
+    Error, Result,
 };
-use darkfi_serial::{Encodable, Decodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
 pub const MERKLE_DEPTH_LEADCOIN: usize = 32;
 pub const MERKLE_DEPTH: u8 = 32;
 pub const ZERO: pallas::Base = pallas::Base::zero();
 pub const ONE: pallas::Base = pallas::Base::one();
-pub const PREFIX_EVL: u64  = 2;
+pub const PREFIX_EVL: u64 = 2;
 pub const PREFIX_SEED: u64 = 3;
 pub const PREFIX_CM: u64 = 4;
 pub const PREFIX_PK: u64 = 5;
 pub const PREFIX_SN: u64 = 6;
-
-
 
 // TODO: Unify item names with the names in the ZK proof (those are more descriptive)
 /// Structure representing the consensus leader coin
@@ -137,12 +135,8 @@ impl LeadCoin {
         let coin2_blind = pallas::Scalar::random(&mut OsRng);
         let tau = pallas::Base::from(slot_index as u64);
         // pk
-        let pk_msg = [
-            pallas::Base::from(PREFIX_PK),
-            coin1_sk_root.inner(),
-            tau,
-            pallas::Base::from(ZERO)
-        ];
+        let pk_msg =
+            [pallas::Base::from(PREFIX_PK), coin1_sk_root.inner(), tau, pallas::Base::from(ZERO)];
         let pk = poseidon_hash(pk_msg);
         // Derive the nonce for coin2
         let coin2_nonce_msg = [
@@ -190,7 +184,7 @@ impl LeadCoin {
             pallas::Base::from(PREFIX_SN),
             coin1_sk_root.inner(),
             pallas::Base::from(seed),
-            pallas::Base::from(ZERO)
+            pallas::Base::from(ZERO),
         ];
         let c_sn = poseidon_hash(sn_msg);
 
@@ -203,7 +197,7 @@ impl LeadCoin {
             idx: u32::try_from(usize::from(leaf_pos)).unwrap(),
             sl: pallas::Base::from(slot_index as u64),
             // Assume tau is sl for simplicity
-            tau: tau,
+            tau,
             nonce: pallas::Base::from(seed),
             nonce_cm: coin2_seed,
             sn: c_sn,
@@ -290,7 +284,7 @@ impl LeadCoin {
             pallas::Base::from(PREFIX_PK),
             self.coin1_sk_root.inner(),
             self.tau,
-            pallas::Base::from(ZERO)
+            pallas::Base::from(ZERO),
         ];
         let pk = poseidon_hash(pk_msg);
         pk
@@ -302,7 +296,7 @@ impl LeadCoin {
             pallas::Base::from(PREFIX_EVL),
             self.coin1_sk_root.inner(),
             self.nonce,
-            pallas::Base::from(ZERO)
+            pallas::Base::from(ZERO),
         ];
         let rho = poseidon_hash(rho_msg);
         rho
@@ -312,12 +306,7 @@ impl LeadCoin {
     pub fn derived_commitment(&self, blind: pallas::Scalar) -> pallas::Point {
         let pk = self.pk();
         let rho = self.derived_rho();
-        let cm_in = [
-            pallas::Base::from(PREFIX_CM),
-            pk,
-            pallas::Base::from(self.value),
-            rho,
-        ];
+        let cm_in = [pallas::Base::from(PREFIX_CM), pk, pallas::Base::from(self.value), rho];
         let cm_v = poseidon_hash(cm_in);
 
         let cm = pedersen_commitment_base(cm_v, blind);
@@ -362,26 +351,26 @@ impl LeadCoin {
             Witness::Scalar(Value::known(mod_r_p(self.rho_mu))),
             Witness::Scalar(Value::known(mod_r_p(self.y_mu))),
             Witness::Base(Value::known(self.sigma1)),
-            Witness::Base(Value::known(self.sigma2))
+            Witness::Base(Value::known(self.sigma2)),
         ];
         let circuit = ZkCircuit::new(witnesses, zkbin.clone());
         Ok(Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?)
     }
 
-    pub fn create_xfer_proof(&self,
-                             pk: &ProvingKey,
-                             change_coin: TxRcpt,
-                             change_pk: pallas::Base, //change coin public key
-                             transfered_coin: TxRcpt,
-                             transfered_pk: pallas::Base // recipient coin's public key
+    pub fn create_xfer_proof(
+        &self,
+        pk: &ProvingKey,
+        change_coin: TxRcpt,
+        change_pk: pallas::Base, //change coin public key
+        transfered_coin: TxRcpt,
+        transfered_pk: pallas::Base, // recipient coin's public key
     ) -> Result<TransferStx> {
-        assert!(change_coin.value+transfered_coin.value==self.value
-                && self.value>0);
+        assert!(change_coin.value + transfered_coin.value == self.value && self.value > 0);
         let bincode = include_bytes!("../../proof/tx.zk.bin");
         let zkbin = ZkBinary::decode(bincode)?;
         let retval = pallas::Base::from(change_coin.value);
         let xferval = pallas::Base::from(transfered_coin.value);
-        let pos : u32 = self.idx;
+        let pos: u32 = self.idx;
         let value = pallas::Base::from(self.value);
         let witnesses = vec![
             // coin (1) burned coin
@@ -409,21 +398,23 @@ impl LeadCoin {
         ];
         let circuit = ZkCircuit::new(witnesses, zkbin.clone());
         let proof = Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?;
-        let cm3_msg_in = [pallas::Base::from(PREFIX_CM),
-                          change_pk,
-                          pallas::Base::from(change_coin.value),
-                          change_coin.rho,
+        let cm3_msg_in = [
+            pallas::Base::from(PREFIX_CM),
+            change_pk,
+            pallas::Base::from(change_coin.value),
+            change_coin.rho,
         ];
         let cm3_msg = poseidon_hash(cm3_msg_in);
         let cm3 = pedersen_commitment_base(cm3_msg, change_coin.opening);
-        let cm4_msg_in = [pallas::Base::from(PREFIX_CM),
-                          transfered_pk,
-                          pallas::Base::from(transfered_coin.value),
-                          transfered_coin.rho,
+        let cm4_msg_in = [
+            pallas::Base::from(PREFIX_CM),
+            transfered_pk,
+            pallas::Base::from(transfered_coin.value),
+            transfered_coin.rho,
         ];
         let cm4_msg = poseidon_hash(cm4_msg_in);
         let cm4 = pedersen_commitment_base(cm4_msg, transfered_coin.opening);
-        let tx  = TransferStx {
+        let tx = TransferStx {
             coin_commitment: self.coin1_commitment,
             coin_pk: self.pk(),
             coin_root_sk: self.coin1_sk_root,
@@ -432,14 +423,11 @@ impl LeadCoin {
             nullifier: self.sn,
             tau: self.tau,
             root: self.coin1_commitment_root,
-            proof: proof
+            proof,
         };
         Ok(tx)
     }
 }
-
-
-
 
 /// This struct holds the secrets for creating LeadCoins during one epoch.
 pub struct LeadCoinSecrets {

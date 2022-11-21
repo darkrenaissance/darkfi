@@ -60,7 +60,7 @@ pub use stx::TransferStx;
 
 /// encrypted receipient coin info
 pub mod rcpt;
-pub use rcpt::{TxRcpt,EncryptedTxRcpt};
+pub use rcpt::{EncryptedTxRcpt, TxRcpt};
 
 /// transfer transaction
 pub mod tx;
