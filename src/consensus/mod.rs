@@ -54,9 +54,14 @@ pub mod utils;
 /// Wallet functions
 pub mod wallet;
 
-/// received transaction.
+/// transfered tx proof with public inputs.
+pub mod stx;
+pub use stx::TransferStx;
+
+/// encrypted receipient coin info
 pub mod rcpt;
 pub use rcpt::{TxRcpt,EncryptedTxRcpt};
 
+/// transfer transaction
 pub mod tx;
 pub use tx::Tx;

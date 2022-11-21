@@ -1,6 +1,6 @@
 use darkfi_serial::{Encodable, Decodable, SerialDecodable, SerialEncodable};
 use crate::{
-    consensus::{EncryptedTxRcpt, leadcoin::TransferStx},
+    consensus::{EncryptedTxRcpt, TransferStx},
 };
 
 /// transfer transaction

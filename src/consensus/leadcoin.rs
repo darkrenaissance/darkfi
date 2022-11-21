@@ -32,11 +32,11 @@ use rand::rngs::OsRng;
 
 use super::constants::{EPOCH_LENGTH};
 use crate::{
-    consensus::{TxRcpt,EncryptedTxRcpt},
+    consensus::{TxRcpt,EncryptedTxRcpt,TransferStx},
     crypto::{proof::ProvingKey, Proof},
     zk::{vm::ZkCircuit, vm_stack::Witness},
     zkas::ZkBinary,
-    Result,
+    Result, Error,
 };
 use darkfi_serial::{Encodable, Decodable, SerialDecodable, SerialEncodable};
 
@@ -50,21 +50,7 @@ pub const PREFIX_CM: u64 = 4;
 pub const PREFIX_PK: u64 = 5;
 pub const PREFIX_SN: u64 = 6;
 
-#[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
-pub struct TransferStx {
-    /// coin3_commitment in zk
-    pub change_coin_commitment: pallas::Point,
-    /// coin4_commitment in zk
-    pub transfered_coin_commitment: pallas::Point,
-    /// nullifiers coin1_nullifier
-    pub nullifier: pallas::Base,
-    /// sk coin pos
-    pub tau: pallas::Base,
-    /// root to coin's commitments
-    pub root: MerkleNode,
-    /// transfer proof
-    pub proof: Proof,
-}
+
 
 // TODO: Unify item names with the names in the ZK proof (those are more descriptive)
 /// Structure representing the consensus leader coin
@@ -438,6 +424,9 @@ impl LeadCoin {
         let cm4_msg = poseidon_hash(cm4_msg_in);
         let cm4 = pedersen_commitment_base(cm4_msg, transfered_coin.opening);
         let tx  = TransferStx {
+            coin_commitment: self.coin1_commitment,
+            coin_pk: self.pk(),
+            coin_root_sk: self.coin1_sk_root,
             change_coin_commitment: cm3,
             transfered_coin_commitment: cm4,
             nullifier: self.sn,

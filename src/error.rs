@@ -241,6 +241,9 @@ pub enum Error {
     #[error("Proposal contains missmatched headers")]
     ProposalHeadersMissmatchError,
 
+    #[error("unable to verify transfer transaction")]
+    TransferTxVerification,
+
     // ===============
     // Database errors
     // ===============

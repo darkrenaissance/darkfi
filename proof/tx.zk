@@ -39,7 +39,7 @@ circuit "tx" {
         PREFIX_SN = witness_base(6);
         # coin (1) pk/public key
         c1_pk = poseidon_hash(PREFIX_PK, c1_root_sk);
-        constrain_instance(c1_pk);
+        #constrain_instance(c1_pk);
         # coin (1) cm/commitment
         c1_cm_msg = poseidon_hash(PREFIX_CM, c1_pk, c1_value, c1_rho);
         c1_cm_v = ec_mul_base(c1_cm_msg, NULLIFIER_K);
