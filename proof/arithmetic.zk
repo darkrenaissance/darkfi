@@ -14,10 +14,4 @@ circuit "Arith" {
 
     difference = base_sub(a, b);
     constrain_instance(difference);
-
-    #a_gt_b = greater_than(a, b);
-    #constrain_instance(a_gt_b);
-
-    #b_gt_a = greater_than(b, a);
-    #constrain_instance(b_gt_a);
 }

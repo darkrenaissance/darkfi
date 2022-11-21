@@ -64,11 +64,16 @@ pub enum Opcode {
     /// Range check a Base field element, given bit-width (up to 253)
     RangeCheck = 0x50,
 
-    /// Compare two Base field elements and see if a is less than b
-    LessThan = 0x51,
+    /// Strictly compare two Base field elements and see if a is less than b
+    /// This enforces the sum of remaining bits to be zero.
+    LessThanStrict = 0x51,
+
+    /// Loosely two Base field elements and see if a is less than b
+    /// This does not enforce the sum of remaining bits to be zero.
+    LessThanLoose = 0x52,
 
     /// Check if a field element fits in a boolean (Either 0 or 1)
-    BoolCheck = 0x52,
+    BoolCheck = 0x53,
 
     /// Constrain equality of two Base field elements inside the circuit
     ConstrainEqualBase = 0xe0,
@@ -99,7 +104,8 @@ impl Opcode {
             "base_sub" => Some(Self::BaseSub),
             "witness_base" => Some(Self::WitnessBase),
             "range_check" => Some(Self::RangeCheck),
-            "less_than" => Some(Self::LessThan),
+            "less_than_strict" => Some(Self::LessThanStrict),
+            "less_than_loose" => Some(Self::LessThanLoose),
             "bool_check" => Some(Self::BoolCheck),
             "constrain_equal_base" => Some(Self::ConstrainEqualBase),
             "constrain_equal_point" => Some(Self::ConstrainEqualPoint),
@@ -124,8 +130,9 @@ impl Opcode {
             0x32 => Some(Self::BaseSub),
             0x40 => Some(Self::WitnessBase),
             0x50 => Some(Self::RangeCheck),
-            0x51 => Some(Self::LessThan),
-            0x52 => Some(Self::BoolCheck),
+            0x51 => Some(Self::LessThanStrict),
+            0x52 => Some(Self::LessThanLoose),
+            0x53 => Some(Self::BoolCheck),
             0xe0 => Some(Self::ConstrainEqualBase),
             0xe1 => Some(Self::ConstrainEqualPoint),
             0xf0 => Some(Self::ConstrainInstance),
@@ -172,7 +179,9 @@ impl Opcode {
 
             Opcode::RangeCheck => (vec![], vec![VarType::Uint64, VarType::Base]),
 
-            Opcode::LessThan => (vec![], vec![VarType::Base, VarType::Base]),
+            Opcode::LessThanStrict => (vec![], vec![VarType::Base, VarType::Base]),
+
+            Opcode::LessThanLoose => (vec![], vec![VarType::Base, VarType::Base]),
 
             Opcode::BoolCheck => (vec![], vec![VarType::Base]),
 

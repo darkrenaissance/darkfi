@@ -66,13 +66,13 @@ circuit "DaoProposeMain" {
 
     # Rangeproof check for proposal amount
     zero = witness_base(0);
-    less_than(zero, proposal_amount);
+    less_than_strict(zero, proposal_amount);
 
     # This is the main check
     # We check that dao_proposer_limit <= total_funds
     one = witness_base(1);
     total_funds_1 = base_add(total_funds, one);
-    less_than(dao_proposer_limit, total_funds_1);
+    less_than_strict(dao_proposer_limit, total_funds_1);
 
 	# Pedersen commitment for coin's value
 	vcv = ec_mul_short(total_funds, VALUE_COMMIT_VALUE);

@@ -165,7 +165,8 @@ TBD
 | `BaseSub`            | `Base` Subtraction.                                             |
 | `WitnessBase`        | Witness an unsigned integer into a `Base`.                      |
 | `RangeCheck`         | Perform a (either 64bit or 253bit) range check over some `Base` |
-| `LessThan`           | Compare if `Base` a is lesser than `Base` b                     |
+| `LessThanStrict`     | Strictly compare if `Base` a is lesser than `Base` b            |
+| `LessThanLoose`      | Loosely compare if `Base` a is lesser than `Base` b             |
 | `BoolCheck`          | Enforce that a `Base` fits in a boolean value (either 0 or 1)   |
 | `ConstrainEqualBase` | Constrain equality of two `Base` elements from the stack        |
 | `ConstrainEqualPoint`| Constrain equality of two `EcPoint` elements from the stack     |
@@ -188,7 +189,8 @@ TBD
 | `BaseSub`             | `base_sub(Base a, Base b)`                              | `(Base c)`    |
 | `WitnessBase`         | `witness_base(123)`                                     | `(Base a)`    |
 | `RangeCheck`          | `range_check(64, Base a)`                               | `()`          |
-| `LessThan`            | `less_than(Base a, Base b)`                             | `()`          |
+| `LessThanStrict`      | `less_than_strict(Base a, Base b)`                      | `()`          |
+| `LessThanLoose`       | `less_than_loose(Base a, Base b)`                       | `()`          |
 | `BoolCheck`           | `bool_check(Base a)`                                    | `()`          |
 | `ConstrainEqualBase`  | `constrain_equal_base(Base a, Base b)`                  | `()`          |
 | `ConstrainEqualPoint` | `constrain_equal_point(EcPoint a, EcPoint b)`           | `()`          |

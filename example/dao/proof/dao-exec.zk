@@ -137,7 +137,7 @@ circuit "DaoExec" {
     # Check that dao_quorum is less than or equal to all_votes_value
     one = witness_base(1);
     all_votes_value_1 = base_add(all_votes_value, one);
-    less_than(dao_quorum, all_votes_value_1);
+    less_than_strict(dao_quorum, all_votes_value_1);
 
     # approval_ratio_quot / approval_ratio_base <= yes_votes / all_votes
     #
@@ -149,7 +149,7 @@ circuit "DaoExec" {
     lhs = base_mul(yes_votes_value, dao_approval_ratio_base);
 
     lhs_1 = base_add(lhs, one);
-    less_than(rhs, lhs_1);
+    less_than_strict(rhs, lhs_1);
     
     ####
 

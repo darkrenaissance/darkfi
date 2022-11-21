@@ -23,7 +23,8 @@ syn keyword zkasInstruction
     \ ec_get_x ec_get_y
     \ base_add base_mul base_sub
     \ poseidon_hash merkle_root
-    \ range_check less_than bool_check witness_base
+    \ range_check less_than_strict less_than_loose  bool_check
+    \ witness_base
     \ constrain_equal_base constrain_equal_point
     \ constrain_instance
 

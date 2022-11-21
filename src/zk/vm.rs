@@ -718,8 +718,24 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     }
                 }
 
-                Opcode::LessThan => {
-                    debug!("Executing `LessThan{:?}` opcode", opcode.1);
+                Opcode::LessThanStrict => {
+                    debug!("Executing `LessThanStrict{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let a = stack[args[0].1].clone().into();
+                    let b = stack[args[1].1].clone().into();
+
+                    lessthan_chip.copy_less_than(
+                        layouter.namespace(|| "copy a<b check"),
+                        a,
+                        b,
+                        0,
+                        true,
+                    )?;
+                }
+
+                Opcode::LessThanLoose => {
+                    debug!("Executing `LessThanLoose{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let a = stack[args[0].1].clone().into();

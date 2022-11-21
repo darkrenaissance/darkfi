@@ -88,5 +88,5 @@ circuit "Lead" {
         term2 = base_mul(term2_1, value);
         target = base_add(term1, term2);
         #lottery
-        less_than(y_hash, target);
+        less_than_loose(y_hash, target);
 }

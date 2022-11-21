@@ -45,7 +45,8 @@ circuit "Opcodes" {
 
 	range_check(64, a);
 	range_check(253, b);
-	less_than(a, b);
+	less_than_strict(a, b);
+	less_than_loose(a, b);
 
 	root = merkle_root(leaf_pos, path, c);
 	constrain_instance(root);
