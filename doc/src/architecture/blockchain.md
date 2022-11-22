@@ -3,7 +3,7 @@
 ## Overview
 
 Darkfi is based off Ouroboros Crypsinous, a privacy focused proof-of-stake algorithm.
-Below is a specification of how DarkFi's current blockchain achieves consensus.
+Below you may find the technical specifications of DarkFi's blockchain implementation.
 
 ## Blockchain
 
