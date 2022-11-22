@@ -65,48 +65,49 @@ Upon receiving a block, one of the following cases occur:
 
 ### Visual Examples
 
-| Sympol | Description                           |
-|--------|---------------------------------------|
-| [C]    | Canonical(finalized) blockchain block |
-| [Ln]   | Block produced by Leader n            |
-| +--    | Appending a block to fork             |
-| /--    | Dropped fork                          |
+| Sympol        | Description                           |
+|---------------|---------------------------------------|
+| [C]           | Canonical(finalized) blockchain block |
+| [C]--...--[C] | Sequence of canonical blocks          |
+| [Ln]          | Block produced by Leader n            |
+| +--           | Appending a block to fork             |
+| /--           | Dropped fork                          |
 
 Starting state:
 
-                  |--[L0] <-- L0 fork
-    [C]--..--[C]--|
-                  |--[L1] <-- L1 fork
+                   |--[L0] <-- L0 fork
+    [C]--...--[C]--|
+                   |--[L1] <-- L1 fork
 
 #### Case 1
 
 New proposal received extending L0 fork:
 
-                  |--[L0]+--[L2] <-- L0L2 fork
-    [C]--..--[C]--|
-                  |--[L1]        <-- L1 fork
+                   |--[L0]+--[L2] <-- L0L2 fork
+    [C]--...--[C]--|
+                   |--[L1]        <-- L1 fork
 
 #### Case 2
 
 New proposal received extending L0L2 fork at [L0] slot:
 
-                  |--[L0]--[L2]  <-- L0L2 fork
-    [C]--..--[C]--|
-                  |--[L0]+--[L3] <-- L0L3 fork
-                  |
-                  |--[L1]        <-- L1 fork
+                   |--[L0]--[L2]  <-- L0L2 fork
+    [C]--...--[C]--|
+                   |--[L0]+--[L3] <-- L0L3 fork
+                   |
+                   |--[L1]        <-- L1 fork
 
 ##### Case 3
 
 New proposal received extending canonical:
 
-                  |--[L0]--[L2] <-- L0L2 fork
-    [C]--..--[C]--|
-                  |--[L0]--[L3] <-- L0L3 fork
-                  |
-                  |--[L1]       <-- L1 fork
-                  |
-                  |+--[L4]      <-- L4 fork
+                   |--[L0]--[L2] <-- L0L2 fork
+    [C]--...--[C]--|
+                   |--[L0]--[L3] <-- L0L3 fork
+                   |
+                   |--[L1]       <-- L1 fork
+                   |
+                   |+--[L4]      <-- L4 fork
 
 
 ## Finalization
@@ -121,39 +122,39 @@ no finalization occurs until a slot with a single leader happens.
 We continue Case 3 from previous sector to visualize this logic.
 On slot 5, node observes 2 proposals, one extending L0L2 fork and one extending L0L3 fork:
 
-                  |--[L0]--[L2]+--[L5a] <-- L0L2L5a fork
-    [C]--..--[C]--|
-                  |--[L0]--[L3]+--[L5b] <-- L0L3L5b fork
-                  |
-                  |--[L1]               <-- L1 fork
-                  |
-                  |--[L4]               <-- L4 fork
+                   |--[L0]--[L2]+--[L5a] <-- L0L2L5a fork
+    [C]--...--[C]--|
+                   |--[L0]--[L3]+--[L5b] <-- L0L3L5b fork
+                   |
+                   |--[L1]               <-- L1 fork
+                   |
+                   |--[L4]               <-- L4 fork
 
 Finalization cannot occur, since we have two competting fork chains.
 On next slot, node only observers 1 proposal, extending L0L3L5b fork:
 
-                  |--[L0]--[L2]--[L5a]        <-- L0L2L5a fork
-    [C]--..--[C]--|
-                  |--[L0]--[L3]--[L5b]+--[L6] <-- L0L3L5bL6 fork
-                  |
-                  |--[L1]                     <-- L1 fork
-                  |
-                  |--[L4]                     <-- L4 fork
+                   |--[L0]--[L2]--[L5a]        <-- L0L2L5a fork
+    [C]--...--[C]--|
+                   |--[L0]--[L3]--[L5b]+--[L6] <-- L0L3L5bL6 fork
+                   |
+                   |--[L1]                     <-- L1 fork
+                   |
+                   |--[L4]                     <-- L4 fork
 
 When finalization sync period starts, node sees that it can finalize fork L0L3L5bL6 and drop rest forks:
 
-                  |/--[L0]--[L2]--[L5a]      <-- L0L2L5a fork
-    [C]--..--[C]--|
-                  |--[L0]--[L3]--[L5b]--[L6] <-- L0L3L5bL6 fork
-                  |
-                  |/--[L1]                   <-- L1 fork
-                  |
-                  |/--[L4]                   <-- L4 fork
+                   |/--[L0]--[L2]--[L5a]      <-- L0L2L5a fork
+    [C]--...--[C]--|
+                   |--[L0]--[L3]--[L5b]--[L6] <-- L0L3L5bL6 fork
+                   |
+                   |/--[L1]                   <-- L1 fork
+                   |
+                   |/--[L4]                   <-- L4 fork
 
 
 resulting in the following state:
 
-    [c]--..--[c]--|--[L6]
+    [C]--...--[C]--|--[L6]
 
 where canonical contains blocks L0, L3 and L5b from L0L3L56L6 fork.
 
