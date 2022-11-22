@@ -134,6 +134,12 @@ pub struct ValidatorState {
     pub participating: Option<u64>,
     /// Wallet interface
     pub wallet: WalletPtr,
+    /// nullifiers
+    pub nullifiers: Vec<pallas::Base>,
+    /// spent coins
+    pub spent: Vec<pallas::Base>,
+    /// lead coins
+    pub lead: Vec<pallas::Base>,
 }
 
 impl ValidatorState {
@@ -204,6 +210,9 @@ impl ValidatorState {
             unconfirmed_txs,
             participating,
             wallet,
+            nullifiers: vec![],
+            spent: vec![],
+            lead: vec![],
         }));
 
         Ok(state)
@@ -330,6 +339,34 @@ impl ValidatorState {
         Ok(true)
     }
 
+    /// return 2-term target approximation sigma coefficients.
+    /// `epoch: absolute epoch index
+    /// `slot: relative slot index
+    fn sigmas(&self, epoch: u64, slot: u64) -> (pallas::Base, pallas::Base) {
+        let f = Self::leadership_probability_with_all_stake().with_precision(RADIX_BITS).value();
+        info!("Consensus: f: {}", f);
+
+        // Generate sigmas
+        let total_stake = Self::total_stake_plus(epoch, slot); // Only used for fine-tuning
+
+        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+        let two = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
+        let field_p = Float10::from_str_native(P).unwrap().with_precision(RADIX_BITS).value();
+        let total_sigma =
+            Float10::try_from(total_stake).unwrap().with_precision(RADIX_BITS).value();
+
+        let x = one - f;
+        let c = x.ln();
+
+        let sigma1_fbig = c.clone() / total_sigma.clone() * field_p.clone();
+        let sigma1 = fbig2base(sigma1_fbig);
+
+        let sigma2_fbig = (c / total_sigma).powf(two.clone()) * (field_p / two);
+        let sigma2 = fbig2base(sigma2_fbig);
+        (sigma1, sigma2)
+
+    }
+
     /// Generate epoch-competing coins
     async fn create_epoch_coins(
         &self,
@@ -338,29 +375,7 @@ impl ValidatorState {
         slot: u64,
     ) -> Result<Vec<Vec<LeadCoin>>> {
         info!("Consensus: Creating coins for epoch: {}", epoch);
-
-        // Retrieve previous epoch-competing coins' frequency
-        let frequency = Self::get_frequency().with_precision(RADIX_BITS).value();
-        info!("Consensus: Previous epoch frequency: {}", frequency);
-
-        // Generate sigmas
-        let total_stake = Self::total_stake(epoch, slot); // Only used for fine-tuning
-
-        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
-        let two = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
-        let field_p = Float10::from_str_native(P).unwrap().with_precision(RADIX_BITS).value();
-        let total_sigma =
-            Float10::try_from(total_stake).unwrap().with_precision(RADIX_BITS).value();
-
-        let x = one - frequency;
-        let c = x.ln();
-
-        let sigma1_fbig = c.clone() / total_sigma.clone() * field_p.clone();
-        let sigma1 = fbig2base(sigma1_fbig);
-
-        let sigma2_fbig = (c / total_sigma).powf(two.clone()) * (field_p / two);
-        let sigma2 = fbig2base(sigma2_fbig);
-
+        let (sigma1, sigma2) = self.sigmas(epoch, slot);
         self.create_coins(eta, sigma1, sigma2).await
     }
 
@@ -393,8 +408,6 @@ impl ValidatorState {
         for i in 0..EPOCH_LENGTH {
             let coin = LeadCoin::new(
                 eta,
-                sigma1,
-                sigma2,
                 LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
                 i as u64,
                 epoch_secrets.secret_keys[i].inner(),
@@ -412,14 +425,26 @@ impl ValidatorState {
         Ok(coins)
     }
 
-    fn total_stake(epoch: u64, slot: u64) -> u64 {
-        // TODO: Fix this
-        // (epoch * EPOCH_LENGTH + slot + 1) * REWARD
-        REWARD
+    /// leadership reward, assuming constant reward
+    /// TODO (res) implement reward mechanism with accord to DRK,DARK token-economics
+    fn reward() -> u64 {
+       REWARD
     }
 
-    fn get_frequency() -> Float10 {
-        // TODO: Actually retrieve frequency of coins from the previous epoch.
+    ///TODO: impl total empty slots count.
+    fn empty_slots_count() -> u64 {
+        0
+    }
+
+    /// total stake plus one.
+    /// assuming constant Reward.
+    fn total_stake_plus(epoch: u64, slot: u64) -> u64 {
+        (epoch * EPOCH_LENGTH as u64 + slot + 1 - Self::empty_slots_count()) * Self::reward()
+    }
+
+    /// leadership probability having all the stake.
+    /// dynamically auto-tune f
+    fn leadership_probability_with_all_stake() -> Float10 {
         let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
         let two = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
         one / two
@@ -434,6 +459,8 @@ impl ValidatorState {
     pub fn is_slot_leader(&self) -> (bool, usize) {
         // Slot relative index
         let slot = self.relative_slot(self.current_slot());
+        let epoch = self.current_epoch();
+        let (sigma1, sigma2) = self.sigmas(slot, epoch);
         // Stakeholder's epoch coins
         let coins = &self.consensus.coins;
 
@@ -447,23 +474,7 @@ impl ValidatorState {
         let mut highest_stake_idx = 0;
 
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
-            let y_exp = [coin.coin1_sk_root.inner(), coin.nonce];
-            let y_exp_hash = poseidon_hash(y_exp);
-            let y_coords = pedersen_commitment_base(y_exp_hash, mod_r_p(coin.y_mu))
-                .to_affine()
-                .coordinates()
-                .unwrap();
-
-            let y_coords = [*y_coords.x(), *y_coords.y()];
-            let y = poseidon_hash(y_coords);
-
-            let value = pallas::Base::from(coin.value);
-            let target = coin.sigma1 * value + coin.sigma2 * value * value;
-
-            info!("Consensus::is_leader(): y = {:?}", y);
-            info!("Consensus::is_leader(): T = {:?}", target);
-
-            let first_winning = y < target;
+            let first_winning = coin.is_leader(sigma1, sigma2);
             if first_winning && !won {
                 highest_stake_idx = winning_idx;
             }
@@ -483,6 +494,8 @@ impl ValidatorState {
     /// chain the node is holding.
     pub fn propose(&mut self, idx: usize) -> Result<Option<BlockProposal>> {
         let slot = self.current_slot();
+        let epoch = self.current_epoch();
+        let (sigma1, sigma2) = self.sigmas(slot, epoch);
         let (prev_hash, index) = self.longest_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
 
@@ -503,7 +516,7 @@ impl ValidatorState {
         // Generating leader proof
         let relative_slot = self.relative_slot(slot) as usize;
         let coin = self.consensus.coins[relative_slot][idx];
-        let proof = coin.create_lead_proof(&self.lead_proving_key)?;
+        let proof = coin.create_lead_proof(sigma1, sigma2, &self.lead_proving_key)?;
 
         // Signing using coin
         let secret_key = coin.secret_key;

@@ -39,6 +39,7 @@ use crate::{
     Error, Result,
 };
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use log::info;
 
 pub const MERKLE_DEPTH_LEADCOIN: usize = 32;
 pub const MERKLE_DEPTH: u8 = 32;
@@ -92,12 +93,6 @@ pub struct LeadCoin {
     pub y_mu: pallas::Base,
     /// Leader election nonce derived from eta at onset of epoch
     pub rho_mu: pallas::Base,
-    /// First coefficient in 1-term T (target function) approximation.
-    /// NOTE: sigma1 and sigma2 are not the capital sigma from the paper, but
-    /// the whole coefficient multiplied with absolute stake.
-    pub sigma1: pallas::Base,
-    /// Second coefficient in 2-term T (target function) approximation.
-    pub sigma2: pallas::Base,
     /// Coin's secret key
     pub secret_key: SecretKey,
 }
@@ -107,10 +102,6 @@ impl LeadCoin {
     pub fn new(
         // emulation of global random oracle output from previous epoch randomness.
         eta: pallas::Base,
-        // First coefficient in 1-term T (target function) approximation.
-        sigma1: pallas::Base,
-        // Second coefficient in 2-term T (target function) approximation.
-        sigma2: pallas::Base,
         // Stake value
         value: u64,
         // Slot index in the epoch
@@ -211,8 +202,6 @@ impl LeadCoin {
             coin2_blind,
             y_mu,
             rho_mu,
-            sigma1,
-            sigma2,
             secret_key,
         }
     }
@@ -302,6 +291,27 @@ impl LeadCoin {
         rho
     }
 
+    pub fn is_leader(&self, sigma1: pallas::Base, sigma2: pallas::Base) -> bool {
+        let y_exp = [self.coin1_sk_root.inner(), self.nonce];
+        let y_exp_hash = poseidon_hash(y_exp);
+        let y_coords = pedersen_commitment_base(y_exp_hash, mod_r_p(self.y_mu))
+            .to_affine()
+            .coordinates()
+            .unwrap();
+
+        let y_coords = [*y_coords.x(), *y_coords.y()];
+        let y = poseidon_hash(y_coords);
+
+        let value = pallas::Base::from(self.value);
+        let target = sigma1 * value + sigma2 * value * value;
+
+        info!("Consensus::is_leader(): y = {:?}", y);
+        info!("Consensus::is_leader(): T = {:?}", target);
+
+        let first_winning = y < target;
+        first_winning
+    }
+
     /// calculated derived coin commitment
     pub fn derived_commitment(&self, blind: pallas::Scalar) -> pallas::Point {
         let pk = self.pk();
@@ -334,7 +344,10 @@ impl LeadCoin {
     }
 
     /// Try to create a ZK proof of consensus leadership
-    pub fn create_lead_proof(&self, pk: &ProvingKey) -> Result<Proof> {
+    pub fn create_lead_proof(&self,
+                             sigma1: pallas::Base,
+                             sigma2: pallas::Base,
+                             pk: &ProvingKey) -> Result<Proof> {
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode)?;
         let witnesses = vec![
@@ -351,8 +364,8 @@ impl LeadCoin {
             Witness::Scalar(Value::known(self.coin2_blind)),
             Witness::Scalar(Value::known(mod_r_p(self.rho_mu))),
             Witness::Scalar(Value::known(mod_r_p(self.y_mu))),
-            Witness::Base(Value::known(self.sigma1)),
-            Witness::Base(Value::known(self.sigma2)),
+            Witness::Base(Value::known(sigma1)),
+            Witness::Base(Value::known(sigma2)),
         ];
         let circuit = ZkCircuit::new(witnesses, zkbin.clone());
         Ok(Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?)
