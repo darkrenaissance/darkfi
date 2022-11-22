@@ -364,7 +364,6 @@ impl ValidatorState {
         let sigma2_fbig = (c / total_sigma).powf(two.clone()) * (field_p / two);
         let sigma2 = fbig2base(sigma2_fbig);
         (sigma1, sigma2)
-
     }
 
     /// Generate epoch-competing coins
@@ -427,7 +426,7 @@ impl ValidatorState {
     /// leadership reward, assuming constant reward
     /// TODO (res) implement reward mechanism with accord to DRK,DARK token-economics
     fn reward() -> u64 {
-       REWARD
+        REWARD
     }
 
     ///TODO: impl total empty slots count.

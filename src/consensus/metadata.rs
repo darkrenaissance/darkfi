@@ -77,11 +77,11 @@ pub struct LeadProof {
 
 impl LeadProof {
     /*
-    pub fn new(pk: &ProvingKey, coin: LeadCoin) -> Self {
-        let proof = coin.create_lead_proof(pk).unwrap();
-        Self { proof }
-}
-    */
+        pub fn new(pk: &ProvingKey, coin: LeadCoin) -> Self {
+            let proof = coin.create_lead_proof(pk).unwrap();
+            Self { proof }
+    }
+        */
 
     pub fn verify(&self, vk: &VerifyingKey, public_inputs: &[pallas::Base]) -> Result<()> {
         if let Err(e) = self.proof.verify(vk, public_inputs) {

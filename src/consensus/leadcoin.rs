@@ -126,15 +126,10 @@ impl LeadCoin {
         // pk
         let pk = Self::util_pk(coin1_sk_root, tau);
         // Derive the nonce for coin2
-        let coin2_seed = Self::util_derived_rho(coin1_sk_root,
-                                                pallas::Base::from(seed)
-        );
+        let coin2_seed = Self::util_derived_rho(coin1_sk_root, pallas::Base::from(seed));
         debug!("coin2_seed[{}]: {:?}", slot_index, coin2_seed);
-        let coin1_commitment = Self::commitment(pk,
-                                                pallas::Base::from(value),
-                                                pallas::Base::from(seed),
-                                                coin1_blind
-        );
+        let coin1_commitment =
+            Self::commitment(pk, pallas::Base::from(value), pallas::Base::from(seed), coin1_blind);
         // Hash its coordinates to get a base field element
         let c1_cm_coords = coin1_commitment.to_affine().coordinates().unwrap();
         let c1_base_msg = [*c1_cm_coords.x(), *c1_cm_coords.y()];
@@ -146,10 +141,11 @@ impl LeadCoin {
         let coin1_commitment_merkle_path =
             coin_commitment_tree.authentication_path(leaf_pos, &coin1_commitment_root).unwrap();
         // Create commitment to coin2
-        let coin2_commitment = Self::commitment(pk,
-                                                pallas::Base::from(value),
-                                                pallas::Base::from(coin2_seed),
-                                                coin2_blind
+        let coin2_commitment = Self::commitment(
+            pk,
+            pallas::Base::from(value),
+            pallas::Base::from(coin2_seed),
+            coin2_blind,
         );
         // Derive election seeds
         let (y_mu, rho_mu) = Self::election_seeds(eta, pallas::Base::from(slot_index));
@@ -251,12 +247,8 @@ impl LeadCoin {
     }
 
     fn util_pk(sk_root: MerkleNode, tau: pallas::Base) -> pallas::Base {
-        let pk_msg = [
-            pallas::Base::from(PREFIX_PK),
-            sk_root.inner(),
-            tau,
-            pallas::Base::from(ZERO),
-        ];
+        let pk_msg =
+            [pallas::Base::from(PREFIX_PK), sk_root.inner(), tau, pallas::Base::from(ZERO)];
         let pk = poseidon_hash(pk_msg);
         pk
     }
@@ -267,12 +259,8 @@ impl LeadCoin {
     }
 
     fn util_derived_rho(sk_root: MerkleNode, nonce: pallas::Base) -> pallas::Base {
-        let rho_msg = [
-            pallas::Base::from(PREFIX_EVL),
-            sk_root.inner(),
-            nonce,
-            pallas::Base::from(ZERO),
-        ];
+        let rho_msg =
+            [pallas::Base::from(PREFIX_EVL), sk_root.inner(), nonce, pallas::Base::from(ZERO)];
         let rho = poseidon_hash(rho_msg);
         rho
     }
@@ -303,14 +291,13 @@ impl LeadCoin {
         first_winning
     }
 
-
-    fn commitment(pk: pallas::Base, value: pallas::Base, seed: pallas::Base, blind: pallas::Scalar) -> pallas::Point {
-        let commit_msg = [
-            pallas::Base::from(PREFIX_CM),
-            pk,
-            value,
-            seed,
-        ];
+    fn commitment(
+        pk: pallas::Base,
+        value: pallas::Base,
+        seed: pallas::Base,
+        blind: pallas::Scalar,
+    ) -> pallas::Point {
+        let commit_msg = [pallas::Base::from(PREFIX_CM), pk, value, seed];
         // Create commitment to coin
         let commit_v = poseidon_hash(commit_msg);
         pedersen_commitment_base(commit_v, blind)
@@ -344,10 +331,12 @@ impl LeadCoin {
     }
 
     /// Try to create a ZK proof of consensus leadership
-    pub fn create_lead_proof(&self,
-                             sigma1: pallas::Base,
-                             sigma2: pallas::Base,
-                             pk: &ProvingKey) -> Result<Proof> {
+    pub fn create_lead_proof(
+        &self,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
+        pk: &ProvingKey,
+    ) -> Result<Proof> {
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode)?;
         let witnesses = vec![
