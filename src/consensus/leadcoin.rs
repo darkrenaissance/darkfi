@@ -71,8 +71,6 @@ pub struct LeadCoin {
     pub nonce: pallas::Base,
     /// Coin nonce's commitment
     pub nonce_cm: pallas::Base,
-    /// Coin's serial number
-    pub sn: pallas::Base,
     /// Merkle root of coin1 commitment
     pub coin1_commitment_root: MerkleNode,
     /// coin1 sk
@@ -170,15 +168,6 @@ impl LeadCoin {
         let coin2_commitment = pedersen_commitment_base(coin2_commit_v, coin2_blind);
         // Derive election seeds
         let (y_mu, rho_mu) = Self::election_seeds(eta, pallas::Base::from(slot_index));
-        // Derive a nullifier
-        let sn_msg = [
-            pallas::Base::from(PREFIX_SN),
-            coin1_sk_root.inner(),
-            pallas::Base::from(seed),
-            pallas::Base::from(ZERO),
-        ];
-        let c_sn = poseidon_hash(sn_msg);
-
         // Return the object
         Self {
             value,
@@ -191,7 +180,6 @@ impl LeadCoin {
             tau,
             nonce: pallas::Base::from(seed),
             nonce_cm: coin2_seed,
-            sn: c_sn,
             coin1_commitment_root,
             coin1_sk,
             coin1_sk_root,
@@ -204,6 +192,16 @@ impl LeadCoin {
             rho_mu,
             secret_key,
         }
+    }
+
+    fn sn(&self) -> pallas::Base {
+        let sn_msg = [
+            pallas::Base::from(PREFIX_SN),
+            self.coin1_sk_root.inner(),
+            self.nonce,
+            pallas::Base::from(ZERO),
+        ];
+        poseidon_hash(sn_msg)
     }
 
     /// Derive election seeds from given parameters
@@ -259,7 +257,7 @@ impl LeadCoin {
             *c2_cm.y(),
             self.coin1_commitment_root.inner(),
             self.coin1_sk_root.inner(),
-            self.sn,
+            self.sn(),
             *y_coords.x(),
             *y_coords.y(),
             *rho_coord.x(),
@@ -398,7 +396,7 @@ impl LeadCoin {
             Witness::Base(Value::known(value)),
             Witness::MerklePath(Value::known(self.coin1_commitment_merkle_path)),
             Witness::Uint32(Value::known(pos)),
-            Witness::Base(Value::known(self.sn)),
+            Witness::Base(Value::known(self.sn())),
             // coin (3)
             Witness::Base(Value::known(change_pk)),
             Witness::Base(Value::known(change_coin.rho)),
@@ -434,7 +432,7 @@ impl LeadCoin {
             coin_root_sk: self.coin1_sk_root,
             change_coin_commitment: cm3,
             transfered_coin_commitment: cm4,
-            nullifier: self.sn,
+            nullifier: self.sn(),
             tau: self.tau,
             root: self.coin1_commitment_root,
             proof,

@@ -421,7 +421,6 @@ impl ValidatorState {
 
             coins.push(vec![coin]);
         }
-
         Ok(coins)
     }
 
