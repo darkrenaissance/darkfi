@@ -21,6 +21,7 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 use futures::{AsyncReadExt, AsyncWriteExt};
 use log::{debug, error, info, warn};
+use serde::Serialize;
 use url::Url;
 
 use super::jsonrpc::{JsonRequest, JsonResult};
@@ -29,8 +30,21 @@ use crate::{
         TcpTransport, TorTransport, Transport, TransportListener, TransportName, TransportStream,
         UnixTransport,
     },
+    system::SubscriberPtr,
     Error, Result,
 };
+
+/// Asynchronous trait implementing an internal accept function
+/// that runs inside a loop for accepting incoming JSON-RPC requests
+/// and passing them to the handler trait.
+#[async_trait]
+pub trait AcceptTrait {
+    async fn accept(
+        self: Arc<Self>,
+        mut stream: Box<dyn TransportStream>,
+        peer_addr: Url,
+    ) -> Result<()>;
+}
 
 /// Asynchronous trait implementing a handler for incoming JSON-RPC requests.
 /// Can be used by matching on methods and branching out to functions that
@@ -40,65 +54,107 @@ pub trait RequestHandler: Sync + Send {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult;
 }
 
-/// Internal accept function that runs inside a loop for accepting incoming
-/// JSON-RPC requests and passing them to the [`RequestHandler`].
-async fn accept(
-    mut stream: Box<dyn TransportStream>,
-    peer_addr: Url,
-    rh: Arc<impl RequestHandler + 'static>,
-) -> Result<()> {
-    loop {
-        // FIXME: Nasty size. 8M
-        let mut buf = vec![0; 1024 * 8192];
+#[async_trait]
+impl<T: RequestHandler> AcceptTrait for T {
+    async fn accept(
+        self: Arc<Self>,
+        mut stream: Box<dyn TransportStream>,
+        peer_addr: Url,
+    ) -> Result<()> {
+        loop {
+            // FIXME: Nasty size. 8M
+            let mut buf = vec![0; 1024 * 8192];
 
-        let n = match stream.read(&mut buf).await {
-            Ok(n) if n == 0 => {
+            let n = match stream.read(&mut buf).await {
+                Ok(n) if n == 0 => {
+                    debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                    break
+                }
+                Ok(n) => n,
+                Err(e) => {
+                    error!("JSON-RPC server failed reading from {} socket: {}", peer_addr, e);
+                    debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                    break
+                }
+            };
+
+            let r: JsonRequest = match serde_json::from_slice(&buf[0..n]) {
+                Ok(r) => {
+                    debug!(target: "jsonrpc-server", "{} --> {}", peer_addr, String::from_utf8_lossy(&buf));
+                    r
+                }
+                Err(e) => {
+                    warn!("JSON-RPC server received invalid JSON from {}: {}", peer_addr, e);
+                    debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                    break
+                }
+            };
+
+            let reply = self.handle_request(r).await;
+            let j = serde_json::to_string(&reply).unwrap();
+            debug!(target: "jsonrpc-server", "{} <-- {}", peer_addr, j);
+
+            if let Err(e) = stream.write_all(j.as_bytes()).await {
+                error!("JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
                 debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
                 break
             }
-            Ok(n) => n,
-            Err(e) => {
-                error!("JSON-RPC server failed reading from {} socket: {}", peer_addr, e);
-                debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
-                break
-            }
-        };
-
-        let r: JsonRequest = match serde_json::from_slice(&buf[0..n]) {
-            Ok(r) => {
-                debug!(target: "jsonrpc-server", "{} --> {}", peer_addr, String::from_utf8_lossy(&buf));
-                r
-            }
-            Err(e) => {
-                warn!("JSON-RPC server received invalid JSON from {}: {}", peer_addr, e);
-                debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
-                break
-            }
-        };
-
-        let reply = rh.handle_request(r).await;
-        let j = serde_json::to_string(&reply).unwrap();
-        debug!(target: "jsonrpc-server", "{} <-- {}", peer_addr, j);
-
-        if let Err(e) = stream.write_all(j.as_bytes()).await {
-            error!("JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
-            debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
-            break
         }
-    }
 
-    Ok(())
+        Ok(())
+    }
+}
+
+/// Wrapper struct to notify an incoming connection about subscription items.
+pub struct NotifyHandler<T> {
+    subscriber: SubscriberPtr<T>,
+}
+
+impl<T: Clone + Serialize> NotifyHandler<T> {
+    pub async fn new(subscriber: SubscriberPtr<T>) -> Arc<Self> {
+        Arc::new(Self { subscriber })
+    }
+}
+
+#[async_trait]
+impl<T: Clone + Send + Serialize> AcceptTrait for NotifyHandler<T> {
+    async fn accept(
+        self: Arc<Self>,
+        mut stream: Box<dyn TransportStream>,
+        peer_addr: Url,
+    ) -> Result<()> {
+        let subscription = self.subscriber.clone().subscribe().await;
+
+        loop {
+            // Listen subscription for notifications
+            let notification = subscription.receive().await;
+
+            // Push notification
+            let j = serde_json::to_string(&notification).unwrap();
+            debug!(target: "jsonrpc-server", "{} <-- {}", peer_addr, j);
+
+            if let Err(e) = stream.write_all(j.as_bytes()).await {
+                debug!(target: "jsonrpc-server", "JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
+                debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                break
+            }
+        }
+
+        subscription.unsubscribe().await;
+
+        Ok(())
+    }
 }
 
 /// Wrapper function around [`accept()`] to take the incoming connection and
 /// pass it forward.
 async fn run_accept_loop(
     listener: Box<dyn TransportListener>,
-    rh: Arc<impl RequestHandler + 'static>,
+    handler: Arc<impl AcceptTrait + 'static>,
 ) -> Result<()> {
     while let Ok((stream, peer_addr)) = listener.next().await {
         info!("JSON-RPC server accepted connection from {}", peer_addr);
-        accept(stream, peer_addr, rh.clone()).await?;
+        handler.clone().accept(stream, peer_addr).await?;
     }
 
     Ok(())
@@ -108,7 +164,7 @@ async fn run_accept_loop(
 /// [`RequestHandler`] to handle incoming requests.
 pub async fn listen_and_serve(
     accept_url: Url,
-    rh: Arc<impl RequestHandler + 'static>,
+    handler: Arc<impl AcceptTrait + 'static>,
 ) -> Result<()> {
     debug!(target: "jsonrpc-server", "Trying to bind listener on {}", accept_url);
 
@@ -129,12 +185,12 @@ pub async fn listen_and_serve(
             match $upgrade {
                 None => {
                     info!("JSON-RPC listener bound to {}", accept_url);
-                    run_accept_loop(Box::new(listener), rh).await?;
+                    run_accept_loop(Box::new(listener), handler).await?;
                 }
                 Some(u) if u == "tls" => {
                     let tls_listener = $transport.upgrade_listener(listener)?.await?;
                     info!("JSON-RPC listener bound to {}", accept_url);
-                    run_accept_loop(Box::new(tls_listener), rh).await?;
+                    run_accept_loop(Box::new(tls_listener), handler).await?;
                 }
                 Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
             }
@@ -167,7 +223,7 @@ pub async fn listen_and_serve(
                 error!("JSON-RPC Unix socket bind to {} failed: {}", accept_url, err);
                 return Err(Error::BindFailed(accept_url.as_str().into()))
             }
-            run_accept_loop(Box::new(listener?), rh).await?;
+            run_accept_loop(Box::new(listener?), handler).await?;
         }
         _ => unimplemented!(),
     }
