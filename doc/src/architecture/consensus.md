@@ -140,15 +140,15 @@ On next slot, node only observers 1 proposal, extending L0L3L5b fork:
                   |
                   |--[L4]                     <-- L4 fork
 
-Ehen finalization sync period starts, node sees that it can finalize fork L0L3L5bL6 and drop rest forks:
+When finalization sync period starts, node sees that it can finalize fork L0L3L5bL6 and drop rest forks:
 
-                  |/--[L0]--[L2]--[L5a]       <-- L0L2L5a fork
+                  |/--[L0]--[L2]--[L5a]      <-- L0L2L5a fork
     [C]--..--[C]--|
-                  |--[L0]--[L3]--[L5b]+--[L6] <-- L0L3L5bL6 fork
+                  |--[L0]--[L3]--[L5b]--[L6] <-- L0L3L5bL6 fork
                   |
-                  |/--[L1]                    <-- L1 fork
+                  |/--[L1]                   <-- L1 fork
                   |
-                  |/--[L4]                    <-- L4 fork
+                  |/--[L4]                   <-- L4 fork
 
 
 resulting in the following state:
