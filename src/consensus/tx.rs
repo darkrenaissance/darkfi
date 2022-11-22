@@ -7,11 +7,3 @@ pub struct Tx {
     pub xfer: TransferStx,
     pub cipher: EncryptedTxRcpt,
 }
-
-impl Tx {
-    /// verify transfer transaction
-    pub fn verify(&self) -> bool {
-        //TODO: verify tx
-        true
-    }
-}
