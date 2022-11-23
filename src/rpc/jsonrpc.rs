@@ -17,9 +17,14 @@
  */
 
 //! JSON-RPC 2.0 primitives
+use std::fmt;
+
+use async_std::sync::Arc;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{json, Value};
+
+use crate::system::SubscriberPtr;
 
 /// JSON-RPC error codes.
 /// The error codes from and including -32768 to -32000 are reserved for pre-defined errors.
@@ -71,6 +76,7 @@ pub enum JsonResult {
     Response(JsonResponse),
     Error(JsonError),
     Notification(JsonNotification),
+    Subscriber(JsonSubscriber),
 }
 // ANCHOR_END: jsonresult
 
@@ -89,6 +95,12 @@ impl From<JsonError> for JsonResult {
 impl From<JsonNotification> for JsonResult {
     fn from(notif: JsonNotification) -> Self {
         Self::Notification(notif)
+    }
+}
+
+impl From<JsonSubscriber> for JsonResult {
+    fn from(sub: JsonSubscriber) -> Self {
+        Self::Subscriber(sub)
     }
 }
 
@@ -134,6 +146,51 @@ pub struct JsonNotification {
 impl JsonNotification {
     pub fn new(method: &str, parameters: Value) -> Self {
         Self { jsonrpc: json!("2.0"), method: json!(method), params: parameters }
+    }
+}
+
+/// A JSON-RPC subscriber for notifications
+#[derive(Clone)]
+pub struct JsonSubscriber {
+    /// JSON-RPC version
+    pub jsonrpc: Value,
+    /// Request ID
+    pub id: Value,
+    /// Notification subscriber
+    pub subscriber: SubscriberPtr<JsonNotification>,
+}
+
+impl JsonSubscriber {
+    pub fn new(id: Value, subscriber: SubscriberPtr<JsonNotification>) -> Self {
+        Self { jsonrpc: json!("2.0"), id, subscriber }
+    }
+}
+
+impl fmt::Debug for JsonSubscriber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("JsonSubscriber")
+            .field("jsonrpc", &self.jsonrpc)
+            .field("id", &self.id)
+            .field("pointer", &Arc::as_ptr(&self.subscriber))
+            .finish()
+    }
+}
+
+impl Serialize for JsonSubscriber {
+    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        unimplemented!();
+    }
+}
+
+impl<'de> Deserialize<'de> for JsonSubscriber {
+    fn deserialize<D>(_deserializer: D) -> Result<JsonSubscriber, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        unimplemented!();
     }
 }
 

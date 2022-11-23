@@ -32,11 +32,13 @@ use darkfi::{
     rpc::{
         jsonrpc::{
             ErrorCode::{InvalidParams, MethodNotFound},
-            JsonError, JsonRequest, JsonResponse, JsonResult,
+            JsonError, JsonNotification, JsonRequest, JsonResponse, JsonResult, JsonSubscriber,
         },
         server::{listen_and_serve, RequestHandler},
     },
+    system::{Subscriber, SubscriberPtr},
     util::{
+        async_util::sleep,
         file::{load_file, save_file},
         path::{expand_path, get_config_path},
     },
@@ -81,6 +83,8 @@ struct Lilith {
     urls: Vec<Url>,
     /// Spawned networks
     spawns: Vec<Spawn>,
+    // TODO: Subscriber should come from ValidatorState or something
+    subscriber: SubscriberPtr<JsonNotification>,
 }
 
 impl Lilith {
@@ -126,6 +130,30 @@ impl Lilith {
     async fn pong(&self, id: Value, _params: &[Value]) -> JsonResult {
         JsonResponse::new(json!("pong"), id).into()
     }
+
+    // RPCAPI:
+    // Create a new subscriber for new blocks to notify connected peer.
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.notify_blocks", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
+    pub async fn blockchain_notify_blocks(&self, id: Value, params: &[Value]) -> JsonResult {
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        JsonSubscriber::new(id, self.subscriber.clone()).into()
+    }
+}
+
+// TODO: remove this
+async fn simulate_blocks(subscriber: SubscriberPtr<JsonNotification>) {
+    // Notifications simulation
+    let message =
+        JsonNotification::new("blockchain.notify_blocks", Value::from("New Block created!"));
+    loop {
+        subscriber.notify(message.clone()).await;
+        sleep(10).await;
+    }
 }
 
 #[async_trait]
@@ -140,6 +168,9 @@ impl RequestHandler for Lilith {
         match req.method.as_str() {
             Some("spawns") => return self.spawns(req.id, params).await,
             Some("ping") => return self.pong(req.id, params).await,
+            Some("blockchain.notify_blocks") => {
+                return self.blockchain_notify_blocks(req.id, params).await
+            }
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
@@ -303,12 +334,19 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         }
     }
 
-    let lilith = Lilith { urls, spawns };
+    // TODO: Subscriber should come from ValidatorState or something
+    let subscriber: SubscriberPtr<JsonNotification> = Subscriber::new();
+
+    let lilith = Lilith { urls, spawns, subscriber: subscriber.clone() };
     let lilith = Arc::new(lilith);
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
     ex.spawn(listen_and_serve(args.rpc_listen, lilith.clone())).detach();
+
+    // JSON-RPC notifications simulation
+    let _ex = ex.clone();
+    ex.spawn(simulate_blocks(subscriber)).detach();
 
     // Wait for SIGINT
     shutdown.recv().await?;

@@ -77,13 +77,35 @@ async fn accept(
         };
 
         let reply = rh.handle_request(r).await;
-        let j = serde_json::to_string(&reply).unwrap();
-        debug!(target: "jsonrpc-server", "{} <-- {}", peer_addr, j);
+        match reply {
+            JsonResult::Subscriber(sub) => {
+                let subscription = sub.subscriber.subscribe().await;
+                loop {
+                    // Listen subscription for notifications
+                    let notification = subscription.receive().await;
 
-        if let Err(e) = stream.write_all(j.as_bytes()).await {
-            error!("JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
-            debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
-            break
+                    // Push notification
+                    let j = serde_json::to_string(&notification).unwrap();
+                    debug!(target: "jsonrpc-server", "{} <-- {}", peer_addr, j);
+
+                    if let Err(e) = stream.write_all(j.as_bytes()).await {
+                        error!(target: "jsonrpc-server", "JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
+                        debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                        break
+                    }
+                }
+                subscription.unsubscribe().await;
+            }
+            _ => {
+                let j = serde_json::to_string(&reply).unwrap();
+                debug!(target: "jsonrpc-server", "{} <-- {}", peer_addr, j);
+
+                if let Err(e) = stream.write_all(j.as_bytes()).await {
+                    error!(target: "jsonrpc-server", "JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
+                    debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                    break
+                }
+            }
         }
     }
 

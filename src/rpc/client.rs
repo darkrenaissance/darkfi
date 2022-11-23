@@ -106,6 +106,7 @@ impl RpcClient {
                 //self.stop_signal.send(()).await?;
                 Err(Error::JsonRpcError("Unexpected reply".to_string()))
             }
+            JsonResult::Subscriber(_) => Err(Error::JsonRpcError("Unexpected reply".to_string())),
         }
     }
 
