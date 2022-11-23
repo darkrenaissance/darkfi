@@ -140,6 +140,8 @@ sled = {version = "0.34.7", optional = true}
 # big float
 dashu = { version = "0.2.0", git = "https://github.com/ertosns/dashu", optional=true } 
 
+rcell = { version = "1.1.3", optional=true }
+
 [dev-dependencies]
 clap = {version = "3.2.20", features = ["derive"]}
 halo2_proofs = {version = "0.2.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
@@ -183,6 +185,7 @@ blockchain = [
     "util",
     "wallet",
     "wasm-runtime",
+    "rcell"
 ]
 
 crypto = [

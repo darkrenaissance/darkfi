@@ -60,6 +60,9 @@ use crate::{
     Error, Result,
 };
 
+const PI_NULLIFIER_INDEX: usize  = 7;
+const PI_COMMITMENT_X_INDEX: usize = 1;
+const PI_COMMITMENT_Y_INDEX: usize = 2;
 /// This struct represents the information required by the consensus algorithm
 #[derive(Debug)]
 pub struct ConsensusState {
@@ -137,9 +140,17 @@ pub struct ValidatorState {
     /// nullifiers
     pub nullifiers: Vec<pallas::Base>,
     /// spent coins
-    pub spent: Vec<pallas::Base>,
+    pub spent: Vec<(pallas::Base, pallas::Base)>,
     /// lead coins
-    pub lead: Vec<pallas::Base>,
+    pub lead: Vec<(pallas::Base, pallas::Base)>,
+    /// f history
+    pub f_history : Vec<Float10>,
+    /// Kp
+    pub Kp: Float10,
+    /// Ti
+    pub Ti: Float10,
+    /// Td
+    pub Td: Float10,
 }
 
 impl ValidatorState {
@@ -201,7 +212,11 @@ impl ValidatorState {
         runtime.deploy(&payload)?;
         info!("Deployed Money Contract with ID: {}", cid);
         // -----END ARTIFACT-----
-
+        let zero = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
+        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+        let ten = Float10::from_str_native("10").unwrap().with_precision(RADIX_BITS).value();
+        let three = Float10::from_str_native("3").unwrap().with_precision(RADIX_BITS).value();
+        let nine  = Float10::from_str_native("9").unwrap().with_precision(RADIX_BITS).value();
         let state = Arc::new(RwLock::new(ValidatorState {
             lead_proving_key,
             lead_verifying_key,
@@ -213,6 +228,10 @@ impl ValidatorState {
             nullifiers: vec![],
             spent: vec![],
             lead: vec![],
+            f_history: vec![zero],
+            Kp: three/nine,
+            Ti: one.clone()/ten.clone(),
+            Td: one/ten,
         }));
 
         Ok(state)
@@ -342,8 +361,9 @@ impl ValidatorState {
     /// return 2-term target approximation sigma coefficients.
     /// `epoch: absolute epoch index
     /// `slot: relative slot index
-    fn sigmas(&self, epoch: u64, slot: u64) -> (pallas::Base, pallas::Base) {
-        let f = Self::leadership_probability_with_all_stake().with_precision(RADIX_BITS).value();
+    fn sigmas(&mut self, epoch: u64, slot: u64) -> (pallas::Base, pallas::Base) {
+        //let f = Self::leadership_probability_with_all_stake().with_precision(RADIX_BITS).value();
+        let f = self.win_prob_with_full_stake();
         info!("Consensus: f: {}", f);
 
         // Generate sigmas
@@ -374,8 +394,7 @@ impl ValidatorState {
         slot: u64,
     ) -> Result<Vec<Vec<LeadCoin>>> {
         info!("Consensus: Creating coins for epoch: {}", epoch);
-        let (sigma1, sigma2) = self.sigmas(epoch, slot);
-        self.create_coins(eta, sigma1, sigma2).await
+        self.create_coins(eta).await
     }
 
     /// Generate coins for provided sigmas.
@@ -383,8 +402,6 @@ impl ValidatorState {
     async fn create_coins(
         &self,
         eta: pallas::Base,
-        sigma1: pallas::Base,
-        sigma2: pallas::Base,
     ) -> Result<Vec<Vec<LeadCoin>>> {
         let mut rng = thread_rng();
 
@@ -440,12 +457,55 @@ impl ValidatorState {
         (epoch * EPOCH_LENGTH as u64 + slot + 1 - Self::empty_slots_count()) * Self::reward()
     }
 
-    /// leadership probability having all the stake.
-    /// dynamically auto-tune f
-    fn leadership_probability_with_all_stake() -> Float10 {
+    /// get number of leaders in last epoch.
+    /// in ideal-world all nodes will end up with identical POV
+    /// of blockchain, but in real-world:
+    /// TODO: this parameter need to be published in the block header,
+    /// and only read from last block header.
+    fn leads_per_block(&mut self) -> Float10 {
+        //TODO: complete this
+        let fi64 : i64 = 1;
+        self.f_history.push(Float10::try_from(fi64).unwrap().with_precision(RADIX_BITS).value());
+        Float10::try_from(fi64).unwrap().with_precision(RADIX_BITS).value()
+    }
+
+    fn f_dif(&mut self) -> Float10 {
         let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
-        let two = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
-        one / two
+        one - self.leads_per_block()
+    }
+
+    fn f_der(&self) -> Float10 {
+        let len = self.f_history.len();
+        (self.f_history[len-1].clone() - self.f_history[len-2].clone())/self.Td.clone()
+    }
+
+    fn f_int(&self) -> Float10 {
+        let mut sum  = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();;
+        for f in &self.f_history {
+            sum += f.clone()*self.Td.clone();
+        }
+        sum
+    }
+
+    /// the probability of winnig lottery having all the stake
+    /// returns f
+    fn win_prob_with_full_stake(&mut self) -> Float10 {
+        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+        let zero = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
+        let mut f = zero.clone();
+        let step = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();;
+        let p = self.f_dif();
+        let i = self.f_int();
+        let d = self.f_der();
+        while f<=Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value() && f>=Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value() {
+            f = self.Kp.clone()*(p.clone() + one.clone()/self.Ti.clone() * i.clone() + self.Td.clone() * d.clone());
+            if f>= one {
+                self.Kp-=step.clone();
+            } else if f<=zero {
+                self.Kp+=step.clone();
+            }
+        }
+        Float10::try_from(f).unwrap().with_precision(RADIX_BITS).value()
     }
 
     /// Check that the provided participant/stakeholder coins win the slot lottery.
@@ -454,7 +514,7 @@ impl ValidatorState {
     /// * `slot` - slot relative index
     /// * `epoch_coins` - stakeholder's epoch coins
     /// Returns: (check: bool, idx: usize) where idx is the winning coin's index
-    pub fn is_slot_leader(&self) -> (bool, usize) {
+    pub fn is_slot_leader(&mut self) -> (bool, usize) {
         // Slot relative index
         let slot = self.relative_slot(self.current_slot());
         let epoch = self.current_epoch();
@@ -499,7 +559,7 @@ impl ValidatorState {
 
         // TODO: [PLACEHOLDER] Create and add rewards transaction
 
-        let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
         /* TODO: FIXME: TESTNET:
         for tx in &unproposed_txs {
             for output in &tx.outputs {
@@ -534,6 +594,12 @@ impl ValidatorState {
         // TODO: do we need that? on next epoch we replace everything
         // how is this going to get reused?
         self.consensus.coins[relative_slot][idx] = coin.derive_coin(eta, relative_slot as u64);
+
+        /// lead,spend,nullifiers
+        self.nullifiers.push(coin.sn());
+        let cm = coin.coin1_commitment.to_affine().coordinates().unwrap();
+        self.spent.push((*cm.x(), *cm.y()));
+        self.lead.push((*cm.x(), *cm.y()));
 
         Ok(Some(BlockProposal::new(header, unproposed_txs, metadata)))
     }
@@ -591,6 +657,21 @@ impl ValidatorState {
     /// Given a proposal, the node verify its sender (slot leader) and finds which blockchain
     /// it extends. If the proposal extends the canonical blockchain, a new fork chain is created.
     pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<()> {
+        //TODO: validate sn/cm
+        let prop_sn = proposal.block.metadata.public_inputs[PI_NULLIFIER_INDEX];
+        for sn in &self.nullifiers {
+            if *sn==prop_sn {
+                return Err(Error::ProposalIsSpent);
+            }
+        }
+        let prop_cm_x : pallas::Base = proposal.block.metadata.public_inputs[PI_COMMITMENT_X_INDEX];
+        let prop_cm_y : pallas::Base = proposal.block.metadata.public_inputs[PI_COMMITMENT_Y_INDEX];
+
+        for cm in &self.lead {
+            if *cm==(prop_cm_x, prop_cm_y) {
+                return Err(Error::ProposalIsSpent);
+            }
+        }
         let current = self.current_slot();
         // Node hasn't started participating
         match self.participating {

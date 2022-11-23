@@ -175,7 +175,7 @@ impl LeadCoin {
         }
     }
 
-    fn sn(&self) -> pallas::Base {
+    pub fn sn(&self) -> pallas::Base {
         let sn_msg = [
             pallas::Base::from(PREFIX_SN),
             self.coin1_sk_root.inner(),
