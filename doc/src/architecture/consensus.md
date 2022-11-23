@@ -1,7 +1,6 @@
 # Consensus
 
-This section of the book describes how nodes participating in the DarkFi
-blockchain achieve consensus.
+This section of the book describes how nodes participating in the DarkFi blockchain achieve consensus.
 
 ## Glossary
 
@@ -20,16 +19,12 @@ blockchain achieve consensus.
 
 ## Node main loop
 
-As described in previous chapter, DarkFi is based on Ouroboros
-Crypsinous. Therefore, block production involves the following steps:
+As described in previous chapter, DarkFi is based on Ouroboros Crypsinous. Therefore, block production involves the following steps:
 
-At the start of every slot, each node runs a leader selection algorithm
-to determine if they are the slot's leader. If successful, they can
-produce a block containing unproposed transactions. This block is then
-appended to the largest known fork and shared with rest of the nodes on
-the P2P network.  Right before the end of every slot each node triggers
-a _finalization check_, to verify which blocks can be finalized.  This is
-also known as the finalization sync period.
+At the start of every slot, each node runs a leader selection algorithm to determine if they are the slot's leader. If successful, they can produce a block containing unproposed transactions. This block is then appended to the largest known fork
+and shared with rest of the nodes on the P2P network. 
+Right before the end of every slot each node triggers a _finalization check_, to verify which blocks can be finalized.
+This is also known as the finalization sync period.
 
 Pseudocode:
 ```
@@ -53,17 +48,13 @@ loop {
 
 ## Listening for blocks
 
-Each node listens to new block proposals concurrently with the main
-loop. Upon receiving block proposals, nodes try to extend the proposals
-onto a fork that they hold in memory. This process is described in the
-next section.
+Each node listens to new block proposals concurrently with the main loop. Upon receiving block proposals,
+nodes try to extend the proposals onto a fork that they hold in memory. This process is described in the next section.
 
 ## Fork extension
 
-Since there can be more than one slot leader, each node holds a set of
-known forks in memory.  When a node becomes a leader, they extend the
-longest fork they hold.
-
+Since there can be more than one slot leader, each node holds a set of known forks in memory.
+When a node becomes a leader, they extend the longest fork they hold.
 Upon receiving a block, one of the following cases may occur:
 
 | Description                               | Handling                                                            |
@@ -122,19 +113,13 @@ Extending the canonical blockchain with a new block proposal:
 
 ## Finalization
 
-When the finalization sync period kicks in, each node looks up the
-longest fork chain it holds. This must be at least 3 blocks long and
-there must be no other fork chain with same length.  If such a fork
-chain exists, nodes finalize all proposed blocks up to the last one by
-appending them to the canonical blockchain.  Once finalized, all other
-fork chains are removed from the memory pool.  Practically this means
-that no finalization can occur while we have competing fork chains of
-the same length. In such a case, finalization can only occur when we
-have a a slot with a single leader.
+When the finalization sync period kicks in, each node looks up the longest fork chain it holds. This must be at least 3 blocks long and there must be no other fork chain with same length.
+If such a fork chain exists, nodes finalize all proposed blocks up to the last one by appending them to the canonical blockchain.
+Once finalized, all other fork chains are removed from the memory pool.
+Practically this means that no finalization can occur while we have competing fork chains of the same length. In such a case, finalization can only occur when we have a a slot with a single leader.
 
 We continue Case 3 from the previous section to visualize this logic.
-On slot 5, a node observes 2 proposals. One extends the L0L2 fork,
-and the other extends the L0L3 fork:
+On slot 5, a node observes 2 proposals. One extends the L0L2 fork, and the other extends the L0L3 fork:
 
                    |--[L0]--[L2]+--[L5a] <-- L0L2L5a fork
     [C]--...--[C]--|
@@ -145,8 +130,7 @@ and the other extends the L0L3 fork:
                    |--[L4]               <-- L4 fork
 
 Since we have two competing fork chains finalization cannot occur.
-On next slot, a node only observes 1 proposal. So it extends the
-L0L3L5b fork:
+On next slot, a node only observes 1 proposal. So it extends the L0L3L5b fork:
 
                    |--[L0]--[L2]--[L5a]        <-- L0L2L5a fork
     [C]--...--[C]--|
@@ -156,8 +140,7 @@ L0L3L5b fork:
                    |
                    |--[L4]                     <-- L4 fork
 
-When the finalization sync period starts, the node finalizes the fork
-L0L3L5bL6 and all other forks get dropped:
+When the finalization sync period starts, the node finalizes the fork L0L3L5bL6 and all other forks get dropped:
 
                    |/--[L0]--[L2]--[L5a]      <-- L0L2L5a fork
     [C]--...--[C]--|
@@ -172,6 +155,5 @@ This results in the following state:
 
     [C]--...--[C]--|--[L6]
 
-The canonical blockchain contains blocks L0, L3 and L5b from the
-L0L3L56L6 fork.
+The canonical blockchain contains blocks L0, L3 and L5b from the L0L3L56L6 fork.
 
