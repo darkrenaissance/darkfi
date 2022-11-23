@@ -177,5 +177,5 @@ This results in the following state:
     [C]--...--[C]--|--[L6]
 
 The canonical blockchain contains blocks L0, L3 and L5b from the
-L0L3L56L6 fork.
+L0L3L5bL6 fork.
 
