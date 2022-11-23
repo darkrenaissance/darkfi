@@ -60,7 +60,7 @@ use crate::{
     Error, Result,
 };
 
-const PI_NULLIFIER_INDEX: usize  = 7;
+const PI_NULLIFIER_INDEX: usize = 7;
 const PI_COMMITMENT_X_INDEX: usize = 1;
 const PI_COMMITMENT_Y_INDEX: usize = 2;
 /// This struct represents the information required by the consensus algorithm
@@ -144,7 +144,7 @@ pub struct ValidatorState {
     /// lead coins
     pub lead: Vec<(pallas::Base, pallas::Base)>,
     /// f history
-    pub f_history : Vec<Float10>,
+    pub f_history: Vec<Float10>,
     /// Kp
     pub Kp: Float10,
     /// Ti
@@ -216,7 +216,7 @@ impl ValidatorState {
         let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
         let ten = Float10::from_str_native("10").unwrap().with_precision(RADIX_BITS).value();
         let three = Float10::from_str_native("3").unwrap().with_precision(RADIX_BITS).value();
-        let nine  = Float10::from_str_native("9").unwrap().with_precision(RADIX_BITS).value();
+        let nine = Float10::from_str_native("9").unwrap().with_precision(RADIX_BITS).value();
         let state = Arc::new(RwLock::new(ValidatorState {
             lead_proving_key,
             lead_verifying_key,
@@ -229,9 +229,9 @@ impl ValidatorState {
             spent: vec![],
             lead: vec![],
             f_history: vec![zero],
-            Kp: three/nine,
-            Ti: one.clone()/ten.clone(),
-            Td: one/ten,
+            Kp: three / nine,
+            Ti: one.clone() / ten.clone(),
+            Td: one / ten,
         }));
 
         Ok(state)
@@ -255,7 +255,7 @@ impl ValidatorState {
         }
 
         debug!("append_tx(): Starting state transition validation");
-        if let Err(e) = self.verify_transactions(&[tx.clone()]) {
+        if let Err(e) = self.verify_transactions(&[tx.clone()], false) {
             error!("append_tx(): Failed to verify transaction: {}", e);
             return false
         };
@@ -399,10 +399,7 @@ impl ValidatorState {
 
     /// Generate coins for provided sigmas.
     /// NOTE: The strategy here is having a single competing coin per slot.
-    async fn create_coins(
-        &self,
-        eta: pallas::Base,
-    ) -> Result<Vec<Vec<LeadCoin>>> {
+    async fn create_coins(&self, eta: pallas::Base) -> Result<Vec<Vec<LeadCoin>>> {
         let mut rng = thread_rng();
 
         let mut seeds: Vec<u64> = Vec::with_capacity(EPOCH_LENGTH);
@@ -464,7 +461,7 @@ impl ValidatorState {
     /// and only read from last block header.
     fn leads_per_block(&mut self) -> Float10 {
         //TODO: complete this
-        let fi64 : i64 = 1;
+        let fi64: i64 = 1;
         self.f_history.push(Float10::try_from(fi64).unwrap().with_precision(RADIX_BITS).value());
         Float10::try_from(fi64).unwrap().with_precision(RADIX_BITS).value()
     }
@@ -476,13 +473,13 @@ impl ValidatorState {
 
     fn f_der(&self) -> Float10 {
         let len = self.f_history.len();
-        (self.f_history[len-1].clone() - self.f_history[len-2].clone())/self.Td.clone()
+        (self.f_history[len - 1].clone() - self.f_history[len - 2].clone()) / self.Td.clone()
     }
 
     fn f_int(&self) -> Float10 {
-        let mut sum  = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();;
+        let mut sum = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
         for f in &self.f_history {
-            sum += f.clone()*self.Td.clone();
+            sum += f.clone() * self.Td.clone();
         }
         sum
     }
@@ -493,16 +490,21 @@ impl ValidatorState {
         let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
         let zero = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
         let mut f = zero.clone();
-        let step = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();;
+        let step = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
         let p = self.f_dif();
         let i = self.f_int();
         let d = self.f_der();
-        while f<=Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value() && f>=Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value() {
-            f = self.Kp.clone()*(p.clone() + one.clone()/self.Ti.clone() * i.clone() + self.Td.clone() * d.clone());
-            if f>= one {
-                self.Kp-=step.clone();
-            } else if f<=zero {
-                self.Kp+=step.clone();
+        while f <= Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value() &&
+            f >= Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value()
+        {
+            f = self.Kp.clone() *
+                (p.clone() +
+                    one.clone() / self.Ti.clone() * i.clone() +
+                    self.Td.clone() * d.clone());
+            if f >= one {
+                self.Kp -= step.clone();
+            } else if f <= zero {
+                self.Kp += step.clone();
             }
         }
         Float10::try_from(f).unwrap().with_precision(RADIX_BITS).value()
@@ -660,16 +662,16 @@ impl ValidatorState {
         //TODO: validate sn/cm
         let prop_sn = proposal.block.metadata.public_inputs[PI_NULLIFIER_INDEX];
         for sn in &self.nullifiers {
-            if *sn==prop_sn {
-                return Err(Error::ProposalIsSpent);
+            if *sn == prop_sn {
+                return Err(Error::ProposalIsSpent)
             }
         }
-        let prop_cm_x : pallas::Base = proposal.block.metadata.public_inputs[PI_COMMITMENT_X_INDEX];
-        let prop_cm_y : pallas::Base = proposal.block.metadata.public_inputs[PI_COMMITMENT_Y_INDEX];
+        let prop_cm_x: pallas::Base = proposal.block.metadata.public_inputs[PI_COMMITMENT_X_INDEX];
+        let prop_cm_y: pallas::Base = proposal.block.metadata.public_inputs[PI_COMMITMENT_Y_INDEX];
 
         for cm in &self.lead {
-            if *cm==(prop_cm_x, prop_cm_y) {
-                return Err(Error::ProposalIsSpent);
+            if *cm == (prop_cm_x, prop_cm_y) {
+                return Err(Error::ProposalIsSpent)
             }
         }
         let current = self.current_slot();
@@ -731,7 +733,7 @@ impl ValidatorState {
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
         debug!("receive_proposal(): Starting state transition validation");
-        if let Err(e) = self.verify_transactions(&proposal.block.txs) {
+        if let Err(e) = self.verify_transactions(&proposal.block.txs, false) {
             error!("receive_proposal(): Transaction verifications failed: {}", e);
             return Err(e.into())
         };
@@ -899,7 +901,7 @@ impl ValidatorState {
             // TODO: FIXME: The state transitions have already been written, they have to be in memory
             //              until this point.
             debug!(target: "consensus", "Applying state transition for finalized block");
-            if let Err(e) = self.verify_transactions(&proposal.txs) {
+            if let Err(e) = self.verify_transactions(&proposal.txs, true) {
                 error!(target: "consensus", "Finalized block transaction verifications failed: {}", e);
                 return Err(e)
             }
@@ -940,7 +942,7 @@ impl ValidatorState {
         // Verify state transitions for all blocks and their respective transactions.
         debug!("receive_blocks(): Starting state transition validations");
         for block in blocks {
-            if let Err(e) = self.verify_transactions(&block.txs) {
+            if let Err(e) = self.verify_transactions(&block.txs, false) {
                 error!("receive_blocks(): Transaction verifications failed: {}", e);
                 return Err(e)
             }
@@ -1013,11 +1015,11 @@ impl ValidatorState {
     /// If all of those succeed, try to execute a state update for the contract calls.
     /// Currently the verifications are sequential, and the function will fail if any
     /// of the verifications fail.
-    /// TODO: FIXME: TESTNET: The state changes should be in memory until a block with
-    ///                       it is finalized. Another option is to not apply and just
-    ///                       run this again when we see a finalized block (and apply
-    ///                       the update at that point). #finalization
-    pub fn verify_transactions(&self, txs: &[Transaction]) -> Result<()> {
+    /// The function takes a boolean called `write` which tells it to actually write
+    /// the state transitions to the database.
+    // TODO: This should be paralellized as if even one tx in the batch fails to verify,
+    //       we can drop everything.
+    pub fn verify_transactions(&self, txs: &[Transaction], write: bool) -> Result<()> {
         debug!("Verifying {} transaction(s)", txs.len());
         for tx in txs {
             // Table of public inputs used for ZK proof verification
@@ -1026,10 +1028,12 @@ impl ValidatorState {
             let mut sig_table = vec![];
             // State updates produced by contract execution
             let mut updates = vec![];
+            // ZK circuit verifying keys (FIXME: These should be in a more global scope)
+            let mut verifying_keys = vec![];
 
             // Iterate over all calls to get the metadata
             for (idx, call) in tx.calls.iter().enumerate() {
-                debug!("Working on call {}", idx);
+                debug!("Verifying contract call {}", idx);
                 // Check if the called contract exist as bincode.
                 let bincode = self.blockchain.wasm_bincode.get(call.contract_id)?;
                 debug!("Found wasm bincode for {}", call.contract_id);
@@ -1070,8 +1074,7 @@ impl ValidatorState {
 
             // Finally, verify the ZK proofs
             debug!("Verifying transaction ZK proofs");
-            // FIXME XXX:
-            tx.verify_zkps(&[], zkp_table)?;
+            tx.verify_zkps(&verifying_keys, zkp_table)?;
             debug!("Transaction ZK proofs verified successfully!");
 
             // When the verification stage has passed, just apply all the changes.
@@ -1080,18 +1083,22 @@ impl ValidatorState {
             //              for additional notes).
             // TODO: We instantiate new runtimes here, so pick up the gas fees from
             //       the previous runs and sum them all together.
-            debug!("Performing state updates");
-            assert!(tx.calls.len() == updates.len());
-            for (call, update) in tx.calls.iter().zip(updates.iter()) {
-                // Do the bincode lookups again
-                let bincode = self.blockchain.wasm_bincode.get(call.contract_id)?;
-                debug!("Found wasm bincode for {}", call.contract_id);
+            if write {
+                debug!("Performing state updates");
+                assert!(tx.calls.len() == updates.len());
+                for (call, update) in tx.calls.iter().zip(updates.iter()) {
+                    // Do the bincode lookups again
+                    let bincode = self.blockchain.wasm_bincode.get(call.contract_id)?;
+                    debug!("Found wasm bincode for {}", call.contract_id);
 
-                let mut runtime =
-                    Runtime::new(&bincode, self.blockchain.clone(), call.contract_id)?;
+                    let mut runtime =
+                        Runtime::new(&bincode, self.blockchain.clone(), call.contract_id)?;
 
-                debug!("Executing \"apply\" call");
-                runtime.apply(&update)?;
+                    debug!("Executing \"apply\" call");
+                    runtime.apply(&update)?;
+                }
+            } else {
+                debug!("Skipping state updates because write=false");
             }
         }
 

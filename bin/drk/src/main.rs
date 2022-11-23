@@ -16,10 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{process::exit, time::Instant};
+use std::{process::exit, str::FromStr, time::Instant};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use darkfi_sdk::crypto::{PublicKey, TokenId};
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -29,6 +30,9 @@ use darkfi::{
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::cli::{get_log_config, get_log_level},
 };
+
+/// Airdrop methods
+mod rpc_airdrop;
 
 /// Wallet operation methods for darkfid's JSON-RPC
 mod rpc_wallet;
@@ -71,6 +75,22 @@ enum Subcmd {
         /// Get the default address in the wallet
         address: bool,
     },
+
+    /// Airdrop some tokens
+    Airdrop {
+        /// Faucet JSON-RPC endpoint
+        #[arg(short, long, default_value = "tcp://127.0.0.1:8340")]
+        faucet_endpoint: Url,
+
+        /// Amount to request from the faucet
+        amount: String,
+
+        /// Token ID to request from the faucet
+        token: String,
+
+        /// Optional address to send tokens to (defaults to main address in wallet)
+        address: Option<String>,
+    },
 }
 
 pub struct Drk {
@@ -103,10 +123,10 @@ async fn main() -> Result<()> {
         Subcmd::Ping => {
             let rpc_client = RpcClient::new(args.endpoint)
                 .await
-                .with_context(|| "Could not connect to RPC endpoint")?;
+                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
 
             let drk = Drk { rpc_client };
-            drk.ping().await.with_context(|| "Failed to ping RPC endpoint")?;
+            drk.ping().await.with_context(|| "Failed to ping darkfid RPC endpoint")?;
             Ok(())
         }
 
@@ -119,7 +139,7 @@ async fn main() -> Result<()> {
 
             let rpc_client = RpcClient::new(args.endpoint)
                 .await
-                .with_context(|| "Could not connect to RPC endpoint")?;
+                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
 
             let drk = Drk { rpc_client };
 
@@ -139,11 +159,43 @@ async fn main() -> Result<()> {
             }
 
             if address {
-                drk.wallet_address(0).await.with_context(|| "Failed to fetch default address")?;
+                let address = drk
+                    .wallet_address(0)
+                    .await
+                    .with_context(|| "Failed to fetch default address")?;
+
+                println!("{}", address);
+
                 return Ok(())
             }
 
             unreachable!()
+        }
+
+        Subcmd::Airdrop { faucet_endpoint, amount, token, address } => {
+            let amount = f64::from_str(&amount).with_context(|| "Invalid amount")?;
+            let token_id = TokenId::try_from(token.as_str()).with_context(|| "Invalid Token ID")?;
+
+            let rpc_client = RpcClient::new(args.endpoint)
+                .await
+                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+            let drk = Drk { rpc_client };
+
+            let address = match address {
+                Some(v) => PublicKey::from_str(v.as_str()).with_context(|| "Invalid address")?,
+                None => drk.wallet_address(0).await.with_context(|| {
+                    "Failed to fetch default address, perhaps the wallet was not initialized?"
+                })?,
+            };
+
+            let txid = drk
+                .request_airdrop(faucet_endpoint, amount, token_id, address)
+                .await
+                .with_context(|| "Failed to request airdrop")?;
+
+            println!("Transaction ID: {}", txid);
+            Ok(())
         }
     }
 }

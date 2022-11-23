@@ -46,7 +46,7 @@ use darkfi_sdk::{
     tx::ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
-use log::info;
+use log::{debug, info};
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
@@ -156,6 +156,9 @@ async fn money_contract_execution() -> Result<()> {
         &burn_pk,
         true,
     )?;
+
+    debug!("PARAMS: {:#?}", params);
+    debug!("PROOFS: {:?}", proofs);
 
     // Build transaction
     let mut data = vec![MoneyFunction::Transfer as u8];

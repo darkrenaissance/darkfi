@@ -371,6 +371,10 @@ impl Faucetd {
     // RPCAPI:
     // Processes an airdrop request and airdrops requested token and amount to address.
     // Returns the transaction ID upon success.
+    // Params:
+    // 0: base58 encoded address of the recipient
+    // 1: Amount to airdrop in form of f64
+    // 2: base58 encoded token ID to airdrop
     //
     // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42, "1F00b4r..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
