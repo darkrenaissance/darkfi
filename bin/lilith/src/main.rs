@@ -34,11 +34,9 @@ use darkfi::{
             ErrorCode::{InvalidParams, MethodNotFound},
             JsonError, JsonRequest, JsonResponse, JsonResult,
         },
-        server::{listen_and_serve, NotifyHandler, RequestHandler},
+        server::{listen_and_serve, RequestHandler},
     },
-    system::{Subscriber, SubscriberPtr},
     util::{
-        async_util::sleep,
         file::{load_file, save_file},
         path::{expand_path, get_config_path},
     },
@@ -259,28 +257,6 @@ fn save_hosts(path: &Path, spawns: FxHashMap<String, Vec<String>>) {
     }
 }
 
-// Auxillary function generating all configured JSON-RPC notification handlers for Lilith
-async fn setup_dummy_notification_handlers(mut accept_url: Url, ex: Arc<smol::Executor<'_>>) {
-    info!("Generating JSON-RPC notification handlers");
-
-    // Creating a strings notification handler listening on accept_url:18999
-    if accept_url.set_port(Some(18999)).is_err() {
-        error!("Error while setting port of notification url.");
-        return
-    }
-    let subscriber: SubscriberPtr<String> = Subscriber::new();
-    let notify_handler = NotifyHandler::new(subscriber.clone()).await;
-    // Handler starts listening for connections
-    ex.spawn(listen_and_serve(accept_url, notify_handler)).detach();
-
-    // Notifications simulation
-    let message = String::from("INSPIRACIJA");
-    loop {
-        subscriber.notify(message.clone()).await;
-        sleep(10).await;
-    }
-}
-
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // We use this handler to block this function after detaching all
@@ -332,11 +308,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    ex.spawn(listen_and_serve(args.rpc_listen.clone(), lilith.clone())).detach();
-
-    // JSON-RPC notifications
-    let _ex = ex.clone();
-    ex.spawn(setup_dummy_notification_handlers(args.rpc_listen, _ex)).detach();
+    ex.spawn(listen_and_serve(args.rpc_listen, lilith.clone())).detach();
 
     // Wait for SIGINT
     shutdown.recv().await?;
