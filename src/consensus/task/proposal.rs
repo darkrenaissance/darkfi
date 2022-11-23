@@ -21,7 +21,11 @@ use std::time::Duration;
 use log::{debug, error, info};
 
 use super::consensus_sync_task;
-use crate::{consensus::ValidatorStatePtr, consensus::ValidatorState, net::P2pPtr, util::async_util::sleep};
+use crate::{
+    consensus::{ValidatorState, ValidatorStatePtr},
+    net::P2pPtr,
+    util::async_util::sleep,
+};
 use std::sync::LockResult;
 
 /// async task used for participating in the consensus protocol
@@ -116,8 +120,6 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
 
         // Node checks if it's the slot leader to generate a new proposal
         // for that slot.
-
-
 
         let (won, idx) = state.write().await.is_slot_leader();
         let result = if won { state.write().await.propose(idx) } else { Ok(None) };
