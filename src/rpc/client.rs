@@ -30,6 +30,7 @@ use crate::{
     net::transport::{
         TcpTransport, TorTransport, Transport, TransportName, TransportStream, UnixTransport,
     },
+    system::SubscriberPtr,
     Error, Result,
 };
 
@@ -52,6 +53,52 @@ impl RpcClient {
     pub async fn close(&self) -> Result<()> {
         self.stop_signal.send(()).await?;
         Ok(())
+    }
+
+    /// Listen instantiated client for notifications.
+    /// NOTE: Subscriber listeners must perform response handling.
+    pub async fn subscribe(
+        &self,
+        req: JsonRequest,
+        subscriber: SubscriberPtr<JsonResult>,
+    ) -> Result<()> {
+        // Perform initial request.
+        debug!(target: "jsonrpc-client", "--> {}", serde_json::to_string(&req)?);
+        // If the connection is closed, the sender will get an error for sending to a closed channel.
+        if let Err(e) = self.send.send(json!(req)).await {
+            error!(target: "jsonrpc-client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
+            return Err(Error::NetworkOperationFailed)
+        }
+
+        loop {
+            // If the connection is closed, the receiver will get an error for waiting on a closed channel.
+            let notification = self.recv.recv().await;
+            if notification.is_err() {
+                error!(target: "jsonrpc-client", "JSON-RPC client unable to recv from {} (channels closed)", self.url);
+                break
+            }
+
+            // Notify subscribed channels
+            let notification = notification?;
+            debug!(target: "jsonrpc-client", "<-- {}", serde_json::to_string(&notification)?);
+
+            subscriber.notify(notification.clone()).await;
+
+            // Stop listenning on error
+            match notification {
+                JsonResult::Notification(_) => {}
+                _ => break,
+            }
+
+            // Triggering next consume
+            if let Err(e) = self.send.send(json!(req)).await {
+                error!(target: "jsonrpc-client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
+                break
+            }
+        }
+
+        subscriber.notify(JsonError::new(ErrorCode::InternalError, None, req.id).into()).await;
+        Err(Error::NetworkOperationFailed)
     }
 
     /// Send a given JSON-RPC request over the instantiated client.

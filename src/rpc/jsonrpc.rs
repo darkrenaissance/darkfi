@@ -154,15 +154,13 @@ impl JsonNotification {
 pub struct JsonSubscriber {
     /// JSON-RPC version
     pub jsonrpc: Value,
-    /// Request ID
-    pub id: Value,
     /// Notification subscriber
     pub subscriber: SubscriberPtr<JsonNotification>,
 }
 
 impl JsonSubscriber {
-    pub fn new(id: Value, subscriber: SubscriberPtr<JsonNotification>) -> Self {
-        Self { jsonrpc: json!("2.0"), id, subscriber }
+    pub fn new(subscriber: SubscriberPtr<JsonNotification>) -> Self {
+        Self { jsonrpc: json!("2.0"), subscriber }
     }
 }
 
@@ -170,7 +168,6 @@ impl fmt::Debug for JsonSubscriber {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("JsonSubscriber")
             .field("jsonrpc", &self.jsonrpc)
-            .field("id", &self.id)
             .field("pointer", &Arc::as_ptr(&self.subscriber))
             .finish()
     }

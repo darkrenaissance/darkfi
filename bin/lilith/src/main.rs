@@ -141,7 +141,7 @@ impl Lilith {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        JsonSubscriber::new(id, self.subscriber.clone()).into()
+        JsonSubscriber::new(self.subscriber.clone()).into()
     }
 }
 
