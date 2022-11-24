@@ -115,9 +115,8 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
 
         // Node checks if it's the slot leader to generate a new proposal
         // for that slot.
-
-        let (won, idx) = state.write().await.is_slot_leader();
-        let result = if won { state.write().await.propose(idx) } else { Ok(None) };
+        let (won, idx, sigma1, sigma2) = state.write().await.is_slot_leader();
+        let result = if won { state.write().await.propose(idx, sigma1, sigma2) } else { Ok(None) };
         let proposal = match result {
             Ok(prop) => {
                 if prop.is_none() {

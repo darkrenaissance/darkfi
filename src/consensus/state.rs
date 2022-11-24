@@ -599,7 +599,7 @@ impl ValidatorState {
     /// * `slot` - slot relative index
     /// * `epoch_coins` - stakeholder's epoch coins
     /// Returns: (check: bool, idx: usize) where idx is the winning coin's index
-    pub fn is_slot_leader(&mut self) -> (bool, usize) {
+    pub fn is_slot_leader(&mut self) -> (bool, usize, pallas::Base, pallas::Base) {
         // Slot relative index
         let slot = self.relative_slot(self.current_slot());
         let (sigma1, sigma2) = self.sigmas(slot, self.consensus.epoch);
@@ -628,15 +628,19 @@ impl ValidatorState {
             }
         }
 
-        (won, highest_stake_idx)
+        (won, highest_stake_idx, sigma1, sigma2)
     }
 
     /// Generate a block proposal for the current slot, containing all
     /// unconfirmed transactions. Proposal extends the longest fork
     /// chain the node is holding.
-    pub fn propose(&mut self, idx: usize) -> Result<Option<BlockProposal>> {
+    pub fn propose(
+        &mut self,
+        idx: usize,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
+    ) -> Result<Option<BlockProposal>> {
         let slot = self.current_slot();
-        let (sigma1, sigma2) = self.sigmas(slot, self.consensus.epoch);
         let (prev_hash, index) = self.longest_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
 
