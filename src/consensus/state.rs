@@ -33,11 +33,7 @@ use darkfi_serial::{
 };
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, error, info, warn};
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::PrimeField, Curve},
-    pallas,
-};
+use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::{rngs::OsRng, thread_rng, Rng};
 
 use super::{
@@ -148,14 +144,13 @@ pub struct ValidatorState {
     pub participating: Option<u64>,
     /// Wallet interface
     pub wallet: WalletPtr,
-    /// nullifiers
-    pub nullifiers: Vec<pallas::Base>,
-    /// spent coins
-    pub spent: Vec<(pallas::Base, pallas::Base)>,
-    /// lead coins
-    pub lead: Vec<(pallas::Base, pallas::Base)>,
-    /// f history
-    pub f_history: Vec<Float10>,
+    // TODO: Aren't these already in db after finalization?
+    /// Seen nullifiers from proposals
+    pub leaders_nullifiers: Vec<pallas::Base>,
+    /// Seen spent coins from proposals
+    pub leaders_spent_coins: Vec<(pallas::Base, pallas::Base)>,
+    /// Leaders count history
+    pub leaders_history: Vec<u64>,
     /// Kp
     pub Kp: Float10,
     /// Ti
@@ -267,7 +262,6 @@ impl ValidatorState {
         info!("Finished deployment of native wasm contracts");
         // -----NATIVE WASM CONTRACTS-----
 
-        let zero = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
         let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
         let ten = Float10::from_str_native("10").unwrap().with_precision(RADIX_BITS).value();
         let three = Float10::from_str_native("3").unwrap().with_precision(RADIX_BITS).value();
@@ -281,10 +275,9 @@ impl ValidatorState {
             verifying_keys: Arc::new(RwLock::new(verifying_keys)),
             participating,
             wallet,
-            nullifiers: vec![],
-            spent: vec![],
-            lead: vec![],
-            f_history: vec![zero],
+            leaders_nullifiers: vec![],
+            leaders_spent_coins: vec![],
+            leaders_history: vec![0],
             Kp: three / nine,
             Ti: one.clone() / ten.clone(),
             Td: one / ten,
@@ -516,7 +509,8 @@ impl ValidatorState {
     /// Auxillary function to calculate overall empty slots.
     /// We keep an offset from genesis indicating when the first slot actually started.
     /// This offset is shared between nodes.
-    fn overall_empty_slots(&mut self, slot: u64) -> u64 {
+    fn overall_empty_slots(&mut self) -> u64 {
+        let slot = self.current_slot();
         // Retrieve existing blocks excluding genesis
         let blocks = (self.blockchain.len() as u64) - 1;
         // Setup offset if only have genesis and havent received offset from other nodes
@@ -534,34 +528,49 @@ impl ValidatorState {
     /// total stake plus one.
     /// assuming constant Reward.
     fn total_stake_plus(&mut self, epoch: u64, slot: u64) -> u64 {
-        (epoch * EPOCH_LENGTH as u64 + slot + 1 - self.overall_empty_slots(slot)) * Self::reward()
+        (epoch * EPOCH_LENGTH as u64 + slot + 1 - self.overall_empty_slots()) * Self::reward()
     }
 
-    /// get number of leaders in last epoch.
-    /// in ideal-world all nodes will end up with identical POV
-    /// of blockchain, but in real-world:
-    /// TODO: this parameter need to be published in the block header,
-    /// and only read from last block header.
-    fn leads_per_block(&mut self) -> Float10 {
-        //TODO: complete this
-        let fi64: i64 = 1;
-        self.f_history.push(Float10::try_from(fi64).unwrap().with_precision(RADIX_BITS).value());
-        Float10::try_from(fi64).unwrap().with_precision(RADIX_BITS).value()
+    /// Calculate how many leaders existed in previous slot and appends
+    /// it to history, to report it if win. On finalization sync period,
+    /// node replaces its leaders history with the sequence extracted by
+    /// the longest fork.
+    fn extend_leaders_history(&mut self) -> Float10 {
+        let slot = self.current_slot();
+        let previous_slot = slot - 1;
+        let mut count = 0;
+        for chain in &self.consensus.proposals {
+            // Previous slot proposals exist at end of each fork
+            if chain.proposals.last().unwrap().block.header.slot == previous_slot {
+                count += 1;
+            }
+        }
+        self.leaders_history.push(count);
+        debug!("extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
+        Float10::try_from(count).unwrap().with_precision(RADIX_BITS).value()
     }
 
     fn f_dif(&mut self) -> Float10 {
         let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
-        one - self.leads_per_block()
+        one - self.extend_leaders_history()
     }
 
     fn f_der(&self) -> Float10 {
-        let len = self.f_history.len();
-        (self.f_history[len - 1].clone() - self.f_history[len - 2].clone()) / self.Td.clone()
+        let len = self.leaders_history.len();
+        let last = Float10::try_from(self.leaders_history[len - 1])
+            .unwrap()
+            .with_precision(RADIX_BITS)
+            .value();
+        let second_to_last = Float10::try_from(self.leaders_history[len - 2])
+            .unwrap()
+            .with_precision(RADIX_BITS)
+            .value();
+        (last - second_to_last) / self.Td.clone()
     }
 
     fn f_int(&self) -> Float10 {
         let mut sum = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
-        for f in &self.f_history {
+        for f in &self.leaders_history {
             sum += f.clone() * self.Td.clone();
         }
         sum
@@ -570,16 +579,14 @@ impl ValidatorState {
     /// the probability of winnig lottery having all the stake
     /// returns f
     fn win_prob_with_full_stake(&mut self) -> Float10 {
-        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
         let zero = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
+        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
         let mut f = zero.clone();
         let step = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
         let p = self.f_dif();
         let i = self.f_int();
         let d = self.f_der();
-        while f <= Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value() &&
-            f >= Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value()
-        {
+        while f <= zero || f >= one {
             f = self.Kp.clone() *
                 (p.clone() +
                     one.clone() / self.Ti.clone() * i.clone() +
@@ -590,7 +597,7 @@ impl ValidatorState {
                 self.Kp += step.clone();
             }
         }
-        Float10::try_from(f).unwrap().with_precision(RADIX_BITS).value()
+        f
     }
 
     /// Check that the provided participant/stakeholder coins win the slot lottery.
@@ -602,11 +609,11 @@ impl ValidatorState {
     pub fn is_slot_leader(&mut self) -> (bool, usize, pallas::Base, pallas::Base) {
         // Slot relative index
         let slot = self.relative_slot(self.current_slot());
-        let (sigma1, sigma2) = self.sigmas(slot, self.consensus.epoch);
+        let (sigma1, sigma2) = self.sigmas(self.consensus.epoch, slot);
         // Stakeholder's epoch coins
         let coins = &self.consensus.coins;
 
-        info!("Consensus::is_leader(): slot: {}, coins len: {}", slot, coins.len());
+        info!("consensus::is_leader(): slot: {}, coins len: {}", slot, coins.len());
         assert!((slot as usize) < coins.len());
 
         let competing_coins = &coins[slot as usize];
@@ -678,17 +685,12 @@ impl ValidatorState {
             eta.to_repr(),
             LeadProof::from(proof),
             self.get_current_offset(),
+            self.leaders_history.last().unwrap().clone(),
         );
         // Replacing old coin with the derived coin
         // TODO: do we need that? on next epoch we replace everything
         // how is this going to get reused?
         self.consensus.coins[relative_slot][idx] = coin.derive_coin(eta, relative_slot as u64);
-
-        // lead,spend,nullifiers
-        self.nullifiers.push(coin.sn());
-        let cm = coin.coin1_commitment.to_affine().coordinates().unwrap();
-        self.spent.push((*cm.x(), *cm.y()));
-        self.lead.push((*cm.x(), *cm.y()));
 
         Ok(Some(BlockProposal::new(header, unproposed_txs, metadata)))
     }
@@ -805,18 +807,19 @@ impl ValidatorState {
         info!("receive_proposal(): Leader proof verified successfully!");
 
         // Verify proposal public inputs
-        //TODO: validate sn/cm
         let prop_sn = md.public_inputs[PI_NULLIFIER_INDEX];
-        for sn in &self.nullifiers {
+        for sn in &self.leaders_nullifiers {
             if *sn == prop_sn {
+                error!("receive_proposal(): Proposal nullifiers exist.");
                 return Err(Error::ProposalIsSpent)
             }
         }
         let prop_cm_x: pallas::Base = md.public_inputs[PI_COMMITMENT_X_INDEX];
         let prop_cm_y: pallas::Base = md.public_inputs[PI_COMMITMENT_Y_INDEX];
 
-        for cm in &self.lead {
+        for cm in &self.leaders_spent_coins {
             if *cm == (prop_cm_x, prop_cm_y) {
+                error!("receive_proposal(): Proposal coin already spent.");
                 return Err(Error::ProposalIsSpent)
             }
         }
@@ -847,6 +850,10 @@ impl ValidatorState {
                 self.consensus.proposals[index as usize].add(proposal);
             }
         };
+
+        // Store proposal coin info
+        self.leaders_nullifiers.push(prop_sn);
+        self.leaders_spent_coins.push((prop_cm_x, prop_cm_y));
 
         Ok(())
     }
@@ -923,6 +930,30 @@ impl ValidatorState {
         Ok(())
     }
 
+    /// Auxillary function to set nodes leaders count history to the largest fork sequence
+    /// of leaders, by using provided index.
+    fn set_leader_history(&mut self, index: i64) {
+        // Check if we found longest fork to extract sequence from
+        match index {
+            -1 => {
+                debug!("set_leader_history(): No fork exists.");
+            }
+            _ => {
+                debug!("set_leader_history(): Checking last proposal of fork: {}", index);
+                let last_proposal =
+                    self.consensus.proposals[index as usize].proposals.last().unwrap();
+                if last_proposal.block.header.slot == self.current_slot() {
+                    // Replacing our last history element with the leaders one
+                    self.leaders_history.pop();
+                    self.leaders_history.push(last_proposal.block.metadata.leaders);
+                    debug!("set_leader_history(): New leaders history: {:?}", self.leaders_history);
+                    return
+                }
+            }
+        }
+        self.leaders_history.push(0);
+    }
+
     /// Node checks if any of the fork chains can be finalized.
     /// Consensus finalization logic:
     /// - If the node has observed the creation of 3 proposals in a fork chain and no other
@@ -932,9 +963,15 @@ impl ValidatorState {
     pub async fn chain_finalization(&mut self) -> Result<Vec<BlockInfo>> {
         // First we find longest chain without any other forks at same height
         let mut chain_index = -1;
+        // Use this index to extract leaders count sequence from longest fork
+        let mut index_for_history = -1;
         let mut max_length = 0;
         for (index, chain) in self.consensus.proposals.iter().enumerate() {
             let length = chain.proposals.len();
+            // Check if greater than max to retain index for history
+            if length > max_length {
+                index_for_history = index as i64;
+            }
             // Ignore forks with less that 3 blocks
             if length < 3 {
                 continue
@@ -958,11 +995,13 @@ impl ValidatorState {
         // Check if we found any fork to finalize
         match chain_index {
             -2 => {
-                debug!("chain_finalization(): Eligible forks with same heigh exist, nothing to finalize");
+                debug!("chain_finalization(): Eligible forks with same heigh exist, nothing to finalize.");
+                self.set_leader_history(index_for_history);
                 return Ok(vec![])
             }
             -1 => {
-                debug!("chain_finalization(): All chains have less than 3 proposals, nothing to finalize");
+                debug!("chain_finalization(): All chains have less than 3 proposals, nothing to finalize.");
+                self.set_leader_history(index_for_history);
                 return Ok(vec![])
             }
             _ => debug!("chain_finalization(): Chain {} can be finalized!", chain_index),
@@ -1003,6 +1042,9 @@ impl ValidatorState {
                 return Err(e)
             }
         }
+
+        // Setting leaders history to last proposal leaders count
+        self.leaders_history = vec![chain.proposals.last().unwrap().block.metadata.leaders];
 
         // Removing rest forks
         self.consensus.proposals = vec![];

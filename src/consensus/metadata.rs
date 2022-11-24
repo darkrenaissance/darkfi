@@ -43,6 +43,8 @@ pub struct Metadata {
     pub proof: LeadProof,
     /// Slot offset block owner used
     pub offset: u64,
+    /// Block owner leaders count
+    pub leaders: u64,
 }
 
 impl Default for Metadata {
@@ -54,7 +56,8 @@ impl Default for Metadata {
         let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
         let proof = LeadProof::default();
         let offset = 0;
-        Self { signature, public_key: keypair.public, public_inputs, eta, proof, offset }
+        let leaders = 0;
+        Self { signature, public_key: keypair.public, public_inputs, eta, proof, offset, leaders }
     }
 }
 
@@ -66,8 +69,9 @@ impl Metadata {
         eta: [u8; 32],
         proof: LeadProof,
         offset: u64,
+        leaders: u64,
     ) -> Self {
-        Self { signature, public_key, public_inputs, eta, proof, offset }
+        Self { signature, public_key, public_inputs, eta, proof, offset, leaders }
     }
 }
 
@@ -79,13 +83,6 @@ pub struct LeadProof {
 }
 
 impl LeadProof {
-    /*
-        pub fn new(pk: &ProvingKey, coin: LeadCoin) -> Self {
-            let proof = coin.create_lead_proof(pk).unwrap();
-            Self { proof }
-    }
-        */
-
     pub fn verify(&self, vk: &VerifyingKey, public_inputs: &[pallas::Base]) -> Result<()> {
         if let Err(e) = self.proof.verify(vk, public_inputs) {
             error!("Verification of consensus lead proof failed: {}", e);
