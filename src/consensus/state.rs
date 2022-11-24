@@ -16,16 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io::Cursor, time::Duration};
+use std::{collections::HashMap, io::Cursor, time::Duration};
 
 use async_std::sync::{Arc, RwLock};
 use chrono::{NaiveDateTime, Utc};
-use darkfi_sdk::crypto::{
-    constants::MERKLE_DEPTH,
-    schnorr::{SchnorrPublic, SchnorrSecret},
-    ContractId, MerkleNode, PublicKey,
+use darkfi_sdk::{
+    crypto::{
+        constants::MERKLE_DEPTH,
+        schnorr::{SchnorrPublic, SchnorrSecret},
+        ContractId, MerkleNode, PublicKey,
+    },
+    db::ZKAS_DB_NAME,
 };
-use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, WriteExt};
+use darkfi_serial::{
+    deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, WriteExt,
+};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, error, info, warn};
 use pasta_curves::{
@@ -130,6 +135,8 @@ pub struct ValidatorState {
     pub blockchain: Blockchain,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Transaction>,
+    /// ZK proof verifying keys for smart contract calls
+    pub verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
     /// Participating start slot
     pub participating: Option<u64>,
     /// Wallet interface
@@ -189,34 +196,68 @@ impl ValidatorState {
         let unconfirmed_txs = vec![];
         let participating = None;
 
-        // -----BEGIN ARTIFACT: WASM INTEGRATION-----
-        // This is the current place where this stuff is being done, and very loosely.
-        // We initialize and "deploy" _native_ contracts here - currently the money contract.
-        // Eventually, the crypsinous consensus should be a native contract like payments are.
-        // This means the previously existing Blockchain state will be a bit different and is
-        // going to have to be changed.
-        // When the `Blockchain` object is created, it doesn't care whether it already has
-        // data or not. If there's existing data it will just open the necessary db and trees,
-        // and give back what it has. This means, on subsequent runs our native contracts will
-        // already be in a deployed state. So what we do here is a "re-deployment". This kind
-        // of operation should only modify the contract's state in case it wasn't deployed
-        // before (meaning the initial run). Otherwise, it shouldn't touch anything, or just
-        // potentially update the database schemas or whatever is necessary. Here it's
-        // transparent and generic, and the entire logic for this db protection is supposed to
-        // be in the `init` function of the contract, so look there for a reference of the
-        // databases and the state.
-        info!("ValidatorState::new(): Deploying \"money_contract.wasm\"");
-        let money_contract_wasm_bincode = include_bytes!("../contract/money/money_contract.wasm");
-        // XXX: FIXME: This ID should be something that does not solve the pallas curve equation,
-        //             and/or just hardcoded and forbidden in non-native contract deployment.
-        let cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
-        let mut runtime = Runtime::new(&money_contract_wasm_bincode[..], blockchain.clone(), cid)?;
-        // The faucet pubkeys are pubkeys which are allowed to create clear inputs in the
-        // money contract.
-        let payload = serialize(&faucet_pubkeys);
-        runtime.deploy(&payload)?;
-        info!("Deployed Money Contract with ID: {}", cid);
-        // -----END ARTIFACT-----
+        // -----NATIVE WASM CONTRACTS-----
+        // This is the current place where native contracts are being deployed.
+        // When the `Blockchain` object is created, it doesn't care whether it
+        // already has the contract data or not. If there's existing data, it
+        // will just open the necessary db and trees, and give back what it has.
+        // This means that on subsequent runs our native contracts will already
+        // be in a deployed state, so what we actually do here is a redeployment.
+        // This kind of operation should only modify the contract's state in case
+        // it wasn't deployed before (meaning the initial run). Otherwise, it
+        // shouldn't touch anything, or just potentially update the db schemas or
+        // whatever is necessary. This logic should be handled in the init function
+        // of the actual contract, so make sure the native contracts handle this well.
+
+        // FIXME: This ID should be something that does not solve the pallas curve equation,
+        // and/or just hardcoded and forbidden in non-native contract deployment.
+        let money_contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        // The faucet pubkeys are pubkeys which are allowed to create clear inputs
+        // in the money contract.
+        let money_contract_deploy_payload = serialize(&faucet_pubkeys);
+
+        // In this hashmap, we keep references to ZK proof verifying keys needed
+        // for the circuits our native contracts provide.
+        let mut verifying_keys = HashMap::new();
+
+        let native_contracts = vec![(
+            "Money Contract",
+            money_contract_id,
+            include_bytes!("../contract/money/money_contract.wasm"),
+            money_contract_deploy_payload,
+        )];
+
+        info!("Deploying native wasm contracts");
+        for nc in native_contracts {
+            info!("Deploying {} with ContractID {}", nc.0, nc.1);
+            let mut runtime = Runtime::new(&nc.2[..], blockchain.clone(), nc.1)?;
+            runtime.deploy(&nc.3)?;
+            info!("Successfully deployed {}", nc.0);
+
+            // When deployed, we can do a lookup for the zkas circuits and
+            // initialize verifying keys for them.
+            info!("Creating ZK verifying keys for {} zkas circuits", nc.0);
+            debug!("Looking up zkas db for {} (ContractID: {})", nc.0, nc.1);
+            let zkas_db = blockchain.contracts.lookup(&blockchain.sled_db, &nc.1, ZKAS_DB_NAME)?;
+
+            let mut vks = vec![];
+            for i in zkas_db.iter() {
+                let (zkas_ns, zkas_bincode) = i?;
+                let zkas_ns: String = deserialize(&zkas_ns)?;
+                let zkas_bincode: Vec<u8> = deserialize(&zkas_bincode)?;
+                info!("Creating VerifyingKey for zkas circuit with namespace {}", zkas_ns);
+                let zkbin = ZkBinary::decode(&zkas_bincode)?;
+                let circuit = ZkCircuit::new(empty_witnesses(&zkbin), zkbin);
+                // FIXME: This k=13 man...
+                let vk = VerifyingKey::build(13, &circuit);
+                vks.push((zkas_ns, vk));
+            }
+
+            info!("Finished creating VerifyingKey objects for {} (ContractID: {})", nc.0, nc.1);
+            verifying_keys.insert(nc.1.to_bytes(), vks);
+        }
+        info!("Finished deployment of native wasm contracts");
+        // -----NATIVE WASM CONTRACTS-----
 
         let zero = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
         let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
@@ -229,6 +270,7 @@ impl ValidatorState {
             consensus,
             blockchain,
             unconfirmed_txs,
+            verifying_keys: Arc::new(RwLock::new(verifying_keys)),
             participating,
             wallet,
             nullifiers: vec![],
@@ -261,7 +303,7 @@ impl ValidatorState {
         }
 
         debug!("append_tx(): Starting state transition validation");
-        if let Err(e) = self.verify_transactions(&[tx.clone()], false) {
+        if let Err(e) = self.verify_transactions(&[tx.clone()], false).await {
             error!("append_tx(): Failed to verify transaction: {}", e);
             return false
         };
@@ -740,7 +782,7 @@ impl ValidatorState {
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
         debug!("receive_proposal(): Starting state transition validation");
-        if let Err(e) = self.verify_transactions(&proposal.block.txs, false) {
+        if let Err(e) = self.verify_transactions(&proposal.block.txs, false).await {
             error!("receive_proposal(): Transaction verifications failed: {}", e);
             return Err(e.into())
         };
@@ -908,7 +950,7 @@ impl ValidatorState {
             // TODO: FIXME: The state transitions have already been written, they have to be in memory
             //              until this point.
             debug!(target: "consensus", "Applying state transition for finalized block");
-            if let Err(e) = self.verify_transactions(&proposal.txs, true) {
+            if let Err(e) = self.verify_transactions(&proposal.txs, true).await {
                 error!(target: "consensus", "Finalized block transaction verifications failed: {}", e);
                 return Err(e)
             }
@@ -949,7 +991,7 @@ impl ValidatorState {
         // Verify state transitions for all blocks and their respective transactions.
         debug!("receive_blocks(): Starting state transition validations");
         for block in blocks {
-            if let Err(e) = self.verify_transactions(&block.txs, false) {
+            if let Err(e) = self.verify_transactions(&block.txs, false).await {
                 error!("receive_blocks(): Transaction verifications failed: {}", e);
                 return Err(e)
             }
@@ -1026,87 +1068,182 @@ impl ValidatorState {
     /// the state transitions to the database.
     // TODO: This should be paralellized as if even one tx in the batch fails to verify,
     //       we can drop everything.
-    pub fn verify_transactions(&self, txs: &[Transaction], write: bool) -> Result<()> {
+    pub async fn verify_transactions(&self, txs: &[Transaction], write: bool) -> Result<()> {
         debug!("Verifying {} transaction(s)", txs.len());
         for tx in txs {
+            let tx_hash = blake3::hash(&serialize(tx));
+            debug!("Verifying transaction {}", tx_hash);
+
             // Table of public inputs used for ZK proof verification
             let mut zkp_table = vec![];
             // Table of public keys used for signature verification
             let mut sig_table = vec![];
-            // State updates produced by contract execution
+            // State updates produced by contract execcution
             let mut updates = vec![];
-            // ZK circuit verifying keys (FIXME: These should be in a more global scope)
-            let mut verifying_keys = vec![];
 
             // Iterate over all calls to get the metadata
             for (idx, call) in tx.calls.iter().enumerate() {
-                debug!("Verifying contract call {}", idx);
-                // Check if the called contract exist as bincode.
-                let bincode = self.blockchain.wasm_bincode.get(call.contract_id)?;
-                debug!("Found wasm bincode for {}", call.contract_id);
+                debug!("Executing contract call {}", idx);
+                let wasm = match self.blockchain.wasm_bincode.get(call.contract_id) {
+                    Ok(v) => {
+                        debug!("Found wasm bincode for {}", call.contract_id);
+                        v
+                    }
+                    Err(e) => {
+                        error!(
+                            "Could not find wasm bincode for contract {}: {}",
+                            call.contract_id, e
+                        );
+                        return Err(Error::ContractNotFound(call.contract_id.to_string()))
+                    }
+                };
 
                 // Write the actual payload data
                 let mut payload = vec![];
                 payload.write_u32(idx as u32)?; // Call index
-                tx.calls.encode(&mut payload)?; // Actual call_data
+                tx.calls.encode(&mut payload)?; // Actual call data
 
                 // Instantiate the wasm runtime
-                // TODO: Sum up the gas fees of these calls and instantiations
                 let mut runtime =
-                    Runtime::new(&bincode, self.blockchain.clone(), call.contract_id)?;
+                    match Runtime::new(&wasm, self.blockchain.clone(), call.contract_id) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!(
+                                "Failed to instantiate WASM runtime for contract {}",
+                                call.contract_id
+                            );
+                            return Err(e.into())
+                        }
+                    };
 
-                // Perform the execution to fetch verification metadata
                 debug!("Executing \"metadata\" call");
-                let metadata = runtime.metadata(&payload)?;
+                let metadata = match runtime.metadata(&payload) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("Failed to execute \"metadata\" call: {}", e);
+                        return Err(e.into())
+                    }
+                };
+
+                // Decode the metadata retrieved from the execution
                 let mut decoder = Cursor::new(&metadata);
-                let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
-                let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
-                // TODO: Make sure we've read all the data above
+                let zkp_pub: Vec<(String, Vec<pallas::Base>)> =
+                    match Decodable::decode(&mut decoder) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("Failed to decode ZK public inputs from metadata: {}", e);
+                            return Err(e.into())
+                        }
+                    };
+
+                let sig_pub: Vec<PublicKey> = match Decodable::decode(&mut decoder) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!("Failed to decode signature pubkeys from metadata: {}", e);
+                        return Err(e.into())
+                    }
+                };
+
+                // TODO: Make sure we've read all the bytes above.
+                debug!("Successfully executed \"metadata\" call");
                 zkp_table.push(zkp_pub);
                 sig_table.push(sig_pub);
-                debug!("Successfully executed \"metadata\" call");
 
-                // Execute the contract call
+                // After getting the metadata, we run the "exec" function with the same
+                // runtime and the same payload.
                 debug!("Executing \"exec\" call");
-                let update = runtime.exec(&payload)?;
-                updates.push(update);
-                debug!("Successfully executed \"exec\" call");
+                match runtime.exec(&payload) {
+                    Ok(v) => {
+                        debug!("Successfully executed \"exec\" call");
+                        updates.push(v);
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to execute \"exec\" call for contract id {}: {}",
+                            call.contract_id, e
+                        );
+                        return Err(e.into())
+                    }
+                };
+                // At this point we're done with the call and move on to the next one.
             }
 
-            // Verify the Schnorr signatures with the public keys given to us from
-            // the metadata call.
-            debug!("Verifying transaction signatures");
-            tx.verify_sigs(sig_table)?;
-            debug!("Signatures verified successfully!");
+            // When we're done looping and executing over the tx's contract calls, we
+            // move on with verification. First we verify the signatures as that's
+            // cheaper, and then finally we verify the ZK proofs.
+            debug!("Verifying signatures for transaction {}", tx_hash);
+            match tx.verify_sigs(sig_table) {
+                Ok(()) => debug!("Signatures verification for tx {} successful", tx_hash),
+                Err(e) => {
+                    error!("Signature verification for tx {} failed: {}", tx_hash, e);
+                    return Err(e.into())
+                }
+            };
 
-            // Finally, verify the ZK proofs
-            debug!("Verifying transaction ZK proofs");
-            tx.verify_zkps(&verifying_keys, zkp_table)?;
-            debug!("Transaction ZK proofs verified successfully!");
+            // NOTE: When it comes to the ZK proofs, we first do a lookup of the
+            // verifying keys, but if we do not find them, we'll generate them
+            // inside of this function. This can be kinda expensive, so open to
+            // alternatives.
+            debug!("Verifying ZK proofs for transaction {}", tx_hash);
+            match tx.verify_zkps(self.verifying_keys.clone(), zkp_table).await {
+                Ok(()) => debug!("ZK proof verification for tx {} successful", tx_hash),
+                Err(e) => {
+                    error!("ZK proof verrification for tx {} failed: {}", tx_hash, e);
+                    return Err(e.into())
+                }
+            };
 
-            // When the verification stage has passed, just apply all the changes.
-            // TODO: FIXME: This writes directly to the database. Instead it should live
-            //              in memory until things get finalized. (Search #finalization
-            //              for additional notes).
-            // TODO: We instantiate new runtimes here, so pick up the gas fees from
-            //       the previous runs and sum them all together.
+            // After the verifications stage passes, if we're told to write, we
+            // apply the state updates.
+            assert!(tx.calls.len() == updates.len());
             if write {
                 debug!("Performing state updates");
-                assert!(tx.calls.len() == updates.len());
                 for (call, update) in tx.calls.iter().zip(updates.iter()) {
-                    // Do the bincode lookups again
-                    let bincode = self.blockchain.wasm_bincode.get(call.contract_id)?;
-                    debug!("Found wasm bincode for {}", call.contract_id);
+                    // For this we instantiate the runtimes again.
+                    // TODO: Optimize this
+                    // TODO: Sum up the gas costs of previous calls during execution
+                    //       and verification and these.
+                    let wasm = match self.blockchain.wasm_bincode.get(call.contract_id) {
+                        Ok(v) => {
+                            debug!("Found wasm bincode for {}", call.contract_id);
+                            v
+                        }
+                        Err(e) => {
+                            error!(
+                                "Could not find wasm bincode for contract {}: {}",
+                                call.contract_id, e
+                            );
+                            return Err(Error::ContractNotFound(call.contract_id.to_string()))
+                        }
+                    };
 
                     let mut runtime =
-                        Runtime::new(&bincode, self.blockchain.clone(), call.contract_id)?;
+                        match Runtime::new(&wasm, self.blockchain.clone(), call.contract_id) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                error!(
+                                    "Failed to instantiate WASM runtime for contract {}",
+                                    call.contract_id
+                                );
+                                return Err(e.into())
+                            }
+                        };
 
                     debug!("Executing \"apply\" call");
-                    runtime.apply(&update)?;
+                    match runtime.apply(&update) {
+                        // TODO: FIXME: This should be done in an atomic tx/batch
+                        Ok(()) => debug!("State update applied successfully"),
+                        Err(e) => {
+                            error!("Failed to apply state update: {}", e);
+                            return Err(e.into())
+                        }
+                    };
                 }
             } else {
-                debug!("Skipping state updates because write=false");
+                debug!("Skipping apply of state updates because write=false");
             }
+
+            debug!("Transaction {} verified successfully", tx_hash);
         }
 
         Ok(())

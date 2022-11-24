@@ -50,6 +50,11 @@ impl ContractId {
         }
     }
 
+    /// Convert a `ContractId` object to its byte representation
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_repr()
+    }
+
     /// `blake3(self || tree_name)` is used in datbases to have a
     /// fixed-size name for a contract's state db.
     pub fn hash_state_id(&self, tree_name: &str) -> [u8; 32] {
