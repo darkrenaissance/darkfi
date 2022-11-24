@@ -20,24 +20,26 @@
 //! intended to. We initialize a state, deploy the contract, create a clear
 //! input, and then we try to spend it.
 //! Let's see if we manage.
-use std::{collections::HashMap, io::Cursor};
+use std::collections::HashMap;
 
 use darkfi::{
-    blockchain::Blockchain,
-    consensus::constants::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
-    crypto::proof::{ProvingKey, VerifyingKey},
-    runtime::vm_runtime::Runtime,
+    consensus::{
+        constants::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
+        ValidatorState,
+    },
+    crypto::proof::ProvingKey,
     tx::Transaction,
     util::parse::decode_base10,
+    wallet::WalletDb,
     zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::ZkBinary,
     Result,
 };
 use darkfi_sdk::{
     crypto::{
-        constants::MERKLE_DEPTH, poseidon_hash, ContractId, Keypair, MerkleNode, Nullifier,
-        PublicKey, TokenId,
+        constants::MERKLE_DEPTH, poseidon_hash, ContractId, Keypair, MerkleNode, Nullifier, TokenId,
     },
+    db::ZKAS_DB_NAME,
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{
         group::ff::{Field, PrimeField},
@@ -45,7 +47,7 @@ use darkfi_sdk::{
     },
     tx::ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Encodable};
 use log::{debug, info};
 use rand::rngs::OsRng;
 
@@ -68,44 +70,55 @@ async fn money_contract_execution() -> Result<()> {
         simplelog::ColorChoice::Auto,
     )?;
 
-    // Our main sled database references which live in memory during this test.
-    info!("Initializing sled DBs");
-    let faucet_sled_db = sled::Config::new().temporary(true).open()?;
-    let alice_sled_db = sled::Config::new().temporary(true).open()?;
-    let faucet_blockchain =
-        Blockchain::new(&faucet_sled_db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
-    let alice_blockchain =
-        Blockchain::new(&alice_sled_db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
-
     // A keypair we can use for the faucet whitelist
     let faucet_kp = Keypair::random(&mut OsRng);
 
     // A keypair we'll use for Alice
     let alice_kp = Keypair::random(&mut OsRng);
 
-    // We deploy the contract natively and initialize its state.
-    info!("Deploying WASM contract");
-    let wasm_bincode = include_bytes!("../money_contract.wasm");
-    let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
-    let mut faucet_runtime =
-        Runtime::new(&wasm_bincode[..], faucet_blockchain.clone(), contract_id)?;
-    let mut alice_runtime = Runtime::new(&wasm_bincode[..], alice_blockchain.clone(), contract_id)?;
-
+    // The faucet's pubkey is allowed to make clear inputs
     let faucet_pubkeys = vec![faucet_kp.public];
-    // Serialize the payload for the init/deploy function of the contract and run the deploy.
-    let payload = serialize(&faucet_pubkeys);
-    faucet_runtime.deploy(&payload)?;
-    alice_runtime.deploy(&payload)?;
 
-    // At this point we've deployed the contract and we can begin executing it.
-    // When the contract is deployed, we should be able to access everything from
-    // the sled databases. We do it here just to confirm correct behaviour.
+    // The wallets are just noops to get around the ValidatorState API
+    let faucet_wallet = WalletDb::new("sqlite::memory:", "foo").await?;
+    let alice_wallet = WalletDb::new("sqlite::memory:", "foo").await?;
+
+    // Our main sled database references which live in memory during this test.
+    info!("Initializing ValidatorState");
+    let faucet_sled_db = sled::Config::new().temporary(true).open()?;
+    let alice_sled_db = sled::Config::new().temporary(true).open()?;
+    let faucet_state = ValidatorState::new(
+        &faucet_sled_db,
+        *TESTNET_GENESIS_TIMESTAMP,
+        *TESTNET_GENESIS_HASH_BYTES,
+        faucet_wallet,
+        faucet_pubkeys.clone(),
+        false,
+    )
+    .await?;
+
+    let alice_state = ValidatorState::new(
+        &alice_sled_db,
+        *TESTNET_GENESIS_TIMESTAMP,
+        *TESTNET_GENESIS_HASH_BYTES,
+        alice_wallet,
+        faucet_pubkeys.clone(),
+        false,
+    )
+    .await?;
+
+    // In a hacky way, we just generate the proving keys for the circuits used.
     info!("Looking up zkas circuits from DB");
-    let zkas_tree = String::from("zkas");
+    let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+
     let zkas_mint_ns = String::from("Mint");
     let zkas_burn_ns = String::from("Burn");
-    let db_handle =
-        alice_blockchain.contracts.lookup(&alice_blockchain.sled_db, &contract_id, &zkas_tree)?;
+    let alice_sled = &alice_state.read().await.blockchain.sled_db;
+    let db_handle = alice_state.read().await.blockchain.contracts.lookup(
+        alice_sled,
+        &contract_id,
+        ZKAS_DB_NAME,
+    )?;
     let mint_zkbin = db_handle.get(&serialize(&zkas_mint_ns))?.unwrap();
     let burn_zkbin = db_handle.get(&serialize(&zkas_burn_ns))?.unwrap();
     info!("Decoding bincode");
@@ -124,14 +137,6 @@ async fn money_contract_execution() -> Result<()> {
     let pks =
         vec![(zkas_mint_ns.clone(), mint_pk.clone()), (zkas_burn_ns.clone(), burn_pk.clone())];
     proving_keys.insert(contract_id.inner().to_repr(), pks);
-
-    info!("Creating zk verifying keys");
-    let mut verifying_keys = HashMap::<[u8; 32], Vec<(String, VerifyingKey)>>::new();
-    let mint_vk = VerifyingKey::build(k, &mint_circuit);
-    let burn_vk = VerifyingKey::build(k, &burn_circuit);
-    let vks =
-        vec![(zkas_mint_ns.clone(), mint_vk.clone()), (zkas_burn_ns.clone(), burn_vk.clone())];
-    verifying_keys.insert(contract_id.inner().to_repr(), vks);
 
     // We also have to initialize the Merkle trees used for coins.
     info!("Initializing Merkle trees");
@@ -169,18 +174,15 @@ async fn money_contract_execution() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
     tx.signatures = vec![sigs];
 
-    // Get our ZK verifying keys in place for the tx verification
-    let vks = verifying_keys.get(&contract_id.inner().to_repr()).unwrap();
-
     // Let's first execute this transaction for the faucet to see if it passes.
     // Then Alice gets the tx and also executes it.
     info!("Executing transaction on the faucet's blockchain db");
-    verify_transaction(&faucet_blockchain, vks, &tx)?;
+    faucet_state.read().await.verify_transactions(&[tx.clone()], true).await?;
     info!("Adding coin to faucet's Merkle tree");
     faucet_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
 
     info!("Executing transaction on Alice's blockchain db");
-    verify_transaction(&alice_blockchain, vks, &tx)?;
+    alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
     // TODO: FIXME: Actually have a look at the `merkle_add` calls
     alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
     let leaf_position = alice_merkle_tree.witness().unwrap();
@@ -233,12 +235,12 @@ async fn money_contract_execution() -> Result<()> {
     tx.signatures = vec![sigs];
 
     info!("Executing transaction on the faucet's blockchain db");
-    verify_transaction(&faucet_blockchain, vks, &tx)?;
+    faucet_state.read().await.verify_transactions(&[tx.clone()], true).await?;
     info!("Adding coin to faucet's Merkle tree");
     faucet_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
 
     info!("Executing transaction on Alice's blockchain db");
-    verify_transaction(&alice_blockchain, vks, &tx)?;
+    alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
     // TODO: FIXME: Actually have a look at the `merkle_add` calls
     alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
     let leaf_position = alice_merkle_tree.witness().unwrap();
@@ -289,77 +291,13 @@ async fn money_contract_execution() -> Result<()> {
     tx.signatures = vec![sigs];
 
     info!("Executing transaction on the faucet's blockchain db");
-    verify_transaction(&faucet_blockchain, vks, &tx)?;
+    faucet_state.read().await.verify_transactions(&[tx.clone()], true).await?;
     info!("Adding coin to faucet's Merkle tree");
     faucet_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
     info!("Executing transaction on Alice's blockchain db");
-    verify_transaction(&alice_blockchain, vks, &tx)?;
+    alice_state.read().await.verify_transactions(&[tx], true).await?;
     // TODO: FIXME: Actually have a look at the `merkle_add` calls
     alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
 
-    Ok(())
-}
-
-fn verify_transaction(
-    blockchain: &Blockchain,
-    verifying_keys: &[(String, VerifyingKey)],
-    tx: &Transaction,
-) -> Result<()> {
-    info!("Begin transcation verification");
-    // Table of public inputs used for ZK proof verification
-    let mut zkp_table = vec![];
-    // Table of public keys used for signature verification
-    let mut sig_table = vec![];
-    // State updates produced by contract execution
-    let mut updates = vec![];
-
-    // Iterate over all calls to get the metadata
-    for (idx, call) in tx.calls.iter().enumerate() {
-        info!("Verifying contract call {}", idx);
-        let bincode = blockchain.wasm_bincode.get(call.contract_id)?;
-        info!("Found wasm bincode for {}", call.contract_id);
-
-        // Write the actual payload data
-        let mut payload = vec![];
-        payload.write_u32(idx as u32)?; // Call index
-        tx.calls.encode(&mut payload)?; // Actual call_data
-
-        // Instantiate the wasm runtime
-        let mut runtime = Runtime::new(&bincode, blockchain.clone(), call.contract_id)?;
-        info!("Executing \"metadata\" call");
-        let metadata = runtime.metadata(&payload)?;
-        let mut decoder = Cursor::new(&metadata);
-        let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
-        let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
-        zkp_table.push(zkp_pub);
-        sig_table.push(sig_pub);
-        info!("Successfully executed \"metadata\" call");
-
-        info!("Executing \"exec\" call");
-        let update = runtime.exec(&payload)?;
-        updates.push(update);
-        info!("Successfully executed \"exec\" call");
-    }
-
-    info!("Verifying transaction signatures");
-    tx.verify_sigs(sig_table)?;
-    info!("Signatures verified successfully");
-
-    info!("Verifying transaction ZK proofs");
-    tx.verify_zkps(verifying_keys, zkp_table)?;
-    info!("Transaction ZK proofs verified successfully");
-
-    // After the verification stage has passed, just apply all the changes.
-    info!("Performing state updates");
-    assert!(tx.calls.len() == updates.len());
-    for (call, update) in tx.calls.iter().zip(updates.iter()) {
-        let bincode = blockchain.wasm_bincode.get(call.contract_id)?;
-        let mut runtime = Runtime::new(&bincode, blockchain.clone(), call.contract_id)?;
-        info!("Executing \"apply\" call");
-        runtime.apply(&update)?;
-        info!("Successfully executed \"apply\" call");
-    }
-
-    info!("Transaction verified successfully");
     Ok(())
 }

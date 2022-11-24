@@ -242,9 +242,10 @@ impl ValidatorState {
 
             let mut vks = vec![];
             for i in zkas_db.iter() {
+                debug!("Iterating over zkas db");
                 let (zkas_ns, zkas_bincode) = i?;
+                debug!("Deserializing namespace");
                 let zkas_ns: String = deserialize(&zkas_ns)?;
-                let zkas_bincode: Vec<u8> = deserialize(&zkas_bincode)?;
                 info!("Creating VerifyingKey for zkas circuit with namespace {}", zkas_ns);
                 let zkbin = ZkBinary::decode(&zkas_bincode)?;
                 let circuit = ZkCircuit::new(empty_witnesses(&zkbin), zkbin);

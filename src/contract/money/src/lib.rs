@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{Coin, ContractId, MerkleNode, MerkleTree, PublicKey},
-    db::{db_contains_key, db_get, db_init, db_lookup, db_set},
+    db::{db_contains_key, db_get, db_init, db_lookup, db_set, ZKAS_DB_NAME},
     error::{ContractError, ContractResult},
     merkle::merkle_add,
     msg,
@@ -60,7 +60,6 @@ darkfi_sdk::define_contract!(
 );
 
 // These are the different sled trees that will be created
-pub const ZKAS_TREE: &str = "zkas"; // <-- This should be a constant in darkfi-sdk
 pub const COIN_ROOTS_TREE: &str = "coin_roots";
 pub const NULLIFIERS_TREE: &str = "nullifiers";
 pub const INFO_TREE: &str = "info";
@@ -82,10 +81,10 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
 
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization. Note that the tree should then be called "zkas".
-    // The lookups can then be done by `contract_id+zkas+namespace`.
-    let zkas_db = match db_lookup(cid, ZKAS_TREE) {
+    // The lookups can then be done by `contract_id+_zkas+namespace`.
+    let zkas_db = match db_lookup(cid, ZKAS_DB_NAME) {
         Ok(v) => v,
-        Err(_) => db_init(cid, ZKAS_TREE)?,
+        Err(_) => db_init(cid, ZKAS_DB_NAME)?,
     };
     let mint_bincode = include_bytes!("../proof/mint.zk.bin");
     let burn_bincode = include_bytes!("../proof/burn.zk.bin");
