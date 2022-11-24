@@ -27,19 +27,17 @@ use darkfi_sdk::{
 };
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use log::debug;
+use log::{debug, info};
 use rand::rngs::OsRng;
 
 use super::constants::EPOCH_LENGTH;
 use crate::{
-    consensus::{EncryptedTxRcpt, TransferStx, TxRcpt},
+    consensus::{TransferStx, TxRcpt},
     crypto::{proof::ProvingKey, Proof},
     zk::{vm::ZkCircuit, vm_stack::Witness},
     zkas::ZkBinary,
-    Error, Result,
+    Result,
 };
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-use log::info;
 
 pub const MERKLE_DEPTH_LEADCOIN: usize = 32;
 pub const MERKLE_DEPTH: u8 = 32;

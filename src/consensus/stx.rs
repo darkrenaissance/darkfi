@@ -25,7 +25,7 @@ use crate::{
     crypto::{proof::VerifyingKey, Proof},
     Error, Result,
 };
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
 pub struct TransferStx {

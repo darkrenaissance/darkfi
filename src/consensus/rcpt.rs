@@ -16,31 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crypto_api_chachapoly::ChachaPolyIetf;
 use darkfi_sdk::{
     crypto::{
         diffie_hellman::{kdf_sapling, sapling_ka_agree},
         keypair::PublicKey,
-        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-        poseidon_hash,
-        util::mod_r_p,
-        MerkleNode, SecretKey,
+        SecretKey,
     },
-    pasta::{arithmetic::CurveAffine, group::Curve, pallas},
+    pasta::pallas,
 };
-use halo2_proofs::{arithmetic::Field, circuit::Value};
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use log::debug;
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
-use super::constants::EPOCH_LENGTH;
-use crate::{
-    crypto::{proof::ProvingKey, Proof},
-    zk::{vm::ZkCircuit, vm_stack::Witness},
-    zkas::ZkBinary,
-    Error, Result,
-};
-use crypto_api_chachapoly::ChachaPolyIetf;
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use crate::Error;
 
 /// transfered leadcoin is rcpt into two coins,
 /// first coin is transfered rcpt coin.

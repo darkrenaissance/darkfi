@@ -591,9 +591,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     // Initialize validator state
-    let state =
-        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet.clone(), faucet_pubkeys)
-            .await?;
+    let state = ValidatorState::new(
+        &sled_db,
+        genesis_ts,
+        genesis_data,
+        wallet.clone(),
+        faucet_pubkeys,
+        false,
+    )
+    .await?;
 
     // P2P network. The faucet doesn't participate in consensus, so we only
     // build the sync protocol.

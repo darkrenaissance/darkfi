@@ -23,7 +23,6 @@ use darkfi_sdk::{
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::error;
 
-use super::leadcoin::LeadCoin;
 use crate::{
     crypto::proof::{Proof, ProvingKey, VerifyingKey},
     Result,

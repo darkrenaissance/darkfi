@@ -21,12 +21,7 @@ use std::time::Duration;
 use log::{debug, error, info};
 
 use super::consensus_sync_task;
-use crate::{
-    consensus::{ValidatorState, ValidatorStatePtr},
-    net::P2pPtr,
-    util::async_util::sleep,
-};
-use std::sync::LockResult;
+use crate::{consensus::ValidatorStatePtr, net::P2pPtr, util::async_util::sleep};
 
 /// async task used for participating in the consensus protocol
 pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: ValidatorStatePtr) {

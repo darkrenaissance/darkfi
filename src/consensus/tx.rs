@@ -1,5 +1,6 @@
+use darkfi_serial::{SerialDecodable, SerialEncodable};
+
 use crate::consensus::{EncryptedTxRcpt, TransferStx};
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
 /// transfer transaction
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]

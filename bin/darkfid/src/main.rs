@@ -317,9 +317,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     // Initialize validator state
-    let state =
-        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet.clone(), faucet_pubkeys)
-            .await?;
+    let state = ValidatorState::new(
+        &sled_db,
+        genesis_ts,
+        genesis_data,
+        wallet.clone(),
+        faucet_pubkeys,
+        args.consensus,
+    )
+    .await?;
 
     let sync_p2p = {
         info!("Registering block sync P2P protocols...");

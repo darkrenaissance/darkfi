@@ -22,10 +22,7 @@ use async_std::sync::{Arc, RwLock};
 use chrono::{NaiveDateTime, Utc};
 use darkfi_sdk::crypto::{
     constants::MERKLE_DEPTH,
-    pedersen::pedersen_commitment_base,
-    poseidon_hash,
     schnorr::{SchnorrPublic, SchnorrSecret},
-    util::mod_r_p,
     ContractId, MerkleNode, PublicKey,
 };
 use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable, WriteExt};
@@ -124,7 +121,7 @@ pub type ValidatorStatePtr = Arc<RwLock<ValidatorState>>;
 /// This struct represents the state of a validator node.
 pub struct ValidatorState {
     /// Leader proof proving key
-    pub lead_proving_key: ProvingKey,
+    pub lead_proving_key: Option<ProvingKey>,
     /// Leader proof verifying key
     pub lead_verifying_key: VerifyingKey,
     /// Hot/Live data used by the consensus algorithm
@@ -160,6 +157,7 @@ impl ValidatorState {
         genesis_data: blake3::Hash,
         wallet: WalletPtr,
         faucet_pubkeys: Vec<PublicKey>,
+        enable_participation: bool,
     ) -> Result<ValidatorStatePtr> {
         info!("Initializing ValidatorState");
 
@@ -174,13 +172,20 @@ impl ValidatorState {
         info!("Generating leader proof keys with k: {}", LEADER_PROOF_K);
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode)?;
-        let void_witnesses = empty_witnesses(&zkbin);
-        let circuit = ZkCircuit::new(void_witnesses, zkbin);
-        let lead_proving_key = ProvingKey::build(LEADER_PROOF_K, &circuit);
+        let witnesses = empty_witnesses(&zkbin);
+        let circuit = ZkCircuit::new(witnesses, zkbin);
+
         let lead_verifying_key = VerifyingKey::build(LEADER_PROOF_K, &circuit);
+        // We only need this proving key if we're going to participate in the consensus.
+        let lead_proving_key = if enable_participation {
+            Some(ProvingKey::build(LEADER_PROOF_K, &circuit))
+        } else {
+            None
+        };
 
         let consensus = ConsensusState::new(genesis_ts, genesis_data)?;
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
+
         let unconfirmed_txs = vec![];
         let participating = None;
 
@@ -212,6 +217,7 @@ impl ValidatorState {
         runtime.deploy(&payload)?;
         info!("Deployed Money Contract with ID: {}", cid);
         // -----END ARTIFACT-----
+
         let zero = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
         let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
         let ten = Float10::from_str_native("10").unwrap().with_precision(RADIX_BITS).value();
@@ -576,7 +582,8 @@ impl ValidatorState {
         // Generating leader proof
         let relative_slot = self.relative_slot(slot) as usize;
         let coin = self.consensus.coins[relative_slot][idx];
-        let proof = coin.create_lead_proof(sigma1, sigma2, &self.lead_proving_key)?;
+        let proof =
+            coin.create_lead_proof(sigma1, sigma2, self.lead_proving_key.as_ref().unwrap())?;
 
         // Signing using coin
         let secret_key = coin.secret_key;
@@ -597,7 +604,7 @@ impl ValidatorState {
         // how is this going to get reused?
         self.consensus.coins[relative_slot][idx] = coin.derive_coin(eta, relative_slot as u64);
 
-        /// lead,spend,nullifiers
+        // lead,spend,nullifiers
         self.nullifiers.push(coin.sn());
         let cm = coin.coin1_commitment.to_affine().coordinates().unwrap();
         self.spent.push((*cm.x(), *cm.y()));
