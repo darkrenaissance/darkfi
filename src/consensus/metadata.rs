@@ -24,7 +24,7 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::error;
 
 use crate::{
-    crypto::proof::{Proof, ProvingKey, VerifyingKey},
+    crypto::proof::{Proof, VerifyingKey},
     Result,
 };
 
