@@ -41,6 +41,8 @@ pub struct Metadata {
     pub eta: [u8; 32],
     /// Leader NIZK proof
     pub proof: LeadProof,
+    /// Slot offset block owner used
+    pub offset: u64,
 }
 
 impl Default for Metadata {
@@ -51,7 +53,8 @@ impl Default for Metadata {
         let public_inputs = vec![];
         let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
         let proof = LeadProof::default();
-        Self { signature, public_key: keypair.public, public_inputs, eta, proof }
+        let offset = 0;
+        Self { signature, public_key: keypair.public, public_inputs, eta, proof, offset }
     }
 }
 
@@ -62,8 +65,9 @@ impl Metadata {
         public_inputs: Vec<pallas::Base>,
         eta: [u8; 32],
         proof: LeadProof,
+        offset: u64,
     ) -> Self {
-        Self { signature, public_key, public_inputs, eta, proof }
+        Self { signature, public_key, public_inputs, eta, proof, offset }
     }
 }
 

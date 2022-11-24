@@ -241,6 +241,9 @@ pub enum Error {
     #[error("Proposal contains missmatched headers")]
     ProposalHeadersMissmatchError,
 
+    #[error("Proposal contains different offset")]
+    ProposalDifferentOffsetError,
+
     #[error("proposed coin is spent")]
     ProposalIsSpent,
 

@@ -56,7 +56,9 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
 
             // Node stores response data.
             let mut lock = state.write().await;
+            lock.consensus.offset = response.offset;
             lock.consensus.proposals = response.proposals.clone();
+            lock.unconfirmed_txs = response.unconfirmed_txs.clone();
 
             break
         }

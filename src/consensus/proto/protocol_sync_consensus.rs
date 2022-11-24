@@ -74,8 +74,10 @@ impl ProtocolSyncConsensus {
 
             // Extra validations can be added here.
             let lock = self.state.read().await;
+            let offset = lock.consensus.offset;
             let proposals = lock.consensus.proposals.clone();
-            let response = ConsensusResponse { proposals };
+            let unconfirmed_txs = lock.unconfirmed_txs.clone();
+            let response = ConsensusResponse { offset, proposals, unconfirmed_txs };
             if let Err(e) = self.channel.send(response).await {
                 error!("ProtocolSyncConsensus::handle_receive_request() channel send fail: {}", e);
             };

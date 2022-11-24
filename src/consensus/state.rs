@@ -72,6 +72,8 @@ pub struct ConsensusState {
     pub genesis_ts: Timestamp,
     /// Genesis block hash
     pub genesis_block: blake3::Hash,
+    /// Slots offset since genesis,
+    pub offset: Option<u64>,
     /// Fork chains containing block proposals
     pub proposals: Vec<ProposalChain>,
     /// Current epoch
@@ -89,6 +91,7 @@ impl ConsensusState {
         Ok(Self {
             genesis_ts,
             genesis_block,
+            offset: None,
             proposals: vec![],
             epoch: 0,
             epoch_eta: pallas::Base::one(),
@@ -110,8 +113,12 @@ impl net::Message for ConsensusRequest {
 /// Auxiliary structure used for consensus syncing.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ConsensusResponse {
+    /// Slots offset since genesis,
+    pub offset: Option<u64>,
     /// Hot/live data used by the consensus algorithm
     pub proposals: Vec<ProposalChain>,
+    /// Pending transactions
+    pub unconfirmed_txs: Vec<Transaction>,
 }
 
 impl net::Message for ConsensusResponse {
@@ -416,7 +423,7 @@ impl ValidatorState {
         info!("Consensus: f: {}", f);
 
         // Generate sigmas
-        let total_stake = Self::total_stake_plus(epoch, slot); // Only used for fine-tuning
+        let total_stake = self.total_stake_plus(epoch, slot); // Only used for fine-tuning
 
         let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
         let two = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
@@ -492,15 +499,42 @@ impl ValidatorState {
         REWARD
     }
 
-    ///TODO: impl total empty slots count.
-    fn empty_slots_count() -> u64 {
-        0
+    /// Auxillary function to receive current slot offset.
+    /// If offset is None, its setted up as last block slot offset.
+    fn get_current_offset(&mut self) -> u64 {
+        // This is the case were we restarted our node, didn't receive offset from other nodes,
+        // so we need to find offset from last block
+        if self.consensus.offset.is_none() {
+            let last = self.blockchain.get_last_offset().unwrap();
+            info!("overall_empty_slots(): Setting slot offset: {}", last);
+            self.consensus.offset = Some(last);
+        }
+
+        self.consensus.offset.unwrap()
+    }
+
+    /// Auxillary function to calculate overall empty slots.
+    /// We keep an offset from genesis indicating when the first slot actually started.
+    /// This offset is shared between nodes.
+    fn overall_empty_slots(&mut self, slot: u64) -> u64 {
+        // Retrieve existing blocks excluding genesis
+        let blocks = (self.blockchain.len() as u64) - 1;
+        // Setup offset if only have genesis and havent received offset from other nodes
+        if blocks == 0 && self.consensus.offset.is_none() {
+            info!(
+                "overall_empty_slots(): Blockchain contains only genesis, setting slot offset: {}",
+                slot
+            );
+            self.consensus.offset = Some(slot);
+        }
+
+        slot - blocks - self.get_current_offset()
     }
 
     /// total stake plus one.
     /// assuming constant Reward.
-    fn total_stake_plus(epoch: u64, slot: u64) -> u64 {
-        (epoch * EPOCH_LENGTH as u64 + slot + 1 - Self::empty_slots_count()) * Self::reward()
+    fn total_stake_plus(&mut self, epoch: u64, slot: u64) -> u64 {
+        (epoch * EPOCH_LENGTH as u64 + slot + 1 - self.overall_empty_slots(slot)) * Self::reward()
     }
 
     /// get number of leaders in last epoch.
@@ -568,8 +602,7 @@ impl ValidatorState {
     pub fn is_slot_leader(&mut self) -> (bool, usize) {
         // Slot relative index
         let slot = self.relative_slot(self.current_slot());
-        let epoch = self.current_epoch();
-        let (sigma1, sigma2) = self.sigmas(slot, epoch);
+        let (sigma1, sigma2) = self.sigmas(slot, self.consensus.epoch);
         // Stakeholder's epoch coins
         let coins = &self.consensus.coins;
 
@@ -603,8 +636,7 @@ impl ValidatorState {
     /// chain the node is holding.
     pub fn propose(&mut self, idx: usize) -> Result<Option<BlockProposal>> {
         let slot = self.current_slot();
-        let epoch = self.current_epoch();
-        let (sigma1, sigma2) = self.sigmas(slot, epoch);
+        let (sigma1, sigma2) = self.sigmas(slot, self.consensus.epoch);
         let (prev_hash, index) = self.longest_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
 
@@ -641,6 +673,7 @@ impl ValidatorState {
             coin.public_inputs(),
             eta.to_repr(),
             LeadProof::from(proof),
+            self.get_current_offset(),
         );
         // Replacing old coin with the derived coin
         // TODO: do we need that? on next epoch we replace everything
@@ -709,21 +742,6 @@ impl ValidatorState {
     /// Given a proposal, the node verify its sender (slot leader) and finds which blockchain
     /// it extends. If the proposal extends the canonical blockchain, a new fork chain is created.
     pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<()> {
-        //TODO: validate sn/cm
-        let prop_sn = proposal.block.metadata.public_inputs[PI_NULLIFIER_INDEX];
-        for sn in &self.nullifiers {
-            if *sn == prop_sn {
-                return Err(Error::ProposalIsSpent)
-            }
-        }
-        let prop_cm_x: pallas::Base = proposal.block.metadata.public_inputs[PI_COMMITMENT_X_INDEX];
-        let prop_cm_y: pallas::Base = proposal.block.metadata.public_inputs[PI_COMMITMENT_Y_INDEX];
-
-        for cm in &self.lead {
-            if *cm == (prop_cm_x, prop_cm_y) {
-                return Err(Error::ProposalIsSpent)
-            }
-        }
         let current = self.current_slot();
         // Node hasn't started participating
         match self.participating {
@@ -765,6 +783,16 @@ impl ValidatorState {
             return Err(Error::ProposalHeadersMissmatchError)
         }
 
+        // Verify proposal offset
+        let offset = self.get_current_offset();
+        if offset != md.offset {
+            warn!(
+                "receive_proposal(): Received proposal contains different offset: {} - {}",
+                offset, md.offset
+            );
+            return Err(Error::ProposalDifferentOffsetError)
+        }
+
         // Verify proposal leader proof
         if let Err(e) = md.proof.verify(&self.lead_verifying_key, &md.public_inputs) {
             error!("receive_proposal(): Error during leader proof verification: {}", e);
@@ -772,7 +800,22 @@ impl ValidatorState {
         };
         info!("receive_proposal(): Leader proof verified successfully!");
 
-        // TODO: Verify proposal public inputs
+        // Verify proposal public inputs
+        //TODO: validate sn/cm
+        let prop_sn = md.public_inputs[PI_NULLIFIER_INDEX];
+        for sn in &self.nullifiers {
+            if *sn == prop_sn {
+                return Err(Error::ProposalIsSpent)
+            }
+        }
+        let prop_cm_x: pallas::Base = md.public_inputs[PI_COMMITMENT_X_INDEX];
+        let prop_cm_y: pallas::Base = md.public_inputs[PI_COMMITMENT_Y_INDEX];
+
+        for cm in &self.lead {
+            if *cm == (prop_cm_x, prop_cm_y) {
+                return Err(Error::ProposalIsSpent)
+            }
+        }
 
         // Check if proposal extends any existing fork chains
         let index = self.find_extended_chain_index(proposal)?;

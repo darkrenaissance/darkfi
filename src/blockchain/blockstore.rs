@@ -322,4 +322,9 @@ impl BlockOrderStore {
 
         Ok((slot, hash))
     }
+
+    /// Retrieve records count
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
