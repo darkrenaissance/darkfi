@@ -211,6 +211,9 @@ impl RequestHandler for Darkfid {
             Some("blockchain.merkle_roots") => {
                 return self.blockchain_merkle_roots(req.id, params).await
             }
+            Some("blockchain.subscribe_blocks") => {
+                return self.blockchain_subscribe_blocks(req.id, params).await
+            }
 
             // ===================
             // Transaction methods

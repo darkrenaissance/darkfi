@@ -35,6 +35,7 @@ use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, error, info, warn};
 use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::{rngs::OsRng, thread_rng, Rng};
+use serde_json::json;
 
 use super::{
     constants::{
@@ -49,7 +50,9 @@ use crate::{
     blockchain::Blockchain,
     crypto::proof::{ProvingKey, VerifyingKey},
     net,
+    rpc::jsonrpc::JsonNotification,
     runtime::vm_runtime::Runtime,
+    system::{Subscriber, SubscriberPtr},
     tx::Transaction,
     util::time::Timestamp,
     wallet::WalletPtr,
@@ -138,6 +141,11 @@ pub struct ValidatorState {
     pub blockchain: Blockchain,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Transaction>,
+    /// A map of various subscribers exporting live info from the blockchain
+    /// TODO: Instead of JsonNotification, it can be an enum of internal objects,
+    ///       and then we don't have to deal with json in this module but only
+    //        externally.
+    pub subscribers: HashMap<&'static str, SubscriberPtr<JsonNotification>>,
     /// ZK proof verifying keys for smart contract calls
     pub verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
     /// Participating start slot
@@ -266,12 +274,19 @@ impl ValidatorState {
         let ten = Float10::from_str_native("10").unwrap().with_precision(RADIX_BITS).value();
         let three = Float10::from_str_native("3").unwrap().with_precision(RADIX_BITS).value();
         let nine = Float10::from_str_native("9").unwrap().with_precision(RADIX_BITS).value();
+
+        // Here we initialize various subscribers that can export live consensus/blockchain data.
+        let mut subscribers = HashMap::new();
+        let block_subscriber = Subscriber::new();
+        subscribers.insert("blocks", block_subscriber);
+
         let state = Arc::new(RwLock::new(ValidatorState {
             lead_proving_key,
             lead_verifying_key,
             consensus,
             blockchain,
             unconfirmed_txs,
+            subscribers,
             verifying_keys: Arc::new(RwLock::new(verifying_keys)),
             participating,
             wallet,
@@ -995,7 +1010,7 @@ impl ValidatorState {
         // Check if we found any fork to finalize
         match chain_index {
             -2 => {
-                debug!("chain_finalization(): Eligible forks with same heigh exist, nothing to finalize.");
+                debug!("chain_finalization(): Eligible forks with same height exist, nothing to finalize.");
                 self.set_leader_history(index_for_history);
                 return Ok(vec![])
             }
@@ -1030,6 +1045,8 @@ impl ValidatorState {
             }
         };
 
+        let blocks_subscriber = self.subscribers.get("blocks").unwrap();
+
         // Validating state transitions
         for proposal in &finalized {
             // TODO: Is this the right place? We're already doing this in protocol_sync.
@@ -1041,6 +1058,11 @@ impl ValidatorState {
                 error!(target: "consensus", "Finalized block transaction verifications failed: {}", e);
                 return Err(e)
             }
+
+            // TODO: Don't hardcode this:
+            let params = json!([bs58::encode(&serialize(proposal)).into_string()]);
+            let notif = JsonNotification::new("blockchain.subscribe_blocks", params);
+            blocks_subscriber.notify(notif).await;
         }
 
         // Setting leaders history to last proposal leaders count
