@@ -217,6 +217,9 @@ pub enum Error {
     #[error("JSON-RPC error: {0}")]
     JsonRpcError(String),
 
+    #[error("Unexpected JSON-RPC data received: {0}")]
+    UnexpectedJsonRpc(String),
+
     #[error("Received proposal from unknown node")]
     UnknownNodeError,
 

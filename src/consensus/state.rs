@@ -1143,7 +1143,7 @@ impl ValidatorState {
 
         // TODO: Don't hardcode this:
         let blocks_subscriber = self.subscribers.get("blocks").unwrap();
-        let params = json!([bs58::encode(&serialize(proposal)).into_string()]);
+        let params = json!([bs58::encode(&serialize(&block)).into_string()]);
         let notif = JsonNotification::new("blockchain.subscribe_blocks", params);
         blocks_subscriber.notify(notif).await;
 
@@ -1183,9 +1183,11 @@ impl ValidatorState {
 
         // TODO: Don't hardcode this:
         let blocks_subscriber = self.subscribers.get("blocks").unwrap();
-        let params = json!([bs58::encode(&serialize(proposal)).into_string()]);
-        let notif = JsonNotification::new("blockchain.subscribe_blocks", params);
-        blocks_subscriber.notify(notif).await;
+        for block in new_blocks {
+            let params = json!([bs58::encode(&serialize(&block)).into_string()]);
+            let notif = JsonNotification::new("blockchain.subscribe_blocks", params);
+            blocks_subscriber.notify(notif).await;
+        }
 
         Ok(())
     }

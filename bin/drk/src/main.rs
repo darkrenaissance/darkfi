@@ -34,6 +34,9 @@ use darkfi::{
 /// Airdrop methods
 mod rpc_airdrop;
 
+/// Blockchain methods
+mod rpc_blockchain;
+
 /// Wallet operation methods for darkfid's JSON-RPC
 mod rpc_wallet;
 
@@ -91,6 +94,14 @@ enum Subcmd {
         /// Optional address to send tokens to (defaults to main address in wallet)
         address: Option<String>,
     },
+
+    /// Subscribe to incoming blocks from darkfid
+    ///
+    /// This subscription will listen for incoming blocks from darkfid and look
+    /// through their transactions to see if there's any that interest us.
+    /// With `drk` we look at transactions calling the money contract so we can
+    /// find coins sent to us and fill our wallet with the necessary metadata.
+    Subscribe,
 }
 
 pub struct Drk {
@@ -195,6 +206,18 @@ async fn main() -> Result<()> {
                 .with_context(|| "Failed to request airdrop")?;
 
             println!("Transaction ID: {}", txid);
+            Ok(())
+        }
+
+        Subcmd::Subscribe => {
+            let rpc_client = RpcClient::new(args.endpoint)
+                .await
+                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+            let drk = Drk { rpc_client };
+
+            drk.subscribe_blocks().await.with_context(|| "Block subscription failed")?;
+
             Ok(())
         }
     }
