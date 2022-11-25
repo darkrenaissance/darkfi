@@ -34,11 +34,10 @@ impl Drk {
     pub async fn subscribe_blocks(&self) -> Result<()> {
         eprintln!("Subscribing to receive notifications of incoming blocks");
         let subscriber = Subscriber::new();
+        let subscription = subscriber.clone().subscribe().await;
 
         let req = JsonRequest::new("blockchain.subscribe_blocks", json!([]));
-        self.rpc_client.subscribe(req, subscriber.clone()).await?;
-
-        let subscription = subscriber.subscribe().await;
+        self.rpc_client.subscribe(req, subscriber).await?;
 
         let e = loop {
             match subscription.receive().await {

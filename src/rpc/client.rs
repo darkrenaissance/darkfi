@@ -244,7 +244,8 @@ impl RpcClient {
         stop_recv: smol::channel::Receiver<()>,
     ) -> Result<()> {
         // If we don't get a reply within 30 seconds, we'll fail.
-        let read_timeout = Duration::from_secs(30);
+        // FIXME: let read_timeout = Duration::from_secs(30);
+        let read_timeout = Duration::from_secs(1200);
 
         loop {
             // FIXME: Nasty size. 8M
