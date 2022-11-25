@@ -1,11 +1,11 @@
-# Use: docker build . -t darkfi:alpine${alpine_ver}_rust${rust_ver} -f ./contrib/docker/Dockerfile.alpine
-#   optionally with: --build-arg ALPINE_VER=$alpine_ver --build-arg RUST_VER=$rust_ver
-# The wallet test fail problem (see below) was the same for alpine 3.16 and rust 1.65
+# Use: docker build . --pull --network=host -t darkfi:alpine -f ./contrib/docker/Dockerfile.alpine
+#   optionally with: --build-arg ALPINE_VER=3.17 --build-arg RUST_VER=nightly
+# The wallet test fail problem (see below) was the same for alpine 3.17 and rust 1.65
 
 ARG RUST_VER=1.65
-ARG ALPINE_VER=3.16
+ARG ALPINE_VER=3.17
 
-FROM rust:${RUST_VER}-alpine${ALPINE_VER}
+FROM alpine:${ALPINE_VER} as rust_builder
 
 ARG RUST_VER
 ARG ALPINE_VER
@@ -17,31 +17,47 @@ RUN echo "=======================================================" \
     && echo "error: test failed, to rerun pass '-p darkfi --lib'" \
     && echo ".... process didn't exit successfully: /opt/darkfi/target/release/deps/darkfi-... (signal: 11, SIGSEGV: invalid memory reference)" \
     && echo "rust ${RUST_VER} / alpine ${ALPINE_VER}" \
-    && rustc -V && cargo -V \
     && cat /etc/os-release  \
     && echo "====>>>>> wait 30 sec to continue; CTRL+C to break" \
     && sleep 30
 
 RUN apk update
 
-RUN apk add cmake jq wget clang curl gcc make
-RUN apk add llvm-dev openssl-dev expat-dev freetype-dev
-RUN apk add libudev-zero-dev libgudev-dev
-RUN apk add pkgconf clang-dev fontconfig-dev
+RUN apk add cmake jq wget clang curl gcc make llvm-dev \
+  openssl-dev expat-dev freetype-dev libudev-zero-dev \
+  libgudev-dev pkgconf clang-dev fontconfig-dev build-base bash
 
-RUN apk add build-base
+# build-base ? musl-dev was enough, maybe libc-dev too
 
-# musl-dev was enough, maybe libc-dev too
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
-RUN mkdir /opt/darkfi
+ENV PATH="/root/.cargo/bin:${PATH}"
 
-COPY . /opt/darkfi
+RUN rustup target add wasm32-unknown-unknown
+
+RUN cargo search whatever  # creates .cargo cache
+
+# 2. stage
+FROM rust_builder as builder
 
 WORKDIR /opt/darkfi
 
+COPY . ./
+
 RUN make clean
 
-RUN rm -rf ./target/*
+RUN rm -rf ./target/
 
-RUN make -j test
+RUN bash -c 'make -j test &&  make -j'
+
+# 3. stage
+FROM alpine:${ALPINE_VER}
+
+RUN apk update && apk add openssl  # ?? TODO lato-fonts
+
+WORKDIR /opt/darkfi
+
+COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid /opt/darkfi/tau /opt/darkfi/taud \
+  /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/darkotc /opt/darkfi/darkwikid \
+  /opt/darkfi/darkwiki /opt/darkfi/zkas /opt/darkfi/dao /opt/darkfi/daod ./
 
