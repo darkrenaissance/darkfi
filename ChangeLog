@@ -2,4 +2,5 @@
 	* wasm: implemented basic db functions needed for persistent state storage
 	* wasm: merge branch and implement prototype working smart contracts.
 	* doc: improved formatting and reorganized the structure.
-
+	* consensus: auto tuning lottery for single leader per slot.
+	* consensus: change y,rho to PRF rather than commitment to be able to constrain it's pallas::Base public values.

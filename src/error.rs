@@ -256,6 +256,8 @@ pub enum Error {
     #[error("unable to verify transfer transaction")]
     TransferTxVerification,
 
+    #[error("unable to verify proposed mu values")]
+    ProposalPublicValuesMismatched,
     // ===============
     // Database errors
     // ===============

@@ -16,8 +16,8 @@ contract "Lead" {
          Scalar c1_opening,
          Base value,
          Scalar c2_opening,
-         Scalar rho_opening,
-         Scalar y_opening,
+         Base mu_rho,
+         Base mu_y,
          Base sigma1,
          Base sigma2,
 }
@@ -30,6 +30,14 @@ circuit "Lead" {
         PREFIX_CM = witness_base(4);
         PREFIX_PK = witness_base(5);
         PREFIX_SN = witness_base(6);
+        
+        # constrain public values
+        
+        # sigma1
+        #constrain_instance(sigma1);
+        # sigma2
+        #constrain_instance(sigma2);
+
         # coin (1) pk
         pk = poseidon_hash(PREFIX_PK, c1_sk_root, c1_tau, ZERO);
         constrain_instance(pk);
@@ -66,27 +74,18 @@ circuit "Lead" {
         # lottery seed
         seed = poseidon_hash(PREFIX_SEED, c1_sk_root, c1_rho, ZERO);
         # y
-        y_v = ec_mul_base(seed, NULLIFIER_K);
-        y_r = ec_mul(y_opening, VALUE_COMMIT_RANDOM);
-        y = ec_add(y_v, y_r);
-        y_x = ec_get_x(y);
-        y_y = ec_get_y(y);
-        y_hash = poseidon_hash(y_x, y_y);
-        constrain_instance(y_x);
-        constrain_instance(y_y);
+        y = poseidon_hash(seed, mu_y);
+        constrain_instance(mu_y);
+        constrain_instance(y);
         # rho
-        rho_v = ec_mul_base(seed, NULLIFIER_K);
-        rho_r = ec_mul(rho_opening, VALUE_COMMIT_RANDOM);
-        rho = ec_add(rho_v, rho_r);
-        rho_x = ec_get_x(rho);
-        rho_y = ec_get_y(rho);
-        constrain_instance(rho_x);
-        constrain_instance(rho_y);
+        rho = poseidon_hash(seed, mu_rho);
+        constrain_instance(mu_rho);
+        constrain_instance(rho);
         # target
         term1 =  base_mul(sigma1, value);
         term2_1 = base_mul(sigma2, value);
         term2 = base_mul(term2_1, value);
         target = base_add(term1, term2);
         #lottery
-        less_than_loose(y_hash, target);
+        less_than_loose(y, target);
 }

@@ -100,7 +100,7 @@ impl LeadCoin {
         eta: pallas::Base,
         // Stake value
         value: u64,
-        // Slot index in the epoch
+        // Slot absolute index
         slot_index: u64,
         // coin1 sk
         coin1_sk: pallas::Base,
@@ -184,7 +184,8 @@ impl LeadCoin {
     }
 
     /// Derive election seeds from given parameters
-    fn election_seeds(eta: pallas::Base, slot: pallas::Base) -> (pallas::Base, pallas::Base) {
+    pub fn election_seeds(eta: pallas::Base, slot: pallas::Base) -> (pallas::Base, pallas::Base) {
+        info!("LeadCoin::election_seeds(): eta: {:?}, slot: {:?}", eta, slot);
         let election_seed_nonce = pallas::Base::from(3);
         let election_seed_lead = pallas::Base::from(22);
 
@@ -223,11 +224,17 @@ impl LeadCoin {
         ];
         let seed = poseidon_hash(seed_msg);
         // y
-        let y = pedersen_commitment_base(seed, mod_r_p(self.y_mu));
-        let y_coords = y.to_affine().coordinates().unwrap();
+        let y_msg = [
+            seed,
+            self.y_mu,
+        ];
+        let y = poseidon_hash(y_msg);
         // rho
-        let rho = pedersen_commitment_base(seed, mod_r_p(self.rho_mu));
-        let rho_coord = rho.to_affine().coordinates().unwrap();
+        let rho_msg = [
+            seed,
+            self.rho_mu,
+        ];
+        let rho = poseidon_hash(rho_msg);
         vec![
             pk,
             *c1_cm.x(),
@@ -237,10 +244,10 @@ impl LeadCoin {
             self.coin1_commitment_root.inner(),
             self.coin1_sk_root.inner(),
             self.sn(),
-            *y_coords.x(),
-            *y_coords.y(),
-            *rho_coord.x(),
-            *rho_coord.y(),
+            self.y_mu,
+            y,
+            self.rho_mu,
+            rho,
         ]
     }
 
@@ -349,8 +356,8 @@ impl LeadCoin {
             Witness::Scalar(Value::known(self.coin1_blind)),
             Witness::Base(Value::known(pallas::Base::from(self.value))),
             Witness::Scalar(Value::known(self.coin2_blind)),
-            Witness::Scalar(Value::known(mod_r_p(self.rho_mu))),
-            Witness::Scalar(Value::known(mod_r_p(self.y_mu))),
+            Witness::Base(Value::known(self.rho_mu)),
+            Witness::Base(Value::known(self.y_mu)),
             Witness::Base(Value::known(sigma1)),
             Witness::Base(Value::known(sigma2)),
         ];

@@ -64,6 +64,8 @@ use crate::{
 const PI_NULLIFIER_INDEX: usize = 7;
 const PI_COMMITMENT_X_INDEX: usize = 1;
 const PI_COMMITMENT_Y_INDEX: usize = 2;
+const PI_MU_Y_INDEX: usize = 8;
+const PI_MU_RHO_INDEX: usize = 10;
 /// This struct represents the information required by the consensus algorithm
 #[derive(Debug)]
 pub struct ConsensusState {
@@ -428,9 +430,7 @@ impl ValidatorState {
     /// `epoch: absolute epoch index
     /// `slot: relative slot index
     fn sigmas(&mut self, epoch: u64, slot: u64) -> (pallas::Base, pallas::Base) {
-        //let f = Self::leadership_probability_with_all_stake().with_precision(RADIX_BITS).value();
         let f = self.win_prob_with_full_stake();
-        info!("Consensus: f: {}", f);
 
         // Generate sigmas
         let total_stake = self.total_stake_plus(epoch, slot); // Only used for fine-tuning
@@ -466,6 +466,7 @@ impl ValidatorState {
     /// Generate coins for provided sigmas.
     /// NOTE: The strategy here is having a single competing coin per slot.
     async fn create_coins(&self, eta: pallas::Base) -> Result<Vec<Vec<LeadCoin>>> {
+        let slot = self.current_slot();
         let mut rng = thread_rng();
 
         let mut seeds: Vec<u64> = Vec::with_capacity(EPOCH_LENGTH);
@@ -488,10 +489,10 @@ impl ValidatorState {
             let coin = LeadCoin::new(
                 eta,
                 LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
-                i as u64,
+                slot as u64,
                 epoch_secrets.secret_keys[i].inner(),
                 epoch_secrets.merkle_roots[i],
-                i, //TODO same as idx now for simplicity.
+                i,
                 epoch_secrets.merkle_paths[i],
                 seeds[i],
                 epoch_secrets.secret_keys[i],
@@ -603,6 +604,7 @@ impl ValidatorState {
         let p = self.f_dif();
         let i = self.f_int();
         let d = self.f_der();
+        info!("Consensus::win_prob_with_full_stake(): Kp: {}", self.Kp.clone());
         while f <= zero || f >= one {
             f = self.Kp.clone() *
                 (p.clone() +
@@ -613,6 +615,7 @@ impl ValidatorState {
             } else if f <= zero {
                 self.Kp += step.clone();
             }
+            info!("Consensus::win_prob_with_full_stake(): f: {}", f);
         }
         f
     }
@@ -630,7 +633,7 @@ impl ValidatorState {
         // Stakeholder's epoch coins
         let coins = &self.consensus.coins;
 
-        info!("consensus::is_leader(): slot: {}, coins len: {}", slot, coins.len());
+        info!("Consensus::is_leader(): slot: {}, coins len: {}", slot, coins.len());
         assert!((slot as usize) < coins.len());
 
         let competing_coins = &coins[slot as usize];
@@ -766,6 +769,9 @@ impl ValidatorState {
     /// it extends. If the proposal extends the canonical blockchain, a new fork chain is created.
     pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<()> {
         let current = self.current_slot();
+
+        let eta = self.consensus.epoch_eta;
+        let (mu_y, mu_rho) = LeadCoin::election_seeds(eta, pallas::Base::from(current));
         // Node hasn't started participating
         match self.consensus.participating {
             Some(start) => {
@@ -828,6 +834,21 @@ impl ValidatorState {
             return Err(Error::LeaderProofVerification)
         };
         info!("receive_proposal(): Leader proof verified successfully!");
+
+        // verify proposal public values
+        // mu values
+        // y
+        let prop_mu_y = md.public_inputs[PI_MU_Y_INDEX];
+        if mu_y != prop_mu_y {
+            error!("failed to verify mu_y: {:?}, proposed: {:?}", mu_y, prop_mu_y);
+            return Err(Error::ProposalPublicValuesMismatched)
+        }
+        // rho
+        let prop_mu_rho = md.public_inputs[PI_MU_RHO_INDEX];
+        if mu_rho != prop_mu_rho {
+            error!("failed to verify mu_rho: {:?}, proposed: {:?}", mu_rho, prop_mu_rho);
+            return Err(Error::ProposalPublicValuesMismatched)
+        }
 
         // Verify proposal public inputs
         let prop_sn = md.public_inputs[PI_NULLIFIER_INDEX];
