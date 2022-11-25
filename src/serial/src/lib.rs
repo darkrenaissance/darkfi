@@ -516,6 +516,17 @@ impl Encodable for String {
     }
 }
 
+impl Encodable for &str {
+    #[inline]
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+        let b = self.as_bytes();
+        let b_len = b.len();
+        let vi_len = VarInt(b_len as u64).encode(&mut s)?;
+        s.write_slice(b)?;
+        Ok(vi_len + b_len)
+    }
+}
+
 impl Decodable for String {
     #[inline]
     fn decode<D: Read>(d: D) -> Result<String, Error> {

@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#[cfg(not(feature = "no-entrypoint"))]
 use darkfi_sdk::{
     crypto::{Coin, ContractId, MerkleNode, MerkleTree, PublicKey},
     db::{db_contains_key, db_get, db_init, db_lookup, db_set, ZKAS_DB_NAME},
@@ -26,6 +27,8 @@ use darkfi_sdk::{
     tx::ContractCall,
     util::set_return_data,
 };
+
+#[cfg(not(feature = "no-entrypoint"))]
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 /// Functions we allow in this contract
@@ -45,6 +48,8 @@ impl From<u8> for MoneyFunction {
 
 /// Structures and object definitions
 pub mod state;
+
+#[cfg(not(feature = "no-entrypoint"))]
 use state::{MoneyTransferParams, MoneyTransferUpdate};
 
 #[cfg(feature = "client")]
@@ -74,6 +79,7 @@ pub const ZKAS_MINT_NS: &str = "Mint";
 pub const ZKAS_BURN_NS: &str = "Burn";
 
 /// This function runs when the contract is (re)deployed and initialized.
+#[cfg(not(feature = "no-entrypoint"))]
 fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     // The payload for now contains a vector of `PublicKey` used to
     // whitelist faucets that can create clear inputs.
@@ -140,6 +146,7 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
 
 /// This function is used by the VM's host to fetch the necessary metadata for
 /// verifying signatures and zk proofs.
+#[cfg(not(feature = "no-entrypoint"))]
 fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, call): (u32, Vec<ContractCall>) = deserialize(ix)?;
     assert!(call_idx < call.len() as u32);
@@ -211,6 +218,7 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
 
 /// This function verifies a state transition and produces an
 /// update if everything is successful.
+#[cfg(not(feature = "no-entrypoint"))]
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, call): (u32, Vec<ContractCall>) = deserialize(ix)?;
     assert!(call_idx < call.len() as u32);
@@ -294,6 +302,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     }
 }
 
+#[cfg(not(feature = "no-entrypoint"))]
 fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
     match MoneyFunction::from(update_data[0]) {
         MoneyFunction::Transfer => {

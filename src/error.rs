@@ -285,6 +285,9 @@ pub enum Error {
     #[error("Contract already initialized")]
     ContractAlreadyInitialized,
 
+    #[error("zkas bincode not found in sled database")]
+    ZkasBincodeNotFound,
+
     // =============
     // Wallet errors
     // =============
