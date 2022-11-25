@@ -18,7 +18,7 @@
 
 use super::Float10;
 use dashu::integer::{IBig, Sign};
-use log::{debug};
+use log::debug;
 use pasta_curves::pallas;
 //use pasta_curves::{group::ff::PrimeField};
 //use dashu::integer::{UBig};

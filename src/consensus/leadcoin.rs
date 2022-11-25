@@ -224,16 +224,10 @@ impl LeadCoin {
         ];
         let seed = poseidon_hash(seed_msg);
         // y
-        let y_msg = [
-            seed,
-            self.y_mu,
-        ];
+        let y_msg = [seed, self.y_mu];
         let y = poseidon_hash(y_msg);
         // rho
-        let rho_msg = [
-            seed,
-            self.rho_mu,
-        ];
+        let rho_msg = [seed, self.rho_mu];
         let rho = poseidon_hash(rho_msg);
         vec![
             pk,
