@@ -183,6 +183,10 @@ impl LeadCoin {
         poseidon_hash(sn_msg)
     }
 
+    pub fn election_seeds_u64(eta: pallas::Base, slotu64: u64) -> (pallas::Base, pallas::Base) {
+        Self::election_seeds(eta, pallas::Base::from(slotu64))
+    }
+
     /// Derive election seeds from given parameters
     pub fn election_seeds(eta: pallas::Base, slot: pallas::Base) -> (pallas::Base, pallas::Base) {
         info!("LeadCoin::election_seeds(): eta: {:?}, slot: {:?}", eta, slot);
@@ -303,8 +307,8 @@ impl LeadCoin {
 
     /// the new coin to be minted after the current coin is spent
     /// in lottery.
-    pub fn derive_coin(&self, eta: pallas::Base, slot: u64) -> LeadCoin {
-        let tau = pallas::Base::from(slot);
+    pub fn derive_coin(&self) -> LeadCoin {
+        info!("LeadCoin::derive_coin()");
         let mut derived = self.clone();
         let rho = self.derived_rho();
         let blind = pallas::Scalar::random(&mut OsRng);
@@ -314,10 +318,6 @@ impl LeadCoin {
         derived.coin2_commitment = cm;
         derived.coin1_blind = derived.coin2_blind;
         derived.coin2_blind = blind;
-        // update random mau_y, mau_rho in case epoch is changed
-        let (y_mu, rho_mu) = Self::election_seeds(eta, tau);
-        derived.y_mu = y_mu;
-        derived.rho_mu = rho_mu;
         derived
     }
 

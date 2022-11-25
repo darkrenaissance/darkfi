@@ -478,8 +478,8 @@ impl ValidatorState {
         for i in 0..constants::EPOCH_LENGTH {
             let coin = LeadCoin::new(
                 eta,
-                constants::LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
-                slot as u64,
+                LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
+                slot+i as u64,
                 epoch_secrets.secret_keys[i].inner(),
                 epoch_secrets.merkle_roots[i],
                 i,
@@ -705,7 +705,7 @@ impl ValidatorState {
         // Replacing old coin with the derived coin
         // TODO: do we need that? on next epoch we replace everything
         // how is this going to get reused?
-        self.consensus.coins[relative_slot][idx] = coin.derive_coin(eta, relative_slot as u64);
+        self.consensus.coins[relative_slot][idx] = coin.derive_coin();
 
         Ok(Some(BlockProposal::new(header, unproposed_txs, lead_info)))
     }
@@ -764,9 +764,11 @@ impl ValidatorState {
     /// it extends. If the proposal extends the canonical blockchain, a new fork chain is created.
     pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<()> {
         let current = self.current_slot();
-
+        let coin_slot = &proposal.block.header.slot;
         let eta = self.consensus.epoch_eta;
-        let (mu_y, mu_rho) = LeadCoin::election_seeds(eta, pallas::Base::from(current));
+        info!("Consensus::receive_proposal(): current slot: {}", current);
+        info!("Consensus::receive_proposal(): proposed slot: {}", coin_slot);
+        let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(eta, *coin_slot);
         // Node hasn't started participating
         match self.consensus.participating {
             Some(start) => {
