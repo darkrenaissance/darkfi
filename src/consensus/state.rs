@@ -132,6 +132,10 @@ pub struct ConsensusResponse {
     pub proposals: Vec<ProposalChain>,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Transaction>,
+    /// Seen nullifiers from proposals
+    pub leaders_nullifiers: Vec<pallas::Base>,
+    /// Seen spent coins from proposals
+    pub leaders_spent_coins: Vec<(pallas::Base, pallas::Base)>,
 }
 
 impl net::Message for ConsensusResponse {

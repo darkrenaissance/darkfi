@@ -77,7 +77,15 @@ impl ProtocolSyncConsensus {
             let offset = lock.consensus.offset;
             let proposals = lock.consensus.proposals.clone();
             let unconfirmed_txs = lock.unconfirmed_txs.clone();
-            let response = ConsensusResponse { offset, proposals, unconfirmed_txs };
+            let leaders_nullifiers = lock.consensus.leaders_nullifiers.clone();
+            let leaders_spent_coins = lock.consensus.leaders_spent_coins.clone();
+            let response = ConsensusResponse {
+                offset,
+                proposals,
+                unconfirmed_txs,
+                leaders_nullifiers,
+                leaders_spent_coins,
+            };
             if let Err(e) = self.channel.send(response).await {
                 error!("ProtocolSyncConsensus::handle_receive_request() channel send fail: {}", e);
             };

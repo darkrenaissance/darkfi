@@ -49,7 +49,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
             // Node verifies response came from a participating node.
             // Extra validations can be added here.
             let response = response_sub.receive().await?;
-            if response.proposals.is_empty() {
+            if response.leaders_nullifiers.is_empty() {
                 warn!("Retrieved consensus state from a new node, retrying...");
                 continue
             }
@@ -59,6 +59,8 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
             lock.consensus.offset = response.offset;
             lock.consensus.proposals = response.proposals.clone();
             lock.unconfirmed_txs = response.unconfirmed_txs.clone();
+            lock.consensus.leaders_nullifiers = response.leaders_nullifiers.clone();
+            lock.consensus.leaders_spent_coins = response.leaders_spent_coins.clone();
 
             break
         }
