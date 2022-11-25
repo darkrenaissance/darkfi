@@ -77,49 +77,50 @@ Upon receiving a block, one of the following cases may occur:
 
 ### Visual Examples
 
-| Sympol        | Description                           |
-|---------------|---------------------------------------|
-| [C]           | Canonical(finalized) blockchain block |
-| [C]--...--[C] | Sequence of canonical blocks          |
-| [Ln]          | Block produced by Leader n            |
-| +--           | Appending a block to fork             |
-| /--           | Dropped fork                          |
+| Sympol        | Description                            |
+|---------------|----------------------------------------|
+| [C]           | Canonical(finalized) blockchain block  |
+| [C]--...--[C] | Sequence of canonical blocks           |
+| [Ln]          | Proposal produced by Leader n          |
+| Fn            | Fork name to identify them in examples |
+| +--           | Appending a block to fork              |
+| /--           | Dropped fork                           |
 
 Starting state:
 
-                   |--[L0] <-- L0 fork
+                   |--[L0] <-- F0
     [C]--...--[C]--|
-                   |--[L1] <-- L1 fork
+                   |--[L1] <-- F1
 
 #### Case 1
 
-Extending L0 fork with a new block proposal:
+Extending F0 fork with a new block proposal:
 
-                   |--[L0]+--[L2] <-- L0L2 fork
+                   |--[L0]+--[L2] <-- F0
     [C]--...--[C]--|
-                   |--[L1]        <-- L1 fork
+                   |--[L1]        <-- F1
 
 #### Case 2
 
-Extending L0L2 fork at [L0] slot with a new block proposal:
+Extending F0 fork at [L0] slot with a new block proposal, creating a new fork chain:
 
-                   |--[L0]--[L2]  <-- L0L2 fork
+                   |--[L0]--[L2]   <-- F0
     [C]--...--[C]--|
-                   |--[L0]+--[L3] <-- L0L3 fork
+                   |--[L1]         <-- F1
                    |
-                   |--[L1]        <-- L1 fork
+                   |+--[L0]+--[L3] <-- F2
 
 ##### Case 3
 
 Extending the canonical blockchain with a new block proposal:
 
-                   |--[L0]--[L2] <-- L0L2 fork
+                   |--[L0]--[L2] <-- F0
     [C]--...--[C]--|
-                   |--[L0]--[L3] <-- L0L3 fork
+                   |--[L1]       <-- F1
                    |
-                   |--[L1]       <-- L1 fork
+                   |--[L0]--[L3] <-- F2
                    |
-                   |+--[L4]      <-- L4 fork
+                   |+--[L4]      <-- F3
 
 
 ## Finalization
@@ -136,46 +137,45 @@ competing fork chains of the same length. In such a case, finalization
 can only occur when we have a a slot with a single leader.
 
 We continue Case 3 from the previous section to visualize this logic.
-On slot 5, a node observes 2 proposals. One extends the L0L2 fork,
-and the other extends the L0L3 fork:
+On slot 5, a node observes 2 proposals. One extends the F0 fork,
+and the other extends the F2 fork:
 
-                   |--[L0]--[L2]+--[L5a] <-- L0L2L5a fork
+                   |--[L0]--[L2]+--[L5a] <-- F0
     [C]--...--[C]--|
-                   |--[L0]--[L3]+--[L5b] <-- L0L3L5b fork
+                   |--[L1]               <-- F1
                    |
-                   |--[L1]               <-- L1 fork
+                   |--[L0]--[L3]+--[L5b] <-- F2
                    |
-                   |--[L4]               <-- L4 fork
+                   |--[L4]               <-- F3
 
 Since we have two competing fork chains finalization cannot occur.
 
 On next slot, a node only observes 1 proposal. So it extends the
-L0L3L5b fork:
+F2 fork:
 
-                   |--[L0]--[L2]--[L5a]        <-- L0L2L5a fork
+                   |--[L0]--[L2]--[L5a]        <-- F0
     [C]--...--[C]--|
-                   |--[L0]--[L3]--[L5b]+--[L6] <-- L0L3L5bL6 fork
+                   |--[L1]                     <-- F1
                    |
-                   |--[L1]                     <-- L1 fork
+                   |--[L0]--[L3]--[L5b]+--[L6] <-- F2
                    |
-                   |--[L4]                     <-- L4 fork
+                   |--[L4]                     <-- F3
 
-When the finalization sync period starts, the node finalizes the fork
-L0L3L5bL6 and all other forks get dropped:
+When the finalization sync period starts, the node finalizes fork
+F2 and all other forks get dropped:
 
-                   |/--[L0]--[L2]--[L5a]      <-- L0L2L5a fork
+                   |/--[L0]--[L2]--[L5a]      <-- F0
     [C]--...--[C]--|
-                   |--[L0]--[L3]--[L5b]--[L6] <-- L0L3L5bL6 fork
+                   |/--[L1]                   <-- F1
                    |
-                   |/--[L1]                   <-- L1 fork
+                   |--[L0]--[L3]--[L5b]--[L6] <-- F2
                    |
-                   |/--[L4]                   <-- L4 fork
+                   |/--[L4]                   <-- F3
 
 
 This results in the following state:
 
     [C]--...--[C]--|--[L6]
 
-The canonical blockchain contains blocks L0, L3 and L5b from the
-L0L3L5bL6 fork.
+The canonical blockchain contains blocks L0, L3 and L5b from fork F2.
 
