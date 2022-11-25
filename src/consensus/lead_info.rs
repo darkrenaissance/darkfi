@@ -28,27 +28,29 @@ use crate::{
     Result,
 };
 
-/// This struct represents [`Block`](super::Block) information used by the consensus protocol.
+// TODO: Replace 'Lead' terms with 'Producer' to make it more clear that
+// we refer to block producer.
+/// This struct represents [`Block`](super::Block) leader information used by the consensus protocol.
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct Metadata {
-    /// Block owner signature
+pub struct LeadInfo {
+    /// Block producer signature
     pub signature: Signature,
-    /// Block owner public_key
+    /// Block producer public_key
     pub public_key: PublicKey, // TODO: remove this(to be derived by proof)
-    /// Block owner slot competing coins public inputs
+    /// Block producer slot competing coins public inputs
     pub public_inputs: Vec<pallas::Base>,
     /// Response of global random oracle, or it's emulation.
     pub eta: [u8; 32],
     /// Leader NIZK proof
     pub proof: LeadProof,
-    /// Slot offset block owner used
+    /// Slot offset block producer used
     pub offset: u64,
-    /// Block owner leaders count
+    /// Block producer leaders count
     pub leaders: u64,
 }
 
-impl Default for Metadata {
-    /// Default Metadata used in genesis block generation
+impl Default for LeadInfo {
+    /// Default LeadInfo used in genesis block generation
     fn default() -> Self {
         let keypair = Keypair::default();
         let signature = Signature::dummy();
@@ -61,7 +63,7 @@ impl Default for Metadata {
     }
 }
 
-impl Metadata {
+impl LeadInfo {
     pub fn new(
         signature: Signature,
         public_key: PublicKey,

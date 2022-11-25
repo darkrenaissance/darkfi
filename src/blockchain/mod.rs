@@ -145,7 +145,7 @@ impl Blockchain {
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(header, txs, block.metadata.clone());
+            let info = BlockInfo::new(header, txs, block.lead_info.clone());
             ret.push(info);
         }
 
@@ -188,7 +188,7 @@ impl Blockchain {
         let blocks = self.blocks.get(&[hash], true)?;
         // Since we used strict get, its safe to unwrap here
         let block = blocks[0].clone().unwrap();
-        let hash = blake3::hash(&serialize(&block.metadata.proof));
+        let hash = blake3::hash(&serialize(&block.lead_info.proof));
         Ok(hash)
     }
 
@@ -198,6 +198,6 @@ impl Blockchain {
         let blocks = self.blocks.get(&[hash], true)?;
         // Since we used strict get, its safe to unwrap here
         let block = blocks[0].clone().unwrap();
-        Ok(block.metadata.offset)
+        Ok(block.lead_info.offset)
     }
 }

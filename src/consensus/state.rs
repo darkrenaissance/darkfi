@@ -43,7 +43,7 @@ use super::{
     },
     leadcoin::{LeadCoin, LeadCoinSecrets},
     utils::fbig2base,
-    Block, BlockInfo, BlockProposal, Float10, Header, LeadProof, Metadata, ProposalChain,
+    Block, BlockInfo, BlockProposal, Float10, Header, LeadInfo, LeadProof, ProposalChain,
 };
 
 use crate::{
@@ -698,7 +698,7 @@ impl ValidatorState {
         let signed_proposal = secret_key.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
         let public_key = PublicKey::from_secret(secret_key);
 
-        let metadata = Metadata::new(
+        let lead_info = LeadInfo::new(
             signed_proposal,
             public_key,
             coin.public_inputs(),
@@ -712,7 +712,7 @@ impl ValidatorState {
         // how is this going to get reused?
         self.consensus.coins[relative_slot][idx] = coin.derive_coin(eta, relative_slot as u64);
 
-        Ok(Some(BlockProposal::new(header, unproposed_txs, metadata)))
+        Ok(Some(BlockProposal::new(header, unproposed_txs, lead_info)))
     }
 
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
@@ -788,13 +788,13 @@ impl ValidatorState {
             return Err(Error::ProposalAfterFinalizationError)
         }
 
-        let md = &proposal.block.metadata;
+        let lf = &proposal.block.lead_info;
         let hdr = &proposal.block.header;
 
         // Verify proposal signature is valid based on producer public key
         // TODO: derive public key from proof
-        if !md.public_key.verify(proposal.header.as_bytes(), &md.signature) {
-            warn!("receive_proposal(): Proposer {} signature could not be verified", md.public_key);
+        if !lf.public_key.verify(proposal.header.as_bytes(), &lf.signature) {
+            warn!("receive_proposal(): Proposer {} signature could not be verified", lf.public_key);
             return Err(Error::InvalidSignature)
         }
 
@@ -820,16 +820,16 @@ impl ValidatorState {
 
         // Verify proposal offset
         let offset = self.get_current_offset();
-        if offset != md.offset {
+        if offset != lf.offset {
             warn!(
                 "receive_proposal(): Received proposal contains different offset: {} - {}",
-                offset, md.offset
+                offset, lf.offset
             );
             return Err(Error::ProposalDifferentOffsetError)
         }
 
         // Verify proposal leader proof
-        if let Err(e) = md.proof.verify(&self.lead_verifying_key, &md.public_inputs) {
+        if let Err(e) = lf.proof.verify(&self.lead_verifying_key, &lf.public_inputs) {
             error!("receive_proposal(): Error during leader proof verification: {}", e);
             return Err(Error::LeaderProofVerification)
         };
@@ -838,28 +838,28 @@ impl ValidatorState {
         // verify proposal public values
         // mu values
         // y
-        let prop_mu_y = md.public_inputs[PI_MU_Y_INDEX];
+        let prop_mu_y = lf.public_inputs[PI_MU_Y_INDEX];
         if mu_y != prop_mu_y {
             error!("failed to verify mu_y: {:?}, proposed: {:?}", mu_y, prop_mu_y);
             return Err(Error::ProposalPublicValuesMismatched)
         }
         // rho
-        let prop_mu_rho = md.public_inputs[PI_MU_RHO_INDEX];
+        let prop_mu_rho = lf.public_inputs[PI_MU_RHO_INDEX];
         if mu_rho != prop_mu_rho {
             error!("failed to verify mu_rho: {:?}, proposed: {:?}", mu_rho, prop_mu_rho);
             return Err(Error::ProposalPublicValuesMismatched)
         }
 
         // Verify proposal public inputs
-        let prop_sn = md.public_inputs[PI_NULLIFIER_INDEX];
+        let prop_sn = lf.public_inputs[PI_NULLIFIER_INDEX];
         for sn in &self.leaders_nullifiers {
             if *sn == prop_sn {
                 error!("receive_proposal(): Proposal nullifiers exist.");
                 return Err(Error::ProposalIsSpent)
             }
         }
-        let prop_cm_x: pallas::Base = md.public_inputs[PI_COMMITMENT_X_INDEX];
-        let prop_cm_y: pallas::Base = md.public_inputs[PI_COMMITMENT_Y_INDEX];
+        let prop_cm_x: pallas::Base = lf.public_inputs[PI_COMMITMENT_X_INDEX];
+        let prop_cm_y: pallas::Base = lf.public_inputs[PI_COMMITMENT_Y_INDEX];
 
         for cm in &self.leaders_spent_coins {
             if *cm == (prop_cm_x, prop_cm_y) {
@@ -989,7 +989,7 @@ impl ValidatorState {
                 if last_proposal.block.header.slot == self.current_slot() {
                     // Replacing our last history element with the leaders one
                     self.leaders_history.pop();
-                    self.leaders_history.push(last_proposal.block.metadata.leaders);
+                    self.leaders_history.push(last_proposal.block.lead_info.leaders);
                     debug!("set_leader_history(): New leaders history: {:?}", self.leaders_history);
                     return
                 }
@@ -1093,7 +1093,7 @@ impl ValidatorState {
         }
 
         // Setting leaders history to last proposal leaders count
-        self.leaders_history = vec![chain.proposals.last().unwrap().block.metadata.leaders];
+        self.leaders_history = vec![chain.proposals.last().unwrap().block.lead_info.leaders];
 
         // Removing rest forks
         self.consensus.proposals = vec![];
