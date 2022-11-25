@@ -71,6 +71,10 @@ pub struct ConsensusState {
     pub genesis_ts: Timestamp,
     /// Genesis block hash
     pub genesis_block: blake3::Hash,
+    /// Participating start slot
+    pub participating: Option<u64>,
+    /// Last slot node check for finalization
+    pub checked_finalization: u64,
     /// Slots offset since genesis,
     pub offset: Option<u64>,
     /// Fork chains containing block proposals
@@ -90,6 +94,8 @@ impl ConsensusState {
         Ok(Self {
             genesis_ts,
             genesis_block,
+            participating: None,
+            checked_finalization: 0,
             offset: None,
             proposals: vec![],
             epoch: 0,
@@ -148,8 +154,6 @@ pub struct ValidatorState {
     pub subscribers: HashMap<&'static str, SubscriberPtr<JsonNotification>>,
     /// ZK proof verifying keys for smart contract calls
     pub verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
-    /// Participating start slot
-    pub participating: Option<u64>,
     /// Wallet interface
     pub wallet: WalletPtr,
     // TODO: Aren't these already in db after finalization?
@@ -204,7 +208,6 @@ impl ValidatorState {
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
 
         let unconfirmed_txs = vec![];
-        let participating = None;
 
         // -----NATIVE WASM CONTRACTS-----
         // This is the current place where native contracts are being deployed.
@@ -288,7 +291,6 @@ impl ValidatorState {
             unconfirmed_txs,
             subscribers,
             verifying_keys: Arc::new(RwLock::new(verifying_keys)),
-            participating,
             wallet,
             leaders_nullifiers: vec![],
             leaders_spent_coins: vec![],
@@ -401,7 +403,7 @@ impl ValidatorState {
 
     /// Set participating slot to next.
     pub fn set_participating(&mut self) -> Result<()> {
-        self.participating = Some(self.current_slot() + 1);
+        self.consensus.participating = Some(self.current_slot() + 1);
         Ok(())
     }
 
@@ -765,13 +767,19 @@ impl ValidatorState {
     pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<()> {
         let current = self.current_slot();
         // Node hasn't started participating
-        match self.participating {
+        match self.consensus.participating {
             Some(start) => {
                 if current < start {
                     return Ok(())
                 }
             }
             None => return Ok(()),
+        }
+
+        // Node have already checked for finalization in this slot
+        if current <= self.consensus.checked_finalization {
+            warn!("receive_proposal(): Proposal received after finalization sync period.");
+            return Err(Error::ProposalAfterFinalizationError)
         }
 
         let md = &proposal.block.metadata;
@@ -976,6 +984,11 @@ impl ValidatorState {
     ///   all proposals up to the last one.
     /// When fork chain proposals are finalized, the rest of fork chains are removed.
     pub async fn chain_finalization(&mut self) -> Result<Vec<BlockInfo>> {
+        let slot = self.current_slot();
+        debug!("chain_finalization(): Started finalization check for slot: {}", slot);
+        // Set last slot finalization check occured to current slot
+        self.consensus.checked_finalization = slot;
+
         // First we find longest chain without any other forks at same height
         let mut chain_index = -1;
         // Use this index to extract leaders count sequence from longest fork

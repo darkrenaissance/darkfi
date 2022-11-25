@@ -235,6 +235,9 @@ pub enum Error {
     #[error("Check if proposal extends any existing fork chains failed")]
     ExtendedChainIndexNotFound,
 
+    #[error("Proposal received after finalization sync period")]
+    ProposalAfterFinalizationError,
+
     #[error("Proposal contains missmatched hashes")]
     ProposalHashesMissmatchError,
 
