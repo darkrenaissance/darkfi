@@ -203,15 +203,8 @@ impl LeadCoin {
     /// Create a vector of `pallas::Base` elements from the `LeadCoin` to be
     /// used as public inputs for the ZK proof.
     pub fn public_inputs(&self) -> Vec<pallas::Base> {
-        let zero = pallas::Base::zero();
-        let prefix_evl = pallas::Base::from(2);
-        let prefix_seed = pallas::Base::from(3);
-        let prefix_pk = pallas::Base::from(5);
-
         // pk
         let pk = self.pk();
-        // rho
-        let c2_rho = self.derived_rho();
         // coin 1-2 cm/commitment
         let c1_cm = self.coin1_commitment.to_affine().coordinates().unwrap();
         let c2_cm = self.coin2_commitment.to_affine().coordinates().unwrap();
@@ -313,7 +306,6 @@ impl LeadCoin {
     pub fn derive_coin(&self, eta: pallas::Base, slot: u64) -> LeadCoin {
         let tau = pallas::Base::from(slot);
         let mut derived = self.clone();
-        let pk = self.pk();
         let rho = self.derived_rho();
         let blind = pallas::Scalar::random(&mut OsRng);
         let cm = self.derived_commitment(blind);

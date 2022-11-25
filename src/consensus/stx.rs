@@ -52,7 +52,7 @@ pub struct TransferStx {
 impl TransferStx {
     /// verify the transfer proof.
     pub fn verify(&self, vk: VerifyingKey) -> Result<()> {
-        if let Err(e) = self.proof.verify(&vk, &self.public_inputs()) {
+        if let Err(_) = self.proof.verify(&vk, &self.public_inputs()) {
             return Err(Error::TransferTxVerification)
         }
         Ok(())

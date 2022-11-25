@@ -69,8 +69,7 @@ impl Transaction {
         for (call, (proofs, pubvals)) in zip!(self.calls, self.proofs, zkp_table) {
             assert_eq!(proofs.len(), pubvals.len());
 
-            for (i, (proof, (zk_ns, public_vals))) in proofs.iter().zip(pubvals.iter()).enumerate()
-            {
+            for (proof, (zk_ns, public_vals)) in proofs.iter().zip(pubvals.iter()) {
                 if let Some(vks) = verifying_keys.read().await.get(&call.contract_id.to_bytes()) {
                     if let Some(vk) = vks.iter().find(|x| &x.0 == zk_ns) {
                         // We have a verifying key for this

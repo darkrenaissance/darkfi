@@ -38,9 +38,7 @@ use rand::{rngs::OsRng, thread_rng, Rng};
 use serde_json::json;
 
 use super::{
-    constants::{
-        EPOCH_LENGTH, LEADER_PROOF_K, LOTTERY_HEAD_START, P, RADIX_BITS, REWARD, SLOT_TIME,
-    },
+    constants,
     leadcoin::{LeadCoin, LeadCoinSecrets},
     utils::fbig2base,
     Block, BlockInfo, BlockProposal, Float10, Header, LeadInfo, LeadProof, ProposalChain,
@@ -61,11 +59,6 @@ use crate::{
     Error, Result,
 };
 
-const PI_NULLIFIER_INDEX: usize = 7;
-const PI_COMMITMENT_X_INDEX: usize = 1;
-const PI_COMMITMENT_Y_INDEX: usize = 2;
-const PI_MU_Y_INDEX: usize = 8;
-const PI_MU_RHO_INDEX: usize = 10;
 /// This struct represents the information required by the consensus algorithm
 #[derive(Debug)]
 pub struct ConsensusState {
@@ -87,6 +80,15 @@ pub struct ConsensusState {
     pub epoch_eta: pallas::Base,
     /// Current epoch competing coins
     pub coins: Vec<Vec<LeadCoin>>,
+    // TODO: Aren't these already in db after finalization?
+    /// Seen nullifiers from proposals
+    pub leaders_nullifiers: Vec<pallas::Base>,
+    /// Seen spent coins from proposals
+    pub leaders_spent_coins: Vec<(pallas::Base, pallas::Base)>,
+    /// Leaders count history
+    pub leaders_history: Vec<u64>,
+    /// Kp
+    pub kp: Float10,
 }
 
 impl ConsensusState {
@@ -103,6 +105,10 @@ impl ConsensusState {
             epoch: 0,
             epoch_eta: pallas::Base::one(),
             coins: vec![],
+            leaders_nullifiers: vec![],
+            leaders_spent_coins: vec![],
+            leaders_history: vec![0],
+            kp: constants::FLOAT10_THREE.clone() / constants::FLOAT10_NINE.clone(),
         })
     }
 }
@@ -158,19 +164,6 @@ pub struct ValidatorState {
     pub verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
     /// Wallet interface
     pub wallet: WalletPtr,
-    // TODO: Aren't these already in db after finalization?
-    /// Seen nullifiers from proposals
-    pub leaders_nullifiers: Vec<pallas::Base>,
-    /// Seen spent coins from proposals
-    pub leaders_spent_coins: Vec<(pallas::Base, pallas::Base)>,
-    /// Leaders count history
-    pub leaders_history: Vec<u64>,
-    /// Kp
-    pub Kp: Float10,
-    /// Ti
-    pub Ti: Float10,
-    /// Td
-    pub Td: Float10,
 }
 
 impl ValidatorState {
@@ -192,16 +185,16 @@ impl ValidatorState {
         //wallet.exec_sql(consensus_tree_init_query).await?;
         //wallet.exec_sql(consensus_keys_init_query).await?;
 
-        info!("Generating leader proof keys with k: {}", LEADER_PROOF_K);
+        info!("Generating leader proof keys with k: {}", constants::LEADER_PROOF_K);
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode)?;
         let witnesses = empty_witnesses(&zkbin);
         let circuit = ZkCircuit::new(witnesses, zkbin);
 
-        let lead_verifying_key = VerifyingKey::build(LEADER_PROOF_K, &circuit);
+        let lead_verifying_key = VerifyingKey::build(constants::LEADER_PROOF_K, &circuit);
         // We only need this proving key if we're going to participate in the consensus.
         let lead_proving_key = if enable_participation {
-            Some(ProvingKey::build(LEADER_PROOF_K, &circuit))
+            Some(ProvingKey::build(constants::LEADER_PROOF_K, &circuit))
         } else {
             None
         };
@@ -275,11 +268,6 @@ impl ValidatorState {
         info!("Finished deployment of native wasm contracts");
         // -----NATIVE WASM CONTRACTS-----
 
-        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
-        let ten = Float10::from_str_native("10").unwrap().with_precision(RADIX_BITS).value();
-        let three = Float10::from_str_native("3").unwrap().with_precision(RADIX_BITS).value();
-        let nine = Float10::from_str_native("9").unwrap().with_precision(RADIX_BITS).value();
-
         // Here we initialize various subscribers that can export live consensus/blockchain data.
         let mut subscribers = HashMap::new();
         let block_subscriber = Subscriber::new();
@@ -294,12 +282,6 @@ impl ValidatorState {
             subscribers,
             verifying_keys: Arc::new(RwLock::new(verifying_keys)),
             wallet,
-            leaders_nullifiers: vec![],
-            leaders_spent_coins: vec![],
-            leaders_history: vec![0],
-            Kp: three / nine,
-            Ti: one.clone() / ten.clone(),
-            Td: one / ten,
         }));
 
         Ok(state)
@@ -341,18 +323,18 @@ impl ValidatorState {
     /// Calculates the epoch of the provided slot.
     /// Epoch duration is configured using the `EPOCH_LENGTH` value.
     pub fn slot_epoch(&self, slot: u64) -> u64 {
-        slot / EPOCH_LENGTH as u64
+        slot / constants::EPOCH_LENGTH as u64
     }
 
     /// Calculates current slot, based on elapsed time from the genesis block.
     /// Slot duration is configured using the `SLOT_TIME` constant.
     pub fn current_slot(&self) -> u64 {
-        self.consensus.genesis_ts.elapsed() / SLOT_TIME
+        self.consensus.genesis_ts.elapsed() / constants::SLOT_TIME
     }
 
     /// Calculates the relative number of the provided slot.
     pub fn relative_slot(&self, slot: u64) -> u64 {
-        slot % EPOCH_LENGTH as u64
+        slot % constants::EPOCH_LENGTH as u64
     }
 
     /// Finds the last slot a proposal or block was generated.
@@ -382,7 +364,8 @@ impl ValidatorState {
         assert!(n > 0);
         let start_time = NaiveDateTime::from_timestamp(self.consensus.genesis_ts.0, 0);
         let current_slot = self.current_slot() + n;
-        let next_slot_start = (current_slot * SLOT_TIME) + (start_time.timestamp() as u64);
+        let next_slot_start =
+            (current_slot * constants::SLOT_TIME) + (start_time.timestamp() as u64);
         let next_slot_start = NaiveDateTime::from_timestamp(next_slot_start as i64, 0);
         let current_time = NaiveDateTime::from_timestamp(Utc::now().timestamp(), 0);
         let diff = next_slot_start - current_time;
@@ -394,8 +377,9 @@ impl ValidatorState {
     /// Epoch duration is configured using the EPOCH_LENGTH value.
     pub fn slots_to_next_n_epoch(&self, n: u64) -> u64 {
         assert!(n > 0);
-        let slots_till_next_epoch = EPOCH_LENGTH as u64 - self.relative_slot(self.current_slot());
-        ((n - 1) * EPOCH_LENGTH as u64) + slots_till_next_epoch
+        let slots_till_next_epoch =
+            constants::EPOCH_LENGTH as u64 - self.relative_slot(self.current_slot());
+        ((n - 1) * constants::EPOCH_LENGTH as u64) + slots_till_next_epoch
     }
 
     /// Calculates seconds until next Nth epoch starting time.
@@ -420,7 +404,7 @@ impl ValidatorState {
         let eta = self.get_eta();
         // TODO: slot parameter should be absolute slot, not relative.
         // At start of epoch, relative slot is 0.
-        self.consensus.coins = self.create_epoch_coins(eta, epoch, 0).await?;
+        self.consensus.coins = self.create_epoch_coins(eta, epoch).await?;
         self.consensus.epoch = epoch;
         self.consensus.epoch_eta = eta;
         Ok(true)
@@ -435,11 +419,14 @@ impl ValidatorState {
         // Generate sigmas
         let total_stake = self.total_stake_plus(epoch, slot); // Only used for fine-tuning
 
-        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
-        let two = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
-        let field_p = Float10::from_str_native(P).unwrap().with_precision(RADIX_BITS).value();
+        let one = constants::FLOAT10_ONE.clone();
+        let two = constants::FLOAT10_TWO.clone();
+        let field_p = Float10::from_str_native(constants::P)
+            .unwrap()
+            .with_precision(constants::RADIX_BITS)
+            .value();
         let total_sigma =
-            Float10::try_from(total_stake).unwrap().with_precision(RADIX_BITS).value();
+            Float10::try_from(total_stake).unwrap().with_precision(constants::RADIX_BITS).value();
 
         let x = one - f;
         let c = x.ln();
@@ -457,7 +444,6 @@ impl ValidatorState {
         &self,
         eta: pallas::Base,
         epoch: u64,
-        slot: u64,
     ) -> Result<Vec<Vec<LeadCoin>>> {
         info!("Consensus: Creating coins for epoch: {}", epoch);
         self.create_coins(eta).await
@@ -469,26 +455,26 @@ impl ValidatorState {
         let slot = self.current_slot();
         let mut rng = thread_rng();
 
-        let mut seeds: Vec<u64> = Vec::with_capacity(EPOCH_LENGTH);
-        for _ in 0..EPOCH_LENGTH {
+        let mut seeds: Vec<u64> = Vec::with_capacity(constants::EPOCH_LENGTH);
+        for _ in 0..constants::EPOCH_LENGTH {
             seeds.push(rng.gen());
         }
 
         let epoch_secrets = LeadCoinSecrets::generate();
 
-        let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(EPOCH_LENGTH);
+        let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH);
         // LeadCoin matrix where each row represents a slot and contains its competing coins.
-        let mut coins: Vec<Vec<LeadCoin>> = Vec::with_capacity(EPOCH_LENGTH);
+        let mut coins: Vec<Vec<LeadCoin>> = Vec::with_capacity(constants::EPOCH_LENGTH);
 
         // TODO: TESTNET: Here we would look into the wallet to find coins we're able to use.
         //                The wallet has specific tables for consensus coins.
         // TODO: TESTNET: Token ID still has to be enforced properly in the consensus.
 
         // Temporarily, we compete with zero stake
-        for i in 0..EPOCH_LENGTH {
+        for i in 0..constants::EPOCH_LENGTH {
             let coin = LeadCoin::new(
                 eta,
-                LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
+                constants::LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
                 slot as u64,
                 epoch_secrets.secret_keys[i].inner(),
                 epoch_secrets.merkle_roots[i],
@@ -507,7 +493,7 @@ impl ValidatorState {
     /// leadership reward, assuming constant reward
     /// TODO (res) implement reward mechanism with accord to DRK,DARK token-economics
     fn reward() -> u64 {
-        REWARD
+        constants::REWARD
     }
 
     /// Auxillary function to receive current slot offset.
@@ -546,7 +532,8 @@ impl ValidatorState {
     /// total stake plus one.
     /// assuming constant Reward.
     fn total_stake_plus(&mut self, epoch: u64, slot: u64) -> u64 {
-        (epoch * EPOCH_LENGTH as u64 + slot + 1 - self.overall_empty_slots()) * Self::reward()
+        (epoch * constants::EPOCH_LENGTH as u64 + slot + 1 - self.overall_empty_slots()) *
+            Self::reward()
     }
 
     /// Calculate how many leaders existed in previous slot and appends
@@ -563,33 +550,36 @@ impl ValidatorState {
                 count += 1;
             }
         }
-        self.leaders_history.push(count);
-        debug!("extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
-        Float10::try_from(count).unwrap().with_precision(RADIX_BITS).value()
+        self.consensus.leaders_history.push(count);
+        debug!(
+            "extend_leaders_history(): Current leaders history: {:?}",
+            self.consensus.leaders_history
+        );
+        Float10::try_from(count).unwrap().with_precision(constants::RADIX_BITS).value()
     }
 
     fn f_dif(&mut self) -> Float10 {
-        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+        let one = constants::FLOAT10_ONE.clone();
         one - self.extend_leaders_history()
     }
 
     fn f_der(&self) -> Float10 {
-        let len = self.leaders_history.len();
-        let last = Float10::try_from(self.leaders_history[len - 1])
+        let len = self.consensus.leaders_history.len();
+        let last = Float10::try_from(self.consensus.leaders_history[len - 1])
             .unwrap()
-            .with_precision(RADIX_BITS)
+            .with_precision(constants::RADIX_BITS)
             .value();
-        let second_to_last = Float10::try_from(self.leaders_history[len - 2])
+        let second_to_last = Float10::try_from(self.consensus.leaders_history[len - 2])
             .unwrap()
-            .with_precision(RADIX_BITS)
+            .with_precision(constants::RADIX_BITS)
             .value();
-        (last - second_to_last) / self.Td.clone()
+        (last - second_to_last) / constants::TD.clone()
     }
 
     fn f_int(&self) -> Float10 {
-        let mut sum = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
-        for f in &self.leaders_history {
-            sum += f.clone() * self.Td.clone();
+        let mut sum = constants::FLOAT10_ZERO.clone();
+        for f in &self.consensus.leaders_history {
+            sum += f.clone() * constants::TD.clone();
         }
         sum
     }
@@ -597,23 +587,24 @@ impl ValidatorState {
     /// the probability of winnig lottery having all the stake
     /// returns f
     fn win_prob_with_full_stake(&mut self) -> Float10 {
-        let zero = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
-        let one = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+        let zero = constants::FLOAT10_ZERO.clone();
+        let one = constants::FLOAT10_ONE.clone();
         let mut f = zero.clone();
-        let step = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
+        let step =
+            Float10::from_str_native("0.1").unwrap().with_precision(constants::RADIX_BITS).value();
         let p = self.f_dif();
         let i = self.f_int();
         let d = self.f_der();
-        info!("Consensus::win_prob_with_full_stake(): Kp: {}", self.Kp.clone());
+        info!("Consensus::win_prob_with_full_stake(): Kp: {}", self.consensus.kp.clone());
         while f <= zero || f >= one {
-            f = self.Kp.clone() *
+            f = self.consensus.kp.clone() *
                 (p.clone() +
-                    one.clone() / self.Ti.clone() * i.clone() +
-                    self.Td.clone() * d.clone());
+                    one.clone() / constants::TI.clone() * i.clone() +
+                    constants::TD.clone() * d.clone());
             if f >= one {
-                self.Kp -= step.clone();
+                self.consensus.kp -= step.clone();
             } else if f <= zero {
-                self.Kp += step.clone();
+                self.consensus.kp += step.clone();
             }
             info!("Consensus::win_prob_with_full_stake(): f: {}", f);
         }
@@ -705,7 +696,7 @@ impl ValidatorState {
             eta.to_repr(),
             LeadProof::from(proof),
             self.get_current_offset(),
-            self.leaders_history.last().unwrap().clone(),
+            self.consensus.leaders_history.last().unwrap().clone(),
         );
         // Replacing old coin with the derived coin
         // TODO: do we need that? on next epoch we replace everything
@@ -838,30 +829,30 @@ impl ValidatorState {
         // verify proposal public values
         // mu values
         // y
-        let prop_mu_y = lf.public_inputs[PI_MU_Y_INDEX];
+        let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
         if mu_y != prop_mu_y {
             error!("failed to verify mu_y: {:?}, proposed: {:?}", mu_y, prop_mu_y);
             return Err(Error::ProposalPublicValuesMismatched)
         }
         // rho
-        let prop_mu_rho = lf.public_inputs[PI_MU_RHO_INDEX];
+        let prop_mu_rho = lf.public_inputs[constants::PI_MU_RHO_INDEX];
         if mu_rho != prop_mu_rho {
             error!("failed to verify mu_rho: {:?}, proposed: {:?}", mu_rho, prop_mu_rho);
             return Err(Error::ProposalPublicValuesMismatched)
         }
 
         // Verify proposal public inputs
-        let prop_sn = lf.public_inputs[PI_NULLIFIER_INDEX];
-        for sn in &self.leaders_nullifiers {
+        let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
+        for sn in &self.consensus.leaders_nullifiers {
             if *sn == prop_sn {
                 error!("receive_proposal(): Proposal nullifiers exist.");
                 return Err(Error::ProposalIsSpent)
             }
         }
-        let prop_cm_x: pallas::Base = lf.public_inputs[PI_COMMITMENT_X_INDEX];
-        let prop_cm_y: pallas::Base = lf.public_inputs[PI_COMMITMENT_Y_INDEX];
+        let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
+        let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];
 
-        for cm in &self.leaders_spent_coins {
+        for cm in &self.consensus.leaders_spent_coins {
             if *cm == (prop_cm_x, prop_cm_y) {
                 error!("receive_proposal(): Proposal coin already spent.");
                 return Err(Error::ProposalIsSpent)
@@ -896,8 +887,8 @@ impl ValidatorState {
         };
 
         // Store proposal coin info
-        self.leaders_nullifiers.push(prop_sn);
-        self.leaders_spent_coins.push((prop_cm_x, prop_cm_y));
+        self.consensus.leaders_nullifiers.push(prop_sn);
+        self.consensus.leaders_spent_coins.push((prop_cm_x, prop_cm_y));
 
         Ok(())
     }
@@ -988,14 +979,17 @@ impl ValidatorState {
                     self.consensus.proposals[index as usize].proposals.last().unwrap();
                 if last_proposal.block.header.slot == self.current_slot() {
                     // Replacing our last history element with the leaders one
-                    self.leaders_history.pop();
-                    self.leaders_history.push(last_proposal.block.lead_info.leaders);
-                    debug!("set_leader_history(): New leaders history: {:?}", self.leaders_history);
+                    self.consensus.leaders_history.pop();
+                    self.consensus.leaders_history.push(last_proposal.block.lead_info.leaders);
+                    debug!(
+                        "set_leader_history(): New leaders history: {:?}",
+                        self.consensus.leaders_history
+                    );
                     return
                 }
             }
         }
-        self.leaders_history.push(0);
+        self.consensus.leaders_history.push(0);
     }
 
     /// Node checks if any of the fork chains can be finalized.
@@ -1071,7 +1065,7 @@ impl ValidatorState {
 
         // Adding finalized proposals to canonical
         info!("consensus: Adding {} finalized block to canonical chain.", finalized.len());
-        let blockhashes = match self.blockchain.add(&finalized) {
+        match self.blockchain.add(&finalized) {
             Ok(v) => v,
             Err(e) => {
                 error!("consensus: Failed appending finalized blocks to canonical chain: {}", e);
@@ -1093,7 +1087,8 @@ impl ValidatorState {
         }
 
         // Setting leaders history to last proposal leaders count
-        self.leaders_history = vec![chain.proposals.last().unwrap().block.lead_info.leaders];
+        self.consensus.leaders_history =
+            vec![chain.proposals.last().unwrap().block.lead_info.leaders];
 
         // Removing rest forks
         self.consensus.proposals = vec![];
