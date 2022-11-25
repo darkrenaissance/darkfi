@@ -1077,6 +1077,8 @@ impl ValidatorState {
             }
         };
 
+        let blocks_subscriber = self.subscribers.get("blocks").unwrap();
+
         // Validating state transitions
         for proposal in &finalized {
             // TODO: Is this the right place? We're already doing this in protocol_sync.
@@ -1088,6 +1090,12 @@ impl ValidatorState {
                 error!(target: "consensus", "Finalized block transaction verifications failed: {}", e);
                 return Err(e)
             }
+
+            // TODO: Don't hardcode this:
+            let params = json!([bs58::encode(&serialize(proposal)).into_string()]);
+            let notif = JsonNotification::new("blockchain.subscribe_blocks", params);
+            info!("consensus: Sending notification about finalized block");
+            blocks_subscriber.notify(notif).await;
         }
 
         // Setting leaders history to last proposal leaders count
@@ -1165,6 +1173,7 @@ impl ValidatorState {
         let blocks_subscriber = self.subscribers.get("blocks").unwrap();
         let params = json!([bs58::encode(&serialize(&block)).into_string()]);
         let notif = JsonNotification::new("blockchain.subscribe_blocks", params);
+        info!("consensus: Sending notification about finalized block");
         blocks_subscriber.notify(notif).await;
 
         debug!("receive_finalized_block(): Removing block transactions from unconfirmed_txs");
@@ -1206,6 +1215,7 @@ impl ValidatorState {
         for block in new_blocks {
             let params = json!([bs58::encode(&serialize(&block)).into_string()]);
             let notif = JsonNotification::new("blockchain.subscribe_blocks", params);
+            info!("consensus: Sending notification about finalized block");
             blocks_subscriber.notify(notif).await;
         }
 
