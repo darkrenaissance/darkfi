@@ -478,7 +478,7 @@ impl ValidatorState {
         for i in 0..constants::EPOCH_LENGTH {
             let coin = LeadCoin::new(
                 eta,
-                LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
+                constants::LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
                 slot+i as u64,
                 epoch_secrets.secret_keys[i].inner(),
                 epoch_secrets.merkle_roots[i],
@@ -846,7 +846,6 @@ impl ValidatorState {
             error!("failed to verify mu_rho: {:?}, proposed: {:?}", mu_rho, prop_mu_rho);
             return Err(Error::ProposalPublicValuesMismatched)
         }
-
 
         // Verify proposal public inputs
         let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
