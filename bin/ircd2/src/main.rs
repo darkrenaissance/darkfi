@@ -123,7 +123,10 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let rpc_listen_addr = settings.rpc_listen.clone();
     let rpc_interface =
         Arc::new(JsonRpcInterface { addr: rpc_listen_addr.clone(), p2p: p2p.clone() });
-    executor.spawn(async move { listen_and_serve(rpc_listen_addr, rpc_interface).await }).detach();
+    let _ex = executor.clone();
+    executor
+        .spawn(async move { listen_and_serve(rpc_listen_addr, rpc_interface, _ex).await })
+        .detach();
 
     ////////////////////
     // IRC server

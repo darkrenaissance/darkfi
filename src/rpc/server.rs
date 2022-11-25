@@ -117,10 +117,17 @@ async fn accept(
 async fn run_accept_loop(
     listener: Box<dyn TransportListener>,
     rh: Arc<impl RequestHandler + 'static>,
+    ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
     while let Ok((stream, peer_addr)) = listener.next().await {
         info!("JSON-RPC server accepted connection from {}", peer_addr);
-        accept(stream, peer_addr, rh.clone()).await?;
+        // Detaching requests handling
+        let _rh = rh.clone();
+        ex.spawn(async move {
+            if let Err(e) = accept(stream, peer_addr.clone(), _rh).await {
+                error!(target: "jsonrpc-server", "JSON-RPC server error on handling request of {}: {}", peer_addr, e);
+            }
+        }).detach();
     }
 
     Ok(())
@@ -131,6 +138,7 @@ async fn run_accept_loop(
 pub async fn listen_and_serve(
     accept_url: Url,
     rh: Arc<impl RequestHandler + 'static>,
+    ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
     debug!(target: "jsonrpc-server", "Trying to bind listener on {}", accept_url);
 
@@ -151,12 +159,12 @@ pub async fn listen_and_serve(
             match $upgrade {
                 None => {
                     info!("JSON-RPC listener bound to {}", accept_url);
-                    run_accept_loop(Box::new(listener), rh).await?;
+                    run_accept_loop(Box::new(listener), rh, ex.clone()).await?;
                 }
                 Some(u) if u == "tls" => {
                     let tls_listener = $transport.upgrade_listener(listener)?.await?;
                     info!("JSON-RPC listener bound to {}", accept_url);
-                    run_accept_loop(Box::new(tls_listener), rh).await?;
+                    run_accept_loop(Box::new(tls_listener), rh, ex.clone()).await?;
                 }
                 Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
             }
@@ -189,7 +197,7 @@ pub async fn listen_and_serve(
                 error!("JSON-RPC Unix socket bind to {} failed: {}", accept_url, err);
                 return Err(Error::BindFailed(accept_url.as_str().into()))
             }
-            run_accept_loop(Box::new(listener?), rh).await?;
+            run_accept_loop(Box::new(listener?), rh, ex.clone()).await?;
         }
         _ => unimplemented!(),
     }

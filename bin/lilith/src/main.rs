@@ -342,10 +342,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    ex.spawn(listen_and_serve(args.rpc_listen, lilith.clone())).detach();
+    let _ex = ex.clone();
+    ex.spawn(listen_and_serve(args.rpc_listen, lilith.clone(), _ex)).detach();
 
     // JSON-RPC notifications simulation
-    let _ex = ex.clone();
     ex.spawn(simulate_blocks(subscriber)).detach();
 
     // Wait for SIGINT

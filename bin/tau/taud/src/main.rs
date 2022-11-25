@@ -276,7 +276,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         workspaces.clone(),
         p2p.clone(),
     ));
-    executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface)).detach();
+    let _ex = executor.clone();
+    executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface, _ex)).detach();
 
     //
     // Waiting Exit signal

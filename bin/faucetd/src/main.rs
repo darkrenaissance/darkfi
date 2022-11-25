@@ -611,7 +611,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    ex.spawn(listen_and_serve(args.rpc_listen, faucetd.clone())).detach();
+    let _ex = ex.clone();
+    ex.spawn(listen_and_serve(args.rpc_listen, faucetd.clone(), _ex)).detach();
 
     info!("Starting sync P2P network");
     sync_p2p.clone().start(ex.clone()).await?;
