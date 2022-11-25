@@ -61,9 +61,7 @@ pub struct LeadCoin {
     pub coin2_commitment: pallas::Point,
     /// Coin index
     pub idx: u32,
-    /// Coin slot ID,
-    pub sl: pallas::Base,
-    /// Coin timestamp
+    /// Coin timestamp as slot index.
     pub tau: pallas::Base,
     /// Coin nonce
     pub nonce: pallas::Base,
@@ -154,7 +152,6 @@ impl LeadCoin {
             coin2_commitment,
             // TODO: Should be abs slot
             idx: u32::try_from(usize::from(leaf_pos)).unwrap(),
-            sl: pallas::Base::from(slot_index),
             // Assume tau is sl for simplicity
             tau,
             nonce: pallas::Base::from(seed),

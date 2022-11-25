@@ -847,6 +847,7 @@ impl ValidatorState {
             return Err(Error::ProposalPublicValuesMismatched)
         }
 
+
         // Verify proposal public inputs
         let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
         for sn in &self.consensus.leaders_nullifiers {
