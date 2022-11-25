@@ -129,7 +129,6 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
             // Add a Merkle tree to the info db:
             let coin_tree = MerkleTree::new(100);
             let mut coin_tree_data = vec![];
-            // TODO: FIXME: What is this write_u32 doing here?
             coin_tree_data.write_u32(0)?;
             coin_tree.encode(&mut coin_tree_data)?;
 

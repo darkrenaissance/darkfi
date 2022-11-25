@@ -1751,6 +1751,7 @@ dependencies = [
  "async-std",
  "clap 4.0.25",
  "darkfi",
+ "darkfi-money-contract",
  "darkfi-sdk",
  "darkfi-serial",
  "libsqlite3-sys",

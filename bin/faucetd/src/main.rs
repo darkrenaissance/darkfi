@@ -32,13 +32,10 @@ use darkfi_money_contract::{
         build_transfer_tx, MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET,
         MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
-    ZKAS_BURN_NS, ZKAS_MINT_NS,
+    MoneyFunction, ZKAS_BURN_NS, ZKAS_MINT_NS,
 };
 use darkfi_sdk::{
-    crypto::{
-        constants::MERKLE_DEPTH, schnorr::SchnorrSecret, ContractId, Keypair, MerkleNode,
-        PublicKey, TokenId,
-    },
+    crypto::{constants::MERKLE_DEPTH, ContractId, Keypair, MerkleNode, PublicKey, TokenId},
     db::ZKAS_DB_NAME,
     incrementalmerkletree::bridgetree::BridgeTree,
     pasta::{group::ff::PrimeField, pallas},
@@ -167,7 +164,7 @@ struct Args {
 pub struct Faucetd {
     synced: Mutex<bool>, // AtomicBool is weird in Arc
     sync_p2p: P2pPtr,
-    _validator_state: ValidatorStatePtr,
+    validator_state: ValidatorStatePtr,
     keypair: Keypair,
     _wallet: WalletPtr,
     merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
@@ -255,7 +252,7 @@ impl Faucetd {
         let faucetd = Self {
             synced: Mutex::new(false),
             sync_p2p,
-            _validator_state: validator_state,
+            validator_state,
             keypair,
             _wallet: wallet,
             merkle_tree,
@@ -451,18 +448,21 @@ impl Faucetd {
         };
 
         // Build transaction
-        let calls = vec![ContractCall { contract_id: cid, data: serialize(&params) }];
+        let mut data = vec![MoneyFunction::Transfer as u8];
+        params.encode(&mut data).unwrap();
+        let calls = vec![ContractCall { contract_id: cid, data }];
         let proofs = vec![proofs];
-        let mut signatures = vec![];
-        let mut encoded_tx = vec![];
-        calls.encode(&mut encoded_tx).unwrap();
-        proofs.encode(&mut encoded_tx).unwrap();
-        for secret in secret_keys {
-            let signature = secret.sign(&mut OsRng, &encoded_tx);
-            signatures.push(signature);
-        }
+        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = tx.create_sigs(&mut OsRng, &secret_keys).unwrap();
+        tx.signatures = vec![sigs];
 
-        let tx = Transaction { calls, proofs, signatures: vec![signatures] };
+        // Safety check to see if the transaction is actually valid.
+        if let Err(e) =
+            self.validator_state.read().await.verify_transactions(&[tx.clone()], false).await
+        {
+            error!("airdrop(): Failed to verify transaction before broadcasting: {}", e);
+            return JsonError::new(InternalError, None, id).into()
+        }
 
         // Broadcast transaction to the network.
         if let Err(e) = self.sync_p2p.broadcast(tx.clone()).await {

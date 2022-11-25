@@ -20,6 +20,11 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, util::parse::encode_base10, wallet::walletdb::QueryType};
+use darkfi_money_contract::client::{
+    MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_VALUE, MONEY_COINS_TABLE,
+    MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE,
+    MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+};
 use darkfi_sdk::{
     crypto::{constants::MERKLE_DEPTH, Keypair, MerkleNode, PublicKey, TokenId},
     incrementalmerkletree::bridgetree::BridgeTree,
@@ -30,40 +35,6 @@ use rand::rngs::OsRng;
 use serde_json::json;
 
 use super::Drk;
-
-// TODO: FIXME:
-// Find a way to have these constants be deterministic for the actual
-// contract. e.g. they could be prefixed with the contract_id in order
-// not to have collisions happen. This is because right now it's easy
-// to overwrite any table in the wallet if the developer doesn't take
-// care of it. The wallet's SQL schema comes from the money contract
-// and here we just hardcode it. There should be a nice way to parse
-// the schema and fill some map.
-//const MONEY_INFO_TABLE: &str = "money_info";
-//const MONEY_INFO_COL_LAST_SCANNED_SLOT: &str = "last_scanned_slot";
-
-const MONEY_TREE_TABLE: &str = "money_tree";
-const MONEY_TREE_COL_TREE: &str = "tree";
-
-const MONEY_KEYS_TABLE: &str = "money_keys";
-//const MONEY_KEYS_COL_KEY_ID: &str = "key_id";
-const MONEY_KEYS_COL_IS_DEFAULT: &str = "is_default";
-const MONEY_KEYS_COL_PUBLIC: &str = "public";
-const MONEY_KEYS_COL_SECRET: &str = "secret";
-
-const MONEY_COINS_TABLE: &str = "money_coins";
-//const MONEY_COINS_COL_COIN: &str = "coin";
-const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
-//const MONEY_COINS_COL_SERIAL: &str = "serial";
-const MONEY_COINS_COL_VALUE: &str = "value";
-const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
-//const MONEY_COINS_COL_COIN_BLIND: &str = "coin_blind";
-//const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
-//const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
-//const MONEY_COINS_COL_SECRET: &str = "secret";
-//const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
-//const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
-//const MONEY_COINS_COL_MEMO: &str = "memo";
 
 impl Drk {
     /// Initialize wallet with tables for the Money contract.
