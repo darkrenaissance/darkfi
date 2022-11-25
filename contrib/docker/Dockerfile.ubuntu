@@ -20,6 +20,8 @@ RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_V
 
 ENV PATH="/root/.cargo/bin:${PATH}"
 
+RUN rustup target add wasm32-unknown-unknown
+
 RUN cargo search whatever  # creates .cargo cache
 
 # 2. stage
