@@ -143,7 +143,7 @@ impl Drk {
         } else {
             format!(
                 "SELECT * FROM {} WHERE {} = {}",
-                MONEY_COINS_TABLE, MONEY_COINS_COL_IS_SPENT, 0
+                MONEY_COINS_TABLE, MONEY_COINS_COL_IS_SPENT, false,
             )
         };
 
@@ -193,7 +193,8 @@ impl Drk {
             let coin_bytes: Vec<u8> = serde_json::from_value(row[0].clone())?;
             let coin: Coin = deserialize(&coin_bytes)?;
 
-            let is_spent: bool = serde_json::from_value(row[1].clone())?;
+            let is_spent: u64 = serde_json::from_value(row[1].clone())?;
+            let is_spent = if is_spent > 0 { true } else { false };
 
             let serial_bytes: Vec<u8> = serde_json::from_value(row[2].clone())?;
             let serial: pallas::Base = deserialize(&serial_bytes)?;
