@@ -5,7 +5,7 @@ Start the nodes
 
 ```
 $ ../../../faucetd -c ./faucetd.config -v
-$ ../../../darkfid -v ./darkfid.config -v
+$ ../../../darkfid -c ./darkfid.config -v
 ```
 
 Wait for them to start up, then initialize wallet:
