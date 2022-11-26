@@ -108,7 +108,7 @@ impl ConsensusState {
             leaders_nullifiers: vec![],
             leaders_spent_coins: vec![],
             leaders_history: vec![0],
-            kp: constants::FLOAT10_THREE.clone() / constants::FLOAT10_NINE.clone(),
+            kp: constants::FLOAT10_TWO.clone() / constants::FLOAT10_NINE.clone(),
         })
     }
 }
@@ -594,24 +594,32 @@ impl ValidatorState {
         let zero = constants::FLOAT10_ZERO.clone();
         let one = constants::FLOAT10_ONE.clone();
         let mut f = zero.clone();
-        let step =
-            Float10::from_str_native("0.1").unwrap().with_precision(constants::RADIX_BITS).value();
         let p = self.f_dif();
         let i = self.f_int();
         let d = self.f_der();
-        info!("Consensus::win_prob_with_full_stake(): Kp: {}", self.consensus.kp.clone());
-        while f <= zero || f >= one {
-            f = self.consensus.kp.clone() *
-                (p.clone() +
-                    one.clone() / constants::TI.clone() * i.clone() +
-                    constants::TD.clone() * d.clone());
-            if f >= one {
-                self.consensus.kp -= step.clone();
-            } else if f <= zero {
-                self.consensus.kp += step.clone();
+        f = self.consensus.kp.clone() *
+            (p.clone() +
+             one.clone() / constants::TI.clone() * i.clone() +
+             constants::TD.clone() * d.clone());
+        while f<=zero.clone() || f >=one.clone() {
+            let mut clipped_f = f;
+            while clipped_f <= zero.clone() || clipped_f >= one.clone() {
+                if clipped_f>=one.clone() {
+                    clipped_f -=one.clone();
+                } else if clipped_f<=zero.clone() {
+                    clipped_f +=one.clone();
+                }
             }
+            let clipped_kp = clipped_f/(p.clone() +
+                                        one.clone() / constants::TI.clone() * i.clone() +
+                                        constants::TD.clone() * d.clone());
+            self.consensus.kp = clipped_kp.clone();
+            f = clipped_kp * (p.clone() +
+                              one.clone() / constants::TI.clone() * i.clone() +
+                              constants::TD.clone() * d.clone());
             info!("Consensus::win_prob_with_full_stake(): f: {}", f);
         }
+        info!("Consensus::win_prob_with_full_stake(): last f: {}", f);
         f
     }
 
