@@ -89,9 +89,9 @@ pub struct ConsensusState {
     pub leaders_history: Vec<u64>,
     /// Kp
     pub kp: Float10,
-    /// previous slot sigma1
+    /// Previous slot sigma1
     pub prev_sigma1: pallas::Base,
-    /// previous slot sigma2
+    /// Previous slot sigma2
     pub prev_sigma2: pallas::Base,
 }
 
@@ -787,11 +787,6 @@ impl ValidatorState {
     /// it extends. If the proposal extends the canonical blockchain, a new fork chain is created.
     pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<()> {
         let current = self.current_slot();
-        let coin_slot = &proposal.block.header.slot;
-        let eta = self.consensus.epoch_eta;
-        info!("Consensus::receive_proposal(): current slot: {}", current);
-        info!("Consensus::receive_proposal(): proposed slot: {}", coin_slot);
-        let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(eta, *coin_slot);
         // Node hasn't started participating
         match self.consensus.participating {
             Some(start) => {
@@ -855,27 +850,32 @@ impl ValidatorState {
         };
         info!("receive_proposal(): Leader proof verified successfully!");
 
-        // verify proposal public values
-        // mu values
+        // Verify proposal public values
+        let (mu_y, mu_rho) =
+            LeadCoin::election_seeds_u64(self.consensus.epoch_eta, proposal.block.header.slot);
         // y
         let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
         if mu_y != prop_mu_y {
-            error!("failed to verify mu_y: {:?}, proposed: {:?}", mu_y, prop_mu_y);
+            error!(
+                "receive_proposal(): Failed to verify mu_y: {:?}, proposed: {:?}",
+                mu_y, prop_mu_y
+            );
             return Err(Error::ProposalPublicValuesMismatched)
         }
         // rho
         let prop_mu_rho = lf.public_inputs[constants::PI_MU_RHO_INDEX];
         if mu_rho != prop_mu_rho {
-            error!("failed to verify mu_rho: {:?}, proposed: {:?}", mu_rho, prop_mu_rho);
+            error!(
+                "receive_proposal(): Failed to verify mu_rho: {:?}, proposed: {:?}",
+                mu_rho, prop_mu_rho
+            );
             return Err(Error::ProposalPublicValuesMismatched)
         }
-
-        // sigmas
         // sigma1
         let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
         if self.consensus.prev_sigma1 != prop_sigma1 {
             error!(
-                "failed to verify public value sigma1: {:?}, to proposed: {:?}",
+                "receive_proposal(): Failed to verify public value sigma1: {:?}, to proposed: {:?}",
                 self.consensus.prev_sigma1, prop_sigma1
             );
         }
@@ -883,11 +883,11 @@ impl ValidatorState {
         let prop_sigma2 = lf.public_inputs[constants::PI_SIGMA2_INDEX];
         if self.consensus.prev_sigma2 != prop_sigma2 {
             error!(
-                "failed to verify public value sigma2: {:?}, to proposed: {:?}",
+                "receive_proposal(): Failed to verify public value sigma2: {:?}, to proposed: {:?}",
                 self.consensus.prev_sigma2, prop_sigma2
             );
         }
-        // Verify proposal public inputs
+        // sn
         let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
         for sn in &self.consensus.leaders_nullifiers {
             if *sn == prop_sn {
@@ -895,9 +895,9 @@ impl ValidatorState {
                 return Err(Error::ProposalIsSpent)
             }
         }
+        // cm
         let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
         let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];
-
         for cm in &self.consensus.leaders_spent_coins {
             if *cm == (prop_cm_x, prop_cm_y) {
                 error!("receive_proposal(): Proposal coin already spent.");

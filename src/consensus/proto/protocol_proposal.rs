@@ -81,12 +81,13 @@ impl ProtocolProposal {
             let proposal_copy = (*proposal).clone();
 
             // Verify we have the proposal already
-            if self.state.read().await.proposal_exists(&proposal_copy.hash) {
+            let mut lock = self.state.write().await;
+            if lock.proposal_exists(&proposal_copy.hash) {
                 debug!("ProtocolProposal::handle_receive_proposal(): Proposal already received.");
                 continue
             }
 
-            if let Err(e) = self.state.write().await.receive_proposal(&proposal_copy).await {
+            if let Err(e) = lock.receive_proposal(&proposal_copy).await {
                 error!(
                     "ProtocolProposal::handle_receive_proposal(): receive_proposal error: {}",
                     e
