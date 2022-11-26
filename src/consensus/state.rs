@@ -676,15 +676,14 @@ impl ValidatorState {
 
         // TODO: [PLACEHOLDER] Create and add rewards transaction
 
-        let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
-        /* TODO: FIXME: TESTNET:
+        let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        // The following is pretty weird, so something better should be done.
         for tx in &unproposed_txs {
-            for output in &tx.outputs {
-                tree.append(&MerkleNode::from(output.revealed.coin.0));
-                tree.witness();
-            }
+            let mut hash = [0_u8; 32];
+            hash[0..31].copy_from_slice(&blake3::hash(&serialize(tx)).as_bytes()[0..31]);
+            tree.append(&MerkleNode::from(pallas::Base::from_repr(hash).unwrap()));
         }
-        */
+
         let root = tree.root(0).unwrap();
 
         let eta = self.consensus.epoch_eta;
