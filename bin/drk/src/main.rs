@@ -23,9 +23,14 @@ use std::{
     time::Instant,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
-use darkfi_sdk::crypto::{PublicKey, TokenId};
+use darkfi::tx::Transaction;
+use darkfi_money_contract::client::Coin;
+use darkfi_sdk::{
+    crypto::{PublicKey, TokenId},
+    pasta::{group::ff::PrimeField, pallas},
+};
 use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
@@ -94,6 +99,16 @@ enum Subcmd {
         #[arg(long)]
         /// Print the Merkle tree in the wallet
         tree: bool,
+
+        #[arg(long)]
+        /// Print all the coins in the wallet
+        coins: bool,
+    },
+
+    /// Unspend a coin
+    Unspend {
+        /// base58-encoded coin to mark as unspent
+        coin: String,
     },
 
     /// Airdrop some tokens
@@ -123,6 +138,9 @@ enum Subcmd {
         /// Recipient address
         recipient: String,
     },
+
+    /// Inspect a transaction from stdin
+    Inspect,
 
     /// Read a transaction from stdin and broadcast it
     Broadcast,
@@ -173,8 +191,8 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Wallet { initialize, keygen, balance, address, secrets, tree } => {
-            if !initialize && !keygen && !balance && !address && !secrets && !tree {
+        Subcmd::Wallet { initialize, keygen, balance, address, secrets, tree, coins } => {
+            if !initialize && !keygen && !balance && !address && !secrets && !tree && !coins {
                 eprintln!("Error: You must use at least one flag for this subcommand");
                 eprintln!("Run with \"wallet -h\" to see the subcommand usage.");
                 exit(2);
@@ -234,7 +252,47 @@ async fn main() -> Result<()> {
                 return Ok(())
             }
 
+            if coins {
+                let coins = drk
+                    .wallet_coins(true)
+                    .await
+                    .with_context(|| "Failed to fetch coins from wallet")?;
+
+                drk.rpc_client.close().await?;
+
+                for i in coins {
+                    print!("{} ", bs58::encode(i.0.coin.inner().to_repr()).into_string());
+                    if i.1 {
+                        println!("(spent)");
+                    } else {
+                        println!("(unspent)");
+                    }
+                }
+
+                return Ok(())
+            }
+
             unreachable!()
+        }
+
+        Subcmd::Unspend { coin } => {
+            let bytes: [u8; 32] = bs58::decode(&coin).into_vec()?.try_into().unwrap();
+
+            let elem: pallas::Base = match pallas::Base::from_repr(bytes).into() {
+                Some(v) => v,
+                None => return Err(anyhow!("Invalid coin")),
+            };
+
+            let coin = Coin::from(elem);
+
+            let rpc_client = RpcClient::new(args.endpoint)
+                .await
+                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+            let drk = Drk { rpc_client };
+            drk.unspend_coin(&coin).await.with_context(|| "Failed to mark coin as unspent")?;
+
+            return Ok(())
         }
 
         Subcmd::Airdrop { faucet_endpoint, amount, token, address } => {
@@ -284,12 +342,24 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
+        Subcmd::Inspect => {
+            let mut buf = String::new();
+            stdin().read_to_string(&mut buf)?;
+
+            let bytes = bs58::decode(&buf.trim()).into_vec()?;
+            let tx: Transaction = deserialize(&bytes)?;
+
+            println!("{:#?}", tx);
+
+            Ok(())
+        }
+
         Subcmd::Broadcast => {
             eprintln!("Reading transaction from stdin...");
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
 
-            let bytes = bs58::decode(&buf).into_vec()?;
+            let bytes = bs58::decode(&buf.trim()).into_vec()?;
             let tx = deserialize(&bytes)?;
 
             let rpc_client = RpcClient::new(args.endpoint)

@@ -34,7 +34,7 @@ use darkfi_money_contract::{
         MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
         MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
         MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_VALUE,
-        MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+        MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE,
     },
     state::{MoneyTransferParams, Output},
     MoneyFunction,
@@ -178,11 +178,7 @@ impl Drk {
         }
 
         eprintln!("Serializing the Merkle tree into the wallet");
-        let query =
-            format!("INSERT INTO {} ({}) VALUES (?1)", MONEY_TREE_TABLE, MONEY_TREE_COL_TREE);
-        let params = json!([query, QueryType::Blob as u8, serialize(&tree)]);
-        let req = JsonRequest::new("wallet.exec_sql", params);
-        self.rpc_client.request(req).await?;
+        self.put_tree(&tree).await?;
         eprintln!("Merkle tree written successfully");
 
         // This is the SQL query we'll be executing to insert coins into the wallet

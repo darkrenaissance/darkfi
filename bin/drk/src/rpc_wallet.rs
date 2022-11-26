@@ -80,14 +80,7 @@ impl Drk {
         if tree_needs_init {
             println!("Initializing Merkle tree");
             let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
-            let tree_bytes = serialize(&tree);
-            let query = format!(
-                "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1);",
-                MONEY_TREE_TABLE, MONEY_TREE_TABLE, MONEY_TREE_COL_TREE
-            );
-            let params = json!([query, QueryType::Blob as u8, tree_bytes]);
-            let req = JsonRequest::new("wallet.exec_sql", params);
-            let _ = self.rpc_client.request(req).await?;
+            self.put_tree(&tree).await?;
             println!("Successfully initialized Merkle tree");
         }
 
@@ -384,6 +377,41 @@ impl Drk {
             serialize(&coin.inner())
         ]);
 
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let _ = self.rpc_client.request(req).await?;
+
+        Ok(())
+    }
+
+    /// Mark a given coin in the wallet as unspent
+    pub async fn unspend_coin(&self, coin: &Coin) -> Result<()> {
+        let query = format!(
+            "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
+            MONEY_COINS_TABLE, MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_COIN
+        );
+
+        let params = json!([
+            query,
+            QueryType::Integer as u8,
+            0,
+            QueryType::Blob as u8,
+            serialize(&coin.inner())
+        ]);
+
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let _ = self.rpc_client.request(req).await?;
+
+        Ok(())
+    }
+
+    /// Replace the Merkle tree in the wallet
+    pub async fn put_tree(&self, tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>) -> Result<()> {
+        let query = format!(
+            "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1);",
+            MONEY_TREE_TABLE, MONEY_TREE_TABLE, MONEY_TREE_COL_TREE
+        );
+
+        let params = json!([query, QueryType::Blob as u8, serialize(tree)]);
         let req = JsonRequest::new("wallet.exec_sql", params);
         let _ = self.rpc_client.request(req).await?;
 
