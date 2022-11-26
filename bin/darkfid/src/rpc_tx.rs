@@ -107,22 +107,28 @@ impl Darkfid {
             }
         };
 
-        // Simulate state transition
-        if let Err(e) =
-            self.validator_state.read().await.verify_transactions(&[tx.clone()], false).await
-        {
-            error!("[RPC] tx.broadcast: Failed to validate state transition: {}", e);
-            return server_error(RpcError::TxSimulationFail, id, None)
-        };
+        if self.consensus_p2p.is_some() {
+            // Consider we're participating in consensus here?
+            // The append_tx function performs a state transition check.
+            if !self.validator_state.write().await.append_tx(tx.clone()).await {
+                error!("[RPC] tx.broadcast: Failed to append transaction to mempool");
+                return server_error(RpcError::TxBroadcastFail, id, None)
+            }
+        } else {
+            // We'll perform the state transition check here.
+            if let Err(e) =
+                self.validator_state.read().await.verify_transactions(&[tx.clone()], false).await
+            {
+                error!("[RPC] tx.broadcast: Failed to validate state transition: {}", e);
+                return server_error(RpcError::TxSimulationFail, id, None)
+            };
+        }
 
-        // TODO: Should we apply the state transition locally before broadcasting it?
         if let Some(sync_p2p) = &self.sync_p2p {
             if let Err(e) = sync_p2p.broadcast(tx.clone()).await {
                 error!("[RPC] tx.broadcast: Failed broadcasting transaction: {}", e);
                 return server_error(RpcError::TxBroadcastFail, id, None)
             }
-
-            // TODO: Mark coin as spent in the wallet
         } else {
             warn!("[RPC] tx.broadcast: No sync P2P network, not broadcasting transaction.");
             return server_error(RpcError::TxBroadcastFail, id, None)
