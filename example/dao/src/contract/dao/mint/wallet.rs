@@ -33,23 +33,38 @@ use crate::{
 
 #[derive(Clone)]
 pub struct DaoParams {
+    // Number of governance tokens that holder must possess in order to propose a new vote.
     pub proposer_limit: u64,
+    // Number of minimum votes that must be met for a proposal to pass.
     pub quorum: u64,
+    // Ratio of winning to total votes for a proposal to pass.Ex- YES_VOTES_COUNT/(YES_VOTES_COUNT+NO_VOTES_COUNT) ???
     pub approval_ratio_quot: u64,
+    // Ratio of winning to total votes for a proposal to pass. NO_VOTES_COUNT/(YES_VOTES_COUNT+NO_VOTES_COUNT) ???
     pub approval_ratio_base: u64,
+    // Governance Token ID ???
     pub gov_token_id: TokenId,
+    // Public key of the DAO for permissioned access.
     pub public_key: PublicKey,
+    // Blinding factor for the DAO bulla.
     pub bulla_blind: pallas::Base,
 }
 
 pub struct Builder {
+    // Number of governance tokens that holder must possess in order to propose a new vote.
     pub dao_proposer_limit: u64,
+    // Number of minimum votes that must be met for a proposal to pass.
     pub dao_quorum: u64,
+    // Ratio of winning to total votes for a proposal to pass.Ex- YES_VOTES_COUNT/(YES_VOTES_COUNT+NO_VOTES_COUNT) ???
     pub dao_approval_ratio_quot: u64,
+    // Ratio of winning to total votes for a proposal to pass. NO_VOTES_COUNT/(YES_VOTES_COUNT+NO_VOTES_COUNT) ???
     pub dao_approval_ratio_base: u64,
+    // Governance Token ID 
     pub gov_token_id: TokenId,
+    // Public key of the DAO for permissioned access.
     pub dao_pubkey: PublicKey,
+    // Blinding factor for the DAO bulla.
     pub dao_bulla_blind: pallas::Base,
+    // signature_secret 
     pub _signature_secret: SecretKey,
 }
 

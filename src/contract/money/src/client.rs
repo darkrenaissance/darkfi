@@ -448,9 +448,12 @@ fn create_transfer_burn_proof(
 /// * `keypair` - Caller's keypair
 /// * `pubkey` - Public key of the recipient
 /// * `value` - Value of the transfer
+/// * `token_id` - Token id of the Coin
 /// * `coins` - Set of coins we're able to spend
 /// * `tree` - Current Merkle tree of coins
+/// * `mint_zkbin` - Mint ZK binary
 /// * `mint_pk` - Proving key for the ZK mint proof
+/// * `burn_zkbin` - Burn ZK binary
 /// * `burn_pk` - Proving key for the ZK burn proof
 /// * `clear_input` - Marks if we're creating clear or anonymous inputs
 pub fn build_transfer_tx(
@@ -487,6 +490,8 @@ pub fn build_transfer_tx(
         let input =
             TransactionBuilderClearInputInfo { value, token_id, signature_secret: keypair.secret };
         clear_inputs.push(input);
+
+        // HERE WE ARE NOT CHECKING FOR inputs_value >= value & ADDING SPENT_COINS ??
     } else {
         debug!("Money::build_transfer_tx(): Building anonymous inputs");
         let mut inputs_value = 0;
@@ -517,6 +522,7 @@ pub fn build_transfer_tx(
             return Err(ClientFailed::NotEnoughValue(inputs_value).into())
         }
 
+        // add the leftover value to outputs inorder to mint us a new coin 
         if inputs_value > value {
             let return_value = inputs_value - value;
             outputs.push(TransactionBuilderOutputInfo {
@@ -638,7 +644,6 @@ pub fn build_transfer_tx(
 
         zk_proofs.push(proof);
 
-        // Encrypted note
         let note = Note {
             serial,
             value: output.value,
@@ -650,7 +655,7 @@ pub fn build_transfer_tx(
             //       VecDeque and then pop front to add here.
             memo: vec![],
         };
-
+        // Encrypted note
         let encrypted_note = note.encrypt(&output.public_key)?;
 
         params.outputs.push(Output {

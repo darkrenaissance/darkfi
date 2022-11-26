@@ -34,6 +34,7 @@ pub mod validate;
 ///   propose a new vote.
 /// * `quorum` - Number of minimum votes that must be met for a proposal to pass.
 /// * `approval_ratio` - Ratio of winning to total votes for a proposal to pass.
+/// * `gov_token_id` - Governance Token ID
 /// * `dao_pubkey` - Public key of the DAO for permissioned access. This can also be
 ///   shared publicly if you want a full decentralized DAO.
 /// * `dao_blind` - Blinding factor for the DAO bulla.
@@ -57,6 +58,7 @@ pub mod validate;
 /// ```
 pub mod wallet;
 
+// FUNCTION_ID for mint smart contract function 
 lazy_static! {
     pub static ref FUNC_ID: pallas::Base = pallas::Base::random(&mut OsRng);
 }

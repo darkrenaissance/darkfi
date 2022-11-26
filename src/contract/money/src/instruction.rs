@@ -1,3 +1,5 @@
+
+
 /* This file is part of DarkFi (https://dark.fi)
  *
  * Copyright (C) 2020-2022 Dyne.org foundation
@@ -16,24 +18,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use lazy_static::lazy_static;
-use pasta_curves::{group::ff::Field, pallas};
-use rand::rngs::OsRng;
 
-// mint() - smart contract function 
-pub mod mint;
-// propose() - smart contract function
-pub mod propose;
-// vote() - smart contract function
-pub mod vote;
-// exec{}
-pub mod exec;
+/// Functions we allow in this contract
+#[repr(u8)]
+pub enum MoneyFunction {
+    Transfer = 0x00,
+    // Transfer2 = 0x01,
+    // ..
+}
 
-pub mod state;
-
-pub use state::{DaoBulla, State};
-
-//  CONTRACT ID of the DAO smart contract 
-lazy_static! {
-    pub static ref CONTRACT_ID: pallas::Base = pallas::Base::random(&mut OsRng);
+impl From<u8> for MoneyFunction {
+    fn from(b: u8) -> Self {
+        match b {
+            0x00 => Self::Transfer,
+            _ => panic!("Invalid function ID: {:#04x?}", b),
+        }
+    }
 }

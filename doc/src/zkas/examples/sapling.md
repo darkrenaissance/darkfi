@@ -81,6 +81,8 @@ is the blinding factor, and $G_1$ and $G_2$ are predefined generators:
 
 $$ T = tG_1 + r_TG_2 $$
 
+Overall, we reveal $C$ , $V$ and $T$ as public_inputs and add $C$ to the Merkle tree.
+
 ## Pseudo-code
 
 Knowing this we can extend our pseudo-code and build the
@@ -151,7 +153,7 @@ $$ T = tG_1 + r_TG_2 $$
 
 We check that the secret key $x$ corresponds to a public key $P$.
 Usually, we do public key derivation my multiplying our secret key
-with a genera tor $G$, which results in a public key:
+with a generator $G$, which results in a public key:
 
 $$ P = xG $$
 

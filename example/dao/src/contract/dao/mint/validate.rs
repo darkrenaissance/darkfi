@@ -58,6 +58,7 @@ impl UpdateBase for Update {
     }
 }
 
+// Custom program errors can be defined here 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum Error {}
 
@@ -78,6 +79,7 @@ impl CallDataBase for CallData {
     }
 
     fn signature_public_keys(&self) -> Vec<PublicKey> {
+        //  no signatures involved in mint phase so empty
         vec![]
     }
 

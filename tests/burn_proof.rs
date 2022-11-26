@@ -107,9 +107,11 @@ fn burn_proof() -> Result<()> {
     let nullifier = Nullifier::from(poseidon_hash::<2>([secret.inner(), serial]));
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
+    // Since the value commit is a curve point, we fetch its coordinates
     let value_coords = value_commit.to_affine().coordinates().unwrap();
 
     let token_commit = pedersen_commitment_base(token_id, token_blind);
+    // Since the value commit is a curve point, we fetch its coordinates
     let token_coords = token_commit.to_affine().coordinates().unwrap();
 
     let sig_pubkey = PublicKey::from_secret(sig_secret);

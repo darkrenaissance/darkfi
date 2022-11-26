@@ -1,3 +1,4 @@
+# checkout this explanation for more info : https://darkrenaissance.github.io/darkfi/zkas/examples/sapling.html
 constant "Mint" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
@@ -23,7 +24,7 @@ contract "Mint" {
 	Base user_data,
 	# Random blinding factor for value commitment
 	Scalar value_blind,
-	# Random blinding facfor for the token ID
+	# Random blinding factor for the token ID
 	Scalar token_blind,
 }
 

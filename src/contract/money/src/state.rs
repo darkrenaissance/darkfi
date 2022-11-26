@@ -71,9 +71,9 @@ pub struct Input {
     pub nullifier: Nullifier,
     /// Revealed Merkle root
     pub merkle_root: MerkleNode,
-    /// spend hook (TODO: document)
+	/// Allows composing this ZK proof to invoke other contracts TODO:add more details in DOCS
     pub spend_hook: pallas::Base,
-    /// user data enc (TODO: document)
+    /// Data passed from this coin to the invoked contract TODO:add more details in DOCS
     pub user_data_enc: pallas::Base,
     /// Public key for the signature
     pub signature_public: PublicKey,

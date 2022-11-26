@@ -1,3 +1,5 @@
+
+
 /* This file is part of DarkFi (https://dark.fi)
  *
  * Copyright (C) 2020-2022 Dyne.org foundation
@@ -16,24 +18,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use lazy_static::lazy_static;
-use pasta_curves::{group::ff::Field, pallas};
-use rand::rngs::OsRng;
+// Custom program errors can be defined here 
+// #[derive(Debug, thiserror::Error)]
+// pub enum MoneyError {
+//     #[error("Duplicate Merkle root error")]
+//     DuplicateMerkleroot,
+//     #[error("State transition failed: '{0}'")]
+//     StateTransitionFailed(String),
+//     #[error("Wallet does not exist")]
+//     NoWalletFound,
+//     #[error("State not found")]
+//     StateNotFound,
+//     #[error("InternalError")]
+//     Darkfi(#[from] darkfi::error::Error),
+//     #[error("Verify proof failed: '{0}', '{0}'")]
+//     VerifyProofFailed(usize, String),
+// }
 
-// mint() - smart contract function 
-pub mod mint;
-// propose() - smart contract function
-pub mod propose;
-// vote() - smart contract function
-pub mod vote;
-// exec{}
-pub mod exec;
-
-pub mod state;
-
-pub use state::{DaoBulla, State};
-
-//  CONTRACT ID of the DAO smart contract 
-lazy_static! {
-    pub static ref CONTRACT_ID: pallas::Base = pallas::Base::random(&mut OsRng);
-}

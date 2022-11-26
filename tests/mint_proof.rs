@@ -78,9 +78,11 @@ fn mint_proof() -> Result<()> {
         .hash(msgs);
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
+    // Since the value commit is a curve point, we fetch its coordinates
     let value_coords = value_commit.to_affine().coordinates().unwrap();
 
     let token_commit = pedersen_commitment_base(token_id, token_blind);
+    // Since the value commit is a curve point, we fetch its coordinates
     let token_coords = token_commit.to_affine().coordinates().unwrap();
 
     let public_inputs =
@@ -89,7 +91,10 @@ fn mint_proof() -> Result<()> {
     // Create the circuit
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
 
-    let proving_key = ProvingKey::build(13, &circuit);
+    // k=13 is used for defining the number of rows in the zkvm for a certain circuit, currently hardcoded to 13
+    // It's going to be dynamic in the future when the zkvm learns how to self-optimize
+    let k = 13;
+    let proving_key = ProvingKey::build(k, &circuit);
     let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
 
     // ========
@@ -102,7 +107,7 @@ fn mint_proof() -> Result<()> {
     // Create the circuit
     let circuit = ZkCircuit::new(verifier_witnesses, zkbin);
 
-    let verifying_key = VerifyingKey::build(13, &circuit);
+    let verifying_key = VerifyingKey::build(k, &circuit);
     proof.verify(&verifying_key, &public_inputs)?;
     /* ANCHOR_END: main */
 

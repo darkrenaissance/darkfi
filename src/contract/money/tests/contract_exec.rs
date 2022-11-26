@@ -52,7 +52,7 @@ use rand::rngs::OsRng;
 use darkfi_money_contract::{
     client::{build_transfer_tx, Coin, EncryptedNote, OwnCoin},
     state::MoneyTransferParams,
-    MoneyFunction,
+    instruction::MoneyFunction,
 };
 
 #[async_std::test]
@@ -117,6 +117,8 @@ async fn money_contract_execution() -> Result<()> {
     let burn_circuit = ZkCircuit::new(burn_witnesses, burn_zkbin.clone());
 
     info!("Creating zk proving keys");
+    // 'k' used for defining the number of rows in the zkvm for a certain circuit, currently hardcoded to 13
+    // It's going to be dynamic in the future when the zkvm learns how to self-optimize
     let k = 13;
     let mut proving_keys = HashMap::<[u8; 32], Vec<(String, ProvingKey)>>::new();
     let mint_pk = ProvingKey::build(k, &mint_circuit);
