@@ -427,15 +427,11 @@ impl ValidatorState {
     }
 
     /// return 2-term target approximation sigma coefficients.
-    /// `epoch: absolute epoch index
-    /// `slot: relative slot index
-    pub fn sigmas(&mut self, epoch: u64, slot: u64) -> (pallas::Base, pallas::Base) {
+    pub fn sigmas(&mut self) -> (pallas::Base, pallas::Base) {
         let f = self.win_prob_with_full_stake();
 
         // Generate sigmas
-        let total_stake = self.total_stake_plus(epoch, slot); // Only used for fine-tuning
-        debug!("consensus::sigmas(): epoch: {}", epoch);
-        debug!("consensus::sigmas(): slot: {}", slot);
+        let total_stake = self.total_stake_plus(); // Only used for fine-tuning
         debug!("consensus::sigmas(): f: {}", f);
         debug!("consensus::sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
@@ -522,7 +518,7 @@ impl ValidatorState {
         // so we need to find offset from last block
         if self.consensus.offset.is_none() {
             let last = self.blockchain.get_last_offset().unwrap();
-            info!("overall_empty_slots(): Setting slot offset: {}", last);
+            info!("get_current_offset(): Setting slot offset: {}", last);
             self.consensus.offset = Some(last);
         }
 
@@ -532,27 +528,26 @@ impl ValidatorState {
     /// Auxillary function to calculate overall empty slots.
     /// We keep an offset from genesis indicating when the first slot actually started.
     /// This offset is shared between nodes.
-    fn overall_empty_slots(&mut self) -> u64 {
-        let slot = self.current_slot();
+    fn overall_empty_slots(&mut self, current_slot: u64) -> u64 {
         // Retrieve existing blocks excluding genesis
         let blocks = (self.blockchain.len() as u64) - 1;
         // Setup offset if only have genesis and havent received offset from other nodes
         if blocks == 0 && self.consensus.offset.is_none() {
             info!(
                 "overall_empty_slots(): Blockchain contains only genesis, setting slot offset: {}",
-                slot
+                current_slot
             );
-            self.consensus.offset = Some(slot);
+            self.consensus.offset = Some(current_slot);
         }
 
-        slot - blocks - self.get_current_offset()
+        current_slot - blocks - self.get_current_offset()
     }
 
     /// total stake plus one.
     /// assuming constant Reward.
-    fn total_stake_plus(&mut self, epoch: u64, slot: u64) -> i64 {
-        ((epoch * constants::EPOCH_LENGTH as u64 + slot + 1 - self.overall_empty_slots()) *
-            Self::reward()) as i64
+    fn total_stake_plus(&mut self) -> i64 {
+        let current_slot = self.current_slot();
+        ((current_slot - self.overall_empty_slots(current_slot)) * Self::reward()) as i64
     }
 
     /// Calculate how many leaders existed in previous slot and appends

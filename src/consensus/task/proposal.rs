@@ -91,11 +91,8 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         info!("consensus: Waiting for next slot ({} sec)", seconds_next_slot);
         sleep(seconds_next_slot).await;
 
-        // Retrieve slot info
-        let slot = state.read().await.current_slot();
-        let relative_slot = state.read().await.relative_slot(slot);
-        let epoch = state.read().await.consensus.epoch;
-        let (sigma1, sigma2) = state.write().await.sigmas(epoch, relative_slot);
+        // Retrieve slot sigmas
+        let (sigma1, sigma2) = state.write().await.sigmas();
 
         // Node checks if epoch has changed, to generate new epoch coins
         let epoch_changed = state.write().await.epoch_changed(sigma1, sigma2).await;
