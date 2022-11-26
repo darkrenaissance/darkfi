@@ -617,12 +617,10 @@ impl ValidatorState {
                 constants::TD.clone() * d.clone());
         while f <= zero.clone() || f >= one.clone() {
             let mut clipped_f = f;
-            while clipped_f <= zero.clone() || clipped_f >= one.clone() {
-                if clipped_f >= one.clone() {
-                    clipped_f -= one.clone();
-                } else if clipped_f <= zero.clone() {
-                    clipped_f += one.clone();
-                }
+            if clipped_f >=one {
+                clipped_f = one - constants::PID_OUT_STEP;
+            } else if clipped_f<=zero {
+                clipped_f = zero + constants::PID_OUT_STEP;
             }
             let clipped_kp = clipped_f /
                 (p.clone() +
