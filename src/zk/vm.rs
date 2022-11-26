@@ -45,7 +45,7 @@ use halo2_proofs::{
     plonk,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn},
 };
-use log::{debug, error};
+use log::{error, trace};
 
 pub use super::vm_stack::{StackVar, Witness};
 use super::{
@@ -284,7 +284,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> std::result::Result<(), plonk::Error> {
-        debug!("Entering synthesize()");
+        trace!(target: "zkvm", "Entering synthesize()");
 
         // ===================
         // VM Setup
@@ -347,7 +347,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Lookup and push constants onto the stack
         for constant in &self.constants {
-            debug!("Pushing constant `{}` to stack index {}", constant.as_str(), stack.len());
+            trace!(target: "zkvm", "Pushing constant `{}` to stack index {}", constant.as_str(), stack.len());
             match constant.as_str() {
                 "VALUE_COMMIT_VALUE" => {
                     let vcv = ValueCommitV;
@@ -396,14 +396,14 @@ impl Circuit<pallas::Base> for ZkCircuit {
         for witness in &self.witnesses {
             match witness {
                 Witness::EcPoint(w) => {
-                    debug!("Witnessing EcPoint into circuit");
+                    trace!(target: "zkvm", "Witnessing EcPoint into circuit");
                     let point = Point::new(
                         ecc_chip.clone(),
                         layouter.namespace(|| "Witness EcPoint"),
                         w.as_ref().map(|cm| cm.to_affine()),
                     )?;
 
-                    debug!("Pushing EcPoint to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing EcPoint to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(point));
                 }
 
@@ -413,14 +413,14 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Witness::Base(w) => {
-                    debug!("Witnessing Base into circuit");
+                    trace!(target: "zkvm", "Witnessing Base into circuit");
                     let base = assign_free_advice(
                         layouter.namespace(|| "Witness Base"),
                         config.advices[0],
                         *w,
                     )?;
 
-                    debug!("Pushing Base to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing Base to stack index {}", stack.len());
                     stack.push(StackVar::Base(base));
                 }
 
@@ -428,26 +428,26 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     // NOTE: Because the type in `halo2_gadgets` does not have a `Clone`
                     //       impl, we push scalars as-is to the stack. They get witnessed
                     //       when they get used.
-                    debug!("Pushing Scalar to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing Scalar to stack index {}", stack.len());
                     stack.push(StackVar::Scalar(*w));
                 }
 
                 Witness::MerklePath(w) => {
-                    debug!("Witnessing MerklePath into circuit");
+                    trace!(target: "zkvm", "Witnessing MerklePath into circuit");
                     let path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
                         w.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
-                    debug!("Pushing MerklePath to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing MerklePath to stack index {}", stack.len());
                     stack.push(StackVar::MerklePath(path));
                 }
 
                 Witness::Uint32(w) => {
-                    debug!("Pushing Uint32 to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing Uint32 to stack index {}", stack.len());
                     stack.push(StackVar::Uint32(*w));
                 }
 
                 Witness::Uint64(w) => {
-                    debug!("Pushing Uint64 to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing Uint64 to stack index {}", stack.len());
                     stack.push(StackVar::Uint64(*w));
                 }
             }
@@ -460,7 +460,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         for opcode in &self.opcodes {
             match opcode.0 {
                 Opcode::EcAdd => {
-                    debug!("Executing `EcAdd{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `EcAdd{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -471,12 +471,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let ret = lhs.add(layouter.namespace(|| "EcAdd()"), &rhs)?;
 
-                    debug!("Pushing result to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
 
                 Opcode::EcMul => {
-                    debug!("Executing `EcMul{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `EcMul{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -490,12 +490,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
 
-                    debug!("Pushing result to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
 
                 Opcode::EcMulBase => {
-                    debug!("Executing `EcMulBase{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `EcMulBase{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -505,12 +505,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let ret = lhs.mul(layouter.namespace(|| "EcMulBase()"), rhs)?;
 
-                    debug!("Pushing result to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
 
                 Opcode::EcMulShort => {
-                    debug!("Executing `EcMulShort{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `EcMulShort{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -524,12 +524,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulShort()"), rhs)?;
 
-                    debug!("Pushing result to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
 
                 Opcode::EcGetX => {
-                    debug!("Executing `EcGetX{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `EcGetX{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -537,12 +537,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let ret = point.inner().x();
 
-                    debug!("Pushing result to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::Base(ret));
                 }
 
                 Opcode::EcGetY => {
-                    debug!("Executing `EcGetY{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `EcGetY{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -550,12 +550,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let ret = point.inner().y();
 
-                    debug!("Pushing result to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::Base(ret));
                 }
 
                 Opcode::PoseidonHash => {
-                    debug!("Executing `PoseidonHash{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `PoseidonHash{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let mut poseidon_message: Vec<AssignedCell<Fp, Fp>> =
@@ -586,7 +586,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                             let $cell: AssignedCell<Fp, Fp> = $output.into();
 
-                            debug!("Pushing hash to stack index {}", stack.len());
+                            trace!(target: "zkvm", "Pushing hash to stack index {}", stack.len());
                             stack.push(StackVar::Base($cell));
                         };
                     }
@@ -609,7 +609,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::MerkleRoot => {
-                    debug!("Executing `MerkleRoot{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `MerkleRoot{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let leaf_pos = stack[args[0].1].clone().into();
@@ -626,12 +626,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let root = merkle_inputs
                         .calculate_root(layouter.namespace(|| "MerkleRoot()"), leaf)?;
 
-                    debug!("Pushing merkle root to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing merkle root to stack index {}", stack.len());
                     stack.push(StackVar::Base(root));
                 }
 
                 Opcode::BaseAdd => {
-                    debug!("Executing `BaseAdd{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `BaseAdd{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs = &stack[args[0].1].clone().into();
@@ -639,12 +639,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let sum = arith_chip.add(layouter.namespace(|| "BaseAdd()"), lhs, rhs)?;
 
-                    debug!("Pushing sum to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing sum to stack index {}", stack.len());
                     stack.push(StackVar::Base(sum));
                 }
 
                 Opcode::BaseMul => {
-                    debug!("Executing `BaseSub{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs = &stack[args[0].1].clone().into();
@@ -652,12 +652,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let product = arith_chip.mul(layouter.namespace(|| "BaseMul()"), lhs, rhs)?;
 
-                    debug!("Pushing product to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing product to stack index {}", stack.len());
                     stack.push(StackVar::Base(product));
                 }
 
                 Opcode::BaseSub => {
-                    debug!("Executing `BaseSub{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs = &stack[args[0].1].clone().into();
@@ -666,12 +666,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let difference =
                         arith_chip.sub(layouter.namespace(|| "BaseSub()"), lhs, rhs)?;
 
-                    debug!("Pushing difference to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing difference to stack index {}", stack.len());
                     stack.push(StackVar::Base(difference));
                 }
 
                 Opcode::WitnessBase => {
-                    debug!("Executing `WitnessBase{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `WitnessBase{:?}` opcode", opcode.1);
                     //let args = &opcode.1;
 
                     let lit = litstack[literals_offset];
@@ -683,12 +683,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         Value::known(pallas::Base::from(lit)),
                     )?;
 
-                    debug!("Pushing assignment to stack index {}", stack.len());
+                    trace!(target: "zkvm", "Pushing assignment to stack index {}", stack.len());
                     stack.push(StackVar::Base(witness));
                 }
 
                 Opcode::RangeCheck => {
-                    debug!("Executing `RangeCheck{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `RangeCheck{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lit = litstack[literals_offset];
@@ -719,7 +719,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::LessThanStrict => {
-                    debug!("Executing `LessThanStrict{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `LessThanStrict{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let a = stack[args[0].1].clone().into();
@@ -735,7 +735,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::LessThanLoose => {
-                    debug!("Executing `LessThanLoose{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `LessThanLoose{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let a = stack[args[0].1].clone().into();
@@ -751,7 +751,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::BoolCheck => {
-                    debug!("Executing `BoolCheck{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `BoolCheck{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let w = stack[args[0].1].clone().into();
@@ -761,7 +761,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::ConstrainEqualBase => {
-                    debug!("Executing `ConstrainEqualBase{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `ConstrainEqualBase{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
@@ -774,7 +774,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::ConstrainEqualPoint => {
-                    debug!("Executing `ConstrainEqualPoint{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `ConstrainEqualPoint{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -790,7 +790,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::ConstrainInstance => {
-                    debug!("Executing `ConstrainInstance{:?}` opcode", opcode.1);
+                    trace!(target: "zkvm", "Executing `ConstrainInstance{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let var: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
@@ -811,7 +811,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             }
         }
 
-        debug!("Exiting synthesize() successfully");
+        trace!(target: "zkvm", "Exiting synthesize() successfully");
         Ok(())
     }
 }

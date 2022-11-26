@@ -246,7 +246,8 @@ async fn main() -> Result<()> {
     // ANCHOR: json_init
     let accept_addr = settings.accept_addr.clone();
     let rpc = Arc::new(JsonRpcInterface { addr: accept_addr.clone(), p2p });
-    ex.spawn(async move { listen_and_serve(accept_addr.clone(), rpc).await }).detach();
+    let _ex = ex.clone();
+    ex.spawn(async move { listen_and_serve(accept_addr.clone(), rpc, _ex).await }).detach();
     // ANCHOR_END: json_init
 
     let nthreads = num_cpus::get();

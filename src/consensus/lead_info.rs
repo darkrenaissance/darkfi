@@ -23,48 +23,57 @@ use darkfi_sdk::{
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::error;
 
-use super::leadcoin::LeadCoin;
 use crate::{
-    crypto::proof::{Proof, ProvingKey, VerifyingKey},
+    crypto::proof::{Proof, VerifyingKey},
     Result,
 };
 
-/// This struct represents [`Block`](super::Block) information used by the consensus protocol.
+// TODO: Replace 'Lead' terms with 'Producer' to make it more clear that
+// we refer to block producer.
+/// This struct represents [`Block`](super::Block) leader information used by the consensus protocol.
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct Metadata {
-    /// Block owner signature
+pub struct LeadInfo {
+    /// Block producer signature
     pub signature: Signature,
-    /// Block owner public_key
+    /// Block producer public_key
     pub public_key: PublicKey, // TODO: remove this(to be derived by proof)
-    /// Block owner slot competing coins public inputs
+    /// Block producer slot competing coins public inputs
     pub public_inputs: Vec<pallas::Base>,
     /// Response of global random oracle, or it's emulation.
     pub eta: [u8; 32],
     /// Leader NIZK proof
     pub proof: LeadProof,
+    /// Slot offset block producer used
+    pub offset: u64,
+    /// Block producer leaders count
+    pub leaders: u64,
 }
 
-impl Default for Metadata {
-    /// Default Metadata used in genesis block generation
+impl Default for LeadInfo {
+    /// Default LeadInfo used in genesis block generation
     fn default() -> Self {
         let keypair = Keypair::default();
         let signature = Signature::dummy();
         let public_inputs = vec![];
         let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
         let proof = LeadProof::default();
-        Self { signature, public_key: keypair.public, public_inputs, eta, proof }
+        let offset = 0;
+        let leaders = 0;
+        Self { signature, public_key: keypair.public, public_inputs, eta, proof, offset, leaders }
     }
 }
 
-impl Metadata {
+impl LeadInfo {
     pub fn new(
         signature: Signature,
         public_key: PublicKey,
         public_inputs: Vec<pallas::Base>,
         eta: [u8; 32],
         proof: LeadProof,
+        offset: u64,
+        leaders: u64,
     ) -> Self {
-        Self { signature, public_key, public_inputs, eta, proof }
+        Self { signature, public_key, public_inputs, eta, proof, offset, leaders }
     }
 }
 
@@ -76,11 +85,6 @@ pub struct LeadProof {
 }
 
 impl LeadProof {
-    pub fn new(pk: &ProvingKey, coin: LeadCoin) -> Self {
-        let proof = coin.create_lead_proof(pk).unwrap();
-        Self { proof }
-    }
-
     pub fn verify(&self, vk: &VerifyingKey, public_inputs: &[pallas::Base]) -> Result<()> {
         if let Err(e) = self.proof.verify(vk, public_inputs) {
             error!("Verification of consensus lead proof failed: {}", e);

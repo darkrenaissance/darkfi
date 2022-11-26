@@ -26,7 +26,7 @@ use pasta_curves::pallas;
 
 use super::{
     constants::{BLOCK_MAGIC_BYTES, BLOCK_VERSION},
-    Metadata,
+    LeadInfo,
 };
 use crate::{net, tx::Transaction, util::time::Timestamp};
 
@@ -85,7 +85,7 @@ impl Default for Header {
     }
 }
 
-/// This struct represents a tuple of the form (`magic`, `header`, `counter`, `txs`, `metadata`).
+/// This struct represents a tuple of the form (`magic`, `header`, `counter`, `txs`, `lead_info`).
 /// The header and transactions are stored as hashes, serving as pointers to
 /// the actual data in the sled database.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -96,8 +96,8 @@ pub struct Block {
     pub header: blake3::Hash,
     /// Trasaction hashes
     pub txs: Vec<blake3::Hash>,
-    /// Metadata
-    pub metadata: Metadata,
+    /// Lead Info
+    pub lead_info: LeadInfo,
 }
 
 impl net::Message for Block {
@@ -113,13 +113,13 @@ impl Block {
         slot: u64,
         txs: Vec<blake3::Hash>,
         root: MerkleNode,
-        metadata: Metadata,
+        lead_info: LeadInfo,
     ) -> Self {
         let magic = BLOCK_MAGIC_BYTES;
         let timestamp = Timestamp::current_time();
         let header = Header::new(previous, epoch, slot, timestamp, root);
         let header = header.headerhash();
-        Self { magic, header, txs, metadata }
+        Self { magic, header, txs, lead_info }
     }
 
     /// Generate the genesis block.
@@ -127,8 +127,8 @@ impl Block {
         let magic = BLOCK_MAGIC_BYTES;
         let header = Header::genesis_header(genesis_ts, genesis_data);
         let header = header.headerhash();
-        let metadata = Metadata::default();
-        Self { magic, header, txs: vec![], metadata }
+        let lead_info = LeadInfo::default();
+        Self { magic, header, txs: vec![], lead_info }
     }
 
     /// Calculate the block hash
@@ -161,14 +161,14 @@ pub struct BlockInfo {
     pub header: Header,
     /// Transactions payload
     pub txs: Vec<Transaction>,
-    /// Metadata,
-    pub metadata: Metadata,
+    /// Lead Info,
+    pub lead_info: LeadInfo,
 }
 
 impl Default for BlockInfo {
     fn default() -> Self {
         let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header: Header::default(), txs: vec![], metadata: Metadata::default() }
+        Self { magic, header: Header::default(), txs: vec![], lead_info: LeadInfo::default() }
     }
 }
 
@@ -179,9 +179,9 @@ impl net::Message for BlockInfo {
 }
 
 impl BlockInfo {
-    pub fn new(header: Header, txs: Vec<Transaction>, metadata: Metadata) -> Self {
+    pub fn new(header: Header, txs: Vec<Transaction>, lead_info: LeadInfo) -> Self {
         let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, metadata }
+        Self { magic, header, txs, lead_info }
     }
 
     /// Calculate the block hash
@@ -198,7 +198,7 @@ impl From<BlockInfo> for Block {
             magic: block_info.magic,
             header: block_info.header.headerhash(),
             txs,
-            metadata: block_info.metadata,
+            lead_info: block_info.lead_info,
         }
     }
 }
@@ -229,8 +229,8 @@ pub struct BlockProposal {
 
 impl BlockProposal {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(header: Header, txs: Vec<Transaction>, metadata: Metadata) -> Self {
-        let block = BlockInfo::new(header, txs, metadata);
+    pub fn new(header: Header, txs: Vec<Transaction>, lead_info: LeadInfo) -> Self {
+        let block = BlockInfo::new(header, txs, lead_info);
         let hash = block.blockhash();
         let header = block.header.headerhash();
         Self { hash, header, block }
@@ -250,7 +250,7 @@ impl fmt::Display for BlockProposal {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_fmt(format_args!(
             "BlockProposal {{ leader public key: {}, hash: {}, header: {}, epoch: {}, slot: {}, txs: {} }}",
-            self.block.metadata.public_key,
+            self.block.lead_info.public_key,
             self.hash,
             self.header,
             self.block.header.epoch,

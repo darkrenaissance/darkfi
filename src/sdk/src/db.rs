@@ -24,6 +24,9 @@ use super::{
     util::{get_object_bytes, get_object_size},
 };
 
+// This might not be the right place for this constant...
+pub const ZKAS_DB_NAME: &str = "_zkas";
+
 pub type DbHandle = u32;
 
 pub const DB_SUCCESS: i32 = 0;

@@ -22,7 +22,7 @@ use serde_json::{json, Value};
 
 use darkfi::rpc::jsonrpc::{
     ErrorCode::{InternalError, InvalidParams},
-    JsonError, JsonResponse, JsonResult,
+    JsonError, JsonResponse, JsonResult, JsonSubscriber,
 };
 
 use super::Darkfid;
@@ -89,5 +89,23 @@ impl Darkfid {
         let roots: Vec<String> = roots.iter().map(|x| x.to_string()).collect();
 
         JsonResponse::new(json!(roots), id).into()
+    }
+
+    // RPCAPI:
+    // Initializes a subscription to new incoming blocks.
+    // Once a subscription is established, `darkfid` will send JSON-RPC notifications of
+    // new incoming blocks to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [`blockinfo`]}
+    pub async fn blockchain_subscribe_blocks(&self, id: Value, params: &[Value]) -> JsonResult {
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let blocks_subscriber =
+            self.validator_state.read().await.subscribers.get("blocks").unwrap().clone();
+
+        JsonSubscriber::new(blocks_subscriber).into()
     }
 }

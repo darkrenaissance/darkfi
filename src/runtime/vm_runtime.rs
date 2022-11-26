@@ -23,7 +23,7 @@ use std::{
 
 use darkfi_sdk::{crypto::ContractId, entrypoint};
 use darkfi_serial::serialize;
-use log::{debug, info};
+use log::{debug, error, info};
 use wasmer::{
     imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
     Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
@@ -281,6 +281,7 @@ impl Runtime {
                 self.print_logs();
                 debug!(target: "runtime", "{}", self.gas_info());
                 // WasmerRuntimeError panics are handled here. Return from run() immediately.
+                error!("Wasmer Runtime Error: {:#?}", e);
                 return Err(e.into())
             }
         };
@@ -297,7 +298,7 @@ impl Runtime {
 
         let retval = match ret[0] {
             Value::I64(v) => v,
-            _ => unreachable!(),
+            _ => unreachable!("Got unexpected result from ret: {:?}", ret),
         };
 
         match retval {

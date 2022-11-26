@@ -54,9 +54,34 @@ use rand::rngs::OsRng;
 
 use crate::state::{ClearInput, Input, MoneyTransferParams, Output};
 
-// Wallet SQL table constant names
+// Wallet SQL table constant names. These have to represent the SQL schema.
+// TODO: They should also ideally be prefixed with the contract ID to avoid
+//       collisions.
+pub const MONEY_INFO_TABLE: &str = "money_info";
+pub const MONEY_INFO_COL_LAST_SCANNED_SLOT: &str = "last_scanned_slot";
+
 pub const MONEY_TREE_TABLE: &str = "money_tree";
 pub const MONEY_TREE_COL_TREE: &str = "tree";
+
+pub const MONEY_KEYS_TABLE: &str = "money_keys";
+pub const MONEY_KEYS_COL_KEY_ID: &str = "key_id";
+pub const MONEY_KEYS_COL_IS_DEFAULT: &str = "is_default";
+pub const MONEY_KEYS_COL_PUBLIC: &str = "public";
+pub const MONEY_KEYS_COL_SECRET: &str = "secret";
+
+pub const MONEY_COINS_TABLE: &str = "money_coins";
+pub const MONEY_COINS_COL_COIN: &str = "coin";
+pub const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
+pub const MONEY_COINS_COL_SERIAL: &str = "serial";
+pub const MONEY_COINS_COL_VALUE: &str = "value";
+pub const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
+pub const MONEY_COINS_COL_COIN_BLIND: &str = "coin_blind";
+pub const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
+pub const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
+pub const MONEY_COINS_COL_SECRET: &str = "secret";
+pub const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
+pub const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
+pub const MONEY_COINS_COL_MEMO: &str = "memo";
 
 /// Byte length of the AEAD tag of the chacha20 cipher used for note encryption
 pub const AEAD_TAG_SIZE: usize = 16;

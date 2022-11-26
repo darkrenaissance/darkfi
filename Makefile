@@ -38,7 +38,7 @@ zkas: $(BINDEPS)
 contracts: zkas
 	$(MAKE) -C src/contract/money
 
-$(PROOFS_BIN): $(PROOFS) zkas
+$(PROOFS_BIN): $(PROOFS)
 	./zkas $(basename $@) -o $@
 
 token_lists:

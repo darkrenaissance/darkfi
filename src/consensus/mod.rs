@@ -23,9 +23,9 @@ pub use block::{Block, BlockInfo, BlockProposal, Header, ProposalChain};
 /// Constants
 pub mod constants;
 
-/// Consensus metadata
-pub mod metadata;
-pub use metadata::{LeadProof, Metadata};
+/// Consensus block leader information
+pub mod lead_info;
+pub use lead_info::{LeadInfo, LeadProof};
 
 /// Consensus state
 pub mod state;

@@ -3,7 +3,7 @@
 ## Overview
 
 Darkfi is based off Ouroboros Crypsinous, a privacy focused proof-of-stake algorithm.
-Below is a specification of how DarkFi's current blockchain achieves consensus.
+Below you may find the technical specifications of DarkFi's blockchain implementation.
 
 ## Blockchain
 
@@ -266,7 +266,7 @@ be used by the protocol.
 |   Field     |        Type        |            Description                     |
 |-------------|--------------------|--------------------------------------------|
 | `version`   | `u8`               | Version                                    |
-| `state`     | `blake3Hash`       | Previous block hash                        |
+| `previous`  | `blake3Hash`       | Previous block hash                        |
 | `epoch`     | `u64`              | Epoch                                      |
 | `slot`      | `u64`              | Slot UID                                   |
 | `timestamp` | `Timestamp`        | Block creation timestamp                   |
@@ -275,14 +275,14 @@ be used by the protocol.
 
 ## Block
 
-|   Field    |        Type       |            Description             |
-|------------|-------------------|------------------------------------|
-| `magic`    | `u8`              | Magic bytes                        |
-| `header`   | `blake3Hash`      | Header hash                        |
-| `txs`      | `Vec<blake3Hash>` | Transaction hashes                 |
-| `metadata` | `Metadata`        | Additional block information       |
+|   Field     |        Type       |            Description             |
+|-------------|-------------------|------------------------------------|
+| `magic`     | `u8`              | Magic bytes                        |
+| `header`    | `blake3Hash`      | Header hash                        |
+| `txs`       | `Vec<blake3Hash>` | Transaction hashes                 |
+| `lead_info` | `LeadInfo`        | Block leader information           |
 
-## Metadata
+## LeadInfo
 
 | Field           | Type                | Description                                         |
 |-----------------|---------------------|-----------------------------------------------------|
@@ -291,3 +291,5 @@ be used by the protocol.
 | `serial_number` | `pallas::Base`      | competing coin's nullifier                          |
 | `eta`           | `[u8; 32]`          | randomness from the previous epoch                  |
 | `proof`         | `Vec<u8>`           | Nizk $\pi$ Proof the stakeholder is the block owner |
+| `offset`        | `u64`               | Slot offset block producer used                     |
+| `leaders`       | `u64`               | Block producer leaders count                        |

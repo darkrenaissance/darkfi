@@ -1308,6 +1308,7 @@ dependencies = [
  "pasta_curves",
  "plotters",
  "rand",
+ "rcell",
  "rcgen",
  "rustls-pemfile",
  "serde",
@@ -1748,8 +1749,10 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-std",
+ "bs58",
  "clap 4.0.25",
  "darkfi",
+ "darkfi-money-contract",
  "darkfi-sdk",
  "darkfi-serial",
  "libsqlite3-sys",
@@ -3512,6 +3515,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rcell"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2c04ae9905949c881834ee94d1a1495d079d649e39babbfc99601aa2fd3f138"
+dependencies = [
+ "sharded_mutex",
+]
+
+[[package]]
 name = "rcgen"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3917,6 +3929,15 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest 0.10.5",
+]
+
+[[package]]
+name = "sharded_mutex"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26c0a2ba1160131410ea1671689505938033c38f5ce86853446d7dd92c81b515"
+dependencies = [
+ "parking_lot 0.12.1",
 ]
 
 [[package]]

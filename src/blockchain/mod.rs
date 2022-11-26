@@ -145,7 +145,7 @@ impl Blockchain {
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(header, txs, block.metadata.clone());
+            let info = BlockInfo::new(header, txs, block.lead_info.clone());
             ret.push(info);
         }
 
@@ -172,6 +172,11 @@ impl Blockchain {
         self.get_blocks_by_hash(&hashes)
     }
 
+    /// Retrieve stored blocks count
+    pub fn len(&self) -> usize {
+        self.order.len()
+    }
+
     /// Retrieve the last block slot and hash.
     pub fn last(&self) -> Result<(u64, blake3::Hash)> {
         self.order.get_last()
@@ -183,7 +188,16 @@ impl Blockchain {
         let blocks = self.blocks.get(&[hash], true)?;
         // Since we used strict get, its safe to unwrap here
         let block = blocks[0].clone().unwrap();
-        let hash = blake3::hash(&serialize(&block.metadata.proof));
+        let hash = blake3::hash(&serialize(&block.lead_info.proof));
         Ok(hash)
+    }
+
+    /// Retrieve last finalized block slot offset
+    pub fn get_last_offset(&self) -> Result<u64> {
+        let (_, hash) = self.last().unwrap();
+        let blocks = self.blocks.get(&[hash], true)?;
+        // Since we used strict get, its safe to unwrap here
+        let block = blocks[0].clone().unwrap();
+        Ok(block.lead_info.offset)
     }
 }

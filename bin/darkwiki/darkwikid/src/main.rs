@@ -598,7 +598,8 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     // JSON-RPC server
     // ===============
     let rpc_iface = Arc::new(JsonRpcInterface::new(rpc_tx, notify_rx));
-    executor.spawn(listen_and_serve(args.rpc_listen, rpc_iface)).detach();
+    let _ex = executor.clone();
+    executor.spawn(listen_and_serve(args.rpc_listen, rpc_iface, _ex)).detach();
 
     // ====
     // Raft

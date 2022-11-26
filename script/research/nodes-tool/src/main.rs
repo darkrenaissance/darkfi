@@ -27,8 +27,8 @@ use darkfi::{
     consensus::{
         block::{Block, BlockProposal, Header, ProposalChain},
         constants::TESTNET_GENESIS_HASH_BYTES,
-        metadata::Metadata,
-        state::{ConsensusState, ValidatorState},        
+        lead_info::LeadInfo,
+        state::{ConsensusState, ValidatorState},
     },
     tx::Transaction,
     util::{path::expand_path, time::Timestamp},
@@ -40,14 +40,14 @@ use darkfi_serial::serialize;
 
 // TODO: Add missing fields
 #[derive(Debug)]
-struct MetadataInfo {
+struct LeadInfoInfo {
     _public_key: String,
 }
 
-impl MetadataInfo {
-    pub fn new(metadata: &Metadata) -> MetadataInfo {
-        let _public_key = metadata.public_key.to_string();
-        MetadataInfo { _public_key }
+impl LeadInfoInfo {
+    pub fn new(lead_info: &LeadInfo) -> LeadInfoInfo {
+        let _public_key = lead_info.public_key.to_string();
+        LeadInfoInfo { _public_key }
     }
 }
 
@@ -64,9 +64,9 @@ impl ProposalInfo {
             let hash = blake3::hash(&serialize(tx));
             _txs.push(hash);
         }
-        let _metadata = MetadataInfo::new(&proposal.block.metadata);
+        let _lead_info = LeadInfoInfo::new(&proposal.block.lead_info);
         let _block =
-            BlockInfo { _hash: _header, _magic: proposal.block.magic, _header, _txs, _metadata };
+            BlockInfo { _hash: _header, _magic: proposal.block.magic, _header, _txs, _lead_info };
         ProposalInfo { _block }
     }
 }
@@ -153,7 +153,7 @@ struct BlockInfo {
     _magic: [u8; 4],
     _header: blake3::Hash,
     _txs: Vec<blake3::Hash>,
-    _metadata: MetadataInfo,
+    _lead_info: LeadInfoInfo,
 }
 
 impl BlockInfo {
@@ -161,8 +161,8 @@ impl BlockInfo {
         let _magic = block.magic;
         let _header = block.header;
         let _txs = block.txs.clone();
-        let _metadata = MetadataInfo::new(&block.metadata);
-        BlockInfo { _hash, _magic, _header, _txs, _metadata }
+        let _lead_info = LeadInfoInfo::new(&block.lead_info);
+        BlockInfo { _hash, _magic, _header, _txs, _lead_info }
     }
 }
 
@@ -299,9 +299,9 @@ async fn generate(name: &str, folder: &str) -> Result<()> {
     let db_path = expand_path(&path).unwrap();
     let sled_db = sled::open(&db_path)?;
 
-    // Data export    
+    // Data export
     let state =
-        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet, vec![]).await?;
+        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet, vec![], false).await?;
     println!("Exporting data for {:?}", name);
     let info = StateInfo::new(&*state.read().await);
     let info_string = format!("{:#?}", info);

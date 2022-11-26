@@ -20,8 +20,13 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, util::parse::encode_base10, wallet::walletdb::QueryType};
+use darkfi_money_contract::client::{
+    MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_VALUE, MONEY_COINS_TABLE,
+    MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE,
+    MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+};
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, Keypair, MerkleNode, PublicKey, TokenId},
+    crypto::{constants::MERKLE_DEPTH, Keypair, MerkleNode, PublicKey, SecretKey, TokenId},
     incrementalmerkletree::bridgetree::BridgeTree,
 };
 use darkfi_serial::{deserialize, serialize};
@@ -30,40 +35,6 @@ use rand::rngs::OsRng;
 use serde_json::json;
 
 use super::Drk;
-
-// TODO: FIXME:
-// Find a way to have these constants be deterministic for the actual
-// contract. e.g. they could be prefixed with the contract_id in order
-// not to have collisions happen. This is because right now it's easy
-// to overwrite any table in the wallet if the developer doesn't take
-// care of it. The wallet's SQL schema comes from the money contract
-// and here we just hardcode it. There should be a nice way to parse
-// the schema and fill some map.
-const MONEY_INFO_TABLE: &str = "money_info";
-const MONEY_INFO_COL_LAST_SCANNED_SLOT: &str = "last_scanned_slot";
-
-const MONEY_TREE_TABLE: &str = "money_tree";
-const MONEY_TREE_COL_TREE: &str = "tree";
-
-const MONEY_KEYS_TABLE: &str = "money_keys";
-const MONEY_KEYS_COL_KEY_ID: &str = "key_id";
-const MONEY_KEYS_COL_IS_DEFAULT: &str = "is_default";
-const MONEY_KEYS_COL_PUBLIC: &str = "public";
-const MONEY_KEYS_COL_SECRET: &str = "secret";
-
-const MONEY_COINS_TABLE: &str = "money_coins";
-const MONEY_COINS_COL_COIN: &str = "coin";
-const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
-const MONEY_COINS_COL_SERIAL: &str = "serial";
-const MONEY_COINS_COL_VALUE: &str = "value";
-const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
-const MONEY_COINS_COL_COIN_BLIND: &str = "coin_blind";
-const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
-const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
-const MONEY_COINS_COL_SECRET: &str = "secret";
-const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
-const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
-const MONEY_COINS_COL_MEMO: &str = "memo";
 
 impl Drk {
     /// Initialize wallet with tables for the Money contract.
@@ -234,7 +205,7 @@ impl Drk {
     }
 
     /// Fetch pubkeys from the wallet and print the requested index.
-    pub async fn wallet_address(&self, idx: u64) -> Result<()> {
+    pub async fn wallet_address(&self, idx: u64) -> Result<PublicKey> {
         let query = format!("SELECT {} FROM {};", MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_TABLE);
         let params = json!([query, QueryType::Blob as u8, MONEY_KEYS_COL_PUBLIC]);
         let req = JsonRequest::new("wallet.query_row_single", params);
@@ -251,8 +222,42 @@ impl Drk {
         let key_bytes: Vec<u8> = serde_json::from_value(arr[0].clone())?;
         let public_key: PublicKey = deserialize(&key_bytes)?;
 
-        println!("{}", public_key);
+        Ok(public_key)
+    }
 
-        Ok(())
+    /// Fetch secret keys from the wallet and return them if found.
+    pub async fn wallet_secrets(&self) -> Result<Vec<SecretKey>> {
+        let query = format!("SELECT {} FROM {};", MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE);
+        let params = json!([query, QueryType::Blob as u8, MONEY_KEYS_COL_SECRET]);
+        let req = JsonRequest::new("wallet.query_row_multi", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        // The returned thing should be an array of found rows.
+        let Some(rows) = rep.as_array() else {
+            return Err(anyhow!("Unexpected response from darkfid: {}", rep))
+        };
+
+        let mut secrets = vec![];
+
+        // Let's scan through the rows and see if we got anything.
+        for row in rows {
+            let secret_bytes: Vec<u8> = serde_json::from_value(row[0].clone())?;
+            let secret: SecretKey = deserialize(&secret_bytes)?;
+            secrets.push(secret);
+        }
+
+        Ok(secrets)
+    }
+
+    /// Get the Merkle tree from the wallet
+    pub async fn wallet_tree(&self) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
+        let query = format!("SELECT * FROM {}", MONEY_TREE_TABLE);
+        let params = json!([query, QueryType::Blob as u8, MONEY_TREE_COL_TREE]);
+        let req = JsonRequest::new("wallet.query_row_single", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        let tree_bytes: Vec<u8> = serde_json::from_value(rep[0].clone())?;
+        let tree = deserialize(&tree_bytes)?;
+        Ok(tree)
     }
 }

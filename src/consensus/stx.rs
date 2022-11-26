@@ -25,7 +25,7 @@ use crate::{
     crypto::{proof::VerifyingKey, Proof},
     Error, Result,
 };
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
 pub struct TransferStx {
@@ -52,7 +52,7 @@ pub struct TransferStx {
 impl TransferStx {
     /// verify the transfer proof.
     pub fn verify(&self, vk: VerifyingKey) -> Result<()> {
-        if let Err(e) = self.proof.verify(&vk, &self.public_inputs()) {
+        if let Err(_) = self.proof.verify(&vk, &self.public_inputs()) {
             return Err(Error::TransferTxVerification)
         }
         Ok(())

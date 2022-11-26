@@ -18,7 +18,7 @@
 
 use super::Float10;
 use dashu::integer::{IBig, Sign};
-use log::{debug, info};
+use log::debug;
 use pasta_curves::pallas;
 //use pasta_curves::{group::ff::PrimeField};
 //use dashu::integer::{UBig};
@@ -49,13 +49,11 @@ pub fn base2ibig(base: pallas::Base) -> IBig {
 }
 */
 pub fn fbig2base(f: Float10) -> pallas::Base {
-    info!("fbig -> base (f): {}", f);
+    debug!("fbig -> base (f): {}", f);
     let val: IBig = fbig2ibig(f);
     let (sign, word) = val.as_sign_words();
-    //TODO (res) set pallas base sign, i.e sigma1 is negative.
     let mut words: [u64; 4] = [0, 0, 0, 0];
     words[..word.len()].copy_from_slice(word);
-
     match sign {
         Sign::Positive => pallas::Base::from_raw(words),
         Sign::Negative => pallas::Base::from_raw(words).neg(),

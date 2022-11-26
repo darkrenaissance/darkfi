@@ -16,6 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
+use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{
     crypto::{
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
@@ -54,9 +57,9 @@ pub struct Transaction {
 
 impl Transaction {
     /// Verify ZK proofs for the entire transaction.
-    pub fn verify_zkps(
+    pub async fn verify_zkps(
         &self,
-        verifying_keys: &[(String, VerifyingKey)],
+        verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
         zkp_table: Vec<Vec<(String, Vec<pallas::Base>)>>,
     ) -> Result<()> {
         // TODO: Are we sure we should assert here?
@@ -66,22 +69,23 @@ impl Transaction {
         for (call, (proofs, pubvals)) in zip!(self.calls, self.proofs, zkp_table) {
             assert_eq!(proofs.len(), pubvals.len());
 
-            for (i, (proof, (zk_ns, public_vals))) in proofs.iter().zip(pubvals.iter()).enumerate()
-            {
-                if let Some(vk) = verifying_keys.iter().find(|x| &x.0 == zk_ns) {
-                    // We have a verifying key for this
-                    debug!("public inputs: {:#?}", public_vals);
-                    if let Err(e) = proof.verify(&vk.1, public_vals) {
-                        error!("Failed verifying zk proof: {}", e);
-                        return Err(VerifyFailed::ProofVerifyFailed(e.to_string()).into())
+            for (proof, (zk_ns, public_vals)) in proofs.iter().zip(pubvals.iter()) {
+                if let Some(vks) = verifying_keys.read().await.get(&call.contract_id.to_bytes()) {
+                    if let Some(vk) = vks.iter().find(|x| &x.0 == zk_ns) {
+                        // We have a verifying key for this
+                        debug!("public inputs: {:#?}", public_vals);
+                        if let Err(e) = proof.verify(&vk.1, public_vals) {
+                            error!("Failed verifying ZK proof: {:#?}", e);
+                            return Err(VerifyFailed::ProofVerifyFailed(e.to_string()).into())
+                        }
+                        debug!("Successfully verified {}:{} ZK proof", call.contract_id, zk_ns);
+                        continue
                     }
-                } else {
-                    return Err(VerifyFailed::ProofVerifyFailed(format!(
-                        "Verifying key for {} circuit does not exist",
-                        zk_ns
-                    ))
-                    .into())
                 }
+
+                let e = format!("{}:{} circuit VK nonexistent", call.contract_id, zk_ns);
+                error!("{}", e);
+                return Err(VerifyFailed::ProofVerifyFailed(e).into())
             }
         }
 

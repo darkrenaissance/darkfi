@@ -211,6 +211,9 @@ impl RequestHandler for Darkfid {
             Some("blockchain.merkle_roots") => {
                 return self.blockchain_merkle_roots(req.id, params).await
             }
+            Some("blockchain.subscribe_blocks") => {
+                return self.blockchain_subscribe_blocks(req.id, params).await
+            }
 
             // ===================
             // Transaction methods
@@ -317,9 +320,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     // Initialize validator state
-    let state =
-        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet.clone(), faucet_pubkeys)
-            .await?;
+    let state = ValidatorState::new(
+        &sled_db,
+        genesis_ts,
+        genesis_data,
+        wallet.clone(),
+        faucet_pubkeys,
+        args.consensus,
+    )
+    .await?;
 
     let sync_p2p = {
         info!("Registering block sync P2P protocols...");
@@ -410,7 +419,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone())).detach();
+    let _ex = ex.clone();
+    ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone(), _ex)).detach();
 
     info!("Starting sync P2P network");
     sync_p2p.clone().unwrap().start(ex.clone()).await?;

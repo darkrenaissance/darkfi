@@ -217,6 +217,9 @@ pub enum Error {
     #[error("JSON-RPC error: {0}")]
     JsonRpcError(String),
 
+    #[error("Unexpected JSON-RPC data received: {0}")]
+    UnexpectedJsonRpc(String),
+
     #[error("Received proposal from unknown node")]
     UnknownNodeError,
 
@@ -235,15 +238,26 @@ pub enum Error {
     #[error("Check if proposal extends any existing fork chains failed")]
     ExtendedChainIndexNotFound,
 
+    #[error("Proposal received after finalization sync period")]
+    ProposalAfterFinalizationError,
+
     #[error("Proposal contains missmatched hashes")]
     ProposalHashesMissmatchError,
 
     #[error("Proposal contains missmatched headers")]
     ProposalHeadersMissmatchError,
 
+    #[error("Proposal contains different offset")]
+    ProposalDifferentOffsetError,
+
+    #[error("proposed coin is spent")]
+    ProposalIsSpent,
+
     #[error("unable to verify transfer transaction")]
     TransferTxVerification,
 
+    #[error("unable to verify proposed mu values")]
+    ProposalPublicValuesMismatched,
     // ===============
     // Database errors
     // ===============
@@ -267,9 +281,6 @@ pub enum Error {
     #[error("Block in slot {0} not found in database")]
     SlotNotFound(u64),
 
-    #[error("Block {0} metadata not found in database")]
-    BlockMetadataNotFound(String),
-
     #[error("Contract {0} not found in database")]
     ContractNotFound(String),
 
@@ -278,6 +289,9 @@ pub enum Error {
 
     #[error("Contract already initialized")]
     ContractAlreadyInitialized,
+
+    #[error("zkas bincode not found in sled database")]
+    ZkasBincodeNotFound,
 
     // =============
     // Wallet errors
