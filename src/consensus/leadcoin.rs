@@ -203,9 +203,7 @@ impl LeadCoin {
 
     /// Create a vector of `pallas::Base` elements from the `LeadCoin` to be
     /// used as public inputs for the ZK proof.
-    pub fn public_inputs(&self,
-                         sigma1: pallas::Base,
-                         sigma2: pallas::Base) -> Vec<pallas::Base> {
+    pub fn public_inputs(&self, sigma1: pallas::Base, sigma2: pallas::Base) -> Vec<pallas::Base> {
         // pk
         let pk = self.pk();
         // coin 1-2 cm/commitment

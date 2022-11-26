@@ -405,9 +405,11 @@ impl ValidatorState {
     /// Check if new epoch has started, to create new epoch coins.
     /// Returns flag to signify if epoch has changed and vector of
     /// new epoch competing coins.
-    pub async fn epoch_changed(&mut self,
-                               sigma1: pallas::Base,
-                               sigma2: pallas::Base) -> Result<bool> {
+    pub async fn epoch_changed(
+        &mut self,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
+    ) -> Result<bool> {
         let epoch = self.current_epoch();
         self.consensus.prev_sigma1 = sigma1;
         self.consensus.prev_sigma2 = sigma2;
@@ -432,10 +434,10 @@ impl ValidatorState {
 
         // Generate sigmas
         let total_stake = self.total_stake_plus(epoch, slot); // Only used for fine-tuning
-        debug!("consensus::sigmas(): epoch: {}",epoch);
-        debug!("consensus::sigmas(): slot: {}",slot);
-        debug!("consensus::sigmas(): f: {}",f);
-        debug!("consensus::sigmas(): stake: {}",total_stake);
+        debug!("consensus::sigmas(): epoch: {}", epoch);
+        debug!("consensus::sigmas(): slot: {}", slot);
+        debug!("consensus::sigmas(): f: {}", f);
+        debug!("consensus::sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
         let field_p = Float10::from_str_native(constants::P)
@@ -611,24 +613,26 @@ impl ValidatorState {
         let d = self.f_der();
         let mut f = self.consensus.kp.clone() *
             (p.clone() +
-             one.clone() / constants::TI.clone() * i.clone() +
-             constants::TD.clone() * d.clone());
-        while f<=zero.clone() || f >=one.clone() {
+                one.clone() / constants::TI.clone() * i.clone() +
+                constants::TD.clone() * d.clone());
+        while f <= zero.clone() || f >= one.clone() {
             let mut clipped_f = f;
             while clipped_f <= zero.clone() || clipped_f >= one.clone() {
-                if clipped_f>=one.clone() {
-                    clipped_f -=one.clone();
-                } else if clipped_f<=zero.clone() {
-                    clipped_f +=one.clone();
+                if clipped_f >= one.clone() {
+                    clipped_f -= one.clone();
+                } else if clipped_f <= zero.clone() {
+                    clipped_f += one.clone();
                 }
             }
-            let clipped_kp = clipped_f/(p.clone() +
-                                        one.clone() / constants::TI.clone() * i.clone() +
-                                        constants::TD.clone() * d.clone());
+            let clipped_kp = clipped_f /
+                (p.clone() +
+                    one.clone() / constants::TI.clone() * i.clone() +
+                    constants::TD.clone() * d.clone());
             self.consensus.kp = clipped_kp.clone();
-            f = clipped_kp * (p.clone() +
-                              one.clone() / constants::TI.clone() * i.clone() +
-                              constants::TD.clone() * d.clone());
+            f = clipped_kp *
+                (p.clone() +
+                    one.clone() / constants::TI.clone() * i.clone() +
+                    constants::TD.clone() * d.clone());
             info!("Consensus::win_prob_with_full_stake(): f: {}", f);
         }
         info!("Consensus::win_prob_with_full_stake(): last f: {}", f);
@@ -870,12 +874,18 @@ impl ValidatorState {
         // sigma1
         let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
         if self.consensus.prev_sigma1 != prop_sigma1 {
-            error!("failed to verify public value sigma1: {:?}, to proposed: {:?}", self.consensus.prev_sigma1, prop_sigma1);
+            error!(
+                "failed to verify public value sigma1: {:?}, to proposed: {:?}",
+                self.consensus.prev_sigma1, prop_sigma1
+            );
         }
         // sigma2
         let prop_sigma2 = lf.public_inputs[constants::PI_SIGMA2_INDEX];
         if self.consensus.prev_sigma2 != prop_sigma2 {
-            error!("failed to verify public value sigma2: {:?}, to proposed: {:?}", self.consensus.prev_sigma2, prop_sigma2);
+            error!(
+                "failed to verify public value sigma2: {:?}, to proposed: {:?}",
+                self.consensus.prev_sigma2, prop_sigma2
+            );
         }
         // Verify proposal public inputs
         let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
@@ -991,9 +1001,9 @@ impl ValidatorState {
     }
 
     /// Remove provided transactions vector from unconfirmed_txs if they exist.
-    pub fn remove_txs(&mut self, transactions: Vec<Transaction>) -> Result<()> {
+    pub fn remove_txs(&mut self, transactions: &Vec<Transaction>) -> Result<()> {
         for tx in transactions {
-            if let Some(pos) = self.unconfirmed_txs.iter().position(|txs| *txs == tx) {
+            if let Some(pos) = self.unconfirmed_txs.iter().position(|txs| txs == tx) {
                 self.unconfirmed_txs.remove(pos);
             }
         }
@@ -1109,7 +1119,7 @@ impl ValidatorState {
             }
         };
 
-        let blocks_subscriber = self.subscribers.get("blocks").unwrap();
+        let blocks_subscriber = self.subscribers.get("blocks").unwrap().clone();
 
         // Validating state transitions
         for proposal in &finalized {
@@ -1120,6 +1130,12 @@ impl ValidatorState {
             debug!(target: "consensus", "Applying state transition for finalized block");
             if let Err(e) = self.verify_transactions(&proposal.txs, true).await {
                 error!(target: "consensus", "Finalized block transaction verifications failed: {}", e);
+                return Err(e)
+            }
+
+            // Remove proposal transactions from memory pool
+            if let Err(e) = self.remove_txs(&proposal.txs) {
+                error!(target: "consensus", "Removing finalized block transactions failed: {}", e);
                 return Err(e)
             }
 
@@ -1209,7 +1225,7 @@ impl ValidatorState {
         blocks_subscriber.notify(notif).await;
 
         debug!("receive_finalized_block(): Removing block transactions from unconfirmed_txs");
-        self.remove_txs(block.txs.clone())?;
+        self.remove_txs(&block.txs)?;
 
         Ok(true)
     }
