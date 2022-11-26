@@ -82,7 +82,7 @@ fn mint_proof() -> Result<()> {
     let value_coords = value_commit.to_affine().coordinates().unwrap();
 
     let token_commit = pedersen_commitment_base(token_id, token_blind);
-    // Since the value commit is a curve point, we fetch its coordinates
+    // Since the token commit is a curve point, we fetch its coordinates
     let token_coords = token_commit.to_affine().coordinates().unwrap();
 
     let public_inputs =
