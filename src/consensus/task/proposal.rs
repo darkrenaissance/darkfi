@@ -91,27 +91,18 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         info!("consensus: Waiting for next slot ({} sec)", seconds_next_slot);
         sleep(seconds_next_slot).await;
 
-        let sl = state.read().await.current_slot();
-        let rel_sl = state.read().await.relative_slot(sl);
-        let ep = state.read().await.consensus.epoch;
-        info!("proposal::proposal_task(): sl: {}, ep: {}", sl, ep);
-        let (sigma1, sigma2) = state.write().await.sigmas(ep, rel_sl);
-        info!("Proposal::proposal_task(): sigma1: {:?}", sigma1);
-        info!("Proposal::proposal_task(): sigma2: {:?}", sigma2);
+        // Retrieve slot info
+        let slot = state.read().await.current_slot();
+        let relative_slot = state.read().await.relative_slot(slot);
+        let epoch = state.read().await.consensus.epoch;
+        let (sigma1, sigma2) = state.write().await.sigmas(epoch, relative_slot);
+
         // Node checks if epoch has changed, to generate new epoch coins
         let epoch_changed = state.write().await.epoch_changed(sigma1, sigma2).await;
         match epoch_changed {
             Ok(changed) => {
                 if changed {
-                    info!("consensus: New epoch started: {}", state.read().await.current_epoch());
-                    let mut coins = vec![];
-                    for slot_coins in &state.read().await.consensus.coins {
-                        let mut slot_coins_inputs = vec![];
-                        for slot_coin in slot_coins {
-                            slot_coins_inputs.push(slot_coin.public_inputs(sigma1, sigma2));
-                        }
-                        coins.push(slot_coins_inputs);
-                    }
+                    info!("consensus: New epoch started: {}", state.read().await.consensus.epoch);
                 }
             }
             Err(e) => {
@@ -119,9 +110,10 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
                 continue
             }
         };
+
         // Node checks if it's the slot leader to generate a new proposal
         // for that slot.
-        let (won, idx) = state.write().await.is_slot_leader();
+        let (won, idx) = state.write().await.is_slot_leader(sigma1, sigma2);
         let result = if won { state.write().await.propose(idx, sigma1, sigma2) } else { Ok(None) };
         let proposal = match result {
             Ok(prop) => {

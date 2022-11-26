@@ -642,13 +642,11 @@ impl ValidatorState {
     /// Check that the provided participant/stakeholder coins win the slot lottery.
     /// If the stakeholder has multiple competing winning coins, only the highest value
     /// coin is selected, since the stakeholder can't give more than one proof per block/slot.
-    /// * `slot` - slot relative index
-    /// * `epoch_coins` - stakeholder's epoch coins
+    /// * 'sigma1', 'sigma2': slot sigmas
     /// Returns: (check: bool, idx: usize) where idx is the winning coin's index
-    pub fn is_slot_leader(&mut self) -> (bool, usize) {
+    pub fn is_slot_leader(&mut self, sigma1: pallas::Base, sigma2: pallas::Base) -> (bool, usize) {
         // Slot relative index
         let slot = self.relative_slot(self.current_slot());
-        let (sigma1, sigma2) = self.sigmas(self.consensus.epoch, slot);
         // Stakeholder's epoch coins
         let coins = &self.consensus.coins;
 
