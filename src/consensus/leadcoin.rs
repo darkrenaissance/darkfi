@@ -203,7 +203,9 @@ impl LeadCoin {
 
     /// Create a vector of `pallas::Base` elements from the `LeadCoin` to be
     /// used as public inputs for the ZK proof.
-    pub fn public_inputs(&self) -> Vec<pallas::Base> {
+    pub fn public_inputs(&self,
+                         sigma1: pallas::Base,
+                         sigma2: pallas::Base) -> Vec<pallas::Base> {
         // pk
         let pk = self.pk();
         // coin 1-2 cm/commitment
@@ -236,6 +238,8 @@ impl LeadCoin {
             y,
             self.rho_mu,
             rho,
+            sigma1,
+            sigma2,
         ]
     }
 
@@ -345,7 +349,7 @@ impl LeadCoin {
             Witness::Base(Value::known(sigma2)),
         ];
         let circuit = ZkCircuit::new(witnesses, zkbin.clone());
-        Ok(Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?)
+        Ok(Proof::create(pk, &[circuit], &self.public_inputs(sigma1, sigma2), &mut OsRng)?)
     }
 
     pub fn create_xfer_proof(
@@ -355,6 +359,8 @@ impl LeadCoin {
         change_pk: pallas::Base, //change coin public key
         transfered_coin: TxRcpt,
         transfered_pk: pallas::Base, // recipient coin's public key
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
     ) -> Result<TransferStx> {
         assert!(change_coin.value + transfered_coin.value == self.value && self.value > 0);
         let bincode = include_bytes!("../../proof/tx.zk.bin");
@@ -388,7 +394,7 @@ impl LeadCoin {
             Witness::Base(Value::known(xferval)),
         ];
         let circuit = ZkCircuit::new(witnesses, zkbin.clone());
-        let proof = Proof::create(pk, &[circuit], &self.public_inputs(), &mut OsRng)?;
+        let proof = Proof::create(pk, &[circuit], &self.public_inputs(sigma1, sigma2), &mut OsRng)?;
         let cm3_msg_in = [
             pallas::Base::from(PREFIX_CM),
             change_pk,

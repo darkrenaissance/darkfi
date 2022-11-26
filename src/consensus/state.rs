@@ -89,12 +89,15 @@ pub struct ConsensusState {
     pub leaders_history: Vec<u64>,
     /// Kp
     pub kp: Float10,
+    /// previous slot sigma1
+    pub prev_sigma1: pallas::Base,
+    /// previous slot sigma2
+    pub prev_sigma2: pallas::Base,
 }
 
 impl ConsensusState {
     pub fn new(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
         let genesis_block = Block::genesis_block(genesis_ts, genesis_data).blockhash();
-
         Ok(Self {
             genesis_ts,
             genesis_block,
@@ -109,6 +112,8 @@ impl ConsensusState {
             leaders_spent_coins: vec![],
             leaders_history: vec![0],
             kp: constants::FLOAT10_TWO.clone() / constants::FLOAT10_NINE.clone(),
+            prev_sigma1: pallas::Base::zero(),
+            prev_sigma2: pallas::Base::zero(),
         })
     }
 }
@@ -400,8 +405,12 @@ impl ValidatorState {
     /// Check if new epoch has started, to create new epoch coins.
     /// Returns flag to signify if epoch has changed and vector of
     /// new epoch competing coins.
-    pub async fn epoch_changed(&mut self) -> Result<bool> {
+    pub async fn epoch_changed(&mut self,
+                               sigma1: pallas::Base,
+                               sigma2: pallas::Base) -> Result<bool> {
         let epoch = self.current_epoch();
+        self.consensus.prev_sigma1 = sigma1;
+        self.consensus.prev_sigma2 = sigma2;
         if epoch <= self.consensus.epoch {
             return Ok(false)
         }
@@ -411,18 +420,22 @@ impl ValidatorState {
         self.consensus.coins = self.create_epoch_coins(eta, epoch).await?;
         self.consensus.epoch = epoch;
         self.consensus.epoch_eta = eta;
+
         Ok(true)
     }
 
     /// return 2-term target approximation sigma coefficients.
     /// `epoch: absolute epoch index
     /// `slot: relative slot index
-    fn sigmas(&mut self, epoch: u64, slot: u64) -> (pallas::Base, pallas::Base) {
+    pub fn sigmas(&mut self, epoch: u64, slot: u64) -> (pallas::Base, pallas::Base) {
         let f = self.win_prob_with_full_stake();
 
         // Generate sigmas
         let total_stake = self.total_stake_plus(epoch, slot); // Only used for fine-tuning
-
+        debug!("consensus::sigmas(): epoch: {}",epoch);
+        debug!("consensus::sigmas(): slot: {}",slot);
+        debug!("consensus::sigmas(): f: {}",f);
+        debug!("consensus::sigmas(): stake: {}",total_stake);
         let one = constants::FLOAT10_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
         let field_p = Float10::from_str_native(constants::P)
@@ -593,11 +606,10 @@ impl ValidatorState {
     fn win_prob_with_full_stake(&mut self) -> Float10 {
         let zero = constants::FLOAT10_ZERO.clone();
         let one = constants::FLOAT10_ONE.clone();
-        let mut f = zero.clone();
         let p = self.f_dif();
         let i = self.f_int();
         let d = self.f_der();
-        f = self.consensus.kp.clone() *
+        let mut f = self.consensus.kp.clone() *
             (p.clone() +
              one.clone() / constants::TI.clone() * i.clone() +
              constants::TD.clone() * d.clone());
@@ -629,7 +641,7 @@ impl ValidatorState {
     /// * `slot` - slot relative index
     /// * `epoch_coins` - stakeholder's epoch coins
     /// Returns: (check: bool, idx: usize) where idx is the winning coin's index
-    pub fn is_slot_leader(&mut self) -> (bool, usize, pallas::Base, pallas::Base) {
+    pub fn is_slot_leader(&mut self) -> (bool, usize) {
         // Slot relative index
         let slot = self.relative_slot(self.current_slot());
         let (sigma1, sigma2) = self.sigmas(self.consensus.epoch, slot);
@@ -658,7 +670,7 @@ impl ValidatorState {
             }
         }
 
-        (won, highest_stake_idx, sigma1, sigma2)
+        (won, highest_stake_idx)
     }
 
     /// Generate a block proposal for the current slot, containing all
@@ -703,7 +715,7 @@ impl ValidatorState {
         let lead_info = LeadInfo::new(
             signed_proposal,
             public_key,
-            coin.public_inputs(),
+            coin.public_inputs(sigma1, sigma2),
             eta.to_repr(),
             LeadProof::from(proof),
             self.get_current_offset(),
@@ -854,6 +866,17 @@ impl ValidatorState {
             return Err(Error::ProposalPublicValuesMismatched)
         }
 
+        // sigmas
+        // sigma1
+        let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
+        if self.consensus.prev_sigma1 != prop_sigma1 {
+            error!("failed to verify public value sigma1: {:?}, to proposed: {:?}", self.consensus.prev_sigma1, prop_sigma1);
+        }
+        // sigma2
+        let prop_sigma2 = lf.public_inputs[constants::PI_SIGMA2_INDEX];
+        if self.consensus.prev_sigma2 != prop_sigma2 {
+            error!("failed to verify public value sigma2: {:?}, to proposed: {:?}", self.consensus.prev_sigma2, prop_sigma2);
+        }
         // Verify proposal public inputs
         let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
         for sn in &self.consensus.leaders_nullifiers {

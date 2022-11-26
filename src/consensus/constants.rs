@@ -77,3 +77,5 @@ pub const PI_COMMITMENT_X_INDEX: usize = 1;
 pub const PI_COMMITMENT_Y_INDEX: usize = 2;
 pub const PI_MU_Y_INDEX: usize = 8;
 pub const PI_MU_RHO_INDEX: usize = 10;
+pub const PI_SIGMA1_INDEX: usize = 12;
+pub const PI_SIGMA2_INDEX: usize = 13;

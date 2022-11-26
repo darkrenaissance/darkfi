@@ -30,13 +30,6 @@ circuit "Lead" {
         PREFIX_CM = witness_base(4);
         PREFIX_PK = witness_base(5);
         PREFIX_SN = witness_base(6);
-        
-        # constrain public values
-        
-        # sigma1
-        #constrain_instance(sigma1);
-        # sigma2
-        #constrain_instance(sigma2);
 
         # coin (1) pk
         pk = poseidon_hash(PREFIX_PK, c1_sk_root, c1_tau, ZERO);
@@ -87,5 +80,9 @@ circuit "Lead" {
         term2 = base_mul(term2_1, value);
         target = base_add(term1, term2);
         #lottery
+        # constrain public value sigma1
+        constrain_instance(sigma1);
+        # constrain public value sigma2
+        constrain_instance(sigma2);
         less_than_loose(y, target);
 }
