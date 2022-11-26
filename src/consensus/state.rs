@@ -479,7 +479,7 @@ impl ValidatorState {
             let coin = LeadCoin::new(
                 eta,
                 constants::LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
-                slot+i as u64,
+                slot + i as u64,
                 epoch_secrets.secret_keys[i].inner(),
                 epoch_secrets.merkle_roots[i],
                 i,
@@ -535,9 +535,9 @@ impl ValidatorState {
 
     /// total stake plus one.
     /// assuming constant Reward.
-    fn total_stake_plus(&mut self, epoch: u64, slot: u64) -> u64 {
-        (epoch * constants::EPOCH_LENGTH as u64 + slot + 1 - self.overall_empty_slots()) *
-            Self::reward()
+    fn total_stake_plus(&mut self, epoch: u64, slot: u64) -> i64 {
+        ((epoch * constants::EPOCH_LENGTH as u64 + slot + 1 - self.overall_empty_slots()) *
+            Self::reward()) as i64
     }
 
     /// Calculate how many leaders existed in previous slot and appends
@@ -559,7 +559,7 @@ impl ValidatorState {
             "extend_leaders_history(): Current leaders history: {:?}",
             self.consensus.leaders_history
         );
-        Float10::try_from(count).unwrap().with_precision(constants::RADIX_BITS).value()
+        Float10::try_from(count as i64).unwrap().with_precision(constants::RADIX_BITS).value()
     }
 
     fn f_dif(&mut self) -> Float10 {
@@ -569,11 +569,11 @@ impl ValidatorState {
 
     fn f_der(&self) -> Float10 {
         let len = self.consensus.leaders_history.len();
-        let last = Float10::try_from(self.consensus.leaders_history[len - 1])
+        let last = Float10::try_from(self.consensus.leaders_history[len - 1] as i64)
             .unwrap()
             .with_precision(constants::RADIX_BITS)
             .value();
-        let second_to_last = Float10::try_from(self.consensus.leaders_history[len - 2])
+        let second_to_last = Float10::try_from(self.consensus.leaders_history[len - 2] as i64)
             .unwrap()
             .with_precision(constants::RADIX_BITS)
             .value();
