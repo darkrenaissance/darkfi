@@ -26,7 +26,7 @@ use darkfi_money_contract::client::{
     MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, Keypair, MerkleNode, PublicKey, TokenId},
+    crypto::{constants::MERKLE_DEPTH, Keypair, MerkleNode, PublicKey, SecretKey, TokenId},
     incrementalmerkletree::bridgetree::BridgeTree,
 };
 use darkfi_serial::{deserialize, serialize};
@@ -223,5 +223,41 @@ impl Drk {
         let public_key: PublicKey = deserialize(&key_bytes)?;
 
         Ok(public_key)
+    }
+
+    /// Fetch secret keys from the wallet and return them if found.
+    pub async fn wallet_secrets(&self) -> Result<Vec<SecretKey>> {
+        let query = format!("SELECT {} FROM {};", MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE);
+        let params = json!([query, QueryType::Blob as u8, MONEY_KEYS_COL_SECRET]);
+        let req = JsonRequest::new("wallet.query_row_multi", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        // The returned thing should be an array of found rows.
+        let Some(rows) = rep.as_array() else {
+            return Err(anyhow!("Unexpected response from darkfid: {}", rep))
+        };
+
+        let mut secrets = vec![];
+
+        // Let's scan through the rows and see if we got anything.
+        for row in rows {
+            let secret_bytes: Vec<u8> = serde_json::from_value(row[0].clone())?;
+            let secret: SecretKey = deserialize(&secret_bytes)?;
+            secrets.push(secret);
+        }
+
+        Ok(secrets)
+    }
+
+    /// Get the Merkle tree from the wallet
+    pub async fn wallet_tree(&self) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
+        let query = format!("SELECT * FROM {}", MONEY_TREE_TABLE);
+        let params = json!([query, QueryType::Blob as u8, MONEY_TREE_COL_TREE]);
+        let req = JsonRequest::new("wallet.query_row_single", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        let tree_bytes: Vec<u8> = serde_json::from_value(rep[0].clone())?;
+        let tree = deserialize(&tree_bytes)?;
+        Ok(tree)
     }
 }

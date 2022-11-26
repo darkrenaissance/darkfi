@@ -77,6 +77,14 @@ enum Subcmd {
         #[arg(long)]
         /// Get the default address in the wallet
         address: bool,
+
+        #[arg(long)]
+        /// Print all the secret keys from the wallet
+        secrets: bool,
+
+        #[arg(long)]
+        /// Print the Merkle tree in the wallet
+        tree: bool,
     },
 
     /// Airdrop some tokens
@@ -141,8 +149,8 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Wallet { initialize, keygen, balance, address } => {
-            if !initialize && !keygen && !balance && !address {
+        Subcmd::Wallet { initialize, keygen, balance, address, secrets, tree } => {
+            if !initialize && !keygen && !balance && !address && !secrets && !tree {
                 eprintln!("Error: You must use at least one flag for this subcommand");
                 eprintln!("Run with \"wallet -h\" to see the subcommand usage.");
                 exit(2);
@@ -180,6 +188,28 @@ async fn main() -> Result<()> {
                 return Ok(())
             }
 
+            if secrets {
+                let v =
+                    drk.wallet_secrets().await.with_context(|| "Failed to fetch wallet secrets")?;
+
+                drk.rpc_client.close().await?;
+
+                for i in v {
+                    println!("{}", i);
+                }
+
+                return Ok(())
+            }
+
+            if tree {
+                let v = drk.wallet_tree().await.with_context(|| "Failed to fetch Merkle tree")?;
+                drk.rpc_client.close().await?;
+
+                println!("{:#?}", v);
+
+                return Ok(())
+            }
+
             unreachable!()
         }
 
@@ -210,13 +240,15 @@ async fn main() -> Result<()> {
         }
 
         Subcmd::Subscribe => {
-            let rpc_client = RpcClient::new(args.endpoint)
+            let rpc_client = RpcClient::new(args.endpoint.clone())
                 .await
                 .with_context(|| "Could not connect to darkfid RPC endpoint")?;
 
             let drk = Drk { rpc_client };
 
-            drk.subscribe_blocks().await.with_context(|| "Block subscription failed")?;
+            drk.subscribe_blocks(args.endpoint)
+                .await
+                .with_context(|| "Block subscription failed")?;
 
             Ok(())
         }
