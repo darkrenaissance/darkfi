@@ -24,9 +24,3 @@ simplelog = "0.12.0"
 libsqlite3-sys = {version = "0.24.2", features = ["bundled-sqlcipher"]}
 sqlx = {version = "0.6.2", features = ["runtime-async-std-native-tls", "sqlite"]}
 url = "2.3.1"
-#bs58 = "0.4.0"
-#clap = {version = "3.2.20", features = ["derive"]}
-#darkfi = {path = "../../", features = ["crypto", "util", "rpc", "wasm-runtime", "zkas"]}
-#indicatif = "0.17.1"
-#log = "0.4.17"
-#pasta_curves = "0.4.1"

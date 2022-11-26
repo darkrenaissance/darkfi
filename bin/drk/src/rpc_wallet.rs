@@ -21,13 +21,21 @@ use std::collections::HashMap;
 use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, util::parse::encode_base10, wallet::walletdb::QueryType};
 use darkfi_money_contract::client::{
-    MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_VALUE, MONEY_COINS_TABLE,
-    MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE,
-    MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+    Coin, Note, OwnCoin, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
+    MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
+    MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
+    MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_VALUE,
+    MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE, MONEY_KEYS_COL_IS_DEFAULT,
+    MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE,
+    MONEY_TREE_TABLE,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, Keypair, MerkleNode, PublicKey, SecretKey, TokenId},
+    crypto::{
+        constants::MERKLE_DEPTH, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey, TokenId,
+    },
+    incrementalmerkletree,
     incrementalmerkletree::bridgetree::BridgeTree,
+    pasta::pallas,
 };
 use darkfi_serial::{deserialize, serialize};
 use prettytable::{format, row, Table};
@@ -79,7 +87,7 @@ impl Drk {
             );
             let params = json!([query, QueryType::Blob as u8, tree_bytes]);
             let req = JsonRequest::new("wallet.exec_sql", params);
-            let _ = self.rpc_client.oneshot_request(req).await?;
+            let _ = self.rpc_client.request(req).await?;
             println!("Successfully initialized Merkle tree");
         }
 
@@ -114,7 +122,7 @@ impl Drk {
         ]);
 
         let req = JsonRequest::new("wallet.exec_sql", params);
-        let rep = self.rpc_client.oneshot_request(req).await?;
+        let rep = self.rpc_client.request(req).await?;
 
         if rep == true {
             println!("Successfully added new keypair to wallet");
@@ -124,6 +132,105 @@ impl Drk {
 
         println!("New address: {}", keypair.public);
         Ok(())
+    }
+
+    /// Fetch all coins and their metadata from the wallet, optionally also spent ones.
+    /// The boolean in the return tuple marks if the coin is marked as spent.
+    pub async fn wallet_coins(&self, fetch_spent: bool) -> Result<Vec<(OwnCoin, bool)>> {
+        eprintln!("Fetching OwnCoins from wallet");
+        let query = if fetch_spent {
+            format!("SELECT * FROM {}", MONEY_COINS_TABLE)
+        } else {
+            format!(
+                "SELECT * FROM {} WHERE {} = {}",
+                MONEY_COINS_TABLE, MONEY_COINS_COL_IS_SPENT, 0
+            )
+        };
+
+        let params = json!([
+            query,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_COIN,
+            QueryType::Integer as u8,
+            MONEY_COINS_COL_IS_SPENT,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_SERIAL,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_VALUE,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_TOKEN_ID,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_COIN_BLIND,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_VALUE_BLIND,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_TOKEN_BLIND,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_SECRET,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_NULLIFIER,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_LEAF_POSITION,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_MEMO,
+        ]);
+
+        let req = JsonRequest::new("wallet.query_row_multi", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        // The returned thing should be an array of found rows.
+        let Some(rows) = rep.as_array() else {
+            return Err(anyhow!("Unexpected response from darkfid: {}", rep))
+        };
+
+        let mut owncoins = vec![];
+
+        for row in rows {
+            let Some(row) = row.as_array() else {
+                return Err(anyhow!("Unexpected response from darkfid: {}", rep))
+            };
+
+            let coin_bytes: Vec<u8> = serde_json::from_value(row[0].clone())?;
+            let coin: Coin = deserialize(&coin_bytes)?;
+
+            let is_spent: bool = serde_json::from_value(row[1].clone())?;
+
+            let serial_bytes: Vec<u8> = serde_json::from_value(row[2].clone())?;
+            let serial: pallas::Base = deserialize(&serial_bytes)?;
+
+            let value_bytes: Vec<u8> = serde_json::from_value(row[3].clone())?;
+            let value: u64 = deserialize(&value_bytes)?;
+
+            let token_id_bytes: Vec<u8> = serde_json::from_value(row[4].clone())?;
+            let token_id: TokenId = deserialize(&token_id_bytes)?;
+
+            let coin_blind_bytes: Vec<u8> = serde_json::from_value(row[5].clone())?;
+            let coin_blind: pallas::Base = deserialize(&coin_blind_bytes)?;
+
+            let value_blind_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
+            let value_blind: pallas::Scalar = deserialize(&value_blind_bytes)?;
+
+            let token_blind_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
+            let token_blind: pallas::Scalar = deserialize(&token_blind_bytes)?;
+
+            let secret_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
+            let secret: SecretKey = deserialize(&secret_bytes)?;
+
+            let nullifier_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
+            let nullifier: Nullifier = deserialize(&nullifier_bytes)?;
+
+            let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
+            let leaf_position: incrementalmerkletree::Position = deserialize(&leaf_position_bytes)?;
+
+            let memo: Vec<u8> = serde_json::from_value(row[11].clone())?;
+
+            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind, memo };
+            let owncoin = OwnCoin { coin, note, secret, nullifier, leaf_position };
+
+            owncoins.push((owncoin, is_spent))
+        }
+
+        Ok(owncoins)
     }
 
     /// Fetch known balances from the wallet and try to print them as a table.
@@ -149,7 +256,7 @@ impl Drk {
         ]);
 
         let req = JsonRequest::new("wallet.query_row_multi", params);
-        let rep = self.rpc_client.oneshot_request(req).await?;
+        let rep = self.rpc_client.request(req).await?;
 
         // The returned thing should be an array of found rows.
         let Some(rows) = rep.as_array() else {
@@ -205,11 +312,11 @@ impl Drk {
     }
 
     /// Fetch pubkeys from the wallet and print the requested index.
-    pub async fn wallet_address(&self, idx: u64) -> Result<PublicKey> {
+    pub async fn wallet_address(&self, _idx: u64) -> Result<PublicKey> {
         let query = format!("SELECT {} FROM {};", MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_TABLE);
         let params = json!([query, QueryType::Blob as u8, MONEY_KEYS_COL_PUBLIC]);
         let req = JsonRequest::new("wallet.query_row_single", params);
-        let rep = self.rpc_client.oneshot_request(req).await?;
+        let rep = self.rpc_client.request(req).await?;
 
         let Some(arr) = rep.as_array() else {
             return Err(anyhow!("Unexpected response from darkfid: {}", rep));
@@ -259,5 +366,26 @@ impl Drk {
         let tree_bytes: Vec<u8> = serde_json::from_value(rep[0].clone())?;
         let tree = deserialize(&tree_bytes)?;
         Ok(tree)
+    }
+
+    /// Mark a coin in the wallet as spent
+    pub async fn mark_spent_coin(&self, coin: &Coin) -> Result<()> {
+        let query = format!(
+            "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
+            MONEY_COINS_TABLE, MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_COIN
+        );
+
+        let params = json!([
+            query,
+            QueryType::Integer as u8,
+            1,
+            QueryType::Blob as u8,
+            serialize(&coin.inner())
+        ]);
+
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let _ = self.rpc_client.request(req).await?;
+
+        Ok(())
     }
 }

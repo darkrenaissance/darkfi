@@ -182,7 +182,7 @@ pub struct Darkfid {
 // JSON-RPC methods
 mod rpc_blockchain;
 mod rpc_misc;
-//mod rpc_tx;
+mod rpc_tx;
 mod rpc_wallet;
 
 // Internal methods
@@ -214,14 +214,15 @@ impl RequestHandler for Darkfid {
             Some("blockchain.subscribe_blocks") => {
                 return self.blockchain_subscribe_blocks(req.id, params).await
             }
+            Some("blockchain.lookup_zkas") => {
+                return self.blockchain_lookup_zkas(req.id, params).await
+            }
 
             // ===================
             // Transaction methods
             // ===================
-            /*
-            Some("tx.transfer") => return self.tx_transfer(req.id, params).await,
             Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
-            */
+
             // ==============
             // Wallet methods
             // ==============
@@ -232,6 +233,7 @@ impl RequestHandler for Darkfid {
             Some("wallet.query_row_multi") => {
                 return self.wallet_query_row_multi(req.id, params).await
             }
+
             // ==============
             // Invalid method
             // ==============

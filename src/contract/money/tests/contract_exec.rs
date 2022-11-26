@@ -148,7 +148,7 @@ async fn money_contract_execution() -> Result<()> {
     let amount = decode_base10("42.69", 8, true)?;
 
     info!("Building transfer tx for clear inputs");
-    let (params, proofs, secret_keys) = build_transfer_tx(
+    let (params, proofs, secret_keys, _spent_coins) = build_transfer_tx(
         &faucet_kp,
         &alice_kp.public,
         amount,
@@ -211,7 +211,7 @@ async fn money_contract_execution() -> Result<()> {
 
     // Alice can spend the coin and send another one to herself
     info!("Building transfer tx for Alice from Alice");
-    let (params, proofs, secret_keys) = build_transfer_tx(
+    let (params, proofs, secret_keys, _spent_coins) = build_transfer_tx(
         &alice_kp,
         &alice_kp.public,
         amount,
@@ -267,7 +267,7 @@ async fn money_contract_execution() -> Result<()> {
 
     // Alice can spend the coin and send another one to herself
     info!("Building transfer tx for Alice from Alice");
-    let (params, proofs, secret_keys) = build_transfer_tx(
+    let (params, proofs, secret_keys, _spent_coins) = build_transfer_tx(
         &alice_kp,
         &alice_kp.public,
         amount,

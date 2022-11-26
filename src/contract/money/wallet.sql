@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS money_tree (
 -- The keypairs in our wallet
 CREATE TABLE IF NOT EXISTS money_keys (
 	key_id INTEGER PRIMARY KEY NOT NULL,
-	is_default BOOLEAN NOT NULL,
+	is_default INTEGER NOT NULL,
 	public BLOB NOT NULL,
 	secret BLOB NOT NULL
 );
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS money_keys (
 -- The coins we have the information to and can spend
 CREATE TABLE IF NOT EXISTS money_coins (
 	coin BLOB PRIMARY KEY NOT NULL,
-	is_spent BOOLEAN NOT NULL,
+	is_spent INTEGER NOT NULL,
 	serial BLOB NOT NULL,
 	value BLOB NOT NULL,
 	token_id BLOB NOT NULL,

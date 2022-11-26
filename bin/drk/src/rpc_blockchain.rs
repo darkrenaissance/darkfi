@@ -25,6 +25,7 @@ use darkfi::{
         jsonrpc::{JsonRequest, JsonResult},
     },
     system::Subscriber,
+    tx::Transaction,
     wallet::walletdb::QueryType,
 };
 use darkfi_money_contract::{
@@ -86,6 +87,9 @@ impl Drk {
                     let bytes = bs58::decode(params).into_vec()?;
 
                     let block_data: BlockInfo = deserialize(&bytes)?;
+                    eprintln!("=======================================");
+                    eprintln!("Block header:\n{:#?}", block_data.header);
+                    eprintln!("=======================================");
 
                     // TODO: FIXME: Disallow this if last_scanned_slot is not this-1 or something
                     eprintln!("Deserialized successfully. Scanning block...");
@@ -236,5 +240,31 @@ impl Drk {
         }
 
         Ok(())
+    }
+
+    /// Try to fetch zkas bincodes for the given `ContractId`.
+    pub async fn lookup_zkas(&self, contract_id: &ContractId) -> Result<Vec<(String, Vec<u8>)>> {
+        eprintln!("Querying zkas bincode for {}", contract_id);
+
+        let params = json!([format!("{}", contract_id)]);
+        let req = JsonRequest::new("blockchain.lookup_zkas", params);
+
+        let rep = self.rpc_client.request(req).await?;
+
+        let ret = serde_json::from_value(rep)?;
+        Ok(ret)
+    }
+
+    /// Broadcast a given transaction to darkfid and forward onto the network.
+    /// Returns the transaction ID upon success
+    pub async fn broadcast_tx(&self, tx: &Transaction) -> Result<String> {
+        eprintln!("Broadcasting transaction...");
+
+        let params = json!([bs58::encode(&serialize(tx)).into_string()]);
+        let req = JsonRequest::new("tx.broadcast", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        let txid = serde_json::from_value(rep)?;
+        Ok(txid)
     }
 }

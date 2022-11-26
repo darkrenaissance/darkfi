@@ -39,7 +39,8 @@ impl Drk {
         let req = JsonRequest::new("airdrop", params);
         let rep = rpc_client.oneshot_request(req).await?;
 
-        println!("{:#?}", rep);
-        Ok(format!("ack"))
+        let txid = serde_json::from_value(rep)?;
+
+        Ok(txid)
     }
 }

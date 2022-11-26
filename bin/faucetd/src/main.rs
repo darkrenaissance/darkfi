@@ -427,7 +427,7 @@ impl Faucetd {
         };
 
         // Create money contract params and proofs
-        let (params, proofs, secret_keys) = match build_transfer_tx(
+        let (params, proofs, secret_keys, _spent_coins) = match build_transfer_tx(
             &self.keypair,
             &pubkey,
             amount,

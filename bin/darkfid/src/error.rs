@@ -34,9 +34,8 @@ pub enum RpcError {
     DecryptionFailed = -32106,
     */
     // Transaction-related errors
-    TxBuildFail = -32110,
+    TxSimulationFail = -32110,
     TxBroadcastFail = -32111,
-    TxSimulationFail = -32112,
 
     // State-related errors,
     NotSynced = -32120,
@@ -44,8 +43,9 @@ pub enum RpcError {
 
     // Parsing errors
     ParseError = -32190,
-    NaN = -32191,
-    LessThanNegOne = -32192,
+
+    // Contract-related errors
+    ContractZkasDbNotFound = -32200,
 }
 
 fn to_tuple(e: RpcError) -> (i64, String) {
@@ -61,16 +61,15 @@ fn to_tuple(e: RpcError) -> (i64, String) {
         RpcError::DecryptionFailed => "Decryption failed",
         */
         // Transaction-related errors
-        RpcError::TxBuildFail => "Failed building transaction",
-        RpcError::TxBroadcastFail => "Failed broadcasting transaction",
         RpcError::TxSimulationFail => "Failed simulating transaction state change",
+        RpcError::TxBroadcastFail => "Failed broadcasting transaction",
         // State-related errors
         RpcError::NotSynced => "Blockchain is not synced",
         RpcError::UnknownSlot => "Did not find slot",
         // Parsing errors
         RpcError::ParseError => "Parse error",
-        RpcError::NaN => "Not a number",
-        RpcError::LessThanNegOne => "Number cannot be lower than -1",
+        // Contract-related errors
+        RpcError::ContractZkasDbNotFound => "zkas database not found for given contract",
     };
 
     (e as i64, msg.to_string())

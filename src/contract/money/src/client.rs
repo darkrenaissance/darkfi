@@ -490,7 +490,7 @@ pub fn build_transfer_tx(
     burn_zkbin: &ZkBinary,
     burn_pk: &ProvingKey,
     clear_input: bool,
-) -> Result<(MoneyTransferParams, Vec<Proof>, Vec<SecretKey>)> {
+) -> Result<(MoneyTransferParams, Vec<Proof>, Vec<SecretKey>, Vec<OwnCoin>)> {
     debug!("Building money contract transaction");
     assert!(value != 0);
     if !clear_input {
@@ -534,7 +534,7 @@ pub fn build_transfer_tx(
             };
 
             inputs.push(input);
-            spent_coins.push(coin);
+            spent_coins.push(coin.clone());
         }
 
         if inputs_value < value {
@@ -689,9 +689,8 @@ pub fn build_transfer_tx(
 
     // Now we should have all the params, zk proofs, and signature secrets.
     // We return it all and let the caller deal with it.
-    // TODO: Return also spent coins
 
-    Ok((params, zk_proofs, signature_secrets))
+    Ok((params, zk_proofs, signature_secrets, spent_coins))
 }
 
 fn compute_remainder_blind(

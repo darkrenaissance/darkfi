@@ -16,11 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{process::exit, str::FromStr, time::Instant};
+use std::{
+    io::{stdin, Read},
+    process::exit,
+    str::FromStr,
+    time::Instant,
+};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use darkfi_sdk::crypto::{PublicKey, TokenId};
+use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -33,6 +39,9 @@ use darkfi::{
 
 /// Airdrop methods
 mod rpc_airdrop;
+
+/// Payment methods
+mod rpc_transfer;
 
 /// Blockchain methods
 mod rpc_blockchain;
@@ -102,6 +111,21 @@ enum Subcmd {
         /// Optional address to send tokens to (defaults to main address in wallet)
         address: Option<String>,
     },
+
+    /// Create a payment transaction
+    Transfer {
+        /// Amount to send
+        amount: String,
+
+        /// Token ID to send
+        token: String,
+
+        /// Recipient address
+        recipient: String,
+    },
+
+    /// Read a transaction from stdin and broadcast it
+    Broadcast,
 
     /// Subscribe to incoming blocks from darkfid
     ///
@@ -236,6 +260,49 @@ async fn main() -> Result<()> {
                 .with_context(|| "Failed to request airdrop")?;
 
             println!("Transaction ID: {}", txid);
+            Ok(())
+        }
+
+        Subcmd::Transfer { amount, token, recipient } => {
+            let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
+            let token_id = TokenId::try_from(token.as_str()).with_context(|| "Invalid Token ID")?;
+            let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
+
+            let rpc_client = RpcClient::new(args.endpoint)
+                .await
+                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+            let drk = Drk { rpc_client };
+
+            let tx = drk
+                .transfer(&amount, token_id, rcpt)
+                .await
+                .with_context(|| "Failed to create payment transaction")?;
+
+            println!("{}", bs58::encode(&serialize(&tx)).into_string());
+
+            Ok(())
+        }
+
+        Subcmd::Broadcast => {
+            eprintln!("Reading transaction from stdin...");
+            let mut buf = String::new();
+            stdin().read_to_string(&mut buf)?;
+
+            let bytes = bs58::decode(&buf).into_vec()?;
+            let tx = deserialize(&bytes)?;
+
+            let rpc_client = RpcClient::new(args.endpoint)
+                .await
+                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+            let drk = Drk { rpc_client };
+
+            let txid =
+                drk.broadcast_tx(&tx).await.with_context(|| "Failed to broadcast transaction")?;
+
+            eprintln!("Transaction ID: {}", txid);
+
             Ok(())
         }
 

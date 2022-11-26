@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::MerkleNode;
+use darkfi_sdk::{
+    crypto::{ContractId, MerkleNode},
+    db::ZKAS_DB_NAME,
+};
+use darkfi_serial::deserialize;
 use log::{debug, error};
 use serde_json::{json, Value};
 
@@ -107,5 +111,50 @@ impl Darkfid {
             self.validator_state.read().await.subscribers.get("blocks").unwrap().clone();
 
         JsonSubscriber::new(blocks_subscriber).into()
+    }
+
+    // RPCAPI:
+    // Performs a lookup of zkas bincodes for a given contract ID and returns all of
+    // them, including their namespace.
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_zkas", "params": ["6Ef42L1KLZXBoxBuCDto7coi9DA2D2SRtegNqNU4sd74"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [["Foo", [...]], ["Bar", [...]]], "id": 1}
+    pub async fn blockchain_lookup_zkas(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let contract_id = match ContractId::try_from(params[0].as_str().unwrap()) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("[RPC] blockchain.lookup_zkas: Error decoding string to ContractId: {}", e);
+                return JsonError::new(InvalidParams, None, id).into()
+            }
+        };
+
+        let blockchain = { self.validator_state.read().await.blockchain.clone() };
+
+        let Ok(zkas_db) = blockchain.contracts.lookup(&blockchain.sled_db, &contract_id, ZKAS_DB_NAME) else {
+            error!("[RPC] blockchain.lookup_zkas: Did not find zkas db for ContractId: {}", contract_id);
+            return server_error(RpcError::ContractZkasDbNotFound, id, None)
+        };
+
+        let mut ret: Vec<(String, Vec<u8>)> = vec![];
+
+        for i in zkas_db.iter() {
+            debug!("Iterating over zkas db");
+            let Ok((zkas_ns, zkas_bincode)) = i else {
+                error!("Internal sled error iterating db");
+                return JsonError::new(InternalError, None, id).into()
+            };
+
+            let Ok(zkas_ns) = deserialize(&zkas_ns) else {
+                return JsonError::new(InternalError, None, id).into()
+            };
+
+            ret.push((zkas_ns, zkas_bincode.to_vec()));
+        }
+
+        JsonResponse::new(json!(ret), id).into()
     }
 }
