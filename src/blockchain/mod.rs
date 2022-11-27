@@ -193,11 +193,11 @@ impl Blockchain {
     }
 
     /// Retrieve last finalized block slot offset
-    pub fn get_last_offset(&self) -> Result<u64> {
-        let (_, hash) = self.last().unwrap();
+    pub fn get_last_offset(&self) -> Result<(u64, u64)> {
+        let (slot, hash) = self.last().unwrap();
         let blocks = self.blocks.get(&[hash], true)?;
         // Since we used strict get, its safe to unwrap here
         let block = blocks[0].clone().unwrap();
-        Ok(block.lead_info.offset)
+        Ok((slot, block.lead_info.offset))
     }
 }

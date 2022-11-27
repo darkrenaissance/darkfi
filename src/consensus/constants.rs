@@ -64,6 +64,9 @@ pub const EPOCH_LENGTH: usize = 10;
 /// Slot time in seconds
 pub const SLOT_TIME: u64 = 20;
 
+/// Finalization sync period duration (should be >=1/4 of slot time)
+pub const FINAL_SYNC_DUR: u64 = 5;
+
 /// Block leader reward
 pub const REWARD: u64 = 420;
 

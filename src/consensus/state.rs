@@ -432,9 +432,9 @@ impl ValidatorState {
 
         // Generate sigmas
         let mut total_stake = self.total_stake(); // Only used for fine-tuning
-        // at genesis epoch first slot, of absolute index 0,
-        // the total stake would be 0, to avoid division by zero,
-        // we asume total stake at first division is GENESIS_TOTAL_STAKE.
+                                                  // at genesis epoch first slot, of absolute index 0,
+                                                  // the total stake would be 0, to avoid division by zero,
+                                                  // we asume total stake at first division is GENESIS_TOTAL_STAKE.
         if total_stake == 0 {
             total_stake = constants::GENESIS_TOTAL_STAKE;
         }
@@ -519,13 +519,14 @@ impl ValidatorState {
 
     /// Auxillary function to receive current slot offset.
     /// If offset is None, its setted up as last block slot offset.
-    fn get_current_offset(&mut self) -> u64 {
+    fn get_current_offset(&mut self, current_slot: u64) -> u64 {
         // This is the case were we restarted our node, didn't receive offset from other nodes,
-        // so we need to find offset from last block
+        // so we need to find offset from last block, exluding network dead period.
         if self.consensus.offset.is_none() {
-            let last = self.blockchain.get_last_offset().unwrap();
-            info!("get_current_offset(): Setting slot offset: {}", last);
-            self.consensus.offset = Some(last);
+            let (last_slot, last_offset) = self.blockchain.get_last_offset().unwrap();
+            let offset = last_offset + (current_slot - last_slot);
+            info!("get_current_offset(): Setting slot offset: {}", offset);
+            self.consensus.offset = Some(offset);
         }
 
         self.consensus.offset.unwrap()
@@ -545,8 +546,10 @@ impl ValidatorState {
             );
             self.consensus.offset = Some(current_slot);
         }
+        // Retrieve longest fork length, to also those proposals in the calculation
+        let max_fork_length = self.longest_chain_length() as u64;
 
-        current_slot - blocks - self.get_current_offset()
+        current_slot - blocks - self.get_current_offset(current_slot) - max_fork_length
     }
 
     /// total stake
@@ -617,6 +620,7 @@ impl ValidatorState {
                 one.clone() / constants::TI.clone() * i.clone() +
                 constants::TD.clone() * d.clone());
         while f <= zero.clone() || f >= one.clone() {
+            info!("Consensus::win_prob_with_full_stake(): f: {}", f);
             let mut clipped_f = f;
             if clipped_f >= one {
                 clipped_f = one.clone() - constants::PID_OUT_STEP.clone();
@@ -632,7 +636,6 @@ impl ValidatorState {
                 (p.clone() +
                     one.clone() / constants::TI.clone() * i.clone() +
                     constants::TD.clone() * d.clone());
-            info!("Consensus::win_prob_with_full_stake(): f: {}", f);
         }
         info!("Consensus::win_prob_with_full_stake(): last f: {}", f);
         f
@@ -719,7 +722,7 @@ impl ValidatorState {
             coin.public_inputs(sigma1, sigma2),
             eta.to_repr(),
             LeadProof::from(proof),
-            self.get_current_offset(),
+            self.get_current_offset(slot),
             self.consensus.leaders_history.last().unwrap().clone(),
         );
         // Replacing old coin with the derived coin
@@ -780,6 +783,18 @@ impl ValidatorState {
         Ok((hash, index))
     }
 
+    /// Finds the length of longest fork chain the node holds.
+    pub fn longest_chain_length(&self) -> usize {
+        let mut max = 0;
+        for proposal in &self.consensus.proposals {
+            if proposal.proposals.len() > max {
+                max = proposal.proposals.len();
+            }
+        }
+
+        max
+    }
+
     /// Given a proposal, the node verify its sender (slot leader) and finds which blockchain
     /// it extends. If the proposal extends the canonical blockchain, a new fork chain is created.
     pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<()> {
@@ -831,7 +846,7 @@ impl ValidatorState {
         }
 
         // Verify proposal offset
-        let offset = self.get_current_offset();
+        let offset = self.get_current_offset(current);
         if offset != lf.offset {
             warn!(
                 "receive_proposal(): Received proposal contains different offset: {} - {}",

@@ -18,7 +18,7 @@
 
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use log::{debug, error, info};
+use log::{debug, error, trace};
 use smol::Executor;
 use url::Url;
 
@@ -75,8 +75,8 @@ impl ProtocolProposal {
                 }
             };
 
-            info!("ProtocolProposal::handle_receive_proposal(): recv: {}", proposal);
-            debug!("ProtocolProposal::handle_receive_proposal(): Full proposal: {:?}", proposal);
+            debug!("ProtocolProposal::handle_receive_proposal(): recv: {}", proposal);
+            trace!("ProtocolProposal::handle_receive_proposal(): Full proposal: {:?}", proposal);
 
             let proposal_copy = (*proposal).clone();
 

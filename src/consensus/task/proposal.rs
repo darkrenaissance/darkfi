@@ -21,18 +21,22 @@ use std::time::Duration;
 use log::{debug, error, info};
 
 use super::consensus_sync_task;
-use crate::{consensus::ValidatorStatePtr, net::P2pPtr, util::async_util::sleep};
+use crate::{
+    consensus::{constants, ValidatorStatePtr},
+    net::P2pPtr,
+    util::async_util::sleep,
+};
 
 /// async task used for participating in the consensus protocol
 pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: ValidatorStatePtr) {
     // Node waits just before the current or next epoch last finalization syncing period, so it can
     // start syncing latest state.
     let mut seconds_until_next_epoch = state.read().await.next_n_epoch_start(1);
-    let three_secs = Duration::new(3, 0);
+    let sync_offset = Duration::new(constants::FINAL_SYNC_DUR + 1, 0);
 
     loop {
-        if seconds_until_next_epoch > three_secs {
-            seconds_until_next_epoch -= three_secs;
+        if seconds_until_next_epoch > sync_offset {
+            seconds_until_next_epoch -= sync_offset;
             break
         }
 
@@ -60,8 +64,9 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
 
     loop {
         // Node sleeps until finalization sync period start (2 seconds before next slot)
-        let seconds_sync_period =
-            (state.read().await.next_n_slot_start(1) - Duration::new(2, 0)).as_secs();
+        let seconds_sync_period = (state.read().await.next_n_slot_start(1) -
+            Duration::new(constants::FINAL_SYNC_DUR, 0))
+        .as_secs();
         info!("consensus: Waiting for finalization sync period ({} sec)", seconds_sync_period);
         sleep(seconds_sync_period).await;
 
