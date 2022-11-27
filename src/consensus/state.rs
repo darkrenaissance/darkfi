@@ -431,7 +431,13 @@ impl ValidatorState {
         let f = self.win_prob_with_full_stake();
 
         // Generate sigmas
-        let total_stake = self.total_stake_plus(); // Only used for fine-tuning
+        let mut total_stake = self.total_stake_plus(); // Only used for fine-tuning
+        // at genesis epoch first slot, of absolute index 0,
+        // the total stake would be 0, to avoid division by zero,
+        // we asume total stake at first division is GENESIS_TOTAL_STAKE.
+        if total_stake == 0 {
+            total_stake = constants::GENESIS_TOTAL_STAKE;
+        }
         debug!("consensus::sigmas(): f: {}", f);
         debug!("consensus::sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();

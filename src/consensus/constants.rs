@@ -46,6 +46,7 @@ lazy_static! {
     pub static ref  TD: Float10 = FLOAT10_ONE.clone() / FLOAT10_TEN.clone();
 
     pub static ref PID_OUT_STEP: Float10  = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
+
 }
 
 /// Block version number
@@ -82,3 +83,4 @@ pub const PI_MU_Y_INDEX: usize = 8;
 pub const PI_MU_RHO_INDEX: usize = 10;
 pub const PI_SIGMA1_INDEX: usize = 12;
 pub const PI_SIGMA2_INDEX: usize = 13;
+pub const GENESIS_TOTAL_STAKE: i64 = 1;
