@@ -173,6 +173,8 @@ pub struct ValidatorState {
     pub verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
     /// Wallet interface
     pub wallet: WalletPtr,
+    /// consensuss coin commitment tree
+    pub coin_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>,
 }
 
 impl ValidatorState {
@@ -281,7 +283,7 @@ impl ValidatorState {
         let mut subscribers = HashMap::new();
         let block_subscriber = Subscriber::new();
         subscribers.insert("blocks", block_subscriber);
-
+        let tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH*100);
         let state = Arc::new(RwLock::new(ValidatorState {
             lead_proving_key,
             lead_verifying_key,
@@ -291,6 +293,7 @@ impl ValidatorState {
             subscribers,
             verifying_keys: Arc::new(RwLock::new(verifying_keys)),
             wallet,
+            coin_tree: tree_cm,
         }));
 
         Ok(state)
@@ -464,7 +467,7 @@ impl ValidatorState {
 
     /// Generate epoch-competing coins
     async fn create_epoch_coins(
-        &self,
+        &mut self,
         eta: pallas::Base,
         epoch: u64,
     ) -> Result<Vec<Vec<LeadCoin>>> {
@@ -474,7 +477,7 @@ impl ValidatorState {
 
     /// Generate coins for provided sigmas.
     /// NOTE: The strategy here is having a single competing coin per slot.
-    async fn create_coins(&self, eta: pallas::Base) -> Result<Vec<Vec<LeadCoin>>> {
+    async fn create_coins(&mut self, eta: pallas::Base) -> Result<Vec<Vec<LeadCoin>>> {
         let slot = self.current_slot();
         let mut rng = thread_rng();
 
@@ -485,7 +488,7 @@ impl ValidatorState {
 
         let epoch_secrets = LeadCoinSecrets::generate();
 
-        let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH);
+        //let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH);
         // LeadCoin matrix where each row represents a slot and contains its competing coins.
         let mut coins: Vec<Vec<LeadCoin>> = Vec::with_capacity(constants::EPOCH_LENGTH);
 
@@ -505,7 +508,7 @@ impl ValidatorState {
                 epoch_secrets.merkle_paths[i],
                 seeds[i],
                 epoch_secrets.secret_keys[i],
-                &mut tree_cm,
+                &mut self.coin_tree,
             );
 
             coins.push(vec![coin]);
@@ -617,6 +620,9 @@ impl ValidatorState {
         let p = self.f_dif();
         let i = self.f_int();
         let d = self.f_der();
+        info!("PID: P: {:?}", p);
+        info!("PID: I: {:?}", i);
+        info!("PID: D: {:?}", d);
         let mut f = self.consensus.kp.clone() *
             (p.clone() +
                 one.clone() / constants::TI.clone() * i.clone() +
@@ -730,7 +736,7 @@ impl ValidatorState {
         // Replacing old coin with the derived coin
         // TODO: do we need that? on next epoch we replace everything
         // how is this going to get reused?
-        self.consensus.coins[relative_slot][idx] = coin.derive_coin();
+        self.consensus.coins[relative_slot][idx] = coin.derive_coin(&mut self.coin_tree);
 
         Ok(Some(BlockProposal::new(header, unproposed_txs, lead_info)))
     }

@@ -306,18 +306,29 @@ impl LeadCoin {
 
     /// the new coin to be minted after the current coin is spent
     /// in lottery.
-    pub fn derive_coin(&self) -> LeadCoin {
+    pub fn derive_coin(&self, coin_commitment_tree:  &mut BridgeTree<MerkleNode, MERKLE_DEPTH>) -> LeadCoin {
         info!("LeadCoin::derive_coin()");
         let mut derived = self.clone();
         let rho = self.derived_rho();
         let blind = pallas::Scalar::random(&mut OsRng);
         let cm = self.derived_commitment(blind);
+        let cm_coord = cm.to_affine().coordinates().unwrap();
+        let cm_msg = [*cm_coord.x(), *cm_coord.y()];
+        let cm_base = poseidon_hash(cm_msg);
+        coin_commitment_tree.append(&MerkleNode::from(cm_base));
+        let leaf_pos = coin_commitment_tree.witness().unwrap();
+        let commitment_root = coin_commitment_tree.root(0).unwrap();
+        let commitment_merkle_path =
+            coin_commitment_tree.authentication_path(leaf_pos, &commitment_root).unwrap();
         derived.nonce = rho;
         derived.coin1_commitment = derived.coin2_commitment;
         derived.coin2_commitment = cm;
         derived.coin1_blind = derived.coin2_blind;
         derived.coin2_blind = blind;
         derived.value = self.value + constants::REWARD;
+        derived.coin1_commitment_root = commitment_root;
+        derived.coin1_commitment_merkle_path = commitment_merkle_path.try_into().unwrap();
+        derived.idx = u32::try_from(usize::from(leaf_pos)).unwrap();
         derived
     }
 
