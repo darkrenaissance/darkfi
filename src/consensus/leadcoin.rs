@@ -32,7 +32,7 @@ use rand::rngs::OsRng;
 
 use super::constants::EPOCH_LENGTH;
 use crate::{
-    consensus::{TransferStx, TxRcpt},
+    consensus::{TransferStx, TxRcpt, constants},
     crypto::{proof::ProvingKey, Proof},
     zk::{vm::ZkCircuit, vm_stack::Witness},
     zkas::ZkBinary,
@@ -139,7 +139,7 @@ impl LeadCoin {
         // Create commitment to coin2
         let coin2_commitment = Self::commitment(
             pk,
-            pallas::Base::from(value),
+            pallas::Base::from(value+constants::REWARD),
             pallas::Base::from(coin2_seed),
             coin2_blind,
         );
@@ -317,6 +317,7 @@ impl LeadCoin {
         derived.coin2_commitment = cm;
         derived.coin1_blind = derived.coin2_blind;
         derived.coin2_blind = blind;
+        derived.value = self.value + constants::REWARD;
         derived
     }
 

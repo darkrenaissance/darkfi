@@ -98,7 +98,6 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
 
         // Retrieve slot sigmas
         let (sigma1, sigma2) = state.write().await.sigmas();
-
         // Node checks if epoch has changed, to generate new epoch coins
         let epoch_changed = state.write().await.epoch_changed(sigma1, sigma2).await;
         match epoch_changed {

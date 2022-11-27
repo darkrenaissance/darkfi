@@ -25,6 +25,7 @@ contract "Lead" {
 circuit "Lead" {
         ZERO = witness_base(0);
         ONE = witness_base(1);
+        REWARD = witness_base(420);
         PREFIX_EVL = witness_base(2);
         PREFIX_SEED = witness_base(3);
         PREFIX_CM = witness_base(4);
@@ -47,7 +48,9 @@ circuit "Lead" {
         constrain_instance(c1_cm_x);
         constrain_instance(c1_cm_y);
         # coin (2) cm/commitment
-        c2_cm_msg = poseidon_hash(PREFIX_CM, pk, value, c2_rho);
+        # reward 
+        c2_value = base_add(value, REWARD);
+        c2_cm_msg = poseidon_hash(PREFIX_CM, pk, c2_value, c2_rho);
         c2_cm_v = ec_mul_base(c2_cm_msg, NULLIFIER_K);
         c2_cm_r = ec_mul(c2_opening, VALUE_COMMIT_RANDOM);
         c2_cm = ec_add(c2_cm_v, c2_cm_r);

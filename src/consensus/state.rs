@@ -417,9 +417,11 @@ impl ValidatorState {
             return Ok(false)
         }
         let eta = self.get_eta();
-        // TODO: slot parameter should be absolute slot, not relative.
         // At start of epoch, relative slot is 0.
-        self.consensus.coins = self.create_epoch_coins(eta, epoch).await?;
+        if self.consensus.coins.len() == 0 {
+            //TODO:  DRK coin need to be burned, and consensus coin to be minted.
+            self.consensus.coins = self.create_epoch_coins(eta, epoch).await?;
+        }
         self.consensus.epoch = epoch;
         self.consensus.epoch_eta = eta;
 
@@ -907,15 +909,19 @@ impl ValidatorState {
                 return Err(Error::ProposalIsSpent)
             }
         }
+
         // cm
+
         let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
         let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];
+        /*
         for cm in &self.consensus.leaders_spent_coins {
             if *cm == (prop_cm_x, prop_cm_y) {
                 error!("receive_proposal(): Proposal coin already spent.");
                 return Err(Error::ProposalIsSpent)
             }
         }
+        */
 
         // Check if proposal extends any existing fork chains
         let index = self.find_extended_chain_index(proposal)?;
