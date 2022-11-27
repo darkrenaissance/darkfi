@@ -78,9 +78,11 @@ pub struct ConsensusState {
     pub epoch: u64,
     /// Current epoch eta
     pub epoch_eta: pallas::Base,
+    // TODO: Aren't these already in db after finalization?
     /// Current epoch competing coins
     pub coins: Vec<Vec<LeadCoin>>,
-    // TODO: Aren't these already in db after finalization?
+    /// Coin commitments tree
+    pub coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     /// Seen nullifiers from proposals
     pub leaders_nullifiers: Vec<pallas::Base>,
     /// Seen spent coins from proposals
@@ -108,6 +110,7 @@ impl ConsensusState {
             epoch: 0,
             epoch_eta: pallas::Base::one(),
             coins: vec![],
+            coins_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100),
             leaders_nullifiers: vec![],
             leaders_spent_coins: vec![],
             leaders_history: vec![0],
@@ -173,8 +176,6 @@ pub struct ValidatorState {
     pub verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
     /// Wallet interface
     pub wallet: WalletPtr,
-    /// consensuss coin commitment tree
-    pub coin_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>,
 }
 
 impl ValidatorState {
@@ -283,7 +284,7 @@ impl ValidatorState {
         let mut subscribers = HashMap::new();
         let block_subscriber = Subscriber::new();
         subscribers.insert("blocks", block_subscriber);
-        let tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH*100);
+
         let state = Arc::new(RwLock::new(ValidatorState {
             lead_proving_key,
             lead_verifying_key,
@@ -293,7 +294,6 @@ impl ValidatorState {
             subscribers,
             verifying_keys: Arc::new(RwLock::new(verifying_keys)),
             wallet,
-            coin_tree: tree_cm,
         }));
 
         Ok(state)
@@ -508,7 +508,7 @@ impl ValidatorState {
                 epoch_secrets.merkle_paths[i],
                 seeds[i],
                 epoch_secrets.secret_keys[i],
-                &mut self.coin_tree,
+                &mut self.consensus.coins_tree,
             );
 
             coins.push(vec![coin]);
@@ -734,9 +734,7 @@ impl ValidatorState {
             self.consensus.leaders_history.last().unwrap().clone(),
         );
         // Replacing old coin with the derived coin
-        // TODO: do we need that? on next epoch we replace everything
-        // how is this going to get reused?
-        self.consensus.coins[relative_slot][idx] = coin.derive_coin(&mut self.coin_tree);
+        self.consensus.coins[relative_slot][idx] = coin.derive_coin(&mut self.consensus.coins_tree);
 
         Ok(Some(BlockProposal::new(header, unproposed_txs, lead_info)))
     }

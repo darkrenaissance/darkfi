@@ -32,7 +32,7 @@ use rand::rngs::OsRng;
 
 use super::constants::EPOCH_LENGTH;
 use crate::{
-    consensus::{TransferStx, TxRcpt, constants},
+    consensus::{constants, TransferStx, TxRcpt},
     crypto::{proof::ProvingKey, Proof},
     zk::{vm::ZkCircuit, vm_stack::Witness},
     zkas::ZkBinary,
@@ -139,7 +139,7 @@ impl LeadCoin {
         // Create commitment to coin2
         let coin2_commitment = Self::commitment(
             pk,
-            pallas::Base::from(value+constants::REWARD),
+            pallas::Base::from(value + constants::REWARD),
             pallas::Base::from(coin2_seed),
             coin2_blind,
         );
@@ -306,7 +306,10 @@ impl LeadCoin {
 
     /// the new coin to be minted after the current coin is spent
     /// in lottery.
-    pub fn derive_coin(&self, coin_commitment_tree:  &mut BridgeTree<MerkleNode, MERKLE_DEPTH>) -> LeadCoin {
+    pub fn derive_coin(
+        &self,
+        coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    ) -> LeadCoin {
         info!("LeadCoin::derive_coin()");
         let mut derived = self.clone();
         let rho = self.derived_rho();
