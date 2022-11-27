@@ -431,7 +431,7 @@ impl ValidatorState {
         let f = self.win_prob_with_full_stake();
 
         // Generate sigmas
-        let mut total_stake = self.total_stake_plus(); // Only used for fine-tuning
+        let mut total_stake = self.total_stake(); // Only used for fine-tuning
         // at genesis epoch first slot, of absolute index 0,
         // the total stake would be 0, to avoid division by zero,
         // we asume total stake at first division is GENESIS_TOTAL_STAKE.
@@ -549,9 +549,9 @@ impl ValidatorState {
         current_slot - blocks - self.get_current_offset()
     }
 
-    /// total stake plus one.
+    /// total stake
     /// assuming constant Reward.
-    fn total_stake_plus(&mut self) -> i64 {
+    fn total_stake(&mut self) -> i64 {
         let current_slot = self.current_slot();
         ((current_slot - self.overall_empty_slots(current_slot)) * Self::reward()) as i64
     }
