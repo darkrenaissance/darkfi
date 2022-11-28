@@ -22,7 +22,7 @@ use log::debug;
 use crate::{
     consensus::{Block, BlockInfo},
     util::time::Timestamp,
-    Result,
+    Result,Error
 };
 
 pub mod blockstore;
@@ -188,6 +188,17 @@ impl Blockchain {
         let blocks = self.blocks.get(&[hash], true)?;
         // Since we used strict get, its safe to unwrap here
         let block = blocks[0].clone().unwrap();
+        let hash = blake3::hash(&serialize(&block.lead_info.proof));
+        Ok(hash)
+    }
+
+    pub fn get_proof_hash_by_slot(&self, slot: u64) -> Result<blake3::Hash> {
+        let blocks = self.get_blocks_by_slot(&[slot]).unwrap();
+        if blocks.len() == 0 {
+            return Err(Error::BlockNotFound("block not found".to_string()))
+        }
+        // Since we used strict get, its safe to unwrap here
+        let block = blocks[0].clone();
         let hash = blake3::hash(&serialize(&block.lead_info.proof));
         Ok(hash)
     }

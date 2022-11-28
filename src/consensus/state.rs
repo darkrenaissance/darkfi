@@ -76,6 +76,8 @@ pub struct ConsensusState {
     pub proposals: Vec<ProposalChain>,
     /// Current epoch
     pub epoch: u64,
+    /// previous epoch eta
+    pub prev_epoch_eta: pallas::Base,
     /// Current epoch eta
     pub epoch_eta: pallas::Base,
     // TODO: Aren't these already in db after finalization?
@@ -108,6 +110,7 @@ impl ConsensusState {
             offset: None,
             proposals: vec![],
             epoch: 0,
+            prev_epoch_eta: pallas::Base::one(),
             epoch_eta: pallas::Base::one(),
             coins: vec![],
             coins_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100),
@@ -426,6 +429,7 @@ impl ValidatorState {
             self.consensus.coins = self.create_epoch_coins(eta, epoch).await?;
         }
         self.consensus.epoch = epoch;
+        self.consensus.prev_epoch_eta = self.consensus.epoch_eta;
         self.consensus.epoch_eta = eta;
 
         Ok(true)
@@ -586,9 +590,12 @@ impl ValidatorState {
         Float10::try_from(count as i64).unwrap().with_precision(constants::RADIX_BITS).value()
     }
 
+    fn pid_error(feedback: Float10) -> Float10 {
+        let target = constants::FLOAT10_ONE.clone();
+        target - feedback
+    }
     fn f_dif(&mut self) -> Float10 {
-        let one = constants::FLOAT10_ONE.clone();
-        one - self.extend_leaders_history()
+        Self::pid_error(self.extend_leaders_history())
     }
 
     fn f_der(&self) -> Float10 {
@@ -601,50 +608,51 @@ impl ValidatorState {
             .unwrap()
             .with_precision(constants::RADIX_BITS)
             .value();
-        (last - second_to_last) / constants::TD.clone()
+        let mut der = (Self::pid_error(second_to_last) - Self::pid_error(last)) / constants::DT.clone();
+        der =  if der > constants::MAX_DER.clone()  {
+            constants::MAX_DER.clone()
+        } else {
+            der
+        };
+        der = if der < constants::MIN_DER.clone() {
+            constants::MIN_DER.clone()
+        } else {
+            der
+        };
+        der
+
     }
 
     fn f_int(&self) -> Float10 {
-        let mut sum = constants::FLOAT10_ZERO.clone();
-        for f in &self.consensus.leaders_history {
-            sum += f.clone() * constants::TD.clone();
+        let mut sum = constants
+            ::FLOAT10_ZERO.clone();
+        let lead_history_len = self.consensus.leaders_history.len();
+        let history_begin_index = if lead_history_len>10 {
+            lead_history_len-10
+        } else {
+            0
+        };
+
+        for lf in &self.consensus.leaders_history[history_begin_index..] {
+            sum +=  Self::pid_error(Float10::try_from(lf.clone()).unwrap());
         }
         sum
+    }
+
+    fn pid(p: Float10, i: Float10, d: Float10) -> Float10 {
+        constants::KP.clone()*p + constants::KI.clone()*i + constants::KD.clone()*d
     }
 
     /// the probability of winnig lottery having all the stake
     /// returns f
     fn win_prob_with_full_stake(&mut self) -> Float10 {
-        let zero = constants::FLOAT10_ZERO.clone();
-        let one = constants::FLOAT10_ONE.clone();
         let p = self.f_dif();
         let i = self.f_int();
         let d = self.f_der();
         info!("PID: P: {:?}", p);
         info!("PID: I: {:?}", i);
         info!("PID: D: {:?}", d);
-        let mut f = self.consensus.kp.clone() *
-            (p.clone() +
-                one.clone() / constants::TI.clone() * i.clone() +
-                constants::TD.clone() * d.clone());
-        while f <= zero.clone() || f >= one.clone() {
-            info!("Consensus::win_prob_with_full_stake(): f: {}", f);
-            let mut clipped_f = f;
-            if clipped_f >= one {
-                clipped_f = one.clone() - constants::PID_OUT_STEP.clone();
-            } else if clipped_f <= zero {
-                clipped_f = zero.clone() + constants::PID_OUT_STEP.clone();
-            }
-            let clipped_kp = clipped_f /
-                (p.clone() +
-                    one.clone() / constants::TI.clone() * i.clone() +
-                    constants::TD.clone() * d.clone());
-            self.consensus.kp = clipped_kp.clone();
-            f = clipped_kp *
-                (p.clone() +
-                    one.clone() / constants::TI.clone() * i.clone() +
-                    constants::TD.clone() * d.clone());
-        }
+        let f = Self::pid(p, i, d);
         info!("Consensus::win_prob_with_full_stake(): last f: {}", f);
         f
     }
@@ -868,9 +876,18 @@ impl ValidatorState {
         };
         info!("receive_proposal(): Leader proof verified successfully!");
 
+        let proposed_slot = proposal.block.header.slot;
+        info!("proposed slot: {}", proposed_slot);
+        let block_len = self.blockchain.len() as u64;
+        info!("block length: {}", block_len);
+        let offset = current - block_len;
+        info!("offset: {}", offset);
+        //TODO: subtract eta slot index from empty slots since restarting the network.
+        //let mut slot_eta = self.get_eta_by_slot(proposed_slot.clone()-offset-1);
+        let slot_eta = self.get_eta();
         // Verify proposal public values
         let (mu_y, mu_rho) =
-            LeadCoin::election_seeds_u64(self.consensus.epoch_eta, proposal.block.header.slot);
+            LeadCoin::election_seeds_u64(slot_eta, proposed_slot);
         // y
         let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
         if mu_y != prop_mu_y {
@@ -1184,6 +1201,22 @@ impl ValidatorState {
     fn get_eta(&self) -> pallas::Base {
         let proof_tx_hash = self.blockchain.get_last_proof_hash().unwrap();
         let mut bytes: [u8; 32] = *proof_tx_hash.as_bytes();
+        // read first 254 bits
+        bytes[30] = 0;
+        bytes[31] = 0;
+        pallas::Base::from_repr(bytes).unwrap()
+    }
+
+    fn get_eta_by_slot(&self, slot: u64) -> pallas::Base {
+        let mut proof_tx_hash = self.blockchain.get_proof_hash_by_slot(slot);
+        proof_tx_hash = match proof_tx_hash {
+            Ok(o) => Ok(o),
+            Err(_) => {
+                error!("get_eta_by_slot(): failed on slot: {}", slot);
+                self.blockchain.get_last_proof_hash()
+            }
+        };
+        let mut bytes: [u8; 32] = *proof_tx_hash.unwrap().as_bytes();
         // read first 254 bits
         bytes[30] = 0;
         bytes[31] = 0;
