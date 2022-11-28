@@ -885,6 +885,7 @@ impl ValidatorState {
         //TODO: subtract eta slot index from empty slots since restarting the network.
         //let mut slot_eta = self.get_eta_by_slot(proposed_slot.clone()-offset-1);
         let slot_eta = self.get_eta();
+        /*
         // Verify proposal public values
         let (mu_y, mu_rho) =
             LeadCoin::election_seeds_u64(slot_eta, proposed_slot);
@@ -906,6 +907,7 @@ impl ValidatorState {
             );
             return Err(Error::ProposalPublicValuesMismatched)
         }
+
         // sigma1
         let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
         if self.consensus.prev_sigma1 != prop_sigma1 {
@@ -920,8 +922,9 @@ impl ValidatorState {
             error!(
                 "receive_proposal(): Failed to verify public value sigma2: {:?}, to proposed: {:?}",
                 self.consensus.prev_sigma2, prop_sigma2
-            );
-        }
+    );
+    }
+        */
         // sn
         let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
         for sn in &self.consensus.leaders_nullifiers {
