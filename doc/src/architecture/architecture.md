@@ -20,31 +20,6 @@ and make his work effortless and smooth.
 | util        | Various utilities and tooling                                          | nar     | xsan    | das       | Mature   |
 | arch        | Architecture, project management and integration                       | nar     | par     |           | Alpha    |
 
-Priorities:
-
-1. Consensus
-    1. Settle on final algorithm. Currently fixing the reward function.
-        1. Todos are leader proof, rewards proof, balance proof and ledger API
-    2. Review the contracts
-    3. Create the blockchain API
-2. WASM
-    1. Update current WASM code
-    2. Experiment and draft docs
-    3. Begin to implement smart contract subsystem
-    4. Migrate dao and otc applications over
-3. util
-    1. Simulate event graph subsystem
-    2. Create underlying event graph subsystem
-    3. Create abstraction layer and APIs
-    4. Begin to rewire ircd and taud
-    5. Update taud to CRDTs
-    6. Q&A on wallet application
-
-Deferred (future):
-
-1. Migration away from SQLite for WalletDb to file system db based off
-   git porcelain.
-
 ## Release Cycle
 
 ```mermaid
