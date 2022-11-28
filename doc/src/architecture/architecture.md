@@ -12,13 +12,13 @@ and make his work effortless and smooth.
 |-------------|------------------------------------------------------------------------|---------|---------|-----------|----------|
 | consensus   | Algorithm for blockchain consensus                                     | err     | agg     | das       | Progress |
 | zk / crypto | ZK compiler and crypto algos                                           | par     | nar     |           | Mature   |
-| wasm        | WASM smart contract system                                             | par     | nar     | xsan      | Progress |
+| wasm        | WASM smart contract system                                             | par     | nar     | xsan      | Alpha    |
 | net         | p2p network protocol code                                              | agg     | xsan    | nar       | Mature   |
 | blockchain  | consensus + net + db                                                   | err     | das     |           | Easy     |
 | bridge      | Develop robust & secure multi-chain bridge architecture                | par     | xsan    |           | None     |
-| tokenomics  | Research and define DRK tokenomics                                     | xeno    | err     | nar       | Starting |
-| util        | Various utilities and tooling                                          | nar     | xsan    | das       | Progress |
-| arch        | Architecture, project management and integration                       | nar     | par     |           | Progress |
+| tokenomics  | Research and define DRK tokenomics                                     | xeno    | err     | nar       | Alpha    |
+| util        | Various utilities and tooling                                          | nar     | xsan    | das       | Mature   |
+| arch        | Architecture, project management and integration                       | nar     | par     |           | Alpha    |
 
 Priorities:
 
