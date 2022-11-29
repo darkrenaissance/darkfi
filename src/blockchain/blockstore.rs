@@ -40,8 +40,8 @@ impl HeaderStore {
         let store = Self(tree);
 
         // In case the store is empty, initialize it with the genesis header.
-        let genesis_header = Header::genesis_header(genesis_ts, genesis_data);
         if store.0.is_empty() {
+            let genesis_header = Header::genesis_header(genesis_ts, genesis_data);
             store.insert(&[genesis_header])?;
         }
 

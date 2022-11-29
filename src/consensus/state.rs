@@ -120,3 +120,31 @@ impl net::Message for ConsensusResponse {
         "consensusresponse"
     }
 }
+
+/// Auxiliary structure used to keep track of slot validation parameters.
+#[derive(Debug, SerialEncodable, SerialDecodable)]
+pub struct SlotCheckpoint {
+    /// Slot UID
+    pub slot: u64,
+    /// Slot eta
+    pub eta: pallas::Base,
+    /// Slot sigma1
+    pub sigma1: pallas::Base,
+    /// Slot sigma2
+    pub sigma2: pallas::Base,
+}
+
+impl SlotCheckpoint {
+    pub fn new(slot: u64, eta: pallas::Base, sigma1: pallas::Base, sigma2: pallas::Base) -> Self {
+        Self { slot, eta, sigma1, sigma2 }
+    }
+
+    /// Generate the genesis slot checkpoint.
+    pub fn genesis_slot_checkpoint() -> Self {
+        let eta = pallas::Base::zero();
+        let sigma1 = pallas::Base::zero();
+        let sigma2 = pallas::Base::zero();
+
+        Self::new(0, eta, sigma1, sigma2)
+    }
+}

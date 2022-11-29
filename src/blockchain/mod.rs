@@ -20,13 +20,16 @@ use darkfi_serial::serialize;
 use log::debug;
 
 use crate::{
-    consensus::{Block, BlockInfo},
+    consensus::{Block, BlockInfo, SlotCheckpoint},
     util::time::Timestamp,
     Error, Result,
 };
 
 pub mod blockstore;
 pub use blockstore::{BlockOrderStore, BlockStore, HeaderStore};
+
+pub mod slotcheckpointstore;
+pub use slotcheckpointstore::SlotCheckpointStore;
 
 pub mod nfstore;
 pub use nfstore::NullifierStore;
@@ -51,6 +54,8 @@ pub struct Blockchain {
     pub blocks: BlockStore,
     /// Block order sled tree
     pub order: BlockOrderStore,
+    /// Slot checkpoints sled tree
+    pub slot_checkpoints: SlotCheckpointStore,
     /// Transactions sled tree
     pub transactions: TxStore,
     /// Nullifiers sled tree
@@ -69,6 +74,7 @@ impl Blockchain {
         let headers = HeaderStore::new(db, genesis_ts, genesis_data)?;
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
+        let slot_checkpoints = SlotCheckpointStore::new(db)?;
         let transactions = TxStore::new(db)?;
         let nullifiers = NullifierStore::new(db)?;
         let merkle_roots = RootStore::new(db)?;
@@ -80,6 +86,7 @@ impl Blockchain {
             headers,
             blocks,
             order,
+            slot_checkpoints,
             transactions,
             nullifiers,
             merkle_roots,
@@ -210,5 +217,11 @@ impl Blockchain {
         // Since we used strict get, its safe to unwrap here
         let block = blocks[0].clone().unwrap();
         Ok((slot, block.lead_info.offset))
+    }
+
+    /// Retrieve n checkpoints after given start slot.
+    pub fn get_slot_checkpoints_after(&self, slot: u64, n: u64) -> Result<Vec<SlotCheckpoint>> {
+        debug!("get_slot_checkpoints_after(): {} -> {}", slot, n);
+        self.slot_checkpoints.get_after(slot, n)
     }
 }

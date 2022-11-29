@@ -29,6 +29,7 @@ pub use lead_info::{LeadInfo, LeadProof};
 
 /// Consensus state
 pub mod state;
+pub use state::SlotCheckpoint;
 
 /// Consensus validator state
 pub mod validator;
