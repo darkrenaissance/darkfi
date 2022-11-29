@@ -61,11 +61,8 @@ rustdoc: token_lists zkas
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --workspace --all-features \
 		--no-deps --document-private-items
 
-test: token_lists zkas $(PROOFS_BIN) test-tx
+test: token_lists zkas $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all
-
-test-tx: zkas
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) run --release --features=node,zkas --example tx
 
 test-dao: zkas
 	$(MAKE) -C example/dao
@@ -95,4 +92,4 @@ uninstall:
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
 
-.PHONY: all contracts check fix clippy rustdoc test test-tx clean cleanbin install uninstall
+.PHONY: all contracts check fix clippy rustdoc test clean cleanbin install uninstall
