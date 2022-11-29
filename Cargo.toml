@@ -361,9 +361,6 @@ name = "dao"
 path = "example/dao/src/main.rs"
 required-features = ["crypto", "rpc"]
 
-[[example]]
-name = "crypsinous"
-path = "example/crypsinous.rs"
 
 [[example]]
 name = "lessthan"

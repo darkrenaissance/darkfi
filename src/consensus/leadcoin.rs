@@ -302,7 +302,7 @@ impl LeadCoin {
     pub fn derived_commitment(&self, blind: pallas::Scalar) -> pallas::Point {
         let pk = self.pk();
         let rho = self.derived_rho();
-        Self::commitment(pk, pallas::Base::from(self.value+constants::REWARD.clone()), rho, blind)
+        Self::commitment(pk, pallas::Base::from(self.value + constants::REWARD.clone()), rho, blind)
     }
 
     /// the new coin to be minted after the current coin is spent
@@ -343,7 +343,6 @@ impl LeadCoin {
             secret_key: self.secret_key,
             eta: self.eta,
         }
-
     }
 
     /// Try to create a ZK proof of consensus leadership

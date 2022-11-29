@@ -608,39 +608,26 @@ impl ValidatorState {
             .unwrap()
             .with_precision(constants::RADIX_BITS)
             .value();
-        let mut der = (Self::pid_error(second_to_last) - Self::pid_error(last)) / constants::DT.clone();
-        der =  if der > constants::MAX_DER.clone()  {
-            constants::MAX_DER.clone()
-        } else {
-            der
-        };
-        der = if der < constants::MIN_DER.clone() {
-            constants::MIN_DER.clone()
-        } else {
-            der
-        };
+        let mut der =
+            (Self::pid_error(second_to_last) - Self::pid_error(last)) / constants::DT.clone();
+        der = if der > constants::MAX_DER.clone() { constants::MAX_DER.clone() } else { der };
+        der = if der < constants::MIN_DER.clone() { constants::MIN_DER.clone() } else { der };
         der
-
     }
 
     fn f_int(&self) -> Float10 {
-        let mut sum = constants
-            ::FLOAT10_ZERO.clone();
+        let mut sum = constants::FLOAT10_ZERO.clone();
         let lead_history_len = self.consensus.leaders_history.len();
-        let history_begin_index = if lead_history_len>10 {
-            lead_history_len-10
-        } else {
-            0
-        };
+        let history_begin_index = if lead_history_len > 10 { lead_history_len - 10 } else { 0 };
 
         for lf in &self.consensus.leaders_history[history_begin_index..] {
-            sum +=  Self::pid_error(Float10::try_from(lf.clone()).unwrap());
+            sum += Self::pid_error(Float10::try_from(lf.clone()).unwrap());
         }
         sum
     }
 
     fn pid(p: Float10, i: Float10, d: Float10) -> Float10 {
-        constants::KP.clone()*p + constants::KI.clone()*i + constants::KD.clone()*d
+        constants::KP.clone() * p + constants::KI.clone() * i + constants::KD.clone() * d
     }
 
     /// the probability of winnig lottery having all the stake
@@ -654,7 +641,7 @@ impl ValidatorState {
         info!("PID: D: {:?}", d);
         let mut f = Self::pid(p, i, d);
         info!("Consensus::win_prob_with_full_stake(): pid f: {}", f);
-        f = if f >= constants::FLOAT10_ONE.clone()  {
+        f = if f >= constants::FLOAT10_ONE.clone() {
             constants::MAX_F.clone()
         } else if f <= constants::FLOAT10_ZERO.clone() {
             constants::MIN_F.clone()
@@ -895,29 +882,29 @@ impl ValidatorState {
         //let mut slot_eta = self.get_eta_by_slot(proposed_slot.clone()-offset-1);
 
         /*
-        let slot_eta = self.get_eta();
-        // Verify proposal public values
-        let (mu_y, mu_rho) =
-            LeadCoin::election_seeds_u64(slot_eta, proposed_slot);
-        // y
-        let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
-        if mu_y != prop_mu_y {
-            error!(
-                "receive_proposal(): Failed to verify mu_y: {:?}, proposed: {:?}",
-                mu_y, prop_mu_y
-            );
-            return Err(Error::ProposalPublicValuesMismatched)
+            let slot_eta = self.get_eta();
+            // Verify proposal public values
+            let (mu_y, mu_rho) =
+                LeadCoin::election_seeds_u64(slot_eta, proposed_slot);
+            // y
+            let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
+            if mu_y != prop_mu_y {
+                error!(
+                    "receive_proposal(): Failed to verify mu_y: {:?}, proposed: {:?}",
+                    mu_y, prop_mu_y
+                );
+                return Err(Error::ProposalPublicValuesMismatched)
+            }
+            // rho
+            let prop_mu_rho = lf.public_inputs[constants::PI_MU_RHO_INDEX];
+            if mu_rho != prop_mu_rho {
+                error!(
+                    "receive_proposal(): Failed to verify mu_rho: {:?}, proposed: {:?}",
+                    mu_rho, prop_mu_rho
+                );
+                return Err(Error::ProposalPublicValuesMismatched)
         }
-        // rho
-        let prop_mu_rho = lf.public_inputs[constants::PI_MU_RHO_INDEX];
-        if mu_rho != prop_mu_rho {
-            error!(
-                "receive_proposal(): Failed to verify mu_rho: {:?}, proposed: {:?}",
-                mu_rho, prop_mu_rho
-            );
-            return Err(Error::ProposalPublicValuesMismatched)
-    }
-        */
+            */
 
         // sigma1
         let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
@@ -947,7 +934,6 @@ impl ValidatorState {
         }
         */
         // cm
-
 
         let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
         let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];

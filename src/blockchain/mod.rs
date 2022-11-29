@@ -22,7 +22,7 @@ use log::debug;
 use crate::{
     consensus::{Block, BlockInfo},
     util::time::Timestamp,
-    Result,Error
+    Error, Result,
 };
 
 pub mod blockstore;
