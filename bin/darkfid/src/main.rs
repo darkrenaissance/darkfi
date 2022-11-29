@@ -208,6 +208,9 @@ impl RequestHandler for Darkfid {
             // Blockchain methods
             // ==================
             Some("blockchain.get_slot") => return self.blockchain_get_slot(req.id, params).await,
+            Some("blockchain.last_known_slot") => {
+                return self.blockchain_last_known_slot(req.id, params).await
+            }
             Some("blockchain.merkle_roots") => {
                 return self.blockchain_merkle_roots(req.id, params).await
             }

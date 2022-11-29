@@ -20,6 +20,9 @@ darkfi-money-contract = {path = "../../src/contract/money", features = ["no-entr
 prettytable-rs = "0.9.0"
 rand = "0.8.5"
 serde_json = "1.0.89"
+smol = "1.3.0"
 simplelog = "0.12.0"
+signal-hook-async-std = "0.2.2"
+signal-hook = "0.3.14"
 sqlx = {version = "0.6.2", features = ["runtime-async-std-native-tls", "sqlite"]}
 url = "2.3.1"

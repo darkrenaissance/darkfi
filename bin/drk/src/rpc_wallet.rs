@@ -25,9 +25,9 @@ use darkfi_money_contract::client::{
     MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
     MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
     MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_VALUE,
-    MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE, MONEY_KEYS_COL_IS_DEFAULT,
-    MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE,
-    MONEY_TREE_TABLE,
+    MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT,
+    MONEY_INFO_TABLE, MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET,
+    MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
 };
 use darkfi_sdk::{
     crypto::{
@@ -82,6 +82,16 @@ impl Drk {
             let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
             self.put_tree(&tree).await?;
             println!("Successfully initialized Merkle tree");
+        }
+
+        if let Err(_) = self.wallet_last_scanned_slot().await {
+            let query = format!(
+                "INSERT INTO {} ({}) VALUES (?1);",
+                MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
+            );
+            let params = json!([query, QueryType::Integer as u8, 0]);
+            let req = JsonRequest::new("wallet.exec_sql", params);
+            let _ = self.rpc_client.request(req).await?;
         }
 
         Ok(())
@@ -360,6 +370,18 @@ impl Drk {
         let tree_bytes: Vec<u8> = serde_json::from_value(rep[0].clone())?;
         let tree = deserialize(&tree_bytes)?;
         Ok(tree)
+    }
+
+    /// Get the last scanned slot from the wallet
+    pub async fn wallet_last_scanned_slot(&self) -> Result<u64> {
+        let query =
+            format!("SELECT {} FROM {};", MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE);
+
+        let params = json!([query, QueryType::Integer as u8, MONEY_INFO_COL_LAST_SCANNED_SLOT]);
+        let req = JsonRequest::new("wallet.query_row_single", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        Ok(serde_json::from_value(rep[0].clone())?)
     }
 
     /// Mark a coin in the wallet as spent

@@ -20,7 +20,7 @@ use darkfi_sdk::{
     crypto::{ContractId, MerkleNode},
     db::ZKAS_DB_NAME,
 };
-use darkfi_serial::deserialize;
+use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
 use serde_json::{json, Value};
 
@@ -62,9 +62,25 @@ impl Darkfid {
             return server_error(RpcError::UnknownSlot, id, None)
         }
 
-        // TODO: Return block as JSON
-        debug!("{:#?}", blocks[0]);
-        JsonResponse::new(json!(true), id).into()
+        JsonResponse::new(json!(serialize(&blocks[0])), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the blockchain database to find the last known slot
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.last_known_slot", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
+    pub async fn blockchain_last_known_slot(&self, id: Value, params: &[Value]) -> JsonResult {
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let blockchain = { self.validator_state.read().await.blockchain.clone() };
+        let Ok(last_slot) = blockchain.last() else {
+                return JsonError::new(InternalError, None, id).into()
+        };
+
+        JsonResponse::new(json!(last_slot.0), id).into()
     }
 
     // RPCAPI:

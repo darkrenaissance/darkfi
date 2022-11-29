@@ -152,6 +152,12 @@ enum Subcmd {
     /// With `drk` we look at transactions calling the money contract so we can
     /// find coins sent to us and fill our wallet with the necessary metadata.
     Subscribe,
+
+    /// Scan the blockchain and parse relevant transactions
+    Scan {
+        /// Slot number to start scanning from (optional)
+        slot: Option<u64>,
+    },
 }
 
 pub struct Drk {
@@ -386,6 +392,19 @@ async fn main() -> Result<()> {
             drk.subscribe_blocks(args.endpoint)
                 .await
                 .with_context(|| "Block subscription failed")?;
+
+            Ok(())
+        }
+
+        Subcmd::Scan { slot } => {
+            let rpc_client = RpcClient::new(args.endpoint)
+                .await
+                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+            let drk = Drk { rpc_client };
+
+            drk.scan_blocks(slot).await.with_context(|| "Failed during scanning")?;
+            eprintln!("Finished scanning blockchain");
 
             Ok(())
         }

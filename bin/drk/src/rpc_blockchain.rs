@@ -17,7 +17,7 @@
  */
 
 use anyhow::{anyhow, Result};
-use async_std::task;
+use async_std::{stream::StreamExt, task};
 use darkfi::{
     consensus::BlockInfo,
     rpc::{
@@ -34,7 +34,8 @@ use darkfi_money_contract::{
         MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
         MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
         MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_VALUE,
-        MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE,
+        MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT,
+        MONEY_INFO_TABLE,
     },
     state::{MoneyTransferParams, Output},
     MoneyFunction,
@@ -46,6 +47,8 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
+use signal_hook::consts::{SIGINT, SIGQUIT, SIGTERM};
+use signal_hook_async_std::Signals;
 use url::Url;
 
 use super::Drk;
@@ -262,5 +265,84 @@ impl Drk {
 
         let txid = serde_json::from_value(rep)?;
         Ok(txid)
+    }
+
+    /// Queries darkfid for a block with given slot
+    async fn get_block_by_slot(&self, slot: u64) -> Result<Option<BlockInfo>> {
+        let req = JsonRequest::new("blockchain.get_slot", json!([slot]));
+
+        // This API is weird, we need some way of telling it's an empty slot and
+        // not an error
+        match self.rpc_client.request(req).await {
+            Ok(v) => {
+                let block_bytes: Vec<u8> = serde_json::from_value(v)?;
+                let block = deserialize(&block_bytes)?;
+                Ok(Some(block))
+            }
+
+            Err(_) => Ok(None),
+        }
+    }
+
+    /// Scans the blockchain optionally starting from the given slot for relevant
+    /// money transfer transactions. Alternatively it looks for a checkpoint in the
+    /// wallet to start scanning from.
+    pub async fn scan_blocks(&self, slot: Option<u64>) -> Result<()> {
+        let mut sl = if let Some(sl) = slot { sl } else { self.wallet_last_scanned_slot().await? };
+
+        let req = JsonRequest::new("blockchain.last_known_slot", json!([]));
+        let rep = self.rpc_client.request(req).await?;
+
+        let last: u64 = serde_json::from_value(rep)?;
+
+        eprintln!("Requested to scan from slot number: {}", sl);
+        eprintln!("Last known slot number reported by darkfid: {}", last);
+
+        // We set this up to handle an interrupt
+        let mut signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT])?;
+        let handle = signals.handle();
+        let (term_tx, _term_rx) = smol::channel::bounded::<()>(1);
+
+        let term_tx_ = term_tx.clone();
+        let signals_task = task::spawn(async move {
+            while let Some(signal) = signals.next().await {
+                match signal {
+                    SIGTERM | SIGINT | SIGQUIT => term_tx_.close(),
+                    _ => unreachable!(),
+                };
+            }
+        });
+
+        while !term_tx.is_closed() {
+            if sl == last {
+                term_tx.close();
+                break
+            }
+
+            sl += 1;
+
+            eprint!("Requesting slot {}... ", sl);
+            if let Some(block) = self.get_block_by_slot(sl).await? {
+                eprintln!("Found");
+                self.scan_block(&block).await?;
+            } else {
+                eprintln!("Not found");
+            }
+
+            // Write down the slot number into back to the wallet
+            // TODO: Why doesn't it work?
+            let query = format!(
+                "INSERT INTO {} ({}) VALUES (?1);",
+                MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
+            );
+            let params = json!([query, QueryType::Integer as u8, sl]);
+            let req = JsonRequest::new("wallet.exec_sql", params);
+            let _ = self.rpc_client.request(req).await?;
+        }
+
+        handle.close();
+        signals_task.await;
+
+        Ok(())
     }
 }
