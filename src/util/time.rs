@@ -47,8 +47,8 @@ impl Timestamp {
 
     /// Calculates elapsed time of a `Timestamp`.
     pub fn elapsed(&self) -> u64 {
-        let start_time = NaiveDateTime::from_timestamp(self.0, 0);
-        let end_time = NaiveDateTime::from_timestamp(Utc::now().timestamp(), 0);
+        let start_time = NaiveDateTime::from_timestamp_opt(self.0, 0).unwrap();
+        let end_time = NaiveDateTime::from_timestamp_opt(Utc::now().timestamp(), 0).unwrap();
         let diff = end_time - start_time;
         diff.num_seconds() as u64
     }
@@ -105,15 +105,19 @@ pub fn timestamp_to_date(timestamp: i64, format: DateFormat) -> String {
     }
 
     match format {
-        DateFormat::Date => {
-            NaiveDateTime::from_timestamp(timestamp, 0).date().format("%-d %b").to_string()
-        }
-        DateFormat::DateTime => {
-            NaiveDateTime::from_timestamp(timestamp, 0).format("%H:%M:%S %A %-d %B").to_string()
-        }
+        DateFormat::Date => NaiveDateTime::from_timestamp_opt(timestamp, 0)
+            .unwrap()
+            .date()
+            .format("%-d %b")
+            .to_string(),
+        DateFormat::DateTime => NaiveDateTime::from_timestamp_opt(timestamp, 0)
+            .unwrap()
+            .format("%H:%M:%S %A %-d %B")
+            .to_string(),
         DateFormat::Nanos => {
             const A_BILLION: i64 = 1_000_000_000;
-            NaiveDateTime::from_timestamp(timestamp / A_BILLION, (timestamp % A_BILLION) as u32)
+            NaiveDateTime::from_timestamp_opt(timestamp / A_BILLION, (timestamp % A_BILLION) as u32)
+                .unwrap()
                 .format("%H:%M:%S.%f")
                 .to_string()
         }

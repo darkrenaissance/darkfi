@@ -9,9 +9,9 @@ edition = "2021"
 
 [dependencies]
 async-std = "1.12.0"
-blake3 = "1.3.1"
+blake3 = "1.3.3"
 darkfi = {path = "../../../", features = ["blockchain", "wallet", "rpc"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = {path = "../../../src/serial"}
-serde = "1.0.147"
+serde = "1.0.148"
 sled = "0.34.7"

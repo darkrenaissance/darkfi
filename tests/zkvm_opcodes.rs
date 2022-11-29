@@ -31,13 +31,11 @@ use rand::rngs::OsRng;
 use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
-    crypto::{
-        proof::{ProvingKey, VerifyingKey},
-        Proof,
-    },
     zk::{
+        proof::{ProvingKey, VerifyingKey},
         vm::ZkCircuit,
         vm_stack::{empty_witnesses, Witness},
+        Proof,
     },
     zkas::ZkBinary,
     Result,

@@ -22,11 +22,13 @@ use std::{
     task::{Context, Poll},
 };
 
-use async_tungstenite::WebSocketStream;
+use async_tungstenite::{
+    tungstenite::{handshake::client::Response, Message},
+    WebSocketStream,
+};
 use futures::sink::Sink;
 use futures_rustls::{client::TlsStream, rustls::ServerName, TlsConnector};
 use smol::{prelude::*, Async};
-use tungstenite::{handshake::client::Response, Message};
 use url::Url;
 
 use crate::{Error, Result as DrkResult};
@@ -38,7 +40,7 @@ pub enum WsStream {
 }
 
 impl Sink<Message> for WsStream {
-    type Error = tungstenite::Error;
+    type Error = async_tungstenite::tungstenite::Error;
 
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         match &mut *self {
@@ -70,7 +72,7 @@ impl Sink<Message> for WsStream {
 }
 
 impl Stream for WsStream {
-    type Item = tungstenite::Result<Message>;
+    type Item = async_tungstenite::tungstenite::Result<Message>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match &mut *self {

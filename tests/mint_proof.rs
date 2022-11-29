@@ -16,30 +16,31 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{
+use darkfi_sdk::{
     crypto::{
-        proof::{ProvingKey, VerifyingKey},
-        Proof,
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+        PublicKey, SecretKey,
     },
+    pasta::{
+        arithmetic::CurveAffine,
+        group::{ff::Field, Curve},
+        pallas,
+    },
+};
+use halo2_gadgets::poseidon::primitives as poseidon;
+use halo2_proofs::circuit::Value;
+use rand::rngs::OsRng;
+
+use darkfi::{
     zk::{
+        proof::{ProvingKey, VerifyingKey},
         vm::{Witness, ZkCircuit},
         vm_stack::empty_witnesses,
+        Proof,
     },
     zkas::decoder::ZkBinary,
     Result,
 };
-use darkfi_sdk::crypto::{
-    pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-    PublicKey, SecretKey,
-};
-use halo2_gadgets::poseidon::primitives as poseidon;
-use halo2_proofs::circuit::Value;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::Field, Curve},
-    pallas,
-};
-use rand::rngs::OsRng;
 
 #[test]
 fn mint_proof() -> Result<()> {

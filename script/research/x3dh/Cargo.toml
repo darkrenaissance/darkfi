@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 sha2 = "0.10.6"
-digest = "0.10.5"
+digest = "0.10.6"
 rand = "0.8.5"
 aes-gcm-siv = "0.11.1"
 curve25519-dalek = "4.0.0-pre.2"

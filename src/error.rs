@@ -147,7 +147,7 @@ pub enum Error {
     #[error("No URL found")]
     NoUrlFound,
 
-    #[cfg(feature = "tungstenite")]
+    #[cfg(feature = "async-tungstenite")]
     #[error("tungstenite error: {0}")]
     TungsteniteError(String),
 
@@ -572,9 +572,18 @@ impl From<halo2_proofs::plonk::Error> for Error {
     }
 }
 
+/*
 #[cfg(feature = "tungstenite")]
 impl From<tungstenite::Error> for Error {
     fn from(err: tungstenite::Error) -> Self {
+        Self::TungsteniteError(err.to_string())
+    }
+}
+*/
+
+#[cfg(feature = "async-tungstenite")]
+impl From<async_tungstenite::tungstenite::Error> for Error {
+    fn from(err: async_tungstenite::tungstenite::Error) -> Self {
         Self::TungsteniteError(err.to_string())
     }
 }

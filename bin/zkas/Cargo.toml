@@ -9,5 +9,5 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-clap = {version = "3.2.20", features = ["derive"]}
+clap = {version = "4.0.28", features = ["derive"]}
 darkfi = {path = "../../", features = ["zkas"]}

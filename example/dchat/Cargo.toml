@@ -16,7 +16,7 @@ darkfi-serial = {path = "../../src/serial"}
 
 # ANCHOR: dependencies
 async-std = "1.12.0"
-async-trait = "0.1.58"
+async-trait = "0.1.59"
 easy-parallel = "3.2.0"
 smol = "1.2.5"
 num_cpus = "1.14.0"
@@ -25,7 +25,7 @@ log = "0.4.17"
 simplelog = "0.12.0"
 url = "2.3.1"
 
-serde_json = "1.0.87"
-serde = {version = "1.0.147", features = ["derive"]}
+serde_json = "1.0.89"
+serde = {version = "1.0.148", features = ["derive"]}
 toml = "0.5.9"
 # ANCHOR_END: dependencies

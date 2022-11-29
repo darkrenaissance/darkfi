@@ -14,7 +14,7 @@ features = ["rpc"]
 
 [dependencies]
 # Tui
-termion = "1.5.6"
+termion = "2.0.1"
 tui = {version = "0.19.0", features = ["termion"]}
 
 # Async
@@ -24,7 +24,7 @@ easy-parallel = "3.2.0"
 async-channel = "1.7.1"
 
 # Misc
-clap = {version = "3.2.20", features = ["derive"]}
+clap = {version = "4.0.28", features = ["derive"]}
 rand = "0.8.5"
 simplelog = "0.12.0"
 log = "0.4.17"
@@ -34,6 +34,6 @@ fxhash = "0.2.1"
 thiserror = "1.0.37"
 
 # Encoding and parsing
-serde_json = "1.0.87"
-serde = {version = "1.0.147", features = ["derive"]}
+serde_json = "1.0.89"
+serde = {version = "1.0.148", features = ["derive"]}
 hex = "0.4.3"

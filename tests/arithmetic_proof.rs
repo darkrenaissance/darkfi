@@ -16,23 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use halo2_proofs::circuit::Value;
+use pasta_curves::pallas;
+use rand::rngs::OsRng;
+use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
+
 use darkfi::{
-    crypto::{
-        proof::{ProvingKey, VerifyingKey},
-        Proof,
-    },
     zk::{
+        proof::{ProvingKey, VerifyingKey},
         vm::{Witness, ZkCircuit},
         vm_stack::empty_witnesses,
+        Proof,
     },
     zkas::decoder::ZkBinary,
     Result,
 };
-use halo2_proofs::circuit::Value;
-use pasta_curves::pallas;
-use rand::rngs::OsRng;
-
-use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
 #[test]
 fn arithmetic_proof() -> Result<()> {

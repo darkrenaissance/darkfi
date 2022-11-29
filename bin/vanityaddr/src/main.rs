@@ -19,7 +19,7 @@
 use std::{process::exit, sync::mpsc::channel};
 
 use clap::Parser;
-use darkfi_sdk::crypto::{Address, Keypair, SecretKey};
+use darkfi_sdk::crypto::{Keypair, SecretKey};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::rngs::OsRng;
 use rayon::prelude::*;
@@ -30,7 +30,7 @@ use darkfi::cli_desc;
 #[clap(name = "vanityaddr", about = cli_desc!(), version)]
 #[clap(arg_required_else_help(true))]
 struct Args {
-    /// Prefixes to search (must start with 1)
+    /// Prefixes to search
     prefix: Vec<String>,
 
     /// Should the search be case-sensitive
@@ -38,7 +38,7 @@ struct Args {
     case_sensitive: bool,
 
     /// Number of threads to use (defaults to number of available CPUs)
-    #[clap(short, parse(try_from_str))]
+    #[clap(short)]
     threads: Option<usize>,
 }
 
@@ -50,9 +50,8 @@ struct DrkAddr {
 impl DrkAddr {
     pub fn new() -> Self {
         let kp = Keypair::random(&mut OsRng);
-        let addr = Address::from(kp.public);
 
-        Self { secret: kp.secret, address: format!("{}", addr) }
+        Self { secret: kp.secret, address: format!("{}", kp.public) }
     }
 
     pub fn starts_with(&self, prefix: &str, case_sensitive: bool) -> bool {
@@ -79,13 +78,6 @@ fn main() {
     if args.prefix.is_empty() {
         eprintln!("Error: No prefix given to search.");
         exit(1);
-    }
-
-    for (idx, prefix) in args.prefix.iter().enumerate() {
-        if !prefix.starts_with('1') {
-            eprintln!("Error: Address prefix at index {} must start with \"1\".", idx);
-            exit(1);
-        }
     }
 
     // Check if prefixes are valid base58

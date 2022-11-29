@@ -380,12 +380,12 @@ impl ValidatorState {
     /// Slots duration is configured using the SLOT_TIME constant.
     pub fn next_n_slot_start(&self, n: u64) -> Duration {
         assert!(n > 0);
-        let start_time = NaiveDateTime::from_timestamp(self.consensus.genesis_ts.0, 0);
+        let start_time = NaiveDateTime::from_timestamp_opt(self.consensus.genesis_ts.0, 0).unwrap();
         let current_slot = self.current_slot() + n;
         let next_slot_start =
             (current_slot * constants::SLOT_TIME) + (start_time.timestamp() as u64);
-        let next_slot_start = NaiveDateTime::from_timestamp(next_slot_start as i64, 0);
-        let current_time = NaiveDateTime::from_timestamp(Utc::now().timestamp(), 0);
+        let next_slot_start = NaiveDateTime::from_timestamp_opt(next_slot_start as i64, 0).unwrap();
+        let current_time = NaiveDateTime::from_timestamp_opt(Utc::now().timestamp(), 0).unwrap();
         let diff = next_slot_start - current_time;
 
         Duration::new(diff.num_seconds().try_into().unwrap(), 0)
