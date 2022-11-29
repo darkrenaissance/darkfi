@@ -19,6 +19,7 @@
 use crate::{
     consensus::{
         block::{BlockOrder, BlockResponse},
+        state::{SlotCheckpointRequest, SlotCheckpointResponse},
         ValidatorStatePtr,
     },
     net, Result,
@@ -28,10 +29,42 @@ use log::{debug, info, warn};
 /// async task used for block syncing.
 pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> {
     info!("Starting blockchain sync...");
-    // Getting a random connected channel to ask for peers
+    // Getting a random connected channel to ask from peers
     match p2p.clone().random_channel().await {
         Some(channel) => {
-            // Communication setup
+            // Communication setup for slot checkpoints
+            let msg_subsystem = channel.get_message_subsystem();
+            msg_subsystem.add_dispatch::<SlotCheckpointResponse>().await;
+            let response_sub = channel.subscribe_msg::<SlotCheckpointResponse>().await?;
+
+            // Node sends the last known slot checkpoint of the canonical blockchain
+            // and loops until the response is the same slot (used to utilize batch requests).
+            let mut last = state.read().await.blockchain.last_slot_checkpoint()?;
+            info!("Last known slot checkpoint: {:?}", last.slot);
+
+            loop {
+                // Node creates a `SlotCheckpointRequest` and sends it
+                let request = SlotCheckpointRequest { slot: last.slot };
+                channel.send(request).await?;
+
+                // Node stores response data.
+                let resp = response_sub.receive().await?;
+
+                // Verify and store retrieved checkpoints
+                debug!("block_sync_task(): Processing received slot checkpoints");
+                state.write().await.receive_slot_checkpoints(&resp.slot_checkpoints).await?;
+
+                let last_received = state.read().await.blockchain.last_slot_checkpoint()?;
+                info!("Last received slot checkpoint: {:?}", last_received.slot);
+
+                if last.slot == last_received.slot {
+                    break
+                }
+
+                last = last_received;
+            }
+
+            // Communication setup for blocks
             let msg_subsystem = channel.get_message_subsystem();
             msg_subsystem.add_dispatch::<BlockResponse>().await;
             let response_sub = channel.subscribe_msg::<BlockResponse>().await?;

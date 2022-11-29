@@ -122,7 +122,7 @@ impl net::Message for ConsensusResponse {
 }
 
 /// Auxiliary structure used to keep track of slot validation parameters.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct SlotCheckpoint {
     /// Slot UID
     pub slot: u64,
@@ -146,5 +146,31 @@ impl SlotCheckpoint {
         let sigma2 = pallas::Base::zero();
 
         Self::new(0, eta, sigma1, sigma2)
+    }
+}
+
+/// Auxiliary structure used for slot checkpoints syncing
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct SlotCheckpointRequest {
+    /// Slot UID
+    pub slot: u64,
+}
+
+impl net::Message for SlotCheckpointRequest {
+    fn name() -> &'static str {
+        "slotcheckpointrequest"
+    }
+}
+
+/// Auxiliary structure used for slot checkpoints syncing
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct SlotCheckpointResponse {
+    /// Response blocks.
+    pub slot_checkpoints: Vec<SlotCheckpoint>,
+}
+
+impl net::Message for SlotCheckpointResponse {
+    fn name() -> &'static str {
+        "slotcheckpointresponse"
     }
 }

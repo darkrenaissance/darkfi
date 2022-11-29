@@ -38,7 +38,7 @@ use serde_json::json;
 use super::{
     constants,
     leadcoin::{LeadCoin, LeadCoinSecrets},
-    state::ConsensusState,
+    state::{ConsensusState, SlotCheckpoint},
     utils::fbig2base,
     BlockInfo, BlockProposal, Float10, Header, LeadInfo, LeadProof, ProposalChain,
 };
@@ -1418,6 +1418,17 @@ impl ValidatorState {
 
             debug!("Transaction {} verified successfully", tx_hash);
         }
+
+        Ok(())
+    }
+
+    /// Append to canonical state received finalized slot checkpoints from block sync task.
+    pub async fn receive_slot_checkpoints(
+        &mut self,
+        slot_checkpoints: &[SlotCheckpoint],
+    ) -> Result<()> {
+        debug!("receive_slot_checkpoints(): Appending slot checkpoints to ledger");
+        self.blockchain.add_slot_checkpoints(slot_checkpoints)?;
 
         Ok(())
     }

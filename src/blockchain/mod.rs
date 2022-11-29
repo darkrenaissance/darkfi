@@ -219,9 +219,19 @@ impl Blockchain {
         Ok((slot, block.lead_info.offset))
     }
 
+    /// Retrieve the last slot checkpoint.
+    pub fn last_slot_checkpoint(&self) -> Result<SlotCheckpoint> {
+        self.slot_checkpoints.get_last()
+    }
+
     /// Retrieve n checkpoints after given start slot.
     pub fn get_slot_checkpoints_after(&self, slot: u64, n: u64) -> Result<Vec<SlotCheckpoint>> {
         debug!("get_slot_checkpoints_after(): {} -> {}", slot, n);
         self.slot_checkpoints.get_after(slot, n)
+    }
+
+    /// Insert a given slice of [`SlotCheckpoint`] into the blockchain database.
+    pub fn add_slot_checkpoints(&self, slot_checkpoints: &[SlotCheckpoint]) -> Result<()> {
+        self.slot_checkpoints.insert(slot_checkpoints)
     }
 }

@@ -123,6 +123,15 @@ impl SlotCheckpointStore {
         Ok(ret)
     }
 
+    /// Fetch the last slot checkpoint in the tree, based on the `Ord`
+    /// implementation for `Vec<u8>`. This should not be able to
+    /// fail because we initialize the store with the genesis slot checkpoint.
+    pub fn get_last(&self) -> Result<SlotCheckpoint> {
+        let found = self.0.last()?.unwrap();
+        let checkpoint = deserialize(&found.1)?;
+        Ok(checkpoint)
+    }
+
     /// Retrieve records count
     pub fn len(&self) -> usize {
         self.0.len()
