@@ -653,7 +653,7 @@ impl ValidatorState {
             self.consensus.leaders_history.last().unwrap().clone(),
         );
         // Replacing old coin with the derived coin
-        //self.consensus.coins[relative_slot][idx] = coin.derive_coin(&mut self.consensus.coins_tree);
+        self.consensus.coins[relative_slot][idx] = coin.derive_coin(&mut self.consensus.coins_tree);
 
         Ok(Some(BlockProposal::new(header, unproposed_txs, lead_info)))
     }
@@ -852,14 +852,6 @@ impl ValidatorState {
 
         let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
         let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];
-        /*
-        for cm in &self.consensus.leaders_spent_coins {
-            if *cm == (prop_cm_x, prop_cm_y) {
-                error!("receive_proposal(): Proposal coin already spent.");
-                return Err(Error::ProposalIsSpent)
-            }
-        }
-        */
 
         // Check if proposal extends any existing fork chains
         let index = self.find_extended_chain_index(proposal)?;

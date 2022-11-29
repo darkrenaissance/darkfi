@@ -315,13 +315,21 @@ impl LeadCoin {
         coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
     ) -> LeadCoin {
         info!("LeadCoin::derive_coin()");
-        let rho = self.derived_rho();
+        let derived_c1_rho = self.derived_rho();
         let blind = pallas::Scalar::random(&mut OsRng);
-        let cm = self.derived_commitment(blind);
-        let cm_coord = cm.to_affine().coordinates().unwrap();
-        let cm_msg = [*cm_coord.x(), *cm_coord.y()];
-        let cm_base = poseidon_hash(cm_msg);
-        coin_commitment_tree.append(&MerkleNode::from(cm_base));
+        let derived_c2_cm = Self::commitment(self.pk(),
+                                                pallas::Base::from(self.value+2*constants::REWARD),
+                                                Self::util_derived_rho(self.coin1_sk_root, derived_c1_rho),
+                                                blind
+
+        );
+        let derived_c1_cm = {
+             self.derived_commitment(self.coin2_blind)
+        };
+        let derived_c1_cm_coord = derived_c1_cm.to_affine().coordinates().unwrap();
+        let derived_c1_cm_msg = [*derived_c1_cm_coord.x(), *derived_c1_cm_coord.y()];
+        let derived_c1_cm_base = poseidon_hash(derived_c1_cm_msg);
+        coin_commitment_tree.append(&MerkleNode::from(derived_c1_cm_base));
         let leaf_pos = coin_commitment_tree.witness().unwrap();
         let commitment_root = coin_commitment_tree.root(0).unwrap();
         let commitment_merkle_path =
@@ -329,10 +337,10 @@ impl LeadCoin {
         LeadCoin {
             value: self.value + constants::REWARD,
             coin1_commitment: self.coin2_commitment,
-            coin2_commitment: cm,
+            coin2_commitment: derived_c2_cm,
             idx: u32::try_from(usize::from(leaf_pos)).unwrap(),
             tau: self.tau,
-            nonce: rho,
+            nonce: derived_c1_rho,
             coin1_commitment_root: commitment_root,
             coin1_sk: self.coin1_sk,
             coin1_sk_root: self.coin1_sk_root,
