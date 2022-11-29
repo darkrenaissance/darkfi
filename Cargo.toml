@@ -45,9 +45,9 @@ members = [
     "src/serial/derive-internal",
 
     "src/contract/money",
+    "src/contract/dao",
 
     "example/dchat",
-    "example/dao",
 ]
 
 [dependencies]

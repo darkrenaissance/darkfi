@@ -17,19 +17,19 @@ WASM_SRC = \
 ZKAS_BIN = $(ZKAS_SRC:=.bin)
 
 # Contract WASM binaries
-WASM_BIN = money_contract.wasm
+WASM_BIN = dao_contract.wasm
 
-all: $(ZKAS_BIN) $(WASM_BIN)
+all: $(WASM_BIN)
 
 $(ZKAS_BIN): $(ZKAS_SRC)
 	$(ZKAS) $(basename $@) -o $@
 
-money_contract.wasm: $(ZKAS_BIN) $(WASM_SRC)
-	$(CARGO) build --release --package darkfi-money-contract --target wasm32-unknown-unknown
-	cp -f ../../../target/wasm32-unknown-unknown/release/darkfi_money_contract.wasm $@
+dao_contract.wasm: $(ZKAS_BIN) $(WASM_SRC)
+	$(CARGO) build --release --package darkfi-dao-contract --target wasm32-unknown-unknown
+	cp -f ../../../target/wasm32-unknown-unknown/release/darkfi_dao_contract.wasm $@
 
 test: all
-	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract
+	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-dao-contract
 
 clean:
 	rm -f $(ZKAS_BIN) $(WASM_BIN)

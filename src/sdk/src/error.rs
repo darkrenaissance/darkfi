@@ -68,6 +68,9 @@ pub enum ContractError {
 
     #[error("Db contains_key failed")]
     DbContainsKeyFailed,
+
+    #[error("Invalid function call")]
+    InvalidFunction,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -91,6 +94,7 @@ pub const DB_SET_FAILED: i64 = to_builtin!(11);
 pub const DB_LOOKUP_FAILED: i64 = to_builtin!(12);
 pub const DB_GET_FAILED: i64 = to_builtin!(13);
 pub const DB_CONTAINS_KEY_FAILED: i64 = to_builtin!(14);
+pub const INVALID_FUNCTION: i64 = to_builtin!(15);
 
 impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
@@ -108,6 +112,7 @@ impl From<ContractError> for i64 {
             ContractError::DbLookupFailed => DB_LOOKUP_FAILED,
             ContractError::DbGetFailed => DB_GET_FAILED,
             ContractError::DbContainsKeyFailed => DB_CONTAINS_KEY_FAILED,
+            ContractError::InvalidFunction => INVALID_FUNCTION,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -136,6 +141,7 @@ impl From<i64> for ContractError {
             DB_LOOKUP_FAILED => Self::DbLookupFailed,
             DB_GET_FAILED => Self::DbGetFailed,
             DB_CONTAINS_KEY_FAILED => Self::DbContainsKeyFailed,
+            INVALID_FUNCTION => Self::InvalidFunction,
             _ => Self::Custom(error as u32),
         }
     }

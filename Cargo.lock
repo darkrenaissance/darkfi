@@ -1148,39 +1148,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dao-example"
-version = "0.3.0"
-dependencies = [
- "async-channel",
- "async-executor",
- "async-std",
- "async-trait",
- "bs58",
- "chacha20poly1305",
- "darkfi",
- "darkfi-sdk",
- "darkfi-serial",
- "easy-parallel",
- "env_logger",
- "futures",
- "fxhash",
- "group",
- "halo2_gadgets",
- "halo2_proofs",
- "incrementalmerkletree",
- "lazy_static",
- "log",
- "num_cpus",
- "pasta_curves",
- "rand",
- "serde_json",
- "simplelog",
- "smol",
- "thiserror",
- "url",
-]
-
-[[package]]
 name = "daod"
 version = "0.3.0"
 dependencies = [
@@ -1277,6 +1244,16 @@ dependencies = [
  "wasmer",
  "wasmer-compiler-singlepass",
  "wasmer-middlewares",
+]
+
+[[package]]
+name = "darkfi-dao-contract"
+version = "0.3.0"
+dependencies = [
+ "darkfi-money-contract",
+ "darkfi-sdk",
+ "darkfi-serial",
+ "getrandom 0.2.8",
 ]
 
 [[package]]
