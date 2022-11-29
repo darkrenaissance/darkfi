@@ -59,14 +59,12 @@ pub struct LeadCoin {
     pub coin1_commitment: pallas::Point,
     /// Commitment for coin2 (rcpt coin)
     pub coin2_commitment: pallas::Point,
-    /// Coin index
+    /// Coin sk index
     pub idx: u32,
     /// Coin timestamp as slot index.
     pub tau: pallas::Base,
     /// Coin nonce
     pub nonce: pallas::Base,
-    /// Coin nonce's commitment
-    pub nonce_cm: pallas::Base,
     /// Merkle root of coin1 commitment
     pub coin1_commitment_root: MerkleNode,
     /// coin1 sk
@@ -89,6 +87,8 @@ pub struct LeadCoin {
     pub rho_mu: pallas::Base,
     /// Coin's secret key
     pub secret_key: SecretKey,
+    /// eta
+    pub eta: pallas::Base,
 }
 
 impl LeadCoin {
@@ -155,7 +155,6 @@ impl LeadCoin {
             // Assume tau is sl for simplicity
             tau,
             nonce: pallas::Base::from(seed),
-            nonce_cm: coin2_seed,
             coin1_commitment_root,
             coin1_sk,
             coin1_sk_root,
@@ -167,6 +166,7 @@ impl LeadCoin {
             y_mu,
             rho_mu,
             secret_key,
+            eta,
         }
     }
 
@@ -223,7 +223,7 @@ impl LeadCoin {
         // rho
         let rho_msg = [seed, self.rho_mu];
         let rho = poseidon_hash(rho_msg);
-        vec![
+        let public_inputs = vec![
             pk,
             *c1_cm.x(),
             *c1_cm.y(),
@@ -238,7 +238,8 @@ impl LeadCoin {
             rho,
             sigma1,
             sigma2,
-        ]
+        ];
+        public_inputs
     }
 
     fn util_pk(sk_root: MerkleNode, tau: pallas::Base) -> pallas::Base {
@@ -301,7 +302,7 @@ impl LeadCoin {
     pub fn derived_commitment(&self, blind: pallas::Scalar) -> pallas::Point {
         let pk = self.pk();
         let rho = self.derived_rho();
-        Self::commitment(pk, pallas::Base::from(self.value), rho, blind)
+        Self::commitment(pk, pallas::Base::from(self.value+constants::REWARD.clone()), rho, blind)
     }
 
     /// the new coin to be minted after the current coin is spent
@@ -323,16 +324,27 @@ impl LeadCoin {
         let commitment_root = coin_commitment_tree.root(0).unwrap();
         let commitment_merkle_path =
             coin_commitment_tree.authentication_path(leaf_pos, &commitment_root).unwrap();
-        derived.nonce = rho;
-        derived.coin1_commitment = derived.coin2_commitment;
-        derived.coin2_commitment = cm;
-        derived.coin1_blind = derived.coin2_blind;
-        derived.coin2_blind = blind;
-        derived.value = self.value + constants::REWARD;
-        derived.coin1_commitment_root = commitment_root;
-        derived.coin1_commitment_merkle_path = commitment_merkle_path.try_into().unwrap();
-        derived.idx = u32::try_from(usize::from(leaf_pos)).unwrap();
-        derived
+        LeadCoin {
+            value: self.value + constants::REWARD,
+            coin1_commitment: self.coin2_commitment,
+            coin2_commitment: cm,
+            idx: u32::try_from(usize::from(leaf_pos)).unwrap(),
+            tau: self.tau,
+            nonce: rho,
+            coin1_commitment_root: commitment_root,
+            coin1_sk: self.coin1_sk,
+            coin1_sk_root: self.coin1_sk_root,
+            coin1_sk_pos: self.coin1_sk_pos,
+            coin1_commitment_merkle_path: commitment_merkle_path.try_into().unwrap(),
+            coin1_sk_merkle_path: self.coin1_sk_merkle_path,
+            coin1_blind: self.coin2_blind,
+            coin2_blind: blind,
+            y_mu: self.y_mu,
+            rho_mu: self.rho_mu,
+            secret_key: self.secret_key,
+            eta: self.eta,
+        }
+
     }
 
     /// Try to create a ZK proof of consensus leadership
@@ -341,9 +353,9 @@ impl LeadCoin {
         sigma1: pallas::Base,
         sigma2: pallas::Base,
         pk: &ProvingKey,
-    ) -> Result<Proof> {
+    ) -> (Result<Proof>, Vec<pallas::Base>) {
         let bincode = include_bytes!("../../proof/lead.zk.bin");
-        let zkbin = ZkBinary::decode(bincode)?;
+        let zkbin = ZkBinary::decode(bincode).unwrap();
         let witnesses = vec![
             Witness::MerklePath(Value::known(self.coin1_commitment_merkle_path)),
             Witness::Uint32(Value::known(self.idx)),
@@ -362,7 +374,8 @@ impl LeadCoin {
             Witness::Base(Value::known(sigma2)),
         ];
         let circuit = ZkCircuit::new(witnesses, zkbin.clone());
-        Ok(Proof::create(pk, &[circuit], &self.public_inputs(sigma1, sigma2), &mut OsRng)?)
+        let public_inputs = self.public_inputs(sigma1, sigma2);
+        (Ok(Proof::create(pk, &[circuit], &public_inputs, &mut OsRng).unwrap()), public_inputs)
     }
 
     pub fn create_xfer_proof(

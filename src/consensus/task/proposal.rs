@@ -111,7 +111,6 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
                 continue
             }
         };
-
         // Node checks if it's the slot leader to generate a new proposal
         // for that slot.
         let (won, idx) = state.write().await.is_slot_leader(sigma1, sigma2);

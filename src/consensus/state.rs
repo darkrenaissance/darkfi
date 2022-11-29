@@ -447,8 +447,8 @@ impl ValidatorState {
         if total_stake == 0 {
             total_stake = constants::GENESIS_TOTAL_STAKE;
         }
-        debug!("consensus::sigmas(): f: {}", f);
-        debug!("consensus::sigmas(): stake: {}", total_stake);
+        info!("consensus::sigmas(): f: {}", f);
+        info!("consensus::sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
         let field_p = Float10::from_str_native(constants::P)
@@ -652,8 +652,16 @@ impl ValidatorState {
         info!("PID: P: {:?}", p);
         info!("PID: I: {:?}", i);
         info!("PID: D: {:?}", d);
-        let f = Self::pid(p, i, d);
-        info!("Consensus::win_prob_with_full_stake(): last f: {}", f);
+        let mut f = Self::pid(p, i, d);
+        info!("Consensus::win_prob_with_full_stake(): pid f: {}", f);
+        f = if f >= constants::FLOAT10_ONE.clone()  {
+            constants::MAX_F.clone()
+        } else if f <= constants::FLOAT10_ZERO.clone() {
+            constants::MIN_F.clone()
+        } else {
+            f
+        };
+        info!("Consensus::win_prob_with_full_stake(): clipped f: {}", f);
         f
     }
 
@@ -718,12 +726,12 @@ impl ValidatorState {
 
         let root = tree.root(0).unwrap();
 
-        let eta = self.consensus.epoch_eta;
+        //let eta = self.consensus.epoch_eta;
         // Generating leader proof
         let relative_slot = self.relative_slot(slot) as usize;
         let coin = self.consensus.coins[relative_slot][idx];
-        let proof =
-            coin.create_lead_proof(sigma1, sigma2, self.lead_proving_key.as_ref().unwrap())?;
+        let (proof, public_inputs) =
+            coin.create_lead_proof(sigma1, sigma2, self.lead_proving_key.as_ref().unwrap());
 
         // Signing using coin
         let secret_key = coin.secret_key;
@@ -735,14 +743,15 @@ impl ValidatorState {
         let lead_info = LeadInfo::new(
             signed_proposal,
             public_key,
-            coin.public_inputs(sigma1, sigma2),
-            eta.to_repr(),
-            LeadProof::from(proof),
+            //coin.public_inputs(sigma1, sigma2),
+            public_inputs,
+            coin.eta.to_repr(),
+            LeadProof::from(proof?),
             self.get_current_offset(slot),
             self.consensus.leaders_history.last().unwrap().clone(),
         );
         // Replacing old coin with the derived coin
-        self.consensus.coins[relative_slot][idx] = coin.derive_coin(&mut self.consensus.coins_tree);
+        //self.consensus.coins[relative_slot][idx] = coin.derive_coin(&mut self.consensus.coins_tree);
 
         Ok(Some(BlockProposal::new(header, unproposed_txs, lead_info)))
     }
@@ -926,19 +935,21 @@ impl ValidatorState {
     }
         */
         // sn
-        let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
+        //let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
+        /*
         for sn in &self.consensus.leaders_nullifiers {
             if *sn == prop_sn {
                 error!("receive_proposal(): Proposal nullifiers exist.");
                 return Err(Error::ProposalIsSpent)
             }
         }
-
+        */
         // cm
 
+        /*
         let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
         let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];
-        /*
+
         for cm in &self.consensus.leaders_spent_coins {
             if *cm == (prop_cm_x, prop_cm_y) {
                 error!("receive_proposal(): Proposal coin already spent.");
@@ -975,8 +986,8 @@ impl ValidatorState {
         };
 
         // Store proposal coin info
-        self.consensus.leaders_nullifiers.push(prop_sn);
-        self.consensus.leaders_spent_coins.push((prop_cm_x, prop_cm_y));
+        //self.consensus.leaders_nullifiers.push(prop_sn);
+        //self.consensus.leaders_spent_coins.push((prop_cm_x, prop_cm_y));
 
         Ok(())
     }
