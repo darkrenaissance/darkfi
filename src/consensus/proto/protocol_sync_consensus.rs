@@ -77,12 +77,14 @@ impl ProtocolSyncConsensus {
             let offset = lock.consensus.offset;
             let proposals = lock.consensus.proposals.clone();
             let unconfirmed_txs = lock.unconfirmed_txs.clone();
+            let slot_checkpoints = lock.consensus.slot_checkpoints.clone();
             let leaders_nullifiers = lock.consensus.leaders_nullifiers.clone();
             let leaders_spent_coins = lock.consensus.leaders_spent_coins.clone();
             let response = ConsensusResponse {
                 offset,
                 proposals,
                 unconfirmed_txs,
+                slot_checkpoints,
                 leaders_nullifiers,
                 leaders_spent_coins,
             };

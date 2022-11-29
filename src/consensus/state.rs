@@ -42,6 +42,8 @@ pub struct ConsensusState {
     pub proposals: Vec<ProposalChain>,
     /// Current epoch
     pub epoch: u64,
+    /// Hot/live slot checkpoints
+    pub slot_checkpoints: Vec<SlotCheckpoint>,
     /// previous epoch eta
     pub prev_epoch_eta: pallas::Base,
     /// Current epoch eta
@@ -76,6 +78,7 @@ impl ConsensusState {
             offset: None,
             proposals: vec![],
             epoch: 0,
+            slot_checkpoints: vec![],
             prev_epoch_eta: pallas::Base::one(),
             epoch_eta: pallas::Base::one(),
             coins: vec![],
@@ -109,6 +112,8 @@ pub struct ConsensusResponse {
     pub proposals: Vec<ProposalChain>,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Transaction>,
+    /// Hot/live slot checkpoints
+    pub slot_checkpoints: Vec<SlotCheckpoint>,
     /// Seen nullifiers from proposals
     pub leaders_nullifiers: Vec<pallas::Base>,
     /// Seen spent coins from proposals
