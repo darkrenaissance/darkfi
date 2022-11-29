@@ -656,9 +656,9 @@ impl ValidatorState {
         let lead_info = LeadInfo::new(
             signed_proposal,
             public_key,
-            //coin.public_inputs(sigma1, sigma2),
             public_inputs,
-            coin.eta.to_repr(),
+            coin.slot,
+            coin.eta,
             LeadProof::from(proof?),
             self.get_current_offset(slot),
             self.consensus.leaders_history.last().unwrap().clone(),
@@ -751,8 +751,20 @@ impl ValidatorState {
             return Err(Error::ProposalAfterFinalizationError)
         }
 
+        // Proposal validations
         let lf = &proposal.block.lead_info;
         let hdr = &proposal.block.header;
+
+        // Ignore proposal if not for current slot
+        if hdr.slot != current {
+            return Err(Error::ProposalNotForCurrentSlotError)
+        }
+
+        // Check if proposal extends any existing fork chains
+        let index = self.find_extended_chain_index(proposal)?;
+        if index == -2 {
+            return Err(Error::ExtendedChainIndexNotFound)
+        }
 
         // Verify proposal signature is valid based on producer public key
         // TODO: derive public key from proof
@@ -798,58 +810,51 @@ impl ValidatorState {
         };
         info!("receive_proposal(): Leader proof verified successfully!");
 
-        let proposed_slot = proposal.block.header.slot;
-        info!("proposed slot: {}", proposed_slot);
-        let block_len = self.blockchain.len() as u64;
-        info!("block length: {}", block_len);
-        let offset = current - block_len;
-        info!("offset: {}", offset);
-        //TODO: subtract eta slot index from empty slots since restarting the network.
-        //let mut slot_eta = self.get_eta_by_slot(proposed_slot.clone()-offset-1);
-
-        /*
-            let slot_eta = self.get_eta();
-            // Verify proposal public values
-            let (mu_y, mu_rho) =
-                LeadCoin::election_seeds_u64(slot_eta, proposed_slot);
-            // y
-            let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
-            if mu_y != prop_mu_y {
-                error!(
-                    "receive_proposal(): Failed to verify mu_y: {:?}, proposed: {:?}",
-                    mu_y, prop_mu_y
-                );
-                return Err(Error::ProposalPublicValuesMismatched)
-            }
-            // rho
-            let prop_mu_rho = lf.public_inputs[constants::PI_MU_RHO_INDEX];
-            if mu_rho != prop_mu_rho {
-                error!(
-                    "receive_proposal(): Failed to verify mu_rho: {:?}, proposed: {:?}",
-                    mu_rho, prop_mu_rho
-                );
-                return Err(Error::ProposalPublicValuesMismatched)
+        // Validate proposal public value against coin creation slot checkpoint
+        let checkpoint = self.get_slot_checkpoint(lf.coin_slot)?;
+        if checkpoint.eta != lf.coin_eta {
+            return Err(Error::ProposalDifferentCoinEtaError)
         }
-            */
+        let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(checkpoint.eta, checkpoint.slot);
+        // y
+        let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
+        if mu_y != prop_mu_y {
+            error!(
+                "receive_proposal(): Failed to verify mu_y: {:?}, proposed: {:?}",
+                mu_y, prop_mu_y
+            );
+            return Err(Error::ProposalPublicValuesMismatched)
+        }
+        // rho
+        let prop_mu_rho = lf.public_inputs[constants::PI_MU_RHO_INDEX];
+        if mu_rho != prop_mu_rho {
+            error!(
+                "receive_proposal(): Failed to verify mu_rho: {:?}, proposed: {:?}",
+                mu_rho, prop_mu_rho
+            );
+            return Err(Error::ProposalPublicValuesMismatched)
+        }
 
+        // Validate proposal coin sigmas against current slot checkpoint
+        let checkpoint = self.get_slot_checkpoint(current)?;
         // sigma1
         let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
-        if self.consensus.prev_sigma1 != prop_sigma1 {
+        if checkpoint.sigma1 != prop_sigma1 {
             error!(
                 "receive_proposal(): Failed to verify public value sigma1: {:?}, to proposed: {:?}",
-                self.consensus.prev_sigma1, prop_sigma1
+                checkpoint.sigma1, prop_sigma1
             );
         }
         // sigma2
         let prop_sigma2 = lf.public_inputs[constants::PI_SIGMA2_INDEX];
-        if self.consensus.prev_sigma2 != prop_sigma2 {
+        if checkpoint.sigma2 != prop_sigma2 {
             error!(
                 "receive_proposal(): Failed to verify public value sigma2: {:?}, to proposed: {:?}",
-                self.consensus.prev_sigma2, prop_sigma2
+                checkpoint.sigma2, prop_sigma2
             );
         }
 
-        // sn
+        // TODO: Check if proposal coin nullifiers already exist
         let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
         /*
         for sn in &self.consensus.leaders_nullifiers {
@@ -859,16 +864,18 @@ impl ValidatorState {
             }
         }
         */
-        // cm
 
+        // TODO: Check if proposal coin commitments already spent
         let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
         let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];
-
-        // Check if proposal extends any existing fork chains
-        let index = self.find_extended_chain_index(proposal)?;
-        if index == -2 {
-            return Err(Error::ExtendedChainIndexNotFound)
+        /*
+        for cm in &self.consensus.leaders_spent_coins {
+            if *cm == (prop_cm_x, prop_cm_y) {
+                error!("receive_proposal(): Proposal coin already spent.");
+                return Err(Error::ProposalIsSpent)
+            }
         }
+        */
 
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
@@ -1158,7 +1165,13 @@ impl ValidatorState {
     }
 
     /// Auxillary function to retrieve slot checkpoint of provided slot UID.
-    fn get_slot_checkpoin(&self, slot: u64) -> Result<SlotCheckpoint> {
+    fn get_slot_checkpoint(&self, slot: u64) -> Result<SlotCheckpoint> {
+        // Check hot/live slot checkpoints
+        for slot_checkpoint in self.consensus.slot_checkpoints.iter().rev() {
+            if slot_checkpoint.slot == slot {
+                return Ok(slot_checkpoint.clone())
+            }
+        }
         // Check if slot is finalized
         if let Ok(slot_checkpoints) = self.blockchain.get_slot_checkpoints_by_slot(&[slot]) {
             if slot_checkpoints.len() > 0 {
@@ -1167,13 +1180,7 @@ impl ValidatorState {
                 }
             }
         }
-        // Check hot/live slot checkpoints
-        for slot_checkpoint in self.consensus.slot_checkpoints.iter().rev() {
-            if slot_checkpoint.slot == slot {
-                return Ok(slot_checkpoint.clone())
-            }
-        }
-        Err(Error::UnknownSlotCheckpointError)
+        Err(Error::SlotCheckpointNotFound(slot))
     }
 
     // ==========================

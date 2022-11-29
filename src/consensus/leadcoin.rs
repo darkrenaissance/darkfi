@@ -92,6 +92,8 @@ pub struct LeadCoin {
     pub secret_key: SecretKey,
     /// eta
     pub eta: pallas::Base,
+    /// slot
+    pub slot: u64,
 }
 
 impl LeadCoin {
@@ -170,6 +172,7 @@ impl LeadCoin {
             rho_mu,
             secret_key,
             eta,
+            slot: slot_index,
         }
     }
 
@@ -351,6 +354,7 @@ impl LeadCoin {
             rho_mu: self.rho_mu,
             secret_key: self.secret_key,
             eta: self.eta,
+            slot: self.slot,
         }
     }
 

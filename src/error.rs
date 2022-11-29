@@ -241,6 +241,9 @@ pub enum Error {
     #[error("Proposal received after finalization sync period")]
     ProposalAfterFinalizationError,
 
+    #[error("Proposal received not for current slot")]
+    ProposalNotForCurrentSlotError,
+
     #[error("Proposal contains missmatched hashes")]
     ProposalHashesMissmatchError,
 
@@ -250,11 +253,11 @@ pub enum Error {
     #[error("Proposal contains different offset")]
     ProposalDifferentOffsetError,
 
+    #[error("Proposal contains different coin creation eta")]
+    ProposalDifferentCoinEtaError,
+
     #[error("proposed coin is spent")]
     ProposalIsSpent,
-
-    #[error("Slot checkpoint doesn't exist")]
-    UnknownSlotCheckpointError,
 
     #[error("unable to verify transfer transaction")]
     TransferTxVerification,
@@ -283,6 +286,9 @@ pub enum Error {
 
     #[error("Block in slot {0} not found in database")]
     SlotNotFound(u64),
+
+    #[error("Slot checkpoint {0} not found in database")]
+    SlotCheckpointNotFound(u64),
 
     #[error("Contract {0} not found in database")]
     ContractNotFound(String),

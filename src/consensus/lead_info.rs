@@ -39,8 +39,10 @@ pub struct LeadInfo {
     pub public_key: PublicKey, // TODO: remove this(to be derived by proof)
     /// Block producer slot competing coins public inputs
     pub public_inputs: Vec<pallas::Base>,
-    /// Response of global random oracle, or it's emulation.
-    pub eta: [u8; 32],
+    /// Leader coin creation slot
+    pub coin_slot: u64,
+    /// Leader coin creation eta
+    pub coin_eta: pallas::Base,
     /// Leader NIZK proof
     pub proof: LeadProof,
     /// Slot offset block producer used
@@ -55,11 +57,21 @@ impl Default for LeadInfo {
         let keypair = Keypair::default();
         let signature = Signature::dummy();
         let public_inputs = vec![];
-        let eta: [u8; 32] = *blake3::hash(b"let there be dark!").as_bytes();
+        let coin_slot = 0;
+        let coin_eta = pallas::Base::zero();
         let proof = LeadProof::default();
         let offset = 0;
         let leaders = 0;
-        Self { signature, public_key: keypair.public, public_inputs, eta, proof, offset, leaders }
+        Self {
+            signature,
+            public_key: keypair.public,
+            public_inputs,
+            coin_slot,
+            coin_eta,
+            proof,
+            offset,
+            leaders,
+        }
     }
 }
 
@@ -68,12 +80,13 @@ impl LeadInfo {
         signature: Signature,
         public_key: PublicKey,
         public_inputs: Vec<pallas::Base>,
-        eta: [u8; 32],
+        coin_slot: u64,
+        coin_eta: pallas::Base,
         proof: LeadProof,
         offset: u64,
         leaders: u64,
     ) -> Self {
-        Self { signature, public_key, public_inputs, eta, proof, offset, leaders }
+        Self { signature, public_key, public_inputs, coin_slot, coin_eta, proof, offset, leaders }
     }
 }
 
