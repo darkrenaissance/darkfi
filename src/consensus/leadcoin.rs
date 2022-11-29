@@ -312,7 +312,6 @@ impl LeadCoin {
         coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
     ) -> LeadCoin {
         info!("LeadCoin::derive_coin()");
-        let mut derived = self.clone();
         let rho = self.derived_rho();
         let blind = pallas::Scalar::random(&mut OsRng);
         let cm = self.derived_commitment(blind);

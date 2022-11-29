@@ -893,8 +893,9 @@ impl ValidatorState {
         info!("offset: {}", offset);
         //TODO: subtract eta slot index from empty slots since restarting the network.
         //let mut slot_eta = self.get_eta_by_slot(proposed_slot.clone()-offset-1);
-        let slot_eta = self.get_eta();
+
         /*
+        let slot_eta = self.get_eta();
         // Verify proposal public values
         let (mu_y, mu_rho) =
             LeadCoin::election_seeds_u64(slot_eta, proposed_slot);
@@ -915,7 +916,8 @@ impl ValidatorState {
                 mu_rho, prop_mu_rho
             );
             return Err(Error::ProposalPublicValuesMismatched)
-        }
+    }
+        */
 
         // sigma1
         let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
@@ -931,11 +933,11 @@ impl ValidatorState {
             error!(
                 "receive_proposal(): Failed to verify public value sigma2: {:?}, to proposed: {:?}",
                 self.consensus.prev_sigma2, prop_sigma2
-    );
-    }
-        */
+            );
+        }
+
         // sn
-        //let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
+        let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
         /*
         for sn in &self.consensus.leaders_nullifiers {
             if *sn == prop_sn {
@@ -946,10 +948,10 @@ impl ValidatorState {
         */
         // cm
 
-        /*
+
         let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
         let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];
-
+        /*
         for cm in &self.consensus.leaders_spent_coins {
             if *cm == (prop_cm_x, prop_cm_y) {
                 error!("receive_proposal(): Proposal coin already spent.");
@@ -986,8 +988,8 @@ impl ValidatorState {
         };
 
         // Store proposal coin info
-        //self.consensus.leaders_nullifiers.push(prop_sn);
-        //self.consensus.leaders_spent_coins.push((prop_cm_x, prop_cm_y));
+        self.consensus.leaders_nullifiers.push(prop_sn);
+        self.consensus.leaders_spent_coins.push((prop_cm_x, prop_cm_y));
 
         Ok(())
     }
@@ -1221,6 +1223,7 @@ impl ValidatorState {
         pallas::Base::from_repr(bytes).unwrap()
     }
 
+    /*
     fn get_eta_by_slot(&self, slot: u64) -> pallas::Base {
         let mut proof_tx_hash = self.blockchain.get_proof_hash_by_slot(slot);
         proof_tx_hash = match proof_tx_hash {
@@ -1236,7 +1239,7 @@ impl ValidatorState {
         bytes[31] = 0;
         pallas::Base::from_repr(bytes).unwrap()
     }
-
+    */
     // ==========================
     // State transition functions
     // ==========================
