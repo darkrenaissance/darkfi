@@ -21,6 +21,7 @@ use std::{fs::File, io::Write};
 use darkfi::{
     blockchain::{
         blockstore::{BlockOrderStore, BlockStore, HeaderStore},
+        slotcheckpointstore::SlotCheckpointStore,
         txstore::TxStore,
         Blockchain,
     },
@@ -28,7 +29,8 @@ use darkfi::{
         block::{Block, BlockProposal, Header, ProposalChain},
         constants::TESTNET_GENESIS_HASH_BYTES,
         lead_info::LeadInfo,
-        state::{ConsensusState, ValidatorState},
+        state::ConsensusState,
+        validator::ValidatorState,
     },
     tx::Transaction,
     util::{path::expand_path, time::Timestamp},
@@ -38,16 +40,41 @@ use darkfi::{
 use darkfi_sdk::crypto::MerkleNode;
 use darkfi_serial::serialize;
 
-// TODO: Add missing fields
 #[derive(Debug)]
 struct LeadInfoInfo {
+    _signature: String,
     _public_key: String,
+    _public_inputs: Vec<String>,
+    _coin_slot: u64,
+    _coin_eta: String,
+    _proof: String,
+    _offset: u64,
+    _leaders: u64,
 }
 
 impl LeadInfoInfo {
     pub fn new(lead_info: &LeadInfo) -> LeadInfoInfo {
+        let _signature = format!("{:?}", lead_info.signature);
         let _public_key = lead_info.public_key.to_string();
-        LeadInfoInfo { _public_key }
+        let mut _public_inputs = vec![];
+        for public_input in &lead_info.public_inputs {
+            _public_inputs.push(format!("{:?}", public_input));
+        }
+        let _coin_slot = lead_info.coin_slot;
+        let _coin_eta = format!("{:?}", lead_info.coin_eta);
+        let _proof = format!("{:?}", lead_info.proof);
+        let _offset = lead_info.offset;
+        let _leaders = lead_info.leaders;
+        LeadInfoInfo {
+            _signature,
+            _public_key,
+            _public_inputs,
+            _coin_slot,
+            _coin_eta,
+            _proof,
+            _offset,
+            _leaders,
+        }
     }
 }
 
@@ -221,6 +248,46 @@ impl BlockOrderStoreInfo {
 }
 
 #[derive(Debug)]
+struct SlotCheckpointInfo {
+    _slot: u64,
+    _eta: String,
+    _sigma1: String,
+    _sigma2: String,
+}
+
+impl SlotCheckpointInfo {
+    pub fn new(_slot: u64, _eta: String, _sigma1: String, _sigma2: String) -> SlotCheckpointInfo {
+        SlotCheckpointInfo { _slot, _eta, _sigma1, _sigma2 }
+    }
+}
+
+#[derive(Debug)]
+struct SlotCheckpointStoreInfo {
+    _slot_checkpoints: Vec<SlotCheckpointInfo>,
+}
+
+impl SlotCheckpointStoreInfo {
+    pub fn new(slotcheckpointstore: &SlotCheckpointStore) -> SlotCheckpointStoreInfo {
+        let mut _slot_checkpoints = Vec::new();
+        let result = slotcheckpointstore.get_all();
+        match result {
+            Ok(iter) => {
+                for slot_checkpoint in iter.iter() {
+                    _slot_checkpoints.push(SlotCheckpointInfo::new(
+                        slot_checkpoint.slot,
+                        format!("{:?}", slot_checkpoint.eta),
+                        format!("{:?}", slot_checkpoint.sigma1),
+                        format!("{:?}", slot_checkpoint.sigma2),
+                    ));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        SlotCheckpointStoreInfo { _slot_checkpoints }
+    }
+}
+
+#[derive(Debug)]
 struct TxInfo {
     _hash: blake3::Hash,
     _payload: Transaction,
@@ -259,6 +326,7 @@ struct BlockchainInfo {
     _headers: HeaderStoreInfo,
     _blocks: BlockInfoChain,
     _order: BlockOrderStoreInfo,
+    _slot_checkpoints: SlotCheckpointStoreInfo,
     _transactions: TxStoreInfo,
 }
 
@@ -267,8 +335,9 @@ impl BlockchainInfo {
         let _headers = HeaderStoreInfo::new(&blockchain.headers);
         let _blocks = BlockInfoChain::new(&blockchain.blocks);
         let _order = BlockOrderStoreInfo::new(&blockchain.order);
+        let _slot_checkpoints = SlotCheckpointStoreInfo::new(&blockchain.slot_checkpoints);
         let _transactions = TxStoreInfo::new(&blockchain.transactions);
-        BlockchainInfo { _headers, _blocks, _order, _transactions }
+        BlockchainInfo { _headers, _blocks, _order, _slot_checkpoints, _transactions }
     }
 }
 
