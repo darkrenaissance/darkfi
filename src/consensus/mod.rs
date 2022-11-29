@@ -29,7 +29,10 @@ pub use lead_info::{LeadInfo, LeadProof};
 
 /// Consensus state
 pub mod state;
-pub use state::{ValidatorState, ValidatorStatePtr};
+
+/// Consensus validator state
+pub mod validator;
+pub use validator::{ValidatorState, ValidatorStatePtr};
 
 /// P2P net protocols
 pub mod proto;
