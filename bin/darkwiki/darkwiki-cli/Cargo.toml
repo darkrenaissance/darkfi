@@ -12,10 +12,10 @@ repository = "https://github.com/darkrenaissance/darkfi"
 darkfi = {path = "../../../", features = ["rpc"]}
 
 # Async
-smol = "1.2.5"
+smol = "1.3.0"
 async-std = {version = "1.12.0", features = ["attributes"]}
 async-trait = "0.1.59"
-async-channel = "1.7.1"
+async-channel = "1.8.0"
 futures = "0.3.25"
 
 # Misc

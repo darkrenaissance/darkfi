@@ -16,7 +16,7 @@ async-std = "1.12.0"
 async-trait = "0.1.59"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 easy-parallel = "3.2.0"
-smol = "1.2.5"
+smol = "1.3.0"
 
 # Misc
 fxhash = "0.2.1"

@@ -10,7 +10,7 @@ edition = "2021"
 
 [dependencies]
 bs58 = "0.4.0"
-clap = {version = "4.0.28", features = ["derive"]}
+clap = {version = "4.0.29", features = ["derive"]}
 ctrlc = "3.2.3"
 darkfi = {path = "../../", features = ["crypto"]}
 darkfi-sdk = {path = "../../src/sdk"}

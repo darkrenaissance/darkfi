@@ -13,7 +13,7 @@ darkfi = {path = "../../", features = ["net", "rpc", "bs58"]}
 darkfi-serial = {path = "../../src/serial"}
 
 # Async
-smol = "1.2.5"
+smol = "1.3.0"
 futures = "0.3.25"
 futures-rustls = "0.22.2"
 rustls-pemfile = "1.0.1"
@@ -27,7 +27,7 @@ crypto_box = "0.8.2"
 rand = "0.8.5"
 
 # Misc
-clap = {version = "4.0.28", features = ["derive"]}
+clap = {version = "4.0.29", features = ["derive"]}
 log = "0.4.17"
 simplelog = "0.12.0"
 fxhash = "0.2.1"

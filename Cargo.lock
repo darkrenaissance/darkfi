@@ -95,11 +95,11 @@ dependencies = [
 
 [[package]]
 name = "async-channel"
-version = "1.7.1"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e14485364214912d3b19cc3435dde4df66065127f05fa0d75c712f36f12c2f28"
+checksum = "cf46fee83e5ccffc220104713af3292ff9bc7c64c7de289f66dae8e38d826833"
 dependencies = [
- "concurrent-queue 1.2.4",
+ "concurrent-queue",
  "event-listener",
  "futures-core",
 ]
@@ -112,7 +112,7 @@ checksum = "17adb73da160dfb475c183343c8cccd80721ea5a605d3eb57125f0a7b7a92d0b"
 dependencies = [
  "async-lock",
  "async-task",
- "concurrent-queue 2.0.0",
+ "concurrent-queue",
  "fastrand",
  "futures-lite",
  "slab",
@@ -153,7 +153,7 @@ checksum = "8c374dda1ed3e7d8f0d9ba58715f924862c63eae6849c92d3a18e7fbde9e2794"
 dependencies = [
  "async-lock",
  "autocfg",
- "concurrent-queue 2.0.0",
+ "concurrent-queue",
  "futures-lite",
  "libc",
  "log",
@@ -490,12 +490,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfb24e866b15a1af2a1b663f10c6b6b8f397a84aadb828f12e5b289ec23a3a3c"
 
 [[package]]
-name = "cache-padded"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1db59621ec70f09c5e9b597b220c7a2b43611f4710dc03ceb8748637775692c"
-
-[[package]]
 name = "camino"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -611,9 +605,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.0.28"
+version = "4.0.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f94eecf2f2d0e0220737d9e6d8530da1e903b97dde58ebaf749262e85ce133c9"
+checksum = "4d63b9e9c07271b9957ad22c173bae2a4d9a81127680962039296abcd2f8251d"
 dependencies = [
  "bitflags",
  "clap_derive",
@@ -680,15 +674,6 @@ dependencies = [
  "atty",
  "lazy_static",
  "winapi",
-]
-
-[[package]]
-name = "concurrent-queue"
-version = "1.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af4780a44ab5696ea9e28294517f1fffb421a83a25af521333c838635509db9c"
-dependencies = [
- "cache-padded",
 ]
 
 [[package]]
@@ -1135,7 +1120,7 @@ dependencies = [
  "async-executor",
  "async-std",
  "async-trait",
- "clap 4.0.28",
+ "clap 4.0.29",
  "darkfi",
  "futures",
  "log",
@@ -1190,7 +1175,7 @@ dependencies = [
  "bs58",
  "chacha20poly1305",
  "chrono",
- "clap 4.0.28",
+ "clap 4.0.29",
  "crypto_api_chachapoly",
  "darkfi-derive",
  "darkfi-derive-internal",
@@ -1363,7 +1348,7 @@ version = "0.3.0"
 dependencies = [
  "async-std",
  "bs58",
- "clap 4.0.28",
+ "clap 4.0.29",
  "darkfi",
  "darkfi-sdk",
  "darkfi-serial",
@@ -1642,7 +1627,7 @@ version = "0.3.0"
 dependencies = [
  "async-channel",
  "async-std",
- "clap 4.0.28",
+ "clap 4.0.29",
  "darkfi",
  "easy-parallel",
  "fxhash",
@@ -1673,7 +1658,7 @@ dependencies = [
  "anyhow",
  "async-std",
  "bs58",
- "clap 4.0.28",
+ "clap 4.0.29",
  "darkfi",
  "darkfi-money-contract",
  "darkfi-sdk",
@@ -2059,7 +2044,7 @@ name = "fu"
 version = "0.3.0"
 dependencies = [
  "async-std",
- "clap 4.0.28",
+ "clap 4.0.29",
  "darkfi",
  "log",
  "serde_json",
@@ -2290,9 +2275,9 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "gloo-timers"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fb7d06c1c8cc2a29bee7ec961009a0b2caa0793ee4900c2ffb348734ba1c8f9"
+checksum = "98c4a8d6391675c6b2ee1a6c8d06e8e2d03605c44cec1270675985a4c2a5500b"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -2570,7 +2555,7 @@ dependencies = [
  "async-trait",
  "bs58",
  "chrono",
- "clap 4.0.28",
+ "clap 4.0.29",
  "crypto_box",
  "ctrlc",
  "darkfi",
@@ -2602,7 +2587,7 @@ dependencies = [
  "async-trait",
  "bs58",
  "chrono",
- "clap 4.0.28",
+ "clap 4.0.29",
  "crypto_box",
  "ctrlc",
  "darkfi",
@@ -3269,9 +3254,9 @@ dependencies = [
 
 [[package]]
 name = "polling"
-version = "2.5.0"
+version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f7d73f1eaed1ca1fb37b54dcc9b38e3b17d6c7b8ecb7abfffcac8d0351f17d4"
+checksum = "166ca89eb77fd403230b9c156612965a81e094ec6ec3aa13663d4c8b113fa748"
 dependencies = [
  "autocfg",
  "cfg-if",
@@ -4325,7 +4310,7 @@ version = "0.4.0"
 dependencies = [
  "async-std",
  "chrono",
- "clap 4.0.28",
+ "clap 4.0.29",
  "colored",
  "darkfi",
  "fxhash",
@@ -4634,9 +4619,9 @@ checksum = "9e79c4d996edb816c91e4308506774452e55e95c3c9de07b6729e17e15a5ef81"
 
 [[package]]
 name = "uint"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a45526d29728d135c2900b0d30573fe3ee79fceb12ef534c7bb30e810a91b601"
+checksum = "76f64bba2c53b04fcab63c01a7d7427eadc821e3bc48c34dc9ba29c501164b52"
 dependencies = [
  "byteorder",
  "crunchy",
@@ -4757,7 +4742,7 @@ name = "vanityaddr"
 version = "0.3.0"
 dependencies = [
  "bs58",
- "clap 4.0.28",
+ "clap 4.0.29",
  "ctrlc",
  "darkfi",
  "darkfi-sdk",
@@ -5376,6 +5361,6 @@ dependencies = [
 name = "zkas"
 version = "0.3.0"
 dependencies = [
- "clap 4.0.28",
+ "clap 4.0.29",
  "darkfi",
 ]

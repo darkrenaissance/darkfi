@@ -10,10 +10,10 @@ edition = "2021"
 darkfi = {path = "../../../", features = ["raft"]}
 
 # Async
-smol = "1.2.5"
+smol = "1.3.0"
 async-std = {version = "1.12.0", features = ["attributes"]}
 async-trait = "0.1.59"
-async-channel = "1.7.1"
+async-channel = "1.8.0"
 async-executor = "1.5.0"
 easy-parallel = "3.2.0"
 futures = "0.3.25"

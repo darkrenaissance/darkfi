@@ -11,7 +11,7 @@ edition = "2021"
 [dependencies]
 async-std = {version = "1.12.0", features = ["attributes"]}
 bs58 = "0.4.0"
-clap = {version = "4.0.28", features = ["derive"]}
+clap = {version = "4.0.29", features = ["derive"]}
 darkfi = {path = "../../", features = ["crypto", "rpc", "util", "tx"]}
 darkfi-sdk = {path = "../../src/sdk"}
 darkfi-serial = {path = "../../src/serial"}
