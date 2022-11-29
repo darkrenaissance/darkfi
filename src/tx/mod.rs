@@ -32,7 +32,7 @@ use log::{debug, error};
 use rand::{CryptoRng, RngCore};
 
 use crate::{
-    crypto::{proof::VerifyingKey, Proof},
+    zk::{proof::VerifyingKey, Proof},
     Error, Result, VerifyFailed,
 };
 

@@ -18,10 +18,9 @@
 
 use anyhow::{anyhow, Result};
 use darkfi::{
-    crypto::proof::ProvingKey,
     tx::Transaction,
     util::parse::{decode_base10, encode_base10},
-    zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::ZkBinary,
 };
 use darkfi_money_contract::{

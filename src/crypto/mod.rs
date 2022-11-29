@@ -18,7 +18,3 @@
 
 /// VDF (Verifiable Delay Function) using MiMC
 pub mod mimc_vdf;
-
-/// Halo2 proof API abstractions
-pub mod proof;
-pub use proof::Proof;

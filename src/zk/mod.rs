@@ -23,6 +23,10 @@ pub mod vm_stack;
 /// ZK gadget implementations
 pub mod gadget;
 
+/// Proof creation API
+pub mod proof;
+pub use proof::Proof;
+
 use halo2_proofs::{
     arithmetic::Field,
     circuit::{AssignedCell, Layouter, Value},

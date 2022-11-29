@@ -27,8 +27,11 @@
 
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use darkfi::{
-    crypto::proof::{Proof, ProvingKey},
-    zk::{vm::ZkCircuit, vm_stack::Witness},
+    zk::{
+        proof::{Proof, ProvingKey},
+        vm::ZkCircuit,
+        vm_stack::Witness,
+    },
     zkas::ZkBinary,
     ClientFailed, Error, Result,
 };

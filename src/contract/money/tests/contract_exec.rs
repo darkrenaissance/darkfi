@@ -27,11 +27,10 @@ use darkfi::{
         constants::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
         ValidatorState,
     },
-    crypto::proof::ProvingKey,
     tx::Transaction,
     util::parse::decode_base10,
     wallet::WalletDb,
-    zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::ZkBinary,
     Result,
 };

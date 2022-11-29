@@ -46,7 +46,6 @@ use super::{
 
 use crate::{
     blockchain::Blockchain,
-    crypto::proof::{ProvingKey, VerifyingKey},
     net,
     rpc::jsonrpc::JsonNotification,
     runtime::vm_runtime::Runtime,
@@ -54,7 +53,11 @@ use crate::{
     tx::Transaction,
     util::time::Timestamp,
     wallet::WalletPtr,
-    zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{
+        proof::{ProvingKey, VerifyingKey},
+        vm::ZkCircuit,
+        vm_stack::empty_witnesses,
+    },
     zkas::ZkBinary,
     Error, Result,
 };

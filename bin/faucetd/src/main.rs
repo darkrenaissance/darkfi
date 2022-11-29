@@ -22,9 +22,8 @@ use async_std::sync::{Arc, Mutex, RwLock};
 use async_trait::async_trait;
 use chrono::Utc;
 use darkfi::{
-    crypto::proof::ProvingKey,
     tx::Transaction,
-    zk::{vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::ZkBinary,
 };
 use darkfi_money_contract::{

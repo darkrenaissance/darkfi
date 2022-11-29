@@ -33,8 +33,11 @@ use rand::rngs::OsRng;
 use super::constants::EPOCH_LENGTH;
 use crate::{
     consensus::{constants, TransferStx, TxRcpt},
-    crypto::{proof::ProvingKey, Proof},
-    zk::{vm::ZkCircuit, vm_stack::Witness},
+    zk::{
+        proof::{Proof, ProvingKey},
+        vm::ZkCircuit,
+        vm_stack::Witness,
+    },
     zkas::ZkBinary,
     Result,
 };

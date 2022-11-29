@@ -22,7 +22,7 @@ use darkfi_sdk::{
 };
 
 use crate::{
-    crypto::{proof::VerifyingKey, Proof},
+    zk::{proof::VerifyingKey, Proof},
     Error, Result,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};

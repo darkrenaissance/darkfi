@@ -187,13 +187,13 @@ impl ArithInstruction<pallas::Base> for ArithChip {
 mod tests {
     use super::*;
     use crate::{
-        crypto::{
-            proof::{ProvingKey, VerifyingKey},
-            Proof,
+        zk::{
+            assign_free_advice,
+            proof::{Proof, ProvingKey, VerifyingKey},
         },
-        zk::assign_free_advice,
         Result,
     };
+
     use halo2_proofs::{
         circuit::{floor_planner, Value},
         dev::{CircuitLayout, MockProver},
