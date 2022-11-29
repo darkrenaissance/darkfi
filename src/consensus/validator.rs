@@ -144,16 +144,27 @@ impl ValidatorState {
         // in the money contract.
         let money_contract_deploy_payload = serialize(&faucet_pubkeys);
 
+        //let dao_contract_id = ContractId::from(pallas::Base::from(u64::MAX - 421));
+        //let dao_contract_deploy_payload = vec![];
+
         // In this hashmap, we keep references to ZK proof verifying keys needed
         // for the circuits our native contracts provide.
         let mut verifying_keys = HashMap::new();
 
-        let native_contracts = vec![(
-            "Money Contract",
-            money_contract_id,
-            include_bytes!("../contract/money/money_contract.wasm"),
-            money_contract_deploy_payload,
-        )];
+        let native_contracts = vec![
+            (
+                "Money Contract",
+                money_contract_id,
+                include_bytes!("../contract/money/money_contract.wasm").to_vec(),
+                money_contract_deploy_payload,
+            ),
+            //(
+            //    "DAO Contract",
+            //    dao_contract_id,
+            //    include_bytes!("../contract/dao/dao_contract.wasm").to_vec(),
+            //    dao_contract_deploy_payload,
+            //),
+        ];
 
         info!("Deploying native wasm contracts");
         for nc in native_contracts {

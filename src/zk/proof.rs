@@ -26,13 +26,6 @@ use halo2_proofs::{
 use pasta_curves::{pallas, vesta};
 use rand::RngCore;
 
-// TODO: this API needs rework. It's not very good.
-// keygen_pk() takes a VerifyingKey by value,
-// yet ProvingKey also provides get_vk() -> &VerifyingKey
-//
-// Maybe we should just use the native halo2 types instead of wrapping them.
-// We can avoid double creating the vk when we call VerifyingKey::build(), ProvingKey::build()
-
 #[derive(Clone, Debug)]
 pub struct VerifyingKey {
     pub params: Params<vesta::Affine>,
