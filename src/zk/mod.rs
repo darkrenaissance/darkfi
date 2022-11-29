@@ -20,9 +20,6 @@
 pub mod vm;
 pub mod vm_stack;
 
-/// ZK circuits
-pub mod circuit;
-
 /// ZK gadget implementations
 pub mod gadget;
 
