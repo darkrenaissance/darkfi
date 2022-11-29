@@ -346,22 +346,3 @@ zkas = [
 name = "net"
 path = "example/net.rs"
 required-features = ["async-runtime", "net"]
-
-[[example]]
-name = "tx"
-path = "example/tx.rs"
-
-[[example]]
-name = "zk"
-path = "example/zk.rs"
-required-features = ["crypto"]
-
-[[example]]
-name = "dao"
-path = "example/dao/src/main.rs"
-required-features = ["crypto", "rpc"]
-
-
-[[example]]
-name = "lessthan"
-path = "example/less_than.rs"
