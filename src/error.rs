@@ -253,6 +253,9 @@ pub enum Error {
     #[error("proposed coin is spent")]
     ProposalIsSpent,
 
+    #[error("Slot checkpoint doesn't exist")]
+    UnknownSlotCheckpointError,
+
     #[error("unable to verify transfer transaction")]
     TransferTxVerification,
 

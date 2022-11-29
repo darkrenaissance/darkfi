@@ -234,4 +234,13 @@ impl Blockchain {
     pub fn add_slot_checkpoints(&self, slot_checkpoints: &[SlotCheckpoint]) -> Result<()> {
         self.slot_checkpoints.insert(slot_checkpoints)
     }
+
+    /// Retrieve [`SlotCheckpoint`]s by given slots. Does not fail if any of them are not found.
+    pub fn get_slot_checkpoints_by_slot(
+        &self,
+        slots: &[u64],
+    ) -> Result<Vec<Option<SlotCheckpoint>>> {
+        debug!("get_slot_checkpoints_by_slot(): {:?}", slots);
+        self.slot_checkpoints.get(slots, true)
+    }
 }

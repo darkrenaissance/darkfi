@@ -313,6 +313,13 @@ impl ValidatorState {
         Ok(())
     }
 
+    /// Generate current slot checkpoint
+    fn generate_slot_checkpoint(&mut self, sigma1: pallas::Base, sigma2: pallas::Base) {
+        let slot = self.current_slot();
+        let checkpoint = SlotCheckpoint { slot, eta: self.consensus.epoch_eta, sigma1, sigma2 };
+        self.consensus.slot_checkpoints.push(checkpoint);
+    }
+
     /// Check if new epoch has started, to create new epoch coins.
     /// Returns flag to signify if epoch has changed and vector of
     /// new epoch competing coins.
@@ -325,6 +332,8 @@ impl ValidatorState {
         self.consensus.prev_sigma1 = sigma1;
         self.consensus.prev_sigma2 = sigma2;
         if epoch <= self.consensus.epoch {
+            self.generate_slot_checkpoint(sigma1.clone(), sigma2.clone());
+
             return Ok(false)
         }
         let eta = self.get_eta();
@@ -336,6 +345,7 @@ impl ValidatorState {
         self.consensus.epoch = epoch;
         self.consensus.prev_epoch_eta = self.consensus.epoch_eta;
         self.consensus.epoch_eta = eta;
+        self.generate_slot_checkpoint(sigma1.clone(), sigma2.clone());
 
         Ok(true)
     }
@@ -989,7 +999,8 @@ impl ValidatorState {
     /// - If the node has observed the creation of 3 proposals in a fork chain and no other
     ///   forks exists at same or greater height, it finalizes (appends to canonical blockchain)
     ///   all proposals up to the last one.
-    /// When fork chain proposals are finalized, the rest of fork chains are removed.
+    /// When fork chain proposals are finalized, the rest of fork chains are removed and all
+    /// slot checkpoints until current slot are apppended to canonical state.
     pub async fn chain_finalization(&mut self) -> Result<Vec<BlockInfo>> {
         let slot = self.current_slot();
         debug!("chain_finalization(): Started finalization check for slot: {}", slot);
@@ -1100,6 +1111,35 @@ impl ValidatorState {
         self.consensus.proposals = vec![];
         self.consensus.proposals.push(chain);
 
+        // Adding finalized slot checkpoints to canonical
+        let mut bound = 0;
+        let mut finalized_slot_checkpoints: Vec<SlotCheckpoint> = vec![];
+        for (index, slot_checkpoint) in self.consensus.slot_checkpoints.iter().enumerate() {
+            if slot_checkpoint.slot >= slot {
+                break
+            }
+            bound = index;
+            finalized_slot_checkpoints.push(slot_checkpoint.clone());
+        }
+
+        // Removing finalized proposals from chain
+        self.consensus.slot_checkpoints.drain(..bound);
+
+        info!(
+            "consensus: Adding {} finalized slot checkpoints to canonical chain.",
+            finalized.len()
+        );
+        match self.blockchain.add_slot_checkpoints(&finalized_slot_checkpoints) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    "consensus: Failed appending finalized slot checkpoints to canonical chain: {}",
+                    e
+                );
+                return Err(e)
+            }
+        };
+
         Ok(finalized)
     }
 
@@ -1114,23 +1154,25 @@ impl ValidatorState {
         pallas::Base::from_repr(bytes).unwrap()
     }
 
-    /*
-    fn get_eta_by_slot(&self, slot: u64) -> pallas::Base {
-        let mut proof_tx_hash = self.blockchain.get_proof_hash_by_slot(slot);
-        proof_tx_hash = match proof_tx_hash {
-            Ok(o) => Ok(o),
-            Err(_) => {
-                error!("get_eta_by_slot(): failed on slot: {}", slot);
-                self.blockchain.get_last_proof_hash()
+    /// Auxillary function to retrieve slot checkpoint of provided slot UID.
+    fn get_slot_checkpoin(&self, slot: u64) -> Result<SlotCheckpoint> {
+        // Check if slot is finalized
+        if let Ok(slot_checkpoints) = self.blockchain.get_slot_checkpoints_by_slot(&[slot]) {
+            if slot_checkpoints.len() > 0 {
+                if let Some(slot_checkpoint) = &slot_checkpoints[0] {
+                    return Ok(slot_checkpoint.clone())
+                }
             }
-        };
-        let mut bytes: [u8; 32] = *proof_tx_hash.unwrap().as_bytes();
-        // read first 254 bits
-        bytes[30] = 0;
-        bytes[31] = 0;
-        pallas::Base::from_repr(bytes).unwrap()
+        }
+        // Check hot/live slot checkpoints
+        for slot_checkpoint in self.consensus.slot_checkpoints.iter().rev() {
+            if slot_checkpoint.slot == slot {
+                return Ok(slot_checkpoint.clone())
+            }
+        }
+        Err(Error::UnknownSlotCheckpointError)
     }
-    */
+
     // ==========================
     // State transition functions
     // ==========================
