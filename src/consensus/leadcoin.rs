@@ -317,15 +317,13 @@ impl LeadCoin {
         info!("LeadCoin::derive_coin()");
         let derived_c1_rho = self.derived_rho();
         let blind = pallas::Scalar::random(&mut OsRng);
-        let derived_c2_cm = Self::commitment(self.pk(),
-                                                pallas::Base::from(self.value+2*constants::REWARD),
-                                                Self::util_derived_rho(self.coin1_sk_root, derived_c1_rho),
-                                                blind
-
+        let derived_c2_cm = Self::commitment(
+            self.pk(),
+            pallas::Base::from(self.value + 2 * constants::REWARD),
+            Self::util_derived_rho(self.coin1_sk_root, derived_c1_rho),
+            blind,
         );
-        let derived_c1_cm = {
-             self.derived_commitment(self.coin2_blind)
-        };
+        let derived_c1_cm = { self.derived_commitment(self.coin2_blind) };
         let derived_c1_cm_coord = derived_c1_cm.to_affine().coordinates().unwrap();
         let derived_c1_cm_msg = [*derived_c1_cm_coord.x(), *derived_c1_cm_coord.y()];
         let derived_c1_cm_base = poseidon_hash(derived_c1_cm_msg);
