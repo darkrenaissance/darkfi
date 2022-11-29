@@ -150,7 +150,6 @@ impl SlotCheckpoint {
         let sigma1 = pallas::Base::zero();
         let sigma2 = pallas::Base::zero();
 
-
         Self::new(0, eta, sigma1, sigma2)
     }
 }
