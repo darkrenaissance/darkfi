@@ -28,9 +28,6 @@ pub mod blockchain;
 pub mod consensus;
 
 #[cfg(feature = "crypto")]
-pub mod crypto;
-
-#[cfg(feature = "crypto")]
 pub mod zk;
 
 #[cfg(feature = "dht")]
