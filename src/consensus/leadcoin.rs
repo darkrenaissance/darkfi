@@ -27,7 +27,7 @@ use darkfi_sdk::{
 };
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use log::{debug, info};
+use log::debug;
 use rand::rngs::OsRng;
 
 use super::constants::EPOCH_LENGTH;
@@ -192,7 +192,7 @@ impl LeadCoin {
 
     /// Derive election seeds from given parameters
     pub fn election_seeds(eta: pallas::Base, slot: pallas::Base) -> (pallas::Base, pallas::Base) {
-        info!("LeadCoin::election_seeds(): eta: {:?}, slot: {:?}", eta, slot);
+        debug!("election_seeds: eta: {:?}, slot: {:?}", eta, slot);
         let election_seed_nonce = pallas::Base::from(3);
         let election_seed_lead = pallas::Base::from(22);
 
@@ -286,8 +286,8 @@ impl LeadCoin {
         let value = pallas::Base::from(self.value);
         let target = sigma1 * value + sigma2 * value * value;
 
-        info!("Consensus::is_leader(): y = {:?}", y);
-        info!("Consensus::is_leader(): T = {:?}", target);
+        debug!("is_leader(): y = {:?}", y);
+        debug!("is_leader(): T = {:?}", target);
 
         let first_winning = y < target;
         first_winning
@@ -317,7 +317,7 @@ impl LeadCoin {
         &self,
         coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
     ) -> LeadCoin {
-        info!("LeadCoin::derive_coin()");
+        debug!("derive_coin(): Deriving new coin!");
         let derived_c1_rho = self.derived_rho();
         let blind = pallas::Scalar::random(&mut OsRng);
         let derived_c2_cm = Self::commitment(

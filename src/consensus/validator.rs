@@ -271,8 +271,7 @@ impl ValidatorState {
 
         //let eta = self.consensus.epoch_eta;
         // Generating leader proof
-        let relative_slot = self.consensus.relative_slot(slot) as usize;
-        let coin = self.consensus.coins[relative_slot][idx];
+        let coin = self.consensus.coins[idx];
         let (proof, public_inputs) =
             coin.create_lead_proof(sigma1, sigma2, self.lead_proving_key.as_ref().unwrap());
 
@@ -299,7 +298,7 @@ impl ValidatorState {
             self.consensus.leaders_history.last().unwrap().clone(),
         );
         // Replacing old coin with the derived coin
-        self.consensus.coins[relative_slot][idx] = coin.derive_coin(&mut self.consensus.coins_tree);
+        self.consensus.coins[idx] = coin.derive_coin(&mut self.consensus.coins_tree);
 
         Ok(Some(BlockProposal::new(header, unproposed_txs, lead_info)))
     }

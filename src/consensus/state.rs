@@ -53,15 +53,13 @@ pub struct ConsensusState {
     pub proposals: Vec<ProposalChain>,
     /// Current epoch
     pub epoch: u64,
-    /// Hot/live slot checkpoints
-    pub slot_checkpoints: Vec<SlotCheckpoint>,
-    /// previous epoch eta
-    pub prev_epoch_eta: pallas::Base,
     /// Current epoch eta
     pub epoch_eta: pallas::Base,
+    /// Hot/live slot checkpoints
+    pub slot_checkpoints: Vec<SlotCheckpoint>,
     // TODO: Aren't these already in db after finalization?
-    /// Current epoch competing coins
-    pub coins: Vec<Vec<LeadCoin>>,
+    /// Current competing coins
+    pub coins: Vec<LeadCoin>,
     /// Coin commitments tree
     pub coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     /// Seen nullifiers from proposals
@@ -70,12 +68,6 @@ pub struct ConsensusState {
     pub leaders_spent_coins: Vec<(pallas::Base, pallas::Base)>,
     /// Leaders count history
     pub leaders_history: Vec<u64>,
-    /// Kp
-    pub kp: Float10,
-    /// Previous slot sigma1
-    pub prev_sigma1: pallas::Base,
-    /// Previous slot sigma2
-    pub prev_sigma2: pallas::Base,
 }
 
 impl ConsensusState {
@@ -94,17 +86,13 @@ impl ConsensusState {
             offset: None,
             proposals: vec![],
             epoch: 0,
-            slot_checkpoints: vec![],
-            prev_epoch_eta: pallas::Base::one(),
             epoch_eta: pallas::Base::one(),
+            slot_checkpoints: vec![],
             coins: vec![],
             coins_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100),
             leaders_nullifiers: vec![],
             leaders_spent_coins: vec![],
             leaders_history: vec![0],
-            kp: constants::FLOAT10_TWO.clone() / constants::FLOAT10_NINE.clone(),
-            prev_sigma1: pallas::Base::zero(),
-            prev_sigma2: pallas::Base::zero(),
         })
     }
 
@@ -202,21 +190,17 @@ impl ConsensusState {
         sigma2: pallas::Base,
     ) -> Result<bool> {
         let epoch = self.current_epoch();
-        self.prev_sigma1 = sigma1;
-        self.prev_sigma2 = sigma2;
         if epoch <= self.epoch {
             self.generate_slot_checkpoint(sigma1.clone(), sigma2.clone());
-
             return Ok(false)
         }
         let eta = self.get_eta();
         // At start of epoch, relative slot is 0.
         if self.coins.len() == 0 {
             //TODO:  DRK coin need to be burned, and consensus coin to be minted.
-            self.coins = self.create_epoch_coins(eta, epoch).await?;
+            self.coins = self.create_coins(eta).await?;
         }
         self.epoch = epoch;
-        self.prev_epoch_eta = self.epoch_eta;
         self.epoch_eta = eta;
         self.generate_slot_checkpoint(sigma1.clone(), sigma2.clone());
 
@@ -235,8 +219,8 @@ impl ConsensusState {
         if total_stake == 0 {
             total_stake = constants::GENESIS_TOTAL_STAKE;
         }
-        info!("consensus::sigmas(): f: {}", f);
-        info!("consensus::sigmas(): stake: {}", total_stake);
+        debug!("sigmas(): f: {}", f);
+        debug!("sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
         let field_p = Float10::from_str_native(constants::P)
@@ -257,54 +241,41 @@ impl ConsensusState {
         (sigma1, sigma2)
     }
 
-    /// Generate epoch-competing coins
-    async fn create_epoch_coins(
-        &mut self,
-        eta: pallas::Base,
-        epoch: u64,
-    ) -> Result<Vec<Vec<LeadCoin>>> {
-        info!("Consensus: Creating coins for epoch: {}", epoch);
-        self.create_coins(eta).await
-    }
-
     /// Generate coins for provided sigmas.
     /// NOTE: The strategy here is having a single competing coin per slot.
-    async fn create_coins(&mut self, eta: pallas::Base) -> Result<Vec<Vec<LeadCoin>>> {
+    async fn create_coins(&mut self, eta: pallas::Base) -> Result<Vec<LeadCoin>> {
         let slot = self.current_slot();
-        let mut rng = thread_rng();
 
+        // TODO: cleanup LeadCoinSecrets, no need to keep a vector
+        let mut rng = thread_rng();
         let mut seeds: Vec<u64> = Vec::with_capacity(constants::EPOCH_LENGTH);
         for _ in 0..constants::EPOCH_LENGTH {
             seeds.push(rng.gen());
         }
-
         let epoch_secrets = LeadCoinSecrets::generate();
 
-        //let mut tree_cm = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH);
-        // LeadCoin matrix where each row represents a slot and contains its competing coins.
-        let mut coins: Vec<Vec<LeadCoin>> = Vec::with_capacity(constants::EPOCH_LENGTH);
+        // LeadCoin matrix containing node competing coins.
+        let mut coins: Vec<LeadCoin> = Vec::with_capacity(constants::EPOCH_LENGTH);
 
         // TODO: TESTNET: Here we would look into the wallet to find coins we're able to use.
         //                The wallet has specific tables for consensus coins.
         // TODO: TESTNET: Token ID still has to be enforced properly in the consensus.
 
         // Temporarily, we compete with zero stake
-        for i in 0..constants::EPOCH_LENGTH {
-            let coin = LeadCoin::new(
-                eta,
-                constants::LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
-                slot + i as u64,
-                epoch_secrets.secret_keys[i].inner(),
-                epoch_secrets.merkle_roots[i],
-                i,
-                epoch_secrets.merkle_paths[i],
-                seeds[i],
-                epoch_secrets.secret_keys[i],
-                &mut self.coins_tree,
-            );
+        let coin = LeadCoin::new(
+            eta,
+            constants::LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
+            slot,
+            epoch_secrets.secret_keys[0].inner(),
+            epoch_secrets.merkle_roots[0],
+            0,
+            epoch_secrets.merkle_paths[0],
+            seeds[0],
+            epoch_secrets.secret_keys[0],
+            &mut self.coins_tree,
+        );
+        coins.push(coin);
 
-            coins.push(vec![coin]);
-        }
         Ok(coins)
     }
 
@@ -421,11 +392,11 @@ impl ConsensusState {
         let p = self.f_dif();
         let i = self.f_int();
         let d = self.f_der();
-        info!("PID: P: {:?}", p);
-        info!("PID: I: {:?}", i);
-        info!("PID: D: {:?}", d);
+        debug!("win_prob_with_full_stake(): PID P: {:?}", p);
+        debug!("win_prob_with_full_stake(): PID I: {:?}", i);
+        debug!("win_prob_with_full_stake(): PID D: {:?}", d);
         let mut f = Self::pid(p, i, d);
-        info!("Consensus::win_prob_with_full_stake(): pid f: {}", f);
+        debug!("win_prob_with_full_stake(): PID f: {}", f);
         f = if f >= constants::FLOAT10_ONE.clone() {
             constants::MAX_F.clone()
         } else if f <= constants::FLOAT10_ZERO.clone() {
@@ -433,25 +404,17 @@ impl ConsensusState {
         } else {
             f
         };
-        info!("Consensus::win_prob_with_full_stake(): clipped f: {}", f);
+        debug!("win_prob_with_full_stake(): PID clipped f: {}", f);
         f
     }
 
-    /// Check that the provided participant/stakeholder coins win the slot lottery.
+    /// Check that the participant/stakeholder coins win the slot lottery.
     /// If the stakeholder has multiple competing winning coins, only the highest value
     /// coin is selected, since the stakeholder can't give more than one proof per block/slot.
     /// * 'sigma1', 'sigma2': slot sigmas
     /// Returns: (check: bool, idx: usize) where idx is the winning coin's index
     pub fn is_slot_leader(&mut self, sigma1: pallas::Base, sigma2: pallas::Base) -> (bool, usize) {
-        // Slot relative index
-        let slot = self.relative_slot(self.current_slot());
-        // Stakeholder's epoch coins
-        let coins = &self.coins;
-
-        info!("Consensus::is_leader(): slot: {}, coins len: {}", slot, coins.len());
-        assert!((slot as usize) < coins.len());
-
-        let competing_coins = &coins[slot as usize];
+        let competing_coins = &self.coins;
 
         let mut won = false;
         let mut highest_stake = 0;
