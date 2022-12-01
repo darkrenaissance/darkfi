@@ -46,7 +46,7 @@ lazy_static! {
     pub static ref  TI: Float10 = FLOAT10_ONE.clone();
     pub static ref  TD: Float10 = FLOAT10_ONE.clone();
     pub static ref  KP: Float10 = Float10::from_str_native("0.3").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  KI: Float10 = Float10::from_str_native("-0.1").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref  KI: Float10 = Float10::from_str_native("0.02").unwrap().with_precision(RADIX_BITS).value();
     pub static ref  KD: Float10 = FLOAT10_ONE.clone();
     pub static ref PID_OUT_STEP: Float10  = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
     pub static ref MAX_DER: Float10 = Float10::from_str_native("0.3").unwrap().with_precision(RADIX_BITS).value();
@@ -84,7 +84,7 @@ pub const LEADER_PROOF_K: u32 = 13;
 pub const RADIX_BITS: usize = 76;
 
 pub const P: &str = "28948022309329048855892746252171976963363056481941560715954676764349967630337";
-pub const LOTTERY_HEAD_START: u64 = 0;
+pub const LOTTERY_HEAD_START: u64 = 1;
 pub const PRF_NULLIFIER_PREFIX: u64 = 0;
 pub const PI_COMMITMENT_X_INDEX: usize = 1;
 pub const PI_COMMITMENT_Y_INDEX: usize = 2;
