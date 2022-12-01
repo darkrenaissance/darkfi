@@ -64,8 +64,6 @@ pub struct ConsensusState {
     pub coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     /// Seen nullifiers from proposals
     pub leaders_nullifiers: Vec<pallas::Base>,
-    /// Seen spent coins from proposals
-    pub leaders_spent_coins: Vec<(pallas::Base, pallas::Base)>,
     /// Leaders count history
     pub leaders_history: Vec<u64>,
 }
@@ -91,7 +89,6 @@ impl ConsensusState {
             coins: vec![],
             coins_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100),
             leaders_nullifiers: vec![],
-            leaders_spent_coins: vec![],
             leaders_history: vec![0],
         })
     }
@@ -194,10 +191,9 @@ impl ConsensusState {
             self.generate_slot_checkpoint(sigma1.clone(), sigma2.clone());
             return Ok(false)
         }
+
         let eta = self.get_eta();
-        // At start of epoch, relative slot is 0.
         if self.coins.len() == 0 {
-            //TODO:  DRK coin need to be burned, and consensus coin to be minted.
             self.coins = self.create_coins(eta).await?;
         }
         self.epoch = epoch;
@@ -243,6 +239,7 @@ impl ConsensusState {
 
     /// Generate coins for provided sigmas.
     /// NOTE: The strategy here is having a single competing coin per slot.
+    // TODO: DRK coin need to be burned, and consensus coin to be minted.
     async fn create_coins(&mut self, eta: pallas::Base) -> Result<Vec<LeadCoin>> {
         let slot = self.current_slot();
 
@@ -611,8 +608,6 @@ pub struct ConsensusResponse {
     pub slot_checkpoints: Vec<SlotCheckpoint>,
     /// Seen nullifiers from proposals
     pub leaders_nullifiers: Vec<pallas::Base>,
-    /// Seen spent coins from proposals
-    pub leaders_spent_coins: Vec<(pallas::Base, pallas::Base)>,
 }
 
 impl net::Message for ConsensusResponse {

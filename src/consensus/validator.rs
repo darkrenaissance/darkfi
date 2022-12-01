@@ -496,9 +496,8 @@ impl ValidatorState {
             }
         };
 
-        // Store proposal coin info
+        // Store proposal coin nullifiers
         self.consensus.leaders_nullifiers.push(prop_sn);
-        self.consensus.leaders_spent_coins.push((prop_cm_x, prop_cm_y));
 
         Ok(())
     }
