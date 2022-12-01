@@ -31,7 +31,7 @@ use crate::{
 pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: ValidatorStatePtr) {
     // Node waits just before the current or next epoch last finalization syncing period, so it can
     // start syncing latest state.
-    let mut seconds_until_next_epoch = state.read().await.next_n_epoch_start(1);
+    let mut seconds_until_next_epoch = state.read().await.consensus.next_n_epoch_start(1);
     let sync_offset = Duration::new(constants::FINAL_SYNC_DUR + 1, 0);
 
     loop {
@@ -42,7 +42,7 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
 
         info!("consensus: Waiting for next epoch ({:?} sec)", seconds_until_next_epoch);
         sleep(seconds_until_next_epoch.as_secs()).await;
-        seconds_until_next_epoch = state.read().await.next_n_epoch_start(1);
+        seconds_until_next_epoch = state.read().await.consensus.next_n_epoch_start(1);
     }
 
     info!("consensus: Waiting for next epoch ({:?} sec)", seconds_until_next_epoch);
@@ -57,14 +57,14 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
     };
 
     // Node modifies its participating slot to next.
-    match state.write().await.set_participating() {
+    match state.write().await.consensus.set_participating() {
         Ok(()) => info!("consensus: Node will start participating in the next slot"),
         Err(e) => error!("consensus: Failed to set participation slot: {}", e),
     }
 
     loop {
         // Node sleeps until finalization sync period start (2 seconds before next slot)
-        let seconds_sync_period = (state.read().await.next_n_slot_start(1) -
+        let seconds_sync_period = (state.read().await.consensus.next_n_slot_start(1) -
             Duration::new(constants::FINAL_SYNC_DUR, 0))
         .as_secs();
         info!("consensus: Waiting for finalization sync period ({} sec)", seconds_sync_period);
@@ -92,14 +92,14 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         }
 
         // Node sleeps until next slot
-        let seconds_next_slot = state.read().await.next_n_slot_start(1).as_secs();
+        let seconds_next_slot = state.read().await.consensus.next_n_slot_start(1).as_secs();
         info!("consensus: Waiting for next slot ({} sec)", seconds_next_slot);
         sleep(seconds_next_slot).await;
 
         // Retrieve slot sigmas
-        let (sigma1, sigma2) = state.write().await.sigmas();
+        let (sigma1, sigma2) = state.write().await.consensus.sigmas();
         // Node checks if epoch has changed, to generate new epoch coins
-        let epoch_changed = state.write().await.epoch_changed(sigma1, sigma2).await;
+        let epoch_changed = state.write().await.consensus.epoch_changed(sigma1, sigma2).await;
         match epoch_changed {
             Ok(changed) => {
                 if changed {
@@ -113,7 +113,7 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         };
         // Node checks if it's the slot leader to generate a new proposal
         // for that slot.
-        let (won, idx) = state.write().await.is_slot_leader(sigma1, sigma2);
+        let (won, idx) = state.write().await.consensus.is_slot_leader(sigma1, sigma2);
         let result = if won { state.write().await.propose(idx, sigma1, sigma2) } else { Ok(None) };
         let proposal = match result {
             Ok(prop) => {

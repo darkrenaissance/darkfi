@@ -38,10 +38,6 @@ Pseudocode:
 loop {
     wait_for_next_slot_start()
 
-    if epoch_changed() {
-        create_competing_coins()   
-    }
-
     if is_slot_leader() {
         block = propose_block()
         p2p.broadcast_block(block)
