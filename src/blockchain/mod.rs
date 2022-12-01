@@ -243,4 +243,12 @@ impl Blockchain {
         debug!("get_slot_checkpoints_by_slot(): {:?}", slots);
         self.slot_checkpoints.get(slots, true)
     }
+
+    /// Check if the given [`SlotCheckpoint`] is in the database and all trees.
+    pub fn has_slot_checkpoint(&self, slot_checkpoint: &SlotCheckpoint) -> Result<bool> {
+        if let Err(_) = self.slot_checkpoints.get(&[slot_checkpoint.slot], true) {
+            return Ok(false)
+        }
+        Ok(true)
+    }
 }

@@ -24,7 +24,7 @@ use smol::Executor;
 use crate::{
     consensus::{
         block::{BlockInfo, BlockOrder, BlockResponse},
-        state::{SlotCheckpointRequest, SlotCheckpointResponse},
+        state::{SlotCheckpoint, SlotCheckpointRequest, SlotCheckpointResponse},
         ValidatorStatePtr,
     },
     net::{
@@ -42,6 +42,7 @@ pub struct ProtocolSync {
     request_sub: MessageSubscription<BlockOrder>,
     slot_checkpoin_request_sub: MessageSubscription<SlotCheckpointRequest>,
     block_sub: MessageSubscription<BlockInfo>,
+    slot_checkpoints_sub: MessageSubscription<SlotCheckpoint>,
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
     p2p: P2pPtr,
@@ -59,16 +60,19 @@ impl ProtocolSync {
         msg_subsystem.add_dispatch::<BlockOrder>().await;
         msg_subsystem.add_dispatch::<SlotCheckpointRequest>().await;
         msg_subsystem.add_dispatch::<BlockInfo>().await;
+        msg_subsystem.add_dispatch::<SlotCheckpoint>().await;
 
         let request_sub = channel.subscribe_msg::<BlockOrder>().await?;
         let slot_checkpoin_request_sub = channel.subscribe_msg::<SlotCheckpointRequest>().await?;
         let block_sub = channel.subscribe_msg::<BlockInfo>().await?;
+        let slot_checkpoints_sub = channel.subscribe_msg::<SlotCheckpoint>().await?;
 
         Ok(Arc::new(Self {
             channel: channel.clone(),
             request_sub,
             slot_checkpoin_request_sub,
             block_sub,
+            slot_checkpoints_sub,
             jobsman: ProtocolJobsManager::new("SyncProtocol", channel),
             state,
             p2p,
@@ -103,6 +107,52 @@ impl ProtocolSync {
             let response = BlockResponse { blocks };
             if let Err(e) = self.channel.send(response).await {
                 error!("ProtocolSync::handle_receive_request(): channel send fail: {}", e)
+            };
+        }
+    }
+
+    async fn handle_receive_block(self: Arc<Self>) -> Result<()> {
+        // Consensus-mode enabled nodes have already performed these steps,
+        // during proposal finalization.
+        if self.consensus_mode && self.state.read().await.consensus.participating.is_some() {
+            debug!(
+                "ProtocolSync::handle_receive_block(): node runs in consensus mode, skipping..."
+            );
+            return Ok(())
+        }
+
+        debug!("ProtocolSync::handle_receive_block() [START]");
+        let exclude_list = vec![self.channel.address()];
+        loop {
+            let info = match self.block_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("ProtocolSync::handle_receive_block(): recv fail: {}", e);
+                    continue
+                }
+            };
+
+            info!("ProtocolSync::handle_receive_block(): Received block: {}", info.blockhash());
+
+            debug!("ProtocolSync::handle_receive_block(): Processing received block");
+            let info_copy = (*info).clone();
+            match self.state.write().await.receive_finalized_block(info_copy.clone()).await {
+                Ok(v) => {
+                    if v {
+                        debug!("ProtocolProposal::handle_receive_block(): block processed successfully, broadcasting...");
+                        if let Err(e) =
+                            self.p2p.broadcast_with_exclude(info_copy, &exclude_list).await
+                        {
+                            error!(
+                                "ProtocolSync::handle_receive_block(): p2p broadcast fail: {}",
+                                e
+                            );
+                        };
+                    }
+                }
+                Err(e) => {
+                    debug!("ProtocolSync::handle_receive_block(): error processing finalized block: {}", e);
+                }
             };
         }
     }
@@ -153,47 +203,58 @@ impl ProtocolSync {
         }
     }
 
-    async fn handle_receive_block(self: Arc<Self>) -> Result<()> {
+    async fn handle_receive_slot_checkpoint(self: Arc<Self>) -> Result<()> {
         // Consensus-mode enabled nodes have already performed these steps,
         // during proposal finalization.
-        if self.consensus_mode {
+        if self.consensus_mode && self.state.read().await.consensus.participating.is_some() {
             debug!(
-                "ProtocolSync::handle_receive_block(): node runs in consensus mode, skipping..."
+                "ProtocolSync::handle_receive_slot_checkpoint(): node runs in consensus mode, skipping..."
             );
             return Ok(())
         }
 
-        debug!("ProtocolSync::handle_receive_block() [START]");
+        debug!("ProtocolSync::handle_receive_slot_checkpoint() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
-            let info = match self.block_sub.receive().await {
+            let slot_checkpoint = match self.slot_checkpoints_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("ProtocolSync::handle_receive_block(): recv fail: {}", e);
+                    error!("ProtocolSync::handle_receive_slot_checkpoint(): recv fail: {}", e);
                     continue
                 }
             };
 
-            info!("ProtocolSync::handle_receive_block(): Received block: {}", info.blockhash());
+            info!(
+                "ProtocolSync::handle_receive_slot_checkpoint(): Received slot checkpoint: {}",
+                slot_checkpoint.slot
+            );
 
-            debug!("ProtocolSync::handle_receive_block(): Processing received block");
-            let info_copy = (*info).clone();
-            match self.state.write().await.receive_finalized_block(info_copy.clone()).await {
+            debug!("ProtocolSync::handle_receive_slot_checkpoint(): Processing received slot checkpoint");
+            let slot_checkpoint_copy = (*slot_checkpoint).clone();
+            match self
+                .state
+                .write()
+                .await
+                .receive_finalized_slot_checkpoints(slot_checkpoint_copy.clone())
+                .await
+            {
                 Ok(v) => {
                     if v {
-                        debug!("ProtocolProposal::handle_receive_block(): block processed successfully, broadcasting...");
-                        if let Err(e) =
-                            self.p2p.broadcast_with_exclude(info_copy, &exclude_list).await
+                        debug!("ProtocolProposal::handle_receive_slot_checkpoint(): slot checkpoint processed successfully, broadcasting...");
+                        if let Err(e) = self
+                            .p2p
+                            .broadcast_with_exclude(slot_checkpoint_copy, &exclude_list)
+                            .await
                         {
                             error!(
-                                "ProtocolSync::handle_receive_block(): p2p broadcast fail: {}",
+                                "ProtocolSync::handle_receive_slot_checkpoint(): p2p broadcast fail: {}",
                                 e
                             );
                         };
                     }
                 }
                 Err(e) => {
-                    debug!("ProtocolSync::handle_receive_block(): error processing finalized block: {}", e);
+                    debug!("ProtocolSync::handle_receive_slot_checkpoint(): error processing finalized slot checkpoint: {}", e);
                 }
             };
         }
@@ -211,6 +272,10 @@ impl ProtocolBase for ProtocolSync {
             .spawn(self.clone().handle_receive_slot_checkpoint_request(), executor.clone())
             .await;
         self.jobsman.clone().spawn(self.clone().handle_receive_block(), executor.clone()).await;
+        self.jobsman
+            .clone()
+            .spawn(self.clone().handle_receive_slot_checkpoint(), executor.clone())
+            .await;
         debug!("ProtocolSync::start() [END]");
         Ok(())
     }

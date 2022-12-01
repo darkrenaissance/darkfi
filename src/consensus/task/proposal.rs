@@ -72,11 +72,11 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
 
         // Check if any forks can be finalized
         match state.write().await.chain_finalization().await {
-            Ok(to_broadcast) => {
+            Ok((to_broadcast_block, to_broadcast_slot_checkpoints)) => {
                 // Broadcast finalized blocks info, if any:
-                if to_broadcast.len() > 0 {
+                if to_broadcast_block.len() > 0 {
                     info!("consensus: Broadcasting finalized blocks");
-                    for info in to_broadcast {
+                    for info in to_broadcast_block {
                         match sync_p2p.broadcast(info).await {
                             Ok(()) => info!("consensus: Broadcasted block"),
                             Err(e) => error!("consensus: Failed broadcasting block: {}", e),
@@ -84,6 +84,21 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
                     }
                 } else {
                     info!("consensus: No finalized blocks to broadcast");
+                }
+
+                // Broadcast finalized slot checkpoints, if any:
+                if to_broadcast_slot_checkpoints.len() > 0 {
+                    info!("consensus: Broadcasting finalized slot checkpoints");
+                    for slot_checkpoint in to_broadcast_slot_checkpoints {
+                        match sync_p2p.broadcast(slot_checkpoint).await {
+                            Ok(()) => info!("consensus: Broadcasted slot_checkpoint"),
+                            Err(e) => {
+                                error!("consensus: Failed broadcasting slot_checkpoint: {}", e)
+                            }
+                        }
+                    }
+                } else {
+                    info!("consensus: No finalized slot checkpoints to broadcast");
                 }
             }
             Err(e) => {

@@ -549,7 +549,7 @@ impl ValidatorState {
     ///   all proposals up to the last one.
     /// When fork chain proposals are finalized, the rest of fork chains are removed and all
     /// slot checkpoints until current slot are apppended to canonical state.
-    pub async fn chain_finalization(&mut self) -> Result<Vec<BlockInfo>> {
+    pub async fn chain_finalization(&mut self) -> Result<(Vec<BlockInfo>, Vec<SlotCheckpoint>)> {
         let slot = self.consensus.current_slot();
         debug!("chain_finalization(): Started finalization check for slot: {}", slot);
         // Set last slot finalization check occured to current slot
@@ -591,12 +591,12 @@ impl ValidatorState {
             -2 => {
                 debug!("chain_finalization(): Eligible forks with same height exist, nothing to finalize.");
                 self.consensus.set_leader_history(index_for_history);
-                return Ok(vec![])
+                return Ok((vec![], vec![]))
             }
             -1 => {
                 debug!("chain_finalization(): All chains have less than 3 proposals, nothing to finalize.");
                 self.consensus.set_leader_history(index_for_history);
-                return Ok(vec![])
+                return Ok((vec![], vec![]))
             }
             _ => debug!("chain_finalization(): Chain {} can be finalized!", fork_index),
         }
@@ -695,7 +695,7 @@ impl ValidatorState {
             }
         };
 
-        Ok(finalized)
+        Ok((finalized, finalized_slot_checkpoints))
     }
 
     // ==========================
@@ -998,5 +998,29 @@ impl ValidatorState {
         self.blockchain.add_slot_checkpoints(slot_checkpoints)?;
 
         Ok(())
+    }
+
+    /// Validate and append to canonical state received finalized slot checkpoint.
+    /// Returns boolean flag indicating already existing slot checkpoint.
+    pub async fn receive_finalized_slot_checkpoints(
+        &mut self,
+        slot_checkpoint: SlotCheckpoint,
+    ) -> Result<bool> {
+        match self.blockchain.has_slot_checkpoint(&slot_checkpoint) {
+            Ok(v) => {
+                if v {
+                    debug!(
+                        "receive_finalized_slot_checkpoints(): Existing slot checkpoint received"
+                    );
+                    return Ok(false)
+                }
+            }
+            Err(e) => {
+                error!("receive_finalized_slot_checkpoints(): failed checking for has_slot_checkpoint(): {}", e);
+                return Ok(false)
+            }
+        };
+        self.receive_slot_checkpoints(&[slot_checkpoint]).await?;
+        Ok(true)
     }
 }

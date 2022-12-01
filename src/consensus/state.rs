@@ -585,14 +585,13 @@ impl ConsensusState {
         Err(Error::SlotCheckpointNotFound(slot))
     }
 
-    /// Auxillary function to update all fork state checkpoints to nodes current canonical states.
+    /// Auxillary function to update all fork state checkpoints to nodes coins current canonical states.
     /// Note: This function should only be invoked once on nodes' coins creation.
     pub fn update_forks_checkpoints(&mut self) {
         for fork in &mut self.forks {
             for state_checkpoint in &mut fork.sequence {
                 state_checkpoint.coins = self.coins.clone();
                 state_checkpoint.coins_tree = self.coins_tree.clone();
-                state_checkpoint.nullifiers = self.nullifiers.clone();
             }
         }
     }
@@ -654,6 +653,12 @@ impl SlotCheckpoint {
         let sigma2 = pallas::Base::zero();
 
         Self::new(0, eta, sigma1, sigma2)
+    }
+}
+
+impl net::Message for SlotCheckpoint {
+    fn name() -> &'static str {
+        "slotcheckpoint"
     }
 }
 
