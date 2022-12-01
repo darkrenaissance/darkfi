@@ -358,6 +358,12 @@ impl LeadCoin {
         }
     }
 
+    pub fn coin_commitment_base(&self) -> pallas::Base {
+        let c1_cm_coord = self.coin1_commitment.to_affine().coordinates().unwrap();
+        let c1_cm_msg = [*c1_cm_coord.x(), *c1_cm_coord.y()];
+        poseidon_hash(c1_cm_msg)
+    }
+
     /// Try to create a ZK proof of consensus leadership
     pub fn create_lead_proof(
         &self,

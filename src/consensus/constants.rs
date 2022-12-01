@@ -84,11 +84,12 @@ pub const LEADER_PROOF_K: u32 = 13;
 pub const RADIX_BITS: usize = 76;
 
 pub const P: &str = "28948022309329048855892746252171976963363056481941560715954676764349967630337";
-pub const LOTTERY_HEAD_START: u64 = 1;
+pub const LOTTERY_HEAD_START: u64 = 0;
 pub const PRF_NULLIFIER_PREFIX: u64 = 0;
-pub const PI_NULLIFIER_INDEX: usize = 7;
 pub const PI_COMMITMENT_X_INDEX: usize = 1;
 pub const PI_COMMITMENT_Y_INDEX: usize = 2;
+pub const PI_COMMITMENT_ROOT: usize = 5;
+pub const PI_NULLIFIER_INDEX: usize = 7;
 pub const PI_MU_Y_INDEX: usize = 8;
 pub const PI_MU_RHO_INDEX: usize = 10;
 pub const PI_SIGMA1_INDEX: usize = 12;
