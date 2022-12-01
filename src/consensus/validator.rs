@@ -244,7 +244,6 @@ impl ValidatorState {
         true
     }
 
-
     /// Generate a block proposal for the current slot, containing all
     /// unconfirmed transactions. Proposal extends the longest fork
     /// chain the node is holding.
@@ -461,21 +460,20 @@ impl ValidatorState {
             }
         }
 
-
         // TODO: Check if proposal coin commitments already spent
         let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
         let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];
 
         // validate that this coin is already published.
         /*
-        let tree_root: MerkleNode = self.consensus.coins_tree.root(0).unwrap();
-        let prop_cm_root: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_ROOT];
-        if tree_root.inner() <= prop_cm_root {
-            error!("validation of tree root failed");
-            info!("tree_root: {:?}", tree_root.inner());
-            info!("prop_root: {:?}", prop_cm_root);
-    }
-        */
+            let tree_root: MerkleNode = self.consensus.coins_tree.root(0).unwrap();
+            let prop_cm_root: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_ROOT];
+            if tree_root.inner() <= prop_cm_root {
+                error!("validation of tree root failed");
+                info!("tree_root: {:?}", tree_root.inner());
+                info!("prop_root: {:?}", prop_cm_root);
+        }
+            */
 
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
@@ -649,7 +647,7 @@ impl ValidatorState {
 
         info!(
             "consensus: Adding {} finalized slot checkpoints to canonical chain.",
-            finalized.len()
+            finalized_slot_checkpoints.len()
         );
         match self.blockchain.add_slot_checkpoints(&finalized_slot_checkpoints) {
             Ok(v) => v,
