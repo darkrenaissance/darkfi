@@ -30,7 +30,7 @@ use super::{
     constants,
     leadcoin::{LeadCoin, LeadCoinSecrets},
     utils::fbig2base,
-    Block, BlockProposal, Float10, ProposalChain,
+    Block, BlockProposal, Float10,
 };
 
 use crate::{blockchain::Blockchain, net, tx::Transaction, util::time::Timestamp, Error, Result};
@@ -50,22 +50,22 @@ pub struct ConsensusState {
     /// Slots offset since genesis,
     pub offset: Option<u64>,
     /// Fork chains containing block proposals
-    pub proposals: Vec<ProposalChain>,
+    pub forks: Vec<Fork>,
     /// Current epoch
     pub epoch: u64,
     /// Current epoch eta
     pub epoch_eta: pallas::Base,
     /// Hot/live slot checkpoints
     pub slot_checkpoints: Vec<SlotCheckpoint>,
-    // TODO: Aren't these already in db after finalization?
-    /// Current competing coins
-    pub coins: Vec<LeadCoin>,
-    /// Coin commitments tree
-    pub coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
-    /// Seen nullifiers from proposals
-    pub leaders_nullifiers: Vec<pallas::Base>,
     /// Leaders count history
     pub leaders_history: Vec<u64>,
+    // TODO: Aren't these already in db after finalization?
+    /// Canonical competing coins
+    pub coins: Vec<LeadCoin>,
+    /// Canonical coin commitments tree
+    pub coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    /// Canonical seen nullifiers from proposals
+    pub nullifiers: Vec<pallas::Base>,
 }
 
 impl ConsensusState {
@@ -82,14 +82,14 @@ impl ConsensusState {
             participating: None,
             checked_finalization: 0,
             offset: None,
-            proposals: vec![],
+            forks: vec![],
             epoch: 0,
             epoch_eta: pallas::Base::one(),
             slot_checkpoints: vec![],
+            leaders_history: vec![0],
             coins: vec![],
             coins_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100),
-            leaders_nullifiers: vec![],
-            leaders_history: vec![0],
+            nullifiers: vec![],
         })
     }
 
@@ -118,10 +118,10 @@ impl ConsensusState {
     /// Finds the last slot a proposal or block was generated.
     pub fn last_slot(&self) -> Result<u64> {
         let mut slot = 0;
-        for chain in &self.proposals {
-            for proposal in &chain.proposals {
-                if proposal.block.header.slot > slot {
-                    slot = proposal.block.header.slot;
+        for chain in &self.forks {
+            for state_checkpoint in &chain.sequence {
+                if state_checkpoint.proposal.block.header.slot > slot {
+                    slot = state_checkpoint.proposal.block.header.slot;
                 }
             }
         }
@@ -195,6 +195,7 @@ impl ConsensusState {
         let eta = self.get_eta();
         if self.coins.len() == 0 {
             self.coins = self.create_coins(eta).await?;
+            self.update_forks_checkpoints();
         }
         self.epoch = epoch;
         self.epoch_eta = eta;
@@ -332,9 +333,9 @@ impl ConsensusState {
         let slot = self.current_slot();
         let previous_slot = slot - 1;
         let mut count = 0;
-        for chain in &self.proposals {
+        for chain in &self.forks {
             // Previous slot proposals exist at end of each fork
-            if chain.proposals.last().unwrap().block.header.slot == previous_slot {
+            if chain.sequence.last().unwrap().proposal.block.header.slot == previous_slot {
                 count += 1;
             }
         }
@@ -436,22 +437,22 @@ impl ConsensusState {
     /// Finds the longest blockchain the node holds and
     /// returns the last block hash and the chain index.
     pub fn longest_chain_last_hash(&self) -> Result<(blake3::Hash, i64)> {
-        let mut longest: Option<ProposalChain> = None;
+        let mut longest: Option<Fork> = None;
         let mut length = 0;
         let mut index = -1;
 
-        if !self.proposals.is_empty() {
-            for (i, chain) in self.proposals.iter().enumerate() {
-                if chain.proposals.len() > length {
+        if !self.forks.is_empty() {
+            for (i, chain) in self.forks.iter().enumerate() {
+                if chain.sequence.len() > length {
                     longest = Some(chain.clone());
-                    length = chain.proposals.len();
+                    length = chain.sequence.len();
                     index = i as i64;
                 }
             }
         }
 
         let hash = match longest {
-            Some(chain) => chain.proposals.last().unwrap().hash,
+            Some(chain) => chain.sequence.last().unwrap().proposal.hash,
             None => self.blockchain.last()?.1,
         };
 
@@ -461,9 +462,9 @@ impl ConsensusState {
     /// Finds the length of longest fork chain the node holds.
     pub fn longest_chain_length(&self) -> usize {
         let mut max = 0;
-        for proposal in &self.proposals {
-            if proposal.proposals.len() > max {
-                max = proposal.proposals.len();
+        for fork in &self.forks {
+            if fork.sequence.len() > max {
+                max = fork.sequence.len();
             }
         }
 
@@ -474,13 +475,13 @@ impl ConsensusState {
     pub fn find_extended_chain_index(&mut self, proposal: &BlockProposal) -> Result<i64> {
         // We iterate through all forks to find which fork to extend
         let mut chain_index = -1;
-        let mut prop_index = 0;
-        for (c_index, chain) in self.proposals.iter().enumerate() {
-            // Traverse proposals in reverse
-            for (p_index, prop) in chain.proposals.iter().enumerate().rev() {
-                if proposal.block.header.previous == prop.hash {
+        let mut state_checkpoint_index = 0;
+        for (c_index, chain) in self.forks.iter().enumerate() {
+            // Traverse sequence in reverse
+            for (sc_index, state_checkpoint) in chain.sequence.iter().enumerate().rev() {
+                if proposal.block.header.previous == state_checkpoint.proposal.hash {
                     chain_index = c_index as i64;
-                    prop_index = p_index;
+                    state_checkpoint_index = sc_index;
                     break
                 }
             }
@@ -504,25 +505,25 @@ impl ConsensusState {
         }
 
         // Found fork chain
-        let chain = &self.proposals[chain_index as usize];
+        let chain = &self.forks[chain_index as usize];
         // Proposal extends fork at last proposal
-        if prop_index == (chain.proposals.len() - 1) {
+        if state_checkpoint_index == (chain.sequence.len() - 1) {
             return Ok(chain_index)
         }
 
         debug!("find_extended_chain_index(): Proposal to fork a forkchain was received.");
-        let mut chain = self.proposals[chain_index as usize].clone();
+        let mut chain = self.forks[chain_index as usize].clone();
         // We keep all proposals until the one it extends
-        chain.proposals.drain((prop_index + 1)..);
-        self.proposals.push(chain);
-        Ok(self.proposals.len() as i64 - 1)
+        chain.sequence.drain((state_checkpoint_index + 1)..);
+        self.forks.push(chain);
+        Ok(self.forks.len() as i64 - 1)
     }
 
     /// Search the chains we're holding for the given proposal.
     pub fn proposal_exists(&self, input_proposal: &blake3::Hash) -> bool {
-        for chain in self.proposals.iter() {
-            for proposal in chain.proposals.iter() {
-                if input_proposal == &proposal.hash {
+        for chain in self.forks.iter() {
+            for state_checkpoint in chain.sequence.iter().rev() {
+                if input_proposal == &state_checkpoint.proposal.hash {
                     return true
                 }
             }
@@ -541,7 +542,7 @@ impl ConsensusState {
             }
             _ => {
                 debug!("set_leader_history(): Checking last proposal of fork: {}", index);
-                let last_proposal = self.proposals[index as usize].proposals.last().unwrap();
+                let last_proposal = &self.forks[index as usize].sequence.last().unwrap().proposal;
                 if last_proposal.block.header.slot == self.current_slot() {
                     // Replacing our last history element with the leaders one
                     self.leaders_history.pop();
@@ -583,6 +584,18 @@ impl ConsensusState {
         }
         Err(Error::SlotCheckpointNotFound(slot))
     }
+
+    /// Auxillary function to update all fork state checkpoints to nodes current canonical states.
+    /// Note: This function should only be invoked once on nodes' coins creation.
+    pub fn update_forks_checkpoints(&mut self) {
+        for fork in &mut self.forks {
+            for state_checkpoint in &mut fork.sequence {
+                state_checkpoint.coins = self.coins.clone();
+                state_checkpoint.coins_tree = self.coins_tree.clone();
+                state_checkpoint.nullifiers = self.nullifiers.clone();
+            }
+        }
+    }
 }
 
 /// Auxiliary structure used for consensus syncing.
@@ -601,13 +614,13 @@ pub struct ConsensusResponse {
     /// Slots offset since genesis,
     pub offset: Option<u64>,
     /// Hot/live data used by the consensus algorithm
-    pub proposals: Vec<ProposalChain>,
+    pub forks: Vec<ForkInfo>,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Transaction>,
     /// Hot/live slot checkpoints
     pub slot_checkpoints: Vec<SlotCheckpoint>,
     /// Seen nullifiers from proposals
-    pub leaders_nullifiers: Vec<pallas::Base>,
+    pub nullifiers: Vec<pallas::Base>,
 }
 
 impl net::Message for ConsensusResponse {
@@ -667,5 +680,139 @@ pub struct SlotCheckpointResponse {
 impl net::Message for SlotCheckpointResponse {
     fn name() -> &'static str {
         "slotcheckpointresponse"
+    }
+}
+
+/// Auxiliary structure used to keep track of consensus state checkpoints.
+#[derive(Debug, Clone)]
+pub struct StateCheckpoint {
+    /// Block proposal
+    pub proposal: BlockProposal,
+    /// Node competing coins current state
+    pub coins: Vec<LeadCoin>,
+    /// Coin commitments tree current state
+    pub coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    /// Seen nullifiers from proposals current state
+    pub nullifiers: Vec<pallas::Base>,
+}
+
+impl StateCheckpoint {
+    pub fn new(
+        proposal: BlockProposal,
+        coins: Vec<LeadCoin>,
+        coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+        nullifiers: Vec<pallas::Base>,
+    ) -> Self {
+        Self { proposal, coins, coins_tree, nullifiers }
+    }
+}
+
+/// Auxiliary structure used for forked consensus state checkpoints syncing
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct StateCheckpointInfo {
+    /// Block proposal
+    pub proposal: BlockProposal,
+    /// Seen nullifiers from proposals current state
+    pub nullifiers: Vec<pallas::Base>,
+}
+
+impl From<StateCheckpoint> for StateCheckpointInfo {
+    fn from(state_checkpoint: StateCheckpoint) -> Self {
+        Self { proposal: state_checkpoint.proposal, nullifiers: state_checkpoint.nullifiers }
+    }
+}
+
+impl From<StateCheckpointInfo> for StateCheckpoint {
+    fn from(state_checkpoint_info: StateCheckpointInfo) -> Self {
+        Self {
+            proposal: state_checkpoint_info.proposal,
+            coins: vec![],
+            coins_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100),
+            nullifiers: state_checkpoint_info.nullifiers,
+        }
+    }
+}
+
+/// This struct represents a sequence of consensus state checkpoints.
+#[derive(Debug, Clone)]
+pub struct Fork {
+    pub genesis_block: blake3::Hash,
+    pub sequence: Vec<StateCheckpoint>,
+}
+
+impl Fork {
+    pub fn new(genesis_block: blake3::Hash, initial_state_checkpoint: StateCheckpoint) -> Self {
+        Self { genesis_block, sequence: vec![initial_state_checkpoint] }
+    }
+
+    /// Insertion of a valid state checkpoint.
+    pub fn add(&mut self, state_checkpoint: &StateCheckpoint) {
+        if self.check_state_checkpoint(state_checkpoint, self.sequence.last().unwrap()) {
+            self.sequence.push(state_checkpoint.clone());
+        }
+    }
+
+    /// A fork chain is considered valid when every state checkpoint is valid,
+    /// based on the `check_state_checkpoint` function
+    pub fn check_chain(&self) -> bool {
+        for (index, state_checkpoint) in self.sequence[1..].iter().enumerate() {
+            if !self.check_state_checkpoint(state_checkpoint, &self.sequence[index]) {
+                return false
+            }
+        }
+
+        true
+    }
+
+    /// A state checkpoint is considered valid when its proposal parent hash is equal to the
+    /// hash of the previous checkpoint's proposal and their slots are incremental,
+    /// excluding the genesis block proposal.
+    pub fn check_state_checkpoint(
+        &self,
+        state_checkpoint: &StateCheckpoint,
+        previous: &StateCheckpoint,
+    ) -> bool {
+        if state_checkpoint.proposal.block.header.previous == self.genesis_block {
+            debug!("check_checkpoint(): Genesis block proposal provided.");
+            return false
+        }
+
+        if state_checkpoint.proposal.block.header.previous != previous.proposal.hash ||
+            state_checkpoint.proposal.block.header.slot <= previous.proposal.block.header.slot
+        {
+            debug!("check_checkpoint(): Provided state checkpoint proposal is invalid.");
+            return false
+        }
+
+        // TODO: validate rest checkpoint info(like nullifiers)
+
+        true
+    }
+}
+
+/// Auxiliary structure used for forks syncing
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct ForkInfo {
+    pub genesis_block: blake3::Hash,
+    pub sequence: Vec<StateCheckpointInfo>,
+}
+
+impl From<Fork> for ForkInfo {
+    fn from(fork: Fork) -> Self {
+        let mut sequence = vec![];
+        for state_checkpoint in fork.sequence {
+            sequence.push(state_checkpoint.into());
+        }
+        Self { genesis_block: fork.genesis_block, sequence }
+    }
+}
+
+impl From<ForkInfo> for Fork {
+    fn from(fork_info: ForkInfo) -> Self {
+        let mut sequence = vec![];
+        for checkpoint in fork_info.sequence {
+            sequence.push(checkpoint.into());
+        }
+        Self { genesis_block: fork_info.genesis_block, sequence }
     }
 }

@@ -87,7 +87,7 @@ impl ProtocolProposal {
                 continue
             }
 
-            if let Err(e) = lock.receive_proposal(&proposal_copy).await {
+            if let Err(e) = lock.receive_proposal(&proposal_copy, None).await {
                 error!(
                     "ProtocolProposal::handle_receive_proposal(): receive_proposal error: {}",
                     e

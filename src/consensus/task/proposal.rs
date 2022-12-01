@@ -115,13 +115,13 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         // for that slot.
         let (won, idx) = state.write().await.consensus.is_slot_leader(sigma1, sigma2);
         let result = if won { state.write().await.propose(idx, sigma1, sigma2) } else { Ok(None) };
-        let proposal = match result {
-            Ok(prop) => {
-                if prop.is_none() {
+        let (proposal, coin) = match result {
+            Ok(pair) => {
+                if pair.is_none() {
                     info!("consensus: Node is not the slot lead");
                     continue
                 }
-                prop.unwrap()
+                pair.unwrap()
             }
             Err(e) => {
                 error!("consensus: Block proposal failed: {}", e);
@@ -132,7 +132,7 @@ pub async fn proposal_task(consensus_p2p: P2pPtr, sync_p2p: P2pPtr, state: Valid
         // Node stores the proposal and broadcast to rest nodes
         info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
         debug!("consensus: Full proposal: {:?}", proposal);
-        match state.write().await.receive_proposal(&proposal).await {
+        match state.write().await.receive_proposal(&proposal, Some((idx, coin))).await {
             Ok(()) => {
                 info!("consensus: Block proposal saved successfully");
                 // Broadcast proposal to other consensus nodes

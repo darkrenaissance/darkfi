@@ -21,7 +21,6 @@ use std::fmt;
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use log::debug;
 use pasta_curves::pallas;
 
 use super::{
@@ -269,57 +268,5 @@ impl net::Message for BlockProposal {
 impl From<BlockProposal> for BlockInfo {
     fn from(block: BlockProposal) -> BlockInfo {
         block.block
-    }
-}
-
-/// This struct represents a sequence of block proposals.
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct ProposalChain {
-    pub genesis_block: blake3::Hash,
-    pub proposals: Vec<BlockProposal>,
-}
-
-impl ProposalChain {
-    pub fn new(genesis_block: blake3::Hash, initial_proposal: BlockProposal) -> Self {
-        Self { genesis_block, proposals: vec![initial_proposal] }
-    }
-
-    /// A proposal is considered valid when its parent hash is equal to the
-    /// hash of the previous proposal and their slots are incremental,
-    /// excluding the genesis block proposal.
-    /// Additional validity rules can be applied.
-    pub fn check_proposal(&self, proposal: &BlockProposal, previous: &BlockProposal) -> bool {
-        if proposal.block.header.previous == self.genesis_block {
-            debug!("check_proposal(): Genesis block proposal provided.");
-            return false
-        }
-
-        if proposal.block.header.previous != previous.hash ||
-            proposal.block.header.slot <= previous.block.header.slot
-        {
-            debug!("check_proposal(): Provided proposal is invalid.");
-            return false
-        }
-
-        true
-    }
-
-    /// A proposals chain is considered valid when every proposal is valid,
-    /// based on the `check_proposal` function.
-    pub fn check_chain(&self) -> bool {
-        for (index, proposal) in self.proposals[1..].iter().enumerate() {
-            if !self.check_proposal(proposal, &self.proposals[index]) {
-                return false
-            }
-        }
-
-        true
-    }
-
-    /// Insertion of a valid proposal.
-    pub fn add(&mut self, proposal: &BlockProposal) {
-        if self.check_proposal(proposal, self.proposals.last().unwrap()) {
-            self.proposals.push(proposal.clone());
-        }
     }
 }

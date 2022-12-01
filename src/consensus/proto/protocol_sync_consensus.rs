@@ -75,17 +75,15 @@ impl ProtocolSyncConsensus {
             // Extra validations can be added here.
             let lock = self.state.read().await;
             let offset = lock.consensus.offset;
-            let proposals = lock.consensus.proposals.clone();
+            let mut forks = vec![];
+            for fork in &lock.consensus.forks {
+                forks.push(fork.clone().into());
+            }
             let unconfirmed_txs = lock.unconfirmed_txs.clone();
             let slot_checkpoints = lock.consensus.slot_checkpoints.clone();
-            let leaders_nullifiers = lock.consensus.leaders_nullifiers.clone();
-            let response = ConsensusResponse {
-                offset,
-                proposals,
-                unconfirmed_txs,
-                slot_checkpoints,
-                leaders_nullifiers,
-            };
+            let nullifiers = lock.consensus.nullifiers.clone();
+            let response =
+                ConsensusResponse { offset, forks, unconfirmed_txs, slot_checkpoints, nullifiers };
             if let Err(e) = self.channel.send(response).await {
                 error!("ProtocolSyncConsensus::handle_receive_request() channel send fail: {}", e);
             };

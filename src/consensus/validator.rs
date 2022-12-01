@@ -37,8 +37,8 @@ use serde_json::json;
 use super::{
     constants,
     leadcoin::LeadCoin,
-    state::{ConsensusState, SlotCheckpoint},
-    BlockInfo, BlockProposal, Header, LeadInfo, LeadProof, ProposalChain,
+    state::{ConsensusState, Fork, SlotCheckpoint, StateCheckpoint},
+    BlockInfo, BlockProposal, Header, LeadInfo, LeadProof,
 };
 
 use crate::{
@@ -252,7 +252,7 @@ impl ValidatorState {
         idx: usize,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
-    ) -> Result<Option<BlockProposal>> {
+    ) -> Result<Option<(BlockProposal, LeadCoin)>> {
         let slot = self.consensus.current_slot();
         let (prev_hash, index) = self.consensus.longest_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
@@ -266,12 +266,16 @@ impl ValidatorState {
             hash[0..31].copy_from_slice(&blake3::hash(&serialize(tx)).as_bytes()[0..31]);
             tree.append(&MerkleNode::from(pallas::Base::from_repr(hash).unwrap()));
         }
-
         let root = tree.root(0).unwrap();
 
-        //let eta = self.consensus.epoch_eta;
+        // Checking if extending a fork or canonical
+        let coin = if index == -1 {
+            self.consensus.coins[idx]
+        } else {
+            self.consensus.forks[index as usize].sequence.last().unwrap().coins[idx]
+        };
+
         // Generating leader proof
-        let coin = self.consensus.coins[idx];
         let (proof, public_inputs) =
             coin.create_lead_proof(sigma1, sigma2, self.lead_proving_key.as_ref().unwrap());
 
@@ -297,10 +301,8 @@ impl ValidatorState {
             self.consensus.get_current_offset(slot),
             self.consensus.leaders_history.last().unwrap().clone(),
         );
-        // Replacing old coin with the derived coin
-        self.consensus.coins[idx] = coin.derive_coin(&mut self.consensus.coins_tree);
 
-        Ok(Some(BlockProposal::new(header, unproposed_txs, lead_info)))
+        Ok(Some((BlockProposal::new(header, unproposed_txs, lead_info), coin)))
     }
 
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
@@ -316,9 +318,9 @@ impl ValidatorState {
 
         // We iterate over the fork chain proposals to find already proposed
         // transactions and remove them from the local unproposed_txs vector.
-        let chain = &self.consensus.proposals[index as usize];
-        for proposal in &chain.proposals {
-            for tx in &proposal.block.txs {
+        let chain = &self.consensus.forks[index as usize];
+        for state_checkpoint in &chain.sequence {
+            for tx in &state_checkpoint.proposal.block.txs {
                 if let Some(pos) = unproposed_txs.iter().position(|txs| *txs == *tx) {
                     unproposed_txs.remove(pos);
                 }
@@ -330,7 +332,11 @@ impl ValidatorState {
 
     /// Given a proposal, the node verify its sender (slot leader) and finds which blockchain
     /// it extends. If the proposal extends the canonical blockchain, a new fork chain is created.
-    pub async fn receive_proposal(&mut self, proposal: &BlockProposal) -> Result<()> {
+    pub async fn receive_proposal(
+        &mut self,
+        proposal: &BlockProposal,
+        coin: Option<(usize, LeadCoin)>,
+    ) -> Result<()> {
         let current = self.consensus.current_slot();
         // Node hasn't started participating
         match self.consensus.participating {
@@ -451,29 +457,48 @@ impl ValidatorState {
             );
         }
 
-        // TODO: Check if proposal coin nullifiers already exist
+        // Create corresponding state checkpoint for validations
+        let mut state_checkpoint = match index {
+            -1 => {
+                // Extends canonical
+                StateCheckpoint::new(
+                    proposal.clone(),
+                    self.consensus.coins.clone(),
+                    self.consensus.coins_tree.clone(),
+                    self.consensus.nullifiers.clone(),
+                )
+            }
+            _ => {
+                // Extends a fork
+                let previous = self.consensus.forks[index as usize].sequence.last().unwrap();
+                StateCheckpoint::new(
+                    proposal.clone(),
+                    previous.coins.clone(),
+                    previous.coins_tree.clone(),
+                    previous.nullifiers.clone(),
+                )
+            }
+        };
+
+        // Check if proposal coin nullifiers already exist in the state checkpoint
         let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
-        for sn in &self.consensus.leaders_nullifiers {
+        for sn in &state_checkpoint.nullifiers {
             if *sn == prop_sn {
                 error!("receive_proposal(): Proposal nullifiers exist.");
                 return Err(Error::ProposalIsSpent)
             }
         }
 
-        // TODO: Check if proposal coin commitments already spent
-        let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
-        let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];
-
-        // validate that this coin is already published.
         /*
-            let tree_root: MerkleNode = self.consensus.coins_tree.root(0).unwrap();
-            let prop_cm_root: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_ROOT];
-            if tree_root.inner() <= prop_cm_root {
-                error!("validation of tree root failed");
-                info!("tree_root: {:?}", tree_root.inner());
-                info!("prop_root: {:?}", prop_cm_root);
+        // TODO: Validate that proposal coin is already published.
+        let tree_root: MerkleNode = self.consensus.coins_tree.root(0).unwrap();
+        let prop_cm_root: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_ROOT];
+        if tree_root.inner() <= prop_cm_root {
+            error!("validation of tree root failed");
+            info!("tree_root: {:?}", tree_root.inner());
+            info!("prop_root: {:?}", prop_cm_root);
         }
-            */
+        */
 
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
@@ -485,19 +510,23 @@ impl ValidatorState {
 
         // TODO: [PLACEHOLDER] Add rewards validation
 
+        // If proposal came fromself, we derive new coin
+        if let Some((idx, c)) = coin {
+            state_checkpoint.coins[idx] = c.derive_coin(&mut state_checkpoint.coins_tree);
+        }
+        // Store proposal coins nullifiers
+        state_checkpoint.nullifiers.push(prop_sn);
+
         // Extend corresponding chain
         match index {
             -1 => {
-                let pc = ProposalChain::new(self.consensus.genesis_block, proposal.clone());
-                self.consensus.proposals.push(pc);
+                let fork = Fork::new(self.consensus.genesis_block, state_checkpoint);
+                self.consensus.forks.push(fork);
             }
             _ => {
-                self.consensus.proposals[index as usize].add(proposal);
+                self.consensus.forks[index as usize].add(&state_checkpoint);
             }
         };
-
-        // Store proposal coin nullifiers
-        self.consensus.leaders_nullifiers.push(prop_sn);
 
         Ok(())
     }
@@ -526,13 +555,13 @@ impl ValidatorState {
         // Set last slot finalization check occured to current slot
         self.consensus.checked_finalization = slot;
 
-        // First we find longest chain without any other forks at same height
-        let mut chain_index = -1;
+        // First we find longest fork without any other forks at same height
+        let mut fork_index = -1;
         // Use this index to extract leaders count sequence from longest fork
         let mut index_for_history = -1;
         let mut max_length = 0;
-        for (index, chain) in self.consensus.proposals.iter().enumerate() {
-            let length = chain.proposals.len();
+        for (index, fork) in self.consensus.forks.iter().enumerate() {
+            let length = fork.sequence.len();
             // Check if greater than max to retain index for history
             if length > max_length {
                 index_for_history = index as i64;
@@ -547,18 +576,18 @@ impl ValidatorState {
             }
             // Check if same length as max
             if length == max_length {
-                // Setting chain_index so we know we have multiple
+                // Setting fork_index so we know we have multiple
                 // forks at same length.
-                chain_index = -2;
+                fork_index = -2;
                 continue
             }
-            // Set chain as max
-            chain_index = index as i64;
+            // Set fork as max
+            fork_index = index as i64;
             max_length = length;
         }
 
         // Check if we found any fork to finalize
-        match chain_index {
+        match fork_index {
             -2 => {
                 debug!("chain_finalization(): Eligible forks with same height exist, nothing to finalize.");
                 self.consensus.set_leader_history(index_for_history);
@@ -569,21 +598,23 @@ impl ValidatorState {
                 self.consensus.set_leader_history(index_for_history);
                 return Ok(vec![])
             }
-            _ => debug!("chain_finalization(): Chain {} can be finalized!", chain_index),
+            _ => debug!("chain_finalization(): Chain {} can be finalized!", fork_index),
         }
 
         // Starting finalization
-        let mut chain = self.consensus.proposals[chain_index as usize].clone();
+        let mut fork = self.consensus.forks[fork_index as usize].clone();
 
         // Retrieving proposals to finalize
         let bound = max_length - 1;
         let mut finalized: Vec<BlockInfo> = vec![];
-        for proposal in &chain.proposals[..bound] {
-            finalized.push(proposal.clone().into());
+        let mut last_state_checkpoint = fork.sequence.first().unwrap().clone();
+        for state_checkpoint in &fork.sequence[..bound] {
+            finalized.push(state_checkpoint.proposal.clone().into());
+            last_state_checkpoint = state_checkpoint.clone();
         }
 
-        // Removing finalized proposals from chain
-        chain.proposals.drain(..bound);
+        // Removing finalized proposals state checkpoins from fork
+        fork.sequence.drain(..bound);
 
         // Adding finalized proposals to canonical
         info!("consensus: Adding {} finalized block to canonical chain.", finalized.len());
@@ -624,11 +655,16 @@ impl ValidatorState {
 
         // Setting leaders history to last proposal leaders count
         self.consensus.leaders_history =
-            vec![chain.proposals.last().unwrap().block.lead_info.leaders];
+            vec![fork.sequence.last().unwrap().proposal.block.lead_info.leaders];
 
         // Removing rest forks
-        self.consensus.proposals = vec![];
-        self.consensus.proposals.push(chain);
+        self.consensus.forks = vec![];
+        self.consensus.forks.push(fork);
+
+        // Setting canonical states from last finalized checkpoint
+        self.consensus.coins = last_state_checkpoint.coins;
+        self.consensus.coins_tree = last_state_checkpoint.coins_tree;
+        self.consensus.nullifiers = last_state_checkpoint.nullifiers;
 
         // Adding finalized slot checkpoints to canonical
         let mut bound = 0;

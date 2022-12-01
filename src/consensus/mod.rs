@@ -18,7 +18,7 @@
 
 /// Block definition
 pub mod block;
-pub use block::{Block, BlockInfo, BlockProposal, Header, ProposalChain};
+pub use block::{Block, BlockInfo, BlockProposal, Header};
 
 /// Constants
 pub mod constants;

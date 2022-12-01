@@ -26,10 +26,9 @@ use darkfi::{
         Blockchain,
     },
     consensus::{
-        block::{Block, BlockProposal, Header, ProposalChain},
+        block::{Block, Header},
         constants::TESTNET_GENESIS_HASH_BYTES,
         lead_info::LeadInfo,
-        state::ConsensusState,
         validator::ValidatorState,
     },
     tx::Transaction,
@@ -38,7 +37,6 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::crypto::MerkleNode;
-use darkfi_serial::serialize;
 
 #[derive(Debug)]
 struct LeadInfoInfo {
@@ -75,58 +73,6 @@ impl LeadInfoInfo {
             _offset,
             _leaders,
         }
-    }
-}
-
-#[derive(Debug)]
-struct ProposalInfo {
-    _block: BlockInfo,
-}
-
-impl ProposalInfo {
-    pub fn new(proposal: &BlockProposal) -> ProposalInfo {
-        let _header = proposal.block.header.headerhash();
-        let mut _txs = vec![];
-        for tx in &proposal.block.txs {
-            let hash = blake3::hash(&serialize(tx));
-            _txs.push(hash);
-        }
-        let _lead_info = LeadInfoInfo::new(&proposal.block.lead_info);
-        let _block =
-            BlockInfo { _hash: _header, _magic: proposal.block.magic, _header, _txs, _lead_info };
-        ProposalInfo { _block }
-    }
-}
-
-#[derive(Debug)]
-struct ProposalInfoChain {
-    _proposals: Vec<ProposalInfo>,
-}
-
-impl ProposalInfoChain {
-    pub fn new(proposals: &ProposalChain) -> ProposalInfoChain {
-        let mut _proposals = Vec::new();
-        for proposal in &proposals.proposals {
-            _proposals.push(ProposalInfo::new(&proposal));
-        }
-        ProposalInfoChain { _proposals }
-    }
-}
-
-#[derive(Debug)]
-struct ConsensusInfo {
-    _genesis_ts: Timestamp,
-    _proposals: Vec<ProposalInfoChain>,
-}
-
-impl ConsensusInfo {
-    pub fn new(consensus: &ConsensusState) -> ConsensusInfo {
-        let _genesis_ts = consensus.genesis_ts.clone();
-        let mut _proposals = Vec::new();
-        for proposal in &consensus.proposals {
-            _proposals.push(ProposalInfoChain::new(&proposal));
-        }
-        ConsensusInfo { _genesis_ts, _proposals }
     }
 }
 
@@ -343,15 +289,13 @@ impl BlockchainInfo {
 
 #[derive(Debug)]
 struct StateInfo {
-    _consensus: ConsensusInfo,
     _blockchain: BlockchainInfo,
 }
 
 impl StateInfo {
     pub fn new(state: &ValidatorState) -> StateInfo {
-        let _consensus = ConsensusInfo::new(&state.consensus);
         let _blockchain = BlockchainInfo::new(&state.blockchain);
-        StateInfo { _consensus, _blockchain }
+        StateInfo { _blockchain }
     }
 }
 
