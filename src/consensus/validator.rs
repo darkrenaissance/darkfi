@@ -453,26 +453,16 @@ impl ValidatorState {
 
         // TODO: Check if proposal coin nullifiers already exist
         let prop_sn = lf.public_inputs[constants::PI_NULLIFIER_INDEX];
-        /*
         for sn in &self.consensus.leaders_nullifiers {
             if *sn == prop_sn {
                 error!("receive_proposal(): Proposal nullifiers exist.");
                 return Err(Error::ProposalIsSpent)
             }
         }
-        */
 
         // TODO: Check if proposal coin commitments already spent
         let prop_cm_x: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_X_INDEX];
         let prop_cm_y: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_Y_INDEX];
-        /*
-        for cm in &self.consensus.leaders_spent_coins {
-            if *cm == (prop_cm_x, prop_cm_y) {
-                error!("receive_proposal(): Proposal coin already spent.");
-                return Err(Error::ProposalIsSpent)
-            }
-        }
-        */
 
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
