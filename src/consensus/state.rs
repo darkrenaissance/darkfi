@@ -217,8 +217,8 @@ impl ConsensusState {
         if total_stake == 0 {
             total_stake = constants::GENESIS_TOTAL_STAKE;
         }
-        info!("sigmas(): f: {}", f);
-        info!("sigmas(): stake: {}", total_stake);
+        debug!("sigmas(): f: {}", f);
+        debug!("sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
         let field_p = Float10::from_str_native(constants::P)
@@ -395,10 +395,6 @@ impl ConsensusState {
     }
 
 
-    fn pid(p: Float10, i: Float10, d: Float10) -> Float10 {
-        constants::KP.clone() * p.abs() + constants::KI.clone() * i + constants::KD.clone() * d
-    }
-
     /// the probability inverse of winnig lottery having all the stake
     /// returns f
     fn win_inv_prob_with_full_stake(&mut self) -> Float10 {
@@ -408,7 +404,7 @@ impl ConsensusState {
         info!("win_inv_prob_with_full_stake(): PID P: {:?}", p);
         info!("win_inv_prob_with_full_stake(): PID I: {:?}", i);
         info!("win_inv_prob_with_full_stake(): PID D: {:?}", d);
-        let mut f = p+i+d;
+        let f = p+i+d;
         info!("win_inv_prob_with_full_stake(): PID f: {}", f);
         if f==constants::FLOAT10_ZERO.clone() {
             return constants::MIN_F.clone()

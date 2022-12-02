@@ -93,9 +93,9 @@ impl ValidatorState {
         faucet_pubkeys: Vec<PublicKey>,
         enable_participation: bool,
     ) -> Result<ValidatorStatePtr> {
-        info!("Initializing ValidatorState");
+        debug!("Initializing ValidatorState");
 
-        info!("Initializing wallet tables for consensus");
+        debug!("Initializing wallet tables for consensus");
         // TODO: TESTNET: The stuff is kept entirely in memory for now, what should we write
         //                to disk/wallet?
         //let consensus_tree_init_query = include_str!("../../script/sql/consensus_tree.sql");
@@ -103,7 +103,7 @@ impl ValidatorState {
         //wallet.exec_sql(consensus_tree_init_query).await?;
         //wallet.exec_sql(consensus_keys_init_query).await?;
 
-        info!("Generating leader proof keys with k: {}", constants::LEADER_PROOF_K);
+        debug!("Generating leader proof keys with k: {}", constants::LEADER_PROOF_K);
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode)?;
         let witnesses = empty_witnesses(&zkbin);
