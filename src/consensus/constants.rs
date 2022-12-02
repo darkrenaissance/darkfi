@@ -46,7 +46,7 @@ lazy_static! {
     pub static ref  TI: Float10 = FLOAT10_ONE.clone();
     pub static ref  TD: Float10 = FLOAT10_ONE.clone();
     pub static ref  KP: Float10 = Float10::from_str_native("0.2").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  KI: Float10 = Float10::from_str_native("0.05").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref  KI: Float10 = Float10::from_str_native("0.043").unwrap().with_precision(RADIX_BITS).value();
     pub static ref  KD: Float10 = FLOAT10_ONE.clone();
     pub static ref PID_OUT_STEP: Float10  = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
     pub static ref MAX_DER: Float10 = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();

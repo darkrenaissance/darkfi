@@ -264,7 +264,6 @@ impl ConsensusState {
         let coin = LeadCoin::new(
             eta,
             rand::thread_rng().gen_range(0..1000),
-            //constants::LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
             slot,
             epoch_secrets.secret_keys[0].inner(),
             epoch_secrets.merkle_roots[0],
@@ -383,7 +382,7 @@ impl ConsensusState {
     fn f_int(&self) -> Float10 {
         let mut sum = constants::FLOAT10_ZERO.clone();
         let lead_history_len = self.leaders_history.len();
-        let history_begin_index = if lead_history_len > 5 { lead_history_len - 5 } else { 0 };
+        let history_begin_index = if lead_history_len > 10 { lead_history_len - 10 } else { 0 };
 
         for lf in &self.leaders_history[history_begin_index..] {
             sum += Float10::try_from(lf.clone()).unwrap().abs();
@@ -425,6 +424,7 @@ impl ConsensusState {
         let mut highest_stake_idx = 0;
 
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
+            info!("is_slot_leader: coin stake: {:?}", coin.value);
             let first_winning = coin.is_leader(sigma1, sigma2);
             if first_winning && !won {
                 highest_stake_idx = winning_idx;
