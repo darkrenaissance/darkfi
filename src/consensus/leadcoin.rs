@@ -27,7 +27,7 @@ use darkfi_sdk::{
 };
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use log::{debug};
+use log::debug;
 use rand::rngs::OsRng;
 
 use super::constants::EPOCH_LENGTH;

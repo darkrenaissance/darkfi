@@ -394,7 +394,6 @@ impl ConsensusState {
         constants::KI.clone() * self.f_int()
     }
 
-
     /// the probability inverse of winnig lottery having all the stake
     /// returns f
     fn win_inv_prob_with_full_stake(&mut self) -> Float10 {
@@ -404,9 +403,9 @@ impl ConsensusState {
         info!("win_inv_prob_with_full_stake(): PID P: {:?}", p);
         info!("win_inv_prob_with_full_stake(): PID I: {:?}", i);
         info!("win_inv_prob_with_full_stake(): PID D: {:?}", d);
-        let f = p+i+d;
+        let f = p + i + d;
         info!("win_inv_prob_with_full_stake(): PID f: {}", f);
-        if f==constants::FLOAT10_ZERO.clone() {
+        if f == constants::FLOAT10_ZERO.clone() {
             return constants::MIN_F.clone()
         }
         info!("win_inv_prob_with_full_stake(): PID clipped f: {}", f);
@@ -625,6 +624,8 @@ pub struct ConsensusResponse {
     pub unconfirmed_txs: Vec<Transaction>,
     /// Hot/live slot checkpoints
     pub slot_checkpoints: Vec<SlotCheckpoint>,
+    /// Leaders count history
+    pub leaders_history: Vec<u64>,
     /// Seen nullifiers from proposals
     pub nullifiers: Vec<pallas::Base>,
 }
