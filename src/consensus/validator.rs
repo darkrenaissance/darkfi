@@ -174,14 +174,14 @@ impl ValidatorState {
             // When deployed, we can do a lookup for the zkas circuits and
             // initialize verifying keys for them.
             info!("Creating ZK verifying keys for {} zkas circuits", nc.0);
-            debug!("Looking up zkas db for {} (ContractID: {})", nc.0, nc.1);
+            info!("Looking up zkas db for {} (ContractID: {})", nc.0, nc.1);
             let zkas_db = blockchain.contracts.lookup(&blockchain.sled_db, &nc.1, ZKAS_DB_NAME)?;
 
             let mut vks = vec![];
             for i in zkas_db.iter() {
-                debug!("Iterating over zkas db");
+                info!("Iterating over zkas db");
                 let (zkas_ns, zkas_bincode) = i?;
-                debug!("Deserializing namespace");
+                info!("Deserializing namespace");
                 let zkas_ns: String = deserialize(&zkas_ns)?;
                 info!("Creating VerifyingKey for zkas circuit with namespace {}", zkas_ns);
                 let zkbin = ZkBinary::decode(&zkas_bincode)?;
@@ -229,17 +229,17 @@ impl ValidatorState {
         };
 
         if self.unconfirmed_txs.contains(&tx) || tx_in_txstore {
-            debug!("append_tx(): We have already seen this tx.");
+            info!("append_tx(): We have already seen this tx.");
             return false
         }
 
-        debug!("append_tx(): Starting state transition validation");
+        info!("append_tx(): Starting state transition validation");
         if let Err(e) = self.verify_transactions(&[tx.clone()], false).await {
             error!("append_tx(): Failed to verify transaction: {}", e);
             return false
         };
 
-        debug!("append_tx(): Appended tx to mempool");
+        info!("append_tx(): Appended tx to mempool");
         self.unconfirmed_txs.push(tx);
         true
     }
@@ -502,7 +502,7 @@ impl ValidatorState {
 
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
-        debug!("receive_proposal(): Starting state transition validation");
+        info!("receive_proposal(): Starting state transition validation");
         if let Err(e) = self.verify_transactions(&proposal.block.txs, false).await {
             error!("receive_proposal(): Transaction verifications failed: {}", e);
             return Err(e.into())
@@ -551,7 +551,7 @@ impl ValidatorState {
     /// slot checkpoints until current slot are apppended to canonical state.
     pub async fn chain_finalization(&mut self) -> Result<(Vec<BlockInfo>, Vec<SlotCheckpoint>)> {
         let slot = self.consensus.current_slot();
-        debug!("chain_finalization(): Started finalization check for slot: {}", slot);
+        info!("chain_finalization(): Started finalization check for slot: {}", slot);
         // Set last slot finalization check occured to current slot
         self.consensus.checked_finalization = slot;
 
@@ -589,16 +589,16 @@ impl ValidatorState {
         // Check if we found any fork to finalize
         match fork_index {
             -2 => {
-                debug!("chain_finalization(): Eligible forks with same height exist, nothing to finalize.");
+                info!("chain_finalization(): Eligible forks with same height exist, nothing to finalize.");
                 self.consensus.set_leader_history(index_for_history);
                 return Ok((vec![], vec![]))
             }
             -1 => {
-                debug!("chain_finalization(): All chains have less than 3 proposals, nothing to finalize.");
+                info!("chain_finalization(): All chains have less than 3 proposals, nothing to finalize.");
                 self.consensus.set_leader_history(index_for_history);
                 return Ok((vec![], vec![]))
             }
-            _ => debug!("chain_finalization(): Chain {} can be finalized!", fork_index),
+            _ => info!("chain_finalization(): Chain {} can be finalized!", fork_index),
         }
 
         // Starting finalization
@@ -634,7 +634,7 @@ impl ValidatorState {
             // TODO: These state transitions have already been checked. (I wrote this, but where?)
             // TODO: FIXME: The state transitions have already been written, they have to be in memory
             //              until this point.
-            debug!(target: "consensus", "Applying state transition for finalized block");
+            info!(target: "consensus", "Applying state transition for finalized block");
             if let Err(e) = self.verify_transactions(&proposal.txs, true).await {
                 error!(target: "consensus", "Finalized block transaction verifications failed: {}", e);
                 return Err(e)
@@ -713,7 +713,7 @@ impl ValidatorState {
     /// Validate and append to canonical state received blocks.
     pub async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         // Verify state transitions for all blocks and their respective transactions.
-        debug!("receive_blocks(): Starting state transition validations");
+        info!("receive_blocks(): Starting state transition validations");
         for block in blocks {
             if let Err(e) = self.verify_transactions(&block.txs, false).await {
                 error!("receive_blocks(): Transaction verifications failed: {}", e);
@@ -721,8 +721,8 @@ impl ValidatorState {
             }
         }
 
-        debug!("receive_blocks(): All state transitions passed");
-        debug!("receive_blocks(): Appending blocks to ledger");
+        info!("receive_blocks(): All state transitions passed");
+        info!("receive_blocks(): Appending blocks to ledger");
         self.blockchain.add(blocks)?;
 
         Ok(())
@@ -734,7 +734,7 @@ impl ValidatorState {
         match self.blockchain.has_block(&block) {
             Ok(v) => {
                 if v {
-                    debug!("receive_finalized_block(): Existing block received");
+                    info!("receive_finalized_block(): Existing block received");
                     return Ok(false)
                 }
             }
@@ -744,7 +744,7 @@ impl ValidatorState {
             }
         };
 
-        debug!("receive_finalized_block(): Executing state transitions");
+        info!("receive_finalized_block(): Executing state transitions");
         self.receive_blocks(&[block.clone()]).await?;
 
         // TODO: Don't hardcode this:
@@ -754,7 +754,7 @@ impl ValidatorState {
         info!("consensus: Sending notification about finalized block");
         blocks_subscriber.notify(notif).await;
 
-        debug!("receive_finalized_block(): Removing block transactions from unconfirmed_txs");
+        info!("receive_finalized_block(): Removing block transactions from unconfirmed_txs");
         self.remove_txs(&block.txs)?;
 
         Ok(true)
@@ -768,7 +768,7 @@ impl ValidatorState {
             match self.blockchain.has_block(block) {
                 Ok(v) => {
                     if v {
-                        debug!("receive_sync_blocks(): Existing block received");
+                        info!("receive_sync_blocks(): Existing block received");
                         continue
                     }
                     new_blocks.push(block.clone());
@@ -781,11 +781,11 @@ impl ValidatorState {
         }
 
         if new_blocks.is_empty() {
-            debug!("receive_sync_blocks(): no new blocks to append");
+            info!("receive_sync_blocks(): no new blocks to append");
             return Ok(())
         }
 
-        debug!("receive_sync_blocks(): Executing state transitions");
+        info!("receive_sync_blocks(): Executing state transitions");
         self.receive_blocks(&new_blocks[..]).await?;
 
         // TODO: Don't hardcode this:
@@ -809,10 +809,10 @@ impl ValidatorState {
     // TODO: This should be paralellized as if even one tx in the batch fails to verify,
     //       we can drop everything.
     pub async fn verify_transactions(&self, txs: &[Transaction], write: bool) -> Result<()> {
-        debug!("Verifying {} transaction(s)", txs.len());
+        info!("Verifying {} transaction(s)", txs.len());
         for tx in txs {
             let tx_hash = blake3::hash(&serialize(tx));
-            debug!("Verifying transaction {}", tx_hash);
+            info!("Verifying transaction {}", tx_hash);
 
             // Table of public inputs used for ZK proof verification
             let mut zkp_table = vec![];
@@ -823,10 +823,10 @@ impl ValidatorState {
 
             // Iterate over all calls to get the metadata
             for (idx, call) in tx.calls.iter().enumerate() {
-                debug!("Executing contract call {}", idx);
+                info!("Executing contract call {}", idx);
                 let wasm = match self.blockchain.wasm_bincode.get(call.contract_id) {
                     Ok(v) => {
-                        debug!("Found wasm bincode for {}", call.contract_id);
+                        info!("Found wasm bincode for {}", call.contract_id);
                         v
                     }
                     Err(e) => {
@@ -856,7 +856,7 @@ impl ValidatorState {
                         }
                     };
 
-                debug!("Executing \"metadata\" call");
+                info!("Executing \"metadata\" call");
                 let metadata = match runtime.metadata(&payload) {
                     Ok(v) => v,
                     Err(e) => {
@@ -885,16 +885,16 @@ impl ValidatorState {
                 };
 
                 // TODO: Make sure we've read all the bytes above.
-                debug!("Successfully executed \"metadata\" call");
+                info!("Successfully executed \"metadata\" call");
                 zkp_table.push(zkp_pub);
                 sig_table.push(sig_pub);
 
                 // After getting the metadata, we run the "exec" function with the same
                 // runtime and the same payload.
-                debug!("Executing \"exec\" call");
+                info!("Executing \"exec\" call");
                 match runtime.exec(&payload) {
                     Ok(v) => {
-                        debug!("Successfully executed \"exec\" call");
+                        info!("Successfully executed \"exec\" call");
                         updates.push(v);
                     }
                     Err(e) => {
@@ -911,9 +911,9 @@ impl ValidatorState {
             // When we're done looping and executing over the tx's contract calls, we
             // move on with verification. First we verify the signatures as that's
             // cheaper, and then finally we verify the ZK proofs.
-            debug!("Verifying signatures for transaction {}", tx_hash);
+            info!("Verifying signatures for transaction {}", tx_hash);
             match tx.verify_sigs(sig_table) {
-                Ok(()) => debug!("Signatures verification for tx {} successful", tx_hash),
+                Ok(()) => info!("Signatures verification for tx {} successful", tx_hash),
                 Err(e) => {
                     error!("Signature verification for tx {} failed: {}", tx_hash, e);
                     return Err(e.into())
@@ -924,9 +924,9 @@ impl ValidatorState {
             // verifying keys, but if we do not find them, we'll generate them
             // inside of this function. This can be kinda expensive, so open to
             // alternatives.
-            debug!("Verifying ZK proofs for transaction {}", tx_hash);
+            info!("Verifying ZK proofs for transaction {}", tx_hash);
             match tx.verify_zkps(self.verifying_keys.clone(), zkp_table).await {
-                Ok(()) => debug!("ZK proof verification for tx {} successful", tx_hash),
+                Ok(()) => info!("ZK proof verification for tx {} successful", tx_hash),
                 Err(e) => {
                     error!("ZK proof verrification for tx {} failed: {}", tx_hash, e);
                     return Err(e.into())
@@ -937,7 +937,7 @@ impl ValidatorState {
             // apply the state updates.
             assert!(tx.calls.len() == updates.len());
             if write {
-                debug!("Performing state updates");
+                info!("Performing state updates");
                 for (call, update) in tx.calls.iter().zip(updates.iter()) {
                     // For this we instantiate the runtimes again.
                     // TODO: Optimize this
@@ -945,7 +945,7 @@ impl ValidatorState {
                     //       and verification and these.
                     let wasm = match self.blockchain.wasm_bincode.get(call.contract_id) {
                         Ok(v) => {
-                            debug!("Found wasm bincode for {}", call.contract_id);
+                            info!("Found wasm bincode for {}", call.contract_id);
                             v
                         }
                         Err(e) => {
@@ -969,10 +969,10 @@ impl ValidatorState {
                             }
                         };
 
-                    debug!("Executing \"apply\" call");
+                    info!("Executing \"apply\" call");
                     match runtime.apply(&update) {
                         // TODO: FIXME: This should be done in an atomic tx/batch
-                        Ok(()) => debug!("State update applied successfully"),
+                        Ok(()) => info!("State update applied successfully"),
                         Err(e) => {
                             error!("Failed to apply state update: {}", e);
                             return Err(e.into())
@@ -980,10 +980,10 @@ impl ValidatorState {
                     };
                 }
             } else {
-                debug!("Skipping apply of state updates because write=false");
+                info!("Skipping apply of state updates because write=false");
             }
 
-            debug!("Transaction {} verified successfully", tx_hash);
+            info!("Transaction {} verified successfully", tx_hash);
         }
 
         Ok(())
@@ -994,7 +994,7 @@ impl ValidatorState {
         &mut self,
         slot_checkpoints: &[SlotCheckpoint],
     ) -> Result<()> {
-        debug!("receive_slot_checkpoints(): Appending slot checkpoints to ledger");
+        info!("receive_slot_checkpoints(): Appending slot checkpoints to ledger");
         self.blockchain.add_slot_checkpoints(slot_checkpoints)?;
 
         Ok(())
@@ -1009,7 +1009,7 @@ impl ValidatorState {
         match self.blockchain.has_slot_checkpoint(&slot_checkpoint) {
             Ok(v) => {
                 if v {
-                    debug!(
+                    info!(
                         "receive_finalized_slot_checkpoints(): Existing slot checkpoint received"
                     );
                     return Ok(false)

@@ -34,6 +34,7 @@ use super::{
 };
 
 use crate::{blockchain::Blockchain, net, tx::Transaction, util::time::Timestamp, Error, Result};
+use dashu::base::Abs;
 
 /// This struct represents the information required by the consensus algorithm
 pub struct ConsensusState {
@@ -206,7 +207,7 @@ impl ConsensusState {
 
     /// return 2-term target approximation sigma coefficients.
     pub fn sigmas(&mut self) -> (pallas::Base, pallas::Base) {
-        let f = self.win_prob_with_full_stake();
+        let f = self.win_inv_prob_with_full_stake();
 
         // Generate sigmas
         let mut total_stake = self.total_stake(); // Only used for fine-tuning
@@ -216,8 +217,8 @@ impl ConsensusState {
         if total_stake == 0 {
             total_stake = constants::GENESIS_TOTAL_STAKE;
         }
-        debug!("sigmas(): f: {}", f);
-        debug!("sigmas(): stake: {}", total_stake);
+        info!("sigmas(): f: {}", f);
+        info!("sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
         let field_p = Float10::from_str_native(constants::P)
@@ -340,7 +341,7 @@ impl ConsensusState {
             }
         }
         self.leaders_history.push(count);
-        debug!("extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
+        info!("extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
         Float10::try_from(count as i64).unwrap().with_precision(constants::RADIX_BITS).value()
     }
 
@@ -348,8 +349,13 @@ impl ConsensusState {
         let target = constants::FLOAT10_ONE.clone();
         target - feedback
     }
+
     fn f_dif(&mut self) -> Float10 {
         Self::pid_error(self.extend_leaders_history())
+    }
+
+    fn weighted_f_dif(&mut self) -> Float10 {
+        constants::KP.clone() * self.f_dif()
     }
 
     fn f_der(&self) -> Float10 {
@@ -369,40 +375,45 @@ impl ConsensusState {
         der
     }
 
+    fn weighted_f_der(&self) -> Float10 {
+        constants::KD.clone() * self.f_der()
+    }
+
     fn f_int(&self) -> Float10 {
         let mut sum = constants::FLOAT10_ZERO.clone();
         let lead_history_len = self.leaders_history.len();
         let history_begin_index = if lead_history_len > 10 { lead_history_len - 10 } else { 0 };
 
         for lf in &self.leaders_history[history_begin_index..] {
-            sum += Self::pid_error(Float10::try_from(lf.clone()).unwrap());
+            sum += Self::pid_error(Float10::try_from(lf.clone()).unwrap()).abs();
         }
         sum
     }
 
-    fn pid(p: Float10, i: Float10, d: Float10) -> Float10 {
-        constants::KP.clone() * p + constants::KI.clone() * i + constants::KD.clone() * d
+    fn weighted_f_int(&self) -> Float10 {
+        constants::KI.clone() * self.f_int()
     }
 
-    /// the probability of winnig lottery having all the stake
+
+    fn pid(p: Float10, i: Float10, d: Float10) -> Float10 {
+        constants::KP.clone() * p.abs() + constants::KI.clone() * i + constants::KD.clone() * d
+    }
+
+    /// the probability inverse of winnig lottery having all the stake
     /// returns f
-    fn win_prob_with_full_stake(&mut self) -> Float10 {
-        let p = self.f_dif();
-        let i = self.f_int();
-        let d = self.f_der();
-        debug!("win_prob_with_full_stake(): PID P: {:?}", p);
-        debug!("win_prob_with_full_stake(): PID I: {:?}", i);
-        debug!("win_prob_with_full_stake(): PID D: {:?}", d);
-        let mut f = Self::pid(p, i, d);
-        debug!("win_prob_with_full_stake(): PID f: {}", f);
-        f = if f >= constants::FLOAT10_ONE.clone() {
-            constants::MAX_F.clone()
-        } else if f <= constants::FLOAT10_ZERO.clone() {
-            constants::MIN_F.clone()
-        } else {
-            f
-        };
-        debug!("win_prob_with_full_stake(): PID clipped f: {}", f);
+    fn win_inv_prob_with_full_stake(&mut self) -> Float10 {
+        let p = self.weighted_f_dif();
+        let i = self.weighted_f_int();
+        let d = self.weighted_f_der();
+        info!("win_inv_prob_with_full_stake(): PID P: {:?}", p);
+        info!("win_inv_prob_with_full_stake(): PID I: {:?}", i);
+        info!("win_inv_prob_with_full_stake(): PID D: {:?}", d);
+        let mut f = p+i+d;
+        info!("win_inv_prob_with_full_stake(): PID f: {}", f);
+        if f==constants::FLOAT10_ZERO.clone() {
+            return constants::MIN_F.clone()
+        }
+        info!("win_inv_prob_with_full_stake(): PID clipped f: {}", f);
         f
     }
 
@@ -496,7 +507,7 @@ impl ConsensusState {
             if proposal.block.header.previous != last_block ||
                 proposal.block.header.slot <= last_slot
             {
-                debug!("find_extended_chain_index(): Proposal doesn't extend any known chain");
+                info!("find_extended_chain_index(): Proposal doesn't extend any known chain");
                 return Ok(-2)
             }
 
@@ -511,7 +522,7 @@ impl ConsensusState {
             return Ok(chain_index)
         }
 
-        debug!("find_extended_chain_index(): Proposal to fork a forkchain was received.");
+        info!("find_extended_chain_index(): Proposal to fork a forkchain was received.");
         let mut chain = self.forks[chain_index as usize].clone();
         // We keep all proposals until the one it extends
         chain.sequence.drain((state_checkpoint_index + 1)..);
@@ -538,16 +549,16 @@ impl ConsensusState {
         // Check if we found longest fork to extract sequence from
         match index {
             -1 => {
-                debug!("set_leader_history(): No fork exists.");
+                info!("set_leader_history(): No fork exists.");
             }
             _ => {
-                debug!("set_leader_history(): Checking last proposal of fork: {}", index);
+                info!("set_leader_history(): Checking last proposal of fork: {}", index);
                 let last_proposal = &self.forks[index as usize].sequence.last().unwrap().proposal;
                 if last_proposal.block.header.slot == self.current_slot() {
                     // Replacing our last history element with the leaders one
                     self.leaders_history.pop();
                     self.leaders_history.push(last_proposal.block.lead_info.leaders);
-                    debug!("set_leader_history(): New leaders history: {:?}", self.leaders_history);
+                    info!("set_leader_history(): New leaders history: {:?}", self.leaders_history);
                     return
                 }
             }
@@ -778,14 +789,14 @@ impl Fork {
         previous: &StateCheckpoint,
     ) -> bool {
         if state_checkpoint.proposal.block.header.previous == self.genesis_block {
-            debug!("check_checkpoint(): Genesis block proposal provided.");
+            info!("check_checkpoint(): Genesis block proposal provided.");
             return false
         }
 
         if state_checkpoint.proposal.block.header.previous != previous.proposal.hash ||
             state_checkpoint.proposal.block.header.slot <= previous.proposal.block.header.slot
         {
-            debug!("check_checkpoint(): Provided state checkpoint proposal is invalid.");
+            info!("check_checkpoint(): Provided state checkpoint proposal is invalid.");
             return false
         }
 
