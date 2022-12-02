@@ -457,7 +457,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         consensus_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
 
         info!("Starting consensus protocol task");
-        ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state)).detach();
+        let _ex = ex.clone();
+        ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state, _ex)).detach();
     } else {
         info!("Not starting consensus P2P network");
     }
