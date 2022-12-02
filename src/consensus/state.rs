@@ -263,7 +263,8 @@ impl ConsensusState {
         // Temporarily, we compete with zero stake
         let coin = LeadCoin::new(
             eta,
-            constants::LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
+            rand::thread_rng().gen_range(0..1000),
+            //constants::LOTTERY_HEAD_START, // TODO: TESTNET: Why is this constant being used?
             slot,
             epoch_secrets.secret_keys[0].inner(),
             epoch_secrets.merkle_roots[0],
@@ -382,10 +383,10 @@ impl ConsensusState {
     fn f_int(&self) -> Float10 {
         let mut sum = constants::FLOAT10_ZERO.clone();
         let lead_history_len = self.leaders_history.len();
-        let history_begin_index = if lead_history_len > 10 { lead_history_len - 10 } else { 0 };
+        let history_begin_index = if lead_history_len > 5 { lead_history_len - 5 } else { 0 };
 
         for lf in &self.leaders_history[history_begin_index..] {
-            sum += Self::pid_error(Float10::try_from(lf.clone()).unwrap()).abs();
+            sum += Float10::try_from(lf.clone()).unwrap().abs();
         }
         sum
     }
@@ -408,7 +409,6 @@ impl ConsensusState {
         if f == constants::FLOAT10_ZERO.clone() {
             return constants::MIN_F.clone()
         }
-        info!("win_inv_prob_with_full_stake(): PID clipped f: {}", f);
         f
     }
 

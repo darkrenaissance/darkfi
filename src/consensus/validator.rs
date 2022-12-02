@@ -680,7 +680,7 @@ impl ValidatorState {
         // Removing finalized proposals from chain
         self.consensus.slot_checkpoints.drain(..bound);
 
-        info!(
+        debug!(
             "consensus: Adding {} finalized slot checkpoints to canonical chain.",
             finalized_slot_checkpoints.len()
         );
