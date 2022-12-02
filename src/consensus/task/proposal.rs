@@ -80,10 +80,10 @@ pub async fn proposal_task(
         match state.write().await.chain_finalization().await {
             Ok((to_broadcast_block, to_broadcast_slot_checkpoints)) => {
                 // Broadcasting in background
-                let _sync_p2p = sync_p2p.clone();
-                ex.spawn(async move {
-                    // Broadcast finalized blocks info, if any:
-                    if to_broadcast_block.len() > 0 {
+                if to_broadcast_block.len() > 0 || to_broadcast_slot_checkpoints.len() > 0 {
+                    let _sync_p2p = sync_p2p.clone();
+                    ex.spawn(async move {
+                        // Broadcast finalized blocks info, if any:
                         info!("consensus: Broadcasting finalized blocks");
                         for info in to_broadcast_block {
                             match _sync_p2p.broadcast(info).await {
@@ -91,12 +91,8 @@ pub async fn proposal_task(
                                 Err(e) => error!("consensus: Failed broadcasting block: {}", e),
                             }
                         }
-                    } else {
-                        info!("consensus: No finalized blocks to broadcast");
-                    }
 
-                    // Broadcast finalized slot checkpoints, if any:
-                    if to_broadcast_slot_checkpoints.len() > 0 {
+                        // Broadcast finalized slot checkpoints, if any:
                         info!("consensus: Broadcasting finalized slot checkpoints");
                         for slot_checkpoint in to_broadcast_slot_checkpoints {
                             match _sync_p2p.broadcast(slot_checkpoint).await {
@@ -106,11 +102,11 @@ pub async fn proposal_task(
                                 }
                             }
                         }
-                    } else {
-                        info!("consensus: No finalized slot checkpoints to broadcast");
-                    }
-                })
-                .detach();
+                    })
+                    .detach();
+                } else {
+                    info!("consensus: No finalized blocks or slot checkpoints to broadcast");
+                }
             }
             Err(e) => {
                 error!("consensus: Finalization check failed: {}", e);
