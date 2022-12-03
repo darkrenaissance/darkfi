@@ -217,8 +217,8 @@ impl ConsensusState {
         if total_stake == 0 {
             total_stake = constants::GENESIS_TOTAL_STAKE;
         }
-        debug!("sigmas(): f: {}", f);
-        debug!("sigmas(): stake: {}", total_stake);
+        info!("sigmas(): f: {}", f);
+        info!("sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
         let field_p = Float10::from_str_native(constants::P)
@@ -394,6 +394,19 @@ impl ConsensusState {
         constants::KI.clone() * self.f_int()
     }
 
+    fn zero_leads_len(&self) -> Float10 {
+        let mut count = constants::FLOAT10_ZERO.clone();
+        let hist_len = self.leaders_history.len();
+        for i in 1..hist_len {
+            if self.leaders_history[hist_len - i] == 0 {
+                count = count + constants::FLOAT10_ONE.clone();
+            } else {
+                break
+            }
+        }
+        count
+    }
+
     /// the probability inverse of winnig lottery having all the stake
     /// returns f
     fn win_inv_prob_with_full_stake(&mut self) -> Float10 {
@@ -403,10 +416,20 @@ impl ConsensusState {
         info!("win_inv_prob_with_full_stake(): PID P: {:?}", p);
         info!("win_inv_prob_with_full_stake(): PID I: {:?}", i);
         info!("win_inv_prob_with_full_stake(): PID D: {:?}", d);
-        let f = p + i + d;
+        let f = p + i.clone() + d;
         info!("win_inv_prob_with_full_stake(): PID f: {}", f);
         if f == constants::FLOAT10_ZERO.clone() {
             return constants::MIN_F.clone()
+        } else if f >= constants::FLOAT10_ONE.clone() {
+            return constants::MAX_F.clone()
+        }
+        let hist_len = self.leaders_history.len();
+        if self.leaders_history[hist_len - 1] == 0 &&
+            self.leaders_history[hist_len - 2] == 0 &&
+            self.leaders_history[hist_len - 3] == 0 &&
+            i.clone() == constants::FLOAT10_ZERO.clone()
+        {
+            return f * constants::DEG_RATE.clone().powf(self.zero_leads_len())
         }
         f
     }
@@ -417,14 +440,16 @@ impl ConsensusState {
     /// * 'sigma1', 'sigma2': slot sigmas
     /// Returns: (check: bool, idx: usize) where idx is the winning coin's index
     pub fn is_slot_leader(&mut self, sigma1: pallas::Base, sigma2: pallas::Base) -> (bool, usize) {
-        let competing_coins = &self.coins;
+        let competing_coins = &self.coins.clone();
 
         let mut won = false;
         let mut highest_stake = 0;
         let mut highest_stake_idx = 0;
-
+        let total_stake = self.total_stake();
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
             info!("is_slot_leader: coin stake: {:?}", coin.value);
+            info!("is_slot_leader: total stake: {}", total_stake);
+            info!("is_slot_leader: relative stake: {}", (coin.value as f64) / total_stake as f64);
             let first_winning = coin.is_leader(sigma1, sigma2);
             if first_winning && !won {
                 highest_stake_idx = winning_idx;

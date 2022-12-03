@@ -27,7 +27,7 @@ use darkfi_sdk::{
 };
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use log::debug;
+use log::info;
 use rand::rngs::OsRng;
 
 use super::constants::EPOCH_LENGTH;
@@ -128,7 +128,7 @@ impl LeadCoin {
         let pk = Self::util_pk(coin1_sk_root, tau);
         // Derive the nonce for coin2
         let coin2_seed = Self::util_derived_rho(coin1_sk_root, pallas::Base::from(seed));
-        debug!("coin2_seed[{}]: {:?}", slot_index, coin2_seed);
+        info!("coin2_seed[{}]: {:?}", slot_index, coin2_seed);
         let coin1_commitment =
             Self::commitment(pk, pallas::Base::from(value), pallas::Base::from(seed), coin1_blind);
         // Hash its coordinates to get a base field element
@@ -192,7 +192,7 @@ impl LeadCoin {
 
     /// Derive election seeds from given parameters
     pub fn election_seeds(eta: pallas::Base, slot: pallas::Base) -> (pallas::Base, pallas::Base) {
-        debug!("election_seeds: eta: {:?}, slot: {:?}", eta, slot);
+        info!("election_seeds: eta: {:?}, slot: {:?}", eta, slot);
         let election_seed_nonce = pallas::Base::from(3);
         let election_seed_lead = pallas::Base::from(22);
 
@@ -286,8 +286,8 @@ impl LeadCoin {
         let value = pallas::Base::from(self.value);
         let target = sigma1 * value + sigma2 * value * value;
 
-        debug!("is_leader(): y = {:?}", y);
-        debug!("is_leader(): T = {:?}", target);
+        info!("is_leader(): y = {:?}", y);
+        info!("is_leader(): T = {:?}", target);
 
         let first_winning = y < target;
         first_winning
@@ -317,7 +317,7 @@ impl LeadCoin {
         &self,
         coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
     ) -> LeadCoin {
-        debug!("derive_coin(): Deriving new coin!");
+        info!("derive_coin(): Deriving new coin!");
         let derived_c1_rho = self.derived_rho();
         let blind = pallas::Scalar::random(&mut OsRng);
         let derived_c2_cm = Self::commitment(
