@@ -57,7 +57,7 @@ use darkfi_money_contract::{
 };
 
 #[async_std::test]
-async fn money_contract_execution() -> Result<()> {
+async fn money_contract_transfer() -> Result<()> {
     // Debug log configuration
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
