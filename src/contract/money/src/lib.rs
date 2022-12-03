@@ -18,15 +18,24 @@
 
 #[cfg(not(feature = "no-entrypoint"))]
 use darkfi_sdk::{
-    crypto::{Coin, ContractId, MerkleNode, MerkleTree, PublicKey},
+    crypto::{
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+        Coin, ContractId, MerkleNode, MerkleTree, PublicKey,
+    },
     db::{db_contains_key, db_get, db_init, db_lookup, db_set, ZKAS_DB_NAME},
-    error::{ContractError, ContractResult},
+    error::ContractResult,
     merkle::merkle_add,
     msg,
-    pasta::{arithmetic::CurveAffine, group::Curve, pallas},
+    pasta::{
+        arithmetic::CurveAffine,
+        group::{Curve, Group},
+        pallas,
+    },
     tx::ContractCall,
     util::set_return_data,
 };
+
+use darkfi_sdk::error::ContractError;
 
 #[cfg(not(feature = "no-entrypoint"))]
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -35,13 +44,17 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 #[repr(u8)]
 pub enum MoneyFunction {
     Transfer = 0x00,
+    OtcSwap = 0x01,
 }
 
-impl From<u8> for MoneyFunction {
-    fn from(b: u8) -> Self {
+impl TryFrom<u8> for MoneyFunction {
+    type Error = ContractError;
+
+    fn try_from(b: u8) -> core::result::Result<MoneyFunction, Self::Error> {
         match b {
-            0x00 => Self::Transfer,
-            _ => panic!("Invalid function ID: {:#04x?}", b),
+            0x00 => Ok(Self::Transfer),
+            0x01 => Ok(Self::OtcSwap),
+            _ => Err(ContractError::InvalidFunction),
         }
     }
 }
@@ -152,8 +165,8 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
 
     let self_ = &call[call_idx as usize];
 
-    match MoneyFunction::from(self_.data[0]) {
-        MoneyFunction::Transfer => {
+    match MoneyFunction::try_from(self_.data[0])? {
+        MoneyFunction::Transfer | MoneyFunction::OtcSwap => {
             let params: MoneyTransferParams = deserialize(&self_.data[1..])?;
 
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -224,9 +237,12 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
     let self_ = &call[call_idx as usize];
 
-    match MoneyFunction::from(self_.data[0]) {
+    match MoneyFunction::try_from(self_.data[0])? {
         MoneyFunction::Transfer => {
             let params: MoneyTransferParams = deserialize(&self_.data[1..])?;
+
+            assert!(params.clear_inputs.len() + params.inputs.len() > 0);
+            assert!(!params.outputs.is_empty());
 
             let info_db = db_lookup(cid, INFO_TREE)?;
             let nullifier_db = db_lookup(cid, NULLIFIERS_TREE)?;
@@ -238,6 +254,9 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             };
             let faucet_pubkeys: Vec<PublicKey> = deserialize(&faucet_pubkeys)?;
 
+            // Accumulator for the value commitments
+            let mut valcom_total = pallas::Point::identity();
+
             // State transition for payments
             msg!("[Transfer] Iterating over clear inputs");
             for (i, input) in params.clear_inputs.iter().enumerate() {
@@ -247,6 +266,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     msg!("[Transfer] Error: Clear input {} has invalid faucet pubkey", i);
                     return Err(ContractError::Custom(20))
                 }
+
+                valcom_total += pedersen_commitment_u64(input.value, input.value_blind);
             }
 
             let mut new_coin_roots = vec![];
@@ -273,6 +294,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
                 new_coin_roots.push(input.merkle_root);
                 new_nullifiers.push(input.nullifier);
+
+                valcom_total += input.value_commit;
             }
 
             // Newly created coins for this transaction are in the outputs.
@@ -285,7 +308,32 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                 }
 
                 // FIXME: Needs some work on types and their place within all these libraries
-                new_coins.push(Coin::from(output.coin))
+                new_coins.push(Coin::from(output.coin));
+
+                valcom_total -= output.value_commit;
+            }
+
+            // If the accumulator is not back in its initial state, there's a value mismatch.
+            if valcom_total != pallas::Point::identity() {
+                msg!("[Transfer] Error: Value commitments do not result in identity");
+                return Err(ContractError::Custom(24))
+            }
+
+            // Verify that the token commitments are all for the same token
+            let tokcom = params.outputs[0].token_commit;
+            let mut failed_tokcom = params.inputs.iter().any(|input| input.token_commit != tokcom);
+
+            failed_tokcom =
+                failed_tokcom || params.outputs.iter().any(|output| output.token_commit != tokcom);
+
+            failed_tokcom = failed_tokcom ||
+                params.clear_inputs.iter().any(|input| {
+                    pedersen_commitment_base(input.token_id.inner(), input.token_blind) != tokcom
+                });
+
+            if failed_tokcom {
+                msg!("[Transfer] Error: Token commitments do not match");
+                return Err(ContractError::Custom(25))
             }
 
             // Create a state update
@@ -298,13 +346,107 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             Ok(())
         }
+
+        MoneyFunction::OtcSwap => {
+            let params: MoneyTransferParams = deserialize(&self_.data[1..])?;
+
+            let nullifier_db = db_lookup(cid, NULLIFIERS_TREE)?;
+            let coin_roots_db = db_lookup(cid, COIN_ROOTS_TREE)?;
+
+            // State transition for OTC swaps
+            assert!(params.clear_inputs.is_empty());
+            // For now we enforce 2 inputs and 2 outputs, which means the coins
+            // must be available beforehand. We might want to change this and
+            // allow transactions including leftover change.
+            assert!(params.inputs.len() == 2);
+            assert!(params.outputs.len() == 2);
+
+            let mut new_coin_roots = vec![];
+            let mut new_nullifiers = vec![];
+
+            // inputs[0] is being swapped to outputs[1]
+            // inputs[1] is being swapped to outputs[0]
+            // So that's how we check the value and token commitments
+            let mut valcom_total = pallas::Point::identity();
+
+            valcom_total += params.inputs[0].value_commit;
+            valcom_total -= params.outputs[1].value_commit;
+            if valcom_total != pallas::Point::identity() {
+                msg!("[OtcSwap] Error: Value commitments for input 0 and output 1 do not match");
+                return Err(ContractError::Custom(24))
+            }
+
+            valcom_total += params.inputs[1].value_commit;
+            valcom_total -= params.outputs[0].value_commit;
+            if valcom_total != pallas::Point::identity() {
+                msg!("[OtcSwap] Error: Value commitments for input 1 and output 0 do not match");
+                return Err(ContractError::Custom(24))
+            }
+
+            if params.inputs[0].token_commit != params.outputs[1].token_commit {
+                msg!("[OtcSwap] Error: Token commitments for input 0 and output 1 do not match");
+                return Err(ContractError::Custom(25))
+            }
+
+            if params.inputs[1].token_commit != params.outputs[0].token_commit {
+                msg!("[OtcSwap] Error: Token commitments for input 1 and output 0 do not match");
+                return Err(ContractError::Custom(25))
+            }
+
+            msg!("[OtcSwap] Iterating over anonymous inputs");
+            for (i, input) in params.inputs.iter().enumerate() {
+                // The Merkle root is used to know whether this is a coin that
+                // existed in a previous state.
+                if new_coin_roots.contains(&input.merkle_root) ||
+                    db_contains_key(coin_roots_db, &serialize(&input.merkle_root))?
+                {
+                    msg!("[OtcSwap] Error: Duplicate Merkle root found in input {}", i);
+                    return Err(ContractError::Custom(21))
+                }
+
+                // The nullifiers should not already exist. It is the double-spend protection.
+                if new_nullifiers.contains(&input.nullifier) ||
+                    db_contains_key(nullifier_db, &serialize(&input.nullifier))?
+                {
+                    msg!("[OtcSwap] Error: Duplicate nullifier found in input {}", i);
+                    return Err(ContractError::Custom(22))
+                }
+
+                new_coin_roots.push(input.merkle_root);
+                new_nullifiers.push(input.nullifier);
+            }
+
+            // Newly created coins for this transaction are in the outputs.
+            let mut new_coins = Vec::with_capacity(params.outputs.len());
+            for (i, output) in params.outputs.iter().enumerate() {
+                // TODO: Should we have coins in a sled tree too to check dupes?
+                if new_coins.contains(&Coin::from(output.coin)) {
+                    msg!("[OtcSwap] Error: Duplicate coin found in output {}", i);
+                    return Err(ContractError::Custom(23))
+                }
+
+                // FIXME: Needs some work on types and their place within all these libraries
+                new_coins.push(Coin::from(output.coin));
+            }
+
+            // Create a state update. We also use the MoneyTransferUpdate because they're
+            // essentially the same thing just with a different transition ruleset.
+            let update = MoneyTransferUpdate { nullifiers: new_nullifiers, coins: new_coins };
+            let mut update_data = vec![];
+            update_data.write_u8(MoneyFunction::OtcSwap as u8)?;
+            update.encode(&mut update_data)?;
+            set_return_data(&update_data)?;
+            msg!("[OtcSwap] State update set!");
+
+            Ok(())
+        }
     }
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
 fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
-    match MoneyFunction::from(update_data[0]) {
-        MoneyFunction::Transfer => {
+    match MoneyFunction::try_from(update_data[0])? {
+        MoneyFunction::Transfer | MoneyFunction::OtcSwap => {
             let update: MoneyTransferUpdate = deserialize(&update_data[1..])?;
 
             let info_db = db_lookup(cid, INFO_TREE)?;
