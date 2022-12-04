@@ -22,7 +22,7 @@ use chrono::{NaiveDateTime, Utc};
 use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use incrementalmerkletree::bridgetree::BridgeTree;
-use log::{debug, info};
+use log::info;
 use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::{thread_rng, Rng};
 

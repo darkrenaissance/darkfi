@@ -50,7 +50,7 @@ use darkfi_sdk::{
         pallas,
     },
 };
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use log::{debug, error, info};
 use rand::rngs::OsRng;
@@ -472,13 +472,189 @@ fn create_transfer_burn_proof(
     Ok((proof, revealed))
 }
 
+/// Build half of the money contract OTC swap transaction parameters with the given data:
+/// * `value_send` - Amount to send
+/// * `token_id_send` - Token ID to send
+/// * `value_recv` - Amount to receive
+/// * `token_id_recv` - Token ID to receive
+/// * `value_blinds` - Value blinds used to calculate remainder blind
+/// * `coins` - Set of coins we're able to spend
+/// * `tree` - Current Merkle tree of coins
+/// * `mint_zkbin` - ZkBinary of the mint circuit
+/// * `mint_pk` - Proving key for the ZK mint proof
+/// * `burn_zkbin` - ZkBinary of the burn circuit
+/// * `burn_pk` - Proving key for the ZK burn proof
+pub fn build_half_swap_tx(
+    pubkey: &PublicKey,
+    value_send: u64,
+    token_id_send: TokenId,
+    value_recv: u64,
+    token_id_recv: TokenId,
+    value_blinds: &[ValueBlind],
+    coins: &[OwnCoin],
+    tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    mint_zkbin: &ZkBinary,
+    mint_pk: &ProvingKey,
+    burn_zkbin: &ZkBinary,
+    burn_pk: &ProvingKey,
+) -> Result<(MoneyTransferParams, Vec<Proof>, Vec<SecretKey>, Vec<OwnCoin>, Vec<ValueBlind>)> {
+    debug!("Building OTC swap transaction half");
+    assert!(value_send != 0);
+    assert!(value_recv != 0);
+    assert!(!coins.is_empty());
+
+    debug!("Money::build_half_swap_tx(): Building anonymous inputs");
+    // We'll take any coin that has correct value
+    let Some(coin) = coins.iter().find(|x| x.note.value == value_send && x.note.token_id == token_id_send) else {
+        error!("Money::build_half_swap_tx(): Did not find a coin with enough value to swap");
+        return Err(ClientFailed::NotEnoughValue(value_send).into())
+    };
+
+    let leaf_position = coin.leaf_position;
+    let root = tree.root(0).unwrap();
+    let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+
+    let input = TransactionBuilderInputInfo {
+        leaf_position,
+        merkle_path,
+        secret: coin.secret,
+        note: coin.note.clone(),
+    };
+
+    let mut spent_coins = vec![];
+    spent_coins.push(coin.clone());
+
+    let output = TransactionBuilderOutputInfo {
+        value: value_recv,
+        token_id: token_id_recv,
+        public_key: *pubkey,
+    };
+
+    // We now fill this with necessary stuff
+    let mut params = MoneyTransferParams { clear_inputs: vec![], inputs: vec![], outputs: vec![] };
+
+    let mut ret_blinds = vec![];
+
+    let value_send_blind = ValueBlind::random(&mut OsRng);
+
+    // If we got a non-empty value_blinds passed into this function, we're making the last
+    // output so we use those blinds to calculate the remainder. The slice should have two
+    // elements, 0 being the input blind, and 1 being the output blind.
+    // BUG: This doesn't work properly, and needs to be fixed.
+    let value_recv_blind = if value_blinds.is_empty() {
+        ValueBlind::random(&mut OsRng)
+    } else {
+        compute_remainder_blind(&[], &[], &[value_blinds[0]])
+    };
+    ret_blinds.push(value_recv_blind);
+    ret_blinds.push(value_send_blind);
+    debug!("RET BLINDS: {:?}", ret_blinds);
+
+    let token_send_blind = ValueBlind::random(&mut OsRng);
+    let token_recv_blind = ValueBlind::random(&mut OsRng);
+
+    let signature_secret = SecretKey::random(&mut OsRng);
+
+    // Disable composability for this old obsolete API
+    let spend_hook = pallas::Base::zero();
+    let user_data = pallas::Base::zero();
+    let user_data_blind = pallas::Base::random(&mut OsRng);
+
+    let mut zk_proofs = vec![];
+
+    info!("Creating swap burn proof for input 0");
+    let (proof, revealed) = create_transfer_burn_proof(
+        burn_zkbin,
+        burn_pk,
+        input.note.value,
+        input.note.token_id,
+        value_send_blind,
+        token_send_blind,
+        input.note.serial,
+        spend_hook,
+        user_data,
+        user_data_blind,
+        input.note.coin_blind,
+        input.secret,
+        input.leaf_position,
+        input.merkle_path.clone(),
+        signature_secret,
+    )?;
+
+    params.inputs.push(Input {
+        value_commit: revealed.value_commit,
+        token_commit: revealed.token_commit,
+        nullifier: revealed.nullifier,
+        merkle_root: revealed.merkle_root,
+        spend_hook: revealed.spend_hook,
+        user_data_enc: revealed.user_data_enc,
+        signature_public: revealed.signature_public,
+    });
+
+    zk_proofs.push(proof);
+
+    let serial = pallas::Base::random(&mut OsRng);
+    let coin_blind = pallas::Base::random(&mut OsRng);
+
+    // Disable composability for this old obsolete API
+    let spend_hook = pallas::Base::zero();
+    let user_data = pallas::Base::zero();
+
+    info!("Creating swap mint proof for output 0");
+    let (proof, revealed) = create_transfer_mint_proof(
+        mint_zkbin,
+        mint_pk,
+        output.value,
+        output.token_id,
+        value_recv_blind,
+        token_recv_blind,
+        serial,
+        spend_hook,
+        user_data,
+        coin_blind,
+        output.public_key,
+    )?;
+
+    zk_proofs.push(proof);
+
+    // Encrypted note
+    let note = Note {
+        serial,
+        value: output.value,
+        token_id: output.token_id,
+        coin_blind,
+        value_blind: value_recv_blind,
+        token_blind: token_recv_blind,
+        // Here we store our secret key we use for signing
+        memo: serialize(&signature_secret),
+    };
+
+    let encrypted_note = note.encrypt(&output.public_key)?;
+
+    params.outputs.push(Output {
+        value_commit: revealed.value_commit,
+        token_commit: revealed.token_commit,
+        coin: revealed.coin.inner(),
+        ciphertext: encrypted_note.ciphertext,
+        ephem_public: encrypted_note.ephem_public,
+    });
+
+    // Now we should have all the params, zk proofs, and signature secrets.
+    // We return it all and let the caller deal with it.
+
+    Ok((params, zk_proofs, vec![signature_secret], spent_coins, ret_blinds))
+}
+
 /// Build money contract transfer transaction parameters with the given data:
 /// * `keypair` - Caller's keypair
 /// * `pubkey` - Public key of the recipient
 /// * `value` - Value of the transfer
+/// * `token_id` - Token ID to transfer
 /// * `coins` - Set of coins we're able to spend
 /// * `tree` - Current Merkle tree of coins
+/// * `mint_zkbin` - ZkBinary of the mint circuit
 /// * `mint_pk` - Proving key for the ZK mint proof
+/// * `burn_zkbin` - ZkBinary of the burn circuit
 /// * `burn_pk` - Proving key for the ZK burn proof
 /// * `clear_input` - Marks if we're creating clear or anonymous inputs
 pub fn build_transfer_tx(

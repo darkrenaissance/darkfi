@@ -26,7 +26,7 @@ use darkfi_sdk::{
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 /// Inputs and outputs for a payment
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTransferParams {
     /// Clear inputs
     pub clear_inputs: Vec<ClearInput>,
@@ -37,7 +37,7 @@ pub struct MoneyTransferParams {
 }
 
 /// State update produced by a payment
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTransferUpdate {
     /// Revealed nullifiers
     pub nullifiers: Vec<Nullifier>,
@@ -46,7 +46,7 @@ pub struct MoneyTransferUpdate {
 }
 
 /// A transaction's clear input
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ClearInput {
     /// Input's value (amount)
     pub value: u64,
@@ -61,7 +61,7 @@ pub struct ClearInput {
 }
 
 /// A transaction's anonymous input
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Input {
     /// Pedersen commitment for the input's value
     pub value_commit: ValueCommit,
@@ -80,7 +80,7 @@ pub struct Input {
 }
 
 /// A transaction's anonymous output
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Output {
     /// Pedersen commitment for the output's value
     pub value_commit: ValueCommit,

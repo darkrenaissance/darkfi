@@ -239,6 +239,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
     match MoneyFunction::try_from(self_.data[0])? {
         MoneyFunction::Transfer => {
+            msg!("[Transfer] Entered match arm");
             let params: MoneyTransferParams = deserialize(&self_.data[1..])?;
 
             assert!(params.clear_inputs.len() + params.inputs.len() > 0);
@@ -348,16 +349,17 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
 
         MoneyFunction::OtcSwap => {
+            msg!("[OtcSwap] Entered match arm");
             let params: MoneyTransferParams = deserialize(&self_.data[1..])?;
 
             let nullifier_db = db_lookup(cid, NULLIFIERS_TREE)?;
             let coin_roots_db = db_lookup(cid, COIN_ROOTS_TREE)?;
 
             // State transition for OTC swaps
-            assert!(params.clear_inputs.is_empty());
             // For now we enforce 2 inputs and 2 outputs, which means the coins
             // must be available beforehand. We might want to change this and
             // allow transactions including leftover change.
+            assert!(params.clear_inputs.is_empty());
             assert!(params.inputs.len() == 2);
             assert!(params.outputs.len() == 2);
 
