@@ -48,7 +48,7 @@ const DEFAULT_PATH: &str = "~/tau_exported_tasks";
 #[clap(name = "tau", version)]
 #[clap(subcommand_precedence_over_arg = true)]
 struct Args {
-    #[clap(short, parse(from_occurrences))]
+    #[arg(short, action = clap::ArgAction::Count)]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
 
