@@ -477,7 +477,8 @@ fn create_transfer_burn_proof(
 /// * `token_id_send` - Token ID to send
 /// * `value_recv` - Amount to receive
 /// * `token_id_recv` - Token ID to receive
-/// * `value_blinds` - Value blinds used to calculate remainder blind
+/// * `value_blinds` - Value blinds to use if we're the second half
+/// * `token_blinds` - Token blinds to use if we're the second half
 /// * `coins` - Set of coins we're able to spend
 /// * `tree` - Current Merkle tree of coins
 /// * `mint_zkbin` - ZkBinary of the mint circuit
@@ -491,13 +492,21 @@ pub fn build_half_swap_tx(
     value_recv: u64,
     token_id_recv: TokenId,
     value_blinds: &[ValueBlind],
+    token_blinds: &[ValueBlind],
     coins: &[OwnCoin],
     tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
     mint_zkbin: &ZkBinary,
     mint_pk: &ProvingKey,
     burn_zkbin: &ZkBinary,
     burn_pk: &ProvingKey,
-) -> Result<(MoneyTransferParams, Vec<Proof>, Vec<SecretKey>, Vec<OwnCoin>, Vec<ValueBlind>)> {
+) -> Result<(
+    MoneyTransferParams,
+    Vec<Proof>,
+    Vec<SecretKey>,
+    Vec<OwnCoin>,
+    Vec<ValueBlind>,
+    Vec<ValueBlind>,
+)> {
     debug!("Building OTC swap transaction half");
     assert!(value_send != 0);
     assert!(value_recv != 0);
@@ -533,26 +542,37 @@ pub fn build_half_swap_tx(
     // We now fill this with necessary stuff
     let mut params = MoneyTransferParams { clear_inputs: vec![], inputs: vec![], outputs: vec![] };
 
-    let mut ret_blinds = vec![];
+    let val_blinds: Vec<ValueBlind>;
+    let tok_blinds: Vec<ValueBlind>;
 
-    let value_send_blind = ValueBlind::random(&mut OsRng);
-
-    // If we got a non-empty value_blinds passed into this function, we're making the last
-    // output so we use those blinds to calculate the remainder. The slice should have two
-    // elements, 0 being the input blind, and 1 being the output blind.
-    // BUG: This doesn't work properly, and needs to be fixed.
-    let value_recv_blind = if value_blinds.is_empty() {
-        ValueBlind::random(&mut OsRng)
-    } else {
-        compute_remainder_blind(&[], &[], &[value_blinds[0]])
+    // If we got non-empty `value_blinds` passed into this function, we use them here.
+    // They should be sent to the second party by the swap initiator.
+    let (value_send_blind, value_recv_blind) = {
+        if value_blinds.is_empty() {
+            let value_send_blind = ValueBlind::random(&mut OsRng);
+            let value_recv_blind = ValueBlind::random(&mut OsRng);
+            val_blinds = vec![value_send_blind, value_recv_blind];
+            (value_send_blind, value_recv_blind)
+        } else {
+            val_blinds = vec![value_blinds[1], value_blinds[0]];
+            (value_blinds[1], value_blinds[0])
+        }
     };
-    ret_blinds.push(value_recv_blind);
-    ret_blinds.push(value_send_blind);
-    debug!("RET BLINDS: {:?}", ret_blinds);
 
-    let token_send_blind = ValueBlind::random(&mut OsRng);
-    let token_recv_blind = ValueBlind::random(&mut OsRng);
+    // The same goes for token blinds
+    let (token_send_blind, token_recv_blind) = {
+        if token_blinds.is_empty() {
+            let token_send_blind = ValueBlind::random(&mut OsRng);
+            let token_recv_blind = ValueBlind::random(&mut OsRng);
+            tok_blinds = vec![token_send_blind, token_recv_blind];
+            (token_send_blind, token_recv_blind)
+        } else {
+            tok_blinds = vec![token_blinds[1], token_blinds[0]];
+            (token_blinds[1], token_blinds[0])
+        }
+    };
 
+    // The ephemeral secret key we're using here.
     let signature_secret = SecretKey::random(&mut OsRng);
 
     // Disable composability for this old obsolete API
@@ -641,8 +661,7 @@ pub fn build_half_swap_tx(
 
     // Now we should have all the params, zk proofs, and signature secrets.
     // We return it all and let the caller deal with it.
-
-    Ok((params, zk_proofs, vec![signature_secret], spent_coins, ret_blinds))
+    Ok((params, zk_proofs, vec![signature_secret], spent_coins, val_blinds, tok_blinds))
 }
 
 /// Build money contract transfer transaction parameters with the given data:

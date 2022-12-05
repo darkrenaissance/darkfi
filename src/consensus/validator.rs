@@ -912,6 +912,11 @@ impl ValidatorState {
             // move on with verification. First we verify the signatures as that's
             // cheaper, and then finally we verify the ZK proofs.
             info!("Verifying signatures for transaction {}", tx_hash);
+            if sig_table.len() != tx.signatures.len() {
+                error!("Incorrect number of signatures in tx {}", tx_hash);
+                return Err(Error::InvalidSignature)
+            }
+
             match tx.verify_sigs(sig_table) {
                 Ok(()) => info!("Signatures verification for tx {} successful", tx_hash),
                 Err(e) => {
@@ -928,7 +933,7 @@ impl ValidatorState {
             match tx.verify_zkps(self.verifying_keys.clone(), zkp_table).await {
                 Ok(()) => info!("ZK proof verification for tx {} successful", tx_hash),
                 Err(e) => {
-                    error!("ZK proof verrification for tx {} failed: {}", tx_hash, e);
+                    error!("ZK proof verification for tx {} failed: {}", tx_hash, e);
                     return Err(e.into())
                 }
             };

@@ -77,6 +77,7 @@ pub enum StackVar {
     Uint64(Value<u64>),
 }
 
+// TODO: Make this not panic (try_from)
 macro_rules! impl_from {
     ($variant:ident, $fortype:ty) => {
         impl From<StackVar> for $fortype {

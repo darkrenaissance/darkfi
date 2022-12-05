@@ -110,16 +110,15 @@ async fn money_contract_transfer() -> Result<()> {
     info!("Looking up zkas circuits from DB");
     let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
 
-    let zkas_mint_ns = String::from("Mint");
-    let zkas_burn_ns = String::from("Burn");
     let alice_sled = &alice_state.read().await.blockchain.sled_db;
     let db_handle = alice_state.read().await.blockchain.contracts.lookup(
         alice_sled,
         &contract_id,
         ZKAS_DB_NAME,
     )?;
-    let mint_zkbin = db_handle.get(&serialize(&zkas_mint_ns))?.unwrap();
-    let burn_zkbin = db_handle.get(&serialize(&zkas_burn_ns))?.unwrap();
+
+    let mint_zkbin = db_handle.get(&serialize(&ZKAS_MINT_NS))?.unwrap();
+    let burn_zkbin = db_handle.get(&serialize(&ZKAS_BURN_NS))?.unwrap();
     info!("Decoding bincode");
     let mint_zkbin = ZkBinary::decode(&mint_zkbin.clone())?;
     let burn_zkbin = ZkBinary::decode(&burn_zkbin.clone())?;
@@ -237,6 +236,7 @@ async fn money_contract_transfer() -> Result<()> {
     info!("Executing transaction on Alice's blockchain db");
     alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
     // TODO: FIXME: Actually have a look at the `merkle_add` calls
+    //              We might want to witness in there to avoid maintaining two trees.
     alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
     let leaf_position = alice_merkle_tree.witness().unwrap();
 

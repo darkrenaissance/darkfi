@@ -28,8 +28,13 @@ money_contract.wasm: $(ZKAS_BIN) $(WASM_SRC)
 	$(CARGO) build --release --package darkfi-money-contract --target wasm32-unknown-unknown
 	cp -f ../../../target/wasm32-unknown-unknown/release/darkfi_money_contract.wasm $@
 
-test: all
-	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract
+test-otc: all
+	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract --test otcswap
+
+test-transfer: all
+	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract --test transfer
+
+test: test-otc test-transfer
 
 clean:
 	rm -f $(ZKAS_BIN) $(WASM_BIN)

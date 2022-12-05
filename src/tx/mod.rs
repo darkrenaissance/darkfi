@@ -75,10 +75,13 @@ impl Transaction {
                         // We have a verifying key for this
                         debug!("public inputs: {:#?}", public_vals);
                         if let Err(e) = proof.verify(&vk.1, public_vals) {
-                            error!("Failed verifying ZK proof: {:#?}", e);
+                            error!(
+                                "Failed verifying {}::{} ZK proof: {:#?}",
+                                call.contract_id, zk_ns, e
+                            );
                             return Err(VerifyFailed::ProofVerifyFailed(e.to_string()).into())
                         }
-                        debug!("Successfully verified {}:{} ZK proof", call.contract_id, zk_ns);
+                        debug!("Successfully verified {}::{} ZK proof", call.contract_id, zk_ns);
                         continue
                     }
                 }

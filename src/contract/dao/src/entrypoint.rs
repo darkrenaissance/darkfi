@@ -329,7 +329,7 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
             let roots_db = db_lookup(cid, DAO_ROOTS_TREE)?;
 
             let node = MerkleNode::from(update.dao_bulla.inner());
-            merkle_add(bulla_db, roots_db, &serialize(&DAO_MERKLE_TREE), &node)?;
+            merkle_add(bulla_db, roots_db, &serialize(&DAO_MERKLE_TREE), &[node])?;
 
             Ok(())
         }
@@ -346,7 +346,7 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
                 proposal_tree_db,
                 proposal_root_db,
                 &serialize(&DAO_PROPOSAL_MERKLE_TREE),
-                &node,
+                &[node],
             )?;
 
             let pv = ProposalVotes::default();

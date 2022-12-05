@@ -142,6 +142,7 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
             // Add a Merkle tree to the info db:
             let coin_tree = MerkleTree::new(100);
             let mut coin_tree_data = vec![];
+
             coin_tree_data.write_u32(0)?;
             coin_tree.encode(&mut coin_tree_data)?;
 
@@ -271,17 +272,14 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                 valcom_total += pedersen_commitment_u64(input.value, input.value_blind);
             }
 
-            let mut new_coin_roots = vec![];
-            let mut new_nullifiers = vec![];
+            let mut new_nullifiers = Vec::with_capacity(params.inputs.len());
 
             msg!("[Transfer] Iterating over anonymous inputs");
             for (i, input) in params.inputs.iter().enumerate() {
                 // The Merkle root is used to know whether this is a coin that existed
                 // in a previous state.
-                if new_coin_roots.contains(&input.merkle_root) ||
-                    db_contains_key(coin_roots_db, &serialize(&input.merkle_root))?
-                {
-                    msg!("[Transfer] Error: Duplicate Merkle root found in input {}", i);
+                if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
+                    msg!("[Transfer] Error: Merkle root not found in previous state (input {})", i);
                     return Err(ContractError::Custom(21))
                 }
 
@@ -293,9 +291,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     return Err(ContractError::Custom(22))
                 }
 
-                new_coin_roots.push(input.merkle_root);
                 new_nullifiers.push(input.nullifier);
-
                 valcom_total += input.value_commit;
             }
 
@@ -310,7 +306,6 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
                 // FIXME: Needs some work on types and their place within all these libraries
                 new_coins.push(Coin::from(output.coin));
-
                 valcom_total -= output.value_commit;
             }
 
@@ -363,24 +358,17 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             assert!(params.inputs.len() == 2);
             assert!(params.outputs.len() == 2);
 
-            let mut new_coin_roots = vec![];
-            let mut new_nullifiers = vec![];
+            let mut new_nullifiers = Vec::with_capacity(params.inputs.len());
 
             // inputs[0] is being swapped to outputs[1]
             // inputs[1] is being swapped to outputs[0]
             // So that's how we check the value and token commitments
-            let mut valcom_total = pallas::Point::identity();
-
-            valcom_total += params.inputs[0].value_commit;
-            valcom_total -= params.outputs[1].value_commit;
-            if valcom_total != pallas::Point::identity() {
+            if params.inputs[0].value_commit != params.outputs[1].value_commit {
                 msg!("[OtcSwap] Error: Value commitments for input 0 and output 1 do not match");
                 return Err(ContractError::Custom(24))
             }
 
-            valcom_total += params.inputs[1].value_commit;
-            valcom_total -= params.outputs[0].value_commit;
-            if valcom_total != pallas::Point::identity() {
+            if params.inputs[1].value_commit != params.outputs[0].value_commit {
                 msg!("[OtcSwap] Error: Value commitments for input 1 and output 0 do not match");
                 return Err(ContractError::Custom(24))
             }
@@ -399,10 +387,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             for (i, input) in params.inputs.iter().enumerate() {
                 // The Merkle root is used to know whether this is a coin that
                 // existed in a previous state.
-                if new_coin_roots.contains(&input.merkle_root) ||
-                    db_contains_key(coin_roots_db, &serialize(&input.merkle_root))?
-                {
-                    msg!("[OtcSwap] Error: Duplicate Merkle root found in input {}", i);
+                if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
+                    msg!("[OtcSwap] Error: Merkle root not found in previous state (input {})", i);
                     return Err(ContractError::Custom(21))
                 }
 
@@ -414,7 +400,6 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     return Err(ContractError::Custom(22))
                 }
 
-                new_coin_roots.push(input.merkle_root);
                 new_nullifiers.push(input.nullifier);
             }
 
@@ -459,15 +444,9 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
                 db_set(nullifiers_db, &serialize(&nullifier), &[])?;
             }
 
-            for coin in update.coins {
-                // TODO: merkle_add() should take a list of coins and batch add them for efficiency
-                merkle_add(
-                    info_db,
-                    coin_roots_db,
-                    &serialize(&COIN_MERKLE_TREE.to_string()),
-                    &MerkleNode::from(coin.inner()),
-                )?;
-            }
+            msg!("Adding coins {:?} to Merkle tree", update.coins);
+            let coins: Vec<_> = update.coins.iter().map(|x| MerkleNode::from(x.inner())).collect();
+            merkle_add(info_db, coin_roots_db, &serialize(&COIN_MERKLE_TREE.to_string()), &coins)?;
 
             Ok(())
         }
