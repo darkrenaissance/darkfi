@@ -18,13 +18,13 @@ $$ B = (tx_{lead},st)$$
 $$tx_{lead} = (LEAD,st\overrightarrow{x}_{ref},stx_{proof})$$
 $st\overrightarrow{x}_{ref}$ it's a vector of $tx_{lead}$ that aren't yet in $C_{loc}$.
 $stx_{proof}=(cm_{\prime{c}},sn_c,ep,sl,\rho,h,ptr,\pi)$
-the Blocks' $\emph{st}$ is the block data, and $\emph{h}$ is the hash of that data.
+the Block's st is the block data, and h is the hash of that data.
 the commitment of the newly created coin is:
 $(cm_{c_2},r_{c_2})=COMM(pk^{COIN}||\tau||v_c||\rho_{c_2})$,
-$\tau$ is the clock current time. \emph{$sn_c$} is the coin's serial number revealed to spend the coin.
+$\tau$ is the clock current time. $sn_c$ is the coin's serial number revealed to spend the coin.
 $$sn_c=PRF_{root_{sk}^{COIN}}^{sn}(\rho_c)$$
 $$\rho=\eta^{sk_{sl}^{COIN}}$$
-$\eta$ is is from random oracle evaluated at $(Nonce||\eta_{ep}||sl)$, $\rho$ is the following epoch's seed. $\emph{ptr}$ is the hash of the previous block, $\pi$ is the NIZK proof of the LEAD statement.
+$\eta$ is is from random oracle evaluated at $(Nonce||\eta_{ep}||sl)$, $\rho$ is the following epoch's seed. ptr is the hash of the previous block, $\pi$ is the NIZK proof of the LEAD statement.
 
 ## st transactions
 the blockchain view is a chain of blocks, each block $B_j=(tx_{lead},st)$, while st being the merkle tree structure of the validated transactions received through the network, that include transfer, and public transactions.
@@ -38,8 +38,8 @@ for tuple $(x,w) \in L_{lead}$ iff:
  * $\rho_{c_2}=PRF_{root_{sk_{c_1}}^{COIN}}^{evl}(\rho_{c_1})$.
  note here the nonce of the new coin is deterministically driven from the nonce of the old coin, this works as resistance mechanism to allow the same coin to be eligible for leadership more than once in the same epoch.
  * $\forall i \in \{1,2\} : DeComm(cm_{c_i},pk^{COIN}||v||\rho_{c_i},r_{c_i})=T$.
- * \emph{path} is a valid Merkle tree path to $cm_{c_1}$ in the tree with the root \emph{root}.
- * \emph{$path_{sk^{COIN}}$} is a valid path to a leaf at position $sl-\tau_c$ in a tree with a root $root_{sk}^{COIN}$.
+ * path is a valid Merkle tree path to $cm_{c_1}$ in the tree with the root root.
+ * $path_{sk^{COIN}}$ is a valid path to a leaf at position $sl-\tau_c$ in a tree with a root $root_{sk}^{COIN}$.
  * $sn_{c_1}= PRF_{root_{sk}^{COIN}}^{sn}(\rho_{c_1})$
  * $y = \mu_{y}^{root_{sk_{c_1}}^{COIN}||\rho_c}$
  * $\rho = \mu_{\rho}^{root_{sk_{c_1}}^{COIN}||\rho_c}$
@@ -71,9 +71,9 @@ $$\forall_i \in \{1,2\}: pk_{c_i}^{COIN} = PRF_{root_{sk_{c_i}}^{COIN}}^{pk}(1)$
 $$\forall_i \in \{1,\dots,4\} : DeComm(cm_{c_i},pk_{c_i}^{COIN}||v_i||\rho_{c_i},r_{c_i})=T$$
 $$v_1+v_2=v_3+v_4$$
 
-$$path_1\text{ is a valid path to } cm_{c_1} \text{ in a tree with the root} \emph{ root}$$
+$path_1$  is a valid path to  $cm_{c_1}$  in a tree with the root root
 
-$$path_2\text{ is a valid path to } cm_{c_2} \text{ in a tree with the root} \emph{ root}, sn_{c_2}=PRF_{root_{sk_{c_1}^{COIN}}}^{zdrv}(\rho_{c_1})$$
+$path_2$ is a valid path to  $cm_{c_2}$  in a tree with the root root, $sn_{c_2}=PRF_{root_{sk_{c_1}^{COIN}}}^{zdrv}(\rho_{c_1})$
 
 $$path_{sk_{c_i}^{COIN}} \text{ is a valid path to a leaf at position } \tau \text{ in }, root_{sk_{c_i}^{COIN}} i \in \{1,2\}$$
 
