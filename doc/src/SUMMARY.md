@@ -12,6 +12,7 @@
   - [Anonymous Assets](architecture/anonymous_assets.md)
   - [Blockchain](architecture/blockchain.md)
   - [Consensus](architecture/consensus.md)
+  - [Transactions](architecture/tx_lifetime.md)
   - [DNA](architecture/dna.md)
   - [Smart Contracts](architecture/smart_contracts.md)
   - [Tooling](architecture/tooling.md)
