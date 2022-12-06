@@ -19,6 +19,9 @@ ZKAS_BIN = $(ZKAS_SRC:=.bin)
 # Contract WASM binaries
 WASM_BIN = money_contract.wasm
 
+# Filter test to run
+FILTER = 'tx_faucet_verification'
+
 all: $(ZKAS_BIN) $(WASM_BIN)
 
 $(ZKAS_BIN): $(ZKAS_SRC)
@@ -35,7 +38,7 @@ test-transfer: all
 	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract --test transfer
 	
 test-tx-verification: all
-	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract --test tx_verification
+	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract --test tx_verification $(FILTER)
 
 test: test-otc test-transfer test-tx-verification
 

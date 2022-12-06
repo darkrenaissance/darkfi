@@ -253,3 +253,53 @@ async fn tx_faucet_verification() -> Result<()> {
 
     Ok(())
 }
+
+/// Check Alice to Alice N transactions with same amount verification performance
+#[async_std::test]
+async fn tx_alice_to_alice_verification() -> Result<()> {
+    init_logger()?;
+
+    // Test configuration
+    let _n = 10;
+
+    // We initialize the faucet that will generate the airdrop transaction.
+    let (
+        faucet_state,
+        faucet_kp,
+        faucet_merkle_tree,
+        contract_id,
+        mint_zkbin,
+        mint_pk,
+        burn_zkbin,
+        burn_pk,
+    ) = init_faucet().await?;
+
+    // Generating airdrop transaction
+    info!("Generating faucet airdrop transaction");
+    let alice_kp = Keypair::random(&mut OsRng);
+    let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
+    let amount = decode_base10("42.69", 8, true)?;
+    let tx = generate_airdrop_tx(
+        &faucet_kp,
+        &faucet_merkle_tree,
+        &alice_kp.public,
+        token_id,
+        amount,
+        contract_id,
+        &mint_zkbin,
+        &mint_pk,
+        &burn_zkbin,
+        &burn_pk,
+    )?;
+
+    // Verifying airdrop transactions
+    info!("Verifying faucet airdrop transaction...");
+    let init = Timestamp::current_time();
+    faucet_state.read().await.verify_transactions(&[tx], true).await?;
+    let verification_elapsed_time = init.elapsed();
+
+    info!("Processing time of faucet airdrop transaction(in sec):");
+    info!("\tVerification -> {}", verification_elapsed_time);
+
+    Ok(())
+}
