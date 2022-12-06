@@ -355,16 +355,12 @@ impl ConsensusState {
     }
 
     fn max_windowed_forks(&self) -> Float10 {
-        let mut max : u64= 5;
+        let mut max: u64 = 5;
         let window_size = 10;
         let len = self.leaders_history.len();
-        let window_begining = if len <= (window_size+1) {
-            0
-        } else {
-            len - (window_size +1)
-        };
+        let window_begining = if len <= (window_size + 1) { 0 } else { len - (window_size + 1) };
         for item in &self.leaders_history[window_begining..] {
-            if *item>max {
+            if *item > max {
                 max = *item;
             }
         }
@@ -373,7 +369,7 @@ impl ConsensusState {
     }
 
     fn tuned_kp(&self) -> Float10 {
-        (constants::KP.clone() * constants::FLOAT10_FIVE.clone())/self.max_windowed_forks()
+        (constants::KP.clone() * constants::FLOAT10_FIVE.clone()) / self.max_windowed_forks()
     }
 
     fn weighted_f_dif(&mut self) -> Float10 {
@@ -397,7 +393,6 @@ impl ConsensusState {
         der
     }
 
-
     fn weighted_f_der(&self) -> Float10 {
         constants::KD.clone() * self.f_der()
     }
@@ -414,7 +409,7 @@ impl ConsensusState {
     }
 
     fn tuned_ki(&self) -> Float10 {
-        (constants::KI.clone() * constants::FLOAT10_FIVE.clone())/self.max_windowed_forks()
+        (constants::KI.clone() * constants::FLOAT10_FIVE.clone()) / self.max_windowed_forks()
     }
 
     fn weighted_f_int(&self) -> Float10 {
