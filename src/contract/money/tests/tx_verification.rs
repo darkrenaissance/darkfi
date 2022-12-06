@@ -130,7 +130,7 @@ async fn init_faucet() -> Result<(
 }
 
 /// Generate a transaction
-fn generate_tx(
+fn generate_airdrop_tx(
     sender_kp: &Keypair,
     sender_merkle_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
     receiver_pk: &PublicKey,
@@ -169,7 +169,7 @@ fn generate_tx(
 }
 
 /// Generate N faucet transactions
-fn generate_faucet_txs(
+fn generate_faucet_airdrop_txs(
     n: u64,
     faucet_kp: &Keypair,
     faucet_merkle_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
@@ -186,7 +186,7 @@ fn generate_faucet_txs(
         let alice_kp = Keypair::random(&mut OsRng);
         let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
         let amount = decode_base10("42.69", 8, true)?;
-        let tx = generate_tx(
+        let tx = generate_airdrop_tx(
             faucet_kp,
             faucet_merkle_tree,
             &alice_kp.public,
@@ -204,7 +204,7 @@ fn generate_faucet_txs(
     Ok(txs)
 }
 
-/// Check N faucet transactions verification performance
+/// Check N faucet airdrop transactions verification performance
 #[async_std::test]
 async fn tx_faucet_verification() -> Result<()> {
     init_logger()?;
@@ -212,7 +212,7 @@ async fn tx_faucet_verification() -> Result<()> {
     // Test configuration
     let n = 10;
 
-    // We initialize the faucet that will generate the transactions.
+    // We initialize the faucet that will generate the airdrop transactions.
     // Faucet will also act as our transactions validator.
     let (
         faucet_state,
@@ -225,10 +225,10 @@ async fn tx_faucet_verification() -> Result<()> {
         burn_pk,
     ) = init_faucet().await?;
 
-    // Generating transactions
-    info!("Generating {} faucet transactions", n);
+    // Generating airdrop transactions
+    info!("Generating {} faucet airdrop transactions", n);
     let init = Timestamp::current_time();
-    let txs = generate_faucet_txs(
+    let txs = generate_faucet_airdrop_txs(
         n,
         &faucet_kp,
         &faucet_merkle_tree,
@@ -241,13 +241,13 @@ async fn tx_faucet_verification() -> Result<()> {
     let generation_elapsed_time = init.elapsed();
     assert_eq!(txs.len(), n as usize);
 
-    // Verifying transactions
-    info!("Verifying faucet transactions...");
+    // Verifying airdrop transactions
+    info!("Verifying faucet airdrop transactions...");
     let init = Timestamp::current_time();
     faucet_state.read().await.verify_transactions(&txs, true).await?;
     let verification_elapsed_time = init.elapsed();
 
-    info!("Processing time of {} faucet transactions(in sec):", n);
+    info!("Processing time of {} faucet airdrop transactions(in sec):", n);
     info!("\tGeneration -> {}", generation_elapsed_time);
     info!("\tVerification -> {}", verification_elapsed_time);
 
