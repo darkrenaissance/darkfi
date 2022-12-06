@@ -256,8 +256,11 @@ pub enum Error {
     #[error("Proposal contains different coin creation eta")]
     ProposalDifferentCoinEtaError,
 
-    #[error("proposed coin is spent")]
+    #[error("Proposal contains spent coin")]
     ProposalIsSpent,
+
+    #[error("Proposal contains more transactions than configured cap")]
+    ProposalTxsExceedCapError,
 
     #[error("unable to verify transfer transaction")]
     TransferTxVerification,

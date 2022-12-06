@@ -375,6 +375,16 @@ impl ValidatorState {
             return Err(Error::ExtendedChainIndexNotFound)
         }
 
+        // Check that proposal transactions don't exceed limit
+        if proposal.block.txs.len() > constants::TXS_CAP {
+            warn!(
+                "receive_proposal(): Received proposal transactions exceed configured cap: {} - {}",
+                proposal.block.txs.len(),
+                constants::TXS_CAP
+            );
+            return Err(Error::ProposalTxsExceedCapError)
+        }
+
         // Verify proposal signature is valid based on producer public key
         // TODO: derive public key from proof
         if !lf.public_key.verify(proposal.header.as_bytes(), &lf.signature) {
