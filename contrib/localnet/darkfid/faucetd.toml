@@ -50,3 +50,6 @@ airdrop_timeout = 10
 
 # Airdrop amount limit
 airdrop_limit = "1000000"
+
+# Whitelisted faucet addresses
+faucet_pub = ["DqaZzCTipXeJw4kcc6ro1SJuzo3diaNjFiaAnKTGQEK1"]

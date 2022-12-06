@@ -68,7 +68,7 @@ localnet = true
 channel_log = true
 
 # Whitelisted faucet public key
-faucet_pub = ["1z3JuN456MieHtpoF4cr5a1ntFF87L8Z3m2E5ACppFodFcjnLS"]
+faucet_pub = ["DqaZzCTipXeJw4kcc6ro1SJuzo3diaNjFiaAnKTGQEK1"]
 
 # Verify system clock is correct
 #clock_sync = true
