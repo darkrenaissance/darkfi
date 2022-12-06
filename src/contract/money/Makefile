@@ -33,8 +33,11 @@ test-otc: all
 
 test-transfer: all
 	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract --test transfer
+	
+test-tx-verification: all
+	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract --test tx_verification
 
-test: test-otc test-transfer
+test: test-otc test-transfer test-tx-verification
 
 clean:
 	rm -f $(ZKAS_BIN) $(WASM_BIN)
