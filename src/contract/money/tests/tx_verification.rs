@@ -32,7 +32,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, ContractId, Keypair, MerkleNode, TokenId},
+    crypto::{constants::MERKLE_DEPTH, ContractId, Keypair, MerkleNode, PublicKey, TokenId},
     db::ZKAS_DB_NAME,
     incrementalmerkletree::bridgetree::BridgeTree,
     pasta::{
@@ -129,7 +129,46 @@ async fn init_faucet() -> Result<(
     ))
 }
 
-/// Generate N transactions
+/// Generate a transaction
+fn generate_tx(
+    sender_kp: &Keypair,
+    sender_merkle_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    receiver_pk: &PublicKey,
+    token_id: TokenId,
+    amount: u64,
+    contract_id: ContractId,
+    mint_zkbin: &ZkBinary,
+    mint_pk: &ProvingKey,
+    burn_zkbin: &ZkBinary,
+    burn_pk: &ProvingKey,
+) -> Result<Transaction> {
+    let (params, proofs, secret_keys, _spent_coins) = build_transfer_tx(
+        sender_kp,
+        receiver_pk,
+        amount,
+        token_id,
+        &[],
+        sender_merkle_tree,
+        mint_zkbin,
+        mint_pk,
+        burn_zkbin,
+        burn_pk,
+        true,
+    )?;
+
+    // Build transaction
+    let mut data = vec![MoneyFunction::Transfer as u8];
+    params.encode(&mut data)?;
+    let calls = vec![ContractCall { contract_id, data }];
+    let proofs = vec![proofs];
+    let mut tx = Transaction { calls, proofs, signatures: vec![] };
+    let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
+    tx.signatures = vec![sigs];
+
+    Ok(tx)
+}
+
+/// Generate N faucet transactions
 fn generate_faucet_txs(
     n: u64,
     faucet_kp: &Keypair,
@@ -147,30 +186,18 @@ fn generate_faucet_txs(
         let alice_kp = Keypair::random(&mut OsRng);
         let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
         let amount = decode_base10("42.69", 8, true)?;
-
-        let (params, proofs, secret_keys, _spent_coins) = build_transfer_tx(
+        let tx = generate_tx(
             faucet_kp,
-            &alice_kp.public,
-            amount,
-            token_id,
-            &[],
             faucet_merkle_tree,
+            &alice_kp.public,
+            token_id,
+            amount,
+            contract_id,
             mint_zkbin,
             mint_pk,
             burn_zkbin,
             burn_pk,
-            true,
         )?;
-
-        // Build transaction
-        let mut data = vec![MoneyFunction::Transfer as u8];
-        params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id, data }];
-        let proofs = vec![proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
-        tx.signatures = vec![sigs];
-
         txs.push(tx);
     }
 
@@ -185,7 +212,8 @@ async fn tx_faucet_verification() -> Result<()> {
     // Test configuration
     let n = 10;
 
-    // We initialize the faucet that will generate the transactions
+    // We initialize the faucet that will generate the transactions.
+    // Faucet will also act as our transactions validator.
     let (
         faucet_state,
         faucet_kp,
