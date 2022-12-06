@@ -25,7 +25,7 @@ contract "Lead" {
 circuit "Lead" {
         ZERO = witness_base(0);
         ONE = witness_base(1);
-        REWARD = witness_base(420);
+        REWARD = witness_base(1);
         PREFIX_EVL = witness_base(2);
         PREFIX_SEED = witness_base(3);
         PREFIX_CM = witness_base(4);

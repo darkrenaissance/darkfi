@@ -71,13 +71,16 @@ pub const BLOCK_INFO_MAGIC_BYTES: [u8; 4] = [0x90, 0x44, 0xf1, 0xf6];
 pub const EPOCH_LENGTH: usize = 10;
 
 /// Slot time in seconds
-pub const SLOT_TIME: u64 = 20;
+pub const SLOT_TIME: u64 = 90;
 
-/// Finalization sync period duration (should be >=1/4 of slot time)
-pub const FINAL_SYNC_DUR: u64 = 5;
+/// Finalization sync period duration (should be >=2/3 of slot time)
+pub const FINAL_SYNC_DUR: u64 = 60;
+
+/// Transactions included in a block cap
+pub const TXS_CAP: usize = 50;
 
 /// Block leader reward
-pub const REWARD: u64 = 420;
+pub const REWARD: u64 = 1;
 
 /// Leader proofs k for zk proof rows (rows=2^k)
 pub const LEADER_PROOF_K: u32 = 13;

@@ -308,23 +308,29 @@ impl ValidatorState {
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
     /// of provided index chain.
     pub fn unproposed_txs(&self, index: i64) -> Vec<Transaction> {
-        let mut unproposed_txs = self.unconfirmed_txs.clone();
-
-        // If index is -1 (canonical blockchain) a new fork will be generated,
-        // therefore all unproposed transactions can be included in the proposal.
-        if index == -1 {
-            return unproposed_txs
-        }
-
-        // We iterate over the fork chain proposals to find already proposed
-        // transactions and remove them from the local unproposed_txs vector.
-        let chain = &self.consensus.forks[index as usize];
-        for state_checkpoint in &chain.sequence {
-            for tx in &state_checkpoint.proposal.block.txs {
-                if let Some(pos) = unproposed_txs.iter().position(|txs| *txs == *tx) {
-                    unproposed_txs.remove(pos);
+        let unproposed_txs = if index == -1 {
+            // If index is -1 (canonical blockchain) a new fork will be generated,
+            // therefore all unproposed transactions can be included in the proposal.
+            self.unconfirmed_txs.clone()
+        } else {
+            // We iterate over the fork chain proposals to find already proposed
+            // transactions and remove them from the local unproposed_txs vector.
+            let mut filtered_txs = self.unconfirmed_txs.clone();
+            let chain = &self.consensus.forks[index as usize];
+            for state_checkpoint in &chain.sequence {
+                for tx in &state_checkpoint.proposal.block.txs {
+                    if let Some(pos) = filtered_txs.iter().position(|txs| *txs == *tx) {
+                        filtered_txs.remove(pos);
+                    }
                 }
             }
+            filtered_txs
+        };
+
+        // Check if transactions exceed configured cap
+        let cap = constants::TXS_CAP;
+        if unproposed_txs.len() > cap {
+            return unproposed_txs[0..cap].to_vec()
         }
 
         unproposed_txs
