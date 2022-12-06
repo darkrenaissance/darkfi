@@ -38,6 +38,7 @@ lazy_static! {
     pub static ref  FLOAT10_ONE: Float10 = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
     pub static ref  FLOAT10_TWO: Float10 = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
     pub static ref  FLOAT10_THREE: Float10 = Float10::from_str_native("3").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref  FLOAT10_FIVE: Float10 = Float10::from_str_native("5").unwrap().with_precision(RADIX_BITS).value();
     pub static ref  FLOAT10_NINE: Float10 = Float10::from_str_native("9").unwrap().with_precision(RADIX_BITS).value();
     pub static ref  FLOAT10_TEN: Float10 = Float10::from_str_native("10").unwrap().with_precision(RADIX_BITS).value();
 
