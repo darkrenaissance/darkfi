@@ -32,20 +32,27 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, ContractId, Keypair, MerkleNode, PublicKey, TokenId},
+    crypto::{
+        constants::MERKLE_DEPTH, poseidon_hash, ContractId, Keypair, MerkleNode, Nullifier,
+        PublicKey, TokenId,
+    },
     db::ZKAS_DB_NAME,
-    incrementalmerkletree::bridgetree::BridgeTree,
+    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{
         group::ff::{Field, PrimeField},
         pallas,
     },
     tx::ContractCall,
 };
-use darkfi_serial::{serialize, Encodable};
+use darkfi_serial::{deserialize, serialize, Encodable};
 use log::info;
 use rand::rngs::OsRng;
 
-use darkfi_money_contract::{client::build_transfer_tx, MoneyFunction, ZKAS_BURN_NS, ZKAS_MINT_NS};
+use darkfi_money_contract::{
+    client::{build_transfer_tx, Coin, EncryptedNote, OwnCoin},
+    state::MoneyTransferParams,
+    MoneyFunction, ZKAS_BURN_NS, ZKAS_MINT_NS,
+};
 
 /// Initialize log configuration
 fn init_logger() -> Result<()> {
@@ -141,7 +148,7 @@ fn generate_airdrop_tx(
     mint_pk: &ProvingKey,
     burn_zkbin: &ZkBinary,
     burn_pk: &ProvingKey,
-) -> Result<Transaction> {
+) -> Result<(Transaction, MoneyTransferParams)> {
     let (params, proofs, secret_keys, _spent_coins) = build_transfer_tx(
         sender_kp,
         receiver_pk,
@@ -165,7 +172,7 @@ fn generate_airdrop_tx(
     let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
     tx.signatures = vec![sigs];
 
-    Ok(tx)
+    Ok((tx, params))
 }
 
 /// Generate N faucet transactions
@@ -186,7 +193,7 @@ fn generate_faucet_airdrop_txs(
         let alice_kp = Keypair::random(&mut OsRng);
         let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
         let amount = decode_base10("42.69", 8, true)?;
-        let tx = generate_airdrop_tx(
+        let (tx, _) = generate_airdrop_tx(
             faucet_kp,
             faucet_merkle_tree,
             &alice_kp.public,
@@ -212,7 +219,7 @@ async fn tx_faucet_verification() -> Result<()> {
     // Test configuration
     let n = 10;
 
-    // We initialize the faucet that will generate the airdrop transactions.
+    // Initialize the faucet that will generate the airdrop transactions.
     // Faucet will also act as our transactions validator.
     let (
         faucet_state,
@@ -260,13 +267,14 @@ async fn tx_alice_to_alice_verification() -> Result<()> {
     init_logger()?;
 
     // Test configuration
-    let _n = 10;
+    let n = 10;
 
-    // We initialize the faucet that will generate the airdrop transaction.
+    // Initialize the faucet that will generate the airdrop transaction.
+    // Faucet will also act as our transactions validator.
     let (
         faucet_state,
         faucet_kp,
-        faucet_merkle_tree,
+        mut faucet_merkle_tree,
         contract_id,
         mint_zkbin,
         mint_pk,
@@ -274,12 +282,27 @@ async fn tx_alice_to_alice_verification() -> Result<()> {
         burn_pk,
     ) = init_faucet().await?;
 
+    // Initialize Alice state
+    info!("Initializing Alice state");
+    let alice_kp = Keypair::random(&mut OsRng);
+    let alice_wallet = WalletDb::new("sqlite::memory:", "foo").await?;
+    let mut alice_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+    let alice_sled_db = sled::Config::new().temporary(true).open()?;
+    let alice_state = ValidatorState::new(
+        &alice_sled_db,
+        *TESTNET_GENESIS_TIMESTAMP,
+        *TESTNET_GENESIS_HASH_BYTES,
+        alice_wallet,
+        vec![faucet_kp.public],
+        false,
+    )
+    .await?;
+
     // Generating airdrop transaction
     info!("Generating faucet airdrop transaction");
-    let alice_kp = Keypair::random(&mut OsRng);
     let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
     let amount = decode_base10("42.69", 8, true)?;
-    let tx = generate_airdrop_tx(
+    let (tx, params) = generate_airdrop_tx(
         &faucet_kp,
         &faucet_merkle_tree,
         &alice_kp.public,
@@ -294,11 +317,74 @@ async fn tx_alice_to_alice_verification() -> Result<()> {
 
     // Verifying airdrop transactions
     info!("Verifying faucet airdrop transaction...");
+    // Executing airdrop transaction on the faucet's blockchain db
+    faucet_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    faucet_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
+
+    // Executing airdrop transaction on Alice's blockchain db
+    alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
+
+    // Generating N Alice to Alice transactions
+    let mut txs = vec![];
+    let mut tx = tx;
     let init = Timestamp::current_time();
-    faucet_state.read().await.verify_transactions(&[tx], true).await?;
+    for i in 0..n {
+        info!("Building transfer tx for Alice from Alice number {}", i);
+        let leaf_position = alice_merkle_tree.witness().unwrap();
+        let params: MoneyTransferParams = deserialize(&tx.calls[0].data[1..])?;
+        let output = &params.outputs[0];
+        let encrypted_note = EncryptedNote {
+            ciphertext: output.ciphertext.clone(),
+            ephem_public: output.ephem_public,
+        };
+        let note = encrypted_note.decrypt(&alice_kp.secret)?;
+        let owncoin = OwnCoin {
+            coin: Coin::from(output.coin),
+            note: note.clone(),
+            secret: alice_kp.secret,
+            nullifier: Nullifier::from(poseidon_hash([alice_kp.secret.inner(), note.serial])),
+            leaf_position,
+        };
+
+        let (params, proofs, secret_keys, _spent_coins) = build_transfer_tx(
+            &alice_kp,
+            &alice_kp.public,
+            amount,
+            token_id,
+            &[owncoin],
+            &alice_merkle_tree,
+            &mint_zkbin,
+            &mint_pk,
+            &burn_zkbin,
+            &burn_pk,
+            false,
+        )?;
+
+        // Build transaction
+        let mut data = vec![MoneyFunction::Transfer as u8];
+        params.encode(&mut data)?;
+        let calls = vec![ContractCall { contract_id, data }];
+        let proofs = vec![proofs];
+        tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
+        tx.signatures = vec![sigs];
+
+        alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
+
+        txs.push(tx.clone());
+    }
+    let generation_elapsed_time = init.elapsed();
+    assert_eq!(txs.len(), n as usize);
+
+    // Verifying transaction
+    info!("Verifying Alice to Alice transactions...");
+    let init = Timestamp::current_time();
+    faucet_state.read().await.verify_transactions(&txs, true).await?;
     let verification_elapsed_time = init.elapsed();
 
-    info!("Processing time of faucet airdrop transaction(in sec):");
+    info!("Processing time of {} Alice to Alice transactions(in sec):", n);
+    info!("\tGeneration -> {}", generation_elapsed_time);
     info!("\tVerification -> {}", verification_elapsed_time);
 
     Ok(())
