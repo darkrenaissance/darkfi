@@ -15,7 +15,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
 use std::process::exit;
 
 use darkfi::{util::parse::decode_base10, Result};
@@ -24,7 +23,7 @@ use darkfi_sdk::crypto::TokenId;
 pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     let v: Vec<&str> = s.split(':').collect();
     if v.len() != 2 {
-        eprintln!("Invalid value pair. Use a pair such as '13.37:11.0'.");
+        eprintln!("Invalid value pair. Use a pair such as 13.37:11.0");
         exit(1);
     }
 
@@ -33,7 +32,7 @@ pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     let val1 = decode_base10(v[1], 8, true);
 
     if val0.is_err() || val1.is_err() {
-        eprintln!("Invalid value pair. Use a pair such as '13.37:11.0'.");
+        eprintln!("Invalid value pair. Use a pair such as 13.37:11.0");
         exit(1);
     }
 

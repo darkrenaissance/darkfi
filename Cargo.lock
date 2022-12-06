@@ -1343,23 +1343,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "darkotc"
-version = "0.3.0"
-dependencies = [
- "async-std",
- "bs58",
- "clap 4.0.29",
- "darkfi",
- "darkfi-sdk",
- "darkfi-serial",
- "halo2_gadgets",
- "halo2_proofs",
- "rand",
- "serde_json",
- "url",
-]
-
-[[package]]
 name = "darkwiki"
 version = "0.4.0"
 dependencies = [

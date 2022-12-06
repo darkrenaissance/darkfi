@@ -123,19 +123,28 @@ impl Drk {
 
         let mut outputs: Vec<Output> = vec![];
 
-        let mf = MoneyFunction::Transfer as u8;
-
         // TODO: FIXME: This shouldn't be hardcoded here obviously.
         let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
 
         for (i, tx) in block.txs.iter().enumerate() {
             for (j, call) in tx.calls.iter().enumerate() {
-                if call.contract_id == contract_id && call.data[0] == mf {
-                    eprintln!("Found money transfer in call {} in tx {}", j, i);
+                if call.contract_id == contract_id && call.data[0] == MoneyFunction::Transfer as u8
+                {
+                    eprintln!("Found Money::Transfer in call {} in tx {}", j, i);
                     let params: MoneyTransferParams = deserialize(&call.data[1..])?;
                     for output in params.outputs {
                         outputs.push(output);
                     }
+                    continue
+                }
+
+                if call.contract_id == contract_id && call.data[0] == MoneyFunction::OtcSwap as u8 {
+                    eprintln!("Found Money::OtcSwap in call {} in tx {}", j, i);
+                    let params: MoneyTransferParams = deserialize(&call.data[1..])?;
+                    for output in params.outputs {
+                        outputs.push(output);
+                    }
+                    continue
                 }
             }
         }
@@ -152,9 +161,11 @@ impl Drk {
 
         let mut owncoins = vec![];
 
+        // FIXME: We end up adding duplicate coins that could already be in the tree
         for output in outputs {
-            // Append the new coin to the Merkle tree. Every coin has to be added.
             let coin = output.coin;
+
+            // Append the new coin to the Merkle tree. Every coin has to be added.
             tree.append(&MerkleNode::from(coin));
 
             // Attempt to decrypt the note
@@ -204,6 +215,7 @@ impl Drk {
 
         eprintln!("Found {} OwnCoin(s) in block", owncoins.len());
         for owncoin in owncoins {
+            eprintln!("Owncoin: {:?}", owncoin.coin);
             let params = json!([
                 query,
                 QueryType::Blob as u8,

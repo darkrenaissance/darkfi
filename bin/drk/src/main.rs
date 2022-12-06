@@ -48,11 +48,19 @@ mod rpc_airdrop;
 /// Payment methods
 mod rpc_transfer;
 
+/// Swap methods
+mod rpc_swap;
+use rpc_swap::PartialSwapData;
+
 /// Blockchain methods
 mod rpc_blockchain;
 
 /// Wallet operation methods for darkfid's JSON-RPC
 mod rpc_wallet;
+
+/// CLI utility functions
+mod cli_util;
+use cli_util::{parse_token_pair, parse_value_pair};
 
 #[derive(Parser)]
 #[command(about = cli_desc!())]
@@ -139,6 +147,10 @@ enum Subcmd {
         recipient: String,
     },
 
+    /// OTC atomic swap
+    #[command(subcommand)]
+    Otc(OtcSubcmd),
+
     /// Inspect a transaction from stdin
     Inspect,
 
@@ -158,6 +170,26 @@ enum Subcmd {
         /// Slot number to start scanning from (optional)
         slot: Option<u64>,
     },
+}
+
+#[derive(Subcommand)]
+enum OtcSubcmd {
+    /// Initialize the first half of the atomic swap
+    Init {
+        /// Value pair to send:recv (11.55:99.42)
+        #[clap(short, long)]
+        value_pair: String,
+
+        /// Token pair to send:recv (f00:b4r)
+        #[clap(short, long)]
+        token_pair: String,
+    },
+
+    /// Build entire swap tx given the first half from stdin
+    Join,
+
+    /// Sign a transaction given from stdin as the first-half
+    Sign,
 }
 
 pub struct Drk {
@@ -267,7 +299,7 @@ async fn main() -> Result<()> {
                 drk.rpc_client.close().await?;
 
                 for i in coins {
-                    print!("{} ", bs58::encode(i.0.coin.inner().to_repr()).into_string());
+                    print!("{:?} ", i.0.coin.inner());
                     if i.1 {
                         println!("(spent)");
                     } else {
@@ -348,15 +380,64 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
+        Subcmd::Otc(cmd) => {
+            let rpc_client = RpcClient::new(args.endpoint)
+                .await
+                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+            let drk = Drk { rpc_client };
+
+            match cmd {
+                OtcSubcmd::Init { value_pair, token_pair } => {
+                    let (vp_send, vp_recv) = parse_value_pair(&value_pair)?;
+                    let (tp_send, tp_recv) = parse_token_pair(&token_pair)?;
+
+                    let half = drk
+                        .init_swap(vp_send, tp_send, vp_recv, tp_recv)
+                        .await
+                        .with_context(|| "Failed to create swap transaction half")?;
+
+                    println!("{}", bs58::encode(&serialize(&half)).into_string());
+                    Ok(())
+                }
+
+                OtcSubcmd::Join => {
+                    let mut buf = String::new();
+                    stdin().read_to_string(&mut buf)?;
+                    let bytes = bs58::decode(&buf.trim()).into_vec()?;
+                    let partial: PartialSwapData = deserialize(&bytes)?;
+
+                    let tx = drk
+                        .join_swap(partial)
+                        .await
+                        .with_context(|| "Failed to create a join swap transaction")?;
+
+                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    Ok(())
+                }
+
+                OtcSubcmd::Sign => {
+                    let mut buf = String::new();
+                    stdin().read_to_string(&mut buf)?;
+                    let bytes = bs58::decode(&buf.trim()).into_vec()?;
+                    let mut tx: Transaction = deserialize(&bytes)?;
+
+                    drk.sign_swap(&mut tx)
+                        .await
+                        .with_context(|| "Failed to sign joined swap transaction")?;
+
+                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    Ok(())
+                }
+            }
+        }
+
         Subcmd::Inspect => {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
-
             let bytes = bs58::decode(&buf.trim()).into_vec()?;
             let tx: Transaction = deserialize(&bytes)?;
-
             println!("{:#?}", tx);
-
             Ok(())
         }
 
@@ -364,7 +445,6 @@ async fn main() -> Result<()> {
             eprintln!("Reading transaction from stdin...");
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
-
             let bytes = bs58::decode(&buf.trim()).into_vec()?;
             let tx = deserialize(&bytes)?;
 

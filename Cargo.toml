@@ -22,7 +22,6 @@ members = [
     "bin/zkas",
     #"bin/cashierd",
     "bin/darkfid",
-    "bin/darkotc",
     "bin/drk",
     "bin/faucetd",
     "bin/fud/fu",

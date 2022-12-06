@@ -55,7 +55,7 @@ impl ProvingKey {
     }
 }
 
-#[derive(Clone, Default, Debug, PartialEq, Eq, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Default, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Proof(Vec<u8>);
 
 impl AsRef<[u8]> for Proof {
@@ -63,6 +63,13 @@ impl AsRef<[u8]> for Proof {
         &self.0
     }
 }
+
+impl core::fmt::Debug for Proof {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Proof({:?})", self.0)
+    }
+}
+
 impl Proof {
     pub fn create(
         pk: &ProvingKey,
