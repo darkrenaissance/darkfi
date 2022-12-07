@@ -179,6 +179,7 @@ blockchain = [
     "darkfi-sdk",
     "darkfi-serial",
     "net",
+    "rpc",
     "tx",
     "util",
     "wallet",
@@ -285,7 +286,8 @@ system = [
 tx = [
     "incrementalmerkletree",
     "rand",
-
+    
+    "async-runtime",
     "darkfi-serial",
     "crypto",
 ]
