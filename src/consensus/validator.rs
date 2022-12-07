@@ -731,7 +731,7 @@ impl ValidatorState {
         // Verify state transitions for all blocks and their respective transactions.
         info!("receive_blocks(): Starting state transition validations");
         for block in blocks {
-            if let Err(e) = self.verify_transactions(&block.txs, false).await {
+            if let Err(e) = self.verify_transactions(&block.txs, true).await {
                 error!("receive_blocks(): Transaction verifications failed: {}", e);
                 return Err(e)
             }
