@@ -411,14 +411,14 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
             match db_handle.contains_key(&key) {
                 Ok(v) => {
                     if v {
-                        return 1 // true
+                        1 // true
                     } else {
-                        return 0 // false
+                        0 // false
                     }
                 }
                 Err(e) => {
                     error!(target: "wasm_runtime::db_contains_key", "sled.tree.contains_key failed: {}", e);
-                    return DB_CONTAINS_KEY_FAILED
+                    DB_CONTAINS_KEY_FAILED
                 }
             }
         }

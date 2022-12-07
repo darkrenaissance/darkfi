@@ -330,7 +330,7 @@ async fn main() -> Result<()> {
             let drk = Drk { rpc_client };
             drk.unspend_coin(&coin).await.with_context(|| "Failed to mark coin as unspent")?;
 
-            return Ok(())
+            Ok(())
         }
 
         Subcmd::Airdrop { faucet_endpoint, amount, token, address } => {

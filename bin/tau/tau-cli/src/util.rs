@@ -41,18 +41,18 @@ pub fn due_as_timestamp(due: &str) -> Option<i64> {
         return None
     }
 
-    let mut year = Local::today().year();
+    let mut year = Local::now().year();
 
     // Ensure the due date is in future
-    if month < Local::today().month() {
+    if month < Local::now().month() {
         year += 1;
     }
 
-    if month == Local::today().month() && day < Local::today().day() {
+    if month == Local::now().month() && day < Local::now().day() {
         year += 1;
     }
 
-    let dt = NaiveDate::from_ymd(year, month, day).and_hms(12, 0, 0);
+    let dt = NaiveDate::from_ymd_opt(year, month, day).unwrap().and_hms_opt(12, 0, 0).unwrap();
     Some(dt.timestamp())
 }
 

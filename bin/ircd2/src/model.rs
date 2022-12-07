@@ -377,11 +377,11 @@ impl Model {
     fn _debug(&self) {
         for (event_id, event_node) in &self.event_map {
             let depth = self.find_depth(*event_id, &self.current_root);
-            println!("{}: {:?} [depth={}]", hex::encode(&event_id), event_node.event, depth);
+            println!("{}: {:?} [depth={}]", hex::encode(event_id), event_node.event, depth);
         }
 
-        println!("root: {}", hex::encode(&self.current_root));
-        println!("head: {}", hex::encode(&self.find_head()));
+        println!("root: {}", hex::encode(self.current_root));
+        println!("head: {}", hex::encode(self.find_head()));
     }
 }
 

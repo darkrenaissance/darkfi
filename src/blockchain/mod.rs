@@ -184,6 +184,10 @@ impl Blockchain {
         self.order.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.order.len() == 0
+    }
+
     /// Retrieve the last block slot and hash.
     pub fn last(&self) -> Result<(u64, blake3::Hash)> {
         self.order.get_last()
@@ -201,7 +205,7 @@ impl Blockchain {
 
     pub fn get_proof_hash_by_slot(&self, slot: u64) -> Result<blake3::Hash> {
         let blocks = self.get_blocks_by_slot(&[slot]).unwrap();
-        if blocks.len() == 0 {
+        if blocks.is_empty() {
             return Err(Error::BlockNotFound("block not found".to_string()))
         }
         // Since we used strict get, its safe to unwrap here

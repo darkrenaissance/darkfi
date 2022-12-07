@@ -189,18 +189,18 @@ impl ConsensusState {
     ) -> Result<bool> {
         let epoch = self.current_epoch();
         if epoch <= self.epoch {
-            self.generate_slot_checkpoint(sigma1.clone(), sigma2.clone());
+            self.generate_slot_checkpoint(sigma1, sigma2);
             return Ok(false)
         }
 
         let eta = self.get_eta();
-        if self.coins.len() == 0 {
+        if self.coins.is_empty() {
             self.coins = self.create_coins(eta).await?;
             self.update_forks_checkpoints();
         }
         self.epoch = epoch;
         self.epoch_eta = eta;
-        self.generate_slot_checkpoint(sigma1.clone(), sigma2.clone());
+        self.generate_slot_checkpoint(sigma1, sigma2);
 
         Ok(true)
     }
@@ -403,7 +403,7 @@ impl ConsensusState {
         let history_begin_index = if lead_history_len > 10 { lead_history_len - 10 } else { 0 };
 
         for lf in &self.leaders_history[history_begin_index..] {
-            sum += Float10::try_from(lf.clone()).unwrap().abs();
+            sum += Float10::try_from(*lf).unwrap().abs();
         }
         sum
     }
@@ -421,7 +421,7 @@ impl ConsensusState {
         let hist_len = self.leaders_history.len();
         for i in 1..hist_len {
             if self.leaders_history[hist_len - i] == 0 {
-                count = count + constants::FLOAT10_ONE.clone();
+                count += constants::FLOAT10_ONE.clone();
             } else {
                 break
             }
@@ -449,7 +449,7 @@ impl ConsensusState {
         if self.leaders_history[hist_len - 1] == 0 &&
             self.leaders_history[hist_len - 2] == 0 &&
             self.leaders_history[hist_len - 3] == 0 &&
-            i.clone() == constants::FLOAT10_ZERO.clone()
+            i == constants::FLOAT10_ZERO.clone()
         {
             return f * constants::DEG_RATE.clone().powf(self.zero_leads_len())
         }
@@ -629,7 +629,7 @@ impl ConsensusState {
         }
         // Check if slot is finalized
         if let Ok(slot_checkpoints) = self.blockchain.get_slot_checkpoints_by_slot(&[slot]) {
-            if slot_checkpoints.len() > 0 {
+            if !slot_checkpoints.is_empty() {
                 if let Some(slot_checkpoint) = &slot_checkpoints[0] {
                     return Ok(slot_checkpoint.clone())
                 }

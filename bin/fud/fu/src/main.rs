@@ -33,7 +33,7 @@ use darkfi::{
 #[clap(name = "fu", about = cli_desc!(), version)]
 #[clap(arg_required_else_help(true))]
 struct Args {
-    #[clap(short, parse(from_occurrences))]
+    #[clap(short, action = clap::ArgAction::Count)]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
 

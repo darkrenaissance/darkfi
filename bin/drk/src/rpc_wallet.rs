@@ -73,7 +73,7 @@ impl Drk {
         // the future we should actually check it?
         // TODO: The RPC needs a better variant for errors so detailed inspection
         //       can be done with error codes and all that.
-        if let Err(_) = self.rpc_client.request(req).await {
+        if (self.rpc_client.request(req).await).is_err() {
             tree_needs_init = true;
         }
 
@@ -84,7 +84,7 @@ impl Drk {
             println!("Successfully initialized Merkle tree");
         }
 
-        if let Err(_) = self.wallet_last_scanned_slot().await {
+        if (self.wallet_last_scanned_slot().await).is_err() {
             let query = format!(
                 "INSERT INTO {} ({}) VALUES (?1);",
                 MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
@@ -197,7 +197,7 @@ impl Drk {
             let coin: Coin = deserialize(&coin_bytes)?;
 
             let is_spent: u64 = serde_json::from_value(row[1].clone())?;
-            let is_spent = if is_spent > 0 { true } else { false };
+            let is_spent = is_spent > 0;
 
             let serial_bytes: Vec<u8> = serde_json::from_value(row[2].clone())?;
             let serial: pallas::Base = deserialize(&serial_bytes)?;

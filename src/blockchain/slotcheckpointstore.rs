@@ -136,4 +136,8 @@ impl SlotCheckpointStore {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.len() == 0
+    }
 }

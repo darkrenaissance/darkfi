@@ -80,7 +80,7 @@ pub async fn proposal_task(
         match state.write().await.chain_finalization().await {
             Ok((to_broadcast_block, to_broadcast_slot_checkpoints)) => {
                 // Broadcasting in background
-                if to_broadcast_block.len() > 0 || to_broadcast_slot_checkpoints.len() > 0 {
+                if !to_broadcast_block.is_empty() || !to_broadcast_slot_checkpoints.is_empty() {
                     let _sync_p2p = sync_p2p.clone();
                     ex.spawn(async move {
                         // Broadcast finalized blocks info, if any:

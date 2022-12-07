@@ -314,7 +314,8 @@ async fn main() -> Result<()> {
             TauSubcommand::Log { month, assignee } => {
                 match month {
                     Some(date) => {
-                        let ts = to_naivedate(date.clone())?.and_hms(12, 0, 0).timestamp();
+                        let ts =
+                            to_naivedate(date.clone())?.and_hms_opt(12, 0, 0).unwrap().timestamp();
                         let tasks = tau.get_stop_tasks(Some(ts)).await?;
                         drawdown(date, tasks, assignee)?;
                     }

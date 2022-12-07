@@ -44,13 +44,13 @@ pub fn make_session_id(node_id: &str, session: &Session) -> Result<String> {
         num += i as u64
     }
 
-    let mut id = hex::encode(&num.to_ne_bytes());
+    let mut id = hex::encode(num.to_ne_bytes());
     id.insert_str(0, "SESSION");
     Ok(id)
 }
 
 pub fn make_connect_id(id: &u64) -> Result<String> {
-    let mut id = hex::encode(&id.to_ne_bytes());
+    let mut id = hex::encode(id.to_ne_bytes());
     id.insert_str(0, "CONNECT");
     Ok(id)
 }
@@ -70,7 +70,7 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
                 num += i as u64
             }
             num += count;
-            let mut id = hex::encode(&num.to_ne_bytes());
+            let mut id = hex::encode(num.to_ne_bytes());
             id.insert_str(0, "EMPTYIN");
             id
         }
@@ -83,7 +83,7 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
                 num += i as u64
             }
             num += count;
-            let mut id = hex::encode(&num.to_ne_bytes());
+            let mut id = hex::encode(num.to_ne_bytes());
             id.insert_str(0, "EMPTYOUT");
             id
         }
@@ -96,7 +96,7 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
                 num += i as u64
             }
             num += count;
-            let mut id = hex::encode(&num.to_ne_bytes());
+            let mut id = hex::encode(num.to_ne_bytes());
             id.insert_str(0, "EMPTYMAN");
             id
         }
@@ -109,7 +109,7 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
                 num += i as u64
             }
             num += count;
-            let mut id = hex::encode(&num.to_ne_bytes());
+            let mut id = hex::encode(num.to_ne_bytes());
             id.insert_str(0, "EMPTYOFF");
             id
         }

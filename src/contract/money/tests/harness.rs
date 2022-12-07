@@ -115,8 +115,8 @@ impl MoneyTestHarness {
         let mint_zkbin = db_handle.get(&serialize(&ZKAS_MINT_NS))?.unwrap();
         let burn_zkbin = db_handle.get(&serialize(&ZKAS_BURN_NS))?.unwrap();
         info!("Decoding bincode");
-        let mint_zkbin = ZkBinary::decode(&mint_zkbin.clone())?;
-        let burn_zkbin = ZkBinary::decode(&burn_zkbin.clone())?;
+        let mint_zkbin = ZkBinary::decode(&mint_zkbin)?;
+        let burn_zkbin = ZkBinary::decode(&burn_zkbin)?;
         let mint_witnesses = empty_witnesses(&mint_zkbin);
         let burn_witnesses = empty_witnesses(&burn_zkbin);
         let mint_circuit = ZkCircuit::new(mint_witnesses, mint_zkbin.clone());
@@ -144,8 +144,8 @@ impl MoneyTestHarness {
             bob_state,
             money_contract_id,
             proving_keys,
-            mint_pk: mint_pk.clone(),
-            burn_pk: burn_pk.clone(),
+            mint_pk,
+            burn_pk,
             mint_zkbin,
             burn_zkbin,
             faucet_merkle_tree,

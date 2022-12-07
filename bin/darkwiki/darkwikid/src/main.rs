@@ -547,17 +547,8 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
             let mut workspace = String::new();
             stdin().read_line(&mut workspace)?;
             // Non-exhaustive
-            let workspace = workspace
-                .replace('\n', "")
-                .replace('\t', "_")
-                .replace('\r', "_")
-                .replace(' ', "_")
-                .replace('/', "_")
-                .replace('\\', "_")
-                .replace('\'', "_")
-                .replace('&', "_")
-                .replace('~', "_")
-                .replace(':', "_");
+            let workspace =
+                workspace.replace(['\t', '\r', ' ', '/', '\\', '\'', '&', '~', ':'], "_");
 
             if workspace.is_empty() || workspace.len() < 3 {
                 eprintln!("Error: Workspace name is empty or less than 3 characters. Try again.");
@@ -574,7 +565,7 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     // Signal handling for config reload and graceful termination.
-    let signals = Signals::new(&[SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
+    let signals = Signals::new([SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
     let handle = signals.handle();
     let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
     let signals_task = task::spawn(handle_signals(signals, cfg_path.clone(), term_tx));

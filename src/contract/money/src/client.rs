@@ -530,8 +530,7 @@ pub fn build_half_swap_tx(
         note: coin.note.clone(),
     };
 
-    let mut spent_coins = vec![];
-    spent_coins.push(coin.clone());
+    let spent_coins = vec![coin.clone()];
 
     let output = TransactionBuilderOutputInfo {
         value: value_recv,
@@ -597,7 +596,7 @@ pub fn build_half_swap_tx(
         input.note.coin_blind,
         input.secret,
         input.leaf_position,
-        input.merkle_path.clone(),
+        input.merkle_path,
         signature_secret,
     )?;
 

@@ -136,7 +136,7 @@ pub fn decrypt_patch(patch: &EncryptedPatch, key: &Key) -> Result<Patch> {
 /// FIXME: There's checking of file extensions here. Take care that the rest of the code
 /// is robust against this attack.
 pub fn get_docs_paths(files: &mut Vec<PathBuf>, path: &Path, parent: Option<&Path>) -> Result<()> {
-    let docs = read_dir(&path)?;
+    let docs = read_dir(path)?;
     let docs = docs.filter(|d| d.is_ok()).map(|d| d.unwrap().path()).collect::<Vec<PathBuf>>();
 
     for doc in docs {

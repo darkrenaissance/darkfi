@@ -12,18 +12,18 @@ fi
 
 tmux new-session -d
 tmux send-keys "LOG_TARGETS='!MessageSubsystem::notify' ../../../lilith ${verbose} -c lilith_config.toml" Enter
-sleep 2
+sleep 10
 tmux split-window -v
 tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid0.toml" Enter
-sleep 2
+sleep 10
 tmux select-pane -t 0
 tmux split-window -h
 tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid1.toml" Enter
-sleep 2
+sleep 10
 tmux select-pane -t 1
 tmux split-window -h
 tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid2.toml" Enter
-sleep 2
+sleep 10
 tmux select-pane -t 3
 tmux split-window -h
 tmux send-keys "LOG_TARGETS='!sled,!net' ../../../faucetd ${verbose} -c faucetd.toml" Enter

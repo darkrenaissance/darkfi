@@ -311,7 +311,7 @@ impl Drk {
         eprintln!("Last known slot number reported by darkfid: {}", last);
 
         // We set this up to handle an interrupt
-        let mut signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT])?;
+        let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
         let handle = signals.handle();
         let (term_tx, _term_rx) = smol::channel::bounded::<()>(1);
 

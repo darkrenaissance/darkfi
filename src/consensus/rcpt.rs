@@ -70,7 +70,7 @@ impl TxRcpt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct EncryptedTxRcpt {
     ciphertext: [u8; CIPHER_SIZE],
     ephem_public: PublicKey,

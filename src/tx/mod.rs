@@ -106,7 +106,7 @@ impl Transaction {
         for (i, (sigs, pubkeys)) in self.signatures.iter().zip(pub_table.iter()).enumerate() {
             for (pubkey, signature) in pubkeys.iter().zip(sigs) {
                 debug!("Verifying signature with public key: {}", pubkey);
-                if !pubkey.verify(&data_hash.as_bytes()[..], &signature) {
+                if !pubkey.verify(&data_hash.as_bytes()[..], signature) {
                     error!("tx::verify_sigs[{}] failed to verify", i);
                     return Err(Error::InvalidSignature)
                 }

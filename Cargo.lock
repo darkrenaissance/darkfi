@@ -1113,57 +1113,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dao"
-version = "0.3.0"
-dependencies = [
- "async-channel",
- "async-executor",
- "async-std",
- "async-trait",
- "clap 4.0.29",
- "darkfi",
- "futures",
- "log",
- "num_cpus",
- "prettytable-rs",
- "serde_json",
- "simplelog",
- "smol",
- "url",
-]
-
-[[package]]
-name = "daod"
-version = "0.3.0"
-dependencies = [
- "async-channel",
- "async-executor",
- "async-std",
- "async-trait",
- "bs58",
- "chacha20poly1305",
- "darkfi",
- "darkfi-sdk",
- "darkfi-serial",
- "easy-parallel",
- "futures",
- "fxhash",
- "halo2_gadgets",
- "halo2_proofs",
- "incrementalmerkletree",
- "lazy_static",
- "log",
- "num_cpus",
- "pasta_curves",
- "rand",
- "serde_json",
- "simplelog",
- "smol",
- "thiserror",
- "url",
-]
-
-[[package]]
 name = "darkfi"
 version = "0.3.0"
 dependencies = [

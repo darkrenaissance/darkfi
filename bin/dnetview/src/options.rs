@@ -21,7 +21,7 @@ use darkfi::cli_desc;
 #[derive(clap::Parser)]
 #[clap(name = "dnetview", about = cli_desc!(), version)]
 pub struct Args {
-    #[clap(short, parse(from_occurrences))]
+    #[clap(short, action = clap::ArgAction::Count)]
     /// Increase verbosity (-vvv supported)
     pub verbose: u8,
 

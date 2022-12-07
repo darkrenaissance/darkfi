@@ -110,10 +110,11 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) ->
                 .into_iter()
                 .filter(|t| {
                     // last event is always state stop
-                    let event_date = NaiveDateTime::from_timestamp(
+                    let event_date = NaiveDateTime::from_timestamp_opt(
                         t.events.last().unwrap_or(&TaskEvent::default()).timestamp.0,
                         0,
-                    );
+                    )
+                    .unwrap();
                     event_date.day() == day
                 })
                 .collect();
@@ -144,20 +145,20 @@ fn helper_parse_func(date: String) -> Result<(u32, i32)> {
         return Err(Error::MalformedPacket)
     }
     let (month, year) = (date[..2].parse::<u32>().unwrap(), date[2..].parse::<i32>().unwrap());
-    let year = year + (Utc::today().year() / 100) * 100;
+    let year = year + (Utc::now().year() / 100) * 100;
 
     Ok((month, year))
 }
 
 pub fn to_naivedate(date: String) -> Result<NaiveDate> {
     let (month, year) = helper_parse_func(date)?;
-    Ok(NaiveDate::from_ymd(year, month, 1))
+    Ok(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
 }
 
 fn get_days_from_month(date: String) -> Result<i64> {
     let (month, year) = helper_parse_func(date)?;
 
-    Ok(NaiveDate::from_ymd(
+    Ok(NaiveDate::from_ymd_opt(
         match month {
             12 => year + 1,
             _ => year,
@@ -168,7 +169,8 @@ fn get_days_from_month(date: String) -> Result<i64> {
         },
         1,
     )
-    .signed_duration_since(NaiveDate::from_ymd(year, month, 1))
+    .unwrap()
+    .signed_duration_since(NaiveDate::from_ymd_opt(year, month, 1).unwrap())
     .num_days())
 }
 

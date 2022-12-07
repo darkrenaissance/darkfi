@@ -299,7 +299,7 @@ impl ValidatorState {
             coin.eta,
             LeadProof::from(proof?),
             self.consensus.get_current_offset(slot),
-            self.consensus.leaders_history.last().unwrap().clone(),
+            *self.consensus.leaders_history.last().unwrap(),
         );
 
         Ok(Some((BlockProposal::new(header, unproposed_txs, lead_info), coin)))
@@ -521,7 +521,7 @@ impl ValidatorState {
         info!("receive_proposal(): Starting state transition validation");
         if let Err(e) = self.verify_transactions(&proposal.block.txs, false).await {
             error!("receive_proposal(): Transaction verifications failed: {}", e);
-            return Err(e.into())
+            return Err(e)
         };
 
         // TODO: [PLACEHOLDER] Add rewards validation
@@ -868,7 +868,7 @@ impl ValidatorState {
                                 "Failed to instantiate WASM runtime for contract {}",
                                 call.contract_id
                             );
-                            return Err(e.into())
+                            return Err(e)
                         }
                     };
 
@@ -877,7 +877,7 @@ impl ValidatorState {
                     Ok(v) => v,
                     Err(e) => {
                         error!("Failed to execute \"metadata\" call: {}", e);
-                        return Err(e.into())
+                        return Err(e)
                     }
                 };
 
@@ -918,7 +918,7 @@ impl ValidatorState {
                             "Failed to execute \"exec\" call for contract id {}: {}",
                             call.contract_id, e
                         );
-                        return Err(e.into())
+                        return Err(e)
                     }
                 };
                 // At this point we're done with the call and move on to the next one.
@@ -937,7 +937,7 @@ impl ValidatorState {
                 Ok(()) => info!("Signatures verification for tx {} successful", tx_hash),
                 Err(e) => {
                     error!("Signature verification for tx {} failed: {}", tx_hash, e);
-                    return Err(e.into())
+                    return Err(e)
                 }
             };
 
@@ -950,7 +950,7 @@ impl ValidatorState {
                 Ok(()) => info!("ZK proof verification for tx {} successful", tx_hash),
                 Err(e) => {
                     error!("ZK proof verification for tx {} failed: {}", tx_hash, e);
-                    return Err(e.into())
+                    return Err(e)
                 }
             };
 
@@ -986,17 +986,17 @@ impl ValidatorState {
                                     "Failed to instantiate WASM runtime for contract {}",
                                     call.contract_id
                                 );
-                                return Err(e.into())
+                                return Err(e)
                             }
                         };
 
                     info!("Executing \"apply\" call");
-                    match runtime.apply(&update) {
+                    match runtime.apply(update) {
                         // TODO: FIXME: This should be done in an atomic tx/batch
                         Ok(()) => info!("State update applied successfully"),
                         Err(e) => {
                             error!("Failed to apply state update: {}", e);
-                            return Err(e.into())
+                            return Err(e)
                         }
                     };
                 }
