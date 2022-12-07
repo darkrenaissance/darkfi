@@ -39,6 +39,11 @@ test-tx-verification: all
 
 test: test-drop-pay-swap test-tx-verification
 
+bench:
+	$(CARGO) test --release --features=no-entrypoint,client \
+		--package darkfi-money-contract \
+		--test verification_bench
+
 clean:
 	rm -f $(ZKAS_BIN) $(WASM_BIN)
 

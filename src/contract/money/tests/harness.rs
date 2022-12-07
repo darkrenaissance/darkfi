@@ -22,22 +22,42 @@ use darkfi::{
         constants::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
         ValidatorState, ValidatorStatePtr,
     },
+    tx::Transaction,
     wallet::WalletDb,
     zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::ZkBinary,
     Result,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, ContractId, Keypair, MerkleNode, PublicKey},
+    crypto::{constants::MERKLE_DEPTH, ContractId, Keypair, MerkleNode, PublicKey, TokenId},
     db::ZKAS_DB_NAME,
     incrementalmerkletree::bridgetree::BridgeTree,
     pasta::{group::ff::PrimeField, pallas},
+    tx::ContractCall,
 };
-use darkfi_serial::serialize;
+use darkfi_serial::{serialize, Encodable};
 use log::info;
 use rand::rngs::OsRng;
 
-use darkfi_money_contract::{ZKAS_BURN_NS, ZKAS_MINT_NS};
+use darkfi_money_contract::{
+    client::build_transfer_tx, state::MoneyTransferParams, MoneyFunction, ZKAS_BURN_NS,
+    ZKAS_MINT_NS,
+};
+
+pub fn init_logger() -> Result<()> {
+    let mut cfg = simplelog::ConfigBuilder::new();
+    cfg.add_filter_ignore("sled".to_string());
+    simplelog::TermLogger::init(
+        simplelog::LevelFilter::Info,
+        //simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Trace,
+        cfg.build(),
+        simplelog::TerminalMode::Mixed,
+        simplelog::ColorChoice::Auto,
+    )?;
+
+    Ok(())
+}
 
 pub struct MoneyTestHarness {
     pub faucet_kp: Keypair,
@@ -152,5 +172,38 @@ impl MoneyTestHarness {
             alice_merkle_tree,
             bob_merkle_tree,
         })
+    }
+
+    pub fn airdrop(
+        &self,
+        amount: u64,
+        token_id: TokenId,
+        rcpt: &PublicKey,
+    ) -> Result<(Transaction, MoneyTransferParams)> {
+        let (params, proofs, secret_keys, _) = build_transfer_tx(
+            &self.faucet_kp,
+            rcpt,
+            amount,
+            token_id,
+            &[],
+            &self.faucet_merkle_tree,
+            &self.mint_zkbin,
+            &self.mint_pk,
+            &self.burn_zkbin,
+            &self.burn_pk,
+            true,
+        )?;
+
+        let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+
+        let mut data = vec![MoneyFunction::Transfer as u8];
+        params.encode(&mut data)?;
+        let calls = vec![ContractCall { contract_id, data }];
+        let proofs = vec![proofs];
+        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
+        tx.signatures = vec![sigs];
+
+        Ok((tx, params))
     }
 }
