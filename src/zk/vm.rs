@@ -62,6 +62,8 @@ use crate::zkas::{
     Opcode, ZkBinary,
 };
 
+const L_TGT: &str = "zkvm";
+
 #[derive(Clone)]
 pub struct VmConfig {
     primary: Column<InstanceColumn>,
@@ -284,7 +286,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> std::result::Result<(), plonk::Error> {
-        trace!(target: "zkvm", "Entering synthesize()");
+        trace!(target: L_TGT, "Entering synthesize()");
 
         // ===================
         // VM Setup
@@ -347,7 +349,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Lookup and push constants onto the stack
         for constant in &self.constants {
-            trace!(target: "zkvm", "Pushing constant `{}` to stack index {}", constant.as_str(), stack.len());
+            trace!(
+                target: L_TGT,
+                "Pushing constant `{}` to stack index {}",
+                constant.as_str(),
+                stack.len()
+            );
             match constant.as_str() {
                 "VALUE_COMMIT_VALUE" => {
                     let vcv = ValueCommitV;
@@ -366,7 +373,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 _ => {
-                    error!("Invalid constant name: {}", constant.as_str());
+                    error!(target: L_TGT, "Invalid constant name: {}", constant.as_str());
                     return Err(plonk::Error::Synthesis)
                 }
             }
@@ -379,12 +386,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 LitType::Uint64 => match literal.1.parse::<u64>() {
                     Ok(v) => litstack.push(v),
                     Err(e) => {
-                        error!("Failed converting u64 literal: {}", e);
+                        error!(target: L_TGT, "Failed converting u64 literal: {}", e);
                         return Err(plonk::Error::Synthesis)
                     }
                 },
                 _ => {
-                    error!("Invalid literal: {:?}", literal);
+                    error!(target: L_TGT, "Invalid literal: {:?}", literal);
                     return Err(plonk::Error::Synthesis)
                 }
             }
@@ -396,31 +403,31 @@ impl Circuit<pallas::Base> for ZkCircuit {
         for witness in &self.witnesses {
             match witness {
                 Witness::EcPoint(w) => {
-                    trace!(target: "zkvm", "Witnessing EcPoint into circuit");
+                    trace!(target: L_TGT, "Witnessing EcPoint into circuit");
                     let point = Point::new(
                         ecc_chip.clone(),
                         layouter.namespace(|| "Witness EcPoint"),
                         w.as_ref().map(|cm| cm.to_affine()),
                     )?;
 
-                    trace!(target: "zkvm", "Pushing EcPoint to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing EcPoint to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(point));
                 }
 
                 Witness::EcFixedPoint(_) => {
-                    error!("Unable to witness EcFixedPoint, this is unimplemented.");
+                    error!(target: L_TGT, "Unable to witness EcFixedPoint, this is unimplemented.");
                     return Err(plonk::Error::Synthesis)
                 }
 
                 Witness::Base(w) => {
-                    trace!(target: "zkvm", "Witnessing Base into circuit");
+                    trace!(target: L_TGT, "Witnessing Base into circuit");
                     let base = assign_free_advice(
                         layouter.namespace(|| "Witness Base"),
                         config.advices[0],
                         *w,
                     )?;
 
-                    trace!(target: "zkvm", "Pushing Base to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing Base to stack index {}", stack.len());
                     stack.push(StackVar::Base(base));
                 }
 
@@ -428,26 +435,26 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     // NOTE: Because the type in `halo2_gadgets` does not have a `Clone`
                     //       impl, we push scalars as-is to the stack. They get witnessed
                     //       when they get used.
-                    trace!(target: "zkvm", "Pushing Scalar to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing Scalar to stack index {}", stack.len());
                     stack.push(StackVar::Scalar(*w));
                 }
 
                 Witness::MerklePath(w) => {
-                    trace!(target: "zkvm", "Witnessing MerklePath into circuit");
+                    trace!(target: L_TGT, "Witnessing MerklePath into circuit");
                     let path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
                         w.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
-                    trace!(target: "zkvm", "Pushing MerklePath to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing MerklePath to stack index {}", stack.len());
                     stack.push(StackVar::MerklePath(path));
                 }
 
                 Witness::Uint32(w) => {
-                    trace!(target: "zkvm", "Pushing Uint32 to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing Uint32 to stack index {}", stack.len());
                     stack.push(StackVar::Uint32(*w));
                 }
 
                 Witness::Uint64(w) => {
-                    trace!(target: "zkvm", "Pushing Uint64 to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing Uint64 to stack index {}", stack.len());
                     stack.push(StackVar::Uint64(*w));
                 }
             }
@@ -460,7 +467,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         for opcode in &self.opcodes {
             match opcode.0 {
                 Opcode::EcAdd => {
-                    trace!(target: "zkvm", "Executing `EcAdd{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `EcAdd{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -471,12 +478,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let ret = lhs.add(layouter.namespace(|| "EcAdd()"), &rhs)?;
 
-                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
 
                 Opcode::EcMul => {
-                    trace!(target: "zkvm", "Executing `EcMul{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `EcMul{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -490,12 +497,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
 
-                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
 
                 Opcode::EcMulBase => {
-                    trace!(target: "zkvm", "Executing `EcMulBase{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `EcMulBase{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -505,12 +512,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let ret = lhs.mul(layouter.namespace(|| "EcMulBase()"), rhs)?;
 
-                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
 
                 Opcode::EcMulShort => {
-                    trace!(target: "zkvm", "Executing `EcMulShort{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `EcMulShort{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -524,12 +531,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulShort()"), rhs)?;
 
-                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));
                 }
 
                 Opcode::EcGetX => {
-                    trace!(target: "zkvm", "Executing `EcGetX{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `EcGetX{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -537,12 +544,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let ret = point.inner().x();
 
-                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::Base(ret));
                 }
 
                 Opcode::EcGetY => {
-                    trace!(target: "zkvm", "Executing `EcGetY{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `EcGetY{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -550,12 +557,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let ret = point.inner().y();
 
-                    trace!(target: "zkvm", "Pushing result to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::Base(ret));
                 }
 
                 Opcode::PoseidonHash => {
-                    trace!(target: "zkvm", "Executing `PoseidonHash{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `PoseidonHash{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let mut poseidon_message: Vec<AssignedCell<Fp, Fp>> =
@@ -586,7 +593,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                             let $cell: AssignedCell<Fp, Fp> = $output.into();
 
-                            trace!(target: "zkvm", "Pushing hash to stack index {}", stack.len());
+                            trace!(target: L_TGT, "Pushing hash to stack index {}", stack.len());
                             stack.push(StackVar::Base($cell));
                         };
                     }
@@ -598,7 +605,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                                     poseidon_hash!($num, $a, $b, $c);
                                 })*
                                 _ => {
-                                    error!("Unsupported poseidon hash for {} elements", $args.len());
+                                    error!(target: L_TGT, "Unsupported poseidon hash for {} elements", $args.len());
                                     return Err(plonk::Error::Synthesis)
                                 }
                             }
@@ -626,12 +633,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let root = merkle_inputs
                         .calculate_root(layouter.namespace(|| "MerkleRoot()"), leaf)?;
 
-                    trace!(target: "zkvm", "Pushing merkle root to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing merkle root to stack index {}", stack.len());
                     stack.push(StackVar::Base(root));
                 }
 
                 Opcode::BaseAdd => {
-                    trace!(target: "zkvm", "Executing `BaseAdd{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `BaseAdd{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs = &stack[args[0].1].clone().into();
@@ -639,12 +646,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let sum = arith_chip.add(layouter.namespace(|| "BaseAdd()"), lhs, rhs)?;
 
-                    trace!(target: "zkvm", "Pushing sum to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing sum to stack index {}", stack.len());
                     stack.push(StackVar::Base(sum));
                 }
 
                 Opcode::BaseMul => {
-                    trace!(target: "zkvm", "Executing `BaseSub{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs = &stack[args[0].1].clone().into();
@@ -652,12 +659,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let product = arith_chip.mul(layouter.namespace(|| "BaseMul()"), lhs, rhs)?;
 
-                    trace!(target: "zkvm", "Pushing product to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing product to stack index {}", stack.len());
                     stack.push(StackVar::Base(product));
                 }
 
                 Opcode::BaseSub => {
-                    trace!(target: "zkvm", "Executing `BaseSub{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs = &stack[args[0].1].clone().into();
@@ -666,12 +673,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let difference =
                         arith_chip.sub(layouter.namespace(|| "BaseSub()"), lhs, rhs)?;
 
-                    trace!(target: "zkvm", "Pushing difference to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing difference to stack index {}", stack.len());
                     stack.push(StackVar::Base(difference));
                 }
 
                 Opcode::WitnessBase => {
-                    trace!(target: "zkvm", "Executing `WitnessBase{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `WitnessBase{:?}` opcode", opcode.1);
                     //let args = &opcode.1;
 
                     let lit = litstack[literals_offset];
@@ -683,12 +690,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         Value::known(pallas::Base::from(lit)),
                     )?;
 
-                    trace!(target: "zkvm", "Pushing assignment to stack index {}", stack.len());
+                    trace!(target: L_TGT, "Pushing assignment to stack index {}", stack.len());
                     stack.push(StackVar::Base(witness));
                 }
 
                 Opcode::RangeCheck => {
-                    trace!(target: "zkvm", "Executing `RangeCheck{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `RangeCheck{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lit = litstack[literals_offset];
@@ -712,14 +719,14 @@ impl Circuit<pallas::Base> for ZkCircuit {
                             )?;
                         }
                         x => {
-                            error!("Unsupported bit-range {} for range_check", x);
+                            error!(target: L_TGT, "Unsupported bit-range {} for range_check", x);
                             return Err(plonk::Error::Synthesis)
                         }
                     }
                 }
 
                 Opcode::LessThanStrict => {
-                    trace!(target: "zkvm", "Executing `LessThanStrict{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `LessThanStrict{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let a = stack[args[0].1].clone().into();
@@ -735,7 +742,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::LessThanLoose => {
-                    trace!(target: "zkvm", "Executing `LessThanLoose{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `LessThanLoose{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let a = stack[args[0].1].clone().into();
@@ -751,7 +758,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::BoolCheck => {
-                    trace!(target: "zkvm", "Executing `BoolCheck{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `BoolCheck{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let w = stack[args[0].1].clone().into();
@@ -761,7 +768,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::ConstrainEqualBase => {
-                    trace!(target: "zkvm", "Executing `ConstrainEqualBase{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `ConstrainEqualBase{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
@@ -774,7 +781,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::ConstrainEqualPoint => {
-                    trace!(target: "zkvm", "Executing `ConstrainEqualPoint{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `ConstrainEqualPoint{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
@@ -790,7 +797,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::ConstrainInstance => {
-                    trace!(target: "zkvm", "Executing `ConstrainInstance{:?}` opcode", opcode.1);
+                    trace!(target: L_TGT, "Executing `ConstrainInstance{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let var: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
@@ -805,13 +812,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 _ => {
-                    error!("Unsupported opcode");
+                    error!(target: L_TGT, "Unsupported opcode");
                     return Err(plonk::Error::Synthesis)
                 }
             }
         }
 
-        trace!(target: "zkvm", "Exiting synthesize() successfully");
+        trace!(target: L_TGT, "Exiting synthesize() successfully");
         Ok(())
     }
 }
