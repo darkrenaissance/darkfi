@@ -158,9 +158,8 @@ impl ProtocolVersion {
         self.channel.set_remote_node_id(version.node_id.clone()).await;
 
         // Send version acknowledgement
-        let verack = message::VerackMessage {
-            app: self.settings.app_version.clone().unwrap_or_default(),
-        };
+        let verack =
+            message::VerackMessage { app: self.settings.app_version.clone().unwrap_or_default() };
         self.channel.clone().send(verack).await?;
 
         debug!(target: "net", "ProtocolVersion::recv_version() [END]");

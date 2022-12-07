@@ -20,7 +20,7 @@ ZKAS_BIN = $(ZKAS_SRC:=.bin)
 WASM_BIN = money_contract.wasm
 
 # Filter test to run
-FILTER = 'tx_faucet_verification'
+FILTER = ''
 
 all: $(ZKAS_BIN) $(WASM_BIN)
 

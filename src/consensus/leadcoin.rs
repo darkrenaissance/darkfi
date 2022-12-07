@@ -177,12 +177,7 @@ impl LeadCoin {
     }
 
     pub fn sn(&self) -> pallas::Base {
-        let sn_msg = [
-            pallas::Base::from(PREFIX_SN),
-            self.coin1_sk_root.inner(),
-            self.nonce,
-            ZERO,
-        ];
+        let sn_msg = [pallas::Base::from(PREFIX_SN), self.coin1_sk_root.inner(), self.nonce, ZERO];
         poseidon_hash(sn_msg)
     }
 
@@ -216,12 +211,8 @@ impl LeadCoin {
         let c1_cm = self.coin1_commitment.to_affine().coordinates().unwrap();
         let c2_cm = self.coin2_commitment.to_affine().coordinates().unwrap();
         // lottery seed
-        let seed_msg = [
-            pallas::Base::from(PREFIX_SEED),
-            self.coin1_sk_root.inner(),
-            self.nonce,
-            ZERO,
-        ];
+        let seed_msg =
+            [pallas::Base::from(PREFIX_SEED), self.coin1_sk_root.inner(), self.nonce, ZERO];
         let seed = poseidon_hash(seed_msg);
         // y
         let y_msg = [seed, self.y_mu];
@@ -249,9 +240,8 @@ impl LeadCoin {
     }
 
     fn util_pk(sk_root: MerkleNode, tau: pallas::Base) -> pallas::Base {
-        let pk_msg =
-            [pallas::Base::from(PREFIX_PK), sk_root.inner(), tau, ZERO];
-        
+        let pk_msg = [pallas::Base::from(PREFIX_PK), sk_root.inner(), tau, ZERO];
+
         poseidon_hash(pk_msg)
     }
     /// calculate coin public key: hash of root coin secret key
@@ -261,9 +251,8 @@ impl LeadCoin {
     }
 
     fn util_derived_rho(sk_root: MerkleNode, nonce: pallas::Base) -> pallas::Base {
-        let rho_msg =
-            [pallas::Base::from(PREFIX_EVL), sk_root.inner(), nonce, ZERO];
-        
+        let rho_msg = [pallas::Base::from(PREFIX_EVL), sk_root.inner(), nonce, ZERO];
+
         poseidon_hash(rho_msg)
     }
     /// calculate derived coin nonce: hash of root coin secret key
@@ -289,7 +278,6 @@ impl LeadCoin {
         info!("is_leader(): y = {:?}", y);
         info!("is_leader(): T = {:?}", target);
 
-        
         y < target
     }
 

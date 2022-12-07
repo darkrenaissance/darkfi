@@ -45,7 +45,7 @@ use darkfi_sdk::{
     tx::ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable};
-use log::info;
+use log::{info, warn};
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
@@ -58,12 +58,14 @@ use darkfi_money_contract::{
 fn init_logger() -> Result<()> {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
-    simplelog::TermLogger::init(
+    if let Err(_) = simplelog::TermLogger::init(
         simplelog::LevelFilter::Info,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
-    )?;
+    ) {
+        warn!("Logger already initialized");
+    }
 
     Ok(())
 }
@@ -391,7 +393,7 @@ async fn tx_alice_to_alice_verification() -> Result<()> {
 }
 
 /// Check Alice to Bob N transactions with random amounts verification performance
-#[async_std::test]
+//#[async_std::test]
 async fn chaotic_tx_alice_to_bob_verification() -> Result<()> {
     init_logger()?;
 
@@ -426,10 +428,10 @@ async fn chaotic_tx_alice_to_bob_verification() -> Result<()> {
         false,
     )
     .await?;
-    
+
     // Generate Bob keys
     let bob_kp = Keypair::random(&mut OsRng);
-    
+
     // TODO: Generate more tokens to play with
     // Generating airdrop transaction
     info!("Generating faucet airdrop transaction");
@@ -457,15 +459,13 @@ async fn chaotic_tx_alice_to_bob_verification() -> Result<()> {
     // Executing airdrop transaction on Alice's blockchain db
     alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
     alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
-    
+
     // Extracting aidrop owncoin
     let leaf_position = alice_merkle_tree.witness().unwrap();
     let params: MoneyTransferParams = deserialize(&tx.calls[0].data[1..])?;
     let output = &params.outputs[0];
-    let encrypted_note = EncryptedNote {
-        ciphertext: output.ciphertext.clone(),
-        ephem_public: output.ephem_public,
-    };
+    let encrypted_note =
+        EncryptedNote { ciphertext: output.ciphertext.clone(), ephem_public: output.ephem_public };
     let note = encrypted_note.decrypt(&alice_kp.secret)?;
     let owncoin = OwnCoin {
         coin: Coin::from(output.coin),
@@ -485,12 +485,12 @@ async fn chaotic_tx_alice_to_bob_verification() -> Result<()> {
         //let index = rand::thread_rng().gen_range(0..owncoins.len());
         let index = 0;
         let owncoin = owncoins[index].clone();
-        
+
         // Pick random amount
         // 1000000 = 0.1
         //let amount = rand::thread_rng().gen_range(1000000..owncoin.note.value);
         let amount = decode_base10("1", 8, true)?;
-        
+
         info!("Selected coin balance: {}", owncoin.note.value);
         info!("Transfering amount: {}", amount);
         let (params, proofs, secret_keys, _spent_coins) = build_transfer_tx(
@@ -519,7 +519,7 @@ async fn chaotic_tx_alice_to_bob_verification() -> Result<()> {
         alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
 
         txs.push(tx.clone());
-        
+
         // Replace spent owncoin
         let leaf_position = alice_merkle_tree.witness().unwrap();
         let params: MoneyTransferParams = deserialize(&tx.calls[0].data[1..])?;
@@ -535,17 +535,17 @@ async fn chaotic_tx_alice_to_bob_verification() -> Result<()> {
             secret: alice_kp.secret,
             nullifier: Nullifier::from(poseidon_hash([alice_kp.secret.inner(), note.serial])),
             leaf_position,
-        };        
+        };
         owncoins[index] = owncoin;
     }
     let generation_elapsed_time = init.elapsed();
     assert_eq!(txs.len(), n as usize);
-    
+
     // Sanity check
     info!("Verifying Alice to Bob transactions in Alice state");
     alice_state.read().await.verify_transactions(&txs, true).await?;
 
-    // Verifying transaction    
+    // Verifying transaction
     info!("Verifying Alice to Bob transactions...");
     let init = Timestamp::current_time();
     faucet_state.read().await.verify_transactions(&txs, true).await?;
