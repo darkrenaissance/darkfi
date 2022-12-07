@@ -213,7 +213,7 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
         info!("Generating transactions for block: {}", b);
         // Get a random sized sample of owncoins
         let sample =
-            (0..10).choose_multiple(&mut rand::thread_rng(), rand::thread_rng().gen_range(0..10));
+            (0..10).choose_multiple(&mut rand::thread_rng(), rand::thread_rng().gen_range(1..10));
         info!("Coins to use: {:?}", sample);
 
         // Generate a transaction for each coin
