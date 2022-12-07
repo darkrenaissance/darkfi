@@ -36,7 +36,7 @@ use darkfi_sdk::{
     tx::ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
-use log::info;
+use log::{info, warn};
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
@@ -47,14 +47,16 @@ use darkfi_money_contract::{
 pub fn init_logger() -> Result<()> {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
-    simplelog::TermLogger::init(
+    if let Err(_) = simplelog::TermLogger::init(
         simplelog::LevelFilter::Info,
         //simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
-    )?;
+    ) {
+        warn!("Logger already initialized");
+    }
 
     Ok(())
 }

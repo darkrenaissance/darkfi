@@ -27,7 +27,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::Encodable;
 use log::info;
-use rand::rngs::OsRng;
+use rand::{rngs::OsRng, Rng};
 
 use darkfi_money_contract::{
     client::{build_transfer_tx, Coin, EncryptedNote, OwnCoin},
@@ -85,8 +85,13 @@ async fn alice2alice_random_amounts() -> Result<()> {
 
     for i in 0..n {
         info!("Building Alice2Alice transfer tx {}", i);
+        
+        info!("Alice coins: {}", owncoins.len());
+        for (i, c) in owncoins.iter().enumerate() {
+            info!("\t coin {} value: {}", i, c.note.value);
+        }
 
-        let amount = ALICE_AIRDROP;
+        let amount = rand::thread_rng().gen_range(1..ALICE_AIRDROP);
         info!("Sending: {}", amount);
 
         let (params, proofs, secret_keys, spent_coins) = build_transfer_tx(
