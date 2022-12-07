@@ -33,16 +33,13 @@ money_contract.wasm: $(ZKAS_BIN) $(WASM_SRC)
 
 test-drop-pay-swap: all
 	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract --test drop_pay_swap
-	
-test-tx-verification: all
-	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract --test tx_verification $(FILTER)
 
-test: test-drop-pay-swap test-tx-verification
+test: test-drop-pay-swap
 
 bench:
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
-		--test verification_bench
+		--test verification_bench $(FILTER)
 
 clean:
 	rm -f $(ZKAS_BIN) $(WASM_BIN)
