@@ -389,3 +389,171 @@ async fn tx_alice_to_alice_verification() -> Result<()> {
 
     Ok(())
 }
+
+/// Check Alice to Bob N transactions with random amounts verification performance
+#[async_std::test]
+async fn chaotic_tx_alice_to_bob_verification() -> Result<()> {
+    init_logger()?;
+
+    // Test configuration
+    let n = 3;
+
+    // Initialize the faucet that will generate the airdrop transaction.
+    // Faucet will also act as our transactions validator.
+    let (
+        faucet_state,
+        faucet_kp,
+        mut faucet_merkle_tree,
+        contract_id,
+        mint_zkbin,
+        mint_pk,
+        burn_zkbin,
+        burn_pk,
+    ) = init_faucet().await?;
+
+    // Initialize Alice state
+    info!("Initializing Alice state");
+    let alice_kp = Keypair::random(&mut OsRng);
+    let alice_wallet = WalletDb::new("sqlite::memory:", "foo").await?;
+    let mut alice_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+    let alice_sled_db = sled::Config::new().temporary(true).open()?;
+    let alice_state = ValidatorState::new(
+        &alice_sled_db,
+        *TESTNET_GENESIS_TIMESTAMP,
+        *TESTNET_GENESIS_HASH_BYTES,
+        alice_wallet,
+        vec![faucet_kp.public],
+        false,
+    )
+    .await?;
+    
+    // Generate Bob keys
+    let bob_kp = Keypair::random(&mut OsRng);
+    
+    // TODO: Generate more tokens to play with
+    // Generating airdrop transaction
+    info!("Generating faucet airdrop transaction");
+    let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
+    let amount = decode_base10("42.69", 8, true)?;
+    let (tx, params) = generate_airdrop_tx(
+        &faucet_kp,
+        &faucet_merkle_tree,
+        &alice_kp.public,
+        token_id,
+        amount,
+        contract_id,
+        &mint_zkbin,
+        &mint_pk,
+        &burn_zkbin,
+        &burn_pk,
+    )?;
+
+    // Verifying airdrop transactions
+    info!("Verifying faucet airdrop transaction...");
+    // Executing airdrop transaction on the faucet's blockchain db
+    faucet_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    faucet_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
+
+    // Executing airdrop transaction on Alice's blockchain db
+    alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
+    
+    // Extracting aidrop owncoin
+    let leaf_position = alice_merkle_tree.witness().unwrap();
+    let params: MoneyTransferParams = deserialize(&tx.calls[0].data[1..])?;
+    let output = &params.outputs[0];
+    let encrypted_note = EncryptedNote {
+        ciphertext: output.ciphertext.clone(),
+        ephem_public: output.ephem_public,
+    };
+    let note = encrypted_note.decrypt(&alice_kp.secret)?;
+    let owncoin = OwnCoin {
+        coin: Coin::from(output.coin),
+        note: note.clone(),
+        secret: alice_kp.secret,
+        nullifier: Nullifier::from(poseidon_hash([alice_kp.secret.inner(), note.serial])),
+        leaf_position,
+    };
+
+    // Generating N Alice to Bob transactions
+    let mut owncoins = vec![owncoin];
+    let mut txs = vec![];
+    let init = Timestamp::current_time();
+    for i in 0..n {
+        info!("Building transfer tx for Alice from Alice number {}", i);
+        // Pick random owncoin
+        //let index = rand::thread_rng().gen_range(0..owncoins.len());
+        let index = 0;
+        let owncoin = owncoins[index].clone();
+        
+        // Pick random amount
+        // 1000000 = 0.1
+        //let amount = rand::thread_rng().gen_range(1000000..owncoin.note.value);
+        let amount = decode_base10("1", 8, true)?;
+        
+        info!("Selected coin balance: {}", owncoin.note.value);
+        info!("Transfering amount: {}", amount);
+        let (params, proofs, secret_keys, _spent_coins) = build_transfer_tx(
+            &alice_kp,
+            &bob_kp.public,
+            amount,
+            token_id,
+            &[owncoin],
+            &alice_merkle_tree,
+            &mint_zkbin,
+            &mint_pk,
+            &burn_zkbin,
+            &burn_pk,
+            false,
+        )?;
+
+        // Build transaction
+        let mut data = vec![MoneyFunction::Transfer as u8];
+        params.encode(&mut data)?;
+        let calls = vec![ContractCall { contract_id, data }];
+        let proofs = vec![proofs];
+        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
+        tx.signatures = vec![sigs];
+
+        alice_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
+
+        txs.push(tx.clone());
+        
+        // Replace spent owncoin
+        let leaf_position = alice_merkle_tree.witness().unwrap();
+        let params: MoneyTransferParams = deserialize(&tx.calls[0].data[1..])?;
+        let output = &params.outputs[0];
+        let encrypted_note = EncryptedNote {
+            ciphertext: output.ciphertext.clone(),
+            ephem_public: output.ephem_public,
+        };
+        let note = encrypted_note.decrypt(&alice_kp.secret)?;
+        let owncoin = OwnCoin {
+            coin: Coin::from(output.coin),
+            note: note.clone(),
+            secret: alice_kp.secret,
+            nullifier: Nullifier::from(poseidon_hash([alice_kp.secret.inner(), note.serial])),
+            leaf_position,
+        };        
+        owncoins[index] = owncoin;
+    }
+    let generation_elapsed_time = init.elapsed();
+    assert_eq!(txs.len(), n as usize);
+    
+    // Sanity check
+    info!("Verifying Alice to Bob transactions in Alice state");
+    alice_state.read().await.verify_transactions(&txs, true).await?;
+
+    // Verifying transaction    
+    info!("Verifying Alice to Bob transactions...");
+    let init = Timestamp::current_time();
+    faucet_state.read().await.verify_transactions(&txs, true).await?;
+    let verification_elapsed_time = init.elapsed();
+
+    info!("Processing time of {} Alice to Bob transactions(in sec):", n);
+    info!("\tGeneration -> {}", generation_elapsed_time);
+    info!("\tVerification -> {}", verification_elapsed_time);
+
+    Ok(())
+}
