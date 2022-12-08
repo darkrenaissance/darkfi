@@ -342,7 +342,6 @@ impl Drk {
             }
 
             // Write down the slot number into back to the wallet
-            // TODO: Why doesn't it work?
             let query = format!(
                 "UPDATE {} SET {} = ?1;",
                 MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
