@@ -326,7 +326,7 @@ impl Drk {
         });
 
         while !term_tx.is_closed() {
-            if sl == last {
+            if sl > last {
                 term_tx.close();
                 break
             }
