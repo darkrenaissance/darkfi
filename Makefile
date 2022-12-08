@@ -10,7 +10,7 @@ CARGO = cargo
 #RUSTFLAGS = -C target-cpu=native
 
 # Binaries to be built
-BINS = drk darkfid tau taud ircd dnetview darkotc darkwikid darkwiki dao daod
+BINS = drk darkfid tau taud ircd dnetview darkwikid darkwiki 
 
 # Common dependencies which should force the binaries to be rebuilt
 BINDEPS = \
