@@ -27,13 +27,14 @@ while True:
 
         for i in url:
             parsed_url = urlparse(i)
-            if parsed_url.netloc.lower() in ['twitter.com','t.co'] and parsed_url.scheme != 'https':
+            if parsed_url.netloc.lower() in ['twitter.com','t.co'] or parsed_url.scheme != 'https':
                 continue
             reqs = requests.get(i)
             soup = BeautifulSoup(reqs.text, 'html.parser')
 
-            title_text = soup.find('title').get_text()
-            if not len(title_text) > 0:
+            try:
+                title_text = soup.find('title').get_text()
+            except:
                 print("Error: Title not found!")
                 continue
             title_text = title_text.split('\n')
