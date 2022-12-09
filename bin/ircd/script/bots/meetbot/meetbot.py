@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import pickle
+from time import time
 
 from base58 import b58decode
 from nacl.public import PrivateKey, Box
@@ -41,6 +42,8 @@ async def channel_listen(host, port, nick, chan):
         msg = f"JOIN {chan}\r\n"
         writer.write(msg.encode("utf-8"))
         await writer.drain()
+
+        elapsed=0
 
         logging.info("%s: Listening to channel", chan)
         while True:
@@ -91,10 +94,16 @@ async def channel_listen(host, port, nick, chan):
                     CHANS[chan]["topics"] = topics
                     writer.write(reply.encode("utf-8"))
                     await writer.drain()
+                    elapsed=time()
                     continue
 
                 if msg_title == "!end":
                     logging.info("%s: Got !end", chan)
+                    reply = f"PRIVMSG {chan} :Elapsed time: {round((time() - elapsed)/60, 1)} min"
+                    elapsed=0
+                    logging.info("%s: Send: %s", chan, reply)
+                    writer.write((reply + "\r\n").encode("utf-8"))
+                    await writer.drain()
                     reply = f"PRIVMSG {chan} :Meeting ended"
                     logging.info("%s: Send: %s", chan, reply)
                     writer.write((reply + "\r\n").encode("utf-8"))
@@ -158,6 +167,13 @@ async def channel_listen(host, port, nick, chan):
                 if msg_title == "!next":
                     logging.info("%s: Got !next", chan)
                     topics = CHANS[chan]["topics"]
+
+                    reply = f"PRIVMSG {chan} :Elapsed time: {round((time() - elapsed)/60, 1)} min"
+                    logging.info("%s: Send: %s", chan, reply)
+                    writer.write((reply + "\r\n").encode("utf-8"))
+                    await writer.drain()
+                    elapsed=time()
+
                     if len(topics) == 0:
                         reply = f"PRIVMSG {chan} :No further topics"
                     else:
