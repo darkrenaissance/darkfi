@@ -255,9 +255,26 @@ impl RpcClient {
                 data = data_recv.recv().fuse() => {
                     let data_bytes = serde_json::to_vec(&data?)?;
                     stream.write_all(&data_bytes).await?;
-                    let n = timeout(read_timeout, async { stream.read(&mut buf[..]).await }).await?;
-                    let reply: JsonResult = serde_json::from_slice(&buf[0..n])?;
-                    result_send.send(reply).await?;
+                    // Since we are using async read and write,
+                    // the other side might not have finished writing
+                    // to the stream. To mitigate this, we perform a read
+                    // and check if data can be converted to a JsonResult.
+                    // If data is incomplete, this will fail, therefore,
+                    // we re-execute read and write after previous read in the buffer,
+                    // and repeat until the data in buffer can be converted.
+                    let mut total = 0;
+                    let mut n = 0;
+                    loop {
+                        n = timeout(read_timeout, async { stream.read(&mut buf[n..]).await }).await?;
+                        total += n;
+                        match serde_json::from_slice(&buf[0..total]) {
+                            Ok(reply) => {
+                                result_send.send(reply).await?;
+                                break
+                            },
+                            Err(e) => debug!("JSON-RPC client retrying failed convertion with error: {}", e),
+                        }
+                    }
                 }
 
                 _ = stop_recv.recv().fuse() => break
