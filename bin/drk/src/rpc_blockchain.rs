@@ -60,6 +60,17 @@ impl Drk {
     /// the payments are intended for us. If so, we decrypt them and append
     /// the metadata to our wallet.
     pub async fn subscribe_blocks(&self, endpoint: Url) -> Result<()> {
+        let req = JsonRequest::new("blockchain.last_known_slot", json!([]));
+        let rep = self.rpc_client.request(req).await?;
+        let last_known: u64 = serde_json::from_value(rep)?;
+        let last_scanned = self.wallet_last_scanned_slot().await?;
+
+        if last_known != last_scanned {
+            eprintln!("Warning: Last scanned slot is not the last known slot.");
+            eprintln!("You should first fully scan the blockchain, and then subscribe");
+            return Err(anyhow!("Blockchain not fully scanned"))
+        }
+
         eprintln!("Subscribing to receive notifications of incoming blocks");
         let subscriber = Subscriber::new();
         let subscription = subscriber.clone().subscribe().await;
@@ -161,7 +172,6 @@ impl Drk {
 
         let mut owncoins = vec![];
 
-        // FIXME: We end up adding duplicate coins that could already be in the tree
         for output in outputs {
             let coin = output.coin;
 
@@ -250,6 +260,13 @@ impl Drk {
             eprintln!("Coin added successfully");
         }
 
+        // Write this slot into `last_scanned_slot`
+        let query =
+            format!("UPDATE {} SET {} = ?1;", MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT);
+        let params = json!([query, QueryType::Integer as u8, block.header.slot]);
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let _ = self.rpc_client.request(req).await?;
+
         Ok(())
     }
 
@@ -304,7 +321,6 @@ impl Drk {
 
         let req = JsonRequest::new("blockchain.last_known_slot", json!([]));
         let rep = self.rpc_client.request(req).await?;
-
         let last: u64 = serde_json::from_value(rep)?;
 
         eprintln!("Requested to scan from slot number: {}", sl);
@@ -339,16 +355,16 @@ impl Drk {
                 self.scan_block(&block).await?;
             } else {
                 eprintln!("Not found");
+                // Write down the slot number into back to the wallet
+                // This might be a bit intense, but we accept it for now.
+                let query = format!(
+                    "UPDATE {} SET {} = ?1;",
+                    MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
+                );
+                let params = json!([query, QueryType::Integer as u8, sl]);
+                let req = JsonRequest::new("wallet.exec_sql", params);
+                let _ = self.rpc_client.request(req).await?;
             }
-
-            // Write down the slot number into back to the wallet
-            let query = format!(
-                "UPDATE {} SET {} = ?1;",
-                MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
-            );
-            let params = json!([query, QueryType::Integer as u8, sl]);
-            let req = JsonRequest::new("wallet.exec_sql", params);
-            let _ = self.rpc_client.request(req).await?;
         }
 
         handle.close();
