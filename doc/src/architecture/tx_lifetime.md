@@ -1,6 +1,8 @@
-# Transaction behaviour
+# Transactions
 
 _(Temporary document, to be integrated into other docs)_
+
+## Transaction behaviour
 
 In our network context, we have two types of nodes.
 
@@ -96,3 +98,99 @@ for any fork(including canonical) or it get finalized.
 Unproposed transactions refers to all $tx$ not included in a proposal of any fork.
 
 If a fork that can be finalized fails to validate all its transactions(14), it should be dropped.
+
+## The `Transaction` object
+
+```rust
+pub struct ContractCall {
+    /// The contract ID to which the payload is fed to
+    pub contract_id: ContractId,
+    /// Arbitrary payload for the contract call
+    pub payload: Vec<u8>,
+}
+
+pub struct Transaction {
+    /// Calls executed in this transaction
+    pub calls: Vec<ContractCall>,
+    /// Attached ZK proofs
+    pub proofs: Vec<Vec<Proof>>,
+    /// Attached Schnorr signatures
+    pub signatures: Vec<Vec<Signature>>,
+}
+```
+
+A generic DarkFi transaction object is simply an array of smart
+contract calls, along with attached ZK proofs and signatures needed
+to properly verify the contracts' execution. A transaction can have
+any number of calls, and proofs, provided it does not exhaust a set
+gas limit.
+
+In DarkFi, every operation is a smart contract. This includes payments,
+which we'll explain in the following section.
+
+## Payments
+
+For A -> B payments in DarkFi we use the Sapling scheme that originates
+from zcash. A payment transaction has a number of _inputs_ (which are
+coins being burned/spent), and a number of _outputs_ (which are coins
+being minted/created). An explanation for the ZK proofs for this scheme
+can be found in the Zkas section of this book, under Sapling.
+
+In code, the structs we use are the following:
+
+```rust
+pub struct MoneyTransferParams {
+    pub inputs: Vec<Input>,
+    pub outputs: Vec<Output>,
+}
+
+pub struct Input {
+    /// Pedersen commitment for the input's value
+    pub value_commit: ValueCommit,
+    /// Pedersen commitment for the input's token ID
+    pub token_commit: ValueCommit,
+    /// Revealed nullifier
+    pub nullifier: Nullifier,
+    /// Revealed Merkle root
+    pub merkle_root: MerkleNode,
+    /// Public key for the Schnorr signature
+    pub signature_public: PublicKey,
+}
+
+pub struct Output {
+    /// Pedersen commitment for the output's value
+    pub value_commit: ValueCommit,
+    /// Pedersen commitment for the output's token ID
+    pub token_commit: ValueCommit,
+    /// Minted coin: poseidon_hash(pubkey, value, token, serial, blind)
+    pub coin: Coin,
+    /// The encrypted note ciphertext
+    pub encrypted_note: EncryptedNote,
+}
+
+pub struct EncryptedNote {
+    pub ciphertext: Vec<u8>,
+    pub ephemeral_key: PublicKey,
+}
+
+pub struct Note {
+    /// Serial number of the coin, used to derive the nullifier
+    pub serial: pallas::Base,
+    /// Value of the coin
+    pub value: u64,
+    /// Token ID of the coin
+    pub token_id: TokenId,
+    /// Blinding factor for the coin bulla
+    pub coin_blind: pallas::Base,
+    /// Blinding factor for the value Pedersen commitment
+    pub value_blind: ValueBlind,
+    /// Blinding factor for the token ID Pedersen commitment
+    pub token_blind: ValueBlind,
+    /// Attached memo (arbitrary data)
+    pub memo: Vec<u8>,
+}
+```
+
+In the blockchain state, every minted coin must be added into a Merkle
+tree of all existing coins. Once added, the new tree root is used to
+prove existence of this coin when it's being spent.
