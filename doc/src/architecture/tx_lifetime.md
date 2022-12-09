@@ -194,3 +194,62 @@ pub struct Note {
 In the blockchain state, every minted coin must be added into a Merkle
 tree of all existing coins. Once added, the new tree root is used to
 prove existence of this coin when it's being spent.
+
+Let's imagine a scenario where Alice has 100 ALICE tokens and wants to
+send them to Bob. Alice would create an `Input` object using the info
+she has of her coin. She has to derive a `nullifier` given her secret
+key and the serial number of the coin, hash the coin bulla so she can
+create a merkle path proof, and derive the value and token commitments
+using the blinds.
+
+```rust
+let nullifier = poseidon_hash([alice_secret_key, serial]);
+let signature_public = alice_secret_key * Generator;
+let coin = poseidon_hash([signature_public, value, token_id, blind]);
+let merkle_root = calculate_merkle_root(coin);
+let value_commit = pedersen_commitment(value, value_blind);
+let token_commit = pedersen_commitment(token_id, token_blind);
+```
+
+The values above, except `coin` become the public inputs for the `Burn`
+ZK proof. If everything is correct, this allows Alice to spend her coin.
+In DarkFi, the changes have to be atomic, so any payment transaction
+that is burning some coins, has to mint new coins at the same time, and
+no value must be lost, nor can the token ID change. We enforce this by
+using Pedersen commitments.
+
+Now that Alice has a valid `Burn` proof and can spend her coin, she can
+mint a new coin for Bob.
+
+```rust
+let blind = pallas::Base::random();
+let value_blind = ValueBlind::random();
+let token_blind = ValueBlind::random();
+let coin = poseidon_hash([bob_public, value, token_id, blind]);
+let value_commit = pedersen_commitment(value, value_blind);
+let token_commit = pedersen_commitment(token, token_blind);
+```
+
+`coin`, `value_commit`, and `token_commit` become the public inputs
+for the `Mint` ZK proof. If this proof is valid, it creates a new coin
+for Bob with the given parameters. Additionally, Alice would put the
+values and blinds in a `Note` which is encrypted with Bob's public key
+so only Bob is able to decrypt it. This `Note` has the necessary info
+for him to further spend the coin he received.
+
+At this point Alice should have 1 input and 1 output. The input is the
+coin she burned, and the output is the coin she minted for Bob. Along
+with this, she has two ZK proofs that prove creation of the input and
+output. Now she can build a transaction object, and then use her secret
+key she derived in the `Burn` proof to sign the transaction and publish
+it to the blockchain.
+
+The blockchain will execute the smart contract with the given payload
+and verify that the Pedersen commitments match, that the nullifier has
+not been published before, and also that the merkle authentication path
+is valid and therefore the coin existed in a previous state. Outside of
+the VM, the validator will also verify the signature(s) and the ZK
+proofs. If this is valid, then Alice's coin is now burned and cannot be
+used anymore. And since Alice also created an output for Bob, this new
+coin is now added to the Merkle tree and is able to be spent by him.
+Effectively this means that Alice has sent her tokens to Bob.
