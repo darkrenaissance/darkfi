@@ -313,11 +313,17 @@ impl Drk {
         }
     }
 
-    /// Scans the blockchain optionally starting from the given slot for relevant
-    /// money transfer transactions. Alternatively it looks for a checkpoint in the
-    /// wallet to start scanning from.
-    pub async fn scan_blocks(&self, slot: Option<u64>) -> Result<()> {
-        let mut sl = if let Some(sl) = slot { sl } else { self.wallet_last_scanned_slot().await? };
+    /// Scans the blockchain starting from the last scanned slot, for relevant
+    /// money transfer transactions. If reset flag is provided, Merkle tree state
+    /// and coins are reset, and start scanning from beginning. Alternatively,
+    /// it looks for a checkpoint in the wallet to reset and start scanning from.
+    pub async fn scan_blocks(&self, reset: bool) -> Result<()> {
+        let mut sl = if reset {
+            self.reset_tree().await?;
+            0
+        } else {
+            self.wallet_last_scanned_slot().await?
+        };
 
         let req = JsonRequest::new("blockchain.last_known_slot", json!([]));
         let rep = self.rpc_client.request(req).await?;

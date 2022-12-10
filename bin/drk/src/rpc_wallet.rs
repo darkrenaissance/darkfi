@@ -480,4 +480,21 @@ impl Drk {
 
         Ok(())
     }
+
+    /// Reset the Merkle tree and coins in the wallet
+    pub async fn reset_tree(&self) -> Result<()> {
+        println!("Resetting Merkle tree");
+        let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        self.put_tree(&tree).await?;
+        println!("Successfully reset Merkle tree");
+
+        println!("Resetting coins");
+        let query = format!("DELETE FROM {};", MONEY_COINS_TABLE);
+        let params = json!([query]);
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let _ = self.rpc_client.request(req).await?;
+        println!("Successfully coins");
+
+        Ok(())
+    }
 }

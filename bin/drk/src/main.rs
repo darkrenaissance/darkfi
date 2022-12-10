@@ -171,8 +171,17 @@ enum Subcmd {
 
     /// Scan the blockchain and parse relevant transactions
     Scan {
-        /// Slot number to start scanning from (optional)
-        slot: Option<u64>,
+        #[arg(long)]
+        /// Reset Merkle tree and start scanning from first slot
+        reset: bool,
+
+        #[arg(long)]
+        /// List all available checkpoints
+        list: bool,
+
+        #[arg(short, long)]
+        /// Reset Merkle tree to checkpoint index and start scanning
+        checkpoint: Option<u64>,
     },
 }
 
@@ -525,14 +534,35 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Scan { slot } => {
+        Subcmd::Scan { reset, list, checkpoint } => {
             let rpc_client = RpcClient::new(args.endpoint)
                 .await
                 .with_context(|| "Could not connect to darkfid RPC endpoint")?;
 
             let drk = Drk { rpc_client };
 
-            drk.scan_blocks(slot).await.with_context(|| "Failed during scanning")?;
+            if reset {
+                eprintln!("Reset requested.");
+                drk.scan_blocks(true).await.with_context(|| "Failed during scanning")?;
+
+                return Ok(())
+            }
+
+            if list {
+                eprintln!("List requested.");
+                // TODO: implement
+
+                return Ok(())
+            }
+
+            if let Some(c) = checkpoint {
+                eprintln!("Checkpoint requested: {}", c);
+                // TODO: implement
+
+                return Ok(())
+            }
+
+            drk.scan_blocks(false).await.with_context(|| "Failed during scanning")?;
             eprintln!("Finished scanning blockchain");
 
             Ok(())
