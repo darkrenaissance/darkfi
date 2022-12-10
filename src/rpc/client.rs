@@ -262,12 +262,10 @@ impl RpcClient {
                     // If data is incomplete, this will fail, therefore,
                     // we re-execute read and write after previous read in the buffer,
                     // and repeat until the data in buffer can be converted.
-                    let mut total = 0;
                     let mut n = 0;
                     loop {
-                        n = timeout(read_timeout, async { stream.read(&mut buf[n..]).await }).await?;
-                        total += n;
-                        match serde_json::from_slice(&buf[0..total]) {
+                        n += timeout(read_timeout, async { stream.read(&mut buf[n..]).await }).await?;
+                        match serde_json::from_slice(&buf[0..n]) {
                             Ok(reply) => {
                                 result_send.send(reply).await?;
                                 break
