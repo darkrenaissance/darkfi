@@ -360,6 +360,47 @@ impl Drk {
         Ok(secrets)
     }
 
+    /// Import given secret keys into the wallet. The query uses INSERT, so if the key already
+    /// exists, it will simply be skipped.
+    pub async fn wallet_import_secrets(&self, secrets: Vec<SecretKey>) -> Result<Vec<PublicKey>> {
+        let mut ret = vec![];
+
+        for secret in secrets {
+            ret.push(PublicKey::from_secret(secret));
+            let is_default = 0;
+            let public = serialize(&PublicKey::from_secret(secret));
+            let secret = serialize(&secret);
+
+            let query = format!(
+                "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3)",
+                MONEY_KEYS_TABLE,
+                MONEY_KEYS_COL_IS_DEFAULT,
+                MONEY_KEYS_COL_PUBLIC,
+                MONEY_KEYS_COL_SECRET,
+            );
+
+            let params = json!([
+                query,
+                QueryType::Integer as u8,
+                is_default,
+                QueryType::Blob as u8,
+                public,
+                QueryType::Blob as u8,
+                secret,
+            ]);
+
+            let req = JsonRequest::new("wallet.exec_sql", params);
+            let rep = self.rpc_client.request(req).await?;
+
+            if rep != true {
+                // Something weird happened?
+                eprintln!("Got unexpected reply from darkfid: {}", rep);
+            }
+        }
+
+        Ok(ret)
+    }
+
     /// Get the Merkle tree from the wallet
     pub async fn wallet_tree(&self) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
         let query = format!("SELECT * FROM {}", MONEY_TREE_TABLE);

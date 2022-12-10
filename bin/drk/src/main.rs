@@ -105,6 +105,10 @@ enum Subcmd {
         secrets: bool,
 
         #[arg(long)]
+        /// Import secret keys from stdin into the wallet, separated by newlines
+        import_secrets: bool,
+
+        #[arg(long)]
         /// Print the Merkle tree in the wallet
         tree: bool,
 
@@ -229,8 +233,25 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Wallet { initialize, keygen, balance, address, secrets, tree, coins } => {
-            if !initialize && !keygen && !balance && !address && !secrets && !tree && !coins {
+        Subcmd::Wallet {
+            initialize,
+            keygen,
+            balance,
+            address,
+            secrets,
+            import_secrets,
+            tree,
+            coins,
+        } => {
+            if !initialize &&
+                !keygen &&
+                !balance &&
+                !address &&
+                !secrets &&
+                !tree &&
+                !coins &&
+                !import_secrets
+            {
                 eprintln!("Error: You must use at least one flag for this subcommand");
                 eprintln!("Run with \"wallet -h\" to see the subcommand usage.");
                 exit(2);
@@ -276,6 +297,34 @@ async fn main() -> Result<()> {
 
                 for i in v {
                     println!("{}", i);
+                }
+
+                return Ok(())
+            }
+
+            if import_secrets {
+                let mut secrets = vec![];
+                let lines = stdin().lines();
+                for (i, line) in lines.enumerate() {
+                    if let Ok(line) = line {
+                        let bytes = bs58::decode(&line.trim()).into_vec()?;
+                        let Ok(secret) = deserialize(&bytes) else {
+                            eprintln!("Warning: Failed to deserialize secret on line {}", i);
+                            continue
+                        };
+                        secrets.push(secret);
+                    }
+                }
+
+                let pubkeys = drk
+                    .wallet_import_secrets(secrets)
+                    .await
+                    .with_context(|| "Failed to import secret keys into wallet")?;
+
+                drk.rpc_client.close().await?;
+
+                for key in pubkeys {
+                    println!("{}", key);
                 }
 
                 return Ok(())
