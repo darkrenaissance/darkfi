@@ -132,6 +132,7 @@ impl Drk {
     async fn scan_block(&self, block: &BlockInfo) -> Result<()> {
         eprintln!("Iterating over {} transactions", block.txs.len());
 
+        let mut nullifiers: Vec<Nullifier> = vec![];
         let mut outputs: Vec<Output> = vec![];
 
         // TODO: FIXME: This shouldn't be hardcoded here obviously.
@@ -143,6 +144,9 @@ impl Drk {
                 {
                     eprintln!("Found Money::Transfer in call {} in tx {}", j, i);
                     let params: MoneyTransferParams = deserialize(&call.data[1..])?;
+                    for input in params.inputs {
+                        nullifiers.push(input.nullifier);
+                    }
                     for output in params.outputs {
                         outputs.push(output);
                     }
@@ -152,6 +156,9 @@ impl Drk {
                 if call.contract_id == contract_id && call.data[0] == MoneyFunction::OtcSwap as u8 {
                     eprintln!("Found Money::OtcSwap in call {} in tx {}", j, i);
                     let params: MoneyTransferParams = deserialize(&call.data[1..])?;
+                    for input in params.inputs {
+                        nullifiers.push(input.nullifier);
+                    }
                     for output in params.outputs {
                         outputs.push(output);
                     }
@@ -204,6 +211,10 @@ impl Drk {
         eprintln!("Serializing the Merkle tree into the wallet");
         self.put_tree(&tree).await?;
         eprintln!("Merkle tree written successfully");
+
+        eprintln!("Marking spent coins");
+        self.mark_spent_coins(nullifiers).await?;
+        eprintln!("Spent coins marked successfully");
 
         // This is the SQL query we'll be executing to insert coins into the wallet
         let query = format!(

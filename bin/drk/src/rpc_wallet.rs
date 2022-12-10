@@ -446,6 +446,22 @@ impl Drk {
         Ok(())
     }
 
+    /// Marks all coins in the wallet as spent, if their nullifier is
+    /// in the provided set
+    pub async fn mark_spent_coins(&self, nullifiers: Vec<Nullifier>) -> Result<()> {
+        if nullifiers.is_empty() {
+            return Ok(())
+        }
+
+        for (coin, _) in self.wallet_coins(false).await? {
+            if nullifiers.contains(&coin.nullifier) {
+                self.mark_spent_coin(&coin.coin).await?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Mark a given coin in the wallet as unspent
     pub async fn unspend_coin(&self, coin: &Coin) -> Result<()> {
         let query = format!(
