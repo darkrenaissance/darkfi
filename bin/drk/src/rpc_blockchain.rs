@@ -342,6 +342,11 @@ impl Drk {
 
         eprintln!("Requested to scan from slot number: {}", sl);
         eprintln!("Last known slot number reported by darkfid: {}", last);
+        
+        // Already scanned last known slot
+        if sl == last {
+            return Ok(())
+        }
 
         // We set this up to handle an interrupt
         let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
@@ -364,8 +369,6 @@ impl Drk {
                 break
             }
 
-            sl += 1;
-
             eprint!("Requesting slot {}... ", sl);
             if let Some(block) = self.get_block_by_slot(sl).await? {
                 eprintln!("Found");
@@ -382,6 +385,8 @@ impl Drk {
                 let req = JsonRequest::new("wallet.exec_sql", params);
                 let _ = self.rpc_client.request(req).await?;
             }
+            
+            sl += 1;
         }
 
         handle.close();
