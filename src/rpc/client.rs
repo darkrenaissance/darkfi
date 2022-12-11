@@ -36,7 +36,7 @@ use crate::{
 
 /// JSON-RPC client implementation using asynchronous channels.
 pub struct RpcClient {
-    send: smol::channel::Sender<Value>,
+    send: smol::channel::Sender<(Value, bool)>,
     recv: smol::channel::Receiver<JsonResult>,
     stop_signal: smol::channel::Sender<()>,
     url: Url,
@@ -65,7 +65,7 @@ impl RpcClient {
         // Perform initial request.
         debug!(target: "jsonrpc-client", "--> {}", serde_json::to_string(&req)?);
         // If the connection is closed, the sender will get an error for sending to a closed channel.
-        if let Err(e) = self.send.send(json!(req)).await {
+        if let Err(e) = self.send.send((json!(req), false)).await {
             error!(target: "jsonrpc-client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
             return Err(Error::NetworkOperationFailed)
         }
@@ -91,7 +91,7 @@ impl RpcClient {
             }
 
             // Triggering next consume
-            if let Err(e) = self.send.send(json!(req)).await {
+            if let Err(e) = self.send.send((json!(req), false)).await {
                 error!(target: "jsonrpc-client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
                 break
             }
@@ -109,7 +109,7 @@ impl RpcClient {
 
         // If the connection is closed, the sender will get an error for
         // sending to a closed channel.
-        if let Err(e) = self.send.send(json!(value)).await {
+        if let Err(e) = self.send.send((json!(value), true)).await {
             error!("JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
             return Err(Error::NetworkOperationFailed)
         }
@@ -128,13 +128,11 @@ impl RpcClient {
                 let resp_id = r.id.as_u64();
                 if resp_id.is_none() {
                     let e = JsonError::new(ErrorCode::InvalidId, None, r.id);
-                    //self.stop_signal.send(()).await?;
                     return Err(Error::JsonRpcError(e.error.message.to_string()))
                 }
 
                 if resp_id.unwrap() != req_id {
                     let e = JsonError::new(ErrorCode::InvalidId, None, r.id);
-                    //self.stop_signal.send(()).await?;
                     return Err(Error::JsonRpcError(e.error.message.to_string()))
                 }
 
@@ -143,14 +141,10 @@ impl RpcClient {
             }
             JsonResult::Error(e) => {
                 debug!(target: "jsonrpc-client", "<-- {}", serde_json::to_string(&e)?);
-                // Close the server connection
-                //self.stop_signal.send(()).await?;
                 Err(Error::JsonRpcError(e.error.message.to_string()))
             }
             JsonResult::Notification(n) => {
                 debug!(target: "jsonrpc-client", "<-- {}", serde_json::to_string(&n)?);
-                // Close the server connection
-                //self.stop_signal.send(()).await?;
                 Err(Error::JsonRpcError("Unexpected reply".to_string()))
             }
             JsonResult::Subscriber(_) => Err(Error::JsonRpcError("Unexpected reply".to_string())),
@@ -169,7 +163,7 @@ impl RpcClient {
     async fn open_channels(
         uri: &Url,
     ) -> Result<(
-        smol::channel::Sender<Value>,
+        smol::channel::Sender<(Value, bool)>,
         smol::channel::Receiver<JsonResult>,
         smol::channel::Sender<()>,
     )> {
@@ -240,20 +234,20 @@ impl RpcClient {
     async fn reqrep_loop<T: TransportStream>(
         mut stream: T,
         result_send: smol::channel::Sender<JsonResult>,
-        data_recv: smol::channel::Receiver<Value>,
+        data_recv: smol::channel::Receiver<(Value, bool)>,
         stop_recv: smol::channel::Receiver<()>,
     ) -> Result<()> {
-        // If we don't get a reply within 30 seconds, we'll fail.
-        // FIXME: let read_timeout = Duration::from_secs(30);
-        let read_timeout = Duration::from_secs(1200);
+        // If timeout is enabled and we don't get a reply within 30 seconds, we'll fail.
+        let read_timeout = Duration::from_secs(30);
 
         loop {
             // FIXME: Nasty size. 8M
             let mut buf = vec![0; 1024 * 8192];
 
             select! {
-                data = data_recv.recv().fuse() => {
-                    let data_bytes = serde_json::to_vec(&data?)?;
+                tuple = data_recv.recv().fuse() => {
+                    let (data, with_timeout) = tuple?;
+                    let data_bytes = serde_json::to_vec(&data)?;
                     stream.write_all(&data_bytes).await?;
                     // Since we are using async read and write,
                     // the other side might not have finished writing
@@ -264,7 +258,11 @@ impl RpcClient {
                     // and repeat until the data in buffer can be converted.
                     let mut n = 0;
                     loop {
-                        n += timeout(read_timeout, async { stream.read(&mut buf[n..]).await }).await?;
+                        n += if with_timeout {
+                            timeout(read_timeout, async { stream.read(&mut buf[n..]).await }).await?
+                        } else {
+                            stream.read(&mut buf[n..]).await?
+                        };
                         match serde_json::from_slice(&buf[0..n]) {
                             Ok(reply) => {
                                 result_send.send(reply).await?;

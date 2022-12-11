@@ -342,7 +342,7 @@ impl Drk {
 
         eprintln!("Requested to scan from slot number: {}", sl);
         eprintln!("Last known slot number reported by darkfid: {}", last);
-        
+
         // Already scanned last known slot
         if sl == last {
             return Ok(())
@@ -385,7 +385,7 @@ impl Drk {
                 let req = JsonRequest::new("wallet.exec_sql", params);
                 let _ = self.rpc_client.request(req).await?;
             }
-            
+
             sl += 1;
         }
 
