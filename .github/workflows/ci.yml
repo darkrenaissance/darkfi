@@ -16,6 +16,11 @@ jobs:
         with:
           toolchain: stable
           override: true
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
 
       - uses: Swatinem/rust-cache@v1
 
@@ -50,6 +55,11 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          override: true
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
           override: true
       - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v1
