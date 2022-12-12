@@ -36,6 +36,7 @@
   	- [Network Protocol](misc/hashchain/network_protocol.md)
   - [darkwiki](misc/darkwiki.md)
   - [dnetview](misc/dnetview.md)
+- [Testnet Guide](testnet/guide.md)
 - [Learn](learn/learn.md)
   - [Research](learn/research.md)
   - [ZK explainer](learn/zk_explainer.md)
