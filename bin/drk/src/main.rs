@@ -126,7 +126,7 @@ enum Subcmd {
     /// Airdrop some tokens
     Airdrop {
         /// Faucet JSON-RPC endpoint
-        #[arg(short, long, default_value = "tcp://127.0.0.1:8340")]
+        #[arg(short, long, default_value = "tls://faucetd.testnet.dark.fi:18340")]
         faucet_endpoint: Url,
 
         /// Amount to request from the faucet

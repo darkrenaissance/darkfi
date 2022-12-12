@@ -7,22 +7,22 @@
 ## uncommenting, or by using the command-line.
 
 # Chain to use (testnet, mainnet)
-#chain = "testnet"
+chain = "testnet"
 
 # Path to the wallet database
-#wallet_path = "~/.config/darkfi/darkfid_wallet.db"
+wallet_path = "~/.config/darkfi/darkfid_wallet_testnet.db"
 
 # Password for the wallet database
 #wallet_pass = "changeme"
 
 # Path to the blockchain database directory
-#database = "~/.config/darkfi/darkfid_blockchain"
+database = "~/.config/darkfi/darkfid_blockchain_testnet"
 
 # JSON-RPC listen URL
-#rpc_listen = "tcp://127.0.0.1:8340"
+rpc_listen = "tcp://127.0.0.1:8340"
 
 # Participate in the consensus protocol
-#consensus = false
+consensus = false
 
 # P2P accept addresses for the consensus protocol
 #consensus_p2p_accept = ["tls://127.0.0.1:8341"]
@@ -49,25 +49,25 @@
 #consensus_p2p_transports = ["tls", "tcp"]
 
 # P2P accept addresses for the syncing protocol
-#sync_p2p_accept = ["tls://127.0.0.1:8342"]
+sync_p2p_accept = ["tls://0.0.0.0:8342"]
 
 # P2P external addresses for the syncing protocol
 #sync_p2p_external = ["tls://127.0.0.1:8342"]
 
 # Connection slots for the syncing protocol
-#sync_slots = 8
+sync_slots = 8
 
 # Seed nodes to connect to for the syncing protocol
-#sync_p2p_seed = []
+sync_p2p_seed = ["tls:/lilith0.dark.fi:8342", "tls://lilith1.dark.fi:8342"]
 
 # Peers to connect to for the syncing protocol
 #sync_p2p_peer = []
 
 # Prefered transports of outbound connections for the syncing protocol
-#sync_p2p_transports = ["tls", "tcp"]
+sync_p2p_transports = ["tls"]
 
 # Enable localnet hosts
-#localnet = true
+localnet = false
 
 # Enable channel log
 #channel_log = true
@@ -76,7 +76,7 @@
 #cashier_pub = []
 
 # Whitelisted faucet addresses
-#faucet_pub = []
+faucet_pub = ["3ce5xa3PjuQGFtTaF7AvMJp7fGxqeGRJx7zj3LCwNCkP"]
 
 # Verify system clock is correct
 #clock_sync = true
