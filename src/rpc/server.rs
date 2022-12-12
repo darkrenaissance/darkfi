@@ -192,12 +192,8 @@ pub async fn listen_and_serve(
         }
         TransportName::Unix => {
             let transport = UnixTransport::new();
-            let listener = transport.listen(accept_url.clone()).await;
-            if let Err(err) = listener {
-                error!("JSON-RPC Unix socket bind to {} failed: {}", accept_url, err);
-                return Err(Error::BindFailed(accept_url.as_str().into()))
-            }
-            run_accept_loop(Box::new(listener?), rh, ex.clone()).await?;
+            let listener = transport.listen_on(accept_url.clone());
+            accept!(listener, transport, None);
         }
         _ => unimplemented!(),
     }

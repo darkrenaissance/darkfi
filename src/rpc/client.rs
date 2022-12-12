@@ -216,13 +216,8 @@ impl RpcClient {
             }
             TransportName::Unix => {
                 let transport = UnixTransport::new();
-                let stream = transport.dial(uri.clone()).await;
-                if let Err(err) = stream {
-                    error!("JSON-RPC client connection to {} failed: {}", uri, err);
-                    return Err(Error::ConnectFailed)
-                }
-
-                smol::spawn(Self::reqrep_loop(stream?, result_send, data_recv, stop_recv)).detach();
+                let stream = transport.dial(uri.clone(), None);
+                reqrep!(stream, transport, None);
             }
             _ => unimplemented!(),
         }

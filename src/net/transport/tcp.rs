@@ -63,7 +63,7 @@ impl TransportListener for (TlsAcceptor, TcpListener) {
         let url = socket_addr_to_url(peer_addr, "tcp+tls")?;
 
         if let Err(err) = stream {
-            error!("Error wraping the connection {} with tls: {}", url, err);
+            error!("Error wrapping the connection {} with tls: {}", url, err);
             return Err(Error::AcceptTlsConnectionFailed(self.1.local_addr()?.to_string()))
         }
 

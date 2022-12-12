@@ -26,7 +26,34 @@ use async_std::{
 };
 use url::Url;
 
-use darkfi::net::transport::{TcpTransport, TorTransport, Transport};
+use darkfi::net::transport::{TcpTransport, TorTransport, Transport, UnixTransport};
+
+#[async_std::test]
+async fn unix_transport() {
+    let unix = UnixTransport::new();
+    let url = Url::parse("unix:///tmp/darkfi_test.sock").unwrap();
+
+    let listener = unix.listen_on(url.clone()).unwrap().await.unwrap();
+
+    let _ = task::spawn(async move {
+        let mut incoming = listener.incoming();
+        while let Some(stream) = incoming.next().await {
+            let stream = stream.unwrap();
+            let (reader, writer) = &mut (&stream, &stream);
+            io::copy(reader, writer).await.unwrap();
+        }
+    });
+
+    let payload = b"ohai unix";
+
+    let mut client = unix.dial(url, None).unwrap().await.unwrap();
+    client.write_all(payload).await.unwrap();
+    let mut buf = vec![0_u8; 9];
+    client.read_exact(&mut buf).await.unwrap();
+
+    std::fs::remove_file("/tmp/darkfi_test.sock").unwrap();
+    assert_eq!(buf, payload);
+}
 
 #[async_std::test]
 async fn tcp_transport() {
