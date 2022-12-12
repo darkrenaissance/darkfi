@@ -212,9 +212,11 @@ impl Drk {
         self.put_tree(&tree).await?;
         eprintln!("Merkle tree written successfully");
 
-        eprintln!("Marking spent coins");
-        self.mark_spent_coins(nullifiers).await?;
-        eprintln!("Spent coins marked successfully");
+        if !nullifiers.is_empty() {
+            eprintln!("Found {} spent coins, marking as spent", nullifiers.len());
+            self.mark_spent_coins(nullifiers).await?;
+            eprintln!("Spent coins marked successfully");
+        }
 
         // This is the SQL query we'll be executing to insert coins into the wallet
         let query = format!(
