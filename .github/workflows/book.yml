@@ -41,6 +41,7 @@ jobs:
                     rm -f "$i"
                 done
                 mkdir -p "$HOME/bin"
+                mv -v mdbook* "$HOME/bin"
                 export PATH="$HOME/bin:$PATH"
 
             - name: Compile and publish the book
