@@ -4,6 +4,7 @@ on:
     push:
         branches:
             - master
+            - mdbook-stuff
 
 jobs:
     compile-book:
@@ -40,9 +41,7 @@ jobs:
                     tar xf "$i"
                     rm -f "$i"
                 done
-                mkdir -p "$HOME/bin"
-                mv -v mdbook* "$HOME/bin"
-                export PATH="$HOME/bin:$PATH"
+                mv -v mdbook* /usr/local/bin/
 
             - name: Compile and publish the book
               run: |
