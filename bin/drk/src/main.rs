@@ -32,6 +32,7 @@ use darkfi_sdk::{
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize};
+use prettytable::{format, row, Table};
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -39,7 +40,10 @@ use url::Url;
 use darkfi::{
     cli_desc,
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
-    util::cli::{get_log_config, get_log_level},
+    util::{
+        cli::{get_log_config, get_log_level},
+        parse::encode_base10,
+    },
 };
 
 /// Airdrop methods
@@ -356,14 +360,23 @@ async fn main() -> Result<()> {
 
                 drk.rpc_client.close().await?;
 
-                for i in coins {
-                    print!("{:?} ", i.0.coin.inner());
-                    if i.1 {
-                        println!("(spent)");
-                    } else {
-                        println!("(unspent)");
-                    }
+                if coins.is_empty() {
+                    return Ok(())
                 }
+
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Coin", "Spent", "Token ID", "Value"]);
+                for coin in coins {
+                    table.add_row(row![
+                        format!("{:?}", coin.0.coin.inner()),
+                        coin.1,
+                        coin.0.note.token_id,
+                        format!("{} ({})", coin.0.note.value, encode_base10(coin.0.note.value, 8))
+                    ]);
+                }
+
+                println!("{}", table);
 
                 return Ok(())
             }
