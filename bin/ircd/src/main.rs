@@ -138,6 +138,18 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         return Ok(())
     }
 
+    if settings.secret.is_some() {
+        let secret = settings.secret.clone().unwrap();
+        let bytes: [u8; 32] = bs58::decode(secret).into_vec()?.try_into().unwrap();
+        let secret = crypto_box::SecretKey::from(bytes);
+        let pubkey = secret.public_key();
+        let pub_encoded = bs58::encode(pubkey.as_bytes()).into_string();
+
+        println!("pubkey recoverd: {}", pub_encoded);
+
+        return Ok(())
+    }
+
     //
     // P2p setup
     //
