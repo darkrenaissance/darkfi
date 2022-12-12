@@ -364,6 +364,8 @@ impl Drk {
         });
 
         while !term_tx.is_closed() {
+            sl += 1;
+
             if sl > last {
                 term_tx.close();
                 break
@@ -385,8 +387,6 @@ impl Drk {
                 let req = JsonRequest::new("wallet.exec_sql", params);
                 let _ = self.rpc_client.request(req).await?;
             }
-
-            sl += 1;
         }
 
         handle.close();
