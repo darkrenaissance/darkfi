@@ -12,7 +12,7 @@ local ws = token(l.WHITESPACE, l.space^1)
 local comment = token(l.COMMENT, '#' * l.nonnewline_esc^0)
 
 -- Strings.
-local dq_str = P('U')^-1 * l.delimited_range('"', true)
+local dq_str = P('U')^-1 * l.range('"', true)
 local string = token(l.STRING, dq_str)
 
 -- Numbers.
