@@ -2,7 +2,7 @@
 name = "vanityaddr"
 version = "0.3.0"
 homepage = "https://dark.fi"
-description = "Vanity address generation tool for DarkFi keypairs."
+description = "Vanity address generation tool for DarkFi keypairs and token IDs"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 repository = "https://github.com/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
