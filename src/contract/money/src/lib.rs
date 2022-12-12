@@ -45,6 +45,8 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 pub enum MoneyFunction {
     Transfer = 0x00,
     OtcSwap = 0x01,
+    Stake = 0x02,
+    Unstake = 0x03,
 }
 
 impl TryFrom<u8> for MoneyFunction {
@@ -54,6 +56,8 @@ impl TryFrom<u8> for MoneyFunction {
         match b {
             0x00 => Ok(Self::Transfer),
             0x01 => Ok(Self::OtcSwap),
+            0x02 => Ok(Self::Stake),
+            0x03 => Ok(Self::Unstake),
             _ => Err(ContractError::InvalidFunction),
         }
     }
@@ -224,6 +228,9 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             // Using this, we pass the above data to the host.
             set_return_data(&metadata)?;
         }
+
+        MoneyFunction::Stake => unimplemented!(),
+        MoneyFunction::Unstake => unimplemented!(),
     };
 
     Ok(())
@@ -427,6 +434,16 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             Ok(())
         }
+
+        MoneyFunction::Stake => {
+            msg!("[Stake] Entered match arm");
+            unimplemented!();
+        }
+
+        MoneyFunction::Unstake => {
+            msg!("[Unstake] Entered match arm");
+            unimplemented!();
+        }
     }
 }
 
@@ -450,5 +467,8 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
 
             Ok(())
         }
+
+        MoneyFunction::Stake => unimplemented!(),
+        MoneyFunction::Unstake => unimplemented!(),
     }
 }

@@ -25,6 +25,46 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
+/// Inputs and outputs for staking coins
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyStakeParams {
+    /// Anonymous inputs
+    pub inputs: Vec<Input>,
+    /// Anonymous outputs for staking
+    pub outputs: Vec<StakedOutput>,
+}
+
+/// Inputs and outputs for unstaking coins
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyUnstakeParams {
+    /// Anonymous staked inputs
+    pub inputs: Vec<StakedInput>,
+    /// Anonymous outputs
+    pub outputs: Vec<Output>,
+}
+
+/// Staked anonymous input
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct StakedInput {
+    /// Revealed nullifier
+    pub nullifier: Nullifier,
+    /// Revealed Merkle root
+    pub merkle_root: MerkleNode,
+    /// Public key for the signature
+    pub signature_public: PublicKey,
+}
+
+/// Staked anonymous output
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct StakedOutput {
+    /// Minted coin
+    pub coin: pallas::Base,
+    /// The encrypted note ciphertext
+    pub ciphertext: Vec<u8>,
+    /// The ephemeral public key
+    pub ephem_public: PublicKey,
+}
+
 /// Inputs and outputs for a payment
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTransferParams {
