@@ -64,7 +64,7 @@ rustdoc: token_lists zkas
 
 test: token_lists zkas $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all
-	$(MAKE) -c src/contract/money test
+	$(MAKE) -C src/contract/money test
 
 test-dao: zkas
 	$(MAKE) -C example/dao
