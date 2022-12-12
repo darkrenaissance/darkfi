@@ -49,7 +49,7 @@ $(BINS): token_lists contracts $(PROOFS_BIN) $(BINDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
 
-check: token_lists zkas $(PROOFS_BIN)
+check: token_lists zkas $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --release --feature-powerset --all
 
 fix: token_lists zkas $(PROOFS_BIN)
@@ -62,8 +62,9 @@ rustdoc: token_lists zkas
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --workspace --all-features \
 		--no-deps --document-private-items
 
-test: token_lists zkas $(PROOFS_BIN)
+test: token_lists zkas $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all
+	$(MAKE) -c src/contract/money test
 
 test-dao: zkas
 	$(MAKE) -C example/dao

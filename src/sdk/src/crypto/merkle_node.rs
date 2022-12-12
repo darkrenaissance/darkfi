@@ -158,3 +158,32 @@ impl Hashable for MerkleNode {
         EMPTY_ROOTS[<usize>::from(altitude)]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use halo2_proofs::arithmetic::Field;
+    use incrementalmerkletree::Tree;
+    use pasta_curves::pallas;
+    use rand::rngs::OsRng;
+
+    #[test]
+    fn bridgetree_checkpoints() {
+        const MAX_CHECKPOINTS: usize = 100;
+        let mut tree = MerkleTree::new(MAX_CHECKPOINTS);
+        let mut roots = vec![];
+
+        for _ in 0..MAX_CHECKPOINTS {
+            let leaf = MerkleNode::from(pallas::Base::random(&mut OsRng));
+            tree.append(&leaf);
+            roots.push(tree.root(0).unwrap());
+            tree.checkpoint();
+        }
+
+        for root in roots.iter().rev() {
+            tree.rewind();
+            assert!(root == &tree.root(0).unwrap());
+        }
+    }
+}
