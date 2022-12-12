@@ -95,4 +95,30 @@ subscribers so you'll see the balance changes.
 
 ## Swaps
 
-TODO
+We can also try to swap some coins between `darkfid1` and `darkfid2`.
+
+First `darkfid1` will initiate the 1st half of the swap, and send it
+to `darkfid2`:
+
+```
+$ ./drk -e tcp://127.0.0.1:8440 otc init \
+    -v 14.24:66.41 \
+    -t A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:BNBZ9YprWvEGMYHW4dFvbLuLfHnN9Bs64zuTFQAbw9Dy \
+    > half_swap
+```
+
+Then `darkfid2` can create the second half and send it back to
+`darkfid1`:
+
+```
+$ ./drk -e tcp://127.0.0.1:8540 otc join < half_swap > full_swap
+```
+
+And finally `darkfid1` can sign and broadcast it:
+
+```
+$ ./drk -e tcp://127.0.0.1:8440 otc sign < full_swap > signed_swap
+$ ./drk -e tcp://127.0.0.1:8440 broadcast < signed_swap
+```
+
+After finalization, the balances should update.
