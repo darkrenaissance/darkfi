@@ -139,8 +139,8 @@ will receive the tokens you've sent.
 
 ![pablo-waiting1](pablo1.jpg)
 
-If you check your balances again, the change should be seen in the
-table immediately:
+We have to wait until the next block to see our change balance reappear
+in our wallet.
 
 ```
 $ ./drk wallet --balance
