@@ -279,6 +279,7 @@ websockets = [
 zk = [
     "halo2_proofs",
     "halo2_gadgets",
+    "rand",
 
     "darkfi-sdk",
     "zkas",
