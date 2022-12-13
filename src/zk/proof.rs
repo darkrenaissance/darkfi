@@ -18,12 +18,12 @@
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::{
+    pasta::{pallas, vesta},
     plonk,
     plonk::{Circuit, SingleVerifier},
     poly::commitment::Params,
     transcript::{Blake2bRead, Blake2bWrite},
 };
-use pasta_curves::{pallas, vesta};
 use rand::RngCore;
 
 #[derive(Clone, Debug)]

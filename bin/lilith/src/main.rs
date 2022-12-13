@@ -16,11 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::path::Path;
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use fxhash::{FxHashMap, FxHashSet};
 use log::{error, info, warn};
 use serde_json::{json, Value};
 use structopt_toml::StructOptToml;
@@ -88,9 +90,9 @@ struct Lilith {
 }
 
 impl Lilith {
-    async fn spawns_hosts(&self) -> FxHashMap<String, Vec<String>> {
+    async fn spawns_hosts(&self) -> HashMap<String, Vec<String>> {
         // Building urls string
-        let mut spawns = FxHashMap::default();
+        let mut spawns = HashMap::new();
         for spawn in &self.spawns {
             spawns.insert(spawn.name.clone(), spawn.addresses().await);
         }
@@ -180,7 +182,7 @@ async fn spawn_network(
     name: &str,
     info: NetInfo,
     urls: Vec<Url>,
-    saved_hosts: Option<&FxHashSet<Url>>,
+    saved_hosts: Option<&HashSet<Url>>,
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<Spawn> {
     let mut full_urls = Vec::new();
@@ -237,8 +239,8 @@ async fn spawn_network(
 }
 
 /// Retrieve saved hosts for provided networks
-fn load_hosts(path: &Path, networks: &[&str]) -> FxHashMap<String, FxHashSet<Url>> {
-    let mut saved_hosts = FxHashMap::default();
+fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, HashSet<Url>> {
+    let mut saved_hosts = HashMap::new();
     info!("Retrieving saved hosts from: {:?}", path);
     let contents = load_file(path);
     if let Err(e) = contents {
@@ -251,7 +253,7 @@ fn load_hosts(path: &Path, networks: &[&str]) -> FxHashMap<String, FxHashSet<Url
         if networks.contains(&data[0]) {
             let mut hosts = match saved_hosts.get(data[0]) {
                 Some(hosts) => hosts.clone(),
-                None => FxHashSet::default(),
+                None => HashSet::new(),
             };
             let url = match Url::parse(data[1]) {
                 Ok(u) => u,
@@ -269,7 +271,7 @@ fn load_hosts(path: &Path, networks: &[&str]) -> FxHashMap<String, FxHashSet<Url
 }
 
 /// Save spawns current hosts
-fn save_hosts(path: &Path, spawns: FxHashMap<String, Vec<String>>) {
+fn save_hosts(path: &Path, spawns: HashMap<String, Vec<String>>) {
     let mut string = "".to_string();
     for (name, urls) in spawns {
         for url in urls {

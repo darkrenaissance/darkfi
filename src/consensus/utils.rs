@@ -16,12 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::Float10;
+use darkfi_sdk::pasta::pallas;
 use dashu::integer::{IBig, Sign};
 use log::debug;
-use pasta_curves::pallas;
-//use pasta_curves::{group::ff::PrimeField};
-//use dashu::integer::{UBig};
+
+use super::Float10;
 
 pub fn fbig2ibig(f: Float10) -> IBig {
     let rad = IBig::try_from(10).unwrap();

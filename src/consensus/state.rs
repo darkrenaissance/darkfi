@@ -19,11 +19,13 @@
 use std::time::Duration;
 
 use chrono::{NaiveDateTime, Utc};
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
+use darkfi_sdk::{
+    crypto::{constants::MERKLE_DEPTH, MerkleNode},
+    incrementalmerkletree::bridgetree::BridgeTree,
+    pasta::{group::ff::PrimeField, pallas},
+};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use incrementalmerkletree::bridgetree::BridgeTree;
 use log::info;
-use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::{thread_rng, Rng};
 
 use super::{

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use async_std::{
     sync::{Arc, Mutex},
@@ -25,12 +25,11 @@ use async_std::{
 use chrono::Utc;
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable};
 use futures::{select, FutureExt};
-use fxhash::FxHashMap;
 use log::{debug, error, warn};
-use rand::{rngs::OsRng, Rng, RngCore};
+use rand::{distributions::Alphanumeric, rngs::OsRng, thread_rng, Rng, RngCore};
 use smol::Executor;
 
-use crate::{net, util::gen_id, Error, Result};
+use crate::{net, Error, Result};
 
 use super::{
     p2p_send_loop,
@@ -48,6 +47,10 @@ async fn send_loop(sender: smol::channel::Sender<()>, timeout: Duration) -> Resu
     }
 }
 
+pub fn gen_id(len: usize) -> String {
+    thread_rng().sample_iter(&Alphanumeric).take(len).map(char::from).collect()
+}
+
 pub struct Raft<T> {
     id: NodeId,
 
@@ -60,7 +63,7 @@ pub struct Raft<T> {
     pub(super) sent_length: MapLength,
     pub(super) acked_length: MapLength,
 
-    pub(super) nodes: Arc<Mutex<FxHashMap<NodeId, i64>>>,
+    pub(super) nodes: Arc<Mutex<HashMap<NodeId, i64>>>,
 
     pub(super) last_term: u64,
 
@@ -73,7 +76,7 @@ pub struct Raft<T> {
 
     datastore: DataStore<T>,
 
-    seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
+    seen_msgs: Arc<Mutex<HashMap<String, i64>>>,
 
     pub(super) settings: RaftSettings,
 
@@ -83,7 +86,7 @@ pub struct Raft<T> {
 impl<T: Decodable + Encodable + Clone> Raft<T> {
     pub fn new(
         settings: RaftSettings,
-        seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
+        seen_msgs: Arc<Mutex<HashMap<String, i64>>>,
     ) -> Result<Self> {
         if settings.datastore_path.to_str().is_none() {
             error!(target: "raft", "datastore path is incorrect");
@@ -115,9 +118,9 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             role,
             current_leader: NodeId("".into()),
             votes_received: vec![],
-            sent_length: MapLength(FxHashMap::default()),
-            acked_length: MapLength(FxHashMap::default()),
-            nodes: Arc::new(Mutex::new(FxHashMap::default())),
+            sent_length: MapLength(HashMap::default()),
+            acked_length: MapLength(HashMap::default()),
+            nodes: Arc::new(Mutex::new(HashMap::default())),
             last_term: 0,
             last_heartbeat: Utc::now().timestamp(),
             p2p_sender,

@@ -19,11 +19,11 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Chip, Layouter},
+    pasta::pallas,
     plonk,
     plonk::{Advice, Column, ConstraintSystem, Constraints, Selector},
     poly::Rotation,
 };
-use pasta_curves::pallas;
 
 pub trait ArithInstruction<F: FieldExt>: Chip<F> {
     fn add(

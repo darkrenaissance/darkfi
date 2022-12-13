@@ -23,10 +23,10 @@ use darkfi_sdk::{
         util::mod_r_p,
         MerkleNode, SecretKey,
     },
+    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
 };
 use halo2_proofs::{arithmetic::Field, circuit::Value};
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::info;
 use rand::rngs::OsRng;
 

@@ -488,7 +488,7 @@ impl Decodable for OpMethods {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi::util::gen_id;
+    use darkfi::raft::gen_id;
     use darkfi_serial::{deserialize, serialize};
 
     #[test]

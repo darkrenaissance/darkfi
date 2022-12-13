@@ -15,15 +15,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::collections::HashMap;
 
 use async_std::sync::{Arc, Mutex};
-use fxhash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 use darkfi::util::time::NanoTimestamp;
 
 type MsgLog = Vec<(NanoTimestamp, String, String)>;
-type MsgMap = Mutex<FxHashMap<String, MsgLog>>;
+type MsgMap = Mutex<HashMap<String, MsgLog>>;
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
 pub enum Session {
@@ -46,13 +46,13 @@ pub enum SelectableObject {
 pub struct Model {
     pub msg_map: MsgMap,
     pub msg_log: Mutex<MsgLog>,
-    pub selectables: Mutex<FxHashMap<String, SelectableObject>>,
+    pub selectables: Mutex<HashMap<String, SelectableObject>>,
 }
 
 impl Model {
     pub fn new() -> Arc<Self> {
-        let selectables = Mutex::new(FxHashMap::default());
-        let msg_map = Mutex::new(FxHashMap::default());
+        let selectables = Mutex::new(HashMap::new());
+        let msg_map = Mutex::new(HashMap::new());
         let msg_log = Mutex::new(Vec::new());
         Arc::new(Model { msg_map, msg_log, selectables })
     }

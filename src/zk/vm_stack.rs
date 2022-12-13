@@ -19,8 +19,10 @@
 //! VM stack type abstractions
 use darkfi_sdk::crypto::{constants::OrchardFixedBases, MerkleNode};
 use halo2_gadgets::ecc::{chip::EccChip, FixedPoint, FixedPointBaseField, FixedPointShort, Point};
-use halo2_proofs::circuit::{AssignedCell, Value};
-use pasta_curves::pallas;
+use halo2_proofs::{
+    circuit::{AssignedCell, Value},
+    pasta::pallas,
+};
 
 use crate::zkas::{decoder::ZkBinary, types::VarType};
 

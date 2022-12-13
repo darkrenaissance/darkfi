@@ -15,13 +15,12 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-use async_std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 
 use async_executor::Executor;
+use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
-use fxhash::FxHashMap;
 use log::{debug, error};
 
 use darkfi::{
@@ -82,16 +81,13 @@ pub struct TokenNotification {
 }
 
 pub struct Bridge {
-    clients: Mutex<FxHashMap<NetworkName, Arc<dyn NetworkClient + Send + Sync>>>,
+    clients: Mutex<HashMap<NetworkName, Arc<dyn NetworkClient + Send + Sync>>>,
     notifiers: FuturesUnordered<async_channel::Receiver<TokenNotification>>,
 }
 
 impl Bridge {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self {
-            clients: Mutex::new(FxHashMap::default()),
-            notifiers: FuturesUnordered::new(),
-        })
+        Arc::new(Self { clients: Mutex::new(HashMap::new()), notifiers: FuturesUnordered::new() })
     }
 
     pub async fn add_clients(

@@ -16,8 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 
+use async_std::sync::{Arc, Mutex};
 use chrono::Utc;
 use log::{debug, error};
 
@@ -32,7 +33,7 @@ mod primitives;
 mod protocol_raft;
 mod settings;
 
-pub use consensus::Raft;
+pub use consensus::{gen_id, Raft};
 pub use datastore::DataStore;
 pub use primitives::NetMsg;
 pub use protocol_raft::ProtocolRaft;
@@ -40,7 +41,7 @@ pub use settings::RaftSettings;
 
 // Auxilary function to periodically prun items, based on when they were received.
 async fn prune_map<T: Clone + Eq + std::hash::Hash>(
-    map: Arc<Mutex<fxhash::FxHashMap<T, i64>>>,
+    map: Arc<Mutex<HashMap<T, i64>>>,
     seen_duration: i64,
 ) {
     loop {

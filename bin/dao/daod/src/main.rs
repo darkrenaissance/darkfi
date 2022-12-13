@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::Instant};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
-use fxhash::FxHashMap;
 use log::debug;
 use rand::rngs::OsRng;
 use simplelog::{ColorChoice, LevelFilter, TermLogger, TerminalMode};
@@ -166,7 +165,7 @@ use crate::{
 
 pub struct Client {
     dao_wallet: DaoWallet,
-    money_wallets: FxHashMap<[u8; 32], MoneyWallet>,
+    money_wallets: HashMap<[u8; 32], MoneyWallet>,
     cashier_wallet: CashierWallet,
     states: StateRegistry,
     zk_bins: ZkContractTable,
@@ -176,7 +175,7 @@ impl Client {
     fn new() -> Self {
         // For this early demo we store all wallets in a single Client.
         let dao_wallet = DaoWallet::new();
-        let money_wallets = FxHashMap::default();
+        let money_wallets = HashMap::new();
         let cashier_wallet = CashierWallet::new();
 
         // Lookup table for smart contract states
@@ -642,8 +641,8 @@ impl DaoWallet {
         Ok(())
     }
 
-    fn balances(&self) -> Result<FxHashMap<String, u64>> {
-        let mut ret: FxHashMap<String, u64> = FxHashMap::default();
+    fn balances(&self) -> Result<HashMap<String, u64>> {
+        let mut ret: HashMap<String, u64> = HashMap::new();
         for (coin, is_spent) in &self.own_coins {
             if *is_spent {}
             if coin.note.token_id == *DRK_ID || coin.note.token_id == *GOV_ID {
@@ -908,8 +907,8 @@ impl MoneyWallet {
         Ok(())
     }
 
-    fn balances(&self) -> Result<FxHashMap<String, u64>> {
-        let mut ret: FxHashMap<String, u64> = FxHashMap::default();
+    fn balances(&self) -> Result<HashMap<String, u64>> {
+        let mut ret: HashMap<String, u64> = HashMap::new();
         for (coin, is_spent) in &self.own_coins {
             if *is_spent {}
             if coin.note.token_id == *DRK_ID || coin.note.token_id == *GOV_ID {

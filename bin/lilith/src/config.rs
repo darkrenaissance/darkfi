@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fxhash::FxHashMap;
+use std::collections::HashMap;
+
 use log::{info, warn};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use toml::Value;
@@ -73,8 +74,8 @@ pub struct NetInfo {
 /// seeds = []
 /// peers = []
 /// ```
-pub fn parse_configured_networks(data: &str) -> Result<FxHashMap<String, NetInfo>> {
-    let mut ret = FxHashMap::default();
+pub fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
+    let mut ret = HashMap::new();
 
     if let Value::Table(map) = toml::from_str(data)? {
         if map.contains_key("network") && map["network"].is_table() {

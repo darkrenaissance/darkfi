@@ -16,12 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use fxhash::FxHashMap;
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
 
@@ -106,12 +105,12 @@ impl<T: Eq + PartialEq + Clone> Seen<T> {
 pub type UnreadEventsPtr = Arc<Mutex<UnreadEvents>>;
 
 pub struct UnreadEvents {
-    events: FxHashMap<EventId, Event>,
+    events: HashMap<EventId, Event>,
 }
 
 impl UnreadEvents {
     pub fn new() -> UnreadEventsPtr {
-        Arc::new(Mutex::new(Self { events: FxHashMap::default() }))
+        Arc::new(Mutex::new(Self { events: HashMap::new() }))
     }
 
     fn contains(&self, key: &EventId) -> bool {

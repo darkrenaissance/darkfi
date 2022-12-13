@@ -480,6 +480,6 @@ impl Analyzer {
         let _ = stdout.write(msg).unwrap();
         stdout.flush().unwrap();
         let _ = stdin().read(&mut [0]).unwrap();
-        write!(stdout, "{}{}\r", termion::cursor::Up(1), termion::clear::CurrentLine).unwrap();
+        write!(stdout, "\x1b[1A\r\x1b[K\r").unwrap();
     }
 }

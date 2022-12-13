@@ -16,11 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, fmt, io};
+use std::{cmp::Ordering, collections::HashMap, fmt, io};
 
 use async_std::sync::Arc;
 use darkfi_serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable};
-use fxhash::FxHashMap;
 use ripemd::{Digest, Ripemd256};
 
 use darkfi::{Error, Result};
@@ -129,8 +128,8 @@ struct EventNode {
 pub struct Model {
     // This is periodically updated so we discard old nodes
     current_root: EventId,
-    orphans: FxHashMap<EventId, Event>,
-    event_map: FxHashMap<EventId, EventNode>,
+    orphans: HashMap<EventId, Event>,
+    event_map: HashMap<EventId, EventNode>,
     events_queue: EventsQueueArc,
 }
 
@@ -153,10 +152,10 @@ impl Model {
 
         let root_node_id = root_node.event.hash();
 
-        let mut event_map = FxHashMap::default();
+        let mut event_map = HashMap::new();
         event_map.insert(root_node_id, root_node);
 
-        Self { current_root: root_node_id, orphans: FxHashMap::default(), event_map, events_queue }
+        Self { current_root: root_node_id, orphans: HashMap::new(), event_map, events_queue }
     }
 
     pub fn add(&mut self, event: Event) {

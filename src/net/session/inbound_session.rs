@@ -15,11 +15,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::collections::HashMap;
 
 use async_std::sync::{Arc, Mutex, Weak};
-
 use async_trait::async_trait;
-use fxhash::FxHashMap;
 use log::{error, info};
 use serde_json::json;
 use smol::Executor;
@@ -50,7 +49,7 @@ pub struct InboundSession {
     p2p: Weak<P2p>,
     acceptors: Mutex<Vec<AcceptorPtr>>,
     accept_tasks: Mutex<Vec<StoppableTaskPtr>>,
-    connect_infos: Mutex<Vec<FxHashMap<Url, InboundInfo>>>,
+    connect_infos: Mutex<Vec<HashMap<Url, InboundInfo>>>,
 }
 
 impl InboundSession {
@@ -89,7 +88,7 @@ impl InboundSession {
                 executor.clone(),
             );
 
-            self.connect_infos.lock().await.push(FxHashMap::default());
+            self.connect_infos.lock().await.push(HashMap::new());
             accept_tasks.push(task);
         }
 
@@ -185,7 +184,7 @@ impl InboundSession {
 #[async_trait]
 impl Session for InboundSession {
     async fn get_info(&self) -> serde_json::Value {
-        let mut infos = FxHashMap::default();
+        let mut infos = HashMap::new();
         for (index, accept_addr) in self.p2p().settings().inbound.iter().enumerate() {
             let connect_infos = &self.connect_infos.lock().await[index];
             for (addr, info) in connect_infos {

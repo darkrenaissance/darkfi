@@ -15,9 +15,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::collections::HashMap;
 
 use crypto_box::SalsaBox;
-use fxhash::FxHashMap;
 use log::{info, warn};
 use serde::Deserialize;
 use structopt::StructOpt;
@@ -193,8 +193,8 @@ fn parse_priv_key(data: &str) -> Result<String> {
 /// [contact."nick"]
 /// contact_pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 /// ```
-pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, ContactInfo>> {
-    let mut ret = FxHashMap::default();
+pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactInfo>> {
+    let mut ret = HashMap::new();
 
     let map = match toml::from_str(data) {
         Ok(Value::Table(m)) => m,
@@ -296,8 +296,8 @@ pub fn parse_configured_contacts(data: &str) -> Result<FxHashMap<String, Contact
 /// secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 /// topic = "Dank Memes"
 /// ```
-pub fn parse_configured_channels(data: &str) -> Result<FxHashMap<String, ChannelInfo>> {
-    let mut ret = FxHashMap::default();
+pub fn parse_configured_channels(data: &str) -> Result<HashMap<String, ChannelInfo>> {
+    let mut ret = HashMap::new();
 
     let map = match toml::from_str(data)? {
         Value::Table(m) => m,

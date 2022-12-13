@@ -51,7 +51,7 @@ members = [
 
 [dependencies]
 # Hard dependencies
-libc = "0.2.137"
+libc = "0.2.138"
 log = "0.4.17"
 thiserror = "1.0.37"
 
@@ -64,11 +64,11 @@ smol = {version = "1.3.0", optional = true}
 # Networking
 futures-rustls = {version = "0.22.2", features = ["dangerous_configuration"], optional = true}
 iprange = {version = "0.6.7", optional = true}
-ipnet = {version = "2.5.1", optional = true}
+ipnet = {version = "2.7.0", optional = true}
 socket2 = {version = "0.4.7", optional = true}
 
 # TLS cert utilities
-ed25519-compact = {version = "2.0.2", features = ["pem"], optional = true}
+ed25519-compact = {version = "2.0.4", features = ["pem"], optional = true}
 rcgen = {version = "0.10.0", features = ["pem"], optional = true}
 rustls-pemfile = {version = "1.0.1", optional = true}
 
@@ -76,10 +76,12 @@ rustls-pemfile = {version = "1.0.1", optional = true}
 bs58 = {version = "0.4.0", optional = true}
 hex = {version = "0.4.3", optional = true}
 serde_json = {version = "1.0.89", optional = true}
-serde = {version = "1.0.148", features = ["derive"], optional = true}
+serde = {version = "1.0.150", features = ["derive"], optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
 toml = {version = "0.5.9", optional = true}
+# big float
+dashu = { version = "0.2.0", git = "https://github.com/ertosns/dashu", optional=true }
 
 # Utilities
 # TODO: check chrono usage and impl our own
@@ -87,12 +89,9 @@ chrono = {version = "0.4.23", optional = true}
 darkfi-serial = {path = "src/serial", optional = true}
 darkfi-derive = {path = "src/serial/derive", optional = true}
 darkfi-derive-internal = {path = "src/serial/derive-internal", optional = true}
-fxhash = {version = "0.2.1", optional = true}
 indexmap = {version = "1.9.2", optional = true}
 itertools = {version = "0.10.5", optional = true}
-lazy-init = {version = "0.5.1", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
-subtle = {version = "2.4.1", optional = true}
 # TODO: Test without serde
 url = {version = "2.3.1", features = ["serde"], optional = true}
 
@@ -100,27 +99,19 @@ url = {version = "2.3.1", features = ["serde"], optional = true}
 # TODO: Implement something simple and kill these deps
 indicatif = {version = "0.17.2", optional = true}
 simplelog = {version = "0.12.0", optional = true}
-termion = {version = "2.0.1", optional = true}
 
 # Websockets
-async-tungstenite = {version = "0.18.0", optional = true}
+async-tungstenite = {version = "0.19.0", optional = true}
 
 # socks5
 fast-socks5 = {version = "0.4.3", optional = true}
             
 # Crypto
 rand = {version = "0.8.5", optional = true}
-blake2b_simd = {version = "1.0.0", optional = true}
 blake3 = {version = "1.3.3", optional = true}
-chacha20poly1305 = {version = "0.10.1", optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
 halo2_proofs = {version = "0.2.0", optional = true}
 halo2_gadgets = {version = "0.2.0", optional = true}
-incrementalmerkletree = {version = "0.3.0", optional = true}
-num-bigint = {version = "0.4.3", optional = true}
-num-traits = {version = "0.2.15", optional = true}
-pasta_curves = {version = "0.4.1", optional = true}
-sha2 = {version = "0.10.6", optional = true}
 
 # Smart contract runtime
 darkfi-sdk = {path = "src/sdk", optional = true}
@@ -135,19 +126,12 @@ sqlx = {version = "0.6.2", features = ["runtime-async-std-native-tls", "sqlite"]
 # Blockchain store
 sled = {version = "0.34.7", optional = true}
 
-# big float
-dashu = { version = "0.2.0", git = "https://github.com/ertosns/dashu", optional=true } 
-
-rcell = { version = "1.1.3", optional=true }
-
 [dev-dependencies]
 clap = {version = "4.0.29", features = ["derive"]}
 halo2_proofs = {version = "0.2.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
 halo2_gadgets = {version = "0.2.0", features = ["dev-graph", "test-dependencies"]}
 plotters = "0.3.4"
-env_logger = "0.10.0"
 easy-parallel = "3.2.0"
-
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
@@ -160,14 +144,11 @@ async-runtime = [
 
 blockchain = [
     "blake3",
+    "bs58", # <-- remove after we get rid of json for notifications
     "chrono",
     "dashu",
-    "halo2_gadgets",
     "halo2_proofs",
-    "incrementalmerkletree",
-    "lazy-init",
     "lazy_static",
-    "pasta_curves",
     "rand",
     "sled",
     "sqlx",
@@ -175,43 +156,14 @@ blockchain = [
     "crypto_api_chachapoly",
 
     "async-runtime",
-    "crypto",
     "darkfi-sdk",
-    "darkfi-serial",
+    "darkfi-serial/crypto",
     "net",
     "rpc",
     "tx",
     "util",
     "wallet",
     "wasm-runtime",
-    "rcell"
-]
-
-crypto = [
-    "blake2b_simd",
-    "blake3",
-    "bs58",
-    "chacha20poly1305",
-    "fxhash",
-    "halo2_gadgets",
-    "halo2_proofs",
-    "hex",
-    "incrementalmerkletree",
-    "lazy_static",
-    "num-bigint",
-    "num-traits",
-    "pasta_curves",
-    "rand",
-    "serde",
-    "serde_json",
-    "sha2",
-    "subtle",
-
-    "darkfi-sdk",
-    "darkfi-serial",
-    "darkfi-serial/crypto",
-    "util",
-    "zkas",
 ]
 
 dht = [
@@ -227,7 +179,6 @@ dht = [
 ]
 
 net = [
-    "fxhash",
     "ed25519-compact",
     "fast-socks5",
     "futures-rustls",
@@ -254,7 +205,6 @@ net = [
 
 raft = [
     "chrono",
-    "fxhash",
     "rand",
     "sled",
 
@@ -277,29 +227,26 @@ rpc = [
 ]
 
 system = [
-    "fxhash",
     "rand",
 
     "async-runtime",
 ]
 
 tx = [
-    "incrementalmerkletree",
+    "blake3",
     "rand",
     
     "async-runtime",
+    "darkfi-sdk",
     "darkfi-serial",
-    "crypto",
+    "zk",
 ]
 
 util = [
     "chrono",
-    "indicatif",
-    "rand",
     "simplelog",
     "serde",
     "serde_json",
-    "termion",
     "toml",
     "url",
 
@@ -308,13 +255,10 @@ util = [
 
 wallet = [
     "async-std",
-    "bs58",
     "rand",
     "sqlx",
-    "incrementalmerkletree",
     "libsqlite3-sys",
 
-    "crypto",
     "darkfi-serial",
     "util",
 ]
@@ -332,8 +276,15 @@ websockets = [
     "async-tungstenite",
 ]
 
+zk = [
+    "halo2_proofs",
+    "halo2_gadgets",
+
+    "darkfi-sdk",
+    "zkas",
+]
+
 zkas = [
-    "termion",
     "indexmap",
     "itertools",
 

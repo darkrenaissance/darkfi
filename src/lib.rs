@@ -27,9 +27,6 @@ pub mod blockchain;
 #[cfg(feature = "blockchain")]
 pub mod consensus;
 
-#[cfg(feature = "crypto")]
-pub mod zk;
-
 #[cfg(feature = "dht")]
 pub mod dht;
 
@@ -56,6 +53,9 @@ pub mod wallet;
 
 #[cfg(feature = "wasm-runtime")]
 pub mod runtime;
+
+#[cfg(feature = "zk")]
+pub mod zk;
 
 #[cfg(feature = "zkas")]
 pub mod zkas;

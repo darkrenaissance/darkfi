@@ -16,11 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, fmt};
+use std::{cmp::Ordering, collections::HashMap, fmt};
 
 use async_std::sync::{Arc, Mutex};
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
-use fxhash::FxHashMap;
 use ripemd::{Digest, Ripemd256};
 
 use crate::{
@@ -80,8 +79,8 @@ pub type ModelPtr = Arc<Mutex<Model>>;
 pub struct Model {
     // This is periodically updated so we discard old nodes
     current_root: EventId,
-    orphans: FxHashMap<EventId, Event>,
-    event_map: FxHashMap<EventId, EventNode>,
+    orphans: HashMap<EventId, Event>,
+    event_map: HashMap<EventId, EventNode>,
     events_queue: EventsQueuePtr,
 }
 
@@ -104,10 +103,10 @@ impl Model {
 
         let root_node_id = root_node.event.hash();
 
-        let mut event_map = FxHashMap::default();
+        let mut event_map = HashMap::new();
         event_map.insert(root_node_id, root_node);
 
-        Self { current_root: root_node_id, orphans: FxHashMap::default(), event_map, events_queue }
+        Self { current_root: root_node_id, orphans: HashMap::new(), event_map, events_queue }
     }
 
     pub fn add(&mut self, event: Event) {

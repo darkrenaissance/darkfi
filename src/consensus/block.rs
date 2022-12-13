@@ -18,10 +18,12 @@
 
 use std::fmt;
 
-use darkfi_sdk::crypto::{constants::MERKLE_DEPTH, MerkleNode};
+use darkfi_sdk::{
+    crypto::{constants::MERKLE_DEPTH, MerkleNode},
+    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
+    pasta::pallas,
+};
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
-use pasta_curves::pallas;
 
 use super::{
     constants::{BLOCK_MAGIC_BYTES, BLOCK_VERSION},

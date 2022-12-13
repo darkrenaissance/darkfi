@@ -22,13 +22,10 @@ use std::{
     marker::PhantomData,
     path::{Path, PathBuf},
     str,
-    time::Duration,
 };
 
-use indicatif::{ProgressBar, ProgressStyle};
 use serde::{de::DeserializeOwned, Serialize};
 use simplelog::ConfigBuilder;
-use termion::color;
 
 use crate::{Error, Result};
 
@@ -206,32 +203,14 @@ macro_rules! async_daemonize {
     };
 }
 
-pub fn progress_bar(message: &str) -> ProgressBar {
-    let progress_bar = ProgressBar::new(42);
-    progress_bar.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
-    );
-    progress_bar.enable_steady_tick(Duration::from_millis(100));
-    progress_bar.set_message(message.to_string());
-    progress_bar
-}
-
 pub fn fg_red(message: &str) -> String {
-    format!("{}{}{}", color::Fg(color::Red), message, color::Fg(color::Reset))
+    format!("\x1b[31m{}\x1b[0m", message)
 }
 
 pub fn fg_green(message: &str) -> String {
-    format!("{}{}{}", color::Fg(color::Green), message, color::Fg(color::Reset))
-}
-
-pub fn start_fg_red() -> String {
-    format!("{}", color::Fg(color::Red))
-}
-
-pub fn start_fg_green() -> String {
-    format!("{}", color::Fg(color::Green))
+    format!("\x1b[32m{}\x1b[0m", message)
 }
 
 pub fn fg_reset() -> String {
-    format!("{}", color::Fg(color::Reset))
+    format!("\x1b[0m")
 }

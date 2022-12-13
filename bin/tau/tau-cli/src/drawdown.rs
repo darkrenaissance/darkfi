@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, Utc};
 use colored::Colorize;
-use fxhash::FxHashMap;
 use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 
 use darkfi::{Error, Result};
@@ -40,7 +41,7 @@ const BLUE: u8 = 50;
 /// assignee in a hashmap, draw a heatmap of how many stopped tasks in each day of the
 /// specified month and assignee.
 pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) -> Result<()> {
-    let mut ret = FxHashMap::default();
+    let mut ret = HashMap::new();
     let assignees = assignees(tasks.clone());
 
     if assignee.is_none() {

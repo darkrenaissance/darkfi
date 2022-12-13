@@ -15,12 +15,12 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::collections::HashMap;
 
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
 use darkfi_serial::serialize;
-use fxhash::FxHashMap;
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
 use smol::Executor;
@@ -34,7 +34,7 @@ pub struct ProtocolRaft {
     notify_queue_sender: smol::channel::Sender<NetMsg>,
     msg_sub: net::MessageSubscription<NetMsg>,
     p2p: net::P2pPtr,
-    seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
+    seen_msgs: Arc<Mutex<HashMap<String, i64>>>,
     channel: net::ChannelPtr,
 }
 
@@ -44,7 +44,7 @@ impl ProtocolRaft {
         channel: net::ChannelPtr,
         notify_queue_sender: smol::channel::Sender<NetMsg>,
         p2p: net::P2pPtr,
-        seen_msgs: Arc<Mutex<FxHashMap<String, i64>>>,
+        seen_msgs: Arc<Mutex<HashMap<String, i64>>>,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<NetMsg>().await;

@@ -17,6 +17,7 @@
  */
 
 use std::{
+    collections::HashMap,
     env,
     fs::{create_dir_all, remove_dir_all},
     io::stdin,
@@ -30,7 +31,6 @@ use crypto_box::{
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use futures::{select, FutureExt};
-use fxhash::FxHashMap;
 use log::{debug, error, info, warn};
 use structopt_toml::StructOptToml;
 
@@ -56,8 +56,8 @@ use crate::{
     task_info::TaskInfo,
 };
 
-fn get_workspaces(settings: &Args) -> Result<FxHashMap<String, SalsaBox>> {
-    let mut workspaces = FxHashMap::default();
+fn get_workspaces(settings: &Args) -> Result<HashMap<String, SalsaBox>> {
+    let mut workspaces = HashMap::new();
 
     for workspace in settings.workspaces.iter() {
         let workspace: Vec<&str> = workspace.split(':').collect();
@@ -114,7 +114,7 @@ async fn start_sync_loop(
     raft_msgs_sender: smol::channel::Sender<EncryptedTask>,
     commits_recv: smol::channel::Receiver<EncryptedTask>,
     datastore_path: std::path::PathBuf,
-    workspaces: FxHashMap<String, SalsaBox>,
+    workspaces: HashMap<String, SalsaBox>,
     mut rng: crypto_box::rand_core::OsRng,
 ) -> TaudResult<()> {
     loop {
@@ -140,7 +140,7 @@ async fn start_sync_loop(
 async fn on_receive_task(
     task: &EncryptedTask,
     datastore_path: &Path,
-    workspaces: &FxHashMap<String, SalsaBox>,
+    workspaces: &HashMap<String, SalsaBox>,
 ) -> TaudResult<()> {
     for (workspace, salsa_box) in workspaces.iter() {
         let task = decrypt_task(task, salsa_box);
@@ -230,7 +230,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     //
     // Raft
     //
-    let seen_net_msgs = Arc::new(Mutex::new(FxHashMap::default()));
+    let seen_net_msgs = Arc::new(Mutex::new(HashMap::new()));
 
     let datastore_raft = datastore_path.join("tau.db");
     let raft_settings = RaftSettings { datastore_path: datastore_raft, ..RaftSettings::default() };

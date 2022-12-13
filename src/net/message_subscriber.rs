@@ -16,11 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Mutex;
-use std::{any::Any, io::Cursor, sync::Arc};
+use std::{any::Any, collections::HashMap, io::Cursor, sync::Arc};
 
+use async_std::sync::Mutex;
 use async_trait::async_trait;
-use fxhash::FxHashMap;
 use log::{debug, warn};
 use rand::Rng;
 
@@ -69,13 +68,13 @@ trait MessageDispatcherInterface: Send + Sync {
 
 /// A dispatchers that is unique to every Message. Maintains a list of subscribers that are subscribed to that unique Message type and handles sending messages across these subscriptions.
 struct MessageDispatcher<M: Message> {
-    subs: Mutex<FxHashMap<MessageSubscriptionId, smol::channel::Sender<MessageResult<M>>>>,
+    subs: Mutex<HashMap<MessageSubscriptionId, smol::channel::Sender<MessageResult<M>>>>,
 }
 
 impl<M: Message> MessageDispatcher<M> {
     /// Create a new message dispatcher.
     fn new() -> Self {
-        MessageDispatcher { subs: Mutex::new(FxHashMap::default()) }
+        MessageDispatcher { subs: Mutex::new(HashMap::new()) }
     }
 
     /// Create a random ID.
@@ -177,13 +176,13 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 /// Generic publish/subscribe class that maintains a list of dispatchers. Dispatchers transmit
 /// messages to subscribers and are specific to one message type.
 pub struct MessageSubsystem {
-    dispatchers: Mutex<FxHashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
+    dispatchers: Mutex<HashMap<&'static str, Arc<dyn MessageDispatcherInterface>>>,
 }
 
 impl MessageSubsystem {
     /// Create a new message subsystem.
     pub fn new() -> Self {
-        MessageSubsystem { dispatchers: Mutex::new(FxHashMap::default()) }
+        MessageSubsystem { dispatchers: Mutex::new(HashMap::new()) }
     }
 
     /// Add a new dispatcher for specified Message.

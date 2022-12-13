@@ -18,8 +18,6 @@
 
 use std::{io, io::Write, process};
 
-use termion::{color, style};
-
 pub(super) struct ErrorEmitter {
     namespace: String,
     file: String,
@@ -61,27 +59,13 @@ impl ErrorEmitter {
         let mut handle = stderr.lock();
 
         match typ {
-            "error" => write!(
-                handle,
-                "{}{}{} error:{} {}",
-                style::Bold,
-                color::Fg(color::Red),
-                self.namespace,
-                style::Reset,
-                msg
-            )
-            .unwrap(),
+            "error" => {
+                write!(handle, "\x1b[31;1m{} error:\x1b[0m {}", self.namespace, msg).unwrap()
+            }
 
-            "warning" => write!(
-                handle,
-                "{}{}{} warning:{} {}",
-                style::Bold,
-                color::Fg(color::Yellow),
-                self.namespace,
-                style::Reset,
-                msg
-            )
-            .unwrap(),
+            "warning" => {
+                write!(handle, "\x1b[33;1m{} warning:\x1b[0m {}", self.namespace, msg).unwrap()
+            }
 
             _ => unreachable!(),
         };

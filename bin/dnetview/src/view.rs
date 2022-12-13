@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fxhash::FxHashMap;
+use std::collections::HashMap;
+
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -36,13 +37,13 @@ use crate::{
 //use log::debug;
 
 type MsgLog = Vec<(NanoTimestamp, String, String)>;
-type MsgMap = FxHashMap<String, MsgLog>;
+type MsgMap = HashMap<String, MsgLog>;
 
 #[derive(Debug, Clone)]
 pub struct View {
     pub id_menu: IdMenu,
     pub msg_list: MsgList,
-    pub selectables: FxHashMap<String, SelectableObject>,
+    pub selectables: HashMap<String, SelectableObject>,
     pub ordered_list: Vec<String>,
 }
 
@@ -54,16 +55,16 @@ impl Default for View {
 
 impl<'a> View {
     pub fn new() -> Self {
-        let msg_map = FxHashMap::default();
+        let msg_map = HashMap::new();
         let msg_list = MsgList::new(msg_map, 0);
-        let selectables = FxHashMap::default();
+        let selectables = HashMap::new();
         let id_menu = IdMenu::new(Vec::new());
         let ordered_list = Vec::new();
 
         Self { id_menu, msg_list, selectables, ordered_list }
     }
 
-    pub fn update(&mut self, msg_map: MsgMap, selectables: FxHashMap<String, SelectableObject>) {
+    pub fn update(&mut self, msg_map: MsgMap, selectables: HashMap<String, SelectableObject>) {
         self.update_selectable(selectables.clone());
         self.update_msg_list(msg_map);
         self.update_id_menu(selectables);
@@ -71,7 +72,7 @@ impl<'a> View {
         self.make_ordered_list();
     }
 
-    fn update_id_menu(&mut self, selectables: FxHashMap<String, SelectableObject>) {
+    fn update_id_menu(&mut self, selectables: HashMap<String, SelectableObject>) {
         for id in selectables.keys() {
             if !self.id_menu.ids.iter().any(|i| i == id) {
                 self.id_menu.ids.push(id.to_string());
@@ -79,7 +80,7 @@ impl<'a> View {
         }
     }
 
-    fn update_selectable(&mut self, selectables: FxHashMap<String, SelectableObject>) {
+    fn update_selectable(&mut self, selectables: HashMap<String, SelectableObject>) {
         for (id, obj) in selectables {
             self.selectables.insert(id, obj);
         }
@@ -487,11 +488,11 @@ impl MsgList {
 #[derive(Debug, Clone)]
 pub struct NodeInfoView {
     pub index: usize,
-    pub infos: FxHashMap<String, NodeInfo>,
+    pub infos: HashMap<String, NodeInfo>,
 }
 
 impl NodeInfoView {
-    pub fn new(infos: FxHashMap<String, NodeInfo>) -> NodeInfoView {
+    pub fn new(infos: HashMap<String, NodeInfo>) -> NodeInfoView {
         let index = 0;
 
         NodeInfoView { index, infos }

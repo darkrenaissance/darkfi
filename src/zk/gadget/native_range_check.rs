@@ -224,9 +224,9 @@ mod tests {
     use halo2_proofs::{
         circuit::floor_planner,
         dev::{CircuitLayout, MockProver},
+        pasta::{arithmetic::FieldExt, group::ff::PrimeField},
         plonk::Circuit,
     };
-    use pasta_curves::{arithmetic::FieldExt, group::ff::PrimeField};
 
     macro_rules! test_circuit {
         ($window_size:expr, $num_bits:expr, $num_windows:expr) => {

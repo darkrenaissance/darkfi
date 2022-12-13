@@ -16,11 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::fmt;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 use async_std::sync::{Arc, Mutex};
 use futures::{select, stream::FuturesUnordered, try_join, FutureExt, StreamExt, TryFutureExt};
-use fxhash::{FxHashMap, FxHashSet};
 use log::{debug, error, warn};
 use rand::Rng;
 use serde_json::json;
@@ -41,9 +43,9 @@ use super::{
 };
 
 /// List of channels that are awaiting connection.
-pub type PendingChannels = Mutex<FxHashSet<Url>>;
+pub type PendingChannels = Mutex<HashSet<Url>>;
 /// List of connected channels.
-pub type ConnectedChannels = Mutex<fxhash::FxHashMap<Url, Arc<Channel>>>;
+pub type ConnectedChannels = Mutex<HashMap<Url, Arc<Channel>>>;
 /// Atomic pointer to p2p interface.
 pub type P2pPtr = Arc<P2p>;
 
@@ -108,8 +110,8 @@ impl P2p {
         let settings = Arc::new(settings);
 
         let self_ = Arc::new(Self {
-            pending: Mutex::new(FxHashSet::default()),
-            channels: Mutex::new(FxHashMap::default()),
+            pending: Mutex::new(HashSet::new()),
+            channels: Mutex::new(HashMap::new()),
             channel_subscriber: Subscriber::new(),
             stop_subscriber: Subscriber::new(),
             hosts: Hosts::new(settings.localnet),

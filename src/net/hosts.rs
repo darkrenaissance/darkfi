@@ -16,10 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
-use std::net::IpAddr;
+use std::{
+    collections::{HashMap, HashSet},
+    net::IpAddr,
+};
 
-use fxhash::{FxHashMap, FxHashSet};
+use async_std::sync::{Arc, Mutex};
 use ipnet::{Ipv4Net, Ipv6Net};
 use iprange::IpRange;
 use log::{debug, error, warn};
@@ -33,7 +35,7 @@ pub type HostsPtr = Arc<Hosts>;
 
 /// Manages a store of network addresses.
 pub struct Hosts {
-    addrs: Mutex<FxHashSet<Url>>,
+    addrs: Mutex<HashSet<Url>>,
     localnet: bool,
     ipv4_range: IpRange<Ipv4Net>,
     ipv6_range: IpRange<Ipv6Net>,
@@ -52,7 +54,7 @@ impl Hosts {
         ipv4_range.simplify();
         ipv6_range.simplify();
 
-        Arc::new(Self { addrs: Mutex::new(FxHashSet::default()), localnet, ipv4_range, ipv6_range })
+        Arc::new(Self { addrs: Mutex::new(HashSet::new()), localnet, ipv4_range, ipv6_range })
     }
 
     /// Add a new host to the host list, after filtering.
@@ -134,9 +136,9 @@ fn filter_invalid(
     ipv4_range: &IpRange<Ipv4Net>,
     ipv6_range: &IpRange<Ipv6Net>,
     input_addrs: Vec<Url>,
-) -> FxHashMap<Url, Vec<IpAddr>> {
+) -> HashMap<Url, Vec<IpAddr>> {
     debug!(target: "net", "hosts::filter_invalid() [Input addresses: {:?}]", input_addrs);
-    let mut filtered = FxHashMap::default();
+    let mut filtered = HashMap::new();
     for addr in &input_addrs {
         // Discard domainless Urls
         let domain = match addr.domain() {
@@ -211,10 +213,7 @@ fn filter_invalid(
 /// Filters `input_addrs` keys to whatever has at least one `IpAddr` that is
 /// the same as `connection_addr`'s IP address.
 /// Skips .onion domains.
-fn filter_non_resolving(
-    connection_addr: Url,
-    input_addrs: FxHashMap<Url, Vec<IpAddr>>,
-) -> Vec<Url> {
+fn filter_non_resolving(connection_addr: Url, input_addrs: HashMap<Url, Vec<IpAddr>>) -> Vec<Url> {
     debug!(target: "net", "hosts::filter_non_resolving() [Input addresses: {:?}]", input_addrs);
     debug!(target: "net", "hosts::filter_non_resolving() [Connection address: {}]", connection_addr);
 
@@ -299,13 +298,13 @@ fn is_valid_onion(onion: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::{
+        collections::{HashMap, HashSet},
+        net::{IpAddr, Ipv4Addr},
+    };
 
-    use fxhash::{FxHashMap, FxHashSet};
     use ipnet::{Ipv4Net, Ipv6Net};
     use iprange::IpRange;
-    // Uncomment for inner logging
-    //use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
     use url::Url;
 
     use crate::net::{
@@ -317,11 +316,11 @@ mod tests {
     fn test_filter_localnet() {
         // Uncomment for inner logging
         /*
-        TermLogger::init(
-            LevelFilter::Debug,
-            Config::default(),
-            TerminalMode::Mixed,
-            ColorChoice::Auto,
+        simplelog::TermLogger::init(
+            simplelog::LevelFilter::Debug,
+            simplelog::Config::default(),
+            simplelog::TerminalMode::Mixed,
+            simplelog::ColorChoice::Auto,
         )
         .unwrap();
         */
@@ -340,11 +339,11 @@ mod tests {
 
         // Create expected output addresses vector
         let output_addrs = vec![valid, onion];
-        let output_addrs = FxHashSet::from_iter(output_addrs.iter());
+        let output_addrs: HashSet<&Url> = HashSet::from_iter(output_addrs.iter());
 
         // Execute filtering for v4 addr
         let filtered = filter_localnet(input_addrs);
-        let filtered = FxHashSet::from_iter(filtered.iter());
+        let filtered: HashSet<&Url> = HashSet::from_iter(filtered.iter());
         // Validate filtered addresses
         assert_eq!(output_addrs, filtered);
     }
@@ -390,12 +389,12 @@ mod tests {
 
         // Create expected output addresses vector
         let output_addrs = vec![valid, onion];
-        let output_addrs = FxHashSet::from_iter(output_addrs.iter());
+        let output_addrs: HashSet<&Url> = HashSet::from_iter(output_addrs.iter());
 
         // Execute filtering for v4 addr
         let filtered = filter_invalid(&ipv4_range, &ipv6_range, input_addrs);
         let filtered: Vec<Url> = filtered.into_iter().map(|(k, _)| k).collect();
-        let filtered = FxHashSet::from_iter(filtered.iter());
+        let filtered: HashSet<&Url> = HashSet::from_iter(filtered.iter());
         // Validate filtered addresses
         assert_eq!(output_addrs, filtered);
     }
@@ -426,7 +425,7 @@ mod tests {
         .unwrap();
 
         // Create input addresses hashmap, containing created addresses, excluding connection url
-        let mut input_addrs = FxHashMap::default();
+        let mut input_addrs = HashMap::new();
         input_addrs.insert(
             resolving_url.clone(),
             vec![
@@ -438,7 +437,7 @@ mod tests {
         input_addrs.insert(onion.clone(), vec![]);
 
         // Create expected output addresses hashset
-        let mut output_addrs = FxHashMap::default();
+        let mut output_addrs = HashMap::new();
         output_addrs.insert(
             resolving_url,
             vec![
@@ -449,28 +448,28 @@ mod tests {
         output_addrs.insert(onion.clone(), vec![]);
         // Convert hashmap to Vec<Url and then to hashset, to ignore shuffling
         let output_addrs: Vec<Url> = output_addrs.into_iter().map(|(k, _)| k).collect();
-        let output_addrs = FxHashSet::from_iter(output_addrs.iter());
+        let output_addrs: HashSet<&Url> = HashSet::from_iter(output_addrs.iter());
 
-        let mut fake_output_addrs: FxHashMap<Url, Vec<Url>> = FxHashMap::default();
+        let mut fake_output_addrs: HashMap<Url, Vec<Url>> = HashMap::new();
         // Onion addresses don't get filtered, as we can't resolve them
         fake_output_addrs.insert(onion, vec![]);
         let fake_output_addrs: Vec<Url> = fake_output_addrs.into_iter().map(|(k, _)| k).collect();
-        let fake_output_addrs = FxHashSet::from_iter(fake_output_addrs.iter());
+        let fake_output_addrs: HashSet<&Url> = HashSet::from_iter(fake_output_addrs.iter());
 
         // Execute filtering for v4 addr
         let filtered = filter_non_resolving(connection_url_v4, input_addrs.clone());
-        let filtered = FxHashSet::from_iter(filtered.iter());
+        let filtered = HashSet::from_iter(filtered.iter());
         // Validate filtered addresses
         assert_eq!(output_addrs, filtered);
 
         // Execute filtering for v6 addr
         let filtered = filter_non_resolving(connection_url_v6, input_addrs.clone());
-        let filtered = FxHashSet::from_iter(filtered.iter());
+        let filtered = HashSet::from_iter(filtered.iter());
         assert_eq!(output_addrs, filtered);
 
         // Execute filtering for fake addr
         let filtered = filter_non_resolving(fake_connection_url, input_addrs);
-        let filtered = FxHashSet::from_iter(filtered.iter());
+        let filtered = HashSet::from_iter(filtered.iter());
         assert_eq!(fake_output_addrs, filtered);
     }
 

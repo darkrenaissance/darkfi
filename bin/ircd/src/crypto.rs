@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use crypto_box::{
     aead::{Aead, AeadCore},
     SalsaBox,
 };
-use fxhash::FxHashMap;
 use rand::rngs::OsRng;
 
 use crate::{
@@ -71,8 +72,8 @@ pub fn encrypt(salt_box: &SalsaBox, plaintext: &str) -> String {
 pub fn decrypt_target(
     contact: &mut String,
     privmsg: &mut Privmsg,
-    configured_chans: FxHashMap<String, ChannelInfo>,
-    configured_contacts: FxHashMap<String, ContactInfo>,
+    configured_chans: HashMap<String, ChannelInfo>,
+    configured_contacts: HashMap<String, ContactInfo>,
 ) {
     for chan_name in configured_chans.keys() {
         let chan_info = configured_chans.get(chan_name).unwrap();

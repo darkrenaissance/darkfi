@@ -40,12 +40,3 @@ pub mod path;
 
 /// Time utilities
 pub mod time;
-
-// =======================
-// TODO: Why is this here?
-// =======================
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
-pub fn gen_id(len: usize) -> String {
-    thread_rng().sample_iter(&Alphanumeric).take(len).map(char::from).collect()
-}
-// ======================

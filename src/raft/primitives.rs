@@ -16,10 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io;
+use std::{collections::HashMap, io};
 
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-use fxhash::FxHashMap;
 
 use crate::{Error, Result};
 
@@ -145,7 +144,7 @@ impl Logs {
 }
 
 #[derive(Clone, Debug)]
-pub struct MapLength(pub FxHashMap<NodeId, u64>);
+pub struct MapLength(pub HashMap<NodeId, u64>);
 
 impl MapLength {
     pub fn get(&self, key: &NodeId) -> Result<u64> {

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs::File, net::SocketAddr};
+use std::{collections::HashMap, fs::File, net::SocketAddr};
 
 use async_std::{
     net::TcpListener,
@@ -24,7 +24,6 @@ use async_std::{
 };
 use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
 use futures_rustls::{rustls, TlsAcceptor};
-use fxhash::FxHashMap;
 use log::{error, info};
 use smol::Executor;
 
@@ -60,12 +59,12 @@ pub struct IrcConfig {
     // user config
     pub nickname: String,
     pub password: String,
-    pub capabilities: FxHashMap<String, bool>,
+    pub capabilities: HashMap<String, bool>,
 
     // channels and contacts
     pub auto_channels: Vec<String>,
-    pub configured_chans: FxHashMap<String, ChannelInfo>,
-    pub configured_contacts: FxHashMap<String, ContactInfo>,
+    pub configured_chans: HashMap<String, ChannelInfo>,
+    pub configured_contacts: HashMap<String, ContactInfo>,
 }
 
 impl IrcConfig {
@@ -80,7 +79,7 @@ impl IrcConfig {
         let configured_chans = parse_configured_channels(&toml_contents)?;
         let configured_contacts = parse_configured_contacts(&toml_contents)?;
 
-        let mut capabilities = FxHashMap::default();
+        let mut capabilities = HashMap::new();
         capabilities.insert("no-history".to_string(), false);
         Ok(Self {
             is_nick_init: false,

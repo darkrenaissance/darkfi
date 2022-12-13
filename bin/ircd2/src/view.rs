@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use fxhash::FxHashMap;
+use std::collections::HashMap;
 
 use darkfi::Result;
 
@@ -26,13 +26,13 @@ use crate::{
 };
 
 pub struct View {
-    seen: FxHashMap<EventId, Event>,
+    seen: HashMap<EventId, Event>,
     events_queue: EventsQueuePtr,
 }
 
 impl View {
     pub fn new(events_queue: EventsQueuePtr) -> Self {
-        Self { seen: FxHashMap::default(), events_queue }
+        Self { seen: HashMap::new(), events_queue }
     }
 
     pub async fn process(&mut self) -> Result<()> {

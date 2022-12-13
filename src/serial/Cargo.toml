@@ -14,7 +14,6 @@ futures-lite = {version = "1.12.0", optional = true}
 
 # Supported types for encoding
 blake3 = {version = "1.3.3", optional = true}
-fxhash = {version = "0.2.1", optional = true}
 incrementalmerkletree = {version = "0.3.0", optional = true}
 pasta_curves = {version = "0.4.1", optional = true}
 url = {version = "2.3.1", optional = true}
@@ -24,6 +23,6 @@ default = ["derive"]
 derive = ["darkfi-derive"]
 
 async = ["futures-lite"]
-collections = ["fxhash"]
+collections = []
 crypto = ["collections", "hash", "incrementalmerkletree", "pasta_curves"]
 hash = ["blake3"]

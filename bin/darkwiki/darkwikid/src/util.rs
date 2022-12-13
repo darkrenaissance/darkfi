@@ -17,6 +17,7 @@
  */
 
 use std::{
+    collections::HashMap,
     fs::{create_dir_all, read_dir},
     path::{Path, PathBuf},
 };
@@ -27,7 +28,6 @@ use dryoc::{
     constants::CRYPTO_SECRETBOX_MACBYTES,
     dryocbox::NewByteArray,
 };
-use fxhash::FxHashMap;
 use log::{error, info, warn};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -54,11 +54,11 @@ fn parse_b58_secret(s: &str) -> Result<[u8; 32]> {
     }
 }
 
-/// Parse a TOML string for configured workspaces and return an `FxHashMap`
+/// Parse a TOML string for configured workspaces and return an `HashMap`
 /// of parsed data. Does not error on failures, just warns if something is
 /// misconfigured.
-pub fn parse_workspaces(toml_str: &str) -> FxHashMap<String, Key> {
-    let mut ret = FxHashMap::default();
+pub fn parse_workspaces(toml_str: &str) -> HashMap<String, Key> {
+    let mut ret = HashMap::new();
 
     let settings: Args = match toml::from_str(toml_str) {
         Ok(v) => v,

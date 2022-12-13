@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{pedersen::pedersen_commitment_u64, MerkleNode, PublicKey, SecretKey};
+use darkfi_sdk::{
+    crypto::{pedersen::pedersen_commitment_u64, MerkleNode, PublicKey, SecretKey},
+    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
+};
 use halo2_gadgets::poseidon::{
     primitives as poseidon,
     primitives::{ConstantLength, P128Pow5T3},
@@ -26,7 +29,6 @@ use halo2_proofs::{
     circuit::Value,
     pasta::{group::Curve, pallas},
 };
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use rand::rngs::OsRng;
 use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 

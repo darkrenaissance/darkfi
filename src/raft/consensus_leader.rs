@@ -15,9 +15,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::collections::HashMap;
 
 use darkfi_serial::{serialize, Decodable, Encodable};
-use fxhash::FxHashMap;
 
 use crate::Result;
 
@@ -93,7 +93,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         Ok(())
     }
 
-    fn acks(&self, nodes: FxHashMap<NodeId, i64>, length: u64) -> FxHashMap<NodeId, i64> {
+    fn acks(&self, nodes: HashMap<NodeId, i64>, length: u64) -> HashMap<NodeId, i64> {
         nodes
             .into_iter()
             .filter(|n| {

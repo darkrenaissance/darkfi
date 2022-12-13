@@ -16,8 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use async_std::sync::{Arc, Mutex};
-use fxhash::FxHashMap;
 use log::warn;
 use rand::Rng;
 
@@ -55,12 +56,12 @@ impl<T: Clone> Subscription<T> {
 
 // Simple broadcast (publish-subscribe) class
 pub struct Subscriber<T> {
-    subs: Mutex<FxHashMap<u64, smol::channel::Sender<T>>>,
+    subs: Mutex<HashMap<u64, smol::channel::Sender<T>>>,
 }
 
 impl<T: Clone> Subscriber<T> {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { subs: Mutex::new(FxHashMap::default()) })
+        Arc::new(Self { subs: Mutex::new(HashMap::new()) })
     }
 
     fn random_id() -> SubscriptionId {

@@ -26,11 +26,11 @@ use darkfi_sdk::{
         ContractId, MerkleNode, PublicKey,
     },
     db::ZKAS_DB_NAME,
+    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
+    pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
-use incrementalmerkletree::{bridgetree::BridgeTree, Tree};
 use log::{debug, error, info, warn};
-use pasta_curves::{group::ff::PrimeField, pallas};
 use rand::rngs::OsRng;
 use serde_json::json;
 

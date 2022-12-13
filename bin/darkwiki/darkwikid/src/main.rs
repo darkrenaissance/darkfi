@@ -17,6 +17,7 @@
  */
 
 use std::{
+    collections::HashMap,
     fs::{create_dir_all, read_dir, remove_file},
     io::stdin,
     path::{Path, PathBuf},
@@ -30,7 +31,6 @@ use async_std::{
 };
 use dryoc::classic::crypto_secretbox::{crypto_secretbox_keygen, Key};
 use futures::{select, FutureExt};
-use fxhash::FxHashMap;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
 use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
@@ -62,7 +62,7 @@ type Patches = (Vec<Patch>, Vec<Patch>, Vec<Patch>, Vec<Patch>);
 
 lazy_static! {
     /// This is where we hold our workspaces, so we are also able to refresh them on SIGHUP.
-    static ref WORKSPACES: RwLock<FxHashMap<String, Key>> = RwLock::new(FxHashMap::default());
+    static ref WORKSPACES: RwLock<HashMap<String, Key>> = RwLock::new(HashMap::new());
 }
 
 pub const CONFIG_FILE: &str = "darkwikid_config.toml";
@@ -595,7 +595,7 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     // ====
     // Raft
     // ====
-    let seen_net_msgs = Arc::new(Mutex::new(FxHashMap::default()));
+    let seen_net_msgs = Arc::new(Mutex::new(HashMap::new()));
     let store_raft = store_path.join("darkwiki.db");
     let raft_settings = RaftSettings { datastore_path: store_raft, ..RaftSettings::default() };
     // FIXME: This is a bad design, and needs a proper rework.
