@@ -146,6 +146,12 @@ in our wallet.
 $ ./drk wallet --balance
 ```
 
+We can see the spent coin in our wallet.
+
+```
+$ ./drk wallet --coins
+```
+
 ## Atomic Swaps
 
 In order to do an atomic swap with someone, you will
