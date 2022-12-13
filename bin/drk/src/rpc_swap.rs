@@ -19,16 +19,20 @@
 use anyhow::{anyhow, Result};
 use darkfi::{
     tx::Transaction,
+    util::parse::encode_base10,
     zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses, Proof},
     zkas::ZkBinary,
 };
 use darkfi_money_contract::{
-    client::{build_half_swap_tx, EncryptedNote},
+    client::{build_half_swap_tx, EncryptedNote, Note},
     state::MoneyTransferParams,
     MoneyFunction, ZKAS_BURN_NS, ZKAS_MINT_NS,
 };
 use darkfi_sdk::{
-    crypto::{pedersen::ValueBlind, ContractId, SecretKey, TokenId},
+    crypto::{
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64, ValueBlind},
+        poseidon_hash, ContractId, PublicKey, SecretKey, TokenId,
+    },
     pasta::pallas,
     tx::ContractCall,
 };
@@ -240,6 +244,161 @@ impl Drk {
         tx.signatures = vec![sigs];
 
         Ok(tx)
+    }
+
+    /// Inspect and verify a given swap (half or full) transaction
+    pub async fn inspect_swap(&self, bytes: Vec<u8>) -> Result<()> {
+        let mut full: Option<Transaction> = None;
+        let mut _half: Option<PartialSwapData> = None;
+
+        match deserialize(&bytes) {
+            Ok(v) => full = Some(v),
+            Err(_) => {}
+        }
+
+        match deserialize(&bytes) {
+            Ok(v) => _half = Some(v),
+            Err(_) => {
+                if full.is_none() {
+                    return Err(anyhow!("Failed to deserialize to Transaction or PartialSwapData"))
+                }
+            }
+        }
+
+        if let Some(tx) = full {
+            // We're inspecting a full transaction
+            if tx.calls.len() != 1 {
+                eprintln!(
+                    "Found {} contract calls in the transaction, there should be 1",
+                    tx.calls.len()
+                );
+                return Err(anyhow!("Inspection failed"))
+            }
+
+            let params: MoneyTransferParams = deserialize(&tx.calls[0].data[1..])?;
+            eprintln!("Parameters:\n{:#?}", params);
+
+            if params.inputs.len() != 2 {
+                eprintln!("Found {} inputs, there should be 2", params.inputs.len());
+                return Err(anyhow!("Inspection failed"))
+            }
+
+            if params.outputs.len() != 2 {
+                eprintln!("Found {} outputs, there should be 2", params.outputs.len());
+                return Err(anyhow!("Inspection failed"))
+            }
+
+            // Try to decrypt one of the outputs.
+            let secret_keys = self.wallet_secrets().await?;
+            let mut skey: Option<SecretKey> = None;
+            let mut note: Option<Note> = None;
+            let mut output_idx = 0;
+
+            for output in &params.outputs {
+                let ciphertext = output.ciphertext.clone();
+                let ephem_public = output.ephem_public;
+                let e_note = EncryptedNote { ciphertext, ephem_public };
+                eprintln!("Trying to decrypt note in output {}", output_idx);
+
+                for secret in &secret_keys {
+                    if let Ok(d_note) = e_note.decrypt(secret) {
+                        let s: SecretKey = deserialize(&d_note.memo)?;
+                        skey = Some(s);
+                        note = Some(d_note);
+                        eprintln!("Successfully decrypted and found an ephemeral secret");
+                        break
+                    }
+                }
+
+                if note.is_some() {
+                    break
+                }
+
+                output_idx += 1;
+            }
+
+            let Some(note) = note else {
+                eprintln!("Error: Could not decrypt notes of either output");
+                return Err(anyhow!("Inspection failed"))
+            };
+
+            eprintln!(
+                "Output[{}] value: {} ({})",
+                output_idx,
+                note.value,
+                encode_base10(note.value, 8)
+            );
+            eprintln!("Output[{}] token ID: {}", output_idx, note.token_id);
+
+            let skey = skey.unwrap();
+            let (pub_x, pub_y) = PublicKey::from_secret(skey).xy();
+            let coin = poseidon_hash([
+                pub_x,
+                pub_y,
+                pallas::Base::from(note.value),
+                note.token_id.inner(),
+                note.serial,
+                note.coin_blind,
+            ]);
+
+            if coin == params.outputs[output_idx].coin {
+                eprintln!("Output[{}] coin matches decrypted note metadata", output_idx);
+            } else {
+                eprintln!("Error: Output[{}] coin does not match note metadata", output_idx);
+                return Err(anyhow!("Inspection failed"))
+            }
+
+            let valcom = pedersen_commitment_u64(note.value, note.value_blind);
+            let tokcom = pedersen_commitment_base(note.token_id.inner(), note.token_blind);
+
+            if valcom != params.outputs[output_idx].value_commit {
+                eprintln!(
+                    "Error: Output[{}] value commitment does not match note metadata",
+                    output_idx
+                );
+                return Err(anyhow!("Inspection failed"))
+            }
+
+            if tokcom != params.outputs[output_idx].token_commit {
+                eprintln!(
+                    "Error: Output[{}] token commitment does not match note metadata",
+                    output_idx
+                );
+                return Err(anyhow!("Inspection failed"))
+            }
+
+            eprintln!("Value and token commitments match decrypted note metadata");
+
+            // Verify that the output commitments match the other input commitments
+            match output_idx {
+                0 => {
+                    if valcom != params.inputs[1].value_commit ||
+                        tokcom != params.inputs[1].token_commit
+                    {
+                        eprintln!("Error: Value/Token commits of output[0] do not match input[1]");
+                        return Err(anyhow!("Inspection failed"))
+                    }
+                }
+                1 => {
+                    if valcom != params.inputs[0].value_commit ||
+                        tokcom != params.inputs[0].token_commit
+                    {
+                        eprintln!("Error: Value/Token commits of output[1] do not match input[0]");
+                        return Err(anyhow!("Inspection failed"))
+                    }
+                }
+                _ => unreachable!(),
+            }
+
+            eprintln!("Found matching pedersen commitments for outputs and inputs");
+
+            // TODO: Verify signature
+            // TODO: Verify ZK proofs
+            return Ok(())
+        }
+
+        // TODO: Inspect PartialSwapData
+        todo!("Inspect PartialSwapData");
     }
 
     /// Sign a given transaction by retrieving the secret key from the encrypted

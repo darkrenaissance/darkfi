@@ -205,6 +205,9 @@ enum OtcSubcmd {
     /// Build entire swap tx given the first half from stdin
     Join,
 
+    /// Inspect a swap half or the full swap tx from stdin
+    Inspect,
+
     /// Sign a transaction given from stdin as the first-half
     Sign,
 }
@@ -484,6 +487,15 @@ async fn main() -> Result<()> {
                         .with_context(|| "Failed to create a join swap transaction")?;
 
                     println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    Ok(())
+                }
+
+                OtcSubcmd::Inspect => {
+                    let mut buf = String::new();
+                    stdin().read_to_string(&mut buf)?;
+                    let bytes = bs58::decode(&buf.trim()).into_vec()?;
+
+                    drk.inspect_swap(bytes).await.with_context(|| "Failed to inspect swap")?;
                     Ok(())
                 }
 
