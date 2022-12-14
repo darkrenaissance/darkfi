@@ -105,7 +105,6 @@ impl Drk {
                     eprintln!("Block header:\n{:#?}", block_data.header);
                     eprintln!("=======================================");
 
-                    // TODO: FIXME: Disallow this if last_scanned_slot is not this-1 or something
                     eprintln!("Deserialized successfully. Scanning block...");
                     self.scan_block(&block_data).await?;
                 }
