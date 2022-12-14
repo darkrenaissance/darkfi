@@ -66,3 +66,6 @@ pub mod pedersen;
 
 /// Schnorr signature traits
 pub mod schnorr;
+
+/// MiMC VDF
+pub mod mimc_vdf;
