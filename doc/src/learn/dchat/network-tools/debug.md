@@ -1,7 +1,7 @@
 # Debugging
 
 As a final step, let's quickly turn to the debug output of `dnetview`
-which is stored in `/tmp/dnetview.log`.
+which is stored in `.local/darkfi/dnetview.log`.
 
 Run `dnetview` in `verbose` mode to enable debugging.
 
