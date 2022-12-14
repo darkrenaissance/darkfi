@@ -251,10 +251,9 @@ impl Drk {
         let mut full: Option<Transaction> = None;
         let mut _half: Option<PartialSwapData> = None;
 
-        match deserialize(&bytes) {
-            Ok(v) => full = Some(v),
-            Err(_) => {}
-        }
+        if let Ok(v) = deserialize(&bytes) {
+            full = Some(v)
+        };
 
         match deserialize(&bytes) {
             Ok(v) => _half = Some(v),

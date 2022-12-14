@@ -130,7 +130,7 @@ pub struct Model {
     current_root: EventId,
     orphans: HashMap<EventId, Event>,
     event_map: HashMap<EventId, EventNode>,
-    events_queue: EventsQueueArc,
+    _events_queue: EventsQueueArc,
 }
 
 impl Model {
@@ -155,7 +155,12 @@ impl Model {
         let mut event_map = HashMap::new();
         event_map.insert(root_node_id, root_node);
 
-        Self { current_root: root_node_id, orphans: HashMap::new(), event_map, events_queue }
+        Self {
+            current_root: root_node_id,
+            orphans: HashMap::new(),
+            event_map,
+            _events_queue: events_queue,
+        }
     }
 
     pub fn add(&mut self, event: Event) {

@@ -98,6 +98,7 @@ pub struct LeadCoin {
 
 impl LeadCoin {
     /// Create a new `LeadCoin` object using given parameters.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         // emulation of global random oracle output from previous epoch randomness.
         eta: pallas::Base,
@@ -383,6 +384,7 @@ impl LeadCoin {
         (Ok(Proof::create(pk, &[circuit], &public_inputs, &mut OsRng).unwrap()), public_inputs)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_xfer_proof(
         &self,
         pk: &ProvingKey,

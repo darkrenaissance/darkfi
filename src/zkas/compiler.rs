@@ -42,6 +42,7 @@ pub struct Compiler {
 }
 
 impl Compiler {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         filename: &str,
         source: Chars,

@@ -212,5 +212,5 @@ pub fn fg_green(message: &str) -> String {
 }
 
 pub fn fg_reset() -> String {
-    format!("\x1b[0m")
+    "\x1b[0m".to_string()
 }

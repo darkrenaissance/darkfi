@@ -409,13 +409,7 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
             let db_handle = &db_handles[handle_idx];
 
             match db_handle.contains_key(&key) {
-                Ok(v) => {
-                    if v {
-                        1 // true
-                    } else {
-                        0 // false
-                    }
-                }
+                Ok(v) => i32::from(v), // <- 0=false, 1=true
                 Err(e) => {
                     error!(target: "wasm_runtime::db_contains_key", "sled.tree.contains_key failed: {}", e);
                     DB_CONTAINS_KEY_FAILED

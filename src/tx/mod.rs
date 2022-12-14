@@ -55,11 +55,13 @@ pub struct Transaction {
     pub signatures: Vec<Vec<Signature>>,
 }
 
+type VerifyingKeyMap = Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>;
+
 impl Transaction {
     /// Verify ZK proofs for the entire transaction.
     pub async fn verify_zkps(
         &self,
-        verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
+        verifying_keys: VerifyingKeyMap,
         zkp_table: Vec<Vec<(String, Vec<pallas::Base>)>>,
     ) -> Result<()> {
         // TODO: Are we sure we should assert here?

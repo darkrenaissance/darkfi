@@ -22,16 +22,17 @@ use darkfi::Result;
 
 use crate::model::{Event, EventId, EventsQueueArc};
 
+#[allow(dead_code)]
 struct View {
     seen: HashMap<EventId, Event>,
 }
 
 impl View {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Self { seen: HashMap::new() }
     }
 
-    pub async fn process(&mut self, events_queue: EventsQueueArc) -> Result<()> {
+    pub async fn _process(&mut self, events_queue: EventsQueueArc) -> Result<()> {
         loop {
             let new_event = events_queue.fetch().await?;
             // TODO sort the events

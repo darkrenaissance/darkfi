@@ -76,6 +76,7 @@ impl Default for LeadInfo {
 }
 
 impl LeadInfo {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         signature: Signature,
         public_key: PublicKey,

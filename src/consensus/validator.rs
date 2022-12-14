@@ -61,6 +61,8 @@ use crate::{
 /// Atomic pointer to validator state.
 pub type ValidatorStatePtr = Arc<RwLock<ValidatorState>>;
 
+type VerifyingKeyMap = Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>;
+
 /// This struct represents the state of a validator node.
 pub struct ValidatorState {
     /// Leader proof proving key
@@ -79,7 +81,7 @@ pub struct ValidatorState {
     //        externally.
     pub subscribers: HashMap<&'static str, SubscriberPtr<JsonNotification>>,
     /// ZK proof verifying keys for smart contract calls
-    pub verifying_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>,
+    pub verifying_keys: VerifyingKeyMap,
     /// Wallet interface
     pub wallet: WalletPtr,
 }

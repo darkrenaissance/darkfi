@@ -78,7 +78,7 @@ impl Transport for UnixTransport {
         }
 
         let socket_path = url.path();
-        let socket_addr = SocketAddr::from_pathname(&socket_path)?;
+        let socket_addr = SocketAddr::from_pathname(socket_path)?;
         debug!(target: "net", "{} transport: listening on {}", url.scheme(), socket_path);
         Ok(Box::pin(self.do_listen(socket_addr)))
     }
@@ -94,13 +94,19 @@ impl Transport for UnixTransport {
         }
 
         let socket_path = url.path();
-        let socket_addr = SocketAddr::from_pathname(&socket_path)?;
+        let socket_addr = SocketAddr::from_pathname(socket_path)?;
         debug!(target: "net", "{} transport: listening on {}", url.scheme(), socket_path);
         Ok(Box::pin(self.do_dial(socket_addr, timeout)))
     }
 
     fn upgrade_dialer(self, _connector: Self::Connector) -> Result<Self::TlsDialer> {
         unimplemented!("TLS not supported for Unix sockets");
+    }
+}
+
+impl Default for UnixTransport {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

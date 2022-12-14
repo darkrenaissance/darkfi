@@ -160,6 +160,8 @@ struct Args {
     verbose: u8,
 }
 
+type ProvingKeyMap = Arc<RwLock<HashMap<[u8; 32], Vec<(String, ProvingKey, ZkBinary)>>>>;
+
 pub struct Faucetd {
     synced: Mutex<bool>, // AtomicBool is weird in Arc
     sync_p2p: P2pPtr,
@@ -170,7 +172,7 @@ pub struct Faucetd {
     airdrop_timeout: i64,
     airdrop_limit: u64,
     airdrop_map: Arc<Mutex<HashMap<[u8; 32], i64>>>,
-    proving_keys: Arc<RwLock<HashMap<[u8; 32], Vec<(String, ProvingKey, ZkBinary)>>>>,
+    proving_keys: ProvingKeyMap,
 }
 
 #[async_trait]

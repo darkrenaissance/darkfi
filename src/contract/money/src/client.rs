@@ -233,6 +233,7 @@ struct TransferBurnRevealed {
 }
 
 impl TransferBurnRevealed {
+    #[allow(clippy::too_many_arguments)]
     pub fn compute(
         value: u64,
         token_id: TokenId,
@@ -323,6 +324,7 @@ struct TransferMintRevealed {
 }
 
 impl TransferMintRevealed {
+    #[allow(clippy::too_many_arguments)]
     pub fn compute(
         value: u64,
         token_id: TokenId,
@@ -369,6 +371,7 @@ impl TransferMintRevealed {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_transfer_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
@@ -416,6 +419,7 @@ fn create_transfer_mint_proof(
     Ok((proof, revealed))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_transfer_burn_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
@@ -485,6 +489,8 @@ fn create_transfer_burn_proof(
 /// * `mint_pk` - Proving key for the ZK mint proof
 /// * `burn_zkbin` - ZkBinary of the burn circuit
 /// * `burn_pk` - Proving key for the ZK burn proof
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 pub fn build_half_swap_tx(
     pubkey: &PublicKey,
     value_send: u64,
@@ -675,6 +681,8 @@ pub fn build_half_swap_tx(
 /// * `burn_zkbin` - ZkBinary of the burn circuit
 /// * `burn_pk` - Proving key for the ZK burn proof
 /// * `clear_input` - Marks if we're creating clear or anonymous inputs
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 pub fn build_transfer_tx(
     keypair: &Keypair,
     pubkey: &PublicKey,

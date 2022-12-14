@@ -415,7 +415,7 @@ impl DoubleRatchetSessionState {
         (self.root_key, self.chain_key_recv, self.next_header_key_recv) =
             kdf_rk(self.root_key, hkdf_ikm.to_bytes());
 
-        let dh_secret_new = X25519SecretKey::new(&mut OsRng);
+        let dh_secret_new = X25519SecretKey::new(OsRng);
         self.dh_sending = dh_secret_new;
 
         let hkdf_ikm = self.dh_sending.diffie_hellman(&self.dh_remote);
@@ -435,11 +435,11 @@ fn main() {
     // 3. Bob receives and processes Alice's initial message.
 
     // Alice's identity key `IK_A`
-    let alice_ik_secret = X25519SecretKey::new(&mut OsRng);
+    let alice_ik_secret = X25519SecretKey::new(OsRng);
     let alice_ik_public = X25519PublicKey::from(&alice_ik_secret);
 
     // Bob's identity key `IK_B`
-    let bob_ik_secret = X25519SecretKey::new(&mut OsRng);
+    let bob_ik_secret = X25519SecretKey::new(OsRng);
     let bob_ik_public = X25519PublicKey::from(&bob_ik_secret);
 
     // Bob only needs to upload his identity key to the server once.
@@ -451,7 +451,7 @@ fn main() {
     // and prekey signature will replace the previous values.
 
     // Bob's signed prekey `SPK_B`
-    let bob_spk_secret = X25519SecretKey::new(&mut OsRng);
+    let bob_spk_secret = X25519SecretKey::new(OsRng);
     let bob_spk_public = X25519PublicKey::from(&bob_spk_secret);
 
     // Bob's prekey signature `Sig(IK_b, Encode(SPK_B))`
@@ -459,11 +459,8 @@ fn main() {
     let bob_spk_sig = bob_ik_secret.xeddsa_sign(&bob_spk_public.to_bytes(), &nonce);
 
     // A set of Bob's one-time prekeys `(OPK_B1, OPK_B2, OPK_B3, ...)`
-    let mut bob_opk_secrets = vec![
-        X25519SecretKey::new(&mut OsRng),
-        X25519SecretKey::new(&mut OsRng),
-        X25519SecretKey::new(&mut OsRng),
-    ];
+    let mut bob_opk_secrets =
+        vec![X25519SecretKey::new(OsRng), X25519SecretKey::new(OsRng), X25519SecretKey::new(OsRng)];
     let mut bob_opk_publics = VecDeque::new();
     bob_opk_publics.push_back(X25519PublicKey::from(&bob_opk_secrets[0]));
     bob_opk_publics.push_back(X25519PublicKey::from(&bob_opk_secrets[1]));
@@ -493,7 +490,7 @@ fn main() {
         .xeddsa_verify(&bob_keyset.signed_prekey.to_bytes(), &bob_keyset.prekey_signature));
 
     // Alice then generates an ephemeral keypair with public key `EK_A`
-    let alice_ek_secret = X25519SecretKey::new(&mut OsRng);
+    let alice_ek_secret = X25519SecretKey::new(OsRng);
     let alice_ek_public = X25519PublicKey::from(&alice_ek_secret);
 
     // If the bundle does _not_ contain a one-time prekey, she calculates:
@@ -661,7 +658,7 @@ fn main() {
     // and Bob initialize their states:
 
     // Alice:
-    let alice_dh_secret = X25519SecretKey::new(&mut OsRng);
+    let alice_dh_secret = X25519SecretKey::new(OsRng);
 
     // The X3DH secret becomes the HKDF salt, and the ikm is the DH output
     // of Alice's DH secret and Bob's SPK_B.

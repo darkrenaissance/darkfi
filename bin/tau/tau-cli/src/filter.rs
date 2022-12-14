@@ -144,7 +144,7 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
                         tasks.retain(|task| task.due.is_none())
                     } else {
                         let filter_date = if value == "today" {
-                            Local::today().naive_local()
+                            Local::now().date_naive()
                         } else {
                             let due_date = due_as_timestamp(value).unwrap_or(0);
                             NaiveDateTime::from_timestamp_opt(due_date, 0).unwrap().date()
