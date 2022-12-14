@@ -45,7 +45,7 @@ RUN apt-get -y update && apt-get install -y openssl fonts-lato \
 
 WORKDIR /opt/darkfi
 
-COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid /opt/darkfi/tau /opt/darkfi/taud \
-  /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/darkotc /opt/darkfi/darkwikid \
-  /opt/darkfi/darkwiki /opt/darkfi/zkas /opt/darkfi/dao /opt/darkfi/daod ./
+COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid /opt/darkfi/tau \
+  /opt/darkfi/taud /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
+  /opt/darkfi/darkwikid /opt/darkfi/darkwiki /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./
 

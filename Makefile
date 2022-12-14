@@ -39,7 +39,7 @@ contracts: zkas
 	$(MAKE) -C src/contract/money
 	$(MAKE) -C src/contract/dao
 
-$(PROOFS_BIN): $(PROOFS)
+$(PROOFS_BIN): $(PROOFS) zkas
 	./zkas $(basename $@) -o $@
 
 token_lists:
