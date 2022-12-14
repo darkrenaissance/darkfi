@@ -43,4 +43,30 @@ impl Darkfid {
     pub async fn misc_clock(&self, id: Value, _params: &[Value]) -> JsonResult {
         JsonResponse::new(json!(Timestamp::current_time()), id).into()
     }
+
+    // RPCAPI:
+    // Returns sync P2P network information.
+    //
+    // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
+    pub async fn misc_get_info(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let resp = match &self.sync_p2p {
+            Some(p2p) => p2p.get_info().await,
+            None => json!([]),
+        };
+        JsonResponse::new(resp, id).into()
+    }
+
+    // RPCAPI:
+    // Returns consensus P2P network information.
+    //
+    // --> {"jsonrpc": "2.0", "method": "get_consensus_info", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
+    pub async fn misc_get_consensus_info(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let resp = match &self.consensus_p2p {
+            Some(p2p) => p2p.get_info().await,
+            None => json!([]),
+        };
+        JsonResponse::new(resp, id).into()
+    }
 }

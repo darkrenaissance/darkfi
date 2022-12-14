@@ -37,4 +37,5 @@ pub struct Node {
 pub enum NodeType {
     LILITH,
     NORMAL,
+    CONSENSUS,
 }

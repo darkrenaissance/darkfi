@@ -203,6 +203,8 @@ impl RequestHandler for Darkfid {
             // =====================
             Some("ping") => return self.misc_pong(req.id, params).await,
             Some("clock") => return self.misc_clock(req.id, params).await,
+            Some("get_info") => return self.misc_get_info(req.id, params).await,
+            Some("get_consensus_info") => return self.misc_get_consensus_info(req.id, params).await,
 
             // ==================
             // Blockchain methods

@@ -44,10 +44,20 @@ impl RpcConnect {
         self.rpc_client.request(req).await
     }
 
-    // --> {"jsonrpc": "2.0", "method": "poll", "params": [], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
     pub async fn get_info(&self) -> DnetViewResult<Value> {
         let req = JsonRequest::new("get_info", json!([]));
+        match self.rpc_client.request(req).await {
+            Ok(req) => Ok(req),
+            Err(e) => Err(DnetViewError::Darkfi(e)),
+        }
+    }
+
+    // --> {"jsonrpc": "2.0", "method": "get_consensus_info", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
+    pub async fn get_consensus_info(&self) -> DnetViewResult<Value> {
+        let req = JsonRequest::new("get_consensus_info", json!([]));
         match self.rpc_client.request(req).await {
             Ok(req) => Ok(req),
             Err(e) => Err(DnetViewError::Darkfi(e)),

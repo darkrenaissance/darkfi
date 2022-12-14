@@ -88,6 +88,7 @@ impl DataParser {
             let response = match &node.node_type {
                 NodeType::LILITH => client.lilith_spawns().await,
                 NodeType::NORMAL => client.get_info().await,
+                NodeType::CONSENSUS => client.get_consensus_info().await,
             };
 
             // Parse response
@@ -105,9 +106,7 @@ impl DataParser {
                             )
                             .await?
                         }
-                        NodeType::NORMAL => {
-                            self.parse_data(reply.as_object().unwrap(), node.name.clone()).await?
-                        }
+                        _ => self.parse_data(reply.as_object().unwrap(), node.name.clone()).await?,
                     };
                 }
                 Err(e) => return Err(e),
