@@ -1,10 +1,10 @@
-constant "Burn" {
+constant "Burn_V1" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "Burn" {
+contract "Burn_V1" {
 	# The value of this coin
 	Base value,
 	# The token ID
@@ -33,7 +33,7 @@ contract "Burn" {
 	Base signature_secret,
 }
 
-circuit "Burn" {
+circuit "Burn_V1" {
 	# Poseidon hash of the nullifier
 	nullifier = poseidon_hash(secret, serial);
 	constrain_instance(nullifier);

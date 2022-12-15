@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{ContractId, MerkleNode},
-    db::ZKAS_DB_NAME,
+    db::SMART_CONTRACT_ZKAS_DB_NAME,
 };
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
@@ -150,7 +150,7 @@ impl Darkfid {
 
         let blockchain = { self.validator_state.read().await.blockchain.clone() };
 
-        let Ok(zkas_db) = blockchain.contracts.lookup(&blockchain.sled_db, &contract_id, ZKAS_DB_NAME) else {
+        let Ok(zkas_db) = blockchain.contracts.lookup(&blockchain.sled_db, &contract_id, SMART_CONTRACT_ZKAS_DB_NAME) else {
             error!("[RPC] blockchain.lookup_zkas: Did not find zkas db for ContractId: {}", contract_id);
             return server_error(RpcError::ContractZkasDbNotFound, id, None)
         };

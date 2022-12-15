@@ -22,7 +22,7 @@ use darkfi_sdk::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
         Coin, ContractId, MerkleNode, MerkleTree, PublicKey,
     },
-    db::{db_contains_key, db_get, db_init, db_lookup, db_set, ZKAS_DB_NAME},
+    db::{db_contains_key, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME},
     error::ContractResult,
     merkle::merkle_add,
     msg,
@@ -82,18 +82,18 @@ darkfi_sdk::define_contract!(
 );
 
 // These are the different sled trees that will be created
-pub const COIN_ROOTS_TREE: &str = "coin_roots";
-pub const NULLIFIERS_TREE: &str = "nullifiers";
-pub const INFO_TREE: &str = "info";
+pub const MONEY_CONTRACT_COIN_ROOTS_TREE: &str = "coin_roots";
+pub const MONEY_CONTRACT_NULLIFIERS_TREE: &str = "nullifiers";
+pub const MONEY_CONTRACT_INFO_TREE: &str = "info";
 
 // This is a key inside the info tree
-pub const COIN_MERKLE_TREE: &str = "coin_tree";
-pub const FAUCET_PUBKEYS: &str = "faucet_pubkeys";
+pub const MONEY_CONTRACT_COIN_MERKLE_TREE: &str = "coin_tree";
+pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &str = "faucet_pubkeys";
 
 /// zkas mint contract namespace
-pub const ZKAS_MINT_NS: &str = "Mint";
+pub const MONEY_CONTRACT_ZKAS_MINT_NS_V1: &str = "Mint_V1";
 /// zkas burn contract namespace
-pub const ZKAS_BURN_NS: &str = "Burn";
+pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
 
 /// This function runs when the contract is (re)deployed and initialized.
 #[cfg(not(feature = "no-entrypoint"))]
@@ -105,12 +105,12 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization. Note that the tree should then be called "zkas".
     // The lookups can then be done by `contract_id+_zkas+namespace`.
-    let zkas_db = match db_lookup(cid, ZKAS_DB_NAME) {
+    let zkas_db = match db_lookup(cid, SMART_CONTRACT_ZKAS_DB_NAME) {
         Ok(v) => v,
-        Err(_) => db_init(cid, ZKAS_DB_NAME)?,
+        Err(_) => db_init(cid, SMART_CONTRACT_ZKAS_DB_NAME)?,
     };
-    let mint_bincode = include_bytes!("../proof/mint.zk.bin");
-    let burn_bincode = include_bytes!("../proof/burn.zk.bin");
+    let mint_v1_bincode = include_bytes!("../proof/mint_v1.zk.bin");
+    let burn_v1_bincode = include_bytes!("../proof/burn_v1.zk.bin");
 
     /* TODO: Do I really want to make zkas a dependency? Yeah, in the future.
        For now we take anything.
@@ -123,26 +123,26 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     db_set(zkas_db, &serialize(&mint_namespace), &mint_bincode[..])?;
     db_set(zkas_db, &serialize(&burn_namespace), &burn_bincode[..])?;
     */
-    db_set(zkas_db, &serialize(&ZKAS_MINT_NS.to_string()), &mint_bincode[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_BURN_NS.to_string()), &burn_bincode[..])?;
+    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1), &mint_v1_bincode[..])?;
+    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1), &burn_v1_bincode[..])?;
 
     // Set up a database tree to hold Merkle roots
-    let _ = match db_lookup(cid, COIN_ROOTS_TREE) {
+    let _ = match db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE) {
         Ok(v) => v,
-        Err(_) => db_init(cid, COIN_ROOTS_TREE)?,
+        Err(_) => db_init(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?,
     };
 
     // Set up a database tree to hold nullifiers
-    let _ = match db_lookup(cid, NULLIFIERS_TREE) {
+    let _ = match db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE) {
         Ok(v) => v,
-        Err(_) => db_init(cid, NULLIFIERS_TREE)?,
+        Err(_) => db_init(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?,
     };
 
     // Set up a database tree for arbitrary data
-    let info_db = match db_lookup(cid, INFO_TREE) {
+    let info_db = match db_lookup(cid, MONEY_CONTRACT_INFO_TREE) {
         Ok(v) => v,
         Err(_) => {
-            let info_db = db_init(cid, INFO_TREE)?;
+            let info_db = db_init(cid, MONEY_CONTRACT_INFO_TREE)?;
             // Add a Merkle tree to the info db:
             let coin_tree = MerkleTree::new(100);
             let mut coin_tree_data = vec![];
@@ -150,13 +150,13 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
             coin_tree_data.write_u32(0)?;
             coin_tree.encode(&mut coin_tree_data)?;
 
-            db_set(info_db, &serialize(&COIN_MERKLE_TREE.to_string()), &coin_tree_data)?;
+            db_set(info_db, &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE), &coin_tree_data)?;
             info_db
         }
     };
 
     // Whitelisted faucets
-    db_set(info_db, &serialize(&FAUCET_PUBKEYS.to_string()), &serialize(&faucet_pubkeys))?;
+    db_set(info_db, &serialize(&MONEY_CONTRACT_FAUCET_PUBKEYS), &serialize(&faucet_pubkeys))?;
 
     Ok(())
 }
@@ -187,7 +187,7 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
                 let (sig_x, sig_y) = input.signature_public.xy();
 
                 zk_public_values.push((
-                    ZKAS_BURN_NS.to_string(),
+                    MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string(),
                     vec![
                         input.nullifier.inner(),
                         *value_coords.x(),
@@ -209,7 +209,7 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
                 let token_coords = output.token_commit.to_affine().coordinates().unwrap();
 
                 zk_public_values.push((
-                    ZKAS_MINT_NS.to_string(),
+                    MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
                     vec![
                         //output.coin.inner(),
                         output.coin,
@@ -253,11 +253,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             assert!(params.clear_inputs.len() + params.inputs.len() > 0);
             assert!(!params.outputs.is_empty());
 
-            let info_db = db_lookup(cid, INFO_TREE)?;
-            let nullifier_db = db_lookup(cid, NULLIFIERS_TREE)?;
-            let coin_roots_db = db_lookup(cid, COIN_ROOTS_TREE)?;
+            let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+            let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+            let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
-            let Some(faucet_pubkeys) = db_get(info_db, &serialize(&FAUCET_PUBKEYS.to_string()))? else {
+            let Some(faucet_pubkeys) = db_get(info_db, &serialize(&MONEY_CONTRACT_FAUCET_PUBKEYS))? else {
                 msg!("[Transfer] Error: Missing faucet pubkeys from info db");
                 return Err(ContractError::Internal);
             };
@@ -292,7 +292,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
                 // The nullifiers should not already exist. It is the double-spend protection.
                 if new_nullifiers.contains(&input.nullifier) ||
-                    db_contains_key(nullifier_db, &serialize(&input.nullifier))?
+                    db_contains_key(nullifiers_db, &serialize(&input.nullifier))?
                 {
                     msg!("[Transfer] Error: Duplicate nullifier found in input {}", i);
                     return Err(ContractError::Custom(22))
@@ -354,8 +354,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             msg!("[OtcSwap] Entered match arm");
             let params: MoneyTransferParams = deserialize(&self_.data[1..])?;
 
-            let nullifier_db = db_lookup(cid, NULLIFIERS_TREE)?;
-            let coin_roots_db = db_lookup(cid, COIN_ROOTS_TREE)?;
+            let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+            let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
             // State transition for OTC swaps
             // For now we enforce 2 inputs and 2 outputs, which means the coins
@@ -401,7 +401,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
                 // The nullifiers should not already exist. It is the double-spend protection.
                 if new_nullifiers.contains(&input.nullifier) ||
-                    db_contains_key(nullifier_db, &serialize(&input.nullifier))?
+                    db_contains_key(nullifiers_db, &serialize(&input.nullifier))?
                 {
                     msg!("[OtcSwap] Error: Duplicate nullifier found in input {}", i);
                     return Err(ContractError::Custom(22))
@@ -453,9 +453,9 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         MoneyFunction::Transfer | MoneyFunction::OtcSwap => {
             let update: MoneyTransferUpdate = deserialize(&update_data[1..])?;
 
-            let info_db = db_lookup(cid, INFO_TREE)?;
-            let nullifiers_db = db_lookup(cid, NULLIFIERS_TREE)?;
-            let coin_roots_db = db_lookup(cid, COIN_ROOTS_TREE)?;
+            let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+            let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+            let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
             for nullifier in update.nullifiers {
                 db_set(nullifiers_db, &serialize(&nullifier), &[])?;
@@ -463,7 +463,12 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
 
             msg!("Adding coins {:?} to Merkle tree", update.coins);
             let coins: Vec<_> = update.coins.iter().map(|x| MerkleNode::from(x.inner())).collect();
-            merkle_add(info_db, coin_roots_db, &serialize(&COIN_MERKLE_TREE.to_string()), &coins)?;
+            merkle_add(
+                info_db,
+                coin_roots_db,
+                &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE),
+                &coins,
+            )?;
 
             Ok(())
         }

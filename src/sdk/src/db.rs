@@ -25,7 +25,7 @@ use super::{
 };
 
 // This might not be the right place for this constant...
-pub const ZKAS_DB_NAME: &str = "_zkas";
+pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
 
 pub type DbHandle = u32;
 

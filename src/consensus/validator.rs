@@ -25,7 +25,7 @@ use darkfi_sdk::{
         schnorr::{SchnorrPublic, SchnorrSecret},
         ContractId, MerkleNode, PublicKey,
     },
-    db::ZKAS_DB_NAME,
+    db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{group::ff::PrimeField, pallas},
 };
@@ -177,7 +177,11 @@ impl ValidatorState {
             // initialize verifying keys for them.
             info!("Creating ZK verifying keys for {} zkas circuits", nc.0);
             info!("Looking up zkas db for {} (ContractID: {})", nc.0, nc.1);
-            let zkas_db = blockchain.contracts.lookup(&blockchain.sled_db, &nc.1, ZKAS_DB_NAME)?;
+            let zkas_db = blockchain.contracts.lookup(
+                &blockchain.sled_db,
+                &nc.1,
+                SMART_CONTRACT_ZKAS_DB_NAME,
+            )?;
 
             let mut vks = vec![];
             for i in zkas_db.iter() {

@@ -10,7 +10,19 @@ CARGO = cargo
 #RUSTFLAGS = -C target-cpu=native
 
 # Binaries to be built
-BINS = drk darkfid tau taud ircd dnetview darkwikid darkwiki faucetd vanityaddr
+BINS = drk darkfid ircd dnetview faucetd vanityaddr
+
+# zkas dependencies
+ZKASDEPS = \
+	Cargo.toml \
+	bin/zkas/Cargo.toml \
+	$(shell find src/zkas -type f) \
+	$(shell find src/serial -type f) \
+	$(shell find bin/zkas/src -type f)
+
+# ZK proofs to compile with zkas
+PROOFS_SRC = $(shell find proof -type f -name '*.zk')
+PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
 # Common dependencies which should force the binaries to be rebuilt
 BINDEPS = \
@@ -20,27 +32,18 @@ BINDEPS = \
 	$(shell find src -type f) \
 	$(shell find contrib/token -type f)
 
-# ZK proofs to compile with zkas
-PROOFS = \
-	$(shell find bin/dao/daod/proof -type f -name '*.zk') \
-	$(shell find example/dao/proof -type f -name '*.zk') \
-	$(shell find proof -type f -name '*.zk') \
-	example/simple.zk
+all: $(BINS)
 
-PROOFS_BIN = $(PROOFS:=.bin)
-
-all: zkas $(PROOFS_BIN) $(BINS)
-
-zkas: $(BINDEPS)
+zkas: $(ZKASDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
+
+$(PROOFS_BIN): zkas $(PROOFS_SRC)
+	./zkas $(basename $@) -o $@
 
 contracts: zkas
 	$(MAKE) -C src/contract/money
 	$(MAKE) -C src/contract/dao
-
-$(PROOFS_BIN): $(PROOFS) zkas
-	./zkas $(basename $@) -o $@
 
 token_lists:
 	$(MAKE) -C contrib/token all
@@ -49,24 +52,20 @@ $(BINS): token_lists contracts $(PROOFS_BIN) $(BINDEPS)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
 	cp -f target/release/$@ $@
 
-check: token_lists zkas $(PROOFS_BIN) contracts
+check: token_lists contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --release --feature-powerset --all
 
-fix: token_lists zkas $(PROOFS_BIN)
+fix: token_lists contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --fix --allow-dirty --all
 
-clippy: token_lists zkas $(PROOFS_BIN)
+clippy: token_lists contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --all
 
-rustdoc: token_lists zkas
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --workspace --all-features \
-		--no-deps --document-private-items
+rustdoc: token_lists contracts $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --all-features --workspace --no-deps --document-private-items
 
-test: token_lists zkas $(PROOFS_BIN) contracts
+test: token_lists $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all
-
-test-dao: zkas
-	$(MAKE) -C example/dao
 
 cleanbin:
 	rm -f $(BINS)
@@ -93,4 +92,4 @@ uninstall:
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
 
-.PHONY: all contracts check fix clippy rustdoc test clean cleanbin install uninstall
+.PHONY: all contracts token_lists check fix clippy rustdoc test cleanbin clean install uninstall

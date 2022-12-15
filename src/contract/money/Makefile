@@ -1,11 +1,14 @@
+.POSIX:
+
 # Cargo binary
-CARGO ?= cargo
+CARGO = cargo
 
-# Zkas binary
-ZKAS ?= ../../../zkas
+# zkas compiler binary
+ZKAS = ../../../zkas
 
-# zkas circuit source files
-ZKAS_SRC = $(shell find proof -type f -name '*.zk')
+# zkas circuits
+PROOFS_SRC = $(shell find proof -type f -name '*.zk')
+PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
 # wasm source files
 WASM_SRC = \
@@ -13,35 +16,31 @@ WASM_SRC = \
 	$(shell find ../../sdk -type f) \
 	$(shell find ../../serial -type f)
 
-# zkas circuit bin files
-ZKAS_BIN = $(ZKAS_SRC:=.bin)
-
-# Contract WASM binaries
+# wasm contract binary
 WASM_BIN = money_contract.wasm
 
-# Filter test to run
-FILTER = ''
+all: $(WASM_BIN)
 
-all: $(ZKAS_BIN) $(WASM_BIN)
-
-$(ZKAS_BIN): $(ZKAS_SRC)
-	$(ZKAS) $(basename $@) -o $@
-
-money_contract.wasm: $(ZKAS_BIN) $(WASM_SRC)
+$(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
 	$(CARGO) build --release --package darkfi-money-contract --target wasm32-unknown-unknown
 	cp -f ../../../target/wasm32-unknown-unknown/release/darkfi_money_contract.wasm $@
 
-test-drop-pay-swap: all
-	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-money-contract --test drop_pay_swap
+$(PROOFS_BIN): $(ZKAS) $(PROOFS_SRC)
+	$(ZKAS) $(basename $@) -o $@
 
-test: test-drop-pay-swap
+test-drop-pay-swap: all
+	$(CARGO) test --release --features=no-entrypoint,client \
+		--package darkfi-money-contract \
+		--test drop_pay_swap
 
 bench:
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
 		--test verification_bench $(FILTER)
 
-clean:
-	rm -f $(ZKAS_BIN) $(WASM_BIN)
+test: test-drop-pay-swap
 
-.PHONY: all test clean
+clean:
+	rm -f $(PROOFS_BIN) $(WASM_BIN)
+
+.PHONY: all test-drop-pay-swap bench test clean

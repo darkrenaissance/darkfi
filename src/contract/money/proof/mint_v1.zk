@@ -1,10 +1,10 @@
-constant "Mint" {
+constant "Mint_V1" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "Mint" {
+contract "Mint_V1" {
 	# X coordinate for public key
 	Base pub_x,
 	# Y coordinate for public key
@@ -27,7 +27,7 @@ contract "Mint" {
 	Scalar token_blind,
 }
 
-circuit "Mint" {
+circuit "Mint_V1" {
 	# Poseidon hash of the coin
 	C = poseidon_hash(
 		pub_x,

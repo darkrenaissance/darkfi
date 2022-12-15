@@ -25,7 +25,7 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{build_transfer_tx, OwnCoin},
-    MoneyFunction, ZKAS_BURN_NS, ZKAS_MINT_NS,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{ContractId, Keypair, PublicKey, TokenId},
@@ -34,7 +34,6 @@ use darkfi_sdk::{
 };
 use darkfi_serial::Encodable;
 use rand::rngs::OsRng;
-//use serde_json::json;
 
 use super::Drk;
 
@@ -86,11 +85,11 @@ impl Drk {
         // We also do this through the RPC.
         let zkas_bins = self.lookup_zkas(&contract_id).await?;
 
-        let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == ZKAS_MINT_NS) else {
+        let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1) else {
             return Err(anyhow!("Mint circuit not found"))
         };
 
-        let Some(burn_zkbin) = zkas_bins.iter().find(|x| x.0 == ZKAS_BURN_NS) else {
+        let Some(burn_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_BURN_NS_V1) else {
             return Err(anyhow!("Burn circuit not found"))
         };
 

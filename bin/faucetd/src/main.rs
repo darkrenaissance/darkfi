@@ -31,11 +31,11 @@ use darkfi_money_contract::{
         build_transfer_tx, MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET,
         MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
-    MoneyFunction, ZKAS_BURN_NS, ZKAS_MINT_NS,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{constants::MERKLE_DEPTH, ContractId, Keypair, MerkleNode, PublicKey, TokenId},
-    db::ZKAS_DB_NAME,
+    db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::bridgetree::BridgeTree,
     pasta::{group::ff::PrimeField, pallas},
     tx::ContractCall,
@@ -213,14 +213,15 @@ impl Faucetd {
 
         // Do a lookup for the money contract's zkas database and fetch the circuits.
         let blockchain = { validator_state.read().await.blockchain.clone() };
-        let db_handle = blockchain.contracts.lookup(&blockchain.sled_db, &cid, ZKAS_DB_NAME)?;
+        let db_handle =
+            blockchain.contracts.lookup(&blockchain.sled_db, &cid, SMART_CONTRACT_ZKAS_DB_NAME)?;
 
-        let Some(mint_zkbin) = db_handle.get(&serialize(&ZKAS_MINT_NS))? else {
-            error!("{} zkas bincode not found in sled database", ZKAS_MINT_NS);
+        let Some(mint_zkbin) = db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1))? else {
+            error!("{} zkas bincode not found in sled database", MONEY_CONTRACT_ZKAS_MINT_NS_V1);
             return Err(Error::ZkasBincodeNotFound);
         };
-        let Some(burn_zkbin) = db_handle.get(&serialize(&ZKAS_BURN_NS))? else {
-            error!("{} zkas bincode not found in sled database", ZKAS_BURN_NS);
+        let Some(burn_zkbin) = db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1))? else {
+            error!("{} zkas bincode not found in sled database", MONEY_CONTRACT_ZKAS_BURN_NS_V1);
             return Err(Error::ZkasBincodeNotFound);
         };
 
@@ -238,8 +239,8 @@ impl Faucetd {
 
         {
             let provingkeys = vec![
-                (ZKAS_MINT_NS.to_string(), mint_provingkey, mint_zkbin),
-                (ZKAS_BURN_NS.to_string(), burn_provingkey, burn_zkbin),
+                (MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(), mint_provingkey, mint_zkbin),
+                (MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string(), burn_provingkey, burn_zkbin),
             ];
 
             let mut proving_keys_w = proving_keys.write().await;
@@ -414,13 +415,13 @@ impl Faucetd {
                 return server_error(RpcError::InternalError, id)
             };
 
-            let Some(mint_data) = arr.iter().find(|x| x.0 == ZKAS_MINT_NS) else {
-                error!("{} proof data not found in vector", ZKAS_MINT_NS);
+            let Some(mint_data) = arr.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1) else {
+                error!("{} proof data not found in vector", MONEY_CONTRACT_ZKAS_MINT_NS_V1);
                 return server_error(RpcError::InternalError, id)
             };
 
-            let Some(burn_data) = arr.iter().find(|x| x.0 == ZKAS_BURN_NS) else {
-                error!("{} prof data not found in vector", ZKAS_BURN_NS);
+            let Some(burn_data) = arr.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_BURN_NS_V1) else {
+                error!("{} prof data not found in vector", MONEY_CONTRACT_ZKAS_BURN_NS_V1);
                 return server_error(RpcError::InternalError, id)
             };
 

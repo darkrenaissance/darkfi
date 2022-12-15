@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{ContractId, MerkleNode, MerkleTree, PublicKey},
-    db::{db_contains_key, db_get, db_init, db_lookup, db_set, ZKAS_DB_NAME},
+    db::{db_contains_key, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME},
     error::{ContractError, ContractResult},
     merkle::merkle_add,
     msg,
@@ -33,7 +33,8 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use darkfi_money_contract::{
-    state::MoneyTransferParams, MoneyFunction, COIN_ROOTS_TREE, NULLIFIERS_TREE,
+    state::MoneyTransferParams, MoneyFunction, MONEY_CONTRACT_COIN_ROOTS_TREE,
+    MONEY_CONTRACT_NULLIFIERS_TREE,
 };
 
 use crate::{
@@ -74,9 +75,9 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization. Note that the tree should then be called "zkas".
     // The lookups can then be done by `contract_id+_zkas+namespace`.
-    let zkas_db = match db_lookup(cid, ZKAS_DB_NAME) {
+    let zkas_db = match db_lookup(cid, SMART_CONTRACT_ZKAS_DB_NAME) {
         Ok(v) => v,
-        Err(_) => db_init(cid, ZKAS_DB_NAME)?,
+        Err(_) => db_init(cid, SMART_CONTRACT_ZKAS_DB_NAME)?,
     };
     let dao_exec_bin = include_bytes!("../proof/dao-exec.zk.bin");
     let dao_mint_bin = include_bytes!("../proof/dao-mint.zk.bin");
@@ -85,12 +86,12 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     let dao_propose_burn_bin = include_bytes!("../proof/dao-propose-burn.zk.bin");
     let dao_propose_main_bin = include_bytes!("../proof/dao-propose-main.zk.bin");
 
-    db_set(zkas_db, &serialize(&ZKAS_DAO_EXEC_NS.to_string()), &dao_exec_bin[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_DAO_MINT_NS.to_string()), &dao_mint_bin[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_DAO_VOTE_BURN_NS.to_string()), &dao_vote_burn_bin[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_DAO_VOTE_MAIN_NS.to_string()), &dao_vote_main_bin[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_DAO_PROPOSE_BURN_NS.to_string()), &dao_propose_burn_bin[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_DAO_PROPOSE_MAIN_NS.to_string()), &dao_propose_main_bin[..])?;
+    db_set(zkas_db, &serialize(&ZKAS_DAO_EXEC_NS), &dao_exec_bin[..])?;
+    db_set(zkas_db, &serialize(&ZKAS_DAO_MINT_NS), &dao_mint_bin[..])?;
+    db_set(zkas_db, &serialize(&ZKAS_DAO_VOTE_BURN_NS), &dao_vote_burn_bin[..])?;
+    db_set(zkas_db, &serialize(&ZKAS_DAO_VOTE_MAIN_NS), &dao_vote_main_bin[..])?;
+    db_set(zkas_db, &serialize(&ZKAS_DAO_PROPOSE_BURN_NS), &dao_propose_burn_bin[..])?;
+    db_set(zkas_db, &serialize(&ZKAS_DAO_PROPOSE_MAIN_NS), &dao_propose_main_bin[..])?;
 
     // Set up a database tree to hold the Merkle tree for DAO bullas
     let dao_bulla_db = match db_lookup(cid, DAO_BULLA_TREE) {
@@ -177,7 +178,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             // Check the Merkle roots for the input coins are valid
             let money_cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
-            let coin_roots_db = db_lookup(money_cid, COIN_ROOTS_TREE)?;
+            let coin_roots_db = db_lookup(money_cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
             for input in &params.inputs {
                 if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
                     msg!("Invalid input Merkle root: {}", input.merkle_root);
@@ -221,8 +222,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             // Check the Merkle roots and nullifiers for the input coins are valid
             let mut vote_nullifiers = vec![];
             let mut all_vote_commit = pallas::Point::identity();
-            let money_roots_db = db_lookup(money_cid, COIN_ROOTS_TREE)?;
-            let money_nullifier_db = db_lookup(money_cid, NULLIFIERS_TREE)?;
+            let money_roots_db = db_lookup(money_cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+            let money_nullifier_db = db_lookup(money_cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
 
             for input in &params.inputs {
                 if !db_contains_key(money_roots_db, &serialize(&input.merkle_root))? {
