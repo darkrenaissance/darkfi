@@ -30,7 +30,7 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{constants::MERKLE_DEPTH, ContractId, Keypair, MerkleNode, PublicKey, TokenId},
-    db::ZKAS_DB_NAME,
+    db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::bridgetree::BridgeTree,
     pasta::{group::ff::PrimeField, pallas},
     tx::ContractCall,
@@ -40,8 +40,8 @@ use log::{info, warn};
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
-    client::build_transfer_tx, state::MoneyTransferParams, MoneyFunction, ZKAS_BURN_NS,
-    ZKAS_MINT_NS,
+    client::build_transfer_tx, state::MoneyTransferParams, MoneyFunction,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 pub fn init_logger() -> Result<()> {
@@ -131,11 +131,11 @@ impl MoneyTestHarness {
         let db_handle = alice_state.read().await.blockchain.contracts.lookup(
             &alice_sled,
             &money_contract_id,
-            ZKAS_DB_NAME,
+            SMART_CONTRACT_ZKAS_DB_NAME,
         )?;
 
-        let mint_zkbin = db_handle.get(&serialize(&ZKAS_MINT_NS))?.unwrap();
-        let burn_zkbin = db_handle.get(&serialize(&ZKAS_BURN_NS))?.unwrap();
+        let mint_zkbin = db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1))?.unwrap();
+        let burn_zkbin = db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1))?.unwrap();
         info!("Decoding bincode");
         let mint_zkbin = ZkBinary::decode(&mint_zkbin)?;
         let burn_zkbin = ZkBinary::decode(&burn_zkbin)?;
@@ -149,7 +149,10 @@ impl MoneyTestHarness {
         let mut proving_keys = HashMap::<[u8; 32], Vec<(&str, ProvingKey)>>::new();
         let mint_pk = ProvingKey::build(k, &mint_circuit);
         let burn_pk = ProvingKey::build(k, &burn_circuit);
-        let pks = vec![(ZKAS_MINT_NS, mint_pk.clone()), (ZKAS_BURN_NS, burn_pk.clone())];
+        let pks = vec![
+            (MONEY_CONTRACT_ZKAS_MINT_NS_V1, mint_pk.clone()),
+            (MONEY_CONTRACT_ZKAS_BURN_NS_V1, burn_pk.clone()),
+        ];
         proving_keys.insert(money_contract_id.inner().to_repr(), pks);
 
         let faucet_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
