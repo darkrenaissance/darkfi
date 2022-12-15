@@ -43,7 +43,7 @@ The following dependencies are also required:
 | jq             | jq               |
 | gcc            | gcc              |
 | pkg-config     | pkg-config       |
-| openssl libs   | openssl-dev      |
+| openssl libs   | libssl-dev       |
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the
 following to install the required dependencies:
