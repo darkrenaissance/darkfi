@@ -19,7 +19,7 @@
 use std::time::Duration;
 
 use async_std::sync::Arc;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 use super::consensus_sync_task;
 use crate::{
