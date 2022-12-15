@@ -224,8 +224,17 @@ pub async fn proposal_task2(
             Err(e) => error!("consensus: Failed to set participation slot: {}", e),
         }
 
+        // Record epoch we start the consensus loop
+        let start_epoch = state.read().await.consensus.current_epoch();
+
         // Start executing consensus
         consensus_loop(consensus_p2p.clone(), sync_p2p.clone(), state.clone(), ex.clone()).await;
+
+        // Reset retries counter if more epochs have passed than sync retries duration
+        let break_epoch = state.read().await.consensus.current_epoch();
+        if (break_epoch - start_epoch) > constants::SYNC_RETRIES_DURATION {
+            retries = 0;
+        }
 
         // Increase retries count on consensus loop break
         retries += 1;

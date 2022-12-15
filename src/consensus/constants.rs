@@ -76,6 +76,9 @@ pub const SLOT_TIME: u64 = 90;
 /// Finalization sync period duration (should be >=2/3 of slot time)
 pub const FINAL_SYNC_DUR: u64 = 60;
 
+/// Max resync retries duration in epochs
+pub const SYNC_RETRIES_DURATION: u64 = 2;
+
 /// Max resync retries
 pub const SYNC_MAX_RETRIES: u64 = 10;
 
