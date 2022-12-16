@@ -50,7 +50,7 @@ following to install the required dependencies:
 
 ```shell
 # apt-get update
-# apt-get install -y git make jq gcc pkg-config openssl-dev
+# apt-get install -y git make jq gcc pkg-config libssl-dev
 ```
 
 Alternatively, users can try using the automated script under `contrib`
