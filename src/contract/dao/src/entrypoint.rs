@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{ContractId, MerkleNode, MerkleTree, PublicKey},
+    crypto::{contract_id::MONEY_CONTRACT_ID, ContractId, MerkleNode, MerkleTree, PublicKey},
     db::{db_contains_key, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME},
     error::{ContractError, ContractResult},
     merkle::merkle_add,
@@ -177,7 +177,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let params: DaoProposeParams = deserialize(&self_.data[1..])?;
 
             // Check the Merkle roots for the input coins are valid
-            let money_cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
+            let money_cid = *MONEY_CONTRACT_ID;
             let coin_roots_db = db_lookup(money_cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
             for input in &params.inputs {
                 if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
@@ -209,7 +209,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::Vote => {
             let params: DaoVoteParams = deserialize(&self_.data[1..])?;
 
-            let money_cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
+            let money_cid = *MONEY_CONTRACT_ID;
 
             // Check proposal bulla exists
             let proposal_votes_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
@@ -275,8 +275,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             assert!(call_idx == 1);
 
             // 3. First item should be a MoneyTransfer call
-            // FIXME: No hardcode of contract like this
-            assert!(call[0].contract_id == ContractId::from(pallas::Base::from(u64::MAX - 420)));
+            assert!(call[0].contract_id == *MONEY_CONTRACT_ID);
             assert!(call[0].data[0] == MoneyFunction::Transfer as u8);
 
             // 4. MoneyTransfer has exactly 2 outputs
@@ -536,7 +535,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
                     *all_votes_coords.y(),
                     *input_value_coords.x(),
                     *input_value_coords.y(),
-                    pallas::Base::from(u64::MAX - 420), // <-- TODO: Should be money contract id?
+                    MONEY_CONTRACT_ID.inner(), // <-- TODO: Should be money contract id?
                     pallas::Base::zero(),
                     pallas::Base::zero(),
                 ],

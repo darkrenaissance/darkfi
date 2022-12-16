@@ -29,10 +29,13 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, ContractId, Keypair, MerkleNode, PublicKey, TokenId},
+    crypto::{
+        constants::MERKLE_DEPTH, contract_id::MONEY_CONTRACT_ID, ContractId, Keypair, MerkleNode,
+        PublicKey, TokenId,
+    },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::bridgetree::BridgeTree,
-    pasta::{group::ff::PrimeField, pallas},
+    pasta::group::ff::PrimeField,
     tx::ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
@@ -125,7 +128,7 @@ impl MoneyTestHarness {
         )
         .await?;
 
-        let money_contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let money_contract_id = *MONEY_CONTRACT_ID;
 
         let alice_sled = alice_state.read().await.blockchain.sled_db.clone();
         let db_handle = alice_state.read().await.blockchain.contracts.lookup(
@@ -199,7 +202,7 @@ impl MoneyTestHarness {
             true,
         )?;
 
-        let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let contract_id = *MONEY_CONTRACT_ID;
 
         let mut data = vec![MoneyFunction::Transfer as u8];
         params.encode(&mut data)?;

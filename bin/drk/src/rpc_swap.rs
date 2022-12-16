@@ -30,8 +30,9 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
+        contract_id::MONEY_CONTRACT_ID,
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64, ValueBlind},
-        poseidon_hash, ContractId, PublicKey, SecretKey, TokenId,
+        poseidon_hash, PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
     tx::ContractCall,
@@ -83,8 +84,7 @@ impl Drk {
         // We'll also need our Merkle tree
         let tree = self.wallet_tree().await?;
 
-        // TODO: FIXME: Do not hardcode the contract ID
-        let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let contract_id = *MONEY_CONTRACT_ID;
 
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.
@@ -170,8 +170,7 @@ impl Drk {
         // We'll also need our Merkle tree
         let tree = self.wallet_tree().await?;
 
-        // TODO: FIXME: Do not hardcode the contract ID
-        let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let contract_id = *MONEY_CONTRACT_ID;
 
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.

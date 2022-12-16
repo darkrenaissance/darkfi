@@ -34,10 +34,13 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, ContractId, Keypair, MerkleNode, PublicKey, TokenId},
+    crypto::{
+        constants::MERKLE_DEPTH, contract_id::MONEY_CONTRACT_ID, Keypair, MerkleNode, PublicKey,
+        TokenId,
+    },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::bridgetree::BridgeTree,
-    pasta::{group::ff::PrimeField, pallas},
+    pasta::group::ff::PrimeField,
     tx::ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable};
@@ -208,8 +211,7 @@ impl Faucetd {
         let proving_keys = Arc::new(RwLock::new(HashMap::new()));
 
         // For now we'll create the keys for the money contract
-        // FIXME: This shouldn't be hardcoded (see consensus/state.rs)
-        let cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let cid = *MONEY_CONTRACT_ID;
 
         // Do a lookup for the money contract's zkas database and fetch the circuits.
         let blockchain = { validator_state.read().await.blockchain.clone() };
@@ -405,8 +407,7 @@ impl Faucetd {
         };
         drop(map);
 
-        // FIXME: This hardcoded shit (see consensus/state.rs)
-        let cid = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let cid = *MONEY_CONTRACT_ID;
 
         let (mint_zkbin, mint_pk, burn_zkbin, burn_pk) = {
             let proving_keys_r = self.proving_keys.read().await;

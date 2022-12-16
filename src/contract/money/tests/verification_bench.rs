@@ -20,7 +20,7 @@ use std::{env, str::FromStr};
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
-    crypto::{poseidon_hash, ContractId, MerkleNode, Nullifier, TokenId},
+    crypto::{contract_id::MONEY_CONTRACT_ID, poseidon_hash, MerkleNode, Nullifier, TokenId},
     incrementalmerkletree::Tree,
     pasta::{group::ff::Field, pallas},
     tx::ContractCall,
@@ -57,7 +57,7 @@ async fn alice2alice_random_amounts() -> Result<()> {
 
     let mut th = MoneyTestHarness::new().await?;
     let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
-    let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+    let contract_id = *MONEY_CONTRACT_ID;
 
     let mut owncoins = vec![];
 
@@ -171,7 +171,7 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
 
     // Initialize harness
     let mut th = MoneyTestHarness::new().await?;
-    let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+    let contract_id = *MONEY_CONTRACT_ID;
 
     // Generating 10 airdrop coins
     let mut token_ids = vec![];

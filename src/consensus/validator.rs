@@ -22,8 +22,9 @@ use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{
     crypto::{
         constants::MERKLE_DEPTH,
+        contract_id::MONEY_CONTRACT_ID,
         schnorr::{SchnorrPublic, SchnorrSecret},
-        ContractId, MerkleNode, PublicKey,
+        MerkleNode, PublicKey,
     },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
@@ -137,14 +138,9 @@ impl ValidatorState {
         // whatever is necessary. This logic should be handled in the init function
         // of the actual contract, so make sure the native contracts handle this well.
 
-        // FIXME: This ID should be something that does not solve the pallas curve equation,
-        // and/or just hardcoded and forbidden in non-native contract deployment.
-        let money_contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
         // The faucet pubkeys are pubkeys which are allowed to create clear inputs
         // in the money contract.
         let money_contract_deploy_payload = serialize(&faucet_pubkeys);
-
-        //let dao_contract_id = ContractId::from(pallas::Base::from(u64::MAX - 421));
         //let dao_contract_deploy_payload = vec![];
 
         // In this hashmap, we keep references to ZK proof verifying keys needed
@@ -154,13 +150,13 @@ impl ValidatorState {
         let native_contracts = vec![
             (
                 "Money Contract",
-                money_contract_id,
+                *MONEY_CONTRACT_ID,
                 include_bytes!("../contract/money/money_contract.wasm").to_vec(),
                 money_contract_deploy_payload,
             ),
             //(
             //    "DAO Contract",
-            //    dao_contract_id,
+            //    *DAO_CONTRACT_ID,
             //    include_bytes!("../contract/dao/dao_contract.wasm").to_vec(),
             //    dao_contract_deploy_payload,
             //),

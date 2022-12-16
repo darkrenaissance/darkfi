@@ -41,9 +41,8 @@ use darkfi_money_contract::{
     MoneyFunction,
 };
 use darkfi_sdk::{
-    crypto::{poseidon_hash, ContractId, MerkleNode, Nullifier},
+    crypto::{contract_id::MONEY_CONTRACT_ID, poseidon_hash, ContractId, MerkleNode, Nullifier},
     incrementalmerkletree::Tree,
-    pasta::pallas,
 };
 use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
@@ -134,8 +133,7 @@ impl Drk {
         let mut nullifiers: Vec<Nullifier> = vec![];
         let mut outputs: Vec<Output> = vec![];
 
-        // TODO: FIXME: This shouldn't be hardcoded here obviously.
-        let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let contract_id = *MONEY_CONTRACT_ID;
 
         for (i, tx) in block.txs.iter().enumerate() {
             for (j, call) in tx.calls.iter().enumerate() {

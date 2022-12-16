@@ -17,10 +17,26 @@
  */
 
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
+use lazy_static::lazy_static;
 use pasta_curves::{group::ff::PrimeField, pallas};
 
 use super::{poseidon_hash, PublicKey, SecretKey};
 use crate::error::ContractError;
+
+lazy_static! {
+    // The idea here is that 0 is not a valid x coordinate for any pallas point,
+    // therefore a signature cannot be produced for such IDs. This allows us to
+    // avoid hardcoding contract IDs for arbitrary contract deployments, because
+    // the contracts with 0 as their x coordinate can never have a valid signature.
+
+    /// Contract ID for the native money contract
+    pub static ref MONEY_CONTRACT_ID: ContractId =
+        ContractId::from(poseidon_hash([pallas::Base::zero(), pallas::Base::from(0)]));
+
+    /// Contract ID for the native DAO contract
+    pub static ref DAO_CONTRACT_ID: ContractId =
+        ContractId::from(poseidon_hash([pallas::Base::zero(), pallas::Base::from(1)]));
+}
 
 /// ContractId represents an on-chain identifier for a certain smart contract.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]

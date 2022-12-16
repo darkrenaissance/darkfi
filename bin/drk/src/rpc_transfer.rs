@@ -28,8 +28,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{ContractId, Keypair, PublicKey, TokenId},
-    pasta::pallas,
+    crypto::{contract_id::MONEY_CONTRACT_ID, Keypair, PublicKey, TokenId},
     tx::ContractCall,
 };
 use darkfi_serial::Encodable;
@@ -77,8 +76,7 @@ impl Drk {
         let secrets = self.wallet_secrets().await?;
         let keypair = Keypair::new(secrets[0]);
 
-        // TODO: FIXME: Do not hardcode the contract ID
-        let contract_id = ContractId::from(pallas::Base::from(u64::MAX - 420));
+        let contract_id = *MONEY_CONTRACT_ID;
 
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.
