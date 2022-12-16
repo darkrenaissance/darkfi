@@ -4,13 +4,15 @@
 # cannot be modified.
 #
 # This is basically the el gamal scheme in ZK
+
+constant "Encrypt" {}
+
 contract "Encrypt" {
     # We are encrypting values to this public key
-    Base pub_x,
-    Base pub_y,
+    EcNiPoint pubkey,
 
     # Emphemeral secret value
-    Scalar ephem_secret,
+    Base ephem_secret,
 
     # Values we are encrypting
     Base value_1,
@@ -23,10 +25,7 @@ circuit "Encrypt" {
     # 1. Derive shared secret using DH
     ################################################
 
-    # TODO: get this working {
-    dest_pub = ec_witness(pub_x, pub_y);
-    ephem_pub = ec_mul(ephem_secret, dest_pub);
-    # }
+    ephem_pub = ec_mul_var_base(ephem_secret, pubkey);
 	ephem_pub_x = ec_get_x(ephem_pub);
 	ephem_pub_y = ec_get_y(ephem_pub);
     # Used by the receiver to also derive the same shared secret
