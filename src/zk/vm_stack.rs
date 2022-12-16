@@ -18,7 +18,9 @@
 
 //! VM stack type abstractions
 use darkfi_sdk::crypto::{constants::OrchardFixedBases, MerkleNode};
-use halo2_gadgets::ecc::{chip::EccChip, FixedPoint, FixedPointBaseField, FixedPointShort, Point};
+use halo2_gadgets::ecc::{
+    chip::EccChip, FixedPoint, FixedPointBaseField, FixedPointShort, NonIdentityPoint, Point,
+};
 use halo2_proofs::{
     circuit::{AssignedCell, Value},
     pasta::pallas,
@@ -31,6 +33,7 @@ use crate::zkas::{decoder::ZkBinary, types::VarType};
 #[derive(Clone)]
 pub enum Witness {
     EcPoint(Value<pallas::Point>),
+    EcNiPoint(Value<pallas::Point>),
     EcFixedPoint(Value<pallas::Point>),
     Base(Value<pallas::Base>),
     Scalar(Value<pallas::Scalar>),
@@ -51,6 +54,7 @@ pub fn empty_witnesses(zkbin: &ZkBinary) -> Vec<Witness> {
     for witness in &zkbin.witnesses {
         match witness {
             VarType::EcPoint => ret.push(Witness::EcPoint(Value::unknown())),
+            VarType::EcNiPoint => ret.push(Witness::EcNiPoint(Value::unknown())),
             VarType::EcFixedPoint => ret.push(Witness::EcFixedPoint(Value::unknown())),
             VarType::Base => ret.push(Witness::Base(Value::unknown())),
             VarType::Scalar => ret.push(Witness::Scalar(Value::unknown())),
@@ -66,9 +70,10 @@ pub fn empty_witnesses(zkbin: &ZkBinary) -> Vec<Witness> {
 
 /// These represent the witness types inside the circuit
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum StackVar {
     EcPoint(Point<pallas::Affine, EccChip<OrchardFixedBases>>),
+    EcNiPoint(NonIdentityPoint<pallas::Affine, EccChip<OrchardFixedBases>>),
     EcFixedPoint(FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>),
     EcFixedPointShort(FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>>),
     EcFixedPointBase(FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>),
@@ -94,6 +99,7 @@ macro_rules! impl_from {
 }
 
 impl_from!(EcPoint, Point<pallas::Affine, EccChip<OrchardFixedBases>>);
+impl_from!(EcNiPoint, NonIdentityPoint<pallas::Affine, EccChip<OrchardFixedBases>>);
 impl_from!(EcFixedPoint, FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>);
 impl_from!(EcFixedPointShort, FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>>);
 impl_from!(EcFixedPointBase, FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>);

@@ -15,6 +15,9 @@ contract "Opcodes" {
 
 	Base secret,
 
+	EcNiPoint pubkey,
+	Base ephem_secret,
+
 	Uint32 leaf_pos,
 	MerklePath path,
 }
@@ -56,4 +59,8 @@ circuit "Opcodes" {
 	constrain_instance(ec_get_y(public));
 
 	bool_check(one);
+
+	ephem_public = ec_mul_var_base(ephem_secret, pubkey);
+	constrain_instance(ec_get_x(ephem_public));
+	constrain_instance(ec_get_y(ephem_public));
 }

@@ -13,13 +13,12 @@ syn keyword zkasKeyword
     \ circuit
 
 syn keyword zkasType 
-    \ EcPoint EcFixedPoint EcFixedPointBase EcFixedPointShort
+    \ EcPoint EcFixedPoint EcFixedPointBase EcFixedPointShort EcNiPoint
     \ Base BaseArray Scalar ScalarArray
-    \ MerklePath
-    \ Uint32 Uint64
+    \ MerklePath Uint32 Uint64
 
 syn keyword zkasInstruction
-    \ ec_add ec_mul ec_mul_base ec_mul_short
+    \ ec_add ec_mul ec_mul_base ec_mul_short ec_mul_var_base
     \ ec_get_x ec_get_y
     \ base_add base_mul base_sub
     \ poseidon_hash merkle_root

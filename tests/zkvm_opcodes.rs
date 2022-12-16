@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pedersen::pedersen_commitment_u64, MerkleNode, PublicKey, SecretKey},
+    crypto::{pedersen::pedersen_commitment_u64, util::mod_r_p, MerkleNode, PublicKey, SecretKey},
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
 };
 use halo2_gadgets::poseidon::{
@@ -80,6 +80,10 @@ fn zkvm_opcodes() -> Result<()> {
     let merkle_path = tree.authentication_path(leaf_pos, &root).unwrap();
     let leaf_pos: u64 = leaf_pos.into();
 
+    let ephem_secret = SecretKey::random(&mut OsRng);
+    let pubkey = PublicKey::from_secret(ephem_secret).inner();
+    let (ephem_x, ephem_y) = PublicKey::from(pubkey * mod_r_p(ephem_secret.inner())).xy();
+
     let prover_witnesses = vec![
         Witness::Base(Value::known(pallas::Base::from(value))),
         Witness::Scalar(Value::known(value_blind)),
@@ -87,6 +91,8 @@ fn zkvm_opcodes() -> Result<()> {
         Witness::Base(Value::known(a)),
         Witness::Base(Value::known(b)),
         Witness::Base(Value::known(secret)),
+        Witness::EcNiPoint(Value::known(pubkey)),
+        Witness::Base(Value::known(ephem_secret.inner())),
         Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
         Witness::MerklePath(Value::known(merkle_path.try_into().unwrap())),
     ];
@@ -100,8 +106,17 @@ fn zkvm_opcodes() -> Result<()> {
     let public = PublicKey::from_secret(SecretKey::from(secret));
     let (pub_x, pub_y) = public.xy();
 
-    let public_inputs =
-        vec![*value_coords.x(), *value_coords.y(), c2, d, root.inner(), pub_x, pub_y];
+    let public_inputs = vec![
+        *value_coords.x(),
+        *value_coords.y(),
+        c2,
+        d,
+        root.inner(),
+        pub_x,
+        pub_y,
+        ephem_x,
+        ephem_y,
+    ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
     let proving_key = ProvingKey::build(13, &circuit);

@@ -24,7 +24,8 @@ use darkfi_sdk::crypto::constants::{
 use halo2_gadgets::{
     ecc::{
         chip::{EccChip, EccConfig},
-        FixedPoint, FixedPointBaseField, FixedPointShort, Point, ScalarFixed, ScalarFixedShort,
+        FixedPoint, FixedPointBaseField, FixedPointShort, NonIdentityPoint, Point, ScalarFixed,
+        ScalarFixedShort, ScalarVar,
     },
     poseidon::{
         primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
@@ -414,6 +415,18 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     stack.push(StackVar::EcPoint(point));
                 }
 
+                Witness::EcNiPoint(w) => {
+                    trace!(target: L_TGT, "Witnessing EcNiPoint into circuit");
+                    let point = NonIdentityPoint::new(
+                        ecc_chip.clone(),
+                        layouter.namespace(|| "Witness EcNiPoint"),
+                        w.as_ref().map(|cm| cm.to_affine()),
+                    )?;
+
+                    trace!(target: L_TGT, "Pushing EcNiPoint to stack index {}", stack.len());
+                    stack.push(StackVar::EcNiPoint(point));
+                }
+
                 Witness::EcFixedPoint(_) => {
                     error!(target: L_TGT, "Unable to witness EcFixedPoint, this is unimplemented.");
                     return Err(plonk::Error::Synthesis)
@@ -496,6 +509,26 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     )?;
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
+
+                    trace!(target: L_TGT, "Pushing result to stack index {}", stack.len());
+                    stack.push(StackVar::EcPoint(ret));
+                }
+
+                Opcode::EcMulVarBase => {
+                    trace!(target: L_TGT, "Executing `EcMulVarBase{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let lhs: NonIdentityPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        stack[args[1].1].clone().into();
+
+                    let rhs: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
+                    let rhs = ScalarVar::from_base(
+                        ecc_chip.clone(),
+                        layouter.namespace(|| "EcMulVarBase::from_base()"),
+                        &rhs,
+                    )?;
+
+                    let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulVarBase()"), rhs)?;
 
                     trace!(target: L_TGT, "Pushing result to stack index {}", stack.len());
                     stack.push(StackVar::EcPoint(ret));

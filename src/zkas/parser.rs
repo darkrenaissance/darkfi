@@ -509,6 +509,24 @@ impl Parser {
 
             // Valid witness types
             match v.1.token.as_str() {
+                "EcPoint" => {
+                    ret.push(Witness {
+                        name: k.to_string(),
+                        typ: VarType::EcPoint,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+
+                "EcNiPoint" => {
+                    ret.push(Witness {
+                        name: k.to_string(),
+                        typ: VarType::EcNiPoint,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+
                 "Base" => {
                     ret.push(Witness {
                         name: k.to_string(),

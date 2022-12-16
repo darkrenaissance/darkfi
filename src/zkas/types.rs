@@ -53,6 +53,9 @@ pub enum VarType {
     /// Elliptic curve fixed point in base field
     EcFixedPointBase = 0x04,
 
+    /// Elliptic curve nonidentity point
+    EcNiPoint = 0x05,
+
     /// Base field element
     Base = 0x10,
 
@@ -82,6 +85,7 @@ impl VarType {
             0x02 => Some(Self::EcFixedPoint),
             0x03 => Some(Self::EcFixedPointShort),
             0x04 => Some(Self::EcFixedPointBase),
+            0x05 => Some(Self::EcNiPoint),
             0x10 => Some(Self::Base),
             0x11 => Some(Self::BaseArray),
             0x12 => Some(Self::Scalar),

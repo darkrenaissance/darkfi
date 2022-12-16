@@ -32,14 +32,13 @@ local constant = token(l.CONSTANT, word_match{
 -- Types.
 local type = token(l.TYPE, word_match{
   'EcPoint', 'EcFixedPoint', 'EcFixedPointBase', 'EcFixedPointShort',
-  'Base', 'BaseArray', 'Scalar', 'ScalarArray',
-  'MerklePath',
-  'Uint32', 'Uint64',
+  'EcNiPoint', 'Base', 'BaseArray', 'Scalar', 'ScalarArray',
+  'MerklePath', 'Uint32', 'Uint64',
 })
 
 -- Instructions.
 local instruction = token('instruction', word_match{
-  'ec_add', 'ec_mul', 'ec_mul_base', 'ec_mul_short',
+  'ec_add', 'ec_mul', 'ec_mul_base', 'ec_mul_short', 'ec_mul_var_base',
   'ec_get_x', 'ec_get_y',
   'base_add', 'base_mul', 'base_sub',
   'poseidon_hash', 'merkle_root',

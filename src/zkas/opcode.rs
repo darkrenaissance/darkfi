@@ -28,7 +28,7 @@ pub enum Opcode {
     /// Elliptic curve addition
     EcAdd = 0x01,
 
-    // Elliptic curve multiplication
+    /// Elliptic curve multiplication
     EcMul = 0x02,
 
     /// Elliptic curve multiplication with a Base field element
@@ -36,6 +36,9 @@ pub enum Opcode {
 
     /// Elliptic curve multiplication with a Base field element of 64bit width
     EcMulShort = 0x04,
+
+    /// Variable Elliptic curve multiplication with a Base field element
+    EcMulVarBase = 0x05,
 
     /// Get the x coordinate of an elliptic curve point
     EcGetX = 0x08,
@@ -95,6 +98,7 @@ impl Opcode {
             "ec_mul" => Some(Self::EcMul),
             "ec_mul_base" => Some(Self::EcMulBase),
             "ec_mul_short" => Some(Self::EcMulShort),
+            "ec_mul_var_base" => Some(Self::EcMulVarBase),
             "ec_get_x" => Some(Self::EcGetX),
             "ec_get_y" => Some(Self::EcGetY),
             "poseidon_hash" => Some(Self::PoseidonHash),
@@ -121,6 +125,7 @@ impl Opcode {
             0x02 => Some(Self::EcMul),
             0x03 => Some(Self::EcMulBase),
             0x04 => Some(Self::EcMulShort),
+            0x05 => Some(Self::EcMulVarBase),
             0x08 => Some(Self::EcGetX),
             0x09 => Some(Self::EcGetY),
             0x10 => Some(Self::PoseidonHash),
@@ -157,6 +162,10 @@ impl Opcode {
 
             Opcode::EcMulShort => {
                 (vec![VarType::EcPoint], vec![VarType::Base, VarType::EcFixedPointShort])
+            }
+
+            Opcode::EcMulVarBase => {
+                (vec![VarType::EcPoint], vec![VarType::Base, VarType::EcNiPoint])
             }
 
             Opcode::EcGetX => (vec![VarType::Base], vec![VarType::EcPoint]),
