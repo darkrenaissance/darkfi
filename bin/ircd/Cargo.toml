@@ -41,5 +41,5 @@ serde = {version = "1.0.150", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 bs58 = "0.4.0"
-toml = "0.5.9"
+toml = "0.5.10"
 hex = "0.4.3"

@@ -79,7 +79,7 @@ serde_json = {version = "1.0.89", optional = true}
 serde = {version = "1.0.150", features = ["derive"], optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
-toml = {version = "0.5.9", optional = true}
+toml = {version = "0.5.10", optional = true}
 # big float
 dashu = { version = "0.2.0", git = "https://github.com/ertosns/dashu", optional=true }
 

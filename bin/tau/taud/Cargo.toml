@@ -36,4 +36,4 @@ structopt-toml = "0.5.1"
 crypto_box = {version = "0.8.2", features = ["std"]}
 hex = "0.4.3"
 bs58 = "0.4.0"
-toml = "0.5.9"
+toml = "0.5.10"
