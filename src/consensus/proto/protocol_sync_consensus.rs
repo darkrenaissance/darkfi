@@ -23,7 +23,10 @@ use smol::Executor;
 
 use crate::{
     consensus::{
-        state::{ConsensusRequest, ConsensusResponse},
+        state::{
+            ConsensusRequest, ConsensusResponse, ConsensusSlotCheckpointsRequest,
+            ConsensusSlotCheckpointsResponse,
+        },
         ValidatorStatePtr,
     },
     net::{
@@ -36,6 +39,7 @@ use crate::{
 pub struct ProtocolSyncConsensus {
     channel: ChannelPtr,
     request_sub: MessageSubscription<ConsensusRequest>,
+    slot_checkpoints_request_sub: MessageSubscription<ConsensusSlotCheckpointsRequest>,
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
 }
@@ -48,12 +52,16 @@ impl ProtocolSyncConsensus {
     ) -> Result<ProtocolBasePtr> {
         let msg_subsystem = channel.get_message_subsystem();
         msg_subsystem.add_dispatch::<ConsensusRequest>().await;
+        msg_subsystem.add_dispatch::<ConsensusSlotCheckpointsRequest>().await;
 
         let request_sub = channel.subscribe_msg::<ConsensusRequest>().await?;
+        let slot_checkpoints_request_sub =
+            channel.subscribe_msg::<ConsensusSlotCheckpointsRequest>().await?;
 
         Ok(Arc::new(Self {
             channel: channel.clone(),
             request_sub,
+            slot_checkpoints_request_sub,
             jobsman: ProtocolJobsManager::new("SyncConsensusProtocol", channel),
             state,
         }))
@@ -62,7 +70,7 @@ impl ProtocolSyncConsensus {
     async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolSyncConsensus::handle_receive_request() [START]");
         loop {
-            let order = match self.request_sub.receive().await {
+            let req = match self.request_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
                     error!("ProtocolSyncConsensus::handle_receive_request() recv fail: {}", e);
@@ -70,7 +78,7 @@ impl ProtocolSyncConsensus {
                 }
             };
 
-            debug!("ProtocolSyncConsensuss::handle_receive_request() received {:?}", order);
+            debug!("ProtocolSyncConsensuss::handle_receive_request() received {:?}", req);
 
             // Extra validations can be added here.
             let lock = self.state.read().await;
@@ -96,6 +104,31 @@ impl ProtocolSyncConsensus {
             };
         }
     }
+
+    async fn handle_receive_slot_checkpoints_request(self: Arc<Self>) -> Result<()> {
+        debug!("ProtocolSyncConsensus::handle_receive_slot_checkpoints_request() [START]");
+        loop {
+            let req = match self.slot_checkpoints_request_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("ProtocolSyncConsensus::handle_receive_slot_checkpoints_request() recv fail: {}", e);
+                    continue
+                }
+            };
+
+            debug!(
+                "ProtocolSyncConsensuss::handle_receive_slot_checkpoints_request() received {:?}",
+                req
+            );
+
+            // Extra validations can be added here.
+            let slot_checkpoints = !self.state.read().await.consensus.slot_checkpoints.is_empty();
+            let response = ConsensusSlotCheckpointsResponse { slot_checkpoints };
+            if let Err(e) = self.channel.send(response).await {
+                error!("ProtocolSyncConsensus::handle_receive_slot_checkpoints_request() channel send fail: {}", e);
+            };
+        }
+    }
 }
 
 #[async_trait]
@@ -104,6 +137,10 @@ impl ProtocolBase for ProtocolSyncConsensus {
         debug!("ProtocolSyncConsensus::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_request(), executor.clone()).await;
+        self.jobsman
+            .clone()
+            .spawn(self.clone().handle_receive_slot_checkpoints_request(), executor.clone())
+            .await;
         debug!("ProtocolSyncConsensus::start() [END]");
         Ok(())
     }

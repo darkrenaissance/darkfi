@@ -650,6 +650,15 @@ impl ConsensusState {
             }
         }
     }
+
+    /// Auxiliary structure to reset consensus state for a resync
+    pub fn reset(&mut self) {
+        self.participating = None;
+        self.forks = vec![];
+        self.slot_checkpoints = vec![];
+        self.leaders_history = vec![0];
+        self.nullifiers = vec![];
+    }
 }
 
 /// Auxiliary structure used for consensus syncing.
@@ -682,6 +691,29 @@ pub struct ConsensusResponse {
 impl net::Message for ConsensusResponse {
     fn name() -> &'static str {
         "consensusresponse"
+    }
+}
+
+/// Auxiliary structure used for consensus syncing.
+#[derive(Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusSlotCheckpointsRequest {}
+
+impl net::Message for ConsensusSlotCheckpointsRequest {
+    fn name() -> &'static str {
+        "consensusslotcheckpointsrequest"
+    }
+}
+
+/// Auxiliary structure used for consensus syncing.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct ConsensusSlotCheckpointsResponse {
+    /// Node has hot/live slot checkpoints
+    pub slot_checkpoints: bool,
+}
+
+impl net::Message for ConsensusSlotCheckpointsResponse {
+    fn name() -> &'static str {
+        "consensusslotcheckpointsresponse"
     }
 }
 

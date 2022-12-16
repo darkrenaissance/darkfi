@@ -180,9 +180,10 @@ pub async fn proposal_task2(
     let mut retries = 0;
     // Sync loop
     loop {
-        // Setting up participating to None, so node can still follow the finalized blocks by
+        // Resetting consensus state, so node can still follow the finalized blocks by
         // the sync p2p network/protocols
-        state.write().await.consensus.participating = None;
+        // TODO: verify that if a consensus node stops participating will receive finalized blocks
+        state.write().await.consensus.reset();
 
         // Checking sync retries
         if retries > constants::SYNC_MAX_RETRIES {
@@ -190,25 +191,6 @@ pub async fn proposal_task2(
             warn!("consensus: Terminating consensus participation.");
             break
         }
-
-        // Node waits just before the current or next epoch last finalization syncing period, so it can
-        // start syncing latest state.
-        let mut seconds_until_next_epoch = state.read().await.consensus.next_n_epoch_start(1);
-        let sync_offset = Duration::new(constants::FINAL_SYNC_DUR + 1, 0);
-
-        loop {
-            if seconds_until_next_epoch > sync_offset {
-                seconds_until_next_epoch -= sync_offset;
-                break
-            }
-
-            info!("consensus: Waiting for next epoch ({:?} sec)", seconds_until_next_epoch);
-            sleep(seconds_until_next_epoch.as_secs()).await;
-            seconds_until_next_epoch = state.read().await.consensus.next_n_epoch_start(1);
-        }
-
-        info!("consensus: Waiting for next epoch ({:?} sec)", seconds_until_next_epoch);
-        sleep(seconds_until_next_epoch.as_secs()).await;
 
         // Node syncs its consensus state
         if let Err(e) = consensus_sync_task(consensus_p2p.clone(), state.clone()).await {
@@ -249,6 +231,7 @@ async fn consensus_loop(
     ex: Arc<smol::Executor<'_>>,
 ) {
     loop {
+        // TODO: Change order, since node extis consensus sync right before next slot
         // Node sleeps until finalization sync period starts
         let next_slot_start = state.read().await.consensus.next_n_slot_start(1);
         let seconds_sync_period = if next_slot_start.as_secs() > constants::FINAL_SYNC_DUR {
@@ -301,7 +284,7 @@ async fn consensus_loop(
 
         // Verify node didn't skip next slot
         let current_slot = state.read().await.consensus.current_slot();
-        if completed_slot == current_slot {
+        if completed_slot != current_slot {
             warn!(
                 "consensus: Node missed slot {} due to finalizated blocks processing, resyncing...",
                 current_slot
