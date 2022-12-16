@@ -23,8 +23,10 @@ use darkfi_sdk::{
     crypto::{
         constants::MERKLE_DEPTH,
         contract_id::MONEY_CONTRACT_ID,
+        //contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
         schnorr::{SchnorrPublic, SchnorrSecret},
-        MerkleNode, PublicKey,
+        MerkleNode,
+        PublicKey,
     },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
@@ -154,12 +156,14 @@ impl ValidatorState {
                 include_bytes!("../contract/money/money_contract.wasm").to_vec(),
                 money_contract_deploy_payload,
             ),
-            //(
-            //    "DAO Contract",
-            //    *DAO_CONTRACT_ID,
-            //    include_bytes!("../contract/dao/dao_contract.wasm").to_vec(),
-            //    dao_contract_deploy_payload,
-            //),
+            /*
+            (
+                "DAO Contract",
+                *DAO_CONTRACT_ID,
+                include_bytes!("../contract/dao/dao_contract.wasm").to_vec(),
+                dao_contract_deploy_payload,
+            ),
+            */
         ];
 
         info!("Deploying native wasm contracts");

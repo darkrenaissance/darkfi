@@ -42,7 +42,9 @@ use crate::{
         DaoExecParams, DaoExecUpdate, DaoMintParams, DaoMintUpdate, DaoProposeParams,
         DaoProposeUpdate, DaoVoteParams, DaoVoteUpdate, ProposalVotes,
     },
-    DaoFunction,
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 
 darkfi_sdk::define_contract!(
@@ -63,15 +65,7 @@ pub const DAO_PROPOSAL_VOTES_TREE: &str = "dao_proposal_votes";
 pub const DAO_MERKLE_TREE: &str = "dao_merkle_tree";
 pub const DAO_PROPOSAL_MERKLE_TREE: &str = "dao_proposals_merkle_tree";
 
-// These are zkas circuit namespaces
-pub const ZKAS_DAO_EXEC_NS: &str = "DaoExec";
-pub const ZKAS_DAO_MINT_NS: &str = "DaoMint";
-pub const ZKAS_DAO_VOTE_BURN_NS: &str = "DaoVoteInput";
-pub const ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
-pub const ZKAS_DAO_PROPOSE_BURN_NS: &str = "DaoProposeInput";
-pub const ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
-
-fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
+fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization. Note that the tree should then be called "zkas".
     // The lookups can then be done by `contract_id+_zkas+namespace`.
@@ -86,12 +80,12 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     let dao_propose_burn_bin = include_bytes!("../proof/dao-propose-burn.zk.bin");
     let dao_propose_main_bin = include_bytes!("../proof/dao-propose-main.zk.bin");
 
-    db_set(zkas_db, &serialize(&ZKAS_DAO_EXEC_NS), &dao_exec_bin[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_DAO_MINT_NS), &dao_mint_bin[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_DAO_VOTE_BURN_NS), &dao_vote_burn_bin[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_DAO_VOTE_MAIN_NS), &dao_vote_main_bin[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_DAO_PROPOSE_BURN_NS), &dao_propose_burn_bin[..])?;
-    db_set(zkas_db, &serialize(&ZKAS_DAO_PROPOSE_MAIN_NS), &dao_propose_main_bin[..])?;
+    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_EXEC_NS), &dao_exec_bin[..])?;
+    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_MINT_NS), &dao_mint_bin[..])?;
+    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS), &dao_vote_burn_bin[..])?;
+    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS), &dao_vote_main_bin[..])?;
+    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS), &dao_propose_burn_bin[..])?;
+    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS), &dao_propose_main_bin[..])?;
 
     // Set up a database tree to hold the Merkle tree for DAO bullas
     let dao_bulla_db = match db_lookup(cid, DAO_BULLA_TREE) {
@@ -108,7 +102,11 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
         None => {
             // We didn't find a tree, so just make a new one.
             let tree = MerkleTree::new(100);
-            db_set(dao_bulla_db, &serialize(&DAO_MERKLE_TREE), &serialize(&tree))?;
+            let mut tree_data = vec![];
+
+            tree_data.write_u32(0)?;
+            tree.encode(&mut tree_data)?;
+            db_set(dao_bulla_db, &serialize(&DAO_MERKLE_TREE), &tree_data)?;
         }
     };
 
@@ -133,7 +131,11 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
         None => {
             // We didn't find a tree, so just make a new one.
             let tree = MerkleTree::new(100);
-            db_set(dao_proposal_db, &serialize(&DAO_PROPOSAL_MERKLE_TREE), &serialize(&tree))?;
+            let mut tree_data = vec![];
+
+            tree_data.write_u32(0)?;
+            tree.encode(&mut tree_data)?;
+            db_set(dao_proposal_db, &serialize(&DAO_PROPOSAL_MERKLE_TREE), &tree_data)?;
         }
     };
 
@@ -163,6 +165,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let params: DaoMintParams = deserialize(&self_.data[1..])?;
 
             // No checks in Mint, just return the update.
+            // TODO: Should it check that there isn't an existing one?
             let update = DaoMintUpdate { dao_bulla: params.dao_bulla };
             let mut update_data = vec![];
             update_data.write_u8(DaoFunction::Mint as u8)?;
@@ -396,9 +399,11 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let params: DaoMintParams = deserialize(&self_.data[1..])?;
 
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
+            // TODO: Why no signatures? Should it be signed with the DAO keypair?
             let signature_pubkeys: Vec<PublicKey> = vec![];
 
-            zk_public_values.push((ZKAS_DAO_MINT_NS.to_string(), vec![params.dao_bulla.inner()]));
+            zk_public_values
+                .push((DAO_CONTRACT_ZKAS_DAO_MINT_NS.to_string(), vec![params.dao_bulla.inner()]));
 
             let mut metadata = vec![];
             zk_public_values.encode(&mut metadata)?;
@@ -426,7 +431,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
                 let (sig_x, sig_y) = input.signature_public.xy();
 
                 zk_public_values.push((
-                    ZKAS_DAO_PROPOSE_BURN_NS.to_string(),
+                    DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS.to_string(),
                     vec![
                         *value_coords.x(),
                         *value_coords.y(),
@@ -440,7 +445,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
             zk_public_values.push((
-                ZKAS_DAO_PROPOSE_MAIN_NS.to_string(),
+                DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS.to_string(),
                 vec![
                     params.token_commit,
                     params.dao_merkle_root.inner(),
@@ -476,7 +481,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
                 let (sig_x, sig_y) = input.signature_public.xy();
 
                 zk_public_values.push((
-                    ZKAS_DAO_VOTE_BURN_NS.to_string(),
+                    DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS.to_string(),
                     vec![
                         input.nullifier.inner(),
                         *value_coords.x(),
@@ -493,7 +498,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let all_vote_commit_coords = all_votes_commit.to_affine().coordinates().unwrap();
 
             zk_public_values.push((
-                ZKAS_DAO_VOTE_MAIN_NS.to_string(),
+                DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS.to_string(),
                 vec![
                     params.token_commit,
                     params.proposal_bulla,
@@ -524,7 +529,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let input_value_coords = params.input_value_commit.to_affine().coordinates().unwrap();
 
             zk_public_values.push((
-                ZKAS_DAO_EXEC_NS.to_string(),
+                DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
                 vec![
                     params.proposal,
                     params.coin_0,

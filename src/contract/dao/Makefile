@@ -28,8 +28,12 @@ $(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
 $(PROOFS_BIN): $(ZKAS) $(PROOFS_SRC)
 	$(ZKAS) $(basename $@) -o $@
 
-test: all
-	$(CARGO) test --release --features=no-entrypoint,client --package darkfi-dao-contract
+test-integration: all
+	$(CARGO) test --release --features=no-entrypoint,client \
+		--package darkfi-dao-contract \
+		--test integration
+
+test:
 
 clean:
 	rm -f $(PROOFS_BIN) $(WASM_BIN)

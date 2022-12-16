@@ -1171,10 +1171,18 @@ dependencies = [
 name = "darkfi-dao-contract"
 version = "0.3.0"
 dependencies = [
+ "async-std",
+ "darkfi",
  "darkfi-money-contract",
  "darkfi-sdk",
  "darkfi-serial",
  "getrandom 0.2.8",
+ "halo2_proofs",
+ "log",
+ "rand",
+ "simplelog",
+ "sled",
+ "sqlx",
 ]
 
 [[package]]

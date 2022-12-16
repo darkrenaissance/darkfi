@@ -45,7 +45,7 @@ use darkfi::{
 
 #[test]
 fn zkvm_opcodes() -> Result<()> {
-    TermLogger::init(LevelFilter::Debug, Config::default(), TerminalMode::Mixed, ColorChoice::Auto)
+    TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto)
         .unwrap();
 
     let bincode = include_bytes!("../proof/opcodes.zk.bin");

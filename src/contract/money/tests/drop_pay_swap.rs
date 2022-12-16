@@ -45,19 +45,11 @@ use darkfi_money_contract::{
 };
 
 mod harness;
-use harness::MoneyTestHarness;
+use harness::{init_logger, MoneyTestHarness};
 
 #[async_std::test]
 async fn money_contract_transfer() -> Result<()> {
-    let mut cfg = simplelog::ConfigBuilder::new();
-    cfg.add_filter_ignore("sled".to_string());
-    simplelog::TermLogger::init(
-        //simplelog::LevelFilter::Debug,
-        simplelog::LevelFilter::Info,
-        cfg.build(),
-        simplelog::TerminalMode::Mixed,
-        simplelog::ColorChoice::Auto,
-    )?;
+    init_logger()?;
 
     // Some numbers we want to assert
     const ALICE_INITIAL: u64 = 100;

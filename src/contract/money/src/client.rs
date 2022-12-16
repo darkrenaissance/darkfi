@@ -696,7 +696,7 @@ pub fn build_transfer_tx(
     burn_pk: &ProvingKey,
     clear_input: bool,
 ) -> Result<(MoneyTransferParams, Vec<Proof>, Vec<SecretKey>, Vec<OwnCoin>)> {
-    debug!("Building money contract transaction");
+    debug!("Building money contract transfer transaction");
     assert!(value != 0);
     if !clear_input {
         assert!(!coins.is_empty());

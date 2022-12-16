@@ -23,6 +23,18 @@ pub mod entrypoint;
 
 pub mod state;
 
+#[cfg(feature = "client")]
+/// Transaction building API for clients interacting with this contract
+pub mod client;
+
+// These are the zkas circuit namespaces
+pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";
+pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS: &str = "DaoVoteInput";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS: &str = "DaoProposeInput";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
+
 #[repr(u8)]
 pub enum DaoFunction {
     Mint = 0x00,
