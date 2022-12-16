@@ -1,0 +1,63 @@
+# Verifiable encryption inside ZK
+# Normally this algo will be hardened due to malleability attacks
+# on the ciphertext, but the ZK proof ensures that the ciphertext
+# cannot be modified.
+#
+# This is basically the el gamal scheme in ZK
+contract "Encrypt" {
+    # We are encrypting values to this public key
+    Base pub_x,
+    Base pub_y,
+
+    # Emphemeral secret value
+    Scalar ephem_secret,
+
+    # Values we are encrypting
+    Base value_1,
+    Base value_2,
+    Base value_3,
+}
+
+circuit "Encrypt" {
+    ################################################
+    # 1. Derive shared secret using DH
+    ################################################
+
+    # TODO: get this working {
+    dest_pub = ec_witness(pub_x, pub_y);
+    ephem_pub = ec_mul(ephem_secret, dest_pub);
+    # }
+	ephem_pub_x = ec_get_x(ephem_pub);
+	ephem_pub_y = ec_get_y(ephem_pub);
+    # Used by the receiver to also derive the same shared secret
+	constrain_instance(ephem_pub_x);
+	constrain_instance(ephem_pub_y);
+
+    shared_secret = poseidon_hash(ephem_pub_x, ephem_pub_y);
+
+    ################################################
+    # 2. Derive blinding factors for witness values
+    ################################################
+
+    N1 = witness_base(1);
+    N2 = witness_base(2);
+    N3 = witness_base(3);
+
+    blind_1 = poseidon_hash(shared_secret, N1);
+    blind_2 = poseidon_hash(shared_secret, N2);
+    blind_3 = poseidon_hash(shared_secret, N3);
+
+    ################################################
+    # 3. Encrypt the values by applying blinds
+    ################################################
+
+    # This could be add or mul
+    enc_value_1 = base_mul(value_1, blind_1);
+    enc_value_2 = base_mul(value_2, blind_2);
+    enc_value_3 = base_mul(value_3, blind_3);
+
+    constrain_instance(enc_value_1);
+    constrain_instance(enc_value_2);
+    constrain_instance(enc_value_3);
+}
+
