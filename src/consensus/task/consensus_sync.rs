@@ -31,57 +31,9 @@ use crate::{
 };
 
 /// async task used for consensus state syncing.
-pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Result<()> {
-    info!("Starting consensus state sync...");
-    let channels_map = p2p.channels().lock().await;
-    let values = channels_map.values();
-    // Using len here because is_empty() uses unstable library feature
-    // called 'exact_size_is_empty'.
-    if values.len() != 0 {
-        // Node iterates the channel peers to ask for their consensus state
-        for channel in values {
-            // Communication setup
-            let msg_subsystem = channel.get_message_subsystem();
-            msg_subsystem.add_dispatch::<ConsensusResponse>().await;
-            let response_sub = channel.subscribe_msg::<ConsensusResponse>().await?;
-
-            // Node creates a `ConsensusRequest` and sends it
-            let request = ConsensusRequest {};
-            channel.send(request).await?;
-
-            // Node verifies response came from a participating node.
-            // Extra validations can be added here.
-            let response = response_sub.receive().await?;
-            if response.nullifiers.is_empty() {
-                warn!("Retrieved consensus state from a new node, retrying...");
-                continue
-            }
-
-            // Node stores response data.
-            let mut lock = state.write().await;
-            lock.consensus.offset = response.offset;
-            let mut forks = vec![];
-            for fork in &response.forks {
-                forks.push(fork.clone().into());
-            }
-            lock.consensus.forks = forks;
-            lock.unconfirmed_txs = response.unconfirmed_txs.clone();
-            lock.consensus.slot_checkpoints = response.slot_checkpoints.clone();
-            lock.consensus.leaders_history = response.leaders_history.clone();
-            lock.consensus.nullifiers = response.nullifiers.clone();
-
-            break
-        }
-    } else {
-        warn!("Node is not connected to other nodes");
-    }
-
-    info!("Consensus state synced!");
-    Ok(())
-}
-
-/// async task used for consensus state syncing.
-pub async fn consensus_sync_task2(p2p: P2pPtr, state: ValidatorStatePtr) -> Result<()> {
+/// Returns flag if node is not connected to other peers or consensus hasn't started,
+/// so it can immediately start proposing proposals.
+pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Result<bool> {
     info!("Starting consensus state sync...");
     // Loop through connected channels
     let channels_map = p2p.channels().lock().await;
@@ -91,7 +43,7 @@ pub async fn consensus_sync_task2(p2p: P2pPtr, state: ValidatorStatePtr) -> Resu
     if values.len() == 0 {
         warn!("Node is not connected to other nodes");
         info!("Consensus state synced!");
-        return Ok(())
+        return Ok(true)
     }
 
     // Node iterates the channel peers to check if at least on peer has seen slot checkpoints
@@ -108,7 +60,7 @@ pub async fn consensus_sync_task2(p2p: P2pPtr, state: ValidatorStatePtr) -> Resu
 
         // Node checks response
         let response = response_sub.receive().await?;
-        if !response.slot_checkpoints {
+        if response.is_empty {
             warn!("Node has not seen any slot checkpoints, retrying...");
             continue
         }
@@ -126,7 +78,7 @@ pub async fn consensus_sync_task2(p2p: P2pPtr, state: ValidatorStatePtr) -> Resu
     if peer.is_none() {
         warn!("No node that has seen any slot checkpoints was found.");
         info!("Consensus state synced!");
-        return Ok(())
+        return Ok(true)
     }
     let peer = peer.unwrap();
 
@@ -166,5 +118,5 @@ pub async fn consensus_sync_task2(p2p: P2pPtr, state: ValidatorStatePtr) -> Resu
     lock.consensus.nullifiers = response.nullifiers.clone();
 
     info!("Consensus state synced!");
-    Ok(())
+    Ok(false)
 }

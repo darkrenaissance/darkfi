@@ -48,6 +48,8 @@ pub struct ConsensusState {
     pub genesis_block: blake3::Hash,
     /// Participating start slot
     pub participating: Option<u64>,
+    /// Node is able to propose proposals
+    pub proposing: bool,
     /// Last slot node check for finalization
     pub checked_finalization: u64,
     /// Slots offset since genesis,
@@ -83,6 +85,7 @@ impl ConsensusState {
             genesis_ts,
             genesis_block,
             participating: None,
+            proposing: false,
             checked_finalization: 0,
             offset: None,
             forks: vec![],
@@ -448,7 +451,8 @@ impl ConsensusState {
             return constants::MAX_F.clone()
         }
         let hist_len = self.leaders_history.len();
-        if self.leaders_history[hist_len - 1] == 0 &&
+        if hist_len > 3 &&
+            self.leaders_history[hist_len - 1] == 0 &&
             self.leaders_history[hist_len - 2] == 0 &&
             self.leaders_history[hist_len - 3] == 0 &&
             i == constants::FLOAT10_ZERO.clone()
@@ -464,6 +468,10 @@ impl ConsensusState {
     /// * 'sigma1', 'sigma2': slot sigmas
     /// Returns: (check: bool, idx: usize) where idx is the winning coin's index
     pub fn is_slot_leader(&mut self, sigma1: pallas::Base, sigma2: pallas::Base) -> (bool, usize) {
+        // Check if node can produce proposals
+        if !self.proposing {
+            return (false, 0)
+        }
         let competing_coins = &self.coins.clone();
 
         let mut won = false;
@@ -589,7 +597,7 @@ impl ConsensusState {
 
     /// Auxillary function to set nodes leaders count history to the largest fork sequence
     /// of leaders, by using provided index.
-    pub fn set_leader_history(&mut self, index: i64) {
+    pub fn set_leader_history(&mut self, index: i64, current_slot: u64) {
         // Check if we found longest fork to extract sequence from
         match index {
             -1 => {
@@ -598,7 +606,7 @@ impl ConsensusState {
             _ => {
                 info!("set_leader_history(): Checking last proposal of fork: {}", index);
                 let last_proposal = &self.forks[index as usize].sequence.last().unwrap().proposal;
-                if last_proposal.block.header.slot == self.current_slot() {
+                if last_proposal.block.header.slot == current_slot {
                     // Replacing our last history element with the leaders one
                     self.leaders_history.pop();
                     self.leaders_history.push(last_proposal.block.lead_info.leaders);
@@ -654,6 +662,7 @@ impl ConsensusState {
     /// Auxiliary structure to reset consensus state for a resync
     pub fn reset(&mut self) {
         self.participating = None;
+        self.proposing = false;
         self.forks = vec![];
         self.slot_checkpoints = vec![];
         self.leaders_history = vec![0];
@@ -708,7 +717,7 @@ impl net::Message for ConsensusSlotCheckpointsRequest {
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ConsensusSlotCheckpointsResponse {
     /// Node has hot/live slot checkpoints
-    pub slot_checkpoints: bool,
+    pub is_empty: bool,
 }
 
 impl net::Message for ConsensusSlotCheckpointsResponse {

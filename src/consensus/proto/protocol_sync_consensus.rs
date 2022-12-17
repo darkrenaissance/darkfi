@@ -122,8 +122,8 @@ impl ProtocolSyncConsensus {
             );
 
             // Extra validations can be added here.
-            let slot_checkpoints = !self.state.read().await.consensus.slot_checkpoints.is_empty();
-            let response = ConsensusSlotCheckpointsResponse { slot_checkpoints };
+            let is_empty = self.state.read().await.consensus.slot_checkpoints.is_empty();
+            let response = ConsensusSlotCheckpointsResponse { is_empty };
             if let Err(e) = self.channel.send(response).await {
                 error!("ProtocolSyncConsensus::handle_receive_slot_checkpoints_request() channel send fail: {}", e);
             };

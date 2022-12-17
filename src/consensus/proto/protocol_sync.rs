@@ -125,12 +125,13 @@ impl ProtocolSync {
 
             // Check if node started participating in consensus.
             // Consensus-mode enabled nodes have already performed these steps,
-            // during proposal finalization.
+            // during proposal finalization. They still listen to this sub,
+            // in case they go out of sync and become a none-consensus node.
             if self.consensus_mode && self.state.read().await.consensus.participating.is_some() {
                 debug!(
                     "ProtocolSync::handle_receive_block(): node runs in consensus mode, skipping..."
                 );
-                return Ok(())
+                continue
             }
 
             info!("ProtocolSync::handle_receive_block(): Received block: {}", info.blockhash());
@@ -218,12 +219,13 @@ impl ProtocolSync {
 
             // Check if node started participating in consensus.
             // Consensus-mode enabled nodes have already performed these steps,
-            // during proposal finalization.
+            // during proposal finalization. They still listen to this sub,
+            // in case they go out of sync and become a none-consensus node.
             if self.consensus_mode && self.state.read().await.consensus.participating.is_some() {
                 debug!(
                     "ProtocolSync::handle_receive_slot_checkpoint(): node runs in consensus mode, skipping..."
                 );
-                return Ok(())
+                continue
             }
 
             info!(

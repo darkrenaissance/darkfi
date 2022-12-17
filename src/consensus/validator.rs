@@ -259,11 +259,15 @@ impl ValidatorState {
         sigma1: pallas::Base,
         sigma2: pallas::Base,
     ) -> Result<Option<(BlockProposal, LeadCoin)>> {
+        // Check if node can produce proposals
+        if !self.consensus.proposing {
+            return Ok(None)
+        }
+
+        // Generate proposal
         let slot = self.consensus.current_slot();
         let (prev_hash, index) = self.consensus.longest_chain_last_hash().unwrap();
         let unproposed_txs = self.unproposed_txs(index);
-
-        // TODO: [PLACEHOLDER] Create and add rewards transaction
 
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
         // The following is pretty weird, so something better should be done.
@@ -581,12 +585,14 @@ impl ValidatorState {
         let mut fork_index = -1;
         // Use this index to extract leaders count sequence from longest fork
         let mut index_for_history = -1;
+        let mut max_length_for_history = 0;
         let mut max_length = 0;
         for (index, fork) in self.consensus.forks.iter().enumerate() {
             let length = fork.sequence.len();
             // Check if greater than max to retain index for history
-            if length > max_length {
+            if length > max_length_for_history {
                 index_for_history = index as i64;
+                max_length_for_history = length;
             }
             // Ignore forks with less that 3 blocks
             if length < 3 {
@@ -612,12 +618,12 @@ impl ValidatorState {
         match fork_index {
             -2 => {
                 info!("chain_finalization(): Eligible forks with same height exist, nothing to finalize.");
-                self.consensus.set_leader_history(index_for_history);
+                self.consensus.set_leader_history(index_for_history, slot);
                 return Ok((vec![], vec![]))
             }
             -1 => {
                 info!("chain_finalization(): All chains have less than 3 proposals, nothing to finalize.");
-                self.consensus.set_leader_history(index_for_history);
+                self.consensus.set_leader_history(index_for_history, slot);
                 return Ok((vec![], vec![]))
             }
             _ => info!("chain_finalization(): Chain {} can be finalized!", fork_index),
