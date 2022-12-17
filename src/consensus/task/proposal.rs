@@ -99,7 +99,7 @@ async fn consensus_loop(
 ) {
     // Note: when a node can start produce proposals is only enforced in code,
     // where we verify if the hardware can keep up with the consensus, by
-    // counting how many consecutive slots node successfully listend and process
+    // counting how many consecutive slots node successfully listened and process
     // everything. Later, this will be enforced via contract, where it will be explicit
     // when a node can produce proposals, and after which slot they can be considered as valid.
     let mut listened_slots = 0;
