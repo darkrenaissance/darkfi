@@ -87,6 +87,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     let subscriber = state.read().await.subscribers.get("blocks").unwrap().clone();
     let subscription = subscriber.subscribe().await;
     subscription.receive().await;
+    subscription.unsubscribe().await;
 
     // After finalization occurs, sync our consensus state.
     // This ensures that the received state always consists of 1 fork with one proposal.
