@@ -252,4 +252,13 @@ impl Blockchain {
     pub fn has_slot_checkpoint(&self, slot_checkpoint: &SlotCheckpoint) -> Result<bool> {
         Ok(self.slot_checkpoints.get(&[slot_checkpoint.slot], true).is_ok())
     }
+
+    /// Check if block order for the given slot is in the database.
+    pub fn has_slot(&self, slot: u64) -> Result<bool> {
+        let vec = match self.order.get(&[slot], true) {
+            Ok(v) => v,
+            Err(_) => return Ok(false),
+        };
+        Ok(!vec.is_empty())
+    }
 }

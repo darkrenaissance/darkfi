@@ -27,6 +27,7 @@ use crate::{
         ValidatorStatePtr,
     },
     net::P2pPtr,
+    util::async_util::sleep,
     Result,
 };
 
@@ -114,6 +115,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     loop {
         if response.forks.len() != 1 || response.forks[0].sequence.len() != 1 {
             warn!("Peer has not finished finalization, retrying...");
+            sleep(1).await;
             peer.send(ConsensusRequest {}).await?;
             response = response_sub.receive().await?;
             continue
@@ -122,11 +124,11 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     }
 
     // Verify that the node has received all finalized blocks
+    let last_finalized_slot = response.forks[0].sequence[0].proposal.block.header.slot - 1;
     loop {
-        let lock = state.read().await;
-        let last_finalized = lock.consensus.current_slot() - 1;
-        if lock.blockchain.last().unwrap().0 != last_finalized {
+        if !state.read().await.blockchain.has_slot(last_finalized_slot)? {
             warn!("Node has not finished finalization, retrying...");
+            sleep(1).await;
             continue
         }
         break
