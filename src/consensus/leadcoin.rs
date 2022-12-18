@@ -88,8 +88,6 @@ pub struct LeadCoin {
     pub y_mu: pallas::Base,
     /// Leader election nonce derived from eta at onset of epoch
     pub rho_mu: pallas::Base,
-    /// Coin's secret key
-    pub secret_key: SecretKey,
     /// eta
     pub eta: pallas::Base,
     /// slot
@@ -116,8 +114,6 @@ impl LeadCoin {
         coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
         // what's seed supposed to be?
         seed: u64,
-        // what is this SecretKey representing?
-        secret_key: SecretKey,
         // Merkle tree of coin commitments
         coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
     ) -> Self {
@@ -125,6 +121,7 @@ impl LeadCoin {
         let coin1_blind = pallas::Scalar::random(&mut OsRng);
         let coin2_blind = pallas::Scalar::random(&mut OsRng);
         let tau = pallas::Base::from(slot_index);
+        //TODO disable tau, set to zero.
         // pk
         let pk = Self::util_pk(coin1_sk_root, tau);
         // Derive the nonce for coin2
@@ -171,7 +168,6 @@ impl LeadCoin {
             coin2_blind,
             y_mu,
             rho_mu,
-            secret_key,
             eta,
             slot: slot_index,
         }
@@ -341,7 +337,6 @@ impl LeadCoin {
             coin2_blind: blind,
             y_mu: self.y_mu,
             rho_mu: self.rho_mu,
-            secret_key: self.secret_key,
             eta: self.eta,
             slot: self.slot,
         }
@@ -366,7 +361,7 @@ impl LeadCoin {
             Witness::MerklePath(Value::known(self.coin1_commitment_merkle_path)),
             Witness::Uint32(Value::known(self.idx)),
             Witness::Uint32(Value::known(self.coin1_sk_pos)),
-            Witness::Base(Value::known(self.secret_key.inner())),
+            Witness::Base(Value::known(self.coin1_sk.inner())),
             Witness::Base(Value::known(self.coin1_sk_root.inner())),
             Witness::MerklePath(Value::known(self.coin1_sk_merkle_path)),
             Witness::Base(Value::known(self.tau)),
