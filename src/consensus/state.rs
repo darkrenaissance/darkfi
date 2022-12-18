@@ -93,7 +93,7 @@ impl ConsensusState {
             offset: None,
             forks: vec![],
             epoch: 0,
-            epoch_eta: pallas::Base::one(),
+            epoch_eta: pallas::Base::zero(),
             slot_checkpoints: vec![],
             leaders_history: vec![0],
             coins: vec![],
@@ -191,9 +191,9 @@ impl ConsensusState {
     pub async fn init_coins(&mut self) -> Result<()> {
         self.epoch = self.current_epoch();
         if self.slot_checkpoints.is_empty() {
-            self.epoch_eta = self.get_eta();
             // Create slot checkpoint if not on genesis slot (already in db)
             if self.current_slot() != 0 {
+                self.epoch_eta = self.get_eta();
                 let (sigma1, sigma2) = self.sigmas();
                 self.generate_slot_checkpoint(sigma1, sigma2);
             }
