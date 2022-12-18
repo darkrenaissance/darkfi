@@ -379,6 +379,18 @@ impl ValidatorState {
             return Err(Error::ProposalNotForCurrentSlotError)
         }
 
+        // Verify that proposer can produce proposals.
+        // NOTE: Later, this will be enforced via contract, where it will be explicit
+        // when a node can produce proposals, and after which slot they can be considered as valid.
+        let elapsed_slots = current - lf.coin_slot;
+        if elapsed_slots <= (constants::EPOCH_LENGTH as u64) {
+            warn!(
+                "receive_proposal(): Proposer {} is not eligible to produce proposals",
+                lf.public_key
+            );
+            return Err(Error::ProposalProposerNotEligible)
+        }
+
         // Check if proposal extends any existing fork chains
         let index = self.consensus.find_extended_chain_index(proposal)?;
         if index == -2 {

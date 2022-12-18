@@ -262,11 +262,15 @@ pub enum Error {
     #[error("Proposal contains more transactions than configured cap")]
     ProposalTxsExceedCapError,
 
-    #[error("unable to verify transfer transaction")]
+    #[error("Unable to verify transfer transaction")]
     TransferTxVerification,
 
-    #[error("unable to verify proposed mu values")]
+    #[error("Unable to verify proposed mu values")]
     ProposalPublicValuesMismatched,
+
+    #[error("Proposer is not eligible to produce proposals")]
+    ProposalProposerNotEligible,
+
     // ===============
     // Database errors
     // ===============
