@@ -35,14 +35,30 @@ pub async fn proposal_task(
     state: ValidatorStatePtr,
     ex: Arc<smol::Executor<'_>>,
 ) {
-    // Check if network is configured to start in the future
-    // NOTE: This should always be true when bootstrapping or restarting a network.
+    // Check if network is configured to start in the future,
+    // otherwise wait for current or next slot finalization period for optimal sync conditions.
+    // NOTE: Network beign configured to start in the future should always be the case
+    // when bootstrapping or restarting a network.
     let current_ts = Timestamp::current_time();
     let genesis_ts = state.read().await.consensus.genesis_ts;
     if current_ts < genesis_ts {
         let diff = genesis_ts.0 - current_ts.0;
         info!("consensus: Waiting for network bootstrap: {} seconds", diff);
         sleep(diff as u64).await;
+    } else {
+        let mut sleep_time = state.read().await.consensus.next_n_slot_start(1);
+        let sync_offset = Duration::new(constants::FINAL_SYNC_DUR, 0);
+        loop {
+            if sleep_time > sync_offset {
+                sleep_time -= sync_offset;
+                break
+            }
+            info!("consensus: Waiting for next slot ({:?})", sleep_time);
+            sleep(sleep_time.as_secs()).await;
+            sleep_time = state.read().await.consensus.next_n_slot_start(1);
+        }
+        info!("consensus: Waiting for finalization sync period ({:?})", sleep_time);
+        sleep(sleep_time.as_secs()).await;
     }
 
     let mut retries = 0;
@@ -200,11 +216,23 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
         }
     };
 
+    // Node checks if it missed finalization period due to proposal creation
+    let next_slot_start = state.read().await.consensus.next_n_slot_start(1);
+    if next_slot_start.as_secs() <= constants::FINAL_SYNC_DUR {
+        warn!(
+            "consensus: Node missed slot {} finalization period due to proposal creation, resyncing...",
+            state.read().await.consensus.current_slot()
+        );
+        return true
+    }
+
     // Node stores the proposal and broadcast to rest nodes
     info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
     debug!("consensus: Full proposal: {:?}", proposal);
     match state.write().await.receive_proposal(&proposal, Some((idx, coin))).await {
-        Ok(()) => {
+        Ok(_) => {
+            // Here we don't have to check to broadcast, because the flag
+            // will always be true, since the node is able to produce proposals
             info!("consensus: Block proposal saved successfully");
             // Broadcast proposal to other consensus nodes
             match consensus_p2p.broadcast(proposal).await {
@@ -230,13 +258,18 @@ async fn finalization_period(
 ) -> bool {
     // Node sleeps until finalization sync period starts
     let next_slot_start = state.read().await.consensus.next_n_slot_start(1);
-    let seconds_sync_period = if next_slot_start.as_secs() > constants::FINAL_SYNC_DUR {
-        (next_slot_start - Duration::new(constants::FINAL_SYNC_DUR, 0)).as_secs()
+    if next_slot_start.as_secs() > constants::FINAL_SYNC_DUR {
+        let seconds_sync_period =
+            (next_slot_start - Duration::new(constants::FINAL_SYNC_DUR, 0)).as_secs();
+        info!("consensus: Waiting for finalization sync period ({} sec)", seconds_sync_period);
+        sleep(seconds_sync_period).await;
     } else {
-        next_slot_start.as_secs()
-    };
-    info!("consensus: Waiting for finalization sync period ({} sec)", seconds_sync_period);
-    sleep(seconds_sync_period).await;
+        warn!(
+            "consensus: Node missed slot {} finalization period due to proposals processing, resyncing...",
+            state.read().await.consensus.current_slot()
+        );
+        return true
+    }
 
     // Keep a record of slot to verify if next slot got skipped during processing
     let completed_slot = state.read().await.consensus.current_slot();

@@ -335,7 +335,6 @@ impl ConsensusState {
         }
         // Retrieve longest fork length, to also those proposals in the calculation
         let max_fork_length = self.longest_chain_length() as u64;
-
         current_slot - blocks - self.get_current_offset(current_slot) - max_fork_length
     }
 
@@ -678,6 +677,7 @@ impl ConsensusState {
     pub fn reset(&mut self) {
         self.participating = None;
         self.proposing = false;
+        self.offset = None;
         self.forks = vec![];
         self.slot_checkpoints = vec![];
         self.leaders_history = vec![0];
@@ -686,7 +686,7 @@ impl ConsensusState {
 }
 
 /// Auxiliary structure used for consensus syncing.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ConsensusRequest {}
 
 impl net::Message for ConsensusRequest {

@@ -87,21 +87,28 @@ impl ProtocolProposal {
                 continue
             }
 
-            if let Err(e) = lock.receive_proposal(&proposal_copy, None).await {
-                error!(
-                    "ProtocolProposal::handle_receive_proposal(): receive_proposal error: {}",
-                    e
-                );
-                continue
+            match lock.receive_proposal(&proposal_copy, None).await {
+                Ok(broadcast) => {
+                    if broadcast {
+                        // Broadcast proposal to rest of nodes
+                        if let Err(e) =
+                            self.p2p.broadcast_with_exclude(proposal_copy, &exclude_list).await
+                        {
+                            error!(
+                                "ProtocolProposal::handle_receive_proposal(): proposal broadcast fail: {}",
+                                e
+                            );
+                        };
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "ProtocolProposal::handle_receive_proposal(): receive_proposal error: {}",
+                        e
+                    );
+                    continue
+                }
             }
-
-            // Broadcast block to rest of nodes
-            if let Err(e) = self.p2p.broadcast_with_exclude(proposal_copy, &exclude_list).await {
-                error!(
-                    "ProtocolProposal::handle_receive_proposal(): proposal broadcast fail: {}",
-                    e
-                );
-            };
         }
     }
 }

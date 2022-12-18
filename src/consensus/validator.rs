@@ -348,20 +348,22 @@ impl ValidatorState {
 
     /// Given a proposal, the node verify its sender (slot leader) and finds which blockchain
     /// it extends. If the proposal extends the canonical blockchain, a new fork chain is created.
+    /// Returns flag to signal if proposal should be broadcasted. Only active consensus participants
+    /// should broadcast proposals.
     pub async fn receive_proposal(
         &mut self,
         proposal: &BlockProposal,
         coin: Option<(usize, LeadCoin)>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let current = self.consensus.current_slot();
         // Node hasn't started participating
         match self.consensus.participating {
             Some(start) => {
                 if current < start {
-                    return Ok(())
+                    return Ok(false)
                 }
             }
-            None => return Ok(()),
+            None => return Ok(false),
         }
 
         // Node have already checked for finalization in this slot
@@ -569,7 +571,7 @@ impl ValidatorState {
             }
         };
 
-        Ok(())
+        Ok(true)
     }
 
     /// Remove provided transactions vector from unconfirmed_txs if they exist.
