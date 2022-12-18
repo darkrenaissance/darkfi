@@ -82,6 +82,7 @@ impl ProtocolSyncConsensus {
 
             // Extra validations can be added here.
             let lock = self.state.read().await;
+            let bootstrap_slot = lock.consensus.bootstrap_slot;
             let offset = lock.consensus.offset;
             let mut forks = vec![];
             for fork in &lock.consensus.forks {
@@ -92,6 +93,7 @@ impl ProtocolSyncConsensus {
             let leaders_history = lock.consensus.leaders_history.clone();
             let nullifiers = lock.consensus.nullifiers.clone();
             let response = ConsensusResponse {
+                bootstrap_slot,
                 offset,
                 forks,
                 unconfirmed_txs,
@@ -122,8 +124,10 @@ impl ProtocolSyncConsensus {
             );
 
             // Extra validations can be added here.
-            let is_empty = self.state.read().await.consensus.slot_checkpoints.is_empty();
-            let response = ConsensusSlotCheckpointsResponse { is_empty };
+            let lock = self.state.read().await;
+            let bootstrap_slot = lock.consensus.bootstrap_slot;
+            let is_empty = lock.consensus.slot_checkpoints.is_empty();
+            let response = ConsensusSlotCheckpointsResponse { bootstrap_slot, is_empty };
             if let Err(e) = self.channel.send(response).await {
                 error!("ProtocolSyncConsensus::handle_receive_slot_checkpoints_request() channel send fail: {}", e);
             };

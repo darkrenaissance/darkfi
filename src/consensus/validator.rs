@@ -380,10 +380,13 @@ impl ValidatorState {
         }
 
         // Verify that proposer can produce proposals.
+        // Nodes that created coins in the bootstrap slot can propose immediately.
         // NOTE: Later, this will be enforced via contract, where it will be explicit
         // when a node can produce proposals, and after which slot they can be considered as valid.
         let elapsed_slots = current - lf.coin_slot;
-        if elapsed_slots <= (constants::EPOCH_LENGTH as u64) {
+        if lf.coin_slot != self.consensus.bootstrap_slot &&
+            elapsed_slots <= (constants::EPOCH_LENGTH as u64)
+        {
             warn!(
                 "receive_proposal(): Proposer {} is not eligible to produce proposals",
                 lf.public_key

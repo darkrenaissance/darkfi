@@ -25,7 +25,7 @@ use super::consensus_sync_task;
 use crate::{
     consensus::{constants, ValidatorStatePtr},
     net::P2pPtr,
-    util::async_util::sleep,
+    util::{async_util::sleep, time::Timestamp},
 };
 
 /// async task used for participating in the consensus protocol
@@ -35,6 +35,16 @@ pub async fn proposal_task(
     state: ValidatorStatePtr,
     ex: Arc<smol::Executor<'_>>,
 ) {
+    // Check if network is configured to start in the future
+    // NOTE: This should always be true when bootstrapping or restarting a network.
+    let current_ts = Timestamp::current_time();
+    let genesis_ts = state.read().await.consensus.genesis_ts;
+    if current_ts < genesis_ts {
+        let diff = genesis_ts.0 - current_ts.0;
+        info!("consensus: Waiting for network bootstrap: {} seconds", diff);
+        sleep(diff as u64).await;
+    }
+
     let mut retries = 0;
     // Sync loop
     loop {
@@ -100,7 +110,7 @@ async fn consensus_loop(
     // Note: when a node can start produce proposals is only enforced in code,
     // where we verify if the hardware can keep up with the consensus, by
     // counting how many consecutive slots node successfully listened and process
-    // everything. Aditionally, we check each proposer coin creation slot to be
+    // everything. Additionally, we check each proposer coin creation slot to be
     // greater than an epoch length. Later, this will be enforced via contract,
     // where it will be explicit when a node can produce proposals,
     // and after which slot they can be considered as valid.

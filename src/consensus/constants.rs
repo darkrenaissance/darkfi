@@ -31,7 +31,7 @@ lazy_static! {
     pub static ref TESTNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_testnet");
 
     /// Genesis timestamp for the testnet chain
-    pub static ref TESTNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1670506503);
+    pub static ref TESTNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1671329520);
 
     // Commonly used Float10
     pub static ref  FLOAT10_ZERO: Float10 = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();

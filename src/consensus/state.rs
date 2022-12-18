@@ -46,6 +46,8 @@ pub struct ConsensusState {
     pub genesis_ts: Timestamp,
     /// Genesis block hash
     pub genesis_block: blake3::Hash,
+    /// Slot the network was bootstrapped
+    pub bootstrap_slot: u64,
     /// Participating start slot
     pub participating: Option<u64>,
     /// Node is able to propose proposals
@@ -84,6 +86,7 @@ impl ConsensusState {
             blockchain,
             genesis_ts,
             genesis_block,
+            bootstrap_slot: 0,
             participating: None,
             proposing: false,
             checked_finalization: 0,
@@ -184,28 +187,40 @@ impl ConsensusState {
         self.slot_checkpoints.push(checkpoint);
     }
 
-    /// Check if new epoch has started, to create new epoch coins.
-    /// Returns flag to signify if epoch has changed and vector of
-    /// new epoch competing coins.
+    // Initialize node lead coins and set current epoch and eta.
+    pub async fn init_coins(&mut self) -> Result<()> {
+        self.epoch = self.current_epoch();
+        if self.slot_checkpoints.is_empty() {
+            self.epoch_eta = self.get_eta();
+            // Create slot checkpoint if not on genesis slot (already in db)
+            if self.current_slot() != 0 {
+                let (sigma1, sigma2) = self.sigmas();
+                self.generate_slot_checkpoint(sigma1, sigma2);
+            }
+        } else {
+            let last_slot_checkpoint = self.slot_checkpoints.last().unwrap();
+            self.epoch_eta = last_slot_checkpoint.eta;
+        };
+        self.coins = self.create_coins(self.epoch_eta).await?;
+        self.update_forks_checkpoints();
+
+        Ok(())
+    }
+
+    /// Check if new epoch has started and generate slot checkpoint.
+    /// Returns flag to signify if epoch has changed.
     pub async fn epoch_changed(
         &mut self,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
     ) -> Result<bool> {
+        self.generate_slot_checkpoint(sigma1, sigma2);
         let epoch = self.current_epoch();
         if epoch <= self.epoch {
-            self.generate_slot_checkpoint(sigma1, sigma2);
             return Ok(false)
         }
-
-        let eta = self.get_eta();
-        if self.coins.is_empty() {
-            self.coins = self.create_coins(eta).await?;
-            self.update_forks_checkpoints();
-        }
         self.epoch = epoch;
-        self.epoch_eta = eta;
-        self.generate_slot_checkpoint(sigma1, sigma2);
+        self.epoch_eta = self.get_eta();
 
         Ok(true)
     }
@@ -683,6 +698,8 @@ impl net::Message for ConsensusRequest {
 /// Auxiliary structure used for consensus syncing.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ConsensusResponse {
+    /// Slot the network was bootstrapped
+    pub bootstrap_slot: u64,
     /// Slots offset since genesis,
     pub offset: Option<u64>,
     /// Hot/live data used by the consensus algorithm
@@ -716,6 +733,8 @@ impl net::Message for ConsensusSlotCheckpointsRequest {
 /// Auxiliary structure used for consensus syncing.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ConsensusSlotCheckpointsResponse {
+    /// Node known bootstrap slot
+    pub bootstrap_slot: u64,
     /// Node has hot/live slot checkpoints
     pub is_empty: bool,
 }

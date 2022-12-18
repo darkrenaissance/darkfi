@@ -42,6 +42,9 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     // called 'exact_size_is_empty'.
     if values.len() == 0 {
         warn!("Node is not connected to other nodes");
+        let mut lock = state.write().await;
+        lock.consensus.bootstrap_slot = lock.consensus.current_slot();
+        lock.consensus.init_coins().await?;
         info!("Consensus state synced!");
         return Ok(true)
     }
@@ -60,6 +63,10 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
 
         // Node checks response
         let response = response_sub.receive().await?;
+        if response.bootstrap_slot == state.read().await.consensus.current_slot() {
+            warn!("Network was just bootstraped, checking rest nodes");
+            continue
+        }
         if response.is_empty {
             warn!("Node has not seen any slot checkpoints, retrying...");
             continue
@@ -76,7 +83,10 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     // If no peer knows about any slot checkpoints, that means that the network was bootstrapped or restarted
     // and no node has started consensus.
     if peer.is_none() {
-        warn!("No node that has seen any slot checkpoints was found.");
+        warn!("No node that has seen any slot checkpoints was found, or network was just boostrapped.");
+        let mut lock = state.write().await;
+        lock.consensus.bootstrap_slot = lock.consensus.current_slot();
+        lock.consensus.init_coins().await?;
         info!("Consensus state synced!");
         return Ok(true)
     }
@@ -112,11 +122,13 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     for fork in &response.forks {
         forks.push(fork.clone().into());
     }
+    lock.consensus.bootstrap_slot = response.bootstrap_slot;
     lock.consensus.forks = forks;
     lock.unconfirmed_txs = response.unconfirmed_txs.clone();
     lock.consensus.slot_checkpoints = response.slot_checkpoints.clone();
     lock.consensus.leaders_history = response.leaders_history.clone();
     lock.consensus.nullifiers = response.nullifiers.clone();
+    lock.consensus.init_coins().await?;
 
     info!("Consensus state synced!");
     Ok(false)
