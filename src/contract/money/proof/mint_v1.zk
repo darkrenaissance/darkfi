@@ -21,9 +21,9 @@ contract "Mint_V1" {
 	Base spend_hook,
 	# Data passed from this coin to the invoked contract
 	Base user_data,
-	# Random blinding factor for value commitment
+	# Random blinding factor for the value commitment
 	Scalar value_blind,
-	# Random blinding facfor for the token ID
+	# Random blinding factor for the token ID
 	Scalar token_blind,
 }
 

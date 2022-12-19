@@ -47,6 +47,7 @@ pub enum MoneyFunction {
     OtcSwap = 0x01,
     Stake = 0x02,
     Unstake = 0x03,
+    Mint = 0x04,
 }
 
 impl TryFrom<u8> for MoneyFunction {
@@ -58,6 +59,7 @@ impl TryFrom<u8> for MoneyFunction {
             0x01 => Ok(Self::OtcSwap),
             0x02 => Ok(Self::Stake),
             0x03 => Ok(Self::Unstake),
+            0x04 => Ok(Self::Mint),
             _ => Err(ContractError::InvalidFunction),
         }
     }
@@ -84,6 +86,7 @@ darkfi_sdk::define_contract!(
 // These are the different sled trees that will be created
 pub const MONEY_CONTRACT_COIN_ROOTS_TREE: &str = "coin_roots";
 pub const MONEY_CONTRACT_NULLIFIERS_TREE: &str = "nullifiers";
+pub const MONEY_CONTRACT_FIXED_SUPPLY_TREE: &str = "fixed_supply_tokens";
 pub const MONEY_CONTRACT_INFO_TREE: &str = "info";
 
 // This is a key inside the info tree
@@ -94,6 +97,8 @@ pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &str = "faucet_pubkeys";
 pub const MONEY_CONTRACT_ZKAS_MINT_NS_V1: &str = "Mint_V1";
 /// zkas burn contract namespace
 pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
+/// zkas token mint contract namespace
+pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";
 
 /// This function runs when the contract is (re)deployed and initialized.
 #[cfg(not(feature = "no-entrypoint"))]
@@ -111,6 +116,7 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     };
     let mint_v1_bincode = include_bytes!("../proof/mint_v1.zk.bin");
     let burn_v1_bincode = include_bytes!("../proof/burn_v1.zk.bin");
+    let token_mint_v1_bincode = include_bytes!("../proof/token_mint_v1.zk.bin");
 
     /* TODO: Do I really want to make zkas a dependency? Yeah, in the future.
        For now we take anything.
@@ -125,6 +131,7 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     */
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1), &mint_v1_bincode[..])?;
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1), &burn_v1_bincode[..])?;
+    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1), &token_mint_v1_bincode[..])?;
 
     // Set up a database tree to hold Merkle roots
     let _ = match db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE) {
@@ -136,6 +143,12 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     let _ = match db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE) {
         Ok(v) => v,
         Err(_) => db_init(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?,
+    };
+
+    // Set up a database tree to hold the set of fixed-supply tokens
+    let _ = match db_lookup(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE) {
+        Ok(v) => v,
+        Err(_) => db_init(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE)?,
     };
 
     // Set up a database tree for arbitrary data
@@ -231,6 +244,7 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
 
         MoneyFunction::Stake => unimplemented!(),
         MoneyFunction::Unstake => unimplemented!(),
+        MoneyFunction::Mint => unimplemented!(),
     };
 
     Ok(())
@@ -444,6 +458,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             msg!("[Unstake] Entered match arm");
             unimplemented!();
         }
+
+        MoneyFunction::Mint => {
+            msg!("[Mint] Entered match arm");
+            unimplemented!();
+        }
     }
 }
 
@@ -475,5 +494,6 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
 
         MoneyFunction::Stake => unimplemented!(),
         MoneyFunction::Unstake => unimplemented!(),
+        MoneyFunction::Mint => unimplemented!(),
     }
 }

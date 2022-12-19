@@ -1,0 +1,74 @@
+constant "TokenMint_V1" {
+	EcFixedPointShort VALUE_COMMIT_VALUE,
+	EcFixedPoint VALUE_COMMIT_RANDOM,
+	EcFixedPointBase NULLIFIER_K,
+}
+
+contract "TokenMint_V1" {
+	# Token mint authority secret
+	Base mint_authority,
+	# Token supply
+	Base supply,
+	# Fixed supply
+	Base fixed_supply,
+	# Recipient's public key x coordinate
+	Base rcpt_x,
+	# Recipient's public key y coordinate
+	Base rcpt_y,
+	# Unique serial number corresponding to this coin
+	Base serial,
+	# Random blinding factor for coin
+	Base coin_blind,
+	# Allows composing this ZK proof to invoke other contracts
+	Base spend_hook,
+	# Data passed from this coin to the invoked contract
+	Base user_data,
+	# Random blinding factor for the value commitment
+	Scalar value_blind,
+	# Random blinding factor for the token ID
+	Scalar token_blind,
+}
+
+circuit "TokenMint_V1" {
+	# Derive public key for the mint authority
+	mint_public = ec_mul_base(mint_authority, NULLIFIER_K);
+	mint_x = ec_get_x(mint_public);
+	mint_y = ec_get_y(mint_public);
+	constrain_instance(mint_x);
+	constrain_instance(mint_y);
+
+	# Derive the token ID
+	token_id = poseidon_hash(mint_x, mint_y);
+	constrain_instance(token_id);
+
+	# Constrain whether this token has a fixed supply or not.
+	# In case it is, subsequent mints will not be allowed.
+	bool_check(fixed_supply);
+	constrain_instance(fixed_supply);
+
+	# Poseidon hash of the coin
+	C = poseidon_hash(
+		rcpt_x,
+		rcpt_y,
+		supply,
+		token_id,
+		spend_hook,
+		user_data,
+		coin_blind,
+	);
+	constrain_instance(C);
+
+	# Pedersen commitment for the coin's value
+	vcv = ec_mul_short(supply, VALUE_COMMIT_VALUE);
+	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+	value_commit = ec_add(vcv, vcr);
+	constrain_instance(ec_get_x(value_commit));
+	constrain_instance(ec_get_y(value_commit));
+
+	# Pedersen commitment for the token ID
+	tcv = ec_mul_base(token_id, NULLIFIER_K);
+	tcr = ec_mul(token_blind, VALUE_COMMIT_RANDOM);
+	token_commit = ec_add(tcv, tcr);
+	constrain_instance(ec_get_x(token_commit));
+	constrain_instance(ec_get_y(token_commit));
+}
