@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use log::debug;
+use rand::seq::SliceRandom;
 use smol::Executor;
 
 use crate::{util::async_util, Result};
@@ -119,7 +120,9 @@ impl ProtocolAddress {
             debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() received GetAddrs message");
 
             // Loads the list of hosts.
-            let addrs = self.hosts.load_all().await;
+            let mut addrs = self.hosts.load_all().await;
+            // Shuffling list of hosts
+            addrs.shuffle(&mut rand::thread_rng());
             debug!(target: "net", "ProtocolAddress::handle_receive_get_addrs() sending {} addrs", addrs.len());
             // Creates an address messages containing host address.
             let addrs_msg = message::AddrsMessage { addrs };
