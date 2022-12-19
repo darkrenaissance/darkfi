@@ -19,18 +19,17 @@ class IRC:
         # Perform user authentication
         self.irc.send(bytes("USER " + botnick + " " + botnick +" " + botnick + " :python\n", "UTF-8"))
         self.irc.send(bytes("NICK " + botnick + "\n", "UTF-8"))
-        # time.sleep(5)
 
         # join the channel
         for chan in channels:
             self.irc.send(bytes("JOIN " + chan + "\n", "UTF-8"))
  
     def get_response(self):
-        # time.sleep(1)
         # Get the response
         resp = self.irc.recv(2040).decode("UTF-8")
+        msg = resp.split(':')[-1]
  
         if resp.find('PING') != -1:                      
-            self.irc.send(bytes('PONG ' + resp.split().decode("UTF-8") [1] + '\r\n', "UTF-8")) 
+            self.irc.send(bytes('PONG ' + msg + '\r\n', "UTF-8")) 
  
         return resp
