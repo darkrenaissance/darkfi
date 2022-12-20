@@ -24,14 +24,22 @@ lazy_static! {
     /// Genesis hash for the mainnet chain
     pub static ref MAINNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_mainnet");
 
+    // NOTE: On initial network bootstrap, genesis timestamp should be equal to boostrap timestamp.
+    // On network restart only change bootstrap timestamp to schedule when nodes become active.
     /// Genesis timestamp for the mainnet chain
     pub static ref MAINNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1650887115);
+
+    /// Bootstrap timestamp for the mainnet chain
+    pub static ref MAINNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1650887115);
 
     /// Genesis hash for the testnet chain
     pub static ref TESTNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_testnet");
 
     /// Genesis timestamp for the testnet chain
-    pub static ref TESTNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1671330180);
+    pub static ref TESTNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1671546600);
+
+    /// Bootstrap timestamp for the testnet chain
+    pub static ref TESTNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1671546600);
 
     // Commonly used Float10
     pub static ref  FLOAT10_ZERO: Float10 = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();

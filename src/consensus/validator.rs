@@ -92,6 +92,7 @@ pub struct ValidatorState {
 impl ValidatorState {
     pub async fn new(
         db: &sled::Db, // <-- TODO: Avoid this with some wrapping, sled should only be in blockchain
+        bootstrap_ts: Timestamp,
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
         wallet: WalletPtr,
@@ -123,7 +124,8 @@ impl ValidatorState {
         };
 
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
-        let consensus = ConsensusState::new(blockchain.clone(), genesis_ts, genesis_data)?;
+        let consensus =
+            ConsensusState::new(blockchain.clone(), bootstrap_ts, genesis_ts, genesis_data)?;
 
         let unconfirmed_txs = vec![];
 

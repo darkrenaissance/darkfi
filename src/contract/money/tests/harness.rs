@@ -19,7 +19,9 @@ use std::collections::HashMap;
 
 use darkfi::{
     consensus::{
-        constants::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
+        constants::{
+            TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
+        },
         ValidatorState, ValidatorStatePtr,
     },
     tx::Transaction,
@@ -100,6 +102,7 @@ impl MoneyTestHarness {
 
         let faucet_state = ValidatorState::new(
             &faucet_sled_db,
+            *TESTNET_BOOTSTRAP_TIMESTAMP,
             *TESTNET_GENESIS_TIMESTAMP,
             *TESTNET_GENESIS_HASH_BYTES,
             faucet_wallet,
@@ -110,6 +113,7 @@ impl MoneyTestHarness {
 
         let alice_state = ValidatorState::new(
             &alice_sled_db,
+            *TESTNET_BOOTSTRAP_TIMESTAMP,
             *TESTNET_GENESIS_TIMESTAMP,
             *TESTNET_GENESIS_HASH_BYTES,
             alice_wallet,
@@ -120,6 +124,7 @@ impl MoneyTestHarness {
 
         let bob_state = ValidatorState::new(
             &bob_sled_db,
+            *TESTNET_BOOTSTRAP_TIMESTAMP,
             *TESTNET_GENESIS_TIMESTAMP,
             *TESTNET_GENESIS_HASH_BYTES,
             bob_wallet,

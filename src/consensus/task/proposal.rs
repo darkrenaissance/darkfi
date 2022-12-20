@@ -40,9 +40,9 @@ pub async fn proposal_task(
     // NOTE: Network beign configured to start in the future should always be the case
     // when bootstrapping or restarting a network.
     let current_ts = Timestamp::current_time();
-    let genesis_ts = state.read().await.consensus.genesis_ts;
-    if current_ts < genesis_ts {
-        let diff = genesis_ts.0 - current_ts.0;
+    let bootstrap_ts = state.read().await.consensus.bootstrap_ts;
+    if current_ts < bootstrap_ts {
+        let diff = bootstrap_ts.0 - current_ts.0;
         info!("consensus: Waiting for network bootstrap: {} seconds", diff);
         sleep(diff as u64).await;
     } else {

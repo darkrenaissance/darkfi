@@ -42,6 +42,8 @@ use dashu::base::Abs;
 pub struct ConsensusState {
     /// Canonical (finalized) blockchain
     pub blockchain: Blockchain,
+    /// Network bootstrap timestamp
+    pub bootstrap_ts: Timestamp,
     /// Genesis block creation timestamp
     pub genesis_ts: Timestamp,
     /// Genesis block hash
@@ -78,12 +80,14 @@ pub struct ConsensusState {
 impl ConsensusState {
     pub fn new(
         blockchain: Blockchain,
+        bootstrap_ts: Timestamp,
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
     ) -> Result<Self> {
         let genesis_block = Block::genesis_block(genesis_ts, genesis_data).blockhash();
         Ok(Self {
             blockchain,
+            bootstrap_ts,
             genesis_ts,
             genesis_block,
             bootstrap_slot: 0,

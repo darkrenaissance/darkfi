@@ -29,8 +29,8 @@ use darkfi::{
     async_daemonize, cli_desc,
     consensus::{
         constants::{
-            MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
-            TESTNET_GENESIS_TIMESTAMP,
+            MAINNET_BOOTSTRAP_TIMESTAMP, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
+            TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
         },
         proto::{ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx},
         task::{block_sync_task, proposal_task},
@@ -298,9 +298,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let sled_db = sled::open(&db_path)?;
 
     // Initialize validator state
-    let (genesis_ts, genesis_data) = match args.chain.as_str() {
-        "mainnet" => (*MAINNET_GENESIS_TIMESTAMP, *MAINNET_GENESIS_HASH_BYTES),
-        "testnet" => (*TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES),
+    let (bootstrap_ts, genesis_ts, genesis_data) = match args.chain.as_str() {
+        "mainnet" => {
+            (*MAINNET_BOOTSTRAP_TIMESTAMP, *MAINNET_GENESIS_TIMESTAMP, *MAINNET_GENESIS_HASH_BYTES)
+        }
+        "testnet" => {
+            (*TESTNET_BOOTSTRAP_TIMESTAMP, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)
+        }
         x => {
             error!("Unsupported chain `{}`", x);
             return Err(Error::UnsupportedChain)
@@ -323,6 +327,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // Initialize validator state
     let state = ValidatorState::new(
         &sled_db,
+        bootstrap_ts,
         genesis_ts,
         genesis_data,
         wallet.clone(),
