@@ -51,6 +51,7 @@ use signal_hook_async_std::Signals;
 use url::Url;
 
 use super::Drk;
+use crate::cli_util::kaching;
 
 impl Drk {
     /// Subscribes to darkfid's JSON-RPC notification endpoint that serves
@@ -234,7 +235,7 @@ impl Drk {
         );
 
         eprintln!("Found {} OwnCoin(s) in block", owncoins.len());
-        for owncoin in owncoins {
+        for owncoin in &owncoins {
             eprintln!("Owncoin: {:?}", owncoin.coin);
             let params = json!([
                 query,
@@ -276,6 +277,12 @@ impl Drk {
         let params = json!([query, QueryType::Integer as u8, block.header.slot]);
         let req = JsonRequest::new("wallet.exec_sql", params);
         let _ = self.rpc_client.request(req).await?;
+
+        if !owncoins.is_empty() {
+            if let Err(_) = kaching().await {
+                return Ok(())
+            }
+        }
 
         Ok(())
     }

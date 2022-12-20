@@ -15,8 +15,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use std::process::exit;
+use std::{path::Path, process::exit};
 
+use async_std::{fs::File, io::WriteExt};
 use darkfi::{util::parse::decode_base10, Result};
 use darkfi_sdk::crypto::TokenId;
 
@@ -57,4 +58,21 @@ pub fn parse_token_pair(s: &str) -> Result<(TokenId, TokenId)> {
     }
 
     Ok((tok0.unwrap(), tok1.unwrap()))
+}
+
+/// Fun police go away
+pub async fn kaching() -> Result<()> {
+    const WALLET_MP3: &[u8] = include_bytes!("../wallet.mp3");
+    const MP3_DROP: &str = "/tmp/wallet.mp3";
+
+    if !Path::new(MP3_DROP).exists() {
+        let mut f = File::create(MP3_DROP).await?;
+        f.write_all(WALLET_MP3).await?;
+    }
+
+    if let Err(_) = play::play(MP3_DROP) {
+        return Ok(())
+    }
+
+    Ok(())
 }
