@@ -511,6 +511,40 @@ impl StakeLeadMintRevealed {
     }
 }
 
+fn create_stake_mint_proof(
+    zkbin: &ZkBinary, // LeadMint contract binary
+    pk: &ProvingKey,
+    public_key: pallas::Base,
+    coin_commitment: pallas::Point,
+    value: pallas::Base,
+    value_blind: ValueBlind,
+    coin_blind: pallas::Base,
+    sk: pallas::Base,
+    sk_root: pallas::Base,
+    tau: pallas::Base,
+    nonce: pallas::Base, // rho
+) > Result<(Proof, StakeLeadMintRevealed)> {
+    let revealed = StakeLeadMintRevealed::compute(
+        value,
+        public_key,
+        coin_commitment,
+    );
+
+    let prover_witnesses = vec![
+        Witness::Base(Value::known(sk)),
+        Witness::Base(Value::known(sk_root)),
+        Witness::Base(Value::known(tau)),
+        Witness::Base(Value::known(nonce)),
+        Witness::Scalar(Value::known(coin_blind)),
+        Witness::Base(Value::known(value)),
+        Witness::Scalar(Value::known(value_blind)),
+    ];
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let proof = Proof::create(pk, &[circuit], &revealed.to_vec(), &mut OsRng)?;
+
+    Ok((proof, revealed))
+}
+
 struct UnstakeLeadBurnRevealed {
     pub value_commit: ValueCommit,
     pub pk: pallas::Base,
@@ -554,40 +588,6 @@ impl UnstakeLeadBurnRevealed {
             self.nullifier,
         ]
     }
-}
-
-fn create_stake_mint_proof(
-    zkbin: &ZkBinary, // LeadMint contract binary
-    pk: &ProvingKey,
-    public_key: pallas::Base,
-    coin_commitment: pallas::Point,
-    value: pallas::Base,
-    value_blind: ValueBlind,
-    coin_blind: pallas::Base,
-    sk: pallas::Base,
-    sk_root: pallas::Base,
-    tau: pallas::Base,
-    nonce: pallas::Base, // rho
-) > Result<(Proof, StakeLeadMintRevealed)> {
-    let revealed = StakeLeadMintRevealed::compute(
-        value,
-        public_key,
-        coin_commitment,
-    );
-
-    let prover_witnesses = vec![
-        Witness::Base(Value::known(sk)),
-        Witness::Base(Value::known(sk_root)),
-        Witness::Base(Value::known(tau)),
-        Witness::Base(Value::known(nonce)),
-        Witness::Scalar(Value::known(coin_blind)),
-        Witness::Base(Value::known(value)),
-        Witness::Scalar(Value::known(value_blind)),
-    ];
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
-    let proof = Proof::create(pk, &[circuit], &revealed.to_vec(), &mut OsRng)?;
-
-    Ok((proof, revealed))
 }
 
 fn create_unstake_burn_proof(
@@ -1060,9 +1060,6 @@ pub fn build_transfer_tx(
 
 pub fn build_stake_tx(
     pubkey: &PublicKey,
-    value_send: u64,
-    value_recv: u64,
-    value_blinds: &[ValueBlind],
     coins: &[OwnCoin],
     tx_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
     cm_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
@@ -1176,28 +1173,24 @@ pub fn build_stake_tx(
 }
 
 pub fn build_unstake_tx(
-    pubkey: &PublicKey,
-    value_send: u64,
-    value_recv: u64,
-    value_blinds: &[ValueBlind],
+    pubkey: &PublicKey, //recepient of owncoin public key
+    token_id_recv: TokenId,
     coins: &[LeadCoin],
-    tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
-    mint_zkbin: &ZkBinary,
+    mint_zkbin: &ZkBinary, // stake own mint binary
     mint_pk: &ProvingKey,
-    burn_zkbin: &ZkBinary,
+    burn_zkbin: &ZkBinary, // unstake lead burn binary
     burn_pk: &ProvingKey,
 ) -> Result<(
     MoneyUnStakeParams,
     Vec<Proof>,
     Vec<SecretKey>,
-    Vec<OwnCoin>,
     Vec<ValueBlind>,
     Vec<ValueBlind>,
 )> {
     // convert leadcoin to owncoin
     let token_blind = ValueBlind::random(&mut OsRng);
-    let lowncoins : Vec<LeadCoin>= vec![];
-    let mut params = MoneyStakeParams {
+    let owncoins : Vec<OwnCoin>= vec![];
+    let mut params = MoneyUnstakeParams {
         inputs: vec![],
         outputs: vec![],
     };
@@ -1206,11 +1199,84 @@ pub fn build_unstake_tx(
     let mut lead_blinds = vec![];
     for coin in coins.iter() {
         // burn lead coin
+        let value_blind = ValueBlind::random(&mut OsRng);
+        lead_blinds.push(value_blind);
+        let (unstake_proof, unstake_revealed) = create_unstake_burn_proof(
+            burn_zkbin,
+            burn_pk,
+            coin.value,
+            value_blind,
+            coin.coin1_blind,
+            coin.pk(),
+            coin.coin1_sk_root,
+            coin.coin1_sk_pos,
+            coin.coin1_sk_merkle_path,
+            coin.coin1_commitment_merkle_path,
+            coin.coin1_commitment,
+            coin.coin1_commitment_root,
+            coin.coin1_commitment_pos,
+            coin.tau,
+            coin.nonce,
+            coin.sn(),
+        );
+        params.inputs.push(StakedInput{
+            coin.sn(),
+            unstake_revealed.value_commit,
+            poseidon_hash([unstake_revealed.commitment_x,
+                           unstake_revealed.commitment_y
+            ]),
+            unstake_revealed.pk,
+            unstake_revealed.commitment_root,
+            unstake_revealed.sk_root,
+        });
+        proofs.push(unstake_proof);
+        let own_value_blind = ValueBlind::random(&mut OsRng);
+        own_blinds.push(own_value_blind);
         // mint own coin
+        let serial = pallas::Base::random(&mut OsRng);
+        let coin_blind = pallas::Base::random(&mut OsRng);
+        let token_recv_blind = ValueBlind::random(&mut OsRng);
+        // Disable composability for this old obsolete API
+        let spend_hook = pallas::Base::zero();
+        let user_data = pallas::Base::zero();
+        let (proof, revealed) = create_transfer_mint_proof(
+            mint_zkbin,
+            mint_pk,
+            coin.value,
+            token_id_recv,
+            value_recv_blind,
+            token_recv_blind,
+            serial,
+            spend_hook,
+            user_data,
+            coin_blind,
+            pubkey, //receipient public_key
+        )?;
+        proofs.push(proof);
+        // Encrypted note
+        let note = Note {
+            serial,
+            value: coin.value,
+            token_id: token_id_recv,
+            coin_blind,
+            value_blind: value_blind,
+            token_blind: token_recv_blind,
+            // Here we store our secret key we use for signing
+            memo: vec![],
+        };
+
+        let encrypted_note = note.encrypt(&output.public_key)?;
+
+        params.outputs.push(Output {
+            value_commit: revealed.value_commit,
+            token_commit: revealed.token_commit,
+            coin: revealed.coin.inner(),
+            ciphertext: encrypted_note.ciphertext,
+            ephem_public: encrypted_note.ephem_public,
+        });
+
+        Ok((params, proofs, vec![], lead_blinds, own_blinds))
     }
-    // return proofs created
-    // return secret keys
-    // blind values.
 }
 
 fn compute_remainder_blind(

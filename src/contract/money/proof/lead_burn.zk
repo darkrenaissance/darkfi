@@ -57,8 +57,7 @@ circuit "LeadBurn" {
                    c1_cm_x,
                    c1_cm_y
         );
-        constrain_instance(c1_cm_x);
-        constrain_instance(c1_cm_y);
+        constrain_instance(c1_cm_hash);
         
         # root of path to burnt coin commitment at given pos
         root = merkle_root(c1_cm_pos, c1_cm_path, c1_cm_hash);

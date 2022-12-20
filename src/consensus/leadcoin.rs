@@ -58,26 +58,26 @@ pub const PREFIX_SN: u64 = 6;
 pub struct LeadCoin {
     /// Coin's stake value
     pub value: u64,
-    /// Commitment for coin1
-    pub coin1_commitment: pallas::Point,
-    /// Commitment for coin2 (rcpt coin)
-    pub coin2_commitment: pallas::Point,
-    /// Coin sk index
-    pub idx: u32,
     /// Coin timestamp as slot index.
     pub tau: pallas::Base,
     /// Coin nonce
     pub nonce: pallas::Base,
+    /// Commitment for coin1
+    pub coin1_commitment: pallas::Point,
+    /// Commitment for coin2 (rcpt coin)
+    pub coin2_commitment: pallas::Point,
     /// Merkle root of coin1 commitment
     pub coin1_commitment_root: MerkleNode,
+    /// Coin commitment position
+    pub coin1_commitment_pos: u32,
+    /// Merkle path to the coin1's commitment
+    pub coin1_commitment_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
     /// coin1 sk
     pub coin1_sk: pallas::Base,
     /// Merkle root of the `coin1` secret key
     pub coin1_sk_root: MerkleNode,
     /// coin1 sk position in merkle tree
     pub coin1_sk_pos: u32,
-    /// Merkle path to the coin1's commitment
-    pub coin1_commitment_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
     /// Merkle path to the secret key of `coin1`
     pub coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
     /// coin1 commitment blinding factor
@@ -133,10 +133,10 @@ impl LeadCoin {
         let coin1_commitment_base = poseidon_hash(c1_base_msg);
         // Append the element to the Merkle tree
         coin_commitment_tree.append(&MerkleNode::from(coin1_commitment_base));
-        let leaf_pos = coin_commitment_tree.witness().unwrap();
+        let coin1_commitment_pos = coin_commitment_tree.witness().unwrap();
         let coin1_commitment_root = coin_commitment_tree.root(0).unwrap();
         let coin1_commitment_merkle_path =
-            coin_commitment_tree.authentication_path(leaf_pos, &coin1_commitment_root).unwrap();
+            coin_commitment_tree.authentication_path(coin1_commitment_pos, &coin1_commitment_root).unwrap();
         // Create commitment to coin2
         let coin2_commitment = Self::commitment(
             pk,
@@ -149,18 +149,18 @@ impl LeadCoin {
         // Return the object
         Self {
             value,
-            coin1_commitment,
-            coin2_commitment,
-            // TODO: Should be abs slot
-            idx: u32::try_from(usize::from(leaf_pos)).unwrap(),
             // Assume tau is sl for simplicity
             tau,
             nonce: pallas::Base::from(seed),
+            coin1_commitment,
+            coin2_commitment,
             coin1_commitment_root,
+            // TODO: Should be abs slot
+            coin1_commitment_pos: u32::try_from(usize::from(coin1_commitment_pos)).unwrap(),
+            coin1_commitment_merkle_path: coin1_commitment_merkle_path.try_into().unwrap(),
             coin1_sk,
             coin1_sk_root,
             coin1_sk_pos: u32::try_from(coin1_sk_pos).unwrap(),
-            coin1_commitment_merkle_path: coin1_commitment_merkle_path.try_into().unwrap(),
             coin1_sk_merkle_path,
             coin1_blind,
             coin2_blind,
@@ -319,16 +319,16 @@ impl LeadCoin {
             coin_commitment_tree.authentication_path(leaf_pos, &commitment_root).unwrap();
         LeadCoin {
             value: self.value + constants::REWARD,
-            coin1_commitment: self.coin2_commitment,
-            coin2_commitment: derived_c2_cm,
-            idx: u32::try_from(usize::from(leaf_pos)).unwrap(),
             tau: self.tau,
             nonce: derived_c1_rho,
+            coin1_commitment: self.coin2_commitment,
+            coin2_commitment: derived_c2_cm,
             coin1_commitment_root: commitment_root,
+            coin1_commitment_pos: u32::try_from(usize::from(leaf_pos)).unwrap(),
+            coin1_commitment_merkle_path: commitment_merkle_path.try_into().unwrap(),
             coin1_sk: self.coin1_sk,
             coin1_sk_root: self.coin1_sk_root,
             coin1_sk_pos: self.coin1_sk_pos,
-            coin1_commitment_merkle_path: commitment_merkle_path.try_into().unwrap(),
             coin1_sk_merkle_path: self.coin1_sk_merkle_path,
             coin1_blind: self.coin2_blind,
             coin2_blind: blind,

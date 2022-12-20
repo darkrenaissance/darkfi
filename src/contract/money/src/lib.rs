@@ -319,8 +319,51 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             set_return_data(&metadata)?;
         }
 
-        MoneyFunction::Unstake => unimplemented!(),
-        MoneyFunction::Mint => unimplemented!(),
+
+        MoneyFunction::Unstake => {
+            let params: MoneyUnstakeParams = deserialize(&self_.data[1..])?;
+
+            let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
+            let mut signature_pubkeys: Vec<PublicKey> = vec![];
+
+            for input in &params.inputs {
+                let value_coords = input.value_commit.to_affine().coordinates().unwrap();
+                zk_public_values.push((
+                    MONEY_CONTRACT_ZKAS_LEAD_BURN_NS.to_string(),
+                    vec![
+                        *value_coords.x(),
+                        *value_coords.y(),
+                        input.coin_pk_hash,
+                        input.coin_commit_hash,
+                        input.coin_commit_root,
+                        input.sk_root,
+                        input.nullifier.inner(),
+                    ],
+                ));
+            }
+
+            for output in &params.outputs {
+                let value_coords = output.value_commit.to_affine().coordinates().unwrap();
+                let token_coords = output.token_commit.to_affine().coordinates().unwrap();
+
+                zk_public_values.push((
+                    MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
+                    vec![
+                        output.coin,
+                        *value_coords.x(),
+                        *value_coords.y(),
+                        *token_coords.x(),
+                        *token_coords.y(),
+                    ],
+                ));
+            }
+            let mut metadata = vec![];
+            zk_public_values.encode(&mut metadata)?;
+            signature_pubkeys.encode(&mut metadata)?;
+
+            // Using this, we pass the above data to the host.
+            set_return_data(&metadata)?;
+        }
     };
 
     Ok(())
@@ -594,7 +637,78 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
         MoneyFunction::Unstake => {
             msg!("[Unstake] Entered match arm");
-            unimplemented!();
+            let params: MoneyUnstakeParams = deserialize(&self_.data[1..])?;
+
+            assert!(params.inputs.len() == params.outputs.len());
+
+            let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+            let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?;
+            let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?;
+            let sk_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_SK_ROOTS_TREE)?;
+
+            // Accumulator for the value commitments
+            let mut valcom_total = pallas::Point::identity();
+
+            // State transition for payments
+            let mut new_nullifiers = Vec::with_capacity(params.inputs.len());
+
+            msg!("[Stake] Iterating over anonymous inputs");
+            for (i, input) in params.inputs.iter().enumerate() {
+                // The Merkle root is used to know whether this is a coin that existed
+                // in a previous state.
+                if !db_contains_key(coin_roots_db, &serialize(&input.coin_commit_root))? {
+                    msg!("[Unstake] Error: Merkle root not found in previous state (input {})", i);
+                    return Err(ContractError::Custom(21))
+                }
+
+                //TODO adde sk root to db.
+                /*
+                if !db_contains_key(sk_roots_db, &serialize(&input.sk_root))? {
+                    msg!("[Unstake] Error: sk merkle root not found in previous state (input {})", i);
+                    return Err(ContractError::Custom(21))
+            }
+
+                */
+
+                // The nullifiers should not already exist. It is the double-spend protection.
+                if new_nullifiers.contains(&input.nullifier) ||
+                    db_contains_key(nullifiers_db, &serialize(&input.nullifier))?
+                {
+                    msg!("[Unstake] Error: Duplicate nullifier found in input {}", i);
+                    return Err(ContractError::Custom(22))
+                }
+
+                new_nullifiers.push(input.nullifier);
+                valcom_total += input.value_commit;
+            }
+
+            // Newly created coins for this transaction are in the outputs.
+            let mut new_coins = Vec::with_capacity(params.outputs.len());
+            for (i, output) in params.outputs.iter().enumerate() {
+                // TODO: Should we have coins in a sled tree too to check dupes?
+                if new_coins.contains(&Coin::from(output.coin)) {
+                    msg!("[Unstake] Error: Duplicate coin found in output {}", i);
+                    return Err(ContractError::Custom(23))
+                }
+                new_coins.push(Coin::from(output.coin));
+                valcom_total -= output.value_commit;
+            }
+
+            // If the accumulator is not back in its initial state, there's a value mismatch.
+            if valcom_total != pallas::Point::identity() {
+                msg!("[UnStake] Error: Value commitments do not result in identity");
+                return Err(ContractError::Custom(24))
+            }
+
+            // Create a state update
+            let update = MoneyUnstakeUpdate { nullifiers: new_nullifiers, coins: new_coins  };
+            let mut update_data = vec![];
+            update_data.write_u8(MoneyFunction::Unstake as u8)?;
+            update.encode(&mut update_data)?;
+            set_return_data(&update_data)?;
+            msg!("[Unstake] State update set!");
+
+            Ok(())
         }
 
         MoneyFunction::Mint => {
@@ -630,7 +744,7 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             Ok(())
         }
 
-        MoneyFunction::Stake => {
+        MoneyFunction::Stake | MoneyFunction::Unstake => {
             let update: MoneyStakeUpdate = deserialize(&update_data[1..])?;
 
             let info_db = db_lookup(cid, MONEY_CONTRACT_LEAD_INFO_TREE)?;
@@ -652,7 +766,5 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
 
             Ok(())
         }
-        MoneyFunction::Unstake => unimplemented!(),
-        MoneyFunction::Mint => unimplemented!(),
     }
 }

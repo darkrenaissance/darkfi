@@ -48,10 +48,16 @@ pub struct MoneyUnstakeParams {
 pub struct StakedInput {
     /// Revealed nullifier
     pub nullifier: Nullifier,
-    /// Revealed Merkle root
-    pub merkle_root: MerkleNode,
-    /// Public key for the signature
-    pub signature_public: PublicKey,
+    /// Pedersen commitment for the output's value
+    pub value_commit: ValueCommit,
+    /// Minted coin
+    pub coin_commit_hash: pallas::Base,
+    /// coin pk hash
+    pub coin_pk_hash: pallas::Base,
+    /// coin commitment root
+    pub coin_commit_root: MerkleNode,
+    /// sk root of merkle tree
+    pub sk_root: MerkleNode,
 }
 
 /// Staked anonymous output
