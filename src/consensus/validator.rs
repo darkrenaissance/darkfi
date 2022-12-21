@@ -27,6 +27,7 @@ use darkfi_sdk::{
         schnorr::{SchnorrPublic, SchnorrSecret},
         MerkleNode,
         PublicKey,
+        SecretKey,
     },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
@@ -292,7 +293,7 @@ impl ValidatorState {
             coin.create_lead_proof(sigma1, sigma2, self.lead_proving_key.as_ref().unwrap());
 
         // Signing using coin
-        let secret_key = coin.secret_key;
+        let secret_key = coin.coin1_sk;
         let header = Header::new(
             prev_hash,
             self.consensus.slot_epoch(slot),
@@ -300,14 +301,14 @@ impl ValidatorState {
             Timestamp::current_time(),
             root,
         );
-        let signed_proposal = secret_key.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
-        let public_key = PublicKey::from_secret(secret_key);
+        let signed_proposal = SecretKey::from(secret_key).sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
+        let public_key = PublicKey::from_secret(secret_key.into());
 
         let lead_info = LeadInfo::new(
             signed_proposal,
             public_key,
             public_inputs,
-            coin.slot,
+            slot,
             coin.eta,
             LeadProof::from(proof?),
             self.consensus.get_current_offset(slot),

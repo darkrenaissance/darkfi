@@ -110,8 +110,8 @@ impl LeadCoin {
         coin1_sk_pos: usize,
         // Merkle path to the secret key of `coin_1` in the Merkle tree of secret keys
         coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
-        // what's seed supposed to be?
-        seed: u64,
+        // coin1 nonce
+        seed: pallas::Base,
         // Merkle tree of coin commitments
         coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
     ) -> Self {
@@ -123,10 +123,10 @@ impl LeadCoin {
         // pk
         let pk = Self::util_pk(coin1_sk_root, tau);
         // Derive the nonce for coin2
-        let coin2_seed = Self::util_derived_rho(coin1_sk_root, pallas::Base::from(seed));
+        let coin2_seed = Self::util_derived_rho(coin1_sk_root, seed);
         info!("coin2_seed[{}]: {:?}", slot_index, coin2_seed);
         let coin1_commitment =
-            Self::commitment(pk, pallas::Base::from(value), pallas::Base::from(seed), coin1_blind);
+            Self::commitment(pk, pallas::Base::from(value), seed, coin1_blind);
         // Hash its coordinates to get a base field element
         let c1_cm_coords = coin1_commitment.to_affine().coordinates().unwrap();
         let c1_base_msg = [*c1_cm_coords.x(), *c1_cm_coords.y()];
@@ -151,7 +151,7 @@ impl LeadCoin {
             value,
             // Assume tau is sl for simplicity
             tau,
-            nonce: pallas::Base::from(seed),
+            nonce: seed,
             coin1_commitment,
             coin2_commitment,
             coin1_commitment_root,
@@ -355,9 +355,9 @@ impl LeadCoin {
         let zkbin = ZkBinary::decode(bincode).unwrap();
         let witnesses = vec![
             Witness::MerklePath(Value::known(self.coin1_commitment_merkle_path)),
-            Witness::Uint32(Value::known(self.idx)),
+            Witness::Uint32(Value::known(self.coin1_commitment_pos)),
             Witness::Uint32(Value::known(self.coin1_sk_pos)),
-            Witness::Base(Value::known(self.coin1_sk.inner())),
+            Witness::Base(Value::known(self.coin1_sk)),
             Witness::Base(Value::known(self.coin1_sk_root.inner())),
             Witness::MerklePath(Value::known(self.coin1_sk_merkle_path)),
             Witness::Base(Value::known(self.tau)),
@@ -391,7 +391,7 @@ impl LeadCoin {
         let zkbin = ZkBinary::decode(bincode)?;
         let retval = pallas::Base::from(change_coin.value);
         let xferval = pallas::Base::from(transfered_coin.value);
-        let pos: u32 = self.idx;
+        let pos: u32 = self.coin1_commitment_pos;
         let value = pallas::Base::from(self.value);
         let witnesses = vec![
             // coin (1) burned coin

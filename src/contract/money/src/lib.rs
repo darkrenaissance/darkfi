@@ -69,7 +69,7 @@ impl TryFrom<u8> for MoneyFunction {
 pub mod state;
 
 #[cfg(not(feature = "no-entrypoint"))]
-use state::{MoneyTransferParams, MoneyTransferUpdate};
+use state::{MoneyTransferParams, MoneyTransferUpdate, MoneyStakeParams, MoneyUnstakeParams, MoneyStakeUpdate};
 
 #[cfg(feature = "client")]
 /// Transaction building API for clients interacting with this contract.
@@ -88,9 +88,14 @@ pub const MONEY_CONTRACT_COIN_ROOTS_TREE: &str = "coin_roots";
 pub const MONEY_CONTRACT_NULLIFIERS_TREE: &str = "nullifiers";
 pub const MONEY_CONTRACT_FIXED_SUPPLY_TREE: &str = "fixed_supply_tokens";
 pub const MONEY_CONTRACT_INFO_TREE: &str = "info";
+// lead coin, nullifier sled trees.
+pub const MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE: &str = "lead_coin_roots";
+pub const MONEY_CONTRACT_LEAD_NULLIFIERS_TREE: &str = "lead_nullifiers";
+pub const MONEY_CONTRACT_LEAD_INFO_TREE: &str = "lead_info";
 
 // This is a key inside the info tree
 pub const MONEY_CONTRACT_COIN_MERKLE_TREE: &str = "coin_tree";
+pub const MONEY_CONTRACT_LEAD_COIN_MERKLE_TREE: &str = "lead_coin_tree";
 pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &str = "faucet_pubkeys";
 
 /// zkas mint contract namespace
@@ -306,7 +311,7 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
                         *value_coords.x(),
                         *value_coords.y(),
                         output.coin_pk_hash,
-                        output.coin,
+                        output.coin_commit_hash,
                     ],
                 ));
             }
@@ -324,7 +329,6 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             let params: MoneyUnstakeParams = deserialize(&self_.data[1..])?;
 
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
-            let mut signature_pubkeys: Vec<PublicKey> = vec![];
 
             for input in &params.inputs {
                 let value_coords = input.value_commit.to_affine().coordinates().unwrap();
@@ -335,8 +339,8 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
                         *value_coords.y(),
                         input.coin_pk_hash,
                         input.coin_commit_hash,
-                        input.coin_commit_root,
-                        input.sk_root,
+                        input.coin_commit_root.inner(),
+                        input.sk_root.inner(),
                         input.nullifier.inner(),
                     ],
                 ));
@@ -359,7 +363,6 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             }
             let mut metadata = vec![];
             zk_public_values.encode(&mut metadata)?;
-            signature_pubkeys.encode(&mut metadata)?;
 
             // Using this, we pass the above data to the host.
             set_return_data(&metadata)?;
@@ -574,7 +577,6 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             assert!(params.inputs.len() == params.outputs.len());
 
-            let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
             let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?;
             let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?;
 
@@ -614,7 +616,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     msg!("[Stake] Error: Duplicate coin found in output {}", i);
                     return Err(ContractError::Custom(23))
                 }
-                new_coins.push(Coin::from(output.coin));
+                new_coins.push(Coin::from(output.coin_commit_hash));
                 valcom_total -= output.value_commit;
             }
 
@@ -641,10 +643,9 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             assert!(params.inputs.len() == params.outputs.len());
 
-            let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
             let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?;
             let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?;
-            let sk_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_SK_ROOTS_TREE)?;
+            //let sk_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_SK_ROOTS_TREE)?;
 
             // Accumulator for the value commitments
             let mut valcom_total = pallas::Point::identity();
@@ -701,7 +702,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             }
 
             // Create a state update
-            let update = MoneyUnstakeUpdate { nullifiers: new_nullifiers, coins: new_coins  };
+            let update = MoneyStakeUpdate { nullifiers: new_nullifiers, coins: new_coins  };
             let mut update_data = vec![];
             update_data.write_u8(MoneyFunction::Unstake as u8)?;
             update.encode(&mut update_data)?;

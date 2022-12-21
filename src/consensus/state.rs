@@ -293,7 +293,7 @@ impl ConsensusState {
             epoch_secrets.merkle_roots[0],
             0,
             epoch_secrets.merkle_paths[0],
-            seeds[0],
+            pallas::Base::from(seeds[0]),
             &mut self.coins_tree,
         );
         coins.push(coin);
@@ -435,7 +435,8 @@ impl ConsensusState {
     }
 
     fn weighted_f_int(&self) -> Float10 {
-        constants::KI.clone() * self.f_int()
+        //constants::KI.clone() * self.f_int()
+        self.tuned_ki() * self.f_int()
     }
 
     fn zero_leads_len(&self) -> Float10 {

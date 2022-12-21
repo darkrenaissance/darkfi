@@ -69,10 +69,6 @@ pub struct StakedOutput {
     pub coin_commit_hash: pallas::Base,
     /// coin pk hash
     pub coin_pk_hash: pallas::Base,
-    /// The encrypted note ciphertext
-    //pub ciphertext: Vec<u8>,
-    /// The ephemeral public key
-    //pub ephem_public: PublicKey,
 }
 
 /// Inputs and outputs for a payment
