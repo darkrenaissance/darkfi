@@ -29,7 +29,11 @@ use super::{Transport, TransportListener, TransportStream};
 use crate::{Error, Result};
 
 fn unix_socket_addr_to_string(addr: std::os::unix::net::SocketAddr) -> String {
-    addr.as_pathname().unwrap_or(&std::path::PathBuf::from("")).to_str().unwrap_or("").into()
+    addr.as_pathname()
+        .unwrap_or(&std::path::PathBuf::from("unix:///"))
+        .to_str()
+        .unwrap_or("unix:///")
+        .into()
 }
 
 impl TransportStream for UnixStream {}
@@ -95,7 +99,7 @@ impl Transport for UnixTransport {
 
         let socket_path = url.path();
         let socket_addr = SocketAddr::from_pathname(socket_path)?;
-        debug!(target: "net", "{} transport: listening on {}", url.scheme(), socket_path);
+        debug!(target: "net", "{} transport: dialing {}", url.scheme(), socket_path);
         Ok(Box::pin(self.do_dial(socket_addr, timeout)))
     }
 
