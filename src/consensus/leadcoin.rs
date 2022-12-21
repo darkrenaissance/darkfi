@@ -125,8 +125,7 @@ impl LeadCoin {
         // Derive the nonce for coin2
         let coin2_seed = Self::util_derived_rho(coin1_sk_root, seed);
         info!("coin2_seed[{}]: {:?}", slot_index, coin2_seed);
-        let coin1_commitment =
-            Self::commitment(pk, pallas::Base::from(value), seed, coin1_blind);
+        let coin1_commitment = Self::commitment(pk, pallas::Base::from(value), seed, coin1_blind);
         // Hash its coordinates to get a base field element
         let c1_cm_coords = coin1_commitment.to_affine().coordinates().unwrap();
         let c1_base_msg = [*c1_cm_coords.x(), *c1_cm_coords.y()];
@@ -135,8 +134,9 @@ impl LeadCoin {
         coin_commitment_tree.append(&MerkleNode::from(coin1_commitment_base));
         let coin1_commitment_pos = coin_commitment_tree.witness().unwrap();
         let coin1_commitment_root = coin_commitment_tree.root(0).unwrap();
-        let coin1_commitment_merkle_path =
-            coin_commitment_tree.authentication_path(coin1_commitment_pos, &coin1_commitment_root).unwrap();
+        let coin1_commitment_merkle_path = coin_commitment_tree
+            .authentication_path(coin1_commitment_pos, &coin1_commitment_root)
+            .unwrap();
         // Create commitment to coin2
         let coin2_commitment = Self::commitment(
             pk,

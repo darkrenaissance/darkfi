@@ -27,13 +27,13 @@
 
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use darkfi::{
+    consensus::leadcoin::LeadCoin,
     zk::{
         proof::{Proof, ProvingKey},
         vm::ZkCircuit,
         vm_stack::Witness,
     },
     zkas::ZkBinary,
-    consensus::leadcoin::LeadCoin,
     ClientFailed, Error, Result,
 };
 use darkfi_sdk::{
@@ -56,7 +56,10 @@ use halo2_proofs::{arithmetic::Field, circuit::Value};
 use log::{debug, error, info};
 use rand::rngs::OsRng;
 
-use crate::state::{ClearInput, Input, MoneyTransferParams, MoneyStakeParams,  MoneyUnstakeParams, Output, StakedOutput, StakedInput,};
+use crate::state::{
+    ClearInput, Input, MoneyStakeParams, MoneyTransferParams, MoneyUnstakeParams, Output,
+    StakedInput, StakedOutput,
+};
 
 // Wallet SQL table constant names. These have to represent the SQL schema.
 // TODO: They should also ideally be prefixed with the contract ID to avoid
@@ -372,7 +375,6 @@ impl TransferMintRevealed {
     }
 }
 
-
 #[allow(clippy::too_many_arguments)]
 fn create_transfer_mint_proof(
     zkbin: &ZkBinary,
@@ -486,33 +488,21 @@ struct StakeLeadMintRevealed {
 }
 
 impl StakeLeadMintRevealed {
-    pub fn compute(value: pallas::Base,
-                   pk: pallas::Base,
-                   value_blind: pallas::Scalar,
-                   commitment: pallas::Point
-
+    pub fn compute(
+        value: pallas::Base,
+        pk: pallas::Base,
+        value_blind: pallas::Scalar,
+        commitment: pallas::Point,
     ) -> Self {
         let value_commit = pedersen_commitment_base(value, value_blind);
         let coord = commitment.to_affine().coordinates().unwrap();
-        Self {
-            value_commit: value_commit,
-            pk: pk,
-            commitment_x: *coord.x(),
-            commitment_y: *coord.y(),
-        }
-
+        Self { value_commit, pk, commitment_x: *coord.x(), commitment_y: *coord.y() }
     }
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let value_coord = self.value_commit.to_affine().coordinates().unwrap();
         let value_cm_x = *value_coord.x();
         let value_cm_y = *value_coord.y();
-        vec![
-            value_cm_x,
-            value_cm_y,
-            self.pk,
-            self.commitment_x,
-            self.commitment_y,
-        ]
+        vec![value_cm_x, value_cm_y, self.pk, self.commitment_x, self.commitment_y]
     }
 }
 
@@ -529,12 +519,7 @@ fn create_stake_mint_proof(
     tau: pallas::Base,
     nonce: pallas::Base, // rho
 ) -> Result<(Proof, StakeLeadMintRevealed)> {
-    let revealed = StakeLeadMintRevealed::compute(
-        value,
-        public_key,
-        value_blind,
-        coin_commitment,
-    );
+    let revealed = StakeLeadMintRevealed::compute(value, public_key, value_blind, coin_commitment);
 
     let prover_witnesses = vec![
         Witness::Base(Value::known(sk)),
@@ -575,15 +560,7 @@ impl UnstakeLeadBurnRevealed {
         let coord = commitment.to_affine().coordinates().unwrap();
         let commitment_x = *coord.x();
         let commitment_y = *coord.y();
-        Self {
-            value_commit,
-            pk,
-            commitment_x,
-            commitment_y,
-            commitment_root,
-            sk_root,
-            nullifier,
-        }
+        Self { value_commit, pk, commitment_x, commitment_y, commitment_root, sk_root, nullifier }
     }
 
     pub fn to_vec(&self) -> Vec<pallas::Base> {
@@ -635,7 +612,7 @@ fn create_unstake_burn_proof(
     let prover_witnesses = vec![
         Witness::MerklePath(Value::known(commitment_merkle_path.try_into().unwrap())),
         Witness::Uint32(Value::known(u64::from(commitment_pos).try_into().unwrap())), // u32
-        Witness::Uint32(Value::known(u64::from(sk_pos).try_into().unwrap())), // u32
+        Witness::Uint32(Value::known(u64::from(sk_pos).try_into().unwrap())),         // u32
         Witness::Base(Value::known(sk)),
         Witness::Base(Value::known(sk_root)),
         Witness::MerklePath(Value::known(sk_path.try_into().unwrap())),
@@ -1085,20 +1062,11 @@ pub fn build_stake_tx(
     burn_pk: &ProvingKey,
     slot_index: u64,
     eta: pallas::Base,
-) -> Result<(
-    MoneyStakeParams,
-    Vec<Proof>,
-    Vec<LeadCoin>,
-    Vec<ValueBlind>,
-    Vec<ValueBlind>,
-)> {
+) -> Result<(MoneyStakeParams, Vec<Proof>, Vec<LeadCoin>, Vec<ValueBlind>, Vec<ValueBlind>)> {
     // convert owncoins to leadcoins.
     //let token_blind = ValueBlind::random(&mut OsRng);
-    let mut leadcoins : Vec<LeadCoin>= vec![];
-    let mut params = MoneyStakeParams {
-        inputs: vec![],
-        outputs: vec![],
-    };
+    let mut leadcoins: Vec<LeadCoin> = vec![];
+    let mut params = MoneyStakeParams { inputs: vec![], outputs: vec![] };
     let mut proofs = vec![];
     let mut own_blinds = vec![];
     let mut lead_blinds = vec![];
@@ -1150,7 +1118,7 @@ pub fn build_stake_tx(
         let leadcoin = LeadCoin::new(
             eta, // randomness from last finalized block.
             coin.note.value,
-            slot_index, // tau
+            slot_index,          // tau
             coin.secret.inner(), // coin secret key
             sk_root,
             sk_pos.try_into().unwrap(),
@@ -1172,16 +1140,13 @@ pub fn build_stake_tx(
             coin.secret.inner(),
             sk_root.inner(),
             pallas::Base::from(slot_index), // tau
-            coin.note.serial, // nonce
+            coin.note.serial,               // nonce
         )?;
-        let coin_commit_coords = [
-            lead_revealed.commitment_x,
-            lead_revealed.commitment_y,
-        ];
+        let coin_commit_coords = [lead_revealed.commitment_x, lead_revealed.commitment_y];
         let coin_commit_hash = poseidon_hash(coin_commit_coords);
         params.outputs.push(StakedOutput {
             value_commit: lead_revealed.value_commit,
-            coin_commit_hash: coin_commit_hash,
+            coin_commit_hash,
             coin_pk_hash: public_key,
         });
         proofs.push(lead_proof);
@@ -1197,20 +1162,11 @@ pub fn build_unstake_tx(
     mint_pk: &ProvingKey,
     burn_zkbin: &ZkBinary, // unstake lead burn binary
     burn_pk: &ProvingKey,
-) -> Result<(
-    MoneyUnstakeParams,
-    Vec<Proof>,
-    Vec<SecretKey>,
-    Vec<ValueBlind>,
-    Vec<ValueBlind>,
-)> {
+) -> Result<(MoneyUnstakeParams, Vec<Proof>, Vec<SecretKey>, Vec<ValueBlind>, Vec<ValueBlind>)> {
     // convert leadcoin to owncoin
     //let token_blind = ValueBlind::random(&mut OsRng);
     //let owncoins : Vec<OwnCoin>= vec![];
-    let mut params = MoneyUnstakeParams {
-        inputs: vec![],
-        outputs: vec![],
-    };
+    let mut params = MoneyUnstakeParams { inputs: vec![], outputs: vec![] };
     let mut proofs = vec![];
     let mut own_blinds = vec![];
     let mut lead_blinds = vec![];
@@ -1239,11 +1195,9 @@ pub fn build_unstake_tx(
             coin.nonce,
             nullifier,
         )?;
-        let commitment_coord = [unstake_revealed.commitment_x,
-                                unstake_revealed.commitment_y
-        ];
+        let commitment_coord = [unstake_revealed.commitment_x, unstake_revealed.commitment_y];
         let coin_commitment_hash = poseidon_hash(commitment_coord);
-        params.inputs.push(StakedInput{
+        params.inputs.push(StakedInput {
             nullifier: nullifier.into(),
             value_commit: unstake_revealed.value_commit,
             coin_commit_hash: coin_commitment_hash,
@@ -1281,7 +1235,7 @@ pub fn build_unstake_tx(
             value: coin.value,
             token_id: token_id_recv,
             coin_blind,
-            value_blind: value_blind,
+            value_blind,
             token_blind: token_recv_blind,
             // Here we store our secret key we use for signing
             memo: vec![],

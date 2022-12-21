@@ -69,7 +69,10 @@ impl TryFrom<u8> for MoneyFunction {
 pub mod state;
 
 #[cfg(not(feature = "no-entrypoint"))]
-use state::{MoneyTransferParams, MoneyTransferUpdate, MoneyStakeParams, MoneyUnstakeParams, MoneyStakeUpdate};
+use state::{
+    MoneyStakeParams, MoneyStakeUpdate, MoneyTransferParams, MoneyTransferUpdate,
+    MoneyUnstakeParams,
+};
 
 #[cfg(feature = "client")]
 /// Transaction building API for clients interacting with this contract.
@@ -129,7 +132,6 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
 
     let token_mint_v1_bincode = include_bytes!("../proof/token_mint_v1.zk.bin");
 
-
     let mint_lead_bincode = include_bytes!("../proof/lead_mint.zk.bin");
     let burn_lead_bincode = include_bytes!("../proof/lead_burn.zk.bin");
 
@@ -163,11 +165,11 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
         Err(_) => db_init(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?,
     };
 
-
     // Set up a database tree to hold the set of fixed-supply tokens
     let _ = match db_lookup(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE) {
         Ok(v) => v,
         Err(_) => db_init(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE)?,
+    };
 
     // Set up a database tree to hold lead Merkle roots
     let _ = match db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE) {
@@ -179,7 +181,6 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     let _ = match db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE) {
         Ok(v) => v,
         Err(_) => db_init(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?,
-
     };
 
     // Set up a database tree for arbitrary data
@@ -272,7 +273,6 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             // Using this, we pass the above data to the host.
             set_return_data(&metadata)?;
         }
-
         MoneyFunction::Stake => {
             let params: MoneyStakeParams = deserialize(&self_.data[1..])?;
 
@@ -323,8 +323,6 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             // Using this, we pass the above data to the host.
             set_return_data(&metadata)?;
         }
-
-
         MoneyFunction::Unstake => {
             let params: MoneyUnstakeParams = deserialize(&self_.data[1..])?;
 
@@ -366,6 +364,10 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
 
             // Using this, we pass the above data to the host.
             set_return_data(&metadata)?;
+        }
+        MoneyFunction::Mint => {
+            msg!("[Mint] Entered match arm");
+            unimplemented!();
         }
     };
 
@@ -580,7 +582,6 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?;
             let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?;
 
-
             // Accumulator for the value commitments
             let mut valcom_total = pallas::Point::identity();
 
@@ -664,12 +665,12 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
                 //TODO adde sk root to db.
                 /*
-                if !db_contains_key(sk_roots_db, &serialize(&input.sk_root))? {
-                    msg!("[Unstake] Error: sk merkle root not found in previous state (input {})", i);
-                    return Err(ContractError::Custom(21))
-            }
+                    if !db_contains_key(sk_roots_db, &serialize(&input.sk_root))? {
+                        msg!("[Unstake] Error: sk merkle root not found in previous state (input {})", i);
+                        return Err(ContractError::Custom(21))
+                }
 
-                */
+                    */
 
                 // The nullifiers should not already exist. It is the double-spend protection.
                 if new_nullifiers.contains(&input.nullifier) ||
@@ -702,7 +703,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             }
 
             // Create a state update
-            let update = MoneyStakeUpdate { nullifiers: new_nullifiers, coins: new_coins  };
+            let update = MoneyStakeUpdate { nullifiers: new_nullifiers, coins: new_coins };
             let mut update_data = vec![];
             update_data.write_u8(MoneyFunction::Unstake as u8)?;
             update.encode(&mut update_data)?;
@@ -766,6 +767,11 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             )?;
 
             Ok(())
+        }
+
+        MoneyFunction::Mint => {
+            msg!("[Mint] Entered match arm");
+            unimplemented!();
         }
     }
 }

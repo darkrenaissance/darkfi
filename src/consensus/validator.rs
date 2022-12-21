@@ -301,7 +301,8 @@ impl ValidatorState {
             Timestamp::current_time(),
             root,
         );
-        let signed_proposal = SecretKey::from(secret_key).sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
+        let signed_proposal =
+            SecretKey::from(secret_key).sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
         let public_key = PublicKey::from_secret(secret_key.into());
 
         let lead_info = LeadInfo::new(
