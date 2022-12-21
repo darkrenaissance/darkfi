@@ -39,6 +39,5 @@ circuit "LeadMint" {
         c1_cm_x = ec_get_x(c1_cm);
         c1_cm_y = ec_get_y(c1_cm);
         c1_cm_hash = poseidon_hash(c1_cm_x, c1_cm_y);
-        constrain_instance(c1_cm_x);
-        constrain_instance(c1_cm_y);
+        constrain_instance(c1_cm_hash);
 }

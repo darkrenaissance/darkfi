@@ -371,6 +371,7 @@ impl TransferMintRevealed {
     }
 }
 
+
 #[allow(clippy::too_many_arguments)]
 fn create_transfer_mint_proof(
     zkbin: &ZkBinary,
@@ -470,6 +471,165 @@ fn create_transfer_burn_proof(
         Witness::Base(Value::known(signature_secret.inner())),
     ];
 
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let proof = Proof::create(pk, &[circuit], &revealed.to_vec(), &mut OsRng)?;
+
+    Ok((proof, revealed))
+}
+
+struct StakeLeadMintRevealed {
+    pub value_commit: ValueCommit,
+    pub pk: pallas::Base,
+    pub commitment_x: pallas::Base,
+    pub commitment_y: pallas::Base,
+}
+
+impl StakeLeadMintRevealed {
+    pub fn compute(value: pallas::Base,
+                   pk: pallas::Base,
+                   value_blind: pallas::Scalar,
+                   commitment: pallas::Point
+
+    ) -> Self {
+        let value_commit = pedersen_commitment_base(value, value_blind);
+        let coord = commitment.to_affine().coordinates().unwrap();
+        Self {
+            value_commit,
+            pk,
+            *coord.x(),
+            *coord.y(),
+        }
+
+    }
+    pub fn to_vec(&self) -> Vec<pallas::Base> {
+        vec![
+            self.value_commit,
+            self.pk,
+            self.commitment_x,
+            self.commitment_y,
+        ]
+    }
+}
+
+struct UnstakeLeadBurnRevealed {
+    pub value_commit: ValueCommit,
+    pub pk: pallas::Base,
+    pub commitment_x: pallas::Base,
+    pub commitment_y: pallas::Base,
+    pub commitment_root: pallas::Base,
+    pub sk_root: pallas::Base,
+    pub nullifier: pallas::Base,
+}
+
+impl UnstakeLeadBurnRevealed {
+    pub fn compute(
+        value: pallas::Base,
+        pk: pallas::Base,
+        commitment: pallas::Point,
+        commitment_root: pallas::Base,
+        sk_root: pallas::Base,
+        nullifier: pallas::Base,
+    ) -> Self {
+        let value_commit = pedersen_commitment_base(value, value_blind);
+        let coord = commitment.to_affine().coordinates().unwrap();
+        Self {
+            value_commit,
+            pk,
+            commitment_x,
+            commitment_y,
+            commitment_root,
+            sk_root,
+            nullifier,
+        }
+    }
+
+    pub fn to_vec(&self) -> Vec<pallas::Base> {
+        vec![
+            self.value_commit,
+            self.pk,
+            self.commitment_x,
+            self.commitment_y,
+            self.commitment_root,
+            self.sk_root,
+            self.nullifier,
+        ]
+    }
+}
+
+fn create_stake_mint_proof(
+    zkbin: &ZkBinary, // LeadMint contract binary
+    pk: &ProvingKey,
+    public_key: pallas::Base,
+    coin_commitment: pallas::Point,
+    value: pallas::Base,
+    value_blind: ValueBlind,
+    coin_blind: pallas::Base,
+    sk: pallas::Base,
+    sk_root: pallas::Base,
+    tau: pallas::Base,
+    nonce: pallas::Base, // rho
+) > Result<(Proof, StakeLeadMintRevealed)> {
+    let revealed = StakeLeadMintRevealed::compute(
+        value,
+        public_key,
+        coin_commitment,
+    );
+
+    let prover_witnesses = vec![
+        Witness::Base(Value::known(sk)),
+        Witness::Base(Value::known(sk_root)),
+        Witness::Base(Value::known(tau)),
+        Witness::Base(Value::known(nonce)),
+        Witness::Scalar(Value::known(coin_blind)),
+        Witness::Base(Value::known(value)),
+        Witness::Scalar(Value::known(value_blind)),
+    ];
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let proof = Proof::create(pk, &[circuit], &revealed.to_vec(), &mut OsRng)?;
+
+    Ok((proof, revealed))
+}
+
+fn create_unstake_burn_proof(
+    zkbin: &ZkBinary,
+    pk: &ProvingKey,
+    value: pallas::Base,
+    value_blind: ValueBlind,
+    coin_blind: pallas::Base,
+    public_key: pallas::Base,
+    sk_root: pallas::Base,
+    sk_pos: incrementalmerkletree::Position,
+    sk_path: Vec<MerkleNode>,
+    commitment_merkle_path: Vec<MerkleNode>,
+    commitment: pallas::Point,
+    commitment_root: pallas::Base,
+    commitment_pos: incrementalmerkletree::Position,
+    tau: pallas::Base,
+    nonce: pallas::Base,
+    nullifier: pallas::Base,
+) -> Result<(Proof, UnstakeLeadBurnRevealed)> {
+    let revealed = UnstakeLeadMintRevealed::compute(
+        value,
+        public_key,
+        commitment,
+        commitment_root,
+        sk_root,
+        nullifier,
+    );
+
+    let prover_witnesses = vec![
+        Witness::MerklePath(Value::known(commitment_merkle_path.try_into().unwrap())),
+        Witness::Uint32(Value::known(u64::from(commitment_pos).try_into().unwrap())), // u32
+        Witness::Uint32(Value::known(u64::from(sk_pos).try_into().unwrap())), // u32
+        Witness::Base(Value::known(sk)),
+        Witness::Base(Value::known(sk_root)),
+        Witness::MerklePath(Value::known(sk_path.try_into().unwrap())),
+        Witness::Base(Value::known(tau)),
+        Witness::Base(Value::known(nonce)),
+        Witness::Scalar(Value::known(coin_blind)),
+        Witness::Base(Value::known(value)),
+        Witness::Scalar(Value::known(value_blind)),
+    ];
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
     let proof = Proof::create(pk, &[circuit], &revealed.to_vec(), &mut OsRng)?;
 
@@ -896,6 +1056,161 @@ pub fn build_transfer_tx(
     // We return it all and let the caller deal with it.
 
     Ok((params, zk_proofs, signature_secrets, spent_coins))
+}
+
+pub fn build_stake_tx(
+    pubkey: &PublicKey,
+    value_send: u64,
+    value_recv: u64,
+    value_blinds: &[ValueBlind],
+    coins: &[OwnCoin],
+    tx_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    cm_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    sk_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    mint_zkbin: &ZkBinary,
+    mint_pk: &ProvingKey,
+    burn_zkbin: &ZkBinary,
+    burn_pk: &ProvingKey,
+    slot_index: pallas::Base,
+    eta: pallas::Base,
+) -> Result<(
+    MoneyStakeParams,
+    Vec<Proof>,
+    Vec<LeadCoin>,
+    Vec<ValueBlind>,
+    Vec<ValueBlind>,
+)> {
+    // convert owncoins to leadcoins.
+    let token_blind = ValueBlind::random(&mut OsRng);
+    let leadcoins : Vec<LeadCoin>= vec![];
+    let mut params = MoneyStakeParams {
+        inputs: vec![],
+        outputs: vec![],
+    };
+    let mut proofs = vec![];
+    let mut own_blinds = vec![];
+    let mut lead_blinds = vec![];
+    for coin in coins.iter() {
+        // burn the coin
+        let value_blind = ValueBlind::random(&mut OsRng);
+        own_blinds.push(value_blind);
+        let spend_hook = pallas::Base::zero();
+        let user_data = pallas::Base::zero();
+        let user_data_blind = pallas::Base::random(&mut OsRng);
+        let tx_leaf_position = coin.leaf_position;
+        let tx_root = tx_tree.root(0).unwrap();
+        let tx_merkle_path = tx_tree.authentication_path(tx_leaf_position, &tx_root).unwrap();
+        let signature_secret = SecretKey::random(&mut OsRng);
+        //signature_secrets.push(signature_secret);
+        let (own_proof, own_revealed) = create_transfer_burn_proof(
+            burn_zkbin,
+            burn_pk,
+            coin.note.value,
+            coin.note.token_id,
+            coin.note.value_blind,
+            coin.note.token_blind,
+            coin.note.serial,
+            spend_hook,
+            user_data,
+            user_data_blind,
+            coin.secret,
+            coin.leaf_position,
+            tx_merkle_path.clone(),
+            signature_secret,
+        )?;
+        params.inputs.push(Input {
+            value_commit: own_revealed.value_commit,
+            token_commit: own_revealed.token_commit,
+            nullifier: own_revealed.nullifier,
+            merkle_root: own_revealed.merkle_root,
+            spend_hook: own_revealed.spend_hook,
+            user_data_enc: own_revealed.user_data_enc,
+            signature_public: own_revealed.signature_public,
+        });
+        proofs.push(own_proof);
+        let lead_value_blind = ValueBlind::random(&mut OsRng);
+        lead_blinds.push(lead_value_blind);
+        sk_tree.append(&MerkleNode::from(coin.secret));
+        let sk_pos = sk_tree.witness().unwrap();
+        let sk_root = sk_tree.root(0).unwrap();
+        let sk_merkle_path = sk_tree.authentication_path(sk_pos, &sk_root).unwrap();
+        let leadcoin = LeadCoin::new(
+            eta, // randomness from last finalized block.
+            coin.note.value,
+            slot_index, // tau
+            coin.secret, // coin secret key
+            sk_root,
+            sk_pos,
+            sk_merkle_path,
+            cm_tree,
+        );
+        leadcoins.push(leadcoin);
+        let lead_coin_blind = ValueBlind::random(&mut OsRng);
+        let public_key = leadcoin.pk();
+        let (lead_proof, lead_revealed) = create_stake_mint_proof(
+            mint_zkbin,
+            mint_pk,
+            public_key,
+            leadcoin.coin1_commitment,
+            coin.note.value,
+            lead_value_blind,
+            lead_coin_blind,
+            coin.secret,
+            sk_root,
+            slot_index, // tau
+            coin.note.serial, // nonce
+        )?;
+        let coin_commit_coords = [
+            lead_revealed.commitment_x,
+            lead_revealed.commitment_y,
+        ];
+        let coin_commit_hash = poseidon_hash(coords);
+        params.outputs.push(StakedOutput{
+            lead_revealed.value_commit,
+            coin_commit_hash,
+            public_key,
+        });
+        proofs.push(lead_proof);
+    }
+    Ok((params, proofs, leadcoins, own_blinds, lead_blinds))
+}
+
+pub fn build_unstake_tx(
+    pubkey: &PublicKey,
+    value_send: u64,
+    value_recv: u64,
+    value_blinds: &[ValueBlind],
+    coins: &[LeadCoin],
+    tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    mint_zkbin: &ZkBinary,
+    mint_pk: &ProvingKey,
+    burn_zkbin: &ZkBinary,
+    burn_pk: &ProvingKey,
+) -> Result<(
+    MoneyUnStakeParams,
+    Vec<Proof>,
+    Vec<SecretKey>,
+    Vec<OwnCoin>,
+    Vec<ValueBlind>,
+    Vec<ValueBlind>,
+)> {
+    // convert leadcoin to owncoin
+    let token_blind = ValueBlind::random(&mut OsRng);
+    let lowncoins : Vec<LeadCoin>= vec![];
+    let mut params = MoneyStakeParams {
+        inputs: vec![],
+        outputs: vec![],
+    };
+    let mut proofs = vec![];
+    let mut own_blinds = vec![];
+    let mut lead_blinds = vec![];
+    for coin in coins.iter() {
+        // burn lead coin
+        // mint own coin
+    }
+    // return proofs created
+    // return secret keys
+    // blind values.
 }
 
 fn compute_remainder_blind(

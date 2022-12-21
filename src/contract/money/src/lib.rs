@@ -100,6 +100,11 @@ pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
 /// zkas token mint contract namespace
 pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";
 
+/// zkas lead  mint contract namespace
+pub const MONEY_CONTRACT_ZKAS_LEAD_MINT_NS: &str = "Lead_Mint";
+/// zkas lead burn contract namespace
+pub const MONEY_CONTRACT_ZKAS_LEAD_BURN_NS: &str = "Lead_Burn";
+
 /// This function runs when the contract is (re)deployed and initialized.
 #[cfg(not(feature = "no-entrypoint"))]
 fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
@@ -116,7 +121,12 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     };
     let mint_v1_bincode = include_bytes!("../proof/mint_v1.zk.bin");
     let burn_v1_bincode = include_bytes!("../proof/burn_v1.zk.bin");
+
     let token_mint_v1_bincode = include_bytes!("../proof/token_mint_v1.zk.bin");
+
+
+    let mint_lead_bincode = include_bytes!("../proof/lead_mint.zk.bin");
+    let burn_lead_bincode = include_bytes!("../proof/lead_burn.zk.bin");
 
     /* TODO: Do I really want to make zkas a dependency? Yeah, in the future.
        For now we take anything.
@@ -133,6 +143,9 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1), &burn_v1_bincode[..])?;
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1), &token_mint_v1_bincode[..])?;
 
+    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_LEAD_MINT_NS), &mint_lead_bincode[..])?;
+    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_LEAD_BURN_NS), &burn_lead_bincode[..])?;
+
     // Set up a database tree to hold Merkle roots
     let _ = match db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE) {
         Ok(v) => v,
@@ -145,10 +158,23 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
         Err(_) => db_init(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?,
     };
 
+
     // Set up a database tree to hold the set of fixed-supply tokens
     let _ = match db_lookup(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE) {
         Ok(v) => v,
         Err(_) => db_init(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE)?,
+
+    // Set up a database tree to hold lead Merkle roots
+    let _ = match db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE) {
+        Ok(v) => v,
+        Err(_) => db_init(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?,
+    };
+
+    // Set up a database tree to hold nullifiers
+    let _ = match db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE) {
+        Ok(v) => v,
+        Err(_) => db_init(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?,
+
     };
 
     // Set up a database tree for arbitrary data
@@ -242,7 +268,57 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             set_return_data(&metadata)?;
         }
 
-        MoneyFunction::Stake => unimplemented!(),
+        MoneyFunction::Stake => {
+            let params: MoneyStakeParams = deserialize(&self_.data[1..])?;
+
+            let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
+            let mut signature_pubkeys: Vec<PublicKey> = vec![];
+
+            for input in &params.inputs {
+                let value_coords = input.value_commit.to_affine().coordinates().unwrap();
+                let token_coords = input.token_commit.to_affine().coordinates().unwrap();
+                let (sig_x, sig_y) = input.signature_public.xy();
+
+                zk_public_values.push((
+                    MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string(),
+                    vec![
+                        input.nullifier.inner(),
+                        *value_coords.x(),
+                        *value_coords.y(),
+                        *token_coords.x(),
+                        *token_coords.y(),
+                        input.merkle_root.inner(),
+                        input.user_data_enc,
+                        sig_x,
+                        sig_y,
+                    ],
+                ));
+
+                signature_pubkeys.push(input.signature_public);
+            }
+
+            for output in &params.outputs {
+                let value_coords = output.value_commit.to_affine().coordinates().unwrap();
+
+                zk_public_values.push((
+                    MONEY_CONTRACT_ZKAS_LEAD_MINT_NS.to_string(),
+                    vec![
+                        *value_coords.x(),
+                        *value_coords.y(),
+                        output.coin_pk_hash,
+                        output.coin,
+                    ],
+                ));
+            }
+
+            let mut metadata = vec![];
+            zk_public_values.encode(&mut metadata)?;
+            signature_pubkeys.encode(&mut metadata)?;
+
+            // Using this, we pass the above data to the host.
+            set_return_data(&metadata)?;
+        }
+
         MoneyFunction::Unstake => unimplemented!(),
         MoneyFunction::Mint => unimplemented!(),
     };
@@ -451,7 +527,69 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
         MoneyFunction::Stake => {
             msg!("[Stake] Entered match arm");
-            unimplemented!();
+            let params: MoneyStakeParams = deserialize(&self_.data[1..])?;
+
+            assert!(params.inputs.len() == params.outputs.len());
+
+            let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+            let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?;
+            let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?;
+
+
+            // Accumulator for the value commitments
+            let mut valcom_total = pallas::Point::identity();
+
+            // State transition for payments
+            let mut new_nullifiers = Vec::with_capacity(params.inputs.len());
+
+            msg!("[Stake] Iterating over anonymous inputs");
+            for (i, input) in params.inputs.iter().enumerate() {
+                // The Merkle root is used to know whether this is a coin that existed
+                // in a previous state.
+                if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
+                    msg!("[Stake] Error: Merkle root not found in previous state (input {})", i);
+                    return Err(ContractError::Custom(21))
+                }
+
+                // The nullifiers should not already exist. It is the double-spend protection.
+                if new_nullifiers.contains(&input.nullifier) ||
+                    db_contains_key(nullifiers_db, &serialize(&input.nullifier))?
+                {
+                    msg!("[Stake] Error: Duplicate nullifier found in input {}", i);
+                    return Err(ContractError::Custom(22))
+                }
+
+                new_nullifiers.push(input.nullifier);
+                valcom_total += input.value_commit;
+            }
+
+            // Newly created coins for this transaction are in the outputs.
+            let mut new_coins = Vec::with_capacity(params.outputs.len());
+            for (i, output) in params.outputs.iter().enumerate() {
+                // TODO: Should we have coins in a sled tree too to check dupes?
+                if new_coins.contains(&Coin::from(output.coin_commit_hash)) {
+                    msg!("[Stake] Error: Duplicate coin found in output {}", i);
+                    return Err(ContractError::Custom(23))
+                }
+                new_coins.push(Coin::from(output.coin));
+                valcom_total -= output.value_commit;
+            }
+
+            // If the accumulator is not back in its initial state, there's a value mismatch.
+            if valcom_total != pallas::Point::identity() {
+                msg!("[Stake] Error: Value commitments do not result in identity");
+                return Err(ContractError::Custom(24))
+            }
+
+            // Create a state update
+            let update = MoneyStakeUpdate { nullifiers: new_nullifiers, coins: new_coins };
+            let mut update_data = vec![];
+            update_data.write_u8(MoneyFunction::Stake as u8)?;
+            update.encode(&mut update_data)?;
+            set_return_data(&update_data)?;
+            msg!("[Stake] State update set!");
+
+            Ok(())
         }
 
         MoneyFunction::Unstake => {
@@ -492,7 +630,28 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             Ok(())
         }
 
-        MoneyFunction::Stake => unimplemented!(),
+        MoneyFunction::Stake => {
+            let update: MoneyStakeUpdate = deserialize(&update_data[1..])?;
+
+            let info_db = db_lookup(cid, MONEY_CONTRACT_LEAD_INFO_TREE)?;
+            let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?;
+            let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?;
+
+            for nullifier in update.nullifiers {
+                db_set(nullifiers_db, &serialize(&nullifier), &[])?;
+            }
+
+            msg!("Adding coins {:?} to Merkle tree", update.coins);
+            let coins: Vec<_> = update.coins.iter().map(|x| MerkleNode::from(x.inner())).collect();
+            merkle_add(
+                info_db,
+                coin_roots_db,
+                &serialize(&MONEY_CONTRACT_LEAD_COIN_MERKLE_TREE),
+                &coins,
+            )?;
+
+            Ok(())
+        }
         MoneyFunction::Unstake => unimplemented!(),
         MoneyFunction::Mint => unimplemented!(),
     }

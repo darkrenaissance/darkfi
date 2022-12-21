@@ -57,12 +57,16 @@ pub struct StakedInput {
 /// Staked anonymous output
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct StakedOutput {
+    /// Pedersen commitment for the output's value
+    pub value_commit: ValueCommit,
     /// Minted coin
-    pub coin: pallas::Base,
+    pub coin_commit_hash: pallas::Base,
+    /// coin pk hash
+    pub coin_pk_hash: pallas::Base,
     /// The encrypted note ciphertext
-    pub ciphertext: Vec<u8>,
+    //pub ciphertext: Vec<u8>,
     /// The ephemeral public key
-    pub ephem_public: PublicKey,
+    //pub ephem_public: PublicKey,
 }
 
 /// Inputs and outputs for a payment
@@ -79,6 +83,15 @@ pub struct MoneyTransferParams {
 /// State update produced by a payment
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTransferUpdate {
+    /// Revealed nullifiers
+    pub nullifiers: Vec<Nullifier>,
+    /// Minted coins
+    pub coins: Vec<Coin>,
+}
+
+/// State update produced by a staking
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyStakeUpdate {
     /// Revealed nullifiers
     pub nullifiers: Vec<Nullifier>,
     /// Minted coins

@@ -294,7 +294,6 @@ impl ConsensusState {
             0,
             epoch_secrets.merkle_paths[0],
             seeds[0],
-            epoch_secrets.secret_keys[0],
             &mut self.coins_tree,
         );
         coins.push(coin);
