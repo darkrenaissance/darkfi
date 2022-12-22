@@ -32,6 +32,8 @@ pub struct MoneyStakeParams {
     pub inputs: Vec<Input>,
     /// Anonymous outputs for staking
     pub outputs: Vec<StakedOutput>,
+    /// Token blind to reveal token ID
+    pub token_blind: ValueBlind,
 }
 
 /// Inputs and outputs for unstaking coins
@@ -41,6 +43,8 @@ pub struct MoneyUnstakeParams {
     pub inputs: Vec<StakedInput>,
     /// Anonymous outputs
     pub outputs: Vec<Output>,
+    /// Token blind to reveal token ID
+    pub token_blind: ValueBlind,
 }
 
 /// Staked anonymous input

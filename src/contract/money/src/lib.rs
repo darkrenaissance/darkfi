@@ -20,6 +20,7 @@
 use darkfi_sdk::{
     crypto::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
+        token_id::DARK_TOKEN_ID,
         Coin, ContractId, MerkleNode, MerkleTree, PublicKey,
     },
     db::{db_contains_key, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME},
@@ -107,11 +108,10 @@ pub const MONEY_CONTRACT_ZKAS_MINT_NS_V1: &str = "Mint_V1";
 pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
 /// zkas token mint contract namespace
 pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";
-
-/// zkas lead  mint contract namespace
-pub const MONEY_CONTRACT_ZKAS_LEAD_MINT_NS: &str = "Lead_Mint";
-/// zkas lead burn contract namespace
-pub const MONEY_CONTRACT_ZKAS_LEAD_BURN_NS: &str = "Lead_Burn";
+/// zkas staking coin mint contract namespace
+pub const MONEY_CONTRACT_ZKAS_LEAD_MINT_NS_V1: &str = "Lead_Mint_V1";
+/// zkas staking coin burn contract namespace
+pub const MONEY_CONTRACT_ZKAS_LEAD_BURN_NS_V1: &str = "Lead_Burn_V1";
 
 /// This function runs when the contract is (re)deployed and initialized.
 #[cfg(not(feature = "no-entrypoint"))]
@@ -127,13 +127,14 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
         Ok(v) => v,
         Err(_) => db_init(cid, SMART_CONTRACT_ZKAS_DB_NAME)?,
     };
+
     let mint_v1_bincode = include_bytes!("../proof/mint_v1.zk.bin");
     let burn_v1_bincode = include_bytes!("../proof/burn_v1.zk.bin");
 
     let token_mint_v1_bincode = include_bytes!("../proof/token_mint_v1.zk.bin");
 
-    let mint_lead_bincode = include_bytes!("../proof/lead_mint.zk.bin");
-    let burn_lead_bincode = include_bytes!("../proof/lead_burn.zk.bin");
+    let lead_mint_v1_bincode = include_bytes!("../proof/lead_mint_v1.zk.bin");
+    let lead_burn_v1_bincode = include_bytes!("../proof/lead_burn_v1.zk.bin");
 
     /* TODO: Do I really want to make zkas a dependency? Yeah, in the future.
        For now we take anything.
@@ -146,42 +147,37 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     db_set(zkas_db, &serialize(&mint_namespace), &mint_bincode[..])?;
     db_set(zkas_db, &serialize(&burn_namespace), &burn_bincode[..])?;
     */
+
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1), &mint_v1_bincode[..])?;
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1), &burn_v1_bincode[..])?;
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1), &token_mint_v1_bincode[..])?;
-
-    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_LEAD_MINT_NS), &mint_lead_bincode[..])?;
-    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_LEAD_BURN_NS), &burn_lead_bincode[..])?;
+    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_LEAD_MINT_NS_V1), &lead_mint_v1_bincode[..])?;
+    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_LEAD_BURN_NS_V1), &lead_burn_v1_bincode[..])?;
 
     // Set up a database tree to hold Merkle roots
-    let _ = match db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE) {
-        Ok(v) => v,
-        Err(_) => db_init(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?,
-    };
+    if db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE).is_err() {
+        db_init(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    }
 
     // Set up a database tree to hold nullifiers
-    let _ = match db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE) {
-        Ok(v) => v,
-        Err(_) => db_init(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?,
-    };
+    if db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE).is_err() {
+        db_init(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    }
 
     // Set up a database tree to hold the set of fixed-supply tokens
-    let _ = match db_lookup(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE) {
-        Ok(v) => v,
-        Err(_) => db_init(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE)?,
-    };
+    if db_lookup(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE).is_err() {
+        db_init(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE)?;
+    }
 
     // Set up a database tree to hold lead Merkle roots
-    let _ = match db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE) {
-        Ok(v) => v,
-        Err(_) => db_init(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?,
-    };
+    if db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE).is_err() {
+        db_init(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?;
+    }
 
     // Set up a database tree to hold nullifiers
-    let _ = match db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE) {
-        Ok(v) => v,
-        Err(_) => db_init(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?,
-    };
+    if db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE).is_err() {
+        db_init(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?;
+    }
 
     // Set up a database tree for arbitrary data
     let info_db = match db_lookup(cid, MONEY_CONTRACT_INFO_TREE) {
@@ -256,7 +252,6 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
                 zk_public_values.push((
                     MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
                     vec![
-                        //output.coin.inner(),
                         output.coin,
                         *value_coords.x(),
                         *value_coords.y(),
@@ -272,7 +267,9 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
 
             // Using this, we pass the above data to the host.
             set_return_data(&metadata)?;
+            Ok(())
         }
+
         MoneyFunction::Stake => {
             let params: MoneyStakeParams = deserialize(&self_.data[1..])?;
 
@@ -306,7 +303,7 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
                 let value_coords = output.value_commit.to_affine().coordinates().unwrap();
 
                 zk_public_values.push((
-                    MONEY_CONTRACT_ZKAS_LEAD_MINT_NS.to_string(),
+                    MONEY_CONTRACT_ZKAS_LEAD_MINT_NS_V1.to_string(),
                     vec![
                         *value_coords.x(),
                         *value_coords.y(),
@@ -322,7 +319,9 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
 
             // Using this, we pass the above data to the host.
             set_return_data(&metadata)?;
+            Ok(())
         }
+
         MoneyFunction::Unstake => {
             let params: MoneyUnstakeParams = deserialize(&self_.data[1..])?;
 
@@ -331,7 +330,7 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             for input in &params.inputs {
                 let value_coords = input.value_commit.to_affine().coordinates().unwrap();
                 zk_public_values.push((
-                    MONEY_CONTRACT_ZKAS_LEAD_BURN_NS.to_string(),
+                    MONEY_CONTRACT_ZKAS_LEAD_BURN_NS_V1.to_string(),
                     vec![
                         *value_coords.x(),
                         *value_coords.y(),
@@ -364,14 +363,13 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
 
             // Using this, we pass the above data to the host.
             set_return_data(&metadata)?;
+            Ok(())
         }
         MoneyFunction::Mint => {
             msg!("[Mint] Entered match arm");
             unimplemented!();
         }
-    };
-
-    Ok(())
+    }
 }
 
 /// This function verifies a state transition and produces an
@@ -579,6 +577,13 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             assert!(params.inputs.len() == params.outputs.len());
 
+            // Verify token commitment
+            let tokcom = pedersen_commitment_base(DARK_TOKEN_ID.inner(), params.token_blind);
+            if params.inputs.iter().any(|input| input.token_commit != tokcom) {
+                msg!("[Stake] Error: Tried to stake non-native token. Unable to proceed");
+                return Err(ContractError::Custom(26))
+            }
+
             let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?;
             let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?;
 
@@ -643,6 +648,13 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let params: MoneyUnstakeParams = deserialize(&self_.data[1..])?;
 
             assert!(params.inputs.len() == params.outputs.len());
+
+            // Verify token commitment
+            let tokcom = pedersen_commitment_base(DARK_TOKEN_ID.inner(), params.token_blind);
+            if params.outputs.iter().any(|output| output.token_commit != tokcom) {
+                msg!("[Stake] Error: Tried to unstake non-native token. Unable to proceed");
+                return Err(ContractError::Custom(26))
+            }
 
             let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?;
             let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?;
