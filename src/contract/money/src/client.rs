@@ -1064,9 +1064,10 @@ pub fn build_stake_tx(
     eta: pallas::Base,
 ) -> Result<(MoneyStakeParams, Vec<Proof>, Vec<LeadCoin>, Vec<ValueBlind>, Vec<ValueBlind>)> {
     // convert owncoins to leadcoins.
-    //let token_blind = ValueBlind::random(&mut OsRng);
+    // TODO: verify this token blind usage
+    let token_blind = ValueBlind::random(&mut OsRng);
     let mut leadcoins: Vec<LeadCoin> = vec![];
-    let mut params = MoneyStakeParams { inputs: vec![], outputs: vec![] };
+    let mut params = MoneyStakeParams { inputs: vec![], outputs: vec![], token_blind };
     let mut proofs = vec![];
     let mut own_blinds = vec![];
     let mut lead_blinds = vec![];
@@ -1164,9 +1165,10 @@ pub fn build_unstake_tx(
     burn_pk: &ProvingKey,
 ) -> Result<(MoneyUnstakeParams, Vec<Proof>, Vec<SecretKey>, Vec<ValueBlind>, Vec<ValueBlind>)> {
     // convert leadcoin to owncoin
-    //let token_blind = ValueBlind::random(&mut OsRng);
+    // TODO: verify this token blind usage
+    let token_blind = ValueBlind::random(&mut OsRng);
     //let owncoins : Vec<OwnCoin>= vec![];
-    let mut params = MoneyUnstakeParams { inputs: vec![], outputs: vec![] };
+    let mut params = MoneyUnstakeParams { inputs: vec![], outputs: vec![], token_blind };
     let mut proofs = vec![];
     let mut own_blinds = vec![];
     let mut lead_blinds = vec![];

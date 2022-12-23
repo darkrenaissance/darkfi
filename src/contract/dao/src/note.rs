@@ -76,6 +76,10 @@ impl EncryptedNote2 {
     }
 }
 
+// TODO: This test is broken:
+//       1. no darkfi::crypto::type
+//       2. SerialDecodable cannot infer type for type parameter `D`
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,3 +121,4 @@ mod tests {
         assert_eq!(note.memo, note2.memo);
     }
 }
+*/
