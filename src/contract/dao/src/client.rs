@@ -22,14 +22,83 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{poseidon_hash, PublicKey, SecretKey, TokenId},
+    crypto::{
+        coin::Coin, constants::MERKLE_DEPTH, poseidon_hash, MerkleNode, PublicKey, SecretKey,
+        TokenId,
+    },
+    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::pallas,
 };
 use halo2_proofs::circuit::Value;
 use log::debug;
 use rand::rngs::OsRng;
 
-use crate::state::{DaoBulla, DaoMintParams};
+use crate::{
+    note::EncryptedNote2,
+    state::{DaoBulla, DaoMintParams},
+};
+
+pub type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
+
+/*
+pub struct OwnCoin {
+    pub coin: Coin,
+    pub note: money::transfer::wallet::Note,
+    pub leaf_position: incrementalmerkletree::Position,
+}
+
+pub struct WalletCache {
+    // Normally this would be a HashMap, but SecretKey is not Hash-able
+    // TODO: This can be HashableBase
+    cache: Vec<(SecretKey, Vec<OwnCoin>)>,
+    /// The entire Merkle tree state
+    tree: MerkleTree,
+}
+
+impl Default for WalletCache {
+    fn default() -> Self {
+        Self { cache: Vec::new(), tree: MerkleTree::new(100) }
+    }
+}
+
+impl WalletCache {
+    pub fn new() -> Self {
+        Self { cache: Vec::new(), tree: MerkleTree::new(100) }
+    }
+
+    /// Must be called at the start to begin tracking received coins for this secret.
+    pub fn track(&mut self, secret: SecretKey) {
+        self.cache.push((secret, Vec::new()));
+    }
+
+    /// Get all coins received by this secret key
+    /// track() must be called on this secret before calling this or the function will panic.
+    pub fn get_received(&mut self, secret: &SecretKey) -> Vec<OwnCoin> {
+        for (other_secret, own_coins) in self.cache.iter_mut() {
+            if *secret == *other_secret {
+                // clear own_coins vec, and return current contents
+                return std::mem::take(own_coins)
+            }
+        }
+        panic!("you forget to track() this secret!");
+    }
+
+    pub fn try_decrypt_note(&mut self, coin: Coin, ciphertext: &EncryptedNote2) {
+        // Add the new coins to the Merkle tree
+        let node = MerkleNode::from(coin.inner());
+        self.tree.append(&node);
+
+        // Loop through all our secret keys...
+        for (secret, own_coins) in self.cache.iter_mut() {
+            // .. attempt to decrypt the note ...
+            if let Ok(note) = ciphertext.decrypt(secret) {
+                let leaf_position = self.tree.witness().expect("coin should be in tree");
+                own_coins.push(OwnCoin { coin, note, leaf_position });
+            }
+        }
+    }
+}
+*/
 
 struct DaoMintRevealed {
     pub bulla: DaoBulla,

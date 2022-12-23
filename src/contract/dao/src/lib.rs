@@ -24,6 +24,9 @@ pub mod entrypoint;
 pub mod state;
 
 #[cfg(feature = "client")]
+pub mod note;
+
+#[cfg(feature = "client")]
 /// Transaction building API for clients interacting with this contract
 pub mod client;
 

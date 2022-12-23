@@ -18,18 +18,30 @@
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
-    crypto::TokenId,
+    crypto::{constants::MERKLE_DEPTH, MerkleNode, TokenId},
+    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{group::ff::Field, pallas},
     tx::ContractCall,
 };
 use darkfi_serial::Encodable;
-use log::info;
+use log::{debug, info};
 use rand::rngs::OsRng;
 
-use darkfi_dao_contract::{client::build_dao_mint_tx, DaoFunction};
+use darkfi_dao_contract::{
+    client::{build_dao_mint_tx, MerkleTree},
+    DaoFunction,
+};
 
 mod harness;
 use harness::{init_logger, DaoTestHarness};
+
+// TODO: Anonymity leaks in this proof of concept:
+//
+// * Vote updates are linked to the proposal_bulla
+// * Nullifier of vote will link vote with the coin when it's spent
+
+// TODO: strategize and cleanup Result/Error usage
+// TODO: fix up code doc
 
 #[async_std::test]
 async fn integration_test() -> Result<()> {
@@ -51,9 +63,12 @@ async fn integration_test() -> Result<()> {
     let dao_approval_ratio_quot = 1;
     let dao_approval_ratio_base = 2;
 
-    // =================
-    // DaoFunction::Mint
-    // =================
+    // =======================================================
+    // Dao::Mint
+    //
+    // Create the DAO bulla
+    // =======================================================
+    debug!(target: "demo", "Stage 1. Creating DAO bulla");
 
     let dao_bulla_blind = pallas::Base::random(&mut OsRng);
 
@@ -89,6 +104,22 @@ async fn integration_test() -> Result<()> {
     info!("[Alice] ===============================");
     th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
     // TODO: Witness and add to wallet merkle tree?
+
+    let mut dao_tree = MerkleTree::new(100);
+    let dao_leaf_position = {
+        let node = MerkleNode::from(params.dao_bulla.inner());
+        dao_tree.append(&node);
+        dao_tree.witness().unwrap()
+    };
+    debug!(target: "demo", "Created DAO bulla: {:?}", params.dao_bulla.inner());
+
+    // =======================================================
+    // Money::Transfer
+    //
+    // Mint the initial supply of treasury token
+    // and send it all to the DAO directly
+    // =======================================================
+    debug!(target: "demo", "Stage 2. Minting treasury token");
 
     Ok(())
 }

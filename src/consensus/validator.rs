@@ -22,8 +22,8 @@ use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{
     crypto::{
         constants::MERKLE_DEPTH,
-        contract_id::MONEY_CONTRACT_ID,
-        //contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+        //contract_id::MONEY_CONTRACT_ID,
+        contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
         schnorr::{SchnorrPublic, SchnorrSecret},
         MerkleNode,
         PublicKey,
@@ -146,7 +146,7 @@ impl ValidatorState {
         // The faucet pubkeys are pubkeys which are allowed to create clear inputs
         // in the money contract.
         let money_contract_deploy_payload = serialize(&faucet_pubkeys);
-        //let dao_contract_deploy_payload = vec![];
+        let dao_contract_deploy_payload = vec![];
 
         // In this hashmap, we keep references to ZK proof verifying keys needed
         // for the circuits our native contracts provide.
@@ -159,14 +159,12 @@ impl ValidatorState {
                 include_bytes!("../contract/money/money_contract.wasm").to_vec(),
                 money_contract_deploy_payload,
             ),
-            /*
             (
                 "DAO Contract",
                 *DAO_CONTRACT_ID,
                 include_bytes!("../contract/dao/dao_contract.wasm").to_vec(),
                 dao_contract_deploy_payload,
             ),
-            */
         ];
 
         info!("Deploying native wasm contracts");
