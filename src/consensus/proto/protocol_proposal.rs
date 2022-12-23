@@ -70,7 +70,7 @@ impl ProtocolProposal {
             let proposal = match self.proposal_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("ProtocolProposal::handle_receive_proposal(): recv fail: {}", e);
+                    debug!("ProtocolProposal::handle_receive_proposal(): recv fail: {}", e);
                     continue
                 }
             };

@@ -73,7 +73,7 @@ impl ProtocolSyncConsensus {
             let req = match self.request_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("ProtocolSyncConsensus::handle_receive_request() recv fail: {}", e);
+                    debug!("ProtocolSyncConsensus::handle_receive_request() recv fail: {}", e);
                     continue
                 }
             };
@@ -113,7 +113,7 @@ impl ProtocolSyncConsensus {
             let req = match self.slot_checkpoints_request_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("ProtocolSyncConsensus::handle_receive_slot_checkpoints_request() recv fail: {}", e);
+                    debug!("ProtocolSyncConsensus::handle_receive_slot_checkpoints_request() recv fail: {}", e);
                     continue
                 }
             };

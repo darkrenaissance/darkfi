@@ -76,7 +76,7 @@ impl ProtocolTx {
             let tx = match self.tx_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("ProtocolTx::handle_receive_tx(): recv fail: {}", e);
+                    debug!("ProtocolTx::handle_receive_tx(): recv fail: {}", e);
                     continue
                 }
             };

@@ -86,7 +86,7 @@ impl ProtocolSync {
             let order = match self.request_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("ProtocolSync::handle_receive_request(): recv fail: {}", e);
+                    debug!("ProtocolSync::handle_receive_request(): recv fail: {}", e);
                     continue
                 }
             };
@@ -118,7 +118,7 @@ impl ProtocolSync {
             let info = match self.block_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("ProtocolSync::handle_receive_block(): recv fail: {}", e);
+                    debug!("ProtocolSync::handle_receive_block(): recv fail: {}", e);
                     continue
                 }
             };
@@ -173,7 +173,7 @@ impl ProtocolSync {
             let request = match self.slot_checkpoin_request_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(
+                    debug!(
                         "ProtocolSync::handle_receive_slot_checkpoint_request(): recv fail: {}",
                         e
                     );
@@ -220,7 +220,7 @@ impl ProtocolSync {
             let slot_checkpoint = match self.slot_checkpoints_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("ProtocolSync::handle_receive_slot_checkpoint(): recv fail: {}", e);
+                    debug!("ProtocolSync::handle_receive_slot_checkpoint(): recv fail: {}", e);
                     continue
                 }
             };
