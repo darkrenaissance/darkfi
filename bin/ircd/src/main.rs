@@ -145,7 +145,12 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         let pubkey = secret.public_key();
         let pub_encoded = bs58::encode(pubkey.as_bytes()).into_string();
 
-        println!("pubkey recoverd: {}", pub_encoded);
+        if settings.output.is_some() {
+            let datastore = expand_path(&settings.output.unwrap())?;
+            save_json_file(&datastore, &pub_encoded)?;
+        } else {
+            println!("Public key recoverd: {}", pub_encoded);
+        }
 
         return Ok(())
     }
