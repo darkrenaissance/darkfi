@@ -105,4 +105,9 @@ When you are shorter on time or studying a subject on the side, you may choose t
 out a sample of questions with a mix of important looking topics and others which grab
 your attention or pique your curiosity.
 
+## Post-Chapter Review
+
+After reading the chapter, be sure to do a quick review and write down any theorems
+and proofs that caught your attention. You may wish to write them on flash cards or
+on a special notebook so later you can come back to them.
 
