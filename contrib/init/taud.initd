@@ -19,7 +19,9 @@ start() {
 			--user $USER \
 			--env HOME="${PWHOME:-/home/$USER}" \
 			--name taud \
-			--exec /usr/bin/screen -- -D -m -S taud /usr/local/bin/taud
+			--exec /usr/bin/screen -- \
+				    -L -Logfile /home/taud/screenlog.0 \
+				    -d -m -S taud /usr/local/bin/taud
 	eend $?
 }
 

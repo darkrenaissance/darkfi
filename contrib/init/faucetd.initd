@@ -19,7 +19,9 @@ start() {
 			--user $USER \
 			--env HOME="${PWHOME:-/home/$USER}" \
 			--name faucetd \
-			--exec /usr/bin/screen -- -D -m -S faucetd /usr/local/bin/faucetd
+            --exec /usr/bin/screen -- \
+				-L -Logfile /home/faucetd/screenlog.0 \
+				-d -m -S faucetd /usr/local/bin/faucetd
 	eend $?
 }
 

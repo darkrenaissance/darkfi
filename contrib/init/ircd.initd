@@ -19,7 +19,9 @@ start() {
 			--user $USER \
 			--env HOME="${PWHOME:-/home/$USER}" \
 			--name ircd \
-			--exec /usr/bin/screen -- -D -m -S ircd /usr/local/bin/ircd
+            --exec /usr/bin/screen -- \
+				    -L -Logfile /home/ircd/screenlog.0 \
+				    -d -m -S ircd /usr/local/bin/ircd
 	eend $?
 }
 

@@ -19,7 +19,9 @@ start() {
 			--user $USER \
 			--env HOME="${PWHOME:-/home/$USER}" \
 			--name darkfid \
-			--exec /usr/bin/screen -- -D -m -S darkfid /usr/local/bin/darkfid
+			--exec /usr/bin/screen -- \
+				    -L -Logfile /home/darkfid/screenlog.0 \
+				    -d -m -S darkfid /usr/local/bin/darkfid
 	eend $?
 }
 

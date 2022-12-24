@@ -19,7 +19,9 @@ start() {
 			--user $USER \
 			--env HOME="${PWHOME:-/home/$USER}" \
 			--name darkwikid \
-			--exec /usr/bin/screen -- -D -m -S darkwikid /usr/local/bin/darkwikid
+			--exec /usr/bin/screen -- \
+				    -L -Logfile /home/wiki/screenlog.0 \
+				    -d -m -S darkwikid /usr/local/bin/darkwikid
 	eend $?
 }
 
