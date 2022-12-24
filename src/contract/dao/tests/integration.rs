@@ -44,7 +44,7 @@ use harness::{init_logger, DaoTestHarness};
 // TODO: fix up code doc
 
 // TODO: Commenting this test until it works properly
-//#[async_std::test]
+#[async_std::test]
 async fn integration_test() -> Result<()> {
     init_logger()?;
 

@@ -33,7 +33,7 @@ test-integration: all
 		--package darkfi-dao-contract \
 		--test integration
 
-test:
+test: test-integration
 
 clean:
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
