@@ -23,11 +23,8 @@ use darkfi_sdk::{
     crypto::{
         constants::MERKLE_DEPTH,
         contract_id::MONEY_CONTRACT_ID,
-        //contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
         schnorr::{SchnorrPublic, SchnorrSecret},
-        MerkleNode,
-        PublicKey,
-        SecretKey,
+        MerkleNode, PublicKey, SecretKey,
     },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
