@@ -7,6 +7,13 @@ participate anonymously using any IRC frontend and by running the
 IRC daemon. `ircd` uses the DarkFi P2P engine to synchronize chats
 between hosts.
 
+## Benefits
+
+* Encrypted using same algorithms as Signal.
+* Completely anonymous. You can rename yourself easily so messages
+  are unlinkable.
+* God-fearing based CLI without soy gui shit.
+* p2p decentralized.
 
 ## Installation
 
