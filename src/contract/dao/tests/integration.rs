@@ -28,7 +28,7 @@ use log::{debug, info};
 use rand::rngs::OsRng;
 
 use darkfi_dao_contract::{
-    client::{build_dao_mint_tx, MerkleTree},
+    dao_client::{build_dao_mint_tx, MerkleTree},
     DaoFunction,
 };
 
@@ -60,11 +60,11 @@ async fn integration_test() -> Result<()> {
     let mut th = DaoTestHarness::new().await?;
 
     // Money parameters
-    //let xdrk_supply = 1_000_000;
-    //let xrdk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
+    let xdrk_supply = 1_000_000;
+    let xrdk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
     // Governance token parameters
-    //let gdrk_supply = 1_000_000;
+    let gdrk_supply = 1_000_000;
     let gdrk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
     // DAO parameters
@@ -131,7 +131,11 @@ async fn integration_test() -> Result<()> {
     // =======================================================
     debug!(target: "demo", "Stage 2. Minting treasury token");
 
+    // We use this to receive coins
+    //let mut cache = WalletCache::new();
+
     let mut th = MoneyTestHarness::new().await?;
+    //let (params, proofs) = builder.build(&zk_bins)?;
 
     Ok(())
 }
