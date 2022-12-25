@@ -32,8 +32,17 @@ use darkfi_dao_contract::{
     DaoFunction,
 };
 
-mod harness;
-use harness::{init_logger, DaoTestHarness};
+use darkfi_money_contract::{
+    client::{build_half_swap_tx, build_transfer_tx, Coin, EncryptedNote, OwnCoin},
+    state::MoneyTransferParams,
+    MoneyFunction,
+};
+
+mod dao_harness;
+use dao_harness::DaoTestHarness;
+
+mod money_harness;
+use money_harness::{init_logger, MoneyTestHarness};
 
 // TODO: Anonymity leaks in this proof of concept:
 //
@@ -121,6 +130,8 @@ async fn integration_test() -> Result<()> {
     // and send it all to the DAO directly
     // =======================================================
     debug!(target: "demo", "Stage 2. Minting treasury token");
+
+    let mut th = MoneyTestHarness::new().await?;
 
     Ok(())
 }

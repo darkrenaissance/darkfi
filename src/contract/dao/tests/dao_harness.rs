@@ -43,23 +43,6 @@ use rand::rngs::OsRng;
 
 use darkfi_dao_contract::DAO_CONTRACT_ZKAS_DAO_MINT_NS;
 
-pub fn init_logger() -> Result<()> {
-    let mut cfg = simplelog::ConfigBuilder::new();
-    cfg.add_filter_ignore("sled".to_string());
-    if let Err(_) = simplelog::TermLogger::init(
-        //simplelog::LevelFilter::Info,
-        simplelog::LevelFilter::Debug,
-        //simplelog::LevelFilter::Trace,
-        cfg.build(),
-        simplelog::TerminalMode::Mixed,
-        simplelog::ColorChoice::Auto,
-    ) {
-        warn!("Logger already initialized");
-    }
-
-    Ok(())
-}
-
 pub struct DaoTestHarness {
     pub alice_kp: Keypair,
     pub dao_kp: Keypair,
