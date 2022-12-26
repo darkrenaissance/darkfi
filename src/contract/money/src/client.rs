@@ -98,7 +98,7 @@ pub const AEAD_TAG_SIZE: usize = 16;
 
 /// The `Coin` is represented as a base field element.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct Coin(pallas::Base);
+pub struct Coin(pub pallas::Base);
 
 impl Coin {
     /// Reference the raw inner base field element

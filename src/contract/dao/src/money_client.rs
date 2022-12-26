@@ -258,13 +258,16 @@ impl Builder {
                 memo: Vec::new(),
             };
 
-            //let encrypted_note = note.encrypt(&output.public)?;
-            /*
-            let encrypted_note = note::encrypt(&note, &output.public)?;
+            let encrypted_note = note.encrypt(&output.public)?;
 
-            let output = Output { revealed, enc_note: encrypted_note };
+            let output = Output {
+                value_commit: revealed.value_commit,
+                token_commit: revealed.token_commit,
+                coin: revealed.coin.inner(),
+                ciphertext: encrypted_note.ciphertext,
+                ephem_public: encrypted_note.ephem_public,
+            };
             outputs.push(output);
-            */
         }
 
         Ok((MoneyTransferParams { clear_inputs, inputs, outputs }, proofs))
