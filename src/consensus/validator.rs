@@ -261,7 +261,9 @@ impl ValidatorState {
     /// chain the node is holding.
     pub fn propose(
         &mut self,
-        idx: usize,
+        slot: u64,
+        fork_index: i64,
+        coin_index: usize,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
     ) -> Result<Option<(BlockProposal, LeadCoin)>> {
@@ -271,10 +273,7 @@ impl ValidatorState {
         }
 
         // Generate proposal
-        let slot = self.consensus.current_slot();
-        let (prev_hash, index) = self.consensus.longest_chain_last_hash().unwrap();
-        let unproposed_txs = self.unproposed_txs(index);
-
+        let unproposed_txs = self.unproposed_txs(fork_index);
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
         // The following is pretty weird, so something better should be done.
         for tx in &unproposed_txs {
@@ -285,10 +284,11 @@ impl ValidatorState {
         let root = tree.root(0).unwrap();
 
         // Checking if extending a fork or canonical
-        let coin = if index == -1 {
-            self.consensus.coins[idx]
+        let (prev_hash, coin) = if fork_index == -1 {
+            (self.blockchain.last()?.1, self.consensus.coins[coin_index])
         } else {
-            self.consensus.forks[index as usize].sequence.last().unwrap().coins[idx]
+            let checkpoint = self.consensus.forks[fork_index as usize].sequence.last().unwrap();
+            (checkpoint.proposal.hash, checkpoint.coins[coin_index])
         };
 
         // Generating leader proof

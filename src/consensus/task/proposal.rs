@@ -200,8 +200,13 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
 
     // Node checks if it's the slot leader to generate a new proposal
     // for that slot.
-    let (won, idx) = state.write().await.consensus.is_slot_leader(sigma1, sigma2);
-    let result = if won { state.write().await.propose(idx, sigma1, sigma2) } else { Ok(None) };
+    let (won, fork_index, coin_index) =
+        state.write().await.consensus.is_slot_leader(sigma1, sigma2);
+    let result = if won {
+        state.write().await.propose(processing_slot, fork_index, coin_index, sigma1, sigma2)
+    } else {
+        Ok(None)
+    };
     let (proposal, coin) = match result {
         Ok(pair) => {
             if pair.is_none() {
@@ -229,7 +234,7 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     // Node stores the proposal and broadcast to rest nodes
     info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
     debug!("consensus: Full proposal: {:?}", proposal);
-    match state.write().await.receive_proposal(&proposal, Some((idx, coin))).await {
+    match state.write().await.receive_proposal(&proposal, Some((coin_index, coin))).await {
         Ok(_) => {
             // Here we don't have to check to broadcast, because the flag
             // will always be true, since the node is able to produce proposals

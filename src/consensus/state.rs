@@ -492,12 +492,22 @@ impl ConsensusState {
     /// coin is selected, since the stakeholder can't give more than one proof per block/slot.
     /// * 'sigma1', 'sigma2': slot sigmas
     /// Returns: (check: bool, idx: usize) where idx is the winning coin's index
-    pub fn is_slot_leader(&mut self, sigma1: pallas::Base, sigma2: pallas::Base) -> (bool, usize) {
+    pub fn is_slot_leader(
+        &mut self,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
+    ) -> (bool, i64, usize) {
         // Check if node can produce proposals
         if !self.proposing {
-            return (false, 0)
+            return (false, 0, 0)
         }
-        let competing_coins = &self.coins.clone();
+
+        let fork_index = self.longest_chain_index();
+        let competing_coins = if fork_index == -1 {
+            self.coins.clone()
+        } else {
+            self.forks[fork_index as usize].sequence.last().unwrap().coins.clone()
+        };
 
         let mut won = false;
         let mut highest_stake = 0;
@@ -519,32 +529,25 @@ impl ConsensusState {
             }
         }
 
-        (won, highest_stake_idx)
+        (won, fork_index, highest_stake_idx)
     }
 
-    /// Finds the longest blockchain the node holds and
-    /// returns the last block hash and the chain index.
-    pub fn longest_chain_last_hash(&self) -> Result<(blake3::Hash, i64)> {
-        let mut longest: Option<Fork> = None;
+    /// Finds the longest forkchain the node holds and
+    /// returns its index.
+    pub fn longest_chain_index(&self) -> i64 {
         let mut length = 0;
         let mut index = -1;
 
         if !self.forks.is_empty() {
             for (i, chain) in self.forks.iter().enumerate() {
                 if chain.sequence.len() > length {
-                    longest = Some(chain.clone());
                     length = chain.sequence.len();
                     index = i as i64;
                 }
             }
         }
 
-        let hash = match longest {
-            Some(chain) => chain.sequence.last().unwrap().proposal.hash,
-            None => self.blockchain.last()?.1,
-        };
-
-        Ok((hash, index))
+        index
     }
 
     /// Finds the length of longest fork chain the node holds.
