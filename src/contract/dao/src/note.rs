@@ -50,8 +50,8 @@ pub fn encrypt<T: Encodable>(note: &T, public: &PublicKey) -> Result<EncryptedNo
 
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct EncryptedNote2 {
-    ciphertext: Vec<u8>,
-    ephem_public: PublicKey,
+    pub ciphertext: Vec<u8>,
+    pub ephem_public: PublicKey,
 }
 
 impl EncryptedNote2 {

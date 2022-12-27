@@ -19,8 +19,8 @@
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
-        coin::Coin, constants::MERKLE_DEPTH, contract_id::MONEY_CONTRACT_ID, poseidon_hash,
-        MerkleNode, TokenId,
+        coin::Coin, constants::MERKLE_DEPTH, contract_id::MONEY_CONTRACT_ID, keypair::Keypair,
+        poseidon_hash, MerkleNode, SecretKey, TokenId,
     },
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{
@@ -36,7 +36,7 @@ use rand::rngs::OsRng;
 
 use darkfi_dao_contract::{
     dao_client::{build_dao_mint_tx, MerkleTree, WalletCache},
-    money_client, DaoFunction,
+    dao_propose_client, money_client, DaoFunction,
 };
 
 use darkfi_money_contract::{
@@ -59,7 +59,6 @@ use money_harness::{init_logger, MoneyTestHarness};
 // TODO: strategize and cleanup Result/Error usage
 // TODO: fix up code doc
 
-// TODO: Commenting this test until it works properly
 #[async_std::test]
 async fn integration_test() -> Result<()> {
     init_logger()?;
@@ -389,6 +388,69 @@ async fn integration_test() -> Result<()> {
     //   output 1: change address
     // =======================================================
     debug!(target: "demo", "Stage 4. Propose the vote");
+
+    // TODO: look into proposal expiry once time for voting has finished
+
+    let receiver_keypair = Keypair::random(&mut OsRng);
+
+    let (money_leaf_position, money_merkle_path) = {
+        let tree = &cache.tree;
+        let leaf_position = gov_recv[0].leaf_position;
+        let root = tree.root(0).unwrap();
+        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        (leaf_position, merkle_path)
+    };
+
+    // TODO: is it possible for an invalid transfer() to be constructed on exec()?
+    //       need to look into this
+    let signature_secret = SecretKey::random(&mut OsRng);
+    let input = dao_propose_client::BuilderInput {
+        secret: money_th.alice_kp.secret,
+        note: gov_recv[0].note.clone(),
+        leaf_position: money_leaf_position,
+        merkle_path: money_merkle_path,
+        signature_secret,
+    };
+
+    let (dao_merkle_path, dao_merkle_root) = {
+        let tree = &dao_tree;
+        let root = tree.root(0).unwrap();
+        let merkle_path = tree.authentication_path(dao_leaf_position, &root).unwrap();
+        (merkle_path, root)
+    };
+
+    let dao_params = dao_propose_client::DaoParams {
+        proposer_limit: dao_proposer_limit,
+        quorum: dao_quorum,
+        approval_ratio_base: dao_approval_ratio_base,
+        approval_ratio_quot: dao_approval_ratio_quot,
+        gov_token_id: gdrk_token_id,
+        public_key: dao_th.dao_kp.public,
+        bulla_blind: dao_bulla_blind,
+    };
+
+    let proposal = dao_propose_client::Proposal {
+        dest: receiver_keypair.public,
+        amount: 1000,
+        serial: pallas::Base::random(&mut OsRng),
+        token_id: xdrk_token_id,
+        blind: pallas::Base::random(&mut OsRng),
+    };
+
+    let builder = dao_propose_client::Builder {
+        inputs: vec![input],
+        proposal,
+        dao: dao_params.clone(),
+        dao_leaf_position,
+        dao_merkle_path,
+        dao_merkle_root,
+    };
+    let (params, proofs) = builder.build(
+        &dao_th.dao_propose_burn_zkbin,
+        &dao_th.dao_propose_burn_pk,
+        &dao_th.dao_propose_main_zkbin,
+        &dao_th.dao_propose_main_pk,
+    )?;
 
     Ok(())
 }

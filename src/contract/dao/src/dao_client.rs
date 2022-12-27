@@ -51,7 +51,7 @@ pub struct WalletCache {
     // TODO: This can be HashableBase
     cache: Vec<(SecretKey, Vec<OwnCoin>)>,
     /// The entire Merkle tree state
-    tree: MerkleTree,
+    pub tree: MerkleTree,
 }
 
 impl Default for WalletCache {

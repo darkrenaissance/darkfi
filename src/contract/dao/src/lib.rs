@@ -29,6 +29,9 @@ pub mod note;
 #[cfg(feature = "client")]
 /// Transaction building API for clients interacting with DAO contract
 pub mod dao_client;
+#[cfg(feature = "client")]
+/// Transaction building API for clients interacting with DAO contract
+pub mod dao_propose_client;
 
 #[cfg(feature = "client")]
 /// Transaction building API for clients interacting with money contract

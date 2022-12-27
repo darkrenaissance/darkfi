@@ -41,7 +41,11 @@ use darkfi_serial::serialize;
 use log::{info, warn};
 use rand::rngs::OsRng;
 
-use darkfi_dao_contract::DAO_CONTRACT_ZKAS_DAO_MINT_NS;
+use darkfi_dao_contract::{
+    DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+};
 
 pub struct DaoTestHarness {
     pub alice_kp: Keypair,
@@ -53,6 +57,10 @@ pub struct DaoTestHarness {
     pub proving_keys: HashMap<[u8; 32], Vec<(&'static str, ProvingKey)>>,
     pub dao_mint_zkbin: ZkBinary,
     pub dao_mint_pk: ProvingKey,
+    pub dao_propose_burn_zkbin: ZkBinary,
+    pub dao_propose_burn_pk: ProvingKey,
+    pub dao_propose_main_zkbin: ZkBinary,
+    pub dao_propose_main_pk: ProvingKey,
 }
 
 impl DaoTestHarness {
@@ -87,17 +95,66 @@ impl DaoTestHarness {
             SMART_CONTRACT_ZKAS_DB_NAME,
         )?;
 
-        let dao_mint_zkbin = db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_MINT_NS))?.unwrap();
         info!("Decoding bincode");
+
+        let dao_mint_zkbin = db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_MINT_NS))?.unwrap();
         let dao_mint_zkbin = ZkBinary::decode(&dao_mint_zkbin)?;
         let dao_mint_witnesses = empty_witnesses(&dao_mint_zkbin);
         let dao_mint_circuit = ZkCircuit::new(dao_mint_witnesses, dao_mint_zkbin.clone());
 
+        let dao_propose_burn_zkbin =
+            db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS))?.unwrap();
+        let dao_propose_burn_zkbin = ZkBinary::decode(&dao_propose_burn_zkbin)?;
+        let dao_propose_burn_witnesses = empty_witnesses(&dao_propose_burn_zkbin);
+        let dao_propose_burn_circuit =
+            ZkCircuit::new(dao_propose_burn_witnesses, dao_propose_burn_zkbin.clone());
+
+        let dao_propose_main_zkbin =
+            db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS))?.unwrap();
+        let dao_propose_main_zkbin = ZkBinary::decode(&dao_propose_main_zkbin)?;
+        let dao_propose_main_witnesses = empty_witnesses(&dao_propose_main_zkbin);
+        let dao_propose_main_circuit =
+            ZkCircuit::new(dao_propose_main_witnesses, dao_propose_main_zkbin.clone());
+
+        let dao_vote_burn_zkbin =
+            db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS))?.unwrap();
+        let dao_vote_burn_zkbin = ZkBinary::decode(&dao_vote_burn_zkbin)?;
+        let dao_vote_burn_witnesses = empty_witnesses(&dao_vote_burn_zkbin);
+        let dao_vote_burn_circuit =
+            ZkCircuit::new(dao_vote_burn_witnesses, dao_vote_burn_zkbin.clone());
+
+        let dao_vote_main_zkbin =
+            db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS))?.unwrap();
+        let dao_vote_main_zkbin = ZkBinary::decode(&dao_vote_main_zkbin)?;
+        let dao_vote_main_witnesses = empty_witnesses(&dao_vote_main_zkbin);
+        let dao_vote_main_circuit =
+            ZkCircuit::new(dao_vote_main_witnesses, dao_vote_main_zkbin.clone());
+
+        let dao_exec_zkbin = db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_EXEC_NS))?.unwrap();
+        let dao_exec_zkbin = ZkBinary::decode(&dao_exec_zkbin)?;
+        let dao_exec_witnesses = empty_witnesses(&dao_exec_zkbin);
+        let dao_exec_circuit = ZkCircuit::new(dao_exec_witnesses, dao_exec_zkbin.clone());
+
         info!("Creating zk proving keys");
+
         let k = 13;
         let mut proving_keys = HashMap::<[u8; 32], Vec<(&str, ProvingKey)>>::new();
+
         let dao_mint_pk = ProvingKey::build(k, &dao_mint_circuit);
-        let pks = vec![(DAO_CONTRACT_ZKAS_DAO_MINT_NS, dao_mint_pk.clone())];
+        let dao_propose_burn_pk = ProvingKey::build(k, &dao_propose_burn_circuit);
+        let dao_propose_main_pk = ProvingKey::build(k, &dao_propose_main_circuit);
+        let dao_vote_burn_pk = ProvingKey::build(k, &dao_vote_burn_circuit);
+        let dao_vote_main_pk = ProvingKey::build(k, &dao_vote_main_circuit);
+        let dao_exec_pk = ProvingKey::build(k, &dao_exec_circuit);
+
+        let pks = vec![
+            (DAO_CONTRACT_ZKAS_DAO_MINT_NS, dao_mint_pk.clone()),
+            (DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, dao_propose_burn_pk.clone()),
+            (DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, dao_propose_burn_pk.clone()),
+            (DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, dao_propose_burn_pk.clone()),
+            (DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS, dao_propose_burn_pk.clone()),
+            (DAO_CONTRACT_ZKAS_DAO_EXEC_NS, dao_propose_burn_pk.clone()),
+        ];
         proving_keys.insert(dao_contract_id.inner().to_repr(), pks);
 
         Ok(Self {
@@ -110,6 +167,10 @@ impl DaoTestHarness {
             proving_keys,
             dao_mint_zkbin,
             dao_mint_pk,
+            dao_propose_burn_zkbin,
+            dao_propose_burn_pk,
+            dao_propose_main_zkbin,
+            dao_propose_main_pk,
         })
     }
 }
