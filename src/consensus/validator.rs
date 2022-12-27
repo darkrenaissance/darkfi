@@ -306,7 +306,7 @@ impl ValidatorState {
             signed_proposal,
             public_key,
             public_inputs,
-            slot,
+            coin.slot,
             coin.eta,
             LeadProof::from(proof?),
             self.consensus.get_current_offset(slot),

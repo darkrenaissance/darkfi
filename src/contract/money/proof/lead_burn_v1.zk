@@ -11,7 +11,7 @@ contract "Lead_Burn_V1" {
 	Base c1_sk,
 	Base c1_sk_root,
 	MerklePath c1_sk_path,
-	Base c1_tau,
+	Base c1_slot,
 	Base c1_rho,
 	Scalar c1_opening,
 	Base value,
@@ -36,7 +36,7 @@ circuit "Lead_Burn_V1" {
 	pk = poseidon_hash(
 		PREFIX_PK,
 		c1_sk_root,
-		c1_tau,
+		c1_slot,
 		ZERO
 	);
 	constrain_instance(pk);

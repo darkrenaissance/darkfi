@@ -595,7 +595,7 @@ fn create_unstake_burn_proof(
     commitment: pallas::Point,
     commitment_root: pallas::Base,
     commitment_pos: incrementalmerkletree::Position,
-    tau: pallas::Base,
+    slot: u64,
     nonce: pallas::Base,
     nullifier: pallas::Base,
 ) -> Result<(Proof, UnstakeLeadBurnRevealed)> {
@@ -616,7 +616,7 @@ fn create_unstake_burn_proof(
         Witness::Base(Value::known(sk)),
         Witness::Base(Value::known(sk_root)),
         Witness::MerklePath(Value::known(sk_path.try_into().unwrap())),
-        Witness::Base(Value::known(tau)),
+        Witness::Base(Value::known(pallas::Base::from(slot))),
         Witness::Base(Value::known(nonce)),
         Witness::Scalar(Value::known(coin_blind)),
         Witness::Base(Value::known(value)),
@@ -1193,7 +1193,7 @@ pub fn build_unstake_tx(
             coin.coin1_commitment,
             coin.coin1_commitment_root.inner(),
             incrementalmerkletree::Position::from(coin.coin1_commitment_pos as usize),
-            coin.tau,
+            coin.slot,
             coin.nonce,
             nullifier,
         )?;

@@ -41,8 +41,8 @@ pub struct TransferStx {
     pub transfered_coin_commitment: pallas::Point,
     /// nullifiers coin1_nullifier
     pub nullifier: pallas::Base,
-    /// sk coin pos
-    pub tau: pallas::Base,
+    /// sk coin creation slot
+    pub slot: pallas::Base,
     /// root to coin's commitments
     pub root: MerkleNode,
     /// transfer proof

@@ -7,7 +7,7 @@ constant "Lead_Mint_V1" {
 contract "Lead_Mint_V1" {
 	Base c1_sk,
 	Base c1_sk_root,
-	Base c1_tau,
+	Base c1_slot,
 	Base c1_rho,
 	Scalar c1_opening,
 	Base value,
@@ -28,7 +28,7 @@ circuit "Lead_Mint_V1" {
 	constrain_instance(ec_get_y(value_commit));
 
 	# coin (1) pk
-	pk = poseidon_hash(PREFIX_PK, c1_sk_root, c1_tau, ZERO);
+	pk = poseidon_hash(PREFIX_PK, c1_sk_root, c1_slot, ZERO);
 	constrain_instance(pk);
 
 	# coin (1) cm/commitment
