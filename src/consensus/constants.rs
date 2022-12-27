@@ -32,6 +32,9 @@ lazy_static! {
     /// Bootstrap timestamp for the mainnet chain
     pub static ref MAINNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1650887115);
 
+    /// Total sum of initial staking coins for the mainnet chain
+    pub static ref MAINNET_INITIAL_DISTRIBUTION: u64 = 1000;
+
     /// Genesis hash for the testnet chain
     pub static ref TESTNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_testnet");
 
@@ -41,22 +44,25 @@ lazy_static! {
     /// Bootstrap timestamp for the testnet chain
     pub static ref TESTNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1671546600);
 
+    /// Total sum of initial staking coins for the testnet chain
+    pub static ref TESTNET_INITIAL_DISTRIBUTION: u64 = 1000;
+
     // Commonly used Float10
-    pub static ref  FLOAT10_ZERO: Float10 = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  FLOAT10_ONE: Float10 = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  FLOAT10_TWO: Float10 = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  FLOAT10_THREE: Float10 = Float10::from_str_native("3").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  FLOAT10_FIVE: Float10 = Float10::from_str_native("5").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  FLOAT10_NINE: Float10 = Float10::from_str_native("9").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  FLOAT10_TEN: Float10 = Float10::from_str_native("10").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref FLOAT10_ZERO: Float10 = Float10::from_str_native("0").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref FLOAT10_ONE: Float10 = Float10::from_str_native("1").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref FLOAT10_TWO: Float10 = Float10::from_str_native("2").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref FLOAT10_THREE: Float10 = Float10::from_str_native("3").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref FLOAT10_FIVE: Float10 = Float10::from_str_native("5").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref FLOAT10_NINE: Float10 = Float10::from_str_native("9").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref FLOAT10_TEN: Float10 = Float10::from_str_native("10").unwrap().with_precision(RADIX_BITS).value();
 
     // Consensus parameters
-    pub static ref  DT: Float10 =  Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  TI: Float10 = FLOAT10_ONE.clone();
-    pub static ref  TD: Float10 = FLOAT10_ONE.clone();
-    pub static ref  KP: Float10 = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  KI: Float10 = Float10::from_str_native("0.03").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref  KD: Float10 = FLOAT10_ONE.clone();
+    pub static ref DT: Float10 =  Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref TI: Float10 = FLOAT10_ONE.clone();
+    pub static ref TD: Float10 = FLOAT10_ONE.clone();
+    pub static ref KP: Float10 = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref KI: Float10 = Float10::from_str_native("0.03").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref KD: Float10 = FLOAT10_ONE.clone();
     pub static ref PID_OUT_STEP: Float10  = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
     pub static ref MAX_DER: Float10 = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
     pub static ref MIN_DER: Float10 = Float10::from_str_native("-0.1").unwrap().with_precision(RADIX_BITS).value();
@@ -113,4 +119,4 @@ pub const PI_MU_Y_INDEX: usize = 8;
 pub const PI_MU_RHO_INDEX: usize = 10;
 pub const PI_SIGMA1_INDEX: usize = 12;
 pub const PI_SIGMA2_INDEX: usize = 13;
-pub const GENESIS_TOTAL_STAKE: i64 = 1;
+pub const GENESIS_TOTAL_STAKE: u64 = 1;

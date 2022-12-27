@@ -93,6 +93,7 @@ impl ValidatorState {
         bootstrap_ts: Timestamp,
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
+        initial_distribution: u64,
         wallet: WalletPtr,
         faucet_pubkeys: Vec<PublicKey>,
         enable_participation: bool,
@@ -122,8 +123,13 @@ impl ValidatorState {
         };
 
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
-        let consensus =
-            ConsensusState::new(blockchain.clone(), bootstrap_ts, genesis_ts, genesis_data)?;
+        let consensus = ConsensusState::new(
+            blockchain.clone(),
+            bootstrap_ts,
+            genesis_ts,
+            genesis_data,
+            initial_distribution,
+        )?;
 
         let unconfirmed_txs = vec![];
 

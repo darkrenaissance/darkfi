@@ -48,6 +48,8 @@ pub struct ConsensusState {
     pub genesis_ts: Timestamp,
     /// Genesis block hash
     pub genesis_block: blake3::Hash,
+    /// Total sum of initial staking coins
+    pub initial_distribution: u64,
     /// Slot the network was bootstrapped
     pub bootstrap_slot: u64,
     /// Participating start slot
@@ -83,6 +85,7 @@ impl ConsensusState {
         bootstrap_ts: Timestamp,
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
+        initial_distribution: u64,
     ) -> Result<Self> {
         let genesis_block = Block::genesis_block(genesis_ts, genesis_data).blockhash();
         Ok(Self {
@@ -90,6 +93,7 @@ impl ConsensusState {
             bootstrap_ts,
             genesis_ts,
             genesis_block,
+            initial_distribution,
             bootstrap_slot: 0,
             participating: None,
             proposing: false,
@@ -229,18 +233,10 @@ impl ConsensusState {
         Ok(true)
     }
 
-    /// return 2-term target approximation sigma coefficients.
+    /// Return 2-term target approximation sigma coefficients.
     pub fn sigmas(&mut self) -> (pallas::Base, pallas::Base) {
         let f = self.win_inv_prob_with_full_stake();
-
-        // Generate sigmas
-        let mut total_stake = self.total_stake(); // Only used for fine-tuning
-                                                  // at genesis epoch first slot, of absolute index 0,
-                                                  // the total stake would be 0, to avoid division by zero,
-                                                  // we asume total stake at first division is GENESIS_TOTAL_STAKE.
-        if total_stake == 0 {
-            total_stake = constants::GENESIS_TOTAL_STAKE;
-        }
+        let total_stake = self.total_stake();
         info!("sigmas(): f: {}", f);
         info!("sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
@@ -284,10 +280,13 @@ impl ConsensusState {
         //                The wallet has specific tables for consensus coins.
         // TODO: TESTNET: Token ID still has to be enforced properly in the consensus.
 
-        // Temporarily, we compete with zero stake
+        // Temporarily, we compete with fixed stake.
+        // This stake should be based on how many nodes we want to run, and they all
+        // must sum to initial distribution total coins.
+        let stake = self.initial_distribution;
         let coin = LeadCoin::new(
             eta,
-            rand::thread_rng().gen_range(0..1000),
+            stake,
             slot,
             epoch_secrets.secret_keys[0].inner(),
             epoch_secrets.merkle_roots[0],
@@ -301,9 +300,9 @@ impl ConsensusState {
         Ok(coins)
     }
 
-    /// leadership reward, assuming constant reward
+    /// Leadership reward, assuming constant reward
     /// TODO (res) implement reward mechanism with accord to DRK,DARK token-economics
-    fn reward() -> u64 {
+    fn reward(&self) -> u64 {
         constants::REWARD
     }
 
@@ -341,11 +340,19 @@ impl ConsensusState {
         current_slot - blocks - self.get_current_offset(current_slot) - max_fork_length
     }
 
-    /// total stake
-    /// assuming constant Reward.
-    fn total_stake(&mut self) -> i64 {
+    /// Network total stake, assuming constant reward.
+    /// Only used for fine-tuning. At genesis epoch first slot, of absolute index 0,
+    /// if no stake was distributed, the total stake would be 0.
+    /// To avoid division by zero, we asume total stake at first division is GENESIS_TOTAL_STAKE(1).
+    fn total_stake(&mut self) -> u64 {
         let current_slot = self.current_slot();
-        ((current_slot - self.overall_empty_slots(current_slot)) * Self::reward()) as i64
+        let rewarded_slots = current_slot - self.overall_empty_slots(current_slot);
+        let rewards = rewarded_slots * self.reward();
+        let total_stake = rewards + self.initial_distribution;
+        if total_stake == 0 {
+            return constants::GENESIS_TOTAL_STAKE
+        }
+        total_stake
     }
 
     /// Calculate how many leaders existed in previous slot and appends

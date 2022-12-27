@@ -56,7 +56,8 @@ use darkfi::{
     consensus::{
         constants::{
             MAINNET_BOOTSTRAP_TIMESTAMP, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
-            TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
+            MAINNET_INITIAL_DISTRIBUTION, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
+            TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
         },
         proto::{ProtocolSync, ProtocolTx},
         task::block_sync_task,
@@ -528,13 +529,19 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let sled_db = sled::open(&db_path)?;
 
     // Initialize validator state
-    let (bootstrap_ts, genesis_ts, genesis_data) = match args.chain.as_str() {
-        "mainnet" => {
-            (*MAINNET_BOOTSTRAP_TIMESTAMP, *MAINNET_GENESIS_TIMESTAMP, *MAINNET_GENESIS_HASH_BYTES)
-        }
-        "testnet" => {
-            (*TESTNET_BOOTSTRAP_TIMESTAMP, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)
-        }
+    let (bootstrap_ts, genesis_ts, genesis_data, initial_distribution) = match args.chain.as_str() {
+        "mainnet" => (
+            *MAINNET_BOOTSTRAP_TIMESTAMP,
+            *MAINNET_GENESIS_TIMESTAMP,
+            *MAINNET_GENESIS_HASH_BYTES,
+            *MAINNET_INITIAL_DISTRIBUTION,
+        ),
+        "testnet" => (
+            *TESTNET_BOOTSTRAP_TIMESTAMP,
+            *TESTNET_GENESIS_TIMESTAMP,
+            *TESTNET_GENESIS_HASH_BYTES,
+            *TESTNET_INITIAL_DISTRIBUTION,
+        ),
         x => {
             error!("Unsupported chain `{}`", x);
             return Err(Error::UnsupportedChain)
@@ -560,6 +567,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         bootstrap_ts,
         genesis_ts,
         genesis_data,
+        initial_distribution,
         wallet.clone(),
         faucet_pubkeys,
         false,

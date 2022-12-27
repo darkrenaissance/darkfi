@@ -21,6 +21,7 @@ use darkfi::{
     consensus::{
         constants::{
             TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
+            TESTNET_INITIAL_DISTRIBUTION,
         },
         ValidatorState, ValidatorStatePtr,
     },
@@ -105,6 +106,7 @@ impl MoneyTestHarness {
             *TESTNET_BOOTSTRAP_TIMESTAMP,
             *TESTNET_GENESIS_TIMESTAMP,
             *TESTNET_GENESIS_HASH_BYTES,
+            *TESTNET_INITIAL_DISTRIBUTION,
             faucet_wallet,
             faucet_pubkeys.clone(),
             false,
@@ -116,6 +118,7 @@ impl MoneyTestHarness {
             *TESTNET_BOOTSTRAP_TIMESTAMP,
             *TESTNET_GENESIS_TIMESTAMP,
             *TESTNET_GENESIS_HASH_BYTES,
+            *TESTNET_INITIAL_DISTRIBUTION,
             alice_wallet,
             faucet_pubkeys.clone(),
             false,
@@ -127,6 +130,7 @@ impl MoneyTestHarness {
             *TESTNET_BOOTSTRAP_TIMESTAMP,
             *TESTNET_GENESIS_TIMESTAMP,
             *TESTNET_GENESIS_HASH_BYTES,
+            *TESTNET_INITIAL_DISTRIBUTION,
             bob_wallet,
             faucet_pubkeys.clone(),
             false,
