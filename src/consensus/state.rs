@@ -346,7 +346,7 @@ impl ConsensusState {
     /// To avoid division by zero, we asume total stake at first division is GENESIS_TOTAL_STAKE(1).
     fn total_stake(&mut self) -> u64 {
         let current_slot = self.current_slot();
-        let rewarded_slots = current_slot - self.overall_empty_slots(current_slot);
+        let rewarded_slots = current_slot - self.overall_empty_slots(current_slot) - 1;
         let rewards = rewarded_slots * self.reward();
         let total_stake = rewards + self.initial_distribution;
         if total_stake == 0 {
