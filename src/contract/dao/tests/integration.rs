@@ -19,7 +19,10 @@
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
-        coin::Coin, constants::MERKLE_DEPTH, contract_id::MONEY_CONTRACT_ID, keypair::Keypair,
+        coin::Coin,
+        constants::MERKLE_DEPTH,
+        contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+        keypair::Keypair,
         poseidon_hash, MerkleNode, SecretKey, TokenId,
     },
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
@@ -64,7 +67,6 @@ async fn integration_test() -> Result<()> {
     init_logger()?;
 
     let mut dao_th = DaoTestHarness::new().await?;
-    let mut money_th = MoneyTestHarness::new().await?;
 
     // Money parameters
     let xdrk_supply = 1_000_000;
@@ -163,7 +165,7 @@ async fn integration_test() -> Result<()> {
         clear_inputs: vec![money_client::BuilderClearInputInfo {
             value: xdrk_supply,
             token_id: xdrk_token_id,
-            signature_secret: money_th.faucet_kp.secret,
+            signature_secret: dao_th.faucet_kp.secret,
         }],
         inputs: vec![],
         outputs: vec![money_client::BuilderOutputInfo {
@@ -177,10 +179,10 @@ async fn integration_test() -> Result<()> {
         }],
     };
     let (params, proofs) = builder.build(
-        &money_th.mint_zkbin,
-        &money_th.mint_pk,
-        &money_th.burn_zkbin,
-        &money_th.burn_pk,
+        &dao_th.money_mint_zkbin,
+        &dao_th.money_mint_pk,
+        &dao_th.money_burn_zkbin,
+        &dao_th.money_burn_pk,
     )?;
 
     let contract_id = *MONEY_CONTRACT_ID;
@@ -190,11 +192,10 @@ async fn integration_test() -> Result<()> {
     let calls = vec![ContractCall { contract_id, data }];
     let proofs = vec![proofs];
     let mut tx = Transaction { calls, proofs, signatures: vec![] };
-    let sigs = tx.create_sigs(&mut OsRng, &vec![money_th.faucet_kp.secret])?;
+    let sigs = tx.create_sigs(&mut OsRng, &vec![dao_th.faucet_kp.secret])?;
     tx.signatures = vec![sigs];
 
-    money_th.faucet_state.read().await.verify_transactions(&[tx.clone()], true).await?;
-    money_th.faucet_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
 
     // Wallet stuff
 
@@ -248,9 +249,9 @@ async fn integration_test() -> Result<()> {
     // =======================================================
     debug!(target: "demo", "Stage 3. Minting governance token");
 
-    cache.track(money_th.alice_kp.secret);
-    cache.track(money_th.bob_kp.secret);
-    cache.track(money_th.charlie_kp.secret);
+    cache.track(dao_th.alice_kp.secret);
+    cache.track(dao_th.bob_kp.secret);
+    cache.track(dao_th.charlie_kp.secret);
 
     // Spend hook and user data disabled
     let spend_hook = pallas::Base::from(0);
@@ -259,7 +260,7 @@ async fn integration_test() -> Result<()> {
     let output1 = money_client::BuilderOutputInfo {
         value: 400000,
         token_id: gdrk_token_id,
-        public: money_th.alice_kp.public,
+        public: dao_th.alice_kp.public,
         serial: pallas::Base::random(&mut OsRng),
         coin_blind: pallas::Base::random(&mut OsRng),
         spend_hook,
@@ -269,7 +270,7 @@ async fn integration_test() -> Result<()> {
     let output2 = money_client::BuilderOutputInfo {
         value: 400000,
         token_id: gdrk_token_id,
-        public: money_th.bob_kp.public,
+        public: dao_th.bob_kp.public,
         serial: pallas::Base::random(&mut OsRng),
         coin_blind: pallas::Base::random(&mut OsRng),
         spend_hook,
@@ -279,7 +280,7 @@ async fn integration_test() -> Result<()> {
     let output3 = money_client::BuilderOutputInfo {
         value: 200000,
         token_id: gdrk_token_id,
-        public: money_th.charlie_kp.public,
+        public: dao_th.charlie_kp.public,
         serial: pallas::Base::random(&mut OsRng),
         coin_blind: pallas::Base::random(&mut OsRng),
         spend_hook,
@@ -293,16 +294,16 @@ async fn integration_test() -> Result<()> {
             value: gdrk_supply,
             token_id: gdrk_token_id,
             // This might be different for various tokens but lets reuse it here
-            signature_secret: money_th.faucet_kp.secret,
+            signature_secret: dao_th.faucet_kp.secret,
         }],
         inputs: vec![],
         outputs: vec![output1, output2, output3],
     };
     let (params, proofs) = builder.build(
-        &money_th.mint_zkbin,
-        &money_th.mint_pk,
-        &money_th.burn_zkbin,
-        &money_th.burn_pk,
+        &dao_th.money_mint_zkbin,
+        &dao_th.money_mint_pk,
+        &dao_th.money_burn_zkbin,
+        &dao_th.money_burn_pk,
     )?;
 
     let contract_id = *MONEY_CONTRACT_ID;
@@ -312,11 +313,10 @@ async fn integration_test() -> Result<()> {
     let calls = vec![ContractCall { contract_id, data }];
     let proofs = vec![proofs];
     let mut tx = Transaction { calls, proofs, signatures: vec![] };
-    let sigs = tx.create_sigs(&mut OsRng, &vec![money_th.faucet_kp.secret])?;
+    let sigs = tx.create_sigs(&mut OsRng, &vec![dao_th.faucet_kp.secret])?;
     tx.signatures = vec![sigs];
 
-    money_th.faucet_state.read().await.verify_transactions(&[tx.clone()], true).await?;
-    money_th.faucet_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin));
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
 
     // Wallet
     {
@@ -334,7 +334,7 @@ async fn integration_test() -> Result<()> {
         }
     }
 
-    let gov_keypairs = vec![money_th.alice_kp, money_th.bob_kp, money_th.charlie_kp];
+    let gov_keypairs = vec![dao_th.alice_kp, dao_th.bob_kp, dao_th.charlie_kp];
     let mut gov_recv = vec![None, None, None];
     // Check that each person received one coin
     for (i, key) in gov_keypairs.iter().enumerate() {
@@ -405,7 +405,7 @@ async fn integration_test() -> Result<()> {
     //       need to look into this
     let signature_secret = SecretKey::random(&mut OsRng);
     let input = dao_propose_client::BuilderInput {
-        secret: money_th.alice_kp.secret,
+        secret: dao_th.alice_kp.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
         merkle_path: money_merkle_path,
@@ -451,6 +451,18 @@ async fn integration_test() -> Result<()> {
         &dao_th.dao_propose_main_zkbin,
         &dao_th.dao_propose_main_pk,
     )?;
+
+    let contract_id = *DAO_CONTRACT_ID;
+
+    let mut data = vec![DaoFunction::Propose as u8];
+    params.encode(&mut data)?;
+    let calls = vec![ContractCall { contract_id, data }];
+    let proofs = vec![proofs];
+    let mut tx = Transaction { calls, proofs, signatures: vec![] };
+    let sigs = tx.create_sigs(&mut OsRng, &vec![signature_secret])?;
+    tx.signatures = vec![sigs];
+
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
 
     Ok(())
 }
