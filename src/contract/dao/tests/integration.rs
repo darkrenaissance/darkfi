@@ -39,7 +39,7 @@ use rand::rngs::OsRng;
 
 use darkfi_dao_contract::{
     dao_client::{build_dao_mint_tx, MerkleTree, WalletCache},
-    dao_propose_client, money_client, DaoFunction,
+    dao_propose_client, money_client, note, DaoFunction,
 };
 
 use darkfi_money_contract::{
@@ -463,6 +463,29 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+
+    //// Wallet
+
+    // Read received proposal
+    let (proposal, proposal_bulla) = {
+        // TODO: EncryptedNote should be accessible by wasm and put in the structs directly
+        let enc_note = note::EncryptedNote2 {
+            ciphertext: params.ciphertext,
+            ephem_public: params.ephem_public,
+        };
+        let note: dao_propose_client::Note = enc_note.decrypt(&dao_th.dao_kp.secret).unwrap();
+
+        // TODO: check it belongs to DAO bulla
+
+        // Return the proposal info
+        (note.proposal, params.proposal_bulla)
+    };
+    debug!(target: "demo", "Proposal now active!");
+    debug!(target: "demo", "  destination: {:?}", proposal.dest);
+    debug!(target: "demo", "  amount: {}", proposal.amount);
+    debug!(target: "demo", "  token_id: {:?}", proposal.token_id);
+    debug!(target: "demo", "  dao_bulla: {:?}", dao_bulla.inner());
+    debug!(target: "demo", "Proposal bulla: {:?}", proposal_bulla);
 
     Ok(())
 }
