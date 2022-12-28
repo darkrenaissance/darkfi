@@ -31,7 +31,7 @@ seeds = ["tls://lilith0.dark.fi:13337", "tls://lilith1.dark.fi:13337"]
 #transports = ["tls", "tcp"]
 
 # Enable localnet hosts
-#localnet = true
+#localnet = false
 
 # Enable channel log
-#channel_log = true
+#channel_log = false

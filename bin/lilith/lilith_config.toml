@@ -20,26 +20,26 @@
 #port = 33032
 #seeds = []
 #peers = []
-#localnet = true
-#channel_log = true
+#localnet = false
+#channel_log = false
 
 #[network."darkfid_consensus"]
 #port = 33033
 #seeds = []
 #peers = []
-#localnet = true
-#channel_log = true
+#localnet = false
+#channel_log = false
 
 #[network."ircd"]
 #port = 25551
 #seeds = []
 #peers = []
-#localnet = true
-#channel_log = true
+#localnet = false
+#channel_log = false
 
 #[network."taud"]
 #port = 23331
 #seeds = []
 #peers = []
-#localnet = true
-#channel_log = true
+#localnet = false
+#channel_log = false

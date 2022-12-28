@@ -70,7 +70,7 @@ sync_p2p_transports = ["tls"]
 localnet = false
 
 # Enable channel log
-#channel_log = true
+#channel_log = false
 
 # Whitelisted cashier addresses
 #cashier_pub = []

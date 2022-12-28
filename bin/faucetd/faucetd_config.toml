@@ -40,10 +40,10 @@
 #sync_p2p_transports = ["tls", "tcp"]
 
 # Enable localnet hosts
-#localnet = true
+#localnet = false
 
 # Enable channel log
-#channel_log = true
+#channel_log = false
 
 # Airdrop timeout limit in seconds
 #airdrop_timeout = 600
