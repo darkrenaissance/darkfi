@@ -46,7 +46,10 @@ use darkfi::{
     Error, Result,
 };
 
-use crate::dao_propose_client::{DaoParams, Proposal};
+use crate::{
+    dao_propose_client::{DaoParams, Proposal},
+    state::DaoExecParams,
+};
 
 pub struct Builder {
     pub proposal: Proposal,
@@ -68,12 +71,11 @@ pub struct Builder {
 impl Builder {
     pub fn build(
         self,
-        // zk_bins: &ZkContractTable
-    )
-    //-> FuncCall
-    {
+        exec_zkbin: &ZkBinary,
+        exec_pk: &ProvingKey,
+    ) -> Result<(DaoExecParams, Vec<Proof>)> {
         debug!(target: "dao_contract::exec::wallet::Builder", "build()");
-        //let mut proofs = vec![];
+        let mut proofs = vec![];
 
         let (proposal_dest_x, proposal_dest_y) = self.proposal.dest.xy();
 
@@ -207,16 +209,12 @@ impl Builder {
             user_data,
         ];
 
-        /*
-        let circuit = ZkCircuit::new(prover_witnesses, zk_bin);
-        let proving_key = &zk_info.proving_key;
-        let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
+        let circuit = ZkCircuit::new(prover_witnesses, exec_zkbin.clone());
+        let input_proof = Proof::create(&exec_pk, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::exec() proving error!)");
         proofs.push(input_proof);
-        */
 
-        /*
-        let call_data = CallData {
+        let params = DaoExecParams {
             proposal: proposal_bulla,
             coin_0,
             coin_1,
@@ -225,12 +223,6 @@ impl Builder {
             input_value_commit,
         };
 
-        FuncCall {
-            contract_id: *CONTRACT_ID,
-            func_id: *super::FUNC_ID,
-            call_data: Box::new(call_data),
-            proofs,
-        }
-        */
+        Ok((params, proofs))
     }
 }

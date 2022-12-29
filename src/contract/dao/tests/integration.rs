@@ -860,6 +860,10 @@ async fn integration_test() -> Result<()> {
         &dao_th.money_burn_pk,
     )?;
 
+    let mut data = vec![MoneyFunction::Transfer as u8];
+    xfer_params.encode(&mut data)?;
+    let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+
     let builder = dao_exec_client::Builder {
         proposal,
         dao: dao_params.clone(),
@@ -876,6 +880,21 @@ async fn integration_test() -> Result<()> {
         hook_dao_exec: spend_hook,
         signature_secret: exec_signature_secret,
     };
+    let (exec_params, mut exec_proofs) =
+        builder.build(&dao_th.dao_exec_zkbin, &dao_th.dao_exec_pk)?;
+
+    let mut data = vec![DaoFunction::Exec as u8];
+    exec_params.encode(&mut data)?;
+    let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+
+    let calls = vec![xfer_call, exec_call];
+    let proofs = vec![xfer_proofs, exec_proofs];
+    let mut tx = Transaction { calls, proofs, signatures: vec![] };
+    let xfer_sigs = tx.create_sigs(&mut OsRng, &vec![tx_signature_secret])?;
+    let exec_sigs = tx.create_sigs(&mut OsRng, &vec![exec_signature_secret])?;
+    tx.signatures = vec![xfer_sigs, exec_sigs];
+
+    //dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
 
     Ok(())
 }

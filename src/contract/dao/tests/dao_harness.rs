@@ -88,6 +88,9 @@ pub struct DaoTestHarness {
 
     pub dao_vote_main_zkbin: ZkBinary,
     pub dao_vote_main_pk: ProvingKey,
+
+    pub dao_exec_zkbin: ZkBinary,
+    pub dao_exec_pk: ProvingKey,
 }
 
 impl DaoTestHarness {
@@ -236,6 +239,8 @@ impl DaoTestHarness {
             dao_vote_burn_pk,
             dao_vote_main_zkbin,
             dao_vote_main_pk,
+            dao_exec_zkbin,
+            dao_exec_pk,
         })
     }
 }
