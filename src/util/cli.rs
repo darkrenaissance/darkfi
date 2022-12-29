@@ -82,6 +82,7 @@ pub fn get_log_config() -> simplelog::Config {
         Ok(x) => {
             let targets: Vec<String> = x.split(',').map(|x| x.to_string()).collect();
             let mut cfgbuilder = ConfigBuilder::new();
+            cfgbuilder.set_target_level(simplelog::LevelFilter::Error);
 
             for i in targets {
                 if i.starts_with('!') {
@@ -93,7 +94,11 @@ pub fn get_log_config() -> simplelog::Config {
 
             cfgbuilder.build()
         }
-        Err(_) => simplelog::Config::default(),
+        Err(_) => {
+            let mut cfgbuilder = ConfigBuilder::new();
+            cfgbuilder.set_target_level(simplelog::LevelFilter::Error);
+            cfgbuilder.build()
+        }
     }
 }
 
