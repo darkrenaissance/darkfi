@@ -648,7 +648,7 @@ impl ConsensusState {
 
     /// Utility function to extract leader selection lottery randomness(eta),
     /// defined as the hash of the previous lead proof converted to pallas base.
-    fn get_eta(&self) -> pallas::Base {
+    pub fn get_eta(&self) -> pallas::Base {
         let proof_tx_hash = self.blockchain.get_last_proof_hash().unwrap();
         let mut bytes: [u8; 32] = *proof_tx_hash.as_bytes();
         // read first 254 bits
