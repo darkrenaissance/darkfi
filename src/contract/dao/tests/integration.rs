@@ -40,7 +40,7 @@ use rand::rngs::OsRng;
 
 use darkfi_dao_contract::{
     dao_client::{build_dao_mint_tx, MerkleTree, WalletCache},
-    dao_propose_client, dao_vote_client, money_client, note, DaoFunction,
+    dao_exec_client, dao_propose_client, dao_vote_client, money_client, note, DaoFunction,
 };
 
 use darkfi_money_contract::{
@@ -853,29 +853,29 @@ async fn integration_test() -> Result<()> {
             },
         ],
     };
-    //let (xfer_params, xfer_proofs) = builder.build(
-    //    &dao_th.dao_propose_burn_zkbin,
-    //    &dao_th.dao_propose_burn_pk,
-    //    &dao_th.dao_propose_main_zkbin,
-    //    &dao_th.dao_propose_main_pk,
-    //)?;
+    let (xfer_params, xfer_proofs) = builder.build(
+        &dao_th.money_mint_zkbin,
+        &dao_th.money_mint_pk,
+        &dao_th.money_burn_zkbin,
+        &dao_th.money_burn_pk,
+    )?;
 
-    //let builder = dao::exec::wallet::Builder {
-    //    proposal,
-    //    dao: dao_params.clone(),
-    //    yes_votes_value,
-    //    all_votes_value,
-    //    yes_votes_blind,
-    //    all_votes_blind,
-    //    user_serial,
-    //    user_coin_blind,
-    //    dao_serial,
-    //    dao_coin_blind,
-    //    input_value,
-    //    input_value_blind,
-    //    hook_dao_exec: *dao::exec::FUNC_ID,
-    //    signature_secret: exec_signature_secret,
-    //};
+    let builder = dao_exec_client::Builder {
+        proposal,
+        dao: dao_params.clone(),
+        yes_votes_value,
+        all_votes_value,
+        yes_votes_blind,
+        all_votes_blind,
+        user_serial,
+        user_coin_blind,
+        dao_serial,
+        dao_coin_blind,
+        input_value,
+        input_value_blind,
+        hook_dao_exec: spend_hook,
+        signature_secret: exec_signature_secret,
+    };
 
     Ok(())
 }

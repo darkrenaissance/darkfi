@@ -39,6 +39,10 @@ pub mod dao_propose_client;
 pub mod dao_vote_client;
 
 #[cfg(feature = "client")]
+/// Transaction building API for clients interacting with DAO contract
+pub mod dao_exec_client;
+
+#[cfg(feature = "client")]
 /// Transaction building API for clients interacting with money contract
 pub mod money_client;
 
