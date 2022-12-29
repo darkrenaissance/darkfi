@@ -363,16 +363,20 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             let proposal_vote_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
 
-            let Some(proposal_votes) = db_get(proposal_vote_db, &serialize(&update.proposal_bulla))? else {
-                msg!("Proposal {:?} not found in db", update.proposal_bulla);
-                return Err(ContractError::Custom(1));
-            };
+            // This is not allowed in update
+            // Skip all this for now
+            //let Some(proposal_votes) = db_get(proposal_vote_db, &serialize(&update.proposal_bulla))? else {
+            //    msg!("Proposal {:?} not found in db", update.proposal_bulla);
+            //    return Err(ContractError::Custom(1));
+            //};
 
-            let mut proposal_votes: ProposalVotes = deserialize(&proposal_votes)?;
+            //msg!("vote dezer:(");
+            //let mut proposal_votes: ProposalVotes = deserialize(&proposal_votes)?;
 
-            proposal_votes.yes_votes_commit += update.yes_vote_commit;
-            proposal_votes.all_votes_commit += update.all_vote_commit;
-            proposal_votes.vote_nullifiers.append(&mut update.vote_nullifiers);
+            //msg!("vote pdd");
+            //proposal_votes.yes_votes_commit += update.yes_vote_commit;
+            //proposal_votes.all_votes_commit += update.all_vote_commit;
+            //proposal_votes.vote_nullifiers.append(&mut update.vote_nullifiers);
 
             Ok(())
         }
