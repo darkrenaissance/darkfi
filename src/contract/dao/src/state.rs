@@ -117,9 +117,11 @@ pub struct DaoVoteParams {
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct DaoVoteUpdate {
     pub proposal_bulla: pallas::Base,
-    pub vote_nullifiers: Vec<Nullifier>,
-    pub yes_vote_commit: pallas::Point,
-    pub all_vote_commit: pallas::Point,
+    // bad but lets get it just working...
+    pub proposal_votes: ProposalVotes,
+    //pub vote_nullifiers: Vec<Nullifier>,
+    //pub yes_vote_commit: pallas::Point,
+    //pub all_vote_commit: pallas::Point,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]

@@ -220,7 +220,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                 msg!("Invalid proposal {:?}", params.proposal_bulla);
                 return Err(ContractError::Custom(4))
             };
-            let proposal_votes: ProposalVotes = deserialize(&proposal_votes)?;
+            let mut proposal_votes: ProposalVotes = deserialize(&proposal_votes)?;
 
             // Check the Merkle roots and nullifiers for the input coins are valid
             let mut vote_nullifiers = vec![];
@@ -246,15 +246,17 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     return Err(ContractError::Custom(7))
                 }
 
-                all_vote_commit += input.vote_commit;
-                vote_nullifiers.push(input.nullifier);
+                proposal_votes.all_votes_commit += input.vote_commit;
+                proposal_votes.vote_nullifiers.push(input.nullifier);
             }
+
+            proposal_votes.yes_votes_commit += params.yes_vote_commit;
 
             let update = DaoVoteUpdate {
                 proposal_bulla: params.proposal_bulla,
-                vote_nullifiers,
-                yes_vote_commit: params.yes_vote_commit,
-                all_vote_commit,
+                proposal_votes, //vote_nullifiers,
+                                //yes_vote_commit: params.yes_vote_commit,
+                                //all_vote_commit,
             };
             let mut update_data = vec![];
             update_data.write_u8(DaoFunction::Vote as u8)?;
@@ -361,22 +363,17 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::Vote => {
             let mut update: DaoVoteUpdate = deserialize(&ix[1..])?;
 
+            // Perform this code:
+            //votes_info.yes_votes_commit += self.yes_vote_commit;
+            //votes_info.all_votes_commit += self.all_vote_commit;
+            //votes_info.vote_nulls.append(&mut self.vote_nulls);
+
             let proposal_vote_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
-
-            // This is not allowed in update
-            // Skip all this for now
-            //let Some(proposal_votes) = db_get(proposal_vote_db, &serialize(&update.proposal_bulla))? else {
-            //    msg!("Proposal {:?} not found in db", update.proposal_bulla);
-            //    return Err(ContractError::Custom(1));
-            //};
-
-            //msg!("vote dezer:(");
-            //let mut proposal_votes: ProposalVotes = deserialize(&proposal_votes)?;
-
-            //msg!("vote pdd");
-            //proposal_votes.yes_votes_commit += update.yes_vote_commit;
-            //proposal_votes.all_votes_commit += update.all_vote_commit;
-            //proposal_votes.vote_nullifiers.append(&mut update.vote_nullifiers);
+            db_set(
+                proposal_vote_db,
+                &serialize(&update.proposal_bulla),
+                &serialize(&update.proposal_votes),
+            )?;
 
             Ok(())
         }
