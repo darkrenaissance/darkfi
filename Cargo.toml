@@ -297,3 +297,9 @@ zkas = [
 name = "net"
 path = "example/net.rs"
 required-features = ["async-runtime", "net"]
+
+[[example]]
+name = "zk"
+path = "example/zk.rs"
+required-features = ["zk"]
+
