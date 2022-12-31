@@ -10,11 +10,11 @@ edition = "2021"
 
 [dependencies]
 bs58 = "0.4.0"
-clap = {version = "4.0.29", features = ["derive"]}
+clap = {version = "4.0.32", features = ["derive"]}
 ctrlc = "3.2.4"
 darkfi = {path = "../../"}
 darkfi-sdk = {path = "../../src/sdk"}
 indicatif = "0.17.2"
-num_cpus = "1.14.0"
+num_cpus = "1.15.0"
 rand = "0.8.5"
 rayon = "1.6.1"

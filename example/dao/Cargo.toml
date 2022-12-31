@@ -14,16 +14,16 @@ darkfi-sdk = {path = "../../src/sdk"}
 smol = "1.3.0"
 futures = "0.3.25"
 async-std = {version = "1.12.0", features = ["attributes"]}
-async-trait = "0.1.59"
+async-trait = "0.1.60"
 async-channel = "1.8.0"
 async-executor = "1.5.0"
 easy-parallel = "3.2.0"
 
 # Misc
 log = "0.4.17"
-num_cpus = "1.14.0"
+num_cpus = "1.15.0"
 simplelog = "0.12.0"
-thiserror = "1.0.37"
+thiserror = "1.0.38"
 
 # Crypto
 incrementalmerkletree = "0.3.0"
@@ -32,10 +32,10 @@ halo2_gadgets = "0.2.0"
 halo2_proofs = "0.2.0"
 rand = "0.8.5"
 chacha20poly1305 = "0.10.1"
-group = "0.12.1"
+group = "0.13.0"
 
 # Encoding and parsing
-serde_json = "1.0.89"
+serde_json = "1.0.91"
 bs58 = "0.4.0"
 fxhash = "0.2.1"
 

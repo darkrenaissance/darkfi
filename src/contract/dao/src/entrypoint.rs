@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::io::Cursor;
+
 use darkfi_sdk::{
     crypto::{
         contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
@@ -33,7 +35,7 @@ use darkfi_sdk::{
     tx::ContractCall,
     util::set_return_data,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
 
 use darkfi_money_contract::{
     state::MoneyTransferParams, MoneyFunction, MONEY_CONTRACT_COIN_ROOTS_TREE,
@@ -100,7 +102,9 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
         Some(bytes) => {
             // We found some bytes, try to deserialize into a tree.
             // For now, if this doesn't work, we bail.
-            let _: MerkleTree = deserialize(&bytes)?;
+            let mut decoder = Cursor::new(&bytes);
+            <i32 as Decodable>::decode(&mut decoder)?;
+            <MerkleTree as Decodable>::decode(&mut decoder)?;
         }
         None => {
             // We didn't find a tree, so just make a new one.

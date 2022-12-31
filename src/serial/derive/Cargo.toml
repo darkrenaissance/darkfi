@@ -13,7 +13,7 @@ proc-macro = true
 
 [dependencies]
 proc-macro-crate = "1.2.1"
-proc-macro2 = "1.0.47"
-syn = {version = "1.0.105", features = ["full", "fold"]}
+proc-macro2 = "1.0.49"
+syn = {version = "1.0.107", features = ["full", "fold"]}
 
 darkfi-derive-internal = {path = "../derive-internal"}

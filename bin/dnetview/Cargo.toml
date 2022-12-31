@@ -24,15 +24,15 @@ easy-parallel = "3.2.0"
 async-channel = "1.8.0"
 
 # Misc
-clap = {version = "4.0.29", features = ["derive"]}
+clap = {version = "4.0.32", features = ["derive"]}
 rand = "0.8.5"
 simplelog = "0.12.0"
 log = "0.4.17"
-num_cpus = "1.14.0"
+num_cpus = "1.15.0"
 url = "2.3.1"
-thiserror = "1.0.37"
+thiserror = "1.0.38"
 
 # Encoding and parsing
-serde_json = "1.0.89"
-serde = {version = "1.0.150", features = ["derive"]}
+serde_json = "1.0.91"
+serde = {version = "1.0.152", features = ["derive"]}
 hex = "0.4.3"

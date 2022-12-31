@@ -20,7 +20,7 @@ features = [
 
 [dependencies]
 # Error handling
-thiserror = "1.0.37"
+thiserror = "1.0.38"
 
 # Encoding
 bs58 = "0.4.0"
