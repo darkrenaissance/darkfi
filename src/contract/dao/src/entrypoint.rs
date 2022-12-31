@@ -17,7 +17,10 @@
  */
 
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, ContractId, MerkleNode, MerkleTree, PublicKey},
+    crypto::{
+        contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+        ContractId, MerkleNode, MerkleTree, PublicKey,
+    },
     db::{db_contains_key, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME},
     error::{ContractError, ContractResult},
     merkle::merkle_add,
@@ -57,8 +60,8 @@ darkfi_sdk::define_contract!(
 // These are the different sled trees that will be created
 pub const DAO_BULLA_TREE: &str = "dao_info";
 pub const DAO_ROOTS_TREE: &str = "dao_roots";
-pub const DAO_PROPOSAL_TREE: &str = "dao_proposals";
-pub const DAO_PROPOSAL_ROOTS_TREE: &str = "dao_proposal_roots";
+//pub const DAO_PROPOSAL_TREE: &str = "dao_proposals";
+//pub const DAO_PROPOSAL_ROOTS_TREE: &str = "dao_proposal_roots";
 pub const DAO_PROPOSAL_VOTES_TREE: &str = "dao_proposal_votes";
 
 // These are keys inside the some db trees
@@ -117,11 +120,14 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     };
 
     // Set up a database tree to hold the Merkle tree for proposal bullas
+    /*
     let dao_proposal_db = match db_lookup(cid, DAO_PROPOSAL_TREE) {
         Ok(v) => v,
         Err(_) => db_init(cid, DAO_PROPOSAL_TREE)?,
     };
+    */
 
+    /*
     match db_get(dao_proposal_db, &serialize(&DAO_PROPOSAL_MERKLE_TREE))? {
         Some(bytes) => {
             // We found some bytes, try to deserialize into a tree.
@@ -138,12 +144,13 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
             db_set(dao_proposal_db, &serialize(&DAO_PROPOSAL_MERKLE_TREE), &tree_data)?;
         }
     };
+    */
 
     // Set up a database tree to hold Merkle roots for the proposal bullas Merkle tree
-    let _ = match db_lookup(cid, DAO_PROPOSAL_ROOTS_TREE) {
+    /*let _ = match db_lookup(cid, DAO_PROPOSAL_ROOTS_TREE) {
         Ok(v) => v,
         Err(_) => db_init(cid, DAO_PROPOSAL_ROOTS_TREE)?,
-    };
+    };*/
 
     // Set up a database tree to hold proposal votes (k: proposalbulla, v: ProposalVotes)
     let _ = match db_lookup(cid, DAO_PROPOSAL_VOTES_TREE) {
@@ -302,7 +309,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             assert!(input_valcoms == params.input_value_commit);
 
             // 3. Get the ProposalVote from DAO state
-            let proposal_db = db_lookup(cid, DAO_PROPOSAL_TREE)?;
+            let proposal_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
             let Some(proposal_votes) = db_get(proposal_db, &serialize(&params.proposal))? else {
                 msg!("Proposal {:?} not found in db", params.proposal);
                 return Err(ContractError::Custom(1));
@@ -342,10 +349,11 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::Propose => {
             let update: DaoProposeUpdate = deserialize(&ix[1..])?;
 
-            let proposal_tree_db = db_lookup(cid, DAO_PROPOSAL_TREE)?;
-            let proposal_root_db = db_lookup(cid, DAO_PROPOSAL_ROOTS_TREE)?;
+            //let proposal_tree_db = db_lookup(cid, DAO_PROPOSAL_TREE)?;
+            //let proposal_root_db = db_lookup(cid, DAO_PROPOSAL_ROOTS_TREE)?;
             let proposal_vote_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
 
+            /*
             let node = MerkleNode::from(update.proposal_bulla);
             merkle_add(
                 proposal_tree_db,
@@ -353,6 +361,7 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
                 &serialize(&DAO_PROPOSAL_MERKLE_TREE),
                 &[node],
             )?;
+            */
 
             let pv = ProposalVotes::default();
             db_set(proposal_vote_db, &serialize(&update.proposal_bulla), &serialize(&pv))?;
@@ -541,7 +550,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
                     *all_votes_coords.y(),
                     *input_value_coords.x(),
                     *input_value_coords.y(),
-                    MONEY_CONTRACT_ID.inner(), // <-- TODO: Should be money contract id?
+                    DAO_CONTRACT_ID.inner(), // <-- TODO: Should be money contract id?
                     pallas::Base::zero(),
                     pallas::Base::zero(),
                 ],

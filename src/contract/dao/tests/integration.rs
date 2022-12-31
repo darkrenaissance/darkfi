@@ -820,7 +820,8 @@ async fn integration_test() -> Result<()> {
     };
 
     // TODO: this should be the contract/func ID
-    let spend_hook = pallas::Base::from(110);
+    //let spend_hook = pallas::Base::from(110);
+    let spend_hook = DAO_CONTRACT_ID.inner();
     // The user_data can be a simple hash of the items passed into the ZK proof
     // up to corresponding linked ZK proof to interpret however they need.
     // In out case, it's the bulla for the DAO
@@ -894,7 +895,7 @@ async fn integration_test() -> Result<()> {
     let exec_sigs = tx.create_sigs(&mut OsRng, &vec![exec_signature_secret])?;
     tx.signatures = vec![xfer_sigs, exec_sigs];
 
-    //dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
 
     Ok(())
 }
