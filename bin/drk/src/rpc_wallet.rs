@@ -24,10 +24,11 @@ use darkfi_money_contract::client::{
     Coin, Note, OwnCoin, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
     MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
     MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
-    MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_VALUE,
-    MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT,
-    MONEY_INFO_TABLE, MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET,
-    MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+    MONEY_COINS_COL_SPEND_HOOK, MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID,
+    MONEY_COINS_COL_USER_DATA, MONEY_COINS_COL_VALUE, MONEY_COINS_COL_VALUE_BLIND,
+    MONEY_COINS_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE,
+    MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE,
+    MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
 };
 use darkfi_sdk::{
     crypto::{
@@ -163,6 +164,10 @@ impl Drk {
             QueryType::Blob as u8,
             MONEY_COINS_COL_TOKEN_ID,
             QueryType::Blob as u8,
+            MONEY_COINS_COL_SPEND_HOOK,
+            QueryType::Blob as u8,
+            MONEY_COINS_COL_USER_DATA,
+            QueryType::Blob as u8,
             MONEY_COINS_COL_COIN_BLIND,
             QueryType::Blob as u8,
             MONEY_COINS_COL_VALUE_BLIND,
@@ -208,27 +213,43 @@ impl Drk {
             let token_id_bytes: Vec<u8> = serde_json::from_value(row[4].clone())?;
             let token_id: TokenId = deserialize(&token_id_bytes)?;
 
-            let coin_blind_bytes: Vec<u8> = serde_json::from_value(row[5].clone())?;
+            let spend_hook_bytes: Vec<u8> = serde_json::from_value(row[5].clone())?;
+            let spend_hook: pallas::Base = deserialize(&spend_hook_bytes)?;
+
+            let user_data_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
+            let user_data: pallas::Base = deserialize(&user_data_bytes)?;
+
+            let coin_blind_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
             let coin_blind: pallas::Base = deserialize(&coin_blind_bytes)?;
 
-            let value_blind_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
+            let value_blind_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
             let value_blind: pallas::Scalar = deserialize(&value_blind_bytes)?;
 
-            let token_blind_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
+            let token_blind_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
             let token_blind: pallas::Scalar = deserialize(&token_blind_bytes)?;
 
-            let secret_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
+            let secret_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
             let secret: SecretKey = deserialize(&secret_bytes)?;
 
-            let nullifier_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
+            let nullifier_bytes: Vec<u8> = serde_json::from_value(row[11].clone())?;
             let nullifier: Nullifier = deserialize(&nullifier_bytes)?;
 
-            let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
+            let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[12].clone())?;
             let leaf_position: incrementalmerkletree::Position = deserialize(&leaf_position_bytes)?;
 
-            let memo: Vec<u8> = serde_json::from_value(row[11].clone())?;
+            let memo: Vec<u8> = serde_json::from_value(row[13].clone())?;
 
-            let note = Note { serial, value, token_id, coin_blind, value_blind, token_blind, memo };
+            let note = Note {
+                serial,
+                value,
+                token_id,
+                spend_hook,
+                user_data,
+                coin_blind,
+                value_blind,
+                token_blind,
+                memo,
+            };
             let owncoin = OwnCoin { coin, note, secret, nullifier, leaf_position };
 
             owncoins.push((owncoin, is_spent))

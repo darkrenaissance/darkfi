@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS money_coins (
 	serial BLOB NOT NULL,
 	value BLOB NOT NULL,
 	token_id BLOB NOT NULL,
+	spend_hook BLOB NOT NULL,
+	user_data BLOB NOT NULL,
 	coin_blind BLOB NOT NULL,
 	value_blind BLOB NOT NULL,
 	token_blind BLOB NOT NULL,

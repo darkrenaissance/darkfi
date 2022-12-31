@@ -148,6 +148,7 @@ impl MoneyTestHarness {
             *TESTNET_BOOTSTRAP_TIMESTAMP,
             *TESTNET_GENESIS_TIMESTAMP,
             *TESTNET_GENESIS_HASH_BYTES,
+            *TESTNET_INITIAL_DISTRIBUTION,
             charlie_wallet,
             faucet_pubkeys.clone(),
             false,

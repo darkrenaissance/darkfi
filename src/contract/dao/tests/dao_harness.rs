@@ -21,6 +21,7 @@ use darkfi::{
     consensus::{
         constants::{
             TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
+            TESTNET_INITIAL_DISTRIBUTION,
         },
         ValidatorState, ValidatorStatePtr,
     },
@@ -113,6 +114,7 @@ impl DaoTestHarness {
             *TESTNET_BOOTSTRAP_TIMESTAMP,
             *TESTNET_GENESIS_TIMESTAMP,
             *TESTNET_GENESIS_HASH_BYTES,
+            *TESTNET_INITIAL_DISTRIBUTION,
             alice_wallet,
             faucet_pubkeys,
             false,
