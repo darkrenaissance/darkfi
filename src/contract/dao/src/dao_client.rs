@@ -26,6 +26,7 @@ use darkfi_sdk::{
         coin::Coin, constants::MERKLE_DEPTH, poseidon_hash, MerkleNode, PublicKey, SecretKey,
         TokenId,
     },
+    incrementalmerkletree,
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::pallas,
 };
@@ -33,17 +34,15 @@ use halo2_proofs::circuit::Value;
 use log::debug;
 use rand::rngs::OsRng;
 
-use crate::{
-    note::EncryptedNote2,
-    state::{DaoBulla, DaoMintParams},
-};
+use darkfi_money_contract::client::{EncryptedNote, Note};
+
+use crate::state::{DaoBulla, DaoMintParams};
 
 pub type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
 
-/*
 pub struct OwnCoin {
     pub coin: Coin,
-    pub note: money::transfer::wallet::Note,
+    pub note: Note,
     pub leaf_position: incrementalmerkletree::Position,
 }
 
@@ -52,7 +51,7 @@ pub struct WalletCache {
     // TODO: This can be HashableBase
     cache: Vec<(SecretKey, Vec<OwnCoin>)>,
     /// The entire Merkle tree state
-    tree: MerkleTree,
+    pub tree: MerkleTree,
 }
 
 impl Default for WalletCache {
@@ -83,7 +82,7 @@ impl WalletCache {
         panic!("you forget to track() this secret!");
     }
 
-    pub fn try_decrypt_note(&mut self, coin: Coin, ciphertext: &EncryptedNote2) {
+    pub fn try_decrypt_note(&mut self, coin: Coin, ciphertext: &EncryptedNote) {
         // Add the new coins to the Merkle tree
         let node = MerkleNode::from(coin.inner());
         self.tree.append(&node);
@@ -98,7 +97,6 @@ impl WalletCache {
         }
     }
 }
-*/
 
 struct DaoMintRevealed {
     pub bulla: DaoBulla,

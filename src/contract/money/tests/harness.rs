@@ -54,8 +54,8 @@ pub fn init_logger() -> Result<()> {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
     if let Err(_) = simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Info,
+        simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
@@ -71,10 +71,12 @@ pub struct MoneyTestHarness {
     pub faucet_kp: Keypair,
     pub alice_kp: Keypair,
     pub bob_kp: Keypair,
+    pub charlie_kp: Keypair,
     pub faucet_pubkeys: Vec<PublicKey>,
     pub faucet_state: ValidatorStatePtr,
     pub alice_state: ValidatorStatePtr,
     pub bob_state: ValidatorStatePtr,
+    pub charlie_state: ValidatorStatePtr,
     pub money_contract_id: ContractId,
     pub proving_keys: HashMap<[u8; 32], Vec<(&'static str, ProvingKey)>>,
     pub mint_zkbin: ZkBinary,
@@ -84,6 +86,7 @@ pub struct MoneyTestHarness {
     pub faucet_merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     pub alice_merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     pub bob_merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    pub charlie_merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
 }
 
 impl MoneyTestHarness {
@@ -91,15 +94,18 @@ impl MoneyTestHarness {
         let faucet_kp = Keypair::random(&mut OsRng);
         let alice_kp = Keypair::random(&mut OsRng);
         let bob_kp = Keypair::random(&mut OsRng);
+        let charlie_kp = Keypair::random(&mut OsRng);
         let faucet_pubkeys = vec![faucet_kp.public];
 
         let faucet_wallet = WalletDb::new("sqlite::memory:", "foo").await?;
         let alice_wallet = WalletDb::new("sqlite::memory:", "foo").await?;
         let bob_wallet = WalletDb::new("sqlite::memory:", "foo").await?;
+        let charlie_wallet = WalletDb::new("sqlite::memory:", "foo").await?;
 
         let faucet_sled_db = sled::Config::new().temporary(true).open()?;
         let alice_sled_db = sled::Config::new().temporary(true).open()?;
         let bob_sled_db = sled::Config::new().temporary(true).open()?;
+        let charlie_sled_db = sled::Config::new().temporary(true).open()?;
 
         let faucet_state = ValidatorState::new(
             &faucet_sled_db,
@@ -132,6 +138,17 @@ impl MoneyTestHarness {
             *TESTNET_GENESIS_HASH_BYTES,
             *TESTNET_INITIAL_DISTRIBUTION,
             bob_wallet,
+            faucet_pubkeys.clone(),
+            false,
+        )
+        .await?;
+
+        let charlie_state = ValidatorState::new(
+            &charlie_sled_db,
+            *TESTNET_BOOTSTRAP_TIMESTAMP,
+            *TESTNET_GENESIS_TIMESTAMP,
+            *TESTNET_GENESIS_HASH_BYTES,
+            charlie_wallet,
             faucet_pubkeys.clone(),
             false,
         )
@@ -170,15 +187,18 @@ impl MoneyTestHarness {
         let faucet_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
         let alice_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
         let bob_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        let charlie_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
 
         Ok(Self {
             faucet_kp,
             alice_kp,
             bob_kp,
+            charlie_kp,
             faucet_pubkeys,
             faucet_state,
             alice_state,
             bob_state,
+            charlie_state,
             money_contract_id,
             proving_keys,
             mint_pk,
@@ -188,6 +208,7 @@ impl MoneyTestHarness {
             faucet_merkle_tree,
             alice_merkle_tree,
             bob_merkle_tree,
+            charlie_merkle_tree,
         })
     }
 

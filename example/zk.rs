@@ -19,24 +19,30 @@
 // ../zkas simple.zk
 
 use darkfi::{
-    crypto::{
-        proof::{ProvingKey, VerifyingKey},
-        Proof,
-    },
     zk::{
+        proof::{Proof, ProvingKey, VerifyingKey},
         vm::{Witness, ZkCircuit},
         vm_stack::empty_witnesses,
     },
     zkas::decoder::ZkBinary,
     Result,
 };
-use darkfi_sdk::crypto::pedersen::pedersen_commitment_u64;
-use halo2_proofs::circuit::Value;
-use pasta_curves::{
-    arithmetic::CurveAffine,
-    group::{ff::Field, Curve},
-    pallas,
+use darkfi_sdk::{
+    crypto::{
+        pedersen::pedersen_commitment_u64, poseidon_hash, MerkleNode, PublicKey, SecretKey, TokenId,
+    },
+    incrementalmerkletree,
+    incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree},
+    pasta::{
+        arithmetic::CurveAffine,
+        group::{
+            ff::{Field, PrimeField},
+            Curve,
+        },
+        pallas,
+    },
 };
+use halo2_proofs::circuit::Value;
 use rand::rngs::OsRng;
 
 fn main() -> Result<()> {

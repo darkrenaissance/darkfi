@@ -20,8 +20,8 @@ contract "DaoProposeInput" {
 }
 
 circuit "DaoProposeInput" {
-	nullifier = poseidon_hash(secret, serial);
-	constrain_instance(nullifier);
+	#nullifier = poseidon_hash(secret, serial);
+	#constrain_instance(nullifier);
 
 	# Pedersen commitment for coin's value
 	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);

@@ -27,8 +27,24 @@ pub mod state;
 pub mod note;
 
 #[cfg(feature = "client")]
-/// Transaction building API for clients interacting with this contract
-pub mod client;
+/// Transaction building API for clients interacting with DAO contract
+pub mod dao_client;
+
+#[cfg(feature = "client")]
+/// Transaction building API for clients interacting with DAO contract
+pub mod dao_propose_client;
+
+#[cfg(feature = "client")]
+/// Transaction building API for clients interacting with DAO contract
+pub mod dao_vote_client;
+
+#[cfg(feature = "client")]
+/// Transaction building API for clients interacting with DAO contract
+pub mod dao_exec_client;
+
+#[cfg(feature = "client")]
+/// Transaction building API for clients interacting with money contract
+pub mod money_client;
 
 // These are the zkas circuit namespaces
 pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";

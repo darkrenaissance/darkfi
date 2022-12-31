@@ -25,7 +25,7 @@ use pasta_curves::{group::ff::PrimeField, pallas};
 /// The `Coin` is represented as a base field element.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct Coin(pallas::Base);
+pub struct Coin(pub pallas::Base);
 
 impl Coin {
     /// Reference the raw inner base field element

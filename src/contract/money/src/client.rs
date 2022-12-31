@@ -47,12 +47,15 @@ use darkfi_sdk::{
     incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree},
     pasta::{
         arithmetic::CurveAffine,
-        group::{ff::PrimeField, Curve},
+        group::{
+            ff::{Field, PrimeField},
+            Curve,
+        },
         pallas,
     },
 };
 use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
-use halo2_proofs::{arithmetic::Field, circuit::Value};
+use halo2_proofs::circuit::Value;
 use log::{debug, error, info};
 use rand::rngs::OsRng;
 
@@ -95,7 +98,7 @@ pub const AEAD_TAG_SIZE: usize = 16;
 
 /// The `Coin` is represented as a base field element.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct Coin(pallas::Base);
+pub struct Coin(pub pallas::Base);
 
 impl Coin {
     /// Reference the raw inner base field element
@@ -143,6 +146,11 @@ pub struct Note {
     pub value: u64,
     /// Token ID of the coin
     pub token_id: TokenId,
+    /// Spend hook used for protocol owned liquidity.
+    /// Specifies which contract owns this coin.
+    pub spend_hook: pallas::Base,
+    /// User data used by protocol when spend hook is enabled.
+    pub user_data: pallas::Base,
     /// Blinding factor for the coin bulla
     pub coin_blind: pallas::Base,
     /// Blinding factor for the value pedersen commitment
@@ -207,6 +215,9 @@ impl EncryptedNote {
     }
 }
 
+// TODO: we can put all these in an internal module like:
+// money_transfer::builder::ClearInputInfo
+
 struct TransactionBuilderClearInputInfo {
     pub value: u64,
     pub token_id: TokenId,
@@ -226,7 +237,7 @@ struct TransactionBuilderOutputInfo {
     pub public_key: PublicKey,
 }
 
-struct TransferBurnRevealed {
+pub struct TransferBurnRevealed {
     pub value_commit: ValueCommit,
     pub token_commit: ValueCommit,
     pub nullifier: Nullifier,
@@ -321,7 +332,7 @@ impl TransferBurnRevealed {
     }
 }
 
-struct TransferMintRevealed {
+pub struct TransferMintRevealed {
     pub coin: Coin,
     pub value_commit: ValueCommit,
     pub token_commit: ValueCommit,
@@ -376,7 +387,7 @@ impl TransferMintRevealed {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn create_transfer_mint_proof(
+pub fn create_transfer_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     value: u64,
@@ -424,7 +435,7 @@ fn create_transfer_mint_proof(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn create_transfer_burn_proof(
+pub fn create_transfer_burn_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     value: u64,
@@ -799,6 +810,8 @@ pub fn build_half_swap_tx(
         serial,
         value: output.value,
         token_id: output.token_id,
+        spend_hook: pallas::Base::zero(),
+        user_data: pallas::Base::zero(),
         coin_blind,
         value_blind: value_recv_blind,
         token_blind: token_recv_blind,
@@ -1025,6 +1038,8 @@ pub fn build_transfer_tx(
             serial,
             value: output.value,
             token_id: output.token_id,
+            spend_hook: pallas::Base::zero(),
+            user_data: pallas::Base::zero(),
             coin_blind,
             value_blind,
             token_blind,
@@ -1236,6 +1251,8 @@ pub fn build_unstake_tx(
             serial,
             value: coin.value,
             token_id: token_id_recv,
+            spend_hook: pallas::Base::zero(),
+            user_data: pallas::Base::zero(),
             coin_blind,
             value_blind,
             token_blind: token_recv_blind,
@@ -1290,6 +1307,8 @@ mod tests {
             serial: pallas::Base::random(&mut OsRng),
             value: 100,
             token_id: TokenId::from(pallas::Base::random(&mut OsRng)),
+            spend_hook: pallas::Base::zero(),
+            user_data: pallas::Base::zero(),
             coin_blind: pallas::Base::random(&mut OsRng),
             value_blind: pallas::Scalar::random(&mut OsRng),
             token_blind: pallas::Scalar::random(&mut OsRng),
