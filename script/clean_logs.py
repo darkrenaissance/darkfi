@@ -1,7 +1,7 @@
 import glob, re, os.path, textwrap
 from colorama import Fore, Back, Style
 
-def mod_prefix(dir):
+def target_prefix(dir):
     if dir.startswith("net"):
         return "net"
     elif dir.startswith("serial"):
@@ -40,17 +40,21 @@ def mod_prefix(dir):
         assert not dir or dir == "tx"
         return ""
 
-def mod_suffix(prefix, base):
+def target_suffix(prefix, base):
     if prefix in ("dao", "money"):
+        # Just shorten the target to simply "dao" or "money"
+        # We don't need the fine grained details
         return ""
     elif base in ("mod.rs", "lib.rs"):
+        # Just use the module name as the target with these files
         return ""
+    # Otherwise just use the filename as the target suffix
     return base.removesuffix(".rs")
 
 def log_target(fname):
     dir, base = os.path.dirname(fname), os.path.basename(fname)
-    prefix = mod_prefix(dir)
-    suffix = mod_suffix(prefix, base)
+    prefix = target_prefix(dir)
+    suffix = target_suffix(prefix, base)
     # you don't need :: when the suffix is empty
     if not suffix and not prefix:
         return ""
@@ -74,10 +78,10 @@ def replace(fname, contents):
         line = lines[i]
 
         # only used for debug output
-        old_line = None
-        new_line = None
+        old_text = None
+        new_text = None
         # This is used as a debug goto
-        line_modified = False
+        is_modified = False
 
         log_level = None
         if "trace!(" in line:
@@ -92,18 +96,19 @@ def replace(fname, contents):
             log_level = "error"
 
         if log_level is not None:
+            # No target exists for this file at all. Just ignore these
+            # We would normally delete any target set for these files
+            # but so far we have none of them, so just ignore them.
             if not target:
-                # No target exists for this file at all. Just ignore these
-                # We would normally delete any target set for these files
-                # but so far we have none of them, so just ignore them.
                 print(
                     "    "
                     + Back.RED + "Skip [no target]:" + Style.RESET_ALL
                     + f" {line}"
                 )
+
+            # Single lines with a target that's a constant or string
             elif re.search(f'{log_level}!\\(target: ([A-Z_]+|"[a-zA-Z:_-]+"),', line):
-                # Single lines with a target that's a constant or string
-                old_line = f"{i}: {line}"
+                old_text = f"{i}: {line}"
 
                 line = re.sub(
                      'target: ([A-Z_]+|"[a-zA-Z:_-]+"),',
@@ -111,63 +116,63 @@ def replace(fname, contents):
                     line
                 )
 
-                line_modified = True
-                new_line = f"{i}: {line}"
+                is_modified = True
+                new_text = f"{i}: {line}"
+            # Normal single lines with no target set
             elif f'{log_level}!("' in line:
-                # Normal single lines with no target set
-                old_line = f"{i}: {line}"
+                old_text = f"{i}: {line}"
 
                 #print(f"    No target: {line}")
                 line = line.replace(f'{log_level}!(',
                                     f'{log_level}!(target: "{target}", ')
 
-                line_modified = True
-                new_line = f"{i}: {line}"
+                is_modified = True
+                new_text = f"{i}: {line}"
+            # Multiline logs
+            # We read the next line and check if there's a target set or not
             else:
-                # Multiline logs
-                # We read the next line and check if there's a target set or not
-                old_line = f"{i}: {line}"
-                new_line = f"{i}: {line}"
+                old_text = f"{i}: {line}"
+                new_text = f"{i}: {line}"
 
                 result += line + "\n"
                 i += 1
                 assert i < len(lines)
                 line = lines[i]
 
-                old_line += f"\n{i}: {line}"
+                old_text += f"\n{i}: {line}"
 
+                # Constants or target strings set
                 if re.search('target: ([A-Z_]+|"[a-zA-Z:_-]+"),', line):
-                    # Constants or target strings set
                     line = re.sub(
                          'target: ([A-Z_]+|"[a-zA-Z:_-]+"),',
                         f'target: "{target}",',
                         line
                     )
 
-                    new_line += f"\n{i}: {line}"
+                    new_text += f"\n{i}: {line}"
+                # Multi-line logs with no target set
+                # Insert an extra line with the target
                 else:
-                    # Multi-line logs with no target set
-                    # Insert an extra line with the target
                     leading_space = lambda line: len(line) - len(line.lstrip())
 
                     added_line = (" "*leading_space(line)
                                   + f'target: "{target}",')
                     result += f"{added_line}\n"
 
-                    new_line += f"\n{i}: {added_line}\n{i + 1}: {line}"
+                    new_text += f"\n{i}: {added_line}\n{i + 1}: {line}"
 
-                line_modified = True
+                is_modified = True
 
-        if line_modified:
-            assert old_line is not None and new_line is not None
+        if is_modified:
+            assert old_text is not None and new_text is not None
             print(
                 Fore.RED
-                + textwrap.indent(old_line, "    < ")
+                + textwrap.indent(old_text, "    < ")
                 + Style.RESET_ALL
             )
             print(
                 Fore.GREEN
-                + textwrap.indent(new_line, "    > ")
+                + textwrap.indent(new_text, "    > ")
                 + Style.RESET_ALL
             )
             print()
