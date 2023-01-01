@@ -76,6 +76,8 @@ def replace(fname, contents):
     i = 0
     while i < len(lines):
         line = lines[i]
+        # Line number
+        ln = lambda: i + 1
 
         # only used for debug output
         old_text = None
@@ -108,7 +110,7 @@ def replace(fname, contents):
 
             # Single lines with a target that's a constant or string
             elif re.search(f'{log_level}!\\(target: ([A-Z_]+|"[a-zA-Z:_-]+"),', line):
-                old_text = f"{i}: {line}"
+                old_text = f"{ln()}: {line}"
 
                 line = re.sub(
                      'target: ([A-Z_]+|"[a-zA-Z:_-]+"),',
@@ -117,29 +119,29 @@ def replace(fname, contents):
                 )
 
                 is_modified = True
-                new_text = f"{i}: {line}"
+                new_text = f"{ln()}: {line}"
             # Normal single lines with no target set
             elif f'{log_level}!("' in line:
-                old_text = f"{i}: {line}"
+                old_text = f"{ln()}: {line}"
 
                 #print(f"    No target: {line}")
                 line = line.replace(f'{log_level}!(',
                                     f'{log_level}!(target: "{target}", ')
 
                 is_modified = True
-                new_text = f"{i}: {line}"
+                new_text = f"{ln()}: {line}"
             # Multiline logs
             # We read the next line and check if there's a target set or not
             else:
-                old_text = f"{i}: {line}"
-                new_text = f"{i}: {line}"
+                old_text = f"{ln()}: {line}"
+                new_text = f"{ln()}: {line}"
 
                 result += line + "\n"
                 i += 1
                 assert i < len(lines)
                 line = lines[i]
 
-                old_text += f"\n{i}: {line}"
+                old_text += f"\n{ln()}: {line}"
 
                 # Constants or target strings set
                 if re.search('target: ([A-Z_]+|"[a-zA-Z:_-]+"),', line):
@@ -149,7 +151,7 @@ def replace(fname, contents):
                         line
                     )
 
-                    new_text += f"\n{i}: {line}"
+                    new_text += f"\n{ln()}: {line}"
                 # Multi-line logs with no target set
                 # Insert an extra line with the target
                 else:
@@ -159,7 +161,7 @@ def replace(fname, contents):
                                   + f'target: "{target}",')
                     result += f"{added_line}\n"
 
-                    new_text += f"\n{i}: {added_line}\n{i + 1}: {line}"
+                    new_text += f"\n{ln()}: {added_line}\n{ln() + 1}: {line}"
 
                 is_modified = True
 
