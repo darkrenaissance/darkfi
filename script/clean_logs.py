@@ -92,6 +92,16 @@ def replace(fname, contents):
                     + Back.RED + "Skip [no target]:" + Style.RESET_ALL
                     + f" {line}"
                 )
+            elif f"{log_level}!(target: L_TGT," in line:
+                old_line = f"{i}: {line}"
+
+                line = line.replace(
+                    f"{log_level}!(target: L_TGT,",
+                    f'{log_level}!(target: "{target}",',
+                )
+
+                line_modified = True
+                new_line = f"{i}: {line}"
             elif f"{log_level}!(target:" in line:
                 old_line = f"{i}: {line}"
 
