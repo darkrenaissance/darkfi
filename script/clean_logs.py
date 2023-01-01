@@ -40,14 +40,17 @@ def mod_prefix(dir):
         assert not dir or dir == "tx"
         return ""
 
-def mod_suffix(base):
-    if base in ("mod.rs", "lib.rs"):
+def mod_suffix(prefix, base):
+    if prefix in ("dao", "money"):
+        return ""
+    elif base in ("mod.rs", "lib.rs"):
         return ""
     return base.removesuffix(".rs")
 
 def log_target(fname):
     dir, base = os.path.dirname(fname), os.path.basename(fname)
-    prefix, suffix = mod_prefix(dir), mod_suffix(base)
+    prefix = mod_prefix(dir)
+    suffix = mod_suffix(prefix, base)
     # you don't need :: when the suffix is empty
     if not suffix and not prefix:
         return ""
@@ -59,6 +62,9 @@ def log_target(fname):
 
 def replace(fname, contents):
     target = log_target(fname)
+    # You can debug like this:
+    #if target != "consensus::proposal":
+    #    return ""
     print(f"Replacing {target}" + " "*(40 - len(target)) + f"[{fname}]")
 
     result = ""
@@ -87,35 +93,30 @@ def replace(fname, contents):
 
         if log_level is not None:
             if not target:
+                # No target exists for this file at all. Just ignore these
+                # We would normally delete any target set for these files
+                # but so far we have none of them, so just ignore them.
                 print(
                     "    "
                     + Back.RED + "Skip [no target]:" + Style.RESET_ALL
                     + f" {line}"
                 )
-            elif f"{log_level}!(target: L_TGT," in line:
+            elif re.search(f'{log_level}!\\(target: ([A-Z_]+|"[a-zA-Z:_-]+"),', line):
+                # Single lines with a target that's a constant or string
                 old_line = f"{i}: {line}"
 
-                line = line.replace(
-                    f"{log_level}!(target: L_TGT,",
-                    f'{log_level}!(target: "{target}",',
+                line = re.sub(
+                     'target: ([A-Z_]+|"[a-zA-Z:_-]+"),',
+                    f'target: "{target}",',
+                    line
                 )
 
                 line_modified = True
                 new_line = f"{i}: {line}"
-            elif f"{log_level}!(target:" in line:
-                old_line = f"{i}: {line}"
-
-                # Normal single lines with a target
-                line = re.sub(f'{log_level}!\\(target: "[a-z:_]+",',
-                              f'{log_level}!(target: "{target}",',
-                              line)
-
-                line_modified = True
-                new_line = f"{i}: {line}"
             elif f'{log_level}!("' in line:
+                # Normal single lines with no target set
                 old_line = f"{i}: {line}"
 
-                # Normal single lines with no target set
                 #print(f"    No target: {line}")
                 line = line.replace(f'{log_level}!(',
                                     f'{log_level}!(target: "{target}", ')
@@ -123,11 +124,11 @@ def replace(fname, contents):
                 line_modified = True
                 new_line = f"{i}: {line}"
             else:
+                # Multiline logs
+                # We read the next line and check if there's a target set or not
                 old_line = f"{i}: {line}"
                 new_line = f"{i}: {line}"
 
-                # Multiline debugs
-                # Read the next line instead
                 result += line + "\n"
                 i += 1
                 assert i < len(lines)
@@ -135,19 +136,18 @@ def replace(fname, contents):
 
                 old_line += f"\n{i}: {line}"
 
-                # one place has a constant defined.
-                if "target: L_TGT" in line:
-                    print(repr(line))
-                    line = line.replace("target: L_TGT,", f'target: "{target}",')
-
-                    new_line += f"\n{i}: {line}"
-                elif "target:" in line:
-                    line = re.sub( 'target: "[a-z:_]+",',
-                                  f'target: "{target}",',
-                                  line)
+                if re.search('target: ([A-Z_]+|"[a-zA-Z:_-]+"),', line):
+                    # Constants or target strings set
+                    line = re.sub(
+                         'target: ([A-Z_]+|"[a-zA-Z:_-]+"),',
+                        f'target: "{target}",',
+                        line
+                    )
 
                     new_line += f"\n{i}: {line}"
                 else:
+                    # Multi-line logs with no target set
+                    # Insert an extra line with the target
                     leading_space = lambda line: len(line) - len(line.lstrip())
 
                     added_line = (" "*leading_space(line)
@@ -170,6 +170,7 @@ def replace(fname, contents):
                 + textwrap.indent(new_line, "    > ")
                 + Style.RESET_ALL
             )
+            print()
 
         result += f"{line}\n"
         i += 1
