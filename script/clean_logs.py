@@ -133,6 +133,8 @@ def replace(fname, contents):
             # Multiline logs
             # We read the next line and check if there's a target set or not
             else:
+                assert re.search(f"{log_level}!\\($", line)
+
                 old_text = f"{ln()}: {line}"
                 new_text = f"{ln()}: {line}"
 
