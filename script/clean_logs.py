@@ -127,6 +127,7 @@ def replace(fname, contents):
                 "net::protocol_version",
                 "net::p2p",
                 "net::message_subscriber",
+                "net::channel",
             ):
                 local_target += f"::{function_name}()"
 
@@ -228,8 +229,8 @@ def main():
             continue
 
         # Uncomment this to apply the changes
-        #with open(f"src/{fname}", "w") as f:
-        #    f.write(contents)
+        with open(f"src/{fname}", "w") as f:
+            f.write(contents)
 
 if __name__ == "__main__":
     main()
