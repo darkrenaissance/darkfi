@@ -66,9 +66,11 @@ def log_target(fname):
 
 def replace(fname, contents):
     target = log_target(fname)
+
     # You can debug like this:
-    #if target != "consensus::proposal":
-    #    return ""
+    #if target != "net::protocol_seed":
+    #    return None
+
     print(f"Replacing {target}" + " "*(40 - len(target)) + f"[{fname}]")
 
     result = []
@@ -104,13 +106,14 @@ def replace(fname, contents):
             for j in range(i - 1, -1, -1):
                 past_line = lines[j]
                 if (match := re.search(
-                    f"fn ([a-zA-Z0-9_]+)(<[a-zA-Z: +']+>)?\\(",
+                    r"fn ([\w]+)(<[\w: \+']+>)?\(",
                     past_line
                 )):
                     function_name = match.group(1)
                     break
             assert function_name is not None
 
+            local_target = target
             if target in (
                 "consensus::protocol_proposal",
                 "consensus::protocol_sync",
@@ -124,7 +127,7 @@ def replace(fname, contents):
                 "net::protocol_version",
                 "net::p2p",
             ):
-                target += f"::{function_name}()"
+                local_target += f"::{function_name}()"
 
             # No target exists for this file at all. Just ignore these
             # We would normally delete any target set for these files
@@ -140,8 +143,8 @@ def replace(fname, contents):
                 old_text = f"{ln()}: {line}"
 
                 line = re.sub(
-                     'target: ([A-Z_]+|"[a-zA-Z:_-]+"),',
-                    f'target: "{target}",',
+                    r'target: ([\w]+|"[\w:\-\(\)]+"),',
+                    f'target: "{local_target}",',
                     line
                 )
 
@@ -153,7 +156,7 @@ def replace(fname, contents):
 
                 #print(f"    No target: {line}")
                 line = line.replace(f'{log_level}!(',
-                                    f'{log_level}!(target: "{target}", ')
+                                    f'{log_level}!(target: "{local_target}", ')
 
                 is_modified = True
                 new_text = f"{ln()}: {line}"
@@ -176,7 +179,7 @@ def replace(fname, contents):
                 if re.search(r'target: ([\w]+|"[\w:\-\(\)]+"),', line):
                     line = re.sub(
                         r'target: ([\w]+|"[\w:\-\(\)]+"),',
-                        f'target: "{target}",',
+                        f'target: "{local_target}",',
                         line
                     )
 
@@ -189,7 +192,7 @@ def replace(fname, contents):
                     leading_space = lambda line: len(line) - len(line.lstrip())
 
                     added_line = (" "*leading_space(line)
-                                  + f'target: "{target}",')
+                                  + f'target: "{local_target}",')
                     result.append(added_line)
 
                     new_text += f"\n{ln()}: {added_line}\n{ln() + 1}: {line}"
@@ -219,7 +222,9 @@ def main():
         with open(f"src/{fname}", "r") as f:
             contents = f.read()
 
-        contents = replace(fname, contents)
+        if (contents := replace(fname, contents)) is None:
+            # Skip this file
+            continue
 
         # Uncomment this to apply the changes
         #with open(f"src/{fname}", "w") as f:
