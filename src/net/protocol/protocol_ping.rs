@@ -72,7 +72,7 @@ impl ProtocolPing {
     /// sends a ping message with a random nonce. Loop starts a timer, waits
     /// for the pong reply and insures the nonce is the same.
     async fn run_ping_pong(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_ping::run_ping_pong()", "ProtocolPing::run_ping_pong() [START]");
+        debug!(target: "net::protocol_ping::run_ping_pong()", "START");
         loop {
             // Wait channel_heartbeat amount of time.
             sleep(self.settings.channel_heartbeat_seconds.into()).await;
@@ -83,7 +83,7 @@ impl ProtocolPing {
             // Send ping message.
             let ping = message::PingMessage { nonce };
             self.channel.clone().send(ping).await?;
-            debug!(target: "net::protocol_ping::run_ping_pong()", "ProtocolPing::run_ping_pong() send Ping message");
+            debug!(target: "net::protocol_ping::run_ping_pong()", "Send Ping message");
             // Start the timer for ping timer.
             let start = Instant::now();
 
@@ -91,29 +91,36 @@ impl ProtocolPing {
             let pong_msg = self.pong_sub.receive().await?;
             if pong_msg.nonce != nonce {
                 // TODO: this is too extreme
-                error!(target: "net::protocol_ping::run_ping_pong()", "Wrong nonce for ping reply. Disconnecting from channel.");
+                error!(
+                    target: "net::protocol_ping::run_ping_pong()",
+                    "Wrong nonce for ping reply. Disconnecting from channel."
+                );
                 self.channel.stop().await;
                 return Err(Error::ChannelStopped)
             }
             let duration = start.elapsed().as_millis();
-            debug!(target: "net::protocol_ping::run_ping_pong()", "Received Pong message {}ms from [{:?}]",
-                   duration, self.channel.address());
+            debug!(
+                target: "net::protocol_ping::run_ping_pong()",
+                "Received Pong message {}ms from [{:?}]",
+                duration,
+                self.channel.address()
+            );
         }
     }
 
     /// Waits for ping, then replies with pong. Copies ping's nonce into the
     /// pong reply.
     async fn reply_to_ping(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_ping::reply_to_ping()", "ProtocolPing::reply_to_ping() [START]");
+        debug!(target: "net::protocol_ping::reply_to_ping()", "START");
         loop {
             // Wait for ping, reply with pong that has a matching nonce.
             let ping = self.ping_sub.receive().await?;
-            debug!(target: "net::protocol_ping::reply_to_ping()", "ProtocolPing::reply_to_ping() received Ping message");
+            debug!(target: "net::protocol_ping::reply_to_ping()", "Received Ping message");
 
             // Send pong message.
             let pong = message::PongMessage { nonce: ping.nonce };
             self.channel.clone().send(pong).await?;
-            debug!(target: "net::protocol_ping::reply_to_ping()", "ProtocolPing::reply_to_ping() sent Pong reply");
+            debug!(target: "net::protocol_ping::reply_to_ping()", "Sent Pong reply");
         }
     }
 
@@ -129,11 +136,11 @@ impl ProtocolBase for ProtocolPing {
     /// protocol task manager, then queues the reply. Sends out a ping and
     /// waits for pong reply. Waits for ping and replies with a pong.
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_ping::start()", "ProtocolPing::start() [START]");
+        debug!(target: "net::protocol_ping::start()", "START");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().run_ping_pong(), executor.clone()).await;
         self.jobsman.clone().spawn(self.reply_to_ping(), executor).await;
-        debug!(target: "net::protocol_ping::start()", "ProtocolPing::start() [END]");
+        debug!(target: "net::protocol_ping::start()", "END");
         Ok(())
     }
 

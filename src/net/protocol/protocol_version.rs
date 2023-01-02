@@ -64,7 +64,7 @@ impl ProtocolVersion {
     /// and wait for version acknowledgement. Wait for version info and send
     /// version acknowledgement.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_version::run()", "ProtocolVersion::run() [START]");
+        debug!(target: "net::protocol_version::run()", "START");
         // Start timer
         // Send version, wait for verack
         // Wait for version, send verack
@@ -79,13 +79,13 @@ impl ProtocolVersion {
             return Err(Error::ChannelTimeout)
         }
 
-        debug!(target: "net::protocol_version::run()", "ProtocolVersion::run() [END]");
+        debug!(target: "net::protocol_version::run()", "END");
         Ok(())
     }
 
     /// Send and recieve version information.
     async fn exchange_versions(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_version::exchange_versions()", "ProtocolVersion::exchange_versions() [START]");
+        debug!(target: "net::protocol_version::exchange_versions()", "START");
 
         let send = executor.spawn(self.clone().send_version());
         let recv = executor.spawn(self.recv_version());
@@ -93,14 +93,14 @@ impl ProtocolVersion {
         send.await?;
         recv.await?;
 
-        debug!(target: "net::protocol_version::exchange_versions()", "ProtocolVersion::exchange_versions() [END]");
+        debug!(target: "net::protocol_version::exchange_versions()", "END");
         Ok(())
     }
 
     /// Send version info and wait for version acknowledgement
     /// and ensures the app version is the same, if configured.
     async fn send_version(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_version::send_version()", "ProtocolVersion::send_version() [START]");
+        debug!(target: "net::protocol_version::send_version()", "START");
 
         let version = message::VersionMessage { node_id: self.settings.node_id.clone() };
 
@@ -114,14 +114,21 @@ impl ProtocolVersion {
         if !self.settings.seeds.contains(&self.channel.address()) {
             match &self.settings.app_version {
                 Some(app_version) => {
-                    debug!(target: "net::protocol_version::send_version()", "ProtocolVersion::send_version() [App version: {}]", app_version);
-                    debug!(target: "net::protocol_version::send_version()", "ProtocolVersion::send_version() [Recieved version: {}]", verack_msg.app);
+                    debug!(
+                        target: "net::protocol_version::send_version()",
+                        "App version: {}, received version: {}",
+                        app_version,
+                        verack_msg.app
+                    );
                     // Version format: MAJOR.MINOR.PATCH
                     let app_versions: Vec<&str> = app_version.split('.').collect();
                     let verack_msg_versions: Vec<&str> = verack_msg.app.split('.').collect();
                     // Check for malformed versions
                     if app_versions.len() != 3 || verack_msg_versions.len() != 3 {
-                        error!(target: "net::protocol_version::send_version()", "ProtocolVersion::send_version() [Malformed version detected. Disconnecting from channel.]");
+                        error!(
+                            target: "net::protocol_version::send_version()",
+                            "Malformed version detected. Disconnecting from channel."
+                        );
                         self.hosts.remove(&self.channel.address()).await;
                         self.channel.stop().await;
                         return Err(Error::ChannelStopped)
@@ -132,7 +139,7 @@ impl ProtocolVersion {
                     {
                         error!(
                             target: "net::protocol_version::send_version()",
-                            "ProtocolVersion::send_version() [Wrong app version from ({}). Disconnecting from channel.]",
+                            "Wrong app version from ({}). Disconnecting from channel.",
                             self.channel.address()
                         );
                         self.hosts.remove(&self.channel.address()).await;
@@ -141,19 +148,22 @@ impl ProtocolVersion {
                     }
                 }
                 None => {
-                    debug!(target: "net::protocol_version::send_version()", "ProtocolVersion::send_version() [App version not set, ignorring received]")
+                    debug!(
+                        target: "net::protocol_version::send_version()",
+                        "App version not set, ignoring received"
+                    )
                 }
             }
         }
 
-        debug!(target: "net::protocol_version::send_version()", "ProtocolVersion::send_version() [END]");
+        debug!(target: "net::protocol_version::send_version()", "END");
         Ok(())
     }
 
     /// Recieve version info, check the message is okay and send version
     /// acknowledgement with app version attached.
     async fn recv_version(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_version::recv_version()", "ProtocolVersion::recv_version() [START]");
+        debug!(target: "net::protocol_version::recv_version()", "START");
         // Receive version message
         let version = self.version_sub.receive().await?;
         self.channel.set_remote_node_id(version.node_id.clone()).await;
@@ -163,7 +173,7 @@ impl ProtocolVersion {
             message::VerackMessage { app: self.settings.app_version.clone().unwrap_or_default() };
         self.channel.clone().send(verack).await?;
 
-        debug!(target: "net::protocol_version::recv_version()", "ProtocolVersion::recv_version() [END]");
+        debug!(target: "net::protocol_version::recv_version()", "END");
         Ok(())
     }
 }
