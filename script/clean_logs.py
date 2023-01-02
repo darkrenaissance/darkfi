@@ -126,6 +126,7 @@ def replace(fname, contents):
                 "net::protocol_seed",
                 "net::protocol_version",
                 "net::p2p",
+                "net::message_subscriber",
             ):
                 local_target += f"::{function_name}()"
 
