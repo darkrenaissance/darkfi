@@ -136,7 +136,7 @@ def replace(fname, contents):
                     + f" {line}"
                 )
             # Single lines with a target that's a constant or string
-            elif re.search(f'{log_level}!\\(target: ([\\w]+|"[\\w:\\-\\(\\)]+"),', line):
+            elif re.search(rf'{log_level}!\(target: ([\w]+|"[\w:\-\(\)]+"),', line):
                 old_text = f"{ln()}: {line}"
 
                 line = re.sub(
@@ -160,7 +160,7 @@ def replace(fname, contents):
             # Multiline logs
             # We read the next line and check if there's a target set or not
             else:
-                assert re.search(f"{log_level}!\\($", line)
+                assert re.search(rf"{log_level}!\($", line)
 
                 old_text = f"{ln()}: {line}"
                 new_text = f"{ln()}: {line}"
@@ -173,9 +173,9 @@ def replace(fname, contents):
                 old_text += f"\n{ln()}: {line}"
 
                 # Constants or target strings set
-                if re.search('target: ([A-Z_]+|"[a-zA-Z:_-]+"),', line):
+                if re.search(r'target: ([\w]+|"[\w:\-\(\)]+"),', line):
                     line = re.sub(
-                         'target: ([A-Z_]+|"[a-zA-Z:_-]+"),',
+                        r'target: ([\w]+|"[\w:\-\(\)]+"),',
                         f'target: "{target}",',
                         line
                     )
@@ -184,6 +184,8 @@ def replace(fname, contents):
                 # Multi-line logs with no target set
                 # Insert an extra line with the target
                 else:
+                    assert re.search('^"', line)
+
                     leading_space = lambda line: len(line) - len(line.lstrip())
 
                     added_line = (" "*leading_space(line)
