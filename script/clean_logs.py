@@ -118,7 +118,6 @@ def replace(fname, contents):
                     past_line
                 )):
                     function_name = match.group(1)
-                    print(past_line, function_name)
                     break
             assert function_name is not None
 
@@ -162,6 +161,7 @@ def replace(fname, contents):
             # Multiline logs
             # We read the next line and check if there's a target set or not
             else:
+                print(line)
                 assert re.search(f"{log_level}!\\($", line)
 
                 old_text = f"{ln()}: {line}"

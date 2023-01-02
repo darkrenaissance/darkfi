@@ -75,7 +75,7 @@ impl Transaction {
                 if let Some(vks) = verifying_keys.read().await.get(&call.contract_id.to_bytes()) {
                     if let Some(vk) = vks.iter().find(|x| &x.0 == zk_ns) {
                         // We have a verifying key for this
-                        debug!(target: "", "public inputs: {:#?}", public_vals);
+                        debug!("public inputs: {:#?}", public_vals);
                         if let Err(e) = proof.verify(&vk.1, public_vals) {
                             error!(
                                 target: "",
@@ -84,13 +84,13 @@ impl Transaction {
                             );
                             return Err(VerifyFailed::ProofVerifyFailed(e.to_string()).into())
                         }
-                        debug!(target: "", "Successfully verified {}::{} ZK proof", call.contract_id, zk_ns);
+                        debug!("Successfully verified {}::{} ZK proof", call.contract_id, zk_ns);
                         continue
                     }
                 }
 
                 let e = format!("{}:{} circuit VK nonexistent", call.contract_id, zk_ns);
-                error!(target: "", "{}", e);
+                error!("{}", e);
                 return Err(VerifyFailed::ProofVerifyFailed(e).into())
             }
         }
@@ -102,19 +102,19 @@ impl Transaction {
     pub fn verify_sigs(&self, pub_table: Vec<Vec<PublicKey>>) -> Result<()> {
         let tx_data = self.encode_without_sigs()?;
         let data_hash = blake3::hash(&tx_data);
-        debug!(target: "", "tx.verify_sigs: data_hash: {:?}", data_hash.as_bytes());
+        debug!("tx.verify_sigs: data_hash: {:?}", data_hash.as_bytes());
 
         assert!(pub_table.len() == self.signatures.len());
 
         for (i, (sigs, pubkeys)) in self.signatures.iter().zip(pub_table.iter()).enumerate() {
             for (pubkey, signature) in pubkeys.iter().zip(sigs) {
-                debug!(target: "", "Verifying signature with public key: {}", pubkey);
+                debug!("Verifying signature with public key: {}", pubkey);
                 if !pubkey.verify(&data_hash.as_bytes()[..], signature) {
-                    error!(target: "", "tx::verify_sigs[{}] failed to verify", i);
+                    error!("tx::verify_sigs[{}] failed to verify", i);
                     return Err(Error::InvalidSignature)
                 }
             }
-            debug!(target: "", "tx::verify_sigs[{}] passed", i);
+            debug!("tx::verify_sigs[{}] passed", i);
         }
 
         Ok(())
@@ -128,11 +128,11 @@ impl Transaction {
     ) -> Result<Vec<Signature>> {
         let tx_data = self.encode_without_sigs()?;
         let data_hash = blake3::hash(&tx_data);
-        debug!(target: "", "tx.create_sigs: data_hash: {:?}", data_hash.as_bytes());
+        debug!("tx.create_sigs: data_hash: {:?}", data_hash.as_bytes());
 
         let mut sigs = vec![];
         for secret in secret_keys {
-            debug!(target: "", "Creating signature with public key: {}", PublicKey::from_secret(*secret));
+            debug!("Creating signature with public key: {}", PublicKey::from_secret(*secret));
             let signature = secret.sign(rng, &data_hash.as_bytes()[..]);
             sigs.push(signature);
         }
