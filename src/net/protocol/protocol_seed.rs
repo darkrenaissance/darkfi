@@ -65,7 +65,7 @@ impl ProtocolSeed {
         }
 
         let ext_addrs = self.settings.external_addr.clone();
-        debug!(target: "net", "ProtocolSeed::send_self_address() ext_addrs={:?}", ext_addrs);
+        debug!(target: "net::protocol_seed::send_self_address()", "ProtocolSeed::send_self_address() ext_addrs={:?}", ext_addrs);
         let ext_addr_msg = message::ExtAddrsMessage { ext_addrs };
         self.channel.clone().send(ext_addr_msg).await
     }
@@ -77,7 +77,7 @@ impl ProtocolBase for ProtocolSeed {
     /// then sends our address to the seed server. Sends a get-address
     /// message and receives an address message.
     async fn start(self: Arc<Self>, _executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_seed::send_self_address()", "START");
+        debug!(target: "net::protocol_seed::start()", "START");
 
         // Send own address to the seed server.
         self.send_self_address().await?;
@@ -89,13 +89,13 @@ impl ProtocolBase for ProtocolSeed {
         // Receive addresses.
         let addrs_msg = self.addr_sub.receive().await?;
         debug!(
-            target: "net::protocol_seed::send_self_address()",
+            target: "net::protocol_seed::start()",
             "ProtocolSeed::start() received {} addrs",
             addrs_msg.addrs.len()
         );
         self.hosts.store(addrs_msg.addrs.clone()).await;
 
-        debug!(target: "net::protocol_seed::send_self_address()", "END");
+        debug!(target: "net::protocol_seed::start()", "END");
         Ok(())
     }
 

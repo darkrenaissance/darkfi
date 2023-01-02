@@ -89,7 +89,7 @@ impl ProtocolAddress {
     /// address messages on the address subsciption. Adds the recieved
     /// addresses to the list of hosts.
     async fn handle_receive_addrs(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net", "ProtocolAddress::handle_receive_addrs() [START]");
+        debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::handle_receive_addrs() [START]");
         loop {
             let addrs_msg = self.addrs_sub.receive().await?;
             debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::handle_receive_addrs() received {} addrs", addrs_msg.addrs.len());
@@ -101,10 +101,10 @@ impl ProtocolAddress {
     /// external address messages on the address subsciption. Adds the recieved
     /// external addresses to the list of hosts.
     async fn handle_receive_ext_addrs(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::handle_receive_ext_addrs() [START]");
+        debug!(target: "net::protocol_address::handle_receive_ext_addrs()", "ProtocolAddress::handle_receive_ext_addrs() [START]");
         loop {
             let ext_addrs_msg = self.ext_addrs_sub.receive().await?;
-            debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::handle_receive_ext_addrs() received {} addrs", ext_addrs_msg.ext_addrs.len());
+            debug!(target: "net::protocol_address::handle_receive_ext_addrs()", "ProtocolAddress::handle_receive_ext_addrs() received {} addrs", ext_addrs_msg.ext_addrs.len());
             self.hosts.store_ext(self.channel.address(), ext_addrs_msg.ext_addrs.clone()).await;
         }
     }
@@ -113,17 +113,17 @@ impl ProtocolAddress {
     /// get-address messages on the get-address subsciption. Then replies
     /// with an address message.
     async fn handle_receive_get_addrs(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::handle_receive_get_addrs() [START]");
+        debug!(target: "net::protocol_address::handle_receive_get_addrs()", "ProtocolAddress::handle_receive_get_addrs() [START]");
         loop {
             let _get_addrs = self.get_addrs_sub.receive().await?;
 
-            debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::handle_receive_get_addrs() received GetAddrs message");
+            debug!(target: "net::protocol_address::handle_receive_get_addrs()", "ProtocolAddress::handle_receive_get_addrs() received GetAddrs message");
 
             // Loads the list of hosts.
             let mut addrs = self.hosts.load_all().await;
             // Shuffling list of hosts
             addrs.shuffle(&mut rand::thread_rng());
-            debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::handle_receive_get_addrs() sending {} addrs", addrs.len());
+            debug!(target: "net::protocol_address::handle_receive_get_addrs()", "ProtocolAddress::handle_receive_get_addrs() sending {} addrs", addrs.len());
             // Creates an address messages containing host address.
             let addrs_msg = message::AddrsMessage { addrs };
             // Sends the address message across the channel.
@@ -132,7 +132,7 @@ impl ProtocolAddress {
     }
 
     async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::send_addrs() [START]");
+        debug!(target: "net::protocol_address::send_my_addrs()", "ProtocolAddress::send_addrs() [START]");
         loop {
             let ext_addrs = self.settings.external_addr.clone();
             let ext_addr_msg = message::ExtAddrsMessage { ext_addrs };
@@ -157,7 +157,7 @@ impl ProtocolBase for ProtocolAddress {
             self.jobsman.clone().spawn(self.clone().send_my_addrs(), executor.clone()).await;
         }
 
-        debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::start() [START]");
+        debug!(target: "net::protocol_address::start()", "ProtocolAddress::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_ext_addrs(), executor.clone()).await;
@@ -166,7 +166,7 @@ impl ProtocolBase for ProtocolAddress {
         // Send get_address message.
         let get_addrs = message::GetAddrsMessage {};
         let _ = self.channel.clone().send(get_addrs).await;
-        debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::start() [END]");
+        debug!(target: "net::protocol_address::start()", "ProtocolAddress::start() [END]");
         Ok(())
     }
 

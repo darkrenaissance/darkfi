@@ -53,7 +53,7 @@ impl ProtocolTx {
         state: ValidatorStatePtr,
         p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {
-        debug!("Adding ProtocolTx to the protocol registry");
+        debug!(target: "consensus::protocol_tx::init()", "Adding ProtocolTx to the protocol registry");
         let msg_subsystem = channel.get_message_subsystem();
         msg_subsystem.add_dispatch::<Transaction>().await;
 
@@ -70,13 +70,13 @@ impl ProtocolTx {
     }
 
     async fn handle_receive_tx(self: Arc<Self>) -> Result<()> {
-        debug!(target: "consensus::protocol_tx::init()", "ProtocolTx::handle_receive_tx() [START]");
+        debug!(target: "consensus::protocol_tx::handle_receive_tx()", "ProtocolTx::handle_receive_tx() [START]");
         let exclude_list = vec![self.channel_address.clone()];
         loop {
             let tx = match self.tx_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    debug!(target: "consensus::protocol_tx::init()", "ProtocolTx::handle_receive_tx(): recv fail: {}", e);
+                    debug!(target: "consensus::protocol_tx::handle_receive_tx()", "ProtocolTx::handle_receive_tx(): recv fail: {}", e);
                     continue
                 }
             };
@@ -86,7 +86,7 @@ impl ProtocolTx {
             // Nodes use unconfirmed_txs vector as seen_txs pool.
             if self.state.write().await.append_tx(tx_copy.clone()).await {
                 if let Err(e) = self.p2p.broadcast_with_exclude(tx_copy, &exclude_list).await {
-                    error!(target: "consensus::protocol_tx::init()", "handle_receive_tx(): p2p broadcast fail: {}", e);
+                    error!(target: "consensus::protocol_tx::handle_receive_tx()", "handle_receive_tx(): p2p broadcast fail: {}", e);
                 };
             }
         }
@@ -96,10 +96,10 @@ impl ProtocolTx {
 #[async_trait]
 impl ProtocolBase for ProtocolTx {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "consensus::protocol_tx::init()", "ProtocolTx::start() [START]");
+        debug!(target: "consensus::protocol_tx::start()", "ProtocolTx::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_tx(), executor.clone()).await;
-        debug!(target: "consensus::protocol_tx::init()", "ProtocolTx::start() [END]");
+        debug!(target: "consensus::protocol_tx::start()", "ProtocolTx::start() [END]");
         Ok(())
     }
 
