@@ -103,10 +103,10 @@ impl<M: Message> MessageDispatcher<M> {
     /// channels. Used strictly internally.
     async fn _trigger_all(&self, message: MessageResult<M>) {
         debug!(
-            target: "net::message_subscriber",
-            "MessageDispatcher<M={}>::trigger_all({}) [START, subs={}]",
+            target: "net::message_subscriber::_trigger_all()",
+            "START, message={}({}), subs={}",
+            if message.is_ok() { "Ok" } else { "Err" },
             M::name(),
-            if message.is_ok() { "msg" } else { "err" },
             self.subs.lock().await.len()
         );
         let mut garbage_ids = Vec::new();
@@ -126,10 +126,10 @@ impl<M: Message> MessageDispatcher<M> {
         self.collect_garbage(garbage_ids).await;
 
         debug!(
-            target: "net::message_subscriber",
-            "MessageDispatcher<M={}>::trigger_all({}) [END, subs={}]",
+            target: "net::message_subscriber::_trigger_all()",
+            "END, msg={}({}), subs={}",
+            if message.is_ok() { "Ok" } else { "Err" },
             M::name(),
-            if message.is_ok() { "msg" } else { "err" },
             self.subs.lock().await.len()
         );
     }
@@ -157,7 +157,11 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
                 self._trigger_all(message).await
             }
             Err(err) => {
-                debug!(target: "net::message_subscriber", "Unable to decode data. Dropping...: {}", err);
+                debug!(
+                    target: "net::message_subscriber::trigger()",
+                    "Unable to decode data. Dropping...: {}",
+                    err
+                );
             }
         }
     }
@@ -225,8 +229,8 @@ impl MessageSubsystem {
             }
             None => {
                 warn!(
-                    target: "net::message_subscriber",
-                    "MessageSubsystem::notify(\"{}\", payload) did not find a dispatcher",
+                    target: "net::message_subscriber::notify()",
+                    "Command '{}' did not find a dispatcher",
                     command
                 );
             }
