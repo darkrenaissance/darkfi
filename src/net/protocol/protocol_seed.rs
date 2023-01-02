@@ -77,7 +77,7 @@ impl ProtocolBase for ProtocolSeed {
     /// then sends our address to the seed server. Sends a get-address
     /// message and receives an address message.
     async fn start(self: Arc<Self>, _executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_seed::send_self_address()", "ProtocolSeed::start() [START]");
+        debug!(target: "net::protocol_seed::send_self_address()", "START");
 
         // Send own address to the seed server.
         self.send_self_address().await?;
@@ -88,10 +88,14 @@ impl ProtocolBase for ProtocolSeed {
 
         // Receive addresses.
         let addrs_msg = self.addr_sub.receive().await?;
-        debug!(target: "net::protocol_seed::send_self_address()", "ProtocolSeed::start() received {} addrs", addrs_msg.addrs.len());
+        debug!(
+            target: "net::protocol_seed::send_self_address()",
+            "ProtocolSeed::start() received {} addrs",
+            addrs_msg.addrs.len()
+        );
         self.hosts.store(addrs_msg.addrs.clone()).await;
 
-        debug!(target: "net::protocol_seed::send_self_address()", "ProtocolSeed::start() [END]");
+        debug!(target: "net::protocol_seed::send_self_address()", "END");
         Ok(())
     }
 
