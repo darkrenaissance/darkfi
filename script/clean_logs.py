@@ -71,7 +71,7 @@ def replace(fname, contents):
     #    return ""
     print(f"Replacing {target}" + " "*(40 - len(target)) + f"[{fname}]")
 
-    result = ""
+    result = []
     lines = contents.split("\n")
     i = 0
     while i < len(lines):
@@ -136,7 +136,7 @@ def replace(fname, contents):
                     + f" {line}"
                 )
             # Single lines with a target that's a constant or string
-            elif re.search(f'{log_level}!\\(target: ([A-Z_]+|"[a-zA-Z:_-]+"),', line):
+            elif re.search(f'{log_level}!\\(target: ([\\w]+|"[\\w:\\-\\(\\)]+"),', line):
                 old_text = f"{ln()}: {line}"
 
                 line = re.sub(
@@ -165,7 +165,7 @@ def replace(fname, contents):
                 old_text = f"{ln()}: {line}"
                 new_text = f"{ln()}: {line}"
 
-                result += line + "\n"
+                result.append(line)
                 i += 1
                 assert i < len(lines)
                 line = lines[i]
@@ -188,7 +188,7 @@ def replace(fname, contents):
 
                     added_line = (" "*leading_space(line)
                                   + f'target: "{target}",')
-                    result += f"{added_line}\n"
+                    result.append(added_line)
 
                     new_text += f"\n{ln()}: {added_line}\n{ln() + 1}: {line}"
 
@@ -208,9 +208,9 @@ def replace(fname, contents):
             )
             print()
 
-        result += f"{line}\n"
+        result.append(line)
         i += 1
-    return result
+    return "\n".join(result)
 
 def main():
     for fname in glob.glob("**/*.rs", root_dir="src/", recursive=True):
