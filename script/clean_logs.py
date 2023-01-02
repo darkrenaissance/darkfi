@@ -98,16 +98,6 @@ def replace(fname, contents):
             log_level = "error"
 
         if log_level is not None:
-            # No target exists for this file at all. Just ignore these
-            # We would normally delete any target set for these files
-            # but so far we have none of them, so just ignore them.
-            if not target:
-                print(
-                    "    "
-                    + Back.RED + "Skip [no target]:" + Style.RESET_ALL
-                    + f" {line}"
-                )
-
             # Walk backwards to find the function name
             # Range is (i, 0]
             function_name = None
@@ -136,6 +126,15 @@ def replace(fname, contents):
             ):
                 target += f"::{function_name}()"
 
+            # No target exists for this file at all. Just ignore these
+            # We would normally delete any target set for these files
+            # but so far we have none of them, so just ignore them.
+            if not target:
+                print(
+                    "    "
+                    + Back.RED + "Skip [no target]:" + Style.RESET_ALL
+                    + f" {line}"
+                )
             # Single lines with a target that's a constant or string
             elif re.search(f'{log_level}!\\(target: ([A-Z_]+|"[a-zA-Z:_-]+"),', line):
                 old_text = f"{ln()}: {line}"
@@ -161,7 +160,6 @@ def replace(fname, contents):
             # Multiline logs
             # We read the next line and check if there's a target set or not
             else:
-                print(line)
                 assert re.search(f"{log_level}!\\($", line)
 
                 old_text = f"{ln()}: {line}"
