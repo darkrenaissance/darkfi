@@ -65,7 +65,7 @@ impl ProtocolSeed {
         }
 
         let ext_addrs = self.settings.external_addr.clone();
-        debug!(target: "net", "ProtocolSeed::send_self_address() ext_addrs={:?}", ext_addrs);
+        debug!(target: "net::protocol_seed::send_self_address()", "ProtocolSeed::send_self_address() ext_addrs={:?}", ext_addrs);
         let ext_addr_msg = message::ExtAddrsMessage { ext_addrs };
         self.channel.clone().send(ext_addr_msg).await
     }

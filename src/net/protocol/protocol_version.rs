@@ -64,7 +64,7 @@ impl ProtocolVersion {
     /// and wait for version acknowledgement. Wait for version info and send
     /// version acknowledgement.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net", "ProtocolVersion::run() [START]");
+        debug!(target: "net::protocol_version::run()", "ProtocolVersion::run() [START]");
         // Start timer
         // Send version, wait for verack
         // Wait for version, send verack
@@ -131,6 +131,7 @@ impl ProtocolVersion {
                         app_versions[1] != verack_msg_versions[1]
                     {
                         error!(
+                            target: "net::protocol_version::run()",
                             target: "net::protocol_version::run()",
                             "ProtocolVersion::send_version() [Wrong app version from ({}). Disconnecting from channel.]",
                             self.channel.address()

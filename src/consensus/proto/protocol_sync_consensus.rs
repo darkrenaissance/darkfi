@@ -68,7 +68,7 @@ impl ProtocolSyncConsensus {
     }
 
     async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
-        debug!("ProtocolSyncConsensus::handle_receive_request() [START]");
+        debug!(target: "consensus::protocol_sync_consensus::handle_receive_request()", "ProtocolSyncConsensus::handle_receive_request() [START]");
         loop {
             let req = match self.request_sub.receive().await {
                 Ok(v) => v,
@@ -119,6 +119,7 @@ impl ProtocolSyncConsensus {
             };
 
             debug!(
+                target: "consensus::protocol_sync_consensus::handle_receive_request()",
                 target: "consensus::protocol_sync_consensus::handle_receive_request()",
                 "ProtocolSyncConsensuss::handle_receive_slot_checkpoints_request() received {:?}",
                 req

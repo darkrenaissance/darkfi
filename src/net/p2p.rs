@@ -156,7 +156,7 @@ impl P2p {
     /// Invoke startup and seeding sequence. Call from constructing thread.
     // ANCHOR: start
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net", "P2p::start() [BEGIN]");
+        debug!(target: "net::p2p::start()", "P2p::start() [BEGIN]");
 
         *self.state.lock().await = P2pState::Start;
 
@@ -313,6 +313,7 @@ impl P2p {
                 msg = subscriber.receive().fuse() => {
                         if let Err(e) = msg {
                             warn!(
+                                target: "net::p2p::start()",
                                 target: "net::p2p::start()",
                                 "P2p::wait_for_outbound(): Outbound connection failed [{}]: {}",
                                 addr, e
