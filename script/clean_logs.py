@@ -108,6 +108,35 @@ def replace(fname, contents):
                     + f" {line}"
                 )
 
+            # Walk backwards to find the function name
+            # Range is (i, 0]
+            function_name = None
+            for j in range(i - 1, -1, -1):
+                past_line = lines[j]
+                if (match := re.search(
+                    f"fn ([a-zA-Z0-9_]+)(<[a-zA-Z: +']+>)?\\(",
+                    past_line
+                )):
+                    function_name = match.group(1)
+                    print(past_line, function_name)
+                    break
+            assert function_name is not None
+
+            if target in (
+                "consensus::protocol_proposal",
+                "consensus::protocol_sync",
+                "consensus::protocol_sync_consensus",
+                "consensus::protocol_tx",
+                "runtime::db",
+                "net::hosts",
+                "net::protocol_address",
+                "net::protocol_ping",
+                "net::protocol_seed",
+                "net::protocol_version",
+                "net::p2p",
+            ):
+                target += f"::{function_name}()"
+
             # Single lines with a target that's a constant or string
             elif re.search(f'{log_level}!\\(target: ([A-Z_]+|"[a-zA-Z:_-]+"),', line):
                 old_text = f"{ln()}: {line}"
@@ -192,8 +221,8 @@ def main():
 
         contents = replace(fname, contents)
 
-        # Doesn't write anything yet
-        #with open(fname, "w") as f:
+        # Uncomment this to apply the changes
+        #with open(f"src/{fname}", "w") as f:
         #    f.write(contents)
 
 if __name__ == "__main__":
