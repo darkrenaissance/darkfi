@@ -89,7 +89,7 @@ impl ProtocolAddress {
     /// address messages on the address subsciption. Adds the recieved
     /// addresses to the list of hosts.
     async fn handle_receive_addrs(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::handle_receive_addrs() [START]");
+        debug!(target: "net", "ProtocolAddress::handle_receive_addrs() [START]");
         loop {
             let addrs_msg = self.addrs_sub.receive().await?;
             debug!(target: "net::protocol_address::handle_receive_addrs()", "ProtocolAddress::handle_receive_addrs() received {} addrs", addrs_msg.addrs.len());

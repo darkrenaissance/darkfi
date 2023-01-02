@@ -72,7 +72,7 @@ impl ProtocolPing {
     /// sends a ping message with a random nonce. Loop starts a timer, waits
     /// for the pong reply and insures the nonce is the same.
     async fn run_ping_pong(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_ping::run_ping_pong()", "ProtocolPing::run_ping_pong() [START]");
+        debug!(target: "net", "ProtocolPing::run_ping_pong() [START]");
         loop {
             // Wait channel_heartbeat amount of time.
             sleep(self.settings.channel_heartbeat_seconds.into()).await;

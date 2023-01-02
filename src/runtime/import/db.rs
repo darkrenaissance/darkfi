@@ -78,7 +78,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
             let contract_id = &env.contract_id;
 
             let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
-                error!(target: "runtime::db::db_init()", "Failed to make slice from ptr");
+                error!(target: "wasm_runtime::db_init", "Failed to make slice from ptr");
                 return DB_INIT_FAILED
             };
 

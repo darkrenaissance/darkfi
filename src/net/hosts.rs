@@ -59,7 +59,7 @@ impl Hosts {
 
     /// Add a new host to the host list, after filtering.
     pub async fn store(&self, input_addrs: Vec<Url>) {
-        debug!(target: "net::hosts::store()", "hosts::store() [Start]");
+        debug!(target: "net", "hosts::store() [Start]");
         let addrs = if !self.localnet {
             let filtered = filter_localnet(input_addrs);
             let filtered = filter_invalid(&self.ipv4_range, &self.ipv6_range, filtered);

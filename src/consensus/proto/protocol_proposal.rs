@@ -45,7 +45,7 @@ impl ProtocolProposal {
         state: ValidatorStatePtr,
         p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {
-        debug!(target: "consensus::protocol_proposal::init()", "Adding ProtocolProposal to the protocol registry");
+        debug!("Adding ProtocolProposal to the protocol registry");
         let msg_subsystem = channel.get_message_subsystem();
         msg_subsystem.add_dispatch::<BlockProposal>().await;
 
@@ -96,7 +96,6 @@ impl ProtocolProposal {
                         {
                             error!(
                                 target: "consensus::protocol_proposal::init()",
-                                target: "consensus::protocol_proposal::init()",
                                 "ProtocolProposal::handle_receive_proposal(): proposal broadcast fail: {}",
                                 e
                             );
@@ -105,7 +104,6 @@ impl ProtocolProposal {
                 }
                 Err(e) => {
                     error!(
-                        target: "consensus::protocol_proposal::init()",
                         target: "consensus::protocol_proposal::init()",
                         "ProtocolProposal::handle_receive_proposal(): receive_proposal error: {}",
                         e
