@@ -60,14 +60,14 @@ impl Connector {
         macro_rules! connect {
             ($stream:expr, $transport:expr, $upgrade:expr) => {{
                 if let Err(err) = $stream {
-                    error!("Setup for {} failed: {}", connect_url, err);
+                    error!(target: "net::connector", "Setup for {} failed: {}", connect_url, err);
                     return Err(Error::ConnectFailed)
                 }
 
                 let stream = $stream?.await;
 
                 if let Err(err) = stream {
-                    error!("Connection to {}  failed: {}", connect_url, err);
+                    error!(target: "net::connector", "Connection to {}  failed: {}", connect_url, err);
                     return Err(Error::ConnectFailed)
                 }
 

@@ -28,7 +28,7 @@ use log::{debug, info, warn};
 
 /// async task used for block syncing.
 pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> {
-    info!("Starting blockchain sync...");
+    info!(target: "consensus::block_sync", "Starting blockchain sync...");
     // Getting a random connected channel to ask from peers
     match p2p.clone().random_channel().await {
         Some(channel) => {
@@ -40,7 +40,7 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
             // Node sends the last known slot checkpoint of the canonical blockchain
             // and loops until the response is the same slot (used to utilize batch requests).
             let mut last = state.read().await.blockchain.last_slot_checkpoint()?;
-            info!("Last known slot checkpoint: {:?}", last.slot);
+            info!(target: "consensus::block_sync", "Last known slot checkpoint: {:?}", last.slot);
 
             loop {
                 // Node creates a `SlotCheckpointRequest` and sends it
@@ -51,11 +51,11 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
                 let resp = response_sub.receive().await?;
 
                 // Verify and store retrieved checkpoints
-                debug!("block_sync_task(): Processing received slot checkpoints");
+                debug!(target: "consensus::block_sync", "block_sync_task(): Processing received slot checkpoints");
                 state.write().await.receive_slot_checkpoints(&resp.slot_checkpoints).await?;
 
                 let last_received = state.read().await.blockchain.last_slot_checkpoint()?;
-                info!("Last received slot checkpoint: {:?}", last_received.slot);
+                info!(target: "consensus::block_sync", "Last received slot checkpoint: {:?}", last_received.slot);
 
                 if last.slot == last_received.slot {
                     break
@@ -73,7 +73,7 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
             // and loops until the response is the same block (used to utilize
             // batch requests).
             let mut last = state.read().await.blockchain.last()?;
-            info!("Last known block: {:?} - {:?}", last.0, last.1);
+            info!(target: "consensus::block_sync", "Last known block: {:?} - {:?}", last.0, last.1);
 
             loop {
                 // Node creates a `BlockOrder` and sends it
@@ -84,11 +84,11 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
                 let resp = response_sub.receive().await?;
 
                 // Verify and store retrieved blocks
-                debug!("block_sync_task(): Processing received blocks");
+                debug!(target: "consensus::block_sync", "block_sync_task(): Processing received blocks");
                 state.write().await.receive_sync_blocks(&resp.blocks).await?;
 
                 let last_received = state.read().await.blockchain.last()?;
-                info!("Last received block: {:?} - {:?}", last_received.0, last_received.1);
+                info!(target: "consensus::block_sync", "Last received block: {:?} - {:?}", last_received.0, last_received.1);
 
                 if last == last_received {
                     break
@@ -97,9 +97,9 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
                 last = last_received;
             }
         }
-        None => warn!("Node is not connected to other nodes"),
+        None => warn!(target: "consensus::block_sync", "Node is not connected to other nodes"),
     };
 
-    info!("Blockchain synced!");
+    info!(target: "consensus::block_sync", "Blockchain synced!");
     Ok(())
 }

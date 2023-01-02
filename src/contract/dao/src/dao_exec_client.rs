@@ -74,7 +74,7 @@ impl Builder {
         exec_zkbin: &ZkBinary,
         exec_pk: &ProvingKey,
     ) -> Result<(DaoExecParams, Vec<Proof>)> {
-        debug!(target: "dao_contract::exec::wallet::Builder", "build()");
+        debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
         let (proposal_dest_x, proposal_dest_y) = self.proposal.dest.xy();

@@ -141,7 +141,7 @@ impl Channel {
     /// Starts the channel. Runs a receive loop to start receiving messages or
     /// handles a network failure.
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
-        debug!(target: "net", "Channel::start() [START, address={}]", self.address());
+        debug!(target: "net::channel", "Channel::start() [START, address={}]", self.address());
         let self2 = self.clone();
         self.receive_task.clone().start(
             self.clone().main_receive_loop(),
@@ -149,28 +149,28 @@ impl Channel {
             Error::NetworkServiceStopped,
             executor,
         );
-        debug!(target: "net", "Channel::start() [END, address={}]", self.address());
+        debug!(target: "net::channel", "Channel::start() [END, address={}]", self.address());
     }
 
     /// Stops the channel. Steps through each component of the channel
     /// connection and sends a stop signal. Notifies all subscribers that
     /// the channel has been closed.
     pub async fn stop(&self) {
-        debug!(target: "net", "Channel::stop() [START, address={}]", self.address());
+        debug!(target: "net::channel", "Channel::stop() [START, address={}]", self.address());
         if !(*self.stopped.lock().await) {
             *self.stopped.lock().await = true;
 
             self.stop_subscriber.notify(Error::ChannelStopped).await;
             self.receive_task.stop().await;
             self.message_subsystem.trigger_error(Error::ChannelStopped).await;
-            debug!(target: "net", "Channel::stop() [END, address={}]", self.address());
+            debug!(target: "net::channel", "Channel::stop() [END, address={}]", self.address());
         }
     }
 
     /// Creates a subscription to a stopped signal.
     /// If the channel is stopped then this will return a ChannelStopped error.
     pub async fn subscribe_stop(&self) -> Result<Subscription<Error>> {
-        debug!(target: "net",
+        debug!(target: "net::channel",
          "Channel::subscribe_stop() [START, address={}]",
          self.address()
         );
@@ -183,7 +183,7 @@ impl Channel {
         }
 
         let sub = self.stop_subscriber.clone().subscribe().await;
-        debug!(target: "net",
+        debug!(target: "net::channel",
          "Channel::subscribe_stop() [END, address={}]",
          self.address()
         );
@@ -195,7 +195,7 @@ impl Channel {
     /// creates a new payload and sends it over the TCP connection as a
     /// packet. Returns an error if something goes wrong.
     pub async fn send<M: message::Message>(&self, message: M) -> Result<()> {
-        debug!(target: "net",
+        debug!(target: "net::channel",
          "Channel::send() [START, command={:?}, address={}]",
          M::name(),
          self.address()
@@ -212,13 +212,13 @@ impl Channel {
         let result = match self.send_message(message).await {
             Ok(()) => Ok(()),
             Err(err) => {
-                error!("Channel send error for [{}]: {}", self.address(), err);
+                error!(target: "net::channel", "Channel send error for [{}]: {}", self.address(), err);
                 self.stop().await;
                 Err(Error::ChannelStopped)
             }
         };
 
-        debug!(target: "net",
+        debug!(target: "net::channel",
          "Channel::send() [END, command={:?}, address={}]",
          M::name(),
          self.address()
@@ -256,13 +256,13 @@ impl Channel {
 
     /// Subscribe to a messages on the message subsystem.
     pub async fn subscribe_msg<M: message::Message>(&self) -> Result<MessageSubscription<M>> {
-        debug!(target: "net",
+        debug!(target: "net::channel",
          "Channel::subscribe_msg() [START, command={:?}, address={}]",
          M::name(),
          self.address()
         );
         let sub = self.message_subsystem.subscribe::<M>().await;
-        debug!(target: "net",
+        debug!(target: "net::channel",
          "Channel::subscribe_msg() [END, command={:?}, address={}]",
          M::name(),
          self.address()
@@ -309,7 +309,7 @@ impl Channel {
     /// Run the receive loop. Start receiving messages or handle network
     /// failure.
     async fn main_receive_loop(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net",
+        debug!(target: "net::channel",
          "Channel::receive_loop() [START, address={}]",
          self.address()
         );
@@ -321,11 +321,11 @@ impl Channel {
                 Ok(packet) => packet,
                 Err(err) => {
                     if Self::is_eof_error(err.clone()) {
-                        info!("Inbound connection {} disconnected", self.address());
+                        info!(target: "net::channel", "Inbound connection {} disconnected", self.address());
                     } else {
-                        error!("Read error on channel {}: {}", self.address(), err);
+                        error!(target: "net::channel", "Read error on channel {}: {}", self.address(), err);
                     }
-                    debug!(target: "net",
+                    debug!(target: "net::channel",
                      "Channel::receive_loop() stopping channel {}",
                      self.address()
                     );
@@ -352,7 +352,7 @@ impl Channel {
     /// Handle network errors. Panic if error passes silently, otherwise
     /// broadcast the error.
     async fn handle_stop(self: Arc<Self>, result: Result<()>) {
-        debug!(target: "net", "Channel::handle_stop() [START, address={}]", self.address());
+        debug!(target: "net::channel", "Channel::handle_stop() [START, address={}]", self.address());
         match result {
             Ok(()) => panic!("Channel task should never complete without error status"),
             Err(err) => {
@@ -360,7 +360,7 @@ impl Channel {
                 self.message_subsystem.trigger_error(err).await;
             }
         }
-        debug!(target: "net", "Channel::handle_stop() [END, address={}]", self.address());
+        debug!(target: "net::channel", "Channel::handle_stop() [END, address={}]", self.address());
     }
 
     fn session(&self) -> Arc<dyn Session> {

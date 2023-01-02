@@ -71,9 +71,9 @@ async fn money_contract_transfer() -> Result<()> {
     let mut alice_owncoins = vec![];
     let mut bob_owncoins = vec![];
 
-    info!("[Faucet] ===================================================");
-    info!("[Faucet] Building Money::Transfer params for Alice's airdrop");
-    info!("[Faucet] ===================================================");
+    info!(target: "money", "[Faucet] ===================================================");
+    info!(target: "money", "[Faucet] Building Money::Transfer params for Alice's airdrop");
+    info!(target: "money", "[Faucet] ===================================================");
     let (alice_params, alice_proofs, alicedrop_secret_keys, _spent_coins) = build_transfer_tx(
         &th.faucet_kp,
         &th.alice_kp.public,
@@ -88,9 +88,9 @@ async fn money_contract_transfer() -> Result<()> {
         true,
     )?;
 
-    info!("[Faucet] =================================================");
-    info!("[Faucet] Building Money::Transfer params for Bob's airdrop");
-    info!("[Faucet] =================================================");
+    info!(target: "money", "[Faucet] =================================================");
+    info!(target: "money", "[Faucet] Building Money::Transfer params for Bob's airdrop");
+    info!(target: "money", "[Faucet] =================================================");
     let (bob_params, bob_proofs, bobdrop_secret_keys, _spent_coins) = build_transfer_tx(
         &th.faucet_kp,
         &th.bob_kp.public,
@@ -105,9 +105,9 @@ async fn money_contract_transfer() -> Result<()> {
         true,
     )?;
 
-    info!("[Faucet] =====================================");
-    info!("[Faucet] Building airdrop tx with Alice params");
-    info!("[Faucet] =====================================");
+    info!(target: "money", "[Faucet] =====================================");
+    info!(target: "money", "[Faucet] Building airdrop tx with Alice params");
+    info!(target: "money", "[Faucet] =====================================");
     let mut data = vec![MoneyFunction::Transfer as u8];
     alice_params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: th.money_contract_id, data }];
@@ -116,9 +116,9 @@ async fn money_contract_transfer() -> Result<()> {
     let sigs = alicedrop_tx.create_sigs(&mut OsRng, &alicedrop_secret_keys)?;
     alicedrop_tx.signatures = vec![sigs];
 
-    info!("[Faucet] ===================================");
-    info!("[Faucet] Building airdrop tx with Bob params");
-    info!("[Faucet] ===================================");
+    info!(target: "money", "[Faucet] ===================================");
+    info!(target: "money", "[Faucet] Building airdrop tx with Bob params");
+    info!(target: "money", "[Faucet] ===================================");
     let mut data = vec![MoneyFunction::Transfer as u8];
     bob_params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: th.money_contract_id, data }];
@@ -127,41 +127,41 @@ async fn money_contract_transfer() -> Result<()> {
     let sigs = bobdrop_tx.create_sigs(&mut OsRng, &bobdrop_secret_keys)?;
     bobdrop_tx.signatures = vec![sigs];
 
-    info!("[Faucet] ==========================");
-    info!("[Faucet] Executing Alice airdrop tx");
-    info!("[Faucet] ==========================");
+    info!(target: "money", "[Faucet] ==========================");
+    info!(target: "money", "[Faucet] Executing Alice airdrop tx");
+    info!(target: "money", "[Faucet] ==========================");
     th.faucet_state.read().await.verify_transactions(&[alicedrop_tx.clone()], true).await?;
     th.faucet_merkle_tree.append(&MerkleNode::from(alice_params.outputs[0].coin));
 
-    info!("[Faucet] ========================");
-    info!("[Faucet] Executing Bob airdrop tx");
-    info!("[Faucet] ========================");
+    info!(target: "money", "[Faucet] ========================");
+    info!(target: "money", "[Faucet] Executing Bob airdrop tx");
+    info!(target: "money", "[Faucet] ========================");
     th.faucet_state.read().await.verify_transactions(&[bobdrop_tx.clone()], true).await?;
     th.faucet_merkle_tree.append(&MerkleNode::from(bob_params.outputs[0].coin));
 
-    info!("[Alice] ==========================");
-    info!("[Alice] Executing Alice airdrop tx");
-    info!("[Alice] ==========================");
+    info!(target: "money", "[Alice] ==========================");
+    info!(target: "money", "[Alice] Executing Alice airdrop tx");
+    info!(target: "money", "[Alice] ==========================");
     th.alice_state.read().await.verify_transactions(&[alicedrop_tx.clone()], true).await?;
     th.alice_merkle_tree.append(&MerkleNode::from(alice_params.outputs[0].coin));
     // Alice has to witness this coin because it's hers.
     let alice_leaf_pos = th.alice_merkle_tree.witness().unwrap();
 
-    info!("[Alice] ========================");
-    info!("[Alice] Executing Bob airdrop tx");
-    info!("[Alice] ========================");
+    info!(target: "money", "[Alice] ========================");
+    info!(target: "money", "[Alice] Executing Bob airdrop tx");
+    info!(target: "money", "[Alice] ========================");
     th.alice_state.read().await.verify_transactions(&[bobdrop_tx.clone()], true).await?;
     th.alice_merkle_tree.append(&MerkleNode::from(bob_params.outputs[0].coin));
 
-    info!("[Bob] ==========================");
-    info!("[Bob] Executing Alice airdrop tx");
-    info!("[Bob] ==========================");
+    info!(target: "money", "[Bob] ==========================");
+    info!(target: "money", "[Bob] Executing Alice airdrop tx");
+    info!(target: "money", "[Bob] ==========================");
     th.bob_state.read().await.verify_transactions(&[alicedrop_tx.clone()], true).await?;
     th.bob_merkle_tree.append(&MerkleNode::from(alice_params.outputs[0].coin));
 
-    info!("[Bob] ========================");
-    info!("[Bob] Executing Bob airdrop tx");
-    info!("[Bob] ========================");
+    info!(target: "money", "[Bob] ========================");
+    info!(target: "money", "[Bob] Executing Bob airdrop tx");
+    info!(target: "money", "[Bob] ========================");
     th.bob_state.read().await.verify_transactions(&[bobdrop_tx.clone()], true).await?;
     th.bob_merkle_tree.append(&MerkleNode::from(bob_params.outputs[0].coin));
     let bob_leaf_pos = th.bob_merkle_tree.witness().unwrap();
@@ -198,9 +198,9 @@ async fn money_contract_transfer() -> Result<()> {
     bob_owncoins.push(bob_oc);
 
     // Now Alice can send a little bit of funds to Bob
-    info!("[Alice] ====================================================");
-    info!("[Alice] Building Money::Transfer params for a payment to Bob");
-    info!("[Alice] ====================================================");
+    info!(target: "money", "[Alice] ====================================================");
+    info!(target: "money", "[Alice] Building Money::Transfer params for a payment to Bob");
+    info!(target: "money", "[Alice] ====================================================");
     let (alice2bob_params, alice2bob_proofs, alice2bob_secret_keys, alice2bob_spent_coins) =
         build_transfer_tx(
             &th.alice_kp,
@@ -222,9 +222,9 @@ async fn money_contract_transfer() -> Result<()> {
     alice_owncoins.retain(|x| x != &alice2bob_spent_coins[0]);
     assert!(alice_owncoins.is_empty());
 
-    info!("[Alice] ==========================");
-    info!("[Alice] Building payment tx to Bob");
-    info!("[Alice] ==========================");
+    info!(target: "money", "[Alice] ==========================");
+    info!(target: "money", "[Alice] Building payment tx to Bob");
+    info!(target: "money", "[Alice] ==========================");
     let mut data = vec![MoneyFunction::Transfer as u8];
     alice2bob_params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: th.money_contract_id, data }];
@@ -233,24 +233,24 @@ async fn money_contract_transfer() -> Result<()> {
     let sigs = alice2bob_tx.create_sigs(&mut OsRng, &alice2bob_secret_keys)?;
     alice2bob_tx.signatures = vec![sigs];
 
-    info!("[Faucet] ==============================");
-    info!("[Faucet] Executing Alice2Bob payment tx");
-    info!("[Faucet] ==============================");
+    info!(target: "money", "[Faucet] ==============================");
+    info!(target: "money", "[Faucet] Executing Alice2Bob payment tx");
+    info!(target: "money", "[Faucet] ==============================");
     th.faucet_state.read().await.verify_transactions(&[alice2bob_tx.clone()], true).await?;
     th.faucet_merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[0].coin));
     th.faucet_merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[1].coin));
 
-    info!("[Alice] ==============================");
-    info!("[Alice] Executing Alice2Bob payment tx");
-    info!("[Alice] ==============================");
+    info!(target: "money", "[Alice] ==============================");
+    info!(target: "money", "[Alice] Executing Alice2Bob payment tx");
+    info!(target: "money", "[Alice] ==============================");
     th.alice_state.read().await.verify_transactions(&[alice2bob_tx.clone()], true).await?;
     th.alice_merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[0].coin));
     let alice_leaf_pos = th.alice_merkle_tree.witness().unwrap();
     th.alice_merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[1].coin));
 
-    info!("[Bob] ==============================");
-    info!("[Bob] Executing Alice2Bob payment tx");
-    info!("[Bob] ==============================");
+    info!(target: "money", "[Bob] ==============================");
+    info!(target: "money", "[Bob] Executing Alice2Bob payment tx");
+    info!(target: "money", "[Bob] ==============================");
     th.bob_state.read().await.verify_transactions(&[alice2bob_tx.clone()], true).await?;
     th.bob_merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[0].coin));
     th.bob_merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[1].coin));
@@ -291,9 +291,9 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(bob_owncoins.len() == 2);
 
     // Bob can send a little bit to Alice as well
-    info!("[Bob] ======================================================");
-    info!("[Bob] Building Money::Transfer params for a payment to Alice");
-    info!("[Bob] ======================================================");
+    info!(target: "money", "[Bob] ======================================================");
+    info!(target: "money", "[Bob] Building Money::Transfer params for a payment to Alice");
+    info!(target: "money", "[Bob] ======================================================");
     let mut bob_owncoins_tmp = bob_owncoins.clone();
     bob_owncoins_tmp.retain(|x| x.note.token_id == bob_token_id);
     let (bob2alice_params, bob2alice_proofs, bob2alice_secret_keys, bob2alice_spent_coins) =
@@ -317,9 +317,9 @@ async fn money_contract_transfer() -> Result<()> {
     bob_owncoins.retain(|x| x != &bob2alice_spent_coins[0]);
     assert!(bob_owncoins.len() == 1);
 
-    info!("[Bob] ============================");
-    info!("[Bob] Building payment tx to Alice");
-    info!("[Bob] ============================");
+    info!(target: "money", "[Bob] ============================");
+    info!(target: "money", "[Bob] Building payment tx to Alice");
+    info!(target: "money", "[Bob] ============================");
     let mut data = vec![MoneyFunction::Transfer as u8];
     bob2alice_params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: th.money_contract_id, data }];
@@ -328,24 +328,24 @@ async fn money_contract_transfer() -> Result<()> {
     let sigs = bob2alice_tx.create_sigs(&mut OsRng, &bob2alice_secret_keys)?;
     bob2alice_tx.signatures = vec![sigs];
 
-    info!("[Faucet] ==============================");
-    info!("[Faucet] Executing Bob2Alice payment tx");
-    info!("[Faucet] ==============================");
+    info!(target: "money", "[Faucet] ==============================");
+    info!(target: "money", "[Faucet] Executing Bob2Alice payment tx");
+    info!(target: "money", "[Faucet] ==============================");
     th.faucet_state.read().await.verify_transactions(&[bob2alice_tx.clone()], true).await?;
     th.faucet_merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[0].coin));
     th.faucet_merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[1].coin));
 
-    info!("[Alice] ==============================");
-    info!("[Alice] Executing Bob2Alice payment tx");
-    info!("[Alice] ==============================");
+    info!(target: "money", "[Alice] ==============================");
+    info!(target: "money", "[Alice] Executing Bob2Alice payment tx");
+    info!(target: "money", "[Alice] ==============================");
     th.alice_state.read().await.verify_transactions(&[bob2alice_tx.clone()], true).await?;
     th.alice_merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[0].coin));
     th.alice_merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[1].coin));
     let alice_leaf_pos = th.alice_merkle_tree.witness().unwrap();
 
-    info!("[Bob] ==================+===========");
-    info!("[Bob] Executing Bob2Alice payment tx");
-    info!("[Bob] ==================+===========");
+    info!(target: "money", "[Bob] ==================+===========");
+    info!(target: "money", "[Bob] Executing Bob2Alice payment tx");
+    info!(target: "money", "[Bob] ==================+===========");
     th.bob_state.read().await.verify_transactions(&[bob2alice_tx.clone()], true).await?;
     th.bob_merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[0].coin));
     let bob_leaf_pos = th.bob_merkle_tree.witness().unwrap();
@@ -396,7 +396,7 @@ async fn money_contract_transfer() -> Result<()> {
 
     // Alice and Bob decide to swap back their tokens so Alice gets back her initial
     // tokens and Bob gets his.
-    info!("[Alice] Building OtcSwap half");
+    info!(target: "money", "[Alice] Building OtcSwap half");
     let (
         alice_swap_params,
         alice_swap_proofs,
@@ -427,7 +427,7 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(alice_owncoins.len() == 1);
 
     // Alice sends Bob necessary data and he builds his half.
-    info!("[Bob] Building OtcSwap half");
+    info!(target: "money", "[Bob] Building OtcSwap half");
     let (
         bob_swap_params,
         bob_swap_proofs,
@@ -486,24 +486,24 @@ async fn money_contract_transfer() -> Result<()> {
     let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &alice_swap_secret_keys)?;
     alicebob_swap_tx.signatures[0].insert(0, sigs[0]);
 
-    info!("[Faucet] ==========================");
-    info!("[Faucet] Executing AliceBob swap tx");
-    info!("[Faucet] ==========================");
+    info!(target: "money", "[Faucet] ==========================");
+    info!(target: "money", "[Faucet] Executing AliceBob swap tx");
+    info!(target: "money", "[Faucet] ==========================");
     th.faucet_state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.faucet_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin));
     th.faucet_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin));
 
-    info!("[Alice] ==========================");
-    info!("[Alice] Executing AliceBob swap tx");
-    info!("[Alice] ==========================");
+    info!(target: "money", "[Alice] ==========================");
+    info!(target: "money", "[Alice] Executing AliceBob swap tx");
+    info!(target: "money", "[Alice] ==========================");
     th.alice_state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.alice_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin));
     let alice_leaf_pos = th.alice_merkle_tree.witness().unwrap();
     th.alice_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin));
 
-    info!("[Bob] ==========================");
-    info!("[Bob] Executing AliceBob swap tx");
-    info!("[Bob] ==========================");
+    info!(target: "money", "[Bob] ==========================");
+    info!(target: "money", "[Bob] Executing AliceBob swap tx");
+    info!(target: "money", "[Bob] ==========================");
     th.bob_state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.bob_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin));
     th.bob_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin));
@@ -549,9 +549,9 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(bob_owncoins[1].note.token_id == bob_token_id);
 
     // Now Alice will create a new coin for herself to combine the two owncoins.
-    info!("[Alice] ======================================================");
-    info!("[Alice] Building Money::Transfer params for a payment to Alice");
-    info!("[Alice] =======================================================");
+    info!(target: "money", "[Alice] ======================================================");
+    info!(target: "money", "[Alice] Building Money::Transfer params for a payment to Alice");
+    info!(target: "money", "[Alice] =======================================================");
     let (alice2alice_params, alice2alice_proofs, alice2alice_secret_keys, alice2alice_spent_coins) =
         build_transfer_tx(
             &th.alice_kp,
@@ -574,9 +574,9 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(alice2alice_params.inputs.len() == 2);
     assert!(alice2alice_params.outputs.len() == 1);
 
-    info!("[Alice] ============================");
-    info!("[Alice] Building payment tx to Alice");
-    info!("[Alice] ============================");
+    info!(target: "money", "[Alice] ============================");
+    info!(target: "money", "[Alice] Building payment tx to Alice");
+    info!(target: "money", "[Alice] ============================");
     let mut data = vec![MoneyFunction::Transfer as u8];
     alice2alice_params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: th.money_contract_id, data }];
@@ -585,22 +585,22 @@ async fn money_contract_transfer() -> Result<()> {
     let sigs = alice2alice_tx.create_sigs(&mut OsRng, &alice2alice_secret_keys)?;
     alice2alice_tx.signatures = vec![sigs];
 
-    info!("[Faucet] ================================");
-    info!("[Faucet] Executing Alice2Alice payment tx");
-    info!("[Faucet] ================================");
+    info!(target: "money", "[Faucet] ================================");
+    info!(target: "money", "[Faucet] Executing Alice2Alice payment tx");
+    info!(target: "money", "[Faucet] ================================");
     th.faucet_state.read().await.verify_transactions(&[alice2alice_tx.clone()], true).await?;
     th.faucet_merkle_tree.append(&MerkleNode::from(alice2alice_params.outputs[0].coin));
 
-    info!("[Alice] ================================");
-    info!("[Alice] Executing Alice2Alice payment tx");
-    info!("[Alice] ================================");
+    info!(target: "money", "[Alice] ================================");
+    info!(target: "money", "[Alice] Executing Alice2Alice payment tx");
+    info!(target: "money", "[Alice] ================================");
     th.alice_state.read().await.verify_transactions(&[alice2alice_tx.clone()], true).await?;
     th.alice_merkle_tree.append(&MerkleNode::from(alice2alice_params.outputs[0].coin));
     let alice_leaf_pos = th.alice_merkle_tree.witness().unwrap();
 
-    info!("[Bob] ================================");
-    info!("[Bob] Executing Alice2Alice payment tx");
-    info!("[Bob] ================================");
+    info!(target: "money", "[Bob] ================================");
+    info!(target: "money", "[Bob] Executing Alice2Alice payment tx");
+    info!(target: "money", "[Bob] ================================");
     th.bob_state.read().await.verify_transactions(&[alice2alice_tx.clone()], true).await?;
     th.bob_merkle_tree.append(&MerkleNode::from(alice2alice_params.outputs[0].coin));
 
@@ -626,9 +626,9 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(alice_owncoins[0].note.token_id == alice_token_id);
 
     // Bob does the same
-    info!("[Bob] ====================================================");
-    info!("[Bob] Building Money::Transfer params for a payment to Bob");
-    info!("[Bob] ====================================================");
+    info!(target: "money", "[Bob] ====================================================");
+    info!(target: "money", "[Bob] Building Money::Transfer params for a payment to Bob");
+    info!(target: "money", "[Bob] ====================================================");
     let (bob2bob_params, bob2bob_proofs, bob2bob_secret_keys, bob2bob_spent_coins) =
         build_transfer_tx(
             &th.bob_kp,
@@ -651,9 +651,9 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(bob2bob_params.inputs.len() == 2);
     assert!(bob2bob_params.outputs.len() == 1);
 
-    info!("[Bob] ==========================");
-    info!("[Bob] Building payment tx to Bob");
-    info!("[Bob] ==========================");
+    info!(target: "money", "[Bob] ==========================");
+    info!(target: "money", "[Bob] Building payment tx to Bob");
+    info!(target: "money", "[Bob] ==========================");
     let mut data = vec![MoneyFunction::Transfer as u8];
     bob2bob_params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: th.money_contract_id, data }];
@@ -662,21 +662,21 @@ async fn money_contract_transfer() -> Result<()> {
     let sigs = bob2bob_tx.create_sigs(&mut OsRng, &bob2bob_secret_keys)?;
     bob2bob_tx.signatures = vec![sigs];
 
-    info!("[Faucet] ============================");
-    info!("[Faucet] Executing Bob2Bob payment tx");
-    info!("[Faucet] ============================");
+    info!(target: "money", "[Faucet] ============================");
+    info!(target: "money", "[Faucet] Executing Bob2Bob payment tx");
+    info!(target: "money", "[Faucet] ============================");
     th.faucet_state.read().await.verify_transactions(&[bob2bob_tx.clone()], true).await?;
     th.faucet_merkle_tree.append(&MerkleNode::from(bob2bob_params.outputs[0].coin));
 
-    info!("[Alice] ============================");
-    info!("[Alice] Executing Bob2Bob payment tx");
-    info!("[Alice] ============================");
+    info!(target: "money", "[Alice] ============================");
+    info!(target: "money", "[Alice] Executing Bob2Bob payment tx");
+    info!(target: "money", "[Alice] ============================");
     th.alice_state.read().await.verify_transactions(&[bob2bob_tx.clone()], true).await?;
     th.alice_merkle_tree.append(&MerkleNode::from(bob2bob_params.outputs[0].coin));
 
-    info!("[Bob] ============================");
-    info!("[Bob] Executing Bob2Bob payment tx");
-    info!("[Bob] ============================");
+    info!(target: "money", "[Bob] ============================");
+    info!(target: "money", "[Bob] Executing Bob2Bob payment tx");
+    info!(target: "money", "[Bob] ============================");
     th.bob_state.read().await.verify_transactions(&[bob2bob_tx.clone()], true).await?;
     th.bob_merkle_tree.append(&MerkleNode::from(bob2bob_params.outputs[0].coin));
     let bob_leaf_pos = th.bob_merkle_tree.witness().unwrap();
@@ -703,7 +703,7 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(bob_owncoins[0].note.token_id == bob_token_id);
 
     // Now they decide to swap all of their tokens
-    info!("[Alice] Building OtcSwap half");
+    info!(target: "money", "[Alice] Building OtcSwap half");
     let (
         alice_swap_params,
         alice_swap_proofs,
@@ -733,7 +733,7 @@ async fn money_contract_transfer() -> Result<()> {
     alice_owncoins.retain(|x| x != &alice_swap_spent_coins[0]);
     assert!(alice_owncoins.is_empty());
 
-    info!("[Bob] Building OtcSwap half");
+    info!(target: "money", "[Bob] Building OtcSwap half");
     let (
         bob_swap_params,
         bob_swap_proofs,
@@ -791,24 +791,24 @@ async fn money_contract_transfer() -> Result<()> {
     let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &alice_swap_secret_keys)?;
     alicebob_swap_tx.signatures[0].insert(0, sigs[0]);
 
-    info!("[Faucet] ==========================");
-    info!("[Faucet] Executing AliceBob swap tx");
-    info!("[Faucet] ==========================");
+    info!(target: "money", "[Faucet] ==========================");
+    info!(target: "money", "[Faucet] Executing AliceBob swap tx");
+    info!(target: "money", "[Faucet] ==========================");
     th.faucet_state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.faucet_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin));
     th.faucet_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin));
 
-    info!("[Alice] ==========================");
-    info!("[Alice] Executing AliceBob swap tx");
-    info!("[Alice] ==========================");
+    info!(target: "money", "[Alice] ==========================");
+    info!(target: "money", "[Alice] Executing AliceBob swap tx");
+    info!(target: "money", "[Alice] ==========================");
     th.alice_state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.alice_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin));
     let alice_leaf_pos = th.alice_merkle_tree.witness().unwrap();
     th.alice_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin));
 
-    info!("[Bob] ==========================");
-    info!("[Bob] Executing AliceBob swap tx");
-    info!("[Bob] ==========================");
+    info!(target: "money", "[Bob] ==========================");
+    info!(target: "money", "[Bob] Executing AliceBob swap tx");
+    info!(target: "money", "[Bob] ==========================");
     th.bob_state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.bob_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin));
     th.bob_merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin));

@@ -42,7 +42,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         self.set_current_term(&(self.current_term()? + 1))?;
 
         if self.role != Role::Candidate {
-            info!(target: "raft", "Set the node role as Candidate");
+            info!(target: "raft::consensus_candidate", "Set the node role as Candidate");
             self.role = Role::Candidate;
         }
 
@@ -75,7 +75,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             drop(nodes);
 
             if self.votes_received.len() >= ((nodes_cloned.len() + 1) / 2) {
-                info!(target: "raft", "Set the node role as Leader");
+                info!(target: "raft::consensus_candidate", "Set the node role as Leader");
                 self.role = Role::Leader;
                 self.current_leader = self.id();
                 for node in nodes_cloned.iter() {

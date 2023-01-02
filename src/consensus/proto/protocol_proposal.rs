@@ -63,27 +63,27 @@ impl ProtocolProposal {
     }
 
     async fn handle_receive_proposal(self: Arc<Self>) -> Result<()> {
-        debug!("ProtocolProposal::handle_receive_proposal() [START]");
+        debug!(target: "consensus::protocol_proposal::init()", "ProtocolProposal::handle_receive_proposal() [START]");
 
         let exclude_list = vec![self.channel_address.clone()];
         loop {
             let proposal = match self.proposal_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    debug!("ProtocolProposal::handle_receive_proposal(): recv fail: {}", e);
+                    debug!(target: "consensus::protocol_proposal::init()", "ProtocolProposal::handle_receive_proposal(): recv fail: {}", e);
                     continue
                 }
             };
 
-            debug!("ProtocolProposal::handle_receive_proposal(): recv: {}", proposal);
-            trace!("ProtocolProposal::handle_receive_proposal(): Full proposal: {:?}", proposal);
+            debug!(target: "consensus::protocol_proposal::init()", "ProtocolProposal::handle_receive_proposal(): recv: {}", proposal);
+            trace!(target: "consensus::protocol_proposal::init()", "ProtocolProposal::handle_receive_proposal(): Full proposal: {:?}", proposal);
 
             let proposal_copy = (*proposal).clone();
 
             // Verify we have the proposal already
             let mut lock = self.state.write().await;
             if lock.consensus.proposal_exists(&proposal_copy.hash) {
-                debug!("ProtocolProposal::handle_receive_proposal(): Proposal already received.");
+                debug!(target: "consensus::protocol_proposal::init()", "ProtocolProposal::handle_receive_proposal(): Proposal already received.");
                 continue
             }
 
@@ -95,6 +95,7 @@ impl ProtocolProposal {
                             self.p2p.broadcast_with_exclude(proposal_copy, &exclude_list).await
                         {
                             error!(
+                                target: "consensus::protocol_proposal::init()",
                                 "ProtocolProposal::handle_receive_proposal(): proposal broadcast fail: {}",
                                 e
                             );
@@ -103,6 +104,7 @@ impl ProtocolProposal {
                 }
                 Err(e) => {
                     error!(
+                        target: "consensus::protocol_proposal::init()",
                         "ProtocolProposal::handle_receive_proposal(): receive_proposal error: {}",
                         e
                     );
@@ -116,10 +118,10 @@ impl ProtocolProposal {
 #[async_trait]
 impl ProtocolBase for ProtocolProposal {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!("ProtocolProposal::start() [START]");
+        debug!(target: "consensus::protocol_proposal::init()", "ProtocolProposal::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_proposal(), executor.clone()).await;
-        debug!("ProtocolProposal::start() [END]");
+        debug!(target: "consensus::protocol_proposal::init()", "ProtocolProposal::start() [END]");
         Ok(())
     }
 

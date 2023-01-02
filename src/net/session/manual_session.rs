@@ -101,7 +101,7 @@ impl ManualSession {
         let transports = if outbound_transports.contains(&addr_transport) {
             vec![addr_transport]
         } else {
-            warn!(target: "net", "Manual outbound address {} transport is not in accepted outbound transports, will try with: {:?}", addr, outbound_transports);
+            warn!(target: "net::manual_session", "Manual outbound address {} transport is not in accepted outbound transports, will try with: {:?}", addr, outbound_transports);
             outbound_transports.clone()
         };
 
@@ -119,11 +119,11 @@ impl ManualSession {
                 // Replace addr transport
                 let mut transport_addr = addr.clone();
                 transport_addr.set_scheme(&transport.to_scheme())?;
-                info!(target: "net", "Connecting to manual outbound [{}]", transport_addr);
+                info!(target: "net::manual_session", "Connecting to manual outbound [{}]", transport_addr);
                 match connector.connect(transport_addr.clone()).await {
                     Ok(channel) => {
                         // Blacklist goes here
-                        info!(target: "net", "Connected to manual outbound [{}]", transport_addr);
+                        info!(target: "net::manual_session", "Connected to manual outbound [{}]", transport_addr);
 
                         let stop_sub = channel.subscribe_stop().await;
                         if stop_sub.is_err() {
@@ -148,7 +148,7 @@ impl ManualSession {
                         stop_sub.unwrap().receive().await;
                     }
                     Err(err) => {
-                        info!(target: "net", "Unable to connect to manual outbound [{}]: {}", addr, err);
+                        info!(target: "net::manual_session", "Unable to connect to manual outbound [{}]: {}", addr, err);
                     }
                 }
             }
@@ -162,7 +162,7 @@ impl ManualSession {
         }
 
         warn!(
-        target: "net",
+        target: "net::manual_session",
         "Suspending manual connection to [{}] after {} failed attempts.",
         &addr,
         attempts

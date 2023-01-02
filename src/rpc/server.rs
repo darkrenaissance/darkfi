@@ -53,25 +53,25 @@ async fn accept(
 
         let n = match stream.read(&mut buf).await {
             Ok(n) if n == 0 => {
-                debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
                 break
             }
             Ok(n) => n,
             Err(e) => {
-                error!("JSON-RPC server failed reading from {} socket: {}", peer_addr, e);
-                debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                error!(target: "rpc::server", "JSON-RPC server failed reading from {} socket: {}", peer_addr, e);
+                debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
                 break
             }
         };
 
         let r: JsonRequest = match serde_json::from_slice(&buf[0..n]) {
             Ok(r) => {
-                debug!(target: "jsonrpc-server", "{} --> {}", peer_addr, String::from_utf8_lossy(&buf));
+                debug!(target: "rpc::server", "{} --> {}", peer_addr, String::from_utf8_lossy(&buf));
                 r
             }
             Err(e) => {
-                warn!("JSON-RPC server received invalid JSON from {}: {}", peer_addr, e);
-                debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                warn!(target: "rpc::server", "JSON-RPC server received invalid JSON from {}: {}", peer_addr, e);
+                debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
                 break
             }
         };
@@ -86,11 +86,11 @@ async fn accept(
 
                     // Push notification
                     let j = serde_json::to_string(&notification).unwrap();
-                    debug!(target: "jsonrpc-server", "{} <-- {}", peer_addr, j);
+                    debug!(target: "rpc::server", "{} <-- {}", peer_addr, j);
 
                     if let Err(e) = stream.write_all(j.as_bytes()).await {
-                        error!(target: "jsonrpc-server", "JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
-                        debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                        error!(target: "rpc::server", "JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
+                        debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
                         break
                     }
                 }
@@ -98,11 +98,11 @@ async fn accept(
             }
             _ => {
                 let j = serde_json::to_string(&reply).unwrap();
-                debug!(target: "jsonrpc-server", "{} <-- {}", peer_addr, j);
+                debug!(target: "rpc::server", "{} <-- {}", peer_addr, j);
 
                 if let Err(e) = stream.write_all(j.as_bytes()).await {
-                    error!(target: "jsonrpc-server", "JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
-                    debug!(target: "jsonrpc-server", "Closed connection for {}", peer_addr);
+                    error!(target: "rpc::server", "JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
+                    debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
                     break
                 }
             }
@@ -120,12 +120,12 @@ async fn run_accept_loop(
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
     while let Ok((stream, peer_addr)) = listener.next().await {
-        info!("JSON-RPC server accepted connection from {}", peer_addr);
+        info!(target: "rpc::server", "JSON-RPC server accepted connection from {}", peer_addr);
         // Detaching requests handling
         let _rh = rh.clone();
         ex.spawn(async move {
             if let Err(e) = accept(stream, peer_addr.clone(), _rh).await {
-                error!(target: "jsonrpc-server", "JSON-RPC server error on handling request of {}: {}", peer_addr, e);
+                error!(target: "rpc::server", "JSON-RPC server error on handling request of {}: {}", peer_addr, e);
             }
         }).detach();
     }
@@ -140,30 +140,30 @@ pub async fn listen_and_serve(
     rh: Arc<impl RequestHandler + 'static>,
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
-    debug!(target: "jsonrpc-server", "Trying to bind listener on {}", accept_url);
+    debug!(target: "rpc::server", "Trying to bind listener on {}", accept_url);
 
     macro_rules! accept {
         ($listener:expr, $transport:expr, $upgrade:expr) => {{
             if let Err(err) = $listener {
-                error!("JSON-RPC server setup for {} failed: {}", accept_url, err);
+                error!(target: "rpc::server", "JSON-RPC server setup for {} failed: {}", accept_url, err);
                 return Err(Error::BindFailed(accept_url.as_str().into()))
             }
 
             let listener = $listener?.await;
             if let Err(err) = listener {
-                error!("JSON-RPC listener bind to {} failed: {}", accept_url, err);
+                error!(target: "rpc::server", "JSON-RPC listener bind to {} failed: {}", accept_url, err);
                 return Err(Error::BindFailed(accept_url.as_str().into()))
             }
 
             let listener = listener?;
             match $upgrade {
                 None => {
-                    info!("JSON-RPC listener bound to {}", accept_url);
+                    info!(target: "rpc::server", "JSON-RPC listener bound to {}", accept_url);
                     run_accept_loop(Box::new(listener), rh, ex.clone()).await?;
                 }
                 Some(u) if u == "tls" => {
                     let tls_listener = $transport.upgrade_listener(listener)?.await?;
-                    info!("JSON-RPC listener bound to {}", accept_url);
+                    info!(target: "rpc::server", "JSON-RPC listener bound to {}", accept_url);
                     run_accept_loop(Box::new(tls_listener), rh, ex.clone()).await?;
                 }
                 Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
@@ -185,7 +185,7 @@ pub async fn listen_and_serve(
 
             // Generate EHS pointing to local address
             let hurl = transport.create_ehs(accept_url.clone())?;
-            info!("Created ephemeral hidden service: {}", hurl.to_string());
+            info!(target: "rpc::server", "Created ephemeral hidden service: {}", hurl.to_string());
 
             let listener = transport.clone().listen_on(accept_url.clone());
             accept!(listener, transport, upgrade);

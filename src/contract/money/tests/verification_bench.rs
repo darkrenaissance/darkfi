@@ -84,15 +84,15 @@ async fn alice2alice_random_amounts() -> Result<()> {
     });
 
     for i in 0..n {
-        info!("Building Alice2Alice transfer tx {}", i);
+        info!(target: "money", "Building Alice2Alice transfer tx {}", i);
 
-        info!("Alice coins: {}", owncoins.len());
+        info!(target: "money", "Alice coins: {}", owncoins.len());
         for (i, c) in owncoins.iter().enumerate() {
-            info!("\t coin {} value: {}", i, c.note.value);
+            info!(target: "money", "\t coin {} value: {}", i, c.note.value);
         }
 
         let amount = rand::thread_rng().gen_range(1..ALICE_AIRDROP);
-        info!("Sending: {}", amount);
+        info!(target: "money", "Sending: {}", amount);
 
         let (params, proofs, secret_keys, spent_coins) = build_transfer_tx(
             &th.alice_kp,
@@ -181,7 +181,7 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
         let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
         let amount = rand::thread_rng().gen_range(1..1000);
 
-        info!("Generating token {}: ID {} - amount {}", i, token_id, amount);
+        info!(target: "money", "Generating token {}: ID {} - amount {}", i, token_id, amount);
 
         let (airdrop_tx, airdrop_params) = th.airdrop(amount, token_id, &th.alice_kp.public)?;
 
@@ -210,28 +210,28 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
 
     // Simulating N blocks
     for b in 0..n {
-        info!("Generating transactions for block: {}", b);
+        info!(target: "money", "Generating transactions for block: {}", b);
         // Get a random sized sample of owncoins
         let sample =
             (0..10).choose_multiple(&mut rand::thread_rng(), rand::thread_rng().gen_range(1..10));
-        info!("Coins to use: {:?}", sample);
+        info!(target: "money", "Coins to use: {:?}", sample);
 
         // Generate a transaction for each coin
         let mut txs = vec![];
         for index in sample {
-            info!("Building Alice2Alice transfer tx for coin {}", index);
+            info!(target: "money", "Building Alice2Alice transfer tx for coin {}", index);
 
             let mut coins = owncoins[index].clone();
             let token_id = token_ids[index];
             let airdrop_amount = airdrops_amounts[index];
 
-            info!("Alice coins: {}", coins.len());
+            info!(target: "money", "Alice coins: {}", coins.len());
             for (i, c) in coins.iter().enumerate() {
-                info!("\t coin {} value: {}", i, c.note.value);
+                info!(target: "money", "\t coin {} value: {}", i, c.note.value);
             }
 
             let amount = rand::thread_rng().gen_range(1..airdrop_amount);
-            info!("Sending: {}", amount);
+            info!(target: "money", "Sending: {}", amount);
 
             let (params, proofs, secret_keys, spent_coins) = build_transfer_tx(
                 &th.alice_kp,

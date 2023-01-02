@@ -35,7 +35,7 @@ pub trait ConsensusWallet {
 #[async_trait]
 impl ConsensusWallet for WalletDb {
     async fn get_default_keypair(&self) -> Result<Keypair> {
-        debug!("Returning default keypair");
+        debug!(target: "consensus::wallet", "Returning default keypair");
         let mut conn = self.conn.acquire().await?;
 
         let row = sqlx::query(&format!(

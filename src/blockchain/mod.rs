@@ -161,7 +161,7 @@ impl Blockchain {
 
     /// Retrieve [`BlockInfo`]s by given slots. Does not fail if any of them are not found.
     pub fn get_blocks_by_slot(&self, slots: &[u64]) -> Result<Vec<BlockInfo>> {
-        debug!("get_blocks_by_slot(): {:?}", slots);
+        debug!(target: "blockchain", "get_blocks_by_slot(): {:?}", slots);
         let blockhashes = self.order.get(slots, false)?;
 
         let mut hashes = vec![];
@@ -174,7 +174,7 @@ impl Blockchain {
 
     /// Retrieve n blocks after given start slot.
     pub fn get_blocks_after(&self, slot: u64, n: u64) -> Result<Vec<BlockInfo>> {
-        debug!("get_blocks_after(): {} -> {}", slot, n);
+        debug!(target: "blockchain", "get_blocks_after(): {} -> {}", slot, n);
         let hashes = self.order.get_after(slot, n)?;
         self.get_blocks_by_hash(&hashes)
     }
@@ -230,7 +230,7 @@ impl Blockchain {
 
     /// Retrieve n checkpoints after given start slot.
     pub fn get_slot_checkpoints_after(&self, slot: u64, n: u64) -> Result<Vec<SlotCheckpoint>> {
-        debug!("get_slot_checkpoints_after(): {} -> {}", slot, n);
+        debug!(target: "blockchain", "get_slot_checkpoints_after(): {} -> {}", slot, n);
         self.slot_checkpoints.get_after(slot, n)
     }
 
@@ -244,7 +244,7 @@ impl Blockchain {
         &self,
         slots: &[u64],
     ) -> Result<Vec<Option<SlotCheckpoint>>> {
-        debug!("get_slot_checkpoints_by_slot(): {:?}", slots);
+        debug!(target: "blockchain", "get_slot_checkpoints_by_slot(): {:?}", slots);
         self.slot_checkpoints.get(slots, true)
     }
 

@@ -120,7 +120,7 @@ pub struct Runtime {
 impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
     pub fn new(wasm_bytes: &[u8], blockchain: Blockchain, contract_id: ContractId) -> Result<Self> {
-        info!(target: "wasm_runtime::new", "Instantiating a new runtime");
+        info!(target: "runtime::vm_runtime", "Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
         // the wasm module execution. It should return the cost of the operator
         // that it received as its first argument.
@@ -144,7 +144,7 @@ impl Runtime {
         compiler_config.push_middleware(metering);
         let mut store = Store::new(compiler_config);
 
-        debug!(target: "wasm_runtime::new", "Compiling module");
+        debug!(target: "runtime::vm_runtime", "Compiling module");
         let module = Module::new(&store, wasm_bytes)?;
 
         // Initialize data
@@ -152,7 +152,7 @@ impl Runtime {
         let db_batches = RefCell::new(vec![]);
         let logs = RefCell::new(vec![]);
 
-        debug!(target: "wasm_runtime::new", "Importing functions");
+        debug!(target: "runtime::vm_runtime", "Importing functions");
 
         let ctx = FunctionEnv::new(
             &mut store,
@@ -240,7 +240,7 @@ impl Runtime {
             }
         };
 
-        debug!(target: "wasm_runtime::new", "Instantiating module");
+        debug!(target: "runtime::vm_runtime", "Instantiating module");
         let instance = Instance::new(&mut store, &module, &imports)?;
 
         let mut env_mut = ctx.as_mut(&mut store);
@@ -250,7 +250,7 @@ impl Runtime {
     }
 
     fn call(&mut self, section: ContractSection, payload: &[u8]) -> Result<Vec<u8>> {
-        debug!(target: "runtime", "Calling {} method", section.name());
+        debug!(target: "runtime::vm_runtime", "Calling {} method", section.name());
 
         let mut env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = section;
@@ -267,27 +267,27 @@ impl Runtime {
         self.set_memory_page_size(pages_required as u32)?;
         self.copy_to_memory(&payload)?;
 
-        debug!(target: "runtime", "Getting {} function", section.name());
+        debug!(target: "runtime::vm_runtime", "Getting {} function", section.name());
         let entrypoint = self.instance.exports.get_function(section.name())?;
 
-        debug!(target: "runtime", "Executing wasm");
+        debug!(target: "runtime::vm_runtime", "Executing wasm");
         let ret = match entrypoint.call(&mut self.store, &[Value::I32(0_i32)]) {
             Ok(retvals) => {
                 self.print_logs();
-                debug!(target: "runtime", "{}", self.gas_info());
+                debug!(target: "runtime::vm_runtime", "{}", self.gas_info());
                 retvals
             }
             Err(e) => {
                 self.print_logs();
-                debug!(target: "runtime", "{}", self.gas_info());
+                debug!(target: "runtime::vm_runtime", "{}", self.gas_info());
                 // WasmerRuntimeError panics are handled here. Return from run() immediately.
-                error!("Wasmer Runtime Error: {:#?}", e);
+                error!(target: "runtime::vm_runtime", "Wasmer Runtime Error: {:#?}", e);
                 return Err(e.into())
             }
         };
 
-        debug!(target: "runtime", "wasm executed successfully");
-        debug!(target: "runtime", "Contract returned: {:?}", ret[0]);
+        debug!(target: "runtime::vm_runtime", "wasm executed successfully");
+        debug!(target: "runtime::vm_runtime", "Contract returned: {:?}", ret[0]);
 
         let mut env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Null;
@@ -321,8 +321,8 @@ impl Runtime {
     /// The permissions for this are handled by the `ContractId` in the sled db API so we
     /// assume that the contract is only able to do write operations on its own sled trees.
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
-        info!("[wasm-runtime] Running deploy");
-        debug!("[wasm-runtime] payload: {:?}", payload);
+        info!(target: "runtime::vm_runtime", "[wasm-runtime] Running deploy");
+        debug!(target: "runtime::vm_runtime", "[wasm-runtime] payload: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
 
         // If the above didn't fail, we write the batches.
@@ -345,7 +345,7 @@ impl Runtime {
     /// execute it if found. A payload is also passed as an instruction that can
     /// be used inside the vm by the runtime.
     pub fn exec(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
-        debug!("exec: {:?}", payload);
+        debug!(target: "runtime::vm_runtime", "exec: {:?}", payload);
         self.call(ContractSection::Exec, payload)
     }
 
@@ -355,7 +355,7 @@ impl Runtime {
     /// it if found. The function does not take an arbitrary payload, but just takes
     /// a state update from `env` and passes it into the wasm runtime.
     pub fn apply(&mut self, update: &[u8]) -> Result<()> {
-        debug!("apply: {:?}", update);
+        debug!(target: "runtime::vm_runtime", "apply: {:?}", update);
         let _ = self.call(ContractSection::Update, update)?;
 
         // If the above didn't fail, we write the batches.
@@ -377,7 +377,7 @@ impl Runtime {
     fn print_logs(&self) {
         let logs = self.ctx.as_ref(&self.store).logs.borrow();
         for msg in logs.iter() {
-            debug!(target: "runtime", "Contract log: {}", msg);
+            debug!(target: "runtime::vm_runtime", "Contract log: {}", msg);
         }
     }
 

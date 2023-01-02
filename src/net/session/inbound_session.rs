@@ -68,7 +68,7 @@ impl InboundSession {
     /// loop.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         if self.p2p().settings().inbound.is_empty() {
-            info!(target: "net", "Not configured for accepting incoming connections.");
+            info!(target: "net::inbound_session", "Not configured for accepting incoming connections.");
             return Ok(())
         }
 
@@ -115,7 +115,7 @@ impl InboundSession {
         accept_addr: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        info!(target: "net", "#{} starting inbound session on {}", index, accept_addr);
+        info!(target: "net::inbound_session", "#{} starting inbound session on {}", index, accept_addr);
         // Generate a new acceptor for this inbound session
         let acceptor = Acceptor::new(Mutex::new(None));
         let parent = Arc::downgrade(&self);
@@ -124,7 +124,7 @@ impl InboundSession {
         // Start listener
         let result = acceptor.clone().start(accept_addr, executor).await;
         if let Err(err) = result.clone() {
-            error!(target: "net", "#{} error starting listener: {}", index, err);
+            error!(target: "net::inbound_session", "#{} error starting listener: {}", index, err);
         }
 
         self.acceptors.lock().await.push(acceptor);
@@ -157,7 +157,7 @@ impl InboundSession {
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        info!(target: "net", "#{} connected inbound [{}]", index, channel.address());
+        info!(target: "net::inbound_session", "#{} connected inbound [{}]", index, channel.address());
 
         self.clone().register_channel(channel.clone(), executor.clone()).await?;
 

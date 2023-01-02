@@ -50,11 +50,11 @@ impl SeedSyncSession {
     /// Start the seed sync session. Creates a new task for every seed connection and
     /// starts the seed on each task.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net", "SeedSyncSession::start() [START]");
+        debug!(target: "net::seedsync_session", "SeedSyncSession::start() [START]");
         let settings = self.p2p().settings();
 
         if settings.seeds.is_empty() {
-            warn!("Skipping seed sync process since no seeds are configured.");
+            warn!(target: "net::seedsync_session", "Skipping seed sync process since no seeds are configured.");
             // Store external addresses in hosts explicitly
             if !settings.external_addr.is_empty() {
                 self.p2p().hosts().store(settings.external_addr.clone()).await
@@ -84,13 +84,13 @@ impl SeedSyncSession {
                 match result {
                     Ok(t) => match t {
                         Ok(()) => {
-                            info!("Seed #{} connected successfully", i)
+                            info!(target: "net::seedsync_session", "Seed #{} connected successfully", i)
                         }
                         Err(err) => {
-                            warn!("Seed #{} failed for reason {}", i, err)
+                            warn!(target: "net::seedsync_session", "Seed #{} failed for reason {}", i, err)
                         }
                     },
-                    Err(_err) => error!("Seed #{} timed out", i),
+                    Err(_err) => error!(target: "net::seedsync_session", "Seed #{} timed out", i),
                 }
             });
         }
@@ -98,10 +98,10 @@ impl SeedSyncSession {
 
         // Seed process complete
         if self.p2p().hosts().is_empty().await {
-            warn!("Hosts pool still empty after seeding");
+            warn!(target: "net::seedsync_session", "Hosts pool still empty after seeding");
         }
 
-        debug!(target: "net", "SeedSyncSession::start() [END]");
+        debug!(target: "net::seedsync_session", "SeedSyncSession::start() [END]");
         Ok(())
     }
 
@@ -112,7 +112,7 @@ impl SeedSyncSession {
         seed: Url,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        debug!(target: "net", "SeedSyncSession::start_seed(i={}) [START]", seed_index);
+        debug!(target: "net::seedsync_session", "SeedSyncSession::start_seed(i={}) [START]", seed_index);
         let (_hosts, settings) = {
             let p2p = self.p2p.upgrade().unwrap();
             (p2p.hosts(), p2p.settings())
@@ -124,22 +124,22 @@ impl SeedSyncSession {
             Ok(channel) => {
                 // Blacklist goes here
 
-                info!("Connected seed #{} [{}]", seed_index, seed);
+                info!(target: "net::seedsync_session", "Connected seed #{} [{}]", seed_index, seed);
 
                 if let Err(err) =
                     self.clone().register_channel(channel.clone(), executor.clone()).await
                 {
-                    warn!("Failure during seed sync session #{} [{}]: {}", seed_index, seed, err);
+                    warn!(target: "net::seedsync_session", "Failure during seed sync session #{} [{}]: {}", seed_index, seed, err);
                 }
 
-                info!("Disconnecting from seed #{} [{}]", seed_index, seed);
+                info!(target: "net::seedsync_session", "Disconnecting from seed #{} [{}]", seed_index, seed);
                 channel.stop().await;
 
-                debug!(target: "net", "SeedSyncSession::start_seed(i={}) [END]", seed_index);
+                debug!(target: "net::seedsync_session", "SeedSyncSession::start_seed(i={}) [END]", seed_index);
                 Ok(())
             }
             Err(err) => {
-                warn!("Failure contacting seed #{} [{}]: {}", seed_index, seed, err);
+                warn!(target: "net::seedsync_session", "Failure contacting seed #{} [{}]: {}", seed_index, seed, err);
                 Err(err)
             }
         }

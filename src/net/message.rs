@@ -126,11 +126,11 @@ pub async fn read_packet<R: AsyncRead + Unpin + Sized>(stream: &mut R) -> Result
     // Packets have a 4 byte header of magic digits
     // This is used for network debugging
     let mut magic = [0u8; 4];
-    debug!(target: "net", "reading magic...");
+    debug!(target: "net::message", "reading magic...");
 
     stream.read_exact(&mut magic).await?;
 
-    debug!(target: "net", "read magic {:?}", magic);
+    debug!(target: "net::message", "read magic {:?}", magic);
     if magic != MAGIC_BYTES {
         return Err(Error::MalformedPacket)
     }
@@ -142,7 +142,7 @@ pub async fn read_packet<R: AsyncRead + Unpin + Sized>(stream: &mut R) -> Result
         stream.read_exact(&mut cmd).await?;
     }
     let cmd = String::from_utf8(cmd)?;
-    debug!(target: "net", "read command: {}", cmd);
+    debug!(target: "net::message", "read command: {}", cmd);
 
     let payload_len = VarInt::decode_async(stream).await?.0 as usize;
 
@@ -151,7 +151,7 @@ pub async fn read_packet<R: AsyncRead + Unpin + Sized>(stream: &mut R) -> Result
     if payload_len > 0 {
         stream.read_exact(&mut payload).await?;
     }
-    debug!(target: "net", "read payload {} bytes", payload_len);
+    debug!(target: "net::message", "read payload {} bytes", payload_len);
 
     Ok(Packet { command: cmd, payload })
 }
@@ -161,14 +161,14 @@ pub async fn send_packet<W: AsyncWrite + Unpin + Sized>(
     stream: &mut W,
     packet: Packet,
 ) -> Result<()> {
-    debug!(target: "net", "sending magic...");
+    debug!(target: "net::message", "sending magic...");
     stream.write_all(&MAGIC_BYTES).await?;
-    debug!(target: "net", "sent magic...");
+    debug!(target: "net::message", "sent magic...");
 
     VarInt(packet.command.len() as u64).encode_async(stream).await?;
     assert!(!packet.command.is_empty());
     stream.write_all(packet.command.as_bytes()).await?;
-    debug!(target: "net", "sent command: {}", packet.command);
+    debug!(target: "net::message", "sent command: {}", packet.command);
 
     assert_eq!(std::mem::size_of::<usize>(), std::mem::size_of::<u64>());
     VarInt(packet.payload.len() as u64).encode_async(stream).await?;
@@ -176,7 +176,7 @@ pub async fn send_packet<W: AsyncWrite + Unpin + Sized>(
     if !packet.payload.is_empty() {
         stream.write_all(&packet.payload).await?;
     }
-    debug!(target: "net", "sent payload {} bytes", packet.payload.len() as u64);
+    debug!(target: "net::message", "sent payload {} bytes", packet.payload.len() as u64);
 
     Ok(())
 }

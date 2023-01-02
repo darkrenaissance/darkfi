@@ -103,7 +103,7 @@ impl<M: Message> MessageDispatcher<M> {
     /// channels. Used strictly internally.
     async fn _trigger_all(&self, message: MessageResult<M>) {
         debug!(
-            target: "net",
+            target: "net::message_subscriber",
             "MessageDispatcher<M={}>::trigger_all({}) [START, subs={}]",
             M::name(),
             if message.is_ok() { "msg" } else { "err" },
@@ -126,7 +126,7 @@ impl<M: Message> MessageDispatcher<M> {
         self.collect_garbage(garbage_ids).await;
 
         debug!(
-            target: "net",
+            target: "net::message_subscriber",
             "MessageDispatcher<M={}>::trigger_all({}) [END, subs={}]",
             M::name(),
             if message.is_ok() { "msg" } else { "err" },
@@ -157,7 +157,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
                 self._trigger_all(message).await
             }
             Err(err) => {
-                debug!("Unable to decode data. Dropping...: {}", err);
+                debug!(target: "net::message_subscriber", "Unable to decode data. Dropping...: {}", err);
             }
         }
     }
@@ -225,7 +225,7 @@ impl MessageSubsystem {
             }
             None => {
                 warn!(
-                    target: "MessageSubsystem::notify",
+                    target: "net::message_subscriber",
                     "MessageSubsystem::notify(\"{}\", payload) did not find a dispatcher",
                     command
                 );

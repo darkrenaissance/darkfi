@@ -54,7 +54,7 @@ impl<T: Encodable + Decodable> DataStore<T> {
         Ok(Self { _db, logs, commits, voted_for, current_term, id })
     }
     pub async fn flush(&self) -> Result<()> {
-        debug!(target: "raft", "DataStore flush");
+        debug!(target: "raft::datastore", "DataStore flush");
         self._db.flush_async().await?;
         Ok(())
     }

@@ -136,7 +136,7 @@ impl DaoTestHarness {
             SMART_CONTRACT_ZKAS_DB_NAME,
         )?;
 
-        info!("Decoding bincode");
+        info!(target: "dao", "Decoding bincode");
 
         let money_mint_zkbin =
             money_db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1))?.unwrap();
@@ -190,7 +190,7 @@ impl DaoTestHarness {
         let dao_exec_witnesses = empty_witnesses(&dao_exec_zkbin);
         let dao_exec_circuit = ZkCircuit::new(dao_exec_witnesses, dao_exec_zkbin.clone());
 
-        info!("Creating zk proving keys");
+        info!(target: "dao", "Creating zk proving keys");
 
         let k = 13;
         let mut proving_keys = HashMap::<[u8; 32], Vec<(&str, ProvingKey)>>::new();

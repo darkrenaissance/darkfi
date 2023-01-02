@@ -186,7 +186,7 @@ pub fn build_dao_mint_tx(
     dao_mint_zkbin: &ZkBinary,
     dao_mint_pk: &ProvingKey,
 ) -> Result<(DaoMintParams, Vec<Proof>)> {
-    debug!("Building DAO contract mint transaction");
+    debug!(target: "dao", "Building DAO contract mint transaction");
 
     let (proof, revealed) = create_dao_mint_proof(
         dao_mint_zkbin,

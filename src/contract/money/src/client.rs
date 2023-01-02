@@ -678,15 +678,15 @@ pub fn build_half_swap_tx(
     Vec<ValueBlind>,
     Vec<ValueBlind>,
 )> {
-    debug!("Building OTC swap transaction half");
+    debug!(target: "money", "Building OTC swap transaction half");
     assert!(value_send != 0);
     assert!(value_recv != 0);
     assert!(!coins.is_empty());
 
-    debug!("Money::build_half_swap_tx(): Building anonymous inputs");
+    debug!(target: "money", "Money::build_half_swap_tx(): Building anonymous inputs");
     // We'll take any coin that has correct value
     let Some(coin) = coins.iter().find(|x| x.note.value == value_send && x.note.token_id == token_id_send) else {
-        error!("Money::build_half_swap_tx(): Did not find a coin with enough value to swap");
+        error!(target: "money", "Money::build_half_swap_tx(): Did not find a coin with enough value to swap");
         return Err(ClientFailed::NotEnoughValue(value_send).into())
     };
 
@@ -752,7 +752,7 @@ pub fn build_half_swap_tx(
 
     let mut zk_proofs = vec![];
 
-    info!("Creating swap burn proof for input 0");
+    info!(target: "money", "Creating swap burn proof for input 0");
     let (proof, revealed) = create_transfer_burn_proof(
         burn_zkbin,
         burn_pk,
@@ -790,7 +790,7 @@ pub fn build_half_swap_tx(
     let spend_hook = pallas::Base::zero();
     let user_data = pallas::Base::zero();
 
-    info!("Creating swap mint proof for output 0");
+    info!(target: "money", "Creating swap mint proof for output 0");
     let (proof, revealed) = create_transfer_mint_proof(
         mint_zkbin,
         mint_pk,
@@ -863,7 +863,7 @@ pub fn build_transfer_tx(
     burn_pk: &ProvingKey,
     clear_input: bool,
 ) -> Result<(MoneyTransferParams, Vec<Proof>, Vec<SecretKey>, Vec<OwnCoin>)> {
-    debug!("Building money contract transfer transaction");
+    debug!(target: "money", "Building money contract transfer transaction");
     assert!(value != 0);
     if !clear_input {
         assert!(!coins.is_empty());
@@ -880,16 +880,16 @@ pub fn build_transfer_tx(
     let mut spent_coins = vec![];
 
     if clear_input {
-        debug!("Money::build_transfer_tx(): Building clear input");
+        debug!(target: "money", "Money::build_transfer_tx(): Building clear input");
         let input =
             TransactionBuilderClearInputInfo { value, token_id, signature_secret: keypair.secret };
         clear_inputs.push(input);
     } else {
-        debug!("Money::build_transfer_tx(): Building anonymous inputs");
+        debug!(target: "money", "Money::build_transfer_tx(): Building anonymous inputs");
         let mut inputs_value = 0;
         for coin in coins.iter() {
             if inputs_value >= value {
-                debug!("inputs_value >= value");
+                debug!(target: "money", "inputs_value >= value");
                 break
             }
 
@@ -910,7 +910,7 @@ pub fn build_transfer_tx(
         }
 
         if inputs_value < value {
-            error!("Money::build_transfer_tx(): Not enough value to build tx inputs");
+            error!(target: "money", "Money::build_transfer_tx(): Not enough value to build tx inputs");
             return Err(ClientFailed::NotEnoughValue(inputs_value).into())
         }
 
@@ -923,7 +923,7 @@ pub fn build_transfer_tx(
             });
         }
 
-        debug!("Money::build_transfer_tx(): Finished building inputs");
+        debug!(target: "money", "Money::build_transfer_tx(): Finished building inputs");
     }
 
     outputs.push(TransactionBuilderOutputInfo { value, token_id, public_key: *pubkey });
@@ -967,7 +967,7 @@ pub fn build_transfer_tx(
         let user_data = pallas::Base::zero();
         let user_data_blind = pallas::Base::random(&mut OsRng);
 
-        info!("Creating transfer burn proof for input {}", i);
+        info!(target: "money", "Creating transfer burn proof for input {}", i);
         let (proof, revealed) = create_transfer_burn_proof(
             burn_zkbin,
             burn_pk,
@@ -1018,7 +1018,7 @@ pub fn build_transfer_tx(
         let spend_hook = pallas::Base::zero();
         let user_data = pallas::Base::zero();
 
-        info!("Creating transfer mint proof for output {}", i);
+        info!(target: "money", "Creating transfer mint proof for output {}", i);
         let (proof, revealed) = create_transfer_mint_proof(
             mint_zkbin,
             mint_pk,

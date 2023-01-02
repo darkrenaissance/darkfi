@@ -34,7 +34,7 @@ pub(crate) fn drk_log(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
             std::mem::drop(logs);
         }
         Err(_) => {
-            error!(target: "wasm_runtime::drk_log", "Failed to read UTF-8 string from VM memory");
+            error!(target: "runtime::util", "Failed to read UTF-8 string from VM memory");
         }
     }
 }
@@ -68,18 +68,18 @@ pub(crate) fn put_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: 
     let env = ctx.data();
     let memory_view = env.memory_view(&ctx);
 
-    //debug!(target: "wasm_runtime::diagnostic", "diagnostic:");
+    //debug!(target: "runtime::util", "diagnostic:");
     //let pages = memory_view.size().0;
-    //debug!(target: "wasm_runtime::diagnostic", "    pages: {}", pages);
+    //debug!(target: "runtime::util", "    pages: {}", pages);
 
     let Ok(slice) = ptr.slice(&memory_view, len) else {
-        error!(target: "wasm_runtime::diagnostic", "Failed to make slice from ptr");
+        error!(target: "runtime::util", "Failed to make slice from ptr");
         return -2
     };
 
     let mut buf = vec![0_u8; len as usize];
     if let Err(e) = slice.read_slice(&mut buf) {
-        error!(target: "wasm_runtime::diagnostic", "Failed to read from memory slice: {}", e);
+        error!(target: "runtime::util", "Failed to read from memory slice: {}", e);
         return -2
     };
 
@@ -87,10 +87,10 @@ pub(crate) fn put_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: 
     // The number of pages is calculated as a quantity X + 1 where X >= 0
     //assert!(pages > 0);
 
-    //debug!(target: "wasm_runtime::diagnostic", "    memory: {:02x?}", &buf[0..32]);
-    //debug!(target: "wasm_runtime::diagnostic", "            {:x?}", &buf[32..64]);
+    //debug!(target: "runtime::util", "    memory: {:02x?}", &buf[0..32]);
+    //debug!(target: "runtime::util", "            {:x?}", &buf[32..64]);
 
-    //debug!(target: "wasm_runtime::diagnostic", "    ptr location: {}", ptr.offset());
+    //debug!(target: "runtime::util", "    ptr location: {}", ptr.offset());
 
     let mut objects = env.objects.borrow_mut();
     objects.push(buf);
@@ -109,7 +109,7 @@ pub(crate) fn get_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: 
 
     let objects = env.objects.borrow();
     if idx as usize >= objects.len() {
-        error!(target: "wasm_runtime::get_object_bytes", "Tried to access object out of bounds");
+        error!(target: "runtime::util", "Tried to access object out of bounds");
         return -5
     }
     let obj = &objects[idx as usize];
@@ -118,13 +118,13 @@ pub(crate) fn get_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: 
 
     // We need to re-read the slice, since in the first run, we just read n
     let Ok(slice) = ptr.slice(&memory_view, obj.len() as u32) else {
-        error!(target: "wasm_runtime::get_object_bytes", "Failed to make slice from ptr");
+        error!(target: "runtime::util", "Failed to make slice from ptr");
         return -2
     };
 
     // Put the result in the VM
     if let Err(e) = slice.write_slice(obj) {
-        error!(target: "wasm_runtime::get_object_bytes", "Failed to write to memory slice: {}", e);
+        error!(target: "runtime::util", "Failed to write to memory slice: {}", e);
         return -4
     };
 
@@ -141,7 +141,7 @@ pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
 
     let objects = env.objects.borrow();
     if idx as usize >= objects.len() {
-        error!(target: "wasm_runtime::get_object_bytes", "Tried to access object out of bounds");
+        error!(target: "runtime::util", "Tried to access object out of bounds");
         return -5
     }
 

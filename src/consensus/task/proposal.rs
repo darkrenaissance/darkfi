@@ -43,7 +43,7 @@ pub async fn proposal_task(
     let bootstrap_ts = state.read().await.consensus.bootstrap_ts;
     if current_ts < bootstrap_ts {
         let diff = bootstrap_ts.0 - current_ts.0;
-        info!("consensus: Waiting for network bootstrap: {} seconds", diff);
+        info!(target: "consensus::proposal", "consensus: Waiting for network bootstrap: {} seconds", diff);
         sleep(diff as u64).await;
     } else {
         let mut sleep_time = state.read().await.consensus.next_n_slot_start(1);
@@ -53,11 +53,11 @@ pub async fn proposal_task(
                 sleep_time -= sync_offset;
                 break
             }
-            info!("consensus: Waiting for next slot ({:?})", sleep_time);
+            info!(target: "consensus::proposal", "consensus: Waiting for next slot ({:?})", sleep_time);
             sleep(sleep_time.as_secs()).await;
             sleep_time = state.read().await.consensus.next_n_slot_start(1);
         }
-        info!("consensus: Waiting for finalization sync period ({:?})", sleep_time);
+        info!(target: "consensus::proposal", "consensus: Waiting for finalization sync period ({:?})", sleep_time);
         sleep(sleep_time.as_secs()).await;
     }
 
@@ -70,8 +70,8 @@ pub async fn proposal_task(
 
         // Checking sync retries
         if retries > constants::SYNC_MAX_RETRIES {
-            error!("consensus: Node reached max sync retries ({}) due to not being able to follow up with consensus processing.", constants::SYNC_MAX_RETRIES);
-            warn!("consensus: Terminating consensus participation.");
+            error!(target: "consensus::proposal", "consensus: Node reached max sync retries ({}) due to not being able to follow up with consensus processing.", constants::SYNC_MAX_RETRIES);
+            warn!(target: "consensus::proposal", "consensus: Terminating consensus participation.");
             break
         }
 
@@ -81,12 +81,12 @@ pub async fn proposal_task(
                 // Check if node is not connected to other nodes and can
                 // start proposing immediately.
                 if p {
-                    info!("consensus: Node can start proposing!");
+                    info!(target: "consensus::proposal", "consensus: Node can start proposing!");
                     state.write().await.consensus.proposing = p;
                 }
             }
             Err(e) => {
-                error!("consensus: Failed syncing consensus state: {}. Quitting consensus.", e);
+                error!(target: "consensus::proposal", "consensus: Failed syncing consensus state: {}. Quitting consensus.", e);
                 // TODO: Perhaps notify over a channel in order to
                 // stop consensus p2p protocols.
                 return
@@ -95,8 +95,12 @@ pub async fn proposal_task(
 
         // Node modifies its participating slot to next.
         match state.write().await.consensus.set_participating() {
-            Ok(()) => info!("consensus: Node will start participating in the next slot"),
-            Err(e) => error!("consensus: Failed to set participation slot: {}", e),
+            Ok(()) => {
+                info!(target: "consensus::proposal", "consensus: Node will start participating in the next slot")
+            }
+            Err(e) => {
+                error!(target: "consensus::proposal", "consensus: Failed to set participation slot: {}", e)
+            }
         }
 
         // Record epoch we start the consensus loop
@@ -138,7 +142,7 @@ async fn consensus_loop(
         // and listened_slots doesn't increment further.
         if listened_slots > constants::EPOCH_LENGTH {
             if !changed_status {
-                info!("consensus: Node can start proposing!");
+                info!(target: "consensus::proposal", "consensus: Node can start proposing!");
                 state.write().await.consensus.proposing = true;
                 changed_status = true;
             }
@@ -150,6 +154,7 @@ async fn consensus_loop(
         if propose_period(consensus_p2p.clone(), state.clone()).await {
             // Node needs to resync
             warn!(
+                target: "consensus::proposal",
                 "consensus: Node missed slot {} due to proposal processing, resyncing...",
                 state.read().await.consensus.current_slot()
             );
@@ -160,6 +165,7 @@ async fn consensus_loop(
         if finalization_period(sync_p2p.clone(), state.clone(), ex.clone()).await {
             // Node needs to resync
             warn!(
+                target: "consensus::proposal",
                 "consensus: Node missed slot {} due to finalizated blocks processing, resyncing...",
                 state.read().await.consensus.current_slot()
             );
@@ -176,7 +182,7 @@ async fn consensus_loop(
 async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool {
     // Node sleeps until next slot
     let seconds_next_slot = state.read().await.consensus.next_n_slot_start(1).as_secs();
-    info!("consensus: Waiting for next slot ({} sec)", seconds_next_slot);
+    info!(target: "consensus::proposal", "consensus: Waiting for next slot ({} sec)", seconds_next_slot);
     sleep(seconds_next_slot).await;
 
     // Keep a record of slot to verify if next slot got skipped during processing
@@ -189,11 +195,11 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     match epoch_changed {
         Ok(changed) => {
             if changed {
-                info!("consensus: New epoch started: {}", state.read().await.consensus.epoch);
+                info!(target: "consensus::proposal", "consensus: New epoch started: {}", state.read().await.consensus.epoch);
             }
         }
         Err(e) => {
-            error!("consensus: Epoch check failed: {}", e);
+            error!(target: "consensus::proposal", "consensus: Epoch check failed: {}", e);
             return false
         }
     };
@@ -210,13 +216,13 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     let (proposal, coin) = match result {
         Ok(pair) => {
             if pair.is_none() {
-                info!("consensus: Node is not the slot lead");
+                info!(target: "consensus::proposal", "consensus: Node is not the slot lead");
                 return false
             }
             pair.unwrap()
         }
         Err(e) => {
-            error!("consensus: Block proposal failed: {}", e);
+            error!(target: "consensus::proposal", "consensus: Block proposal failed: {}", e);
             return false
         }
     };
@@ -225,6 +231,7 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     let next_slot_start = state.read().await.consensus.next_n_slot_start(1);
     if next_slot_start.as_secs() <= constants::FINAL_SYNC_DUR {
         warn!(
+            target: "consensus::proposal",
             "consensus: Node missed slot {} finalization period due to proposal creation, resyncing...",
             state.read().await.consensus.current_slot()
         );
@@ -232,21 +239,25 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     }
 
     // Node stores the proposal and broadcast to rest nodes
-    info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
-    debug!("consensus: Full proposal: {:?}", proposal);
+    info!(target: "consensus::proposal", "consensus: Node is the slot leader: Proposed block: {}", proposal);
+    debug!(target: "consensus::proposal", "consensus: Full proposal: {:?}", proposal);
     match state.write().await.receive_proposal(&proposal, Some((coin_index, coin))).await {
         Ok(_) => {
             // Here we don't have to check to broadcast, because the flag
             // will always be true, since the node is able to produce proposals
-            info!("consensus: Block proposal saved successfully");
+            info!(target: "consensus::proposal", "consensus: Block proposal saved successfully");
             // Broadcast proposal to other consensus nodes
             match consensus_p2p.broadcast(proposal).await {
-                Ok(()) => info!("consensus: Proposal broadcasted successfully"),
-                Err(e) => error!("consensus: Failed broadcasting proposal: {}", e),
+                Ok(()) => {
+                    info!(target: "consensus::proposal", "consensus: Proposal broadcasted successfully")
+                }
+                Err(e) => {
+                    error!(target: "consensus::proposal", "consensus: Failed broadcasting proposal: {}", e)
+                }
             }
         }
         Err(e) => {
-            error!("consensus: Block proposal save failed: {}", e);
+            error!(target: "consensus::proposal", "consensus: Block proposal save failed: {}", e);
         }
     }
 
@@ -266,10 +277,11 @@ async fn finalization_period(
     if next_slot_start.as_secs() > constants::FINAL_SYNC_DUR {
         let seconds_sync_period =
             (next_slot_start - Duration::new(constants::FINAL_SYNC_DUR, 0)).as_secs();
-        info!("consensus: Waiting for finalization sync period ({} sec)", seconds_sync_period);
+        info!(target: "consensus::proposal", "consensus: Waiting for finalization sync period ({} sec)", seconds_sync_period);
         sleep(seconds_sync_period).await;
     } else {
         warn!(
+            target: "consensus::proposal",
             "consensus: Node missed slot {} finalization period due to proposals processing, resyncing...",
             state.read().await.consensus.current_slot()
         );
@@ -286,32 +298,32 @@ async fn finalization_period(
             if !to_broadcast_block.is_empty() || !to_broadcast_slot_checkpoints.is_empty() {
                 ex.spawn(async move {
                     // Broadcast finalized blocks info, if any:
-                    info!("consensus: Broadcasting finalized blocks");
+                    info!(target: "consensus::proposal", "consensus: Broadcasting finalized blocks");
                     for info in to_broadcast_block {
                         match sync_p2p.broadcast(info).await {
-                            Ok(()) => info!("consensus: Broadcasted block"),
-                            Err(e) => error!("consensus: Failed broadcasting block: {}", e),
+                            Ok(()) => info!(target: "consensus::proposal", "consensus: Broadcasted block"),
+                            Err(e) => error!(target: "consensus::proposal", "consensus: Failed broadcasting block: {}", e),
                         }
                     }
 
                     // Broadcast finalized slot checkpoints, if any:
-                    info!("consensus: Broadcasting finalized slot checkpoints");
+                    info!(target: "consensus::proposal", "consensus: Broadcasting finalized slot checkpoints");
                     for slot_checkpoint in to_broadcast_slot_checkpoints {
                         match sync_p2p.broadcast(slot_checkpoint).await {
-                            Ok(()) => info!("consensus: Broadcasted slot_checkpoint"),
+                            Ok(()) => info!(target: "consensus::proposal", "consensus: Broadcasted slot_checkpoint"),
                             Err(e) => {
-                                error!("consensus: Failed broadcasting slot_checkpoint: {}", e)
+                                error!(target: "consensus::proposal", "consensus: Failed broadcasting slot_checkpoint: {}", e)
                             }
                         }
                     }
                 })
                 .detach();
             } else {
-                info!("consensus: No finalized blocks or slot checkpoints to broadcast");
+                info!(target: "consensus::proposal", "consensus: No finalized blocks or slot checkpoints to broadcast");
             }
         }
         Err(e) => {
-            error!("consensus: Finalization check failed: {}", e);
+            error!(target: "consensus::proposal", "consensus: Finalization check failed: {}", e);
         }
     }
 

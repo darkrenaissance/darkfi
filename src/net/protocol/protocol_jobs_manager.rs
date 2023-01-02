@@ -75,7 +75,7 @@ impl ProtocolJobsManager {
     /// Closes all open tasks. Takes all the tasks from the internal queue and
     /// closes them.
     async fn close_all_tasks(self: Arc<Self>) {
-        debug!(target: "net",
+        debug!(target: "net::protocol_jobs_manager",
             "ProtocolJobsManager::close_all_tasks() [START, name={}, addr={}]",
             self.name,
             self.channel.address()

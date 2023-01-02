@@ -89,7 +89,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         seen_msgs: Arc<Mutex<HashMap<String, i64>>>,
     ) -> Result<Self> {
         if settings.datastore_path.to_str().is_none() {
-            error!(target: "raft", "datastore path is incorrect");
+            error!(target: "raft::consensus", "datastore path is incorrect");
             return Err(Error::ParseFailed("unable to parse pathbuf to str"))
         };
 
@@ -188,11 +188,11 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
 
             if let Err(e) = result {
-                warn!(target: "raft", "warn: {}", e);
+                warn!(target: "raft::consensus", "warn: {}", e);
             }
         }
 
-        warn!(target: "raft", "Raft Terminating...");
+        warn!(target: "raft::consensus", "Raft Terminating...");
         p2p_send_task.cancel().await;
         prune_seen_messages_task.cancel().await;
         prune_nodes_id_task.cancel().await;
@@ -255,7 +255,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
         }
 
-        debug!(target: "raft", "Role: {:?} Id: {:?}, broadcast a msg id: {:?} ", self.role, self.id, msg_id);
+        debug!(target: "raft::consensus", "Role: {:?} Id: {:?}, broadcast a msg id: {:?} ", self.role, self.id, msg_id);
 
         Ok(())
     }
@@ -292,7 +292,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
             }
         }
 
-        debug!(target: "raft", "Role: {:?} Id: {:?}, receive a msg with id: {}  recipient_id: {:?} method: {:?} ",
+        debug!(target: "raft::consensus", "Role: {:?} Id: {:?}, receive a msg with id: {}  recipient_id: {:?} method: {:?} ",
                self.role, self.id, msg.id, &msg.recipient_id, &msg.method);
         Ok(())
     }
@@ -306,7 +306,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     ) -> Result<()> {
         let random_id = if msg_id.is_some() { msg_id.unwrap() } else { OsRng.next_u64() };
 
-        debug!(target: "raft","Role: {:?} Id: {:?}, send a msg with id: {}  recipient_id: {:?} method: {:?} ",
+        debug!(target: "raft::consensus","Role: {:?} Id: {:?}, send a msg with id: {}  recipient_id: {:?} method: {:?} ",
                self.role, self.id, random_id, &recipient_id, &method);
 
         let net_msg = NetMsg { id: random_id, recipient_id, payload: payload.to_vec(), method };

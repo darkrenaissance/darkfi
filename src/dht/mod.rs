@@ -125,13 +125,13 @@ impl Dht {
         self.map.insert(key, value);
 
         if let Err(e) = self.lookup_insert(key, self.id) {
-            error!("Failed to insert record to lookup map: {}", e);
+            error!(target: "dht", "Failed to insert record to lookup map: {}", e);
             return Err(e)
         };
 
         let request = LookupRequest::new(self.id, key, 0);
         if let Err(e) = self.p2p.broadcast(request).await {
-            error!("Failed broadcasting request: {}", e);
+            error!(target: "dht", "Failed broadcasting request: {}", e);
             return Err(e)
         }
 
@@ -143,10 +143,10 @@ impl Dht {
         // Check if key value pair existed and act accordingly
         match self.map.remove(&key) {
             Some(_) => {
-                debug!("Key removed: {}", key);
+                debug!(target: "dht", "Key removed: {}", key);
                 let request = LookupRequest::new(self.id, key, 1);
                 if let Err(e) = self.p2p.broadcast(request).await {
-                    error!("Failed broadcasting request: {}", e);
+                    error!(target: "dht", "Failed broadcasting request: {}", e);
                     return Err(e)
                 }
 
@@ -213,7 +213,7 @@ impl Dht {
             None => return Err(UnknownKey),
         };
 
-        debug!("Key is in peers: {:?}", peers);
+        debug!(target: "dht", "Key is in peers: {:?}", peers);
 
         // We retrieve p2p network connected channels, to verify if we
         // are connected to a network.
@@ -229,7 +229,7 @@ impl Dht {
         let request = KeyRequest::new(self.id, peer, key);
         // TODO: ask connected peers directly, not broadcast
         if let Err(e) = self.p2p.broadcast(request).await {
-            error!("Failed broadcasting request: {}", e);
+            error!(target: "dht", "Failed broadcasting request: {}", e);
             return Err(e)
         }
 
@@ -238,7 +238,7 @@ impl Dht {
 
     /// Auxilary function to sync lookup map with network
     pub async fn sync_lookup_map(&mut self) -> Result<()> {
-        debug!("Starting lookup map sync...");
+        debug!(target: "dht", "Starting lookup map sync...");
         let channels_map = self.p2p.channels().lock().await.clone();
         let values = channels_map.values();
         // Using len here because is_empty() uses unstable library feature
@@ -258,12 +258,12 @@ impl Dht {
                 // Node stores response data.
                 let resp = response_sub.receive().await?;
                 if resp.lookup.is_empty() {
-                    warn!("Retrieved empty lookup map from an unsynced node, retrying...");
+                    warn!(target: "dht", "Retrieved empty lookup map from an unsynced node, retrying...");
                     continue
                 }
 
                 // Store retrieved records
-                debug!("Processing received records");
+                debug!(target: "dht", "Processing received records");
                 for (k, v) in &resp.lookup {
                     for node in v {
                         self.lookup_insert(*k, *node)?;
@@ -273,10 +273,10 @@ impl Dht {
                 break
             }
         } else {
-            warn!("Node is not connected to other nodes");
+            warn!(target: "dht", "Node is not connected to other nodes");
         }
 
-        debug!("Lookup map synced!");
+        debug!(target: "dht", "Lookup map synced!");
         Ok(())
     }
 }
@@ -315,7 +315,7 @@ pub async fn waiting_for_response(dht: DhtPtr) -> Result<Option<KeyResponse>> {
 async fn prune_seen_messages(dht: DhtPtr) {
     loop {
         sleep(SEEN_DURATION as u64).await;
-        debug!("Pruning seen messages");
+        debug!(target: "dht", "Pruning seen messages");
 
         let now = Utc::now().timestamp();
 

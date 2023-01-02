@@ -58,7 +58,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
     }
 
     pub(super) async fn receive_log_request(&mut self, lr: LogRequest) -> Result<()> {
-        debug!(target: "raft",
+        debug!(target: "raft::consensus_follower",
         "Receive LogRequest current_term: {} prefix_term: {} prefix_len: {} commit_length: {} suffixlen {}",
         lr.current_term, lr.prefix_term, lr.prefix_len, lr.commit_length, lr.suffix.len(),
         );
@@ -88,7 +88,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
         let response =
             LogResponse { node_id: self.id(), current_term: self.current_term()?, ack, ok };
 
-        debug!(target: "raft",
+        debug!(target: "raft::consensus_follower",
          "Send LogResponse current_term: {} ack: {} ok: {}",
          response.current_term, response.ack, response.ok
         );

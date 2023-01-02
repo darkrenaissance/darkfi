@@ -93,7 +93,7 @@ impl Builder {
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
     ) -> Result<(DaoVoteParams, Vec<Proof>)> {
-        debug!(target: "dao_contract::vote::wallet::Builder", "build()");
+        debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
         let gov_token_blind = pallas::Base::random(&mut OsRng);
@@ -189,7 +189,7 @@ impl Builder {
             ];
 
             let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin.clone());
-            debug!(target: "dao_contract::vote::wallet::Builder", "input_proof Proof::create()");
+            debug!(target: "dao", "input_proof Proof::create()");
             let input_proof = Proof::create(&burn_pk, &[circuit], &public_inputs, &mut OsRng)
                 .expect("DAO::vote() proving error!");
             proofs.push(input_proof);
@@ -298,7 +298,7 @@ impl Builder {
 
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin.clone());
 
-        debug!(target: "dao_contract::vote::wallet::Builder", "main_proof = Proof::create()");
+        debug!(target: "dao", "main_proof = Proof::create()");
         let main_proof = Proof::create(&main_pk, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::vote() proving error!");
         proofs.push(main_proof);

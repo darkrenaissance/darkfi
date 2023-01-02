@@ -35,7 +35,7 @@ use crate::{
 /// Returns flag if node is not connected to other peers or consensus hasn't started,
 /// so it can immediately start proposing proposals.
 pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Result<bool> {
-    info!("Starting consensus state sync...");
+    info!(target: "consensus::consensus_sync", "Starting consensus state sync...");
     let current_slot = state.read().await.consensus.current_slot();
     // Loop through connected channels
     let channels_map = p2p.channels().lock().await;
@@ -43,11 +43,11 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     // Using len here because is_empty() uses unstable library feature
     // called 'exact_size_is_empty'.
     if values.len() == 0 {
-        warn!("Node is not connected to other nodes");
+        warn!(target: "consensus::consensus_sync", "Node is not connected to other nodes");
         let mut lock = state.write().await;
         lock.consensus.bootstrap_slot = current_slot;
         lock.consensus.init_coins().await?;
-        info!("Consensus state synced!");
+        info!(target: "consensus::consensus_sync", "Consensus state synced!");
         return Ok(true)
     }
 
@@ -64,11 +64,11 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
         // Node checks response
         let response = response_sub.receive().await?;
         if response.bootstrap_slot == current_slot {
-            warn!("Network was just bootstraped, checking rest nodes");
+            warn!(target: "consensus::consensus_sync", "Network was just bootstraped, checking rest nodes");
             continue
         }
         if response.is_empty {
-            warn!("Node has not seen any slot checkpoints, retrying...");
+            warn!(target: "consensus::consensus_sync", "Node has not seen any slot checkpoints, retrying...");
             continue
         }
         // Keep peer to ask for consensus state
@@ -82,17 +82,17 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     // If no peer knows about any slot checkpoints, that means that the network was bootstrapped or restarted
     // and no node has started consensus.
     if peer.is_none() {
-        warn!("No node that has seen any slot checkpoints was found, or network was just boostrapped.");
+        warn!(target: "consensus::consensus_sync", "No node that has seen any slot checkpoints was found, or network was just boostrapped.");
         let mut lock = state.write().await;
         lock.consensus.bootstrap_slot = current_slot;
         lock.consensus.init_coins().await?;
-        info!("Consensus state synced!");
+        info!(target: "consensus::consensus_sync", "Consensus state synced!");
         return Ok(true)
     }
     let peer = peer.unwrap();
 
     // Listen for next finalization
-    info!("Waiting for next finalization...");
+    info!(target: "consensus::consensus_sync", "Waiting for next finalization...");
     let subscriber = state.read().await.subscribers.get("blocks").unwrap().clone();
     let subscription = subscriber.subscribe().await;
     subscription.receive().await;
@@ -100,7 +100,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
 
     // After finalization occurs, sync our consensus state.
     // This ensures that the received state always consists of 1 fork with one proposal.
-    info!("Finalization signal received, requesting consensus state...");
+    info!(target: "consensus::consensus_sync", "Finalization signal received, requesting consensus state...");
     // Communication setup
     let msg_subsystem = peer.get_message_subsystem();
     msg_subsystem.add_dispatch::<ConsensusResponse>().await;
@@ -114,7 +114,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     // Verify that peer has finished finalizing forks
     loop {
         if response.forks.len() != 1 || response.forks[0].sequence.len() != 1 {
-            warn!("Peer has not finished finalization, retrying...");
+            warn!(target: "consensus::consensus_sync", "Peer has not finished finalization, retrying...");
             sleep(1).await;
             peer.send(ConsensusRequest {}).await?;
             response = response_sub.receive().await?;
@@ -127,7 +127,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     let last_finalized_slot = response.forks[0].sequence[0].proposal.block.header.slot - 1;
     loop {
         if !state.read().await.blockchain.has_slot(last_finalized_slot)? {
-            warn!("Node has not finished finalization, retrying...");
+            warn!(target: "consensus::consensus_sync", "Node has not finished finalization, retrying...");
             sleep(1).await;
             continue
         }
@@ -149,6 +149,6 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     lock.consensus.nullifiers = response.nullifiers.clone();
     lock.consensus.init_coins().await?;
 
-    info!("Consensus state synced!");
+    info!(target: "consensus::consensus_sync", "Consensus state synced!");
     Ok(false)
 }

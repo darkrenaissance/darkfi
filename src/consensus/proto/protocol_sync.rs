@@ -86,39 +86,39 @@ impl ProtocolSync {
             let order = match self.request_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    debug!("ProtocolSync::handle_receive_request(): recv fail: {}", e);
+                    debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_request(): recv fail: {}", e);
                     continue
                 }
             };
 
-            debug!("ProtocolSync::handle_receive_request() received {:?}", order);
+            debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_request() received {:?}", order);
 
             // Extra validations can be added here
             let key = order.slot;
             let blocks = match self.state.read().await.blockchain.get_blocks_after(key, BATCH) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("ProtocolSync::handle_receive_request(): get_blocks_after fail: {}", e);
+                    error!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_request(): get_blocks_after fail: {}", e);
                     continue
                 }
             };
-            debug!("ProtocolSync::handle_receive_request(): Found {} blocks", blocks.len());
+            debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_request(): Found {} blocks", blocks.len());
 
             let response = BlockResponse { blocks };
             if let Err(e) = self.channel.send(response).await {
-                error!("ProtocolSync::handle_receive_request(): channel send fail: {}", e)
+                error!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_request(): channel send fail: {}", e)
             };
         }
     }
 
     async fn handle_receive_block(self: Arc<Self>) -> Result<()> {
-        debug!("ProtocolSync::handle_receive_block() [START]");
+        debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_block() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
             let info = match self.block_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    debug!("ProtocolSync::handle_receive_block(): recv fail: {}", e);
+                    debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_block(): recv fail: {}", e);
                     continue
                 }
             };
@@ -135,6 +135,7 @@ impl ProtocolSync {
                     let slot = participating.unwrap();
                     if current >= slot {
                         debug!(
+                            target: "consensus::protocol_sync::handle_receive_request()",
                             "ProtocolSync::handle_receive_block(): node runs in consensus mode, skipping..."
                         );
                         continue
@@ -142,18 +143,19 @@ impl ProtocolSync {
                 }
             }
 
-            info!("ProtocolSync::handle_receive_block(): Received block: {}", info.blockhash());
+            info!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_block(): Received block: {}", info.blockhash());
 
-            debug!("ProtocolSync::handle_receive_block(): Processing received block");
+            debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_block(): Processing received block");
             let info_copy = (*info).clone();
             match self.state.write().await.receive_finalized_block(info_copy.clone()).await {
                 Ok(v) => {
                     if v {
-                        debug!("ProtocolProposal::handle_receive_block(): block processed successfully, broadcasting...");
+                        debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolProposal::handle_receive_block(): block processed successfully, broadcasting...");
                         if let Err(e) =
                             self.p2p.broadcast_with_exclude(info_copy, &exclude_list).await
                         {
                             error!(
+                                target: "consensus::protocol_sync::handle_receive_request()",
                                 "ProtocolSync::handle_receive_block(): p2p broadcast fail: {}",
                                 e
                             );
@@ -161,19 +163,20 @@ impl ProtocolSync {
                     }
                 }
                 Err(e) => {
-                    debug!("ProtocolSync::handle_receive_block(): error processing finalized block: {}", e);
+                    debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_block(): error processing finalized block: {}", e);
                 }
             };
         }
     }
 
     async fn handle_receive_slot_checkpoint_request(self: Arc<Self>) -> Result<()> {
-        debug!("ProtocolSync::handle_receive_slot_checkpoint_request() [START]");
+        debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_slot_checkpoint_request() [START]");
         loop {
             let request = match self.slot_checkpoin_request_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
                     debug!(
+                        target: "consensus::protocol_sync::handle_receive_request()",
                         "ProtocolSync::handle_receive_slot_checkpoint_request(): recv fail: {}",
                         e
                     );
@@ -181,7 +184,7 @@ impl ProtocolSync {
                 }
             };
 
-            debug!("ProtocolSync::handle_receive_slot_checkpoint_request() received {:?}", request);
+            debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_slot_checkpoint_request() received {:?}", request);
 
             // Extra validations can be added here
             let key = request.slot;
@@ -194,11 +197,12 @@ impl ProtocolSync {
             {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("ProtocolSync::handle_receive_slot_checkpoint_request(): get_slot_checkpoints_after fail: {}", e);
+                    error!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_slot_checkpoint_request(): get_slot_checkpoints_after fail: {}", e);
                     continue
                 }
             };
             debug!(
+                target: "consensus::protocol_sync::handle_receive_request()",
                 "ProtocolSync::handle_receive_slot_checkpoint_request(): Found {} slot checkpoints",
                 slot_checkpoints.len()
             );
@@ -206,6 +210,7 @@ impl ProtocolSync {
             let response = SlotCheckpointResponse { slot_checkpoints };
             if let Err(e) = self.channel.send(response).await {
                 error!(
+                    target: "consensus::protocol_sync::handle_receive_request()",
                     "ProtocolSync::handle_receive_slot_checkpoint_request(): channel send fail: {}",
                     e
                 )
@@ -214,13 +219,13 @@ impl ProtocolSync {
     }
 
     async fn handle_receive_slot_checkpoint(self: Arc<Self>) -> Result<()> {
-        debug!("ProtocolSync::handle_receive_slot_checkpoint() [START]");
+        debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_slot_checkpoint() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
             let slot_checkpoint = match self.slot_checkpoints_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    debug!("ProtocolSync::handle_receive_slot_checkpoint(): recv fail: {}", e);
+                    debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_slot_checkpoint(): recv fail: {}", e);
                     continue
                 }
             };
@@ -237,6 +242,7 @@ impl ProtocolSync {
                     let slot = participating.unwrap();
                     if current >= slot {
                         debug!(
+                            target: "consensus::protocol_sync::handle_receive_request()",
                             "ProtocolSync::handle_receive_block(): node runs in consensus mode, skipping..."
                         );
                         continue
@@ -245,11 +251,12 @@ impl ProtocolSync {
             }
 
             info!(
+                target: "consensus::protocol_sync::handle_receive_request()",
                 "ProtocolSync::handle_receive_slot_checkpoint(): Received slot checkpoint: {}",
                 slot_checkpoint.slot
             );
 
-            debug!("ProtocolSync::handle_receive_slot_checkpoint(): Processing received slot checkpoint");
+            debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_slot_checkpoint(): Processing received slot checkpoint");
             let slot_checkpoint_copy = (*slot_checkpoint).clone();
             match self
                 .state
@@ -260,13 +267,14 @@ impl ProtocolSync {
             {
                 Ok(v) => {
                     if v {
-                        debug!("ProtocolProposal::handle_receive_slot_checkpoint(): slot checkpoint processed successfully, broadcasting...");
+                        debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolProposal::handle_receive_slot_checkpoint(): slot checkpoint processed successfully, broadcasting...");
                         if let Err(e) = self
                             .p2p
                             .broadcast_with_exclude(slot_checkpoint_copy, &exclude_list)
                             .await
                         {
                             error!(
+                                target: "consensus::protocol_sync::handle_receive_request()",
                                 "ProtocolSync::handle_receive_slot_checkpoint(): p2p broadcast fail: {}",
                                 e
                             );
@@ -274,7 +282,7 @@ impl ProtocolSync {
                     }
                 }
                 Err(e) => {
-                    debug!("ProtocolSync::handle_receive_slot_checkpoint(): error processing finalized slot checkpoint: {}", e);
+                    debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::handle_receive_slot_checkpoint(): error processing finalized slot checkpoint: {}", e);
                 }
             };
         }
@@ -284,7 +292,7 @@ impl ProtocolSync {
 #[async_trait]
 impl ProtocolBase for ProtocolSync {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!("ProtocolSync::start() [START]");
+        debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_request(), executor.clone()).await;
         self.jobsman
@@ -296,7 +304,7 @@ impl ProtocolBase for ProtocolSync {
             .clone()
             .spawn(self.clone().handle_receive_slot_checkpoint(), executor.clone())
             .await;
-        debug!("ProtocolSync::start() [END]");
+        debug!(target: "consensus::protocol_sync::handle_receive_request()", "ProtocolSync::start() [END]");
         Ok(())
     }
 

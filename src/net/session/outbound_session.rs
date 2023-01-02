@@ -118,7 +118,7 @@ impl OutboundSession {
     /// Start the outbound session. Runs the channel connect loop.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         let slots_count = self.p2p().settings().outbound_connections;
-        info!(target: "net", "Starting {} outbound connection slots.", slots_count);
+        info!(target: "net::outbound_session", "Starting {} outbound connection slots.", slots_count);
         // Activate mutex lock on connection slots.
         let mut connect_slots = self.connect_slots.lock().await;
 
@@ -168,9 +168,11 @@ impl OutboundSession {
                 .try_connect(slot_number, executor.clone(), &connector, outbound_transports)
                 .await
             {
-                Ok(_) => info!(target: "net", "#{} slot disconnected", slot_number),
+                Ok(_) => {
+                    info!(target: "net::outbound_session", "#{} slot disconnected", slot_number)
+                }
                 Err(err) => {
-                    error!(target: "net", "#{} slot connection failed: {}", slot_number, err)
+                    error!(target: "net::outbound_session", "#{} slot connection failed: {}", slot_number, err)
                 }
             }
 
@@ -190,7 +192,7 @@ impl OutboundSession {
         outbound_transports: &Vec<TransportName>,
     ) -> Result<()> {
         let addr = self.load_address(slot_number).await?;
-        info!(target: "net", "#{} processing outbound [{}]", slot_number, addr);
+        info!(target: "net::outbound_session", "#{} processing outbound [{}]", slot_number, addr);
         {
             let info = &mut self.slot_info.lock().await[slot_number as usize];
             info.addr = Some(addr.clone());
@@ -202,7 +204,7 @@ impl OutboundSession {
         let transports = if outbound_transports.contains(&addr_transport) {
             vec![addr_transport]
         } else {
-            warn!(target: "net", "#{} address {} transport is not in accepted outbound transports, will try with: {:?}", slot_number, addr, outbound_transports);
+            warn!(target: "net::outbound_session", "#{} address {} transport is not in accepted outbound transports, will try with: {:?}", slot_number, addr, outbound_transports);
             outbound_transports.clone()
         };
 
@@ -210,11 +212,11 @@ impl OutboundSession {
             // Replace addr transport
             let mut transport_addr = addr.clone();
             transport_addr.set_scheme(&transport.to_scheme())?;
-            info!(target: "net", "#{} connecting to outbound [{}]", slot_number, transport_addr);
+            info!(target: "net::outbound_session", "#{} connecting to outbound [{}]", slot_number, transport_addr);
             match connector.connect(transport_addr.clone()).await {
                 Ok(channel) => {
                     // Blacklist goes here
-                    info!(target: "net", "#{} connected to outbound [{}]", slot_number, transport_addr);
+                    info!(target: "net::outbound_session", "#{} connected to outbound [{}]", slot_number, transport_addr);
 
                     let stop_sub = channel.subscribe_stop().await;
                     if stop_sub.is_err() {
@@ -244,7 +246,7 @@ impl OutboundSession {
                     return Ok(())
                 }
                 Err(err) => {
-                    error!(target: "net", "Unable to connect to outbound [{}]: {}", &transport_addr, err);
+                    error!(target: "net::outbound_session", "Unable to connect to outbound [{}]: {}", &transport_addr, err);
                 }
             }
         }
@@ -310,13 +312,13 @@ impl OutboundSession {
 
             // Peer discovery
             if p2p.settings().peer_discovery {
-                debug!(target: "net", "#{} No available address found, entering peer discovery mode.", slot_number);
+                debug!(target: "net::outbound_session", "#{} No available address found, entering peer discovery mode.", slot_number);
                 self.peer_discovery(slot_number).await?;
-                debug!(target: "net", "#{} Discovery mode ended.", slot_number);
+                debug!(target: "net::outbound_session", "#{} Discovery mode ended.", slot_number);
             }
 
             // Sleep and then retry
-            debug!(target: "net", "Retrying connect slot #{}", slot_number);
+            debug!(target: "net::outbound_session", "Retrying connect slot #{}", slot_number);
             async_util::sleep(p2p.settings().outbound_retry_seconds).await;
         }
     }
@@ -326,24 +328,24 @@ impl OutboundSession {
         // Check that another slot(thread) already tries to update hosts
         let p2p = self.p2p();
         if !p2p.clone().start_discovery().await {
-            debug!(target: "net", "#{} P2P already on discovery mode.", slot_number);
+            debug!(target: "net::outbound_session", "#{} P2P already on discovery mode.", slot_number);
             return Ok(())
         }
 
-        debug!(target: "net", "#{} Discovery mode started.", slot_number);
+        debug!(target: "net::outbound_session", "#{} Discovery mode started.", slot_number);
 
         // Getting a random connected channel to ask for peers
         let channel = match p2p.clone().random_channel().await {
             Some(c) => c,
             None => {
-                debug!(target: "net", "#{} No peers found.", slot_number);
+                debug!(target: "net::outbound_session", "#{} No peers found.", slot_number);
                 p2p.clone().stop_discovery().await;
                 return Ok(())
             }
         };
 
         // Ask peer
-        debug!(target: "net", "#{} Asking peer: {}", slot_number, channel.address());
+        debug!(target: "net::outbound_session", "#{} Asking peer: {}", slot_number, channel.address());
         let get_addr_msg = message::GetAddrsMessage {};
         channel.send(get_addr_msg).await?;
 

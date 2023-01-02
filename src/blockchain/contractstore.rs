@@ -60,7 +60,7 @@ impl WasmStore {
     /// Inserts or replaces the bincode for a given ContractId
     pub fn insert(&self, contract_id: ContractId, bincode: &[u8]) -> Result<()> {
         if let Err(e) = self.0.insert(&serialize(&contract_id), bincode) {
-            error!("Failed to insert bincode to WasmStore: {}", e);
+            error!(target: "blockchain::contractstore", "Failed to insert bincode to WasmStore: {}", e);
             return Err(e.into())
         }
 
@@ -104,7 +104,7 @@ impl ContractStateStore {
         contract_id: &ContractId,
         tree_name: &str,
     ) -> Result<sled::Tree> {
-        debug!(target: CS_TGT_INIT, "Initializing state tree for {}:{}", contract_id, tree_name);
+        debug!(target: "blockchain::contractstore", "Initializing state tree for {}:{}", contract_id, tree_name);
 
         let contract_id_bytes = serialize(contract_id);
         let ptr = contract_id.hash_state_id(tree_name);
@@ -150,7 +150,7 @@ impl ContractStateStore {
         contract_id: &ContractId,
         tree_name: &str,
     ) -> Result<sled::Tree> {
-        debug!(target: CS_TGT_LKUP, "Looking up state tree for {}:{}", contract_id, tree_name);
+        debug!(target: "blockchain::contractstore", "Looking up state tree for {}:{}", contract_id, tree_name);
 
         let contract_id_bytes = serialize(contract_id);
         let ptr = contract_id.hash_state_id(tree_name);
@@ -180,7 +180,7 @@ impl ContractStateStore {
     /// will be removed from the main `ContractStateStore`. If anything is not
     /// found as initialized, an error is returned.
     pub fn remove(&self, db: &sled::Db, contract_id: &ContractId, tree_name: &str) -> Result<()> {
-        debug!(target: CS_TGT_DROP, "Removing state tree for {}:{}", contract_id, tree_name);
+        debug!(target: "blockchain::contractstore", "Removing state tree for {}:{}", contract_id, tree_name);
 
         let contract_id_bytes = serialize(contract_id);
         let ptr = contract_id.hash_state_id(tree_name);

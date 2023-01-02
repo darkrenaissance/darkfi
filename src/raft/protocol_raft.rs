@@ -63,7 +63,7 @@ impl ProtocolRaft {
     }
 
     async fn handle_receive_msg(self: Arc<Self>) -> Result<()> {
-        debug!(target: "protocol_raft", "ProtocolRaft::handle_receive_msg() [START]");
+        debug!(target: "raft::protocol_raft", "ProtocolRaft::handle_receive_msg() [START]");
 
         // on initialization send a NodeIdMsg
         let random_id = OsRng.next_u64();
@@ -83,7 +83,7 @@ impl ProtocolRaft {
             let msg = self.msg_sub.receive().await?;
 
             debug!(
-            target: "protocol_raft",
+            target: "raft::protocol_raft",
             "ProtocolRaft::handle_receive_msg() received id: {:?} method {:?}",
             &msg.id, &msg.method
             );
@@ -117,10 +117,10 @@ impl net::ProtocolBase for ProtocolRaft {
     /// protocol task manager, then queues the reply. Sends out a ping and
     /// waits for pong reply. Waits for ping and replies with a pong.
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "protocol_raft", "ProtocolRaft::start() [START]");
+        debug!(target: "raft::protocol_raft", "ProtocolRaft::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_msg(), executor.clone()).await;
-        debug!(target: "protocol_raft", "ProtocolRaft::start() [END]");
+        debug!(target: "raft::protocol_raft", "ProtocolRaft::start() [END]");
         Ok(())
     }
 

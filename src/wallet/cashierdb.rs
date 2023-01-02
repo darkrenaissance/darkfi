@@ -67,16 +67,16 @@ pub struct CashierDb {
 
 impl CashierDb {
     pub async fn new(path: &str, password: &str) -> Result<CashierDbPtr> {
-        debug!("new() Constructor called");
+        debug!(target: "wallet::cashierdb", "new() Constructor called");
         if password.trim().is_empty() {
-            error!("Password is empty. You must set a password to use the wallet.");
+            error!(target: "wallet::cashierdb", "Password is empty. You must set a password to use the wallet.");
             return Err(WalletEmptyPassword)
         }
 
         if path != "sqlite::memory:" {
             let p = Path::new(path.strip_prefix("sqlite://").unwrap());
             if let Some(dirname) = p.parent() {
-                info!("Creating path to database: {}", dirname.display());
+                info!(target: "wallet::cashierdb", "Creating path to database: {}", dirname.display());
                 create_dir_all(&dirname)?;
             }
         }
@@ -91,7 +91,7 @@ impl CashierDb {
 
         let conn = SqlitePoolOptions::new().connect_with(connect_opts).await?;
 
-        info!("Opened connection at path: {:?}", path);
+        info!(target: "wallet::cashierdb", "Opened connection at path: {:?}", path);
         Ok(Arc::new(CashierDb { conn }))
     }
 
@@ -102,24 +102,24 @@ impl CashierDb {
 
         let mut conn = self.conn.acquire().await?;
 
-        debug!("Initializing main keypairs table");
+        debug!(target: "wallet::cashierdb", "Initializing main keypairs table");
         sqlx::query(main_kps).execute(&mut conn).await?;
 
-        debug!("Initializing deposit keypairs table");
+        debug!(target: "wallet::cashierdb", "Initializing deposit keypairs table");
         sqlx::query(deposit_kps).execute(&mut conn).await?;
 
-        debug!("Initializing withdraw keypairs table");
+        debug!(target: "wallet::cashierdb", "Initializing withdraw keypairs table");
         sqlx::query(withdraw_kps).execute(&mut conn).await?;
         Ok(())
     }
 
     pub async fn tree_gen(&self) -> Result<()> {
-        debug!("Attempting to generate merkle tree");
+        debug!(target: "wallet::cashierdb", "Attempting to generate merkle tree");
         let mut conn = self.conn.acquire().await?;
 
         match sqlx::query("SELECT * FROM tree").fetch_one(&mut conn).await {
             Ok(_) => {
-                error!("Merkle tree already exists");
+                error!(target: "wallet::cashierdb", "Merkle tree already exists");
                 Err(WalletTreeExists)
             }
             Err(_) => {
@@ -131,7 +131,7 @@ impl CashierDb {
     }
 
     pub async fn get_tree(&self) -> Result<BridgeTree<MerkleNode, 32>> {
-        debug!("Getting merkle tree");
+        debug!(target: "wallet::cashierdb", "Getting merkle tree");
         let mut conn = self.conn.acquire().await?;
 
         let row = sqlx::query("SELECT tree FROM tree").fetch_one(&mut conn).await?;
@@ -140,7 +140,7 @@ impl CashierDb {
     }
 
     pub async fn put_tree(&self, tree: &BridgeTree<MerkleNode, 32>) -> Result<()> {
-        debug!("Attempting to write merkle tree");
+        debug!(target: "wallet::cashierdb", "Attempting to write merkle tree");
         let mut conn = self.conn.acquire().await?;
 
         let tree_bytes = bincode::serialize(tree)?;
@@ -153,7 +153,7 @@ impl CashierDb {
     }
 
     pub async fn put_main_keys(&self, token_key: &TokenKey, network: &NetworkName) -> Result<()> {
-        debug!("Writing main keys into the database");
+        debug!(target: "wallet::cashierdb", "Writing main keys into the database");
         let network = serialize(network);
 
         let mut conn = self.conn.acquire().await?;
@@ -173,7 +173,7 @@ impl CashierDb {
     }
 
     pub async fn get_main_keys(&self, network: &NetworkName) -> Result<Vec<TokenKey>> {
-        debug!("Returning main keypairs");
+        debug!(target: "wallet::cashierdb", "Returning main keypairs");
         let network = serialize(network);
 
         let mut conn = self.conn.acquire().await?;
@@ -197,7 +197,7 @@ impl CashierDb {
     }
 
     pub async fn remove_withdraw_and_deposit_keys(&self) -> Result<()> {
-        debug!("Removing withdraw and deposit keys");
+        debug!(target: "wallet::cashierdb", "Removing withdraw and deposit keys");
         let mut conn = self.conn.acquire().await?;
         sqlx::query("DROP TABLE deposit_keypairs;").execute(&mut conn).await?;
         sqlx::query("DROP TABLE withdraw_keypairs;").execute(&mut conn).await?;
@@ -214,7 +214,7 @@ impl CashierDb {
         token_id: TokenId,
         mint_address: String,
     ) -> Result<()> {
-        debug!("Writing withdraw keys to database");
+        debug!(target: "wallet::cashierdb", "Writing withdraw keys to database");
         let public = serialize(d_key_public);
         let secret = serialize(d_key_secret);
         let network = serialize(network);
@@ -252,7 +252,7 @@ impl CashierDb {
         token_id: TokenId,
         mint_address: String,
     ) -> Result<()> {
-        debug!("Writing deposit keys to database");
+        debug!(target: "wallet::cashierdb", "Writing deposit keys to database");
         let d_key_public = serialize(d_key_public);
         let token_id = serialize(token_id);
         let network = serialize(network);
@@ -281,7 +281,7 @@ impl CashierDb {
     }
 
     pub async fn get_withdraw_private_keys(&self) -> Result<Vec<SecretKey>> {
-        debug!("Getting withdraw private keys");
+        debug!(target: "wallet::cashierdb", "Getting withdraw private keys");
         let confirm = serialize(&false);
 
         let mut conn = self.conn.acquire().await?;
@@ -306,7 +306,7 @@ impl CashierDb {
         &self,
         pubkey: &PublicKey,
     ) -> Result<Option<WithdrawToken>> {
-        debug!("Get token address by pubkey");
+        debug!(target: "wallet::cashierdb", "Get token address by pubkey");
         let d_key_public = serialize(pubkey);
         let confirm = serialize(&false);
 
@@ -340,7 +340,7 @@ impl CashierDb {
         d_key_public: &PublicKey,
         network: &NetworkName,
     ) -> Result<Vec<TokenKey>> {
-        debug!("Checking for existing dkey");
+        debug!(target: "wallet::cashierdb", "Checking for existing dkey");
         let d_key_public = serialize(d_key_public);
         let network = serialize(network);
         let confirm = serialize(&false);
@@ -374,7 +374,7 @@ impl CashierDb {
         token_key_public: &[u8],
         network: &NetworkName,
     ) -> Result<Option<Keypair>> {
-        debug!("Checking for existing token address");
+        debug!(target: "wallet::cashierdb", "Checking for existing token address");
         let confirm = serialize(&false);
         let network = serialize(network);
 
@@ -406,7 +406,7 @@ impl CashierDb {
         token_address: &[u8],
         network: &NetworkName,
     ) -> Result<()> {
-        debug!("Confirm withdraw keys");
+        debug!(target: "wallet::cashierdb", "Confirm withdraw keys");
         let network = serialize(network);
         let confirm = serialize(&true);
 
@@ -431,7 +431,7 @@ impl CashierDb {
         d_key_public: &PublicKey,
         network: &NetworkName,
     ) -> Result<()> {
-        debug!("Confirm deposit keys");
+        debug!(target: "wallet::cashierdb", "Confirm deposit keys");
         let network = serialize(network);
         let confirm = serialize(&true);
         let d_key_public = serialize(d_key_public);
@@ -456,7 +456,7 @@ impl CashierDb {
         &self,
         network: &NetworkName,
     ) -> Result<Vec<DepositToken>> {
-        debug!("Checking for existing dkey");
+        debug!(target: "wallet::cashierdb", "Checking for existing dkey");
         let network = serialize(network);
         let confirm = serialize(&false);
 
@@ -590,3 +590,4 @@ mod tests {
         Ok(())
     }
 }
+

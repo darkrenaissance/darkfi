@@ -95,7 +95,7 @@ impl Clock {
     /// return true if the clock is at the begining (before 2/3 of the slot).
     async fn ticking(&self) -> bool {
         let (abs, rel, _) = self.tick_time().await;
-        debug!("abs time to genesis ticks: {}, rel ticks: {}", abs, rel);
+        debug!(target: "consensus::clock", "abs time to genesis ticks: {}, rel ticks: {}", abs, rel);
         rel < (self.tick_len) * 2 / 3
     }
 
@@ -110,21 +110,21 @@ impl Clock {
     /// returns absolute zero based slot index
     async fn slot_abs(&self) -> u64 {
         let sl_abs = self.tick_time().await.0 / self.sl_len;
-        debug!("[slot_abs] slot len: {} - slot abs: {}", self.sl_len, sl_abs);
+        debug!(target: "consensus::clock", "[slot_abs] slot len: {} - slot abs: {}", self.sl_len, sl_abs);
         sl_abs
     }
 
     /// returns relative zero based slot index
     async fn slot_relative(&self) -> u64 {
         let e_abs = self.slot_abs().await % self.e_len;
-        debug!("[slot_relative] slot len: {} - slot relative: {}", self.sl_len, e_abs);
+        debug!(target: "consensus::clock", "[slot_relative] slot len: {} - slot relative: {}", self.sl_len, e_abs);
         e_abs
     }
 
     /// returns absolute zero based epoch index.
     async fn epoch_abs(&self) -> u64 {
         let res = self.slot_abs().await / self.e_len;
-        debug!("[epoch_abs] epoch len: {} - epoch abs: {}", self.e_len, res);
+        debug!(target: "consensus::clock", "[epoch_abs] epoch len: {} - epoch abs: {}", self.e_len, res);
         res
     }
 
@@ -137,34 +137,35 @@ impl Clock {
         let sl = self.slot_relative().await;
         if self.ticking().await {
             debug!(
+                target: "consensus::clock",
                 "e/e`: {}/{} sl/sl`: {}/{}, BB_E/BB_SL: {}/{}",
                 e, self.e, sl, self.sl, BB_E, BB_SL
             );
             if e == self.e && e == BB_E && self.sl == BB_SL {
                 self.sl = sl + 1; // 0
                 self.e = e; // 0
-                debug!("new genesis");
+                debug!(target: "consensus::clock", "new genesis");
                 Ticks::GENESIS { e, sl }
             } else if e == self.e && sl == self.sl + 1 {
                 self.sl = sl;
-                debug!("new slot");
+                debug!(target: "consensus::clock", "new slot");
                 Ticks::NEWSLOT { e, sl }
             } else if e == self.e + 1 && sl == 0 {
                 self.e = e;
                 self.sl = sl;
-                debug!("new epoch");
+                debug!(target: "consensus::clock", "new epoch");
                 Ticks::NEWEPOCH { e, sl }
             } else if e == self.e && sl == self.sl {
-                debug!("clock is idle");
+                debug!(target: "consensus::clock", "clock is idle");
                 thread::sleep(Duration::from_millis(100));
                 Ticks::IDLE
             } else {
-                debug!("clock is out of sync");
+                debug!(target: "consensus::clock", "clock is out of sync");
                 //clock is out of sync
                 Ticks::OUTOFSYNC
             }
         } else {
-            debug!("tocks");
+            debug!(target: "consensus::clock", "tocks");
             Ticks::TOCKS
         }
     }

@@ -44,7 +44,7 @@ impl TransportListener for UnixListener {
         let (stream, peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
             Err(err) => {
-                error!("Error listening for connections: {}", err);
+                error!(target: "net::unix", "Error listening for connections: {}", err);
                 return Err(Error::AcceptConnectionFailed(unix_socket_addr_to_string(
                     self.local_addr()?,
                 )))
@@ -83,7 +83,7 @@ impl Transport for UnixTransport {
 
         let socket_path = url.path();
         let socket_addr = SocketAddr::from_pathname(socket_path)?;
-        debug!(target: "net", "{} transport: listening on {}", url.scheme(), socket_path);
+        debug!(target: "net::unix", "{} transport: listening on {}", url.scheme(), socket_path);
         Ok(Box::pin(self.do_listen(socket_addr)))
     }
 
@@ -99,7 +99,7 @@ impl Transport for UnixTransport {
 
         let socket_path = url.path();
         let socket_addr = SocketAddr::from_pathname(socket_path)?;
-        debug!(target: "net", "{} transport: dialing {}", url.scheme(), socket_path);
+        debug!(target: "net::unix", "{} transport: dialing {}", url.scheme(), socket_path);
         Ok(Box::pin(self.do_dial(socket_addr, timeout)))
     }
 

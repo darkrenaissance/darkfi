@@ -167,7 +167,7 @@ impl P2p {
 
         *self.state.lock().await = P2pState::Started;
 
-        debug!(target: "net", "P2p::start() [END]");
+        debug!(target: "net::p2p::start()", "P2p::start() [END]");
         Ok(())
     }
     // ANCHOR_END: start
@@ -186,7 +186,7 @@ impl P2p {
     /// Waits for a stop signal and stops the network if received.
     // ANCHOR: run
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net", "P2p::run() [BEGIN]");
+        debug!(target: "net::p2p::start()", "P2p::run() [BEGIN]");
 
         *self.state.lock().await = P2pState::Run;
 
@@ -210,20 +210,20 @@ impl P2p {
         inbound.stop().await;
         outbound.stop().await;
 
-        debug!(target: "net", "P2p::run() [END]");
+        debug!(target: "net::p2p::start()", "P2p::run() [END]");
         Ok(())
     }
     // ANCHOR_END: run
 
     /// Wait for outbound connections to be established.
     pub async fn wait_for_outbound(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net", "P2p::wait_for_outbound() [BEGIN]");
+        debug!(target: "net::p2p::start()", "P2p::wait_for_outbound() [BEGIN]");
         // To verify that the network needs initialization, we check if we have seeds or peers configured,
         // and have configured outbound slots.
         if !(self.settings.seeds.is_empty() && self.settings.peers.is_empty()) &&
             self.settings.outbound_connections > 0
         {
-            debug!(target: "net", "P2p::wait_for_outbound(): seeds are configured, waiting for outbound initialization...");
+            debug!(target: "net::p2p::start()", "P2p::wait_for_outbound(): seeds are configured, waiting for outbound initialization...");
             // Retrieve P2P network settings;
             let settings = self.settings();
 
@@ -278,7 +278,7 @@ impl P2p {
             self.session_outbound().await.disable_notify().await;
         }
 
-        debug!(target: "net", "P2p::wait_for_outbound() [END]");
+        debug!(target: "net::p2p::start()", "P2p::wait_for_outbound() [END]");
         Ok(())
     }
 
@@ -313,14 +313,15 @@ impl P2p {
                 msg = subscriber.receive().fuse() => {
                         if let Err(e) = msg {
                             warn!(
+                                target: "net::p2p::start()",
                                 "P2p::wait_for_outbound(): Outbound connection failed [{}]: {}",
                                 addr, e
                             );
                         }
                 },
-                _ = stop_sub.receive().fuse() => debug!("P2p::wait_for_outbound(): stop signal received!"),
+                _ = stop_sub.receive().fuse() => debug!(target: "net::p2p::start()", "P2p::wait_for_outbound(): stop signal received!"),
                 _ = timeout_r.recv().fuse() => {
-                    warn!("P2p::wait_for_outbound(): Timeout on outbound connection: {}", addr);
+                    warn!(target: "net::p2p::start()", "P2p::wait_for_outbound(): Timeout on outbound connection: {}", addr);
                     continue
                 },
             }
@@ -353,13 +354,13 @@ impl P2p {
         }
 
         if futures.is_empty() {
-            error!("P2P::broadcast: No connected channels found");
+            error!(target: "net::p2p::start()", "P2P::broadcast: No connected channels found");
             return Ok(())
         }
 
         while let Some(entry) = futures.next().await {
             if let Err(e) = entry {
-                error!("{}", e);
+                error!(target: "net::p2p::start()", "{}", e);
             }
         }
 
@@ -391,13 +392,13 @@ impl P2p {
         }
 
         if futures.is_empty() {
-            error!("P2P::broadcast_with_exclude: No connected channels found");
+            error!(target: "net::p2p::start()", "P2P::broadcast_with_exclude: No connected channels found");
             return Ok(())
         }
 
         while let Some(entry) = futures.next().await {
             if let Err(e) = entry {
-                error!("{}", e);
+                error!(target: "net::p2p::start()", "{}", e);
             }
         }
 

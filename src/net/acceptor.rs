@@ -64,14 +64,14 @@ impl Acceptor {
         macro_rules! accept {
             ($listener:expr, $transport:expr, $upgrade:expr) => {{
                 if let Err(err) = $listener {
-                    error!("Setup for {} failed: {}", accept_url, err);
+                    error!(target: "net::acceptor", "Setup for {} failed: {}", accept_url, err);
                     return Err(Error::BindFailed(accept_url.as_str().into()))
                 }
 
                 let listener = $listener?.await;
 
                 if let Err(err) = listener {
-                    error!("Bind listener to {} failed: {}", accept_url, err);
+                    error!(target: "net::acceptor", "Bind listener to {} failed: {}", accept_url, err);
                     return Err(Error::BindFailed(accept_url.as_str().into()))
                 }
 
@@ -126,7 +126,7 @@ impl Acceptor {
                 // generate EHS pointing to local address
                 let hurl = transport.create_ehs(accept_url.clone())?;
 
-                info!("EHS TOR: {}", hurl.to_string());
+                info!(target: "net::acceptor", "EHS TOR: {}", hurl.to_string());
 
                 let listener = transport.clone().listen_on(accept_url.clone());
 
@@ -170,7 +170,7 @@ impl Acceptor {
                     self.channel_subscriber.notify(Ok(channel)).await;
                 }
                 Err(e) => {
-                    error!("Error listening for new connection: {}", e);
+                    error!(target: "net::acceptor", "Error listening for new connection: {}", e);
                 }
             }
         }

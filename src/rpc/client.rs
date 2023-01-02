@@ -63,10 +63,10 @@ impl RpcClient {
         subscriber: SubscriberPtr<JsonResult>,
     ) -> Result<()> {
         // Perform initial request.
-        debug!(target: "jsonrpc-client", "--> {}", serde_json::to_string(&req)?);
+        debug!(target: "rpc::client", "--> {}", serde_json::to_string(&req)?);
         // If the connection is closed, the sender will get an error for sending to a closed channel.
         if let Err(e) = self.send.send((json!(req), false)).await {
-            error!(target: "jsonrpc-client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
+            error!(target: "rpc::client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
             return Err(Error::NetworkOperationFailed)
         }
 
@@ -74,13 +74,13 @@ impl RpcClient {
             // If the connection is closed, the receiver will get an error for waiting on a closed channel.
             let notification = self.recv.recv().await;
             if notification.is_err() {
-                error!(target: "jsonrpc-client", "JSON-RPC client unable to recv from {} (channels closed)", self.url);
+                error!(target: "rpc::client", "JSON-RPC client unable to recv from {} (channels closed)", self.url);
                 break
             }
 
             // Notify subscribed channels
             let notification = notification?;
-            debug!(target: "jsonrpc-client", "<-- {}", serde_json::to_string(&notification)?);
+            debug!(target: "rpc::client", "<-- {}", serde_json::to_string(&notification)?);
 
             subscriber.notify(notification.clone()).await;
 
@@ -92,7 +92,7 @@ impl RpcClient {
 
             // Triggering next consume
             if let Err(e) = self.send.send((json!(req), false)).await {
-                error!(target: "jsonrpc-client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
+                error!(target: "rpc::client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
                 break
             }
         }
@@ -105,12 +105,12 @@ impl RpcClient {
     pub async fn request(&self, value: JsonRequest) -> Result<Value> {
         let req_id = value.id.clone().as_u64().unwrap();
 
-        debug!(target: "jsonrpc-client", "--> {}", serde_json::to_string(&value)?);
+        debug!(target: "rpc::client", "--> {}", serde_json::to_string(&value)?);
 
         // If the connection is closed, the sender will get an error for
         // sending to a closed channel.
         if let Err(e) = self.send.send((json!(value), true)).await {
-            error!("JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
+            error!(target: "rpc::client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
             return Err(Error::NetworkOperationFailed)
         }
 
@@ -118,7 +118,7 @@ impl RpcClient {
         // waiting on a closed channel.
         let reply = self.recv.recv().await;
         if reply.is_err() {
-            error!("JSON-RPC client unable to recv from {} (channels closed)", self.url);
+            error!(target: "rpc::client", "JSON-RPC client unable to recv from {} (channels closed)", self.url);
             return Err(Error::NetworkOperationFailed)
         }
 
@@ -136,15 +136,15 @@ impl RpcClient {
                     return Err(Error::JsonRpcError(e.error.message.to_string()))
                 }
 
-                debug!(target: "jsonrpc-client", "<-- {}", serde_json::to_string(&r)?);
+                debug!(target: "rpc::client", "<-- {}", serde_json::to_string(&r)?);
                 Ok(r.result)
             }
             JsonResult::Error(e) => {
-                debug!(target: "jsonrpc-client", "<-- {}", serde_json::to_string(&e)?);
+                debug!(target: "rpc::client", "<-- {}", serde_json::to_string(&e)?);
                 Err(Error::JsonRpcError(e.error.message.to_string()))
             }
             JsonResult::Notification(n) => {
-                debug!(target: "jsonrpc-client", "<-- {}", serde_json::to_string(&n)?);
+                debug!(target: "rpc::client", "<-- {}", serde_json::to_string(&n)?);
                 Err(Error::JsonRpcError("Unexpected reply".to_string()))
             }
             JsonResult::Subscriber(_) => Err(Error::JsonRpcError("Unexpected reply".to_string())),
@@ -176,13 +176,13 @@ impl RpcClient {
         macro_rules! reqrep {
             ($stream:expr, $transport:expr, $upgrade:expr) => {{
                 if let Err(err) = $stream {
-                    error!("JSON-RPC client setup for {} failed: {}", uri, err);
+                    error!(target: "rpc::client", "JSON-RPC client setup for {} failed: {}", uri, err);
                     return Err(Error::ConnectFailed)
                 }
 
                 let stream = $stream?.await;
                 if let Err(err) = stream {
-                    error!("JSON-RPC client connection to {} failed: {}", uri, err);
+                    error!(target: "rpc::client", "JSON-RPC client connection to {} failed: {}", uri, err);
                     return Err(Error::ConnectFailed)
                 }
 
@@ -263,7 +263,7 @@ impl RpcClient {
                                 result_send.send(reply).await?;
                                 break
                             },
-                            Err(e) => debug!("JSON-RPC client retrying failed convertion with error: {}", e),
+                            Err(e) => debug!(target: "rpc::client", "JSON-RPC client retrying failed convertion with error: {}", e),
                         }
                     }
                 }

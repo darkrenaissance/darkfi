@@ -54,7 +54,7 @@ impl Protocol {
         dht: DhtPtr,
         p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {
-        debug!("Adding Protocol to the protocol registry");
+        debug!(target: "dht::protocol", "Adding Protocol to the protocol registry");
         let msg_subsystem = channel.get_message_subsystem();
         msg_subsystem.add_dispatch::<KeyRequest>().await;
         msg_subsystem.add_dispatch::<KeyResponse>().await;
@@ -80,24 +80,25 @@ impl Protocol {
     }
 
     async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
-        debug!("Protocol::handle_receive_request() [START]");
+        debug!(target: "dht::protocol", "Protocol::handle_receive_request() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
             let req = match self.req_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("Protocol::handle_receive_request(): recv fail: {}", e);
+                    error!(target: "dht::protocol", "Protocol::handle_receive_request(): recv fail: {}", e);
                     continue
                 }
             };
 
             let req_copy = (*req).clone();
-            debug!("Protocol::handle_receive_request(): req: {:?}", req_copy);
+            debug!(target: "dht::protocol", "Protocol::handle_receive_request(): req: {:?}", req_copy);
 
             {
                 let dht = &mut self.dht.write().await;
                 if dht.seen.contains_key(&req_copy.id) {
                     debug!(
+                        target: "dht::protocol",
                         "Protocol::handle_receive_request(): We have already seen this request."
                     );
                     continue
@@ -111,7 +112,7 @@ impl Protocol {
                 if let Err(e) =
                     self.p2p.broadcast_with_exclude(req_copy.clone(), &exclude_list).await
                 {
-                    error!("Protocol::handle_receive_response(): p2p broadcast fail: {}", e);
+                    error!(target: "dht::protocol", "Protocol::handle_receive_response(): p2p broadcast fail: {}", e);
                 };
                 continue
             }
@@ -120,37 +121,38 @@ impl Protocol {
                 Some(value) => {
                     let response =
                         KeyResponse::new(daemon, req_copy.from, req_copy.key, value.clone());
-                    debug!("Protocol::handle_receive_request(): sending response: {:?}", response);
+                    debug!(target: "dht::protocol", "Protocol::handle_receive_request(): sending response: {:?}", response);
                     if let Err(e) = self.channel.send(response).await {
-                        error!("Protocol::handle_receive_request(): p2p broadcast of response failed: {}", e);
+                        error!(target: "dht::protocol", "Protocol::handle_receive_request(): p2p broadcast of response failed: {}", e);
                     };
                 }
                 None => {
-                    error!("Protocol::handle_receive_request(): Requested key doesn't exist locally: {}", req_copy.key);
+                    error!(target: "dht::protocol", "Protocol::handle_receive_request(): Requested key doesn't exist locally: {}", req_copy.key);
                 }
             }
         }
     }
 
     async fn handle_receive_response(self: Arc<Self>) -> Result<()> {
-        debug!("Protocol::handle_receive_response() [START]");
+        debug!(target: "dht::protocol", "Protocol::handle_receive_response() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
             let resp = match self.resp_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("Protocol::handle_receive_response(): recv fail: {}", e);
+                    error!(target: "dht::protocol", "Protocol::handle_receive_response(): recv fail: {}", e);
                     continue
                 }
             };
 
             let resp_copy = (*resp).clone();
-            debug!("Protocol::handle_receive_response(): resp: {:?}", resp_copy);
+            debug!(target: "dht::protocol", "Protocol::handle_receive_response(): resp: {:?}", resp_copy);
 
             {
                 let dht = &mut self.dht.write().await;
                 if dht.seen.contains_key(&resp_copy.id) {
                     debug!(
+                        target: "dht::protocol",
                         "Protocol::handle_receive_request(): We have already seen this request."
                     );
                     continue
@@ -163,7 +165,7 @@ impl Protocol {
                 if let Err(e) =
                     self.p2p.broadcast_with_exclude(resp_copy.clone(), &exclude_list).await
                 {
-                    error!("Protocol::handle_receive_response(): p2p broadcast fail: {}", e);
+                    error!(target: "dht::protocol", "Protocol::handle_receive_response(): p2p broadcast fail: {}", e);
                 };
                 continue
             }
@@ -173,22 +175,22 @@ impl Protocol {
     }
 
     async fn handle_receive_lookup_request(self: Arc<Self>) -> Result<()> {
-        debug!("Protocol::handle_receive_lookup_request() [START]");
+        debug!(target: "dht::protocol", "Protocol::handle_receive_lookup_request() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
             let req = match self.lookup_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("Protocol::handle_receive_lookup_request(): recv fail: {}", e);
+                    error!(target: "dht::protocol", "Protocol::handle_receive_lookup_request(): recv fail: {}", e);
                     continue
                 }
             };
 
             let req_copy = (*req).clone();
-            debug!("Protocol::handle_receive_lookup_request(): req: {:?}", req_copy);
+            debug!(target: "dht::protocol", "Protocol::handle_receive_lookup_request(): req: {:?}", req_copy);
 
             if !(0..=1).contains(&req_copy.req_type) {
-                debug!("Protocol::handle_receive_lookup_request(): Unknown request type.");
+                debug!(target: "dht::protocol", "Protocol::handle_receive_lookup_request(): Unknown request type.");
                 continue
             }
 
@@ -196,6 +198,7 @@ impl Protocol {
                 let dht = &mut self.dht.write().await;
                 if dht.seen.contains_key(&req_copy.id) {
                     debug!(
+                        target: "dht::protocol",
                         "Protocol::handle_receive_request(): We have already seen this request."
                     );
                     continue
@@ -210,33 +213,34 @@ impl Protocol {
             };
 
             if let Err(e) = result {
-                error!("Protocol::handle_receive_lookup_request(): request action failed: {}", e);
+                error!(target: "dht::protocol", "Protocol::handle_receive_lookup_request(): request action failed: {}", e);
                 continue
             };
 
             if let Err(e) = self.p2p.broadcast_with_exclude(req_copy, &exclude_list).await {
-                error!("Protocol::handle_receive_lookup_request(): p2p broadcast fail: {}", e);
+                error!(target: "dht::protocol", "Protocol::handle_receive_lookup_request(): p2p broadcast fail: {}", e);
             };
         }
     }
 
     async fn handle_receive_lookup_map_request(self: Arc<Self>) -> Result<()> {
-        debug!("Protocol::handle_receive_lookup_map_request() [START]");
+        debug!(target: "dht::protocol", "Protocol::handle_receive_lookup_map_request() [START]");
         loop {
             let req = match self.lookup_map_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
-                    error!("Protocol::handle_receive_lookup_map_request(): recv fail: {}", e);
+                    error!(target: "dht::protocol", "Protocol::handle_receive_lookup_map_request(): recv fail: {}", e);
                     continue
                 }
             };
 
-            debug!("Protocol::handle_receive_lookup_map_request(): req: {:?}", req);
+            debug!(target: "dht::protocol", "Protocol::handle_receive_lookup_map_request(): req: {:?}", req);
 
             {
                 let dht = &mut self.dht.write().await;
                 if dht.seen.contains_key(&req.id) {
                     debug!(
+                        target: "dht::protocol",
                         "Protocol::handle_receive_lookup_map_request(): We have already seen this request."
                     );
                     continue
@@ -249,7 +253,7 @@ impl Protocol {
             let lookup = self.dht.read().await.lookup.clone();
             let response = LookupMapResponse::new(lookup);
             if let Err(e) = self.channel.send(response).await {
-                error!("Protocol::handle_receive_lookup_map_request() channel send fail: {}", e);
+                error!(target: "dht::protocol", "Protocol::handle_receive_lookup_map_request() channel send fail: {}", e);
             };
         }
     }
@@ -258,7 +262,7 @@ impl Protocol {
 #[async_trait]
 impl ProtocolBase for Protocol {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!("Protocol::start() [START]");
+        debug!(target: "dht::protocol", "Protocol::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_request(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_response(), executor.clone()).await;
@@ -270,7 +274,7 @@ impl ProtocolBase for Protocol {
             .clone()
             .spawn(self.clone().handle_receive_lookup_map_request(), executor.clone())
             .await;
-        debug!("Protocol::start() [END]");
+        debug!(target: "dht::protocol", "Protocol::start() [END]");
         Ok(())
     }
 

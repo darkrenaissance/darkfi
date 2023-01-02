@@ -67,12 +67,12 @@ impl ProtocolRegistry {
         for (session_flags, construct) in self.protocol_constructors.lock().await.iter() {
             // Skip protocols that are not registered for this session
             if selector_id & session_flags == 0 {
-                debug!("Skipping {selector_id:#b}, {session_flags:#b}");
+                debug!(target: "net::protocol_registry", "Skipping {selector_id:#b}, {session_flags:#b}");
                 continue
             }
 
             let protocol: ProtocolBasePtr = construct(channel.clone(), p2p.clone()).await;
-            debug!(target: "net", "Attached {}", protocol.name());
+            debug!(target: "net::protocol_registry", "Attached {}", protocol.name());
 
             protocols.push(protocol)
         }

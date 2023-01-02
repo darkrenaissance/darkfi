@@ -237,8 +237,8 @@ impl ConsensusState {
     pub fn sigmas(&mut self) -> (pallas::Base, pallas::Base) {
         let f = self.win_inv_prob_with_full_stake();
         let total_stake = self.total_stake();
-        info!("sigmas(): f: {}", f);
-        info!("sigmas(): stake: {}", total_stake);
+        info!(target: "consensus::state", "sigmas(): f: {}", f);
+        info!(target: "consensus::state", "sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
         let field_p = Float10::from_str_native(constants::P)
@@ -314,7 +314,7 @@ impl ConsensusState {
         if self.offset.is_none() {
             let (last_slot, last_offset) = self.blockchain.get_last_offset().unwrap();
             let offset = last_offset + (current_slot - last_slot);
-            info!("get_current_offset(): Setting slot offset: {}", offset);
+            info!(target: "consensus::state", "get_current_offset(): Setting slot offset: {}", offset);
             self.offset = Some(offset);
         }
 
@@ -330,6 +330,7 @@ impl ConsensusState {
         // Setup offset if only have genesis and havent received offset from other nodes
         if blocks == 0 && self.offset.is_none() {
             info!(
+                target: "consensus::state",
                 "overall_empty_slots(): Blockchain contains only genesis, setting slot offset: {}",
                 current_slot
             );
@@ -370,7 +371,7 @@ impl ConsensusState {
             }
         }
         self.leaders_history.push(count);
-        info!("extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
+        info!(target: "consensus::state", "extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
         Float10::try_from(count as i64).unwrap().with_precision(constants::RADIX_BITS).value()
     }
 
@@ -465,11 +466,11 @@ impl ConsensusState {
         let p = self.weighted_f_dif();
         let i = self.weighted_f_int();
         let d = self.weighted_f_der();
-        info!("win_inv_prob_with_full_stake(): PID P: {:?}", p);
-        info!("win_inv_prob_with_full_stake(): PID I: {:?}", i);
-        info!("win_inv_prob_with_full_stake(): PID D: {:?}", d);
+        info!(target: "consensus::state", "win_inv_prob_with_full_stake(): PID P: {:?}", p);
+        info!(target: "consensus::state", "win_inv_prob_with_full_stake(): PID I: {:?}", i);
+        info!(target: "consensus::state", "win_inv_prob_with_full_stake(): PID D: {:?}", d);
         let f = p + i.clone() + d;
-        info!("win_inv_prob_with_full_stake(): PID f: {}", f);
+        info!(target: "consensus::state", "win_inv_prob_with_full_stake(): PID f: {}", f);
         if f == constants::FLOAT10_ZERO.clone() {
             return constants::MIN_F.clone()
         } else if f >= constants::FLOAT10_ONE.clone() {
@@ -514,9 +515,9 @@ impl ConsensusState {
         let mut highest_stake_idx = 0;
         let total_stake = self.total_stake();
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
-            info!("is_slot_leader: coin stake: {:?}", coin.value);
-            info!("is_slot_leader: total stake: {}", total_stake);
-            info!("is_slot_leader: relative stake: {}", (coin.value as f64) / total_stake as f64);
+            info!(target: "consensus::state", "is_slot_leader: coin stake: {:?}", coin.value);
+            info!(target: "consensus::state", "is_slot_leader: total stake: {}", total_stake);
+            info!(target: "consensus::state", "is_slot_leader: relative stake: {}", (coin.value as f64) / total_stake as f64);
             let first_winning = coin.is_leader(sigma1, sigma2);
             if first_winning && !won {
                 highest_stake_idx = winning_idx;
@@ -587,7 +588,7 @@ impl ConsensusState {
             if proposal.block.header.previous != last_block ||
                 proposal.block.header.slot <= last_slot
             {
-                info!("find_extended_chain_index(): Proposal doesn't extend any known chain");
+                info!(target: "consensus::state", "find_extended_chain_index(): Proposal doesn't extend any known chain");
                 return Ok(-2)
             }
 
@@ -602,7 +603,7 @@ impl ConsensusState {
             return Ok(chain_index)
         }
 
-        info!("find_extended_chain_index(): Proposal to fork a forkchain was received.");
+        info!(target: "consensus::state", "find_extended_chain_index(): Proposal to fork a forkchain was received.");
         let mut chain = self.forks[chain_index as usize].clone();
         // We keep all proposals until the one it extends
         chain.sequence.drain((state_checkpoint_index + 1)..);
@@ -629,16 +630,16 @@ impl ConsensusState {
         // Check if we found longest fork to extract sequence from
         match index {
             -1 => {
-                info!("set_leader_history(): No fork exists.");
+                info!(target: "consensus::state", "set_leader_history(): No fork exists.");
             }
             _ => {
-                info!("set_leader_history(): Checking last proposal of fork: {}", index);
+                info!(target: "consensus::state", "set_leader_history(): Checking last proposal of fork: {}", index);
                 let last_proposal = &self.forks[index as usize].sequence.last().unwrap().proposal;
                 if last_proposal.block.header.slot == current_slot {
                     // Replacing our last history element with the leaders one
                     self.leaders_history.pop();
                     self.leaders_history.push(last_proposal.block.lead_info.leaders);
-                    info!("set_leader_history(): New leaders history: {:?}", self.leaders_history);
+                    info!(target: "consensus::state", "set_leader_history(): New leaders history: {:?}", self.leaders_history);
                     return
                 }
             }
@@ -909,14 +910,14 @@ impl Fork {
         previous: &StateCheckpoint,
     ) -> bool {
         if state_checkpoint.proposal.block.header.previous == self.genesis_block {
-            info!("check_checkpoint(): Genesis block proposal provided.");
+            info!(target: "consensus::state", "check_checkpoint(): Genesis block proposal provided.");
             return false
         }
 
         if state_checkpoint.proposal.block.header.previous != previous.proposal.hash ||
             state_checkpoint.proposal.block.header.slot <= previous.proposal.block.header.slot
         {
-            info!("check_checkpoint(): Provided state checkpoint proposal is invalid.");
+            info!(target: "consensus::state", "check_checkpoint(): Provided state checkpoint proposal is invalid.");
             return false
         }
 

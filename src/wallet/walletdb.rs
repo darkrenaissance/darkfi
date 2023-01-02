@@ -67,14 +67,14 @@ pub struct WalletDb {
 impl WalletDb {
     pub async fn new(path: &str, password: &str) -> Result<WalletPtr> {
         if password.trim().is_empty() {
-            error!("Wallet password is empty. You must set a password to use the wallet.");
+            error!(target: "wallet::walletdb", "Wallet password is empty. You must set a password to use the wallet.");
             return Err(Error::WalletEmptyPassword)
         }
 
         if path != "sqlite::memory:" {
             let p = Path::new(path.strip_prefix("sqlite://").unwrap());
             if let Some(dirname) = p.parent() {
-                info!("Creating path to wallet database: {}", dirname.display());
+                info!(target: "wallet::walletdb", "Creating path to wallet database: {}", dirname.display());
                 create_dir_all(&dirname).await?;
             }
         }
@@ -89,15 +89,15 @@ impl WalletDb {
 
         let conn = SqlitePool::connect_with(connect_opts).await?;
 
-        info!("Opened wallet Sqlite connection at path {}", path);
+        info!(target: "wallet::walletdb", "Opened wallet Sqlite connection at path {}", path);
         Ok(Arc::new(WalletDb { conn }))
     }
 
     /// This function executes a given SQL query, but isn't able to return anything.
     /// Therefore it's best to use it for initializing a table or similar things.
     pub async fn exec_sql(&self, query: &str) -> Result<()> {
-        info!("walletdb: Executing SQL query");
-        debug!("\n{}", query);
+        info!(target: "wallet::walletdb", "walletdb: Executing SQL query");
+        debug!(target: "wallet::walletdb", "\n{}", query);
         let mut conn = self.conn.acquire().await?;
         sqlx::query(query).execute(&mut conn).await?;
         Ok(())

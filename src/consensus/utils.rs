@@ -27,8 +27,8 @@ pub fn fbig2ibig(f: Float10) -> IBig {
     let sig = f.repr().significand();
     let exp = f.repr().exponent();
     let val: IBig = if exp >= 0 { sig.clone() * rad.pow(exp as usize) } else { sig.clone() };
-    debug!("fbig2ibig (f): {}", f);
-    debug!("fbig2ibig (i): {}", val);
+    debug!(target: "consensus::utils", "fbig2ibig (f): {}", f);
+    debug!(target: "consensus::utils", "fbig2ibig (i): {}", val);
     val
 }
 /*
@@ -48,7 +48,7 @@ pub fn base2ibig(base: pallas::Base) -> IBig {
 }
 */
 pub fn fbig2base(f: Float10) -> pallas::Base {
-    debug!("fbig -> base (f): {}", f);
+    debug!(target: "consensus::utils", "fbig -> base (f): {}", f);
     let val: IBig = fbig2ibig(f);
     let (sign, word) = val.as_sign_words();
     let mut words: [u64; 4] = [0, 0, 0, 0];

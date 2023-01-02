@@ -61,7 +61,7 @@ pub fn init_logger() -> Result<()> {
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
     ) {
-        warn!("Logger already initialized");
+        warn!(target: "dao", "Logger already initialized");
     }
 
     Ok(())
@@ -166,7 +166,7 @@ impl MoneyTestHarness {
 
         let mint_zkbin = db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1))?.unwrap();
         let burn_zkbin = db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1))?.unwrap();
-        info!("Decoding bincode");
+        info!(target: "dao", "Decoding bincode");
         let mint_zkbin = ZkBinary::decode(&mint_zkbin)?;
         let burn_zkbin = ZkBinary::decode(&burn_zkbin)?;
         let mint_witnesses = empty_witnesses(&mint_zkbin);
@@ -174,7 +174,7 @@ impl MoneyTestHarness {
         let mint_circuit = ZkCircuit::new(mint_witnesses, mint_zkbin.clone());
         let burn_circuit = ZkCircuit::new(burn_witnesses, burn_zkbin.clone());
 
-        info!("Creating zk proving keys");
+        info!(target: "dao", "Creating zk proving keys");
         let k = 13;
         let mut proving_keys = HashMap::<[u8; 32], Vec<(&str, ProvingKey)>>::new();
         let mint_pk = ProvingKey::build(k, &mint_circuit);

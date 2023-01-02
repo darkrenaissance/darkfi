@@ -38,7 +38,7 @@ impl TransportListener for TcpListener {
         let (stream, peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
             Err(err) => {
-                error!("Error listening for connections: {}", err);
+                error!(target: "net::tcp", "Error listening for connections: {}", err);
                 return Err(Error::AcceptConnectionFailed(self.local_addr()?.to_string()))
             }
         };
@@ -53,7 +53,7 @@ impl TransportListener for (TlsAcceptor, TcpListener) {
         let (stream, peer_addr) = match self.1.accept().await {
             Ok((s, a)) => (s, a),
             Err(err) => {
-                error!("Error listening for connections: {}", err);
+                error!(target: "net::tcp", "Error listening for connections: {}", err);
                 return Err(Error::AcceptConnectionFailed(self.1.local_addr()?.to_string()))
             }
         };
@@ -63,7 +63,7 @@ impl TransportListener for (TlsAcceptor, TcpListener) {
         let url = socket_addr_to_url(peer_addr, "tcp+tls")?;
 
         if let Err(err) = stream {
-            error!("Error wrapping the connection {} with tls: {}", url, err);
+            error!(target: "net::tcp", "Error wrapping the connection {} with tls: {}", url, err);
             return Err(Error::AcceptTlsConnectionFailed(self.1.local_addr()?.to_string()))
         }
 
@@ -96,7 +96,7 @@ impl Transport for TcpTransport {
         }
 
         let socket_addr = url.socket_addrs(|| None)?[0];
-        debug!(target: "net", "{} transport: listening on {}", url.scheme(), socket_addr);
+        debug!(target: "net::tcp", "{} transport: listening on {}", url.scheme(), socket_addr);
         Ok(Box::pin(self.do_listen(socket_addr)))
     }
 
@@ -112,7 +112,7 @@ impl Transport for TcpTransport {
         }
 
         let socket_addr = url.socket_addrs(|| None)?[0];
-        debug!(target: "net", "{} transport: dialing {}", url.scheme(), socket_addr);
+        debug!(target: "net::tcp", "{} transport: dialing {}", url.scheme(), socket_addr);
         Ok(Box::pin(self.do_dial(socket_addr, timeout)))
     }
 

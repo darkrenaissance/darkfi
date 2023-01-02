@@ -65,33 +65,33 @@ impl Hosts {
             let filtered = filter_invalid(&self.ipv4_range, &self.ipv6_range, filtered);
             filtered.into_iter().map(|(k, _)| k).collect()
         } else {
-            debug!(target: "net", "hosts::store() [Localnet mode, skipping filterring.]");
+            debug!(target: "net::hosts::store()", "hosts::store() [Localnet mode, skipping filterring.]");
             input_addrs
         };
         let mut addrs_map = self.addrs.lock().await;
         for addr in addrs {
             addrs_map.insert(addr);
         }
-        debug!(target: "net", "hosts::store() [End]");
+        debug!(target: "net::hosts::store()", "hosts::store() [End]");
     }
 
     /// Add a new hosts external adders to the host list, after filtering and verifying
     /// the address url resolves to the provided connection address.
     pub async fn store_ext(&self, connection_addr: Url, input_addrs: Vec<Url>) {
-        debug!(target: "net", "hosts::store_ext() [Start]");
+        debug!(target: "net::hosts::store()", "hosts::store_ext() [Start]");
         let addrs = if !self.localnet {
             let filtered = filter_localnet(input_addrs);
             let filtered = filter_invalid(&self.ipv4_range, &self.ipv6_range, filtered);
             filter_non_resolving(connection_addr, filtered)
         } else {
-            debug!(target: "net", "hosts::store_ext() [Localnet mode, skipping filterring.]");
+            debug!(target: "net::hosts::store()", "hosts::store_ext() [Localnet mode, skipping filterring.]");
             input_addrs
         };
         let mut addrs_map = self.addrs.lock().await;
         for addr in addrs {
             addrs_map.insert(addr);
         }
-        debug!(target: "net", "hosts::store_ext() [End]");
+        debug!(target: "net::hosts::store()", "hosts::store_ext() [End]");
     }
 
     /// Return the list of hosts.
@@ -112,7 +112,7 @@ impl Hosts {
 
 /// Auxiliary function to filter localnet hosts.
 fn filter_localnet(input_addrs: Vec<Url>) -> Vec<Url> {
-    debug!(target: "net", "hosts::filter_localnet() [Input addresses: {:?}]", input_addrs);
+    debug!(target: "net::hosts::store()", "hosts::filter_localnet() [Input addresses: {:?}]", input_addrs);
     let mut filtered = vec![];
 
     for addr in &input_addrs {
@@ -121,13 +121,13 @@ fn filter_localnet(input_addrs: Vec<Url>) -> Vec<Url> {
                 filtered.push(addr.clone());
                 continue
             }
-            debug!(target: "net", "hosts::filter_localnet() [Filtered localnet addr: {}]", addr);
+            debug!(target: "net::hosts::store()", "hosts::filter_localnet() [Filtered localnet addr: {}]", addr);
             continue
         }
-        warn!(target: "net", "hosts::filter_localnet() [{} addr.host_str is empty, skipping.]", addr);
+        warn!(target: "net::hosts::store()", "hosts::filter_localnet() [{} addr.host_str is empty, skipping.]", addr);
     }
 
-    debug!(target: "net", "hosts::filter_localnet() [Filtered addresses: {:?}]", filtered);
+    debug!(target: "net::hosts::store()", "hosts::filter_localnet() [Filtered addresses: {:?}]", filtered);
     filtered
 }
 
@@ -137,14 +137,14 @@ fn filter_invalid(
     ipv6_range: &IpRange<Ipv6Net>,
     input_addrs: Vec<Url>,
 ) -> HashMap<Url, Vec<IpAddr>> {
-    debug!(target: "net", "hosts::filter_invalid() [Input addresses: {:?}]", input_addrs);
+    debug!(target: "net::hosts::store()", "hosts::filter_invalid() [Input addresses: {:?}]", input_addrs);
     let mut filtered = HashMap::new();
     for addr in &input_addrs {
         // Discard domainless Urls
         let domain = match addr.domain() {
             Some(d) => d,
             None => {
-                debug!(target: "net", "hosts::filter_invalid() [Filtered domainless url: {}]", addr);
+                debug!(target: "net::hosts::store()", "hosts::filter_invalid() [Filtered domainless url: {}]", addr);
                 continue
             }
         };
@@ -156,7 +156,7 @@ fn filter_invalid(
                     filtered.insert(addr.clone(), vec![]);
                 }
                 false => {
-                    warn!(target: "net", "hosts::filter_invalid() [Got invalid onion address: {}]", addr)
+                    warn!(target: "net::hosts::store()", "hosts::filter_invalid() [Got invalid onion address: {}]", addr)
                 }
             }
             continue
@@ -169,7 +169,7 @@ fn filter_invalid(
         if let Ok(socket_addrs) = addr.socket_addrs(|| None) {
             // Check if domain resolved to anything
             if socket_addrs.is_empty() {
-                debug!(target: "net", "hosts::filter_invalid() [Filtered unresolvable URL: {}]", addr);
+                debug!(target: "net::hosts::store()", "hosts::filter_invalid() [Filtered unresolvable URL: {}]", addr);
                 continue
             }
 
@@ -180,13 +180,13 @@ fn filter_invalid(
                 match ip {
                     IpAddr::V4(a) => {
                         if ipv4_range.contains(&a) {
-                            debug!(target: "net", "hosts::filter_invalid() [Filtered private-range IPv4: {}]", a);
+                            debug!(target: "net::hosts::store()", "hosts::filter_invalid() [Filtered private-range IPv4: {}]", a);
                             continue
                         }
                     }
                     IpAddr::V6(a) => {
                         if ipv6_range.contains(&a) {
-                            debug!(target: "net", "hosts::filter_invalid() [Filtered private range IPv6: {}]", a);
+                            debug!(target: "net::hosts::store()", "hosts::filter_invalid() [Filtered private range IPv6: {}]", a);
                             continue
                         }
                     }
@@ -195,18 +195,18 @@ fn filter_invalid(
             }
 
             if resolves.is_empty() {
-                debug!(target: "net", "hosts::filter_invalid() [Filtered unresolvable URL: {}]", addr);
+                debug!(target: "net::hosts::store()", "hosts::filter_invalid() [Filtered unresolvable URL: {}]", addr);
                 continue
             }
 
             filtered.insert(addr.clone(), resolves);
         } else {
-            warn!(target: "net", "hosts::filter_invalid() [Failed resolving socket_addrs for {}]", addr);
+            warn!(target: "net::hosts::store()", "hosts::filter_invalid() [Failed resolving socket_addrs for {}]", addr);
             continue
         }
     }
 
-    debug!(target: "net", "hosts::filter_invalid() [Filtered addresses: {:?}]", filtered);
+    debug!(target: "net::hosts::store()", "hosts::filter_invalid() [Filtered addresses: {:?}]", filtered);
     filtered
 }
 
@@ -214,8 +214,8 @@ fn filter_invalid(
 /// the same as `connection_addr`'s IP address.
 /// Skips .onion domains.
 fn filter_non_resolving(connection_addr: Url, input_addrs: HashMap<Url, Vec<IpAddr>>) -> Vec<Url> {
-    debug!(target: "net", "hosts::filter_non_resolving() [Input addresses: {:?}]", input_addrs);
-    debug!(target: "net", "hosts::filter_non_resolving() [Connection address: {}]", connection_addr);
+    debug!(target: "net::hosts::store()", "hosts::filter_non_resolving() [Input addresses: {:?}]", input_addrs);
+    debug!(target: "net::hosts::store()", "hosts::filter_non_resolving() [Connection address: {}]", connection_addr);
 
     // Retrieve connection IPs
     let mut ipv4_range = vec![];
@@ -231,13 +231,13 @@ fn filter_non_resolving(connection_addr: Url, input_addrs: HashMap<Url, Vec<IpAd
             }
         }
         Err(e) => {
-            error!(target: "net", "hosts::filter_non_resolving() [Failed resolving connection_addr {}: {}]", connection_addr, e);
+            error!(target: "net::hosts::store()", "hosts::filter_non_resolving() [Failed resolving connection_addr {}: {}]", connection_addr, e);
             return vec![]
         }
     };
 
-    debug!(target: "net", "hosts::filter_non_resolving() [{} IPv4: {:?}]", connection_addr, ipv4_range);
-    debug!(target: "net", "hosts::filter_non_resolving() [{} IPv6: {:?}]", connection_addr, ipv6_range);
+    debug!(target: "net::hosts::store()", "hosts::filter_non_resolving() [{} IPv4: {:?}]", connection_addr, ipv4_range);
+    debug!(target: "net::hosts::store()", "hosts::filter_non_resolving() [{} IPv6: {:?}]", connection_addr, ipv6_range);
 
     let mut filtered = vec![];
     for (addr, resolves) in &input_addrs {
@@ -269,14 +269,14 @@ fn filter_non_resolving(connection_addr: Url, input_addrs: HashMap<Url, Vec<IpAd
         }
 
         if !valid {
-            debug!(target: "net", "hosts::filter_non_resolving() [Filtered unresolvable url: {}]", addr);
+            debug!(target: "net::hosts::store()", "hosts::filter_non_resolving() [Filtered unresolvable url: {}]", addr);
             continue
         }
 
         filtered.push(addr.clone());
     }
 
-    debug!(target: "net", "hosts::filter_non_resolving() [Filtered addresses: {:?}]", filtered);
+    debug!(target: "net::hosts::store()", "hosts::filter_non_resolving() [Filtered addresses: {:?}]", filtered);
     filtered
 }
 

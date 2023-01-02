@@ -91,13 +91,13 @@ async fn integration_test() -> Result<()> {
     //
     // Create the DAO bulla
     // =======================================================
-    debug!(target: "demo", "Stage 1. Creating DAO bulla");
+    debug!(target: "dao", "Stage 1. Creating DAO bulla");
 
     let dao_bulla_blind = pallas::Base::random(&mut OsRng);
 
-    info!("[Alice] =========================");
-    info!("[Alice] Building Dao::Mint params");
-    info!("[Alice] =========================");
+    info!(target: "dao", "[Alice] =========================");
+    info!(target: "dao", "[Alice] Building Dao::Mint params");
+    info!(target: "dao", "[Alice] =========================");
     let (params, proofs) = build_dao_mint_tx(
         dao_proposer_limit,
         dao_quorum,
@@ -111,9 +111,9 @@ async fn integration_test() -> Result<()> {
         &dao_th.dao_mint_pk,
     )?;
 
-    info!("[Alice] ==========================================");
-    info!("[Alice] Building Dao::Mint transaction with params");
-    info!("[Alice] ==========================================");
+    info!(target: "dao", "[Alice] ==========================================");
+    info!(target: "dao", "[Alice] Building Dao::Mint transaction with params");
+    info!(target: "dao", "[Alice] ==========================================");
     let mut data = vec![DaoFunction::Mint as u8];
     params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: dao_th.dao_contract_id, data }];
@@ -122,9 +122,9 @@ async fn integration_test() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &[])?;
     tx.signatures = vec![sigs];
 
-    info!("[Alice] ===============================");
-    info!("[Alice] Executing Dao::Mint transaction");
-    info!("[Alice] ===============================");
+    info!(target: "dao", "[Alice] ===============================");
+    info!(target: "dao", "[Alice] Executing Dao::Mint transaction");
+    info!(target: "dao", "[Alice] ===============================");
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
     // TODO: Witness and add to wallet merkle tree?
 
@@ -135,7 +135,7 @@ async fn integration_test() -> Result<()> {
         dao_tree.witness().unwrap()
     };
     let dao_bulla = params.dao_bulla;
-    debug!(target: "demo", "Created DAO bulla: {:?}", dao_bulla.inner());
+    debug!(target: "dao", "Created DAO bulla: {:?}", dao_bulla.inner());
 
     // =======================================================
     // Money::Transfer
@@ -143,7 +143,7 @@ async fn integration_test() -> Result<()> {
     // Mint the initial supply of treasury token
     // and send it all to the DAO directly
     // =======================================================
-    debug!(target: "demo", "Stage 2. Minting treasury token");
+    debug!(target: "dao", "Stage 2. Minting treasury token");
 
     cache.track(dao_th.dao_kp.secret);
 
@@ -240,7 +240,7 @@ async fn integration_test() -> Result<()> {
     assert_eq!(treasury_note.spend_hook, spend_hook);
     assert_eq!(treasury_note.user_data, dao_bulla.inner());
 
-    debug!("DAO received a coin worth {} xDRK", treasury_note.value);
+    debug!(target: "dao", "DAO received a coin worth {} xDRK", treasury_note.value);
 
     // =======================================================
     // Money::Transfer
@@ -248,7 +248,7 @@ async fn integration_test() -> Result<()> {
     // Mint the governance token
     // Send it to three hodlers
     // =======================================================
-    debug!(target: "demo", "Stage 3. Minting governance token");
+    debug!(target: "dao", "Stage 3. Minting governance token");
 
     cache.track(dao_th.alice_kp.secret);
     cache.track(dao_th.bob_kp.secret);
@@ -363,7 +363,7 @@ async fn integration_test() -> Result<()> {
             ]);
             assert_eq!(coin, recv_coin.coin.0);
 
-            debug!("Holder{} received a coin worth {} gDRK", i, note.value);
+            debug!(target: "dao", "Holder{} received a coin worth {} gDRK", i, note.value);
 
             recv_coin
         };
@@ -388,7 +388,7 @@ async fn integration_test() -> Result<()> {
     //   output 0: value and address
     //   output 1: change address
     // =======================================================
-    debug!(target: "demo", "Stage 4. Propose the vote");
+    debug!(target: "dao", "Stage 4. Propose the vote");
 
     // TODO: look into proposal expiry once time for voting has finished
 
@@ -481,12 +481,12 @@ async fn integration_test() -> Result<()> {
         // Return the proposal info
         (note.proposal, params.proposal_bulla)
     };
-    debug!(target: "demo", "Proposal now active!");
-    debug!(target: "demo", "  destination: {:?}", proposal.dest);
-    debug!(target: "demo", "  amount: {}", proposal.amount);
-    debug!(target: "demo", "  token_id: {:?}", proposal.token_id);
-    debug!(target: "demo", "  dao_bulla: {:?}", dao_bulla.inner());
-    debug!(target: "demo", "Proposal bulla: {:?}", proposal_bulla);
+    debug!(target: "dao", "Proposal now active!");
+    debug!(target: "dao", "  destination: {:?}", proposal.dest);
+    debug!(target: "dao", "  amount: {}", proposal.amount);
+    debug!(target: "dao", "  token_id: {:?}", proposal.token_id);
+    debug!(target: "dao", "  dao_bulla: {:?}", dao_bulla.inner());
+    debug!(target: "dao", "Proposal bulla: {:?}", proposal_bulla);
 
     // =======================================================
     // Proposal is accepted!
@@ -512,7 +512,7 @@ async fn integration_test() -> Result<()> {
     // beginning of gov period
     // Cannot use nullifiers from before voting period
 
-    debug!(target: "demo", "Stage 5. Start voting");
+    debug!(target: "dao", "Stage 5. Start voting");
 
     // We were previously saving updates here for testing
     // let mut updates = vec![];
@@ -584,9 +584,9 @@ async fn integration_test() -> Result<()> {
         let note: dao_vote_client::Note = enc_note.decrypt(&vote_keypair_1.secret).unwrap();
         note
     };
-    debug!(target: "demo", "User 1 voted!");
-    debug!(target: "demo", "  vote_option: {}", vote_note_1.vote.vote_option);
-    debug!(target: "demo", "  value: {}", vote_note_1.vote_value);
+    debug!(target: "dao", "User 1 voted!");
+    debug!(target: "dao", "  vote_option: {}", vote_note_1.vote.vote_option);
+    debug!(target: "dao", "  value: {}", vote_note_1.vote_value);
 
     // User 2: NO
 
@@ -652,9 +652,9 @@ async fn integration_test() -> Result<()> {
         let note: dao_vote_client::Note = enc_note.decrypt(&vote_keypair_2.secret).unwrap();
         note
     };
-    debug!(target: "demo", "User 2 voted!");
-    debug!(target: "demo", "  vote_option: {}", vote_note_2.vote.vote_option);
-    debug!(target: "demo", "  value: {}", vote_note_2.vote_value);
+    debug!(target: "dao", "User 2 voted!");
+    debug!(target: "dao", "  vote_option: {}", vote_note_2.vote.vote_option);
+    debug!(target: "dao", "  value: {}", vote_note_2.vote_value);
 
     // User 3: YES
 
@@ -723,9 +723,9 @@ async fn integration_test() -> Result<()> {
         let note: dao_vote_client::Note = enc_note.decrypt(&vote_keypair_3.secret).unwrap();
         note
     };
-    debug!(target: "demo", "User 3 voted!");
-    debug!(target: "demo", "  vote_option: {}", vote_note_3.vote.vote_option);
-    debug!(target: "demo", "  value: {}", vote_note_3.vote_value);
+    debug!(target: "dao", "User 3 voted!");
+    debug!(target: "dao", "  vote_option: {}", vote_note_3.vote.vote_option);
+    debug!(target: "dao", "  value: {}", vote_note_3.vote_value);
 
     // Every votes produces a semi-homomorphic encryption of their vote.
     // Which is either yes or no
@@ -775,10 +775,10 @@ async fn integration_test() -> Result<()> {
         all_votes_value += note.vote_value;
         let vote_result: String = if vote_option { "yes".to_string() } else { "no".to_string() };
 
-        debug!("Voter {} voted {}", i, vote_result);
+        debug!(target: "dao", "Voter {} voted {}", i, vote_result);
     }
 
-    debug!("Outcome = {} / {}", yes_votes_value, all_votes_value);
+    debug!(target: "dao", "Outcome = {} / {}", yes_votes_value, all_votes_value);
 
     assert!(all_votes_commit == pedersen_commitment_u64(all_votes_value, all_votes_blind));
     assert!(yes_votes_commit == pedersen_commitment_u64(yes_votes_value, yes_votes_blind));
@@ -787,7 +787,7 @@ async fn integration_test() -> Result<()> {
     // Execute the vote
     // =======================================================
 
-    debug!(target: "demo", "Stage 6. Execute vote");
+    debug!(target: "dao", "Stage 6. Execute vote");
 
     // Used to export user_data from this coin so it can be accessed by DAO::exec()
     let user_data_blind = pallas::Base::random(&mut OsRng);

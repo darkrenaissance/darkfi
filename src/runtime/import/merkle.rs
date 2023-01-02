@@ -37,13 +37,13 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let memory_view = env.memory_view(&ctx);
 
             let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
-                error!(target: "wasm_runtime::merkle_add", "Failed to make slice from ptr");
+                error!(target: "runtime::merkle", "Failed to make slice from ptr");
                 return -2
             };
 
             let mut buf = vec![0_u8; len as usize];
             if let Err(e) = mem_slice.read_slice(&mut buf) {
-                error!(target: "wasm_runtime:merkle_add", "Failed to read from memory slice: {}", e);
+                error!(target: "runtime::merkle", "Failed to read from memory slice: {}", e);
                 return -2
             };
 
@@ -57,7 +57,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let db_info: u32 = match Decodable::decode(&mut buf_reader) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::merkle_add", "Failed to decode db_info DbHandle: {}", e);
+                    error!(target: "runtime::merkle", "Failed to decode db_info DbHandle: {}", e);
                     return -2
                 }
             };
@@ -65,7 +65,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let db_roots: u32 = match Decodable::decode(&mut buf_reader) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::merkle_add", "Failed to decode db_roots DbHandle: {}", e);
+                    error!(target: "runtime::merkle", "Failed to decode db_roots DbHandle: {}", e);
                     return -2
                 }
             };
@@ -78,7 +78,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let n_bat = db_batches.len();
 
             if n_dbs <= db_info || n_bat <= db_info || n_dbs <= db_roots || n_bat <= db_roots {
-                error!(target: "wasm_runtime::merkle_add", "Requested DbHandle that is out of bounds");
+                error!(target: "runtime::merkle", "Requested DbHandle that is out of bounds");
                 return -2
             }
 
@@ -89,7 +89,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let db_roots = &db_handles[roots_handle_idx];
 
             if db_info.contract_id != env.contract_id || db_roots.contract_id != env.contract_id {
-                error!(target: "wasm_runtime::merkle_add", "Unauthorized to write to DbHandle");
+                error!(target: "runtime::merkle", "Unauthorized to write to DbHandle");
                 return -2
             }
 
@@ -97,7 +97,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::merkle_add", "Failed to decode key vec: {}", e);
+                    error!(target: "runtime::merkle", "Failed to decode key vec: {}", e);
                     return -2
                 }
             };
@@ -106,7 +106,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let coins: Vec<MerkleNode> = match Decodable::decode(&mut buf_reader) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::merkle_add", "Failed to decode MerkleNode: {}", e);
+                    error!(target: "runtime::merkle", "Failed to decode MerkleNode: {}", e);
                     return -2
                 }
             };
@@ -117,23 +117,23 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let ret = match db_info.get(&key) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::merkle_add", "Internal error getting from tree: {}", e);
+                    error!(target: "runtime::merkle", "Internal error getting from tree: {}", e);
                     return -2
                 }
             };
 
             let Some(return_data) = ret else {
-                error!(target: "wasm_runtime::merkle_add", "Return data is empty");
+                error!(target: "runtime::merkle", "Return data is empty");
                 return -2
             };
 
             debug!(
-                target: "wasm_runtime::merkle_add",
+                target: "runtime::merkle",
                 "Serialized tree: {} bytes",
                 return_data.len()
             );
             debug!(
-                target: "wasm_runtime::merkle_add",
+                target: "runtime::merkle",
                 "                 {:02x?}",
                 return_data
             );
@@ -143,7 +143,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let set_size: u32 = match Decodable::decode(&mut decoder) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::merkle_add", "Unable to read set size: {}", e);
+                    error!(target: "runtime::merkle", "Unable to read set size: {}", e);
                     return -2
                 }
             };
@@ -151,7 +151,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let mut tree: MerkleTree = match Decodable::decode(&mut decoder) {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(target: "wasm_runtime::merkle_add", "Unable to deserialize tree: {}", e);
+                    error!(target: "runtime::merkle", "Unable to deserialize tree: {}", e);
                     return -2
                 }
             };
@@ -162,7 +162,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             for coin in coins {
                 tree.append(&coin);
                 let Some(root) = tree.root(0) else {
-                    error!(target: "wasm_runtime::merkle_add", "Unable to read the root of tree");
+                    error!(target: "runtime::merkle", "Unable to read the root of tree");
                     return -2;
                 };
                 new_roots.push(root);
@@ -173,7 +173,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             if tree_data.write_u32(set_size + new_roots.len() as u32).is_err() ||
                 tree.encode(&mut tree_data).is_err()
             {
-                error!(target: "wasm_runtime::merkle_add", "Couldn't reserialize modified tree");
+                error!(target: "runtime::merkle", "Couldn't reserialize modified tree");
                 return -2
             }
             let db_info_batch = &mut db_batches[info_handle_idx];
@@ -186,7 +186,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
                 // FIXME: Why were we writing the set size here?
                 //let root_index: Vec<u8> = serialize(&(set_size as u32));
                 //assert_eq!(root_index.len(), 4);
-                debug!(target: "wasm_runtime::merkle_add", "Appending Merkle root to db: {:?}", root);
+                debug!(target: "runtime::merkle", "Appending Merkle root to db: {:?}", root);
                 let root_value: Vec<u8> = serialize(root);
                 // FIXME: This assert can be used to DoS nodes from contracts
                 assert_eq!(root_value.len(), 32);

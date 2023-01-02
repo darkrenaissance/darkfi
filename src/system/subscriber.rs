@@ -86,7 +86,7 @@ impl<T: Clone> Subscriber<T> {
     pub async fn notify(&self, message_result: T) {
         for sub in (*self.subs.lock().await).values() {
             if let Err(e) = sub.send(message_result.clone()).await {
-                warn!("Error returned sending message in notify() call! {}", e);
+                warn!(target: "system::subscriber", "Error returned sending message in notify() call! {}", e);
             }
         }
     }
@@ -98,7 +98,7 @@ impl<T: Clone> Subscriber<T> {
             }
 
             if let Err(e) = sub.send(message_result.clone()).await {
-                warn!("Error returned sending message in notify_with_exclude() call! {}", e);
+                warn!(target: "system::subscriber", "Error returned sending message in notify_with_exclude() call! {}", e);
             }
         }
     }
