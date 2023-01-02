@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
 
     // Skip genesis slot.
     // Note: increase slot duration if nodes generation takes longer than it
-    let seconds_next_slot = nodes[0].next_n_slot_start(1).as_secs();
+    let seconds_next_slot = nodes[0].next_n_slot_start(2).as_secs();
     println!("Waiting for next slot ({seconds_next_slot} sec)");
     sleep(seconds_next_slot).await;
 
@@ -117,18 +117,24 @@ async fn main() -> Result<()> {
     if leaders.len() > 1 {
         println!("Entering last man standing mode...");
         let mut round = 0;
+        let mut survivors = vec![];
         loop {
-            println!("Round {round}, FIGHT!");
-            let mut survivors = vec![];
-            for leader in &leaders {
+            println!("Round {round}, FIGHT!");            
+            let participants = if !survivors.is_empty() {
+                survivors.clone()
+            } else {
+                leaders.clone()
+            };
+            survivors = vec![];
+            for participant in &participants {
                 // We derive the new coin. In real conditions, slot sigmas should adapt on how many
                 // leaders/survivors we have seen on each round.
-                let mut coins_tree = nodes[*leader].coins_tree.clone();
-                nodes[*leader].coins[0] = nodes[*leader].coins[0].derive_coin(&mut coins_tree);
-                nodes[*leader].coins_tree = coins_tree;
-                let (won, _, _) = nodes[*leader].is_slot_leader(sigma1, sigma2);
+                let mut coins_tree = nodes[*participant].coins_tree.clone();
+                nodes[*participant].coins[0] = nodes[*participant].coins[0].derive_coin(&mut coins_tree);
+                nodes[*participant].coins_tree = coins_tree;
+                let (won, _, _) = nodes[*participant].is_slot_leader(sigma1, sigma2);
                 if won {
-                    survivors.push(leader);
+                    survivors.push(*participant);
                 }
             }
             println!("Round {round} survivors: {:?}", survivors);
