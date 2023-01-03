@@ -1,1 +1,0 @@
-../../money/tests/harness.rs

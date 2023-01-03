@@ -49,11 +49,8 @@ use darkfi_money_contract::{
     MoneyFunction,
 };
 
-mod dao_harness;
-use dao_harness::DaoTestHarness;
-
-mod money_harness;
-use money_harness::{init_logger, MoneyTestHarness};
+mod harness;
+use harness::{init_logger, DaoTestHarness};
 
 // TODO: Anonymity leaks in this proof of concept:
 //
