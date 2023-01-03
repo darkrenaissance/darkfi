@@ -21,8 +21,6 @@ use darkfi_sdk::error::ContractError;
 #[cfg(not(feature = "no-entrypoint"))]
 pub mod entrypoint;
 
-pub mod state;
-
 #[cfg(feature = "client")]
 pub mod note;
 
@@ -30,17 +28,19 @@ pub mod note;
 /// Transaction building API for clients interacting with DAO contract
 pub mod dao_client;
 
-#[cfg(feature = "client")]
-/// Transaction building API for clients interacting with DAO contract
-pub mod dao_propose_client;
+pub mod dao_model;
 
-#[cfg(feature = "client")]
-/// Transaction building API for clients interacting with DAO contract
-pub mod dao_vote_client;
-
-#[cfg(feature = "client")]
-/// Transaction building API for clients interacting with DAO contract
-pub mod dao_exec_client;
+//#[cfg(feature = "client")]
+///// Transaction building API for clients interacting with DAO contract
+//pub mod dao_propose_client;
+//
+//#[cfg(feature = "client")]
+///// Transaction building API for clients interacting with DAO contract
+//pub mod dao_vote_client;
+//
+//#[cfg(feature = "client")]
+///// Transaction building API for clients interacting with DAO contract
+//pub mod dao_exec_client;
 
 #[cfg(feature = "client")]
 /// Transaction building API for clients interacting with money contract

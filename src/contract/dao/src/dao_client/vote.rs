@@ -18,7 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        pedersen::pedersen_commitment_u64, poseidon_hash, MerkleNode, PublicKey, SecretKey, TokenId,
+        keypair::Keypair, pedersen::pedersen_commitment_u64, poseidon_hash, MerkleNode, Nullifier,
+        PublicKey, SecretKey, TokenId,
     },
     incrementalmerkletree,
     incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree},
@@ -33,6 +34,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
+use log::{debug, info};
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -45,25 +47,23 @@ use darkfi::{
     Error, Result,
 };
 
+use super::propose::{DaoParams, Proposal};
 use crate::{
+    dao_model::{DaoVoteParams, VoteInput},
     note,
-    state::{DaoProposeParams, ProposeInput},
 };
-
-#[derive(Clone)]
-pub struct DaoParams {
-    pub proposer_limit: u64,
-    pub quorum: u64,
-    pub approval_ratio_quot: u64,
-    pub approval_ratio_base: u64,
-    pub gov_token_id: TokenId,
-    pub public_key: PublicKey,
-    pub bulla_blind: pallas::Base,
-}
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct Note {
-    pub proposal: Proposal,
+    pub vote: Vote,
+    pub vote_value: u64,
+    pub vote_value_blind: pallas::Scalar,
+}
+
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct Vote {
+    pub vote_option: bool,
+    pub vote_option_blind: pallas::Scalar,
 }
 
 pub struct BuilderInput {
@@ -75,47 +75,51 @@ pub struct BuilderInput {
     pub signature_secret: SecretKey,
 }
 
-#[derive(SerialEncodable, SerialDecodable, Clone)]
-pub struct Proposal {
-    pub dest: PublicKey,
-    pub amount: u64,
-    pub serial: pallas::Base,
-    pub token_id: TokenId,
-    pub blind: pallas::Base,
-}
-
+// TODO: should be token locking voting?
+// Inside ZKproof, check proposal is correct.
 pub struct Builder {
     pub inputs: Vec<BuilderInput>,
+    pub vote: Vote,
+    pub vote_keypair: Keypair,
     pub proposal: Proposal,
     pub dao: DaoParams,
-    pub dao_leaf_position: incrementalmerkletree::Position,
-    pub dao_merkle_path: Vec<MerkleNode>,
-    pub dao_merkle_root: MerkleNode,
 }
 
 impl Builder {
-    //pub fn build(self /*, zk_bins: &ZkContractTable */) -> Result<(DaoProposeParams, Vec<Proof>)> {
     pub fn build(
         self,
         burn_zkbin: &ZkBinary,
         burn_pk: &ProvingKey,
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
-    ) -> Result<(DaoProposeParams, Vec<Proof>)> {
+    ) -> Result<(DaoVoteParams, Vec<Proof>)> {
+        debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
         let gov_token_blind = pallas::Base::random(&mut OsRng);
 
         let mut inputs = vec![];
-        let mut total_funds = 0;
-        let mut total_funds_blinds = pallas::Scalar::from(0);
+        let mut vote_value = 0;
+        let mut vote_value_blind = pallas::Scalar::from(0);
 
         for input in self.inputs {
-            let funds_blind = pallas::Scalar::random(&mut OsRng);
-            total_funds += input.note.value;
-            total_funds_blinds += funds_blind;
+            let value_blind = pallas::Scalar::random(&mut OsRng);
+
+            vote_value += input.note.value;
+            vote_value_blind += value_blind;
 
             let signature_public = PublicKey::from_secret(input.signature_secret);
+
+            /*
+            let zk_info = zk_bins.lookup(&"dao-vote-burn".to_string()).unwrap();
+
+            let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
+                info
+            } else {
+                panic!("Not binary info")
+            };
+            let zk_bin = zk_info.bincode.clone();
+            */
 
             // Note from the previous output
             let note = input.note;
@@ -129,7 +133,7 @@ impl Builder {
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
                 Witness::Base(Value::known(note.token_id.inner())),
                 Witness::Base(Value::known(note.coin_blind)),
-                Witness::Scalar(Value::known(funds_blind)),
+                Witness::Scalar(Value::known(vote_value_blind)),
                 Witness::Base(Value::known(gov_token_blind)),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
@@ -167,33 +171,37 @@ impl Builder {
             let token_commit = poseidon_hash::<2>([note.token_id.inner(), gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
-            let value_commit = pedersen_commitment_u64(note.value, funds_blind);
-            let value_coords = value_commit.to_affine().coordinates().unwrap();
+            let nullifier = poseidon_hash::<2>([input.secret.inner(), note.serial]);
+
+            let vote_commit = pedersen_commitment_u64(note.value, vote_value_blind);
+            let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
 
             let (sig_x, sig_y) = signature_public.xy();
 
             let public_inputs = vec![
-                *value_coords.x(),
-                *value_coords.y(),
+                nullifier,
+                *vote_commit_coords.x(),
+                *vote_commit_coords.y(),
                 token_commit,
                 merkle_root.inner(),
                 sig_x,
                 sig_y,
             ];
-            let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin.clone());
 
-            let proving_key = &burn_pk;
-            let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
-                .expect("DAO::propose() proving error!");
+            let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin.clone());
+            debug!(target: "dao", "input_proof Proof::create()");
+            let input_proof = Proof::create(&burn_pk, &[circuit], &public_inputs, &mut OsRng)
+                .expect("DAO::vote() proving error!");
             proofs.push(input_proof);
 
-            let input = ProposeInput { value_commit, merkle_root, signature_public };
+            let input = VoteInput {
+                nullifier: Nullifier::from(nullifier),
+                vote_commit,
+                merkle_root,
+                signature_public,
+            };
             inputs.push(input);
         }
-
-        let total_funds_commit = pedersen_commitment_u64(total_funds, total_funds_blinds);
-        let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
-        let total_funds = pallas::Base::from(total_funds);
 
         let token_commit = poseidon_hash::<2>([self.dao.gov_token_id.inner(), gov_token_blind]);
 
@@ -219,8 +227,6 @@ impl Builder {
             self.dao.bulla_blind,
         ]);
 
-        let dao_leaf_position: u64 = self.dao_leaf_position.into();
-
         let proposal_bulla = poseidon_hash::<8>([
             proposal_dest_x,
             proposal_dest_y,
@@ -233,12 +239,27 @@ impl Builder {
             self.proposal.blind,
         ]);
 
+        let vote_option = self.vote.vote_option as u64;
+        assert!(vote_option == 0 || vote_option == 1);
+
+        let yes_vote_commit =
+            pedersen_commitment_u64(vote_option * vote_value, self.vote.vote_option_blind);
+        let yes_vote_commit_coords = yes_vote_commit.to_affine().coordinates().unwrap();
+
+        let all_vote_commit = pedersen_commitment_u64(vote_value, vote_value_blind);
+        let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
+
+        /*
+        let zk_info = zk_bins.lookup(&"dao-vote-main".to_string()).unwrap();
+        let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
+            info
+        } else {
+            panic!("Not binary info")
+        };
+        let zk_bin = zk_info.bincode.clone();
+        */
+
         let prover_witnesses = vec![
-            // Proposers total number of gov tokens
-            Witness::Base(Value::known(total_funds)),
-            Witness::Scalar(Value::known(total_funds_blinds)),
-            // Used for blinding exported gov token ID
-            Witness::Base(Value::known(gov_token_blind)),
             // proposal params
             Witness::Base(Value::known(proposal_dest_x)),
             Witness::Base(Value::known(proposal_dest_y)),
@@ -255,28 +276,41 @@ impl Builder {
             Witness::Base(Value::known(dao_pub_x)),
             Witness::Base(Value::known(dao_pub_y)),
             Witness::Base(Value::known(self.dao.bulla_blind)),
-            Witness::Uint32(Value::known(dao_leaf_position.try_into().unwrap())),
-            Witness::MerklePath(Value::known(self.dao_merkle_path.try_into().unwrap())),
+            // Vote
+            Witness::Base(Value::known(pallas::Base::from(vote_option))),
+            Witness::Scalar(Value::known(self.vote.vote_option_blind)),
+            // Total number of gov tokens allocated
+            Witness::Base(Value::known(pallas::Base::from(vote_value))),
+            Witness::Scalar(Value::known(vote_value_blind)),
+            // gov token
+            Witness::Base(Value::known(gov_token_blind)),
         ];
+
         let public_inputs = vec![
             token_commit,
-            self.dao_merkle_root.inner(),
             proposal_bulla,
-            *total_funds_coords.x(),
-            *total_funds_coords.y(),
+            // this should be a value commit??
+            *yes_vote_commit_coords.x(),
+            *yes_vote_commit_coords.y(),
+            *all_vote_commit_coords.x(),
+            *all_vote_commit_coords.y(),
         ];
+
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin.clone());
 
+        debug!(target: "dao", "main_proof = Proof::create()");
         let main_proof = Proof::create(&main_pk, &[circuit], &public_inputs, &mut OsRng)
-            .expect("DAO::propose() proving error!");
+            .expect("DAO::vote() proving error!");
         proofs.push(main_proof);
 
-        let note = Note { proposal: self.proposal };
-        let enc_note = note::encrypt(&note, &self.dao.public_key).unwrap();
-        let params = DaoProposeParams {
-            dao_merkle_root: self.dao_merkle_root,
-            proposal_bulla,
+        let note = Note { vote: self.vote, vote_value, vote_value_blind };
+        let enc_note = note::encrypt(&note, &self.vote_keypair.public).unwrap();
+
+        let params = DaoVoteParams {
             token_commit,
+            proposal_bulla,
+            yes_vote_commit,
+
             ciphertext: enc_note.ciphertext,
             ephem_public: enc_note.ephem_public,
             inputs,

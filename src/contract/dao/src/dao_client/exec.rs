@@ -46,10 +46,8 @@ use darkfi::{
     Error, Result,
 };
 
-use crate::{
-    dao_propose_client::{DaoParams, Proposal},
-    state::DaoExecParams,
-};
+use super::propose::{DaoParams, Proposal};
+use crate::dao_model::DaoExecParams;
 
 pub struct Builder {
     pub proposal: Proposal,

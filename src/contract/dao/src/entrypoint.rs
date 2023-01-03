@@ -43,7 +43,7 @@ use darkfi_money_contract::{
 };
 
 use crate::{
-    state::{
+    dao_model::{
         DaoExecParams, DaoExecUpdate, DaoMintParams, DaoMintUpdate, DaoProposeParams,
         DaoProposeUpdate, DaoVoteParams, DaoVoteUpdate, ProposalVotes,
     },

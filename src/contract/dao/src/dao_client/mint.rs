@@ -36,7 +36,7 @@ use rand::rngs::OsRng;
 
 use darkfi_money_contract::client::{EncryptedNote, Note};
 
-use crate::state::{DaoBulla, DaoMintParams};
+use crate::dao_model::{DaoBulla, DaoMintParams};
 
 pub type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
 

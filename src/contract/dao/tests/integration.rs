@@ -39,8 +39,12 @@ use log::{debug, info};
 use rand::rngs::OsRng;
 
 use darkfi_dao_contract::{
-    dao_client::{build_dao_mint_tx, MerkleTree, WalletCache},
-    dao_exec_client, dao_propose_client, dao_vote_client, money_client, note, DaoFunction,
+    dao_client::{
+        exec as dao_exec_client,
+        mint::{build_dao_mint_tx, MerkleTree, WalletCache},
+        propose as dao_propose_client, vote as dao_vote_client,
+    },
+    money_client, note, DaoFunction,
 };
 
 use darkfi_money_contract::{
