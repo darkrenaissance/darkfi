@@ -59,6 +59,10 @@ pub enum Error {
     #[error(transparent)]
     TryFromSliceError(#[from] std::array::TryFromSliceError),
 
+    #[cfg(feature = "dashu")]
+    #[error(transparent)]
+    DashuParseError(#[from] dashu::integer::error::ParseError),
+
     // ===============
     // Encoding errors
     // ===============

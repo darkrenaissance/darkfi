@@ -34,9 +34,7 @@ use super::{
     utils::fbig2base,
     Block, BlockProposal, Float10,
 };
-
 use crate::{blockchain::Blockchain, net, tx::Transaction, util::time::Timestamp, Error, Result};
-use dashu::base::Abs;
 
 /// This struct represents the information required by the consensus algorithm
 pub struct ConsensusState {
@@ -241,12 +239,8 @@ impl ConsensusState {
         info!(target: "consensus::state", "sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
-        let field_p = Float10::from_str_native(constants::P)
-            .unwrap()
-            .with_precision(constants::RADIX_BITS)
-            .value();
-        let total_sigma =
-            Float10::try_from(total_stake).unwrap().with_precision(constants::RADIX_BITS).value();
+        let field_p = Float10::try_from(constants::P).unwrap();
+        let total_sigma = Float10::try_from(total_stake).unwrap();
 
         let x = one - f;
         let c = x.ln();
@@ -372,7 +366,7 @@ impl ConsensusState {
         }
         self.leaders_history.push(count);
         info!(target: "consensus::state", "extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
-        Float10::try_from(count as i64).unwrap().with_precision(constants::RADIX_BITS).value()
+        Float10::try_from(count as i64).unwrap()
     }
 
     fn pid_error(feedback: Float10) -> Float10 {
@@ -395,7 +389,7 @@ impl ConsensusState {
             }
         }
 
-        Float10::try_from(max as i64).unwrap().with_precision(constants::RADIX_BITS).value()
+        Float10::try_from(max as i64).unwrap()
     }
 
     fn tuned_kp(&self) -> Float10 {
@@ -408,14 +402,9 @@ impl ConsensusState {
 
     fn f_der(&self) -> Float10 {
         let len = self.leaders_history.len();
-        let last = Float10::try_from(self.leaders_history[len - 1] as i64)
-            .unwrap()
-            .with_precision(constants::RADIX_BITS)
-            .value();
-        let second_to_last = Float10::try_from(self.leaders_history[len - 2] as i64)
-            .unwrap()
-            .with_precision(constants::RADIX_BITS)
-            .value();
+        let last = Float10::try_from(self.leaders_history[len - 1] as i64).unwrap();
+        let second_to_last = Float10::try_from(self.leaders_history[len - 2] as i64).unwrap();
+
         let mut der =
             (Self::pid_error(second_to_last) - Self::pid_error(last)) / constants::DT.clone();
         der = if der > constants::MAX_DER.clone() { constants::MAX_DER.clone() } else { der };
