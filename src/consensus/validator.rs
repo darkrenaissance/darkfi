@@ -613,7 +613,7 @@ impl ValidatorState {
         self.consensus.checked_finalization = slot;
 
         // First we find longest fork without any other forks at same height
-        let mut fork_index = -1;
+        let mut fork_index = 0;
         // Use this index to extract leaders count sequence from longest fork
         let mut index_for_history = -1;
         let mut max_length_for_history = 0;
@@ -626,9 +626,11 @@ impl ValidatorState {
                 max_length_for_history = length;
             }
             // Ignore forks with less that 3 blocks
+            /*
             if length < 3 {
                 continue
-            }
+        }
+            */
             // Check if less than max
             if length < max_length {
                 continue
@@ -652,14 +654,16 @@ impl ValidatorState {
                 self.consensus.set_leader_history(index_for_history, slot);
                 return Ok((vec![], vec![]))
             }
+            /*
             -1 => {
                 info!(target: "consensus::validator", "chain_finalization(): All chains have less than 3 proposals, nothing to finalize.");
                 self.consensus.set_leader_history(index_for_history, slot);
                 return Ok((vec![], vec![]))
-            }
-            _ => {
-                info!(target: "consensus::validator", "chain_finalization(): Chain {} can be finalized!", fork_index)
-            }
+
+        }
+            */
+            _ => info!("chain_finalization(): Chain {} can be finalized!", fork_index),
+
         }
 
         // Starting finalization
