@@ -28,18 +28,16 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, MerkleNode},
-    incrementalmerkletree::bridgetree::BridgeTree,
+    crypto::MerkleTree,
     pasta::{group::ff::PrimeField, pallas},
 };
-use dashu::base::Abs;
-use rand::{thread_rng, Rng};
+use rand::Rng;
 
 // Simulation configuration
 const NODES: u64 = 10;
 const SLOTS: u64 = 10;
 
-// PID controller configuration/constants
+/// PID controller configuration/constants
 #[derive(Clone)]
 struct PID {
     pub dt: Float10,
@@ -59,45 +57,18 @@ struct PID {
 impl PID {
     fn new() -> Self {
         Self {
-            dt: Float10::from_str_native("0.1")
-                .unwrap()
-                .with_precision(constants::RADIX_BITS)
-                .value(),
+            dt: Float10::try_from("0.1").unwrap(),
             _ti: constants::FLOAT10_ONE.clone(),
             _td: constants::FLOAT10_ONE.clone(),
-            kp: Float10::from_str_native("0.1")
-                .unwrap()
-                .with_precision(constants::RADIX_BITS)
-                .value(),
-            ki: Float10::from_str_native("0.03")
-                .unwrap()
-                .with_precision(constants::RADIX_BITS)
-                .value(),
+            kp: Float10::try_from("0.1").unwrap(),
+            ki: Float10::try_from("0.03").unwrap(),
             kd: constants::FLOAT10_ONE.clone(),
-            _pid_out_step: Float10::from_str_native("0.1")
-                .unwrap()
-                .with_precision(constants::RADIX_BITS)
-                .value(),
-            max_der: Float10::from_str_native("0.1")
-                .unwrap()
-                .with_precision(constants::RADIX_BITS)
-                .value(),
-            min_der: Float10::from_str_native("-0.1")
-                .unwrap()
-                .with_precision(constants::RADIX_BITS)
-                .value(),
-            max_f: Float10::from_str_native("0.99")
-                .unwrap()
-                .with_precision(constants::RADIX_BITS)
-                .value(),
-            min_f: Float10::from_str_native("0.05")
-                .unwrap()
-                .with_precision(constants::RADIX_BITS)
-                .value(),
-            deg_rate: Float10::from_str_native("0.9")
-                .unwrap()
-                .with_precision(constants::RADIX_BITS)
-                .value(),
+            _pid_out_step: Float10::try_from("0.1").unwrap(),
+            max_der: Float10::try_from("0.1").unwrap(),
+            min_der: Float10::try_from("-0.1").unwrap(),
+            max_f: Float10::try_from("0.99").unwrap(),
+            min_f: Float10::try_from("0.05").unwrap(),
+            deg_rate: Float10::try_from("0.9").unwrap(),
         }
     }
 }
@@ -111,9 +82,9 @@ struct ConsensusState {
     /// Competing coins
     pub coins: Vec<LeadCoin>,
     /// Coin commitments tree
-    pub coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
-    /// Previous rounds leaders
-    pub leaders_history: Vec<i64>,
+    pub coins_tree: MerkleTree,
+    /// Previous round leaders
+    pub leaders_history: Vec<u64>,
     /// PID configuration
     pub pid: PID,
 }
@@ -125,26 +96,24 @@ impl ConsensusState {
     }
 
     fn f_dif(&self) -> Float10 {
-        let last_round_leaders = *self.leaders_history.last().unwrap();
-        let previous_leaders = Float10::try_from(last_round_leaders)
-            .unwrap()
-            .with_precision(constants::RADIX_BITS)
-            .value();
-        self.pid_error(previous_leaders)
+        let last_round_leader = *self.leaders_history.last().unwrap();
+        let previous_leader = Float10::try_from(last_round_leader).unwrap();
+        self.pid_error(previous_leader)
     }
 
     fn max_windowed_forks(&self) -> Float10 {
-        let mut max: i64 = 5;
+        let mut max = 5;
         let window_size = 10;
         let len = self.leaders_history.len();
-        let window_begining = if len <= (window_size + 1) { 0 } else { len - (window_size + 1) };
-        for item in &self.leaders_history[window_begining..] {
+        let window_beginning = if len <= (window_size + 1) { 0 } else { len - (window_size + 1) };
+
+        for item in &self.leaders_history[window_beginning..] {
             if *item > max {
                 max = *item;
             }
         }
 
-        Float10::try_from(max).unwrap().with_precision(constants::RADIX_BITS).value()
+        Float10::try_from(max).unwrap()
     }
 
     fn tuned_kp(&self) -> Float10 {
@@ -163,6 +132,7 @@ impl ConsensusState {
         for lf in &self.leaders_history[history_begin_index..] {
             sum += self.pid_error(Float10::try_from(lf.clone()).unwrap()).abs();
         }
+
         sum
     }
 
@@ -176,15 +146,10 @@ impl ConsensusState {
 
     fn f_der(&self) -> Float10 {
         let len = self.leaders_history.len();
-        let last = Float10::try_from(self.leaders_history[len - 1] as i64)
-            .unwrap()
-            .with_precision(constants::RADIX_BITS)
-            .value();
+        let last = Float10::try_from(self.leaders_history[len - 1]).unwrap();
+
         let mut der = if len > 1 {
-            let second_to_last = Float10::try_from(self.leaders_history[len - 2] as i64)
-                .unwrap()
-                .with_precision(constants::RADIX_BITS)
-                .value();
+            let second_to_last = Float10::try_from(self.leaders_history[len - 2]).unwrap();
             (self.pid_error(second_to_last) - self.pid_error(last)) / self.pid.dt.clone()
         } else {
             self.pid_error(last) / self.pid.dt.clone()
@@ -209,10 +174,11 @@ impl ConsensusState {
                 break
             }
         }
+
         count
     }
 
-    /// Inverse probability of winning lottery having all the stake.    
+    /// Inverse probability of winning lottery having all the stake.
     fn win_inv_prob_with_full_stake(&self) -> Float10 {
         let p = self.weighted_f_dif();
         let i = self.weighted_f_int();
@@ -227,6 +193,7 @@ impl ConsensusState {
         } else if f >= constants::FLOAT10_ONE.clone() {
             return self.pid.max_f.clone()
         }
+
         let hist_len = self.leaders_history.len();
         if hist_len > 3 &&
             self.leaders_history[hist_len - 1] == 0 &&
@@ -236,6 +203,7 @@ impl ConsensusState {
         {
             return f * self.pid.deg_rate.clone().powf(self.zero_leads_len())
         }
+
         f
     }
 
@@ -248,13 +216,14 @@ impl ConsensusState {
     /// Network total stake, assuming constant reward.
     /// Only used for fine-tuning. At genesis epoch first slot, of absolute index 0,
     /// if no stake was distributed, the total stake would be 0.
-    /// To avoid division by zero, we asume total stake at first division is GENESIS_TOTAL_STAKE(1).
+    /// To avoid division by zero, we assume total stake at first division is GENESIS_TOTAL_STAKE(1).
     fn total_stake(&self) -> u64 {
         let rewards = (self.current_slot - 1) * self.reward();
         let total_stake = rewards + self.initial_distribution;
         if total_stake == 0 {
             return constants::GENESIS_TOTAL_STAKE
         }
+
         total_stake
     }
 
@@ -266,12 +235,8 @@ impl ConsensusState {
         //println!("sigmas(): stake: {}", total_stake);
         let one = constants::FLOAT10_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
-        let field_p = Float10::from_str_native(constants::P)
-            .unwrap()
-            .with_precision(constants::RADIX_BITS)
-            .value();
-        let total_sigma =
-            Float10::try_from(total_stake).unwrap().with_precision(constants::RADIX_BITS).value();
+        let field_p = Float10::try_from(constants::P).unwrap();
+        let total_sigma = Float10::try_from(total_stake).unwrap();
 
         let x = one - f;
         let c = x.ln();
@@ -285,18 +250,20 @@ impl ConsensusState {
     }
 
     /// Check that the participant/stakeholder coins win the slot lottery.
-    /// If the stakeholder has multiple competing winning coins, only the highest value
-    /// coin is selected, since the stakeholder can't give more than one proof per block/slot.
+    /// If the stakeholder has multiple competing winning coins, only the
+    /// highest value coin is selected, since the stakeholder can't give
+    /// more than one proof per block/slot.
     /// * 'sigma1', 'sigma2': slot sigmas
-    /// Returns: (check: bool, idx: usize) where idx is the winning coin's index
+    /// Returns: (check: bool, idx: usize) where idx is the winning coin's index.
     pub fn is_slot_leader(&mut self, sigma1: pallas::Base, sigma2: pallas::Base) -> (bool, usize) {
         let mut won = false;
         let mut highest_stake = 0;
         let mut highest_stake_idx = 0;
         let _total_stake = self.total_stake();
+
         for (winning_idx, coin) in self.coins.iter().enumerate() {
             //println!("is_slot_leader: coin stake: {:?}", coin.value);
-            //println!("is_slot_leader: total stake: {}", total_stake);
+            //println!("is_slot_leader: total_stake: {}", total_stake);
             //println!("is_slot_leader: relative stake: {}", (coin.value as f64) / total_stake as f64);
             let first_winning = coin.is_leader(sigma1, sigma2);
             if first_winning && !won {
@@ -314,18 +281,20 @@ impl ConsensusState {
     }
 }
 
-/// Utility function to extract leader selection lottery randomness(eta),
-/// defined as the hash of the previous lead proof converted to pallas base.
+/// Utility function to extract leader selection lottery randomness (eta),
+/// defined as the hash of the last finalized block converted to pallas::Base.
 fn get_eta(blockchain: &Blockchain) -> pallas::Base {
-    let proof_tx_hash = blockchain.get_last_proof_hash().unwrap();
-    let mut bytes: [u8; 32] = *proof_tx_hash.as_bytes();
-    // read first 254 bits
+    let block_hash = blockchain.last().unwrap().1;
+    let mut bytes: [u8; 32] = *block_hash.as_bytes();
+
+    // We drop the last two bits of the BLAKE3 hash in order to fit it in
+    // the pallas::Base field.
     bytes[30] = 0;
     bytes[31] = 0;
+
     pallas::Base::from_repr(bytes).unwrap()
 }
 
-// Generate N nodes states
 fn generate_nodes() -> Result<Vec<ConsensusState>> {
     println!("Generating {NODES} nodes...");
 
@@ -337,27 +306,30 @@ fn generate_nodes() -> Result<Vec<ConsensusState>> {
     // Generate coins configuration
     let mut stakes = vec![];
     let mut initial_distribution = 0;
+
     for _ in 0..NODES {
-        let stake = rand::thread_rng().gen_range(0..1000);
-        //let stake = 100;
+        let stake = rand::thread_rng().gen_range(0..1000000);
         initial_distribution += stake;
         stakes.push(stake);
     }
+
     let slot = 0;
     let eta = get_eta(&blockchain);
     let pid = PID::new();
+
     let mut nodes = vec![];
     for i in 0..NODES {
         println!("Generating node {i}");
         // Generate coin here to control stake
-        let mut coins_tree =
-            BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100);
-        let mut rng = thread_rng();
+        let mut coins_tree = MerkleTree::new(constants::EPOCH_LENGTH * 100);
+        let mut rng = rand::thread_rng();
         let mut seeds: Vec<u64> = Vec::with_capacity(constants::EPOCH_LENGTH);
         for _ in 0..constants::EPOCH_LENGTH {
             seeds.push(rng.gen());
         }
+
         let epoch_secrets = LeadCoinSecrets::generate();
+
         let coin = LeadCoin::new(
             eta,
             stakes[i as usize],
@@ -387,17 +359,19 @@ fn generate_nodes() -> Result<Vec<ConsensusState>> {
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    // This script simulates the last man standing logic of replaying the crypsinous
-    // leader election lottery until a single leader occurs, for instant finality.
-    // Porpuse of the simulation is to validate if that logic is feasible as the network grows.
+    // This script simulates the last man standing logic of replaying the
+    // crypsinous leader election lottery until a single leader occurs, for
+    // instant finality. The purpose of the simulation is to validate if this
+    // logic is feasible as the network grows.
 
     // Generate nodes
     let mut nodes = generate_nodes()?;
 
-    // In real conditions, everyone waits until a leader arises, and then the "draft" period begins,
-    // where other leaders can join/challenge the fight for leadership. If a leader submits a proof after
-    // that window passes, it gets ignorred.
-    // Note: This time window is the min slot time.
+    // In real conditions, everyone waits until a leader arises, and then
+    // the "draft" period begins, where other leaders can join/challenge
+    // the fight for leadership. If a leader submits a proof after that
+    // window passes, it gets ignored.
+    // NOTE: This time window is the min slot time.
 
     // Playing lottery for N slots
     for slot in 1..SLOTS {
@@ -425,16 +399,17 @@ async fn main() -> Result<()> {
             // Draft round where everyone plays the lottery
             let mut sigmas: Vec<(pallas::Base, pallas::Base)> = vec![];
             let mut leaders = vec![];
+
             for (i, node) in nodes.iter_mut().enumerate() {
                 // We verify all nodes will calculate the same sigmas
                 let (sigma1, sigma2) = node.sigmas();
-                for pair in &sigmas {
-                    if sigma1 != pair.0 && sigma2 != pair.1 {
-                        println!("ABORT, sigmas are wrong.");
-                        return Ok(())
-                    }
+
+                if sigmas.iter().any(|(s1, s2)| sigma1 != *s1 || sigma2 != *s2) {
+                    panic!("sigmas are wrong.");
                 }
+
                 sigmas.push((sigma1, sigma2));
+
                 let (won, _) = node.is_slot_leader(sigma1, sigma2);
                 if won {
                     leaders.push(i);
@@ -451,42 +426,54 @@ async fn main() -> Result<()> {
 
             // Updated nodes leaders history
             for node in &mut nodes {
-                node.leaders_history.push(leaders.len() as i64);
+                node.leaders_history.push(leaders.len() as u64);
             }
 
-            // If more than one leaders occur, we enter the last man standing mode,
-            // where they replay the lottery in specific time windows (rounds), until only one left.
-            // Rounds should be the same time window as the draft period.
-            // Also to "progress" to next round the node must have submitted proof for all the previous rounds.
+            // If more than one leader occurs, we ender the last man standing mode,
+            // where they replay the lottery in specific time windows (rounds),
+            // until only one is left.
+            // Also, to "progress" to the next round, the node must have submitted
+            // a valid proof for all the previous rounds.
             if leaders.len() > 1 {
                 println!("Entering last man standing mode...");
                 let mut round = 0;
-                let mut survivors = vec![];
+                // Initially there are the leaders who have won the initial lottery.
+                let mut survivors = leaders.clone();
+
+                // Sigmas of the previous round
+                let mut prev_sigmas = sigmas.clone();
+
                 loop {
                     println!("Round {round}, FIGHT!");
-                    // Sanity check: we verify all nodes will calculate the same sigmas for round validations
-                    let mut sigmas: Vec<(pallas::Base, pallas::Base)> = vec![];
+                    // Sanity check: We verify all nodes will calculate the same
+                    // sigmas for round validations.
+                    // TODO: Something here should actually change to represent the
+                    //       current round, otherwise proofs might be reusable.
+                    let mut cur_sigmas: Vec<(pallas::Base, pallas::Base)> = vec![];
                     for node in &nodes {
                         let (sigma1, sigma2) = node.sigmas();
-                        for pair in &sigmas {
-                            if sigma1 != pair.0 && sigma2 != pair.1 {
-                                println!("ABORT, sigmas are wrong.");
-                                return Ok(())
-                            }
+
+                        if prev_sigmas.iter().any(|(s1, s2)| sigma1 == *s1 && sigma2 == *s2) {
+                            panic!("the sigmas are the same like for the previous round");
                         }
-                        sigmas.push((sigma1, sigma2));
+
+                        if cur_sigmas.iter().any(|(s1, s2)| sigma1 != *s1 || sigma2 != *s2) {
+                            panic!("the sigmas for current round are wrong");
+                        }
+
+                        cur_sigmas.push((sigma1, sigma2));
                     }
 
-                    // Now leaders/survivors can replay the lottery
-                    let participants =
-                        if !survivors.is_empty() { survivors.clone() } else { leaders.clone() };
+                    // Now the lottery can be played for this round.
+                    let participants = survivors.clone();
                     survivors = vec![];
                     for participant in &participants {
                         let (sigma1, sigma2) = nodes[*participant].sigmas();
                         // Verify no shenanigans happen when recalculating sigmas
-                        if sigma1 != sigmas[*participant].0 && sigma2 != sigmas[*participant].1 {
-                            println!("ABORT, participant sigmas are wrong.");
-                            return Ok(())
+                        if sigma1 != cur_sigmas[*participant].0 ||
+                            sigma2 != cur_sigmas[*participant].1
+                        {
+                            panic!("participant sigmas are wrong.");
                         }
 
                         let (won, _) = nodes[*participant].is_slot_leader(sigma1, sigma2);
@@ -497,13 +484,14 @@ async fn main() -> Result<()> {
 
                     // Updated nodes leaders history
                     for node in &mut nodes {
-                        node.leaders_history.push(survivors.len() as i64);
+                        node.leaders_history.push(survivors.len() as u64);
                     }
 
                     println!("Round {round} survivors: {:?}", survivors);
                     if survivors.is_empty() {
-                        println!("Survivors didn't win round, terminating last man standing mode");
-                        break
+                        // If nobody won this round. The same participants should play the next round.
+                        println!("Nobody won round, running new round with the same participants");
+                        survivors = participants.clone();
                     } else if survivors.len() == 1 {
                         println!("Node {} is the last man standing!", survivors[0]);
                         slot_leader = Some(survivors[0]);
@@ -511,6 +499,7 @@ async fn main() -> Result<()> {
                     }
 
                     round += 1;
+                    prev_sigmas = cur_sigmas.clone();
                 }
             }
         }
