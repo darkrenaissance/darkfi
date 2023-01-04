@@ -475,13 +475,6 @@ impl ValidatorState {
         info!(target: "consensus::validator", "receive_proposal(): Leader proof verified successfully!");
 
         // Validate proposal public value against coin creation slot checkpoint
-        /*
-        let checkpoint = self.consensus.get_slot_checkpoint(lf.coin_slot)?;
-        if checkpoint.eta != lf.coin_eta {
-            return Err(Error::ProposalDifferentCoinEtaError)
-        }
-        */
-        // TODO: fix
         let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(self.consensus.get_eta(),
                                                           self.consensus.current_slot());
         // y
@@ -562,17 +555,6 @@ impl ValidatorState {
             }
         }
 
-        /*
-        // TODO: Validate that proposal coin is already published.
-        let tree_root: MerkleNode = self.consensus.coins_tree.root(0).unwrap();
-        let prop_cm_root: pallas::Base = lf.public_inputs[constants::PI_COMMITMENT_ROOT];
-        if tree_root.inner() <= prop_cm_root {
-            error!(target: "consensus::validator", "validation of tree root failed");
-            info!(target: "consensus::validator", "tree_root: {:?}", tree_root.inner());
-            info!(target: "consensus::validator", "prop_root: {:?}", prop_cm_root);
-        }
-        */
-
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
         info!(target: "consensus::validator", "receive_proposal(): Starting state transition validation");
@@ -641,12 +623,6 @@ impl ValidatorState {
                 index_for_history = index as i64;
                 max_length_for_history = length;
             }
-            // Ignore forks with less that 3 blocks
-            /*
-            if length < 3 {
-                continue
-        }
-            */
             // Check if less than max
             if length < max_length {
                 continue
@@ -670,14 +646,6 @@ impl ValidatorState {
                 self.consensus.set_leader_history(index_for_history, slot);
                 return Ok((vec![], vec![]))
             }
-            /*
-            -1 => {
-                info!(target: "consensus::validator", "chain_finalization(): All chains have less than 3 proposals, nothing to finalize.");
-                self.consensus.set_leader_history(index_for_history, slot);
-                return Ok((vec![], vec![]))
-
-        }
-            */
             _ => info!("chain_finalization(): Chain {} can be finalized!", fork_index),
 
         }
