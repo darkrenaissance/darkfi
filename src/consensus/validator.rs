@@ -652,6 +652,9 @@ impl ValidatorState {
         if max_length==0 {
             return Ok((vec![], vec![]))
         }
+        if max_length==0 {
+            return Ok((vec![], vec![]))
+        }
 
         // Starting finalization
         let mut fork = self.consensus.forks[fork_index as usize].clone();
