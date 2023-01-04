@@ -290,6 +290,7 @@ impl ConsensusState {
         // must sum to initial distribution total coins.
         //let stake = self.initial_distribution;
         let coin = LeadCoin::new(
+
             200,
             slot,
             epoch_secrets.secret_keys[0].inner(),
@@ -547,7 +548,12 @@ impl ConsensusState {
             info!("is_slot_leader: coin stake: {:?}", coin.value);
             info!("is_slot_leader: total stake: {}", total_stake);
             info!("is_slot_leader: relative stake: {}", (coin.value as f64) / total_stake as f64);
-            let first_winning = coin.is_leader(sigma1, sigma2, self.get_eta(), pallas::Base::from(self.current_slot()));
+
+            let first_winning = coin.is_leader(sigma1,
+                                               sigma2,
+                                               self.get_eta(),
+                                               pallas::Base::from(self.current_slot()));
+
             if first_winning && !won {
                 highest_stake_idx = winning_idx;
             }

@@ -110,10 +110,6 @@ impl LeadCoin {
         //let coin2_blind = pallas::Scalar::random(&mut OsRng);
         // pk
         let pk = Self::util_pk(coin1_sk_root, slot);
-        // Derive the nonce for coin2
-        let coin2_seed = Self::util_derived_rho(coin1_sk_root, seed);
-        info!(target: "consensus::leadcoin", "coin2_seed[{}]: {:?}", slot, coin2_seed);
-
         let coin1_commitment = Self::commitment(pk, pallas::Base::from(value), seed, coin1_blind);
         // Hash its coordinates to get a base field element
         let c1_cm_coords = coin1_commitment.to_affine().coordinates().unwrap();
