@@ -475,13 +475,18 @@ impl ValidatorState {
         info!(target: "consensus::validator", "receive_proposal(): Leader proof verified successfully!");
 
         // Validate proposal public value against coin creation slot checkpoint
+        /*
         let checkpoint = self.consensus.get_slot_checkpoint(lf.coin_slot)?;
         if checkpoint.eta != lf.coin_eta {
             return Err(Error::ProposalDifferentCoinEtaError)
         }
-        let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(checkpoint.eta, checkpoint.slot);
+        */
+        // TODO: fix
+        let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(self.consensus.get_eta(),
+                                                          self.consensus.current_slot());
         // y
         let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
+
         if mu_y != prop_mu_y {
             error!(
                 target: "consensus::validator",
@@ -490,8 +495,10 @@ impl ValidatorState {
             );
             return Err(Error::ProposalPublicValuesMismatched)
         }
+
         // rho
         let prop_mu_rho = lf.public_inputs[constants::PI_MU_RHO_INDEX];
+
         if mu_rho != prop_mu_rho {
             error!(
                 target: "consensus::validator",
@@ -500,6 +507,7 @@ impl ValidatorState {
             );
             return Err(Error::ProposalPublicValuesMismatched)
         }
+
 
         // Validate proposal coin sigmas against current slot checkpoint
         let checkpoint = self.consensus.get_slot_checkpoint(current)?;
@@ -672,6 +680,9 @@ impl ValidatorState {
             */
             _ => info!("chain_finalization(): Chain {} can be finalized!", fork_index),
 
+        }
+        if max_length==0 {
+            return Ok((vec![], vec![]))
         }
 
         // Starting finalization
