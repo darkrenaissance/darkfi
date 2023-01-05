@@ -36,6 +36,9 @@ use super::{
 };
 use crate::{blockchain::Blockchain, net, tx::Transaction, util::time::Timestamp, Error, Result};
 
+use std::io::{prelude::*, BufWriter};
+use std::fs::File;
+
 /// This struct represents the information required by the consensus algorithm
 pub struct ConsensusState {
     /// Canonical (finalized) blockchain
@@ -376,8 +379,18 @@ impl ConsensusState {
             }
         }
         self.leaders_history.push(count);
-        info!(target: "consensus::state", "extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
+
+        info!("extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
+        let mut count_str : String = count.to_string();
+        count_str.push_str(",");
+        let mut f = File::options().append(true).open(constants::LEADER_HISTORY_LOG).unwrap();
+        {
+            let mut writer = BufWriter::new(f);
+            writer.write(&count_str.into_bytes()).unwrap();
+        }
+
         Float10::try_from(count as i64).unwrap()
+
     }
 
     fn pid_error(feedback: Float10) -> Float10 {
@@ -500,6 +513,14 @@ impl ConsensusState {
         self.extend_leaders_history();
         //
         let f = self.discrete_pid();
+        // log f history
+        let file = File::options().append(true).open(constants::F_HISTORY_LOG).unwrap();
+        {
+            let mut f_history = format!("{:}", f);
+            f_history.push_str(",");
+            let mut writer = BufWriter::new(file);
+            writer.write(&f_history.into_bytes()).unwrap();
+        }
         if f == constants::FLOAT10_ZERO.clone() {
             return constants::MIN_F.clone()
         } else if f >= constants::FLOAT10_ONE.clone() {
