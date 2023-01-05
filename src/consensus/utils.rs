@@ -63,12 +63,11 @@ pub fn fbig2base(f: Float10) -> pallas::Base {
 mod tests {
     use dashu::integer::IBig;
 
-    use crate::consensus::{constants::RADIX_BITS, types::Float10, utils::fbig2ibig};
+    use crate::consensus::{types::Float10, utils::fbig2ibig};
 
     #[test]
     fn dashu_fbig2ibig() {
-        let f =
-            Float10::from_str_native("234234223.000").unwrap().with_precision(RADIX_BITS).value();
+        let f = Float10::try_from("234234223.000").unwrap();
         let i: IBig = fbig2ibig(f);
         let sig = IBig::from(234234223);
         assert_eq!(i, sig);
