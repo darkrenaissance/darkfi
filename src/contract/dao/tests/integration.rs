@@ -20,13 +20,12 @@ use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
         coin::Coin,
-        constants::MERKLE_DEPTH,
         contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
         keypair::Keypair,
         pedersen::pedersen_commitment_u64,
         poseidon_hash, MerkleNode, SecretKey, TokenId,
     },
-    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
+    incrementalmerkletree::Tree,
     pasta::{
         arithmetic::CurveAffine,
         group::{ff::Field, Curve, Group},
@@ -48,11 +47,7 @@ use darkfi_dao_contract::{
     money_client, note, DaoFunction,
 };
 
-use darkfi_money_contract::{
-    client::{build_half_swap_tx, build_transfer_tx, EncryptedNote, OwnCoin},
-    state::MoneyTransferParams,
-    MoneyFunction,
-};
+use darkfi_money_contract::{client::EncryptedNote, state::MoneyTransferParams, MoneyFunction};
 
 mod harness;
 use harness::{init_logger, DaoTestHarness};
@@ -97,9 +92,6 @@ async fn integration_test() -> Result<()> {
 
     let dao_bulla_blind = pallas::Base::random(&mut OsRng);
 
-    info!(target: "dao", "[Alice] =========================");
-    info!(target: "dao", "[Alice] Building Dao::Mint params");
-    info!(target: "dao", "[Alice] =========================");
     let (params, proofs) = build_dao_mint_tx(
         dao_proposer_limit,
         dao_quorum,
@@ -113,9 +105,6 @@ async fn integration_test() -> Result<()> {
         &dao_th.dao_mint_pk,
     )?;
 
-    info!(target: "dao", "[Alice] ==========================================");
-    info!(target: "dao", "[Alice] Building Dao::Mint transaction with params");
-    info!(target: "dao", "[Alice] ==========================================");
     let mut data = vec![DaoFunction::Mint as u8];
     params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: dao_th.dao_contract_id, data }];
@@ -124,9 +113,6 @@ async fn integration_test() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &[])?;
     tx.signatures = vec![sigs];
 
-    info!(target: "dao", "[Alice] ===============================");
-    info!(target: "dao", "[Alice] Executing Dao::Mint transaction");
-    info!(target: "dao", "[Alice] ===============================");
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
     // TODO: Witness and add to wallet merkle tree?
 

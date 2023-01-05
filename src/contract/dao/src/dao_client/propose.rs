@@ -21,13 +21,10 @@ use darkfi_sdk::{
         pedersen::pedersen_commitment_u64, poseidon_hash, MerkleNode, PublicKey, SecretKey, TokenId,
     },
     incrementalmerkletree,
-    incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree},
+    incrementalmerkletree::Hashable,
     pasta::{
         arithmetic::CurveAffine,
-        group::{
-            ff::{Field, PrimeField},
-            Curve,
-        },
+        group::{ff::Field, Curve},
         pallas,
     },
 };
@@ -42,7 +39,7 @@ use darkfi::{
         vm_stack::Witness,
     },
     zkas::ZkBinary,
-    Error, Result,
+    Result,
 };
 
 use crate::{

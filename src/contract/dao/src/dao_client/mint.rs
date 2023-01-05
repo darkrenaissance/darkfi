@@ -193,7 +193,7 @@ pub fn build_dao_mint_tx(
     gov_token_id: TokenId,
     dao_pubkey: &PublicKey,
     dao_bulla_blind: pallas::Base,
-    signature_secret: &SecretKey,
+    _signature_secret: &SecretKey,
     dao_mint_zkbin: &ZkBinary,
     dao_mint_pk: &ProvingKey,
 ) -> Result<(DaoMintParams, Vec<Proof>)> {

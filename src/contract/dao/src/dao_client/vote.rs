@@ -19,22 +19,19 @@
 use darkfi_sdk::{
     crypto::{
         keypair::Keypair, pedersen::pedersen_commitment_u64, poseidon_hash, MerkleNode, Nullifier,
-        PublicKey, SecretKey, TokenId,
+        PublicKey, SecretKey,
     },
     incrementalmerkletree,
-    incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree},
+    incrementalmerkletree::Hashable,
     pasta::{
         arithmetic::CurveAffine,
-        group::{
-            ff::{Field, PrimeField},
-            Curve,
-        },
+        group::{ff::Field, Curve},
         pallas,
     },
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
-use log::{debug, info};
+use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -44,7 +41,7 @@ use darkfi::{
         vm_stack::Witness,
     },
     zkas::ZkBinary,
-    Error, Result,
+    Result,
 };
 
 use super::{propose::Proposal, Dao};

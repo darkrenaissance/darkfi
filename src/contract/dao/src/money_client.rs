@@ -16,38 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use darkfi::{
-    consensus::leadcoin::LeadCoin,
-    zk::{
-        proof::{Proof, ProvingKey},
-        vm::ZkCircuit,
-        vm_stack::Witness,
-    },
+    zk::proof::{Proof, ProvingKey},
     zkas::ZkBinary,
-    ClientFailed, Error, Result,
+    Result,
 };
 use darkfi_sdk::{
-    crypto::{
-        constants::MERKLE_DEPTH,
-        diffie_hellman::{kdf_sapling, sapling_ka_agree},
-        pedersen::{pedersen_commitment_base, pedersen_commitment_u64, ValueBlind, ValueCommit},
-        poseidon_hash, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey, TokenId,
-    },
+    crypto::{pedersen::ValueBlind, MerkleNode, PublicKey, SecretKey, TokenId},
     incrementalmerkletree,
-    incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree},
-    pasta::{
-        arithmetic::CurveAffine,
-        group::{
-            ff::{Field, PrimeField},
-            Curve,
-        },
-        pallas,
-    },
+    pasta::{group::ff::Field, pallas},
 };
-use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
-use halo2_proofs::circuit::Value;
-use log::{debug, error, info};
+
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{

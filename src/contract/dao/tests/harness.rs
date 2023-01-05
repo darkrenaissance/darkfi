@@ -33,7 +33,7 @@ use darkfi::{
 use darkfi_sdk::{
     crypto::{
         contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
-        ContractId, Keypair, MerkleTree,
+        ContractId, Keypair,
     },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     pasta::group::ff::PrimeField,
