@@ -82,7 +82,6 @@ pub struct ProposeCall {
 }
 
 impl ProposeCall {
-    //pub fn build(self /*, zk_bins: &ZkContractTable */) -> Result<(DaoProposeParams, Vec<Proof>)> {
     pub fn make(
         self,
         burn_zkbin: &ZkBinary,

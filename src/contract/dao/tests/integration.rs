@@ -34,17 +34,15 @@ use darkfi_sdk::{
     tx::ContractCall,
 };
 use darkfi_serial::{Decodable, Encodable};
-use log::{debug, info};
+use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi_dao_contract::{
     dao_client,
-    dao_client::{
-        exec as dao_exec_client,
-        mint::{build_dao_mint_tx, MerkleTree, WalletCache},
-        propose as dao_propose_client, vote as dao_vote_client,
-    },
-    money_client, note, DaoFunction,
+    dao_client::{exec as dao_exec_client, propose as dao_propose_client, vote as dao_vote_client},
+    money_client, note,
+    wallet_cache::{MerkleTree, WalletCache},
+    DaoFunction,
 };
 
 use darkfi_money_contract::{client::EncryptedNote, state::MoneyTransferParams, MoneyFunction};
@@ -75,10 +73,15 @@ async fn integration_test() -> Result<()> {
     let gdrk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
     // DAO parameters
-    let dao_proposer_limit = 110;
-    let dao_quorum = 110;
-    let dao_approval_ratio_quot = 1;
-    let dao_approval_ratio_base = 2;
+    let dao = dao_client::Dao {
+        proposer_limit: 110,
+        quorum: 110,
+        approval_ratio_base: 1,
+        approval_ratio_quot: 2,
+        gov_token_id: gdrk_token_id,
+        public_key: dao_th.dao_kp.public,
+        bulla_blind: pallas::Base::random(&mut OsRng),
+    };
 
     // We use this to receive coins
     let mut cache = WalletCache::new();
@@ -90,20 +93,8 @@ async fn integration_test() -> Result<()> {
     // =======================================================
     debug!(target: "dao", "Stage 1. Creating DAO bulla");
 
-    let dao_bulla_blind = pallas::Base::random(&mut OsRng);
-
-    let (params, proofs) = build_dao_mint_tx(
-        dao_proposer_limit,
-        dao_quorum,
-        dao_approval_ratio_quot,
-        dao_approval_ratio_base,
-        gdrk_token_id,
-        &dao_th.dao_kp.public,
-        dao_bulla_blind,
-        &dao_th.dao_kp.secret,
-        &dao_th.dao_mint_zkbin,
-        &dao_th.dao_mint_pk,
-    )?;
+    let (params, proofs) =
+        dao_client::make_mint_call(&dao, &dao_th.dao_mint_zkbin, &dao_th.dao_mint_pk)?;
 
     let mut data = vec![DaoFunction::Mint as u8];
     params.encode(&mut data)?;
@@ -408,16 +399,6 @@ async fn integration_test() -> Result<()> {
         (merkle_path, root)
     };
 
-    let dao_params = dao_client::Dao {
-        proposer_limit: dao_proposer_limit,
-        quorum: dao_quorum,
-        approval_ratio_base: dao_approval_ratio_base,
-        approval_ratio_quot: dao_approval_ratio_quot,
-        gov_token_id: gdrk_token_id,
-        public_key: dao_th.dao_kp.public,
-        bulla_blind: dao_bulla_blind,
-    };
-
     let proposal = dao_client::Proposal {
         dest: receiver_keypair.public,
         amount: 1000,
@@ -429,7 +410,7 @@ async fn integration_test() -> Result<()> {
     let call = dao_client::ProposeCall {
         inputs: vec![input],
         proposal,
-        dao: dao_params.clone(),
+        dao: dao.clone(),
         dao_leaf_position,
         dao_merkle_path,
         dao_merkle_root,
@@ -539,7 +520,7 @@ async fn integration_test() -> Result<()> {
         },
         vote_keypair: vote_keypair_1,
         proposal: proposal.clone(),
-        dao: dao_params.clone(),
+        dao: dao.clone(),
     };
     let (params, proofs) = builder.build(
         &dao_th.dao_vote_burn_zkbin,
@@ -610,7 +591,7 @@ async fn integration_test() -> Result<()> {
         },
         vote_keypair: vote_keypair_2,
         proposal: proposal.clone(),
-        dao: dao_params.clone(),
+        dao: dao.clone(),
     };
     let (params, proofs) = builder.build(
         &dao_th.dao_vote_burn_zkbin,
@@ -678,7 +659,7 @@ async fn integration_test() -> Result<()> {
         },
         vote_keypair: vote_keypair_3,
         proposal: proposal.clone(),
-        dao: dao_params.clone(),
+        dao: dao.clone(),
     };
     let (params, proofs) = builder.build(
         &dao_th.dao_vote_burn_zkbin,
@@ -855,7 +836,7 @@ async fn integration_test() -> Result<()> {
 
     let builder = dao_exec_client::Builder {
         proposal,
-        dao: dao_params.clone(),
+        dao,
         yes_votes_value,
         all_votes_value,
         yes_votes_blind,
