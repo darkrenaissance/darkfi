@@ -21,7 +21,7 @@ ZKASDEPS = \
 	$(shell find bin/zkas/src -type f)
 
 # ZK proofs to compile with zkas
-PROOFS_SRC = $(shell find proof -type f -name '*.zk')
+PROOFS_SRC = $(shell find proof -type f -name '*.zk') example/simple.zk
 PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
 # Common dependencies which should force the binaries to be rebuilt
