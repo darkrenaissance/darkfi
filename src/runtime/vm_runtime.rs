@@ -214,6 +214,12 @@ impl Runtime {
                     import::db::db_set,
                 ),
 
+                "db_del_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_del,
+                ),
+
                 "put_object_bytes_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,

@@ -21,7 +21,7 @@ use std::io::Cursor;
 use darkfi_sdk::{
     crypto::ContractId,
     db::{
-        CALLER_ACCESS_DENIED, DB_CONTAINS_KEY_FAILED, DB_GET_FAILED, DB_INIT_FAILED,
+        CALLER_ACCESS_DENIED, DB_CONTAINS_KEY_FAILED, DB_DEL_FAILED, DB_GET_FAILED, DB_INIT_FAILED,
         DB_LOOKUP_FAILED, DB_SET_FAILED, DB_SUCCESS,
     },
 };
@@ -106,7 +106,10 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
                 }
             };
 
-            // TODO: Ensure we've read the entire buffer above.
+            if !buf_reader.is_empty() {
+                error!(target: "runtime::db::db_init()", "Trailing bytes in argument stream");
+                return DB_DEL_FAILED
+            }
 
             if &cid != contract_id {
                 error!(target: "runtime::db::db_init()", "Unauthorized ContractId for db_init");
@@ -181,7 +184,10 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
                 }
             };
 
-            // TODO: Ensure we've read the entire buffer above.
+            if !buf_reader.is_empty() {
+                error!(target: "runtime::db::db_lookup()", "Trailing bytes in argument stream");
+                return DB_LOOKUP_FAILED
+            }
 
             let tree_handle = match contracts.lookup(db, &cid, &db_name) {
                 Ok(v) => v,
@@ -256,7 +262,10 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
                 }
             };
 
-            // TODO: Ensure we've read the entire buffer above.
+            if !buf_reader.is_empty() {
+                error!(target: "runtime::db::db_set()", "Trailing bytes in argument stream");
+                return DB_DEL_FAILED
+            }
 
             let db_handles = env.db_handles.borrow();
             let mut db_batches = env.db_batches.borrow_mut();
@@ -276,6 +285,74 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
             }
 
             db_batch.insert(key, value);
+
+            DB_SUCCESS
+        }
+        _ => CALLER_ACCESS_DENIED,
+    }
+}
+
+/// Only update() can call this. Remove a key from the database.
+pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+    let env = ctx.data();
+    match env.contract_section {
+        ContractSection::Deploy | ContractSection::Update => {
+            let memory_view = env.memory_view(&ctx);
+
+            let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
+                error!(target: "runtime::db::db_del()", "Failed to make slice from ptr");
+                return DB_DEL_FAILED
+            };
+
+            let mut buf = vec![0_u8; len as usize];
+            if let Err(e) = mem_slice.read_slice(&mut buf) {
+                error!(target: "runtime::db::db_del()", "Failed to read from memory slice: {}", e);
+                return DB_DEL_FAILED
+            };
+
+            let mut buf_reader = Cursor::new(buf);
+
+            // FIXME: There's a type DbHandle=u32, but this should maybe be renamed
+            let db_handle: u32 = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "runtime::db::db_del()", "Failed to decode DbHandle: {}", e);
+                    return DB_DEL_FAILED
+                }
+            };
+            let db_handle = db_handle as usize;
+
+            let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "runtime::db::db_del()", "Failed to decode key vec: {}", e);
+                    return DB_DEL_FAILED
+                }
+            };
+
+            if !buf_reader.is_empty() {
+                error!(target: "runtime::db::db_del()", "Trailing bytes in argument stream");
+                return DB_DEL_FAILED
+            }
+
+            let db_handles = env.db_handles.borrow();
+            let mut db_batches = env.db_batches.borrow_mut();
+
+            if db_handles.len() <= db_handle || db_batches.len() <= db_handle {
+                error!(target: "runtime::db::db_del()", "Requested DbHandle that is out of bounds");
+                return DB_DEL_FAILED
+            }
+
+            let handle_idx = db_handle;
+            let db_handle = &db_handles[handle_idx];
+            let db_batch = &mut db_batches[handle_idx];
+
+            if db_handle.contract_id != env.contract_id {
+                error!(target: "runtime::db::db_del()", "Unauthorized to write to DbHandle");
+                return CALLER_ACCESS_DENIED
+            }
+
+            db_batch.remove(key);
 
             DB_SUCCESS
         }
@@ -321,7 +398,10 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
                 }
             };
 
-            // TODO: Ensure we've read the entire buffer above.
+            if !buf_reader.is_empty() {
+                error!(target: "runtime::db::db_get()", "Trailing bytes in argument stream");
+                return DB_GET_FAILED.into()
+            }
 
             let db_handles = env.db_handles.borrow();
 
@@ -396,7 +476,10 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
                 }
             };
 
-            // TODO: Ensure we've read the entire buffer above.
+            if !buf_reader.is_empty() {
+                error!(target: "runtime::db::db_contains_key()", "Trailing bytes in argument stream");
+                return DB_CONTAINS_KEY_FAILED
+            }
 
             let db_handles = env.db_handles.borrow();
 

@@ -36,6 +36,7 @@ pub const DB_LOOKUP_FAILED: i32 = -3;
 pub const DB_GET_FAILED: i32 = -4;
 pub const DB_CONTAINS_KEY_FAILED: i32 = -5;
 pub const DB_SET_FAILED: i32 = -6;
+pub const DB_DEL_FAILED: i32 = -7;
 
 /// Only deploy() can call this. Creates a new database instance for this contract.
 ///
@@ -162,10 +163,33 @@ pub fn db_set(db_handle: DbHandle, key: &[u8], value: &[u8]) -> GenericResult<()
     }
 }
 
+/// Only update() can call this. Removes a key from the db.
+///
+/// ```
+///     db_del(tx_handle, key);
+/// ```
+pub fn db_del(db_handle: DbHandle, key: &[u8]) -> GenericResult<()> {
+    // Check entry for tx_handle is not None
+    unsafe {
+        let mut len = 0;
+        let mut buf = vec![];
+        len += db_handle.encode(&mut buf)?;
+        len += key.to_vec().encode(&mut buf)?;
+
+        match db_del_(buf.as_ptr(), len as u32) {
+            CALLER_ACCESS_DENIED => Err(ContractError::CallerAccessDenied),
+            DB_DEL_FAILED => Err(ContractError::DbDelFailed),
+            DB_SUCCESS => Ok(()),
+            _ => unreachable!(),
+        }
+    }
+}
+
 extern "C" {
     fn db_init_(ptr: *const u8, len: u32) -> i32;
     fn db_lookup_(ptr: *const u8, len: u32) -> i32;
     fn db_get_(ptr: *const u8, len: u32) -> i64;
     fn db_contains_key_(ptr: *const u8, len: u32) -> i32;
     fn db_set_(ptr: *const u8, len: u32) -> i32;
+    fn db_del_(ptr: *const u8, len: u32) -> i32;
 }

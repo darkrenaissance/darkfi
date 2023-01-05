@@ -60,6 +60,9 @@ pub enum ContractError {
     #[error("Db set failed")]
     DbSetFailed,
 
+    #[error("Db del failed")]
+    DbDelFailed,
+
     #[error("Db lookup failed")]
     DbLookupFailed,
 
@@ -95,6 +98,7 @@ pub const DB_LOOKUP_FAILED: i64 = to_builtin!(12);
 pub const DB_GET_FAILED: i64 = to_builtin!(13);
 pub const DB_CONTAINS_KEY_FAILED: i64 = to_builtin!(14);
 pub const INVALID_FUNCTION: i64 = to_builtin!(15);
+pub const DB_DEL_FAILED: i64 = to_builtin!(16);
 
 impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
@@ -113,6 +117,7 @@ impl From<ContractError> for i64 {
             ContractError::DbGetFailed => DB_GET_FAILED,
             ContractError::DbContainsKeyFailed => DB_CONTAINS_KEY_FAILED,
             ContractError::InvalidFunction => INVALID_FUNCTION,
+            ContractError::DbDelFailed => DB_DEL_FAILED,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -142,6 +147,7 @@ impl From<i64> for ContractError {
             DB_GET_FAILED => Self::DbGetFailed,
             DB_CONTAINS_KEY_FAILED => Self::DbContainsKeyFailed,
             INVALID_FUNCTION => Self::InvalidFunction,
+            DB_DEL_FAILED => Self::DbDelFailed,
             _ => Self::Custom(error as u32),
         }
     }

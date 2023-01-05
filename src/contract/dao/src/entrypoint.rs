@@ -23,7 +23,9 @@ use darkfi_sdk::{
         contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
         ContractId, MerkleNode, MerkleTree, PublicKey,
     },
-    db::{db_contains_key, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME},
+    db::{
+        db_contains_key, db_del, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME,
+    },
     error::{ContractError, ContractResult},
     merkle::merkle_add,
     msg,
@@ -394,8 +396,9 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::Exec => {
             let update: DaoExecUpdate = deserialize(&ix[1..])?;
 
-            // TODO: Implement db_del
             // Remove proposal from db
+            let proposal_vote_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
+            db_del(proposal_vote_db, &serialize(&update.proposal))?;
 
             Ok(())
         }
