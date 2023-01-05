@@ -57,6 +57,9 @@ use harness::{init_logger, DaoTestHarness};
 
 // TODO: strategize and cleanup Result/Error usage
 // TODO: fix up code doc
+// TODO: db_* errors returned from runtime should be more specific.
+// TODO: db_* functions should be consistently ordered
+// TODO: migrate rest of func calls below to make() format and cleanup
 
 #[async_std::test]
 async fn integration_test() -> Result<()> {
