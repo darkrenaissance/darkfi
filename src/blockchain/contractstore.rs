@@ -25,11 +25,6 @@ use crate::{Error, Result};
 const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
 const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
 
-// Logger targets
-const CS_TGT_INIT: &str = "blockchain::contractstatestore::init";
-const CS_TGT_LKUP: &str = "blockchain::contractstatestore::lookup";
-const CS_TGT_DROP: &str = "blockchain::contractstatestore::remove";
-
 /// The `WasmStore` is a `sled` tree that stores the wasm bincode for deployed
 /// contracts.
 #[derive(Clone)]

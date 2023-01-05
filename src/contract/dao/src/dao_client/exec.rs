@@ -46,12 +46,12 @@ use darkfi::{
     Error, Result,
 };
 
-use super::propose::{DaoParams, Proposal};
+use super::{propose::Proposal, Dao};
 use crate::dao_model::DaoExecParams;
 
 pub struct Builder {
     pub proposal: Proposal,
-    pub dao: DaoParams,
+    pub dao: Dao,
     pub yes_votes_value: u64,
     pub all_votes_value: u64,
     pub yes_votes_blind: pallas::Scalar,

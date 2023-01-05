@@ -50,23 +50,14 @@ use crate::{
     note,
 };
 
-#[derive(Clone)]
-pub struct DaoParams {
-    pub proposer_limit: u64,
-    pub quorum: u64,
-    pub approval_ratio_quot: u64,
-    pub approval_ratio_base: u64,
-    pub gov_token_id: TokenId,
-    pub public_key: PublicKey,
-    pub bulla_blind: pallas::Base,
-}
+use super::Dao;
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct Note {
     pub proposal: Proposal,
 }
 
-pub struct BuilderInput {
+pub struct ProposalStakeInput {
     pub secret: SecretKey,
     //pub note: money::transfer::wallet::Note,
     pub note: darkfi_money_contract::client::Note,
@@ -84,18 +75,18 @@ pub struct Proposal {
     pub blind: pallas::Base,
 }
 
-pub struct Builder {
-    pub inputs: Vec<BuilderInput>,
+pub struct ProposeCall {
+    pub inputs: Vec<ProposalStakeInput>,
     pub proposal: Proposal,
-    pub dao: DaoParams,
+    pub dao: Dao,
     pub dao_leaf_position: incrementalmerkletree::Position,
     pub dao_merkle_path: Vec<MerkleNode>,
     pub dao_merkle_root: MerkleNode,
 }
 
-impl Builder {
+impl ProposeCall {
     //pub fn build(self /*, zk_bins: &ZkContractTable */) -> Result<(DaoProposeParams, Vec<Proof>)> {
-    pub fn build(
+    pub fn make(
         self,
         burn_zkbin: &ZkBinary,
         burn_pk: &ProvingKey,

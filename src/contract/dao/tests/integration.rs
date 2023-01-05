@@ -39,6 +39,7 @@ use log::{debug, info};
 use rand::rngs::OsRng;
 
 use darkfi_dao_contract::{
+    dao_client,
     dao_client::{
         exec as dao_exec_client,
         mint::{build_dao_mint_tx, MerkleTree, WalletCache},
@@ -68,7 +69,7 @@ use harness::{init_logger, DaoTestHarness};
 async fn integration_test() -> Result<()> {
     init_logger()?;
 
-    let mut dao_th = DaoTestHarness::new().await?;
+    let dao_th = DaoTestHarness::new().await?;
 
     // Money parameters
     let xdrk_supply = 1_000_000;
@@ -406,7 +407,7 @@ async fn integration_test() -> Result<()> {
     // TODO: is it possible for an invalid transfer() to be constructed on exec()?
     //       need to look into this
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_propose_client::BuilderInput {
+    let input = dao_client::ProposalStakeInput {
         secret: dao_th.alice_kp.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
@@ -421,7 +422,7 @@ async fn integration_test() -> Result<()> {
         (merkle_path, root)
     };
 
-    let dao_params = dao_propose_client::DaoParams {
+    let dao_params = dao_client::Dao {
         proposer_limit: dao_proposer_limit,
         quorum: dao_quorum,
         approval_ratio_base: dao_approval_ratio_base,
@@ -431,7 +432,7 @@ async fn integration_test() -> Result<()> {
         bulla_blind: dao_bulla_blind,
     };
 
-    let proposal = dao_propose_client::Proposal {
+    let proposal = dao_client::Proposal {
         dest: receiver_keypair.public,
         amount: 1000,
         serial: pallas::Base::random(&mut OsRng),
@@ -439,7 +440,7 @@ async fn integration_test() -> Result<()> {
         blind: pallas::Base::random(&mut OsRng),
     };
 
-    let builder = dao_propose_client::Builder {
+    let call = dao_client::ProposeCall {
         inputs: vec![input],
         proposal,
         dao: dao_params.clone(),
@@ -447,7 +448,7 @@ async fn integration_test() -> Result<()> {
         dao_merkle_path,
         dao_merkle_root,
     };
-    let (params, proofs) = builder.build(
+    let (params, proofs) = call.make(
         &dao_th.dao_propose_burn_zkbin,
         &dao_th.dao_propose_burn_pk,
         &dao_th.dao_propose_main_zkbin,
@@ -882,8 +883,7 @@ async fn integration_test() -> Result<()> {
         hook_dao_exec: spend_hook,
         signature_secret: exec_signature_secret,
     };
-    let (exec_params, mut exec_proofs) =
-        builder.build(&dao_th.dao_exec_zkbin, &dao_th.dao_exec_pk)?;
+    let (exec_params, exec_proofs) = builder.build(&dao_th.dao_exec_zkbin, &dao_th.dao_exec_pk)?;
 
     let mut data = vec![DaoFunction::Exec as u8];
     exec_params.encode(&mut data)?;

@@ -47,7 +47,7 @@ use darkfi::{
     Error, Result,
 };
 
-use super::propose::{DaoParams, Proposal};
+use super::{propose::Proposal, Dao};
 use crate::{
     dao_model::{DaoVoteParams, VoteInput},
     note,
@@ -82,7 +82,7 @@ pub struct Builder {
     pub vote: Vote,
     pub vote_keypair: Keypair,
     pub proposal: Proposal,
-    pub dao: DaoParams,
+    pub dao: Dao,
 }
 
 impl Builder {

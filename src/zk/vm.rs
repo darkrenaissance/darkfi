@@ -63,8 +63,6 @@ use crate::zkas::{
     Opcode, ZkBinary,
 };
 
-const L_TGT: &str = "zkvm";
-
 #[derive(Clone)]
 pub struct VmConfig {
     primary: Column<InstanceColumn>,

@@ -67,6 +67,7 @@ pub const DAO_ROOTS_TREE: &str = "dao_roots";
 //pub const DAO_PROPOSAL_TREE: &str = "dao_proposals";
 //pub const DAO_PROPOSAL_ROOTS_TREE: &str = "dao_proposal_roots";
 pub const DAO_PROPOSAL_VOTES_TREE: &str = "dao_proposal_votes";
+pub const DAO_VOTE_NULLS: &str = "dao_vote_nulls";
 
 // These are keys inside the some db trees
 pub const DAO_MERKLE_TREE: &str = "dao_merkle_tree";
@@ -164,6 +165,11 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
         Err(_) => db_init(cid, DAO_PROPOSAL_VOTES_TREE)?,
     };
 
+    let _ = match db_lookup(cid, DAO_VOTE_NULLS) {
+        Ok(v) => v,
+        Err(_) => db_init(cid, DAO_VOTE_NULLS)?,
+    };
+
     Ok(())
 }
 
@@ -236,10 +242,10 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let mut proposal_votes: ProposalVotes = deserialize(&proposal_votes)?;
 
             // Check the Merkle roots and nullifiers for the input coins are valid
-            let mut vote_nullifiers = vec![];
-            let mut all_vote_commit = pallas::Point::identity();
+            // TODO: vote_nullifiers is useless
             let money_roots_db = db_lookup(money_cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
             let money_nullifier_db = db_lookup(money_cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+            let dao_vote_nulls_db = db_lookup(cid, DAO_VOTE_NULLS)?;
 
             for input in &params.inputs {
                 if !db_contains_key(money_roots_db, &serialize(&input.merkle_root))? {
@@ -252,8 +258,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     return Err(ContractError::Custom(6))
                 }
 
-                if vote_nullifiers.contains(&input.nullifier) ||
-                    proposal_votes.vote_nullifiers.contains(&input.nullifier)
+                if proposal_votes.vote_nullifiers.contains(&input.nullifier) ||
+                    db_contains_key(dao_vote_nulls_db, &serialize(&input.nullifier))?
                 {
                     msg!("Attempted double vote");
                     return Err(ContractError::Custom(7))
@@ -376,7 +382,7 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
 
         DaoFunction::Vote => {
-            let mut update: DaoVoteUpdate = deserialize(&ix[1..])?;
+            let update: DaoVoteUpdate = deserialize(&ix[1..])?;
 
             // Perform this code:
             //votes_info.yes_votes_commit += self.yes_vote_commit;
@@ -389,6 +395,12 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
                 &serialize(&update.proposal_bulla),
                 &serialize(&update.proposal_votes),
             )?;
+
+            let dao_vote_nulls_db = db_lookup(cid, DAO_VOTE_NULLS)?;
+
+            for nullifier in update.proposal_votes.vote_nullifiers {
+                db_set(dao_vote_nulls_db, &serialize(&nullifier), &[])?;
+            }
 
             Ok(())
         }
@@ -405,7 +417,7 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
     }
 }
 
-fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
+fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, call): (u32, Vec<ContractCall>) = deserialize(ix)?;
     assert!(call_idx < call.len() as u32);
 

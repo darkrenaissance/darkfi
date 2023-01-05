@@ -98,6 +98,17 @@ impl WalletCache {
     }
 }
 
+#[derive(Clone)]
+pub struct Dao {
+    pub proposer_limit: u64,
+    pub quorum: u64,
+    pub approval_ratio_quot: u64,
+    pub approval_ratio_base: u64,
+    pub gov_token_id: TokenId,
+    pub public_key: PublicKey,
+    pub bulla_blind: pallas::Base,
+}
+
 struct DaoMintRevealed {
     pub bulla: DaoBulla,
 }
