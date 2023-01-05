@@ -138,7 +138,7 @@ async fn integration_test() -> Result<()> {
     //   spend_hook = b"0xdao_ruleset"
     //
     // TODO: this should be the contract/func ID
-    let spend_hook = pallas::Base::from(110);
+    let spend_hook = DAO_CONTRACT_ID.inner();
     // The user_data can be a simple hash of the items passed into the ZK proof
     // up to corresponding linked ZK proof to interpret however they need.
     // In out case, it's the bulla for the DAO
@@ -781,16 +781,6 @@ async fn integration_test() -> Result<()> {
         (leaf_position, merkle_path)
     };
 
-    let input = money_client::BuilderInputInfo {
-        leaf_position: treasury_leaf_position,
-        merkle_path: treasury_merkle_path,
-        secret: dao_th.dao_kp.secret,
-        note: treasury_note,
-        user_data_blind,
-        value_blind: input_value_blind,
-        signature_secret: tx_signature_secret,
-    };
-
     // TODO: this should be the contract/func ID
     //let spend_hook = pallas::Base::from(110);
     let spend_hook = DAO_CONTRACT_ID.inner();
@@ -801,7 +791,15 @@ async fn integration_test() -> Result<()> {
 
     let builder = money_client::Builder {
         clear_inputs: vec![],
-        inputs: vec![input],
+        inputs: vec![money_client::BuilderInputInfo {
+            leaf_position: treasury_leaf_position,
+            merkle_path: treasury_merkle_path,
+            secret: dao_th.dao_kp.secret,
+            note: treasury_note,
+            user_data_blind,
+            value_blind: input_value_blind,
+            signature_secret: tx_signature_secret,
+        }],
         outputs: vec![
             // Sending money
             money_client::BuilderOutputInfo {
@@ -859,9 +857,11 @@ async fn integration_test() -> Result<()> {
     exec_params.encode(&mut data)?;
     let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
-    let calls = vec![xfer_call, exec_call];
-    let proofs = vec![xfer_proofs, exec_proofs];
-    let mut tx = Transaction { calls, proofs, signatures: vec![] };
+    let mut tx = Transaction {
+        calls: vec![xfer_call, exec_call],
+        proofs: vec![xfer_proofs, exec_proofs],
+        signatures: vec![],
+    };
     let xfer_sigs = tx.create_sigs(&mut OsRng, &vec![tx_signature_secret])?;
     let exec_sigs = tx.create_sigs(&mut OsRng, &vec![exec_signature_secret])?;
     tx.signatures = vec![xfer_sigs, exec_sigs];

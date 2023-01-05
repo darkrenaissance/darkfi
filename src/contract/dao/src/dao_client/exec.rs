@@ -181,6 +181,7 @@ impl Builder {
             Witness::Base(Value::known(user_data)),
         ];
 
+        debug!("proposal_bulla: {:?}", proposal_bulla);
         let public_inputs = vec![
             proposal_bulla,
             coin_0,
@@ -197,9 +198,9 @@ impl Builder {
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, exec_zkbin.clone());
-        let input_proof = Proof::create(&exec_pk, &[circuit], &public_inputs, &mut OsRng)
-            .expect("DAO::exec() proving error!)");
-        proofs.push(input_proof);
+        //let input_proof = Proof::create(&exec_pk, &[circuit], &public_inputs, &mut OsRng)
+        //    .expect("DAO::exec() proving error!)");
+        //proofs.push(input_proof);
 
         let params = DaoExecParams {
             proposal: proposal_bulla,

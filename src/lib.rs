@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#![feature(cursor_remaining)]
+//#![feature(cursor_remaining)]
 
 pub mod error;
 pub use error::{ClientFailed, ClientResult, Error, Result, VerifyFailed, VerifyResult};

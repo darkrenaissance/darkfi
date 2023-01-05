@@ -106,10 +106,12 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
                 }
             };
 
-            if !buf_reader.is_empty() {
+            // Disabled until cursor_remaining feature is available on master.
+            // Then enable #![feature(cursor_remaining)] in src/lib.rs
+            /*if !buf_reader.is_empty() {
                 error!(target: "runtime::db::db_init()", "Trailing bytes in argument stream");
                 return DB_DEL_FAILED
-            }
+            }*/
 
             if &cid != contract_id {
                 error!(target: "runtime::db::db_init()", "Unauthorized ContractId for db_init");
@@ -184,10 +186,12 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
                 }
             };
 
-            if !buf_reader.is_empty() {
+            // Disabled until cursor_remaining feature is available on master.
+            // Then enable #![feature(cursor_remaining)] in src/lib.rs
+            /*if !buf_reader.is_empty() {
                 error!(target: "runtime::db::db_lookup()", "Trailing bytes in argument stream");
                 return DB_LOOKUP_FAILED
-            }
+            }*/
 
             let tree_handle = match contracts.lookup(db, &cid, &db_name) {
                 Ok(v) => v,
@@ -262,10 +266,12 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
                 }
             };
 
-            if !buf_reader.is_empty() {
+            // Disabled until cursor_remaining feature is available on master.
+            // Then enable #![feature(cursor_remaining)] in src/lib.rs
+            /*if !buf_reader.is_empty() {
                 error!(target: "runtime::db::db_set()", "Trailing bytes in argument stream");
                 return DB_DEL_FAILED
-            }
+            }*/
 
             let db_handles = env.db_handles.borrow();
             let mut db_batches = env.db_batches.borrow_mut();
@@ -330,10 +336,12 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
                 }
             };
 
-            if !buf_reader.is_empty() {
+            // Disabled until cursor_remaining feature is available on master.
+            // Then enable #![feature(cursor_remaining)] in src/lib.rs
+            /*if !buf_reader.is_empty() {
                 error!(target: "runtime::db::db_del()", "Trailing bytes in argument stream");
                 return DB_DEL_FAILED
-            }
+            }*/
 
             let db_handles = env.db_handles.borrow();
             let mut db_batches = env.db_batches.borrow_mut();
@@ -398,10 +406,12 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
                 }
             };
 
-            if !buf_reader.is_empty() {
+            // Disabled until cursor_remaining feature is available on master.
+            // Then enable #![feature(cursor_remaining)] in src/lib.rs
+            /*if !buf_reader.is_empty() {
                 error!(target: "runtime::db::db_get()", "Trailing bytes in argument stream");
                 return DB_GET_FAILED.into()
-            }
+            }*/
 
             let db_handles = env.db_handles.borrow();
 
@@ -476,10 +486,12 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
                 }
             };
 
-            if !buf_reader.is_empty() {
+            // Disabled until cursor_remaining feature is available on master.
+            // Then enable #![feature(cursor_remaining)] in src/lib.rs
+            /*if !buf_reader.is_empty() {
                 error!(target: "runtime::db::db_contains_key()", "Trailing bytes in argument stream");
                 return DB_CONTAINS_KEY_FAILED
-            }
+            }*/
 
             let db_handles = env.db_handles.borrow();
 

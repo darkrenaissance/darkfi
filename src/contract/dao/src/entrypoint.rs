@@ -557,6 +557,8 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
             let all_votes_coords = params.all_votes_commit.to_affine().coordinates().unwrap();
             let input_value_coords = params.input_value_commit.to_affine().coordinates().unwrap();
 
+            msg!("params.proposal: {:?}", params.proposal);
+            /*
             zk_public_values.push((
                 DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
                 vec![
@@ -569,11 +571,12 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
                     *all_votes_coords.y(),
                     *input_value_coords.x(),
                     *input_value_coords.y(),
-                    DAO_CONTRACT_ID.inner(), // <-- TODO: Should be money contract id?
+                    DAO_CONTRACT_ID.inner(),
                     pallas::Base::zero(),
                     pallas::Base::zero(),
                 ],
             ));
+            */
 
             let mut metadata = vec![];
             zk_public_values.encode(&mut metadata)?;
