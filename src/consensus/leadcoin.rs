@@ -305,16 +305,11 @@ impl LeadCoin {
         ];
         let y_seed_hash = poseidon_hash(y_seed);
         let (y_mu, rho_mu) = Self::election_seeds(current_eta, current_slot);
-        let y_coords = pedersen_commitment_base(y_seed_hash, mod_r_p(y_mu))
-            .to_affine()
-            .coordinates()
-            .unwrap();
-
-        let y_coords = [*y_coords.x(), *y_coords.y()];
-        let y = poseidon_hash(y_coords);
+        let y_msg = [y_seed_hash, y_mu];
+        let y = poseidon_hash(y_msg);
 
         let value = pallas::Base::from(self.value);
-        let target = sigma1 * value + sigma2 * value * value;
+        let target = pallas::Base::one().neg() * (sigma1 * value + sigma2 * value * value);
 
         info!(target: "consensus::leadcoin", "is_leader(): y = {:?}", y);
         info!(target: "consensus::leadcoin", "is_leader(): T = {:?}", target);

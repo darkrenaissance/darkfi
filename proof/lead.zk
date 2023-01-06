@@ -71,6 +71,7 @@ circuit "Lead" {
         seed = poseidon_hash(PREFIX_SEED, c1_sk_root, c1_rho, ZERO);
         # y
         y = poseidon_hash(seed, mu_y);
+        ###
         constrain_instance(mu_y);
         constrain_instance(y);
         # rho
