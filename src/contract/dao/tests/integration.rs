@@ -79,8 +79,8 @@ async fn integration_test() -> Result<()> {
     let dao = dao_client::Dao {
         proposer_limit: 110,
         quorum: 110,
-        approval_ratio_base: 1,
-        approval_ratio_quot: 2,
+        approval_ratio_base: 2,
+        approval_ratio_quot: 1,
         gov_token_id: gdrk_token_id,
         public_key: dao_th.dao_kp.public,
         bulla_blind: pallas::Base::random(&mut OsRng),

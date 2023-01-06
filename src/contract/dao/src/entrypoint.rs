@@ -558,7 +558,6 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
             let input_value_coords = params.input_value_commit.to_affine().coordinates().unwrap();
 
             msg!("params.proposal: {:?}", params.proposal);
-            /*
             zk_public_values.push((
                 DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
                 vec![
@@ -576,7 +575,6 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
                     pallas::Base::zero(),
                 ],
             ));
-            */
 
             let mut metadata = vec![];
             zk_public_values.encode(&mut metadata)?;

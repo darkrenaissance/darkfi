@@ -134,19 +134,7 @@ impl Builder {
         let input_value_commit = pedersen_commitment_u64(self.input_value, self.input_value_blind);
         let input_value_commit_coords = input_value_commit.to_affine().coordinates().unwrap();
 
-        /*
-        let zk_info = zk_bins.lookup(&"dao-exec".to_string()).unwrap();
-        let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
-            info
-        } else {
-            panic!("Not binary info")
-        };
-
-        let zk_bin = zk_info.bincode.clone();
-        */
-
         let prover_witnesses = vec![
-            //
             // proposal params
             Witness::Base(Value::known(proposal_dest_x)),
             Witness::Base(Value::known(proposal_dest_y)),
@@ -198,9 +186,9 @@ impl Builder {
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, exec_zkbin.clone());
-        //let input_proof = Proof::create(&exec_pk, &[circuit], &public_inputs, &mut OsRng)
-        //    .expect("DAO::exec() proving error!)");
-        //proofs.push(input_proof);
+        let input_proof = Proof::create(&exec_pk, &[circuit], &public_inputs, &mut OsRng)
+            .expect("DAO::exec() proving error!)");
+        proofs.push(input_proof);
 
         let params = DaoExecParams {
             proposal: proposal_bulla,
