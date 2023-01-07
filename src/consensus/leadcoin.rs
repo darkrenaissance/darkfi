@@ -42,6 +42,9 @@ use crate::{
     Result,
 };
 
+use std::io::{prelude::*, BufWriter};
+use std::fs::File;
+
 pub const MERKLE_DEPTH_LEADCOIN: usize = 32;
 pub const MERKLE_DEPTH: u8 = 32;
 pub const ZERO: pallas::Base = pallas::Base::zero();
@@ -311,8 +314,15 @@ impl LeadCoin {
         let value = pallas::Base::from(self.value);
         let target = pallas::Base::one().neg() * (sigma1 * value + sigma2 * value * value);
 
-        info!(target: "consensus::leadcoin", "is_leader(): y = {:?}", y);
-        info!(target: "consensus::leadcoin", "is_leader(): T = {:?}", target);
+        let mut y_t_str = format!("{:?},{:?}\n", y,target);
+        let mut f = File::options().append(true).open(constants::LOTTERY_HISTORY_LOG).unwrap();
+        {
+            let mut writer = BufWriter::new(f);
+            writer.write(&y_t_str.into_bytes()).unwrap();
+        }
+        info!("is_leader(): y = {:?}", y);
+        info!("is_leader(): T = {:?}", target);
+
 
         y < target
     }

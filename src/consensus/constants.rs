@@ -40,10 +40,10 @@ lazy_static! {
     pub static ref TESTNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_testnet");
 
     /// Genesis timestamp for the testnet chain
-    pub static ref TESTNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1673039000);
+    pub static ref TESTNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1673115200);
 
     /// Bootstrap timestamp for the testnet chain
-    pub static ref TESTNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1673039000);
+    pub static ref TESTNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1673115200);
 
     /// Total sum of initial staking coins for the testnet chain
     pub static ref TESTNET_INITIAL_DISTRIBUTION: u64 = 1000;
@@ -134,3 +134,4 @@ pub const GENESIS_TOTAL_STAKE: u64 = 1;
 
 pub const LEADER_HISTORY_LOG : &str = "/tmp/lead_history.log";
 pub const F_HISTORY_LOG : &str = "/tmp/f_history.log";
+pub const LOTTERY_HISTORY_LOG : &str = "/tmp/lottery_history.log";

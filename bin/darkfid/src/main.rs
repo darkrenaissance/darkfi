@@ -30,8 +30,9 @@ use darkfi::{
     consensus::{
         constants::{
             MAINNET_BOOTSTRAP_TIMESTAMP, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
-            MAINNET_INITIAL_DISTRIBUTION, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
-            TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
+            MAINNET_INITIAL_DISTRIBUTION, TESTNET_GENESIS_HASH_BYTES,
+            TESTNET_INITIAL_DISTRIBUTION, TESTNET_GENESIS_TIMESTAMP,
+            TESTNET_BOOTSTRAP_TIMESTAMP,
         },
         proto::{ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx},
         task::{block_sync_task, proposal_task},
@@ -48,7 +49,7 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
-    util::path::expand_path,
+    util::{path::expand_path,time::Timestamp},
     wallet::{walletdb::init_wallet, WalletPtr},
     Error, Result,
 };
@@ -299,7 +300,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let sled_db = sled::open(&db_path)?;
 
     // Initialize validator state
-    let (bootstrap_ts, genesis_ts, genesis_data, initial_distribution) = match args.chain.as_str() {
+    let (mut bootstrap_ts, mut genesis_ts, genesis_data, initial_distribution) = match args.chain.as_str() {
         "mainnet" => (
             *MAINNET_BOOTSTRAP_TIMESTAMP,
             *MAINNET_GENESIS_TIMESTAMP,
@@ -309,6 +310,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         "testnet" => (
             *TESTNET_BOOTSTRAP_TIMESTAMP,
             *TESTNET_GENESIS_TIMESTAMP,
+            //Timestamp::current_time(),
+            //Timestamp::current_time(),
             *TESTNET_GENESIS_HASH_BYTES,
             *TESTNET_INITIAL_DISTRIBUTION,
         ),
@@ -317,7 +320,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
             return Err(Error::UnsupportedChain)
         }
     };
-
+    //genesis_ts.add(-9);
+    //bootstrap_ts.add(-9);
     // Parse faucet addresses
     let mut faucet_pubkeys = vec![];
 

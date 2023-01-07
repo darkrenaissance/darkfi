@@ -495,17 +495,23 @@ impl ConsensusState {
         let k1 =  constants::KP.clone() +
             constants::KI.clone() +
             constants::KD.clone();
-        let k2 = constants::FLOAT10_NEG_ONE.clone() * constants::KP.clone() -
-            constants::FLOAT10_NEG_TWO.clone() * constants::KD.clone();
+        let k2 = constants::FLOAT10_NEG_ONE.clone() * constants::KP.clone() + constants::FLOAT10_NEG_TWO.clone() * constants::KD.clone();
         let k3 = constants::KD.clone();
         let f_len = self.f_history.len();
         let err = self.f_dif();
         let err_len = self.err_history.len();
         let ret = self.f_history[f_len-1].clone() +
-            k1 * err.clone() +
-            k2 * self.err_history[err_len-1].clone() +
-            k3 * self.err_history[err_len-2].clone();
-        self.err_history.push(err);
+            k1.clone() * err.clone() +
+            k2.clone() * self.err_history[err_len-1].clone() +
+            k3.clone() * self.err_history[err_len-2].clone();
+        info!("pid::f-1: {:}", self.f_history[f_len-1].clone());
+        info!("pid::err: {:}", err);
+        info!("pid::err-1: {}", self.err_history[err_len-1].clone());
+        info!("pid::err-2: {}", self.err_history[err_len-2].clone());
+        info!("pid::k1: {}", k1.clone());
+        info!("pid::k2: {}", k2.clone());
+        info!("pid::k3: {}", k3.clone());
+        self.err_history.push(err.clone());
         ret
     }
     /// the probability inverse of winnig lottery having all the stake
@@ -514,14 +520,6 @@ impl ConsensusState {
         self.extend_leaders_history();
         //
         let mut f = self.discrete_pid();
-        // log f history
-        let file = File::options().append(true).open(constants::F_HISTORY_LOG).unwrap();
-        {
-            let mut f_history = format!("{:}", f);
-            f_history.push_str(",");
-            let mut writer = BufWriter::new(file);
-            writer.write(&f_history.into_bytes()).unwrap();
-        }
         if f <= constants::FLOAT10_ZERO.clone() {
             f = constants::MIN_F.clone()
         } else if f >= constants::FLOAT10_ONE.clone() {
@@ -535,6 +533,14 @@ impl ConsensusState {
             //&& i == constants::FLOAT10_ZERO.clone()
         {
             f =  f.clone() * constants::DEG_RATE.clone().powf(self.zero_leads_len());
+        }
+        // log f history
+        let file = File::options().append(true).open(constants::F_HISTORY_LOG).unwrap();
+        {
+            let mut f_history = format!("{:}", f);
+            f_history.push_str(",");
+            let mut writer = BufWriter::new(file);
+            writer.write(&f_history.into_bytes()).unwrap();
         }
         self.f_history.push(f.clone());
         f

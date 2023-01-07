@@ -9,6 +9,10 @@ else
 	verbose=""
 fi
 
+touch /tmp/f_history.log
+touch /tmp/lead_history.log
+touch /tmp/lottery_history.log
+
 tmux new-session -d
 tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid0.toml" Enter
 sleep 2
