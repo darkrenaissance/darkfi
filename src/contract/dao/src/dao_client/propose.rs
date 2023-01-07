@@ -24,7 +24,7 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
 use darkfi::{
-    zk::{Proof, ProvingKey, Value, Witness, ZkCircuit},
+    zk::{halo2, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
@@ -96,18 +96,20 @@ impl ProposeCall {
             let leaf_pos: u64 = input.leaf_position.into();
 
             let prover_witnesses = vec![
-                Witness::Base(Value::known(input.secret.inner())),
-                Witness::Base(Value::known(note.serial)),
-                Witness::Base(Value::known(pallas::Base::from(0))),
-                Witness::Base(Value::known(pallas::Base::from(0))),
-                Witness::Base(Value::known(pallas::Base::from(note.value))),
-                Witness::Base(Value::known(note.token_id.inner())),
-                Witness::Base(Value::known(note.coin_blind)),
-                Witness::Scalar(Value::known(funds_blind)),
-                Witness::Base(Value::known(gov_token_blind)),
-                Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
-                Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
-                Witness::Base(Value::known(input.signature_secret.inner())),
+                Witness::Base(halo2::Value::known(input.secret.inner())),
+                Witness::Base(halo2::Value::known(note.serial)),
+                Witness::Base(halo2::Value::known(pallas::Base::from(0))),
+                Witness::Base(halo2::Value::known(pallas::Base::from(0))),
+                Witness::Base(halo2::Value::known(pallas::Base::from(note.value))),
+                Witness::Base(halo2::Value::known(note.token_id.inner())),
+                Witness::Base(halo2::Value::known(note.coin_blind)),
+                Witness::Scalar(halo2::Value::known(funds_blind)),
+                Witness::Base(halo2::Value::known(gov_token_blind)),
+                Witness::Uint32(halo2::Value::known(leaf_pos.try_into().unwrap())),
+                Witness::MerklePath(halo2::Value::known(
+                    input.merkle_path.clone().try_into().unwrap(),
+                )),
+                Witness::Base(halo2::Value::known(input.signature_secret.inner())),
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
@@ -209,28 +211,28 @@ impl ProposeCall {
 
         let prover_witnesses = vec![
             // Proposers total number of gov tokens
-            Witness::Base(Value::known(total_funds)),
-            Witness::Scalar(Value::known(total_funds_blinds)),
+            Witness::Base(halo2::Value::known(total_funds)),
+            Witness::Scalar(halo2::Value::known(total_funds_blinds)),
             // Used for blinding exported gov token ID
-            Witness::Base(Value::known(gov_token_blind)),
+            Witness::Base(halo2::Value::known(gov_token_blind)),
             // proposal params
-            Witness::Base(Value::known(proposal_dest_x)),
-            Witness::Base(Value::known(proposal_dest_y)),
-            Witness::Base(Value::known(proposal_amount)),
-            Witness::Base(Value::known(self.proposal.serial)),
-            Witness::Base(Value::known(self.proposal.token_id.inner())),
-            Witness::Base(Value::known(self.proposal.blind)),
+            Witness::Base(halo2::Value::known(proposal_dest_x)),
+            Witness::Base(halo2::Value::known(proposal_dest_y)),
+            Witness::Base(halo2::Value::known(proposal_amount)),
+            Witness::Base(halo2::Value::known(self.proposal.serial)),
+            Witness::Base(halo2::Value::known(self.proposal.token_id.inner())),
+            Witness::Base(halo2::Value::known(self.proposal.blind)),
             // DAO params
-            Witness::Base(Value::known(dao_proposer_limit)),
-            Witness::Base(Value::known(dao_quorum)),
-            Witness::Base(Value::known(dao_approval_ratio_quot)),
-            Witness::Base(Value::known(dao_approval_ratio_base)),
-            Witness::Base(Value::known(self.dao.gov_token_id.inner())),
-            Witness::Base(Value::known(dao_pub_x)),
-            Witness::Base(Value::known(dao_pub_y)),
-            Witness::Base(Value::known(self.dao.bulla_blind)),
-            Witness::Uint32(Value::known(dao_leaf_position.try_into().unwrap())),
-            Witness::MerklePath(Value::known(self.dao_merkle_path.try_into().unwrap())),
+            Witness::Base(halo2::Value::known(dao_proposer_limit)),
+            Witness::Base(halo2::Value::known(dao_quorum)),
+            Witness::Base(halo2::Value::known(dao_approval_ratio_quot)),
+            Witness::Base(halo2::Value::known(dao_approval_ratio_base)),
+            Witness::Base(halo2::Value::known(self.dao.gov_token_id.inner())),
+            Witness::Base(halo2::Value::known(dao_pub_x)),
+            Witness::Base(halo2::Value::known(dao_pub_y)),
+            Witness::Base(halo2::Value::known(self.dao.bulla_blind)),
+            Witness::Uint32(halo2::Value::known(dao_leaf_position.try_into().unwrap())),
+            Witness::MerklePath(halo2::Value::known(self.dao_merkle_path.try_into().unwrap())),
         ];
         let public_inputs = vec![
             token_commit,

@@ -30,22 +30,23 @@ pub mod gadget;
 pub mod proof;
 pub use proof::{Proof, ProvingKey};
 
-// I thought about putting this in a sub-module called halo2
-pub use halo2_proofs::{
-    arithmetic::Field,
-    circuit::{AssignedCell, Layouter, Value},
-    plonk,
-    plonk::{Advice, Assigned, Column},
-};
+pub mod halo2 {
+    pub use halo2_proofs::{
+        arithmetic::Field,
+        circuit::{AssignedCell, Layouter, Value},
+        plonk,
+        plonk::{Advice, Assigned, Column},
+    };
+}
 
 //pub(in crate::zk) fn assign_free_advice<F: Field, V: Copy>(
-pub fn assign_free_advice<F: Field, V: Copy>(
-    mut layouter: impl Layouter<F>,
-    column: Column<Advice>,
-    value: Value<V>,
-) -> Result<AssignedCell<V, F>, plonk::Error>
+pub fn assign_free_advice<F: halo2::Field, V: Copy>(
+    mut layouter: impl halo2::Layouter<F>,
+    column: halo2::Column<halo2::Advice>,
+    value: halo2::Value<V>,
+) -> Result<halo2::AssignedCell<V, F>, halo2::plonk::Error>
 where
-    for<'v> Assigned<F>: From<&'v V>,
+    for<'v> halo2::Assigned<F>: From<&'v V>,
 {
     layouter.assign_region(
         || "load private",

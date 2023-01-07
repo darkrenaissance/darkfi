@@ -17,7 +17,7 @@
  */
 
 use darkfi::{
-    zk::{Proof, ProvingKey, Value, Witness, ZkCircuit},
+    zk::{halo2, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
@@ -65,14 +65,14 @@ pub fn make_mint_call(
 
     // NOTE: It's important to keep these in the same order as the zkas code.
     let prover_witnesses = vec![
-        Witness::Base(Value::known(dao_proposer_limit)),
-        Witness::Base(Value::known(dao_quorum)),
-        Witness::Base(Value::known(dao_approval_ratio_quot)),
-        Witness::Base(Value::known(dao_approval_ratio_base)),
-        Witness::Base(Value::known(dao.gov_token_id.inner())),
-        Witness::Base(Value::known(pub_x)),
-        Witness::Base(Value::known(pub_y)),
-        Witness::Base(Value::known(dao.bulla_blind)),
+        Witness::Base(halo2::Value::known(dao_proposer_limit)),
+        Witness::Base(halo2::Value::known(dao_quorum)),
+        Witness::Base(halo2::Value::known(dao_approval_ratio_quot)),
+        Witness::Base(halo2::Value::known(dao_approval_ratio_base)),
+        Witness::Base(halo2::Value::known(dao.gov_token_id.inner())),
+        Witness::Base(halo2::Value::known(pub_x)),
+        Witness::Base(halo2::Value::known(pub_y)),
+        Witness::Base(halo2::Value::known(dao.bulla_blind)),
     ];
 
     let public = vec![dao_bulla];
