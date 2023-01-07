@@ -27,32 +27,18 @@
 
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use darkfi::{
-    consensus::leadcoin::LeadCoin,
-    zk::{
-        proof::{Proof, ProvingKey},
-        vm::ZkCircuit,
-        vm_stack::Witness,
-    },
+    consensus::LeadCoin,
+    zk::{Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     ClientFailed, Error, Result,
 };
-use darkfi_sdk::{
-    crypto::{
-        constants::MERKLE_DEPTH,
-        diffie_hellman::{kdf_sapling, sapling_ka_agree},
-        pedersen::{pedersen_commitment_base, pedersen_commitment_u64, ValueBlind, ValueCommit},
-        poseidon_hash, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey, TokenId,
-    },
-    incrementalmerkletree,
-    incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree},
-    pasta::{
-        arithmetic::CurveAffine,
-        group::{
-            ff::{Field, PrimeField},
-            Curve,
-        },
-        pallas,
-    },
+use darkfi_sdk::crypto::{
+    diffie_hellman::{kdf_sapling, sapling_ka_agree},
+    merkle_prelude::*,
+    pallas,
+    pasta_prelude::*,
+    pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode,
+    MerklePosition, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId, ValueBlind, ValueCommit,
 };
 use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use halo2_proofs::circuit::Value;
@@ -136,7 +122,7 @@ pub struct OwnCoin {
     /// Coin's nullifier,
     pub nullifier: Nullifier,
     /// Coin's leaf position in the Merkle tree of coins
-    pub leaf_position: incrementalmerkletree::Position,
+    pub leaf_position: MerklePosition,
 }
 
 /// The `Note` holds the inner attributes of a `Coin`
@@ -227,7 +213,7 @@ struct TransactionBuilderClearInputInfo {
 }
 
 struct TransactionBuilderInputInfo {
-    pub leaf_position: incrementalmerkletree::Position,
+    pub leaf_position: MerklePosition,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
     pub note: Note,
@@ -262,7 +248,7 @@ impl TransferBurnRevealed {
         user_data_blind: pallas::Base,
         coin_blind: pallas::Base,
         secret_key: SecretKey,
-        leaf_position: incrementalmerkletree::Position,
+        leaf_position: MerklePosition,
         merkle_path: Vec<MerkleNode>,
         signature_secret: SecretKey,
     ) -> Self {
@@ -450,7 +436,7 @@ pub fn create_transfer_burn_proof(
     user_data_blind: pallas::Base,
     coin_blind: pallas::Base,
     secret_key: SecretKey,
-    leaf_position: incrementalmerkletree::Position,
+    leaf_position: MerklePosition,
     merkle_path: Vec<MerkleNode>,
     signature_secret: SecretKey,
 ) -> Result<(Proof, TransferBurnRevealed)> {
@@ -602,12 +588,12 @@ fn create_unstake_burn_proof(
     public_key: pallas::Base,
     sk: pallas::Base,
     sk_root: pallas::Base,
-    sk_pos: incrementalmerkletree::Position,
+    sk_pos: MerklePosition,
     sk_path: Vec<MerkleNode>,
     commitment_merkle_path: Vec<MerkleNode>,
     commitment: pallas::Point,
     commitment_root: pallas::Base,
-    commitment_pos: incrementalmerkletree::Position,
+    commitment_pos: MerklePosition,
     slot: u64,
     nonce: pallas::Base,
     nullifier: pallas::Base,
@@ -665,7 +651,7 @@ pub fn build_half_swap_tx(
     value_blinds: &[ValueBlind],
     token_blinds: &[ValueBlind],
     coins: &[OwnCoin],
-    tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    tree: &MerkleTree,
     mint_zkbin: &ZkBinary,
     mint_pk: &ProvingKey,
     burn_zkbin: &ZkBinary,
@@ -856,7 +842,7 @@ pub fn build_transfer_tx(
     value: u64,
     token_id: TokenId,
     coins: &[OwnCoin],
-    tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    tree: &MerkleTree,
     mint_zkbin: &ZkBinary,
     mint_pk: &ProvingKey,
     burn_zkbin: &ZkBinary,
@@ -1070,9 +1056,9 @@ pub fn build_transfer_tx(
 pub fn build_stake_tx(
     //pubkey: &PublicKey,
     coins: &[OwnCoin],
-    tx_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
-    cm_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
-    sk_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    tx_tree: &mut MerkleTree,
+    cm_tree: &mut MerkleTree,
+    sk_tree: &mut MerkleTree,
     mint_zkbin: &ZkBinary,
     mint_pk: &ProvingKey,
     burn_zkbin: &ZkBinary,
@@ -1204,12 +1190,12 @@ pub fn build_unstake_tx(
             pk,
             coin.coin1_sk,
             coin.coin1_sk_root.inner(),
-            incrementalmerkletree::Position::from(coin.coin1_sk_pos as usize),
+            MerklePosition::from(coin.coin1_sk_pos as usize),
             coin.coin1_sk_merkle_path.to_vec(),
             coin.coin1_commitment_merkle_path.to_vec(),
             coin.coin1_commitment,
             coin.coin1_commitment_root.inner(),
-            incrementalmerkletree::Position::from(coin.coin1_commitment_pos as usize),
+            MerklePosition::from(coin.coin1_commitment_pos as usize),
             coin.slot,
             coin.nonce,
             nullifier,

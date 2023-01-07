@@ -16,20 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{coin::Coin, constants::MERKLE_DEPTH, MerkleNode, SecretKey},
-    incrementalmerkletree,
-    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
+use darkfi_sdk::crypto::{
+    merkle_prelude::*, Coin, MerkleNode, MerklePosition, MerkleTree, SecretKey,
 };
 
 use darkfi_money_contract::client::{EncryptedNote, Note};
 
-pub type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
-
 pub struct OwnCoin {
     pub coin: Coin,
     pub note: Note,
-    pub leaf_position: incrementalmerkletree::Position,
+    pub leaf_position: MerklePosition,
 }
 
 pub struct WalletCache {

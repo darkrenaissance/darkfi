@@ -16,12 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{
-        pedersen::{ValueBlind, ValueCommit},
-        Coin, MerkleNode, Nullifier, PublicKey, TokenId,
-    },
-    pasta::pallas,
+use darkfi_sdk::crypto::{
+    pallas, Coin, MerkleNode, Nullifier, PublicKey, TokenId, ValueBlind, ValueCommit,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 

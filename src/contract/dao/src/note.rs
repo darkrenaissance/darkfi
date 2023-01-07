@@ -17,10 +17,7 @@
  */
 
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
-use darkfi_sdk::crypto::{
-    diffie_hellman::{kdf_sapling, sapling_ka_agree},
-    PublicKey, SecretKey,
-};
+use darkfi_sdk::crypto::{diffie_hellman, PublicKey, SecretKey};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
@@ -31,8 +28,8 @@ pub const AEAD_TAG_SIZE: usize = 16;
 pub fn encrypt<T: Encodable>(note: &T, public: &PublicKey) -> Result<EncryptedNote2> {
     let ephem_secret = SecretKey::random(&mut OsRng);
     let ephem_public = PublicKey::from_secret(ephem_secret);
-    let shared_secret = sapling_ka_agree(&ephem_secret, public);
-    let key = kdf_sapling(&shared_secret, &ephem_public);
+    let shared_secret = diffie_hellman::sapling_ka_agree(&ephem_secret, public);
+    let key = diffie_hellman::kdf_sapling(&shared_secret, &ephem_public);
 
     let mut input = Vec::new();
     note.encode(&mut input)?;
@@ -56,8 +53,8 @@ pub struct EncryptedNote2 {
 
 impl EncryptedNote2 {
     pub fn decrypt<T: Decodable>(&self, secret: &SecretKey) -> Result<T> {
-        let shared_secret = sapling_ka_agree(secret, &self.ephem_public);
-        let key = kdf_sapling(&shared_secret, &self.ephem_public);
+        let shared_secret = diffie_hellman::sapling_ka_agree(secret, &self.ephem_public);
+        let key = diffie_hellman::kdf_sapling(&shared_secret, &self.ephem_public);
 
         let ciphertext_len = self.ciphertext.len();
         let mut plaintext = vec![0_u8; ciphertext_len];

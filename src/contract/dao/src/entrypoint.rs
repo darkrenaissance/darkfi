@@ -20,22 +20,14 @@ use std::io::Cursor;
 
 use darkfi_sdk::{
     crypto::{
-        contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
-        ContractId, MerkleNode, MerkleTree, PublicKey,
+        pallas, pasta_prelude::*, ContractId, MerkleNode, MerkleTree, PublicKey, DAO_CONTRACT_ID,
+        MONEY_CONTRACT_ID,
     },
     db::{
         db_contains_key, db_del, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME,
     },
     error::{ContractError, ContractResult},
-    merkle::merkle_add,
-    msg,
-    pasta::{
-        arithmetic::CurveAffine,
-        group::{Curve, Group},
-        pallas,
-    },
-    tx::ContractCall,
-    util::set_return_data,
+    merkle_add, msg, set_return_data, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
 
@@ -242,7 +234,6 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let mut proposal_votes: ProposalVotes = deserialize(&proposal_votes)?;
 
             // Check the Merkle roots and nullifiers for the input coins are valid
-            // TODO: vote_nullifiers is useless
             let money_roots_db = db_lookup(money_cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
             let money_nullifier_db = db_lookup(money_cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
             let dao_vote_nulls_db = db_lookup(cid, DAO_VOTE_NULLS)?;

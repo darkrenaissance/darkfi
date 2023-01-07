@@ -16,28 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{
-        pedersen::pedersen_commitment_u64, poseidon_hash, MerkleNode, PublicKey, SecretKey, TokenId,
-    },
-    incrementalmerkletree,
-    incrementalmerkletree::Hashable,
-    pasta::{
-        arithmetic::CurveAffine,
-        group::{ff::Field, Curve},
-        pallas,
-    },
+use darkfi_sdk::crypto::{
+    merkle_prelude::*, pallas, pasta_prelude::*, pedersen::pedersen_commitment_u64, poseidon_hash,
+    MerkleNode, MerklePosition, PublicKey, SecretKey, TokenId,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use halo2_proofs::circuit::Value;
 use rand::rngs::OsRng;
 
 use darkfi::{
-    zk::{
-        proof::{Proof, ProvingKey},
-        vm::ZkCircuit,
-        vm_stack::Witness,
-    },
+    zk::{Proof, ProvingKey, Value, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
@@ -58,7 +45,7 @@ pub struct ProposalStakeInput {
     pub secret: SecretKey,
     //pub note: money::transfer::wallet::Note,
     pub note: darkfi_money_contract::client::Note,
-    pub leaf_position: incrementalmerkletree::Position,
+    pub leaf_position: MerklePosition,
     pub merkle_path: Vec<MerkleNode>,
     pub signature_secret: SecretKey,
 }
@@ -76,7 +63,7 @@ pub struct ProposeCall {
     pub inputs: Vec<ProposalStakeInput>,
     pub proposal: Proposal,
     pub dao: Dao,
-    pub dao_leaf_position: incrementalmerkletree::Position,
+    pub dao_leaf_position: MerklePosition,
     pub dao_merkle_path: Vec<MerkleNode>,
     pub dao_merkle_root: MerkleNode,
 }

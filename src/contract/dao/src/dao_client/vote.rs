@@ -16,30 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{
-        keypair::Keypair, pedersen::pedersen_commitment_u64, poseidon_hash, MerkleNode, Nullifier,
-        PublicKey, SecretKey,
-    },
-    incrementalmerkletree,
-    incrementalmerkletree::Hashable,
-    pasta::{
-        arithmetic::CurveAffine,
-        group::{ff::Field, Curve},
-        pallas,
-    },
+use darkfi_sdk::crypto::{
+    merkle_prelude::*, pallas, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair,
+    MerkleNode, MerklePosition, Nullifier, PublicKey, SecretKey,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use halo2_proofs::circuit::Value;
 use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
-    zk::{
-        proof::{Proof, ProvingKey},
-        vm::ZkCircuit,
-        vm_stack::Witness,
-    },
+    zk::{Proof, ProvingKey, Value, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
@@ -67,7 +53,7 @@ pub struct BuilderInput {
     pub secret: SecretKey,
     //pub note: money::transfer::wallet::Note,
     pub note: darkfi_money_contract::client::Note,
-    pub leaf_position: incrementalmerkletree::Position,
+    pub leaf_position: MerklePosition,
     pub merkle_path: Vec<MerkleNode>,
     pub signature_secret: SecretKey,
 }
@@ -106,17 +92,6 @@ impl Builder {
             vote_value_blind += value_blind;
 
             let signature_public = PublicKey::from_secret(input.signature_secret);
-
-            /*
-            let zk_info = zk_bins.lookup(&"dao-vote-burn".to_string()).unwrap();
-
-            let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
-                info
-            } else {
-                panic!("Not binary info")
-            };
-            let zk_bin = zk_info.bincode.clone();
-            */
 
             // Note from the previous output
             let note = input.note;
@@ -245,16 +220,6 @@ impl Builder {
 
         let all_vote_commit = pedersen_commitment_u64(vote_value, vote_value_blind);
         let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
-
-        /*
-        let zk_info = zk_bins.lookup(&"dao-vote-main".to_string()).unwrap();
-        let zk_info = if let ZkContractInfo::Binary(info) = zk_info {
-            info
-        } else {
-            panic!("Not binary info")
-        };
-        let zk_bin = zk_info.bincode.clone();
-        */
 
         let prover_witnesses = vec![
             // proposal params

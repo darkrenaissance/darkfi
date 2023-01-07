@@ -17,14 +17,12 @@
  */
 
 use darkfi::{
-    zk::proof::{Proof, ProvingKey},
+    zk::{Proof, ProvingKey},
     zkas::ZkBinary,
     Result,
 };
-use darkfi_sdk::{
-    crypto::{pedersen::ValueBlind, MerkleNode, PublicKey, SecretKey, TokenId},
-    incrementalmerkletree,
-    pasta::{group::ff::Field, pallas},
+use darkfi_sdk::crypto::{
+    pallas, pasta_prelude::*, MerkleNode, MerklePosition, PublicKey, SecretKey, TokenId, ValueBlind,
 };
 
 use rand::rngs::OsRng;
@@ -33,42 +31,6 @@ use darkfi_money_contract::{
     client::{create_transfer_burn_proof, create_transfer_mint_proof, Note},
     state::{ClearInput, Input, MoneyTransferParams, Output},
 };
-
-/*
-use darkfi::{
-    crypto::{
-        burn_proof::create_burn_proof,
-        mint_proof::create_mint_proof,
-        types::{
-            DrkCoinBlind, DrkSerial, DrkSpendHook, DrkUserData, DrkUserDataBlind, DrkValueBlind,
-        },
-    },
-    Result,
-};
-
-use crate::{
-    contract::money::{
-        transfer::validate::{CallData, ClearInput, Input, Output},
-        CONTRACT_ID,
-    },
-    note,
-    util::{FuncCall, ZkContractInfo, ZkContractTable},
-};
-*/
-
-/*
-#[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct Note {
-    pub serial: DrkSerial,
-    pub value: u64,
-    pub token_id: TokenId,
-    pub spend_hook: DrkSpendHook,
-    pub user_data: DrkUserData,
-    pub coin_blind: DrkCoinBlind,
-    pub value_blind: DrkValueBlind,
-    pub token_blind: DrkValueBlind,
-}
-*/
 
 pub struct Builder {
     pub clear_inputs: Vec<BuilderClearInputInfo>,
@@ -83,7 +45,7 @@ pub struct BuilderClearInputInfo {
 }
 
 pub struct BuilderInputInfo {
-    pub leaf_position: incrementalmerkletree::Position,
+    pub leaf_position: MerklePosition,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
     pub note: Note,

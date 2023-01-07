@@ -19,27 +19,21 @@ use std::collections::HashMap;
 
 use darkfi::{
     consensus::{
-        constants::{
-            TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
-            TESTNET_INITIAL_DISTRIBUTION,
-        },
-        ValidatorState, ValidatorStatePtr,
+        ValidatorState, ValidatorStatePtr, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
+        TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
     },
     tx::Transaction,
     wallet::WalletDb,
-    zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
 use darkfi_sdk::{
     crypto::{
-        constants::MERKLE_DEPTH, contract_id::MONEY_CONTRACT_ID, ContractId, Keypair, MerkleNode,
-        PublicKey, TokenId,
+        pasta_prelude::*, ContractId, Keypair, MerkleTree, PublicKey, TokenId, MONEY_CONTRACT_ID,
     },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
-    incrementalmerkletree::bridgetree::BridgeTree,
-    pasta::group::ff::PrimeField,
-    tx::ContractCall,
+    ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
 use log::{info, warn};
@@ -83,10 +77,10 @@ pub struct MoneyTestHarness {
     pub burn_zkbin: ZkBinary,
     pub mint_pk: ProvingKey,
     pub burn_pk: ProvingKey,
-    pub faucet_merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
-    pub alice_merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
-    pub bob_merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
-    pub charlie_merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    pub faucet_merkle_tree: MerkleTree,
+    pub alice_merkle_tree: MerkleTree,
+    pub bob_merkle_tree: MerkleTree,
+    pub charlie_merkle_tree: MerkleTree,
 }
 
 impl MoneyTestHarness {
@@ -185,10 +179,10 @@ impl MoneyTestHarness {
         ];
         proving_keys.insert(money_contract_id.inner().to_repr(), pks);
 
-        let faucet_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
-        let alice_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
-        let bob_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
-        let charlie_merkle_tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        let faucet_merkle_tree = MerkleTree::new(100);
+        let alice_merkle_tree = MerkleTree::new(100);
+        let bob_merkle_tree = MerkleTree::new(100);
+        let charlie_merkle_tree = MerkleTree::new(100);
 
         Ok(Self {
             faucet_kp,

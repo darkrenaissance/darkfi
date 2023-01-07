@@ -18,16 +18,20 @@
 
 /// Halo2 zkas virtual machine
 pub mod vm;
+pub use vm::ZkCircuit;
+
 pub mod vm_stack;
+pub use vm_stack::{empty_witnesses, Witness};
 
 /// ZK gadget implementations
 pub mod gadget;
 
 /// Proof creation API
 pub mod proof;
-pub use proof::Proof;
+pub use proof::{Proof, ProvingKey};
 
-use halo2_proofs::{
+// I thought about putting this in a sub-module called halo2
+pub use halo2_proofs::{
     arithmetic::Field,
     circuit::{AssignedCell, Layouter, Value},
     plonk,

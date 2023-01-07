@@ -22,6 +22,10 @@ pub use block::{Block, BlockInfo, BlockProposal, Header};
 
 /// Constants
 pub mod constants;
+pub use constants::{
+    TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
+    TESTNET_INITIAL_DISTRIBUTION,
+};
 
 /// Consensus block leader information
 pub mod lead_info;
@@ -47,6 +51,7 @@ pub use clock::{Clock, Ticks};
 
 /// Consensus participation coin functions and definitions
 pub mod leadcoin;
+pub use leadcoin::LeadCoin;
 
 /// Utility types
 pub mod types;

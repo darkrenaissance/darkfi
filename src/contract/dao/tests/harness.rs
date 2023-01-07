@@ -19,24 +19,17 @@ use std::collections::HashMap;
 
 use darkfi::{
     consensus::{
-        constants::{
-            TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP,
-            TESTNET_INITIAL_DISTRIBUTION,
-        },
-        ValidatorState, ValidatorStatePtr,
+        ValidatorState, ValidatorStatePtr, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
+        TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
     },
     wallet::WalletDb,
-    zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
 use darkfi_sdk::{
-    crypto::{
-        contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
-        ContractId, Keypair,
-    },
+    crypto::{pasta_prelude::*, ContractId, Keypair, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
     db::SMART_CONTRACT_ZKAS_DB_NAME,
-    pasta::group::ff::PrimeField,
 };
 use darkfi_serial::serialize;
 use log::{info, warn};

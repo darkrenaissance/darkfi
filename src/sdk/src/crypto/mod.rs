@@ -47,15 +47,20 @@ pub use coin::Coin;
 
 /// Contract ID definitions and methods
 pub mod contract_id;
-pub use contract_id::ContractId;
+pub use contract_id::{ContractId, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
 
 /// Token ID definitions and methods
 pub mod token_id;
-pub use token_id::TokenId;
+pub use token_id::{TokenId, DARK_TOKEN_ID};
 
 /// Merkle node definitions
 pub mod merkle_node;
 pub use merkle_node::{MerkleNode, MerkleTree};
+
+pub mod merkle_prelude {
+    pub use incrementalmerkletree::{Hashable, Tree};
+}
+pub use incrementalmerkletree::Position as MerklePosition;
 
 /// Nullifier definitions
 pub mod nullifier;
@@ -63,9 +68,24 @@ pub use nullifier::Nullifier;
 
 /// Pedersen commitment utilities
 pub mod pedersen;
+pub use pedersen::{pedersen_commitment_base, pedersen_commitment_u64, ValueBlind, ValueCommit};
 
 /// Schnorr signature traits
 pub mod schnorr;
 
 /// MiMC VDF
 pub mod mimc_vdf;
+
+pub use incrementalmerkletree;
+pub use pasta_curves::{pallas, vesta};
+/// Convenience module to import all the pasta traits.
+/// You still have to import the curves.
+pub mod pasta_prelude {
+    pub use pasta_curves::{
+        arithmetic::CurveAffine,
+        group::{
+            ff::{Field, PrimeField},
+            Curve, Group,
+        },
+    };
+}

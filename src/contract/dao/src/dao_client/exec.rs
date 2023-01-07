@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{pedersen::pedersen_commitment_u64, poseidon_hash, SecretKey},
-    pasta::{arithmetic::CurveAffine, group::Curve, pallas},
+use darkfi_sdk::crypto::{
+    pallas, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, SecretKey,
 };
 
 use halo2_proofs::circuit::Value;
@@ -26,11 +25,7 @@ use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
-    zk::{
-        proof::{Proof, ProvingKey},
-        vm::ZkCircuit,
-        vm_stack::Witness,
-    },
+    zk::{Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };

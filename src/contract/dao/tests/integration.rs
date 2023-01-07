@@ -19,19 +19,10 @@
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
-        coin::Coin,
-        contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
-        keypair::Keypair,
-        pedersen::pedersen_commitment_u64,
-        poseidon_hash, MerkleNode, SecretKey, TokenId,
+        merkle_prelude::*, pallas, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Coin,
+        Keypair, MerkleNode, MerkleTree, SecretKey, TokenId, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
-    incrementalmerkletree::Tree,
-    pasta::{
-        arithmetic::CurveAffine,
-        group::{ff::Field, Curve, Group},
-        pallas,
-    },
-    tx::ContractCall,
+    ContractCall,
 };
 use darkfi_serial::{Decodable, Encodable};
 use log::debug;
@@ -41,7 +32,7 @@ use darkfi_dao_contract::{
     dao_client,
     dao_client::{exec as dao_exec_client, propose as dao_propose_client, vote as dao_vote_client},
     money_client, note,
-    wallet_cache::{MerkleTree, WalletCache},
+    wallet_cache::WalletCache,
     DaoFunction,
 };
 

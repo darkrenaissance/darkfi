@@ -19,21 +19,13 @@
 #[cfg(not(feature = "no-entrypoint"))]
 use darkfi_sdk::{
     crypto::{
-        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-        token_id::DARK_TOKEN_ID,
-        Coin, ContractId, MerkleNode, MerkleTree, PublicKey,
+        pallas, pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, Coin,
+        ContractId, MerkleNode, MerkleTree, PublicKey, DARK_TOKEN_ID,
     },
     db::{db_contains_key, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME},
     error::ContractResult,
     merkle::merkle_add,
-    msg,
-    pasta::{
-        arithmetic::CurveAffine,
-        group::{Curve, Group},
-        pallas,
-    },
-    tx::ContractCall,
-    util::set_return_data,
+    msg, set_return_data, ContractCall,
 };
 
 use darkfi_sdk::error::ContractError;

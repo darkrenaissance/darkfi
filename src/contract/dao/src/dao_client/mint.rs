@@ -17,15 +17,11 @@
  */
 
 use darkfi::{
-    zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::Witness, Proof},
+    zk::{Proof, ProvingKey, Value, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
-use darkfi_sdk::{
-    crypto::{poseidon_hash, PublicKey, TokenId},
-    pasta::pallas,
-};
-use halo2_proofs::circuit::Value;
+use darkfi_sdk::crypto::{pallas, poseidon_hash, PublicKey, TokenId};
 use log::debug;
 use rand::rngs::OsRng;
 

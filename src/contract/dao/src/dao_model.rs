@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{MerkleNode, Nullifier, PublicKey},
-    pasta::{group::Group, pallas},
-};
+use darkfi_sdk::crypto::{pallas, pasta_prelude::*, MerkleNode, Nullifier, PublicKey};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 #[derive(SerialEncodable, SerialDecodable)]

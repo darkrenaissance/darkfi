@@ -29,10 +29,10 @@
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
-    crypto::{poseidon_hash, MerkleNode, Nullifier, TokenId},
-    incrementalmerkletree::Tree,
-    pasta::{group::ff::Field, pallas},
-    tx::ContractCall,
+    crypto::{
+        merkle_prelude::*, pallas, pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier, TokenId,
+    },
+    ContractCall,
 };
 use darkfi_serial::Encodable;
 use log::info;
