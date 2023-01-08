@@ -539,7 +539,6 @@ async fn integration_test() -> Result<()> {
     // TODO: look into verifiable encryption for notes
     // TODO: look into timelock puzzle as a possibility
     let vote_note_1 = {
-        // TODO: EncryptedNote should be accessible by wasm and put in the structs directly
         let enc_note = note::EncryptedNote2 {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
@@ -607,7 +606,6 @@ async fn integration_test() -> Result<()> {
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
 
     let vote_note_2 = {
-        // TODO: EncryptedNote should be accessible by wasm and put in the structs directly
         let enc_note = note::EncryptedNote2 {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
@@ -678,7 +676,6 @@ async fn integration_test() -> Result<()> {
     // TODO: look into verifiable encryption for notes
     // TODO: look into timelock puzzle as a possibility
     let vote_note_3 = {
-        // TODO: EncryptedNote should be accessible by wasm and put in the structs directly
         let enc_note = note::EncryptedNote2 {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
