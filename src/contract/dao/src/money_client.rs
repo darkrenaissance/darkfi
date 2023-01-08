@@ -32,19 +32,19 @@ use darkfi_money_contract::{
     state::{ClearInput, Input, MoneyTransferParams, Output},
 };
 
-pub struct Builder {
-    pub clear_inputs: Vec<BuilderClearInputInfo>,
-    pub inputs: Vec<BuilderInputInfo>,
-    pub outputs: Vec<BuilderOutputInfo>,
+pub struct TransferCall {
+    pub clear_inputs: Vec<TransferClearInput>,
+    pub inputs: Vec<TransferInput>,
+    pub outputs: Vec<TransferOutput>,
 }
 
-pub struct BuilderClearInputInfo {
+pub struct TransferClearInput {
     pub value: u64,
     pub token_id: TokenId,
     pub signature_secret: SecretKey,
 }
 
-pub struct BuilderInputInfo {
+pub struct TransferInput {
     pub leaf_position: MerklePosition,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
@@ -54,7 +54,7 @@ pub struct BuilderInputInfo {
     pub signature_secret: SecretKey,
 }
 
-pub struct BuilderOutputInfo {
+pub struct TransferOutput {
     pub value: u64,
     pub token_id: TokenId,
     pub public: PublicKey,
@@ -64,7 +64,7 @@ pub struct BuilderOutputInfo {
     pub user_data: pallas::Base,
 }
 
-impl Builder {
+impl TransferCall {
     fn compute_remainder_blind(
         clear_inputs: &[ClearInput],
         input_blinds: &[ValueBlind],
@@ -87,7 +87,7 @@ impl Builder {
         total
     }
 
-    pub fn build(
+    pub fn make(
         self,
         mint_zkbin: &ZkBinary,
         mint_pk: &ProvingKey,

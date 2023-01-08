@@ -94,7 +94,7 @@ pub struct DaoProposeUpdate {
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct VoteInput {
+pub struct VoteCallInput {
     pub nullifier: Nullifier,
     pub vote_commit: pallas::Point,
     pub merkle_root: MerkleNode,
@@ -108,7 +108,7 @@ pub struct DaoVoteParams {
     pub yes_vote_commit: pallas::Point,
     pub ciphertext: Vec<u8>,
     pub ephem_public: PublicKey,
-    pub inputs: Vec<VoteInput>,
+    pub inputs: Vec<VoteCallInput>,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]

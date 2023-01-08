@@ -28,7 +28,7 @@ use rand::rngs::OsRng;
 use crate::dao_model::DaoMintParams;
 
 #[derive(Clone)]
-pub struct Dao {
+pub struct DaoInfo {
     pub proposer_limit: u64,
     pub quorum: u64,
     pub approval_ratio_quot: u64,
@@ -39,7 +39,7 @@ pub struct Dao {
 }
 
 pub fn make_mint_call(
-    dao: &Dao,
+    dao: &DaoInfo,
     dao_mint_zkbin: &ZkBinary,
     dao_mint_pk: &ProvingKey,
 ) -> Result<(DaoMintParams, Vec<Proof>)> {

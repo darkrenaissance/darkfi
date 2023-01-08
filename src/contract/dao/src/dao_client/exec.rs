@@ -30,12 +30,12 @@ use darkfi::{
     Result,
 };
 
-use super::{propose::Proposal, Dao};
+use super::{DaoInfo, ProposalInfo};
 use crate::dao_model::DaoExecParams;
 
-pub struct Builder {
-    pub proposal: Proposal,
-    pub dao: Dao,
+pub struct ExecCall {
+    pub proposal: ProposalInfo,
+    pub dao: DaoInfo,
     pub yes_votes_value: u64,
     pub all_votes_value: u64,
     pub yes_votes_blind: pallas::Scalar,
@@ -50,8 +50,8 @@ pub struct Builder {
     pub signature_secret: SecretKey,
 }
 
-impl Builder {
-    pub fn build(
+impl ExecCall {
+    pub fn make(
         self,
         exec_zkbin: &ZkBinary,
         exec_pk: &ProvingKey,

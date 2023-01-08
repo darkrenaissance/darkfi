@@ -30,26 +30,26 @@ use darkfi::{
     Result,
 };
 
-use super::{propose::Proposal, Dao};
+use super::{DaoInfo, ProposalInfo};
 use crate::{
-    dao_model::{DaoVoteParams, VoteInput},
+    dao_model::{DaoVoteParams, VoteCallInput},
     note,
 };
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct Note {
-    pub vote: Vote,
+pub struct VoteNote {
+    pub vote: VoteInfo,
     pub vote_value: u64,
     pub vote_value_blind: pallas::Scalar,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct Vote {
+pub struct VoteInfo {
     pub vote_option: bool,
     pub vote_option_blind: pallas::Scalar,
 }
 
-pub struct BuilderInput {
+pub struct VoteInput {
     pub secret: SecretKey,
     //pub note: money::transfer::wallet::Note,
     pub note: darkfi_money_contract::client::Note,
@@ -60,16 +60,16 @@ pub struct BuilderInput {
 
 // TODO: should be token locking voting?
 // Inside ZKproof, check proposal is correct.
-pub struct Builder {
-    pub inputs: Vec<BuilderInput>,
-    pub vote: Vote,
+pub struct VoteCall {
+    pub inputs: Vec<VoteInput>,
+    pub vote: VoteInfo,
     pub vote_keypair: Keypair,
-    pub proposal: Proposal,
-    pub dao: Dao,
+    pub proposal: ProposalInfo,
+    pub dao: DaoInfo,
 }
 
-impl Builder {
-    pub fn build(
+impl VoteCall {
+    pub fn make(
         self,
         burn_zkbin: &ZkBinary,
         burn_pk: &ProvingKey,
@@ -168,7 +168,7 @@ impl Builder {
                 .expect("DAO::vote() proving error!");
             proofs.push(input_proof);
 
-            let input = VoteInput {
+            let input = VoteCallInput {
                 nullifier: Nullifier::from(nullifier),
                 vote_commit,
                 merkle_root,
@@ -267,7 +267,7 @@ impl Builder {
             .expect("DAO::vote() proving error!");
         proofs.push(main_proof);
 
-        let note = Note { vote: self.vote, vote_value, vote_value_blind };
+        let note = VoteNote { vote: self.vote, vote_value, vote_value_blind };
         let enc_note = note::encrypt(&note, &self.vote_keypair.public).unwrap();
 
         let params = DaoVoteParams {

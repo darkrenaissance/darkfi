@@ -34,14 +34,23 @@ use crate::{
     note,
 };
 
-use super::Dao;
+use super::DaoInfo;
 
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct Note {
-    pub proposal: Proposal,
+#[derive(SerialEncodable, SerialDecodable, Clone)]
+pub struct ProposalInfo {
+    pub dest: PublicKey,
+    pub amount: u64,
+    pub serial: pallas::Base,
+    pub token_id: TokenId,
+    pub blind: pallas::Base,
 }
 
-pub struct ProposalStakeInput {
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct ProposeNote {
+    pub proposal: ProposalInfo,
+}
+
+pub struct ProposeStakeInput {
     pub secret: SecretKey,
     //pub note: money::transfer::wallet::Note,
     pub note: darkfi_money_contract::client::Note,
@@ -50,19 +59,10 @@ pub struct ProposalStakeInput {
     pub signature_secret: SecretKey,
 }
 
-#[derive(SerialEncodable, SerialDecodable, Clone)]
-pub struct Proposal {
-    pub dest: PublicKey,
-    pub amount: u64,
-    pub serial: pallas::Base,
-    pub token_id: TokenId,
-    pub blind: pallas::Base,
-}
-
 pub struct ProposeCall {
-    pub inputs: Vec<ProposalStakeInput>,
-    pub proposal: Proposal,
-    pub dao: Dao,
+    pub inputs: Vec<ProposeStakeInput>,
+    pub proposal: ProposalInfo,
+    pub dao: DaoInfo,
     pub dao_leaf_position: MerklePosition,
     pub dao_merkle_path: Vec<MerkleNode>,
     pub dao_merkle_root: MerkleNode,
@@ -247,7 +247,7 @@ impl ProposeCall {
             .expect("DAO::propose() proving error!");
         proofs.push(main_proof);
 
-        let note = Note { proposal: self.proposal };
+        let note = ProposeNote { proposal: self.proposal };
         let enc_note = note::encrypt(&note, &self.dao.public_key).unwrap();
         let params = DaoProposeParams {
             dao_merkle_root: self.dao_merkle_root,

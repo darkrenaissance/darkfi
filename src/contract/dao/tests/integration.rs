@@ -28,13 +28,7 @@ use darkfi_serial::{Decodable, Encodable};
 use log::debug;
 use rand::rngs::OsRng;
 
-use darkfi_dao_contract::{
-    dao_client,
-    dao_client::{exec as dao_exec_client, propose as dao_propose_client, vote as dao_vote_client},
-    money_client, note,
-    wallet_cache::WalletCache,
-    DaoFunction,
-};
+use darkfi_dao_contract::{dao_client, money_client, note, wallet_cache::WalletCache, DaoFunction};
 
 use darkfi_money_contract::{client::EncryptedNote, state::MoneyTransferParams, MoneyFunction};
 
@@ -67,7 +61,7 @@ async fn integration_test() -> Result<()> {
     let gdrk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
     // DAO parameters
-    let dao = dao_client::Dao {
+    let dao = dao_client::DaoInfo {
         proposer_limit: 110,
         quorum: 110,
         approval_ratio_base: 2,
@@ -135,14 +129,14 @@ async fn integration_test() -> Result<()> {
     // In out case, it's the bulla for the DAO
     let user_data = dao_bulla.inner();
 
-    let builder = money_client::Builder {
-        clear_inputs: vec![money_client::BuilderClearInputInfo {
+    let call = money_client::TransferCall {
+        clear_inputs: vec![money_client::TransferClearInput {
             value: xdrk_supply,
             token_id: xdrk_token_id,
             signature_secret: dao_th.faucet_kp.secret,
         }],
         inputs: vec![],
-        outputs: vec![money_client::BuilderOutputInfo {
+        outputs: vec![money_client::TransferOutput {
             value: xdrk_supply,
             token_id: xdrk_token_id,
             public: dao_th.dao_kp.public,
@@ -152,7 +146,7 @@ async fn integration_test() -> Result<()> {
             user_data,
         }],
     };
-    let (params, proofs) = builder.build(
+    let (params, proofs) = call.make(
         &dao_th.money_mint_zkbin,
         &dao_th.money_mint_pk,
         &dao_th.money_burn_zkbin,
@@ -231,7 +225,7 @@ async fn integration_test() -> Result<()> {
     let spend_hook = pallas::Base::from(0);
     let user_data = pallas::Base::from(0);
 
-    let output1 = money_client::BuilderOutputInfo {
+    let output1 = money_client::TransferOutput {
         value: 400000,
         token_id: gdrk_token_id,
         public: dao_th.alice_kp.public,
@@ -241,7 +235,7 @@ async fn integration_test() -> Result<()> {
         user_data,
     };
 
-    let output2 = money_client::BuilderOutputInfo {
+    let output2 = money_client::TransferOutput {
         value: 400000,
         token_id: gdrk_token_id,
         public: dao_th.bob_kp.public,
@@ -251,7 +245,7 @@ async fn integration_test() -> Result<()> {
         user_data,
     };
 
-    let output3 = money_client::BuilderOutputInfo {
+    let output3 = money_client::TransferOutput {
         value: 200000,
         token_id: gdrk_token_id,
         public: dao_th.charlie_kp.public,
@@ -263,8 +257,8 @@ async fn integration_test() -> Result<()> {
 
     assert!(2 * 400000 + 200000 == gdrk_supply);
 
-    let builder = money_client::Builder {
-        clear_inputs: vec![money_client::BuilderClearInputInfo {
+    let call = money_client::TransferCall {
+        clear_inputs: vec![money_client::TransferClearInput {
             value: gdrk_supply,
             token_id: gdrk_token_id,
             // This might be different for various tokens but lets reuse it here
@@ -273,7 +267,7 @@ async fn integration_test() -> Result<()> {
         inputs: vec![],
         outputs: vec![output1, output2, output3],
     };
-    let (params, proofs) = builder.build(
+    let (params, proofs) = call.make(
         &dao_th.money_mint_zkbin,
         &dao_th.money_mint_pk,
         &dao_th.money_burn_zkbin,
@@ -378,7 +372,7 @@ async fn integration_test() -> Result<()> {
     // TODO: is it possible for an invalid transfer() to be constructed on exec()?
     //       need to look into this
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_client::ProposalStakeInput {
+    let input = dao_client::ProposeStakeInput {
         secret: dao_th.alice_kp.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
@@ -393,7 +387,7 @@ async fn integration_test() -> Result<()> {
         (merkle_path, root)
     };
 
-    let proposal = dao_client::Proposal {
+    let proposal = dao_client::ProposalInfo {
         dest: receiver_keypair.public,
         amount: 1000,
         serial: pallas::Base::random(&mut OsRng),
@@ -437,7 +431,7 @@ async fn integration_test() -> Result<()> {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
         };
-        let note: dao_propose_client::Note = enc_note.decrypt(&dao_th.dao_kp.secret).unwrap();
+        let note: dao_client::ProposeNote = enc_note.decrypt(&dao_th.dao_kp.secret).unwrap();
 
         // TODO: check it belongs to DAO bulla
 
@@ -491,7 +485,7 @@ async fn integration_test() -> Result<()> {
     };
 
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_vote_client::BuilderInput {
+    let input = dao_client::VoteInput {
         secret: dao_th.alice_kp.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
@@ -506,9 +500,9 @@ async fn integration_test() -> Result<()> {
     // For the demo MVP, you can just use the dao_keypair secret
     let vote_keypair_1 = Keypair::random(&mut OsRng);
 
-    let builder = dao_vote_client::Builder {
+    let call = dao_client::VoteCall {
         inputs: vec![input],
-        vote: dao_vote_client::Vote {
+        vote: dao_client::VoteInfo {
             vote_option,
             vote_option_blind: pallas::Scalar::random(&mut OsRng),
         },
@@ -516,7 +510,7 @@ async fn integration_test() -> Result<()> {
         proposal: proposal.clone(),
         dao: dao.clone(),
     };
-    let (params, proofs) = builder.build(
+    let (params, proofs) = call.make(
         &dao_th.dao_vote_burn_zkbin,
         &dao_th.dao_vote_burn_pk,
         &dao_th.dao_vote_main_zkbin,
@@ -543,7 +537,7 @@ async fn integration_test() -> Result<()> {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
         };
-        let note: dao_vote_client::Note = enc_note.decrypt(&vote_keypair_1.secret).unwrap();
+        let note: dao_client::VoteNote = enc_note.decrypt(&vote_keypair_1.secret).unwrap();
         note
     };
     debug!(target: "dao", "User 1 voted!");
@@ -561,7 +555,7 @@ async fn integration_test() -> Result<()> {
     };
 
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_vote_client::BuilderInput {
+    let input = dao_client::VoteInput {
         //secret: gov_keypair_2.secret,
         secret: dao_th.bob_kp.secret,
         note: gov_recv[1].note.clone(),
@@ -576,9 +570,9 @@ async fn integration_test() -> Result<()> {
     // We create a new keypair to encrypt the vote.
     let vote_keypair_2 = Keypair::random(&mut OsRng);
 
-    let builder = dao_vote_client::Builder {
+    let call = dao_client::VoteCall {
         inputs: vec![input],
-        vote: dao_vote_client::Vote {
+        vote: dao_client::VoteInfo {
             vote_option,
             vote_option_blind: pallas::Scalar::random(&mut OsRng),
         },
@@ -586,7 +580,7 @@ async fn integration_test() -> Result<()> {
         proposal: proposal.clone(),
         dao: dao.clone(),
     };
-    let (params, proofs) = builder.build(
+    let (params, proofs) = call.make(
         &dao_th.dao_vote_burn_zkbin,
         &dao_th.dao_vote_burn_pk,
         &dao_th.dao_vote_main_zkbin,
@@ -610,7 +604,7 @@ async fn integration_test() -> Result<()> {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
         };
-        let note: dao_vote_client::Note = enc_note.decrypt(&vote_keypair_2.secret).unwrap();
+        let note: dao_client::VoteNote = enc_note.decrypt(&vote_keypair_2.secret).unwrap();
         note
     };
     debug!(target: "dao", "User 2 voted!");
@@ -628,7 +622,7 @@ async fn integration_test() -> Result<()> {
     };
 
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_vote_client::BuilderInput {
+    let input = dao_client::VoteInput {
         //secret: gov_keypair_3.secret,
         secret: dao_th.charlie_kp.secret,
         note: gov_recv[2].note.clone(),
@@ -643,9 +637,9 @@ async fn integration_test() -> Result<()> {
     // We create a new keypair to encrypt the vote.
     let vote_keypair_3 = Keypair::random(&mut OsRng);
 
-    let builder = dao_vote_client::Builder {
+    let call = dao_client::VoteCall {
         inputs: vec![input],
-        vote: dao_vote_client::Vote {
+        vote: dao_client::VoteInfo {
             vote_option,
             vote_option_blind: pallas::Scalar::random(&mut OsRng),
         },
@@ -653,7 +647,7 @@ async fn integration_test() -> Result<()> {
         proposal: proposal.clone(),
         dao: dao.clone(),
     };
-    let (params, proofs) = builder.build(
+    let (params, proofs) = call.make(
         &dao_th.dao_vote_burn_zkbin,
         &dao_th.dao_vote_burn_pk,
         &dao_th.dao_vote_main_zkbin,
@@ -680,7 +674,7 @@ async fn integration_test() -> Result<()> {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
         };
-        let note: dao_vote_client::Note = enc_note.decrypt(&vote_keypair_3.secret).unwrap();
+        let note: dao_client::VoteNote = enc_note.decrypt(&vote_keypair_3.secret).unwrap();
         note
     };
     debug!(target: "dao", "User 3 voted!");
@@ -777,9 +771,9 @@ async fn integration_test() -> Result<()> {
     // In out case, it's the bulla for the DAO
     let user_data = dao_bulla.inner();
 
-    let builder = money_client::Builder {
+    let xfer_call = money_client::TransferCall {
         clear_inputs: vec![],
-        inputs: vec![money_client::BuilderInputInfo {
+        inputs: vec![money_client::TransferInput {
             leaf_position: treasury_leaf_position,
             merkle_path: treasury_merkle_path,
             secret: dao_th.dao_kp.secret,
@@ -790,7 +784,7 @@ async fn integration_test() -> Result<()> {
         }],
         outputs: vec![
             // Sending money
-            money_client::BuilderOutputInfo {
+            money_client::TransferOutput {
                 value: 1000,
                 token_id: xdrk_token_id,
                 //public: user_keypair.public,
@@ -801,7 +795,7 @@ async fn integration_test() -> Result<()> {
                 user_data: pallas::Base::from(0),
             },
             // Change back to DAO
-            money_client::BuilderOutputInfo {
+            money_client::TransferOutput {
                 value: xdrk_supply - 1000,
                 token_id: xdrk_token_id,
                 public: dao_th.dao_kp.public,
@@ -812,7 +806,7 @@ async fn integration_test() -> Result<()> {
             },
         ],
     };
-    let (xfer_params, xfer_proofs) = builder.build(
+    let (xfer_params, xfer_proofs) = xfer_call.make(
         &dao_th.money_mint_zkbin,
         &dao_th.money_mint_pk,
         &dao_th.money_burn_zkbin,
@@ -823,7 +817,7 @@ async fn integration_test() -> Result<()> {
     xfer_params.encode(&mut data)?;
     let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
-    let builder = dao_exec_client::Builder {
+    let call = dao_client::ExecCall {
         proposal,
         dao,
         yes_votes_value,
@@ -839,7 +833,7 @@ async fn integration_test() -> Result<()> {
         hook_dao_exec: spend_hook,
         signature_secret: exec_signature_secret,
     };
-    let (exec_params, exec_proofs) = builder.build(&dao_th.dao_exec_zkbin, &dao_th.dao_exec_pk)?;
+    let (exec_params, exec_proofs) = call.make(&dao_th.dao_exec_zkbin, &dao_th.dao_exec_pk)?;
 
     let mut data = vec![DaoFunction::Exec as u8];
     exec_params.encode(&mut data)?;
