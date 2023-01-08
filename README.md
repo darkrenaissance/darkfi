@@ -79,7 +79,7 @@ trusted setup params, and compile the source code.
 
 If you want to hack on the source code, make sure to read some
 introductory advice in the
-[DarkFi book](https://darkrenaissance.github.io/darkfi/development.html).
+[DarkFi book](https://darkrenaissance.github.io/darkfi/development/development.html).
 
 
 ## Install
