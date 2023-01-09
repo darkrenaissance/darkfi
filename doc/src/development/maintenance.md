@@ -6,13 +6,13 @@ or need to be maintained:
 important work for example [overview](https://darkrenaissance.github.io/darkfi/architecture/overview.html) 
 page is out of date.
 
-**Tooling:** Such as the drk tool `camacho` is maintaining. right now 
+**Tooling:** Such as the `drk` tool. right now 
 we're adding [DAO functionality](https://github.com/darkrenaissance/darkfi/blob/master/src/contract/dao/wallet.sql) 
 to it.
 
 **Tests:** Throughout the project there are either broken or commented out unit tests, they need to be fixed.
 
-**Cleanup:** General code cleanup. `narodnik` begun flattening headers and improving things like in 
+**Cleanup:** General code cleanup. for example flattening headers and improving things like in 
 [this commit](https://github.com/darkrenaissance/darkfi/commit/9cd9c3113eed1b5f0bcad2ee449ef926d0908d55).
 
 **ZK Debugger:** The ZKVM needs a debugger so we can interactively inspect values 
