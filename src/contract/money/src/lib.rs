@@ -426,6 +426,32 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     return Err(ContractError::Custom(22))
                 }
 
+                msg!("XXXX: spend_hook = {:?}", input.spend_hook);
+
+                // Check the invoked contract if spend hook is set
+                if !bool::from(input.spend_hook.is_zero()) {
+                    let next_call_idx = call_idx + 1;
+                    if next_call_idx >= call.len() as u32 {
+                        msg!(
+                            "[Transfer] Error: next_call_idx = {} but len(calls) = {} in input {}",
+                            next_call_idx,
+                            call.len(),
+                            i
+                        );
+                        return Err(ContractError::Custom(23))
+                    }
+
+                    let next = &call[next_call_idx as usize];
+                    if next.contract_id.inner() != input.spend_hook {
+                        msg!(
+                            "[Transfer] Error: invoking contract call does not match spend hook\
+                             in input {}",
+                            i
+                        );
+                        return Err(ContractError::Custom(24))
+                    }
+                }
+
                 new_nullifiers.push(input.nullifier);
                 valcom_total += input.value_commit;
             }
@@ -436,7 +462,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                 // TODO: Should we have coins in a sled tree too to check dupes?
                 if new_coins.contains(&Coin::from(output.coin)) {
                     msg!("[Transfer] Error: Duplicate coin found in output {}", i);
-                    return Err(ContractError::Custom(23))
+                    return Err(ContractError::Custom(25))
                 }
 
                 // FIXME: Needs some work on types and their place within all these libraries
@@ -447,7 +473,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             // If the accumulator is not back in its initial state, there's a value mismatch.
             if valcom_total != pallas::Point::identity() {
                 msg!("[Transfer] Error: Value commitments do not result in identity");
-                return Err(ContractError::Custom(24))
+                return Err(ContractError::Custom(26))
             }
 
             // Verify that the token commitments are all for the same token

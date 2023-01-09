@@ -148,8 +148,23 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     assert!(call_idx < call.len() as u32);
 
     let self_ = &call[call_idx as usize];
+    let func = DaoFunction::try_from(self_.data[0])?;
 
-    match DaoFunction::try_from(self_.data[0])? {
+    if call.len() != 1 {
+        // Enforce a strict structure for our tx
+        assert_eq!(call.len(), 2);
+        assert_eq!(call_idx, 1);
+
+        // We can unpack user_data and check the function call is correct.
+        // But in this contract, only DAO::exec() can be invoked by other ones.
+        // So just check the function call is correct.
+
+        // NOTE: we may wish to improve this since it cripples user composability.
+
+        assert_eq!(func, DaoFunction::Exec);
+    }
+
+    match func {
         DaoFunction::Mint => {
             let params: MintCallParams = deserialize(&self_.data[1..])?;
             let dao_bulla = params.dao_bulla.inner();

@@ -47,6 +47,7 @@ pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS: &str = "DaoProposeInput";
 pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
 
 #[repr(u8)]
+#[derive(PartialEq, Debug)]
 pub enum DaoFunction {
     Mint = 0x00,
     Propose = 0x01,

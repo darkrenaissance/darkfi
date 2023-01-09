@@ -126,9 +126,13 @@ pub struct Input {
     pub nullifier: Nullifier,
     /// Revealed Merkle root
     pub merkle_root: MerkleNode,
-    /// spend hook (TODO: document)
+    /// Spend hook used to invoke other contracts.
+    /// If this value is nonzero then the subsequent contract call in the tx
+    /// must have this value as its ID.
     pub spend_hook: pallas::Base,
-    /// user data enc (TODO: document)
+    /// Encrypted user data field. An encrypted commitment to arbitrary data.
+    /// When spend hook is set (it is nonzero), then this field may be used
+    /// to pass data to the invoked contract.
     pub user_data_enc: pallas::Base,
     /// Public key for the signature
     pub signature_public: PublicKey,

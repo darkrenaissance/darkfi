@@ -755,7 +755,7 @@ async fn integration_test() -> Result<()> {
     let dao_coin_blind = pallas::Base::random(&mut OsRng);
     let input_value = treasury_note.value;
     let input_value_blind = pallas::Scalar::random(&mut OsRng);
-    let tx_signature_secret = SecretKey::random(&mut OsRng);
+    let xfer_signature_secret = SecretKey::random(&mut OsRng);
     let exec_signature_secret = SecretKey::random(&mut OsRng);
 
     let (treasury_leaf_position, treasury_merkle_path) = {
@@ -783,7 +783,7 @@ async fn integration_test() -> Result<()> {
             note: treasury_note,
             user_data_blind,
             value_blind: input_value_blind,
-            signature_secret: tx_signature_secret,
+            signature_secret: xfer_signature_secret,
         }],
         outputs: vec![
             // Sending money
@@ -847,7 +847,7 @@ async fn integration_test() -> Result<()> {
         proofs: vec![xfer_proofs, exec_proofs],
         signatures: vec![],
     };
-    let xfer_sigs = tx.create_sigs(&mut OsRng, &vec![tx_signature_secret])?;
+    let xfer_sigs = tx.create_sigs(&mut OsRng, &vec![xfer_signature_secret])?;
     let exec_sigs = tx.create_sigs(&mut OsRng, &vec![exec_signature_secret])?;
     tx.signatures = vec![xfer_sigs, exec_sigs];
 
