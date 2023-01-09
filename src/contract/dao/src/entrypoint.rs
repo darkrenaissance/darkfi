@@ -53,17 +53,20 @@ darkfi_sdk::define_contract!(
     metadata: get_metadata
 );
 
-// These are the different sled trees that will be created
-pub const DAO_BULLA_TREE: &str = "dao_info";
-pub const DAO_ROOTS_TREE: &str = "dao_roots";
-//pub const DAO_PROPOSAL_TREE: &str = "dao_proposals";
-//pub const DAO_PROPOSAL_ROOTS_TREE: &str = "dao_proposal_roots";
-pub const DAO_PROPOSAL_VOTES_TREE: &str = "dao_proposal_votes";
-pub const DAO_VOTE_NULLS: &str = "dao_vote_nulls";
+/// General info for the DAO
+pub const DB_INFO: &str = "dao_info";
+/// Name of the DAO bulla tree in DB_INFO
+pub const KEY_DAO_MERKLE_TREE: &str = "dao_merkle_tree";
 
-// These are keys inside the some db trees
-pub const DAO_MERKLE_TREE: &str = "dao_merkle_tree";
-pub const DAO_PROPOSAL_MERKLE_TREE: &str = "dao_proposals_merkle_tree";
+/// DAO bullas
+pub const DB_DAO_BULLAS: &str = "dao_bullas";
+/// Keeps track of all merkle roots DAO bullas
+pub const DB_DAO_MERKLE_ROOTS: &str = "dao_roots";
+
+/// Proposal bullas. The key is the current aggregated vote
+pub const DB_PROPOSAL_BULLAS: &str = "dao_proposals";
+/// Nullifiers to prevent double voting
+pub const DAO_VOTE_NULLS: &str = "dao_vote_nulls";
 
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
@@ -87,13 +90,14 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS), &dao_propose_burn_bin[..])?;
     db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS), &dao_propose_main_bin[..])?;
 
-    // Set up a database tree to hold the Merkle tree for DAO bullas
-    let dao_bulla_db = match db_lookup(cid, DAO_BULLA_TREE) {
+    // Setup db for general info
+    let dao_info_db = match db_lookup(cid, DB_INFO) {
         Ok(v) => v,
-        Err(_) => db_init(cid, DAO_BULLA_TREE)?,
+        Err(_) => db_init(cid, DB_INFO)?,
     };
 
-    match db_get(dao_bulla_db, &serialize(&DAO_MERKLE_TREE))? {
+    // Setup the entries in the header table
+    match db_get(dao_info_db, &serialize(&KEY_DAO_MERKLE_TREE))? {
         Some(bytes) => {
             // We found some bytes, try to deserialize into a tree.
             // For now, if this doesn't work, we bail.
@@ -104,57 +108,31 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
         None => {
             // We didn't find a tree, so just make a new one.
             let tree = MerkleTree::new(100);
-            let mut tree_data = vec![];
 
+            let mut tree_data = vec![];
             tree_data.write_u32(0)?;
             tree.encode(&mut tree_data)?;
-            db_set(dao_bulla_db, &serialize(&DAO_MERKLE_TREE), &tree_data)?;
+
+            db_set(dao_info_db, &serialize(&KEY_DAO_MERKLE_TREE), &tree_data)?;
         }
     };
 
-    // Set up a database tree to hold Merkle roots for the DAO bullas Merkle tree
-    let _ = match db_lookup(cid, DAO_ROOTS_TREE) {
+    // Setup db to avoid double creating DAOs
+    let _ = match db_lookup(cid, DB_DAO_BULLAS) {
         Ok(v) => v,
-        Err(_) => db_init(cid, DAO_ROOTS_TREE)?,
+        Err(_) => db_init(cid, DB_DAO_BULLAS)?,
     };
 
-    // Set up a database tree to hold the Merkle tree for proposal bullas
-    /*
-    let dao_proposal_db = match db_lookup(cid, DAO_PROPOSAL_TREE) {
+    // Setup db for DAO bulla merkle roots
+    let _ = match db_lookup(cid, DB_DAO_MERKLE_ROOTS) {
         Ok(v) => v,
-        Err(_) => db_init(cid, DAO_PROPOSAL_TREE)?,
+        Err(_) => db_init(cid, DB_DAO_MERKLE_ROOTS)?,
     };
-    */
 
-    /*
-    match db_get(dao_proposal_db, &serialize(&DAO_PROPOSAL_MERKLE_TREE))? {
-        Some(bytes) => {
-            // We found some bytes, try to deserialize into a tree.
-            // For now, if this doesn't work, we bail.
-            let _: MerkleTree = deserialize(&bytes)?;
-        }
-        None => {
-            // We didn't find a tree, so just make a new one.
-            let tree = MerkleTree::new(100);
-            let mut tree_data = vec![];
-
-            tree_data.write_u32(0)?;
-            tree.encode(&mut tree_data)?;
-            db_set(dao_proposal_db, &serialize(&DAO_PROPOSAL_MERKLE_TREE), &tree_data)?;
-        }
-    };
-    */
-
-    // Set up a database tree to hold Merkle roots for the proposal bullas Merkle tree
-    /*let _ = match db_lookup(cid, DAO_PROPOSAL_ROOTS_TREE) {
+    // Setup db for proposal votes (k: ProposalBulla, v: BlindAggregateVote)
+    let _ = match db_lookup(cid, DB_PROPOSAL_BULLAS) {
         Ok(v) => v,
-        Err(_) => db_init(cid, DAO_PROPOSAL_ROOTS_TREE)?,
-    };*/
-
-    // Set up a database tree to hold proposal votes (k: proposalbulla, v: BlindAggregateVote)
-    let _ = match db_lookup(cid, DAO_PROPOSAL_VOTES_TREE) {
-        Ok(v) => v,
-        Err(_) => db_init(cid, DAO_PROPOSAL_VOTES_TREE)?,
+        Err(_) => db_init(cid, DB_PROPOSAL_BULLAS)?,
     };
 
     let _ = match db_lookup(cid, DAO_VOTE_NULLS) {
@@ -174,9 +152,15 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     match DaoFunction::try_from(self_.data[0])? {
         DaoFunction::Mint => {
             let params: MintCallParams = deserialize(&self_.data[1..])?;
+            let dao_bulla = params.dao_bulla.inner();
 
-            // No checks in Mint, just return the update.
-            // TODO: Should it check that there isn't an existing one?
+            // Check the DAO bulla doesn't already exist
+            let bulla_db = db_lookup(cid, DB_DAO_BULLAS)?;
+            if db_contains_key(bulla_db, &serialize(&dao_bulla))? {
+                msg!("DAO already exists: {:?}", dao_bulla);
+                return Err(ContractError::Custom(1))
+            }
+
             let update = MintCallUpdate { dao_bulla: params.dao_bulla };
             let mut update_data = vec![];
             update_data.write_u8(DaoFunction::Mint as u8)?;
@@ -201,14 +185,19 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             }
 
             // Is the DAO bulla generated in the ZK proof valid
-            let dao_roots_db = db_lookup(cid, DAO_ROOTS_TREE)?;
+            let dao_roots_db = db_lookup(cid, DB_DAO_MERKLE_ROOTS)?;
             if !db_contains_key(dao_roots_db, &serialize(&params.dao_merkle_root))? {
                 msg!("Invalid DAO Merkle root: {}", params.dao_merkle_root);
                 return Err(ContractError::Custom(3))
             }
 
-            // TODO: Look at gov tokens avoid using already spent ones
-            // Need to spend original coin and generate 2 nullifiers?
+            let proposal_db = db_lookup(cid, DB_PROPOSAL_BULLAS)?;
+            // Make sure proposal doesn't already exist
+            // Otherwise it will reset voting again
+            if db_contains_key(proposal_db, &serialize(&params.proposal_bulla))? {
+                msg!("Proposal already exists: {:?}", params.proposal_bulla);
+                return Err(ContractError::Custom(4))
+            }
 
             let update = ProposeCallUpdate { proposal_bulla: params.proposal_bulla };
             let mut update_data = vec![];
@@ -226,7 +215,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let money_cid = *MONEY_CONTRACT_ID;
 
             // Check proposal bulla exists
-            let proposal_votes_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
+            let proposal_votes_db = db_lookup(cid, DB_PROPOSAL_BULLAS)?;
             let Some(proposal_votes) = db_get(proposal_votes_db, &serialize(&params.proposal_bulla))? else {
                 msg!("Invalid proposal {:?}", params.proposal_bulla);
                 return Err(ContractError::Custom(4))
@@ -317,7 +306,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             assert!(input_valcoms == params.input_value_commit);
 
             // 3. Get the ProposalVote from DAO state
-            let proposal_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
+            let proposal_db = db_lookup(cid, DB_PROPOSAL_BULLAS)?;
             let Some(proposal_votes) = db_get(proposal_db, &serialize(&params.proposal))? else {
                 msg!("Proposal {:?} not found in db", params.proposal);
                 return Err(ContractError::Custom(1));
@@ -344,12 +333,16 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
     match DaoFunction::try_from(ix[0])? {
         DaoFunction::Mint => {
             let update: MintCallUpdate = deserialize(&ix[1..])?;
+            let dao_bulla = update.dao_bulla.inner();
 
-            let bulla_db = db_lookup(cid, DAO_BULLA_TREE)?;
-            let roots_db = db_lookup(cid, DAO_ROOTS_TREE)?;
+            let info_db = db_lookup(cid, DB_INFO)?;
+            let bulla_db = db_lookup(cid, DB_DAO_BULLAS)?;
+            let roots_db = db_lookup(cid, DB_DAO_MERKLE_ROOTS)?;
 
-            let node = MerkleNode::from(update.dao_bulla.inner());
-            merkle_add(bulla_db, roots_db, &serialize(&DAO_MERKLE_TREE), &[node])?;
+            db_set(bulla_db, &serialize(&dao_bulla), &[])?;
+
+            let node = MerkleNode::from(dao_bulla);
+            merkle_add(info_db, roots_db, &serialize(&KEY_DAO_MERKLE_TREE), &[node])?;
 
             Ok(())
         }
@@ -357,21 +350,9 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::Propose => {
             let update: ProposeCallUpdate = deserialize(&ix[1..])?;
 
-            //let proposal_tree_db = db_lookup(cid, DAO_PROPOSAL_TREE)?;
-            //let proposal_root_db = db_lookup(cid, DAO_PROPOSAL_ROOTS_TREE)?;
-            let proposal_vote_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
-
-            /*
-            let node = MerkleNode::from(update.proposal_bulla);
-            merkle_add(
-                proposal_tree_db,
-                proposal_root_db,
-                &serialize(&DAO_PROPOSAL_MERKLE_TREE),
-                &[node],
-            )?;
-            */
-
+            let proposal_vote_db = db_lookup(cid, DB_PROPOSAL_BULLAS)?;
             let pv = BlindAggregateVote::default();
+
             db_set(proposal_vote_db, &serialize(&update.proposal_bulla), &serialize(&pv))?;
 
             Ok(())
@@ -384,7 +365,7 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
             //   total_yes_vote_commit += update.yes_vote_commit
             //   total_all_vote_commit += update.all_vote_commit
 
-            let proposal_vote_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
+            let proposal_vote_db = db_lookup(cid, DB_PROPOSAL_BULLAS)?;
             db_set(
                 proposal_vote_db,
                 &serialize(&update.proposal_bulla),
@@ -408,7 +389,7 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update: ExecCallUpdate = deserialize(&ix[1..])?;
 
             // Remove proposal from db
-            let proposal_vote_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
+            let proposal_vote_db = db_lookup(cid, DB_PROPOSAL_BULLAS)?;
             db_del(proposal_vote_db, &serialize(&update.proposal))?;
 
             Ok(())
