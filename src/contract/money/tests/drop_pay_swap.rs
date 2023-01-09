@@ -40,7 +40,7 @@ use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
     client::{build_half_swap_tx, build_transfer_tx, Coin, EncryptedNote, OwnCoin},
-    state::MoneyTransferParams,
+    model::MoneyTransferParams,
     MoneyFunction,
 };
 

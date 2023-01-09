@@ -40,7 +40,7 @@ use log::{info, warn};
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
-    client::build_transfer_tx, state::MoneyTransferParams, MoneyFunction,
+    client::build_transfer_tx, model::MoneyTransferParams, MoneyFunction,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 

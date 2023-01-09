@@ -59,10 +59,10 @@ impl TryFrom<u8> for MoneyFunction {
 }
 
 /// Structures and object definitions
-pub mod state;
+pub mod model;
 
 #[cfg(not(feature = "no-entrypoint"))]
-use state::{
+use model::{
     MoneyStakeParams, MoneyStakeUpdate, MoneyTransferParams, MoneyTransferUpdate,
     MoneyUnstakeParams,
 };
@@ -425,8 +425,6 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     msg!("[Transfer] Error: Duplicate nullifier found in input {}", i);
                     return Err(ContractError::Custom(22))
                 }
-
-                msg!("XXXX: spend_hook = {:?}", input.spend_hook);
 
                 // Check the invoked contract if spend hook is set
                 if !bool::from(input.spend_hook.is_zero()) {

@@ -45,7 +45,7 @@ use halo2_proofs::circuit::Value;
 use log::{debug, error, info};
 use rand::rngs::OsRng;
 
-use crate::state::{
+use crate::model::{
     ClearInput, Input, MoneyStakeParams, MoneyTransferParams, MoneyUnstakeParams, Output,
     StakedInput, StakedOutput,
 };
