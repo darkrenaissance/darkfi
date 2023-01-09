@@ -1577,6 +1577,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-std",
+ "blake3",
  "bs58",
  "clap 4.0.32",
  "darkfi",

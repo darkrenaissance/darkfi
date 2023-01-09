@@ -103,7 +103,7 @@
 
 CREATE TABLE IF NOT EXISTS dao_daos (
 	dao_id INTEGER PRIMARY KEY NOT NULL,
-    name VARCHAR UNIQUE NOT NULL,
+    name BLOB UNIQUE NOT NULL,
     proposer_limit INTEGER NOT NULL,
     -- minimum threshold for total number of votes for proposal to pass.
     -- If there's too little activity then it cannot pass.

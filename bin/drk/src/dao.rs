@@ -18,11 +18,13 @@
 
 use darkfi_sdk::{
     crypto::{SecretKey, TokenId},
+    incrementalmerkletree::Position,
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+/// Parameters representing a DAO to be initialized
 pub struct DaoParams {
     /// The minimum amount of governance tokens needed to open a proposal
     pub proposer_limit: u64,
@@ -37,4 +39,30 @@ pub struct DaoParams {
     pub secret_key: SecretKey,
     /// DAO bulla blind
     pub bulla_blind: pallas::Base,
+}
+
+#[derive(Debug, Clone)]
+/// Parameters representing an intialized DAO, optionally deployed on-chain
+pub struct Dao {
+    /// Named identifier for the DAO
+    pub name: String,
+    /// The minimum amount of governance tokens needed to open a proposal
+    pub proposer_limit: u64,
+    /// Minimal threshold of participating total tokens needed for a proposal to pass
+    pub quorum: u64,
+    /// The ratio of winning/total votes needed for a proposal to pass
+    pub approval_ratio_base: u64,
+    pub approval_ratio_quot: u64,
+    /// DAO's governance token ID
+    pub gov_token_id: TokenId,
+    /// Secret key for the DAO
+    pub secret_key: SecretKey,
+    /// DAO bulla blind
+    pub bulla_blind: pallas::Base,
+    /// Leaf position of the DAO in the Merkle tree of DAOs
+    pub leaf_position: Option<Position>,
+    /// The transaction hash where the DAO was deployed
+    pub tx_hash: Option<blake3::Hash>,
+    /// The call index in the transaction where the DAO was deployed
+    pub call_index: Option<u32>,
 }

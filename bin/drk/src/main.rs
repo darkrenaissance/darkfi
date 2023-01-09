@@ -57,6 +57,9 @@ mod rpc_transfer;
 mod rpc_swap;
 use rpc_swap::PartialSwapData;
 
+/// DAO methods
+mod rpc_dao;
+
 /// Blockchain methods
 mod rpc_blockchain;
 
@@ -238,16 +241,16 @@ enum DaoSubcmd {
     /// View DAO data from stdin
     View,
 
-    /// List imported DAOs
-    List,
-
     /// Import DAO data from stdin
     Import {
         /// Named identifier for the DAO
         dao_name: String,
     },
 
-    /// Mint a DAO on-chain
+    /// List imported DAOs
+    List,
+
+    /// Mint an imported DAO on-chain
     Mint {
         /// Named identifier for the DAO
         dao_name: String,
@@ -737,7 +740,24 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Import { dao_name } => todo!(),
+            DaoSubcmd::Import { dao_name } => {
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let bytes = bs58::decode(&buf.trim()).into_vec()?;
+                let dao_params: DaoParams = deserialize(&bytes)?;
+
+                let rpc_client = RpcClient::new(args.endpoint.clone())
+                    .await
+                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+                let drk = Drk { rpc_client };
+
+                drk.dao_import(dao_name, dao_params)
+                    .await
+                    .with_context(|| "Failed to import DAO")?;
+
+                Ok(())
+            }
 
             DaoSubcmd::List => todo!(),
 
