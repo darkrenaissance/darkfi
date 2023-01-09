@@ -25,14 +25,15 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
-use darkfi::tx::Transaction;
+use darkfi::{tx::Transaction, zk::halo2::Field};
 use darkfi_money_contract::client::Coin;
 use darkfi_sdk::{
-    crypto::{PublicKey, TokenId},
+    crypto::{PublicKey, SecretKey, TokenId},
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize};
 use prettytable::{format, row, Table};
+use rand::rngs::OsRng;
 use serde_json::json;
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
 use url::Url;
@@ -65,6 +66,10 @@ mod rpc_wallet;
 /// CLI utility functions
 mod cli_util;
 use cli_util::{parse_token_pair, parse_value_pair};
+
+/// DAO aux functionality
+mod dao;
+use dao::DaoParams;
 
 #[derive(Parser)]
 #[command(about = cli_desc!())]
@@ -173,6 +178,10 @@ enum Subcmd {
     /// find coins sent to us and fill our wallet with the necessary metadata.
     Subscribe,
 
+    /// DAO functionalities
+    #[command(subcommand)]
+    Dao(DaoSubcmd),
+
     /// Scan the blockchain and parse relevant transactions
     Scan {
         #[arg(long)]
@@ -210,6 +219,92 @@ enum OtcSubcmd {
 
     /// Sign a transaction given from stdin as the first-half
     Sign,
+}
+
+#[derive(Subcommand)]
+enum DaoSubcmd {
+    /// Create DAO parameters
+    Create {
+        /// The minimum amount of governance tokens needed to open a proposal for this DAO
+        proposer_limit: u64,
+        /// Minimal threshold of participating total tokens needed for a proposal to pass
+        quorum: u64,
+        /// The ratio of winning votes/total votes needed for a proposal to pass (2 decimals),
+        approval_ratio: f64,
+        /// DAO's governance token ID
+        gov_token_id: String,
+    },
+
+    /// View DAO data from stdin
+    View,
+
+    /// List imported DAOs
+    List,
+
+    /// Import DAO data from stdin
+    Import {
+        /// Named identifier for the DAO
+        dao_name: String,
+    },
+
+    /// Mint a DAO on-chain
+    Mint {
+        /// Named identifier for the DAO
+        dao_name: String,
+    },
+
+    /// Create a proposal for a DAO
+    Propose {
+        /// Named identifier for the DAO
+        dao_name: String,
+
+        /// Pubkey to send tokens to with proposal success
+        recv_pubkey: String,
+
+        /// Amount to send from DAO with proposal success
+        amount: u64,
+
+        /// Token ID to send from DAO with proposal success
+        token_id: String,
+
+        serial: u64,
+    },
+
+    /// List DAO proposals
+    Proposals {
+        /// Named identifier for the DAO
+        dao_name: String,
+    },
+
+    /// View a DAO proposal data
+    Proposal {
+        /// Named identifier for the DAO
+        dao_name: String,
+
+        /// Proposal identifier
+        proposal: String,
+    },
+
+    /// Vote on a given proposal
+    Vote {
+        /// Named identifier for the DAO
+        dao_name: String,
+
+        /// Proposal identifier
+        proposal: String,
+
+        /// Vote
+        vote: String,
+    },
+
+    /// Execute a DAO proposal
+    Exec {
+        /// Named identifier for the DAO
+        dao_name: String,
+
+        /// Proposal identifier
+        proposal: String,
+    },
 }
 
 pub struct Drk {
@@ -592,5 +687,71 @@ async fn main() -> Result<()> {
 
             Ok(())
         }
+
+        Subcmd::Dao(cmd) => match cmd {
+            DaoSubcmd::Create { proposer_limit, quorum, approval_ratio, gov_token_id } => {
+                if approval_ratio > 1.0 {
+                    eprintln!("Error: Approval ratio cannot be >1.0");
+                    exit(1);
+                }
+
+                let approval_ratio_quot = 100_u64;
+                let approval_ratio_base = (approval_ratio * approval_ratio_quot as f64) as u64;
+
+                let gov_token_id =
+                    TokenId::try_from(gov_token_id.as_str()).with_context(|| "Invalid Token ID")?;
+
+                let secret_key = SecretKey::random(&mut OsRng);
+                let bulla_blind = pallas::Base::random(&mut OsRng);
+
+                let dao_params = DaoParams {
+                    proposer_limit,
+                    quorum,
+                    approval_ratio_base,
+                    approval_ratio_quot,
+                    gov_token_id,
+                    secret_key,
+                    bulla_blind,
+                };
+
+                let encoded = bs58::encode(&serialize(&dao_params)).into_string();
+                println!("{}", encoded);
+                Ok(())
+            }
+
+            DaoSubcmd::View => {
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let bytes = bs58::decode(&buf.trim()).into_vec()?;
+                let dao_params: DaoParams = deserialize(&bytes)?;
+                println!("DAO Parameters:");
+                println!("Proposer limit: {}", dao_params.proposer_limit);
+                println!("Quorum: {}", dao_params.quorum);
+                println!(
+                    "Approval ratio: {}",
+                    dao_params.approval_ratio_base as f64 / dao_params.approval_ratio_quot as f64
+                );
+                println!("Governance token ID: {}", dao_params.gov_token_id);
+                println!("Secret key: {}", dao_params.secret_key);
+                println!("Bulla blind: {:?}", dao_params.bulla_blind);
+                Ok(())
+            }
+
+            DaoSubcmd::Import { dao_name } => todo!(),
+
+            DaoSubcmd::List => todo!(),
+
+            DaoSubcmd::Mint { dao_name } => todo!(),
+
+            DaoSubcmd::Propose { dao_name, recv_pubkey, amount, token_id, serial } => todo!(),
+
+            DaoSubcmd::Proposals { dao_name } => todo!(),
+
+            DaoSubcmd::Proposal { dao_name, proposal } => todo!(),
+
+            DaoSubcmd::Vote { dao_name, proposal, vote } => todo!(),
+
+            DaoSubcmd::Exec { dao_name, proposal } => todo!(),
+        },
     }
 }
