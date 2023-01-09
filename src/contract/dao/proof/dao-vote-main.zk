@@ -27,8 +27,8 @@ contract "DaoVoteMain" {
 	Scalar yes_vote_blind,
 
 	# Total amount of capital allocated to vote
-	Base all_votes_value,
-	Scalar all_votes_blind,
+	Base all_vote_value,
+	Scalar all_vote_blind,
 
 	# Check the inputs and this proof are for the same token
 	Base gov_token_blind,
@@ -65,19 +65,19 @@ circuit "DaoVoteMain" {
 
 	# Normally we call this yes vote
 	# Pedersen commitment for vote option
-	yes_votes_value = base_mul(vote_option, all_votes_value);
-	yes_votes_value_c = ec_mul_short(yes_votes_value, VALUE_COMMIT_VALUE);
-	yes_votes_blind_c = ec_mul(yes_vote_blind, VALUE_COMMIT_RANDOM);
-	yes_votes_commit = ec_add(yes_votes_value_c, yes_votes_blind_c);
-	constrain_instance(ec_get_x(yes_votes_commit));
-	constrain_instance(ec_get_y(yes_votes_commit));
+	yes_vote_value = base_mul(vote_option, all_vote_value);
+	yes_vote_value_c = ec_mul_short(yes_vote_value, VALUE_COMMIT_VALUE);
+	yes_vote_blind_c = ec_mul(yes_vote_blind, VALUE_COMMIT_RANDOM);
+	yes_vote_commit = ec_add(yes_vote_value_c, yes_vote_blind_c);
+	constrain_instance(ec_get_x(yes_vote_commit));
+	constrain_instance(ec_get_y(yes_vote_commit));
 
 	# Pedersen commitment for vote value
-	all_votes_c = ec_mul_short(all_votes_value, VALUE_COMMIT_VALUE);
-	all_votes_blind_c = ec_mul(all_votes_blind, VALUE_COMMIT_RANDOM);
-	all_votes_commit = ec_add(all_votes_c, all_votes_blind_c);
-	constrain_instance(ec_get_x(all_votes_commit));
-	constrain_instance(ec_get_y(all_votes_commit));
+	all_vote_c = ec_mul_short(all_vote_value, VALUE_COMMIT_VALUE);
+	all_vote_blind_c = ec_mul(all_vote_blind, VALUE_COMMIT_RANDOM);
+	all_vote_commit = ec_add(all_vote_c, all_vote_blind_c);
+	constrain_instance(ec_get_x(all_vote_commit));
+	constrain_instance(ec_get_y(all_vote_commit));
 
 	# Vote option should be 0 or 1
 	bool_check(vote_option);

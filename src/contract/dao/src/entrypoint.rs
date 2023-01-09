@@ -262,11 +262,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     return Err(ContractError::Custom(7))
                 }
 
-                proposal_votes.all_votes_commit += input.vote_commit;
+                proposal_votes.all_vote_commit += input.vote_commit;
                 vote_nullifiers.push(input.nullifier);
             }
 
-            proposal_votes.yes_votes_commit += params.yes_vote_commit;
+            proposal_votes.yes_vote_commit += params.yes_vote_commit;
 
             let update = VoteCallUpdate {
                 proposal_bulla: params.proposal_bulla,
@@ -324,9 +324,9 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             };
             let proposal_votes: BlindAggregateVote = deserialize(&proposal_votes)?;
 
-            // 4. Check yes_votes_commit and all_votes_commit are the same as in BlindAggregateVote
-            assert!(proposal_votes.yes_votes_commit == params.yes_votes_commit);
-            assert!(proposal_votes.all_votes_commit == params.all_votes_commit);
+            // 4. Check yes_vote_commit and all_vote_commit are the same as in BlindAggregateVote
+            assert!(proposal_votes.yes_vote_commit == params.blind_total_vote.yes_vote_commit);
+            assert!(proposal_votes.all_vote_commit == params.blind_total_vote.all_vote_commit);
 
             let update = ExecCallUpdate { proposal: params.proposal };
             let mut update_data = vec![];
@@ -381,8 +381,8 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update: VoteCallUpdate = deserialize(&ix[1..])?;
 
             // Perform this code:
-            //   total_yes_votes_commit += update.yes_vote_commit
-            //   total_all_votes_commit += update.all_vote_commit
+            //   total_yes_vote_commit += update.yes_vote_commit
+            //   total_all_vote_commit += update.all_vote_commit
 
             let proposal_vote_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
             db_set(
@@ -499,11 +499,11 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
             let mut signature_pubkeys: Vec<PublicKey> = vec![];
 
-            let mut all_votes_commit = pallas::Point::identity();
+            let mut all_vote_commit = pallas::Point::identity();
 
             for input in &params.inputs {
                 signature_pubkeys.push(input.signature_public);
-                all_votes_commit += input.vote_commit;
+                all_vote_commit += input.vote_commit;
 
                 let value_coords = input.vote_commit.to_affine().coordinates().unwrap();
                 let (sig_x, sig_y) = input.signature_public.xy();
@@ -523,7 +523,7 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
             }
 
             let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
-            let all_vote_commit_coords = all_votes_commit.to_affine().coordinates().unwrap();
+            let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
             zk_public_values.push((
                 DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS.to_string(),
@@ -552,8 +552,9 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
             let signature_pubkeys: Vec<PublicKey> = vec![];
 
-            let yes_votes_coords = params.yes_votes_commit.to_affine().coordinates().unwrap();
-            let all_votes_coords = params.all_votes_commit.to_affine().coordinates().unwrap();
+            let blind_vote = params.blind_total_vote;
+            let yes_vote_coords = blind_vote.yes_vote_commit.to_affine().coordinates().unwrap();
+            let all_vote_coords = blind_vote.all_vote_commit.to_affine().coordinates().unwrap();
             let input_value_coords = params.input_value_commit.to_affine().coordinates().unwrap();
 
             msg!("params.proposal: {:?}", params.proposal);
@@ -563,10 +564,10 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
                     params.proposal,
                     params.coin_0,
                     params.coin_1,
-                    *yes_votes_coords.x(),
-                    *yes_votes_coords.y(),
-                    *all_votes_coords.x(),
-                    *all_votes_coords.y(),
+                    *yes_vote_coords.x(),
+                    *yes_vote_coords.y(),
+                    *all_vote_coords.x(),
+                    *all_vote_coords.y(),
                     *input_value_coords.x(),
                     *input_value_coords.y(),
                     DAO_CONTRACT_ID.inner(),

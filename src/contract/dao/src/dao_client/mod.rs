@@ -17,7 +17,7 @@ pub use propose::{ProposalInfo, ProposeCall, ProposeNote, ProposeStakeInput};
 /// * `VoteCall` is what creates the call data used on chain.
 /// * `VoteNote` is the secret shared info transmitted between DAO members.
 pub mod vote;
-pub use vote::{VoteCall, VoteInfo, VoteInput, VoteNote};
+pub use vote::{VoteCall, VoteInput, VoteNote};
 
 pub mod exec;
 pub use exec::ExecCall;

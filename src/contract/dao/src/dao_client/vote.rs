@@ -38,15 +38,11 @@ use crate::{
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct VoteNote {
-    pub vote: VoteInfo,
-    pub vote_value: u64,
-    pub vote_value_blind: pallas::Scalar,
-}
-
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct VoteInfo {
     pub vote_option: bool,
-    pub vote_option_blind: pallas::Scalar,
+    pub yes_vote_blind: pallas::Scalar,
+    // yes_vote_value = vote_option * all_vote_value
+    pub all_vote_value: u64,
+    pub all_vote_blind: pallas::Scalar,
 }
 
 pub struct VoteInput {
@@ -62,7 +58,8 @@ pub struct VoteInput {
 // Inside ZKproof, check proposal is correct.
 pub struct VoteCall {
     pub inputs: Vec<VoteInput>,
-    pub vote: VoteInfo,
+    pub vote_option: bool,
+    pub yes_vote_blind: pallas::Scalar,
     pub vote_keypair: Keypair,
     pub proposal: ProposalInfo,
     pub dao: DaoInfo,
@@ -82,14 +79,14 @@ impl VoteCall {
         let gov_token_blind = pallas::Base::random(&mut OsRng);
 
         let mut inputs = vec![];
-        let mut vote_value = 0;
-        let mut vote_value_blind = pallas::Scalar::from(0);
+        let mut all_vote_value = 0;
+        let mut all_vote_blind = pallas::Scalar::from(0);
 
         for input in self.inputs {
             let value_blind = pallas::Scalar::random(&mut OsRng);
 
-            vote_value += input.note.value;
-            vote_value_blind += value_blind;
+            all_vote_value += input.note.value;
+            all_vote_blind += value_blind;
 
             let signature_public = PublicKey::from_secret(input.signature_secret);
 
@@ -105,7 +102,7 @@ impl VoteCall {
                 Witness::Base(halo2::Value::known(pallas::Base::from(note.value))),
                 Witness::Base(halo2::Value::known(note.token_id.inner())),
                 Witness::Base(halo2::Value::known(note.coin_blind)),
-                Witness::Scalar(halo2::Value::known(vote_value_blind)),
+                Witness::Scalar(halo2::Value::known(all_vote_blind)),
                 Witness::Base(halo2::Value::known(gov_token_blind)),
                 Witness::Uint32(halo2::Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(halo2::Value::known(
@@ -147,7 +144,7 @@ impl VoteCall {
 
             let nullifier = poseidon_hash::<2>([input.secret.inner(), note.serial]);
 
-            let vote_commit = pedersen_commitment_u64(note.value, vote_value_blind);
+            let vote_commit = pedersen_commitment_u64(note.value, all_vote_blind);
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
 
             let (sig_x, sig_y) = signature_public.xy();
@@ -213,14 +210,14 @@ impl VoteCall {
             self.proposal.blind,
         ]);
 
-        let vote_option = self.vote.vote_option as u64;
+        let vote_option = self.vote_option as u64;
         assert!(vote_option == 0 || vote_option == 1);
 
         let yes_vote_commit =
-            pedersen_commitment_u64(vote_option * vote_value, self.vote.vote_option_blind);
+            pedersen_commitment_u64(vote_option * all_vote_value, self.yes_vote_blind);
         let yes_vote_commit_coords = yes_vote_commit.to_affine().coordinates().unwrap();
 
-        let all_vote_commit = pedersen_commitment_u64(vote_value, vote_value_blind);
+        let all_vote_commit = pedersen_commitment_u64(all_vote_value, all_vote_blind);
         let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
         let prover_witnesses = vec![
@@ -242,10 +239,10 @@ impl VoteCall {
             Witness::Base(halo2::Value::known(self.dao.bulla_blind)),
             // Vote
             Witness::Base(halo2::Value::known(pallas::Base::from(vote_option))),
-            Witness::Scalar(halo2::Value::known(self.vote.vote_option_blind)),
+            Witness::Scalar(halo2::Value::known(self.yes_vote_blind)),
             // Total number of gov tokens allocated
-            Witness::Base(halo2::Value::known(pallas::Base::from(vote_value))),
-            Witness::Scalar(halo2::Value::known(vote_value_blind)),
+            Witness::Base(halo2::Value::known(pallas::Base::from(all_vote_value))),
+            Witness::Scalar(halo2::Value::known(all_vote_blind)),
             // gov token
             Witness::Base(halo2::Value::known(gov_token_blind)),
         ];
@@ -267,14 +264,18 @@ impl VoteCall {
             .expect("DAO::vote() proving error!");
         proofs.push(main_proof);
 
-        let note = VoteNote { vote: self.vote, vote_value, vote_value_blind };
+        let note = VoteNote {
+            vote_option: self.vote_option,
+            yes_vote_blind: self.yes_vote_blind,
+            all_vote_value,
+            all_vote_blind,
+        };
         let enc_note = note::encrypt(&note, &self.vote_keypair.public).unwrap();
 
         let params = VoteCallParams {
             token_commit,
             proposal_bulla,
             yes_vote_commit,
-
             ciphertext: enc_note.ciphertext,
             ephem_public: enc_note.ephem_public,
             inputs,

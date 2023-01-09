@@ -101,27 +101,23 @@ pub struct VoteCallUpdate {
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct BlindAggregateVote {
     /// Weighted vote commit
-    pub yes_votes_commit: pallas::Point,
+    pub yes_vote_commit: pallas::Point,
     /// All value staked in the vote
-    pub all_votes_commit: pallas::Point,
+    pub all_vote_commit: pallas::Point,
 }
 
 impl BlindAggregateVote {
-    //pub fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-    //    self.vote_nullifiers.iter().any(|n| n == nullifier)
-    //}
-
-    pub fn combine(&mut self, other: BlindAggregateVote) {
-        self.yes_votes_commit += other.yes_votes_commit;
-        self.all_votes_commit += other.all_votes_commit;
+    pub fn aggregate(&mut self, other: BlindAggregateVote) {
+        self.yes_vote_commit += other.yes_vote_commit;
+        self.all_vote_commit += other.all_vote_commit;
     }
 }
 
 impl Default for BlindAggregateVote {
     fn default() -> Self {
         Self {
-            yes_votes_commit: pallas::Point::identity(),
-            all_votes_commit: pallas::Point::identity(),
+            yes_vote_commit: pallas::Point::identity(),
+            all_vote_commit: pallas::Point::identity(),
         }
     }
 }
@@ -133,8 +129,7 @@ pub struct ExecCallParams {
     pub proposal: pallas::Base,
     pub coin_0: pallas::Base,
     pub coin_1: pallas::Base,
-    pub yes_votes_commit: pallas::Point,
-    pub all_votes_commit: pallas::Point,
+    pub blind_total_vote: BlindAggregateVote,
     pub input_value_commit: pallas::Point,
 }
 

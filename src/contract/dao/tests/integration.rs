@@ -28,7 +28,9 @@ use darkfi_serial::{Decodable, Encodable};
 use log::debug;
 use rand::rngs::OsRng;
 
-use darkfi_dao_contract::{dao_client, money_client, note, wallet_cache::WalletCache, DaoFunction};
+use darkfi_dao_contract::{
+    dao_client, dao_model, money_client, note, wallet_cache::WalletCache, DaoFunction,
+};
 
 use darkfi_money_contract::{client::EncryptedNote, state::MoneyTransferParams, MoneyFunction};
 
@@ -502,10 +504,8 @@ async fn integration_test() -> Result<()> {
 
     let call = dao_client::VoteCall {
         inputs: vec![input],
-        vote: dao_client::VoteInfo {
-            vote_option,
-            vote_option_blind: pallas::Scalar::random(&mut OsRng),
-        },
+        vote_option,
+        yes_vote_blind: pallas::Scalar::random(&mut OsRng),
         vote_keypair: vote_keypair_1,
         proposal: proposal.clone(),
         dao: dao.clone(),
@@ -541,8 +541,8 @@ async fn integration_test() -> Result<()> {
         note
     };
     debug!(target: "dao", "User 1 voted!");
-    debug!(target: "dao", "  vote_option: {}", vote_note_1.vote.vote_option);
-    debug!(target: "dao", "  value: {}", vote_note_1.vote_value);
+    debug!(target: "dao", "  vote_option: {}", vote_note_1.vote_option);
+    debug!(target: "dao", "  value: {}", vote_note_1.all_vote_value);
 
     // User 2: NO
 
@@ -572,10 +572,8 @@ async fn integration_test() -> Result<()> {
 
     let call = dao_client::VoteCall {
         inputs: vec![input],
-        vote: dao_client::VoteInfo {
-            vote_option,
-            vote_option_blind: pallas::Scalar::random(&mut OsRng),
-        },
+        vote_option,
+        yes_vote_blind: pallas::Scalar::random(&mut OsRng),
         vote_keypair: vote_keypair_2,
         proposal: proposal.clone(),
         dao: dao.clone(),
@@ -608,8 +606,8 @@ async fn integration_test() -> Result<()> {
         note
     };
     debug!(target: "dao", "User 2 voted!");
-    debug!(target: "dao", "  vote_option: {}", vote_note_2.vote.vote_option);
-    debug!(target: "dao", "  value: {}", vote_note_2.vote_value);
+    debug!(target: "dao", "  vote_option: {}", vote_note_2.vote_option);
+    debug!(target: "dao", "  value: {}", vote_note_2.all_vote_value);
 
     // User 3: YES
 
@@ -639,10 +637,8 @@ async fn integration_test() -> Result<()> {
 
     let call = dao_client::VoteCall {
         inputs: vec![input],
-        vote: dao_client::VoteInfo {
-            vote_option,
-            vote_option_blind: pallas::Scalar::random(&mut OsRng),
-        },
+        vote_option,
+        yes_vote_blind: pallas::Scalar::random(&mut OsRng),
         vote_keypair: vote_keypair_3,
         proposal: proposal.clone(),
         dao: dao.clone(),
@@ -678,8 +674,8 @@ async fn integration_test() -> Result<()> {
         note
     };
     debug!(target: "dao", "User 3 voted!");
-    debug!(target: "dao", "  vote_option: {}", vote_note_3.vote.vote_option);
-    debug!(target: "dao", "  value: {}", vote_note_3.vote_value);
+    debug!(target: "dao", "  vote_option: {}", vote_note_3.vote_option);
+    debug!(target: "dao", "  value: {}", vote_note_3.all_vote_value);
 
     // Every votes produces a semi-homomorphic encryption of their vote.
     // Which is either yes or no
@@ -690,52 +686,59 @@ async fn integration_test() -> Result<()> {
     // voting period.
     // (that's if we want votes to be hidden during voting)
 
-    let mut yes_votes_value = 0;
-    let mut yes_votes_blind = pallas::Scalar::from(0);
-    let mut yes_votes_commit = pallas::Point::identity();
+    let mut total_yes_vote_value = 0;
+    let mut total_all_vote_value = 0;
 
-    let mut all_votes_value = 0;
-    let mut all_votes_blind = pallas::Scalar::from(0);
-    let mut all_votes_commit = pallas::Point::identity();
+    let mut blind_total_vote = dao_model::BlindAggregateVote::default();
 
-    // We were previously saving votes to a Vec<Update> for testing.
-    // However since Update is now UpdateBase it gets moved into update.apply().
-    // So we need to think of another way to run these tests.
-    //assert!(updates.len() == 3);
+    // Just keep track of these for the assert statements after the for loop
+    // but they aren't needed otherwise.
+    let mut total_yes_vote_blind = pallas::Scalar::from(0);
+    let mut total_all_vote_blind = pallas::Scalar::from(0);
 
-    for (i, note /* update*/) in [vote_note_1, vote_note_2, vote_note_3]
-        .iter() /*.zip(updates)*/
-        .enumerate()
-    {
-        let vote_commit = pedersen_commitment_u64(note.vote_value, note.vote_value_blind);
-        //assert!(update.value_commit == all_vote_value_commit);
-        all_votes_commit += vote_commit;
-        all_votes_blind += note.vote_value_blind;
+    for (i, note) in [vote_note_1, vote_note_2, vote_note_3].iter().enumerate() {
+        total_yes_vote_blind += note.yes_vote_blind;
+        total_all_vote_blind += note.all_vote_blind;
 
-        let yes_vote_commit = pedersen_commitment_u64(
-            note.vote.vote_option as u64 * note.vote_value,
-            note.vote.vote_option_blind,
+        // Update private values
+
+        // vote_option is either 0 or 1
+        let yes_vote_value = note.vote_option as u64 * note.all_vote_value;
+        total_yes_vote_value += yes_vote_value;
+        total_all_vote_value += note.all_vote_value;
+
+        // Update public values
+
+        let yes_vote_commit = pedersen_commitment_u64(yes_vote_value, note.yes_vote_blind);
+        let all_vote_commit = pedersen_commitment_u64(note.all_vote_value, note.all_vote_blind);
+
+        let blind_vote = dao_model::BlindAggregateVote { yes_vote_commit, all_vote_commit };
+        blind_total_vote.aggregate(blind_vote);
+
+        // Just for the debug
+        let vote_result = match note.vote_option {
+            true => "yes",
+            false => "no",
+        };
+        debug!(
+            target: "dao",
+            "Voter {} voted {} with {} gDRK",
+            i,
+            vote_result,
+            note.all_vote_value,
         );
-        //assert!(update.yes_vote_commit == yes_vote_commit);
-
-        yes_votes_commit += yes_vote_commit;
-        yes_votes_blind += note.vote.vote_option_blind;
-
-        let vote_option = note.vote.vote_option;
-
-        if vote_option {
-            yes_votes_value += note.vote_value;
-        }
-        all_votes_value += note.vote_value;
-        let vote_result: String = if vote_option { "yes".to_string() } else { "no".to_string() };
-
-        debug!(target: "dao", "Voter {} voted {}", i, vote_result);
     }
 
-    debug!(target: "dao", "Outcome = {} / {}", yes_votes_value, all_votes_value);
+    debug!(target: "dao", "Outcome = {} / {}", total_yes_vote_value, total_all_vote_value);
 
-    assert!(all_votes_commit == pedersen_commitment_u64(all_votes_value, all_votes_blind));
-    assert!(yes_votes_commit == pedersen_commitment_u64(yes_votes_value, yes_votes_blind));
+    assert!(
+        blind_total_vote.all_vote_commit ==
+            pedersen_commitment_u64(total_all_vote_value, total_all_vote_blind),
+    );
+    assert!(
+        blind_total_vote.yes_vote_commit ==
+            pedersen_commitment_u64(total_yes_vote_value, total_yes_vote_blind),
+    );
 
     // =======================================================
     // Execute the vote
@@ -820,10 +823,10 @@ async fn integration_test() -> Result<()> {
     let call = dao_client::ExecCall {
         proposal,
         dao,
-        yes_votes_value,
-        all_votes_value,
-        yes_votes_blind,
-        all_votes_blind,
+        yes_vote_value: total_yes_vote_value,
+        all_vote_value: total_all_vote_value,
+        yes_vote_blind: total_yes_vote_blind,
+        all_vote_blind: total_all_vote_blind,
         user_serial,
         user_coin_blind,
         dao_serial,
