@@ -62,16 +62,19 @@ pub fn parse_token_pair(s: &str) -> Result<(TokenId, TokenId)> {
 
 /// Fun police go away
 pub async fn kaching() -> Result<()> {
-    const WALLET_MP3: &[u8] = include_bytes!("../wallet.mp3");
-    const MP3_DROP: &str = "/tmp/wallet.mp3";
+    #[cfg(feature = "play")]
+    {
+        const WALLET_MP3: &[u8] = include_bytes!("../wallet.mp3");
+        const MP3_DROP: &str = "/tmp/wallet.mp3";
 
-    if !Path::new(MP3_DROP).exists() {
-        let mut f = File::create(MP3_DROP).await?;
-        f.write_all(WALLET_MP3).await?;
-    }
+        if !Path::new(MP3_DROP).exists() {
+            let mut f = File::create(MP3_DROP).await?;
+            f.write_all(WALLET_MP3).await?;
+        }
 
-    if let Err(_) = play::play(MP3_DROP) {
-        return Ok(())
+        if let Err(_) = play::play(MP3_DROP) {
+            return Ok(())
+        }
     }
 
     Ok(())

@@ -1583,6 +1583,7 @@ dependencies = [
  "darkfi-money-contract",
  "darkfi-sdk",
  "darkfi-serial",
+ "pkg-config",
  "play",
  "prettytable-rs",
  "rand",
