@@ -85,11 +85,8 @@ impl Darkfid {
 
         // Execute the query and see if we find a row
         let row = match sqlx::query(params[0].as_str().unwrap()).fetch_one(&mut conn).await {
-            Ok(v) => v,
-            Err(e) => {
-                error!("[RPC] wallet.query_row_single: Failed to execute SQL query: {}", e);
-                return server_error(RpcError::NoRowsFoundInWallet, id, None)
-            }
+            Ok(v) => Some(v),
+            Err(_) => None,
         };
 
         // Try to decode the row into what was requested
@@ -98,6 +95,11 @@ impl Darkfid {
         for (typ, col) in types.iter().zip(names) {
             match typ {
                 QueryType::Integer => {
+                    let Some(ref row) = row else {
+                        error!("[RPC] wallet.query_row_single: Got None for QueryType::Integer");
+                        return server_error(RpcError::NoRowsFoundInWallet, id, None)
+                    };
+
                     let value: i32 = match row.try_get(col) {
                         Ok(v) => v,
                         Err(e) => {
@@ -107,9 +109,15 @@ impl Darkfid {
                     };
 
                     ret.push(json!(value));
+                    continue
                 }
 
                 QueryType::Blob => {
+                    let Some(ref row) = row else {
+                        error!("[RPC] wallet.query_row_single: Got None for QueryType::Blob");
+                        return server_error(RpcError::NoRowsFoundInWallet, id, None)
+                    };
+
                     let value: Vec<u8> = match row.try_get(col) {
                         Ok(v) => v,
                         Err(e) => {
@@ -119,6 +127,43 @@ impl Darkfid {
                     };
 
                     ret.push(json!(value));
+                    continue
+                }
+
+                QueryType::OptionInteger => {
+                    let Some(ref row) = row else {
+                        ret.push(json!(None::<i32>));
+                        continue
+                    };
+
+                    let value: i32 = match row.try_get(col) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("[RPC] wallet.query_row_single: {}", e);
+                            return JsonError::new(ParseError, None, id).into()
+                        }
+                    };
+
+                    ret.push(json!(value));
+                    continue
+                }
+
+                QueryType::OptionBlob => {
+                    let Some(ref row) = row else {
+                        ret.push(json!(None::<Vec<u8>>));
+                        continue
+                    };
+
+                    let value: Vec<u8> = match row.try_get(col) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("[RPC] wallet.query_row_single: {}", e);
+                            return JsonError::new(ParseError, None, id).into()
+                        }
+                    };
+
+                    ret.push(json!(value));
+                    continue
                 }
 
                 _ => unreachable!(),
