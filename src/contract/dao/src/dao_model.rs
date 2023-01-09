@@ -34,67 +34,56 @@ impl From<pallas::Base> for DaoBulla {
     }
 }
 
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct ProposalVotes {
-    // TODO: Might be more logical to have `yes_votes_commit` and `no_votes_commit`
-    /// Weighted vote commit
-    pub yes_votes_commit: pallas::Point,
-    /// All value staked in the vote
-    pub all_votes_commit: pallas::Point,
-    /// Vote nullifiers
-    pub vote_nullifiers: Vec<Nullifier>,
-}
-
-impl ProposalVotes {
-    pub fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
-        self.vote_nullifiers.iter().any(|n| n == nullifier)
-    }
-}
-
-impl Default for ProposalVotes {
-    fn default() -> Self {
-        Self {
-            yes_votes_commit: pallas::Point::identity(),
-            all_votes_commit: pallas::Point::identity(),
-            vote_nullifiers: vec![],
-        }
-    }
-}
+// DAO::mint()
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoMintParams {
+pub struct MintCallParams {
     pub dao_bulla: DaoBulla,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoMintUpdate {
+pub struct MintCallUpdate {
     pub dao_bulla: DaoBulla,
+}
+
+// DAO::propose()
+
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct ProposeCallParams {
+    pub dao_merkle_root: MerkleNode,
+    pub token_commit: pallas::Base,
+    pub proposal_bulla: pallas::Base,
+    pub ciphertext: Vec<u8>,
+    pub ephem_public: PublicKey,
+    pub inputs: Vec<ProposeCallParamsInput>,
 }
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct ProposeInput {
+pub struct ProposeCallParamsInput {
     pub value_commit: pallas::Point,
     pub merkle_root: MerkleNode,
     pub signature_public: PublicKey,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoProposeParams {
-    pub dao_merkle_root: MerkleNode,
+pub struct ProposeCallUpdate {
+    pub proposal_bulla: pallas::Base,
+}
+
+// DAO::vote()
+
+#[derive(SerialEncodable, SerialDecodable)]
+pub struct VoteCallParams {
     pub token_commit: pallas::Base,
     pub proposal_bulla: pallas::Base,
+    pub yes_vote_commit: pallas::Point,
     pub ciphertext: Vec<u8>,
     pub ephem_public: PublicKey,
-    pub inputs: Vec<ProposeInput>,
+    pub inputs: Vec<VoteCallParamsInput>,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoProposeUpdate {
-    pub proposal_bulla: pallas::Base,
-}
-
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct VoteCallInput {
+pub struct VoteCallParamsInput {
     pub nullifier: Nullifier,
     pub vote_commit: pallas::Point,
     pub merkle_root: MerkleNode,
@@ -102,27 +91,45 @@ pub struct VoteCallInput {
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoVoteParams {
-    pub token_commit: pallas::Base,
+pub struct VoteCallUpdate {
     pub proposal_bulla: pallas::Base,
-    pub yes_vote_commit: pallas::Point,
-    pub ciphertext: Vec<u8>,
-    pub ephem_public: PublicKey,
-    pub inputs: Vec<VoteCallInput>,
+    pub proposal_votes: BlindAggregateVote,
+    pub vote_nullifiers: Vec<Nullifier>,
 }
 
+/// Represents a single or multiple blinded votes. These can be summed together.
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoVoteUpdate {
-    pub proposal_bulla: pallas::Base,
-    // bad but lets get it just working...
-    pub proposal_votes: ProposalVotes,
-    //pub vote_nullifiers: Vec<Nullifier>,
-    //pub yes_vote_commit: pallas::Point,
-    //pub all_vote_commit: pallas::Point,
+pub struct BlindAggregateVote {
+    /// Weighted vote commit
+    pub yes_votes_commit: pallas::Point,
+    /// All value staked in the vote
+    pub all_votes_commit: pallas::Point,
 }
 
+impl BlindAggregateVote {
+    //pub fn nullifier_exists(&self, nullifier: &Nullifier) -> bool {
+    //    self.vote_nullifiers.iter().any(|n| n == nullifier)
+    //}
+
+    pub fn combine(&mut self, other: BlindAggregateVote) {
+        self.yes_votes_commit += other.yes_votes_commit;
+        self.all_votes_commit += other.all_votes_commit;
+    }
+}
+
+impl Default for BlindAggregateVote {
+    fn default() -> Self {
+        Self {
+            yes_votes_commit: pallas::Point::identity(),
+            all_votes_commit: pallas::Point::identity(),
+        }
+    }
+}
+
+// DAO::exec()
+
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoExecParams {
+pub struct ExecCallParams {
     pub proposal: pallas::Base,
     pub coin_0: pallas::Base,
     pub coin_1: pallas::Base,
@@ -132,6 +139,6 @@ pub struct DaoExecParams {
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoExecUpdate {
+pub struct ExecCallUpdate {
     pub proposal: pallas::Base,
 }

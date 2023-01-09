@@ -30,7 +30,7 @@ use darkfi::{
 };
 
 use crate::{
-    dao_model::{DaoProposeParams, ProposeInput},
+    dao_model::{ProposeCallParams, ProposeCallParamsInput},
     note,
 };
 
@@ -75,7 +75,7 @@ impl ProposeCall {
         burn_pk: &ProvingKey,
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
-    ) -> Result<(DaoProposeParams, Vec<Proof>)> {
+    ) -> Result<(ProposeCallParams, Vec<Proof>)> {
         let mut proofs = vec![];
 
         let gov_token_blind = pallas::Base::random(&mut OsRng);
@@ -163,7 +163,7 @@ impl ProposeCall {
                 .expect("DAO::propose() proving error!");
             proofs.push(input_proof);
 
-            let input = ProposeInput { value_commit, merkle_root, signature_public };
+            let input = ProposeCallParamsInput { value_commit, merkle_root, signature_public };
             inputs.push(input);
         }
 
@@ -249,7 +249,7 @@ impl ProposeCall {
 
         let note = ProposeNote { proposal: self.proposal };
         let enc_note = note::encrypt(&note, &self.dao.public_key).unwrap();
-        let params = DaoProposeParams {
+        let params = ProposeCallParams {
             dao_merkle_root: self.dao_merkle_root,
             proposal_bulla,
             token_commit,

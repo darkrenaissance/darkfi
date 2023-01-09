@@ -25,7 +25,7 @@ use darkfi_sdk::crypto::{pallas, poseidon_hash, PublicKey, TokenId};
 use log::debug;
 use rand::rngs::OsRng;
 
-use crate::dao_model::DaoMintParams;
+use crate::dao_model::MintCallParams;
 
 #[derive(Clone)]
 pub struct DaoInfo {
@@ -42,7 +42,7 @@ pub fn make_mint_call(
     dao: &DaoInfo,
     dao_mint_zkbin: &ZkBinary,
     dao_mint_pk: &ProvingKey,
-) -> Result<(DaoMintParams, Vec<Proof>)> {
+) -> Result<(MintCallParams, Vec<Proof>)> {
     debug!(target: "dao", "Building DAO contract mint transaction");
 
     let dao_proposer_limit = pallas::Base::from(dao.proposer_limit);
@@ -80,7 +80,7 @@ pub fn make_mint_call(
     let circuit = ZkCircuit::new(prover_witnesses, dao_mint_zkbin.clone());
     let proof = Proof::create(dao_mint_pk, &[circuit], &public, &mut OsRng)?;
 
-    let dao_mint_params = DaoMintParams { dao_bulla: dao_bulla.into() };
+    let dao_mint_params = MintCallParams { dao_bulla: dao_bulla.into() };
 
     Ok((dao_mint_params, vec![proof]))
 }

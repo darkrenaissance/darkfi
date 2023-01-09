@@ -32,7 +32,7 @@ use darkfi::{
 
 use super::{DaoInfo, ProposalInfo};
 use crate::{
-    dao_model::{DaoVoteParams, VoteCallInput},
+    dao_model::{VoteCallParams, VoteCallParamsInput},
     note,
 };
 
@@ -75,7 +75,7 @@ impl VoteCall {
         burn_pk: &ProvingKey,
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
-    ) -> Result<(DaoVoteParams, Vec<Proof>)> {
+    ) -> Result<(VoteCallParams, Vec<Proof>)> {
         debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
@@ -168,7 +168,7 @@ impl VoteCall {
                 .expect("DAO::vote() proving error!");
             proofs.push(input_proof);
 
-            let input = VoteCallInput {
+            let input = VoteCallParamsInput {
                 nullifier: Nullifier::from(nullifier),
                 vote_commit,
                 merkle_root,
@@ -270,7 +270,7 @@ impl VoteCall {
         let note = VoteNote { vote: self.vote, vote_value, vote_value_blind };
         let enc_note = note::encrypt(&note, &self.vote_keypair.public).unwrap();
 
-        let params = DaoVoteParams {
+        let params = VoteCallParams {
             token_commit,
             proposal_bulla,
             yes_vote_commit,

@@ -31,7 +31,7 @@ use darkfi::{
 };
 
 use super::{DaoInfo, ProposalInfo};
-use crate::dao_model::DaoExecParams;
+use crate::dao_model::ExecCallParams;
 
 pub struct ExecCall {
     pub proposal: ProposalInfo,
@@ -55,7 +55,7 @@ impl ExecCall {
         self,
         exec_zkbin: &ZkBinary,
         exec_pk: &ProvingKey,
-    ) -> Result<(DaoExecParams, Vec<Proof>)> {
+    ) -> Result<(ExecCallParams, Vec<Proof>)> {
         debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
@@ -185,7 +185,7 @@ impl ExecCall {
             .expect("DAO::exec() proving error!)");
         proofs.push(input_proof);
 
-        let params = DaoExecParams {
+        let params = ExecCallParams {
             proposal: proposal_bulla,
             coin_0,
             coin_1,

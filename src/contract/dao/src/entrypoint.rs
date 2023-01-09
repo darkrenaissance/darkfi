@@ -38,8 +38,8 @@ use darkfi_money_contract::{
 
 use crate::{
     dao_model::{
-        DaoExecParams, DaoExecUpdate, DaoMintParams, DaoMintUpdate, DaoProposeParams,
-        DaoProposeUpdate, DaoVoteParams, DaoVoteUpdate, ProposalVotes,
+        BlindAggregateVote, ExecCallParams, ExecCallUpdate, MintCallParams, MintCallUpdate,
+        ProposeCallParams, ProposeCallUpdate, VoteCallParams, VoteCallUpdate,
     },
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
@@ -151,7 +151,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
         Err(_) => db_init(cid, DAO_PROPOSAL_ROOTS_TREE)?,
     };*/
 
-    // Set up a database tree to hold proposal votes (k: proposalbulla, v: ProposalVotes)
+    // Set up a database tree to hold proposal votes (k: proposalbulla, v: BlindAggregateVote)
     let _ = match db_lookup(cid, DAO_PROPOSAL_VOTES_TREE) {
         Ok(v) => v,
         Err(_) => db_init(cid, DAO_PROPOSAL_VOTES_TREE)?,
@@ -173,11 +173,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
     match DaoFunction::try_from(self_.data[0])? {
         DaoFunction::Mint => {
-            let params: DaoMintParams = deserialize(&self_.data[1..])?;
+            let params: MintCallParams = deserialize(&self_.data[1..])?;
 
             // No checks in Mint, just return the update.
             // TODO: Should it check that there isn't an existing one?
-            let update = DaoMintUpdate { dao_bulla: params.dao_bulla };
+            let update = MintCallUpdate { dao_bulla: params.dao_bulla };
             let mut update_data = vec![];
             update_data.write_u8(DaoFunction::Mint as u8)?;
             update.encode(&mut update_data)?;
@@ -188,7 +188,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
 
         DaoFunction::Propose => {
-            let params: DaoProposeParams = deserialize(&self_.data[1..])?;
+            let params: ProposeCallParams = deserialize(&self_.data[1..])?;
 
             // Check the Merkle roots for the input coins are valid
             let money_cid = *MONEY_CONTRACT_ID;
@@ -210,7 +210,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             // TODO: Look at gov tokens avoid using already spent ones
             // Need to spend original coin and generate 2 nullifiers?
 
-            let update = DaoProposeUpdate { proposal_bulla: params.proposal_bulla };
+            let update = ProposeCallUpdate { proposal_bulla: params.proposal_bulla };
             let mut update_data = vec![];
             update_data.write_u8(DaoFunction::Propose as u8)?;
             update.encode(&mut update_data)?;
@@ -221,7 +221,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
 
         DaoFunction::Vote => {
-            let params: DaoVoteParams = deserialize(&self_.data[1..])?;
+            let params: VoteCallParams = deserialize(&self_.data[1..])?;
 
             let money_cid = *MONEY_CONTRACT_ID;
 
@@ -231,12 +231,14 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                 msg!("Invalid proposal {:?}", params.proposal_bulla);
                 return Err(ContractError::Custom(4))
             };
-            let mut proposal_votes: ProposalVotes = deserialize(&proposal_votes)?;
+            let mut proposal_votes: BlindAggregateVote = deserialize(&proposal_votes)?;
 
             // Check the Merkle roots and nullifiers for the input coins are valid
             let money_roots_db = db_lookup(money_cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
             let money_nullifier_db = db_lookup(money_cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
             let dao_vote_nulls_db = db_lookup(cid, DAO_VOTE_NULLS)?;
+
+            let mut vote_nullifiers = vec![];
 
             for input in &params.inputs {
                 if !db_contains_key(money_roots_db, &serialize(&input.merkle_root))? {
@@ -249,24 +251,27 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     return Err(ContractError::Custom(6))
                 }
 
-                if proposal_votes.vote_nullifiers.contains(&input.nullifier) ||
-                    db_contains_key(dao_vote_nulls_db, &serialize(&input.nullifier))?
+                // Prefix nullifier with proposal bulla so nullifiers from different proposals
+                // don't interfere with each other.
+                let null_key = serialize(&(params.proposal_bulla, input.nullifier));
+
+                if vote_nullifiers.contains(&input.nullifier) ||
+                    db_contains_key(dao_vote_nulls_db, &null_key)?
                 {
                     msg!("Attempted double vote");
                     return Err(ContractError::Custom(7))
                 }
 
                 proposal_votes.all_votes_commit += input.vote_commit;
-                proposal_votes.vote_nullifiers.push(input.nullifier);
+                vote_nullifiers.push(input.nullifier);
             }
 
             proposal_votes.yes_votes_commit += params.yes_vote_commit;
 
-            let update = DaoVoteUpdate {
+            let update = VoteCallUpdate {
                 proposal_bulla: params.proposal_bulla,
-                proposal_votes, //vote_nullifiers,
-                                //yes_vote_commit: params.yes_vote_commit,
-                                //all_vote_commit,
+                proposal_votes,
+                vote_nullifiers,
             };
             let mut update_data = vec![];
             update_data.write_u8(DaoFunction::Vote as u8)?;
@@ -278,7 +283,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
 
         DaoFunction::Exec => {
-            let params: DaoExecParams = deserialize(&self_.data[1..])?;
+            let params: ExecCallParams = deserialize(&self_.data[1..])?;
 
             // =============================
             // Enforce tx has correct format
@@ -317,13 +322,13 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                 msg!("Proposal {:?} not found in db", params.proposal);
                 return Err(ContractError::Custom(1));
             };
-            let proposal_votes: ProposalVotes = deserialize(&proposal_votes)?;
+            let proposal_votes: BlindAggregateVote = deserialize(&proposal_votes)?;
 
-            // 4. Check yes_votes_commit and all_votes_commit are the same as in ProposalVotes
+            // 4. Check yes_votes_commit and all_votes_commit are the same as in BlindAggregateVote
             assert!(proposal_votes.yes_votes_commit == params.yes_votes_commit);
             assert!(proposal_votes.all_votes_commit == params.all_votes_commit);
 
-            let update = DaoExecUpdate { proposal: params.proposal };
+            let update = ExecCallUpdate { proposal: params.proposal };
             let mut update_data = vec![];
             update_data.write_u8(DaoFunction::Exec as u8)?;
             update.encode(&mut update_data)?;
@@ -338,7 +343,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
     match DaoFunction::try_from(ix[0])? {
         DaoFunction::Mint => {
-            let update: DaoMintUpdate = deserialize(&ix[1..])?;
+            let update: MintCallUpdate = deserialize(&ix[1..])?;
 
             let bulla_db = db_lookup(cid, DAO_BULLA_TREE)?;
             let roots_db = db_lookup(cid, DAO_ROOTS_TREE)?;
@@ -350,7 +355,7 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
 
         DaoFunction::Propose => {
-            let update: DaoProposeUpdate = deserialize(&ix[1..])?;
+            let update: ProposeCallUpdate = deserialize(&ix[1..])?;
 
             //let proposal_tree_db = db_lookup(cid, DAO_PROPOSAL_TREE)?;
             //let proposal_root_db = db_lookup(cid, DAO_PROPOSAL_ROOTS_TREE)?;
@@ -366,19 +371,18 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
             )?;
             */
 
-            let pv = ProposalVotes::default();
+            let pv = BlindAggregateVote::default();
             db_set(proposal_vote_db, &serialize(&update.proposal_bulla), &serialize(&pv))?;
 
             Ok(())
         }
 
         DaoFunction::Vote => {
-            let update: DaoVoteUpdate = deserialize(&ix[1..])?;
+            let update: VoteCallUpdate = deserialize(&ix[1..])?;
 
             // Perform this code:
-            //votes_info.yes_votes_commit += self.yes_vote_commit;
-            //votes_info.all_votes_commit += self.all_vote_commit;
-            //votes_info.vote_nulls.append(&mut self.vote_nulls);
+            //   total_yes_votes_commit += update.yes_vote_commit
+            //   total_all_votes_commit += update.all_vote_commit
 
             let proposal_vote_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
             db_set(
@@ -387,17 +391,21 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
                 &serialize(&update.proposal_votes),
             )?;
 
+            // We are essentially doing: vote_nulls.append(update.nulls)
+
             let dao_vote_nulls_db = db_lookup(cid, DAO_VOTE_NULLS)?;
 
-            for nullifier in update.proposal_votes.vote_nullifiers {
-                db_set(dao_vote_nulls_db, &serialize(&nullifier), &[])?;
+            for nullifier in update.vote_nullifiers {
+                // Uniqueness is enforced for (proposal_bulla, nullifier)
+                let key = serialize(&(update.proposal_bulla, nullifier));
+                db_set(dao_vote_nulls_db, &key, &[])?;
             }
 
             Ok(())
         }
 
         DaoFunction::Exec => {
-            let update: DaoExecUpdate = deserialize(&ix[1..])?;
+            let update: ExecCallUpdate = deserialize(&ix[1..])?;
 
             // Remove proposal from db
             let proposal_vote_db = db_lookup(cid, DAO_PROPOSAL_VOTES_TREE)?;
@@ -416,7 +424,7 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
 
     match DaoFunction::try_from(self_.data[0])? {
         DaoFunction::Mint => {
-            let params: DaoMintParams = deserialize(&self_.data[1..])?;
+            let params: MintCallParams = deserialize(&self_.data[1..])?;
 
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
             // TODO: Why no signatures? Should it be signed with the DAO keypair?
@@ -435,7 +443,7 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
         }
 
         DaoFunction::Propose => {
-            let params: DaoProposeParams = deserialize(&self_.data[1..])?;
+            let params: ProposeCallParams = deserialize(&self_.data[1..])?;
             assert!(!params.inputs.is_empty());
 
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -485,7 +493,7 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
         }
 
         DaoFunction::Vote => {
-            let params: DaoVoteParams = deserialize(&self_.data[1..])?;
+            let params: VoteCallParams = deserialize(&self_.data[1..])?;
             assert!(!params.inputs.is_empty());
 
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -539,7 +547,7 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
         }
 
         DaoFunction::Exec => {
-            let params: DaoExecParams = deserialize(&self_.data[1..])?;
+            let params: ExecCallParams = deserialize(&self_.data[1..])?;
 
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
             let signature_pubkeys: Vec<PublicKey> = vec![];
