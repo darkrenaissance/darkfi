@@ -25,7 +25,7 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{build_half_swap_tx, EncryptedNote, Note},
-    state::MoneyTransferParams,
+    model::MoneyTransferParams,
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{

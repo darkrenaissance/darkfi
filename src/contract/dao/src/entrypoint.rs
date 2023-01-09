@@ -32,7 +32,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
 
 use darkfi_money_contract::{
-    state::MoneyTransferParams, MoneyFunction, MONEY_CONTRACT_COIN_ROOTS_TREE,
+    model::MoneyTransferParams, MoneyFunction, MONEY_CONTRACT_COIN_ROOTS_TREE,
     MONEY_CONTRACT_NULLIFIERS_TREE,
 };
 

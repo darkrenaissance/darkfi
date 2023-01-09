@@ -37,7 +37,7 @@ use darkfi_money_contract::{
         MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT,
         MONEY_INFO_TABLE,
     },
-    state::{MoneyTransferParams, Output},
+    model::{MoneyTransferParams, Output},
     MoneyFunction,
 };
 use darkfi_sdk::{

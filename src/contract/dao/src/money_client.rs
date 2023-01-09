@@ -29,7 +29,7 @@ use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
     client::{create_transfer_burn_proof, create_transfer_mint_proof, Note},
-    state::{ClearInput, Input, MoneyTransferParams, Output},
+    model::{ClearInput, Input, MoneyTransferParams, Output},
 };
 
 pub struct TransferCall {

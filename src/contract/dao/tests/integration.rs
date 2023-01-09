@@ -32,7 +32,7 @@ use darkfi_dao_contract::{
     dao_client, dao_model, money_client, note, wallet_cache::WalletCache, DaoFunction,
 };
 
-use darkfi_money_contract::{client::EncryptedNote, state::MoneyTransferParams, MoneyFunction};
+use darkfi_money_contract::{client::EncryptedNote, model::MoneyTransferParams, MoneyFunction};
 
 mod harness;
 use harness::{init_logger, DaoTestHarness};
