@@ -207,7 +207,7 @@ impl Drk {
         }
 
         eprintln!("Serializing the Merkle tree into the wallet");
-        self.put_tree(&tree).await?;
+        self.put_money_tree(&tree).await?;
         eprintln!("Merkle tree written successfully");
 
         if !nullifiers.is_empty() {
@@ -336,7 +336,7 @@ impl Drk {
     /// it looks for a checkpoint in the wallet to reset and start scanning from.
     pub async fn scan_blocks(&self, reset: bool) -> Result<()> {
         let mut sl = if reset {
-            self.reset_tree().await?;
+            self.reset_money_tree().await?;
             0
         } else {
             self.wallet_last_scanned_slot().await?

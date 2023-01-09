@@ -20,6 +20,9 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, util::parse::encode_base10, wallet::walletdb::QueryType};
+use darkfi_dao_contract::dao_client::{
+    DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE, DAO_TREES_TABLE,
+};
 use darkfi_money_contract::client::{
     Coin, Note, OwnCoin, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
     MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
@@ -32,7 +35,8 @@ use darkfi_money_contract::client::{
 };
 use darkfi_sdk::{
     crypto::{
-        constants::MERKLE_DEPTH, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey, TokenId,
+        constants::MERKLE_DEPTH, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
+        TokenId,
     },
     incrementalmerkletree,
     incrementalmerkletree::bridgetree::BridgeTree,
@@ -46,9 +50,8 @@ use serde_json::json;
 use super::Drk;
 
 impl Drk {
-    /// Initialize wallet with tables for the Money contract.
-    /// This should be performed initially before doing other operations.
-    pub async fn wallet_initialize(&self) -> Result<()> {
+    /// Initialize wallet with tables for the Money Contract.
+    async fn wallet_initialize_money(&self) -> Result<()> {
         let wallet_schema = include_str!("../../../src/contract/money/wallet.sql");
 
         // We perform a request to darkfid with the schema to initialize
@@ -57,9 +60,9 @@ impl Drk {
         let rep = self.rpc_client.request(req).await?;
 
         if rep == true {
-            println!("Successfully initialized wallet schema for Money Contract");
+            println!("Successfully initialized wallet schema for the Money Contract");
         } else {
-            println!("Got unexpected reply from darkfid: {}", rep);
+            println!("Got unxpected reply from darkfid: {}", rep);
         }
 
         // Check if we have to initialize the Merkle tree.
@@ -80,9 +83,9 @@ impl Drk {
 
         if tree_needs_init {
             println!("Initializing Merkle tree");
-            let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
-            self.put_tree(&tree).await?;
-            println!("Successfully initialized Merkle tree");
+            let tree = MerkleTree::new(100);
+            self.put_money_tree(&tree).await?;
+            println!("Successfully initialized Merkle tree for Money Contract");
         }
 
         if (self.wallet_last_scanned_slot().await).is_err() {
@@ -95,6 +98,56 @@ impl Drk {
             let _ = self.rpc_client.request(req).await?;
         }
 
+        Ok(())
+    }
+
+    /// Initialize wallet with tables for the DAO Contract.
+    async fn wallet_initialize_dao(&self) -> Result<()> {
+        let wallet_schema = include_str!("../../../src/contract/dao/wallet.sql");
+
+        // We perform a request to darkfid with the schema to initialize
+        // the necessary tables in the wallet.
+        let req = JsonRequest::new("wallet.exec_sql", json!([wallet_schema]));
+        let rep = self.rpc_client.request(req).await?;
+
+        if rep == true {
+            println!("Successfully initialized wallet schema for the DAO Contract");
+        } else {
+            println!("Got unxpected reply from darkfid: {}", rep);
+        }
+
+        // Check if we have to initialize the Merkle trees. We check if one exists,
+        // but we actually have to create two.
+        let mut tree_needs_init = false;
+        let query = format!("SELECT {} FROM {}", DAO_TREES_COL_DAOS_TREE, DAO_TREES_TABLE);
+        let params = json!([query, QueryType::Blob as u8, DAO_TREES_COL_DAOS_TREE]);
+        let req = JsonRequest::new("wallet.query_row_single", params);
+
+        // For now, on success, we don't care what's returned, but maybe in
+        // the future we should actually check it?
+        // TODO: The RPC needs a better variant for errors so detailed inspection
+        //       can be done with error codes and all that.
+        if (self.rpc_client.request(req).await).is_err() {
+            tree_needs_init = true;
+        }
+
+        if tree_needs_init {
+            println!("Initializing DAO Merkle trees");
+            let daos_tree = MerkleTree::new(100);
+            let proposals_tree = MerkleTree::new(100);
+            self.put_dao_trees(&daos_tree, &proposals_tree).await?;
+            println!("Successfully initialized Merkle trees for DAO Contract");
+        }
+
+        Ok(())
+    }
+
+    /// Main orchestration for wallet initialization. Internally, it initializes
+    /// the wallet structure for the Money contract and the DAO contract.
+    /// This should be performed initially before doing other operations.
+    pub async fn wallet_initialize(&self) -> Result<()> {
+        self.wallet_initialize_money().await?;
+        self.wallet_initialize_dao().await?;
         Ok(())
     }
 
@@ -504,8 +557,8 @@ impl Drk {
         Ok(())
     }
 
-    /// Replace the Merkle tree in the wallet
-    pub async fn put_tree(&self, tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>) -> Result<()> {
+    /// Replace the Money Merkle tree in the wallet
+    pub async fn put_money_tree(&self, tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>) -> Result<()> {
         let query = format!(
             "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1);",
             MONEY_TREE_TABLE, MONEY_TREE_TABLE, MONEY_TREE_COL_TREE
@@ -518,19 +571,57 @@ impl Drk {
         Ok(())
     }
 
-    /// Reset the Merkle tree and coins in the wallet
-    pub async fn reset_tree(&self) -> Result<()> {
-        println!("Resetting Merkle tree");
+    /// Reset the Money Contract Merkle tree and coins in the wallet
+    pub async fn reset_money_tree(&self) -> Result<()> {
+        println!("Resetting Money Merkle tree");
         let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
-        self.put_tree(&tree).await?;
-        println!("Successfully reset Merkle tree");
+        self.put_money_tree(&tree).await?;
+        println!("Successfully reset Money Merkle tree");
 
         println!("Resetting coins");
         let query = format!("DELETE FROM {};", MONEY_COINS_TABLE);
         let params = json!([query]);
         let req = JsonRequest::new("wallet.exec_sql", params);
         let _ = self.rpc_client.request(req).await?;
-        println!("Successfully coins");
+        println!("Successfully reset coins");
+
+        Ok(())
+    }
+
+    /// Replace the DAO Merkle trees in the wallet
+    pub async fn put_dao_trees(
+        &self,
+        daos_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
+        proposals_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    ) -> Result<()> {
+        let query = format!(
+            "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1);",
+            DAO_TREES_TABLE, DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE
+        );
+
+        let params = json!([query, QueryType::Blob as u8, serialize(daos_tree)]);
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let _ = self.rpc_client.request(req).await?;
+
+        let query = format!(
+            "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1);",
+            DAO_TREES_TABLE, DAO_TREES_TABLE, DAO_TREES_COL_PROPOSALS_TREE
+        );
+
+        let params = json!([query, QueryType::Blob as u8, serialize(proposals_tree)]);
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let _ = self.rpc_client.request(req).await?;
+
+        Ok(())
+    }
+
+    /// Reset the DAO Contract Merkle trees in the wallet
+    pub async fn reset_dao_trees(&self) -> Result<()> {
+        println!("Resetting DAO Merkle trees");
+        let tree0 = MerkleTree::new(100);
+        let tree1 = MerkleTree::new(100);
+        self.put_dao_trees(&tree0, &tree1).await?;
+        println!("Successfully reset DAO Merkle trees");
 
         Ok(())
     }

@@ -1580,6 +1580,7 @@ dependencies = [
  "bs58",
  "clap 4.0.32",
  "darkfi",
+ "darkfi-dao-contract",
  "darkfi-money-contract",
  "darkfi-sdk",
  "darkfi-serial",
