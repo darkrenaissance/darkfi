@@ -21,6 +21,10 @@ use std::collections::HashMap;
 use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, util::parse::encode_base10, wallet::walletdb::QueryType};
 use darkfi_dao_contract::dao_client::{
+    DAO_DAOS_COL_APPROVAL_RATIO_BASE, DAO_DAOS_COL_APPROVAL_RATIO_QUOT, DAO_DAOS_COL_BULLA_BLIND,
+    DAO_DAOS_COL_CALL_INDEX, DAO_DAOS_COL_DAO_ID, DAO_DAOS_COL_GOV_TOKEN_ID,
+    DAO_DAOS_COL_LEAF_POSITION, DAO_DAOS_COL_NAME, DAO_DAOS_COL_PROPOSER_LIMIT,
+    DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_SECRET, DAO_DAOS_COL_TX_HASH, DAO_DAOS_TABLE,
     DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE, DAO_TREES_TABLE,
 };
 use darkfi_money_contract::client::{
@@ -48,6 +52,7 @@ use rand::rngs::OsRng;
 use serde_json::json;
 
 use super::Drk;
+use crate::dao::Dao;
 
 impl Drk {
     /// Initialize wallet with tables for the Money Contract.
@@ -381,7 +386,7 @@ impl Drk {
         }
 
         if table.is_empty() {
-            println!("No unspent balances found");
+            eprintln!("No unspent balances found");
         } else {
             println!("{}", table);
         }
@@ -594,17 +599,17 @@ impl Drk {
 
     /// Reset the Money Contract Merkle tree and coins in the wallet
     pub async fn reset_money_tree(&self) -> Result<()> {
-        println!("Resetting Money Merkle tree");
+        eprintln!("Resetting Money Merkle tree");
         let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
         self.put_money_tree(&tree).await?;
-        println!("Successfully reset Money Merkle tree");
+        eprintln!("Successfully reset Money Merkle tree");
 
-        println!("Resetting coins");
+        eprintln!("Resetting coins");
         let query = format!("DELETE FROM {};", MONEY_COINS_TABLE);
         let params = json!([query]);
         let req = JsonRequest::new("wallet.exec_sql", params);
         let _ = self.rpc_client.request(req).await?;
-        println!("Successfully reset coins");
+        eprintln!("Successfully reset coins");
 
         Ok(())
     }
@@ -637,12 +642,112 @@ impl Drk {
 
     /// Reset the DAO Contract Merkle trees in the wallet
     pub async fn reset_dao_trees(&self) -> Result<()> {
-        println!("Resetting DAO Merkle trees");
+        eprintln!("Resetting DAO Merkle trees");
         let tree0 = MerkleTree::new(100);
         let tree1 = MerkleTree::new(100);
         self.put_dao_trees(&tree0, &tree1).await?;
-        println!("Successfully reset DAO Merkle trees");
+        eprintln!("Successfully reset DAO Merkle trees");
 
         Ok(())
+    }
+
+    /// Fetch all DAOs from the wallet
+    /// We use this a lot because we don't worry too much about performance in this
+    /// tool, and also in practice probably not a lot of DAOs will be in a single
+    /// wallet.
+    pub async fn wallet_get_daos(&self) -> Result<Vec<Dao>> {
+        let query = format!("SELECT * FROM {}", DAO_DAOS_TABLE);
+
+        let params = json!([
+            query,
+            QueryType::Integer as u8,
+            DAO_DAOS_COL_DAO_ID,
+            QueryType::Blob as u8,
+            DAO_DAOS_COL_NAME,
+            QueryType::Integer as u8,
+            DAO_DAOS_COL_PROPOSER_LIMIT,
+            QueryType::Integer as u8,
+            DAO_DAOS_COL_QUORUM,
+            QueryType::Integer as u8,
+            DAO_DAOS_COL_APPROVAL_RATIO_BASE,
+            QueryType::Integer as u8,
+            DAO_DAOS_COL_APPROVAL_RATIO_QUOT,
+            QueryType::Blob as u8,
+            DAO_DAOS_COL_GOV_TOKEN_ID,
+            QueryType::Blob as u8,
+            DAO_DAOS_COL_SECRET,
+            QueryType::Blob as u8,
+            DAO_DAOS_COL_BULLA_BLIND,
+            QueryType::OptionBlob as u8,
+            DAO_DAOS_COL_LEAF_POSITION,
+            QueryType::OptionBlob as u8,
+            DAO_DAOS_COL_TX_HASH,
+            QueryType::OptionInteger as u8,
+            DAO_DAOS_COL_CALL_INDEX,
+        ]);
+
+        let req = JsonRequest::new("wallet.query_row_multi", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        let Some(rows) = rep.as_array() else {
+            return Err(anyhow!("Unexpected response from darkfid: {}", rep));
+        };
+
+        let mut daos = Vec::with_capacity(rows.len());
+
+        for row in rows {
+            let id: u64 = serde_json::from_value(row[0].clone())?;
+
+            let name_bytes: Vec<u8> = serde_json::from_value(row[1].clone())?;
+            let name = deserialize(&name_bytes)?;
+
+            let proposer_limit = serde_json::from_value(row[2].clone())?;
+            let quorum = serde_json::from_value(row[3].clone())?;
+            let approval_ratio_base = serde_json::from_value(row[4].clone())?;
+            let approval_ratio_quot = serde_json::from_value(row[5].clone())?;
+
+            let gov_token_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
+            let gov_token_id = deserialize(&gov_token_bytes)?;
+
+            let secret_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
+            let secret_key = deserialize(&secret_bytes)?;
+
+            let bulla_blind_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
+            let bulla_blind = deserialize(&bulla_blind_bytes)?;
+
+            let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
+            let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
+            let call_index = serde_json::from_value(row[11].clone())?;
+
+            let leaf_position = if leaf_position_bytes.is_empty() {
+                None
+            } else {
+                Some(deserialize(&leaf_position_bytes)?)
+            };
+
+            let tx_hash =
+                if tx_hash_bytes.is_empty() { None } else { Some(deserialize(&tx_hash_bytes)?) };
+
+            let dao = Dao {
+                id,
+                name,
+                proposer_limit,
+                quorum,
+                approval_ratio_base,
+                approval_ratio_quot,
+                gov_token_id,
+                secret_key,
+                bulla_blind,
+                leaf_position,
+                tx_hash,
+                call_index,
+            };
+
+            daos.push(dao);
+        }
+
+        // Sort by ID in SQL. The SELECT statement does not guarantee this.
+        daos.sort_by(|a, b| a.id.cmp(&b.id));
+        Ok(daos)
     }
 }

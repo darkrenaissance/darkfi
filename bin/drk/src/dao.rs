@@ -16,8 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_dao_contract::dao_model::DaoBulla;
 use darkfi_sdk::{
-    crypto::{SecretKey, TokenId},
+    crypto::{poseidon_hash, PublicKey, SecretKey, TokenId},
     incrementalmerkletree::Position,
     pasta::pallas,
 };
@@ -44,6 +45,8 @@ pub struct DaoParams {
 #[derive(Debug, Clone)]
 /// Parameters representing an intialized DAO, optionally deployed on-chain
 pub struct Dao {
+    /// Numeric identifier for the DAO
+    pub id: u64,
     /// Named identifier for the DAO
     pub name: String,
     /// The minimum amount of governance tokens needed to open a proposal
@@ -65,4 +68,21 @@ pub struct Dao {
     pub tx_hash: Option<blake3::Hash>,
     /// The call index in the transaction where the DAO was deployed
     pub call_index: Option<u32>,
+}
+
+impl Dao {
+    pub fn bulla(&self) -> DaoBulla {
+        let (x, y) = PublicKey::from_secret(self.secret_key).xy();
+
+        DaoBulla::from(poseidon_hash([
+            pallas::Base::from(self.proposer_limit),
+            pallas::Base::from(self.quorum),
+            pallas::Base::from(self.approval_ratio_base),
+            pallas::Base::from(self.approval_ratio_quot),
+            self.gov_token_id.inner(),
+            x,
+            y,
+            self.bulla_blind,
+        ]))
+    }
 }
