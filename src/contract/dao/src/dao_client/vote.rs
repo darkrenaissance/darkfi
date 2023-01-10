@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2022 Dyne.org foundation
+ * Copyright (C) 2020-2023 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -30,14 +30,14 @@ use darkfi::{
     Result,
 };
 
-use super::{DaoInfo, ProposalInfo};
+use super::{DaoInfo, DaoProposalInfo};
 use crate::{
-    dao_model::{VoteCallParams, VoteCallParamsInput},
+    dao_model::{DaoVoteParams, DaoVoteParamsInput},
     note,
 };
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct VoteNote {
+pub struct DaoVoteNote {
     pub vote_option: bool,
     pub yes_vote_blind: pallas::Scalar,
     // yes_vote_value = vote_option * all_vote_value
@@ -45,7 +45,7 @@ pub struct VoteNote {
     pub all_vote_blind: pallas::Scalar,
 }
 
-pub struct VoteInput {
+pub struct DaoVoteInput {
     pub secret: SecretKey,
     //pub note: money::transfer::wallet::Note,
     pub note: darkfi_money_contract::client::Note,
@@ -56,23 +56,23 @@ pub struct VoteInput {
 
 // TODO: should be token locking voting?
 // Inside ZKproof, check proposal is correct.
-pub struct VoteCall {
-    pub inputs: Vec<VoteInput>,
+pub struct DaoVoteCall {
+    pub inputs: Vec<DaoVoteInput>,
     pub vote_option: bool,
     pub yes_vote_blind: pallas::Scalar,
     pub vote_keypair: Keypair,
-    pub proposal: ProposalInfo,
+    pub proposal: DaoProposalInfo,
     pub dao: DaoInfo,
 }
 
-impl VoteCall {
+impl DaoVoteCall {
     pub fn make(
         self,
         burn_zkbin: &ZkBinary,
         burn_pk: &ProvingKey,
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
-    ) -> Result<(VoteCallParams, Vec<Proof>)> {
+    ) -> Result<(DaoVoteParams, Vec<Proof>)> {
         debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
@@ -165,7 +165,7 @@ impl VoteCall {
                 .expect("DAO::vote() proving error!");
             proofs.push(input_proof);
 
-            let input = VoteCallParamsInput {
+            let input = DaoVoteParamsInput {
                 nullifier: Nullifier::from(nullifier),
                 vote_commit,
                 merkle_root,
@@ -264,7 +264,7 @@ impl VoteCall {
             .expect("DAO::vote() proving error!");
         proofs.push(main_proof);
 
-        let note = VoteNote {
+        let note = DaoVoteNote {
             vote_option: self.vote_option,
             yes_vote_blind: self.yes_vote_blind,
             all_vote_value,
@@ -272,7 +272,7 @@ impl VoteCall {
         };
         let enc_note = note::encrypt(&note, &self.vote_keypair.public).unwrap();
 
-        let params = VoteCallParams {
+        let params = DaoVoteParams {
             token_commit,
             proposal_bulla,
             yes_vote_commit,

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2022 Dyne.org foundation
+ * Copyright (C) 2020-2023 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -30,11 +30,11 @@ use darkfi::{
     Result,
 };
 
-use super::{DaoInfo, ProposalInfo};
-use crate::dao_model::{BlindAggregateVote, ExecCallParams};
+use super::{DaoInfo, DaoProposalInfo};
+use crate::dao_model::{DaoBlindAggregateVote, DaoExecParams};
 
-pub struct ExecCall {
-    pub proposal: ProposalInfo,
+pub struct DaoExecCall {
+    pub proposal: DaoProposalInfo,
     pub dao: DaoInfo,
     pub yes_vote_value: u64,
     pub all_vote_value: u64,
@@ -50,12 +50,12 @@ pub struct ExecCall {
     pub signature_secret: SecretKey,
 }
 
-impl ExecCall {
+impl DaoExecCall {
     pub fn make(
         self,
         exec_zkbin: &ZkBinary,
         exec_pk: &ProvingKey,
-    ) -> Result<(ExecCallParams, Vec<Proof>)> {
+    ) -> Result<(DaoExecParams, Vec<Proof>)> {
         debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
@@ -185,11 +185,11 @@ impl ExecCall {
             .expect("DAO::exec() proving error!)");
         proofs.push(input_proof);
 
-        let params = ExecCallParams {
+        let params = DaoExecParams {
             proposal: proposal_bulla,
             coin_0,
             coin_1,
-            blind_total_vote: BlindAggregateVote { yes_vote_commit, all_vote_commit },
+            blind_total_vote: DaoBlindAggregateVote { yes_vote_commit, all_vote_commit },
             input_value_commit,
         };
 

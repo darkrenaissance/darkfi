@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2022 Dyne.org foundation
+ * Copyright (C) 2020-2023 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -30,14 +30,14 @@ use darkfi::{
 };
 
 use crate::{
-    dao_model::{ProposeCallParams, ProposeCallParamsInput},
+    dao_model::{DaoProposeParams, DaoProposeParamsInput},
     note,
 };
 
 use super::DaoInfo;
 
 #[derive(SerialEncodable, SerialDecodable, Clone)]
-pub struct ProposalInfo {
+pub struct DaoProposalInfo {
     pub dest: PublicKey,
     pub amount: u64,
     pub serial: pallas::Base,
@@ -46,11 +46,11 @@ pub struct ProposalInfo {
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct ProposeNote {
-    pub proposal: ProposalInfo,
+pub struct DaoProposeNote {
+    pub proposal: DaoProposalInfo,
 }
 
-pub struct ProposeStakeInput {
+pub struct DaoProposeStakeInput {
     pub secret: SecretKey,
     //pub note: money::transfer::wallet::Note,
     pub note: darkfi_money_contract::client::Note,
@@ -59,23 +59,23 @@ pub struct ProposeStakeInput {
     pub signature_secret: SecretKey,
 }
 
-pub struct ProposeCall {
-    pub inputs: Vec<ProposeStakeInput>,
-    pub proposal: ProposalInfo,
+pub struct DaoProposeCall {
+    pub inputs: Vec<DaoProposeStakeInput>,
+    pub proposal: DaoProposalInfo,
     pub dao: DaoInfo,
     pub dao_leaf_position: MerklePosition,
     pub dao_merkle_path: Vec<MerkleNode>,
     pub dao_merkle_root: MerkleNode,
 }
 
-impl ProposeCall {
+impl DaoProposeCall {
     pub fn make(
         self,
         burn_zkbin: &ZkBinary,
         burn_pk: &ProvingKey,
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
-    ) -> Result<(ProposeCallParams, Vec<Proof>)> {
+    ) -> Result<(DaoProposeParams, Vec<Proof>)> {
         let mut proofs = vec![];
 
         let gov_token_blind = pallas::Base::random(&mut OsRng);
@@ -163,7 +163,7 @@ impl ProposeCall {
                 .expect("DAO::propose() proving error!");
             proofs.push(input_proof);
 
-            let input = ProposeCallParamsInput { value_commit, merkle_root, signature_public };
+            let input = DaoProposeParamsInput { value_commit, merkle_root, signature_public };
             inputs.push(input);
         }
 
@@ -247,9 +247,9 @@ impl ProposeCall {
             .expect("DAO::propose() proving error!");
         proofs.push(main_proof);
 
-        let note = ProposeNote { proposal: self.proposal };
+        let note = DaoProposeNote { proposal: self.proposal };
         let enc_note = note::encrypt(&note, &self.dao.public_key).unwrap();
-        let params = ProposeCallParams {
+        let params = DaoProposeParams {
             dao_merkle_root: self.dao_merkle_root,
             proposal_bulla,
             token_commit,

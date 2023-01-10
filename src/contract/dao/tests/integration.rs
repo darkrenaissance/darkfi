@@ -374,7 +374,7 @@ async fn integration_test() -> Result<()> {
     // TODO: is it possible for an invalid transfer() to be constructed on exec()?
     //       need to look into this
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_client::ProposeStakeInput {
+    let input = dao_client::DaoProposeStakeInput {
         secret: dao_th.alice_kp.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
@@ -389,7 +389,7 @@ async fn integration_test() -> Result<()> {
         (merkle_path, root)
     };
 
-    let proposal = dao_client::ProposalInfo {
+    let proposal = dao_client::DaoProposalInfo {
         dest: receiver_keypair.public,
         amount: 1000,
         serial: pallas::Base::random(&mut OsRng),
@@ -397,7 +397,7 @@ async fn integration_test() -> Result<()> {
         blind: pallas::Base::random(&mut OsRng),
     };
 
-    let call = dao_client::ProposeCall {
+    let call = dao_client::DaoProposeCall {
         inputs: vec![input],
         proposal,
         dao: dao.clone(),
@@ -433,7 +433,7 @@ async fn integration_test() -> Result<()> {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
         };
-        let note: dao_client::ProposeNote = enc_note.decrypt(&dao_th.dao_kp.secret).unwrap();
+        let note: dao_client::DaoProposeNote = enc_note.decrypt(&dao_th.dao_kp.secret).unwrap();
 
         // TODO: check it belongs to DAO bulla
 
@@ -487,7 +487,7 @@ async fn integration_test() -> Result<()> {
     };
 
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_client::VoteInput {
+    let input = dao_client::DaoVoteInput {
         secret: dao_th.alice_kp.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
@@ -502,7 +502,7 @@ async fn integration_test() -> Result<()> {
     // For the demo MVP, you can just use the dao_keypair secret
     let vote_keypair_1 = Keypair::random(&mut OsRng);
 
-    let call = dao_client::VoteCall {
+    let call = dao_client::DaoVoteCall {
         inputs: vec![input],
         vote_option,
         yes_vote_blind: pallas::Scalar::random(&mut OsRng),
@@ -537,7 +537,7 @@ async fn integration_test() -> Result<()> {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
         };
-        let note: dao_client::VoteNote = enc_note.decrypt(&vote_keypair_1.secret).unwrap();
+        let note: dao_client::DaoVoteNote = enc_note.decrypt(&vote_keypair_1.secret).unwrap();
         note
     };
     debug!(target: "dao", "User 1 voted!");
@@ -555,7 +555,7 @@ async fn integration_test() -> Result<()> {
     };
 
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_client::VoteInput {
+    let input = dao_client::DaoVoteInput {
         //secret: gov_keypair_2.secret,
         secret: dao_th.bob_kp.secret,
         note: gov_recv[1].note.clone(),
@@ -570,7 +570,7 @@ async fn integration_test() -> Result<()> {
     // We create a new keypair to encrypt the vote.
     let vote_keypair_2 = Keypair::random(&mut OsRng);
 
-    let call = dao_client::VoteCall {
+    let call = dao_client::DaoVoteCall {
         inputs: vec![input],
         vote_option,
         yes_vote_blind: pallas::Scalar::random(&mut OsRng),
@@ -602,7 +602,7 @@ async fn integration_test() -> Result<()> {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
         };
-        let note: dao_client::VoteNote = enc_note.decrypt(&vote_keypair_2.secret).unwrap();
+        let note: dao_client::DaoVoteNote = enc_note.decrypt(&vote_keypair_2.secret).unwrap();
         note
     };
     debug!(target: "dao", "User 2 voted!");
@@ -620,7 +620,7 @@ async fn integration_test() -> Result<()> {
     };
 
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_client::VoteInput {
+    let input = dao_client::DaoVoteInput {
         //secret: gov_keypair_3.secret,
         secret: dao_th.charlie_kp.secret,
         note: gov_recv[2].note.clone(),
@@ -635,7 +635,7 @@ async fn integration_test() -> Result<()> {
     // We create a new keypair to encrypt the vote.
     let vote_keypair_3 = Keypair::random(&mut OsRng);
 
-    let call = dao_client::VoteCall {
+    let call = dao_client::DaoVoteCall {
         inputs: vec![input],
         vote_option,
         yes_vote_blind: pallas::Scalar::random(&mut OsRng),
@@ -670,7 +670,7 @@ async fn integration_test() -> Result<()> {
             ciphertext: params.ciphertext,
             ephem_public: params.ephem_public,
         };
-        let note: dao_client::VoteNote = enc_note.decrypt(&vote_keypair_3.secret).unwrap();
+        let note: dao_client::DaoVoteNote = enc_note.decrypt(&vote_keypair_3.secret).unwrap();
         note
     };
     debug!(target: "dao", "User 3 voted!");
@@ -689,7 +689,7 @@ async fn integration_test() -> Result<()> {
     let mut total_yes_vote_value = 0;
     let mut total_all_vote_value = 0;
 
-    let mut blind_total_vote = dao_model::BlindAggregateVote::default();
+    let mut blind_total_vote = dao_model::DaoBlindAggregateVote::default();
 
     // Just keep track of these for the assert statements after the for loop
     // but they aren't needed otherwise.
@@ -712,7 +712,7 @@ async fn integration_test() -> Result<()> {
         let yes_vote_commit = pedersen_commitment_u64(yes_vote_value, note.yes_vote_blind);
         let all_vote_commit = pedersen_commitment_u64(note.all_vote_value, note.all_vote_blind);
 
-        let blind_vote = dao_model::BlindAggregateVote { yes_vote_commit, all_vote_commit };
+        let blind_vote = dao_model::DaoBlindAggregateVote { yes_vote_commit, all_vote_commit };
         blind_total_vote.aggregate(blind_vote);
 
         // Just for the debug
@@ -820,7 +820,7 @@ async fn integration_test() -> Result<()> {
     xfer_params.encode(&mut data)?;
     let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
-    let call = dao_client::ExecCall {
+    let call = dao_client::DaoExecCall {
         proposal,
         dao,
         yes_vote_value: total_yes_vote_value,

@@ -1,26 +1,44 @@
+/* This file is part of DarkFi (https://dark.fi)
+ *
+ * Copyright (C) 2020-2023 Dyne.org foundation
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 pub mod mint;
 pub use mint::{make_mint_call, DaoInfo};
 
 /// Provides core structs for DAO::propose()
 ///
-/// * `ProposalInfo` is the main info about the proposal.
-/// * `ProposeStakeInput` are the staking inputs used to meet the `proposer_limit` threshold.
-/// * `ProposeCall` is what creates the call data used on chain.
-/// * `ProposeNote` is the secret shared info transmitted between DAO members.
+/// * `DaoProposalInfo` is the main info about the proposal.
+/// * `DaoProposeStakeInput` are the staking inputs used to meet the `proposer_limit` threshold.
+/// * `DaoProposeCall` is what creates the call data used on chain.
+/// * `DaoProposeNote` is the secret shared info transmitted between DAO members.
 pub mod propose;
-pub use propose::{ProposalInfo, ProposeCall, ProposeNote, ProposeStakeInput};
+pub use propose::{DaoProposalInfo, DaoProposeCall, DaoProposeNote, DaoProposeStakeInput};
 
 /// Provides core structs for DAO::vote()
 ///
-/// * `VoteInfo` is the main info about the vote.
-/// * `VoteStakeInput` are the staking inputs used in actual voting.
-/// * `VoteCall` is what creates the call data used on chain.
-/// * `VoteNote` is the secret shared info transmitted between DAO members.
+/// * `DaoVoteInfo` is the main info about the vote.
+/// * `DaoVoteStakeInput` are the staking inputs used in actual voting.
+/// * `DaoVoteCall` is what creates the call data used on chain.
+/// * `DaoVoteNote` is the secret shared info transmitted between DAO members.
 pub mod vote;
-pub use vote::{VoteCall, VoteInput, VoteNote};
+pub use vote::{DaoVoteCall, DaoVoteInput, DaoVoteNote};
 
 pub mod exec;
-pub use exec::ExecCall;
+pub use exec::DaoExecCall;
 
 // Wallet SQL table constant names. These have to represent the SQL schema.
 pub const DAO_DAOS_TABLE: &str = "dao_daos";
