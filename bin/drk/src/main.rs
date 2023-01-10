@@ -247,8 +247,11 @@ enum DaoSubcmd {
         dao_name: String,
     },
 
-    /// List imported DAOs
-    List,
+    /// List imported DAOs (or info about a specific one)
+    List {
+        /// Named identifier for the DAO (optional)
+        dao_name: Option<String>,
+    },
 
     /// Mint an imported DAO on-chain
     Mint {
@@ -759,7 +762,7 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::List => todo!(),
+            DaoSubcmd::List { dao_name } => todo!(),
 
             DaoSubcmd::Mint { dao_name } => todo!(),
 
