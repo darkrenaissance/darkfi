@@ -595,21 +595,20 @@ impl Drk {
         proposals_tree: &BridgeTree<MerkleNode, MERKLE_DEPTH>,
     ) -> Result<()> {
         let query = format!(
-            "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1);",
-            DAO_TREES_TABLE, DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE
+            "DELETE FROM {}; INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
+            DAO_TREES_TABLE, DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE
         );
 
-        let params = json!([query, QueryType::Blob as u8, serialize(daos_tree)]);
-        let req = JsonRequest::new("wallet.exec_sql", params);
-        let _ = self.rpc_client.request(req).await?;
+        let params = json!([
+            query,
+            QueryType::Blob as u8,
+            serialize(daos_tree),
+            QueryType::Blob as u8,
+            serialize(proposals_tree)
+        ]);
 
-        let query = format!(
-            "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1);",
-            DAO_TREES_TABLE, DAO_TREES_TABLE, DAO_TREES_COL_PROPOSALS_TREE
-        );
-
-        let params = json!([query, QueryType::Blob as u8, serialize(proposals_tree)]);
         let req = JsonRequest::new("wallet.exec_sql", params);
+
         let _ = self.rpc_client.request(req).await?;
 
         Ok(())

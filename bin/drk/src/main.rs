@@ -249,8 +249,8 @@ enum DaoSubcmd {
 
     /// List imported DAOs (or info about a specific one)
     List {
-        /// Named identifier for the DAO (optional)
-        dao_name: Option<String>,
+        /// Numeric identifier for the DAO (optional)
+        dao_id: Option<u64>,
     },
 
     /// Mint an imported DAO on-chain
@@ -762,7 +762,17 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::List { dao_name } => todo!(),
+            DaoSubcmd::List { dao_id } => {
+                let rpc_client = RpcClient::new(args.endpoint.clone())
+                    .await
+                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+                let drk = Drk { rpc_client };
+
+                drk.dao_list(dao_id).await.with_context(|| "Failed to list DAO")?;
+
+                Ok(())
+            }
 
             DaoSubcmd::Mint { dao_name } => todo!(),
 
