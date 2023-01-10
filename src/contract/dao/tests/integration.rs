@@ -83,15 +83,19 @@ async fn integration_test() -> Result<()> {
     // =======================================================
     debug!(target: "dao", "Stage 1. Creating DAO bulla");
 
-    let (params, proofs) =
-        dao_client::make_mint_call(&dao, &dao_th.dao_mint_zkbin, &dao_th.dao_mint_pk)?;
+    let (params, proofs) = dao_client::make_mint_call(
+        &dao,
+        &dao_th.dao_kp.secret,
+        &dao_th.dao_mint_zkbin,
+        &dao_th.dao_mint_pk,
+    )?;
 
     let mut data = vec![DaoFunction::Mint as u8];
     params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: dao_th.dao_contract_id, data }];
     let proofs = vec![proofs];
     let mut tx = Transaction { calls, proofs, signatures: vec![] };
-    let sigs = tx.create_sigs(&mut OsRng, &[])?;
+    let sigs = tx.create_sigs(&mut OsRng, &[dao_th.dao_kp.secret])?;
     tx.signatures = vec![sigs];
 
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;

@@ -1,5 +1,6 @@
 constant "DaoMint" {
 	EcFixedPoint VALUE_COMMIT_RANDOM,
+	EcFixedPointBase NULLIFIER_K,
 }
 
 contract "DaoMint" {
@@ -8,13 +9,18 @@ contract "DaoMint" {
 	Base dao_approval_ratio_quot,
 	Base dao_approval_ratio_base,
 	Base gov_token_id,
-	Base dao_public_x,
-	Base dao_public_y,
+	Base dao_secret,
 	Base dao_bulla_blind,
 }
 
 circuit "DaoMint" {
 	# This circuit states that the bulla is a hash of 8 values
+
+	dao_public = ec_mul_base(dao_secret, NULLIFIER_K);
+	dao_public_x = ec_get_x(dao_public);
+	dao_public_y = ec_get_y(dao_public);
+	constrain_instance(dao_public_x);
+	constrain_instance(dao_public_y);
 
 	bulla = poseidon_hash(
 		dao_proposer_limit,

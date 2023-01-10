@@ -37,6 +37,7 @@ impl From<pallas::Base> for DaoBulla {
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct DaoMintParams {
     pub dao_bulla: DaoBulla,
+    pub dao_pubkey: PublicKey,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]

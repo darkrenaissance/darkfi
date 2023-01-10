@@ -412,7 +412,7 @@ fn process_update(cid: ContractId, ix: &[u8]) -> ContractResult {
     }
 }
 
-fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
+fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, call): (u32, Vec<ContractCall>) = deserialize(ix)?;
     assert!(call_idx < call.len() as u32);
 
@@ -423,11 +423,14 @@ fn get_metadata(_: ContractId, ix: &[u8]) -> ContractResult {
             let params: DaoMintParams = deserialize(&self_.data[1..])?;
 
             let mut zk_public_values: Vec<(String, Vec<pallas::Base>)> = vec![];
-            // TODO: Why no signatures? Should it be signed with the DAO keypair?
-            let signature_pubkeys: Vec<PublicKey> = vec![];
+            let signature_pubkeys: Vec<PublicKey> = vec![params.dao_pubkey];
 
-            zk_public_values
-                .push((DAO_CONTRACT_ZKAS_DAO_MINT_NS.to_string(), vec![params.dao_bulla.inner()]));
+            let (pub_x, pub_y) = params.dao_pubkey.xy();
+
+            zk_public_values.push((
+                DAO_CONTRACT_ZKAS_DAO_MINT_NS.to_string(),
+                vec![pub_x, pub_y, params.dao_bulla.inner()],
+            ));
 
             let mut metadata = vec![];
             zk_public_values.encode(&mut metadata)?;
