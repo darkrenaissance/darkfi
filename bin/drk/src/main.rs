@@ -781,8 +781,8 @@ async fn main() -> Result<()> {
 
                 let drk = Drk { rpc_client };
 
-                drk.dao_mint(dao_id).await.with_context(|| "Failed to mint DAO")?;
-
+                let tx = drk.dao_mint(dao_id).await.with_context(|| "Failed to mint DAO")?;
+                println!("{}", bs58::encode(&serialize(&tx)).into_string());
                 Ok(())
             }
 

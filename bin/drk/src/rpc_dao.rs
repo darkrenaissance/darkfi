@@ -17,14 +17,30 @@
  */
 
 use anyhow::{anyhow, Result};
-use darkfi::{rpc::jsonrpc::JsonRequest, wallet::walletdb::QueryType};
-use darkfi_dao_contract::dao_client::{
-    DAO_DAOS_COL_APPROVAL_RATIO_BASE, DAO_DAOS_COL_APPROVAL_RATIO_QUOT, DAO_DAOS_COL_BULLA_BLIND,
-    DAO_DAOS_COL_CALL_INDEX, DAO_DAOS_COL_DAO_ID, DAO_DAOS_COL_GOV_TOKEN_ID,
-    DAO_DAOS_COL_LEAF_POSITION, DAO_DAOS_COL_NAME, DAO_DAOS_COL_PROPOSER_LIMIT,
-    DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_SECRET, DAO_DAOS_COL_TX_HASH, DAO_DAOS_TABLE,
+use darkfi::{
+    rpc::jsonrpc::JsonRequest,
+    tx::Transaction,
+    wallet::walletdb::QueryType,
+    zk::{empty_witnesses, ProvingKey, ZkCircuit},
+    zkas::ZkBinary,
 };
-use darkfi_serial::{deserialize, serialize};
+use darkfi_dao_contract::{
+    dao_client,
+    dao_client::{
+        DaoInfo, DAO_DAOS_COL_APPROVAL_RATIO_BASE, DAO_DAOS_COL_APPROVAL_RATIO_QUOT,
+        DAO_DAOS_COL_BULLA_BLIND, DAO_DAOS_COL_CALL_INDEX, DAO_DAOS_COL_DAO_ID,
+        DAO_DAOS_COL_GOV_TOKEN_ID, DAO_DAOS_COL_LEAF_POSITION, DAO_DAOS_COL_NAME,
+        DAO_DAOS_COL_PROPOSER_LIMIT, DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_SECRET,
+        DAO_DAOS_COL_TX_HASH, DAO_DAOS_TABLE,
+    },
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+};
+use darkfi_sdk::{
+    crypto::{PublicKey, DAO_CONTRACT_ID},
+    ContractCall,
+};
+use darkfi_serial::{deserialize, serialize, Encodable};
+use rand::rngs::OsRng;
 use serde_json::json;
 
 use super::Drk;
@@ -230,9 +246,46 @@ impl Drk {
     }
 
     /// Mint a DAO on-chain
-    pub async fn dao_mint(&self, dao_id: u64) -> Result<()> {
+    pub async fn dao_mint(&self, dao_id: u64) -> Result<Transaction> {
         let dao = self.dao_get_by_id(dao_id).await?;
 
-        Ok(())
+        if dao.tx_hash.is_some() {
+            return Err(anyhow!("This DAO seems to have already been minted on-chain"))
+        }
+
+        let dao_info = DaoInfo {
+            proposer_limit: dao.proposer_limit,
+            quorum: dao.quorum,
+            approval_ratio_base: dao.approval_ratio_base,
+            approval_ratio_quot: dao.approval_ratio_quot,
+            gov_token_id: dao.gov_token_id,
+            public_key: PublicKey::from_secret(dao.secret_key),
+            bulla_blind: dao.bulla_blind,
+        };
+
+        let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
+        let Some(dao_mint_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_MINT_NS) else {
+            return Err(anyhow!("DAO Mint circuit not found"));
+        };
+
+        let dao_mint_zkbin = ZkBinary::decode(&dao_mint_zkbin.1)?;
+        let k = 13;
+        let dao_mint_circuit =
+            ZkCircuit::new(empty_witnesses(&dao_mint_zkbin), dao_mint_zkbin.clone());
+        eprintln!("Creating DAO Mint proving key");
+        let dao_mint_pk = ProvingKey::build(k, &dao_mint_circuit);
+
+        let (params, proofs) =
+            dao_client::make_mint_call(&dao_info, &dao.secret_key, &dao_mint_zkbin, &dao_mint_pk)?;
+
+        let mut data = vec![DaoFunction::Mint as u8];
+        params.encode(&mut data)?;
+        let calls = vec![ContractCall { contract_id: *DAO_CONTRACT_ID, data }];
+        let proofs = vec![proofs];
+        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = tx.create_sigs(&mut OsRng, &[dao.secret_key])?;
+        tx.signatures = vec![sigs];
+
+        Ok(tx)
     }
 }
