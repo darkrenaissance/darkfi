@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS dao_daos (
 
 -- The merkle tree containing DAO bullas
 CREATE TABLE IF NOT EXISTS dao_trees (
-	daos_tree BLOB NOT NULL
+	daos_tree BLOB NOT NULL,
 	proposals_tree BLOB NOT NULL
 );
 
@@ -153,15 +153,15 @@ CREATE TABLE IF NOT EXISTS dao_proposals (
     -- and received by the DAO
 	leaf_position BLOB,
     tx_hash BLOB,
-    call_index INTEGER
+    call_index INTEGER,
     -- this is NULL until we have voted on this proposal
-    our_vote_id INTEGER UNIQUE,
+    our_vote_id INTEGER UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS dao_votes (
     vote_id INTEGER PRIMARY KEY NOT NULL,
     proposal_id INTEGER NOT NULL,
-    vote_option INTEGER NOT NULL
+    vote_option INTEGER NOT NULL,
     -- these values are NULL until the vote is minted on chain
     -- and received by the DAO
     tx_hash BLOB,
