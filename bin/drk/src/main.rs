@@ -164,7 +164,7 @@ enum Subcmd {
     },
 
     /// OTC atomic swap
-    #[command(subcommand)]
+    #[command(subcommand, about = cli_desc!())]
     Otc(OtcSubcmd),
 
     /// Inspect a transaction from stdin
@@ -182,7 +182,7 @@ enum Subcmd {
     Subscribe,
 
     /// DAO functionalities
-    #[command(subcommand)]
+    #[command(subcommand, about = cli_desc!())]
     Dao(DaoSubcmd),
 
     /// Scan the blockchain and parse relevant transactions
@@ -255,14 +255,14 @@ enum DaoSubcmd {
 
     /// Mint an imported DAO on-chain
     Mint {
-        /// Named identifier for the DAO
-        dao_name: String,
+        /// Numeric identifier for the DAO
+        dao_id: u64,
     },
 
     /// Create a proposal for a DAO
     Propose {
-        /// Named identifier for the DAO
-        dao_name: String,
+        /// Numeric identifier for the DAO
+        dao_id: u64,
 
         /// Pubkey to send tokens to with proposal success
         recv_pubkey: String,
@@ -278,14 +278,14 @@ enum DaoSubcmd {
 
     /// List DAO proposals
     Proposals {
-        /// Named identifier for the DAO
-        dao_name: String,
+        /// Numeric identifier for the DAO
+        dao_id: u64,
     },
 
     /// View a DAO proposal data
     Proposal {
-        /// Named identifier for the DAO
-        dao_name: String,
+        /// Numeric identifier for the DAO
+        dao_id: u64,
 
         /// Proposal identifier
         proposal: String,
@@ -293,8 +293,8 @@ enum DaoSubcmd {
 
     /// Vote on a given proposal
     Vote {
-        /// Named identifier for the DAO
-        dao_name: String,
+        /// Numeric identifier for the DAO
+        dao_id: u64,
 
         /// Proposal identifier
         proposal: String,
@@ -305,8 +305,8 @@ enum DaoSubcmd {
 
     /// Execute a DAO proposal
     Exec {
-        /// Named identifier for the DAO
-        dao_name: String,
+        /// Numeric identifier for the DAO
+        dao_id: u64,
 
         /// Proposal identifier
         proposal: String,
@@ -774,17 +774,27 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Mint { dao_name } => todo!(),
+            DaoSubcmd::Mint { dao_id } => {
+                let rpc_client = RpcClient::new(args.endpoint.clone())
+                    .await
+                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
 
-            DaoSubcmd::Propose { dao_name, recv_pubkey, amount, token_id, serial } => todo!(),
+                let drk = Drk { rpc_client };
 
-            DaoSubcmd::Proposals { dao_name } => todo!(),
+                drk.dao_mint(dao_id).await.with_context(|| "Failed to mint DAO")?;
 
-            DaoSubcmd::Proposal { dao_name, proposal } => todo!(),
+                Ok(())
+            }
 
-            DaoSubcmd::Vote { dao_name, proposal, vote } => todo!(),
+            DaoSubcmd::Propose { dao_id, recv_pubkey, amount, token_id, serial } => todo!(),
 
-            DaoSubcmd::Exec { dao_name, proposal } => todo!(),
+            DaoSubcmd::Proposals { dao_id } => todo!(),
+
+            DaoSubcmd::Proposal { dao_id, proposal } => todo!(),
+
+            DaoSubcmd::Vote { dao_id, proposal, vote } => todo!(),
+
+            DaoSubcmd::Exec { dao_id, proposal } => todo!(),
         },
     }
 }

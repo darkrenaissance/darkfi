@@ -28,6 +28,10 @@ use darkfi::{
     tx::Transaction,
     wallet::walletdb::QueryType,
 };
+use darkfi_dao_contract::{
+    dao_model::{DaoBulla, DaoMintParams},
+    DaoFunction,
+};
 use darkfi_money_contract::{
     client::{
         Coin, EncryptedNote, OwnCoin, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
@@ -106,7 +110,8 @@ impl Drk {
                     eprintln!("=======================================");
 
                     eprintln!("Deserialized successfully. Scanning block...");
-                    self.scan_block(&block_data).await?;
+                    self.scan_block_money(&block_data).await?;
+                    self.scan_block_dao(&block_data).await?;
                 }
 
                 JsonResult::Error(e) => {
@@ -124,21 +129,56 @@ impl Drk {
         Err(e)
     }
 
-    /// `scan_block` will go over transactions in a block and fetch the ones dealing
+    /// `scan_block_dao` will go over transactions in a block and fetch the ones dealing
+    /// with the dao contract. Then over all of them, try to see if any are related
+    /// to us. If any are found, the metadata is extracted and placed into the wallet
+    /// for future use.
+    async fn scan_block_dao(&self, block: &BlockInfo) -> Result<()> {
+        eprintln!("Iterating over {} transactions", block.txs.len());
+
+        let mut minted_dao_bullas: Vec<(DaoBulla, blake3::Hash, u32)> = vec![];
+
+        for (i, tx) in block.txs.iter().enumerate() {
+            for (j, call) in tx.calls.iter().enumerate() {
+                if call.contract_id == *MONEY_CONTRACT_ID && call.data[0] == DaoFunction::Mint as u8
+                {
+                    eprintln!("Found Dao::Mint in call {} in tx {}", j, i);
+                    let params: DaoMintParams = deserialize(&call.data[1..])?;
+                    minted_dao_bullas.push((
+                        params.dao_bulla,
+                        blake3::hash(&serialize(tx)),
+                        j as u32,
+                    ));
+                    continue
+                }
+            }
+        }
+
+        let (mut daos_tree, mut proposals_tree) = self.wallet_dao_trees().await?;
+        // We assume that the state transitions are correct and won't allow a DAO being
+        // minted twice. So here we just blindly put stuff in.
+        for bulla in minted_dao_bullas {
+            daos_tree.append(&MerkleNode::from(bulla.0.inner()));
+            // TODO: If our wallet has this DAO, add the info in the row, and witness the tree
+        }
+
+        Ok(())
+    }
+
+    /// `scan_block_money` will go over transactions in a block and fetch the ones dealing
     /// with the money contract. Then over all of them, try to see if any are related
     /// to us. If any are found, the metadata is extracted and placed into the wallet
     /// for future use.
-    async fn scan_block(&self, block: &BlockInfo) -> Result<()> {
+    async fn scan_block_money(&self, block: &BlockInfo) -> Result<()> {
         eprintln!("Iterating over {} transactions", block.txs.len());
 
         let mut nullifiers: Vec<Nullifier> = vec![];
         let mut outputs: Vec<Output> = vec![];
 
-        let contract_id = *MONEY_CONTRACT_ID;
-
         for (i, tx) in block.txs.iter().enumerate() {
             for (j, call) in tx.calls.iter().enumerate() {
-                if call.contract_id == contract_id && call.data[0] == MoneyFunction::Transfer as u8
+                if call.contract_id == *MONEY_CONTRACT_ID &&
+                    call.data[0] == MoneyFunction::Transfer as u8
                 {
                     eprintln!("Found Money::Transfer in call {} in tx {}", j, i);
                     let params: MoneyTransferParams = deserialize(&call.data[1..])?;
@@ -151,7 +191,9 @@ impl Drk {
                     continue
                 }
 
-                if call.contract_id == contract_id && call.data[0] == MoneyFunction::OtcSwap as u8 {
+                if call.contract_id == *MONEY_CONTRACT_ID &&
+                    call.data[0] == MoneyFunction::OtcSwap as u8
+                {
                     eprintln!("Found Money::OtcSwap in call {} in tx {}", j, i);
                     let params: MoneyTransferParams = deserialize(&call.data[1..])?;
                     for input in params.inputs {
@@ -380,7 +422,8 @@ impl Drk {
             eprint!("Requesting slot {}... ", sl);
             if let Some(block) = self.get_block_by_slot(sl).await? {
                 eprintln!("Found");
-                self.scan_block(&block).await?;
+                self.scan_block_money(&block).await?;
+                self.scan_block_dao(&block).await?;
             } else {
                 eprintln!("Not found");
                 // Write down the slot number into back to the wallet

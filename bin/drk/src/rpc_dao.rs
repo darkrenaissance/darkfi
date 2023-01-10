@@ -90,7 +90,7 @@ impl Drk {
         Ok(())
     }
 
-    async fn dao_list_single(&self, dao_id: u64) -> Result<()> {
+    async fn dao_get_by_id(&self, dao_id: u64) -> Result<Dao> {
         let query =
             format!("SELECT * FROM {} WHERE {} = {}", DAO_DAOS_TABLE, DAO_DAOS_COL_DAO_ID, dao_id);
 
@@ -157,7 +157,7 @@ impl Drk {
         let tx_hash =
             if tx_hash_bytes.is_empty() { None } else { Some(deserialize(&tx_hash_bytes)?) };
 
-        let dao = Dao {
+        Ok(Dao {
             name,
             proposer_limit,
             quorum,
@@ -169,7 +169,11 @@ impl Drk {
             leaf_position,
             tx_hash,
             call_index,
-        };
+        })
+    }
+
+    async fn dao_list_single(&self, dao_id: u64) -> Result<()> {
+        let dao = self.dao_get_by_id(dao_id).await?;
 
         println!("DAO Parameters:");
         println!("Name: {}", dao.name);
@@ -221,6 +225,13 @@ impl Drk {
             let dao_name: String = deserialize(&dao_name_bytes)?;
             println!("[{}] {}", dao_id, dao_name);
         }
+
+        Ok(())
+    }
+
+    /// Mint a DAO on-chain
+    pub async fn dao_mint(&self, dao_id: u64) -> Result<()> {
+        let dao = self.dao_get_by_id(dao_id).await?;
 
         Ok(())
     }

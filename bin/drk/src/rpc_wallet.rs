@@ -475,7 +475,7 @@ impl Drk {
         Ok(ret)
     }
 
-    /// Get the Merkle tree from the wallet
+    /// Get the Money Merkle tree from the wallet
     pub async fn wallet_tree(&self) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
         let query = format!("SELECT * FROM {}", MONEY_TREE_TABLE);
         let params = json!([query, QueryType::Blob as u8, MONEY_TREE_COL_TREE]);
@@ -485,6 +485,27 @@ impl Drk {
         let tree_bytes: Vec<u8> = serde_json::from_value(rep[0].clone())?;
         let tree = deserialize(&tree_bytes)?;
         Ok(tree)
+    }
+
+    pub async fn wallet_dao_trees(&self) -> Result<(MerkleTree, MerkleTree)> {
+        let query = format!("SELECT * FROM {}", DAO_TREES_TABLE);
+        let params = json!([
+            query,
+            QueryType::Blob as u8,
+            DAO_TREES_COL_DAOS_TREE,
+            QueryType::Blob as u8,
+            DAO_TREES_COL_PROPOSALS_TREE
+        ]);
+        let req = JsonRequest::new("wallet.query_row_single", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        let daos_tree_bytes: Vec<u8> = serde_json::from_value(rep[0].clone())?;
+        let proposals_tree_bytes: Vec<u8> = serde_json::from_value(rep[1].clone())?;
+
+        let daos_tree = deserialize(&daos_tree_bytes)?;
+        let proposals_tree = deserialize(&proposals_tree_bytes)?;
+
+        Ok((daos_tree, proposals_tree))
     }
 
     /// Get the last scanned slot from the wallet
