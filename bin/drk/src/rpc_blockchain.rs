@@ -154,13 +154,26 @@ impl Drk {
             }
         }
 
+        let mut daos = self.wallet_get_daos().await?;
         let (mut daos_tree, mut proposals_tree) = self.wallet_dao_trees().await?;
         // We assume that the state transitions are correct and won't allow a DAO being
         // minted twice. So here we just blindly put stuff in.
         for bulla in minted_dao_bullas {
             daos_tree.append(&MerkleNode::from(bulla.0.inner()));
-            // TODO: If our wallet has this DAO, add the info in the row, and witness the tree
+            for dao in daos.iter_mut() {
+                if dao.bulla() == bulla.0 {
+                    eprintln!("Found DAO {:?}, noting down for wallet update", bulla.0);
+                    // We have this DAO imported our wallet. Add the metadata:
+                    dao.leaf_position = daos_tree.witness();
+                    dao.tx_hash = Some(bulla.1);
+                    dao.call_index = Some(bulla.2);
+                }
+            }
         }
+
+        eprintln!("Writing DAO updates to wallet");
+        self.put_daos(&daos).await?;
+        self.put_dao_trees(&daos_tree, &proposals_tree).await?;
 
         Ok(())
     }

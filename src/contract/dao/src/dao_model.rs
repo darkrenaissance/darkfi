@@ -19,7 +19,7 @@
 use darkfi_sdk::crypto::{pallas, pasta_prelude::*, MerkleNode, Nullifier, PublicKey};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct DaoBulla(pallas::Base);
 
 impl DaoBulla {

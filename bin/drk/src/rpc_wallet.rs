@@ -651,6 +651,37 @@ impl Drk {
         Ok(())
     }
 
+    /// Write given DAOs into the wallet
+    pub async fn put_daos(&self, daos: &[Dao]) -> Result<()> {
+        for dao in daos {
+            // Note that for now we just write the leaf pos, tx-hash, and call_index.
+            // This is because we don't expect the other stuff to change.
+            let query = format!(
+                "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 WHERE {} = ?4;",
+                DAO_DAOS_TABLE,
+                DAO_DAOS_COL_LEAF_POSITION,
+                DAO_DAOS_COL_TX_HASH,
+                DAO_DAOS_COL_CALL_INDEX,
+                DAO_DAOS_COL_DAO_ID
+            );
+
+            let params = json!([
+                query,
+                QueryType::Blob as u8,
+                serialize(&dao.leaf_position.unwrap()),
+                QueryType::Blob as u8,
+                serialize(&dao.tx_hash.unwrap()),
+                QueryType::Integer as u8,
+                dao.call_index.unwrap(),
+            ]);
+
+            let req = JsonRequest::new("wallet.exec_sql", params);
+            let _ = self.rpc_client.request(req).await?;
+        }
+
+        Ok(())
+    }
+
     /// Fetch all DAOs from the wallet
     /// We use this a lot because we don't worry too much about performance in this
     /// tool, and also in practice probably not a lot of DAOs will be in a single
