@@ -28,24 +28,8 @@ use darkfi::{
     tx::Transaction,
     wallet::walletdb::QueryType,
 };
-use darkfi_money_contract::{
-    client::{
-        Coin, EncryptedNote, OwnCoin, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
-        MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
-        MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
-        MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_VALUE,
-        MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT,
-        MONEY_INFO_TABLE,
-    },
-    model::{MoneyTransferParams, Output},
-    MoneyFunction,
-};
-use darkfi_sdk::{
-    crypto::{
-        contract_id::MONEY_CONTRACT_ID, poseidon_hash, ContractId, MerkleNode, Nullifier, SecretKey,
-    },
-    incrementalmerkletree::Tree,
-};
+use darkfi_money_contract::client::{MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE};
+use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
 use signal_hook::consts::{SIGINT, SIGQUIT, SIGTERM};
@@ -53,7 +37,6 @@ use signal_hook_async_std::Signals;
 use url::Url;
 
 use super::Drk;
-use crate::cli_util::kaching;
 
 impl Drk {
     /// Subscribes to darkfid's JSON-RPC notification endpoint that serves
@@ -147,145 +130,8 @@ impl Drk {
     async fn scan_block_money(&self, block: &BlockInfo) -> Result<()> {
         eprintln!("Iterating over {} transactions", block.txs.len());
 
-        let mut nullifiers: Vec<Nullifier> = vec![];
-        let mut outputs: Vec<Output> = vec![];
-
-        for (i, tx) in block.txs.iter().enumerate() {
-            for (j, call) in tx.calls.iter().enumerate() {
-                if call.contract_id == *MONEY_CONTRACT_ID &&
-                    call.data[0] == MoneyFunction::Transfer as u8
-                {
-                    eprintln!("Found Money::Transfer in call {} in tx {}", j, i);
-                    let params: MoneyTransferParams = deserialize(&call.data[1..])?;
-                    for input in params.inputs {
-                        nullifiers.push(input.nullifier);
-                    }
-                    for output in params.outputs {
-                        outputs.push(output);
-                    }
-                    continue
-                }
-
-                if call.contract_id == *MONEY_CONTRACT_ID &&
-                    call.data[0] == MoneyFunction::OtcSwap as u8
-                {
-                    eprintln!("Found Money::OtcSwap in call {} in tx {}", j, i);
-                    let params: MoneyTransferParams = deserialize(&call.data[1..])?;
-                    for input in params.inputs {
-                        nullifiers.push(input.nullifier);
-                    }
-                    for output in params.outputs {
-                        outputs.push(output);
-                    }
-                    continue
-                }
-            }
-        }
-
-        // Fetch our secret keys from the wallet
-        eprintln!("Fetching secret keys from wallet");
-        let secrets: Vec<SecretKey> = self.get_money_secrets().await?;
-        if secrets.is_empty() {
-            eprintln!("Warning: No secrets found in wallet");
-        }
-
-        eprintln!("Fetching Money Merkle tree from wallet");
-        let mut tree = self.get_money_tree().await?;
-
-        let mut owncoins = vec![];
-
-        for output in outputs {
-            let coin = output.coin;
-
-            // Append the new coin to the Merkle tree. Every coin has to be added.
-            tree.append(&MerkleNode::from(coin));
-
-            // Attempt to decrypt the note
-            let enc_note =
-                EncryptedNote { ciphertext: output.ciphertext, ephem_public: output.ephem_public };
-
-            for secret in &secrets {
-                if let Ok(note) = enc_note.decrypt(secret) {
-                    eprintln!("Successfully decrypted a note");
-                    eprintln!("Witnessing coin in Merkle tree");
-                    let leaf_position = tree.witness().unwrap();
-
-                    let owncoin = OwnCoin {
-                        coin: Coin::from(coin),
-                        note: note.clone(),
-                        secret: *secret,
-                        nullifier: Nullifier::from(poseidon_hash([secret.inner(), note.serial])),
-                        leaf_position,
-                    };
-
-                    owncoins.push(owncoin);
-                }
-            }
-        }
-
-        eprintln!("Serializing the Merkle tree into the wallet");
-        self.put_money_tree(&tree).await?;
-        eprintln!("Merkle tree written successfully");
-
-        if !nullifiers.is_empty() {
-            eprintln!("Found {} spent coins, marking as spent", nullifiers.len());
-            self.mark_spent_coins(&nullifiers).await?;
-            eprintln!("Spent coins marked successfully");
-        }
-
-        // This is the SQL query we'll be executing to insert coins into the wallet
-        let query = format!(
-            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);",
-            MONEY_COINS_TABLE,
-            MONEY_COINS_COL_COIN,
-            MONEY_COINS_COL_IS_SPENT,
-            MONEY_COINS_COL_SERIAL,
-            MONEY_COINS_COL_VALUE,
-            MONEY_COINS_COL_TOKEN_ID,
-            MONEY_COINS_COL_COIN_BLIND,
-            MONEY_COINS_COL_VALUE_BLIND,
-            MONEY_COINS_COL_TOKEN_BLIND,
-            MONEY_COINS_COL_SECRET,
-            MONEY_COINS_COL_NULLIFIER,
-            MONEY_COINS_COL_LEAF_POSITION,
-            MONEY_COINS_COL_MEMO,
-        );
-
-        eprintln!("Found {} OwnCoin(s) in block", owncoins.len());
-        for owncoin in &owncoins {
-            eprintln!("Owncoin: {:?}", owncoin.coin);
-            let params = json!([
-                query,
-                QueryType::Blob as u8,
-                serialize(&owncoin.coin),
-                QueryType::Integer as u8,
-                0, // <-- is_spent
-                QueryType::Blob as u8,
-                serialize(&owncoin.note.serial),
-                QueryType::Blob as u8,
-                serialize(&owncoin.note.value),
-                QueryType::Blob as u8,
-                serialize(&owncoin.note.token_id),
-                QueryType::Blob as u8,
-                serialize(&owncoin.note.coin_blind),
-                QueryType::Blob as u8,
-                serialize(&owncoin.note.value_blind),
-                QueryType::Blob as u8,
-                serialize(&owncoin.note.token_blind),
-                QueryType::Blob as u8,
-                serialize(&owncoin.secret),
-                QueryType::Blob as u8,
-                serialize(&owncoin.nullifier),
-                QueryType::Blob as u8,
-                serialize(&owncoin.leaf_position),
-                QueryType::Blob as u8,
-                serialize(&owncoin.note.memo),
-            ]);
-
-            eprintln!("Executing JSON-RPC request to add OwnCoin to wallet");
-            let req = JsonRequest::new("wallet.exec_sql", params);
-            self.rpc_client.request(req).await?;
-            eprintln!("Coin added successfully");
+        for tx in block.txs.iter() {
+            self.apply_tx_money_data(tx, true).await?;
         }
 
         // Write this slot into `last_scanned_slot`
@@ -294,12 +140,6 @@ impl Drk {
         let params = json!([query, QueryType::Integer as u8, block.header.slot]);
         let req = JsonRequest::new("wallet.exec_sql", params);
         let _ = self.rpc_client.request(req).await?;
-
-        if !owncoins.is_empty() {
-            if let Err(_) = kaching().await {
-                return Ok(())
-            }
-        }
 
         Ok(())
     }

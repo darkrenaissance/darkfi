@@ -18,20 +18,28 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
-use darkfi::{rpc::jsonrpc::JsonRequest, wallet::walletdb::QueryType};
-use darkfi_money_contract::client::{
-    Coin, Note, OwnCoin, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
-    MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
-    MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
-    MONEY_COINS_COL_SPEND_HOOK, MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID,
-    MONEY_COINS_COL_USER_DATA, MONEY_COINS_COL_VALUE, MONEY_COINS_COL_VALUE_BLIND,
-    MONEY_COINS_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE,
-    MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_KEY_ID, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET,
-    MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+use darkfi::{rpc::jsonrpc::JsonRequest, tx::Transaction, wallet::walletdb::QueryType};
+use darkfi_money_contract::{
+    client::{
+        Coin, EncryptedNote, Note, OwnCoin, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
+        MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
+        MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
+        MONEY_COINS_COL_SPEND_HOOK, MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID,
+        MONEY_COINS_COL_USER_DATA, MONEY_COINS_COL_VALUE, MONEY_COINS_COL_VALUE_BLIND,
+        MONEY_COINS_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE,
+        MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_KEY_ID, MONEY_KEYS_COL_PUBLIC,
+        MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+    },
+    model::{MoneyTransferParams, Output},
+    MoneyFunction,
 };
 use darkfi_sdk::{
-    crypto::{Keypair, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId},
+    crypto::{
+        poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId,
+        MONEY_CONTRACT_ID,
+    },
     incrementalmerkletree,
+    incrementalmerkletree::Tree,
     pasta::pallas,
 };
 use darkfi_serial::{deserialize, serialize};
@@ -39,6 +47,7 @@ use rand::rngs::OsRng;
 use serde_json::json;
 
 use super::Drk;
+use crate::cli_util::kaching;
 
 impl Drk {
     /// Initialize wallet with tables for the Money contract
@@ -510,6 +519,153 @@ impl Drk {
         }
 
         Ok(balmap)
+    }
+
+    /// Append data related to Money contract transactions into the wallet database.
+    pub async fn apply_tx_money_data(&self, tx: &Transaction, _confirm: bool) -> Result<()> {
+        let cid = *MONEY_CONTRACT_ID;
+
+        let mut nullifiers: Vec<Nullifier> = vec![];
+        let mut outputs: Vec<Output> = vec![];
+
+        for (i, call) in tx.calls.iter().enumerate() {
+            if call.contract_id == cid && call.data[0] == MoneyFunction::Transfer as u8 {
+                eprintln!("Found Money::Transfer in call {}", i);
+                let params: MoneyTransferParams = deserialize(&call.data[1..])?;
+
+                for input in params.inputs {
+                    nullifiers.push(input.nullifier);
+                }
+
+                for output in params.outputs {
+                    outputs.push(output);
+                }
+
+                continue
+            }
+
+            if call.contract_id == cid && call.data[0] == MoneyFunction::OtcSwap as u8 {
+                eprintln!("Found Money::OtcSwap in call {}", i);
+                let params: MoneyTransferParams = deserialize(&call.data[1..])?;
+
+                for input in params.inputs {
+                    nullifiers.push(input.nullifier);
+                }
+
+                for output in params.outputs {
+                    outputs.push(output);
+                }
+
+                continue
+            }
+        }
+
+        let secrets = self.get_money_secrets().await?;
+        let mut tree = self.get_money_tree().await?;
+
+        let mut owncoins = vec![];
+
+        for output in outputs {
+            let coin = output.coin;
+
+            // Append the new coin to the Merkle tree. Every coin has to be added.
+            tree.append(&MerkleNode::from(coin));
+
+            // Attempt to decrypt the note
+            let enc_note =
+                EncryptedNote { ciphertext: output.ciphertext, ephem_public: output.ephem_public };
+
+            for secret in &secrets {
+                if let Ok(note) = enc_note.decrypt(secret) {
+                    eprintln!("Successfully decrypted a Money Note");
+                    eprintln!("Witnessing coin in Merkle tree");
+                    let leaf_position = tree.witness().unwrap();
+
+                    let owncoin = OwnCoin {
+                        coin: Coin::from(coin),
+                        note: note.clone(),
+                        secret: *secret,
+                        nullifier: Nullifier::from(poseidon_hash([secret.inner(), note.serial])),
+                        leaf_position,
+                    };
+
+                    owncoins.push(owncoin);
+                }
+            }
+        }
+
+        self.put_money_tree(&tree).await?;
+        if !nullifiers.is_empty() {
+            self.mark_spent_coins(&nullifiers).await?;
+        }
+
+        // This is the SQL query we'll be executing to insert new coins
+        // into the wallet
+        let query = format!(
+            "INSERT INTO {} ({}, {}, {}, {}, {} {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);",
+            MONEY_COINS_TABLE,
+            MONEY_COINS_COL_COIN,
+            MONEY_COINS_COL_IS_SPENT,
+            MONEY_COINS_COL_SERIAL,
+            MONEY_COINS_COL_VALUE,
+            MONEY_COINS_COL_TOKEN_ID,
+            MONEY_COINS_COL_SPEND_HOOK,
+            MONEY_COINS_COL_USER_DATA,
+            MONEY_COINS_COL_COIN_BLIND,
+            MONEY_COINS_COL_VALUE_BLIND,
+            MONEY_COINS_COL_TOKEN_BLIND,
+            MONEY_COINS_COL_SECRET,
+            MONEY_COINS_COL_NULLIFIER,
+            MONEY_COINS_COL_LEAF_POSITION,
+            MONEY_COINS_COL_MEMO,
+        );
+
+        eprintln!("Found {} OwnCoin(s) in transaction", owncoins.len());
+        for owncoin in &owncoins {
+            eprintln!("OwnCoin: {:?}", owncoin.coin);
+            let params = json!([
+                query,
+                QueryType::Blob as u8,
+                serialize(&owncoin.coin),
+                QueryType::Integer as u8,
+                0, // <-- is_spent
+                QueryType::Blob as u8,
+                serialize(&owncoin.note.serial),
+                QueryType::Blob as u8,
+                serialize(&owncoin.note.value),
+                QueryType::Blob as u8,
+                serialize(&owncoin.note.token_id),
+                QueryType::Blob as u8,
+                serialize(&owncoin.note.spend_hook),
+                QueryType::Blob as u8,
+                serialize(&owncoin.note.user_data),
+                QueryType::Blob as u8,
+                serialize(&owncoin.note.coin_blind),
+                QueryType::Blob as u8,
+                serialize(&owncoin.note.value_blind),
+                QueryType::Blob as u8,
+                serialize(&owncoin.note.token_blind),
+                QueryType::Blob as u8,
+                serialize(&owncoin.secret),
+                QueryType::Blob as u8,
+                serialize(&owncoin.nullifier),
+                QueryType::Blob as u8,
+                serialize(&owncoin.leaf_position),
+                QueryType::Blob as u8,
+                serialize(&owncoin.note.memo),
+            ]);
+
+            let req = JsonRequest::new("wallet.exec_sql", params);
+            let _ = self.rpc_client.request(req).await?;
+        }
+
+        if !owncoins.is_empty() {
+            if let Err(_) = kaching().await {
+                return Ok(())
+            }
+        }
+
+        Ok(())
     }
 
     /// Get the last scanned slot from the wallet
