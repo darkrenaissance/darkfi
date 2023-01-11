@@ -20,6 +20,7 @@ use anyhow::{anyhow, Result};
 use darkfi::{
     rpc::jsonrpc::JsonRequest,
     tx::Transaction,
+    util::parse::encode_base10,
     wallet::walletdb::QueryType,
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
@@ -33,8 +34,10 @@ use darkfi_dao_contract::{
     },
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
 };
+use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
-    crypto::{PublicKey, DAO_CONTRACT_ID},
+    crypto::{PublicKey, TokenId, DAO_CONTRACT_ID},
+    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable};
@@ -192,5 +195,67 @@ impl Drk {
         tx.signatures = vec![sigs];
 
         Ok(tx)
+    }
+
+    /// Create a DAO proposal
+    pub async fn dao_propose(
+        &self,
+        dao_id: u64,
+        rcpt: PublicKey,
+        amount: u64,
+        token_id: TokenId,
+        serial: pallas::Base,
+    ) -> Result<Transaction> {
+        let daos = self.wallet_get_daos().await?;
+        let Some(dao) = daos.get(dao_id as usize - 1) else {
+            return Err(anyhow!("DAO not found in wallet"))
+        };
+
+        let bulla = dao.bulla();
+        let owncoins = self.wallet_coins(false).await?;
+        let mut dao_owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
+        dao_owncoins.retain(|x| {
+            x.note.token_id == token_id &&
+                x.note.spend_hook == DAO_CONTRACT_ID.inner() &&
+                x.note.user_data == bulla.inner()
+        });
+
+        if dao_owncoins.is_empty() {
+            return Err(anyhow!("Did not find any {} coins owned by this DAO", token_id))
+        }
+
+        let mut dao_balance = 0;
+        for coin in dao_owncoins.iter() {
+            dao_balance += coin.note.value;
+        }
+
+        if dao_balance < amount {
+            return Err(anyhow!(
+                "Not enough balance for token ID: {}, found: {}",
+                token_id,
+                encode_base10(dao_balance, 8)
+            ))
+        }
+
+        let mut user_owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
+        user_owncoins.retain(|x| x.note.token_id == dao.gov_token_id);
+
+        if user_owncoins.is_empty() {
+            return Err(anyhow!("Did not find any governance {} coins in wallet", dao.gov_token_id))
+        }
+
+        let mut user_balance = 0;
+        for coin in user_owncoins.iter() {
+            user_balance += coin.note.value;
+        }
+
+        if user_balance < dao.proposer_limit {
+            return Err(anyhow!(
+                "Not enough governance token {} balance found to create proposal",
+                dao.gov_token_id
+            ))
+        }
+
+        todo!();
     }
 }

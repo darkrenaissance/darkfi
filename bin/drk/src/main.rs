@@ -25,7 +25,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
-use darkfi::{tx::Transaction, zk::halo2::Field};
+use darkfi::{tx::Transaction, util::parse::decode_base10, zk::halo2::Field};
 use darkfi_money_contract::client::Coin;
 use darkfi_sdk::{
     crypto::{PublicKey, SecretKey, TokenId},
@@ -271,10 +271,10 @@ enum DaoSubcmd {
         dao_id: u64,
 
         /// Pubkey to send tokens to with proposal success
-        recv_pubkey: String,
+        recipient: String,
 
         /// Amount to send from DAO with proposal success
-        amount: u64,
+        amount: String,
 
         /// Token ID to send from DAO with proposal success
         token_id: String,
@@ -792,7 +792,29 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Propose { dao_id, recv_pubkey, amount, token_id, serial } => todo!(),
+            DaoSubcmd::Propose { dao_id, recipient, amount, token_id, serial } => {
+                let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
+                let amount = decode_base10(&amount, 8, true)?;
+
+                let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
+                let token_id =
+                    TokenId::try_from(token_id.as_str()).with_context(|| "Invalid Token ID")?;
+                let serial = serial.into(); // <-- TODO: Should this be pallas::Base?
+
+                let rpc_client = RpcClient::new(args.endpoint.clone())
+                    .await
+                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+                let drk = Drk { rpc_client };
+
+                let tx = drk
+                    .dao_propose(dao_id, rcpt, amount, token_id, serial)
+                    .await
+                    .with_context(|| "Failed to create DAO proposal")?;
+
+                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                Ok(())
+            }
 
             DaoSubcmd::Proposals { dao_id } => todo!(),
 
