@@ -20,15 +20,20 @@ use anyhow::{anyhow, Result};
 use darkfi::{
     tx::Transaction,
     util::parse::{decode_base10, encode_base10},
-    zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::ZkBinary,
 };
+use darkfi_dao_contract::dao_model::DaoBulla;
 use darkfi_money_contract::{
     client::{build_transfer_tx, OwnCoin},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, Keypair, PublicKey, TokenId},
+    crypto::{
+        contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+        Keypair, PublicKey, TokenId,
+    },
+    pasta::pallas,
     tx::ContractCall,
 };
 use darkfi_serial::Encodable;
@@ -43,13 +48,33 @@ impl Drk {
         amount: &str,
         token_id: TokenId,
         recipient: PublicKey,
+        dao: bool,
+        dao_bulla: Option<String>,
     ) -> Result<Transaction> {
+        let dao_bulla: Option<DaoBulla> = if dao {
+            let Some(dao_bulla) = dao_bulla else {
+                return Err(anyhow!("Missing DAO bulla in parameters"))
+            };
+
+            Some(DaoBulla::try_from(dao_bulla.as_str())?)
+        } else {
+            None
+        };
+
+        let (spend_hook, user_data, user_data_blind) = if dao {
+            (DAO_CONTRACT_ID.inner(), dao_bulla.unwrap().inner(), pallas::Base::random(&mut OsRng))
+        } else {
+            (pallas::Base::zero(), pallas::Base::zero(), pallas::Base::random(&mut OsRng))
+        };
+
         // First get all unspent OwnCoins to see what our balance is.
         eprintln!("Fetching OwnCoins");
         let owncoins = self.wallet_coins(false).await?;
         let mut owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
         // We're only interested in the ones for the token_id we're sending
+        // And the ones not owned by some protocol (meaning spend-hook should be 0)
         owncoins.retain(|x| x.note.token_id == token_id);
+        owncoins.retain(|x| x.note.spend_hook == pallas::Base::zero());
         if owncoins.is_empty() {
             return Err(anyhow!("Did not find any coins with token ID: {}", token_id))
         }
@@ -109,6 +134,9 @@ impl Drk {
             &recipient,
             amount,
             token_id,
+            spend_hook,
+            user_data,
+            user_data_blind,
             &owncoins,
             &tree,
             &mint_zkbin,

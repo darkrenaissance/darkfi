@@ -827,6 +827,9 @@ pub fn build_half_swap_tx(
 /// * `pubkey` - Public key of the recipient
 /// * `value` - Value of the transfer
 /// * `token_id` - Token ID to transfer
+/// * `spend_hook` - Spend hook
+/// * `user_data` - User data
+/// * `user_data_blind` - Blinding for user data
 /// * `coins` - Set of coins we're able to spend
 /// * `tree` - Current Merkle tree of coins
 /// * `mint_zkbin` - ZkBinary of the mint circuit
@@ -841,6 +844,9 @@ pub fn build_transfer_tx(
     pubkey: &PublicKey,
     value: u64,
     token_id: TokenId,
+    spend_hook: pallas::Base,
+    user_data: pallas::Base,
+    user_data_blind: pallas::Base,
     coins: &[OwnCoin],
     tree: &MerkleTree,
     mint_zkbin: &ZkBinary,
@@ -948,11 +954,6 @@ pub fn build_transfer_tx(
         let signature_secret = SecretKey::random(&mut OsRng);
         signature_secrets.push(signature_secret);
 
-        // Disable composability for this old obsolete API
-        let spend_hook = pallas::Base::zero();
-        let user_data = pallas::Base::zero();
-        let user_data_blind = pallas::Base::random(&mut OsRng);
-
         info!(target: "money", "Creating transfer burn proof for input {}", i);
         let (proof, revealed) = create_transfer_burn_proof(
             burn_zkbin,
@@ -1000,10 +1001,6 @@ pub fn build_transfer_tx(
         let serial = pallas::Base::random(&mut OsRng);
         let coin_blind = pallas::Base::random(&mut OsRng);
 
-        // Disable composability for this old obsolete API
-        let spend_hook = pallas::Base::zero();
-        let user_data = pallas::Base::zero();
-
         info!(target: "money", "Creating transfer mint proof for output {}", i);
         let (proof, revealed) = create_transfer_mint_proof(
             mint_zkbin,
@@ -1026,8 +1023,8 @@ pub fn build_transfer_tx(
             serial,
             value: output.value,
             token_id: output.token_id,
-            spend_hook: pallas::Base::zero(),
-            user_data: pallas::Base::zero(),
+            spend_hook,
+            user_data,
             coin_blind,
             value_blind,
             token_blind,

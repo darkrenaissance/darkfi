@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use darkfi::{
     tx::Transaction,
-    zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
     zkas::ZkBinary,
 };
 use darkfi_money_contract::{
@@ -40,7 +40,7 @@ use darkfi_sdk::{
     },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::bridgetree::BridgeTree,
-    pasta::group::ff::PrimeField,
+    pasta::{group::ff::PrimeField, pallas},
     tx::ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable};
@@ -436,6 +436,9 @@ impl Faucetd {
             &pubkey,
             amount,
             token_id,
+            pallas::Base::zero(),
+            pallas::Base::zero(),
+            pallas::Base::random(&mut OsRng),
             &[], // <-- The faucet doesn't really have to pass OwnCoins I think
             &self.merkle_tree,
             &mint_zkbin,

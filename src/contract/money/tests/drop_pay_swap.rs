@@ -68,6 +68,11 @@ async fn money_contract_transfer() -> Result<()> {
     let alice_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
     let bob_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
 
+    // We're just going to be using a zero spend-hook and user-data
+    let spend_hook = pallas::Base::zero();
+    let user_data = pallas::Base::zero();
+    let user_data_blind = pallas::Base::random(&mut OsRng);
+
     let mut alice_owncoins = vec![];
     let mut bob_owncoins = vec![];
 
@@ -79,6 +84,9 @@ async fn money_contract_transfer() -> Result<()> {
         &th.alice_kp.public,
         ALICE_INITIAL,
         alice_token_id,
+        spend_hook,
+        user_data,
+        user_data_blind,
         &[],
         &th.faucet_merkle_tree,
         &th.mint_zkbin,
@@ -96,6 +104,9 @@ async fn money_contract_transfer() -> Result<()> {
         &th.bob_kp.public,
         BOB_INITIAL,
         bob_token_id,
+        spend_hook,
+        user_data,
+        user_data_blind,
         &[],
         &th.faucet_merkle_tree,
         &th.mint_zkbin,
@@ -207,6 +218,9 @@ async fn money_contract_transfer() -> Result<()> {
             &th.bob_kp.public,
             ALICE_FIRST_SEND,
             alice_token_id,
+            spend_hook,
+            user_data,
+            user_data_blind,
             &alice_owncoins,
             &th.alice_merkle_tree,
             &th.mint_zkbin,
@@ -302,6 +316,9 @@ async fn money_contract_transfer() -> Result<()> {
             &th.alice_kp.public,
             BOB_FIRST_SEND,
             bob_token_id,
+            spend_hook,
+            user_data,
+            user_data_blind,
             &bob_owncoins_tmp,
             &th.bob_merkle_tree,
             &th.mint_zkbin,
@@ -558,6 +575,9 @@ async fn money_contract_transfer() -> Result<()> {
             &th.alice_kp.public,
             ALICE_INITIAL,
             alice_token_id,
+            spend_hook,
+            user_data,
+            user_data_blind,
             &alice_owncoins,
             &th.alice_merkle_tree,
             &th.mint_zkbin,
@@ -635,6 +655,9 @@ async fn money_contract_transfer() -> Result<()> {
             &th.bob_kp.public,
             BOB_INITIAL,
             bob_token_id,
+            spend_hook,
+            user_data,
+            user_data_blind,
             &bob_owncoins,
             &th.bob_merkle_tree,
             &th.mint_zkbin,

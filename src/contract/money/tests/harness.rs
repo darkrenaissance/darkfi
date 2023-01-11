@@ -33,6 +33,7 @@ use darkfi_sdk::{
         pasta_prelude::*, ContractId, Keypair, MerkleTree, PublicKey, TokenId, MONEY_CONTRACT_ID,
     },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
+    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
@@ -218,6 +219,9 @@ impl MoneyTestHarness {
             rcpt,
             amount,
             token_id,
+            pallas::Base::zero(),
+            pallas::Base::zero(),
+            pallas::Base::random(&mut OsRng),
             &[],
             &self.faucet_merkle_tree,
             &self.mint_zkbin,

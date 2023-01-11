@@ -350,6 +350,7 @@ impl Drk {
         let mut balmap: HashMap<String, u64> = HashMap::new();
 
         // Let's scan through the rows and see if we got anything.
+        // TODO: Separate tokens with spend-hook != 0
         for row in rows {
             let Some(row) = row.as_array() else {
                 return Err(anyhow!("Unexpected response from darkfid: {}", rep))

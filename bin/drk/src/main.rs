@@ -161,6 +161,12 @@ enum Subcmd {
 
         /// Recipient address
         recipient: String,
+
+        /// Mark if this is being sent to a DAO
+        dao: bool,
+
+        /// DAO bulla, if the tokens are being sent to a DAO
+        dao_bulla: Option<String>,
     },
 
     /// OTC atomic swap
@@ -534,7 +540,7 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Transfer { amount, token, recipient } => {
+        Subcmd::Transfer { amount, token, recipient, dao, dao_bulla } => {
             let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
             let token_id = TokenId::try_from(token.as_str()).with_context(|| "Invalid Token ID")?;
             let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
@@ -546,7 +552,7 @@ async fn main() -> Result<()> {
             let drk = Drk { rpc_client };
 
             let tx = drk
-                .transfer(&amount, token_id, rcpt)
+                .transfer(&amount, token_id, rcpt, dao, dao_bulla)
                 .await
                 .with_context(|| "Failed to create payment transaction")?;
 

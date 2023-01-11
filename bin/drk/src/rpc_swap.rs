@@ -67,6 +67,7 @@ impl Drk {
         let mut owncoins = self.wallet_coins(false).await?;
         // Then we see if we have one that we can send.
         owncoins.retain(|x| (x.0.note.value == value_send && x.0.note.token_id == token_send));
+        owncoins.retain(|x| (x.0.note.spend_hook == pallas::Base::zero()));
         if owncoins.is_empty() {
             return Err(anyhow!(
                 "Did not find any unspent coins of value {} and token_id {}",

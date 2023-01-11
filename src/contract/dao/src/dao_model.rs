@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{pallas, pasta_prelude::*, MerkleNode, Nullifier, PublicKey};
+use darkfi_sdk::{
+    crypto::{pallas, pasta_prelude::*, MerkleNode, Nullifier, PublicKey},
+    error::ContractError,
+};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
@@ -31,6 +34,35 @@ impl DaoBulla {
 impl From<pallas::Base> for DaoBulla {
     fn from(x: pallas::Base) -> Self {
         Self(x)
+    }
+}
+
+impl TryFrom<&str> for DaoBulla {
+    type Error = ContractError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        let bytes: [u8; 32] = match bs58::decode(s).into_vec() {
+            Ok(v) => {
+                if v.len() != 32 {
+                    return Err(ContractError::IoError(
+                        "Decoded bs58 string for DaoBulla is not 32 bytes long".to_string(),
+                    ))
+                }
+
+                v.try_into().unwrap()
+            }
+            Err(e) => {
+                return Err(ContractError::IoError(format!(
+                    "Failed to decode bs58 for DaoBulla: {}",
+                    e
+                )))
+            }
+        };
+
+        match pallas::Base::from_repr(bytes).into() {
+            Some(v) => Ok(Self(v)),
+            None => Err(ContractError::IoError("Bytes for DaoBulla are noncanonical".to_string())),
+        }
     }
 }
 
