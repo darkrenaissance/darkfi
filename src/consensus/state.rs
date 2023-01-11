@@ -418,11 +418,6 @@ impl ConsensusState {
         target - feedback
     }
 
-    fn f_dif(&mut self) -> Float10 {
-        let len = self.leaders_history.len();
-        Self::pid_error(Float10::try_from(self.leaders_history[len-1] as i64).unwrap().with_precision(constants::RADIX_BITS).value())
-    }
-
     fn max_windowed_forks(&self) -> Float10 {
         let mut max: u64 = 5;
         let window_size = 10;
@@ -437,53 +432,7 @@ impl ConsensusState {
         Float10::try_from(max as i64).unwrap()
     }
 
-    fn tuned_kp(&self) -> Float10 {
-        //(constants::KP.clone() * constants::FLOAT10_FIVE.clone()) / self.max_windowed_forks()
-        constants::KP.clone()
-    }
 
-    fn weighted_f_dif(&mut self) -> Float10 {
-        self.tuned_kp() * self.f_dif()
-    }
-
-    fn f_der(&self) -> Float10 {
-        let len = self.leaders_history.len();
-        let last = Float10::try_from(self.leaders_history[len - 1] as i64).unwrap();
-        let second_to_last = Float10::try_from(self.leaders_history[len - 2] as i64).unwrap();
-
-        let mut der =
-            (Self::pid_error(second_to_last) - Self::pid_error(last)) / constants::TD.clone();
-        /*
-        der = if der > constants::MAX_DER.clone() { constants::MAX_DER.clone() } else { der };
-        der = if der < constants::MIN_DER.clone() { constants::MIN_DER.clone() } else { der };
-        */
-        der
-    }
-
-    fn weighted_f_der(&self) -> Float10 {
-        constants::KD.clone() * self.f_der()
-    }
-
-    fn f_int(&self) -> Float10 {
-        let mut sum = constants::FLOAT10_ZERO.clone();
-        let lead_history_len = self.leaders_history.len();
-        let history_begin_index = if lead_history_len > 10 { lead_history_len - 10 } else { 0 };
-
-        for lf in &self.leaders_history[history_begin_index..] {
-            sum += Float10::try_from(*lf).unwrap().abs();
-        }
-        sum
-    }
-
-    fn tuned_ki(&self) -> Float10 {
-        //(constants::KI.clone() * constants::FLOAT10_FIVE.clone()) / self.max_windowed_forks()
-        constants::KI.clone()
-    }
-
-    fn weighted_f_int(&self) -> Float10 {
-        //constants::KI.clone() * self.f_int()
-        self.tuned_ki() * self.f_int()
-    }
 
     fn zero_leads_len(&self) -> Float10 {
         let mut count = constants::FLOAT10_ZERO.clone();
@@ -498,19 +447,12 @@ impl ConsensusState {
         count
     }
 
-    fn pid(&mut self) -> Float10 {
-        let p = self.weighted_f_dif();
-        let i = self.weighted_f_int();
-        let d = self.weighted_f_der();
-        info!(target: "consensus::state", "win_inv_prob_with_full_stake(): PID P: {:?}", p);
-        info!(target: "consensus::state", "win_inv_prob_with_full_stake(): PID I: {:?}", i);
-        info!(target: "consensus::state", "win_inv_prob_with_full_stake(): PID D: {:?}", d);
-        let f = p + i.clone() + d;
 
-        info!("win_inv_prob_with_full_stake(): PID f: {}", f);
-        f
+    fn f_dif(&mut self) -> Float10 {
+        let len = self.leaders_history.len();
+        Self::pid_error(Float10::try_from(self.leaders_history[len-1] as i64).unwrap().with_precision(constants::RADIX_BITS).value())
+
     }
-
 
     fn discrete_pid(&mut self) -> Float10 {
         let k1 =  constants::KP.clone() +
