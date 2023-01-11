@@ -511,6 +511,7 @@ impl ConsensusState {
         f
     }
 
+
     fn discrete_pid(&mut self) -> Float10 {
         let k1 =  constants::KP.clone() +
             constants::KI.clone() +
@@ -545,17 +546,6 @@ impl ConsensusState {
         } else if f >= constants::FLOAT10_ONE.clone() {
             f = constants::MAX_F.clone()
         }
-        /*
-        let hist_len = self.leaders_history.len();
-        if hist_len > 3 &&
-            self.leaders_history[hist_len - 1] == 0 &&
-            self.leaders_history[hist_len - 2] == 0 &&
-            self.leaders_history[hist_len - 3] == 0
-            //&& i == constants::FLOAT10_ZERO.clone()
-        {
-            f =  f.clone() * constants::DEG_RATE.clone().powf(self.zero_leads_len());
-        }
-        */
         // log f history
         let file = File::options().append(true).open(constants::F_HISTORY_LOG).unwrap();
         {
