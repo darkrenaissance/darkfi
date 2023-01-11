@@ -20,9 +20,8 @@ use anyhow::{anyhow, Result};
 use darkfi::{
     rpc::jsonrpc::JsonRequest,
     tx::Transaction,
-    util::parse::encode_base10,
     wallet::walletdb::QueryType,
-    zk::{empty_witnesses, ProvingKey, ZkCircuit},
+    zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
 };
 use darkfi_dao_contract::{
@@ -32,11 +31,13 @@ use darkfi_dao_contract::{
         DAO_DAOS_COL_BULLA_BLIND, DAO_DAOS_COL_GOV_TOKEN_ID, DAO_DAOS_COL_NAME,
         DAO_DAOS_COL_PROPOSER_LIMIT, DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_SECRET, DAO_DAOS_TABLE,
     },
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
-    crypto::{PublicKey, TokenId, DAO_CONTRACT_ID},
+    crypto::{PublicKey, SecretKey, TokenId, DAO_CONTRACT_ID},
+    incrementalmerkletree::Tree,
     pasta::pallas,
     ContractCall,
 };
@@ -201,7 +202,7 @@ impl Drk {
     pub async fn dao_propose(
         &self,
         dao_id: u64,
-        rcpt: PublicKey,
+        recipient: PublicKey,
         amount: u64,
         token_id: TokenId,
         serial: pallas::Base,
@@ -211,8 +212,13 @@ impl Drk {
             return Err(anyhow!("DAO not found in wallet"))
         };
 
+        if dao.leaf_position.is_none() || dao.tx_hash.is_none() {
+            return Err(anyhow!("DAO seems to not have been deployed yet"))
+        }
+
         let bulla = dao.bulla();
         let owncoins = self.wallet_coins(false).await?;
+
         let mut dao_owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
         dao_owncoins.retain(|x| {
             x.note.token_id == token_id &&
@@ -220,42 +226,131 @@ impl Drk {
                 x.note.user_data == bulla.inner()
         });
 
+        let mut gov_owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
+        gov_owncoins.retain(|x| x.note.token_id == dao.gov_token_id);
+
         if dao_owncoins.is_empty() {
             return Err(anyhow!("Did not find any {} coins owned by this DAO", token_id))
         }
 
-        let mut dao_balance = 0;
-        for coin in dao_owncoins.iter() {
-            dao_balance += coin.note.value;
-        }
-
-        if dao_balance < amount {
-            return Err(anyhow!(
-                "Not enough balance for token ID: {}, found: {}",
-                token_id,
-                encode_base10(dao_balance, 8)
-            ))
-        }
-
-        let mut user_owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
-        user_owncoins.retain(|x| x.note.token_id == dao.gov_token_id);
-
-        if user_owncoins.is_empty() {
+        if gov_owncoins.is_empty() {
             return Err(anyhow!("Did not find any governance {} coins in wallet", dao.gov_token_id))
         }
 
-        let mut user_balance = 0;
-        for coin in user_owncoins.iter() {
-            user_balance += coin.note.value;
+        if dao_owncoins.iter().map(|x| x.note.value).sum::<u64>() < amount {
+            return Err(anyhow!("Not enough DAO balance for token ID: {}", token_id))
         }
 
-        if user_balance < dao.proposer_limit {
-            return Err(anyhow!(
-                "Not enough governance token {} balance found to create proposal",
-                dao.gov_token_id
-            ))
+        if gov_owncoins.iter().map(|x| x.note.value).sum::<u64>() < dao.proposer_limit {
+            return Err(anyhow!("Not enough gov token {} balance to propose", dao.gov_token_id))
         }
 
-        todo!();
+        // FIXME: Here we're looking for a coin == proposer_limit but this shouldn't have to
+        // be the case {
+        let Some(gov_coin) = gov_owncoins.iter().find(|x| x.note.value == dao.proposer_limit) else {
+            return Err(anyhow!("Did not find a single gov coin of value {}", dao.proposer_limit));
+        };
+        // }
+
+        // Lookup the zkas bins
+        let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
+        let Some(propose_burn_zkbin) =
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS) else
+        {
+            return Err(anyhow!("Propose Burn circuit not found"))
+        };
+
+        let Some(propose_main_zkbin) =
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS) else
+        {
+            return Err(anyhow!("Propose Main circuit not found"))
+        };
+
+        let propose_burn_zkbin = ZkBinary::decode(&propose_burn_zkbin.1)?;
+        let propose_main_zkbin = ZkBinary::decode(&propose_main_zkbin.1)?;
+
+        let k = 13;
+        let propose_burn_circuit =
+            ZkCircuit::new(empty_witnesses(&propose_burn_zkbin), propose_burn_zkbin.clone());
+        let propose_main_circuit =
+            ZkCircuit::new(empty_witnesses(&propose_main_zkbin), propose_main_zkbin.clone());
+
+        eprintln!("Creating Propose Burn circuit proving key");
+        let propose_burn_pk = ProvingKey::build(k, &propose_burn_circuit);
+        eprintln!("Creating Propose Main circuit proving key");
+        let propose_main_pk = ProvingKey::build(k, &propose_main_circuit);
+
+        // Now create the parameters for the proposal tx
+        let signature_secret = SecretKey::random(&mut OsRng);
+
+        // Get the Merkle path for the gov coin in the money tree
+        let money_merkle_tree = self.wallet_tree().await?;
+        let root = money_merkle_tree.root(0).unwrap();
+        let gov_coin_merkle_path =
+            money_merkle_tree.authentication_path(gov_coin.leaf_position, &root).unwrap();
+
+        // Fetch the daos Merkle tree
+        let (daos_tree, _) = self.wallet_dao_trees().await?;
+
+        let input = dao_client::DaoProposeStakeInput {
+            secret: gov_coin.secret, // <-- TODO: Is this correct?
+            note: gov_coin.note.clone(),
+            leaf_position: gov_coin.leaf_position,
+            merkle_path: gov_coin_merkle_path,
+            signature_secret,
+        };
+
+        let (dao_merkle_path, dao_merkle_root) = {
+            let root = daos_tree.root(0).unwrap();
+            let dao_merkle_path =
+                daos_tree.authentication_path(dao.leaf_position.unwrap(), &root).unwrap();
+            (dao_merkle_path, root)
+        };
+
+        let proposal_blind = pallas::Base::random(&mut OsRng);
+        let proposal = dao_client::DaoProposalInfo {
+            dest: recipient,
+            amount,
+            serial,
+            token_id,
+            blind: proposal_blind,
+        };
+
+        let daoinfo = DaoInfo {
+            proposer_limit: dao.proposer_limit,
+            quorum: dao.quorum,
+            approval_ratio_quot: dao.approval_ratio_quot,
+            approval_ratio_base: dao.approval_ratio_base,
+            gov_token_id: dao.gov_token_id,
+            public_key: PublicKey::from_secret(dao.secret_key),
+            bulla_blind: dao.bulla_blind,
+        };
+
+        let call = dao_client::DaoProposeCall {
+            inputs: vec![input],
+            proposal,
+            dao: daoinfo,
+            dao_leaf_position: dao.leaf_position.unwrap(),
+            dao_merkle_path,
+            dao_merkle_root,
+        };
+
+        eprintln!("Creating ZK proofs...");
+        let (params, proofs) = call.make(
+            &propose_burn_zkbin,
+            &propose_burn_pk,
+            &propose_main_zkbin,
+            &propose_main_pk,
+        )?;
+
+        let mut data = vec![DaoFunction::Propose as u8];
+        params.encode(&mut data)?;
+        let calls = vec![ContractCall { contract_id: *DAO_CONTRACT_ID, data }];
+        let proofs = vec![proofs];
+        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = tx.create_sigs(&mut OsRng, &vec![signature_secret])?;
+        tx.signatures = vec![sigs];
+
+        Ok(tx)
     }
 }
