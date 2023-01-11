@@ -64,10 +64,14 @@ impl Drk {
         token_recv: TokenId,
     ) -> Result<PartialSwapData> {
         // First we'll fetch all of our unspent coins from the wallet.
-        let mut owncoins = self.wallet_coins(false).await?;
+        let mut owncoins = self.get_coins(false).await?;
         // Then we see if we have one that we can send.
-        owncoins.retain(|x| (x.0.note.value == value_send && x.0.note.token_id == token_send));
-        owncoins.retain(|x| (x.0.note.spend_hook == pallas::Base::zero()));
+        owncoins.retain(|x| {
+            x.0.note.value == value_send &&
+                x.0.note.token_id == token_send &&
+                x.0.note.spend_hook == pallas::Base::zero()
+        });
+
         if owncoins.is_empty() {
             return Err(anyhow!(
                 "Did not find any unspent coins of value {} and token_id {}",
@@ -83,7 +87,7 @@ impl Drk {
         let address = self.wallet_address(0).await?;
 
         // We'll also need our Merkle tree
-        let tree = self.wallet_tree().await?;
+        let tree = self.get_money_tree().await?;
 
         let contract_id = *MONEY_CONTRACT_ID;
 
@@ -149,7 +153,7 @@ impl Drk {
     pub async fn join_swap(&self, partial: PartialSwapData) -> Result<Transaction> {
         // Our side of the tx in the pairs is the second half, so we try to find
         // an unspent coin like that in our wallet.
-        let mut owncoins = self.wallet_coins(false).await?;
+        let mut owncoins = self.get_coins(false).await?;
         owncoins.retain(|x| {
             x.0.note.value == partial.value_pair.1 && x.0.note.token_id == partial.token_pair.1
         });
@@ -169,7 +173,7 @@ impl Drk {
         let address = self.wallet_address(0).await?;
 
         // We'll also need our Merkle tree
-        let tree = self.wallet_tree().await?;
+        let tree = self.get_money_tree().await?;
 
         let contract_id = *MONEY_CONTRACT_ID;
 
@@ -288,7 +292,7 @@ impl Drk {
             }
 
             // Try to decrypt one of the outputs.
-            let secret_keys = self.wallet_secrets().await?;
+            let secret_keys = self.get_money_secrets().await?;
             let mut skey: Option<SecretKey> = None;
             let mut note: Option<Note> = None;
             let mut output_idx = 0;
@@ -404,7 +408,7 @@ impl Drk {
     /// note and prepending it to the transaction's signatures.
     pub async fn sign_swap(&self, tx: &mut Transaction) -> Result<()> {
         // We need our secret keys to try and decrypt the note
-        let secret_keys = self.wallet_secrets().await?;
+        let secret_keys = self.get_money_secrets().await?;
         let params: MoneyTransferParams = deserialize(&tx.calls[0].data[1..])?;
 
         // Our output should be outputs[0] so we try to decrypt that.

@@ -63,16 +63,16 @@ mod rpc_dao;
 /// Blockchain methods
 mod rpc_blockchain;
 
-/// Wallet operation methods for darkfid's JSON-RPC
-mod rpc_wallet;
-
 /// CLI utility functions
 mod cli_util;
 use cli_util::{parse_token_pair, parse_value_pair};
 
-/// DAO aux functionality
-mod dao;
-use dao::DaoParams;
+/// Wallet functionality related to DAO
+mod wallet_dao;
+use wallet_dao::DaoParams;
+
+/// Wallet functionality related to Money
+mod wallet_money;
 
 #[derive(Parser)]
 #[command(about = cli_desc!())]
@@ -387,17 +387,35 @@ async fn main() -> Result<()> {
             let drk = Drk { rpc_client };
 
             if initialize {
-                drk.wallet_initialize().await.with_context(|| "Failed to initialize wallet")?;
+                drk.initialize_money().await?;
+                drk.initialize_dao().await?;
                 return Ok(())
             }
 
             if keygen {
-                drk.wallet_keygen().await.with_context(|| "Failed to generate keypair")?;
+                drk.money_keygen().await.with_context(|| "Failed to generate keypair")?;
                 return Ok(())
             }
 
             if balance {
-                drk.wallet_balance().await.with_context(|| "Failed to fetch wallet balance")?;
+                let balmap =
+                    drk.money_balance().await.with_context(|| "Failed to fetch wallet balance")?;
+
+                // Create a prettytable with the new data:
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Token ID", "Balance"]);
+                for (token_id, balance) in balmap.iter() {
+                    // FIXME: Don't hardcode to 8 decimals
+                    table.add_row(row![token_id, encode_base10(*balance, 8)]);
+                }
+
+                if table.is_empty() {
+                    println!("No unspent balances found");
+                } else {
+                    println!("{}", table);
+                }
+
                 return Ok(())
             }
 
@@ -413,8 +431,10 @@ async fn main() -> Result<()> {
             }
 
             if secrets {
-                let v =
-                    drk.wallet_secrets().await.with_context(|| "Failed to fetch wallet secrets")?;
+                let v = drk
+                    .get_money_secrets()
+                    .await
+                    .with_context(|| "Failed to fetch wallet secrets")?;
 
                 drk.rpc_client.close().await?;
 
@@ -440,7 +460,7 @@ async fn main() -> Result<()> {
                 }
 
                 let pubkeys = drk
-                    .wallet_import_secrets(secrets)
+                    .import_money_secrets(secrets)
                     .await
                     .with_context(|| "Failed to import secret keys into wallet")?;
 
@@ -454,7 +474,8 @@ async fn main() -> Result<()> {
             }
 
             if tree {
-                let v = drk.wallet_tree().await.with_context(|| "Failed to fetch Merkle tree")?;
+                let v =
+                    drk.get_money_tree().await.with_context(|| "Failed to fetch Merkle tree")?;
                 drk.rpc_client.close().await?;
 
                 println!("{:#?}", v);
@@ -464,7 +485,7 @@ async fn main() -> Result<()> {
 
             if coins {
                 let coins = drk
-                    .wallet_coins(true)
+                    .get_coins(true)
                     .await
                     .with_context(|| "Failed to fetch coins from wallet")?;
 
@@ -761,7 +782,7 @@ async fn main() -> Result<()> {
 
                 let drk = Drk { rpc_client };
 
-                drk.dao_import(dao_name, dao_params)
+                drk.import_dao(dao_name, dao_params)
                     .await
                     .with_context(|| "Failed to import DAO")?;
 

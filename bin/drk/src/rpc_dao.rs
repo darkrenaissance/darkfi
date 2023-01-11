@@ -18,21 +18,13 @@
 
 use anyhow::{anyhow, Result};
 use darkfi::{
-    rpc::jsonrpc::JsonRequest,
     tx::Transaction,
-    wallet::walletdb::QueryType,
     zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
 };
 use darkfi_dao_contract::{
-    dao_client,
-    dao_client::{
-        DaoInfo, DAO_DAOS_COL_APPROVAL_RATIO_BASE, DAO_DAOS_COL_APPROVAL_RATIO_QUOT,
-        DAO_DAOS_COL_BULLA_BLIND, DAO_DAOS_COL_GOV_TOKEN_ID, DAO_DAOS_COL_NAME,
-        DAO_DAOS_COL_PROPOSER_LIMIT, DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_SECRET, DAO_DAOS_TABLE,
-    },
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    dao_client, dao_client::DaoInfo, DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
@@ -41,122 +33,15 @@ use darkfi_sdk::{
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable};
+use darkfi_serial::Encodable;
 use rand::rngs::OsRng;
-use serde_json::json;
 
 use super::Drk;
-use crate::{dao::Dao, DaoParams};
 
 impl Drk {
-    /// Import given DAO into the wallet
-    pub async fn dao_import(&self, dao_name: String, dao_params: DaoParams) -> Result<()> {
-        // First let's check if we've imported this DAO before. We use the name
-        // as the identifier.
-        let query = format!("SELECT {} FROM {}", DAO_DAOS_COL_NAME, DAO_DAOS_TABLE);
-        let params = json!([query, QueryType::Blob as u8, DAO_DAOS_COL_NAME]);
-        let req = JsonRequest::new("wallet.query_row_multi", params);
-        let rep = self.rpc_client.request(req).await?;
-
-        // The returned thing should be an array of found rows.
-        let Some(rows) = rep.as_array() else {
-            return Err(anyhow!("Unexpected response from darkfid: {}", rep))
-        };
-
-        for row in rows {
-            let name_bytes: Vec<u8> = serde_json::from_value(row[0].clone())?;
-            let name: String = deserialize(&name_bytes)?;
-            if name == dao_name {
-                return Err(anyhow!("DAO \"{}\" already imported in wallet", dao_name))
-            }
-        }
-
-        eprintln!("Importing \"{}\" DAO into wallet", dao_name);
-
-        let query = format!(
-            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);",
-            DAO_DAOS_TABLE, DAO_DAOS_COL_NAME, DAO_DAOS_COL_PROPOSER_LIMIT,
-            DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_APPROVAL_RATIO_BASE, DAO_DAOS_COL_APPROVAL_RATIO_QUOT,
-            DAO_DAOS_COL_GOV_TOKEN_ID, DAO_DAOS_COL_SECRET, DAO_DAOS_COL_BULLA_BLIND,
-        );
-
-        let params = json!([
-            query,
-            QueryType::Blob as u8,
-            serialize(&dao_name),
-            QueryType::Integer as u8,
-            dao_params.proposer_limit,
-            QueryType::Integer as u8,
-            dao_params.quorum,
-            QueryType::Integer as u8,
-            dao_params.approval_ratio_base,
-            QueryType::Integer as u8,
-            dao_params.approval_ratio_quot,
-            QueryType::Blob as u8,
-            serialize(&dao_params.gov_token_id),
-            QueryType::Blob as u8,
-            serialize(&dao_params.secret_key),
-            QueryType::Blob as u8,
-            serialize(&dao_params.bulla_blind),
-        ]);
-
-        eprintln!("Executing JSON-RPC request to add DAO to wallet");
-        let req = JsonRequest::new("wallet.exec_sql", params);
-        self.rpc_client.request(req).await?;
-        eprintln!("DAO imported successfully");
-
-        Ok(())
-    }
-
-    async fn dao_get_by_id(&self, dao_id: u64) -> Result<Dao> {
-        let daos = self.wallet_get_daos().await?;
-
-        let Some(dao) = daos.iter().find(|x| x.id == dao_id) else {
-            return Err(anyhow!("DAO not found in wallet"))
-        };
-
-        Ok(dao.clone())
-    }
-
-    async fn dao_list_single(&self, dao_id: u64) -> Result<()> {
-        let dao = self.dao_get_by_id(dao_id).await?;
-
-        println!("DAO Parameters:");
-        println!("Name: {}", dao.name);
-        println!("Proposer limit: {}", dao.proposer_limit);
-        println!("Quorum: {}", dao.quorum);
-        println!(
-            "Approval ratio: {}",
-            dao.approval_ratio_base as f64 / dao.approval_ratio_quot as f64
-        );
-        println!("Governance token ID: {}", dao.gov_token_id);
-        println!("Secret key: {}", dao.secret_key);
-        println!("Bulla blind: {:?}", dao.bulla_blind);
-        println!("Leaf position: {:?}", dao.leaf_position);
-        println!("Tx hash: {:?}", dao.tx_hash);
-        println!("Call idx: {:?}", dao.call_index);
-
-        Ok(())
-    }
-
-    /// List DAO(s) imported in the wallet
-    pub async fn dao_list(&self, dao_id: Option<u64>) -> Result<()> {
-        if dao_id.is_some() {
-            return self.dao_list_single(dao_id.unwrap()).await
-        }
-
-        let daos = self.wallet_get_daos().await?;
-
-        for dao in daos {
-            println!("[{}] {}", dao.id, dao.name);
-        }
-
-        Ok(())
-    }
-
     /// Mint a DAO on-chain
     pub async fn dao_mint(&self, dao_id: u64) -> Result<Transaction> {
-        let dao = self.dao_get_by_id(dao_id).await?;
+        let dao = self.get_dao_by_id(dao_id).await?;
 
         if dao.tx_hash.is_some() {
             return Err(anyhow!("This DAO seems to have already been minted on-chain"))
@@ -207,8 +92,7 @@ impl Drk {
         token_id: TokenId,
         serial: pallas::Base,
     ) -> Result<Transaction> {
-        let daos = self.wallet_get_daos().await?;
-        let Some(dao) = daos.get(dao_id as usize - 1) else {
+        let Ok(dao) = self.get_dao_by_id(dao_id).await else {
             return Err(anyhow!("DAO not found in wallet"))
         };
 
@@ -217,7 +101,7 @@ impl Drk {
         }
 
         let bulla = dao.bulla();
-        let owncoins = self.wallet_coins(false).await?;
+        let owncoins = self.get_coins(false).await?;
 
         let mut dao_owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
         dao_owncoins.retain(|x| {
@@ -284,13 +168,13 @@ impl Drk {
         let signature_secret = SecretKey::random(&mut OsRng);
 
         // Get the Merkle path for the gov coin in the money tree
-        let money_merkle_tree = self.wallet_tree().await?;
+        let money_merkle_tree = self.get_money_tree().await?;
         let root = money_merkle_tree.root(0).unwrap();
         let gov_coin_merkle_path =
             money_merkle_tree.authentication_path(gov_coin.leaf_position, &root).unwrap();
 
         // Fetch the daos Merkle tree
-        let (daos_tree, _) = self.wallet_dao_trees().await?;
+        let (daos_tree, _) = self.get_dao_trees().await?;
 
         let input = dao_client::DaoProposeStakeInput {
             secret: gov_coin.secret, // <-- TODO: Is this correct?

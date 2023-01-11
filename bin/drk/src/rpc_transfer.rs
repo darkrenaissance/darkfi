@@ -69,7 +69,7 @@ impl Drk {
 
         // First get all unspent OwnCoins to see what our balance is.
         eprintln!("Fetching OwnCoins");
-        let owncoins = self.wallet_coins(false).await?;
+        let owncoins = self.get_coins(false).await?;
         let mut owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
         // We're only interested in the ones for the token_id we're sending
         // And the ones not owned by some protocol (meaning spend-hook should be 0)
@@ -95,10 +95,10 @@ impl Drk {
         }
 
         // We'll also need our Merkle tree
-        let tree = self.wallet_tree().await?;
+        let tree = self.get_money_tree().await?;
 
         // TODO: Which keypair to actually use?
-        let secrets = self.wallet_secrets().await?;
+        let secrets = self.get_money_secrets().await?;
         let keypair = Keypair::new(secrets[0]);
 
         let contract_id = *MONEY_CONTRACT_ID;

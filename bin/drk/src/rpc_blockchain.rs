@@ -28,10 +28,6 @@ use darkfi::{
     tx::Transaction,
     wallet::walletdb::QueryType,
 };
-use darkfi_dao_contract::{
-    dao_model::{DaoBulla, DaoMintParams},
-    DaoFunction,
-};
 use darkfi_money_contract::{
     client::{
         Coin, EncryptedNote, OwnCoin, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
@@ -45,7 +41,9 @@ use darkfi_money_contract::{
     MoneyFunction,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, poseidon_hash, ContractId, MerkleNode, Nullifier},
+    crypto::{
+        contract_id::MONEY_CONTRACT_ID, poseidon_hash, ContractId, MerkleNode, Nullifier, SecretKey,
+    },
     incrementalmerkletree::Tree,
 };
 use darkfi_serial::{deserialize, serialize};
@@ -67,7 +65,7 @@ impl Drk {
         let req = JsonRequest::new("blockchain.last_known_slot", json!([]));
         let rep = self.rpc_client.request(req).await?;
         let last_known: u64 = serde_json::from_value(rep)?;
-        let last_scanned = self.wallet_last_scanned_slot().await?;
+        let last_scanned = self.last_scanned_slot().await?;
 
         if last_known != last_scanned {
             eprintln!("Warning: Last scanned slot is not the last known slot.");
@@ -135,45 +133,9 @@ impl Drk {
     /// for future use.
     async fn scan_block_dao(&self, block: &BlockInfo) -> Result<()> {
         eprintln!("Iterating over {} transactions", block.txs.len());
-
-        let mut minted_dao_bullas: Vec<(DaoBulla, blake3::Hash, u32)> = vec![];
-
-        for (i, tx) in block.txs.iter().enumerate() {
-            for (j, call) in tx.calls.iter().enumerate() {
-                if call.contract_id == *MONEY_CONTRACT_ID && call.data[0] == DaoFunction::Mint as u8
-                {
-                    eprintln!("Found Dao::Mint in call {} in tx {}", j, i);
-                    let params: DaoMintParams = deserialize(&call.data[1..])?;
-                    minted_dao_bullas.push((
-                        params.dao_bulla,
-                        blake3::hash(&serialize(tx)),
-                        j as u32,
-                    ));
-                    continue
-                }
-            }
+        for tx in block.txs.iter() {
+            self.apply_tx_dao_data(tx, true).await?;
         }
-
-        let mut daos = self.wallet_get_daos().await?;
-        let (mut daos_tree, mut proposals_tree) = self.wallet_dao_trees().await?;
-        // We assume that the state transitions are correct and won't allow a DAO being
-        // minted twice. So here we just blindly put stuff in.
-        for bulla in minted_dao_bullas {
-            daos_tree.append(&MerkleNode::from(bulla.0.inner()));
-            for dao in daos.iter_mut() {
-                if dao.bulla() == bulla.0 {
-                    eprintln!("Found DAO {:?}, noting down for wallet update", bulla.0);
-                    // We have this DAO imported our wallet. Add the metadata:
-                    dao.leaf_position = daos_tree.witness();
-                    dao.tx_hash = Some(bulla.1);
-                    dao.call_index = Some(bulla.2);
-                }
-            }
-        }
-
-        eprintln!("Writing DAO updates to wallet");
-        self.put_daos(&daos).await?;
-        self.put_dao_trees(&daos_tree, &proposals_tree).await?;
 
         Ok(())
     }
@@ -222,13 +184,13 @@ impl Drk {
 
         // Fetch our secret keys from the wallet
         eprintln!("Fetching secret keys from wallet");
-        let secrets = self.wallet_secrets().await?;
+        let secrets: Vec<SecretKey> = self.get_money_secrets().await?;
         if secrets.is_empty() {
             eprintln!("Warning: No secrets found in wallet");
         }
 
-        eprintln!("Fetching Merkle tree from wallet");
-        let mut tree = self.wallet_tree().await?;
+        eprintln!("Fetching Money Merkle tree from wallet");
+        let mut tree = self.get_money_tree().await?;
 
         let mut owncoins = vec![];
 
@@ -267,7 +229,7 @@ impl Drk {
 
         if !nullifiers.is_empty() {
             eprintln!("Found {} spent coins, marking as spent", nullifiers.len());
-            self.mark_spent_coins(nullifiers).await?;
+            self.mark_spent_coins(&nullifiers).await?;
             eprintln!("Spent coins marked successfully");
         }
 
@@ -365,6 +327,15 @@ impl Drk {
         let rep = self.rpc_client.request(req).await?;
 
         let txid = serde_json::from_value(rep)?;
+
+        // At this point the tx is successfully broadcasted. We can add the
+        // temp data into the wallet. Once scanned, it should mean that the
+        // transaction was finalized, so at that point we actually add the
+        // missing data. For now it'll be in an "unconfirmed" state.
+        // TODO: Do the same for Money::*
+        //self.wallet_apply_unconfirmed_dao_data(tx).await?;
+        //self.wallet_apply_unconfirmed_money_data(tx).await?;
+
         Ok(txid)
     }
 
@@ -394,7 +365,7 @@ impl Drk {
             self.reset_money_tree().await?;
             0
         } else {
-            self.wallet_last_scanned_slot().await?
+            self.last_scanned_slot().await?
         };
 
         let req = JsonRequest::new("blockchain.last_known_slot", json!([]));

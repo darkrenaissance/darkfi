@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS dao_proposals (
     -- Public key of person that would receive the funds
     recv_public BLOB NOT NULL,
     -- Amount of funds that would be sent
-    amount INTEGER NOT NULL,
+    amount BLOB NOT NULL,
     serial BLOB NOT NULL,
     -- Token ID we propose to send
     sendcoin_token_id BLOB NOT NULL,
