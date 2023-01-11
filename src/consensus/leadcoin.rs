@@ -286,21 +286,7 @@ impl LeadCoin {
                      sigma2: pallas::Base,
                      current_eta: pallas::Base,
                      current_slot: pallas::Base,
-                     //coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
     ) -> bool {
-        //FIXME: coin should evolve to void the following:
-        // all competing coins are stuck at same y, T,
-        // that doesn't change through time.
-        // which happens if the coins aren't evolving, and
-        // controller give the same output (in case of discrete controller).
-        //if self.slot != current_slot () {
-            //evolve_coin(current_eta, current_slot, coin_commitment_tree);
-        //}
-        // this would require pubishing a vec of evolving coins for validation
-        // which requires a long processing time, and would slow down the tx.
-        // NOTE! but if only the y_mu is changed according to the current slot value,
-        // and not the minting slot index.
-        // the latter is less work, and saves processing time.
         let y_seed = [pallas::Base::from(PREFIX_SEED),
                      self.coin1_sk_root.inner(),
                      self.nonce,
