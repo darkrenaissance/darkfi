@@ -40,10 +40,10 @@ lazy_static! {
     pub static ref TESTNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_testnet");
 
     /// Genesis timestamp for the testnet chain
-    pub static ref TESTNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1673115200);
+    pub static ref TESTNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1673281500);
 
     /// Bootstrap timestamp for the testnet chain
-    pub static ref TESTNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1673115200);
+    pub static ref TESTNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1673281500);
 
     /// Total sum of initial staking coins for the testnet chain
     pub static ref TESTNET_INITIAL_DISTRIBUTION: u64 = 1000;
@@ -65,15 +65,12 @@ lazy_static! {
 
     pub static ref TI: Float10 = FLOAT10_ONE.clone();
     pub static ref TD: Float10 = FLOAT10_ONE.clone();
-    //pid parameters
-    //pub static ref KP: Float10 = Float10::from_str_native("-0.8").unwrap().with_precision(RADIX_BITS).value();
-    //pub static ref KI: Float10 = Float10::from_str_native("0.6").unwrap().with_precision(RADIX_BITS).value();
-    //pub static ref KD: Float10 = Float10::from_str_native("0.8").unwrap().with_precision(RADIX_BITS).value();
     // pid discrete parameters
-    pub static ref KP: Float10 = Float10::from_str_native("0.5").unwrap().with_precision(RADIX_BITS).value();
-    pub static ref KI: Float10 = Float10::from_str_native("0.8").unwrap().with_precision(RADIX_BITS).value();
 
-    pub static ref KD: Float10 = Float10::from_str_native("0.8").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref KP: Float10 = Float10::from_str_native("0.18").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref KI: Float10 = Float10::from_str_native("0.02").unwrap().with_precision(RADIX_BITS).value();
+    pub static ref KD: Float10 = Float10::from_str_native("-0.1").unwrap().with_precision(RADIX_BITS).value();
+
     pub static ref PID_OUT_STEP: Float10  = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
     pub static ref MAX_DER: Float10 = Float10::from_str_native("0.1").unwrap().with_precision(RADIX_BITS).value();
     pub static ref MIN_DER: Float10 = Float10::from_str_native("-0.1").unwrap().with_precision(RADIX_BITS).value();
