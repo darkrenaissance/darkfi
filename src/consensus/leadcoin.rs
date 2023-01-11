@@ -293,7 +293,7 @@ impl LeadCoin {
                      ZERO
         ];
         let y_seed_hash = poseidon_hash(y_seed);
-        let (y_mu, rho_mu) = Self::election_seeds(current_eta, current_slot);
+        let (y_mu, _) = Self::election_seeds(current_eta, current_slot);
         let y_msg = [y_seed_hash, y_mu];
         let y = poseidon_hash(y_msg);
 
@@ -301,8 +301,9 @@ impl LeadCoin {
 
         let target =  sigma1 * value + sigma2 * value * value;
 
-        let mut y_t_str = format!("{:?},{:?}\n", y,target);
-        let mut f = File::options().append(true).open(constants::LOTTERY_HISTORY_LOG).unwrap();
+        let y_t_str = format!("{:?},{:?}\n", y,target);
+        let f = File::options().append(true).open(constants::LOTTERY_HISTORY_LOG).unwrap();
+
         {
             let mut writer = BufWriter::new(f);
             writer.write(&y_t_str.into_bytes()).unwrap();
@@ -363,12 +364,6 @@ impl LeadCoin {
             coin1_sk_merkle_path: self.coin1_sk_merkle_path,
             coin1_blind: derived_blind,
         }
-    }
-
-    fn coin_commitment_base(&self) -> pallas::Base {
-        let c1_cm_coord = self.coin1_commitment.to_affine().coordinates().unwrap();
-        let c1_cm_msg = [*c1_cm_coord.x(), *c1_cm_coord.y()];
-        poseidon_hash(c1_cm_msg)
     }
 
     /// Try to create a ZK proof of consensus leadership

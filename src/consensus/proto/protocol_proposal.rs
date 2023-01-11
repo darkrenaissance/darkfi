@@ -32,7 +32,7 @@ use crate::{
 };
 
 use darkfi_sdk::{
-    pasta::{arithmetic::CurveAffine, group::Curve, pallas},
+    pasta::{pallas},
 };
 use rand::rngs::OsRng;
 use halo2_proofs::arithmetic::Field;

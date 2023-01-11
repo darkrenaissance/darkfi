@@ -21,7 +21,6 @@ use dashu::integer::{IBig, Sign};
 use log::debug;
 use dashu::integer::UBig;
 use darkfi_sdk::pasta::group::ff::PrimeField;
-use crate::consensus::{constants::RADIX_BITS};
 
 use super::Float10;
 
