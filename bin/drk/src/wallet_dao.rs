@@ -19,7 +19,7 @@ use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, tx::Transaction, wallet::walletdb::QueryType};
 use darkfi_dao_contract::{
     dao_client::{
-        DAO_DAOS_COL_APPROVAL_RATIO_BASE, DAO_DAOS_COL_APPROVAL_RATIO_QUOT,
+        DaoProposeNote, DAO_DAOS_COL_APPROVAL_RATIO_BASE, DAO_DAOS_COL_APPROVAL_RATIO_QUOT,
         DAO_DAOS_COL_BULLA_BLIND, DAO_DAOS_COL_CALL_INDEX, DAO_DAOS_COL_DAO_ID,
         DAO_DAOS_COL_GOV_TOKEN_ID, DAO_DAOS_COL_LEAF_POSITION, DAO_DAOS_COL_NAME,
         DAO_DAOS_COL_PROPOSER_LIMIT, DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_SECRET,
@@ -598,6 +598,7 @@ impl Drk {
         let mut new_dao_bullas: Vec<(DaoBulla, Option<blake3::Hash>, u32)> = vec![];
         // DAO proposals that have been minted
         let mut new_dao_proposals: Vec<(DaoProposeParams, Option<blake3::Hash>, u32)> = vec![];
+        let mut our_proposals: Vec<DaoProposal> = vec![];
 
         // Run through the transaction and see what we got:
         for (i, call) in tx.calls.iter().enumerate() {
@@ -656,18 +657,42 @@ impl Drk {
                     ephem_public: proposal.0.ephem_public,
                 };
 
-                // TODO: Decrypt proposal and see if it's for us
+                // If we're able to decrypt this note, that's the way to link it
+                // to a specific DAO.
+                for dao in &daos {
+                    if let Ok(note) = enc_note.decrypt::<DaoProposeNote>(&dao.secret_key) {
+                        // We managed to decrypt it. Let's place this in a proper
+                        // DaoProposal object. We assume we can just increment the
+                        // ID by looking at how many proposals we already have.
+                        // We also assume we don't mantain duplicate DAOs in the
+                        // wallet.
+                        eprintln!("Managed to decrypt DAO proposal note");
+                        let daos_proposals = self.get_dao_proposals(dao.id).await?;
+                        let our_prop = DaoProposal {
+                            // This ID stuff is flaky.
+                            id: daos_proposals.len() as u64 + our_proposals.len() as u64 + 1,
+                            dao_bulla: dao.bulla(),
+                            recipient: note.proposal.dest,
+                            amount: note.proposal.amount,
+                            serial: note.proposal.serial,
+                            token_id: note.proposal.token_id,
+                            bulla_blind: note.proposal.blind,
+                            leaf_position: proposals_tree.witness(),
+                            tx_hash: proposal.1,
+                            call_index: Some(proposal.2),
+                            vote_id: None,
+                        };
+
+                        our_proposals.push(our_prop);
+                        break
+                    }
+                }
             }
         }
 
-        // Put new stuff into the wallet.
-        // Note that this is not done for Dao::Mint, as that should have already
-        // been done through `drk dao import`.
-        //self.put_dao_proposals(&new_dao_proposals).await?;
-
         if confirm {
             self.confirm_daos(&daos).await?;
-            //self.confirm_dao_proposals(&new_dao_proposals).await?;
+            self.put_dao_proposals(&our_proposals).await?;
         }
 
         Ok(())
@@ -706,11 +731,53 @@ impl Drk {
 
     /// Import given DAO proposals into the wallet
     pub async fn put_dao_proposals(&self, proposals: &[DaoProposal]) -> Result<()> {
-        todo!()
-    }
+        let daos = self.get_daos().await?;
 
-    /// Confirm already imported DAO proposal metadata into the wallet.
-    pub async fn confirm_dao_proposals(&self, proposals: &[DaoProposal]) -> Result<()> {
-        todo!()
+        for proposal in proposals {
+            let Some(dao) = daos.iter().find(|x| x.bulla() == proposal.dao_bulla) else {
+                return Err(anyhow!("[put_dao_proposals] Couldn't find respective DAO"))
+            };
+
+            let query = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
+                DAO_PROPOSALS_TABLE,
+                DAO_PROPOSALS_COL_DAO_ID,
+                DAO_PROPOSALS_COL_RECV_PUBLIC,
+                DAO_PROPOSALS_COL_AMOUNT,
+                DAO_PROPOSALS_COL_SERIAL,
+                DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID,
+                DAO_PROPOSALS_COL_BULLA_BLIND,
+                DAO_PROPOSALS_COL_LEAF_POSITION,
+                DAO_PROPOSALS_COL_TX_HASH,
+                DAO_PROPOSALS_COL_CALL_INDEX,
+            );
+
+            let params = json!([
+                query,
+                QueryType::Integer as u8,
+                dao.id,
+                QueryType::Blob as u8,
+                serialize(&proposal.recipient),
+                QueryType::Blob as u8,
+                serialize(&proposal.amount),
+                QueryType::Blob as u8,
+                serialize(&proposal.serial),
+                QueryType::Blob as u8,
+                serialize(&proposal.token_id),
+                QueryType::Blob as u8,
+                serialize(&proposal.bulla_blind),
+                QueryType::Blob as u8,
+                serialize(&proposal.leaf_position.unwrap()),
+                QueryType::Blob as u8,
+                serialize(&proposal.tx_hash.unwrap()),
+                QueryType::Integer as u8,
+                proposal.call_index,
+            ]);
+
+            let req = JsonRequest::new("wallet.exec_sql", params);
+            let _ = self.rpc_client.request(req).await?;
+        }
+
+        Ok(())
     }
 }
