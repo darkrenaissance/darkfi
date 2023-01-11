@@ -312,7 +312,8 @@ impl LeadCoin {
         let y = poseidon_hash(y_msg);
 
         let value = pallas::Base::from(self.value);
-        let target = pallas::Base::one().neg() * (sigma1 * value + sigma2 * value * value);
+
+        let target =  sigma1 * value + sigma2 * value * value;
 
         let mut y_t_str = format!("{:?},{:?}\n", y,target);
         let mut f = File::options().append(true).open(constants::LOTTERY_HISTORY_LOG).unwrap();
@@ -322,7 +323,6 @@ impl LeadCoin {
         }
         info!("is_leader(): y = {:?}", y);
         info!("is_leader(): T = {:?}", target);
-
 
         y < target
     }
