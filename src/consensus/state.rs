@@ -413,46 +413,14 @@ impl ConsensusState {
 
     }
 
-    fn pid_error(feedback: Float10) -> Float10 {
+
+    fn f_err(&mut self) -> Float10 {
+        let len = self.leaders_history.len();
+        let feedback = Float10::try_from(self.leaders_history[len-1] as i64).unwrap().with_precision(constants::RADIX_BITS).value();
         let target = constants::FLOAT10_ONE.clone();
         target - feedback
     }
 
-    fn max_windowed_forks(&self) -> Float10 {
-        let mut max: u64 = 5;
-        let window_size = 10;
-        let len = self.leaders_history.len();
-        let window_begining = if len <= (window_size + 1) { 0 } else { len - (window_size + 1) };
-        for item in &self.leaders_history[window_begining..] {
-            if *item > max {
-                max = *item;
-            }
-        }
-
-        Float10::try_from(max as i64).unwrap()
-    }
-
-
-
-    fn zero_leads_len(&self) -> Float10 {
-        let mut count = constants::FLOAT10_ZERO.clone();
-        let hist_len = self.leaders_history.len();
-        for i in 1..hist_len {
-            if self.leaders_history[hist_len - i] == 0 {
-                count += constants::FLOAT10_ONE.clone();
-            } else {
-                break
-            }
-        }
-        count
-    }
-
-
-    fn f_dif(&mut self) -> Float10 {
-        let len = self.leaders_history.len();
-        Self::pid_error(Float10::try_from(self.leaders_history[len-1] as i64).unwrap().with_precision(constants::RADIX_BITS).value())
-
-    }
 
     fn discrete_pid(&mut self) -> Float10 {
         let k1 =  constants::KP.clone() +
@@ -461,7 +429,7 @@ impl ConsensusState {
         let k2 = constants::FLOAT10_NEG_ONE.clone() * constants::KP.clone() + constants::FLOAT10_NEG_TWO.clone() * constants::KD.clone();
         let k3 = constants::KD.clone();
         let f_len = self.f_history.len();
-        let err = self.f_dif();
+        let err = self.f_err();
         let err_len = self.err_history.len();
         let ret = self.f_history[f_len-1].clone() +
             k1.clone() * err.clone() +
