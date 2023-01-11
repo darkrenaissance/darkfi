@@ -90,7 +90,6 @@ impl Drk {
         recipient: PublicKey,
         amount: u64,
         token_id: TokenId,
-        serial: pallas::Base,
     ) -> Result<Transaction> {
         let Ok(dao) = self.get_dao_by_id(dao_id).await else {
             return Err(anyhow!("DAO not found in wallet"))
@@ -195,7 +194,7 @@ impl Drk {
         let proposal = dao_client::DaoProposalInfo {
             dest: recipient,
             amount,
-            serial,
+            serial: pallas::Base::random(&mut OsRng),
             token_id,
             blind: proposal_blind,
         };

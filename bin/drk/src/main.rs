@@ -278,8 +278,6 @@ enum DaoSubcmd {
 
         /// Token ID to send from DAO with proposal success
         token_id: String,
-
-        serial: u64,
     },
 
     /// List DAO proposals
@@ -293,8 +291,8 @@ enum DaoSubcmd {
         /// Numeric identifier for the DAO
         dao_id: u64,
 
-        /// Proposal identifier
-        proposal: String,
+        /// Numeric identifier for the proposal
+        proposal_id: u64,
     },
 
     /// Vote on a given proposal
@@ -302,8 +300,8 @@ enum DaoSubcmd {
         /// Numeric identifier for the DAO
         dao_id: u64,
 
-        /// Proposal identifier
-        proposal: String,
+        /// Numeric identifier for the proposal
+        proposal: u64,
 
         /// Vote
         vote: String,
@@ -813,14 +811,13 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Propose { dao_id, recipient, amount, token_id, serial } => {
+            DaoSubcmd::Propose { dao_id, recipient, amount, token_id } => {
                 let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
                 let amount = decode_base10(&amount, 8, true)?;
 
                 let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
                 let token_id =
                     TokenId::try_from(token_id.as_str()).with_context(|| "Invalid Token ID")?;
-                let serial = serial.into(); // <-- TODO: Should this be pallas::Base?
 
                 let rpc_client = RpcClient::new(args.endpoint.clone())
                     .await
@@ -829,7 +826,7 @@ async fn main() -> Result<()> {
                 let drk = Drk { rpc_client };
 
                 let tx = drk
-                    .dao_propose(dao_id, rcpt, amount, token_id, serial)
+                    .dao_propose(dao_id, rcpt, amount, token_id)
                     .await
                     .with_context(|| "Failed to create DAO proposal")?;
 
@@ -837,9 +834,52 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Proposals { dao_id } => todo!(),
+            DaoSubcmd::Proposals { dao_id } => {
+                let rpc_client = RpcClient::new(args.endpoint.clone())
+                    .await
+                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
 
-            DaoSubcmd::Proposal { dao_id, proposal } => todo!(),
+                let drk = Drk { rpc_client };
+
+                let proposals = drk.get_dao_proposals(dao_id).await?;
+                for proposal in proposals {
+                    println!("[{}] {:?}", proposal.id, proposal.bulla());
+                }
+
+                Ok(())
+            }
+
+            DaoSubcmd::Proposal { dao_id, proposal_id } => {
+                let rpc_client = RpcClient::new(args.endpoint.clone())
+                    .await
+                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+                let drk = Drk { rpc_client };
+
+                let proposals = drk.get_dao_proposals(dao_id).await?;
+                let Some(proposal) = proposals.iter().find(|x| x.id == proposal_id) else {
+                    eprintln!("No such DAO proposal found");
+                    exit(1);
+                };
+
+                println!("Proposal parameters:");
+                println!("DAO Bulla: {:?}", proposal.dao_bulla);
+                println!("Recipient: {}", proposal.recipient);
+                println!(
+                    "Proposal amount {} ({})",
+                    encode_base10(proposal.amount, 8),
+                    proposal.amount
+                );
+                println!("Proposal serial: {:?}", proposal.serial);
+                println!("Proposal token ID: {}", proposal.token_id);
+                println!("Proposal bulla blind: {:?}", proposal.bulla_blind);
+                println!("Proposal leaf position: {:?}", proposal.leaf_position);
+                println!("Proposal tx hash: {:?}", proposal.tx_hash);
+                println!("Proposal call index: {:?}", proposal.call_index);
+                println!("Proposal vote ID: {:?}", proposal.vote_id);
+
+                Ok(())
+            }
 
             DaoSubcmd::Vote { dao_id, proposal, vote } => todo!(),
 
