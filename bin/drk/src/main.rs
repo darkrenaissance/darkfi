@@ -303,8 +303,11 @@ enum DaoSubcmd {
         /// Numeric identifier for the proposal
         proposal: u64,
 
-        /// Vote
-        vote: String,
+        /// Vote (0 for NO, 1 for YES)
+        vote: u8,
+
+        /// Vote weight (amount of governance tokens)
+        vote_weight: String,
     },
 
     /// Execute a DAO proposal
@@ -881,7 +884,30 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Vote { dao_id, proposal, vote } => todo!(),
+            DaoSubcmd::Vote { dao_id, proposal, vote, vote_weight } => {
+                let rpc_client = RpcClient::new(args.endpoint.clone())
+                    .await
+                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+                let drk = Drk { rpc_client };
+
+                let _ = f64::from_str(&vote_weight).with_context(|| "Invalid vote weight")?;
+                let weight = decode_base10(&vote_weight, 8, true)?;
+
+                if vote > 1 {
+                    eprintln!("Vote can be either 0 (NO) or 1 (YES)");
+                    exit(1);
+                }
+                let vote = vote != 0;
+
+                let tx = drk
+                    .dao_vote(dao_id, proposal, vote, weight)
+                    .await
+                    .with_context(|| "Failed to create DAO Vote transaction")?;
+
+                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                Ok(())
+            }
 
             DaoSubcmd::Exec { dao_id, proposal } => todo!(),
         },

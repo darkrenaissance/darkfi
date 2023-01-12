@@ -23,12 +23,15 @@ use darkfi::{
     zkas::ZkBinary,
 };
 use darkfi_dao_contract::{
-    dao_client, dao_client::DaoInfo, DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    dao_client,
+    dao_client::{DaoInfo, DaoProposalInfo, DaoVoteCall, DaoVoteInput},
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS,
+    DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
-    crypto::{PublicKey, SecretKey, TokenId, DAO_CONTRACT_ID},
+    crypto::{Keypair, PublicKey, SecretKey, TokenId, DAO_CONTRACT_ID},
     incrementalmerkletree::Tree,
     pasta::pallas,
     ContractCall,
@@ -232,6 +235,139 @@ impl Drk {
         let proofs = vec![proofs];
         let mut tx = Transaction { calls, proofs, signatures: vec![] };
         let sigs = tx.create_sigs(&mut OsRng, &vec![signature_secret])?;
+        tx.signatures = vec![sigs];
+
+        Ok(tx)
+    }
+
+    /// Vote on a DAO proposal
+    pub async fn dao_vote(
+        &self,
+        dao_id: u64,
+        proposal_id: u64,
+        vote_option: bool,
+        weight: u64,
+    ) -> Result<Transaction> {
+        let dao = self.get_dao_by_id(dao_id).await?;
+        let proposals = self.get_dao_proposals(dao_id).await?;
+        let Some(proposal) = proposals.iter().find(|x| x.id == proposal_id) else {
+            return Err(anyhow!("Proposal ID not found"))
+        };
+
+        let money_tree = self.get_money_tree().await?;
+
+        let mut coins: Vec<OwnCoin> =
+            self.get_coins(false).await?.iter().map(|x| x.0.clone()).collect();
+
+        coins.retain(|x| x.note.token_id == dao.gov_token_id);
+
+        if coins.iter().map(|x| x.note.value).sum::<u64>() < weight {
+            return Err(anyhow!("Not enough balance for vote weight"))
+        }
+
+        // TODO: The spent coins need to either be marked as spent here, and/or on scan
+        let mut spent_value = 0;
+        let mut spent_coins = vec![];
+        let mut inputs = vec![];
+        let mut input_secrets = vec![];
+
+        // FIXME: We don't take back any change so it's possible to vote with > requested weight.
+        for coin in coins {
+            if spent_value >= weight {
+                break
+            }
+
+            spent_value += coin.note.value;
+            spent_coins.push(coin.clone());
+
+            let signature_secret = SecretKey::random(&mut OsRng);
+            input_secrets.push(signature_secret);
+
+            let root = money_tree.root(0).unwrap();
+            let leaf_position = coin.leaf_position;
+            let merkle_path = money_tree.authentication_path(coin.leaf_position, &root).unwrap();
+
+            let input = DaoVoteInput {
+                secret: coin.secret,
+                note: coin.note.clone(),
+                leaf_position,
+                merkle_path,
+                signature_secret,
+            };
+
+            inputs.push(input);
+        }
+
+        // We use the DAO secret to encrypt the vote.
+        let vote_keypair = Keypair::new(dao.secret_key);
+
+        let proposal_info = DaoProposalInfo {
+            dest: proposal.recipient,
+            amount: proposal.amount,
+            serial: proposal.serial,
+            token_id: proposal.token_id,
+            blind: proposal.bulla_blind,
+        };
+
+        let dao_info = DaoInfo {
+            proposer_limit: dao.proposer_limit,
+            quorum: dao.quorum,
+            approval_ratio_quot: dao.approval_ratio_quot,
+            approval_ratio_base: dao.approval_ratio_base,
+            gov_token_id: dao.gov_token_id,
+            public_key: PublicKey::from_secret(dao.secret_key),
+            bulla_blind: dao.bulla_blind,
+        };
+
+        let call = DaoVoteCall {
+            inputs,
+            vote_option,
+            yes_vote_blind: pallas::Scalar::random(&mut OsRng),
+            vote_keypair,
+            proposal: proposal_info,
+            dao: dao_info,
+        };
+
+        let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
+        let Some(dao_vote_burn_zkbin) =
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS) else
+        {
+            return Err(anyhow!("DAO Vote Burn circuit not found"))
+        };
+
+        let Some(dao_vote_main_zkbin) =
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS) else
+        {
+            return Err(anyhow!("DAO Vote Main circuit not found"))
+        };
+
+        let dao_vote_burn_zkbin = ZkBinary::decode(&dao_vote_burn_zkbin.1)?;
+        let dao_vote_main_zkbin = ZkBinary::decode(&dao_vote_main_zkbin.1)?;
+
+        let k = 13;
+        let dao_vote_burn_circuit =
+            ZkCircuit::new(empty_witnesses(&dao_vote_burn_zkbin), dao_vote_burn_zkbin.clone());
+        let dao_vote_main_circuit =
+            ZkCircuit::new(empty_witnesses(&dao_vote_main_zkbin), dao_vote_main_zkbin.clone());
+
+        eprintln!("Creating DAO Vote Burn proving key");
+        let dao_vote_burn_pk = ProvingKey::build(k, &dao_vote_burn_circuit);
+        eprintln!("Creating DAO Vote Main proving key");
+        let dao_vote_main_pk = ProvingKey::build(k, &dao_vote_main_circuit);
+
+        let (params, proofs) = call.make(
+            &dao_vote_burn_zkbin,
+            &dao_vote_burn_pk,
+            &dao_vote_main_zkbin,
+            &dao_vote_main_pk,
+        )?;
+
+        let mut data = vec![DaoFunction::Vote as u8];
+        params.encode(&mut data)?;
+        let calls = vec![ContractCall { contract_id: *DAO_CONTRACT_ID, data }];
+        let proofs = vec![proofs];
+        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = tx.create_sigs(&mut OsRng, &input_secrets)?;
         tx.signatures = vec![sigs];
 
         Ok(tx)
