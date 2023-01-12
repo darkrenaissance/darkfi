@@ -16,11 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::pasta::pallas;
-use dashu::integer::{IBig, Sign};
+use darkfi_sdk::pasta::{group::ff::PrimeField, pallas};
+use dashu::integer::{IBig, Sign, UBig};
 use log::debug;
-use dashu::integer::UBig;
-use darkfi_sdk::pasta::group::ff::PrimeField;
 
 use super::Float10;
 
@@ -71,9 +69,11 @@ pub fn base2ibig(base: pallas::Base) -> IBig {
 mod tests {
     use dashu::integer::IBig;
 
-    use darkfi_sdk::pasta::{pallas, group::ff::PrimeField};
-    use crate::consensus::{constants::RADIX_BITS, types::Float10, utils::{fbig2ibig, fbig2base, base2ibig}};
-
+    use crate::consensus::{
+        types::Float10,
+        utils::{base2ibig, fbig2base, fbig2ibig},
+    };
+    use darkfi_sdk::pasta::pallas;
 
     #[test]
     fn dashu_fbig2ibig() {
@@ -86,7 +86,10 @@ mod tests {
     #[test]
     fn dashu_test_base2ibig() {
         //
-        let fbig: Float10 = Float10::from_str_native("289480223093290488558927462521719769633630564819415607159546767643499676303").unwrap().with_precision(RADIX_BITS).value();
+        let fbig: Float10 = Float10::try_from(
+            "289480223093290488558927462521719769633630564819415607159546767643499676303",
+        )
+        .unwrap();
         let ibig = fbig2ibig(fbig.clone());
         let res_base: pallas::Base = fbig2base(fbig.clone());
         let res_ibig: IBig = base2ibig(res_base);
@@ -96,7 +99,10 @@ mod tests {
     #[test]
     fn dashu_test2_base2ibig() {
         //assert that field wrapping for negative values won't hold during conversions.
-        let fbig: Float10 = Float10::from_str_native("-20065240046497827215558476051577517633529246907153511707181011345840062564.87").unwrap().with_precision(RADIX_BITS).value();
+        let fbig: Float10 = Float10::try_from(
+            "-20065240046497827215558476051577517633529246907153511707181011345840062564.87",
+        )
+        .unwrap();
         let ibig = fbig2ibig(fbig.clone());
         let res_base: pallas::Base = fbig2base(fbig.clone());
         let res_ibig: IBig = base2ibig(res_base);

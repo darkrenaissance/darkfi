@@ -36,8 +36,10 @@ use super::{
 };
 use crate::{blockchain::Blockchain, net, tx::Transaction, util::time::Timestamp, Error, Result};
 
-use std::io::{prelude::*, BufWriter};
-use std::fs::File;
+use std::{
+    fs::File,
+    io::{prelude::*, BufWriter},
+};
 
 /// This struct represents the information required by the consensus algorithm
 pub struct ConsensusState {
@@ -110,8 +112,7 @@ impl ConsensusState {
             slot_checkpoints: vec![],
             leaders_history: vec![0],
             f_history: vec![constants::FLOAT10_ZERO.clone()],
-            err_history: vec![constants::FLOAT10_ZERO.clone(),
-                              constants::FLOAT10_ZERO.clone()],
+            err_history: vec![constants::FLOAT10_ZERO.clone(), constants::FLOAT10_ZERO.clone()],
             coins: vec![],
             coins_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100),
             nullifiers: vec![],
@@ -261,19 +262,15 @@ impl ConsensusState {
         let neg_one = constants::FLOAT10_NEG_ONE.clone();
         let two = constants::FLOAT10_TWO.clone();
 
-
         let field_p = Float10::try_from(constants::P).unwrap();
-
-
 
         let x = one - f;
         let c = x.ln();
         let neg_c = neg_one * c;
 
-        let sigma1_fbig =  neg_c.clone() / total_sigma.clone() * field_p.clone();
+        let sigma1_fbig = neg_c.clone() / total_sigma.clone() * field_p.clone();
         println!("sigma1_fbig: {:}", sigma1_fbig);
         let sigma1 = fbig2base(sigma1_fbig);
-
 
         let sigma2_fbig = (neg_c / total_sigma).powf(two.clone()) * (field_p / two);
         println!("sigma2_fbig: {:}", sigma2_fbig);
@@ -282,12 +279,12 @@ impl ConsensusState {
         (sigma1, sigma2)
     }
 
-
     /// Generate coins for provided sigmas.
     /// NOTE: The strategy here is having a single competing coin per slot.
     // TODO: DRK coin need to be burned, and consensus coin to be minted.
-    async fn create_coins(&mut self,
-                          //eta: pallas::Base,
+    async fn create_coins(
+        &mut self,
+        //eta: pallas::Base,
     ) -> Result<Vec<LeadCoin>> {
         let slot = self.current_slot();
 
@@ -311,7 +308,6 @@ impl ConsensusState {
         // must sum to initial distribution total coins.
         //let stake = self.initial_distribution;
         let coin = LeadCoin::new(
-
             200,
             slot,
             epoch_secrets.secret_keys[0].inner(),
@@ -399,7 +395,7 @@ impl ConsensusState {
         self.leaders_history.push(count);
 
         info!("extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
-        let mut count_str : String = count.to_string();
+        let mut count_str: String = count.to_string();
         count_str.push_str(",");
         let f = File::options().append(true).open(constants::LEADER_HISTORY_LOG).unwrap();
         {
@@ -408,35 +404,31 @@ impl ConsensusState {
         }
 
         Float10::try_from(count as i64).unwrap()
-
     }
-
 
     fn f_err(&mut self) -> Float10 {
         let len = self.leaders_history.len();
-        let feedback = Float10::try_from(self.leaders_history[len-1] as i64).unwrap();
+        let feedback = Float10::try_from(self.leaders_history[len - 1] as i64).unwrap();
         let target = constants::FLOAT10_ONE.clone();
         target - feedback
     }
 
-
     fn discrete_pid(&mut self) -> Float10 {
-        let k1 =  constants::KP.clone() +
-            constants::KI.clone() +
-            constants::KD.clone();
-        let k2 = constants::FLOAT10_NEG_ONE.clone() * constants::KP.clone() + constants::FLOAT10_NEG_TWO.clone() * constants::KD.clone();
+        let k1 = constants::KP.clone() + constants::KI.clone() + constants::KD.clone();
+        let k2 = constants::FLOAT10_NEG_ONE.clone() * constants::KP.clone() +
+            constants::FLOAT10_NEG_TWO.clone() * constants::KD.clone();
         let k3 = constants::KD.clone();
         let f_len = self.f_history.len();
         let err = self.f_err();
         let err_len = self.err_history.len();
-        let ret = self.f_history[f_len-1].clone() +
+        let ret = self.f_history[f_len - 1].clone() +
             k1.clone() * err.clone() +
-            k2.clone() * self.err_history[err_len-1].clone() +
-            k3.clone() * self.err_history[err_len-2].clone();
-        info!("pid::f-1: {:}", self.f_history[f_len-1].clone());
+            k2.clone() * self.err_history[err_len - 1].clone() +
+            k3.clone() * self.err_history[err_len - 2].clone();
+        info!("pid::f-1: {:}", self.f_history[f_len - 1].clone());
         info!("pid::err: {:}", err);
-        info!("pid::err-1: {}", self.err_history[err_len-1].clone());
-        info!("pid::err-2: {}", self.err_history[err_len-2].clone());
+        info!("pid::err-1: {}", self.err_history[err_len - 1].clone());
+        info!("pid::err-2: {}", self.err_history[err_len - 2].clone());
         info!("pid::k1: {}", k1.clone());
         info!("pid::k2: {}", k2.clone());
         info!("pid::k3: {}", k3.clone());
@@ -493,15 +485,16 @@ impl ConsensusState {
         let mut highest_stake_idx = 0;
         let total_stake = self.total_stake();
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
-
             info!("is_slot_leader: coin stake: {:?}", coin.value);
             info!("is_slot_leader: total stake: {}", total_stake);
             info!("is_slot_leader: relative stake: {}", (coin.value as f64) / total_stake as f64);
 
-            let first_winning = coin.is_leader(sigma1,
-                                               sigma2,
-                                               self.get_eta(),
-                                               pallas::Base::from(self.current_slot()));
+            let first_winning = coin.is_leader(
+                sigma1,
+                sigma2,
+                self.get_eta(),
+                pallas::Base::from(self.current_slot()),
+            );
 
             if first_winning && !won {
                 highest_stake_idx = winning_idx;
@@ -942,36 +935,28 @@ impl From<ForkInfo> for Fork {
 #[cfg(test)]
 mod tests {
 
-    use darkfi_sdk::{
-        pasta::{group::ff::PrimeField, pallas},
-    };
-    use log::info;
-
-    use crate::consensus::{
-        constants,
-        state::ConsensusState,
-        utils::fbig2base,
-        Float10,
-    };
-
-    use crate::{ Error, Result};
-    use dashu::base::Abs;
-
-    use std::io::{prelude::*, BufWriter};
-    use std::fs::File;
+    use crate::consensus::{state::ConsensusState, utils::fbig2base, Float10};
 
     #[test]
     fn calc_sigmas_test() {
-        let giga_epsilon = Float10::try_from("10000000000000000000000000000000000000000000000000000000000").unwrap();
+        let giga_epsilon =
+            Float10::try_from("10000000000000000000000000000000000000000000000000000000000")
+                .unwrap();
         let giga_epsilon_base = fbig2base(giga_epsilon);
         let f = Float10::try_from("0.5").unwrap();
         let total_stake = Float10::try_from("1000").unwrap();
         let (sigma1, sigma2) = ConsensusState::calc_sigmas(f, total_stake);
-        let sigma1_rhs = Float10::try_from("20065240046497827749443820209808913616958821867408735207193448041041362944").unwrap();
+        let sigma1_rhs = Float10::try_from(
+            "20065240046497827749443820209808913616958821867408735207193448041041362944",
+        )
+        .unwrap();
         let sigma1_rhs_base = fbig2base(sigma1_rhs);
-        let sigma2_rhs = Float10::try_from("6954082282744237239883318512759812991231744634473746668074299461468160").unwrap();
+        let sigma2_rhs = Float10::try_from(
+            "6954082282744237239883318512759812991231744634473746668074299461468160",
+        )
+        .unwrap();
         let sigma2_rhs_base = fbig2base(sigma2_rhs);
-        let sigma1_delta = if sigma1_rhs_base>sigma1 {
+        let sigma1_delta = if sigma1_rhs_base > sigma1 {
             sigma1_rhs_base - sigma1
         } else {
             sigma1 - sigma1_rhs_base

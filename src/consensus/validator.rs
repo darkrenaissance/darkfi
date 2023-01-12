@@ -264,7 +264,7 @@ impl ValidatorState {
         coin_index: usize,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
-        derived_blind: pallas::Scalar
+        derived_blind: pallas::Scalar,
     ) -> Result<Option<(BlockProposal, LeadCoin)>> {
         let eta = self.consensus.get_eta();
         // Check if node can produce proposals
@@ -292,12 +292,13 @@ impl ValidatorState {
         };
 
         // Generating leader proof
-        let (proof, public_inputs) = coin.create_lead_proof(sigma1,
-                                                            sigma2,
-                                                            eta.clone(),
-                                                            pallas::Base::from(self.consensus.current_slot()),
-                                                            self.lead_proving_key.as_ref().unwrap(),
-                                                            derived_blind,
+        let (proof, public_inputs) = coin.create_lead_proof(
+            sigma1,
+            sigma2,
+            eta.clone(),
+            pallas::Base::from(self.consensus.current_slot()),
+            self.lead_proving_key.as_ref().unwrap(),
+            derived_blind,
         );
 
         // Signing using coin
@@ -475,8 +476,8 @@ impl ValidatorState {
         info!(target: "consensus::validator", "receive_proposal(): Leader proof verified successfully!");
 
         // Validate proposal public value against coin creation slot checkpoint
-        let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(self.consensus.get_eta(),
-                                                          self.consensus.current_slot());
+        let (mu_y, mu_rho) =
+            LeadCoin::election_seeds_u64(self.consensus.get_eta(), self.consensus.current_slot());
         // y
         let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
 
@@ -500,7 +501,6 @@ impl ValidatorState {
             );
             return Err(Error::ProposalPublicValuesMismatched)
         }
-
 
         // Validate proposal coin sigmas against current slot checkpoint
         let checkpoint = self.consensus.get_slot_checkpoint(current)?;
@@ -567,7 +567,8 @@ impl ValidatorState {
 
         // If proposal came fromself, we derive new coin
         if let Some((idx, c)) = coin {
-            state_checkpoint.coins[idx] = c.derive_coin(&mut state_checkpoint.coins_tree, derived_blind);
+            state_checkpoint.coins[idx] =
+                c.derive_coin(&mut state_checkpoint.coins_tree, derived_blind);
         }
         // Store proposal coins nullifiers
         state_checkpoint.nullifiers.push(prop_sn);
@@ -647,12 +648,11 @@ impl ValidatorState {
                 return Ok((vec![], vec![]))
             }
             _ => info!("chain_finalization(): Chain {} can be finalized!", fork_index),
-
         }
-        if max_length==0 {
+        if max_length == 0 {
             return Ok((vec![], vec![]))
         }
-        if max_length==0 {
+        if max_length == 0 {
             return Ok((vec![], vec![]))
         }
 

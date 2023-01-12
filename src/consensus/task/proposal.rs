@@ -28,11 +28,9 @@ use crate::{
     util::{async_util::sleep, time::Timestamp},
 };
 
-use darkfi_sdk::{
-    pasta::{pallas},
-};
-use rand::rngs::OsRng;
+use darkfi_sdk::pasta::pallas;
 use halo2_proofs::arithmetic::Field;
+use rand::rngs::OsRng;
 
 /// async task used for participating in the consensus protocol
 pub async fn proposal_task(
@@ -186,9 +184,10 @@ async fn consensus_loop(
 ///     - Generate slot sigmas and checkpoint
 ///     - Check if slot leader to generate and broadcast proposal
 /// Returns flag in case node needs to resync.
-async fn propose_period(consensus_p2p: P2pPtr,
-                        state: ValidatorStatePtr,
-                        derived_blind: pallas::Scalar,
+async fn propose_period(
+    consensus_p2p: P2pPtr,
+    state: ValidatorStatePtr,
+    derived_blind: pallas::Scalar,
 ) -> bool {
     // Node sleeps until next slot
     let seconds_next_slot = state.read().await.consensus.next_n_slot_start(1).as_secs();
@@ -219,12 +218,13 @@ async fn propose_period(consensus_p2p: P2pPtr,
     let (won, fork_index, coin_index) =
         state.write().await.consensus.is_slot_leader(sigma1, sigma2);
     let result = if won {
-        state.write().await.propose(processing_slot,
-                                    fork_index,
-                                    coin_index,
-                                    sigma1,
-                                    sigma2,
-                                    derived_blind
+        state.write().await.propose(
+            processing_slot,
+            fork_index,
+            coin_index,
+            sigma1,
+            sigma2,
+            derived_blind,
         )
     } else {
         Ok(None)
@@ -258,7 +258,12 @@ async fn propose_period(consensus_p2p: P2pPtr,
 
     info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
     debug!("consensus: Full proposal: {:?}", proposal);
-    match state.write().await.receive_proposal(&proposal, Some((coin_index, coin)), derived_blind).await {
+    match state
+        .write()
+        .await
+        .receive_proposal(&proposal, Some((coin_index, coin)), derived_blind)
+        .await
+    {
         Ok(_) => {
             // Here we don't have to check to broadcast, because the flag
             // will always be true, since the node is able to produce proposals

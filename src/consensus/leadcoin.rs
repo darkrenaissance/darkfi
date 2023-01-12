@@ -42,8 +42,10 @@ use crate::{
     Result,
 };
 
-use std::io::{prelude::*, BufWriter};
-use std::fs::File;
+use std::{
+    fs::File,
+    io::{prelude::*, BufWriter},
+};
 
 pub const MERKLE_DEPTH_LEADCOIN: usize = 32;
 pub const MERKLE_DEPTH: u8 = 32;
@@ -130,10 +132,10 @@ impl LeadCoin {
         //info!("coin2_seed[{}]: {:?}", slot, coin2_seed);
         // Create commitment to coin2
         //let coin2_commitment = Self::commitment(
-            //pk,
-            //pallas::Base::from(value + constants::REWARD),
-            //coin2_seed,
-            //coin2_blind,
+        //pk,
+        //pallas::Base::from(value + constants::REWARD),
+        //coin2_seed,
+        //coin2_blind,
         //);
         // Derive election seeds
         //let (y_mu, rho_mu) = Self::election_seeds_u64(eta, slot);
@@ -187,12 +189,13 @@ impl LeadCoin {
 
     /// Create a vector of `pallas::Base` elements from the `LeadCoin` to be
     /// used as public inputs for the ZK proof.
-    pub fn public_inputs(&self,
-                         sigma1: pallas::Base,
-                         sigma2: pallas::Base,
-                         current_eta: pallas::Base,
-                         current_slot: pallas::Base,
-                         derived_blind: pallas::Scalar,
+    pub fn public_inputs(
+        &self,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
+        current_eta: pallas::Base,
+        current_slot: pallas::Base,
+        derived_blind: pallas::Scalar,
     ) -> Vec<pallas::Base> {
         // pk
         let pk = self.pk();
@@ -200,11 +203,8 @@ impl LeadCoin {
         let c1_cm_coord = self.coin1_commitment.to_affine().coordinates().unwrap();
         let c2_cm_coord = self.derived_commitment(derived_blind).to_affine().coordinates().unwrap();
         // lottery seed
-        let seed_msg = [pallas::Base::from(PREFIX_SEED),
-                        self.coin1_sk_root.inner(),
-                        self.nonce,
-                        ZERO
-        ];
+        let seed_msg =
+            [pallas::Base::from(PREFIX_SEED), self.coin1_sk_root.inner(), self.nonce, ZERO];
         let seed = poseidon_hash(seed_msg);
         // y
         let (y_mu, rho_mu) = Self::election_seeds(current_eta, current_slot);
@@ -282,16 +282,15 @@ impl LeadCoin {
     }
     */
 
-    pub fn is_leader(&self, sigma1: pallas::Base,
-                     sigma2: pallas::Base,
-                     current_eta: pallas::Base,
-                     current_slot: pallas::Base,
+    pub fn is_leader(
+        &self,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
+        current_eta: pallas::Base,
+        current_slot: pallas::Base,
     ) -> bool {
-        let y_seed = [pallas::Base::from(PREFIX_SEED),
-                     self.coin1_sk_root.inner(),
-                     self.nonce,
-                     ZERO
-        ];
+        let y_seed =
+            [pallas::Base::from(PREFIX_SEED), self.coin1_sk_root.inner(), self.nonce, ZERO];
         let y_seed_hash = poseidon_hash(y_seed);
         let (y_mu, _) = Self::election_seeds(current_eta, current_slot);
         let y_msg = [y_seed_hash, y_mu];
@@ -299,9 +298,9 @@ impl LeadCoin {
 
         let value = pallas::Base::from(self.value);
 
-        let target =  sigma1 * value + sigma2 * value * value;
+        let target = sigma1 * value + sigma2 * value * value;
 
-        let y_t_str = format!("{:?},{:?}\n", y,target);
+        let y_t_str = format!("{:?},{:?}\n", y, target);
         let f = File::options().append(true).open(constants::LOTTERY_HISTORY_LOG).unwrap();
 
         {
@@ -447,7 +446,12 @@ impl LeadCoin {
             Witness::Base(Value::known(xferval)),
         ];
         let circuit = ZkCircuit::new(witnesses, zkbin);
-        let proof = Proof::create(pk, &[circuit], &self.public_inputs(sigma1, sigma2, current_eta, current_slot, derived_blind), &mut OsRng)?;
+        let proof = Proof::create(
+            pk,
+            &[circuit],
+            &self.public_inputs(sigma1, sigma2, current_eta, current_slot, derived_blind),
+            &mut OsRng,
+        )?;
         let cm3_msg_in = [
             pallas::Base::from(PREFIX_CM),
             change_pk,

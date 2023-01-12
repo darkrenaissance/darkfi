@@ -28,15 +28,11 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{
-        pedersen::pedersen_commitment_u64, poseidon_hash, MerkleNode, PublicKey, SecretKey, TokenId,
-    },
-    incrementalmerkletree,
-    incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree},
+    crypto::pedersen::pedersen_commitment_u64,
     pasta::{
         arithmetic::CurveAffine,
         group::{
-            ff::{Field, PrimeField},
+            ff::Field,
             Curve,
         },
         pallas,

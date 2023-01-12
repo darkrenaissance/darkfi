@@ -30,9 +30,8 @@ use darkfi::{
     consensus::{
         constants::{
             MAINNET_BOOTSTRAP_TIMESTAMP, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
-            MAINNET_INITIAL_DISTRIBUTION, TESTNET_GENESIS_HASH_BYTES,
-            TESTNET_INITIAL_DISTRIBUTION, TESTNET_GENESIS_TIMESTAMP,
-            TESTNET_BOOTSTRAP_TIMESTAMP,
+            MAINNET_INITIAL_DISTRIBUTION, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
+            TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
         },
         proto::{ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx},
         task::{block_sync_task, proposal_task},
@@ -49,7 +48,7 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
-    util::{path::expand_path},
+    util::path::expand_path,
     wallet::{walletdb::init_wallet, WalletPtr},
     Error, Result,
 };

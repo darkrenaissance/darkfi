@@ -1061,7 +1061,6 @@ pub fn build_stake_tx(
     burn_zkbin: &ZkBinary,
     burn_pk: &ProvingKey,
     slot_index: u64,
-    eta: pallas::Base,
 ) -> Result<(MoneyStakeParams, Vec<Proof>, Vec<LeadCoin>, Vec<ValueBlind>, Vec<ValueBlind>)> {
     // convert owncoins to leadcoins.
     // TODO: verify this token blind usage
@@ -1117,7 +1116,6 @@ pub fn build_stake_tx(
         let sk_root = sk_tree.root(0).unwrap();
         let sk_merkle_path = sk_tree.authentication_path(sk_pos, &sk_root).unwrap();
         let leadcoin = LeadCoin::new(
-            eta, // randomness from last finalized block.
             coin.note.value,
             slot_index,          // tau
             coin.secret.inner(), // coin secret key

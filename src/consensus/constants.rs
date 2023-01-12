@@ -124,6 +124,6 @@ pub const PI_SIGMA1_INDEX: usize = 12;
 pub const PI_SIGMA2_INDEX: usize = 13;
 pub const GENESIS_TOTAL_STAKE: u64 = 1;
 
-pub const LEADER_HISTORY_LOG : &str = "/tmp/lead_history.log";
-pub const F_HISTORY_LOG : &str = "/tmp/f_history.log";
-pub const LOTTERY_HISTORY_LOG : &str = "/tmp/lottery_history.log";
+pub const LEADER_HISTORY_LOG: &str = "/tmp/lead_history.log";
+pub const F_HISTORY_LOG: &str = "/tmp/f_history.log";
+pub const LOTTERY_HISTORY_LOG: &str = "/tmp/lottery_history.log";

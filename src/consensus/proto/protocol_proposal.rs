@@ -31,11 +31,9 @@ use crate::{
     Result,
 };
 
-use darkfi_sdk::{
-    pasta::{pallas},
-};
-use rand::rngs::OsRng;
+use darkfi_sdk::pasta::pallas;
 use halo2_proofs::arithmetic::Field;
+use rand::rngs::OsRng;
 
 pub struct ProtocolProposal {
     proposal_sub: MessageSubscription<BlockProposal>,
