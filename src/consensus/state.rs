@@ -248,8 +248,8 @@ impl ConsensusState {
         let f = self.win_inv_prob_with_full_stake();
         let total_stake = self.total_stake();
 
-        let total_sigma =
-            Float10::try_from(total_stake).unwrap().with_precision(constants::RADIX_BITS).value();
+        let total_sigma = Float10::try_from(total_stake).unwrap();
+
         Self::calc_sigmas(f, total_sigma)
     }
 
@@ -262,10 +262,8 @@ impl ConsensusState {
         let two = constants::FLOAT10_TWO.clone();
 
 
-        let field_p = Float10::from_str_native(constants::P)
-            .unwrap()
-            .with_precision(constants::RADIX_BITS)
-            .value();
+        let field_p = Float10::try_from(constants::P).unwrap();
+
 
 
         let x = one - f;
@@ -416,7 +414,7 @@ impl ConsensusState {
 
     fn f_err(&mut self) -> Float10 {
         let len = self.leaders_history.len();
-        let feedback = Float10::try_from(self.leaders_history[len-1] as i64).unwrap().with_precision(constants::RADIX_BITS).value();
+        let feedback = Float10::try_from(self.leaders_history[len-1] as i64).unwrap();
         let target = constants::FLOAT10_ONE.clone();
         target - feedback
     }
@@ -964,14 +962,14 @@ mod tests {
 
     #[test]
     fn calc_sigmas_test() {
-        let giga_epsilon = Float10::from_str_native("10000000000000000000000000000000000000000000000000000000000").unwrap();
+        let giga_epsilon = Float10::try_from("10000000000000000000000000000000000000000000000000000000000").unwrap();
         let giga_epsilon_base = fbig2base(giga_epsilon);
-        let f = Float10::from_str_native("0.5").unwrap();
-        let total_stake = Float10::from_str_native("1000").unwrap();
+        let f = Float10::try_from("0.5").unwrap();
+        let total_stake = Float10::try_from("1000").unwrap();
         let (sigma1, sigma2) = ConsensusState::calc_sigmas(f, total_stake);
-        let sigma1_rhs = Float10::from_str_native("20065240046497827749443820209808913616958821867408735207193448041041362944").unwrap();
+        let sigma1_rhs = Float10::try_from("20065240046497827749443820209808913616958821867408735207193448041041362944").unwrap();
         let sigma1_rhs_base = fbig2base(sigma1_rhs);
-        let sigma2_rhs = Float10::from_str_native("6954082282744237239883318512759812991231744634473746668074299461468160").unwrap();
+        let sigma2_rhs = Float10::try_from("6954082282744237239883318512759812991231744634473746668074299461468160").unwrap();
         let sigma2_rhs_base = fbig2base(sigma2_rhs);
         let sigma1_delta = if sigma1_rhs_base>sigma1 {
             sigma1_rhs_base - sigma1
