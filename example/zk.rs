@@ -31,10 +31,7 @@ use darkfi_sdk::{
     crypto::pedersen::pedersen_commitment_u64,
     pasta::{
         arithmetic::CurveAffine,
-        group::{
-            ff::Field,
-            Curve,
-        },
+        group::{ff::Field, Curve},
         pallas,
     },
 };
