@@ -64,8 +64,6 @@ pub struct LeadCoin {
     pub nonce: pallas::Base,
     /// Commitment for coin1
     pub coin1_commitment: pallas::Point,
-    /// Commitment for coin2 (rcpt coin)
-    pub coin2_commitment: pallas::Point,
     /// Merkle root of coin1 commitment
     pub coin1_commitment_root: MerkleNode,
     /// Coin commitment position
@@ -82,14 +80,6 @@ pub struct LeadCoin {
     pub coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
     /// coin1 commitment blinding factor
     pub coin1_blind: pallas::Scalar,
-    /// coin2 commitment blinding factor
-    pub coin2_blind: pallas::Scalar,
-    /// Leader election nonce derived from eta at onset of epoch
-    pub y_mu: pallas::Base,
-    /// Leader election nonce derived from eta at onset of epoch
-    pub rho_mu: pallas::Base,
-    /// eta
-    pub eta: pallas::Base,
 }
 
 impl LeadCoin {
@@ -97,7 +87,7 @@ impl LeadCoin {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         // emulation of global random oracle output from previous epoch randomness.
-        eta: pallas::Base,
+        //eta: pallas::Base,
         // Stake value
         value: u64,
         // Slot absolute index
@@ -117,12 +107,13 @@ impl LeadCoin {
     ) -> Self {
         // Generate random blinding values for commitments:
         let coin1_blind = pallas::Scalar::random(&mut OsRng);
-        let coin2_blind = pallas::Scalar::random(&mut OsRng);
+        //let coin2_blind = pallas::Scalar::random(&mut OsRng);
         // pk
         let pk = Self::util_pk(coin1_sk_root, slot);
         // Derive the nonce for coin2
         let coin2_seed = Self::util_derived_rho(coin1_sk_root, seed);
         info!(target: "consensus::leadcoin", "coin2_seed[{}]: {:?}", slot, coin2_seed);
+
         let coin1_commitment = Self::commitment(pk, pallas::Base::from(value), seed, coin1_blind);
         // Hash its coordinates to get a base field element
         let c1_cm_coords = coin1_commitment.to_affine().coordinates().unwrap();
@@ -135,22 +126,24 @@ impl LeadCoin {
         let coin1_commitment_merkle_path = coin_commitment_tree
             .authentication_path(coin1_commitment_pos, &coin1_commitment_root)
             .unwrap();
+        // Derive the nonce for coin2
+        //let coin2_seed = Self::util_derived_rho(coin1_sk_root, seed);
+        //info!("coin2_seed[{}]: {:?}", slot, coin2_seed);
         // Create commitment to coin2
-        let coin2_commitment = Self::commitment(
-            pk,
-            pallas::Base::from(value + constants::REWARD),
-            coin2_seed,
-            coin2_blind,
-        );
+        //let coin2_commitment = Self::commitment(
+            //pk,
+            //pallas::Base::from(value + constants::REWARD),
+            //coin2_seed,
+            //coin2_blind,
+        //);
         // Derive election seeds
-        let (y_mu, rho_mu) = Self::election_seeds_u64(eta, slot);
+        //let (y_mu, rho_mu) = Self::election_seeds_u64(eta, slot);
         // Return the object
         Self {
             value,
             slot,
             nonce: seed,
             coin1_commitment,
-            coin2_commitment,
             coin1_commitment_root,
             coin1_commitment_pos: u32::try_from(usize::from(coin1_commitment_pos)).unwrap(),
             coin1_commitment_merkle_path: coin1_commitment_merkle_path.try_into().unwrap(),
@@ -159,10 +152,11 @@ impl LeadCoin {
             coin1_sk_pos: u32::try_from(coin1_sk_pos).unwrap(),
             coin1_sk_merkle_path,
             coin1_blind,
-            coin2_blind,
-            y_mu,
-            rho_mu,
-            eta,
+            //coin2_blind,
+            //coin2_commitment,
+            //y_mu,
+            //rho_mu,
+            //eta,
         }
     }
 
@@ -194,34 +188,44 @@ impl LeadCoin {
 
     /// Create a vector of `pallas::Base` elements from the `LeadCoin` to be
     /// used as public inputs for the ZK proof.
-    pub fn public_inputs(&self, sigma1: pallas::Base, sigma2: pallas::Base) -> Vec<pallas::Base> {
+    pub fn public_inputs(&self,
+                         sigma1: pallas::Base,
+                         sigma2: pallas::Base,
+                         current_eta: pallas::Base,
+                         current_slot: pallas::Base,
+                         derived_blind: pallas::Scalar,
+    ) -> Vec<pallas::Base> {
         // pk
         let pk = self.pk();
         // coin 1-2 cm/commitment
-        let c1_cm = self.coin1_commitment.to_affine().coordinates().unwrap();
-        let c2_cm = self.coin2_commitment.to_affine().coordinates().unwrap();
+        let c1_cm_coord = self.coin1_commitment.to_affine().coordinates().unwrap();
+        let c2_cm_coord = self.derived_commitment(derived_blind).to_affine().coordinates().unwrap();
         // lottery seed
-        let seed_msg =
-            [pallas::Base::from(PREFIX_SEED), self.coin1_sk_root.inner(), self.nonce, ZERO];
+        let seed_msg = [pallas::Base::from(PREFIX_SEED),
+                        self.coin1_sk_root.inner(),
+                        self.nonce,
+                        ZERO
+        ];
         let seed = poseidon_hash(seed_msg);
         // y
-        let y_msg = [seed, self.y_mu];
+        let (y_mu, rho_mu) = Self::election_seeds(current_eta, current_slot);
+        let y_msg = [seed, y_mu];
         let y = poseidon_hash(y_msg);
         // rho
-        let rho_msg = [seed, self.rho_mu];
+        let rho_msg = [seed, rho_mu];
         let rho = poseidon_hash(rho_msg);
         let public_inputs = vec![
             pk,
-            *c1_cm.x(),
-            *c1_cm.y(),
-            *c2_cm.x(),
-            *c2_cm.y(),
+            *c1_cm_coord.x(),
+            *c1_cm_coord.y(),
+            *c2_cm_coord.x(),
+            *c2_cm_coord.y(),
             self.coin1_commitment_root.inner(),
             self.coin1_sk_root.inner(),
             self.sn(),
-            self.y_mu,
+            y_mu,
             y,
-            self.rho_mu,
+            rho_mu,
             rho,
             sigma1,
             sigma2,
@@ -252,10 +256,60 @@ impl LeadCoin {
         Self::util_derived_rho(self.coin1_sk_root, self.nonce)
     }
 
-    pub fn is_leader(&self, sigma1: pallas::Base, sigma2: pallas::Base) -> bool {
-        let y_exp = [self.coin1_sk_root.inner(), self.nonce];
-        let y_exp_hash = poseidon_hash(y_exp);
-        let y_coords = pedersen_commitment_base(y_exp_hash, mod_r_p(self.y_mu))
+    /*
+    fn evolve_coin(current_eta: pallas::Base,
+                   current_slot: pallas::Base,
+                   coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>) {
+        self.slot = current_slot.clone();
+        // pk
+        let pk = Self::util_pk(self.coin1_sk_root, self.slot);
+        let coin1_commitment = Self::commitment(pk,
+                                                pallas::Base::from(self.value),
+                                                self.seed,
+                                                self.coin1_blind
+        );
+        // Hash its coordinates to get a base field element
+        let c1_cm_coords = coin1_commitment.to_affine().coordinates().unwrap();
+        let c1_base_msg = [*c1_cm_coords.x(), *c1_cm_coords.y()];
+        let coin1_commitment_base = poseidon_hash(c1_base_msg);
+        // Append the element to the Merkle tree
+        coin_commitment_tree.append(&MerkleNode::from(coin1_commitment_base));
+        let coin1_commitment_pos = coin_commitment_tree.witness().unwrap();
+        let coin1_commitment_root = coin_commitment_tree.root(0).unwrap();
+        let coin1_commitment_merkle_path = coin_commitment_tree
+            .authentication_path(coin1_commitment_pos, &coin1_commitment_root)
+            .unwrap();
+        //TODO complete
+    }
+    */
+
+    pub fn is_leader(&self, sigma1: pallas::Base,
+                     sigma2: pallas::Base,
+                     current_eta: pallas::Base,
+                     current_slot: pallas::Base,
+                     //coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    ) -> bool {
+        //FIXME: coin should evolve to void the following:
+        // all competing coins are stuck at same y, T,
+        // that doesn't change through time.
+        // which happens if the coins aren't evolving, and
+        // controller give the same output (in case of discrete controller).
+        //if self.slot != current_slot () {
+            //evolve_coin(current_eta, current_slot, coin_commitment_tree);
+        //}
+        // this would require pubishing a vec of evolving coins for validation
+        // which requires a long processing time, and would slow down the tx.
+        // NOTE! but if only the y_mu is changed according to the current slot value,
+        // and not the minting slot index.
+        // the latter is less work, and saves processing time.
+        let y_seed = [pallas::Base::from(PREFIX_SEED),
+                     self.coin1_sk_root.inner(),
+                     self.nonce,
+                     ZERO
+        ];
+        let y_seed_hash = poseidon_hash(y_seed);
+        let (y_mu, rho_mu) = Self::election_seeds(current_eta, current_slot);
+        let y_coords = pedersen_commitment_base(y_seed_hash, mod_r_p(y_mu))
             .to_affine()
             .coordinates()
             .unwrap();
@@ -295,17 +349,11 @@ impl LeadCoin {
     pub fn derive_coin(
         &self,
         coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
+        derived_blind: pallas::Scalar,
     ) -> LeadCoin {
         info!(target: "consensus::leadcoin", "derive_coin(): Deriving new coin!");
         let derived_c1_rho = self.derived_rho();
-        let blind = pallas::Scalar::random(&mut OsRng);
-        let derived_c2_cm = Self::commitment(
-            self.pk(),
-            pallas::Base::from(self.value + 2 * constants::REWARD),
-            Self::util_derived_rho(self.coin1_sk_root, derived_c1_rho),
-            blind,
-        );
-        let derived_c1_cm = { self.derived_commitment(self.coin2_blind) };
+        let derived_c1_cm = self.derived_commitment(derived_blind);
         let derived_c1_cm_coord = derived_c1_cm.to_affine().coordinates().unwrap();
         let derived_c1_cm_msg = [*derived_c1_cm_coord.x(), *derived_c1_cm_coord.y()];
         let derived_c1_cm_base = poseidon_hash(derived_c1_cm_msg);
@@ -318,8 +366,7 @@ impl LeadCoin {
             value: self.value + constants::REWARD,
             slot: self.slot,
             nonce: derived_c1_rho,
-            coin1_commitment: self.coin2_commitment,
-            coin2_commitment: derived_c2_cm,
+            coin1_commitment: derived_c1_cm,
             coin1_commitment_root: commitment_root,
             coin1_commitment_pos: u32::try_from(usize::from(leaf_pos)).unwrap(),
             coin1_commitment_merkle_path: commitment_merkle_path.try_into().unwrap(),
@@ -327,15 +374,11 @@ impl LeadCoin {
             coin1_sk_root: self.coin1_sk_root,
             coin1_sk_pos: self.coin1_sk_pos,
             coin1_sk_merkle_path: self.coin1_sk_merkle_path,
-            coin1_blind: self.coin2_blind,
-            coin2_blind: blind,
-            y_mu: self.y_mu,
-            rho_mu: self.rho_mu,
-            eta: self.eta,
+            coin1_blind: derived_blind,
         }
     }
 
-    pub fn coin_commitment_base(&self) -> pallas::Base {
+    fn coin_commitment_base(&self) -> pallas::Base {
         let c1_cm_coord = self.coin1_commitment.to_affine().coordinates().unwrap();
         let c1_cm_msg = [*c1_cm_coord.x(), *c1_cm_coord.y()];
         poseidon_hash(c1_cm_msg)
@@ -346,8 +389,12 @@ impl LeadCoin {
         &self,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
+        eta: pallas::Base,
+        slot: pallas::Base, //current slot index.
         pk: &ProvingKey,
+        derived_blind: pallas::Scalar,
     ) -> (Result<Proof>, Vec<pallas::Base>) {
+        let (y_mu, rho_mu) = Self::election_seeds(eta, slot);
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode).unwrap();
         let witnesses = vec![
@@ -361,14 +408,14 @@ impl LeadCoin {
             Witness::Base(Value::known(self.nonce)),
             Witness::Scalar(Value::known(self.coin1_blind)),
             Witness::Base(Value::known(pallas::Base::from(self.value))),
-            Witness::Scalar(Value::known(self.coin2_blind)),
-            Witness::Base(Value::known(self.rho_mu)),
-            Witness::Base(Value::known(self.y_mu)),
+            Witness::Scalar(Value::known(derived_blind)),
+            Witness::Base(Value::known(rho_mu)),
+            Witness::Base(Value::known(y_mu)),
             Witness::Base(Value::known(sigma1)),
             Witness::Base(Value::known(sigma2)),
         ];
         let circuit = ZkCircuit::new(witnesses, zkbin);
-        let public_inputs = self.public_inputs(sigma1, sigma2);
+        let public_inputs = self.public_inputs(sigma1, sigma2, eta, slot, derived_blind);
         (Ok(Proof::create(pk, &[circuit], &public_inputs, &mut OsRng).unwrap()), public_inputs)
     }
 
@@ -382,6 +429,9 @@ impl LeadCoin {
         transfered_pk: pallas::Base, // recipient coin's public key
         sigma1: pallas::Base,
         sigma2: pallas::Base,
+        current_eta: pallas::Base,
+        current_slot: pallas::Base,
+        derived_blind: pallas::Scalar,
     ) -> Result<TransferStx> {
         assert!(change_coin.value + transfered_coin.value == self.value && self.value > 0);
         let bincode = include_bytes!("../../proof/tx.zk.bin");
@@ -415,7 +465,7 @@ impl LeadCoin {
             Witness::Base(Value::known(xferval)),
         ];
         let circuit = ZkCircuit::new(witnesses, zkbin);
-        let proof = Proof::create(pk, &[circuit], &self.public_inputs(sigma1, sigma2), &mut OsRng)?;
+        let proof = Proof::create(pk, &[circuit], &self.public_inputs(sigma1, sigma2, current_eta, current_slot, derived_blind), &mut OsRng)?;
         let cm3_msg_in = [
             pallas::Base::from(PREFIX_CM),
             change_pk,

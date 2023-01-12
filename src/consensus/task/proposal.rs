@@ -28,6 +28,12 @@ use crate::{
     util::{async_util::sleep, time::Timestamp},
 };
 
+use darkfi_sdk::{
+    pasta::{arithmetic::CurveAffine, group::Curve, pallas},
+};
+use rand::rngs::OsRng;
+use halo2_proofs::arithmetic::Field;
+
 /// async task used for participating in the consensus protocol
 pub async fn proposal_task(
     consensus_p2p: P2pPtr,
@@ -137,6 +143,7 @@ async fn consensus_loop(
     let mut listened_slots = 0;
     let mut changed_status = false;
     loop {
+        let derived_blind = pallas::Scalar::random(&mut OsRng);
         // Check if node can start proposing.
         // This code ensures that we only change the status once
         // and listened_slots doesn't increment further.
@@ -151,7 +158,7 @@ async fn consensus_loop(
         }
 
         // Node waits and execute consensus protocol propose period.
-        if propose_period(consensus_p2p.clone(), state.clone()).await {
+        if propose_period(consensus_p2p.clone(), state.clone(), derived_blind).await {
             // Node needs to resync
             warn!(
                 target: "consensus::proposal",
@@ -179,7 +186,10 @@ async fn consensus_loop(
 ///     - Generate slot sigmas and checkpoint
 ///     - Check if slot leader to generate and broadcast proposal
 /// Returns flag in case node needs to resync.
-async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool {
+async fn propose_period(consensus_p2p: P2pPtr,
+                        state: ValidatorStatePtr,
+                        derived_blind: pallas::Scalar,
+) -> bool {
     // Node sleeps until next slot
     let seconds_next_slot = state.read().await.consensus.next_n_slot_start(1).as_secs();
     info!(target: "consensus::proposal", "consensus: Waiting for next slot ({} sec)", seconds_next_slot);
@@ -209,7 +219,13 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     let (won, fork_index, coin_index) =
         state.write().await.consensus.is_slot_leader(sigma1, sigma2);
     let result = if won {
-        state.write().await.propose(processing_slot, fork_index, coin_index, sigma1, sigma2)
+        state.write().await.propose(processing_slot,
+                                    fork_index,
+                                    coin_index,
+                                    sigma1,
+                                    sigma2,
+                                    derived_blind
+        )
     } else {
         Ok(None)
     };
@@ -239,9 +255,10 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     }
 
     // Node stores the proposal and broadcast to rest nodes
-    info!(target: "consensus::proposal", "consensus: Node is the slot leader: Proposed block: {}", proposal);
-    debug!(target: "consensus::proposal", "consensus: Full proposal: {:?}", proposal);
-    match state.write().await.receive_proposal(&proposal, Some((coin_index, coin))).await {
+
+    info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
+    debug!("consensus: Full proposal: {:?}", proposal);
+    match state.write().await.receive_proposal(&proposal, Some((coin_index, coin)), derived_blind).await {
         Ok(_) => {
             // Here we don't have to check to broadcast, because the flag
             // will always be true, since the node is able to produce proposals

@@ -264,7 +264,9 @@ impl ValidatorState {
         coin_index: usize,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
+        derived_blind: pallas::Scalar
     ) -> Result<Option<(BlockProposal, LeadCoin)>> {
+        let eta = self.consensus.get_eta();
         // Check if node can produce proposals
         if !self.consensus.proposing {
             return Ok(None)
@@ -290,8 +292,13 @@ impl ValidatorState {
         };
 
         // Generating leader proof
-        let (proof, public_inputs) =
-            coin.create_lead_proof(sigma1, sigma2, self.lead_proving_key.as_ref().unwrap());
+        let (proof, public_inputs) = coin.create_lead_proof(sigma1,
+                                                            sigma2,
+                                                            eta.clone(),
+                                                            pallas::Base::from(self.consensus.current_slot()),
+                                                            self.lead_proving_key.as_ref().unwrap(),
+                                                            derived_blind,
+        );
 
         // Signing using coin
         let secret_key = coin.coin1_sk;
@@ -311,7 +318,7 @@ impl ValidatorState {
             public_key,
             public_inputs,
             coin.slot,
-            coin.eta,
+            eta,
             LeadProof::from(proof?),
             self.consensus.get_current_offset(slot),
             *self.consensus.leaders_history.last().unwrap(),
@@ -359,6 +366,7 @@ impl ValidatorState {
         &mut self,
         proposal: &BlockProposal,
         coin: Option<(usize, LeadCoin)>,
+        derived_blind: pallas::Scalar,
     ) -> Result<bool> {
         let current = self.consensus.current_slot();
         // Node hasn't started participating
@@ -569,7 +577,7 @@ impl ValidatorState {
 
         // If proposal came fromself, we derive new coin
         if let Some((idx, c)) = coin {
-            state_checkpoint.coins[idx] = c.derive_coin(&mut state_checkpoint.coins_tree);
+            state_checkpoint.coins[idx] = c.derive_coin(&mut state_checkpoint.coins_tree, derived_blind);
         }
         // Store proposal coins nullifiers
         state_checkpoint.nullifiers.push(prop_sn);

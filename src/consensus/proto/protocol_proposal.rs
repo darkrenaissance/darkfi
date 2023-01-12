@@ -31,6 +31,12 @@ use crate::{
     Result,
 };
 
+use darkfi_sdk::{
+    pasta::{arithmetic::CurveAffine, group::Curve, pallas},
+};
+use rand::rngs::OsRng;
+use halo2_proofs::arithmetic::Field;
+
 pub struct ProtocolProposal {
     proposal_sub: MessageSubscription<BlockProposal>,
     jobsman: ProtocolJobsManagerPtr,
@@ -67,6 +73,7 @@ impl ProtocolProposal {
 
         let exclude_list = vec![self.channel_address.clone()];
         loop {
+            let derived_blind = pallas::Scalar::random(&mut OsRng);
             let proposal = match self.proposal_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
@@ -100,7 +107,7 @@ impl ProtocolProposal {
                 continue
             }
 
-            match lock.receive_proposal(&proposal_copy, None).await {
+            match lock.receive_proposal(&proposal_copy, None, derived_blind).await {
                 Ok(broadcast) => {
                     if broadcast {
                         // Broadcast proposal to rest of nodes

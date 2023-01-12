@@ -216,7 +216,7 @@ impl ConsensusState {
             let last_slot_checkpoint = self.slot_checkpoints.last().unwrap();
             self.epoch_eta = last_slot_checkpoint.eta;
         };
-        self.coins = self.create_coins(self.epoch_eta).await?;
+        self.coins = self.create_coins().await?;
         self.update_forks_checkpoints();
 
         Ok(())
@@ -265,7 +265,9 @@ impl ConsensusState {
     /// Generate coins for provided sigmas.
     /// NOTE: The strategy here is having a single competing coin per slot.
     // TODO: DRK coin need to be burned, and consensus coin to be minted.
-    async fn create_coins(&mut self, eta: pallas::Base) -> Result<Vec<LeadCoin>> {
+    async fn create_coins(&mut self,
+                          //eta: pallas::Base,
+    ) -> Result<Vec<LeadCoin>> {
         let slot = self.current_slot();
 
         // TODO: cleanup LeadCoinSecrets, no need to keep a vector
@@ -288,7 +290,7 @@ impl ConsensusState {
         // must sum to initial distribution total coins.
         //let stake = self.initial_distribution;
         let coin = LeadCoin::new(
-            eta,
+            //eta,
             200,
             slot,
             epoch_secrets.secret_keys[0].inner(),
@@ -542,10 +544,11 @@ impl ConsensusState {
         let mut highest_stake_idx = 0;
         let total_stake = self.total_stake();
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
-            info!(target: "consensus::state", "is_slot_leader: coin stake: {:?}", coin.value);
-            info!(target: "consensus::state", "is_slot_leader: total stake: {}", total_stake);
-            info!(target: "consensus::state", "is_slot_leader: relative stake: {}", (coin.value as f64) / total_stake as f64);
-            let first_winning = coin.is_leader(sigma1, sigma2);
+
+            info!("is_slot_leader: coin stake: {:?}", coin.value);
+            info!("is_slot_leader: total stake: {}", total_stake);
+            info!("is_slot_leader: relative stake: {}", (coin.value as f64) / total_stake as f64);
+            let first_winning = coin.is_leader(sigma1, sigma2, self.get_eta(), pallas::Base::from(self.current_slot()));
             if first_winning && !won {
                 highest_stake_idx = winning_idx;
             }
