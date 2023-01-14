@@ -2,34 +2,34 @@
 
 ## Overview
 
-Darkfi is based off Ouroboros Crypsinous, a privacy focused proof-of-stake algorithm.
-Below you may find the technical specifications of DarkFi's blockchain implementation.
+The DarkFi blockchain is based off proof of stake  privacy focused Ouroboros Crypsinous,
+tunned with a discrete controller to achieve a stable supply.
 
 ## Blockchain
 
 Blockchain $\mathbb{C_{loc}}$ is a series of epochs: it's a tree of chains,
-$C^1$, $C^2$, $\dots$, $C^n$, the chain of the max length in $\mathbb{C_{loc}}$
-is the driving chain $C_{loc}$.
+$C^1$, $C^2$, $\dots$, $C^n$, the chain ending in a single leader per slot singls finalization.
 
 Crypsinous Blockchain is built on top of Zerocash sapling scheme, and Ouroboros Genesis  blockchain.
-Each part $U_p$ stores it's own local view of the Blockchain $C_{loc}^{U_p}$.
+Each participant $U_p$ stores it's own local view of the Blockchain $C_{loc}^{U_p}$.
 $C_{loc}$ is a sequence of blocks $B_i$ (i>0), where each $B \in C_{loc}$
 $$ B = (tx_{lead},st)$$
-$$tx_{lead} = (LEAD,st\overrightarrow{x}_{ref},stx_{proof})$$
-$st\overrightarrow{x}_{ref}$ it's a vector of $tx_{lead}$ that aren't yet in $C_{loc}$.
-$stx_{proof}=(cm_{\prime{c}},sn_c,ep,sl,\rho,h,ptr,\pi)$
+$$tx_{lead} = (LEAD, header, txs, stx_{proof})$$
+LEAD is a magic word, header is a metadata, and txs is a vector of transaction hash (see appendix).
+$stx_{proof}=(cm_{\prime{c}},sn_c,ep,sl,\rho,h,\pi)$
 the Block's st is the block data, and h is the hash of that data.
 the commitment of the newly created coin is:
 $(cm_{c_2},r_{c_2})=COMM(pk^{COIN}||\tau||v_c||\rho_{c_2})$,
-$\tau$ is the clock current time. $sn_c$ is the coin's serial number revealed to spend the coin.
+$\tau$ is slot timestamp, or index. $sn_c$ is the coin's serial number revealed to spend the coin.
 $$sn_c=PRF_{root_{sk}^{COIN}}^{sn}(\rho_c)$$
 $$\rho=\eta^{sk_{sl}^{COIN}}$$
-$\eta$ is is from random oracle evaluated at $(Nonce||\eta_{ep}||sl)$, $\rho$ is the following epoch's seed. ptr is the hash of the previous block, $\pi$ is the NIZK proof of the LEAD statement.
+$\eta$ is randomness from  random oracle implemented as hash of previous epoch, $\rho$ id derived randomness from $\eta$.  $\pi$ is the NIZK proof of the LEAD statement.
 
-## st transactions
-the blockchain view is a chain of blocks, each block $B_j=(tx_{lead},st)$, while st being the merkle tree structure of the validated transactions received through the network, that include transfer, and public transactions.
 
-## LEAD statement
+### st transactions
+the blockchain view is a chain of blocks, each block $B_j=(tx_{lead},st)$, while $st$ being the merkle tree structure of the validated transactions received through the network, that include transfer, and public transactions.
+
+### LEAD statement
 for $x=(cm_{c_2},sn_{c_1},\eta,sl,\rho,h,ptr,\mu_{\rho},\mu_{y},root)$, and
 $w=(path,root_{sk^{COIN}},path_{sk^{COIN}},\tau_c,\rho_c,r_{c_1},v,r_{c_2})$
 for tuple $(x,w) \in L_{lead}$ iff:
@@ -43,11 +43,13 @@ for tuple $(x,w) \in L_{lead}$ iff:
  * $sn_{c_1}= PRF_{root_{sk}^{COIN}}^{sn}(\rho_{c_1})$
  * $y = \mu_{y}^{root_{sk_{c_1}}^{COIN}||\rho_c}$
  * $\rho = \mu_{\rho}^{root_{sk_{c_1}}^{COIN}||\rho_c}$
- * $y< ord(G)\phi_f(v)$
-note that this process involves renewing the old coin $c_1$ who's serial number gets revealed(proof of spending), becoming an input, to $c_2$ of the same value,
+ * $y< T(v)$
+note that this process involves burning old coin $c_1$, minting new  $c_2$ of the same value + reward.
 
 
-## transfer transaction $tx_{xfer}$
+<!--
+this is now replaced by tx as a contract in zkas
+### transfer transaction $tx_{xfer}$
 transfer transaction of the pouring mechanism of input: old coin, and public coin, with output: new return change coin, and further recipient coin.  such that input total value $v^{old}_1 + v_{pub} = v^{new}_3 + v^{new}_4$
 $$ tx_{xfer} = (TRANSFER,stx_{proof},c_r)$$
 $$stx_{proof} = (\{cm_{c_{3}}),cm_{c_{4}}\}),(\{sn_{c_2},{sn_{c_1}}\}),\tau,root,\pi)$$
@@ -55,9 +57,8 @@ $c_r$ is forward secure encryption of $stx_{rcpt}=(\rho_{c_3},r_{c_3},v_{c_3})$ 
 the commitment of the new coins $c_3$, $c_4$ is:
 $$(cm_{c_3},r_{c_3})=Comm(pk_{pk_s}^{COIN}||\tau||v_{c_3}||\rho_{c_3})$$
 $$(cm_{c_4},r_{c_4})=Comm(pk_{pk_r}^{COIN}||\tau||v_{c_4}||\rho_{c_4})$$
+also the spend proofs of the old coins $sn_{c_1},sn_{c_2}$ are revealed.
 
-### spend proof
-the spend proofs of the old coins $sn_{c_1},sn_{c_2}$ are revealed.
 
 ### NIZK proof $\pi$
 for the circuit inputs, and witnesses
@@ -79,23 +80,13 @@ $$path_{sk_{c_i}^{COIN}} \text{ is a valid path to a leaf at position } \tau \te
 
 $$sn_{c_i}=PRF_{root_{sk_{c_i}^{COIN}}}^{sn}(\rho_{c_i}), \forall_i \in \{1,2\}$$
 
-# toward better decentralization in ouroboros
+-->
 
-the randomization of the leader selection at each slot is hinged on the random $y$, $\mu_y$, $\rho_c$, those three values are dervied from $\eta$, and root of the secret keys, the root of the secret keys for each stakeholder can be sampled, and derived beforehand, but $\eta$ is a response to global random oracle, so the whole security of the leader selection is hinged on $\textit{centralized global random node}$.
-
-## solution
-
-to break this centeralization, a decentralized emulation of $G_{ro}$ functionality for calculation of: $\eta_i=PRF^{G_{ro}}_{\eta_{i-1}}(\psi)$
-$$\psi=hash(tx^{ep}_{0})$$
-$$\eta_0=hash("let there be dark!")$$
-note that first transaction in the block, is the proof transaction.
 
 
 ## Epoch
 
 An epoch is a vector of blocks. Some of the  blocks might be empty if there is no winnig leader.
-
-
 
 ## Leader selection
 
@@ -123,8 +114,68 @@ the probability that a party holding all the stake will be selected to be
 a leader. Stakeholder is selected as leader for slot j with probability
 $\phi_f(\alpha_i)$, $\alpha_i$ is $U_i$ relative stake.
 
-The following are absolute stake aggregation dependent leader selection
+see the appendix for absolute stake aggregation dependent leader selection
 family of functions.
+
+### automating f tuning
+
+the stable consensus token supply is maintained by the help of discrete PID controller, that maintain stabilized occurance of single leader per slot.
+
+### target T n-term approximation
+target function is approximated to avoid use of power, and division in zk, since no function in the family of functions that have independent aggregation property achieve avoid it (see appendix).
+
+s is stake, and $\Sigma$ is total token staked during an epoch, relative stake:
+$$ \sigma = \frac{s}{\Sigma} $$
+the ouroboros target function is approximated as follows:
+ $$ T  = -[\frac{k}{\Sigma}s + \frac{k^{''}}{\Sigma^2 2!} s^2 + \dots +\frac{k^{'n}}{\Sigma^n n!} s^n] $$
+
+
+
+# Appendix
+
+This section gives further details about the structures that will
+be used by the protocol.
+
+## Blockchain
+
+| Field    |     Type     |                Description                 |
+|----------|--------------|--------------------------------------------|
+| `blocks` | `Vec<Block>` | Series of blocks consisting the Blockchain |
+
+
+## Header
+
+|   Field     |        Type        |            Description                     |
+|-------------|--------------------|--------------------------------------------|
+| `version`   | `u8`               | Version                                    |
+| `previous`  | `blake3Hash`       | Previous block hash                        |
+| `epoch`     | `u64`              | Epoch                                      |
+| `slot`      | `u64`              | Slot UID                                   |
+| `timestamp` | `Timestamp`        | Block creation timestamp                   |
+| `root`      | `MerkleRoot`       | Root of the transaction hashes merkle tree |
+
+
+## Block
+
+|   Field     |        Type       |            Description             |
+|-------------|-------------------|------------------------------------|
+| `magic`     | `u8`              | Magic bytes                        |
+| `header`    | `blake3Hash`      | Header hash                        |
+| `txs`       | `Vec<blake3Hash>` | Transaction hashes                 |
+| `lead_info` | `LeadInfo`        | Block leader information           |
+
+## LeadInfo
+
+| Field           | Type                | Description                                         |
+|-----------------|---------------------|-----------------------------------------------------|
+| `signature`     | `Signature`         | Block owner signature                               |
+| `public_inputs` | `Vec<pallas::Base>` | Nizk proof public inputs                            |
+| `serial_number` | `pallas::Base`      | competing coin's nullifier                          |
+| `eta`           | `[u8; 32]`          | randomness from the previous epoch                  |
+| `proof`         | `Vec<u8>`           | Nizk $\pi$ Proof the stakeholder is the block owner |
+| `offset`        | `u64`               | Slot offset block producer used                     |
+| `leaders`       | `u64`               | Block producer leaders count                        |
+
 
 ### Linear family functions
 
@@ -174,7 +225,7 @@ For a stakeholder with $nv_{max}$ absolute stake, $\mid n \in \mathbb{Z}$
 it's advantageous for the stakeholder to distribute stakes on $n$
 competing coins.
 
-### Inverse functions
+#### Inverse functions
 
 Inverse lead selection functions doesn't require maximum stake, most
 suitable for absolute stake, it has the disadvantage that it's inflating
@@ -226,13 +277,8 @@ such that S $in Z$
 $\phi_{max}=\phi(\alpha_{max})$ where $\alpha_{max}$ is the maximum stake value being $2^{64}$, following from the previous proof that the family of function haveing independent aggregation property is the exponential function $f^\alpha$, and $f \in Z | f>1$, the smallest value satisfying f is $f=2$, then $$\phi_{max} = 2^{2^{64}}$$
 note that since $ord(G)<<\phi_{max}$ thus $S<<1$, contradiction.
 
-### target T n term approximation
-- s is stake, and $\Sigma$ is total stake.
-- $$ \sigma = \frac{s}{\Sigma} $$
-- $$ T  = -[\frac{k}{\Sigma}s + \frac{k^{''}}{\Sigma^2 2!} s^2 + \dots +\frac{k^{'n}}{\Sigma^n n!} s^n] $$
 
-
-## Leaky non-resettable beacon
+### Leaky non-resettable beacon
 
 Built on top of globally synchronized clock, that leaks the nonce $\eta$
 of the next epoch a head of time (thus called leaky), non-resettable
@@ -248,48 +294,13 @@ beginning of epoch $e_{i-1}$ to the slot with timestamp up to $(j-2)R +
 \frac{16k}{1+\epsilon}$, note that k is a persistence security parameter,
 R is the epoch length in terms of slots.
 
+### toward better decentralization in ouroboros
 
-# Appendix
+the randomization of the leader selection at each slot is hinged on the random $y$, $\mu_y$, $\rho_c$, those three values are dervied from $\eta$, and root of the secret keys, the root of the secret keys for each stakeholder can be sampled, and derived beforehand, but $\eta$ is a response to global random oracle query, so it's security is hinged on $\textit{centralized global random node}$.
 
-This section gives further details about the structures that will
-be used by the protocol.
+#### solution
 
-## Blockchain
-
-| Field    |     Type     |                Description                 |
-|----------|--------------|--------------------------------------------|
-| `blocks` | `Vec<Block>` | Series of blocks consisting the Blockchain |
-
-
-## Header
-
-|   Field     |        Type        |            Description                     |
-|-------------|--------------------|--------------------------------------------|
-| `version`   | `u8`               | Version                                    |
-| `previous`  | `blake3Hash`       | Previous block hash                        |
-| `epoch`     | `u64`              | Epoch                                      |
-| `slot`      | `u64`              | Slot UID                                   |
-| `timestamp` | `Timestamp`        | Block creation timestamp                   |
-| `root`      | `MerkleRoot`       | Root of the transaction hashes merkle tree |
-
-
-## Block
-
-|   Field     |        Type       |            Description             |
-|-------------|-------------------|------------------------------------|
-| `magic`     | `u8`              | Magic bytes                        |
-| `header`    | `blake3Hash`      | Header hash                        |
-| `txs`       | `Vec<blake3Hash>` | Transaction hashes                 |
-| `lead_info` | `LeadInfo`        | Block leader information           |
-
-## LeadInfo
-
-| Field           | Type                | Description                                         |
-|-----------------|---------------------|-----------------------------------------------------|
-| `signature`     | `Signature`         | Block owner signature                               |
-| `public_inputs` | `Vec<pallas::Base>` | Nizk proof public inputs                            |
-| `serial_number` | `pallas::Base`      | competing coin's nullifier                          |
-| `eta`           | `[u8; 32]`          | randomness from the previous epoch                  |
-| `proof`         | `Vec<u8>`           | Nizk $\pi$ Proof the stakeholder is the block owner |
-| `offset`        | `u64`               | Slot offset block producer used                     |
-| `leaders`       | `u64`               | Block producer leaders count                        |
+to break this centeralization, a decentralized emulation of $G_{ro}$ functionality for calculation of: $\eta_i=PRF^{G_{ro}}_{\eta_{i-1}}(\psi)$
+$$\psi=hash(tx^{ep}_{0})$$
+$$\eta_0=hash("let there be dark!")$$
+note that first transaction in the block, is the proof transaction.

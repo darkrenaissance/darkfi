@@ -12,10 +12,9 @@ and visa versa. Currently, the role of the Cashier is trusted and
 centralized. As a next step, DarkFi plans to implement trust-minimized
 bridges and eventually fully trustless bridges.
 
-**Blockchain:** The DarkFi blockchain is based off proof of stake Ouroboros Crypsinous,
-tunned with a discrete controller to achieve a stable supply, currently
+**Blockchain:** The DarkFi blockchain is based off proof of stake Ouroboros Crypsinous, tuned with a discrete controller to achieve a stable supply, currently
 under development to achieve instant finality using parallel leader election
-blockchain, using Drk consensus token.
+blockchain. uses Drk consensus token.
 
 DarkFi blockchain's leadership, staking, unstaking, and transaction contracts are written in zkas language, on a P2P Network.
 
