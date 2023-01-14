@@ -12,15 +12,12 @@ and visa versa. Currently, the role of the Cashier is trusted and
 centralized. As a next step, DarkFi plans to implement trust-minimized
 bridges and eventually fully trustless bridges.
 
-**Blockchain:** Once new anonymous tokens (e.g. dETH) have been issued,
-the Cashier posts that data on the blockchain. This data is encrypted
-and the transaction link is broken.
+**Blockchain:** The DarkFi blockchain is based off proof of stake Ouroboros Crypsinous,
+tunned with a discrete controller to achieve a stable supply, currently
+under development to achieve instant finality using parallel leader election
+blockchain, using Drk consensus token.
 
-The DarkFi blockchain is currently using a very simple consensus protocol
-called Streamlet. The blockchain is currently in devnet phase. This is a
-local testnet ran by the DarkFi community. Currently, the blockchain has
-no consensus token. DarkFi is working to upgrade to a privacy-enhanced
-proof-of-stake algorithm called Ouroborus Crypsinous.
+DarkFi blockchain's leadership, staking, unstaking, and transaction contracts are written in zkas language, on a P2P Network.
 
 **Wallet:** A wallet is a portal to the DarkFi network. It provides
 the user with the ability to send and receive anonymous _darkened_
