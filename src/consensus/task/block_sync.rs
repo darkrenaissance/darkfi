@@ -32,69 +32,87 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
     // Getting a random connected channel to ask from peers
     match p2p.clone().random_channel().await {
         Some(channel) => {
-            // Communication setup for slot checkpoints
             let msg_subsystem = channel.get_message_subsystem();
+
+            // Communication setup for slot checkpoints
             msg_subsystem.add_dispatch::<SlotCheckpointResponse>().await;
-            let response_sub = channel.subscribe_msg::<SlotCheckpointResponse>().await?;
-
-            // Node sends the last known slot checkpoint of the canonical blockchain
-            // and loops until the response is the same slot (used to utilize batch requests).
-            let mut last = state.read().await.blockchain.last_slot_checkpoint()?;
-            info!(target: "consensus::block_sync", "Last known slot checkpoint: {:?}", last.slot);
-
-            loop {
-                // Node creates a `SlotCheckpointRequest` and sends it
-                let request = SlotCheckpointRequest { slot: last.slot };
-                channel.send(request).await?;
-
-                // Node stores response data.
-                let resp = response_sub.receive().await?;
-
-                // Verify and store retrieved checkpoints
-                debug!(target: "consensus::block_sync", "block_sync_task(): Processing received slot checkpoints");
-                state.write().await.receive_slot_checkpoints(&resp.slot_checkpoints).await?;
-
-                let last_received = state.read().await.blockchain.last_slot_checkpoint()?;
-                info!(target: "consensus::block_sync", "Last received slot checkpoint: {:?}", last_received.slot);
-
-                if last.slot == last_received.slot {
-                    break
-                }
-
-                last = last_received;
-            }
+            let slot_checkpoint_response_sub =
+                channel.subscribe_msg::<SlotCheckpointResponse>().await?;
 
             // Communication setup for blocks
-            let msg_subsystem = channel.get_message_subsystem();
             msg_subsystem.add_dispatch::<BlockResponse>().await;
-            let response_sub = channel.subscribe_msg::<BlockResponse>().await?;
+            let block_response_sub = channel.subscribe_msg::<BlockResponse>().await?;
 
-            // Node sends the last known block hash of the canonical blockchain
-            // and loops until the response is the same block (used to utilize
-            // batch requests).
-            let mut last = state.read().await.blockchain.last()?;
-            info!(target: "consensus::block_sync", "Last known block: {:?} - {:?}", last.0, last.1);
-
+            // Node loops until both slot checkpoints and blocks have been synced
+            let mut slot_checkpoints_synced = false;
+            let mut blocks_synced = false;
             loop {
-                // Node creates a `BlockOrder` and sends it
-                let order = BlockOrder { slot: last.0, block: last.1 };
-                channel.send(order).await?;
+                // Node sends the last known slot checkpoint of the canonical blockchain
+                // and loops until the response is the same slot (used to utilize batch requests).
+                let mut last = state.read().await.blockchain.last_slot_checkpoint()?;
+                info!(target: "consensus::block_sync", "Last known slot checkpoint: {:?}", last.slot);
 
-                // Node stores response data.
-                let resp = response_sub.receive().await?;
+                loop {
+                    // Node creates a `SlotCheckpointRequest` and sends it
+                    let request = SlotCheckpointRequest { slot: last.slot };
+                    channel.send(request).await?;
 
-                // Verify and store retrieved blocks
-                debug!(target: "consensus::block_sync", "block_sync_task(): Processing received blocks");
-                state.write().await.receive_sync_blocks(&resp.blocks).await?;
+                    // Node stores response data.
+                    let resp = slot_checkpoint_response_sub.receive().await?;
 
-                let last_received = state.read().await.blockchain.last()?;
-                info!(target: "consensus::block_sync", "Last received block: {:?} - {:?}", last_received.0, last_received.1);
+                    // Verify and store retrieved checkpoints
+                    debug!(target: "consensus::block_sync", "block_sync_task(): Processing received slot checkpoints");
+                    state.write().await.receive_slot_checkpoints(&resp.slot_checkpoints).await?;
 
-                if last == last_received {
-                    break
+                    let last_received = state.read().await.blockchain.last_slot_checkpoint()?;
+                    info!(target: "consensus::block_sync", "Last received slot checkpoint: {:?}", last_received.slot);
+
+                    if last.slot == last_received.slot {
+                        break
+                    }
+
+                    blocks_synced = false;
+                    last = last_received;
                 }
 
-                last = last_received;
+                // We force a recheck of slot checkpoints after blocks have been synced
+                if blocks_synced {
+                    slot_checkpoints_synced = true;
+                }
+
+                // Node sends the last known block hash of the canonical blockchain
+                // and loops until the response is the same block (used to utilize
+                // batch requests).
+                let mut last = state.read().await.blockchain.last()?;
+                info!(target: "consensus::block_sync", "Last known block: {:?} - {:?}", last.0, last.1);
+
+                loop {
+                    // Node creates a `BlockOrder` and sends it
+                    let order = BlockOrder { slot: last.0, block: last.1 };
+                    channel.send(order).await?;
+
+                    // Node stores response data.
+                    let resp = block_response_sub.receive().await?;
+
+                    // Verify and store retrieved blocks
+                    debug!(target: "consensus::block_sync", "block_sync_task(): Processing received blocks");
+                    state.write().await.receive_sync_blocks(&resp.blocks).await?;
+
+                    let last_received = state.read().await.blockchain.last()?;
+                    info!(target: "consensus::block_sync", "Last received block: {:?} - {:?}", last_received.0, last_received.1);
+
+                    if last == last_received {
+                        blocks_synced = true;
+                        break
+                    }
+
+                    slot_checkpoints_synced = false;
+                    last = last_received;
+                }
+
+                if slot_checkpoints_synced && blocks_synced {
+                    break
+                }
             }
         }
         None => warn!(target: "consensus::block_sync", "Node is not connected to other nodes"),
