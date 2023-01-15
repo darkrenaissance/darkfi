@@ -94,7 +94,6 @@ impl ProtocolSyncConsensus {
             // Extra validations can be added here.
             let lock = self.state.read().await;
             let bootstrap_slot = lock.consensus.bootstrap_slot;
-            let offset = lock.consensus.offset;
             let mut forks = vec![];
             for fork in &lock.consensus.forks {
                 forks.push(fork.clone().into());
@@ -105,7 +104,6 @@ impl ProtocolSyncConsensus {
             let nullifiers = lock.consensus.nullifiers.clone();
             let response = ConsensusResponse {
                 bootstrap_slot,
-                offset,
                 forks,
                 unconfirmed_txs,
                 slot_checkpoints,

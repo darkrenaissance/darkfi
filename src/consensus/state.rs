@@ -61,8 +61,6 @@ pub struct ConsensusState {
     pub proposing: bool,
     /// Last slot node check for finalization
     pub checked_finalization: u64,
-    /// Slots offset since genesis,
-    pub offset: Option<u64>,
     /// Fork chains containing block proposals
     pub forks: Vec<Fork>,
     /// Current epoch
@@ -105,7 +103,6 @@ impl ConsensusState {
             participating: None,
             proposing: false,
             checked_finalization: 0,
-            offset: None,
             forks: vec![],
             epoch: 0,
             epoch_eta: pallas::Base::zero(),
@@ -328,50 +325,24 @@ impl ConsensusState {
         constants::REWARD
     }
 
-    /// Auxillary function to receive current slot offset.
-    /// If offset is None, its setted up as last block slot offset.
-    pub fn get_current_offset(&mut self, current_slot: u64) -> u64 {
-        // This is the case were we restarted our node, didn't receive offset from other nodes,
-        // so we need to find offset from last block, exluding network dead period.
-        if self.offset.is_none() {
-            let (last_slot, last_offset) = self.blockchain.get_last_offset().unwrap();
-            let offset = last_offset + (current_slot - last_slot);
-            info!(target: "consensus::state", "get_current_offset(): Setting slot offset: {}", offset);
-            self.offset = Some(offset);
-        }
-
-        self.offset.unwrap()
-    }
-
-    /// Auxillary function to calculate overall empty slots.
-    /// We keep an offset from genesis indicating when the first slot actually started.
-    /// This offset is shared between nodes.
-    fn overall_empty_slots(&mut self, current_slot: u64) -> u64 {
+    /// Auxillary function to calculate total slot rewards.
+    fn slot_rewards(&self) -> u64 {
         // Retrieve existing blocks excluding genesis
         let blocks = (self.blockchain.len() as u64) - 1;
-        // Setup offset if only have genesis and havent received offset from other nodes
-        if blocks == 0 && self.offset.is_none() {
-            info!(
-                target: "consensus::state",
-                "overall_empty_slots(): Blockchain contains only genesis, setting slot offset: {}",
-                current_slot
-            );
-            self.offset = Some(current_slot);
-        }
-        // Retrieve longest fork length, to also those proposals in the calculation
+        // Retrieve longest fork length, to include those proposals in the calculation
         let max_fork_length = self.longest_chain_length() as u64;
-        current_slot - blocks - self.get_current_offset(current_slot) - max_fork_length
+        // Calculate rewarded slots
+        let rewarded_slots = blocks + max_fork_length;
+
+        rewarded_slots * self.reward()
     }
 
     /// Network total stake, assuming constant reward.
     /// Only used for fine-tuning. At genesis epoch first slot, of absolute index 0,
     /// if no stake was distributed, the total stake would be 0.
     /// To avoid division by zero, we asume total stake at first division is GENESIS_TOTAL_STAKE(1).
-    fn total_stake(&mut self) -> u64 {
-        let current_slot = self.current_slot();
-        let rewarded_slots = current_slot - self.overall_empty_slots(current_slot) - 1;
-        let rewards = rewarded_slots * self.reward();
-        let total_stake = rewards + self.initial_distribution;
+    fn total_stake(&self) -> u64 {
+        let total_stake = self.slot_rewards() + self.initial_distribution;
         if total_stake == 0 {
             return constants::GENESIS_TOTAL_STAKE
         }
@@ -672,7 +643,6 @@ impl ConsensusState {
     pub fn reset(&mut self) {
         self.participating = None;
         self.proposing = false;
-        self.offset = None;
         self.forks = vec![];
         self.slot_checkpoints = vec![];
         self.leaders_history = vec![0];
@@ -695,8 +665,6 @@ impl net::Message for ConsensusRequest {
 pub struct ConsensusResponse {
     /// Slot the network was bootstrapped
     pub bootstrap_slot: u64,
-    /// Slots offset since genesis,
-    pub offset: Option<u64>,
     /// Hot/live data used by the consensus algorithm
     pub forks: Vec<ForkInfo>,
     /// Pending transactions

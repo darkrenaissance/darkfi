@@ -136,7 +136,6 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
 
     // Node stores response data.
     let mut lock = state.write().await;
-    lock.consensus.offset = response.offset;
     let mut forks = vec![];
     for fork in &response.forks {
         forks.push(fork.clone().into());

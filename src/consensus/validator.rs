@@ -321,7 +321,6 @@ impl ValidatorState {
             coin.slot,
             eta,
             LeadProof::from(proof?),
-            self.consensus.get_current_offset(slot),
             *self.consensus.leaders_history.last().unwrap(),
         );
 
@@ -455,17 +454,6 @@ impl ValidatorState {
                 proposal.header, proposal_header
             );
             return Err(Error::ProposalHeadersMissmatchError)
-        }
-
-        // Verify proposal offset
-        let offset = self.consensus.get_current_offset(current);
-        if offset != lf.offset {
-            warn!(
-                target: "consensus::validator",
-                "receive_proposal(): Received proposal contains different offset: {} - {}",
-                offset, lf.offset
-            );
-            return Err(Error::ProposalDifferentOffsetError)
         }
 
         // Verify proposal leader proof

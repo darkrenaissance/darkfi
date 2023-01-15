@@ -45,8 +45,6 @@ pub struct LeadInfo {
     pub coin_eta: pallas::Base,
     /// Leader NIZK proof
     pub proof: LeadProof,
-    /// Slot offset block producer used
-    pub offset: u64,
     /// Block producer leaders count
     pub leaders: u64,
 }
@@ -60,7 +58,6 @@ impl Default for LeadInfo {
         let coin_slot = 0;
         let coin_eta = pallas::Base::zero();
         let proof = LeadProof::default();
-        let offset = 0;
         let leaders = 0;
         Self {
             signature,
@@ -69,7 +66,6 @@ impl Default for LeadInfo {
             coin_slot,
             coin_eta,
             proof,
-            offset,
             leaders,
         }
     }
@@ -84,10 +80,9 @@ impl LeadInfo {
         coin_slot: u64,
         coin_eta: pallas::Base,
         proof: LeadProof,
-        offset: u64,
         leaders: u64,
     ) -> Self {
-        Self { signature, public_key, public_inputs, coin_slot, coin_eta, proof, offset, leaders }
+        Self { signature, public_key, public_inputs, coin_slot, coin_eta, proof, leaders }
     }
 }
 
