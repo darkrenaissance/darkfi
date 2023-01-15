@@ -256,8 +256,8 @@ async fn propose_period(
 
     // Node stores the proposal and broadcast to rest nodes
 
-    info!("consensus: Node is the slot leader: Proposed block: {}", proposal);
-    debug!("consensus: Full proposal: {:?}", proposal);
+    info!(target: "consensus::proposal", "consensus: Node is the slot leader: Proposed block: {}", proposal);
+    debug!(target: "consensus::proposal", "consensus: Full proposal: {:?}", proposal);
     match state
         .write()
         .await

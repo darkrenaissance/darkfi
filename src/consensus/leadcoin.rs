@@ -129,7 +129,7 @@ impl LeadCoin {
             .unwrap();
         // Derive the nonce for coin2
         //let coin2_seed = Self::util_derived_rho(coin1_sk_root, seed);
-        //info!("coin2_seed[{}]: {:?}", slot, coin2_seed);
+        //info!(target: "consensus::leadcoin", "coin2_seed[{}]: {:?}", slot, coin2_seed);
         // Create commitment to coin2
         //let coin2_commitment = Self::commitment(
         //pk,
@@ -307,8 +307,8 @@ impl LeadCoin {
             let mut writer = BufWriter::new(f);
             writer.write(&y_t_str.into_bytes()).unwrap();
         }
-        info!("is_leader(): y = {:?}", y);
-        info!("is_leader(): T = {:?}", target);
+        info!(target: "consensus::leadcoin", "is_leader(): y = {:?}", y);
+        info!(target: "consensus::leadcoin", "is_leader(): T = {:?}", target);
 
         y < target
     }

@@ -201,7 +201,7 @@ impl ConsensusState {
     fn generate_slot_checkpoint(&mut self, sigma1: pallas::Base, sigma2: pallas::Base) {
         let slot = self.current_slot();
         let eta = self.get_eta();
-        info!("generate_slot_checkpoint: slot: {:?}, eta: {:?}", slot, eta);
+        info!(target: "consensus::state", "generate_slot_checkpoint: slot: {:?}, eta: {:?}", slot, eta);
         let checkpoint = SlotCheckpoint { slot, eta, sigma1, sigma2 };
         self.slot_checkpoints.push(checkpoint);
     }
@@ -255,8 +255,8 @@ impl ConsensusState {
     }
 
     fn calc_sigmas(f: Float10, total_sigma: Float10) -> (pallas::Base, pallas::Base) {
-        info!("sigmas(): f: {}", f);
-        info!("sigmas(): stake: {:}", total_sigma);
+        info!(target: "consensus::state", "sigmas(): f: {}", f);
+        info!(target: "consensus::state", "sigmas(): stake: {:}", total_sigma);
 
         let one = constants::FLOAT10_ONE.clone();
         let neg_one = constants::FLOAT10_NEG_ONE.clone();
@@ -394,7 +394,7 @@ impl ConsensusState {
         }
         self.leaders_history.push(count);
 
-        info!("extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
+        info!(target: "consensus::state", "extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
         let mut count_str: String = count.to_string();
         count_str.push_str(",");
         let f = File::options().append(true).open(constants::LEADER_HISTORY_LOG).unwrap();
@@ -425,13 +425,13 @@ impl ConsensusState {
             k1.clone() * err.clone() +
             k2.clone() * self.err_history[err_len - 1].clone() +
             k3.clone() * self.err_history[err_len - 2].clone();
-        info!("pid::f-1: {:}", self.f_history[f_len - 1].clone());
-        info!("pid::err: {:}", err);
-        info!("pid::err-1: {}", self.err_history[err_len - 1].clone());
-        info!("pid::err-2: {}", self.err_history[err_len - 2].clone());
-        info!("pid::k1: {}", k1.clone());
-        info!("pid::k2: {}", k2.clone());
-        info!("pid::k3: {}", k3.clone());
+        info!(target: "consensus::state", "pid::f-1: {:}", self.f_history[f_len - 1].clone());
+        info!(target: "consensus::state", "pid::err: {:}", err);
+        info!(target: "consensus::state", "pid::err-1: {}", self.err_history[err_len - 1].clone());
+        info!(target: "consensus::state", "pid::err-2: {}", self.err_history[err_len - 2].clone());
+        info!(target: "consensus::state", "pid::k1: {}", k1.clone());
+        info!(target: "consensus::state", "pid::k2: {}", k2.clone());
+        info!(target: "consensus::state", "pid::k3: {}", k3.clone());
         self.err_history.push(err.clone());
         ret
     }
@@ -485,9 +485,9 @@ impl ConsensusState {
         let mut highest_stake_idx = 0;
         let total_stake = self.total_stake();
         for (winning_idx, coin) in competing_coins.iter().enumerate() {
-            info!("is_slot_leader: coin stake: {:?}", coin.value);
-            info!("is_slot_leader: total stake: {}", total_stake);
-            info!("is_slot_leader: relative stake: {}", (coin.value as f64) / total_stake as f64);
+            info!(target: "consensus::state", "is_slot_leader: coin stake: {:?}", coin.value);
+            info!(target: "consensus::state", "is_slot_leader: total stake: {}", total_stake);
+            info!(target: "consensus::state", "is_slot_leader: relative stake: {}", (coin.value as f64) / total_stake as f64);
 
             let first_winning = coin.is_leader(
                 sigma1,

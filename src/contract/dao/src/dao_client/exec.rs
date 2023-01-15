@@ -164,7 +164,7 @@ impl DaoExecCall {
             Witness::Base(Value::known(user_data)),
         ];
 
-        debug!("proposal_bulla: {:?}", proposal_bulla);
+        debug!(target: "dao", "proposal_bulla: {:?}", proposal_bulla);
         let public_inputs = vec![
             proposal_bulla,
             coin_0,

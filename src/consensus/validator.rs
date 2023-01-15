@@ -647,7 +647,9 @@ impl ValidatorState {
                 self.consensus.set_leader_history(index_for_history, slot);
                 return Ok((vec![], vec![]))
             }
-            _ => info!("chain_finalization(): Chain {} can be finalized!", fork_index),
+            _ => {
+                info!(target: "consensus::validator", "chain_finalization(): Chain {} can be finalized!", fork_index)
+            }
         }
         if max_length == 0 {
             return Ok((vec![], vec![]))
