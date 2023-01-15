@@ -595,7 +595,6 @@ impl ConsensusState {
                 }
             }
         }
-        //self.leaders_history.push(0);
     }
 
     /// Utility function to extract leader selection lottery randomness(eta),
@@ -626,6 +625,17 @@ impl ConsensusState {
             }
         }
         Err(Error::SlotCheckpointNotFound(slot))
+    }
+
+    /// Auxillary function to check if node has seen current or previous slot checkpoints.
+    /// This check ensures that either the slots exist in memory or node has seen the finalization of these slots.
+    pub fn slot_checkpoints_is_empty(&self) -> bool {
+        let current_slot = self.current_slot();
+        if self.get_slot_checkpoint(current_slot).is_ok() {
+            return false
+        }
+        let previous_slot = current_slot - 1;
+        !self.get_slot_checkpoint(previous_slot).is_ok()
     }
 
     /// Auxillary function to update all fork state checkpoints to nodes coins current canonical states.

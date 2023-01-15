@@ -588,11 +588,10 @@ impl ValidatorState {
 
     /// Node checks if any of the fork chains can be finalized.
     /// Consensus finalization logic:
-    /// - If the node has observed the creation of 3 proposals in a fork chain and no other
-    ///   forks exists at same or greater height, it finalizes (appends to canonical blockchain)
-    ///   all proposals up to the last one.
+    /// - If the node has observed the creation of a fork chain and no other forks exists at same or greater height,
+    ///   it finalizes (appends to canonical blockchain) all proposals in that fork chain.
     /// When fork chain proposals are finalized, the rest of fork chains are removed and all
-    /// slot checkpoints until current slot are apppended to canonical state.
+    /// slot checkpoints are apppended to canonical state.
     pub async fn chain_finalization(&mut self) -> Result<(Vec<BlockInfo>, Vec<SlotCheckpoint>)> {
         let slot = self.consensus.current_slot();
         info!(target: "consensus::validator", "chain_finalization(): Started finalization check for slot: {}", slot);
@@ -600,7 +599,7 @@ impl ValidatorState {
         self.consensus.checked_finalization = slot;
 
         // First we find longest fork without any other forks at same height
-        let mut fork_index = 0;
+        let mut fork_index = -1;
         // Use this index to extract leaders count sequence from longest fork
         let mut index_for_history = -1;
         let mut max_length_for_history = 0;
@@ -635,31 +634,26 @@ impl ValidatorState {
                 self.consensus.set_leader_history(index_for_history, slot);
                 return Ok((vec![], vec![]))
             }
+            -1 => {
+                info!(target: "consensus::validator", "chain_finalization(): Nothing to finalize.");
+            }
             _ => {
                 info!(target: "consensus::validator", "chain_finalization(): Chain {} can be finalized!", fork_index)
             }
         }
-        if max_length == 0 {
-            return Ok((vec![], vec![]))
-        }
+
         if max_length == 0 {
             return Ok((vec![], vec![]))
         }
 
         // Starting finalization
-        let mut fork = self.consensus.forks[fork_index as usize].clone();
+        let fork = self.consensus.forks[fork_index as usize].clone();
 
         // Retrieving proposals to finalize
-        let bound = max_length - 1;
         let mut finalized: Vec<BlockInfo> = vec![];
-        let mut last_state_checkpoint = fork.sequence.first().unwrap().clone();
-        for state_checkpoint in &fork.sequence[..bound] {
+        for state_checkpoint in &fork.sequence {
             finalized.push(state_checkpoint.proposal.clone().into());
-            last_state_checkpoint = state_checkpoint.clone();
         }
-
-        // Removing finalized proposals state checkpoins from fork
-        fork.sequence.drain(..bound);
 
         // Adding finalized proposals to canonical
         info!(target: "consensus::validator", "consensus: Adding {} finalized block to canonical chain.", finalized.len());
@@ -699,12 +693,9 @@ impl ValidatorState {
         }
 
         // Setting leaders history to last proposal leaders count
+        let last_state_checkpoint = fork.sequence.last().unwrap().clone();
         self.consensus.leaders_history =
-            vec![fork.sequence.last().unwrap().proposal.block.lead_info.leaders];
-
-        // Removing rest forks
-        self.consensus.forks = vec![];
-        self.consensus.forks.push(fork);
+            vec![last_state_checkpoint.proposal.block.lead_info.leaders];
 
         // Setting canonical states from last finalized checkpoint
         self.consensus.coins = last_state_checkpoint.coins;
@@ -712,18 +703,8 @@ impl ValidatorState {
         self.consensus.nullifiers = last_state_checkpoint.nullifiers;
 
         // Adding finalized slot checkpoints to canonical
-        let mut bound = 0;
-        let mut finalized_slot_checkpoints: Vec<SlotCheckpoint> = vec![];
-        for (index, slot_checkpoint) in self.consensus.slot_checkpoints.iter().enumerate() {
-            if slot_checkpoint.slot >= slot {
-                break
-            }
-            bound = index;
-            finalized_slot_checkpoints.push(slot_checkpoint.clone());
-        }
-
-        // Removing finalized proposals from chain
-        self.consensus.slot_checkpoints.drain(..bound);
+        let finalized_slot_checkpoints: Vec<SlotCheckpoint> =
+            self.consensus.slot_checkpoints.clone();
 
         debug!(
             target: "consensus::validator",
@@ -741,6 +722,10 @@ impl ValidatorState {
                 return Err(e)
             }
         };
+
+        // Resetting forks and slot checkpoints
+        self.consensus.forks = vec![];
+        self.consensus.slot_checkpoints = vec![];
 
         Ok((finalized, finalized_slot_checkpoints))
     }

@@ -147,7 +147,7 @@ impl ProtocolSyncConsensus {
             // Extra validations can be added here.
             let lock = self.state.read().await;
             let bootstrap_slot = lock.consensus.bootstrap_slot;
-            let is_empty = lock.consensus.slot_checkpoints.is_empty();
+            let is_empty = lock.consensus.slot_checkpoints_is_empty();
             let response = ConsensusSlotCheckpointsResponse { bootstrap_slot, is_empty };
             if let Err(e) = self.channel.send(response).await {
                 error!(
