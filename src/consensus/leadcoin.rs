@@ -301,7 +301,8 @@ impl LeadCoin {
         let target = sigma1 * value + sigma2 * value * value;
 
         let y_t_str = format!("{:?},{:?}\n", y, target);
-        let f = File::options().append(true).open(constants::LOTTERY_HISTORY_LOG).unwrap();
+        let f =
+            File::options().append(true).create(true).open(constants::LOTTERY_HISTORY_LOG).unwrap();
 
         {
             let mut writer = BufWriter::new(f);

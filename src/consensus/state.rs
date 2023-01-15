@@ -269,11 +269,11 @@ impl ConsensusState {
         let neg_c = neg_one * c;
 
         let sigma1_fbig = neg_c.clone() / total_sigma.clone() * field_p.clone();
-        println!("sigma1_fbig: {:}", sigma1_fbig);
+        info!(target: "consensus::state", "sigma1_fbig: {:}", sigma1_fbig);
         let sigma1 = fbig2base(sigma1_fbig);
 
         let sigma2_fbig = (neg_c / total_sigma).powf(two.clone()) * (field_p / two);
-        println!("sigma2_fbig: {:}", sigma2_fbig);
+        info!(target: "consensus::state", "sigma2_fbig: {:}", sigma2_fbig);
         let sigma2 = fbig2base(sigma2_fbig);
 
         (sigma1, sigma2)
@@ -397,7 +397,8 @@ impl ConsensusState {
         info!(target: "consensus::state", "extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
         let mut count_str: String = count.to_string();
         count_str.push_str(",");
-        let f = File::options().append(true).open(constants::LEADER_HISTORY_LOG).unwrap();
+        let f =
+            File::options().append(true).create(true).open(constants::LEADER_HISTORY_LOG).unwrap();
         {
             let mut writer = BufWriter::new(f);
             writer.write(&count_str.into_bytes()).unwrap();
@@ -447,7 +448,8 @@ impl ConsensusState {
             f = constants::MAX_F.clone()
         }
         // log f history
-        let file = File::options().append(true).open(constants::F_HISTORY_LOG).unwrap();
+        let file =
+            File::options().append(true).create(true).open(constants::F_HISTORY_LOG).unwrap();
         {
             let mut f_history = format!("{:}", f);
             f_history.push_str(",");
