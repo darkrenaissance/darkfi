@@ -21,7 +21,6 @@ def find_nth_root_unity(K, p, N, n):
     assert n > 1
     assert int(pNx_order) % n == 0
     ω = K.multiplicative_generator()
-    print(f"ω = {ω}")
     assert ω^pNx_order == 1
     ω = ω^(pNx_order/n)
     assert ω^n == 1
@@ -75,7 +74,6 @@ def test1():
     print(f"p^N = {p^N}")
     K.<a> = GF(p^N, repr="int")
     ω = find_nth_root_unity(K, p, N, n)
-    print(f"ω = {ω}")
     print()
 
     L.<X> = K[]
@@ -96,8 +94,10 @@ def test1():
 
 def random_test():
     p = random_prime(1000)
-    #n = 16
-    n = 2^2
+    #d = int(ZZ.random_element(6, 8))
+    #n = 2^d
+    n = 256
+
     assert p.is_prime()
     N = find_ext_order(p, n)
     print(f"p = {p}")
@@ -107,7 +107,6 @@ def random_test():
     K.<a> = GF(p^N, repr="int")
     ω = find_nth_root_unity(K, p, N, n)
     print(f"ω = {ω}")
-    print()
 
     L.<X> = K[]
 
@@ -116,8 +115,7 @@ def random_test():
     for i in range(n/2):
         f += ZZ.random_element(0, 200) * X^i
     assert f.degree() < n/2
-    print(f"f = {f}")
-    print()
+    #print(f"f = {f}")
 
     ω_powers = vector(ω^i for i in range(n/2))
     fT = vectorify(X, f, n)
@@ -133,14 +131,15 @@ def random_test():
     eval_duration = time.time() - start
 
     print(f"Eval time: {eval_duration}")
+    print()
 
-    print()
-    print(f"DFT(f) = {dft}")
-    print()
-    print(f"f(ω^i) = {f_evals}")
+    #print()
+    #print(f"DFT(f) = {dft}")
+    #print()
+    #print(f"f(ω^i) = {f_evals}")
     assert dft == f_evals
 
-    return dft_duration, eval_duration
+    return dft_duration, eval_duration, n, log(p).n()
 
 def timing_info():
     table = []
@@ -149,27 +148,24 @@ def timing_info():
     for i in range(20):
         print(f"Trial: {i}")
         try:
-            dft, eval = random_test()
+            dft, eval, n, log_p = random_test()
         except AssertionError:
-            table.append((i, "Error", "Error"))
+            table.append((i, "Error", "", "", ""))
             continue
-        table.append((i, dft, eval))
+        table.append((i, f"{dft:.5f}", f"{eval:.5f}", n, log_p))
         total_dft += dft
         total_eval += eval
         success += 1
     avg_dft = total_dft / success
     avg_eval = total_eval / success
     table.append(("", "", ""))
-    table.append(("Average:", avg_dft, avg_eval))
-    print(tabulate(table, headers=["#", "DFT", "Naive"]))
+    table.append(("Average:", f"{avg_dft:.5f}", f"{avg_eval:.5f}"))
+    print(tabulate(table, headers=["#", "DFT", "Naive", "n", "log_p"]))
 
 def test_root_of_unity():
-    #p = random_prime(1000)
-    #d = int(ZZ.random_element(2, 10))
-    #n = 2^d
-
-    p = 653
-    n = 64
+    p = random_prime(1000)
+    d = int(ZZ.random_element(2, 8))
+    n = 2^d
 
     assert p.is_prime()
     N = find_ext_order(p, n)
@@ -183,9 +179,8 @@ def test_root_of_unity():
     print()
 
 #test1()
-#timing_info()
-#for i in range(50):
-#    random_test()
+timing_info()
+#random_test()
 #for i in range(50):
 #    test_root_of_unity()
 
