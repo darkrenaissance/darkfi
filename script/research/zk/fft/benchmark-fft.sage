@@ -12,15 +12,24 @@ def find_ext_order(p, n):
 
         N += 1
 
+def find_multiplicative_generator(K, p):
+    # Find primitive generator
+    if N == 1:
+        for i in range(2, p):
+            if gcd(i, p - 1) == 1:
+                return K(i)
+    else:
+        return K.gens()[0]
+
 def find_nth_root_unity(K, p, N, n):
     # It cannot be a quadratic residue if n is odd
     #assert n % 2 == 1
 
     # So there is an nth root of unity in p^N. Now we have to find it.
     pNx_order = p^N - 1
-
-    ω = K.gens()[0]
+    ω = find_multiplicative_generator(K, p)
     ω = ω^(pNx_order/n)
+    print(f"Here: {ω}")
     assert ω^n == 1
     assert ω^(n - 1) != 1
 
@@ -94,7 +103,7 @@ def test1():
 def random_test():
     p = random_prime(1000)
     #n = 16
-    n = 2^8
+    n = 2^2
     assert p.is_prime()
     N = find_ext_order(p, n)
     print(f"p = {p}")
@@ -131,10 +140,10 @@ def random_test():
 
     print(f"Eval time: {eval_duration}")
 
-    #print()
-    #print(f"DFT(f) = {dft}")
-    #print()
-    #print(f"f(ω^i) = {f_evals}")
+    print()
+    print(f"DFT(f) = {dft}")
+    print()
+    print(f"f(ω^i) = {f_evals}")
     assert dft == f_evals
 
     return dft_duration, eval_duration
@@ -160,7 +169,8 @@ def timing_info():
     table.append(("Average:", avg_dft, avg_eval))
     print(tabulate(table, headers=["#", "DFT", "Naive"]))
 
-#test1()
+test1()
 #timing_info()
-#random_test()
+#for i in range(50):
+#    random_test()
 
