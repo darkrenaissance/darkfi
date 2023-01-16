@@ -9,7 +9,7 @@ blockchain achieve consensus.
 |------------------------|-------------------------------------------------------------------------------------------|
 | Consensus              | Algorithm for reaching blockchain consensus between participating nodes                   |
 | Node                   | darkfid daemon participating in the network                                               |
-| Slot                   | Specified timeframe for block production, measured in seconds(default=20)                 |
+| Slot                   | Specified timeframe for block production, measured in seconds(default=90)                 |
 | Epoch                  | Specified timeframe for blockchain events, measured in slots(default=10)                  |
 | Leader                 | Block producer                                                                            |
 | Unproposed Transaction | Transaction that exists in the memory pool but has not yet been included in a block       |
