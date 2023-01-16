@@ -18,6 +18,7 @@ runnable = false
 [output.katex]
 
 [preprocessor.katex]
+macros = "latex-macros.txt"
 
 [preprocessor.toc]
 command = "mdbook-toc"

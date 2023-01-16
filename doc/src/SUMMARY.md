@@ -37,6 +37,8 @@
   	- [Network Protocol](misc/hashchain/network_protocol.md)
   - [darkwiki](misc/darkwiki.md)
   - [dnetview](misc/dnetview.md)
+- [Crypto](crypto/crypto.md)
+  - [FFT](crypto/fft.md)
 - [Testnet Guide](testnet/guide.md)
 - [Learn](learn/learn.md)
   - [Research](learn/research.md)
