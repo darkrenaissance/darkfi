@@ -45,31 +45,21 @@ def alternate(list1, list2):
 
 def calc_dft(n, ω_powers, f):
     m = len(f)
-    indent = " " * (n - m)
-    print(f"{indent}calc_dft({ω_powers}, {f})")
-    print(f"{indent}  m = {m}")
     if m == 1:
-        print(f"{indent}  m = 1 so return f")
         return f
     g, h = vector(f[:m/2]), vector(f[m/2:])
-    print(f"{indent}  g = {g}")
-    print(f"{indent}  h = {h}")
 
     r = g + h
     s = dot(g - h, ω_powers)
-    print(f"{indent}  r = {r}")
-    print(f"{indent}  s = {s}")
-    print()
 
     ω_powers = vector(ω_i for ω_i in ω_powers[::2])
     rT = calc_dft(n, ω_powers, r)
     sT = calc_dft(n, ω_powers, s)
 
     result = list(alternate(rT, sT))
-    print(f"{indent}return {result}")
     return result
 
-def test():
+def test1():
     p = 199
     #n = 16
     n = 8
@@ -100,5 +90,39 @@ def test():
     f_evals = [f(X=ω^i) for i in range(n)]
     print(f"f(ω^i) = {f_evals}")
 
-test()
+def random_test():
+    p = random_prime(1000)
+    #n = 16
+    n = int(2^ZZ.random_element(2, 10))
+    assert p.is_prime()
+    N = find_ext_order(p, n)
+    print(f"p = {p}")
+    print(f"n = {n}")
+    print(f"N = {N}")
+    print(f"p^N = {p^N}")
+    K.<a> = GF(p^N, repr="int")
+    ω = find_nth_root_unity(K, p, N, n)
+    print(f"ω = {ω}")
+    print()
+
+    L.<X> = K[]
+
+    #f = 9*X^7 + 45*X^6 + 33*X^5 + 7*X^3 + X^2 + 110*X + 4
+    f = 0
+    for i in range(n/2):
+        f += ZZ.random_element(0, 200) * X^i
+    assert f.degree() < n/2
+    print(f"f = {f}")
+    print()
+
+    ω_powers = vector(ω^i for i in range(n/2))
+    fT = vectorify(X, f, n)
+    dft = calc_dft(n, ω_powers, fT)
+    print()
+    print(f"DFT(f) = {dft}")
+    f_evals = [f(X=ω^i) for i in range(n)]
+    print(f"f(ω^i) = {f_evals}")
+
+#test1()
+random_test()
 
