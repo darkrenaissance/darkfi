@@ -178,8 +178,62 @@ def test_root_of_unity():
     print(f"ω = {ω}")
     print()
 
+def pallas_base_test():
+    print("Pallas base Fp test")
+    d = 11
+    print(f"n = 2^{d}")
+    p = 28948022309329048855892746252171976963363056481941560715954676764349967630337
+    n = 2^d
+    K = GF(p, repr="int")
+    ω = K(5)^((p - 1)/n)
+    assert ω^n == 1
+    assert ω^(n - 1) != 1
+    ω_powers = vector(ω^i for i in range(n/2))
+
+    table = []
+    number_trials = 10
+    total_dft_duration, total_naive_duration = 0, 0
+    for trial_i in range(number_trials):
+        print(f"Trial: {trial_i}")
+        print("Generating random polynomial...")
+        fT = ([K.random_element() for _ in range(n/2)]
+              + [K(0) for _ in range(n/2)])
+        assert len(fT) == n
+
+        start = time.time()
+        dft = calc_dft(n, ω_powers, fT)
+        dft_duration = time.time() - start
+
+        print(f"DFT time: {dft_duration}")
+
+        def eval_poly(fT, x):
+            accum = 0
+            current_x = 1
+            for a in fT:
+                accum += a*current_x
+                current_x *= x
+            return accum
+
+        start = time.time()
+        evals = [eval_poly(fT, ω^i) for i in range(n)]
+        eval_duration = time.time() - start
+
+        print(f"Eval time: {eval_duration}")
+        print()
+
+        table.append((trial_i, f"{dft_duration:.5f}", f"{eval_duration:.5f}"))
+        total_dft_duration += dft_duration
+        total_naive_duration += eval_duration
+
+    avg_dft = total_dft_duration / number_trials
+    avg_naive = total_naive_duration / number_trials
+    table.append(("", "", ""))
+    table.append(("Average:", f"{avg_dft:.5f}", f"{avg_naive:.5f}"))
+    print(tabulate(table, headers=["#", "DFT", "Naive"]))
+
+pallas_base_test()
 #test1()
-timing_info()
+#timing_info()
 #random_test()
 #for i in range(50):
 #    test_root_of_unity()

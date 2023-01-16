@@ -1,0 +1,67 @@
+Pallas base Fp test
+n = 2^13
+Trial: 0
+Generating random polynomial...
+DFT time: 1.1284587383270264
+Eval time: 119.17004179954529
+
+Trial: 1
+Generating random polynomial...
+DFT time: 4.4929492473602295
+Eval time: 175.590922832489
+
+Trial: 2
+Generating random polynomial...
+DFT time: 4.509522914886475
+Eval time: 173.64100193977356
+
+Trial: 3
+Generating random polynomial...
+DFT time: 4.5000691413879395
+Eval time: 177.55537366867065
+
+Trial: 4
+Generating random polynomial...
+DFT time: 4.47330904006958
+Eval time: 177.98394203186035
+
+Trial: 5
+Generating random polynomial...
+DFT time: 4.454346179962158
+Eval time: 178.4333655834198
+
+Trial: 6
+Generating random polynomial...
+DFT time: 4.436606168746948
+Eval time: 178.82195281982422
+
+Trial: 7
+Generating random polynomial...
+DFT time: 4.422141790390015
+Eval time: 178.92308521270752
+
+Trial: 8
+Generating random polynomial...
+DFT time: 4.416403293609619
+Eval time: 178.4114100933075
+
+Trial: 9
+Generating random polynomial...
+DFT time: 4.546687841415405
+Eval time: 180.261412858963
+
+#         DFT      Naive
+--------  -------  ---------
+0         1.12846  119.17004
+1         4.49295  175.59092
+2         4.50952  173.64100
+3         4.50007  177.55537
+4         4.47331  177.98394
+5         4.45435  178.43337
+6         4.43661  178.82195
+7         4.42214  178.92309
+8         4.41640  178.41141
+9         4.54669  180.26141
+
+Average:  4.13805  171.87925
+
