@@ -23,7 +23,7 @@ blockchain achieve consensus.
 As described in previous chapter, DarkFi is based on Ouroboros
 Crypsinous. Therefore, block production involves the following steps:
 
-At the start of every slot, each node runs a leader selection algorithm
+At the start of every slot, each node runs the leader selection algorithm
 to determine if they are the slot's leader. If successful, they can
 produce a block containing unproposed transactions. This block is then
 appended to the largest known fork and shared with rest of the nodes on
@@ -122,12 +122,11 @@ Extending the canonical blockchain with a new block proposal:
 ## Finalization
 
 When the finalization sync period kicks in, each node looks up the longest
-fork chain it holds. This must be at least 3 blocks long and there must
-be no other fork chain with same length.  If such a fork chain exists,
-nodes finalize all block proposals up to the last one by appending them
+fork chain it holds. There must be no other fork chain with same length.
+If such a fork chain exists, nodes finalize all block proposals by appending them
 to the canonical blockchain.
 
-Once finalized, all other fork chains are removed from the memory pool.
+Once finalized, all fork chains are removed from the memory pool.
 Practically this means that no finalization can occur while there are
 competing fork chains of the same length. In such a case, finalization
 can only occur when we have a a slot with a single leader.
@@ -168,10 +167,5 @@ F2 and all other forks get dropped:
                    |
                    |/--[L4]                   <-- F3
 
-
-This results in the following state:
-
-    [C]--...--[C]--|--[L6]
-
-The canonical blockchain contains blocks L0, L3 and L5b from fork F2.
+The canonical blockchain now contains blocks L0, L3, L5b and L6 from fork F2.
 
