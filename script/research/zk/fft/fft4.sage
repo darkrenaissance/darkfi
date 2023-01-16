@@ -1,6 +1,7 @@
 import itertools
 
 p = 199
+#n = 16
 n = 8
 
 assert p.is_prime()
@@ -42,6 +43,7 @@ print()
 
 L.<X> = K[]
 
+#f = 9*X^7 + 45*X^6 + 33*X^5 + 7*X^3 + X^2 + 110*X + 4
 f = 7*X^3 + X^2 + 110*X + 4
 assert f.degree() < n/2
 print(f"f = {f}")
