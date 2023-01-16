@@ -12,24 +12,18 @@ def find_ext_order(p, n):
 
         N += 1
 
-def find_multiplicative_generator(K, p):
-    # Find primitive generator
-    if N == 1:
-        for i in range(2, p):
-            if gcd(i, p - 1) == 1:
-                return K(i)
-    else:
-        return K.gens()[0]
-
 def find_nth_root_unity(K, p, N, n):
     # It cannot be a quadratic residue if n is odd
     #assert n % 2 == 1
 
     # So there is an nth root of unity in p^N. Now we have to find it.
     pNx_order = p^N - 1
-    ω = find_multiplicative_generator(K, p)
+    assert n > 1
+    assert int(pNx_order) % n == 0
+    ω = K.multiplicative_generator()
+    print(f"ω = {ω}")
+    assert ω^pNx_order == 1
     ω = ω^(pNx_order/n)
-    print(f"Here: {ω}")
     assert ω^n == 1
     assert ω^(n - 1) != 1
 
@@ -169,8 +163,29 @@ def timing_info():
     table.append(("Average:", avg_dft, avg_eval))
     print(tabulate(table, headers=["#", "DFT", "Naive"]))
 
-test1()
+def test_root_of_unity():
+    #p = random_prime(1000)
+    #d = int(ZZ.random_element(2, 10))
+    #n = 2^d
+
+    p = 653
+    n = 64
+
+    assert p.is_prime()
+    N = find_ext_order(p, n)
+    print(f"p = {p}")
+    print(f"n = {n}")
+    print(f"N = {N}")
+    print(f"p^N = {p^N}")
+    K.<a> = GF(p^N, repr="int")
+    ω = find_nth_root_unity(K, p, N, n)
+    print(f"ω = {ω}")
+    print()
+
+#test1()
 #timing_info()
 #for i in range(50):
 #    random_test()
+#for i in range(50):
+#    test_root_of_unity()
 

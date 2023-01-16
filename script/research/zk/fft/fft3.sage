@@ -14,22 +14,13 @@ def find_ext_order(p, n):
 
         N += 1
 
-def find_multiplicative_generator(K, p):
-    # Find primitive generator
-    if N == 1:
-        for i in range(2, p):
-            if gcd(i, p - 1) == 1:
-                return K(i)
-    else:
-        return K.gens()[0]
-
 def find_nth_root_unity(K, n):
     # It cannot be a quadratic residue if n is odd
     #assert n % 2 == 1
 
     # So there is an nth root of unity in p^N. Now we have to find it.
     pNx_order = p^N - 1
-    ω = find_multiplicative_generator(K, p)
+    ω = K.multiplicative_generator()
     ω = ω^(pNx_order/n)
     assert ω^n == 1
     assert ω^(n - 1) != 1
