@@ -46,7 +46,6 @@ struct LeadInfoInfo {
     _coin_slot: u64,
     _coin_eta: String,
     _proof: String,
-    _offset: u64,
     _leaders: u64,
 }
 
@@ -61,7 +60,6 @@ impl LeadInfoInfo {
         let _coin_slot = lead_info.coin_slot;
         let _coin_eta = format!("{:?}", lead_info.coin_eta);
         let _proof = format!("{:?}", lead_info.proof);
-        let _offset = lead_info.offset;
         let _leaders = lead_info.leaders;
         LeadInfoInfo {
             _signature,
@@ -70,7 +68,6 @@ impl LeadInfoInfo {
             _coin_slot,
             _coin_eta,
             _proof,
-            _offset,
             _leaders,
         }
     }
@@ -299,10 +296,19 @@ impl StateInfo {
     }
 }
 
-async fn generate(name: &str, folder: &str) -> Result<()> {
+async fn generate(localnet: &str, name: &str) -> Result<()> {
+    println!("Exporting data for {name}...");
+
+    // Node folder
+    let folder = localnet.to_owned() + name;
+
+    // Consensus configuration
+    let bootstrap_ts = Timestamp(1648383795);
     let genesis_ts = Timestamp(1648383795);
     let genesis_data = *TESTNET_GENESIS_HASH_BYTES;
+    let initial_distribution = 1000;
     let pass = "changeme";
+
     // Initialize or load wallet
     let path = folder.to_owned() + "/wallet.db";
     let wallet = init_wallet(&path, &pass).await?;
@@ -313,9 +319,17 @@ async fn generate(name: &str, folder: &str) -> Result<()> {
     let sled_db = sled::open(&db_path)?;
 
     // Data export
-    let state =
-        ValidatorState::new(&sled_db, genesis_ts, genesis_data, wallet, vec![], false).await?;
-    println!("Exporting data for {:?}", name);
+    let state = ValidatorState::new(
+        &sled_db,
+        bootstrap_ts,
+        genesis_ts,
+        genesis_data,
+        initial_distribution,
+        wallet,
+        vec![],
+        false,
+    )
+    .await?;
     let info = StateInfo::new(&*state.read().await);
     let info_string = format!("{:#?}", info);
     let path = name.to_owned() + "_testnet_db";
@@ -328,14 +342,17 @@ async fn generate(name: &str, folder: &str) -> Result<()> {
 
 #[async_std::main]
 async fn main() -> Result<()> {
+    // Localnet folder
+    let localnet = "../../../contrib/localnet/darkfid/";
+    println!("Localnet folder: {localnet}");
     // darkfid0
-    generate("darkfid0", "../../../contrib/localnet/darkfid/darkfid0").await?;
+    generate(localnet, "darkfid0").await?;
     // darkfid1
-    generate("darkfid1", "../../../contrib/localnet/darkfid/darkfid1").await?;
+    generate(localnet, "darkfid1").await?;
     // darkfid2
-    generate("darkfid2", "../../../contrib/localnet/darkfid/darkfid2").await?;
+    generate(localnet, "darkfid2").await?;
     // faucetd
-    generate("faucetd", "../../../contrib/localnet/darkfid/faucetd").await?;
+    generate(localnet, "faucetd").await?;
 
     Ok(())
 }
