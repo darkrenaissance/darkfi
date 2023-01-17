@@ -8,17 +8,17 @@ For this phase of development we organize into teams lead by a single
 surgeon. The role of the team is to give full support to the surgeon
 and make his work effortless and smooth.
 
-| Component   | Description                                                            | Surgeon | Copilot | Assistant | Status   |
-|-------------|------------------------------------------------------------------------|---------|---------|-----------|----------|
-| consensus   | Algorithm for blockchain consensus                                     | err     | agg     | das       | Alpha    |
-| zk / crypto | ZK compiler and crypto algos                                           | par     | nar     |           | Mature   |
-| wasm        | WASM smart contract system                                             | par     | nar     | xsan      | Alpha    |
-| net         | p2p network protocol code                                              | agg     | xsan    | nar       | Mature   |
-| blockchain  | consensus + net + db                                                   | err     | das     |           | Easy     |
-| bridge      | Develop robust & secure multi-chain bridge architecture                | par     | xsan    |           | None     |
-| tokenomics  | Research and define DRK tokenomics                                     | xeno    | err     | nar       | Alpha    |
-| util        | Various utilities and tooling                                          | nar     | xsan    | das       | Mature   |
-| arch        | Architecture, project management and integration                       | nar     | par     |           | Alpha    |
+| Component   | Description                                                            | Status   |
+|-------------|------------------------------------------------------------------------|----------|
+| consensus   | Algorithm for blockchain consensus                                     | Alpha    |
+| zk / crypto | ZK compiler and crypto algos                                           | Alpha    |
+| wasm        | WASM smart contract system                                             | Alpha    |
+| net         | p2p network protocol code                                              | Alpha    |
+| blockchain  | consensus + net + db                                                   | Alpha    |
+| bridge      | Develop robust & secure multi-chain bridge architecture                | None     |
+| tokenomics  | Research and define DRK tokenomics                                     | Alpha    |
+| util        | Various utilities and tooling                                          | Alpha    |
+| arch        | Architecture, project management and integration                       | Alpha    |
 
 ## Release Cycle
 
@@ -28,10 +28,10 @@ gantt
     dateFormat  DD-MM-YYYY
     axisFormat  %m-%y
     section Phases
-    Dcon0            :done, d0, 01-01-2022, 01-04-2022
-    Dcon1            :      d1, after d0,   23-12-2022
-    Dcon2            :      d2, 23-08-2022, 23-02-2023
-    Dcon3            :      d3, after d2,   60d
+    Dcon0            :done, d0, 11-12-2021, 120d
+    Dcon1            :done, d1, after d0,   120d
+    Dcon2            :done, d2, after d1,   120d
+    Dcon3            :done, d3, after d2,   60d
     Dcon4            :      d4, after d3,   14d
     Dcon5            :      d5, after d4,   7d
 ```
