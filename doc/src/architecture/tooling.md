@@ -27,8 +27,6 @@ their commands so that product teams can easily build an application. They will
 use the command line tool as an interactive debugging application and
 point of reference.
 
-NOTE: should the API use byte arrays or hex strings?
-
 The API should be well documented with all arguments explained. Likewise for the
 commands help text.
 
