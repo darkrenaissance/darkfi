@@ -16,4 +16,4 @@ proc-macro-crate = "1.2.1"
 proc-macro2 = "1.0.49"
 syn = {version = "1.0.107", features = ["full", "fold"]}
 
-darkfi-derive-internal = {path = "../derive-internal"}
+darkfi-derive-internal = {version = "0.3.0", path = "../derive-internal"}
