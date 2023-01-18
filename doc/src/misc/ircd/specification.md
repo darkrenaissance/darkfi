@@ -1,11 +1,6 @@
 
 # Ircd Specification
 
-Ircd use [Hashchain](https://darkrenaissance.github.io/darkfi/misc/hashchain/hashchain.html)
-to maintain the synchronization between nodes. The messages are handled as
-events in Ircd network.
-
-
 ## PrivMsgEvent
 
 This is the main message type inside Ircd. The `PrivMsgEvent` is an
@@ -109,18 +104,19 @@ The channel `Subscription<ClientSubMsg>` used by the server to notify
 
 ### ClientSubMsg
 
+```rust
 	enum ClientSubMsg {
 		Privmsg(`PrivMsgEvent`),
 		Config(`IrcConfig`),	
 	}
+```
 
 ### NotifierMsg 
 
+```rust
 	enum NotifierMsg {
 		Privmsg(`PrivMsgEvent`),
 		UpdateConfig,
 	}
-
-
-
+```
 
