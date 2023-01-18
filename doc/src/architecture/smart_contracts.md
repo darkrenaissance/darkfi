@@ -50,35 +50,33 @@ mod dao_contract {
     }
 
     // Corresponds to 2. mint()
-    mod mint {
-        // Prover specific
-        struct Builder {
-            ...
-            // secret witness values for prover
+    // Prover specific
+    struct MintCall {
+        ...
+        // secret witness values for prover
+        ...
+    }
+
+    impl MintCall {
+        fn new(...) -> Self {
             ...
         }
 
-        impl Builder {
-            fn new(...) -> Self {
-                ...
-            }
-
-            fn build() -> FuncCall {
-                ...
-            }
-        }
-
-        // Verifier code
-        struct CallData {
-            ...
-            // contains the function call data
+        fn make() -> FuncCall {
             ...
         }
+    }
+
+    // Verifier code
+    struct MintParams {
+        ...
+        // contains the function call data
+        ...
     }
 }
 ```
 
-There is a pipeline where the prover runs `Builder::build()` to create the `FuncCall` object that
+There is a pipeline where the prover runs `MintCall::make()` to create the `MintParams` object that
 is then broadcast to the verifiers through the p2p network.
 
 The `CallData` usually is the public values exported from a ZK proof. Essentially it is the data
@@ -91,13 +89,13 @@ the entire tx is rejected. Additionally some smart contracts might impose additi
 on the transaction's structure or other function calls (such as their call data).
 
 ```rust
-{{#include ../../../bin/dao/daod/src/util.rs:transaction}}
+{{#include ../../../src/tx/mod.rs:transaction}}
 ```
 
 Function calls represent mutations of the current active state to a new state.
 
 ```rust
-{{#include ../../../bin/dao/daod/src/util.rs:funccall}}
+{{#include ../../../src/sdk/src/tx.rs:contractcall}}
 ```
 
 The `contract_id` corresponds to the top level module for the contract which
@@ -185,13 +183,13 @@ The transaction verification pipeline roughly looks like this:
 Lets review again the format of transactions.
 
 ```rust
-{{#include ../../../bin/dao/daod/src/util.rs:transaction}}
+{{#include ../../../src/tx/mod.rs:transaction}}
 ```
 
 And corresponding function calls.
 
 ```rust
-{{#include ../../../bin/dao/daod/src/util.rs:funccall}}
+{{#include ../../../src/sdk/src/tx.rs:contractcall}}
 ```
 
 As we can see the ZK proofs and signatures are separate from the actuall `call_data` interpreted

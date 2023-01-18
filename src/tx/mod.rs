@@ -43,6 +43,7 @@ macro_rules! zip {
     )
 }
 
+// ANCHOR: transaction
 /// A Transaction contains an arbitrary number of `ContractCall` objects,
 /// along with corresponding ZK proofs and Schnorr signatures.
 #[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
@@ -54,6 +55,7 @@ pub struct Transaction {
     /// Attached Schnorr signatures
     pub signatures: Vec<Vec<Signature>>,
 }
+// ANCHOR_END: transaction
 
 type VerifyingKeyMap = Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>;
 

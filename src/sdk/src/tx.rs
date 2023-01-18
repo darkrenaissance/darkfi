@@ -20,10 +20,14 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use super::crypto::ContractId;
 
+// ANCHOR: contractcall
 /// A ContractCall is the part of a transaction that executes a certain
 /// `contract_id` with `data` as the call's payload.
 #[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct ContractCall {
+    /// ID of the contract invoked
     pub contract_id: ContractId,
+    /// Call data passed to the contract
     pub data: Vec<u8>,
 }
+// ANCHOR_END: contractcall
