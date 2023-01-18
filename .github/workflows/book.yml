@@ -27,23 +27,30 @@ jobs:
                 override: true
                 components: rustfmt, clippy
 
+            - name: Install Rust (wasm32)
+              uses: actions-rs/toolchain@v1
+              with:
+                toolchain: stable
+                target: wasm32-unknown-unknown
+                override: true
+
             - uses: Swatinem/rust-cache@v1
 
             - name: Install ghp-import and mdbook
               run: |
                 pip install ghp-import
                 sudo apt -y install make wget
-                wget "https://github.com/badboy/mdbook-toc/releases/download/0.10.0/mdbook-toc-0.10.0-x86_64-unknown-linux-gnu.tar.gz"
-                wget "https://github.com/lzanini/mdbook-katex/releases/download/v0.2.18/mdbook-katex-v0.2.18-x86_64-unknown-linux-gnu.tar.gz"
-                wget "https://github.com/badboy/mdbook-mermaid/releases/download/v0.12.3/mdbook-mermaid-v0.12.3-x86_64-unknown-linux-gnu.tar.gz"
-                wget "https://github.com/rust-lang/mdBook/releases/download/v0.4.22/mdbook-v0.4.22-x86_64-unknown-linux-gnu.tar.gz"
+                wget "https://github.com/badboy/mdbook-toc/releases/download/0.11.0/mdbook-toc-0.11.0-x86_64-unknown-linux-gnu.tar.gz"
+                wget "https://github.com/lzanini/mdbook-katex/releases/download/v0.3.3/mdbook-katex-v0.3.3-x86_64-unknown-linux-gnu.tar.gz"
+                wget "https://github.com/badboy/mdbook-mermaid/releases/download/v0.12.6/mdbook-mermaid-v0.12.6-x86_64-unknown-linux-gnu.tar.gz"
+                wget "https://github.com/rust-lang/mdBook/releases/download/v0.4.25/mdbook-v0.4.25-x86_64-unknown-linux-gnu.tar.gz"
                 for i in *.tar.gz; do
                     tar xf "$i"
                     rm -f "$i"
                 done
                 mv -v mdbook* /usr/local/bin/
 
-            - name: Compile and publish the book
+            - name: Compile and publish the book and rustdoc
               run: |
                 git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
                 git config --local user.name "parazyd"

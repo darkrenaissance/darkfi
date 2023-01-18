@@ -66,4 +66,4 @@
     - [Network Protocol](misc/event_graph/network_protocol.md)
   - [darkwiki](misc/darkwiki.md)
   - [dnetview](misc/dnetview.md)
-
+- [Rustdoc](rustdoc/rustdoc.md)
