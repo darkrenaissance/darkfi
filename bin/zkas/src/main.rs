@@ -32,7 +32,7 @@ use darkfi::{
 #[derive(clap::Parser)]
 #[clap(name = "zkas", about = cli_desc!(), version)]
 struct Args {
-    /// Place the output into <FILE>
+    /// Place the output into `<FILE>`
     #[clap(short = 'o', value_name = "FILE")]
     output: Option<String>,
 

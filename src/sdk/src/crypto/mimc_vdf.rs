@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! https://vitalik.ca/general/2018/07/21/starks_part_3.html
+//! <https://vitalik.ca/general/2018/07/21/starks_part_3.html>
 
 use num_bigint::BigUint;
 use num_traits::Num;

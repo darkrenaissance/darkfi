@@ -319,7 +319,7 @@ impl Runtime {
     }
 
     /// This function runs when a smart contract is initially deployed, or re-deployed.
-    /// The runtime will look for an [`INITIALIZE`] symbol in the wasm code, and execute
+    /// The runtime will look for an `INITIALIZE` symbol in the wasm code, and execute
     /// it if found. Optionally, it is possible to pass in a payload for any kind of special
     /// instructions the developer wants to manage in the initialize function.
     /// This process is supposed to set up the sled db trees for storing the smart contract
@@ -347,7 +347,7 @@ impl Runtime {
     }
 
     /// This funcion runs when someone wants to execute a smart contract.
-    /// The runtime will look for an [`ENTRYPOINT`] symbol in the wasm code, and
+    /// The runtime will look for an `ENTRYPOINT` symbol in the wasm code, and
     /// execute it if found. A payload is also passed as an instruction that can
     /// be used inside the vm by the runtime.
     pub fn exec(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
@@ -355,9 +355,9 @@ impl Runtime {
         self.call(ContractSection::Exec, payload)
     }
 
-    /// This function runs after successful execution of [`exec`] and tries to
+    /// This function runs after successful execution of `exec` and tries to
     /// apply the state change to the sled databases.
-    /// The runtime will lok for an [`UPDATE`] symbol in the wasm code, and execute
+    /// The runtime will lok for an `UPDATE` symbol in the wasm code, and execute
     /// it if found. The function does not take an arbitrary payload, but just takes
     /// a state update from `env` and passes it into the wasm runtime.
     pub fn apply(&mut self, update: &[u8]) -> Result<()> {

@@ -40,13 +40,13 @@ pub async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletP
 /// Types we want to allow to query from the SQL wallet
 #[repr(u8)]
 pub enum QueryType {
-    /// Integer gets decoded into u64
+    /// Integer gets decoded into `u64`
     Integer = 0x00,
-    /// Blob gets decoded into Vec<u8>
+    /// Blob gets decoded into `Vec<u8>`
     Blob = 0x01,
-    /// OptionInteger gets decoded into Option<u64>
+    /// OptionInteger gets decoded into `Option<u64>`
     OptionInteger = 0x02,
-    /// OptionBlob gets decoded into Option<Vec<u8>>
+    /// OptionBlob gets decoded into `Option<Vec<u8>>`
     OptionBlob = 0x03,
     /// Last type, increment this when you add new types.
     Last = 0x04,

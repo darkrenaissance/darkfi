@@ -202,8 +202,8 @@ impl From<SettingsOpt> for Settings {
     }
 }
 
-/// Auxiliary function to convert outbound transport Vec<String>
-/// to Vec<TransportName>, using defaults if empty.
+/// Auxiliary function to convert outbound transport `Vec<String>`
+/// to `Vec<TransportName>`, using defaults if empty.
 pub fn get_outbound_transports(opt_outbound_transports: Vec<String>) -> Vec<TransportName> {
     let mut outbound_transports = vec![];
     for transport in opt_outbound_transports {
