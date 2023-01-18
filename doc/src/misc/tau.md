@@ -59,18 +59,22 @@ To run your own instance check [Local Deployment](#local-deployment)
 
 #### Add tasks
 
-```shell
-% tau add Review tau usage desc:description	# will add a new task named
-%						# "Review tau usage" with
-%						# "description" in its desc filed
-% tau add Second task assign:dave 	# will add a new task and assign it
-%					# to "dave".
-%					# Note: not having "desc:" key
-% 					# will pop up your OS editor
-%					# configured in \$EDITOR env var,
-%					# this is recommended for
-%					# formatting reasons and
-%					# will be used through this demo.
+Add a new task with the title "review tau usage" with the description text
+"description" set to "review tau".
+
+```bash
+tau add review tau usage "desc:review tau"
+```
+
+Add another task with the title "second task" assigned to dave.
+Because no description is set, it will open your EDITOR and prompt you
+for a description which allows entering multiline text.
+
+```bash
+tau add second task @dave
+```
+
+```
 % tau add Third task project:tau rank:1.1
 % tau add Fourth task assign:dave project:tau due:1509 rank:2.5
 % tau add Five
@@ -144,10 +148,8 @@ connect to when they first connect to the network. The `seed_session` simply
 connects to a seed node and runs `protocol_seed`, which requests a list of
 addresses from the seed node and disconnects straight after receiving them.
 
-	in config file:
-
-		## P2P accept addresses
-		inbound=["127.0.0.1:11001"] 
+    # P2P accept addresses
+    inbound=["127.0.0.1:11001"] 
 
 Note that the above config doesn't specify an external address since the
 seed node shouldn't be advertised in the list of connectable nodes. The seed
@@ -161,16 +163,14 @@ making any outbound connections.
 
 The external addresses are important and must be correct.
 
-	in config file:
-		
-		## P2P accept addresses
-		inbound=["127.0.0.1:11002"]
-		
-		## P2P external addresses
-		external_addr=["127.0.0.1:11002"]
+    # P2P accept addresses
+    inbound=["127.0.0.1:11002"]
+    
+    # P2P external addresses
+    external_addr=["127.0.0.1:11002"]
 
-		## Seed nodes to connect to 
-		seeds=["127.0.0.1:11001"]
+    # Seed nodes to connect to 
+    seeds=["127.0.0.1:11001"]
 
 ### Outbound Node
 
@@ -178,11 +178,8 @@ This is a node which has 8 outbound connection slots and no inbound connections.
 This means the node has 8 slots which will actively search for unique nodes to
 connect to in the p2p network.
 
-	in config file:
+    # Connection slots
+    outbound_connections=8
 
-		## Connection slots
-		outbound_connections=8
-
-		## Seed nodes to connect to 
-
+    # Seed nodes to connect to 
 

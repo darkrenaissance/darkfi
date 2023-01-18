@@ -8,11 +8,6 @@ dnetview displays:
 2. outgoing, incoming and manual sessions
 3. each associated connection and recent messages.
 
-dnetview is based on the design-pattern Model, View, Controller. We
-create a logical separation between the underlying data structure or
-Model; the ui rendering aspect which is the View; and the Controller or
-game engine that makes everything run.
-
 ## Install 
 
 ```shell
