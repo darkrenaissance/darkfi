@@ -301,6 +301,6 @@ the randomization of the leader selection at each slot is hinged on the random $
 #### solution
 
 to break this centeralization, a decentralized emulation of $G_{ro}$ functionality for calculation of: $\eta_i=PRF^{G_{ro}}_{\eta_{i-1}}(\psi)$
-$$\psi=hash(tx^{ep}_{0})$$
-$$\eta_0=hash("let there be dark!")$$
+$$\psi   =  \hash(tx^{ep}_{0})$$
+$$\eta_0 =  \hash(\mathrm{"let\; there\; be\; dark!"})$$
 note that first transaction in the block, is the proof transaction.
