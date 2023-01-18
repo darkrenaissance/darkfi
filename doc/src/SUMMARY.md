@@ -8,6 +8,7 @@
 - [Start Here: Testnet Guide](testnet/guide.md)
 - [Development](development/development.md)
   - [Maintenance](development/maintenance.md)
+  - [API Rustdoc](development/rustdoc.md)
 - [Architecture](architecture/architecture.md)
   - [Overview](architecture/overview.md)
   - [Anonymous Assets](architecture/anonymous_assets.md)
@@ -66,4 +67,3 @@
     - [Network Protocol](misc/event_graph/network_protocol.md)
   - [darkwiki](misc/darkwiki.md)
   - [dnetview](misc/dnetview.md)
-- [Rustdoc](rustdoc/rustdoc.md)
