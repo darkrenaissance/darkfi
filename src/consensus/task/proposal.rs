@@ -28,10 +28,6 @@ use crate::{
     util::{async_util::sleep, time::Timestamp},
 };
 
-use darkfi_sdk::pasta::pallas;
-use halo2_proofs::arithmetic::Field;
-use rand::rngs::OsRng;
-
 /// async task used for participating in the consensus protocol
 pub async fn proposal_task(
     consensus_p2p: P2pPtr,
@@ -141,7 +137,6 @@ async fn consensus_loop(
     let mut listened_slots = 0;
     let mut changed_status = false;
     loop {
-        let derived_blind = pallas::Scalar::random(&mut OsRng);
         // Check if node can start proposing.
         // This code ensures that we only change the status once
         // and listened_slots doesn't increment further.
@@ -156,7 +151,7 @@ async fn consensus_loop(
         }
 
         // Node waits and execute consensus protocol propose period.
-        if propose_period(consensus_p2p.clone(), state.clone(), derived_blind).await {
+        if propose_period(consensus_p2p.clone(), state.clone()).await {
             // Node needs to resync
             warn!(
                 target: "consensus::proposal",
@@ -184,11 +179,7 @@ async fn consensus_loop(
 ///     - Generate slot sigmas and checkpoint
 ///     - Check if slot leader to generate and broadcast proposal
 /// Returns flag in case node needs to resync.
-async fn propose_period(
-    consensus_p2p: P2pPtr,
-    state: ValidatorStatePtr,
-    derived_blind: pallas::Scalar,
-) -> bool {
+async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool {
     // Node sleeps until next slot
     let seconds_next_slot = state.read().await.consensus.next_n_slot_start(1).as_secs();
     info!(target: "consensus::proposal", "consensus: Waiting for next slot ({} sec)", seconds_next_slot);
@@ -218,18 +209,11 @@ async fn propose_period(
     let (won, fork_index, coin_index) =
         state.write().await.consensus.is_slot_leader(sigma1, sigma2);
     let result = if won {
-        state.write().await.propose(
-            processing_slot,
-            fork_index,
-            coin_index,
-            sigma1,
-            sigma2,
-            derived_blind,
-        )
+        state.write().await.propose(processing_slot, fork_index, coin_index, sigma1, sigma2)
     } else {
         Ok(None)
     };
-    let (proposal, coin) = match result {
+    let (proposal, coin, derived_blind) = match result {
         Ok(pair) => {
             if pair.is_none() {
                 info!(target: "consensus::proposal", "consensus: Node is not the slot lead");
@@ -261,7 +245,7 @@ async fn propose_period(
     match state
         .write()
         .await
-        .receive_proposal(&proposal, Some((coin_index, coin)), derived_blind)
+        .receive_proposal(&proposal, Some((coin_index, coin, derived_blind)))
         .await
     {
         Ok(_) => {

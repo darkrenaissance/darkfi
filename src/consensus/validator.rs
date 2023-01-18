@@ -31,6 +31,7 @@ use darkfi_sdk::{
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
+use halo2_proofs::arithmetic::Field;
 use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 use serde_json::json;
@@ -264,8 +265,7 @@ impl ValidatorState {
         coin_index: usize,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
-        derived_blind: pallas::Scalar,
-    ) -> Result<Option<(BlockProposal, LeadCoin)>> {
+    ) -> Result<Option<(BlockProposal, LeadCoin, pallas::Scalar)>> {
         let eta = self.consensus.get_eta();
         // Check if node can produce proposals
         if !self.consensus.proposing {
@@ -290,6 +290,9 @@ impl ValidatorState {
             let checkpoint = self.consensus.forks[fork_index as usize].sequence.last().unwrap();
             (checkpoint.proposal.hash, checkpoint.coins[coin_index])
         };
+
+        // Generate derived coin blind
+        let derived_blind = pallas::Scalar::random(&mut OsRng);
 
         // Generating leader proof
         let (proof, public_inputs) = coin.create_lead_proof(
@@ -324,7 +327,7 @@ impl ValidatorState {
             *self.consensus.leaders_history.last().unwrap(),
         );
 
-        Ok(Some((BlockProposal::new(header, unproposed_txs, lead_info), coin)))
+        Ok(Some((BlockProposal::new(header, unproposed_txs, lead_info), coin, derived_blind)))
     }
 
     /// Retrieve all unconfirmed transactions not proposed in previous blocks
@@ -365,8 +368,7 @@ impl ValidatorState {
     pub async fn receive_proposal(
         &mut self,
         proposal: &BlockProposal,
-        coin: Option<(usize, LeadCoin)>,
-        derived_blind: pallas::Scalar,
+        coin: Option<(usize, LeadCoin, pallas::Scalar)>,
     ) -> Result<bool> {
         let current = self.consensus.current_slot();
         // Node hasn't started participating
@@ -554,7 +556,7 @@ impl ValidatorState {
         // TODO: [PLACEHOLDER] Add rewards validation
 
         // If proposal came fromself, we derive new coin
-        if let Some((idx, c)) = coin {
+        if let Some((idx, c, derived_blind)) = coin {
             state_checkpoint.coins[idx] =
                 c.derive_coin(&mut state_checkpoint.coins_tree, derived_blind);
         }
