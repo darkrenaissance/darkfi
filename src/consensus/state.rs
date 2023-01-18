@@ -30,7 +30,7 @@ use rand::{thread_rng, Rng};
 
 use super::{
     constants,
-    leadcoin::{LeadCoin, LeadCoinSecrets},
+    lead_coin::{LeadCoin, LeadCoinSecrets},
     utils::fbig2base,
     Block, BlockProposal, Float10,
 };

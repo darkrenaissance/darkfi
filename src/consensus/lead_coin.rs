@@ -47,7 +47,7 @@ use std::{
     io::{prelude::*, BufWriter},
 };
 
-pub const MERKLE_DEPTH_LEADCOIN: usize = 32;
+pub const MERKLE_DEPTH_LEAD_COIN: usize = 32;
 pub const MERKLE_DEPTH: u8 = 32;
 pub const ZERO: pallas::Base = pallas::Base::zero();
 pub const ONE: pallas::Base = pallas::Base::one();
@@ -74,7 +74,7 @@ pub struct LeadCoin {
     /// Coin commitment position
     pub coin1_commitment_pos: u32,
     /// Merkle path to the coin1's commitment
-    pub coin1_commitment_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
+    pub coin1_commitment_merkle_path: [MerkleNode; MERKLE_DEPTH_LEAD_COIN],
     /// coin1 sk
     pub coin1_sk: pallas::Base,
     /// Merkle root of the `coin1` secret key
@@ -82,7 +82,7 @@ pub struct LeadCoin {
     /// coin1 sk position in merkle tree
     pub coin1_sk_pos: u32,
     /// Merkle path to the secret key of `coin1`
-    pub coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
+    pub coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEAD_COIN],
     /// coin1 commitment blinding factor
     pub coin1_blind: pallas::Scalar,
 }
@@ -104,7 +104,7 @@ impl LeadCoin {
         // sk pos
         coin1_sk_pos: usize,
         // Merkle path to the secret key of `coin_1` in the Merkle tree of secret keys
-        coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEADCOIN],
+        coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEAD_COIN],
         // coin1 nonce
         seed: pallas::Base,
         // Merkle tree of coin commitments
@@ -488,7 +488,7 @@ impl LeadCoin {
 pub struct LeadCoinSecrets {
     pub secret_keys: Vec<SecretKey>,
     pub merkle_roots: Vec<MerkleNode>,
-    pub merkle_paths: Vec<[MerkleNode; MERKLE_DEPTH_LEADCOIN]>,
+    pub merkle_paths: Vec<[MerkleNode; MERKLE_DEPTH_LEAD_COIN]>,
 }
 
 impl LeadCoinSecrets {

@@ -50,8 +50,8 @@ pub mod clock;
 pub use clock::{Clock, Ticks};
 
 /// Consensus participation coin functions and definitions
-pub mod leadcoin;
-pub use leadcoin::LeadCoin;
+pub mod lead_coin;
+pub use lead_coin::LeadCoin;
 
 /// Utility types
 pub mod types;

@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{ContractId, MerkleNode},
-    db::SMART_CONTRACT_ZKAS_DB_NAME,
-};
+use darkfi_sdk::{crypto::ContractId, db::SMART_CONTRACT_ZKAS_DB_NAME};
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
 use serde_json::{json, Value};
@@ -81,34 +78,6 @@ impl Darkfid {
         };
 
         JsonResponse::new(json!(last_slot.0), id).into()
-    }
-
-    // RPCAPI:
-    // Queries the blockchain database for all available merkle roots.
-    //
-    // --> {"jsonrpc": "2.0", "method": "blockchain.merkle_roots", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": [..., ..., ...], "id": 1}
-    pub async fn blockchain_merkle_roots(&self, id: Value, params: &[Value]) -> JsonResult {
-        if !params.is_empty() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
-
-        let validator_state = self.validator_state.read().await;
-
-        let roots: Vec<MerkleNode> = match validator_state.blockchain.merkle_roots.get_all() {
-            Ok(v) => {
-                drop(validator_state);
-                v
-            }
-            Err(e) => {
-                error!("[RPC] blockchain.merkle_roots: Failed fetching merkle roots from rootstore: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
-
-        let roots: Vec<String> = roots.iter().map(|x| x.to_string()).collect();
-
-        JsonResponse::new(json!(roots), id).into()
     }
 
     // RPCAPI:

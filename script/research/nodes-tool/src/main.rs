@@ -20,9 +20,9 @@ use std::{fs::File, io::Write};
 
 use darkfi::{
     blockchain::{
-        blockstore::{BlockOrderStore, BlockStore, HeaderStore},
-        slotcheckpointstore::SlotCheckpointStore,
-        txstore::TxStore,
+        block_store::{BlockOrderStore, BlockStore, HeaderStore},
+        slot_checkpoint_store::SlotCheckpointStore,
+        tx_store::TxStore,
         Blockchain,
     },
     consensus::{

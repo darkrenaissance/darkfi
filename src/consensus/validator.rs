@@ -37,7 +37,7 @@ use serde_json::json;
 
 use super::{
     constants,
-    leadcoin::LeadCoin,
+    lead_coin::LeadCoin,
     state::{ConsensusState, Fork, SlotCheckpoint, StateCheckpoint},
     BlockInfo, BlockProposal, Header, LeadInfo, LeadProof,
 };

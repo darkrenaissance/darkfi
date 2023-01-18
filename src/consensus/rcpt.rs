@@ -30,7 +30,7 @@ use rand::rngs::OsRng;
 
 use crate::Error;
 
-/// transfered leadcoin is rcpt into two coins,
+/// transfered lead coin is rcpt into two coins,
 /// first coin is transfered rcpt coin.
 /// second coin is the change returning to sender, or different address.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, SerialEncodable, SerialDecodable)]

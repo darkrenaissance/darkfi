@@ -25,23 +25,17 @@ use crate::{
     Error, Result,
 };
 
-pub mod blockstore;
-pub use blockstore::{BlockOrderStore, BlockStore, HeaderStore};
+pub mod block_store;
+pub use block_store::{BlockOrderStore, BlockStore, HeaderStore};
 
-pub mod slotcheckpointstore;
-pub use slotcheckpointstore::SlotCheckpointStore;
+pub mod slot_checkpoint_store;
+pub use slot_checkpoint_store::SlotCheckpointStore;
 
-pub mod nfstore;
-pub use nfstore::NullifierStore;
+pub mod tx_store;
+pub use tx_store::TxStore;
 
-pub mod rootstore;
-pub use rootstore::RootStore;
-
-pub mod txstore;
-pub use txstore::TxStore;
-
-pub mod contractstore;
-pub use contractstore::{ContractStateStore, WasmStore};
+pub mod contract_store;
+pub use contract_store::{ContractStateStore, WasmStore};
 
 /// Structure holding all sled trees that define the concept of Blockchain.
 #[derive(Clone)]
@@ -58,10 +52,6 @@ pub struct Blockchain {
     pub slot_checkpoints: SlotCheckpointStore,
     /// Transactions sled tree
     pub transactions: TxStore,
-    /// Nullifiers sled tree
-    pub nullifiers: NullifierStore,
-    /// Merkle roots sled tree
-    pub merkle_roots: RootStore,
     /// Contract states
     pub contracts: ContractStateStore,
     /// Wasm bincodes
@@ -76,8 +66,6 @@ impl Blockchain {
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
         let slot_checkpoints = SlotCheckpointStore::new(db)?;
         let transactions = TxStore::new(db)?;
-        let nullifiers = NullifierStore::new(db)?;
-        let merkle_roots = RootStore::new(db)?;
         let contracts = ContractStateStore::new(db)?;
         let wasm_bincode = WasmStore::new(db)?;
 
@@ -88,8 +76,6 @@ impl Blockchain {
             order,
             slot_checkpoints,
             transactions,
-            nullifiers,
-            merkle_roots,
             contracts,
             wasm_bincode,
         })
