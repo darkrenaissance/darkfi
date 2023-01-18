@@ -13,7 +13,7 @@ all: $(JSONRPC)
 	mdbook build
 	cp -f theme/logo* book/html/
 	$(MAKE) -C ../ rustdoc
-	cp -r ../target/doc/* book/html/rustdoc/
+	cp -r ../target/doc/* book/html/development/
 
 $(DARKFID_JSONRPC):
 	@echo "# darkfid JSON-RPC API" > $@
