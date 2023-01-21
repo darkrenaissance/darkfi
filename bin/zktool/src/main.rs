@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use clap::{IntoApp, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 
 #[derive(Subcommand)]
 pub enum CliSubCommands {
@@ -54,7 +54,7 @@ pub enum CliSubCommands {
 #[clap(arg_required_else_help(true))]
 pub struct CliDao {
     /// Increase verbosity
-    #[clap(short, parse(from_occurrences))]
+    #[clap(short, action = clap::ArgAction::Count)]
     pub verbose: u8,
     #[clap(subcommand)]
     pub command: Option<CliSubCommands>,
@@ -63,8 +63,10 @@ pub struct CliDao {
 fn main() {
     let args = CliDao::parse();
     match args.command {
-        Some(CliSubCommands::Random {}) => {
-            println!("random!");
+        Some(_) => {
+            println!("Some arg!");
         }
+
+        None => todo!(),
     }
 }
