@@ -78,7 +78,7 @@ configuration doesn't match attemping to start a session will simply
 return without doing anything. For example, if you are an outbound node,
 `inbound.start()` will return with the following message:
 
-```
+```rust
 info!(target: "net", "Not configured for accepting incoming connections.");
 ```
 
