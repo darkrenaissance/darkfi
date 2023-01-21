@@ -37,6 +37,7 @@ members = [
     "bin/darkwiki/darkwiki-cli",
     "bin/vanityaddr",
     "bin/lilith",
+    "bin/zktool",
 
     "src/sdk",
     "src/serial",

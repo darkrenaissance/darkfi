@@ -1,0 +1,15 @@
+[package]
+name = "zktool"
+version = "0.1.0"
+homepage = "https://dark.fi"
+description = "ZK multitool program"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[dependencies]
+clap = {version = "4.0.32", features = ["derive"]}
+darkfi = {path = "../../", features = ["zkas"]}
+darkfi-sdk = {path = "../../src/sdk"}
+
