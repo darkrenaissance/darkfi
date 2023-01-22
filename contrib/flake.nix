@@ -10,7 +10,7 @@
 {
   description = "DarkFi";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-22.05";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-22.11";
   inputs.utils.url = "github:numtide/flake-utils";
   inputs.rust-overlay.url = "github:oxalica/rust-overlay";
 
@@ -23,7 +23,7 @@
         pkgs = import nixpkgs rec {
           inherit system overlays;
         };
-        rust-bin = pkgs.rust-bin.stable."1.62.0".default.override {
+        rust-bin = pkgs.rust-bin.stable."1.66.0".default.override {
           extensions = [ "rust-src" ];
         };
         buildRustPackage = (pkgs.makeRustPlatform {
