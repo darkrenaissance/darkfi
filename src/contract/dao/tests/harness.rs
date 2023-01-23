@@ -128,6 +128,7 @@ impl DaoTestHarness {
             alice_wallet,
             faucet_pubkeys,
             false,
+            false,
         )
         .await?;
 

@@ -111,6 +111,7 @@ impl MoneyTestHarness {
             faucet_wallet,
             faucet_pubkeys.clone(),
             false,
+            false,
         )
         .await?;
 
@@ -122,6 +123,7 @@ impl MoneyTestHarness {
             *TESTNET_INITIAL_DISTRIBUTION,
             alice_wallet,
             faucet_pubkeys.clone(),
+            false,
             false,
         )
         .await?;
@@ -135,6 +137,7 @@ impl MoneyTestHarness {
             bob_wallet,
             faucet_pubkeys.clone(),
             false,
+            false,
         )
         .await?;
 
@@ -146,6 +149,7 @@ impl MoneyTestHarness {
             *TESTNET_INITIAL_DISTRIBUTION,
             charlie_wallet,
             faucet_pubkeys.clone(),
+            false,
             false,
         )
         .await?;
