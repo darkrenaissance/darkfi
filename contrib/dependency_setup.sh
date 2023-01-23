@@ -23,37 +23,37 @@ setup_mac() {
 
 setup_apt() {
 	apt_deps="git make jq gcc pkg-config libssl-dev"
-	$1 install "$apt_deps" || return 1
+	$1 install $apt_deps || return 1
 }
 
 setup_pacman() {
 	pacman_deps="git make jq gcc pkgconf openssl"
-	$1 -Sy "$pacman_deps" || return 1
+	$1 -Sy $pacman_deps || return 1
 }
 
 setup_xbps() {
 	xbps_deps="git make jq gcc pkg-config openssl-devel"
-	$1 -S "$xbps_deps" || return 1
+	$1 -S $xbps_deps || return 1
 }
 
 setup_dnf() {
 	dnf_deps="git make jq gcc pkg-config openssl-devel findutils lato-fonts"
-	$1 install -y "$dnf_deps" || return 1
+	$1 install -y $dnf_deps || return 1
 }
 
 setup_apk() {
 	apk_deps="git make jq gcc musl-dev openssl-dev"
-	$1 add "$apk_deps" || return 1
+	$1 add $apk_deps || return 1
 }
 
 setup_zypper() {
 	zypper_deps="git make jq gcc pkg-config openssl-devel findutils"
-	$1 install -y "$zypper_deps" || return 1
+	$1 install -y $zypper_deps || return 1
 }
 
 setup_emerge() {
 	emerge_deps="dev-vcs/git app-misc/jq dev-util/pkgconf dev-libs/openssl"
-	$1 "$emerge_deps" || return 1
+	$1 $emerge_deps || return 1
 }
 
 case "$(uname -s)" in
