@@ -170,7 +170,7 @@ pub async fn send_packet<W: AsyncWrite + Unpin + Sized>(
     stream.write_all(packet.command.as_bytes()).await?;
     debug!(target: "net::message", "sent command: {}", packet.command);
 
-    assert_eq!(std::mem::size_of::<usize>(), std::mem::size_of::<u64>());
+    assert!(std::mem::size_of::<usize>() <= std::mem::size_of::<u64>());
     VarInt(packet.payload.len() as u64).encode_async(stream).await?;
 
     if !packet.payload.is_empty() {
