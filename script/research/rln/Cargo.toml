@@ -10,4 +10,5 @@ edition = "2021"
 [dependencies]
 darkfi-sdk = {path = "../../../src/sdk"}
 darkfi = {path = "../../../", features = ["zk"]}
+lazy_static = "1.4.0"
 rand = "0.8.5"

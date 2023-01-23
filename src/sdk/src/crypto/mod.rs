@@ -82,7 +82,7 @@ pub use pasta_curves::{pallas, vesta};
 /// You still have to import the curves.
 pub mod pasta_prelude {
     pub use pasta_curves::{
-        arithmetic::CurveAffine,
+        arithmetic::{CurveAffine, CurveExt},
         group::{
             ff::{Field, PrimeField},
             Curve, Group,

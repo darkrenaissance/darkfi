@@ -28,7 +28,7 @@ pub mod gadget;
 
 /// Proof creation API
 pub mod proof;
-pub use proof::{Proof, ProvingKey};
+pub use proof::{Proof, ProvingKey, VerifyingKey};
 
 pub mod halo2 {
     pub use halo2_proofs::{

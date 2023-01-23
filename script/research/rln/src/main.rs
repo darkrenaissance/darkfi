@@ -1,190 +1,56 @@
-//! Rate-limit nullifiers, to be implemented in ircd for spam protection.
-//!
-//! For an application, each user maintains:
-//! - User registration
-//! - User interactions
-//! - User removal
-//!
-//! # User registration
-//! 1. Derive an identity commitment: poseidon_hash(secret_key)
-//! 2. Register by providing the commitment
-//! 3. Store the commitment in the Merkle tree of registered users
-//!
-//! # User interaction
-//! For each interaction, the user must create a ZK proof which ensures
-//! the other participants (verifiers) that they are a valid member of
-//! the application and their identity commitment is part of the membership
-//! Merkle tree.
-//! The anti-spam rule is also introduced in the protocol, e.g.:
-//!
-//! > Users must not make more than X interactions per epoch.
-//! In other words:
-//! > Users must not send more than one message per second.
-//!
-//! The anti-spam rule is implemented with Shamir-Secret-Sharing Scheme.
-//! In our case the secret is the user's secret key, and the shares are
-//! parts of the secret key. In a 2/3 case, this means the user's secret
-//! key can be reconstructed if they send two messages per epoch.
-//! For these claims to hold true, the user's ZK proof must also include
-//! shares of their secret key and the epoch. By not having any of these
-//! fields included, the ZK proof will be treated as invalid.
-//!
-//! # User removal
-//! In the case of spam, the secret key can be retrieved from the SSS
-//! shares and a user can use this to remove the key from the set of
-//! registered users, therefore disabling their ability to send future
-//! messages and requiring them to register with a new key.
+/* This file is part of DarkFi (https://dark.fi)
+ *
+ * Copyright (C) 2020-2023 Dyne.org foundation
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+//! <https://darkrenaissance.github.io/darkfi/crypto/rln.html>
+
+use std::{collections::HashMap, time::Instant};
 
 use darkfi::{
-    zk::{
-        empty_witnesses, halo2::Value, proof::VerifyingKey, Proof, ProvingKey, Witness, ZkCircuit,
-    },
+    zk::{empty_witnesses, halo2::Value, Proof, ProvingKey, VerifyingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, poseidon_hash, MerkleNode, MerkleTree},
     incrementalmerkletree::Tree,
-    pasta::{arithmetic::CurveExt, pallas},
+    pasta::{Ep, Fp},
 };
+use lazy_static::lazy_static;
 use rand::rngs::OsRng;
 
-fn main() {
-    // This should be unique constant per application
-    let rln_identifier = pallas::Base::from(42);
-    let key_derivation_path = pallas::Base::from(0);
-    let nf_derivation_path = pallas::Base::from(1);
+// These should be unique constants per application.
+lazy_static! {
+    static ref RLN_IDENTIFIER: Fp = Fp::from(42);
+    static ref IDENTITY_DERIVATION_PATH: Fp = Fp::from(11);
+    static ref NULLIFIER_DERIVATION_PATH: Fp = Fp::from(12);
+}
 
-    let epoch = pallas::Base::from(1674495551);
-    let external_nullifier = poseidon_hash([epoch, rln_identifier]);
-
-    // The identity commitment should be something that cannot be precalculated
-    // for usage in the future, and possibly also has to be some kind of puzzle
-    // that is costly to precalculate.
-    // Alternatively, it could be economic stake of funds which could then be
-    // lost if spam is detected and acted upon.
-    let alice_secret_key = pallas::Base::random(&mut OsRng);
-    let alice_identity_commitment = poseidon_hash([key_derivation_path, alice_secret_key]);
-
-    // ============
-    // Registration
-    // ============
-    let mut membership_tree = MerkleTree::new(100);
-    membership_tree.append(&MerkleNode::from(alice_identity_commitment));
-    let alice_identity_leafpos = membership_tree.witness().unwrap();
-
-    // ==========
-    // Signalling
-    // ==========
-
-    // Our secret-sharing polynomial will be A(x) = a_1*x + a_0, where:
-    // a_0 = secret_key,
-    // a_1 = Poseidon(a_0, external_nullifier)
-    // To send a message, the user has to come up with a share - an (x, y) on the polynomial.
-    // x = Poseidon(message), y = A(x)
-    // Thus, if the same epoch user sends more than one message, their secret can be recovered.
-
-    // TODO: I don't know a better way to do this:
-    let message = b"hello i wanna spam";
-    let hasher = pallas::Point::hash_to_curve("ircd_domain");
+fn hash_message(message: &[u8]) -> Fp {
+    let hasher = Ep::hash_to_curve("rln-domain:demoapp");
     let message_point = hasher(message);
     let message_coords = message_point.to_affine().coordinates().unwrap();
-    let x = poseidon_hash([*message_coords.x(), *message_coords.y()]);
-    let y = poseidon_hash([alice_secret_key, external_nullifier]) * x + alice_secret_key;
+    poseidon_hash([*message_coords.x(), *message_coords.y()])
+}
 
-    let internal_nullifier =
-        poseidon_hash([nf_derivation_path, poseidon_hash([alice_secret_key, external_nullifier])]);
-
-    let identity_root = membership_tree.root(0).unwrap();
-    let alice_identity_path =
-        membership_tree.authentication_path(alice_identity_leafpos, &identity_root).unwrap();
-
-    // NIZK stuff
-    let zkbin = include_bytes!("../signal.zk.bin");
-    let rln_zkbin = ZkBinary::decode(zkbin).unwrap();
-    let rln_empty_circuit = ZkCircuit::new(empty_witnesses(&rln_zkbin), rln_zkbin.clone());
-
-    println!("Building Proving key...");
-    let rln_pk = ProvingKey::build(13, &rln_empty_circuit);
-    println!("Building Verifying key...");
-    let rln_vk = VerifyingKey::build(13, &rln_empty_circuit);
-
-    // Alice has her witnesses and creates a NIZK proof
-    let prover_witnesses = vec![
-        Witness::Base(Value::known(alice_secret_key)),
-        Witness::MerklePath(Value::known(alice_identity_path.clone().try_into().unwrap())),
-        Witness::Uint32(Value::known(u64::from(alice_identity_leafpos).try_into().unwrap())),
-        Witness::Base(Value::known(x)),
-        Witness::Base(Value::known(epoch)),
-        Witness::Base(Value::known(rln_identifier)),
-    ];
-
-    let rln_circuit = ZkCircuit::new(prover_witnesses, rln_zkbin.clone());
-    let public_inputs = vec![
-        epoch,
-        rln_identifier,
-        x, // <-- message hash
-        identity_root.inner(),
-        internal_nullifier,
-        y,
-    ];
-
-    println!("Creating ZK proof...");
-    let proof = Proof::create(&rln_pk, &[rln_circuit], &public_inputs, &mut OsRng).unwrap();
-
-    // ============
-    // Verification
-    // ============
-    println!("Verifying ZK proof...");
-    assert!(proof.verify(&rln_vk, &public_inputs).is_ok());
-
-    let mut alice_shares = vec![(public_inputs[2], public_inputs[5])];
-
-    // Now if Alice sends another message in the same epoch, we should be able to
-    // get their secret key and ban them
-    let message = b"hello i'm spamming";
-    let hasher = pallas::Point::hash_to_curve("ircd_domain");
-    let message_point = hasher(message);
-    let message_coords = message_point.to_affine().coordinates().unwrap();
-    let x = poseidon_hash([*message_coords.x(), *message_coords.y()]);
-    let y = poseidon_hash([alice_secret_key, external_nullifier]) * x + alice_secret_key;
-
-    // Same epoch and account, different message
-    let prover_witnesses = vec![
-        Witness::Base(Value::known(alice_secret_key)),
-        Witness::MerklePath(Value::known(alice_identity_path.try_into().unwrap())),
-        Witness::Uint32(Value::known(u64::from(alice_identity_leafpos).try_into().unwrap())),
-        Witness::Base(Value::known(x)),
-        Witness::Base(Value::known(epoch)),
-        Witness::Base(Value::known(rln_identifier)),
-    ];
-
-    let rln_circuit = ZkCircuit::new(prover_witnesses, rln_zkbin);
-
-    let public_inputs = vec![
-        epoch,
-        rln_identifier,
-        x, // <-- message hash
-        identity_root.inner(),
-        internal_nullifier,
-        y,
-    ];
-
-    println!("Creating ZK proof...");
-    let proof = Proof::create(&rln_pk, &[rln_circuit], &public_inputs, &mut OsRng).unwrap();
-
-    println!("Verifying ZK proof...");
-    assert!(proof.verify(&rln_vk, &public_inputs).is_ok());
-    alice_shares.push((public_inputs[2], public_inputs[5]));
-
-    // ========
-    // Slashing
-    // ========
-    // We should be able to retrieve Alice's secret key because she sent two
-    // messages in the same epoch.
-    let mut secret = pallas::Base::zero();
-    for (j, share_j) in alice_shares.iter().enumerate() {
-        let mut prod = pallas::Base::one();
-        for (i, share_i) in alice_shares.iter().enumerate() {
+fn sss_recover(shares: &[(Fp, Fp)]) -> Fp {
+    let mut secret = Fp::zero();
+    for (j, share_j) in shares.iter().enumerate() {
+        let mut prod = Fp::one();
+        for (i, share_i) in shares.iter().enumerate() {
             if i != j {
                 prod *= share_i.0 * (share_i.0 - share_j.0).invert().unwrap();
             }
@@ -194,6 +60,202 @@ fn main() {
         secret += prod;
     }
 
-    assert_eq!(secret, alice_secret_key);
-    println!("u banned");
+    secret
+}
+
+fn main() {
+    let epoch = Fp::from(1674509414);
+    let external_nullifier = poseidon_hash([epoch, *RLN_IDENTIFIER]);
+
+    // The identity commitment should be something that cannot be
+    // precalculated for usage in the future, and possibly also has
+    // to be some kind of puzzle that is costly to (pre)calculate.
+    // Alternatively, it could be economic stake of funds which could
+    // then be lost if spam is detected and acted upon.
+    let secret_key = Fp::random(&mut OsRng);
+    let identity_commitment = poseidon_hash([*IDENTITY_DERIVATION_PATH, secret_key]);
+
+    // ============
+    // Registration
+    // ============
+    let mut membership_tree = MerkleTree::new(100);
+    let mut identity_roots: Vec<MerkleNode> = vec![];
+    let mut banned_roots: Vec<MerkleNode> = vec![];
+    let mut identities = HashMap::new();
+
+    // Everyone needs to maintain the leaf positions, because to slash, we
+    // need to provide a valid authentication path. Therefore, the easiest
+    // way is to store a hashmap.
+    assert!(!identities.contains_key(&identity_commitment.to_repr()));
+    membership_tree.append(&MerkleNode::from(identity_commitment));
+    let leaf_pos = membership_tree.witness().unwrap();
+    identities.insert(identity_commitment.to_repr(), leaf_pos);
+    identity_roots.push(membership_tree.root(0).unwrap());
+
+    // ==========
+    // Signalling
+    // ==========
+    let a_1 = poseidon_hash([secret_key, external_nullifier]);
+
+    // Construct share
+    let x = hash_message(b"hello i wanna spam");
+    let y = a_1 * x + secret_key;
+
+    // Construct internal nullifier
+    let internal_nullifier = poseidon_hash([*NULLIFIER_DERIVATION_PATH, a_1]);
+
+    let identity_root = membership_tree.root(0).unwrap();
+    let identity_path = membership_tree.authentication_path(leaf_pos, &identity_root);
+    let identity_path = identity_path.unwrap();
+
+    // zkSNARK things
+    let signal_zkbin = include_bytes!("../signal.zk.bin");
+    let rln_zkbin = ZkBinary::decode(signal_zkbin).unwrap();
+    let rln_empty_circuit = ZkCircuit::new(empty_witnesses(&rln_zkbin), rln_zkbin.clone());
+
+    print!("[Interaction] Building Proving key... ");
+    let now = Instant::now();
+    let rln_pk = ProvingKey::build(13, &rln_empty_circuit);
+    println!("[{:?}]", now.elapsed());
+
+    print!("[Interaction] Building Verifying key... ");
+    let now = Instant::now();
+    let rln_vk = VerifyingKey::build(13, &rln_empty_circuit);
+    println!("[{:?}]", now.elapsed());
+
+    // Prover's witnesses and public inputs
+    let witnesses = vec![
+        Witness::Base(Value::known(secret_key)),
+        Witness::MerklePath(Value::known(identity_path.clone().try_into().unwrap())),
+        Witness::Uint32(Value::known(u64::from(leaf_pos).try_into().unwrap())),
+        Witness::Base(Value::known(x)),
+        Witness::Base(Value::known(epoch)),
+        Witness::Base(Value::known(*RLN_IDENTIFIER)),
+    ];
+
+    let public_inputs = vec![
+        epoch,
+        *RLN_IDENTIFIER,
+        x, // <-- Message hash
+        identity_root.inner(),
+        internal_nullifier,
+        y,
+    ];
+
+    // Build a circuit with these witnesses
+    print!("[Interaction] Creating ZK proof... ");
+    let now = Instant::now();
+    let rln_circuit = ZkCircuit::new(witnesses, rln_zkbin.clone());
+    let proof = Proof::create(&rln_pk, &[rln_circuit], &public_inputs, &mut OsRng).unwrap();
+    println!("[{:?}]", now.elapsed());
+
+    // ============
+    // Verification
+    // ============
+    print!("[Interaction] Verifying ZK proof... ");
+    let now = Instant::now();
+    assert!(proof.verify(&rln_vk, &public_inputs).is_ok());
+    assert!(!banned_roots.contains(&MerkleNode::from(public_inputs[3])));
+    assert!(identity_roots.contains(&MerkleNode::from(public_inputs[3])));
+    println!("[{:?}]", now.elapsed());
+
+    // NOTE: These shares should actually be tracked through the internal nullifier.
+    let mut shares = vec![(public_inputs[2], public_inputs[5])];
+
+    // Now if another message is sent in the same epoch, we should be able to
+    // recover the secret key and ban the sender.
+    let x = hash_message(b"hello i'm spamming");
+    let y = a_1 * x + secret_key;
+
+    // Same epoch and account, different message
+    let witnesses = vec![
+        Witness::Base(Value::known(secret_key)),
+        Witness::MerklePath(Value::known(identity_path.try_into().unwrap())),
+        Witness::Uint32(Value::known(u64::from(leaf_pos).try_into().unwrap())),
+        Witness::Base(Value::known(x)),
+        Witness::Base(Value::known(epoch)),
+        Witness::Base(Value::known(*RLN_IDENTIFIER)),
+    ];
+
+    let public_inputs = vec![
+        epoch,
+        *RLN_IDENTIFIER,
+        x, // <-- Message hash
+        identity_root.inner(),
+        internal_nullifier,
+        y,
+    ];
+
+    // Build a circuit with these witnesses
+    print!("[Interaction] Creating ZK proof... ");
+    let now = Instant::now();
+    let rln_circuit = ZkCircuit::new(witnesses, rln_zkbin);
+    let proof = Proof::create(&rln_pk, &[rln_circuit], &public_inputs, &mut OsRng).unwrap();
+    println!("[{:?}]", now.elapsed());
+
+    print!("[Interaction] Verifying ZK proof... ");
+    let now = Instant::now();
+    assert!(proof.verify(&rln_vk, &public_inputs).is_ok());
+    assert!(!banned_roots.contains(&MerkleNode::from(public_inputs[3])));
+    assert!(identity_roots.contains(&MerkleNode::from(public_inputs[3])));
+    println!("[{:?}]", now.elapsed());
+
+    // NOTE: These shares should actually be tracked through the internal nullifier.
+    shares.push((public_inputs[2], public_inputs[5]));
+
+    // ========
+    // Slashing
+    // ========
+
+    // We should be able to retrieve the secret key because two messages were
+    // sent in the same epoch.
+    let recovered_secret = sss_recover(&shares);
+    assert_eq!(recovered_secret, secret_key);
+
+    // Create a slash proof
+    let slash_zkbin = include_bytes!("../slash.zk.bin");
+    let slash_zkbin = ZkBinary::decode(slash_zkbin).unwrap();
+    let slash_empty_circuit = ZkCircuit::new(empty_witnesses(&slash_zkbin), slash_zkbin.clone());
+
+    print!("[Slash] Building Proving key... ");
+    let now = Instant::now();
+    let slash_pk = ProvingKey::build(13, &slash_empty_circuit);
+    println!("[{:?}]", now.elapsed());
+
+    print!("[Slash] Building Verifying key... ");
+    let now = Instant::now();
+    let slash_vk = VerifyingKey::build(13, &slash_empty_circuit);
+    println!("[{:?}]", now.elapsed());
+
+    // Find the leaf position in the hashmap of identity commitments
+    let identity_commitment = poseidon_hash([*IDENTITY_DERIVATION_PATH, recovered_secret]);
+    let leaf_pos = identities.get(&identity_commitment.to_repr()).unwrap();
+    let identity_root = membership_tree.root(0).unwrap();
+    let identity_path = membership_tree.authentication_path(*leaf_pos, &identity_root);
+    let identity_path = identity_path.unwrap();
+
+    // Witnesses & public inputs
+    let witnesses = vec![
+        Witness::Base(Value::known(recovered_secret)),
+        Witness::MerklePath(Value::known(identity_path.try_into().unwrap())),
+        Witness::Uint32(Value::known(u64::from(*leaf_pos).try_into().unwrap())),
+    ];
+
+    let public_inputs = vec![identity_root.inner()];
+
+    print!("[Slash] Creating ZK proof... ");
+    let now = Instant::now();
+    let slash_circuit = ZkCircuit::new(witnesses, slash_zkbin);
+    let proof = Proof::create(&slash_pk, &[slash_circuit], &public_inputs, &mut OsRng).unwrap();
+    println!("[{:?}]", now.elapsed());
+
+    print!("[Slash] Verifying ZK proof... ");
+    let now = Instant::now();
+    assert!(!banned_roots.contains(&MerkleNode::from(public_inputs[0])));
+    assert!(identity_roots.contains(&MerkleNode::from(public_inputs[0]))); // <- Will this be true?
+    assert!(proof.verify(&slash_vk, &public_inputs).is_ok());
+    println!("[{:?}]", now.elapsed());
+    banned_roots.push(MerkleNode::from(public_inputs[0]));
+
+    println!("boi u banned");
 }

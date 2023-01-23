@@ -26,6 +26,7 @@
   - [FFT](crypto/fft.md)
   - [ZK explainer](crypto/zk_explainer.md)
   - [Research](crypto/research.md)
+  - [Rate-Limit Nullifiers](crypto/rln.md)
 - [p2p Api Tutorial](learn/dchat/dchat.md)
   - [Deployment](learn/dchat/deployment/part-1.md)
     - [Getting started](learn/dchat/deployment/getting-started.md)

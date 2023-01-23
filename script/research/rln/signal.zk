@@ -17,18 +17,19 @@ circuit "RlnSignal" {
 	constrain_instance(message_hash);
 
 	# This has to be the same constant used outside
-	key_derivation_path = witness_base(0);
-	nf_derivation_path = witness_base(1);
-	identity_commit = poseidon_hash(key_derivation_path, secret_key);
+	identity_derivation_path = witness_base(11);
+	nullifier_derivation_path = witness_base(12);
+
+	identity_commit = poseidon_hash(identity_derivation_path, secret_key);
 	root = merkle_root(identity_leaf_pos, identity_path, identity_commit);
 	constrain_instance(root);
 
 	external_nullifier = poseidon_hash(epoch, rln_identifier);
-	a1 = poseidon_hash(secret_key, external_nullifier);
-	internal_nullifier = poseidon_hash(nf_derivation_path, a1);
+	a_1 = poseidon_hash(secret_key, external_nullifier);
+	internal_nullifier = poseidon_hash(nullifier_derivation_path, a_1);
 	constrain_instance(internal_nullifier);
 
-	y_a = base_mul(a1, message_hash);
+	y_a = base_mul(a_1, message_hash);
 	y = base_add(y_a, secret_key);
 	constrain_instance(y);
 }
