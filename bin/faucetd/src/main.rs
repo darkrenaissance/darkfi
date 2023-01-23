@@ -574,6 +574,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         wallet.clone(),
         faucet_pubkeys,
         false,
+        false,
     )
     .await?;
 

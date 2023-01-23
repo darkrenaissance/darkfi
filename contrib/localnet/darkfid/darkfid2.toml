@@ -24,6 +24,9 @@ rpc_listen = "tcp://127.0.0.1:8540"
 # Participate in the consensus protocol
 consensus = false
 
+# Enable single-node mode for local testing
+single_node = false
+
 # P2P accept addresses for the consensus protocol
 #consensus_p2p_accept = ["tcp://127.0.0.1:8541"]
 

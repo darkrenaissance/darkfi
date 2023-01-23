@@ -53,6 +53,8 @@ pub struct ConsensusState {
     pub genesis_block: blake3::Hash,
     /// Total sum of initial staking coins
     pub initial_distribution: u64,
+    /// Flag to enable single-node mode
+    pub single_node: bool,
     /// Slot the network was bootstrapped
     pub bootstrap_slot: u64,
     /// Participating start slot
@@ -91,6 +93,7 @@ impl ConsensusState {
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
         initial_distribution: u64,
+        single_node: bool,
     ) -> Result<Self> {
         let genesis_block = Block::genesis_block(genesis_ts, genesis_data).blockhash();
         Ok(Self {
@@ -99,6 +102,7 @@ impl ConsensusState {
             genesis_ts,
             genesis_block,
             initial_distribution,
+            single_node,
             bootstrap_slot: 0,
             participating: None,
             proposing: false,
@@ -303,9 +307,10 @@ impl ConsensusState {
         // Temporarily, we compete with fixed stake.
         // This stake should be based on how many nodes we want to run, and they all
         // must sum to initial distribution total coins.
-        //let stake = self.initial_distribution;
+        let stake = self.initial_distribution;
+        //let stake = 200;
         let coin = LeadCoin::new(
-            200,
+            stake,
             slot,
             epoch_secrets.secret_keys[0].inner(),
             epoch_secrets.merkle_roots[0],
@@ -452,6 +457,12 @@ impl ConsensusState {
         } else {
             self.forks[fork_index as usize].sequence.last().unwrap().coins.clone()
         };
+
+        // If on single-node mode, node always proposes by extending the
+        // single fork it holds.
+        if self.single_node {
+            return (true, fork_index, 0)
+        }
 
         let mut won = false;
         let mut highest_stake = 0;

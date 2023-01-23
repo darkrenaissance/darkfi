@@ -75,6 +75,10 @@ struct Args {
     /// Participate in consensus
     consensus: bool,
 
+    #[structopt(long)]
+    /// Enable single-node mode for local testing
+    single_node: bool,
+
     #[structopt(long, default_value = "~/.config/darkfi/darkfid_wallet.db")]
     /// Path to wallet database
     wallet_path: String,
@@ -327,6 +331,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         faucet_pubkeys.push(pk);
     }
 
+    if args.single_node {
+        info!("Node is configured to tun in single-node mode!");
+    }
+
     // Initialize validator state
     let state = ValidatorState::new(
         &sled_db,
@@ -337,6 +345,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         wallet.clone(),
         faucet_pubkeys,
         args.consensus,
+        args.single_node,
     )
     .await?;
 

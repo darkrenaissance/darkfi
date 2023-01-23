@@ -86,6 +86,8 @@ pub struct ValidatorState {
     pub verifying_keys: VerifyingKeyMap,
     /// Wallet interface
     pub wallet: WalletPtr,
+    /// Flag to enable single-node mode
+    pub single_node: bool,
 }
 
 impl ValidatorState {
@@ -98,6 +100,7 @@ impl ValidatorState {
         wallet: WalletPtr,
         faucet_pubkeys: Vec<PublicKey>,
         enable_participation: bool,
+        single_node: bool,
     ) -> Result<ValidatorStatePtr> {
         debug!(target: "consensus::validator", "Initializing ValidatorState");
 
@@ -130,6 +133,7 @@ impl ValidatorState {
             genesis_ts,
             genesis_data,
             initial_distribution,
+            single_node,
         )?;
 
         let unconfirmed_txs = vec![];
@@ -222,6 +226,7 @@ impl ValidatorState {
             subscribers,
             verifying_keys: Arc::new(RwLock::new(verifying_keys)),
             wallet,
+            single_node,
         }));
 
         Ok(state)
@@ -458,59 +463,64 @@ impl ValidatorState {
             return Err(Error::ProposalHeadersMissmatchError)
         }
 
-        // Verify proposal leader proof
-        if let Err(e) = lf.proof.verify(&self.lead_verifying_key, &lf.public_inputs) {
-            error!(target: "consensus::validator", "receive_proposal(): Error during leader proof verification: {}", e);
-            return Err(Error::LeaderProofVerification)
-        };
-        info!(target: "consensus::validator", "receive_proposal(): Leader proof verified successfully!");
+        // Ignore node coin validations if we oporate in single-node mode
+        if !self.single_node {
+            // Verify proposal leader proof
+            if let Err(e) = lf.proof.verify(&self.lead_verifying_key, &lf.public_inputs) {
+                error!(target: "consensus::validator", "receive_proposal(): Error during leader proof verification: {}", e);
+                return Err(Error::LeaderProofVerification)
+            };
+            info!(target: "consensus::validator", "receive_proposal(): Leader proof verified successfully!");
 
-        // Validate proposal public value against coin creation slot checkpoint
-        let (mu_y, mu_rho) =
-            LeadCoin::election_seeds_u64(self.consensus.get_eta(), self.consensus.current_slot());
-        // y
-        let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
-
-        if mu_y != prop_mu_y {
-            error!(
-                target: "consensus::validator",
-                "receive_proposal(): Failed to verify mu_y: {:?}, proposed: {:?}",
-                mu_y, prop_mu_y
+            // Validate proposal public value against coin creation slot checkpoint
+            let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(
+                self.consensus.get_eta(),
+                self.consensus.current_slot(),
             );
-            return Err(Error::ProposalPublicValuesMismatched)
-        }
+            // y
+            let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
 
-        // rho
-        let prop_mu_rho = lf.public_inputs[constants::PI_MU_RHO_INDEX];
+            if mu_y != prop_mu_y {
+                error!(
+                    target: "consensus::validator",
+                    "receive_proposal(): Failed to verify mu_y: {:?}, proposed: {:?}",
+                    mu_y, prop_mu_y
+                );
+                return Err(Error::ProposalPublicValuesMismatched)
+            }
 
-        if mu_rho != prop_mu_rho {
-            error!(
-                target: "consensus::validator",
-                "receive_proposal(): Failed to verify mu_rho: {:?}, proposed: {:?}",
-                mu_rho, prop_mu_rho
-            );
-            return Err(Error::ProposalPublicValuesMismatched)
-        }
+            // rho
+            let prop_mu_rho = lf.public_inputs[constants::PI_MU_RHO_INDEX];
 
-        // Validate proposal coin sigmas against current slot checkpoint
-        let checkpoint = self.consensus.get_slot_checkpoint(current)?;
-        // sigma1
-        let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
-        if checkpoint.sigma1 != prop_sigma1 {
-            error!(
-                target: "consensus::validator",
-                "receive_proposal(): Failed to verify public value sigma1: {:?}, to proposed: {:?}",
-                checkpoint.sigma1, prop_sigma1
-            );
-        }
-        // sigma2
-        let prop_sigma2 = lf.public_inputs[constants::PI_SIGMA2_INDEX];
-        if checkpoint.sigma2 != prop_sigma2 {
-            error!(
-                target: "consensus::validator",
-                "receive_proposal(): Failed to verify public value sigma2: {:?}, to proposed: {:?}",
-                checkpoint.sigma2, prop_sigma2
-            );
+            if mu_rho != prop_mu_rho {
+                error!(
+                    target: "consensus::validator",
+                    "receive_proposal(): Failed to verify mu_rho: {:?}, proposed: {:?}",
+                    mu_rho, prop_mu_rho
+                );
+                return Err(Error::ProposalPublicValuesMismatched)
+            }
+
+            // Validate proposal coin sigmas against current slot checkpoint
+            let checkpoint = self.consensus.get_slot_checkpoint(current)?;
+            // sigma1
+            let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
+            if checkpoint.sigma1 != prop_sigma1 {
+                error!(
+                    target: "consensus::validator",
+                    "receive_proposal(): Failed to verify public value sigma1: {:?}, to proposed: {:?}",
+                    checkpoint.sigma1, prop_sigma1
+                );
+            }
+            // sigma2
+            let prop_sigma2 = lf.public_inputs[constants::PI_SIGMA2_INDEX];
+            if checkpoint.sigma2 != prop_sigma2 {
+                error!(
+                    target: "consensus::validator",
+                    "receive_proposal(): Failed to verify public value sigma2: {:?}, to proposed: {:?}",
+                    checkpoint.sigma2, prop_sigma2
+                );
+            }
         }
 
         // Create corresponding state checkpoint for validations

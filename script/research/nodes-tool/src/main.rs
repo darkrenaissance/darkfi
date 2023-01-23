@@ -328,6 +328,7 @@ async fn generate(localnet: &str, name: &str) -> Result<()> {
         wallet,
         vec![],
         false,
+        false,
     )
     .await?;
     let info = StateInfo::new(&*state.read().await);
