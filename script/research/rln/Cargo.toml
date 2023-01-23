@@ -1,0 +1,12 @@
+[package]
+name = "rln"
+version = "0.1.0"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+darkfi-sdk = {path = "../../../src/sdk"}
+rand = "0.8.5"
