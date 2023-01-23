@@ -1,0 +1,34 @@
+constant "RlnSignal" {}
+
+contract "RlnSignal" {
+	Base secret_key,
+	MerklePath identity_path,
+	Uint32 identity_leaf_pos,
+
+	# These are public so have to be properly constructed
+	Base message_hash, # x
+	Base epoch,
+	Base rln_identifier,
+}
+
+circuit "RlnSignal" {
+	constrain_instance(epoch);
+	constrain_instance(rln_identifier);
+	constrain_instance(message_hash);
+
+	# This has to be the same constant used outside
+	key_derivation_path = witness_base(0);
+	nf_derivation_path = witness_base(1);
+	identity_commit = poseidon_hash(key_derivation_path, secret_key);
+	root = merkle_root(identity_leaf_pos, identity_path, identity_commit);
+	constrain_instance(root);
+
+	external_nullifier = poseidon_hash(epoch, rln_identifier);
+	a1 = poseidon_hash(secret_key, external_nullifier);
+	internal_nullifier = poseidon_hash(nf_derivation_path, a1);
+	constrain_instance(internal_nullifier);
+
+	y_a = base_mul(a1, message_hash);
+	y = base_add(y_a, secret_key);
+	constrain_instance(y);
+}

@@ -9,4 +9,5 @@ edition = "2021"
 
 [dependencies]
 darkfi-sdk = {path = "../../../src/sdk"}
+darkfi = {path = "../../../", features = ["zk"]}
 rand = "0.8.5"
