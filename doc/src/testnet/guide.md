@@ -225,6 +225,8 @@ we can now import it into our wallet:
 ./drk dao list 1
 ```
 
+### Minting
+
 If parameters are shown, this means the DAO was successfully imported
 into our wallet. The DAO's index in our wallet is `1`, so we'll use
 that to reference it. Now we can create a transaction that will mint
@@ -239,6 +241,8 @@ Now the transaction is broadcasted to the network. Wait for it to
 finalize, and if your `drk` is subscribed, after finalization you
 should see a `leaf_position` and a transaction ID when running
 `dao list 1`.
+
+### Sending money to the treasury
 
 Let's send some tokens to the DAO's treasury so we're able to make
 a proposal to send those somewhere. First find the DAO bulla and the
@@ -257,4 +261,33 @@ receive the funds:
 
 ```
 $ ./drk dao balance 1
+```
+
+### Creating a proposal
+
+Now that the DAO has something in their treasury, we can create a
+proposal to send it somewhere. Let's send 5 of the 10 tokens to our
+address (we can find that with `drk wallet --address`).
+
+Since we chose `110` as the governance token proposal limit, let's
+just airdrop that into our wallet first:
+
+```
+$ ./drk airdrop 0.00000110 A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd
+```
+
+Then create the proposal:
+
+```
+$ ./drk dao propose 1 ChgNSmpp6pCstPsvYNNT1686fuj1PPobo1C4qWXubr3r \
+    5 BNBZ9YprWvEGMYHW4dFvbLuLfHnN9Bs64zuTFQAbw9Dy > proposal_tx
+$ ./drk broadcast < proposal_tx
+```
+
+Once finalized and scanned, the proposal should be viewable in the
+wallet. We can see this with the `proposal` subcommands:
+
+```
+$ ./drk dao proposals 1
+$ ./drk dao proposal 1 1
 ```
