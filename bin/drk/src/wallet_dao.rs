@@ -214,6 +214,17 @@ impl Drk {
         Ok(())
     }
 
+    /// Fetch all DAO secret keys from the wallet
+    pub async fn get_dao_secrets(&self) -> Result<Vec<SecretKey>> {
+        let daos = self.get_daos().await?;
+        let mut ret = Vec::with_capacity(daos.len());
+        for dao in daos {
+            ret.push(dao.secret_key);
+        }
+
+        Ok(ret)
+    }
+
     /// Replace the DAO Merkle trees in the wallet.
     pub async fn put_dao_trees(
         &self,
@@ -632,7 +643,6 @@ impl Drk {
     /// Append data related to DAO contract transactions into the wallet database.
     /// Optionally, if `confirm` is true, also append the data in the Merkle trees, etc.
     pub async fn apply_tx_dao_data(&self, tx: &Transaction, confirm: bool) -> Result<()> {
-        eprintln!("Enter apply_tx_dao_data()");
         let cid = *DAO_CONTRACT_ID;
         let mut daos = self.get_daos().await?;
         let mut daos_to_confirm = vec![];

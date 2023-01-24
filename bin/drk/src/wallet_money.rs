@@ -519,6 +519,7 @@ impl Drk {
         }
 
         let secrets = self.get_money_secrets().await?;
+        let dao_secrets = self.get_dao_secrets().await?;
         let mut tree = self.get_money_tree().await?;
 
         let mut owncoins = vec![];
@@ -533,7 +534,7 @@ impl Drk {
             let enc_note =
                 EncryptedNote { ciphertext: output.ciphertext, ephem_public: output.ephem_public };
 
-            for secret in &secrets {
+            for secret in secrets.iter().chain(dao_secrets.iter()) {
                 if let Ok(note) = enc_note.decrypt(secret) {
                     eprintln!("Successfully decrypted a Money Note");
                     eprintln!("Witnessing coin in Merkle tree");
