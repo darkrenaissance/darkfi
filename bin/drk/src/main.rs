@@ -163,6 +163,7 @@ enum Subcmd {
         recipient: String,
 
         /// Mark if this is being sent to a DAO
+        #[clap(long)]
         dao: bool,
 
         /// DAO bulla, if the tokens are being sent to a DAO
@@ -257,6 +258,12 @@ enum DaoSubcmd {
     List {
         /// Numeric identifier for the DAO (optional)
         dao_id: Option<u64>,
+    },
+
+    /// Show the balance of a DAO
+    Balance {
+        /// Numeric identifier for the DAO
+        dao_id: u64,
     },
 
     /// Mint an imported DAO on-chain
@@ -422,7 +429,7 @@ async fn main() -> Result<()> {
 
             if address {
                 let address = drk
-                    .wallet_address(0)
+                    .wallet_address(1)
                     .await
                     .with_context(|| "Failed to fetch default address")?;
 
@@ -548,7 +555,7 @@ async fn main() -> Result<()> {
 
             let address = match address {
                 Some(v) => PublicKey::from_str(v.as_str()).with_context(|| "Invalid address")?,
-                None => drk.wallet_address(0).await.with_context(|| {
+                None => drk.wallet_address(1).await.with_context(|| {
                     "Failed to fetch default address, perhaps the wallet was not initialized?"
                 })?,
             };
@@ -802,6 +809,34 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
+            DaoSubcmd::Balance { dao_id } => {
+                let rpc_client = RpcClient::new(args.endpoint.clone())
+                    .await
+                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
+
+                let drk = Drk { rpc_client };
+
+                let balmap =
+                    drk.dao_balance(dao_id).await.with_context(|| "Failed to fetch DAO balance")?;
+
+                // Create a prettytable with the new data:
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Token ID", "Balance"]);
+                for (token_id, balance) in balmap.iter() {
+                    // FIXME: Don't hardcode to 8 decimals
+                    table.add_row(row![token_id, encode_base10(*balance, 8)]);
+                }
+
+                if table.is_empty() {
+                    println!("No unspent balances found");
+                } else {
+                    println!("{}", table);
+                }
+
+                return Ok(())
+            }
+
             DaoSubcmd::Mint { dao_id } => {
                 let rpc_client = RpcClient::new(args.endpoint.clone())
                     .await
@@ -866,7 +901,7 @@ async fn main() -> Result<()> {
                 };
 
                 println!("Proposal parameters:");
-                println!("DAO Bulla: {:?}", proposal.dao_bulla);
+                println!("DAO Bulla: {}", proposal.dao_bulla);
                 println!("Recipient: {}", proposal.recipient);
                 println!(
                     "Proposal amount {} ({})",

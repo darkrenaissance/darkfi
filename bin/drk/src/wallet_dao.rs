@@ -15,6 +15,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+use std::collections::HashMap;
+
 use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, tx::Transaction, wallet::walletdb::QueryType};
 use darkfi_dao_contract::{
@@ -100,8 +103,8 @@ impl Dao {
         DaoBulla::from(poseidon_hash([
             pallas::Base::from(self.proposer_limit),
             pallas::Base::from(self.quorum),
-            pallas::Base::from(self.approval_ratio_base),
             pallas::Base::from(self.approval_ratio_quot),
+            pallas::Base::from(self.approval_ratio_base),
             self.gov_token_id.inner(),
             x,
             y,
@@ -270,6 +273,16 @@ impl Drk {
         Ok(())
     }
 
+    /// Reset confirmed DAOs in the wallet
+    pub async fn reset_daos(&self) -> Result<()> {
+        eprintln!("Resetting DAO confirmations");
+        let daos = self.get_daos().await?;
+        self.unconfirm_daos(&daos).await?;
+        eprintln!("Successfully unconfirmed DAOs");
+
+        Ok(())
+    }
+
     /// Import given DAO params into the wallet with a given name.
     pub async fn import_dao(&self, dao_name: String, dao_params: DaoParams) -> Result<()> {
         // First let's check if we've imported this DAO with the given name before.
@@ -340,6 +353,7 @@ impl Drk {
 
         println!("DAO Parameters:");
         println!("Name: {}", dao.name);
+        println!("Bulla: {}", dao.bulla());
         println!("Proposer limit: {}", dao.proposer_limit);
         println!("Quorum: {}", dao.quorum);
         println!(
@@ -347,6 +361,7 @@ impl Drk {
             dao.approval_ratio_base as f64 / dao.approval_ratio_quot as f64
         );
         println!("Governance token ID: {}", dao.gov_token_id);
+        println!("Public key: {}", PublicKey::from_secret(dao.secret_key));
         println!("Secret key: {}", dao.secret_key);
         println!("Bulla blind: {:?}", dao.bulla_blind);
         println!("Leaf position: {:?}", dao.leaf_position);
@@ -467,6 +482,33 @@ impl Drk {
         // this, so just do it here.
         daos.sort_by(|a, b| a.id.cmp(&b.id));
         Ok(daos)
+    }
+
+    /// Fetch known unspent balances from the wallet for the given DAO ID
+    pub async fn dao_balance(&self, dao_id: u64) -> Result<HashMap<String, u64>> {
+        let daos = self.get_daos().await?;
+        let Some(dao) = daos.get(dao_id as usize -1) else {
+            return Err(anyhow!("DAO with ID {} not found in wallet", dao_id))
+        };
+
+        let mut coins = self.get_coins(false).await?;
+        coins.retain(|x| x.0.note.spend_hook == DAO_CONTRACT_ID.inner());
+        coins.retain(|x| x.0.note.user_data == dao.bulla().inner());
+
+        // Fill this map with balances
+        let mut balmap: HashMap<String, u64> = HashMap::new();
+
+        for coin in coins {
+            let mut value = coin.0.note.value;
+
+            if let Some(prev) = balmap.get(&coin.0.note.token_id.to_string()) {
+                value += prev;
+            }
+
+            balmap.insert(coin.0.note.token_id.to_string(), value);
+        }
+
+        Ok(balmap)
     }
 
     /// Fetch all known DAO proposals from the wallet given a DAO ID
@@ -590,8 +632,10 @@ impl Drk {
     /// Append data related to DAO contract transactions into the wallet database.
     /// Optionally, if `confirm` is true, also append the data in the Merkle trees, etc.
     pub async fn apply_tx_dao_data(&self, tx: &Transaction, confirm: bool) -> Result<()> {
+        eprintln!("Enter apply_tx_dao_data()");
         let cid = *DAO_CONTRACT_ID;
         let mut daos = self.get_daos().await?;
+        let mut daos_to_confirm = vec![];
         let (mut daos_tree, mut proposals_tree) = self.get_dao_trees().await?;
 
         // DAOs that have been minted
@@ -638,13 +682,14 @@ impl Drk {
                 for dao in daos.iter_mut() {
                     if dao.bulla() == new_bulla.0 {
                         eprintln!(
-                            "Found minted DAO {:?}, noting down for wallet update",
+                            "Found minted DAO {}, noting down for wallet update",
                             new_bulla.0
                         );
                         // We have this DAO imported in our wallet. Add the metadata:
                         dao.leaf_position = daos_tree.witness();
                         dao.tx_hash = new_bulla.1;
                         dao.call_index = Some(new_bulla.2);
+                        daos_to_confirm.push(dao.clone());
                     }
                 }
             }
@@ -691,7 +736,7 @@ impl Drk {
         }
 
         if confirm {
-            self.confirm_daos(&daos).await?;
+            self.confirm_daos(&daos_to_confirm).await?;
             self.put_dao_proposals(&our_proposals).await?;
         }
 
@@ -704,12 +749,13 @@ impl Drk {
     pub async fn confirm_daos(&self, daos: &[Dao]) -> Result<()> {
         for dao in daos {
             let query = format!(
-                "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 WHERE {} = ?4;",
+                "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 WHERE {} = {};",
                 DAO_DAOS_TABLE,
                 DAO_DAOS_COL_LEAF_POSITION,
                 DAO_DAOS_COL_TX_HASH,
                 DAO_DAOS_COL_CALL_INDEX,
                 DAO_DAOS_COL_DAO_ID,
+                dao.id,
             );
 
             let params = json!([
@@ -720,6 +766,36 @@ impl Drk {
                 serialize(&dao.tx_hash.unwrap()),
                 QueryType::Integer as u8,
                 dao.call_index.unwrap(),
+            ]);
+
+            let req = JsonRequest::new("wallet.exec_sql", params);
+            let _ = self.rpc_client.request(req).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Unconfirm imported DAOs by removing the leaf position, txid, and call index.
+    pub async fn unconfirm_daos(&self, daos: &[Dao]) -> Result<()> {
+        for dao in daos {
+            let query = format!(
+                "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 WHERE {} = {};",
+                DAO_DAOS_TABLE,
+                DAO_DAOS_COL_LEAF_POSITION,
+                DAO_DAOS_COL_TX_HASH,
+                DAO_DAOS_COL_CALL_INDEX,
+                DAO_DAOS_COL_DAO_ID,
+                dao.id,
+            );
+
+            let params = json!([
+                query,
+                QueryType::OptionBlob as u8,
+                None::<Vec<u8>>,
+                QueryType::OptionBlob as u8,
+                None::<Vec<u8>>,
+                QueryType::OptionInteger as u8,
+                None::<u64>,
             ]);
 
             let req = JsonRequest::new("wallet.exec_sql", params);
