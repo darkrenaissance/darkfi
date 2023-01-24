@@ -257,6 +257,24 @@ impl Darkfid {
                         row_ret.push(json!(value));
                     }
 
+                    QueryType::OptionInteger => {
+                        let value: Option<i32> = match row.try_get(col) {
+                            Ok(v) => Some(v),
+                            Err(_) => None,
+                        };
+
+                        row_ret.push(json!(value));
+                    }
+
+                    QueryType::OptionBlob => {
+                        let value: Option<Vec<u8>> = match row.try_get(col) {
+                            Ok(v) => Some(v),
+                            Err(_) => None,
+                        };
+
+                        row_ret.push(json!(value));
+                    }
+
                     _ => unreachable!(),
                 }
             }
@@ -315,6 +333,34 @@ impl Darkfid {
 
                     query = query.bind(val);
                 }
+
+                QueryType::OptionInteger => {
+                    let val: Option<i32> = match serde_json::from_value(pair[1].clone()) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!(
+                                "[RPC] wallet.exec_sql: Failed casting value to Option<i32>: {}",
+                                e
+                            );
+                            return JsonError::new(ParseError, None, id).into()
+                        }
+                    };
+
+                    query = query.bind(val);
+                }
+
+                QueryType::OptionBlob => {
+                    let val: Option<Vec<u8>> = match serde_json::from_value(pair[1].clone()) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("[RPC] wallet.exec_sql: Failed casting value to Option<Vec<u8>>: {}", e);
+                            return JsonError::new(ParseError, None, id).into()
+                        }
+                    };
+
+                    query = query.bind(val);
+                }
+
                 _ => return JsonError::new(InvalidParams, None, id).into(),
             }
         }

@@ -332,7 +332,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     if args.single_node {
-        info!("Node is configured to tun in single-node mode!");
+        info!("Node is configured to run in single-node mode!");
     }
 
     // Initialize validator state
