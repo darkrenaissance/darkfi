@@ -460,62 +460,20 @@ impl Drk {
 
     /// Fetch known unspent balances from the wallet and return them as a hashmap.
     pub async fn money_balance(&self) -> Result<HashMap<String, u64>> {
-        // This represents "false"
-        let is_spent = 0;
-
-        let query = format!(
-            "SELECT {}, {} FROM {} WHERE {} = {}",
-            MONEY_COINS_COL_VALUE,
-            MONEY_COINS_COL_TOKEN_ID,
-            MONEY_COINS_TABLE,
-            MONEY_COINS_COL_IS_SPENT,
-            is_spent,
-        );
-
-        let params = json!([
-            query,
-            QueryType::Blob as u8,
-            MONEY_COINS_COL_VALUE,
-            QueryType::Blob as u8,
-            MONEY_COINS_COL_TOKEN_ID,
-        ]);
-
-        let req = JsonRequest::new("wallet.query_row_multi", params);
-        let rep = self.rpc_client.request(req).await?;
-
-        // The returned thing should be an array of found rows.
-        let Some(rows) = rep.as_array() else {
-            return Err(anyhow!("[money_balance] Unexpected response from darkfid: {}", rep))
-        };
+        let mut coins = self.get_coins(false).await?;
+        coins.retain(|x| x.0.note.spend_hook == pallas::Base::zero());
 
         // Fill this map with balances
         let mut balmap: HashMap<String, u64> = HashMap::new();
 
-        // Let's scan through the rows and see if we got anything.
-        // TODO: Separate tokens with spend_hook != 0
-        for row in rows {
-            let Some(row) = row.as_array() else {
-                return Err(anyhow!("[money_balance] Unexpected response from darkfid: {}", rep))
-            };
+        for coin in coins {
+            let mut value = coin.0.note.value;
 
-            if row.len() != 2 {
-                eprintln!("Error: Got invalid array, row should contain two elements.");
-                eprintln!("Actual contents:\n:{:#?}", row);
-                return Err(anyhow!("[money_balance] Unexpected response from darkfid: {}", rep))
-            }
-
-            let value_bytes: Vec<u8> = serde_json::from_value(row[0].clone())?;
-            let mut value: u64 = deserialize(&value_bytes)?;
-
-            let token_bytes: Vec<u8> = serde_json::from_value(row[1].clone())?;
-            let token_id: TokenId = deserialize(&token_bytes)?;
-            let token_id = format!("{}", token_id);
-
-            if let Some(prev) = balmap.get(&token_id) {
+            if let Some(prev) = balmap.get(&coin.0.note.token_id.to_string()) {
                 value += prev;
             }
 
-            balmap.insert(token_id, value);
+            balmap.insert(coin.0.note.token_id.to_string(), value);
         }
 
         Ok(balmap)
@@ -602,7 +560,7 @@ impl Drk {
         // This is the SQL query we'll be executing to insert new coins
         // into the wallet
         let query = format!(
-            "INSERT INTO {} ({}, {}, {}, {}, {} {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);",
+            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);",
             MONEY_COINS_TABLE,
             MONEY_COINS_COL_COIN,
             MONEY_COINS_COL_IS_SPENT,
