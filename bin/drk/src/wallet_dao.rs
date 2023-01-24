@@ -746,6 +746,7 @@ impl Drk {
         }
 
         if confirm {
+            self.put_dao_trees(&daos_tree, &proposals_tree).await?;
             self.confirm_daos(&daos_to_confirm).await?;
             self.put_dao_proposals(&our_proposals).await?;
         }

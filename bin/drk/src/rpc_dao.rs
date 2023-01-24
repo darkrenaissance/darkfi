@@ -188,8 +188,8 @@ impl Drk {
 
         let (dao_merkle_path, dao_merkle_root) = {
             let root = daos_tree.root(0).unwrap();
-            let dao_merkle_path =
-                daos_tree.authentication_path(dao.leaf_position.unwrap(), &root).unwrap();
+            let leaf_pos = dao.leaf_position.unwrap();
+            let dao_merkle_path = daos_tree.authentication_path(leaf_pos, &root).unwrap();
             (dao_merkle_path, root)
         };
 
