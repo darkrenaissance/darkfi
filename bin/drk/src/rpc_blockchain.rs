@@ -115,7 +115,7 @@ impl Drk {
     /// to us. If any are found, the metadata is extracted and placed into the wallet
     /// for future use.
     async fn scan_block_dao(&self, block: &BlockInfo) -> Result<()> {
-        eprintln!("Iterating over {} transactions", block.txs.len());
+        eprintln!("[DAO] Iterating over {} transactions", block.txs.len());
         for tx in block.txs.iter() {
             self.apply_tx_dao_data(tx, true).await?;
         }
@@ -128,7 +128,7 @@ impl Drk {
     /// to us. If any are found, the metadata is extracted and placed into the wallet
     /// for future use.
     async fn scan_block_money(&self, block: &BlockInfo) -> Result<()> {
-        eprintln!("Iterating over {} transactions", block.txs.len());
+        eprintln!("[Money] Iterating over {} transactions", block.txs.len());
 
         for tx in block.txs.iter() {
             self.apply_tx_money_data(tx, true).await?;
@@ -203,6 +203,9 @@ impl Drk {
     pub async fn scan_blocks(&self, reset: bool) -> Result<()> {
         let mut sl = if reset {
             self.reset_money_tree().await?;
+            self.reset_money_coins().await?;
+            self.reset_dao_trees().await?;
+            self.reset_daos().await?;
             0
         } else {
             self.last_scanned_slot().await?
