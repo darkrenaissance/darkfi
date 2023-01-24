@@ -66,6 +66,13 @@ impl TryFrom<&str> for DaoBulla {
     }
 }
 
+impl core::fmt::Display for DaoBulla {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let disp: String = bs58::encode(self.0.to_repr()).into_string();
+        write!(f, "{}", disp)
+    }
+}
+
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct DaoMintParams {
     pub dao_bulla: DaoBulla,
