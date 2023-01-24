@@ -869,6 +869,7 @@ pub fn build_transfer_tx(
     let mut clear_inputs = vec![];
     let mut inputs = vec![];
     let mut outputs = vec![];
+    let mut change_outputs = vec![];
     let mut spent_coins = vec![];
 
     if clear_input {
@@ -908,7 +909,7 @@ pub fn build_transfer_tx(
 
         if inputs_value > value {
             let return_value = inputs_value - value;
-            outputs.push(TransactionBuilderOutputInfo {
+            change_outputs.push(TransactionBuilderOutputInfo {
                 value: return_value,
                 token_id,
                 public_key: keypair.public,
@@ -963,9 +964,9 @@ pub fn build_transfer_tx(
             value_blind,
             token_blind,
             input.note.serial,
-            spend_hook,
-            user_data,
-            user_data_blind,
+            pallas::Base::zero(),
+            pallas::Base::zero(),
+            user_data_blind, // <-- FIXME: This api needs rework to support normal and DAO transfers
             input.note.coin_blind,
             input.secret,
             input.leaf_position,
@@ -989,8 +990,8 @@ pub fn build_transfer_tx(
     // This value_blind calc assumes there will always be at least a single output
     assert!(!outputs.is_empty());
 
-    for (i, output) in outputs.iter().enumerate() {
-        let value_blind = if i == outputs.len() - 1 {
+    for (i, output) in outputs.iter().chain(change_outputs.iter()).enumerate() {
+        let value_blind = if i == outputs.len() + change_outputs.len() - 1 {
             compute_remainder_blind(&params.clear_inputs, &input_blinds, &output_blinds)
         } else {
             ValueBlind::random(&mut OsRng)
@@ -1001,6 +1002,15 @@ pub fn build_transfer_tx(
         let serial = pallas::Base::random(&mut OsRng);
         let coin_blind = pallas::Base::random(&mut OsRng);
 
+        // A hacky way to zeroize spend hooks for the change outputs
+        let (scoped_spend_hook, scoped_user_data) = {
+            if i >= outputs.len() {
+                (pallas::Base::zero(), pallas::Base::zero())
+            } else {
+                (spend_hook, user_data)
+            }
+        };
+
         info!(target: "money", "Creating transfer mint proof for output {}", i);
         let (proof, revealed) = create_transfer_mint_proof(
             mint_zkbin,
@@ -1010,8 +1020,8 @@ pub fn build_transfer_tx(
             value_blind,
             token_blind,
             serial,
-            spend_hook,
-            user_data,
+            scoped_spend_hook,
+            scoped_user_data,
             coin_blind,
             output.public_key,
         )?;
@@ -1023,8 +1033,8 @@ pub fn build_transfer_tx(
             serial,
             value: output.value,
             token_id: output.token_id,
-            spend_hook,
-            user_data,
+            spend_hook: scoped_spend_hook,
+            user_data: scoped_user_data,
             coin_blind,
             value_blind,
             token_blind,
