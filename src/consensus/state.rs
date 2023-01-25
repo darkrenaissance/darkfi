@@ -269,11 +269,15 @@ impl ConsensusState {
         let c = x.ln();
         let neg_c = neg_one * c;
 
-        let sigma1_fbig = neg_c.clone() / (total_sigma.clone()+constants::FLOAT10_EPSILON.clone()) * field_p.clone();
+        let sigma1_fbig = neg_c.clone() /
+            (total_sigma.clone() + constants::FLOAT10_EPSILON.clone()) *
+            field_p.clone();
         info!(target: "consensus::state", "sigma1_fbig: {:}", sigma1_fbig);
         let sigma1 = fbig2base(sigma1_fbig);
 
-        let sigma2_fbig = (neg_c / (total_sigma+constants::FLOAT10_EPSILON.clone())).powf(two.clone()) * (field_p / two);
+        let sigma2_fbig = (neg_c / (total_sigma + constants::FLOAT10_EPSILON.clone()))
+            .powf(two.clone()) *
+            (field_p / two);
         info!(target: "consensus::state", "sigma2_fbig: {:}", sigma2_fbig);
         let sigma2 = fbig2base(sigma2_fbig);
 

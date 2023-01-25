@@ -30,9 +30,9 @@ use halo2_proofs::{arithmetic::Field, circuit::Value};
 use log::info;
 use rand::rngs::OsRng;
 
-use super::constants::{EPOCH_LENGTH};
+use super::constants::EPOCH_LENGTH;
 use crate::{
-    consensus::{constants, TransferStx, TxRcpt, Float10, utils::fbig2base},
+    consensus::{constants, utils::fbig2base, Float10, TransferStx, TxRcpt},
     zk::{
         proof::{Proof, ProvingKey},
         vm::ZkCircuit,
@@ -285,7 +285,7 @@ impl LeadCoin {
     pub fn headstart() -> pallas::Base {
         let headstart = constants::MIN_F.clone() * Float10::try_from(constants::P.clone()).unwrap();
         let headstart_base = fbig2base(headstart);
-        headstart_base   
+        headstart_base
     }
 
     pub fn is_leader(

@@ -50,7 +50,7 @@ lazy_static! {
     pub static ref TESTNET_INITIAL_DISTRIBUTION: u64 = 0;
 
     pub static ref FLOAT10_EPSILON: Float10 = Float10::try_from("1").unwrap();
-    // Commonly used Float10 
+    // Commonly used Float10
     pub static ref FLOAT10_NEG_TWO: Float10 = Float10::try_from("-2").unwrap();
     pub static ref FLOAT10_NEG_ONE: Float10 = Float10::try_from("-1").unwrap();
     pub static ref FLOAT10_ZERO: Float10 = Float10::try_from("0").unwrap();
