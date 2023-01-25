@@ -257,7 +257,7 @@ impl ConsensusState {
 
     fn calc_sigmas(f: Float10, total_sigma: Float10) -> (pallas::Base, pallas::Base) {
         info!(target: "consensus::state", "sigmas(): f: {}", f);
-        info!(target: "consensus::state", "sigmas(): stake: {:}", total_sigma);
+        info!(target: "consensus::state", "sigmas(): total network stake: {:}", total_sigma);
 
         let one = constants::FLOAT10_ONE.clone();
         let neg_one = constants::FLOAT10_NEG_ONE.clone();
