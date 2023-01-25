@@ -213,7 +213,6 @@ impl LeadCoin {
         // rho
         let rho_msg = [seed, rho_mu];
         let rho = poseidon_hash(rho_msg);
-        let headstart = Self::headstart();
         let public_inputs = vec![
             pk,
             *c1_cm_coord.x(),
@@ -229,7 +228,6 @@ impl LeadCoin {
             rho,
             sigma1,
             sigma2,
-            headstart,
         ];
         public_inputs
     }
@@ -388,6 +386,7 @@ impl LeadCoin {
         let (y_mu, rho_mu) = Self::election_seeds(eta, slot);
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode).unwrap();
+        let headstart = Self::headstart();
         let witnesses = vec![
             Witness::MerklePath(Value::known(self.coin1_commitment_merkle_path)),
             Witness::Uint32(Value::known(self.coin1_commitment_pos)),
@@ -404,6 +403,7 @@ impl LeadCoin {
             Witness::Base(Value::known(y_mu)),
             Witness::Base(Value::known(sigma1)),
             Witness::Base(Value::known(sigma2)),
+            Witness::Base(Value::known(headstart)),
         ];
         let circuit = ZkCircuit::new(witnesses, zkbin);
         let public_inputs = self.public_inputs(sigma1, sigma2, eta, slot, derived_blind);
