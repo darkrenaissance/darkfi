@@ -71,7 +71,7 @@ lazy_static! {
     pub static ref MAX_DER: Float10 = Float10::try_from("0.1").unwrap();
     pub static ref MIN_DER: Float10 = Float10::try_from("-0.1").unwrap();
     pub static ref MAX_F: Float10 = Float10::try_from("0.99").unwrap();
-    pub static ref MIN_F: Float10 = Float10::try_from("0.05").unwrap();
+    pub static ref MIN_F: Float10 = Float10::try_from("0.01").unwrap();
 
 }
 

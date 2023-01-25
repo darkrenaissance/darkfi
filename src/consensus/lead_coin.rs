@@ -30,9 +30,9 @@ use halo2_proofs::{arithmetic::Field, circuit::Value};
 use log::info;
 use rand::rngs::OsRng;
 
-use super::constants::EPOCH_LENGTH;
+use super::constants::{EPOCH_LENGTH};
 use crate::{
-    consensus::{constants, TransferStx, TxRcpt},
+    consensus::{constants, TransferStx, TxRcpt, Float10, utils::fbig2base},
     zk::{
         proof::{Proof, ProvingKey},
         vm::ZkCircuit,
@@ -213,6 +213,7 @@ impl LeadCoin {
         // rho
         let rho_msg = [seed, rho_mu];
         let rho = poseidon_hash(rho_msg);
+        let headstart = Self::headstart();
         let public_inputs = vec![
             pk,
             *c1_cm_coord.x(),
@@ -228,6 +229,7 @@ impl LeadCoin {
             rho,
             sigma1,
             sigma2,
+            headstart,
         ];
         public_inputs
     }
@@ -282,6 +284,12 @@ impl LeadCoin {
     }
     */
 
+    pub fn headstart() -> pallas::Base {
+        let headstart = constants::MIN_F.clone() * Float10::try_from(constants::P.clone()).unwrap();
+        let headstart_base = fbig2base(headstart);
+        headstart_base   
+    }
+
     pub fn is_leader(
         &self,
         sigma1: pallas::Base,
@@ -298,7 +306,8 @@ impl LeadCoin {
 
         let value = pallas::Base::from(self.value);
 
-        let target = sigma1 * value + sigma2 * value * value;
+        let headstart = Self::headstart();
+        let target = sigma1 * value + sigma2 * value * value + headstart;
 
         let y_t_str = format!("{:?},{:?}\n", y, target);
         let f =

@@ -20,6 +20,7 @@ contract "Lead" {
          Base mu_y,
          Base sigma1,
          Base sigma2,
+         Base headstart,
 }
 
 circuit "Lead" {
@@ -83,10 +84,11 @@ circuit "Lead" {
         term2_1 = base_mul(sigma2, value);
         term2 = base_mul(term2_1, value);
         target = base_add(term1, term2);
+        shifted_target = base_add(target, headstart);
         #lottery
         #constrain public value sigma1
         constrain_instance(sigma1);
         # constrain public value sigma2
         constrain_instance(sigma2);
-        less_than_loose(y, target);
+        less_than_loose(y, shifted_target);
 }
