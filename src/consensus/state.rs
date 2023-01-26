@@ -73,8 +73,6 @@ pub struct ConsensusState {
     pub forks: Vec<Fork>,
     /// Current epoch
     pub epoch: u64,
-    /// Current epoch eta
-    pub epoch_eta: pallas::Base,
     /// Hot/live slot checkpoints
     pub slot_checkpoints: Vec<SlotCheckpoint>,
     /// Leaders count history
@@ -117,7 +115,6 @@ impl ConsensusState {
             checked_finalization: 0,
             forks: vec![],
             epoch: 0,
-            epoch_eta: pallas::Base::zero(),
             slot_checkpoints: vec![],
             leaders_history: vec![0],
             f_history: vec![constants::FLOAT10_ZERO.clone()],
@@ -218,16 +215,10 @@ impl ConsensusState {
     // Initialize node lead coins and set current epoch and eta.
     pub async fn init_coins(&mut self) -> Result<()> {
         self.epoch = self.current_epoch();
-        if self.slot_checkpoints.is_empty() {
-            // Create slot checkpoint if not on genesis slot (already in db)
-            if self.current_slot() != 0 {
-                self.epoch_eta = self.get_eta();
-                let (sigma1, sigma2) = self.sigmas();
-                self.generate_slot_checkpoint(sigma1, sigma2);
-            }
-        } else {
-            let last_slot_checkpoint = self.slot_checkpoints.last().unwrap();
-            self.epoch_eta = last_slot_checkpoint.eta;
+        // Create slot checkpoint if not on genesis slot (already in db)
+        if self.slot_checkpoints.is_empty() && self.current_slot() != 0 {
+            let (sigma1, sigma2) = self.sigmas();
+            self.generate_slot_checkpoint(sigma1, sigma2);
         };
         self.coins = self.create_coins().await?;
         self.update_forks_checkpoints();
@@ -248,7 +239,6 @@ impl ConsensusState {
             return Ok(false)
         }
         self.epoch = epoch;
-        self.epoch_eta = self.get_eta();
 
         Ok(true)
     }
