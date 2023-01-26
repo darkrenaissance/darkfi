@@ -323,8 +323,8 @@ impl ConsensusState {
                 // Temporarily, we compete with fixed stake.
                 // This stake should be based on how many nodes we want to run, and they all
                 // must sum to initial distribution total coins.
-                //let stake = self.initial_distribution;
-                let stake = 200;
+                let stake = self.initial_distribution;
+                //let stake = 200;
                 let c = LeadCoin::new(
                     stake,
                     slot,
@@ -637,11 +637,11 @@ impl ConsensusState {
     }
 
     /// Utility function to extract leader selection lottery randomness(eta),
-    /// defined as the hash of the previous lead proof converted to pallas base.
+    /// defined as the hash of the last block, converted to pallas base.
     pub fn get_eta(&self) -> pallas::Base {
-        let proof_tx_hash = self.blockchain.get_last_proof_hash().unwrap();
-        let mut bytes: [u8; 32] = *proof_tx_hash.as_bytes();
-        // read first 254 bits
+        let (_, hash) = self.blockchain.last().unwrap();
+        let mut bytes: [u8; 32] = *hash.as_bytes();
+        // Read first 254 bits
         bytes[30] = 0;
         bytes[31] = 0;
         pallas::Base::from_repr(bytes).unwrap()
