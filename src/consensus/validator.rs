@@ -105,12 +105,12 @@ impl ValidatorState {
         debug!(target: "consensus::validator", "Initializing ValidatorState");
 
         debug!(target: "consensus::validator", "Initializing wallet tables for consensus");
-        // TODO: TESTNET: The stuff is kept entirely in memory for now, what should we write
-        //                to disk/wallet?
-        //let consensus_tree_init_query = include_str!("../../script/sql/consensus_tree.sql");
-        //let consensus_keys_init_query = include_str!("../../script/sql/consensus_keys.sql");
-        //wallet.exec_sql(consensus_tree_init_query).await?;
-        //wallet.exec_sql(consensus_keys_init_query).await?;
+
+        // Initialize consensus coin table.
+        // NOTE: In future this will be redundant as consensus coins will live in the money contract.
+        if enable_participation {
+            wallet.exec_sql(include_str!("consensus_coin.sql")).await?;
+        }
 
         debug!(target: "consensus::validator", "Generating leader proof keys with k: {}", constants::LEADER_PROOF_K);
         let bincode = include_bytes!("../../proof/lead.zk.bin");
@@ -128,6 +128,7 @@ impl ValidatorState {
 
         let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
         let consensus = ConsensusState::new(
+            wallet.clone(),
             blockchain.clone(),
             bootstrap_ts,
             genesis_ts,
@@ -290,10 +291,10 @@ impl ValidatorState {
 
         // Checking if extending a fork or canonical
         let (prev_hash, coin) = if fork_index == -1 {
-            (self.blockchain.last()?.1, self.consensus.coins[coin_index])
+            (self.blockchain.last()?.1, self.consensus.coins[coin_index].clone())
         } else {
             let checkpoint = self.consensus.forks[fork_index as usize].sequence.last().unwrap();
-            (checkpoint.proposal.hash, checkpoint.coins[coin_index])
+            (checkpoint.proposal.hash, checkpoint.coins[coin_index].clone())
         };
 
         // Generate derived coin blind
@@ -567,8 +568,23 @@ impl ValidatorState {
 
         // If proposal came fromself, we derive new coin
         if let Some((idx, c, derived_blind)) = coin {
-            state_checkpoint.coins[idx] =
-                c.derive_coin(&mut state_checkpoint.coins_tree, derived_blind);
+            info!(target: "consensus::validator", "receive_proposal(): Storing derived coin...");
+            // Derive coin
+            let derived = c.derive_coin(&mut state_checkpoint.coins_tree, derived_blind);
+            // Update consensus coin in wallet
+            // NOTE: In future this will be redundant as consensus coins will live in the money contract.
+            // Get a wallet connection
+            let mut conn = self.wallet.conn.acquire().await?;
+            let query_str = format!(
+                "UPDATE {} SET {} = ?1",
+                constants::CONSENSUS_COIN_TABLE,
+                constants::CONSENSUS_COIN_COL
+            );
+            let mut query = sqlx::query(&query_str);
+            query = query.bind(serialize(&derived));
+            query.execute(&mut conn).await?;
+
+            state_checkpoint.coins[idx] = derived;
         }
         // Store proposal coins nullifiers
         state_checkpoint.nullifiers.push(prop_sn);

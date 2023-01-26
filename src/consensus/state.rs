@@ -24,9 +24,10 @@ use darkfi_sdk::{
     incrementalmerkletree::bridgetree::BridgeTree,
     pasta::{group::ff::PrimeField, pallas},
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use log::info;
 use rand::{thread_rng, Rng};
+use sqlx::Row;
 
 use super::{
     constants,
@@ -34,7 +35,10 @@ use super::{
     utils::fbig2base,
     Block, BlockProposal, Float10,
 };
-use crate::{blockchain::Blockchain, net, tx::Transaction, util::time::Timestamp, Error, Result};
+use crate::{
+    blockchain::Blockchain, net, tx::Transaction, util::time::Timestamp, wallet::WalletPtr, Error,
+    Result,
+};
 
 use std::{
     fs::File,
@@ -43,6 +47,8 @@ use std::{
 
 /// This struct represents the information required by the consensus algorithm
 pub struct ConsensusState {
+    /// Wallet interface
+    pub wallet: WalletPtr,
     /// Canonical (finalized) blockchain
     pub blockchain: Blockchain,
     /// Network bootstrap timestamp
@@ -88,6 +94,7 @@ pub struct ConsensusState {
 
 impl ConsensusState {
     pub fn new(
+        wallet: WalletPtr,
         blockchain: Blockchain,
         bootstrap_ts: Timestamp,
         genesis_ts: Timestamp,
@@ -97,6 +104,7 @@ impl ConsensusState {
     ) -> Result<Self> {
         let genesis_block = Block::genesis_block(genesis_ts, genesis_data).blockhash();
         Ok(Self {
+            wallet,
             blockchain,
             bootstrap_ts,
             genesis_ts,
@@ -294,35 +302,61 @@ impl ConsensusState {
         let slot = self.current_slot();
 
         // TODO: cleanup LeadCoinSecrets, no need to keep a vector
-        let mut rng = thread_rng();
-        let mut seeds: Vec<u64> = Vec::with_capacity(constants::EPOCH_LENGTH);
-        for _ in 0..constants::EPOCH_LENGTH {
-            seeds.push(rng.gen());
-        }
-        let epoch_secrets = LeadCoinSecrets::generate();
+        let (seeds, epoch_secrets) = {
+            let mut rng = thread_rng();
+            let mut seeds: Vec<u64> = Vec::with_capacity(constants::EPOCH_LENGTH);
+            for _ in 0..constants::EPOCH_LENGTH {
+                seeds.push(rng.gen());
+            }
+            (seeds, LeadCoinSecrets::generate())
+        };
 
         // LeadCoin matrix containing node competing coins.
         let mut coins: Vec<LeadCoin> = Vec::with_capacity(constants::EPOCH_LENGTH);
 
-        // TODO: TESTNET: Here we would look into the wallet to find coins we're able to use.
-        //                The wallet has specific tables for consensus coins.
-        // TODO: TESTNET: Token ID still has to be enforced properly in the consensus.
+        // Retrieve coin from wallet
+        // NOTE: In future this will be retrieved from the money contract.
+        // Get a wallet connection
+        let mut conn = self.wallet.conn.acquire().await?;
 
-        // Temporarily, we compete with fixed stake.
-        // This stake should be based on how many nodes we want to run, and they all
-        // must sum to initial distribution total coins.
-        let stake = self.initial_distribution;
-        //let stake = 200;
-        let coin = LeadCoin::new(
-            stake,
-            slot,
-            epoch_secrets.secret_keys[0].inner(),
-            epoch_secrets.merkle_roots[0],
-            0,
-            epoch_secrets.merkle_paths[0],
-            pallas::Base::from(seeds[0]),
-            &mut self.coins_tree,
-        );
+        // Execute the query and see if we find any rows
+        let query_str = format!("SELECT * FROM {}", constants::CONSENSUS_COIN_TABLE);
+        let mut query = sqlx::query(&query_str);
+        let coin = match query.fetch_one(&mut conn).await {
+            Ok(row) => {
+                let bytes: Vec<u8> = row.try_get(constants::CONSENSUS_COIN_COL)?;
+                deserialize(&bytes)?
+            }
+            Err(_) => {
+                // If no records are found, we generate a new coin and save it to the database
+                info!(target: "consensus::state", "create_coins(): No LeadCoin was found in DB, generating new one...");
+                // Temporarily, we compete with fixed stake.
+                // This stake should be based on how many nodes we want to run, and they all
+                // must sum to initial distribution total coins.
+                //let stake = self.initial_distribution;
+                let stake = 200;
+                let c = LeadCoin::new(
+                    stake,
+                    slot,
+                    epoch_secrets.secret_keys[0].inner(),
+                    epoch_secrets.merkle_roots[0],
+                    0,
+                    epoch_secrets.merkle_paths[0].clone(),
+                    pallas::Base::from(seeds[0]),
+                    &mut self.coins_tree,
+                );
+                let query_str = format!(
+                    "INSERT INTO {} ({}) VALUES (?1);",
+                    constants::CONSENSUS_COIN_TABLE,
+                    constants::CONSENSUS_COIN_COL
+                );
+                query = sqlx::query(&query_str);
+                query = query.bind(serialize(&c));
+                query.execute(&mut conn).await?;
+                c
+            }
+        };
+        info!(target: "consensus::state", "create_coins(): Will use LeadCoin with value: {}", coin.value);
         coins.push(coin);
 
         Ok(coins)

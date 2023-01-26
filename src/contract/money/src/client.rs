@@ -1131,11 +1131,11 @@ pub fn build_stake_tx(
             coin.secret.inner(), // coin secret key
             sk_root,
             sk_pos.try_into().unwrap(),
-            sk_merkle_path.try_into().unwrap(),
+            sk_merkle_path,
             coin.note.serial,
             cm_tree,
         );
-        leadcoins.push(leadcoin);
+        leadcoins.push(leadcoin.clone());
         let lead_coin_blind = ValueBlind::random(&mut OsRng);
         let public_key = leadcoin.pk();
         let (lead_proof, lead_revealed) = create_stake_mint_proof(

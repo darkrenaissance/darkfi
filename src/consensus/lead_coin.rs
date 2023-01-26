@@ -26,6 +26,7 @@ use darkfi_sdk::{
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
 };
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use log::info;
 use rand::rngs::OsRng;
@@ -59,7 +60,7 @@ pub const PREFIX_SN: u64 = 6;
 
 // TODO: Unify item names with the names in the ZK proof (those are more descriptive)
 /// Structure representing the consensus leader coin
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
 pub struct LeadCoin {
     /// Coin's stake value
     pub value: u64,
@@ -74,7 +75,7 @@ pub struct LeadCoin {
     /// Coin commitment position
     pub coin1_commitment_pos: u32,
     /// Merkle path to the coin1's commitment
-    pub coin1_commitment_merkle_path: [MerkleNode; MERKLE_DEPTH_LEAD_COIN],
+    pub coin1_commitment_merkle_path: Vec<MerkleNode>,
     /// coin1 sk
     pub coin1_sk: pallas::Base,
     /// Merkle root of the `coin1` secret key
@@ -82,7 +83,7 @@ pub struct LeadCoin {
     /// coin1 sk position in merkle tree
     pub coin1_sk_pos: u32,
     /// Merkle path to the secret key of `coin1`
-    pub coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEAD_COIN],
+    pub coin1_sk_merkle_path: Vec<MerkleNode>,
     /// coin1 commitment blinding factor
     pub coin1_blind: pallas::Scalar,
 }
@@ -104,7 +105,7 @@ impl LeadCoin {
         // sk pos
         coin1_sk_pos: usize,
         // Merkle path to the secret key of `coin_1` in the Merkle tree of secret keys
-        coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEAD_COIN],
+        coin1_sk_merkle_path: Vec<MerkleNode>,
         // coin1 nonce
         seed: pallas::Base,
         // Merkle tree of coin commitments
@@ -147,7 +148,7 @@ impl LeadCoin {
             coin1_commitment,
             coin1_commitment_root,
             coin1_commitment_pos: u32::try_from(usize::from(coin1_commitment_pos)).unwrap(),
-            coin1_commitment_merkle_path: coin1_commitment_merkle_path.try_into().unwrap(),
+            coin1_commitment_merkle_path,
             coin1_sk,
             coin1_sk_root,
             coin1_sk_pos: u32::try_from(coin1_sk_pos).unwrap(),
@@ -368,7 +369,7 @@ impl LeadCoin {
             coin1_sk: self.coin1_sk,
             coin1_sk_root: self.coin1_sk_root,
             coin1_sk_pos: self.coin1_sk_pos,
-            coin1_sk_merkle_path: self.coin1_sk_merkle_path,
+            coin1_sk_merkle_path: self.coin1_sk_merkle_path.clone(),
             coin1_blind: derived_blind,
         }
     }
@@ -387,13 +388,17 @@ impl LeadCoin {
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode).unwrap();
         let headstart = Self::headstart();
+        let coin1_commitment_merkle_path: [MerkleNode; MERKLE_DEPTH_LEAD_COIN] =
+            self.coin1_commitment_merkle_path.clone().try_into().unwrap();
+        let coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEAD_COIN] =
+            self.coin1_sk_merkle_path.clone().try_into().unwrap();
         let witnesses = vec![
-            Witness::MerklePath(Value::known(self.coin1_commitment_merkle_path)),
+            Witness::MerklePath(Value::known(coin1_commitment_merkle_path)),
             Witness::Uint32(Value::known(self.coin1_commitment_pos)),
             Witness::Uint32(Value::known(self.coin1_sk_pos)),
             Witness::Base(Value::known(self.coin1_sk)),
             Witness::Base(Value::known(self.coin1_sk_root.inner())),
-            Witness::MerklePath(Value::known(self.coin1_sk_merkle_path)),
+            Witness::MerklePath(Value::known(coin1_sk_merkle_path)),
             Witness::Base(Value::known(pallas::Base::from(self.slot))),
             Witness::Base(Value::known(self.nonce)),
             Witness::Scalar(Value::known(self.coin1_blind)),
@@ -431,17 +436,21 @@ impl LeadCoin {
         let xferval = pallas::Base::from(transfered_coin.value);
         let pos: u32 = self.coin1_commitment_pos;
         let value = pallas::Base::from(self.value);
+        let coin1_sk_merkle_path: [MerkleNode; MERKLE_DEPTH_LEAD_COIN] =
+            self.coin1_sk_merkle_path.clone().try_into().unwrap();
+        let coin1_commitment_merkle_path: [MerkleNode; MERKLE_DEPTH_LEAD_COIN] =
+            self.coin1_commitment_merkle_path.clone().try_into().unwrap();
         let witnesses = vec![
             // coin (1) burned coin
             Witness::Base(Value::known(self.coin1_commitment_root.inner())),
             Witness::Base(Value::known(self.coin1_sk_root.inner())),
             Witness::Base(Value::known(self.coin1_sk)),
-            Witness::MerklePath(Value::known(self.coin1_sk_merkle_path)),
+            Witness::MerklePath(Value::known(coin1_sk_merkle_path)),
             Witness::Uint32(Value::known(self.coin1_sk_pos)),
             Witness::Base(Value::known(self.nonce)),
             Witness::Scalar(Value::known(self.coin1_blind)),
             Witness::Base(Value::known(value)),
-            Witness::MerklePath(Value::known(self.coin1_commitment_merkle_path)),
+            Witness::MerklePath(Value::known(coin1_commitment_merkle_path)),
             Witness::Uint32(Value::known(pos)),
             Witness::Base(Value::known(self.sn())),
             // coin (3)
@@ -497,7 +506,7 @@ impl LeadCoin {
 pub struct LeadCoinSecrets {
     pub secret_keys: Vec<SecretKey>,
     pub merkle_roots: Vec<MerkleNode>,
-    pub merkle_paths: Vec<[MerkleNode; MERKLE_DEPTH_LEAD_COIN]>,
+    pub merkle_paths: Vec<Vec<MerkleNode>>,
 }
 
 impl LeadCoinSecrets {
@@ -540,7 +549,7 @@ impl LeadCoinSecrets {
             let path = tree.authentication_path(leaf_pos, &root).unwrap();
 
             root_sks.push(root);
-            path_sks.push(path.try_into().unwrap());
+            path_sks.push(path);
         }
 
         Self { secret_keys: sks, merkle_roots: root_sks, merkle_paths: path_sks }
