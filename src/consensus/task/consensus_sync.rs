@@ -144,7 +144,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     lock.consensus.forks = forks;
     lock.unconfirmed_txs = response.unconfirmed_txs.clone();
     lock.consensus.slot_checkpoints = response.slot_checkpoints.clone();
-    lock.consensus.leaders_history = response.leaders_history.clone();
+    lock.consensus.previous_leaders = response.previous_leaders.clone();
     lock.consensus.nullifiers = response.nullifiers.clone();
     lock.consensus.init_coins().await?;
 

@@ -330,7 +330,7 @@ impl ValidatorState {
             coin.slot,
             eta,
             LeadProof::from(proof?),
-            *self.consensus.leaders_history.last().unwrap(),
+            self.consensus.previous_leaders,
         );
 
         Ok(Some((BlockProposal::new(header, unproposed_txs, lead_info), coin, derived_blind)))
@@ -600,6 +600,9 @@ impl ValidatorState {
             }
         };
 
+        // Increase slot leaders count
+        self.consensus.previous_leaders += 1;
+
         Ok(true)
     }
 
@@ -628,17 +631,9 @@ impl ValidatorState {
 
         // First we find longest fork without any other forks at same height
         let mut fork_index = -1;
-        // Use this index to extract leaders count sequence from longest fork
-        let mut index_for_history = -1;
-        let mut max_length_for_history = 0;
         let mut max_length = 0;
         for (index, fork) in self.consensus.forks.iter().enumerate() {
             let length = fork.sequence.len();
-            // Check if greater than max to retain index for history
-            if length > max_length_for_history {
-                index_for_history = index as i64;
-                max_length_for_history = length;
-            }
             // Check if less than max
             if length < max_length {
                 continue
@@ -659,7 +654,6 @@ impl ValidatorState {
         match fork_index {
             -2 => {
                 info!(target: "consensus::validator", "chain_finalization(): Eligible forks with same height exist, nothing to finalize.");
-                self.consensus.set_leader_history(index_for_history, slot);
                 return Ok((vec![], vec![]))
             }
             -1 => {
@@ -722,8 +716,6 @@ impl ValidatorState {
 
         // Setting leaders history to last proposal leaders count
         let last_state_checkpoint = fork.sequence.last().unwrap().clone();
-        self.consensus.leaders_history =
-            vec![last_state_checkpoint.proposal.block.lead_info.leaders];
 
         // Setting canonical states from last finalized checkpoint
         self.consensus.coins = last_state_checkpoint.coins;

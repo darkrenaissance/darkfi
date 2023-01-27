@@ -75,8 +75,8 @@ pub struct ConsensusState {
     pub epoch: u64,
     /// Hot/live slot checkpoints
     pub slot_checkpoints: Vec<SlotCheckpoint>,
-    /// Leaders count history
-    pub leaders_history: Vec<u64>,
+    /// Last slot leaders count
+    pub previous_leaders: u64,
     /// controller output history
     pub f_history: Vec<Float10>,
     /// controller proportional error history
@@ -116,7 +116,7 @@ impl ConsensusState {
             forks: vec![],
             epoch: 0,
             slot_checkpoints: vec![],
-            leaders_history: vec![0],
+            previous_leaders: 0,
             f_history: vec![constants::FLOAT10_ZERO.clone()],
             err_history: vec![constants::FLOAT10_ZERO.clone(), constants::FLOAT10_ZERO.clone()],
             coins: vec![],
@@ -323,8 +323,8 @@ impl ConsensusState {
                 // Temporarily, we compete with fixed stake.
                 // This stake should be based on how many nodes we want to run, and they all
                 // must sum to initial distribution total coins.
-                let stake = self.initial_distribution;
-                //let stake = 200;
+                //let stake = self.initial_distribution;
+                let stake = 200;
                 let c = LeadCoin::new(
                     stake,
                     slot,
@@ -382,38 +382,11 @@ impl ConsensusState {
         total_stake
     }
 
-    /// Calculate how many leaders existed in previous slot and appends
-    /// it to history, to report it if win. On finalization sync period,
-    /// node replaces its leaders history with the sequence extracted by
-    /// the longest fork.
-    fn extend_leaders_history(&mut self) -> Float10 {
-        let slot = self.current_slot();
-        let previous_slot = slot - 1;
-        let mut count = 0;
-        for chain in &self.forks {
-            // Previous slot proposals exist at end of each fork
-            if chain.sequence.last().unwrap().proposal.block.header.slot == previous_slot {
-                count += 1;
-            }
-        }
-        self.leaders_history.push(count);
-
-        info!(target: "consensus::state", "extend_leaders_history(): Current leaders history: {:?}", self.leaders_history);
-        let mut count_str: String = count.to_string();
-        count_str.push_str(",");
-        let f =
-            File::options().append(true).create(true).open(constants::LEADER_HISTORY_LOG).unwrap();
-        {
-            let mut writer = BufWriter::new(f);
-            writer.write(&count_str.into_bytes()).unwrap();
-        }
-
-        Float10::try_from(count as i64).unwrap()
-    }
-
     fn f_err(&mut self) -> Float10 {
-        let len = self.leaders_history.len();
-        let feedback = Float10::try_from(self.leaders_history[len - 1] as i64).unwrap();
+        info!(target: "consensus::state", "Previous leaders: {}", self.previous_leaders);
+        let feedback = Float10::try_from(self.previous_leaders as i64).unwrap();
+        // Reset previous leaders counter
+        self.previous_leaders = 0;
         let target = constants::FLOAT10_ONE.clone();
         target - feedback
     }
@@ -443,8 +416,6 @@ impl ConsensusState {
     /// the probability inverse of winnig lottery having all the stake
     /// returns f
     fn win_inv_prob_with_full_stake(&mut self) -> Float10 {
-        self.extend_leaders_history();
-        //
         let mut f = self.discrete_pid();
         if f <= constants::FLOAT10_ZERO.clone() {
             f = constants::MIN_F.clone()
@@ -613,29 +584,6 @@ impl ConsensusState {
         false
     }
 
-    /// Auxillary function to set nodes leaders count history to the largest fork sequence
-    /// of leaders, by using provided index.
-
-    pub fn set_leader_history(&mut self, index: i64, current_slot: u64) {
-        // Check if we found longest fork to extract sequence from
-        match index {
-            -1 => {
-                info!(target: "consensus::state", "set_leader_history(): No fork exists.");
-            }
-            _ => {
-                info!(target: "consensus::state", "set_leader_history(): Checking last proposal of fork: {}", index);
-                let last_proposal = &self.forks[index as usize].sequence.last().unwrap().proposal;
-                if last_proposal.block.header.slot == current_slot {
-                    // Replacing our last history element with the leaders one
-                    self.leaders_history.pop();
-                    self.leaders_history.push(last_proposal.block.lead_info.leaders);
-                    info!(target: "consensus::state", "set_leader_history(): New leaders history: {:?}", self.leaders_history);
-                    return
-                }
-            }
-        }
-    }
-
     /// Utility function to extract leader selection lottery randomness(eta),
     /// defined as the hash of the last block, converted to pallas base.
     pub fn get_eta(&self) -> pallas::Base {
@@ -694,7 +642,7 @@ impl ConsensusState {
         self.proposing = false;
         self.forks = vec![];
         self.slot_checkpoints = vec![];
-        self.leaders_history = vec![0];
+        self.previous_leaders = 0;
         self.nullifiers = vec![];
     }
 }
@@ -720,8 +668,8 @@ pub struct ConsensusResponse {
     pub unconfirmed_txs: Vec<Transaction>,
     /// Hot/live slot checkpoints
     pub slot_checkpoints: Vec<SlotCheckpoint>,
-    /// Leaders count history
-    pub leaders_history: Vec<u64>,
+    /// Last slot leaders count
+    pub previous_leaders: u64,
     /// Seen nullifiers from proposals
     pub nullifiers: Vec<pallas::Base>,
 }

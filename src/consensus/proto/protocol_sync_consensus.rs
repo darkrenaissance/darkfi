@@ -100,14 +100,14 @@ impl ProtocolSyncConsensus {
             }
             let unconfirmed_txs = lock.unconfirmed_txs.clone();
             let slot_checkpoints = lock.consensus.slot_checkpoints.clone();
-            let leaders_history = lock.consensus.leaders_history.clone();
+            let previous_leaders = lock.consensus.previous_leaders.clone();
             let nullifiers = lock.consensus.nullifiers.clone();
             let response = ConsensusResponse {
                 bootstrap_slot,
                 forks,
                 unconfirmed_txs,
                 slot_checkpoints,
-                leaders_history,
+                previous_leaders,
                 nullifiers,
             };
             if let Err(e) = self.channel.send(response).await {
