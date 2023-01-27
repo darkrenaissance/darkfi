@@ -33,7 +33,7 @@ lazy_static! {
     pub static ref MAINNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1650887115);
 
     /// Total sum of initial staking coins for the mainnet chain
-    pub static ref MAINNET_INITIAL_DISTRIBUTION: u64 = 1000;
+    pub static ref MAINNET_INITIAL_DISTRIBUTION: u64 = 0;
 
     /// Genesis hash for the testnet chain
     pub static ref TESTNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_testnet");

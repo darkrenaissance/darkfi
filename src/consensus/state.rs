@@ -324,9 +324,8 @@ impl ConsensusState {
                 // This stake should be based on how many nodes we want to run, and they all
                 // must sum to initial distribution total coins.
                 //let stake = self.initial_distribution;
-                let stake = 200;
                 let c = LeadCoin::new(
-                    stake,
+                    0,
                     slot,
                     epoch_secrets.secret_keys[0].inner(),
                     epoch_secrets.merkle_roots[0],
