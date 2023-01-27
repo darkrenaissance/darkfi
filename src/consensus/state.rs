@@ -384,6 +384,16 @@ impl ConsensusState {
 
     fn f_err(&mut self) -> Float10 {
         info!(target: "consensus::state", "Previous leaders: {}", self.previous_leaders);
+        // Write counter to file
+        let mut count_str: String = self.previous_leaders.to_string();
+        count_str.push_str(",");
+        let f =
+            File::options().append(true).create(true).open(constants::LEADER_HISTORY_LOG).unwrap();
+        {
+            let mut writer = BufWriter::new(f);
+            writer.write(&count_str.into_bytes()).unwrap();
+        }
+        // Calculate feedback
         let feedback = Float10::try_from(self.previous_leaders as i64).unwrap();
         // Reset previous leaders counter
         self.previous_leaders = 0;
