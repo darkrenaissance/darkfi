@@ -46,6 +46,20 @@ for tuple $(x,w) \in L_{lead}$ iff:
  * $y< T(v)$
 note that this process involves burning old coin $c_1$, minting new  $c_2$ of the same value + reward.
 
+#### validation rules
+
+validation of proposed lead proof as follows:
+
+* slot index is less than current slot index
+* proposal extend from valid fork chain
+* transactions doesn't exceed max limit
+* signature is valid based off producer public key
+* verify block hash
+* verify block header hash
+* public inputs $\mu_y$, $\mu_{rho}$ are hash of current consensus $\eta$, and current slot
+* public inputs of target 2-term approximations $\sigma_1$, $\sigma_2$ are valid given total network stake and controller parameters
+* the competing coin nullifier isn't published before to protect against double spening, before burning the coin.
+* verify block transactions
 
 <!--
 this is now replaced by tx as a contract in zkas
@@ -86,7 +100,7 @@ $$sn_{c_i}=PRF_{root_{sk_{c_i}^{COIN}}}^{sn}(\rho_{c_i}), \forall_i \in \{1,2\}$
 
 ## Epoch
 
-An epoch is a vector of blocks. Some of the  blocks might be empty if there is no winnig leader.
+An epoch is a vector of blocks. Some of the  blocks might be empty if there is no winnig leader. tokens in stake are constant during the epoch.
 
 ## Leader selection
 
