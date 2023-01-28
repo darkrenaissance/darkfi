@@ -121,14 +121,41 @@ family of functions.
 
 the stable consensus token supply is maintained by the help of discrete PID controller, that maintain stabilized occurance of single leader per slot.
 
+#### control lottery f tunning paramter
+
+$$f[k] = f[k-1] + K_1e[k] + K_2e[k-1] + K_3e[k-2]$$
+
+with $k_1 = k_p + K_i + K_d$,  $k_2 = -K_p -2K_d$,  $k_3 = K_d$, and e is the error function.
+
+
 ### target T n-term approximation
 target function is approximated to avoid use of power, and division in zk, since no function in the family of functions that have independent aggregation property achieve avoid it (see appendix).
 
-s is stake, and $\Sigma$ is total token staked during an epoch, relative stake:
-$$ \sigma = \frac{s}{\Sigma} $$
-the ouroboros target function is approximated as follows:
- $$ T  = -[\frac{k}{\Sigma}s + \frac{k^{''}}{\Sigma^2 2!} s^2 + \dots +\frac{k^{'n}}{\Sigma^n n!} s^n] $$
+#### target function
 
+ target fuction T: $$ T = L * \phi(\sigma) = L * (1- (1 - f)^{\sigma}) $$
+ $\sigma$ is relative stake.
+ f is tuning parameter, or the probability of winning have all the stake
+ L is field length
+
+#### $\phi(\sigma)$ approximation
+
+ $$\phi(\sigma) = 1 - (1-f)^{\sigma} $$
+ $$ = 1 - e^{\sigma ln(1-f)} $$
+ $$ = 1 - (1 + \sum_{n=1}^{\infty}\frac{(\sigma ln (1-f))^n}{n!}) $$
+ $$ \sigma = \frac{s}{\Sigma} $$
+ s is stake, and $\Sigma$ is total stake.
+
+#### target T n term approximation
+
+ $$ k = L ln (1-f)^1 $$
+ $$ k^{'n} =  L ln (1-f)^n $$
+ $$ T = -[k\sigma + \frac{k^{''}}{2!} \sigma^2 + \dots +\frac{ k^{'n}}{n!}\sigma^n] $$
+ $$  = -[\frac{k}{\Sigma}s + \frac{k^{''}}{\Sigma^2 2!} s^2 + \dots +\frac{k^{'n}}{\Sigma^n n!} s^n] $$
+
+#### comparison of original target to approximation
+
+![approximation comparison to the original](https://github.com/darkrenaissance/darkfi/blob/master/script/research/crypsinous/linearindependence/target.png?raw=true)
 
 
 # Appendix
