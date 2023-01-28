@@ -176,6 +176,24 @@ be used by the protocol.
 | `offset`        | `u64`               | Slot offset block producer used                     |
 | `leaders`       | `u64`               | Block producer leaders count                        |
 
+## Public Inputs
+| Field        | Type           | Description                                           |
+|--------------|----------------|-------------------------------------------------------|
+| `pk`         | `pallas::Base` | burnt coin public key                                 |
+| `c1_cm_x`    | `pallas::Base` | burnt coin commitment x coordinate                    |
+| `c1_cm_y`    | `pallas::Base` | burnt coin commitment y coordinate                    |
+| `c2_cm_x`    | `pallas::Base` | minted coin commitment x coordinate                   |
+| `c2_cm_y`    | `pallas::Base` | minted coin commitment y coordinate                   |
+| `cm1_root`   | `pallas::Base` | root of burnt coin commitment in burnt merkle tree    |
+| `c1_sk_root` | `pallas::Base` | burn coin secret key                                  |
+| `sn`         | `pallas::Base` | burnt coin spending nullifier                         |
+| `y_mu`       | `pallas::Base` | random seed base from blockchain                      |
+| `y`          | `pallas::Base` | hash of random seed, and `y_mu`, used in lottery      |
+| `rho_mu`     | `pallas::Base` | random seed base from blockchain                      |
+| `rho`        | `pallas::Base` | hash of random seed and `rho_mu` to constrain lottery |
+| `sigma1`     | `pallas::Base` | first term in 2-terms target approximation.           |
+| `sigma2`     | `pallas::Base` | second term in 2-terms target approximatino.          |
+
 
 ### Linear family functions
 
@@ -301,6 +319,6 @@ the randomization of the leader selection at each slot is hinged on the random $
 #### solution
 
 to break this centeralization, a decentralized emulation of $G_{ro}$ functionality for calculation of: $\eta_i=PRF^{G_{ro}}_{\eta_{i-1}}(\psi)$
-$$\psi   =  \hash(tx^{ep}_{0})$$
-$$\eta_0 =  \hash(\mathrm{"let\; there\; be\; dark!"})$$
+$$\psi   =  hash(tx^{ep}_{0})$$
+$$\eta_0 =  hash(\mathrm{"let\; there\; be\; dark!"})$$
 note that first transaction in the block, is the proof transaction.
