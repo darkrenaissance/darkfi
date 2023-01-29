@@ -6,6 +6,14 @@ For an application, each user maintains:
 * User interactions
 * User removal
 
+Points to note:
+
+1. Network cannot reconstruct your key unless you send 2 messages
+   within 1 epoch, which well behaving clients don't do.
+2. Requires clocks between nodes to be in sync.
+3. You create an keypair which is added to the set. These have a
+   cost to create which deters spam.
+
 ## User registration
 
 * There exists a Merkle tree of published and valid registrations.
@@ -19,9 +27,7 @@ For an application, each user maintains:
 Let $K$ be a constant identity derivation path.
 
 1. Alice generates a secret key $a_0$ and derives an identity
-   commitment:
-$$ Poseidon(K, a_0) $$
-
+   commitment: $\hash(K, a_0)$
 2. Alice publishes the identity commitment.
 3. The Network verifies that the identity commitment is not part of the
    set of identity commitments, providing the ability to append it to
@@ -60,22 +66,23 @@ $$ A(x) = a_1 x + a_0 $$
 
 Where:
 
-$$ a_1 = Poseidon(a_0, \text{external\_nullifier}) $$
+$$ a_1 = \hash(a_0, N_\text{external}) $$
 
-$$ \mathrm{external\_nullifier} = Poseidon(epoch, \text{rln\_identifier}) $$
+$$ N_\text{external} = \hash(\text{epoch}, \text{RLN\_ID}) $$
 
 $\text{rln\_identifier}$ is a unique constant per application.
 
-We will also use $\text{internal\_nullifier}$ as a mechanism to make a
+We will also use the internal nullifier
+$N_\text{internal}$ as a mechanism to make a
 connection between a person and their messages without revealing their
 identity:
 
-$$ \mathrm{internal\_nullifier} = Poseidon(a_1, \text{rln\_identifier}) $$
+$$ N_\text{internal} = \hash(a_1, \text{RLN\_ID}) $$
 
-To send a message, we must come up with a share $(x, y)$, given the
+To send a message $M$, we must come up with a share $(x, y)$, given the
 above polynomial.
 
-$$ x = Poseidon(message) $$
+$$ x = \hash(M) $$
 $$ y = A(x) $$
 
 We must also use a _zkSNARK_ to prove correctness of the share.
