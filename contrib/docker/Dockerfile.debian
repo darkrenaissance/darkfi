@@ -3,7 +3,7 @@
 #   optionally with: --build-arg BUILD_OS_VER=slim-buster --build-arg RUN_OS_VER=buster-slim --build-arg RUST_VER=1.65
 #   rust nightly with: BUILD_OS_VER=bullseye-slim RUN_OS_VER=bullseye-slim RUST_VER=nightly REPOSITORY=rustlang/rust
 
-ARG RUST_VER=1.65  #
+ARG RUST_VER=1.67  # 1.65
 ARG BUILD_OS_VER=slim-bullseye  # slim-buster
 ARG RUN_OS_VER=bullseye-slim    # buster-slim
 ARG REPOSITORY=rust             # rustlang/rust

@@ -1,8 +1,8 @@
 # Use: docker build . --pull --network=host -t darkfi:alpine -f ./contrib/docker/Dockerfile.alpine
 #   optionally with: --build-arg ALPINE_VER=3.17 --build-arg RUST_VER=nightly
-# The wallet test fail problem (see below) was the same for alpine 3.17 and rust 1.65
+# The wallet test fail problem (see below) was the same for alpine 3.17 and rust nightly
 
-ARG RUST_VER=1.65
+ARG RUST_VER=1.67
 ARG ALPINE_VER=3.17
 
 FROM alpine:${ALPINE_VER} as rust_builder
@@ -12,8 +12,8 @@ ARG ALPINE_VER
 
 RUN echo "=======================================================" \
     &&echo "===>>>>> The following error will occur during the test::" \
-    && echo "test util::parse::tests::test_truncate ... ok" \
-    && echo "test runtime::memory::tests::can_read_from_memory ... ok" \
+    && echo "test net::hosts::tests::test_filter_invalid ... ok" \
+    && echo "test consensus::state::tests::calc_sigmas_test ... ok" \
     && echo "error: test failed, to rerun pass '-p darkfi --lib'" \
     && echo ".... process didn't exit successfully: /opt/darkfi/target/release/deps/darkfi-... (signal: 11, SIGSEGV: invalid memory reference)" \
     && echo "rust ${RUST_VER} / alpine ${ALPINE_VER}" \

@@ -2,7 +2,7 @@
 # Use: docker build . --pull --network=host -t darkfi:fedora -f ./contrib/docker/Dockerfile.fedora
 #   optionally with: --build-arg OS_VER=fedora:36 --build-arg RUST_VER=nightly
 
-ARG RUST_VER=1.65       # stable nightly beta
+ARG RUST_VER=1.67       # stable nightly beta 1.65
 ARG OS_VER=fedora:37    # fedora:36
 
 FROM ${OS_VER} as rust_builder

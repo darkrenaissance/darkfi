@@ -2,7 +2,7 @@
 # Use: docker build . --network=host --pull -t darkfi:ubuntu -f ./contrib/docker/Dockerfile.ubuntu
 #   optionally with: --build-arg BUILD_OS_VER=20.04 --build-arg RUST_VER=1.65
 
-ARG RUST_VER=1.65       # stable nightly beta
+ARG RUST_VER=1.67       # stable nightly beta
 ARG BUILD_OS_VER=22.04  # 20.04
 ARG RUN_OS_VER=${BUILD_OS_VER}
 ARG REPOSITORY=ubuntu
