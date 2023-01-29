@@ -1,0 +1,20 @@
+constant "InclusionProof" {
+}
+
+contract "InclusionProof" {
+	Base leaf,
+	Uint32 leaf_pos,
+	MerklePath path,
+    Base blind,
+}
+
+circuit "InclusionProof" {
+	# Merkle root
+	root = merkle_root(leaf_pos, path, leaf);
+	constrain_instance(root);
+
+    # Also export the actual value but encrypted with a random blind
+	enc_leaf = poseidon_hash(leaf, blind);
+	constrain_instance(enc_leaf);
+}
+

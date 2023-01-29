@@ -304,3 +304,8 @@ name = "zk"
 path = "example/zk.rs"
 required-features = ["zk"]
 
+[[example]]
+name = "zk-inclusion-proof"
+path = "example/zk-inclusion-proof.rs"
+required-features = ["zk"]
+
