@@ -2,7 +2,7 @@
 # Use: docker build . --pull --network=host -t darkfi:fedora -f ./contrib/docker/Dockerfile.fedora
 #   optionally with: --build-arg OS_VER=fedora:36 --build-arg RUST_VER=nightly
 
-ARG RUST_VER=1.65       # stable nightly beta
+ARG RUST_VER=1.67       # stable nightly beta 1.65
 ARG OS_VER=fedora:37    # fedora:36
 
 FROM ${OS_VER} as rust_builder
@@ -13,8 +13,6 @@ RUN dnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
   pkg-config clang clang-libs llvm-libs \
   openssl-devel findutils fontconfig-devel \
   lato-fonts
-
-## TODO ?? ?? cargo rustc rust-libudev-devel rust-freetype-rs-devel rust-expat-sys-devel
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -40,10 +38,12 @@ RUN bash -c 'make -j test &&  make -j all'
 # 3. stage
 FROM ${OS_VER}
 
-RUN dnf -y install openssl lato-fonts
+RUN dnf -y install openssl lato-fonts \
+  && dnf clean all \
+  && rm -rf /var/cache/dnf
 
 WORKDIR /opt/darkfi
 
-COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid /opt/darkfi/tau \
-  /opt/darkfi/taud /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
-  /opt/darkfi/darkwikid /opt/darkfi/darkwiki /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./
+COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
+   /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
+   /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./

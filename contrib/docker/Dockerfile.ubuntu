@@ -2,7 +2,7 @@
 # Use: docker build . --network=host --pull -t darkfi:ubuntu -f ./contrib/docker/Dockerfile.ubuntu
 #   optionally with: --build-arg BUILD_OS_VER=20.04 --build-arg RUST_VER=1.65
 
-ARG RUST_VER=1.65       # stable nightly beta
+ARG RUST_VER=1.67       # stable nightly beta
 ARG BUILD_OS_VER=22.04  # 20.04
 ARG RUN_OS_VER=${BUILD_OS_VER}
 ARG REPOSITORY=ubuntu
@@ -41,11 +41,11 @@ RUN bash -c 'make -j test &&  make -j all'
 FROM ${REPOSITORY}:${RUN_OS_VER}
 
 RUN apt-get -y update && apt-get install -y openssl fonts-lato \
-  && rm -rf /var/lib/apt/lists/*
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/darkfi
 
-COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid /opt/darkfi/tau \
-  /opt/darkfi/taud /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
-  /opt/darkfi/darkwikid /opt/darkfi/darkwiki /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./
+COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
+   /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
+   /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./
 
