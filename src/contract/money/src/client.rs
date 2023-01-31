@@ -990,7 +990,7 @@ pub fn build_transfer_tx(
     // This value_blind calc assumes there will always be at least a single output
     assert!(!outputs.is_empty());
 
-    for (i, output) in outputs.iter().chain(change_outputs.iter()).enumerate() {
+    for (i, output) in change_outputs.iter().chain(outputs.iter()).enumerate() {
         let value_blind = if i == outputs.len() + change_outputs.len() - 1 {
             compute_remainder_blind(&params.clear_inputs, &input_blinds, &output_blinds)
         } else {
