@@ -62,7 +62,7 @@ clippy: token_lists contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --all
 
 rustdoc: token_lists contracts $(PROOFS_BIN)
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --all-features --workspace --no-deps --document-private-items
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --all-features --workspace --document-private-items
 
 test: token_lists $(PROOFS_BIN) contracts
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all

@@ -11,7 +11,7 @@ repository = "https://github.com/darkrenaissance/darkfi"
 [dependencies]
 async-std = {version = "1.12.0", features = ["attributes"]}
 chrono = "0.4.23"
-clap = {version = "4.0.32", features = ["derive"]}
+clap = {version = "4.1.4", features = ["derive"]}
 colored = "2.0.0"
 darkfi = { path = "../../../", features = ["rpc"]}
 log = "0.4.17"
