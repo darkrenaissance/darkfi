@@ -498,7 +498,7 @@ impl Drk {
     /// Fetch known unspent balances from the wallet for the given DAO ID
     pub async fn dao_balance(&self, dao_id: u64) -> Result<HashMap<String, u64>> {
         let daos = self.get_daos().await?;
-        let Some(dao) = daos.get(dao_id as usize -1) else {
+        let Some(dao) = daos.get(dao_id as usize - 1) else {
             return Err(anyhow!("DAO with ID {} not found in wallet", dao_id))
         };
 

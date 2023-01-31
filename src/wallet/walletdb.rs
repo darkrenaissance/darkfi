@@ -87,6 +87,7 @@ impl WalletDb {
 
         let mut connect_opts = SqliteConnectOptions::from_str(path)?
             //.pragma("key", password.to_string())
+            .pragma("foreign_keys", "ON")
             .create_if_missing(true)
             .journal_mode(SqliteJournalMode::Off);
 

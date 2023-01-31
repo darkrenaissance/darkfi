@@ -101,8 +101,10 @@
 --              For now I didn't put anything, but we should keep this minor
 --              point in mind and ruminate on it for later.
 
+PRAGMA foreign_keys = ON;
+
 CREATE TABLE IF NOT EXISTS dao_daos (
-	dao_id INTEGER PRIMARY KEY NOT NULL,
+	dao_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     name BLOB UNIQUE NOT NULL,
     proposer_limit INTEGER NOT NULL,
     -- minimum threshold for total number of votes for proposal to pass.
@@ -127,19 +129,8 @@ CREATE TABLE IF NOT EXISTS dao_trees (
 	proposals_tree BLOB NOT NULL
 );
 
--- NOTE: we should rename coin as coin_id in the money_coins table
---       and also keep track of the tx hash, call index, output of the coin.
---       There should also be a spends table which tracks
---       tx_hash:call_index:input
-
--- This table maps received coins to its DAO owner and vice versa.
-CREATE TABLE IF NOT EXISTS dao_coins (
-    coin_id INTEGER PRIMARY KEY NOT NULL,
-    dao_id INTEGER UNIQUE NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS dao_proposals (
-    proposal_id INTEGER PRIMARY KEY NOT NULL,
+    proposal_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     dao_id INTEGER NOT NULL,
     -- Public key of person that would receive the funds
     recv_public BLOB NOT NULL,
@@ -155,18 +146,21 @@ CREATE TABLE IF NOT EXISTS dao_proposals (
     tx_hash BLOB,
     call_index INTEGER,
     -- this is NULL until we have voted on this proposal
-    our_vote_id INTEGER UNIQUE
+    our_vote_id INTEGER UNIQUE,
+
+    FOREIGN KEY(our_vote_id) REFERENCES dao_votes(vote_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY(dao_id) REFERENCES dao_daos(dao_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS dao_votes (
-    vote_id INTEGER PRIMARY KEY NOT NULL,
+    vote_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     proposal_id INTEGER NOT NULL,
     vote_option INTEGER NOT NULL,
     -- these values are NULL until the vote is minted on chain
     -- and received by the DAO
     tx_hash BLOB,
-    call_index INTEGER
+    call_index INTEGER,
     -- My code has votes merkle tree and position for votes, but
     -- that might be a mistake...
+    FOREIGN KEY(proposal_id) REFERENCES dao_proposals(proposal_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-
