@@ -325,7 +325,7 @@ impl ConsensusState {
                 // must sum to initial distribution total coins.
                 //let stake = self.initial_distribution;
                 let c = LeadCoin::new(
-                    0,
+                    250,
                     slot,
                     epoch_secrets.secret_keys[0].inner(),
                     epoch_secrets.merkle_roots[0],

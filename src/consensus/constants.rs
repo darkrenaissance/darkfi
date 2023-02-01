@@ -39,18 +39,16 @@ lazy_static! {
     pub static ref TESTNET_GENESIS_HASH_BYTES: blake3::Hash = blake3::hash(b"darkfi_testnet");
 
     /// Genesis timestamp for the testnet chain
-
-    pub static ref TESTNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1672785000);
+    pub static ref TESTNET_GENESIS_TIMESTAMP: Timestamp = Timestamp(1675260000);
 
     /// Bootstrap timestamp for the testnet chain
-    pub static ref TESTNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1672785000);
-
+    pub static ref TESTNET_BOOTSTRAP_TIMESTAMP: Timestamp = Timestamp(1675260000);
 
     /// Total sum of initial staking coins for the testnet chain
-    pub static ref TESTNET_INITIAL_DISTRIBUTION: u64 = 0;
+    pub static ref TESTNET_INITIAL_DISTRIBUTION: u64 = 1000;
 
-    pub static ref FLOAT10_EPSILON: Float10 = Float10::try_from("1").unwrap();
     // Commonly used Float10
+    pub static ref FLOAT10_EPSILON: Float10 = Float10::try_from("1").unwrap();
     pub static ref FLOAT10_NEG_TWO: Float10 = Float10::try_from("-2").unwrap();
     pub static ref FLOAT10_NEG_ONE: Float10 = Float10::try_from("-1").unwrap();
     pub static ref FLOAT10_ZERO: Float10 = Float10::try_from("0").unwrap();
@@ -62,8 +60,6 @@ lazy_static! {
     pub static ref FLOAT10_TEN: Float10 = Float10::try_from("10").unwrap();
 
     // Consensus parameters
-
-
     pub static ref KP: Float10 = Float10::try_from("0.18").unwrap();
     pub static ref KI: Float10 = Float10::try_from("0.02").unwrap();
     pub static ref KD: Float10 = Float10::try_from("-0.1").unwrap();
