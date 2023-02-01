@@ -1,6 +1,6 @@
 [package]
 name = "darkfi-derive"
-version = "0.3.0"
+version = "0.4.0"
 homepage = "https://dark.fi"
 description = "Crate for serialization derive macros"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
@@ -16,4 +16,4 @@ proc-macro-crate = "1.3.0"
 proc-macro2 = "1.0.50"
 syn = {version = "1.0.107", features = ["full", "fold"]}
 
-darkfi-derive-internal = {version = "0.3.0", path = "../derive-internal"}
+darkfi-derive-internal = {version = "0.4.0", path = "../derive-internal"}

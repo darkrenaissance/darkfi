@@ -1107,7 +1107,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "async-trait",
@@ -1162,7 +1162,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-dao-contract"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "bs58",
@@ -1182,7 +1182,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-derive"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "darkfi-derive-internal",
  "proc-macro-crate",
@@ -1192,7 +1192,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-derive-internal"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1201,7 +1201,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-money-contract"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "chacha20poly1305",
@@ -1219,7 +1219,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-sdk"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "blake2b_simd",
  "blake3",
@@ -1241,7 +1241,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-serial"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "blake3",
  "darkfi-derive",
@@ -1253,7 +1253,7 @@ dependencies = [
 
 [[package]]
 name = "darkfid"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "async-trait",
@@ -1397,7 +1397,7 @@ dependencies = [
 
 [[package]]
 name = "dchat"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "async-trait",
@@ -1491,7 +1491,7 @@ dependencies = [
 
 [[package]]
 name = "dnetview"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-channel",
  "async-std",
@@ -1724,7 +1724,7 @@ dependencies = [
 
 [[package]]
 name = "faucetd"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "async-trait",
@@ -1876,7 +1876,7 @@ dependencies = [
 
 [[package]]
 name = "fu"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "clap 4.1.4",
@@ -1889,7 +1889,7 @@ dependencies = [
 
 [[package]]
 name = "fud"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "async-trait",
@@ -2500,7 +2500,7 @@ dependencies = [
 
 [[package]]
 name = "lilith"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-std",
  "async-trait",
@@ -4487,7 +4487,7 @@ dependencies = [
 
 [[package]]
 name = "vanityaddr"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bs58",
  "clap 4.1.4",
@@ -5116,7 +5116,7 @@ dependencies = [
 
 [[package]]
 name = "zkas"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "clap 4.1.4",
  "darkfi",
@@ -5124,7 +5124,7 @@ dependencies = [
 
 [[package]]
 name = "zktool"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "clap 4.1.4",
  "darkfi",
