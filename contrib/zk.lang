@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+ Syntax highlighting for zkas scripts.
+ Copy into /usr/share/gtksourceview-4/language-specs/zk.lang
+
+-->
+
+<language id="zkas" name="zkas" version="2.0" _section="Source">
+  <metadata>
+    <!--<property name="mimetypes">text/zkas</property>-->
+    <property name="globs">*.zk</property>
+    <property name="line-comment-start">#</property>
+    <property name="suggested-suffix">.zk</property>
+  </metadata>
+  
+  <styles> 
+    <style id="keyword"  name="Keyword"   map-to="def:keyword"/>
+    <style id="constant" name="Constant"  map-to="def:special-constant"/>
+    <style id="type"     name="Data Type" map-to="def:type"/>
+    <style id="function" name="Function"  map-to="def:function"/>
+  </styles>
+
+  <definitions>
+    <context id="keywords" style-ref="keyword">
+      <keyword>constant</keyword>
+      <keyword>contract</keyword>
+      <keyword>circuit</keyword>
+    </context>
+    
+    <context id="constants" style-ref="constant">
+      <keyword>true</keyword>
+      <keyword>false</keyword>
+      <keyword>VALUE_COMMIT_VALUE</keyword>
+      <keyword>VALUE_COMMIT_RANDOM</keyword>
+      <keyword>NULLIFIER_K</keyword>
+    </context>
+    
+    <context id="types" style-ref="type">
+      <keyword>EcPoint</keyword>
+      <keyword>EcFixedPoint</keyword>
+      <keyword>EcFixedPointBase</keyword>
+      <keyword>EcFixedPointShort</keyword>
+      <keyword>EcNiPoint</keyword>
+      <keyword>Base</keyword>
+      <keyword>BaseArray</keyword>
+      <keyword>Scalar</keyword>
+      <keyword>ScalarArray</keyword>
+      <keyword>MerklePath</keyword>
+      <keyword>Uint32</keyword>
+      <keyword>Uint64</keyword>
+    </context>
+    
+    <context id="instructions" style-ref="function">
+      <keyword>ec_add</keyword>
+      <keyword>ec_mul</keyword>
+      <keyword>ec_mul_base</keyword>
+      <keyword>ec_mul_short</keyword>
+      <keyword>ec_mul_var_base</keyword>
+      <keyword>ec_get_x</keyword>
+      <keyword>ec_get_y</keyword>
+      <keyword>base_add</keyword>
+      <keyword>base_mul</keyword>
+      <keyword>base_sub</keyword>
+      <keyword>poseidon_hash</keyword>
+      <keyword>merkle_root</keyword>
+      <keyword>range_check</keyword>
+      <keyword>less_than_strict</keyword>
+      <keyword>less_than_loose</keyword>
+      <keyword>bool_check</keyword>
+      <keyword>witness_base</keyword>
+      <keyword>constrain_equal_base</keyword>
+      <keyword>constrain_equal_point</keyword>
+      <keyword>constrain_instance</keyword>
+    </context>
+    
+    <context id="zkas" class="no-spell-check">
+      <include>
+        <context ref="def:shell-like-comment"/>
+        <context ref="def:string"/>
+        <context ref="keywords"/>
+        <context ref="constants"/>
+        <context ref="types"/>
+        <context ref="instructions"/>
+      </include>
+    </context>
+  </definitions>  
+</language>
