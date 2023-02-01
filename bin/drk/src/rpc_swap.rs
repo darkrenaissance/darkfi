@@ -84,7 +84,7 @@ impl Drk {
         let burn_coin = owncoins[0].0.clone();
 
         // Fetch our default address
-        let address = self.wallet_address(0).await?;
+        let address = self.wallet_address(1).await?;
 
         // We'll also need our Merkle tree
         let tree = self.get_money_tree().await?;
@@ -170,7 +170,7 @@ impl Drk {
         let burn_coin = owncoins[0].0.clone();
 
         // Fetch our default address
-        let address = self.wallet_address(0).await?;
+        let address = self.wallet_address(1).await?;
 
         // We'll also need our Merkle tree
         let tree = self.get_money_tree().await?;
