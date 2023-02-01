@@ -29,6 +29,6 @@ smol = "1.3.0"
 simplelog = "0.12.0"
 signal-hook-async-std = "0.2.2"
 signal-hook = "0.3.14"
-sqlx = {version = "0.6.2", features = ["runtime-async-std-native-tls", "sqlite"]}
+sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "sqlite"]}
 url = "2.3.1"
 play = {version = "0.5.3", optional = true}

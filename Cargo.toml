@@ -120,8 +120,8 @@ wasmer-compiler-singlepass = {version = "3.1.1", optional = true}
 wasmer-middlewares = {version = "3.1.1", optional = true}
 
 # Wallet management
-libsqlite3-sys = {version = "0.24.2", features = ["bundled-sqlcipher"],  optional = true }
-sqlx = {version = "0.6.2", features = ["runtime-async-std-native-tls", "sqlite"], optional = true}
+libsqlite3-sys = {version = "0.24.1", features = ["bundled-sqlcipher"],  optional = true }
+sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "sqlite"], optional = true}
 
 # Blockchain store
 sled = {version = "0.34.7", optional = true}

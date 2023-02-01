@@ -43,7 +43,6 @@ The following dependencies are also required:
 | jq             | jq               |
 | gcc            | gcc              |
 | pkg-config     | pkg-config       |
-| openssl libs   | libssl-dev       |
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the
 following to install the required dependencies:
@@ -66,8 +65,7 @@ package manager, please consider adding support for it into the script
 and sending a patch.
 
 To build the necessary binaries, we can just clone the repo, and use
-the provided Makefile to build the project. This will download the
-trusted setup params, and compile the source code.
+the provided Makefile to build the project:
 
 ```shell
 % git clone https://github.com/darkrenaissance/darkfi
