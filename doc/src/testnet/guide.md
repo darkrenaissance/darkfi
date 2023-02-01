@@ -273,7 +273,7 @@ Since we chose `110` as the governance token proposal limit, let's
 just airdrop that into our wallet first:
 
 ```
-$ ./drk airdrop 0.00000110 A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd
+$ ./drk airdrop 110 A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd
 ```
 
 Then create the proposal:
