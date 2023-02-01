@@ -206,13 +206,13 @@ On the testnet, we are also able to create an anonymous DAO. Using
 the `drk` CLI tool, we have a `dao` subcommand that can perform the
 necessary operations. Let's create a DAO with the following parameters:
 
-* Proposer limit: `110`
-* Quorum: `11`
+* Proposer limit: `90`
+* Quorum: `10`
 * Approval ratio: `0.67`
 * Governance token: `A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd`
 
 ```
-$ ./drk dao create 110 11 0.67 A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd > dao.dat
+$ ./drk dao create 90 10 0.67 A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd > dao.dat
 $ ./drk dao view < dao.dat
 ```
 
@@ -269,11 +269,11 @@ Now that the DAO has something in their treasury, we can create a
 proposal to send it somewhere. Let's send 5 of the 10 tokens to our
 address (we can find that with `drk wallet --address`).
 
-Since we chose `110` as the governance token proposal limit, let's
+Since we chose `90` as the governance token proposal limit, let's
 just airdrop that into our wallet first:
 
 ```
-$ ./drk airdrop 110 A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd
+$ ./drk airdrop 90 A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd
 ```
 
 Then create the proposal:
