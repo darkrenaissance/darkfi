@@ -32,7 +32,7 @@ for the P2P IRC daemon.
 This project requires the Rust compiler to be installed. 
 Please visit [Rustup](https://rustup.rs/) for instructions.
 
-Minimum Rust version supported is **1.65.0 (stable)**.
+Minimum Rust version supported is **1.67.0 (stable)**.
 
 The following dependencies are also required:
 
@@ -49,7 +49,7 @@ following to install the required dependencies:
 
 ```shell
 # apt-get update
-# apt-get install -y git make jq gcc pkg-config libssl-dev
+# apt-get install -y git make jq gcc pkg-config
 ```
 
 Alternatively, users can try using the automated script under `contrib`
@@ -64,12 +64,12 @@ and install dependencies accordingly. In case it does not find your
 package manager, please consider adding support for it into the script
 and sending a patch.
 
-To build the necessary binaries, we can just clone the repo, and use
-the provided Makefile to build the project:
+To build the necessary binaries, we can just clone the repo, checkout
+to the latest tag, and use the provided Makefile to build the project:
 
 ```shell
 % git clone https://github.com/darkrenaissance/darkfi
-% cd darkfi/
+% cd darkfi && git checkout v0.4.0
 % make
 ```
 
@@ -89,12 +89,6 @@ in order for them to spawn a config file, which you can then review.
 
 ```shell
 # make install
-```
-
-## Bash Completion
-This will add the options auto completion of `drk` and `darkfid`.
-```shell
-% echo source \$(pwd)/contrib/auto-complete >> ~/.bashrc
 ```
 
 ### Examples and usage

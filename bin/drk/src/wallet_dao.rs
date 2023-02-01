@@ -405,6 +405,30 @@ impl Drk {
         Ok(())
     }
 
+    pub async fn reset_dao_proposals(&self) -> Result<()> {
+        eprintln!("Resetting DAO proposals");
+        let query = format!("DELETE FROM {};", DAO_PROPOSALS_TABLE);
+
+        let params = json!([query]);
+
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let _ = self.rpc_client.request(req).await?;
+
+        Ok(())
+    }
+
+    pub async fn reset_dao_votes(&self) -> Result<()> {
+        eprintln!("Resetting DAO votes");
+        let query = format!("DELETE FROM {};", DAO_VOTES_TABLE);
+
+        let params = json!([query]);
+
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let _ = self.rpc_client.request(req).await?;
+
+        Ok(())
+    }
+
     /// Import given DAO params into the wallet with a given name.
     pub async fn import_dao(&self, dao_name: String, dao_params: DaoParams) -> Result<()> {
         // First let's check if we've imported this DAO with the given name before.
@@ -876,7 +900,8 @@ impl Drk {
 
             let id: u64 = serde_json::from_value(row[0].clone())?;
             let proposal_id: u64 = serde_json::from_value(row[1].clone())?;
-            let vote_option: bool = serde_json::from_value(row[2].clone())?;
+            let vote_option: u32 = serde_json::from_value(row[2].clone())?;
+            let vote_option = vote_option != 0;
 
             let yes_vote_blind_bytes: Vec<u8> = serde_json::from_value(row[3].clone())?;
             let yes_vote_blind = deserialize(&yes_vote_blind_bytes)?;
@@ -1209,7 +1234,7 @@ impl Drk {
                 QueryType::Integer as u8,
                 vote.proposal_id,
                 QueryType::Integer as u8,
-                vote.vote_option,
+                vote.vote_option as u64,
                 QueryType::Blob as u8,
                 serialize(&vote.yes_vote_blind),
                 QueryType::Blob as u8,

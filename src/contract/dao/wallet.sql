@@ -106,10 +106,10 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS dao_daos (
 	dao_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     name BLOB UNIQUE NOT NULL,
-    proposer_limit INTEGER NOT NULL,
+    proposer_limit BLOB NOT NULL,
     -- minimum threshold for total number of votes for proposal to pass.
     -- If there's too little activity then it cannot pass.
-    quorum INTEGER NOT NULL,
+    quorum BLOB NOT NULL,
     -- Needed ratio of yes/total for proposal to pass.
     -- approval_ratio = approval_ratio_quot / approval_ratio_base
     approval_ratio_base INTEGER NOT NULL,
@@ -156,6 +156,9 @@ CREATE TABLE IF NOT EXISTS dao_votes (
     vote_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     proposal_id INTEGER NOT NULL,
     vote_option INTEGER NOT NULL,
+    yes_vote_blind BLOB NOT NULL,
+    all_vote_value BLOB NOT NULL,
+    all_vote_blind BLOB NOT NULL,
     -- these values are NULL until the vote is minted on chain
     -- and received by the DAO
     tx_hash BLOB,

@@ -385,6 +385,7 @@ impl Drk {
     /// This function is really bad but I'm also really tired and annoyed.
     pub async fn dao_exec(&self, dao: Dao, proposal: DaoProposal) -> Result<Transaction> {
         let dao_bulla = dao.bulla();
+        eprintln!("Fetching proposal's votes");
         let votes = self.get_dao_proposal_votes(proposal.id).await?;
 
         // Find the treasury coins that can be used for this proposal

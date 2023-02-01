@@ -875,7 +875,7 @@ async fn main() -> Result<()> {
                 let drk = Drk::new(args.endpoint).await?;
                 let dao = drk.get_dao_by_id(dao_id).await?;
                 let proposal = drk.get_dao_proposal_by_id(proposal_id).await?;
-                assert!(proposal.id == dao.id);
+                assert!(proposal.dao_bulla == dao.bulla());
 
                 let tx = drk
                     .dao_exec(dao, proposal)

@@ -206,6 +206,8 @@ impl Drk {
             self.reset_money_coins().await?;
             self.reset_dao_trees().await?;
             self.reset_daos().await?;
+            self.reset_dao_proposals().await?;
+            self.reset_dao_votes().await?;
             0
         } else {
             self.last_scanned_slot().await?

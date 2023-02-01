@@ -1004,10 +1004,10 @@ pub fn build_transfer_tx(
 
         // A hacky way to zeroize spend hooks for the change outputs
         let (scoped_spend_hook, scoped_user_data) = {
-            if i >= outputs.len() {
-                (pallas::Base::zero(), pallas::Base::zero())
-            } else {
+            if i >= change_outputs.len() {
                 (spend_hook, user_data)
+            } else {
+                (pallas::Base::zero(), pallas::Base::zero())
             }
         };
 
@@ -1056,7 +1056,6 @@ pub fn build_transfer_tx(
 
     // Now we should have all the params, zk proofs, and signature secrets.
     // We return it all and let the caller deal with it.
-
     Ok((params, zk_proofs, signature_secrets, spent_coins))
 }
 
