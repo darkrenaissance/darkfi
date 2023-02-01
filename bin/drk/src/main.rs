@@ -236,9 +236,9 @@ enum DaoSubcmd {
     /// Create DAO parameters
     Create {
         /// The minimum amount of governance tokens needed to open a proposal for this DAO
-        proposer_limit: u64,
+        proposer_limit: String,
         /// Minimal threshold of participating total tokens needed for a proposal to pass
-        quorum: u64,
+        quorum: String,
         /// The ratio of winning votes/total votes needed for a proposal to pass (2 decimals),
         approval_ratio: f64,
         /// DAO's governance token ID
@@ -308,7 +308,7 @@ enum DaoSubcmd {
         dao_id: u64,
 
         /// Numeric identifier for the proposal
-        proposal: u64,
+        proposal_id: u64,
 
         /// Vote (0 for NO, 1 for YES)
         vote: u8,
@@ -322,8 +322,8 @@ enum DaoSubcmd {
         /// Numeric identifier for the DAO
         dao_id: u64,
 
-        /// Proposal identifier
-        proposal: String,
+        /// Numeric identifier for the proposal
+        proposal_id: u64,
     },
 }
 
@@ -332,6 +332,11 @@ pub struct Drk {
 }
 
 impl Drk {
+    async fn new(endpoint: Url) -> Result<Self> {
+        let rpc_client = RpcClient::new(endpoint).await?;
+        Ok(Self { rpc_client })
+    }
+
     async fn ping(&self) -> Result<()> {
         let latency = Instant::now();
         let req = JsonRequest::new("ping", json!([]));
@@ -355,12 +360,9 @@ async fn main() -> Result<()> {
 
     match args.command {
         Subcmd::Ping => {
-            let rpc_client = RpcClient::new(args.endpoint)
-                .await
-                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-            let drk = Drk { rpc_client };
+            let drk = Drk::new(args.endpoint).await?;
             drk.ping().await.with_context(|| "Failed to ping darkfid RPC endpoint")?;
+
             Ok(())
         }
 
@@ -388,11 +390,7 @@ async fn main() -> Result<()> {
                 exit(2);
             }
 
-            let rpc_client = RpcClient::new(args.endpoint)
-                .await
-                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-            let drk = Drk { rpc_client };
+            let drk = Drk::new(args.endpoint).await?;
 
             if initialize {
                 drk.initialize_money().await?;
@@ -429,7 +427,7 @@ async fn main() -> Result<()> {
 
             if address {
                 let address = drk
-                    .wallet_address(1)
+                    .wallet_address(1) // <-- TODO: Use is_default from the sql table
                     .await
                     .with_context(|| "Failed to fetch default address")?;
 
@@ -508,7 +506,7 @@ async fn main() -> Result<()> {
                 table.set_titles(row!["Coin", "Spent", "Token ID", "Value"]);
                 for coin in coins {
                     table.add_row(row![
-                        format!("{:?}", coin.0.coin.inner()),
+                        format!("{}", bs58::encode(&serialize(&coin.0.coin.inner())).into_string()),
                         coin.1,
                         coin.0.note.token_id,
                         format!("{} ({})", coin.0.note.value, encode_base10(coin.0.note.value, 8))
@@ -532,12 +530,7 @@ async fn main() -> Result<()> {
             };
 
             let coin = Coin::from(elem);
-
-            let rpc_client = RpcClient::new(args.endpoint)
-                .await
-                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-            let drk = Drk { rpc_client };
+            let drk = Drk::new(args.endpoint).await?;
             drk.unspend_coin(&coin).await.with_context(|| "Failed to mark coin as unspent")?;
 
             Ok(())
@@ -547,11 +540,7 @@ async fn main() -> Result<()> {
             let amount = f64::from_str(&amount).with_context(|| "Invalid amount")?;
             let token_id = TokenId::try_from(token.as_str()).with_context(|| "Invalid Token ID")?;
 
-            let rpc_client = RpcClient::new(args.endpoint)
-                .await
-                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-            let drk = Drk { rpc_client };
+            let drk = Drk::new(args.endpoint).await?;
 
             let address = match address {
                 Some(v) => PublicKey::from_str(v.as_str()).with_context(|| "Invalid address")?,
@@ -566,6 +555,7 @@ async fn main() -> Result<()> {
                 .with_context(|| "Failed to request airdrop")?;
 
             println!("Transaction ID: {}", txid);
+
             Ok(())
         }
 
@@ -574,11 +564,7 @@ async fn main() -> Result<()> {
             let token_id = TokenId::try_from(token.as_str()).with_context(|| "Invalid Token ID")?;
             let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
 
-            let rpc_client = RpcClient::new(args.endpoint)
-                .await
-                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-            let drk = Drk { rpc_client };
+            let drk = Drk::new(args.endpoint).await?;
 
             let tx = drk
                 .transfer(&amount, token_id, rcpt, dao, dao_bulla)
@@ -591,11 +577,7 @@ async fn main() -> Result<()> {
         }
 
         Subcmd::Otc(cmd) => {
-            let rpc_client = RpcClient::new(args.endpoint)
-                .await
-                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-            let drk = Drk { rpc_client };
+            let drk = Drk::new(args.endpoint).await?;
 
             match cmd {
                 OtcSubcmd::Init { value_pair, token_pair } => {
@@ -667,26 +649,18 @@ async fn main() -> Result<()> {
             let bytes = bs58::decode(&buf.trim()).into_vec()?;
             let tx = deserialize(&bytes)?;
 
-            let rpc_client = RpcClient::new(args.endpoint)
-                .await
-                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-            let drk = Drk { rpc_client };
+            let drk = Drk::new(args.endpoint).await?;
 
             let txid =
                 drk.broadcast_tx(&tx).await.with_context(|| "Failed to broadcast transaction")?;
 
-            eprintln!("Transaction ID: {}", txid);
+            println!("Transaction ID: {}", txid);
 
             Ok(())
         }
 
         Subcmd::Subscribe => {
-            let rpc_client = RpcClient::new(args.endpoint.clone())
-                .await
-                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-            let drk = Drk { rpc_client };
+            let drk = Drk::new(args.endpoint.clone()).await?;
 
             drk.subscribe_blocks(args.endpoint)
                 .await
@@ -696,11 +670,7 @@ async fn main() -> Result<()> {
         }
 
         Subcmd::Scan { reset, list, checkpoint } => {
-            let rpc_client = RpcClient::new(args.endpoint)
-                .await
-                .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-            let drk = Drk { rpc_client };
+            let drk = Drk::new(args.endpoint).await?;
 
             if reset {
                 eprintln!("Reset requested.");
@@ -731,6 +701,12 @@ async fn main() -> Result<()> {
 
         Subcmd::Dao(cmd) => match cmd {
             DaoSubcmd::Create { proposer_limit, quorum, approval_ratio, gov_token_id } => {
+                let _ = f64::from_str(&proposer_limit).with_context(|| "Invalid proposer limit")?;
+                let _ = f64::from_str(&quorum).with_context(|| "Invalid quorum")?;
+
+                let proposer_limit = decode_base10(&proposer_limit, 8, true)?;
+                let quorum = decode_base10(&quorum, 8, true)?;
+
                 if approval_ratio > 1.0 {
                     eprintln!("Error: Approval ratio cannot be >1.0");
                     exit(1);
@@ -757,6 +733,7 @@ async fn main() -> Result<()> {
 
                 let encoded = bs58::encode(&serialize(&dao_params)).into_string();
                 println!("{}", encoded);
+
                 Ok(())
             }
 
@@ -765,16 +742,8 @@ async fn main() -> Result<()> {
                 stdin().read_to_string(&mut buf)?;
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
                 let dao_params: DaoParams = deserialize(&bytes)?;
-                println!("DAO Parameters:");
-                println!("Proposer limit: {}", dao_params.proposer_limit);
-                println!("Quorum: {}", dao_params.quorum);
-                println!(
-                    "Approval ratio: {}",
-                    dao_params.approval_ratio_base as f64 / dao_params.approval_ratio_quot as f64
-                );
-                println!("Governance token ID: {}", dao_params.gov_token_id);
-                println!("Secret key: {}", dao_params.secret_key);
-                println!("Bulla blind: {:?}", dao_params.bulla_blind);
+                println!("{}", dao_params);
+
                 Ok(())
             }
 
@@ -784,11 +753,7 @@ async fn main() -> Result<()> {
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
                 let dao_params: DaoParams = deserialize(&bytes)?;
 
-                let rpc_client = RpcClient::new(args.endpoint.clone())
-                    .await
-                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-                let drk = Drk { rpc_client };
+                let drk = Drk::new(args.endpoint).await?;
 
                 drk.import_dao(dao_name, dao_params)
                     .await
@@ -798,11 +763,7 @@ async fn main() -> Result<()> {
             }
 
             DaoSubcmd::List { dao_id } => {
-                let rpc_client = RpcClient::new(args.endpoint.clone())
-                    .await
-                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-                let drk = Drk { rpc_client };
+                let drk = Drk::new(args.endpoint).await?;
 
                 drk.dao_list(dao_id).await.with_context(|| "Failed to list DAO")?;
 
@@ -810,11 +771,7 @@ async fn main() -> Result<()> {
             }
 
             DaoSubcmd::Balance { dao_id } => {
-                let rpc_client = RpcClient::new(args.endpoint.clone())
-                    .await
-                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-                let drk = Drk { rpc_client };
+                let drk = Drk::new(args.endpoint).await?;
 
                 let balmap =
                     drk.dao_balance(dao_id).await.with_context(|| "Failed to fetch DAO balance")?;
@@ -838,11 +795,7 @@ async fn main() -> Result<()> {
             }
 
             DaoSubcmd::Mint { dao_id } => {
-                let rpc_client = RpcClient::new(args.endpoint.clone())
-                    .await
-                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-                let drk = Drk { rpc_client };
+                let drk = Drk::new(args.endpoint).await?;
 
                 let tx = drk.dao_mint(dao_id).await.with_context(|| "Failed to mint DAO")?;
                 println!("{}", bs58::encode(&serialize(&tx)).into_string());
@@ -857,11 +810,7 @@ async fn main() -> Result<()> {
                 let token_id =
                     TokenId::try_from(token_id.as_str()).with_context(|| "Invalid Token ID")?;
 
-                let rpc_client = RpcClient::new(args.endpoint.clone())
-                    .await
-                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-                let drk = Drk { rpc_client };
+                let drk = Drk::new(args.endpoint).await?;
 
                 let tx = drk
                     .dao_propose(dao_id, rcpt, amount, token_id)
@@ -873,13 +822,10 @@ async fn main() -> Result<()> {
             }
 
             DaoSubcmd::Proposals { dao_id } => {
-                let rpc_client = RpcClient::new(args.endpoint.clone())
-                    .await
-                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-                let drk = Drk { rpc_client };
+                let drk = Drk::new(args.endpoint).await?;
 
                 let proposals = drk.get_dao_proposals(dao_id).await?;
+
                 for proposal in proposals {
                     println!("[{}] {:?}", proposal.id, proposal.bulla());
                 }
@@ -888,11 +834,7 @@ async fn main() -> Result<()> {
             }
 
             DaoSubcmd::Proposal { dao_id, proposal_id } => {
-                let rpc_client = RpcClient::new(args.endpoint.clone())
-                    .await
-                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-                let drk = Drk { rpc_client };
+                let drk = Drk::new(args.endpoint).await?;
 
                 let proposals = drk.get_dao_proposals(dao_id).await?;
                 let Some(proposal) = proposals.iter().find(|x| x.id == proposal_id) else {
@@ -900,31 +842,13 @@ async fn main() -> Result<()> {
                     exit(1);
                 };
 
-                println!("Proposal parameters:");
-                println!("DAO Bulla: {}", proposal.dao_bulla);
-                println!("Recipient: {}", proposal.recipient);
-                println!(
-                    "Proposal amount {} ({})",
-                    encode_base10(proposal.amount, 8),
-                    proposal.amount
-                );
-                println!("Proposal serial: {:?}", proposal.serial);
-                println!("Proposal token ID: {}", proposal.token_id);
-                println!("Proposal bulla blind: {:?}", proposal.bulla_blind);
-                println!("Proposal leaf position: {:?}", proposal.leaf_position);
-                println!("Proposal tx hash: {:?}", proposal.tx_hash);
-                println!("Proposal call index: {:?}", proposal.call_index);
-                println!("Proposal vote ID: {:?}", proposal.vote_id);
+                println!("{}", proposal);
 
                 Ok(())
             }
 
-            DaoSubcmd::Vote { dao_id, proposal, vote, vote_weight } => {
-                let rpc_client = RpcClient::new(args.endpoint.clone())
-                    .await
-                    .with_context(|| "Could not connect to darkfid RPC endpoint")?;
-
-                let drk = Drk { rpc_client };
+            DaoSubcmd::Vote { dao_id, proposal_id, vote, vote_weight } => {
+                let drk = Drk::new(args.endpoint).await?;
 
                 let _ = f64::from_str(&vote_weight).with_context(|| "Invalid vote weight")?;
                 let weight = decode_base10(&vote_weight, 8, true)?;
@@ -936,15 +860,32 @@ async fn main() -> Result<()> {
                 let vote = vote != 0;
 
                 let tx = drk
-                    .dao_vote(dao_id, proposal, vote, weight)
+                    .dao_vote(dao_id, proposal_id, vote, weight)
                     .await
                     .with_context(|| "Failed to create DAO Vote transaction")?;
 
+                // TODO: Write our_vote in the proposal sql.
+
                 println!("{}", bs58::encode(&serialize(&tx)).into_string());
+
                 Ok(())
             }
 
-            DaoSubcmd::Exec { dao_id, proposal } => todo!(),
+            DaoSubcmd::Exec { dao_id, proposal_id } => {
+                let drk = Drk::new(args.endpoint).await?;
+                let dao = drk.get_dao_by_id(dao_id).await?;
+                let proposal = drk.get_dao_proposal_by_id(proposal_id).await?;
+                assert!(proposal.id == dao.id);
+
+                let tx = drk
+                    .dao_exec(dao, proposal)
+                    .await
+                    .with_context(|| "Failed to execute DAO proposal")?;
+
+                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+
+                Ok(())
+            }
         },
     }
 }

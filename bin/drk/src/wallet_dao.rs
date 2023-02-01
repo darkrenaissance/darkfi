@@ -16,25 +16,31 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 use anyhow::{anyhow, Result};
-use darkfi::{rpc::jsonrpc::JsonRequest, tx::Transaction, wallet::walletdb::QueryType};
+use darkfi::{
+    rpc::jsonrpc::JsonRequest, tx::Transaction, util::parse::encode_base10,
+    wallet::walletdb::QueryType,
+};
 use darkfi_dao_contract::{
     dao_client::{
-        DaoProposeNote, DAO_DAOS_COL_APPROVAL_RATIO_BASE, DAO_DAOS_COL_APPROVAL_RATIO_QUOT,
-        DAO_DAOS_COL_BULLA_BLIND, DAO_DAOS_COL_CALL_INDEX, DAO_DAOS_COL_DAO_ID,
-        DAO_DAOS_COL_GOV_TOKEN_ID, DAO_DAOS_COL_LEAF_POSITION, DAO_DAOS_COL_NAME,
-        DAO_DAOS_COL_PROPOSER_LIMIT, DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_SECRET,
+        DaoProposeNote, DaoVoteNote, DAO_DAOS_COL_APPROVAL_RATIO_BASE,
+        DAO_DAOS_COL_APPROVAL_RATIO_QUOT, DAO_DAOS_COL_BULLA_BLIND, DAO_DAOS_COL_CALL_INDEX,
+        DAO_DAOS_COL_DAO_ID, DAO_DAOS_COL_GOV_TOKEN_ID, DAO_DAOS_COL_LEAF_POSITION,
+        DAO_DAOS_COL_NAME, DAO_DAOS_COL_PROPOSER_LIMIT, DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_SECRET,
         DAO_DAOS_COL_TX_HASH, DAO_DAOS_TABLE, DAO_PROPOSALS_COL_AMOUNT,
         DAO_PROPOSALS_COL_BULLA_BLIND, DAO_PROPOSALS_COL_CALL_INDEX, DAO_PROPOSALS_COL_DAO_ID,
         DAO_PROPOSALS_COL_LEAF_POSITION, DAO_PROPOSALS_COL_OUR_VOTE_ID,
         DAO_PROPOSALS_COL_PROPOSAL_ID, DAO_PROPOSALS_COL_RECV_PUBLIC,
         DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID, DAO_PROPOSALS_COL_SERIAL, DAO_PROPOSALS_COL_TX_HASH,
         DAO_PROPOSALS_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE,
-        DAO_TREES_TABLE,
+        DAO_TREES_TABLE, DAO_VOTES_COL_ALL_VOTE_BLIND, DAO_VOTES_COL_ALL_VOTE_VALUE,
+        DAO_VOTES_COL_CALL_INDEX, DAO_VOTES_COL_PROPOSAL_ID, DAO_VOTES_COL_TX_HASH,
+        DAO_VOTES_COL_VOTE_ID, DAO_VOTES_COL_VOTE_OPTION, DAO_VOTES_COL_YES_VOTE_BLIND,
+        DAO_VOTES_TABLE,
     },
-    dao_model::{DaoBulla, DaoMintParams, DaoProposeParams},
+    dao_model::{DaoBulla, DaoMintParams, DaoProposeParams, DaoVoteParams},
     note::EncryptedNote2,
     DaoFunction,
 };
@@ -66,6 +72,34 @@ pub struct DaoParams {
     pub secret_key: SecretKey,
     /// DAO bulla blind
     pub bulla_blind: pallas::Base,
+}
+
+impl fmt::Display for DaoParams {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = format!(
+            "{}\n{}\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {:?}",
+            "DAO Parameters",
+            "==============",
+            "Proposer limit",
+            encode_base10(self.proposer_limit, 8),
+            self.proposer_limit,
+            "Quorum",
+            encode_base10(self.quorum, 8),
+            self.quorum,
+            "Approval ratio",
+            self.approval_ratio_base as f64 / self.approval_ratio_quot as f64,
+            "Governance Token ID",
+            self.gov_token_id,
+            "Public key",
+            PublicKey::from_secret(self.secret_key),
+            "Secret key",
+            self.secret_key,
+            "Bulla blind",
+            self.bulla_blind,
+        );
+
+        write!(f, "{}", s)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -113,6 +147,44 @@ impl Dao {
     }
 }
 
+impl fmt::Display for Dao {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = format!(
+            "{}\n{}\n{}: {}\n{}: {}\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {:?}\n{}: {:?}\n{}: {:?}\n{}: {:?}",
+            "DAO Parameters",
+            "==============",
+            "Name",
+            self.name,
+            "Bulla",
+            self.bulla(),
+            "Proposer limit",
+            encode_base10(self.proposer_limit, 8),
+            self.proposer_limit,
+            "Quorum",
+            encode_base10(self.quorum, 8),
+            self.quorum,
+            "Approval ratio",
+            self.approval_ratio_base as f64 / self.approval_ratio_quot as f64,
+            "Governance Token ID",
+            self.gov_token_id,
+            "Public key",
+            PublicKey::from_secret(self.secret_key),
+            "Secret key",
+            self.secret_key,
+            "Bulla blind",
+            self.bulla_blind,
+            "Leaf position",
+            self.leaf_position,
+            "Tx hash",
+            self.tx_hash,
+            "Call idx",
+            self.call_index,
+        );
+
+        write!(f, "{}", s)
+    }
+}
+
 #[derive(Debug, Clone)]
 /// Parameters representing an initialized DAO proposal, optionally deployed on-chain
 pub struct DaoProposal {
@@ -157,6 +229,39 @@ impl DaoProposal {
     }
 }
 
+impl fmt::Display for DaoProposal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = format!(
+            "{}\n{}\n{}: {}\n{}: {}\n{}: {} ({})\n{}: {:?}\n{}: {}\n{}: {:?}\n{}: {:?}\n{}: {:?}\n{}: {:?}\n{}: {:?}",
+            "Proposal parameters",
+            "===================",
+            "DAO Bulla",
+            self.dao_bulla,
+            "Recipient",
+            self.recipient,
+            "Proposal amount",
+            encode_base10(self.amount, 8),
+            self.amount,
+            "Proposal serial",
+            self.serial,
+            "Proposal Token ID",
+            self.token_id,
+            "Proposal bulla blind",
+            self.bulla_blind,
+            "Proposal leaf position",
+            self.leaf_position,
+            "Proposal tx hash",
+            self.tx_hash,
+            "Proposal call index",
+            self.call_index,
+            "Proposal vote ID",
+            self.vote_id,
+        );
+
+        write!(f, "{}", s)
+    }
+}
+
 #[derive(Debug, Clone)]
 /// Parameters representing a vote we've made on a DAO proposal
 pub struct DaoVote {
@@ -166,6 +271,12 @@ pub struct DaoVote {
     pub proposal_id: u64,
     /// The vote
     pub vote_option: bool,
+    /// Blinding factor for the yes vote
+    pub yes_vote_blind: pallas::Scalar,
+    /// Value of all votes
+    pub all_vote_value: u64,
+    /// Blinding facfor of all votes
+    pub all_vote_blind: pallas::Scalar,
     /// Transaction hash where this vote was casted
     pub tx_hash: Option<blake3::Hash>,
     /// call index in the transaction where this vote was casted
@@ -321,10 +432,10 @@ impl Drk {
             query,
             QueryType::Blob as u8,
             serialize(&dao_name),
-            QueryType::Integer as u8,
-            dao_params.proposer_limit,
-            QueryType::Integer as u8,
-            dao_params.quorum,
+            QueryType::Blob as u8,
+            serialize(&dao_params.proposer_limit),
+            QueryType::Blob as u8,
+            serialize(&dao_params.quorum),
             QueryType::Integer as u8,
             dao_params.approval_ratio_base,
             QueryType::Integer as u8,
@@ -362,22 +473,7 @@ impl Drk {
     async fn dao_list_single(&self, dao_id: u64) -> Result<()> {
         let dao = self.get_dao_by_id(dao_id).await?;
 
-        println!("DAO Parameters:");
-        println!("Name: {}", dao.name);
-        println!("Bulla: {}", dao.bulla());
-        println!("Proposer limit: {}", dao.proposer_limit);
-        println!("Quorum: {}", dao.quorum);
-        println!(
-            "Approval ratio: {}",
-            dao.approval_ratio_base as f64 / dao.approval_ratio_quot as f64
-        );
-        println!("Governance token ID: {}", dao.gov_token_id);
-        println!("Public key: {}", PublicKey::from_secret(dao.secret_key));
-        println!("Secret key: {}", dao.secret_key);
-        println!("Bulla blind: {:?}", dao.bulla_blind);
-        println!("Leaf position: {:?}", dao.leaf_position);
-        println!("Tx hash: {:?}", dao.tx_hash);
-        println!("Call idx: {:?}", dao.call_index);
+        println!("{}", dao);
 
         Ok(())
     }
@@ -403,9 +499,9 @@ impl Drk {
             DAO_DAOS_COL_DAO_ID,
             QueryType::Blob as u8,
             DAO_DAOS_COL_NAME,
-            QueryType::Integer as u8,
+            QueryType::Blob as u8,
             DAO_DAOS_COL_PROPOSER_LIMIT,
-            QueryType::Integer as u8,
+            QueryType::Blob as u8,
             DAO_DAOS_COL_QUORUM,
             QueryType::Integer as u8,
             DAO_DAOS_COL_APPROVAL_RATIO_BASE,
@@ -444,8 +540,12 @@ impl Drk {
             let name_bytes: Vec<u8> = serde_json::from_value(row[1].clone())?;
             let name = deserialize(&name_bytes)?;
 
-            let proposer_limit = serde_json::from_value(row[2].clone())?;
-            let quorum = serde_json::from_value(row[3].clone())?;
+            let proposer_limit_bytes: Vec<u8> = serde_json::from_value(row[2].clone())?;
+            let proposer_limit = deserialize(&proposer_limit_bytes)?;
+
+            let quorum_bytes: Vec<u8> = serde_json::from_value(row[3].clone())?;
+            let quorum = deserialize(&quorum_bytes)?;
+
             let approval_ratio_base = serde_json::from_value(row[4].clone())?;
             let approval_ratio_quot = serde_json::from_value(row[5].clone())?;
 
@@ -597,7 +697,9 @@ impl Drk {
 
             let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
             let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
+
             let call_index = serde_json::from_value(row[9].clone())?;
+
             let vote_id_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
 
             let leaf_position = if leaf_position_bytes.is_empty() {
@@ -635,10 +737,179 @@ impl Drk {
         Ok(proposals)
     }
 
+    /// Fetch a DAO proposal by its ID
+    pub async fn get_dao_proposal_by_id(&self, proposal_id: u64) -> Result<DaoProposal> {
+        let query = format!(
+            "SELECT * FROM {} WHERE {} = {}",
+            DAO_PROPOSALS_TABLE, DAO_PROPOSALS_COL_PROPOSAL_ID, proposal_id
+        );
+
+        let params = json!([
+            query,
+            QueryType::Integer as u8,
+            DAO_PROPOSALS_COL_PROPOSAL_ID,
+            QueryType::Integer as u8,
+            DAO_PROPOSALS_COL_DAO_ID,
+            QueryType::Blob as u8,
+            DAO_PROPOSALS_COL_RECV_PUBLIC,
+            QueryType::Blob as u8,
+            DAO_PROPOSALS_COL_AMOUNT,
+            QueryType::Blob as u8,
+            DAO_PROPOSALS_COL_SERIAL,
+            QueryType::Blob as u8,
+            DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID,
+            QueryType::Blob as u8,
+            DAO_PROPOSALS_COL_BULLA_BLIND,
+            QueryType::OptionBlob as u8,
+            DAO_PROPOSALS_COL_LEAF_POSITION,
+            QueryType::OptionBlob as u8,
+            DAO_PROPOSALS_COL_TX_HASH,
+            QueryType::OptionInteger as u8,
+            DAO_PROPOSALS_COL_CALL_INDEX,
+            QueryType::OptionBlob as u8,
+            DAO_PROPOSALS_COL_OUR_VOTE_ID,
+        ]);
+
+        let req = JsonRequest::new("wallet.query_row_single", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        let Some(row) = rep.as_array() else {
+            return Err(anyhow!("[get_proposal_by_id] Unexpected response from darkfid: {}", rep));
+        };
+
+        let id: u64 = serde_json::from_value(row[0].clone())?;
+        let dao_id: u64 = serde_json::from_value(row[1].clone())?;
+
+        let recipient_bytes: Vec<u8> = serde_json::from_value(row[2].clone())?;
+        let recipient = deserialize(&recipient_bytes)?;
+
+        let amount_bytes: Vec<u8> = serde_json::from_value(row[3].clone())?;
+        let amount = deserialize(&amount_bytes)?;
+
+        let serial_bytes: Vec<u8> = serde_json::from_value(row[4].clone())?;
+        let serial = deserialize(&serial_bytes)?;
+
+        let token_id_bytes: Vec<u8> = serde_json::from_value(row[5].clone())?;
+        let token_id = deserialize(&token_id_bytes)?;
+
+        let bulla_blind_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
+        let bulla_blind = deserialize(&bulla_blind_bytes)?;
+
+        let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
+        let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
+
+        let call_index = serde_json::from_value(row[9].clone())?;
+
+        let vote_id_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
+
+        let leaf_position = if leaf_position_bytes.is_empty() {
+            None
+        } else {
+            Some(deserialize(&leaf_position_bytes)?)
+        };
+
+        let tx_hash =
+            if tx_hash_bytes.is_empty() { None } else { Some(deserialize(&tx_hash_bytes)?) };
+
+        let vote_id =
+            if vote_id_bytes.is_empty() { None } else { Some(deserialize(&vote_id_bytes)?) };
+
+        let dao = self.get_dao_by_id(dao_id).await?;
+
+        let proposal = DaoProposal {
+            id,
+            dao_bulla: dao.bulla(),
+            recipient,
+            amount,
+            serial,
+            token_id,
+            bulla_blind,
+            leaf_position,
+            tx_hash,
+            call_index,
+            vote_id,
+        };
+
+        Ok(proposal)
+    }
+
     // Fetch all known DAO proposal votes from the wallet given a proposal ID
-    //pub async fn get_dao_proposal_votes(&self, _proposal_id: u64) -> Result<Vec<Vote>> {
-    //todo!()
-    //}
+    pub async fn get_dao_proposal_votes(&self, proposal_id: u64) -> Result<Vec<DaoVote>> {
+        let query = format!(
+            "SELECT * FROM {} WHERE {} = {}",
+            DAO_VOTES_TABLE, DAO_VOTES_COL_PROPOSAL_ID, proposal_id
+        );
+
+        let params = json!([
+            query,
+            QueryType::Integer as u8,
+            DAO_VOTES_COL_VOTE_ID,
+            QueryType::Integer as u8,
+            DAO_VOTES_COL_PROPOSAL_ID,
+            QueryType::Integer as u8,
+            DAO_VOTES_COL_VOTE_OPTION,
+            QueryType::Blob as u8,
+            DAO_VOTES_COL_YES_VOTE_BLIND,
+            QueryType::Blob as u8,
+            DAO_VOTES_COL_ALL_VOTE_VALUE,
+            QueryType::Blob as u8,
+            DAO_VOTES_COL_ALL_VOTE_BLIND,
+            QueryType::OptionBlob as u8,
+            DAO_VOTES_COL_TX_HASH,
+            QueryType::OptionInteger as u8,
+            DAO_VOTES_COL_CALL_INDEX,
+        ]);
+
+        let req = JsonRequest::new("wallet.query_row_multi", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        let Some(rows) = rep.as_array() else {
+            return Err(anyhow!("[get_dao_proposal_votes] Unexpected response from darkfid: {}", rep));
+        };
+
+        let mut votes = Vec::with_capacity(rows.len());
+
+        for row in rows {
+            let Some(row) = row.as_array() else {
+                return Err(anyhow!("[get_dao_proposal_votes] Unexpected response from darkfid: {}", rep));
+            };
+
+            let id: u64 = serde_json::from_value(row[0].clone())?;
+            let proposal_id: u64 = serde_json::from_value(row[1].clone())?;
+            let vote_option: bool = serde_json::from_value(row[2].clone())?;
+
+            let yes_vote_blind_bytes: Vec<u8> = serde_json::from_value(row[3].clone())?;
+            let yes_vote_blind = deserialize(&yes_vote_blind_bytes)?;
+
+            let all_vote_value_bytes: Vec<u8> = serde_json::from_value(row[4].clone())?;
+            let all_vote_value = deserialize(&all_vote_value_bytes)?;
+
+            let all_vote_blind_bytes: Vec<u8> = serde_json::from_value(row[5].clone())?;
+            let all_vote_blind = deserialize(&all_vote_blind_bytes)?;
+
+            let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
+
+            let call_index = serde_json::from_value(row[7].clone())?;
+
+            let tx_hash =
+                if tx_hash_bytes.is_empty() { None } else { Some(deserialize(&tx_hash_bytes)?) };
+
+            let vote = DaoVote {
+                id,
+                proposal_id,
+                vote_option,
+                yes_vote_blind,
+                all_vote_value,
+                all_vote_blind,
+                tx_hash,
+                call_index,
+            };
+
+            votes.push(vote);
+        }
+
+        Ok(votes)
+    }
 
     /// Append data related to DAO contract transactions into the wallet database.
     /// Optionally, if `confirm` is true, also append the data in the Merkle trees, etc.
@@ -653,6 +924,9 @@ impl Drk {
         // DAO proposals that have been minted
         let mut new_dao_proposals: Vec<(DaoProposeParams, Option<blake3::Hash>, u32)> = vec![];
         let mut our_proposals: Vec<DaoProposal> = vec![];
+        // DAO votes that have been seen
+        let mut new_dao_votes: Vec<(DaoVoteParams, Option<blake3::Hash>, u32)> = vec![];
+        let mut dao_votes: Vec<DaoVote> = vec![];
 
         // Run through the transaction and see what we got:
         for (i, call) in tx.calls.iter().enumerate() {
@@ -673,12 +947,16 @@ impl Drk {
             }
 
             if call.contract_id == cid && call.data[0] == DaoFunction::Vote as u8 {
-                eprintln!("[UNIMPLEMENTED] Found Dao::Vote in call {}", i);
+                eprintln!("Found Dao::Vote in call {}", i);
+                let params: DaoVoteParams = deserialize(&call.data[1..])?;
+                let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
+                new_dao_votes.push((params, tx_hash, i as u32));
                 continue
             }
 
             if call.contract_id == cid && call.data[0] == DaoFunction::Exec as u8 {
-                eprintln!("[UNIMPLEMENTED] Found Dao::Exec in call {}", i);
+                // This seems to not need any special action
+                eprintln!("Found Dao::Exec in call {}", i);
                 continue
             }
         }
@@ -743,12 +1021,53 @@ impl Drk {
                     }
                 }
             }
+
+            for vote in new_dao_votes {
+                let enc_note = EncryptedNote2 {
+                    ciphertext: vote.0.ciphertext,
+                    ephem_public: vote.0.ephem_public,
+                };
+
+                for dao in &daos {
+                    if let Ok(note) = enc_note.decrypt::<DaoVoteNote>(&dao.secret_key) {
+                        eprintln!("Managed to decrypt DAO proposal vote note");
+                        let daos_proposals = self.get_dao_proposals(dao.id).await?;
+                        let mut proposal_id = None;
+
+                        for i in daos_proposals {
+                            if i.bulla() == vote.0.proposal_bulla {
+                                proposal_id = Some(i.id);
+                                break
+                            }
+                        }
+
+                        if proposal_id.is_none() {
+                            eprintln!("Warning: Decrypted DaoVoteNote but did not find proposal");
+                            break
+                        }
+
+                        let v = DaoVote {
+                            id: 0,
+                            proposal_id: proposal_id.unwrap(),
+                            vote_option: note.vote_option,
+                            yes_vote_blind: note.yes_vote_blind,
+                            all_vote_value: note.all_vote_value,
+                            all_vote_blind: note.all_vote_blind,
+                            tx_hash: vote.1,
+                            call_index: Some(vote.2),
+                        };
+
+                        dao_votes.push(v);
+                    }
+                }
+            }
         }
 
         if confirm {
             self.put_dao_trees(&daos_tree, &proposals_tree).await?;
             self.confirm_daos(&daos_to_confirm).await?;
             self.put_dao_proposals(&our_proposals).await?;
+            self.put_dao_votes(&dao_votes).await?;
         }
 
         Ok(())
@@ -863,6 +1182,49 @@ impl Drk {
 
             let req = JsonRequest::new("wallet.exec_sql", params);
             let _ = self.rpc_client.request(req).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Import given DAO votes into the wallet
+    pub async fn put_dao_votes(&self, votes: &[DaoVote]) -> Result<()> {
+        for vote in votes {
+            eprintln!("Importing DAO vote into wallet");
+
+            let query = format!(
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);",
+                DAO_VOTES_TABLE,
+                DAO_VOTES_COL_PROPOSAL_ID,
+                DAO_VOTES_COL_VOTE_OPTION,
+                DAO_VOTES_COL_YES_VOTE_BLIND,
+                DAO_VOTES_COL_ALL_VOTE_VALUE,
+                DAO_VOTES_COL_ALL_VOTE_BLIND,
+                DAO_VOTES_COL_TX_HASH,
+                DAO_VOTES_COL_CALL_INDEX,
+            );
+
+            let params = json!([
+                query,
+                QueryType::Integer as u8,
+                vote.proposal_id,
+                QueryType::Integer as u8,
+                vote.vote_option,
+                QueryType::Blob as u8,
+                serialize(&vote.yes_vote_blind),
+                QueryType::Blob as u8,
+                serialize(&vote.all_vote_value),
+                QueryType::Blob as u8,
+                serialize(&vote.all_vote_blind),
+                QueryType::Blob as u8,
+                serialize(&vote.tx_hash.unwrap()),
+                QueryType::Integer as u8,
+                vote.call_index.unwrap(),
+            ]);
+
+            let req = JsonRequest::new("wallet.exec_sql", params);
+            let _ = self.rpc_client.request(req).await?;
+            eprintln!("DAO vote added to wallet");
         }
 
         Ok(())
