@@ -128,19 +128,7 @@ impl LeadCoin {
         let coin1_commitment_merkle_path = coin_commitment_tree
             .authentication_path(coin1_commitment_pos, &coin1_commitment_root)
             .unwrap();
-        // Derive the nonce for coin2
-        //let coin2_seed = Self::util_derived_rho(coin1_sk_root, seed);
-        //info!(target: "consensus::leadcoin", "coin2_seed[{}]: {:?}", slot, coin2_seed);
-        // Create commitment to coin2
-        //let coin2_commitment = Self::commitment(
-        //pk,
-        //pallas::Base::from(value + constants::REWARD),
-        //coin2_seed,
-        //coin2_blind,
-        //);
-        // Derive election seeds
-        //let (y_mu, rho_mu) = Self::election_seeds_u64(eta, slot);
-        // Return the object
+
         Self {
             value,
             slot,
@@ -154,11 +142,6 @@ impl LeadCoin {
             coin1_sk_pos: u32::try_from(coin1_sk_pos).unwrap(),
             coin1_sk_merkle_path,
             coin1_blind,
-            //coin2_blind,
-            //coin2_commitment,
-            //y_mu,
-            //rho_mu,
-            //eta,
         }
     }
 
@@ -255,33 +238,6 @@ impl LeadCoin {
     pub fn derived_rho(&self) -> pallas::Base {
         Self::util_derived_rho(self.coin1_sk_root, self.nonce)
     }
-
-    /*
-    fn evolve_coin(current_eta: pallas::Base,
-                   current_slot: pallas::Base,
-                   coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>) {
-        self.slot = current_slot.clone();
-        // pk
-        let pk = Self::util_pk(self.coin1_sk_root, self.slot);
-        let coin1_commitment = Self::commitment(pk,
-                                                pallas::Base::from(self.value),
-                                                self.seed,
-                                                self.coin1_blind
-        );
-        // Hash its coordinates to get a base field element
-        let c1_cm_coords = coin1_commitment.to_affine().coordinates().unwrap();
-        let c1_base_msg = [*c1_cm_coords.x(), *c1_cm_coords.y()];
-        let coin1_commitment_base = poseidon_hash(c1_base_msg);
-        // Append the element to the Merkle tree
-        coin_commitment_tree.append(&MerkleNode::from(coin1_commitment_base));
-        let coin1_commitment_pos = coin_commitment_tree.witness().unwrap();
-        let coin1_commitment_root = coin_commitment_tree.root(0).unwrap();
-        let coin1_commitment_merkle_path = coin_commitment_tree
-            .authentication_path(coin1_commitment_pos, &coin1_commitment_root)
-            .unwrap();
-        //TODO complete
-    }
-    */
 
     pub fn headstart() -> pallas::Base {
         let headstart = constants::MIN_F.clone() * Float10::try_from(constants::P.clone()).unwrap();
