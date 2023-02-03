@@ -171,7 +171,7 @@ enum Subcmd {
     },
 
     /// OTC atomic swap
-    #[command(subcommand, about = cli_desc!())]
+    #[command(subcommand)]
     Otc(OtcSubcmd),
 
     /// Inspect a transaction from stdin
@@ -189,7 +189,7 @@ enum Subcmd {
     Subscribe,
 
     /// DAO functionalities
-    #[command(subcommand, about = cli_desc!())]
+    #[command(subcommand)]
     Dao(DaoSubcmd),
 
     /// Scan the blockchain and parse relevant transactions
