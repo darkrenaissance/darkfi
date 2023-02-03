@@ -313,3 +313,5 @@ wallet. We can see this with the `proposal` subcommands:
 $ ./drk dao proposals 1
 $ ./drk dao proposal 1 1
 ```
+
+NOTE: vote & exec is todo, check src/contract/dao/ for code.
