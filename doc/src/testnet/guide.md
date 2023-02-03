@@ -33,7 +33,7 @@ already preset for using the testnet network.
 
 ```
 $ ./darkfid
-Config file created in "~.config/darkfi/darkfid_config.toml". Please review it and try again.
+Config file created in "~/.config/darkfi/darkfid_config.toml". Please review it and try again.
 ```
 
 
@@ -99,6 +99,9 @@ $ ./drk airdrop 42.69 DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq
 $ ./drk airdrop 13.37 BobvfQrDaf32VNhVtX6Adyi3WGfPpPYZPJBn6rnrxHKm
 ```
 
+Note: you have wait some minutes between airdrops since they're
+rate-limited.
+
 On success, you should see a transaction ID. If successful,
 the airdrop transactions will how be in the consensus' mempool,
 waiting for inclusion in the next block. Depending on the network,
@@ -139,17 +142,17 @@ will receive the tokens you've sent.
 
 ![pablo-waiting1](pablo1.jpg)
 
+We can see the spent coin in our wallet.
+
+```
+$ ./drk wallet --coins
+```
+
 We have to wait until the next block to see our change balance reappear
 in our wallet.
 
 ```
 $ ./drk wallet --balance
-```
-
-We can see the spent coin in our wallet.
-
-```
-$ ./drk wallet --coins
 ```
 
 ## Atomic Swaps
