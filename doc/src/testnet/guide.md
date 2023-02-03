@@ -225,6 +225,14 @@ necessary operations. Let's create a DAO with the following parameters:
 * Approval ratio: `0.67`
 * Governance token: `A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd`
 
+You can see what these parameters mean with the `help` command.
+
+```
+$ ./drk help dao create
+```
+
+Lets create our DAO.
+
 ```
 $ ./drk dao create 90 10 0.67 A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd > dao.dat
 $ ./drk dao view < dao.dat
