@@ -32,6 +32,7 @@ for the P2P IRC daemon.
 This project requires the Rust compiler to be installed. 
 Please visit [Rustup](https://rustup.rs/) for instructions.
 
+You have to install a native toolchain, and `wasm32-unknown-unknown`.
 Minimum Rust version supported is **1.67.0 (stable)**.
 
 The following dependencies are also required:
