@@ -223,7 +223,7 @@ The view command will show us the parameters. If everything looks fine,
 we can now import it into our wallet:
 
 ```
-./drk dao import FrenDAO < dao.dat
+./drk dao import MiladyMakerDAO < dao.dat
 ./drk dao list
 ./drk dao list 1
 ```
