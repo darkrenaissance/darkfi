@@ -37,14 +37,15 @@ Minimum Rust version supported is **1.67.0 (stable)**.
 
 The following dependencies are also required:
 
-|   Dependency   |   Debian-based   |   
-|----------------|------------------|
-| git            | git              |
-| make           | make             |
-| jq             | jq               |
-| gcc            | gcc              |
-| pkg-config     | pkg-config       |
-| libmpg123      | libmpg123-dev    |
+|   Dependency   |   Debian-based   | Fedora-based    |   
+|----------------|------------------|-----------------|
+| git            | git              | git             |
+| make           | make             | make            |
+| jq             | jq               | jq              |
+| gcc            | gcc              | gcc             |
+| pkg-config     | pkg-config       | pkg-config      |
+| libmpg123      | libmpg123-dev    | libmpg123-devel |
+|                |                  | openssl-devel   |
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the
 following to install the required dependencies:
@@ -52,6 +53,13 @@ following to install the required dependencies:
 ```shell
 # apt-get update
 # apt-get install -y git make jq gcc pkg-config libmpg123-dev
+```
+
+Users of Fedora-based systems can simply run the
+following to install the required dependencies:
+
+```shell
+# dnf install -y git make jq gcc pkg-config libmpg123-devel openssl-devel
 ```
 
 Alternatively, users can try using the automated script under `contrib`
