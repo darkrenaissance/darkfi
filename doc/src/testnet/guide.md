@@ -99,6 +99,8 @@ $ ./drk airdrop 42.69 DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq
 $ ./drk airdrop 13.37 BobvfQrDaf32VNhVtX6Adyi3WGfPpPYZPJBn6rnrxHKm
 ```
 
+There is a limit of 100 for testnet airdrops currently.
+
 Note: you have wait some minutes between airdrops since they're
 rate-limited.
 
@@ -163,6 +165,15 @@ swap. For example purposes, let's say you want to swap `40`
 `DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq` (which is the balance
 you should have left over after doing the above payment) for your
 counterparty's `20` `AcABG4fnmBuT5vuXV8TLdEV8panhk5SdtBZxCCLqQxyL`.
+
+To protect your anonymity from the counterparty, the swap can only
+send entire coins. To create a smaller coin denomination, send
+yourself the amount you want to swap. Then check you have a spendable
+coin to swap with:
+
+```
+$ ./drk wallet --coins
+```
 
 You'll have to initiate the swap and build your half of the swap tx:
 
