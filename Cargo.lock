@@ -2403,6 +2403,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "ircd2"
+version = "0.4.0"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "bs58",
+ "chrono",
+ "clap 4.1.4",
+ "crypto_box",
+ "ctrlc",
+ "darkfi",
+ "darkfi-serial",
+ "easy-parallel",
+ "futures",
+ "futures-rustls",
+ "hex",
+ "log",
+ "rand",
+ "ripemd",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "toml 0.5.11",
+ "url",
+]
+
+[[package]]
 name = "is-terminal"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

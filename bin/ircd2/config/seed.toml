@@ -1,0 +1,33 @@
+## JSON-RPC listen URL
+rpc_listen="127.0.0.1:8000"
+
+## IRC listen URL
+irc_listen="127.0.0.1:11065"
+
+## Sets Datastore Path
+datastore="~/.config/ircd-seed"
+
+## Raft net settings
+[net]
+## P2P accept addresses
+inbound=["127.0.0.1:11001"]
+
+## Connection slots
+# outbound_connections=5
+
+## P2P external addresses
+# external_addr=["127.0.0.1:11001"]
+
+## Peers to connect to
+# peers=["127.0.0.1:11001"]
+
+## Seed nodes to connect to 
+# seeds=["127.0.0.1:11002"]
+
+## these are the default configuration for the p2p network
+#manual_attempt_limit=0
+#seed_query_timeout_seconds=8
+#connect_timeout_seconds=10
+#channel_handshake_seconds=4
+#channel_heartbeat_seconds=10
+

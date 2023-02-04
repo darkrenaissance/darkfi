@@ -27,6 +27,7 @@ members = [
     "bin/fud/fu",
     "bin/fud/fud",
     "bin/ircd",
+    "bin/ircd2",
     "bin/dnetview",
     #"bin/dao/daod",
     #"bin/dao/dao-cli",
