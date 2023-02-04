@@ -80,26 +80,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         loop {
             let mut line = String::new();
 
-            // TODO fix this lock
-            // let mut view = view.lock().await;
             futures::select! {
-                // Process msg from View
-                // evnt = view.process().fuse() => {
-                //     if let Err(e) = evnt {
-                //         error!("[CLIENT {}] Read line error: {}", self.address, e);
-                //         break
-                //     }
-                //     let event = evnt.unwrap();
-                //     match event.action {
-                //         EventAction::PrivMsg(mut m) => {
-                //             if let Err(e) = self.process_msg(&mut m).await {
-                //                 error!("[CLIENT {}] Process msg: {}",  self.address, e);
-                //                 break
-                //             }
-                //         }
-                //     }
-                // }
-                // Process msgs from other client connnected to the same irc server
+                // Process msg from View or other client connnected to the same irc server
                 msg = self.subscription.receive().fuse() => {
                     match msg {
                         ClientSubMsg::Privmsg(mut m) => {
@@ -576,6 +558,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 self.reply(&t).await?;
             }
 
+            // Process missed messages if any (sorted by event's timestamp)
             let unread_events = self.unread_events.lock().await.events.clone();
 
             let chan_info = self.irc_config.channels.get_mut(chan).unwrap();

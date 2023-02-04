@@ -21,7 +21,7 @@ use std::collections::{HashMap, VecDeque};
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use log::{debug, info};
+use log::debug;
 use rand::{rngs::OsRng, RngCore};
 
 use darkfi::{net, util::async_util::sleep, Result};
@@ -130,7 +130,6 @@ impl UnreadEvents {
         if let Some(event) = self.events.get_mut(key) {
             event.read_confirms += 1;
             if event.read_confirms >= MAX_CONFIRM {
-                info!("max confirm reached");
                 result = Some(event.clone())
             }
         }
@@ -234,7 +233,6 @@ impl ProtocolEvent {
             // if event.read_confirms >= MAX_CONFIRM {
             //     self.new_event(&event).await?;
             // } else {
-            info!("add to unread_events: {:?}", event);
             self.unread_events.lock().await.insert(&event);
             self.send_inv(&event).await?;
             // }
@@ -250,29 +248,23 @@ impl ProtocolEvent {
         loop {
             let inv = self.inv_sub.receive().await?;
             let inv = (*inv).to_owned();
-            // info!("invs: {}", inv.invs.iter().len());
-            let the_inv = inv.invs[0].clone();
+            let inv_item = inv.invs[0].clone();
 
             // for inv in inv.invs.iter() {
-            if !self.seen_inv.push(&the_inv.id).await {
+            if !self.seen_inv.push(&inv_item.id).await {
                 continue
             }
-
-            info!("received inv: id: {}", the_inv.id);
 
             {
                 let mut unread_events = self.unread_events.lock().await;
 
-                if !unread_events.contains(&the_inv.hash) &&
-                    self.model.lock().await.get_event(&the_inv.hash).is_none()
+                if !unread_events.contains(&inv_item.hash) &&
+                    self.model.lock().await.get_event(&inv_item.hash).is_none()
                 {
-                    info!("send_getdata");
-                    self.send_getdata(vec![the_inv.hash]).await?;
-                } else if let Some(event) = unread_events.inc_read_confirms(&the_inv.hash) {
-                    info!("new_event() in handle_receive_inv");
+                    self.send_getdata(vec![inv_item.hash]).await?;
+                } else if let Some(event) = unread_events.inc_read_confirms(&inv_item.hash) {
                     self.new_event(&event).await?;
                 }
-                info!("unread events: {:?}", unread_events);
             }
             // }
 
@@ -286,21 +278,15 @@ impl ProtocolEvent {
             let getdata = self.getdata_sub.receive().await?;
             let events = (*getdata).to_owned().events;
 
-            // info!("received getdata()");
-
             for event_id in events {
-                // info!("requesting event with id: {:?}", event_id);
-
                 let unread_event = self.unread_events.lock().await.get(&event_id);
                 if let Some(event) = unread_event {
                     self.channel.send(event).await?;
-                    // info!("[unread_events] send event");
                     continue
                 }
 
                 let model_event = self.model.lock().await.get_event(&event_id);
                 if let Some(event) = model_event {
-                    // info!("[model] send event");
                     self.channel.send(event).await?;
                 }
             }
@@ -345,10 +331,8 @@ impl ProtocolEvent {
     async fn new_event(&self, event: &Event) -> Result<()> {
         let mut model = self.model.lock().await;
         if model.is_orphan(event) {
-            info!("orphan -> send_getdata()");
             self.send_getdata(vec![event.hash()]).await?;
         } else {
-            info!("not orphan -> add()");
             model.add(event.clone()).await;
         }
 
@@ -357,16 +341,8 @@ impl ProtocolEvent {
 
     async fn send_inv(&self, event: &Event) -> Result<()> {
         let id = OsRng.next_u64();
-        info!("send_inv() with id: {id}");
-        // let exclude_list = vec![self.channel.address()];
         self.p2p.broadcast(Inv { invs: vec![InvItem { id, hash: event.hash() }] }).await?;
 
-        // self.p2p
-        //     .broadcast_with_exclude(
-        //         Inv { invs: vec![InvItem { id, hash: event.hash() }] },
-        //         &exclude_list,
-        //     )
-        //     .await?;
         Ok(())
     }
 

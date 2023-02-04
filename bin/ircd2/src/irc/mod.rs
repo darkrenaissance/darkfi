@@ -134,7 +134,6 @@ impl IrcServer {
                 self.p2p.clone(),
                 self.model.clone(),
                 self.seen.clone(),
-                self.unread_events.clone(),
                 msg_recv,
                 self.clients_subscriptions.clone(),
             ))
@@ -177,7 +176,6 @@ impl IrcServer {
         p2p: P2pPtr,
         model: ModelPtr,
         seen: SeenPtr<EventId>,
-        unread_events: UnreadEventsPtr,
         recv: smol::channel::Receiver<(NotifierMsg, u64)>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
@@ -202,7 +200,6 @@ impl IrcServer {
                     if !seen.push(&event.hash()).await {
                         continue
                     }
-                    // view.lock().await.seen.insert(event.hash(), event.clone());
                     // unread_events.lock().await.insert(&event);
 
                     p2p.broadcast(event).await?;

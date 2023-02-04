@@ -20,7 +20,7 @@ use std::{cmp::Ordering, collections::HashMap, fmt};
 
 use async_std::sync::{Arc, Mutex};
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
-use log::info;
+use log::error;
 use ripemd::{Digest, Ripemd256};
 
 use crate::{
@@ -101,8 +101,6 @@ impl Model {
             children: Vec::new(),
         };
 
-        // info!("time: {}", get_current_time());
-
         let root_node_id = root_node.event.hash();
 
         let mut event_map = HashMap::new();
@@ -154,7 +152,6 @@ impl Model {
     }
 
     async fn reorganize(&mut self) {
-        info!("Reorganize");
         for (_, orphan) in std::mem::take(&mut self.orphans) {
             if self.is_orphan(&orphan) {
                 // TODO should we remove orphan if it's too old
@@ -170,16 +167,13 @@ impl Model {
             let parent = match self.event_map.get_mut(&prev_event) {
                 Some(parent) => parent,
                 None => {
-                    info!("no parent");
+                    error!("No parent found, Orphan is not relinked");
                     continue
                 }
             };
             parent.children.push(node_hash);
 
             self.event_map.insert(node_hash, node.clone());
-
-            // TODO dispatch to events_queue
-            // to use events_queue here the add() and reorganize() functions should change to async
 
             self.events_queue.dispatch(&node.event).await.expect("error dispatching the event");
 

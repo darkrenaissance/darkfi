@@ -19,11 +19,9 @@
 use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
-use darkfi::{Error, Result};
+use darkfi::Result;
 
 pub type ViewPtr = Arc<Mutex<View>>;
-
-use log::info;
 
 use crate::{
     events_queue::EventsQueuePtr,
@@ -43,15 +41,7 @@ impl View {
     pub async fn process(&mut self) -> Result<Event> {
         // loop {
         let new_event = self.events_queue.fetch().await?;
-        info!("fetched event from events queue: {:?}", new_event);
-        // TODO sort the events
         Ok(new_event)
-        // if !self.seen.contains_key(&new_event.hash()) {
-        //     self.seen.insert(new_event.hash(), new_event.clone());
-
-        // } else {
-        //     Err(Error::MalformedPacket)
-        // }
         // }
     }
 }
