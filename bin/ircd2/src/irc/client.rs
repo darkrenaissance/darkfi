@@ -557,23 +557,19 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 self.reply(&j).await?;
                 self.reply(&t).await?;
             }
+        }
+        // Process missed messages if any (sorted by event's timestamp)
+        let unread_events = self.unread_events.lock().await.events.clone();
 
-            // Process missed messages if any (sorted by event's timestamp)
-            let unread_events = self.unread_events.lock().await.events.clone();
+        let mut hash_vec: Vec<Event> = unread_events.values().cloned().collect();
+        hash_vec.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
 
-            let chan_info = self.irc_config.channels.get_mut(chan).unwrap();
-            if chan_info.joined {
-                let mut hash_vec: Vec<Event> = unread_events.values().cloned().collect();
-                hash_vec.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
-
-                for event in hash_vec {
-                    match event.action {
-                        EventAction::PrivMsg(mut m) => {
-                            if let Err(e) = self.process_msg(&mut m).await {
-                                error!("[CLIENT {}] Process msg: {}", self.address, e);
-                                break
-                            }
-                        }
+        for event in hash_vec {
+            match event.action {
+                EventAction::PrivMsg(mut m) => {
+                    if let Err(e) = self.process_msg(&mut m).await {
+                        error!("[CLIENT {}] Process msg: {}", self.address, e);
+                        break
                     }
                 }
             }
