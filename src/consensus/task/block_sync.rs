@@ -118,6 +118,7 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
         None => warn!(target: "consensus::block_sync", "Node is not connected to other nodes"),
     };
 
+    state.write().await.synced = true;
     info!(target: "consensus::block_sync", "Blockchain synced!");
     Ok(())
 }

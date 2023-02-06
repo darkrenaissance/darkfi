@@ -91,6 +91,15 @@ impl ProtocolTx {
                 }
             };
 
+            // Check if node has finished syncing its blockchain
+            if !self.state.read().await.synced {
+                debug!(
+                    target: "consensus::protocol_tx::handle_receive_tx()",
+                    "Node still syncing blockchain, skipping..."
+                );
+                continue
+            }
+
             let tx_copy = (*tx).clone();
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.

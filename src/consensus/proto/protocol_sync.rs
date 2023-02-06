@@ -150,6 +150,15 @@ impl ProtocolSync {
                 }
             };
 
+            // Check if node has finished syncing its blockchain
+            if !self.state.read().await.synced {
+                debug!(
+                    target: "consensus::protocol_sync::handle_receive_block()",
+                    "Node still syncing blockchain, skipping..."
+                );
+                continue
+            }
+
             // Check if node started participating in consensus.
             // Consensus-mode enabled nodes have already performed these steps,
             // during proposal finalization. They still listen to this sub,
@@ -288,6 +297,15 @@ impl ProtocolSync {
                     continue
                 }
             };
+
+            // Check if node has finished syncing its blockchain
+            if !self.state.read().await.synced {
+                debug!(
+                    target: "consensus::protocol_sync::handle_receive_slot_checkpoint()",
+                    "Node still syncing blockchain, skipping..."
+                );
+                continue
+            }
 
             // Check if node started participating in consensus.
             // Consensus-mode enabled nodes have already performed these steps,

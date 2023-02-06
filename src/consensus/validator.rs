@@ -86,6 +86,8 @@ pub struct ValidatorState {
     pub verifying_keys: VerifyingKeyMap,
     /// Wallet interface
     pub wallet: WalletPtr,
+    /// Flag signalling node has finished initial sync
+    pub synced: bool,
     /// Flag to enable single-node mode
     pub single_node: bool,
 }
@@ -227,6 +229,7 @@ impl ValidatorState {
             subscribers,
             verifying_keys: Arc::new(RwLock::new(verifying_keys)),
             wallet,
+            synced: false,
             single_node,
         }));
 
