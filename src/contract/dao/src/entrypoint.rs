@@ -102,8 +102,8 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
             // We found some bytes, try to deserialize into a tree.
             // For now, if this doesn't work, we bail.
             let mut decoder = Cursor::new(&bytes);
-            <i32 as Decodable>::decode(&mut decoder)?;
-            <MerkleTree as Decodable>::decode(&mut decoder)?;
+            <u32 as Decodable>::decode(&mut decoder)?;
+            <Vec<MerkleTree> as Decodable>::decode(&mut decoder)?;
         }
         None => {
             // We didn't find a tree, so just make a new one.
