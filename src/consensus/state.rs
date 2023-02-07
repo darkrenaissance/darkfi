@@ -77,9 +77,9 @@ pub struct ConsensusState {
     pub slot_checkpoints: Vec<SlotCheckpoint>,
     /// Last slot leaders count
     pub previous_leaders: u64,
-    /// controller output history
+    /// Controller output history
     pub f_history: Vec<Float10>,
-    /// controller proportional error history
+    /// Controller proportional error history
     pub err_history: Vec<Float10>,
     // TODO: Aren't these already in db after finalization?
     /// Canonical competing coins
@@ -215,14 +215,8 @@ impl ConsensusState {
     // Initialize node lead coins and set current epoch and eta.
     pub async fn init_coins(&mut self) -> Result<()> {
         self.epoch = self.current_epoch();
-        // Create slot checkpoint if not on genesis slot (already in db)
-        if self.slot_checkpoints.is_empty() && self.current_slot() != 0 {
-            let (sigma1, sigma2) = self.sigmas();
-            self.generate_slot_checkpoint(sigma1, sigma2);
-        };
         self.coins = self.create_coins().await?;
         self.update_forks_checkpoints();
-
         Ok(())
     }
 
@@ -247,13 +241,11 @@ impl ConsensusState {
     pub fn sigmas(&mut self) -> (pallas::Base, pallas::Base) {
         let f = self.win_inv_prob_with_full_stake();
         let total_stake = self.total_stake();
-
         let total_sigma = Float10::try_from(total_stake).unwrap();
-
-        Self::calc_sigmas(f, total_sigma)
+        self.calc_sigmas(f, total_sigma)
     }
 
-    fn calc_sigmas(f: Float10, total_sigma: Float10) -> (pallas::Base, pallas::Base) {
+    fn calc_sigmas(&self, f: Float10, total_sigma: Float10) -> (pallas::Base, pallas::Base) {
         info!(target: "consensus::state", "sigmas(): f: {}", f);
         info!(target: "consensus::state", "sigmas(): total network stake: {:}", total_sigma);
 
@@ -285,12 +277,7 @@ impl ConsensusState {
     /// Generate coins for provided sigmas.
     /// NOTE: The strategy here is having a single competing coin per slot.
     // TODO: DRK coin need to be burned, and consensus coin to be minted.
-    async fn create_coins(
-        &mut self,
-        //eta: pallas::Base,
-    ) -> Result<Vec<LeadCoin>> {
-        let slot = self.current_slot();
-
+    async fn create_coins(&mut self) -> Result<Vec<LeadCoin>> {
         // TODO: cleanup LeadCoinSecrets, no need to keep a vector
         let (seeds, epoch_secrets) = {
             let mut rng = thread_rng();
@@ -326,7 +313,7 @@ impl ConsensusState {
                 //let stake = self.initial_distribution;
                 let c = LeadCoin::new(
                     0,
-                    slot,
+                    self.current_slot(),
                     epoch_secrets.secret_keys[0].inner(),
                     epoch_secrets.merkle_roots[0],
                     0,
@@ -652,6 +639,8 @@ impl ConsensusState {
         self.forks = vec![];
         self.slot_checkpoints = vec![];
         self.previous_leaders = 0;
+        self.f_history = vec![constants::FLOAT10_ZERO.clone()];
+        self.err_history = vec![constants::FLOAT10_ZERO.clone(), constants::FLOAT10_ZERO.clone()];
         self.nullifiers = vec![];
     }
 }
@@ -671,14 +660,20 @@ impl net::Message for ConsensusRequest {
 pub struct ConsensusResponse {
     /// Slot the network was bootstrapped
     pub bootstrap_slot: u64,
+    /// Current slot
+    pub current_slot: u64,
     /// Hot/live data used by the consensus algorithm
     pub forks: Vec<ForkInfo>,
     /// Pending transactions
     pub unconfirmed_txs: Vec<Transaction>,
     /// Hot/live slot checkpoints
     pub slot_checkpoints: Vec<SlotCheckpoint>,
-    /// Last slot leaders count
-    pub previous_leaders: u64,
+    // TODO: When Float10 supports encoding/decoding this should be
+    // replaced by directly using Vec<Float10>
+    /// Controller output history
+    pub f_history: Vec<String>,
+    /// Controller proportional error history
+    pub err_history: Vec<String>,
     /// Seen nullifiers from proposals
     pub nullifiers: Vec<pallas::Base>,
 }
@@ -704,6 +699,8 @@ impl net::Message for ConsensusSlotCheckpointsRequest {
 pub struct ConsensusSlotCheckpointsResponse {
     /// Node known bootstrap slot
     pub bootstrap_slot: u64,
+    /// Node is able to propose proposals
+    pub proposing: bool,
     /// Node has hot/live slot checkpoints
     pub is_empty: bool,
 }

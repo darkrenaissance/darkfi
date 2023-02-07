@@ -94,20 +94,32 @@ impl ProtocolSyncConsensus {
             // Extra validations can be added here.
             let lock = self.state.read().await;
             let bootstrap_slot = lock.consensus.bootstrap_slot;
+            let current_slot = lock.consensus.current_slot();
             let mut forks = vec![];
             for fork in &lock.consensus.forks {
                 forks.push(fork.clone().into());
             }
             let unconfirmed_txs = lock.unconfirmed_txs.clone();
             let slot_checkpoints = lock.consensus.slot_checkpoints.clone();
-            let previous_leaders = lock.consensus.previous_leaders.clone();
+            let mut f_history = vec![];
+            for f in &lock.consensus.f_history {
+                let f_str = format!("{:}", f);
+                f_history.push(f_str);
+            }
+            let mut err_history = vec![];
+            for err in &lock.consensus.err_history {
+                let err_str = format!("{:}", err);
+                err_history.push(err_str);
+            }
             let nullifiers = lock.consensus.nullifiers.clone();
             let response = ConsensusResponse {
                 bootstrap_slot,
+                current_slot,
                 forks,
                 unconfirmed_txs,
                 slot_checkpoints,
-                previous_leaders,
+                f_history,
+                err_history,
                 nullifiers,
             };
             if let Err(e) = self.channel.send(response).await {
@@ -147,8 +159,9 @@ impl ProtocolSyncConsensus {
             // Extra validations can be added here.
             let lock = self.state.read().await;
             let bootstrap_slot = lock.consensus.bootstrap_slot;
+            let proposing = lock.consensus.proposing;
             let is_empty = lock.consensus.slot_checkpoints_is_empty();
-            let response = ConsensusSlotCheckpointsResponse { bootstrap_slot, is_empty };
+            let response = ConsensusSlotCheckpointsResponse { bootstrap_slot, proposing, is_empty };
             if let Err(e) = self.channel.send(response).await {
                 error!(
                     target: "consensus::protocol_sync_consensus::handle_receive_slot_checkpoints_request()",

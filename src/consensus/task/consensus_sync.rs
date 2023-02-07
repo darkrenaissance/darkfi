@@ -24,7 +24,7 @@ use crate::{
             ConsensusRequest, ConsensusResponse, ConsensusSlotCheckpointsRequest,
             ConsensusSlotCheckpointsResponse,
         },
-        ValidatorStatePtr,
+        Float10, ValidatorStatePtr,
     },
     net::P2pPtr,
     util::async_util::sleep,
@@ -65,6 +65,10 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
         let response = response_sub.receive().await?;
         if response.bootstrap_slot == current_slot {
             warn!(target: "consensus::consensus_sync", "Network was just bootstraped, checking rest nodes");
+            continue
+        }
+        if !response.proposing {
+            warn!(target: "consensus::consensus_sync", "Node is not proposing, checking rest nodes");
             continue
         }
         if response.is_empty {
@@ -113,7 +117,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     let mut response = response_sub.receive().await?;
     // Verify that peer has finished finalizing forks
     loop {
-        if response.forks.len() != 1 {
+        if response.forks.len() != 0 {
             warn!(target: "consensus::consensus_sync", "Peer has not finished finalization, retrying...");
             sleep(1).await;
             peer.send(ConsensusRequest {}).await?;
@@ -124,9 +128,8 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     }
 
     // Verify that the node has received all finalized blocks
-    let last_finalized_slot = response.forks[0].sequence[0].proposal.block.header.slot - 1;
     loop {
-        if !state.read().await.blockchain.has_slot(last_finalized_slot)? {
+        if !state.read().await.blockchain.has_slot(response.current_slot)? {
             warn!(target: "consensus::consensus_sync", "Node has not finished finalization, retrying...");
             sleep(1).await;
             continue
@@ -144,7 +147,19 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     lock.consensus.forks = forks;
     lock.unconfirmed_txs = response.unconfirmed_txs.clone();
     lock.consensus.slot_checkpoints = response.slot_checkpoints.clone();
-    lock.consensus.previous_leaders = response.previous_leaders.clone();
+    lock.consensus.previous_leaders = 1;
+    let mut f_history = vec![];
+    for f in &response.f_history {
+        let f_float = Float10::try_from(f.as_str()).unwrap();
+        f_history.push(f_float);
+    }
+    lock.consensus.f_history = f_history;
+    let mut err_history = vec![];
+    for err in &response.err_history {
+        let err_float = Float10::try_from(err.as_str()).unwrap();
+        err_history.push(err_float);
+    }
+    lock.consensus.err_history = err_history;
     lock.consensus.nullifiers = response.nullifiers.clone();
     lock.consensus.init_coins().await?;
 
