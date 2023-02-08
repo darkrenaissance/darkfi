@@ -523,6 +523,7 @@ impl Drk {
             total_all_vote_blind += vote.all_vote_blind;
 
             let yes_vote_value = vote.vote_option as u64 * vote.all_vote_value;
+            eprintln!("yes_vote = {}", yes_vote_value);
             total_yes_vote_value += yes_vote_value;
             total_all_vote_value += vote.all_vote_value;
 
@@ -533,6 +534,8 @@ impl Drk {
             blind_total_vote.aggregate(blind_vote);
         }
 
+        eprintln!("yes = {}, all = {}", total_yes_vote_value, total_all_vote_value);
+
         let prop_t = DaoProposalInfo {
             dest: proposal.recipient,
             amount: proposal.amount,
@@ -540,6 +543,9 @@ impl Drk {
             token_id: proposal.token_id,
             blind: proposal.bulla_blind, // <-- FIXME: wtf
         };
+
+        // TODO: user blind weirdness in proposal
+        // TODO: allvote/yesvote is 11 weirdly
 
         let dao_t = DaoInfo {
             proposer_limit: dao.proposer_limit,
