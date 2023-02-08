@@ -907,11 +907,34 @@ impl From<ForkInfo> for Fork {
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        consensus::{
+            state::{Blockchain, ConsensusState},
+            utils::fbig2base,
+            Float10, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
+            TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
+        },
+        wallet::WalletDb,
+        Result,
+    };
 
-    use crate::consensus::{state::ConsensusState, utils::fbig2base, Float10};
+    #[async_std::test]
+    async fn calc_sigmas_test() -> Result<()> {
+        // Generate dummy state
+        let wallet = WalletDb::new("sqlite::memory:", "foo").await?;
+        let sled_db = sled::Config::new().temporary(true).open()?;
+        let blockchain =
+            Blockchain::new(&sled_db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
+        let state = ConsensusState::new(
+            wallet,
+            blockchain,
+            *TESTNET_BOOTSTRAP_TIMESTAMP,
+            *TESTNET_GENESIS_TIMESTAMP,
+            *TESTNET_GENESIS_HASH_BYTES,
+            *TESTNET_INITIAL_DISTRIBUTION,
+            true,
+        )?;
 
-    #[test]
-    fn calc_sigmas_test() {
         let precision_diff = Float10::try_from(
             "10000000000000000000000000000000000000000000000000000000000000000000000000",
         )
@@ -919,7 +942,7 @@ mod tests {
         let precision_diff_base = fbig2base(precision_diff);
         let f = Float10::try_from("0.01").unwrap();
         let total_stake = Float10::try_from("100").unwrap();
-        let (sigma1, sigma2) = ConsensusState::calc_sigmas(f, total_stake);
+        let (sigma1, sigma2) = state.calc_sigmas(f, total_stake);
         let sigma1_rhs = Float10::try_from(
             "2909373465034095801035568917399197865646520818579502832252119592405565440",
         )
@@ -944,5 +967,7 @@ mod tests {
         //https://github.com/ertosns/lotterysim/blob/master/pallas_unittests.csv
         assert!(sigma1_delta < precision_diff_base);
         assert!(sigma2_delta < precision_diff_base);
+
+        Ok(())
     }
 }
