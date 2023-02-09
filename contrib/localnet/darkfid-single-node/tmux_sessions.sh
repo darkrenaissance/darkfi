@@ -1,8 +1,7 @@
 #!/bin/sh
 set -e
 
-# Start a tmux session with a lilith node, two consensus nodes, a non-consensus
-# node, and a faucet that's able to mint tokens.
+# Start a tmux session with a consensus nodes and a faucet that's able to mint tokens.
 
 if [ "$1" = "-v" ]; then
 	verbose="-v"
@@ -25,7 +24,7 @@ if [ "$1" = "now" ]; then
 fi
 
 tmux new-session -d
-tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid0.toml" Enter
+tmux send-keys "LOG_TARGETS='!sled,!net' ../../../darkfid ${verbose} -c darkfid0.toml" Enter
 sleep 10
 tmux split-window -v
 tmux send-keys "LOG_TARGETS='!sled,!net' ../../../faucetd ${verbose} -c faucetd.toml" Enter
