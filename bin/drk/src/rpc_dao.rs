@@ -406,7 +406,6 @@ impl Drk {
         let user_coin_blind = pallas::Base::random(&mut OsRng);
         let dao_serial = pallas::Base::random(&mut OsRng);
         let dao_coin_blind = pallas::Base::random(&mut OsRng);
-        let input_value_blind = pallas::Scalar::random(&mut OsRng);
 
         // TODO: FIXME: Clean this up and create an API
         let exec_signature_secret = SecretKey::random(&mut OsRng);
@@ -414,7 +413,6 @@ impl Drk {
         let mut xfer_inputs = vec![];
 
         let mut input_coins = vec![];
-        let mut input_value_blinds = vec![];
         let mut input_amount = 0;
         for coin in coins {
             input_amount += coin.note.value;
@@ -427,6 +425,7 @@ impl Drk {
         let money_merkle_tree = self.get_money_tree().await?;
         let money_merkle_root = money_merkle_tree.root(0).unwrap();
 
+        let mut input_value_blind = pallas::Scalar::from(0);
         for coin in &input_coins {
             let value_blind = pallas::Scalar::random(&mut OsRng);
             let sig_secret = SecretKey::random(&mut OsRng);
@@ -444,7 +443,7 @@ impl Drk {
                 signature_secret: sig_secret,
             });
 
-            input_value_blinds.push(value_blind);
+            input_value_blind += value_blind;
         }
 
         let input_sum = input_coins.iter().map(|x| x.note.value).sum::<u64>();
@@ -456,8 +455,8 @@ impl Drk {
                 value: proposal.amount,
                 token_id: proposal.token_id,
                 public: proposal.recipient,
-                serial: user_serial,
-                coin_blind: user_coin_blind,
+                serial: proposal.serial,
+                coin_blind: proposal.bulla_blind,
                 spend_hook: pallas::Base::zero(),
                 user_data: pallas::Base::zero(),
             },
@@ -524,6 +523,7 @@ impl Drk {
             total_all_vote_blind += vote.all_vote_blind;
 
             let yes_vote_value = vote.vote_option as u64 * vote.all_vote_value;
+            eprintln!("yes_vote = {}", yes_vote_value);
             total_yes_vote_value += yes_vote_value;
             total_all_vote_value += vote.all_vote_value;
 
@@ -534,6 +534,8 @@ impl Drk {
             blind_total_vote.aggregate(blind_vote);
         }
 
+        eprintln!("yes = {}, all = {}", total_yes_vote_value, total_all_vote_value);
+
         let prop_t = DaoProposalInfo {
             dest: proposal.recipient,
             amount: proposal.amount,
@@ -541,6 +543,9 @@ impl Drk {
             token_id: proposal.token_id,
             blind: proposal.bulla_blind, // <-- FIXME: wtf
         };
+
+        // TODO: user blind weirdness in proposal
+        // TODO: allvote/yesvote is 11 weirdly
 
         let dao_t = DaoInfo {
             proposer_limit: dao.proposer_limit,

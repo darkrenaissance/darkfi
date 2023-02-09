@@ -712,8 +712,8 @@ async fn main() -> Result<()> {
                     exit(1);
                 }
 
-                let approval_ratio_quot = 100_u64;
-                let approval_ratio_base = (approval_ratio * approval_ratio_quot as f64) as u64;
+                let approval_ratio_base = 100_u64;
+                let approval_ratio_quot = (approval_ratio * approval_ratio_base as f64) as u64;
 
                 let gov_token_id =
                     TokenId::try_from(gov_token_id.as_str()).with_context(|| "Invalid Token ID")?;
