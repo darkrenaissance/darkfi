@@ -15,7 +15,6 @@ contract "DaoProposeMain" {
 	Base proposal_dest_x,
 	Base proposal_dest_y,
 	Base proposal_amount,
-	Base proposal_serial,
 	Base proposal_token_id,
 	Base proposal_blind,
 
@@ -56,10 +55,8 @@ circuit "DaoProposeMain" {
 		proposal_dest_x,
 		proposal_dest_y,
 		proposal_amount,
-		proposal_serial,
 		proposal_token_id,
 		dao_bulla,
-		proposal_blind,
 		proposal_blind,
 	);
 	constrain_instance(proposal_bulla);

@@ -396,7 +396,6 @@ async fn integration_test() -> Result<()> {
     let proposal = dao_client::DaoProposalInfo {
         dest: receiver_keypair.public,
         amount: 1000,
-        serial: pallas::Base::random(&mut OsRng),
         token_id: xdrk_token_id,
         blind: pallas::Base::random(&mut OsRng),
     };
@@ -796,8 +795,8 @@ async fn integration_test() -> Result<()> {
                 token_id: xdrk_token_id,
                 //public: user_keypair.public,
                 public: receiver_keypair.public,
-                serial: proposal.serial,
-                coin_blind: proposal.blind,
+                serial: user_serial,
+                coin_blind: user_coin_blind,
                 spend_hook: pallas::Base::from(0),
                 user_data: pallas::Base::from(0),
             },

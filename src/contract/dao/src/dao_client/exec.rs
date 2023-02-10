@@ -86,15 +86,12 @@ impl DaoExecCall {
             self.dao.bulla_blind,
         ]);
 
-        let proposal_bulla = poseidon_hash::<8>([
+        let proposal_bulla = poseidon_hash::<6>([
             proposal_dest_x,
             proposal_dest_y,
             proposal_amount,
-            self.proposal.serial,
             self.proposal.token_id.inner(),
             dao_bulla,
-            self.proposal.blind,
-            // @tmp-workaround
             self.proposal.blind,
         ]);
 
@@ -103,10 +100,10 @@ impl DaoExecCall {
             proposal_dest_y,
             proposal_amount,
             self.proposal.token_id.inner(),
-            self.proposal.serial,
+            self.user_serial,
             user_spend_hook,
             user_data,
-            self.proposal.blind,
+            self.user_coin_blind,
         ]);
 
         let coin_1 = poseidon_hash::<8>([
@@ -134,7 +131,6 @@ impl DaoExecCall {
             Witness::Base(Value::known(proposal_dest_x)),
             Witness::Base(Value::known(proposal_dest_y)),
             Witness::Base(Value::known(proposal_amount)),
-            Witness::Base(Value::known(self.proposal.serial)),
             Witness::Base(Value::known(self.proposal.token_id.inner())),
             Witness::Base(Value::known(self.proposal.blind)),
             // DAO params

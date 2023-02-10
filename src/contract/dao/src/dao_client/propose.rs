@@ -40,7 +40,6 @@ use super::DaoInfo;
 pub struct DaoProposalInfo {
     pub dest: PublicKey,
     pub amount: u64,
-    pub serial: pallas::Base,
     pub token_id: TokenId,
     pub blind: pallas::Base,
 }
@@ -197,15 +196,12 @@ impl DaoProposeCall {
 
         let dao_leaf_position: u64 = self.dao_leaf_position.into();
 
-        let proposal_bulla = poseidon_hash::<8>([
+        let proposal_bulla = poseidon_hash::<6>([
             proposal_dest_x,
             proposal_dest_y,
             proposal_amount,
-            self.proposal.serial,
             self.proposal.token_id.inner(),
             dao_bulla,
-            self.proposal.blind,
-            // @tmp-workaround
             self.proposal.blind,
         ]);
 
@@ -219,7 +215,6 @@ impl DaoProposeCall {
             Witness::Base(halo2::Value::known(proposal_dest_x)),
             Witness::Base(halo2::Value::known(proposal_dest_y)),
             Witness::Base(halo2::Value::known(proposal_amount)),
-            Witness::Base(halo2::Value::known(self.proposal.serial)),
             Witness::Base(halo2::Value::known(self.proposal.token_id.inner())),
             Witness::Base(halo2::Value::known(self.proposal.blind)),
             // DAO params

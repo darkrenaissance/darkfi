@@ -8,7 +8,6 @@ contract "DaoExec" {
 	Base proposal_dest_x,
 	Base proposal_dest_y,
 	Base proposal_amount,
-	Base proposal_serial,
 	Base proposal_token_id,
 	Base proposal_blind,
 
@@ -61,11 +60,8 @@ circuit "DaoExec" {
 		proposal_dest_x,
 		proposal_dest_y,
 		proposal_amount,
-		proposal_serial,
 		proposal_token_id,
 		dao_bulla,
-		proposal_blind,
-		# Blind twice to workaround odd-n poseidon bug
 		proposal_blind,
 	);
 	constrain_instance(proposal_bulla);
@@ -75,10 +71,10 @@ circuit "DaoExec" {
 		proposal_dest_y,
 		proposal_amount,
 		proposal_token_id,
-		proposal_serial,
+		user_serial,
 		user_spend_hook,
 		user_data,
-		proposal_blind,
+		user_coin_blind,
 	);
 	constrain_instance(coin_0);
 
