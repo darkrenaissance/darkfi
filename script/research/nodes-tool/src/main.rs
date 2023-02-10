@@ -22,7 +22,7 @@ use darkfi::{
     blockchain::{
         block_store::{BlockOrderStore, BlockStore, HeaderStore},
         slot_checkpoint_store::SlotCheckpointStore,
-        tx_store::TxStore,
+        tx_store::{ErroneousTxStore, TxStore},
         Blockchain,
     },
     consensus::{
@@ -265,12 +265,34 @@ impl TxStoreInfo {
 }
 
 #[derive(Debug)]
+struct ErroneousTxStoreInfo {
+    _transactions: Vec<TxInfo>,
+}
+
+impl ErroneousTxStoreInfo {
+    pub fn new(erroneoustxstore: &ErroneousTxStore) -> ErroneousTxStoreInfo {
+        let mut _transactions = Vec::new();
+        let result = erroneoustxstore.get_all();
+        match result {
+            Ok(iter) => {
+                for (hash, tx) in iter.iter() {
+                    _transactions.push(TxInfo::new(hash.clone(), &tx));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        ErroneousTxStoreInfo { _transactions }
+    }
+}
+
+#[derive(Debug)]
 struct BlockchainInfo {
     _headers: HeaderStoreInfo,
     _blocks: BlockInfoChain,
     _order: BlockOrderStoreInfo,
     _slot_checkpoints: SlotCheckpointStoreInfo,
     _transactions: TxStoreInfo,
+    _erroneous_txs: ErroneousTxStoreInfo,
 }
 
 impl BlockchainInfo {
@@ -280,7 +302,15 @@ impl BlockchainInfo {
         let _order = BlockOrderStoreInfo::new(&blockchain.order);
         let _slot_checkpoints = SlotCheckpointStoreInfo::new(&blockchain.slot_checkpoints);
         let _transactions = TxStoreInfo::new(&blockchain.transactions);
-        BlockchainInfo { _headers, _blocks, _order, _slot_checkpoints, _transactions }
+        let _erroneous_txs = ErroneousTxStoreInfo::new(&blockchain.erroneous_txs);
+        BlockchainInfo {
+            _headers,
+            _blocks,
+            _order,
+            _slot_checkpoints,
+            _transactions,
+            _erroneous_txs,
+        }
     }
 }
 
@@ -344,14 +374,10 @@ async fn generate(localnet: &str, name: &str) -> Result<()> {
 #[async_std::main]
 async fn main() -> Result<()> {
     // Localnet folder
-    let localnet = "../../../contrib/localnet/darkfid/";
+    let localnet = "../../../contrib/localnet/darkfid-single-node/";
     println!("Localnet folder: {localnet}");
     // darkfid0
     generate(localnet, "darkfid0").await?;
-    // darkfid1
-    generate(localnet, "darkfid1").await?;
-    // darkfid2
-    generate(localnet, "darkfid2").await?;
     // faucetd
     generate(localnet, "faucetd").await?;
 

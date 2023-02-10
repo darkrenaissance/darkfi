@@ -693,15 +693,19 @@ impl ValidatorState {
         let blocks_subscriber = self.subscribers.get("blocks").unwrap().clone();
 
         // Validating state transitions
+        let mut erroneous_txs = vec![];
         for proposal in &finalized {
             // TODO: Is this the right place? We're already doing this in protocol_sync.
             // TODO: These state transitions have already been checked. (I wrote this, but where?)
             // TODO: FIXME: The state transitions have already been written, they have to be in memory
             //              until this point.
             info!(target: "consensus::validator", "Applying state transition for finalized block");
-            if let Err(e) = self.verify_transactions(&proposal.txs, true).await {
-                error!(target: "consensus::validator", "Finalized block transaction verifications failed: {}", e);
-                return Err(e)
+            match self.verify_transactions(&proposal.txs, true).await {
+                Ok(hashes) => erroneous_txs.extend(hashes),
+                Err(e) => {
+                    error!(target: "consensus::validator", "Finalized block transaction verifications failed: {}", e);
+                    return Err(e)
+                }
             }
 
             // Remove proposal transactions from memory pool
@@ -716,6 +720,7 @@ impl ValidatorState {
             info!(target: "consensus::validator", "consensus: Sending notification about finalized block");
             blocks_subscriber.notify(notif).await;
         }
+        self.blockchain.add_erroneous_txs(&erroneous_txs)?;
 
         // Setting leaders history to last proposal leaders count
         let last_state_checkpoint = fork.sequence.last().unwrap().clone();
@@ -769,16 +774,21 @@ impl ValidatorState {
     pub async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         // Verify state transitions for all blocks and their respective transactions.
         info!(target: "consensus::validator", "receive_blocks(): Starting state transition validations");
+        let mut erroneous_txs = vec![];
         for block in blocks {
-            if let Err(e) = self.verify_transactions(&block.txs, true).await {
-                error!(target: "consensus::validator", "receive_blocks(): Transaction verifications failed: {}", e);
-                return Err(e)
+            match self.verify_transactions(&block.txs, true).await {
+                Ok(hashes) => erroneous_txs.extend(hashes),
+                Err(e) => {
+                    error!(target: "consensus::validator", "receive_blocks(): Transaction verifications failed: {}", e);
+                    return Err(e)
+                }
             }
         }
 
         info!(target: "consensus::validator", "receive_blocks(): All state transitions passed");
         info!(target: "consensus::validator", "receive_blocks(): Appending blocks to ledger");
         self.blockchain.add(blocks)?;
+        self.blockchain.add_erroneous_txs(&erroneous_txs)?;
 
         Ok(())
     }
@@ -857,14 +867,21 @@ impl ValidatorState {
 
     /// Validate signatures, wasm execution, and zk proofs for given transactions.
     /// If all of those succeed, try to execute a state update for the contract calls.
-    /// Currently the verifications are sequential, and the function will fail if any
-    /// of the verifications fail.
+    /// Currently the verifications are sequential, and the function will skip a
+    /// transaction if any of the verifications fail.
     /// The function takes a boolean called `write` which tells it to actually write
     /// the state transitions to the database.
+    // TODO: Currently we keep erroneous transactions in the vector and blocks,
+    //       in order to apply max fee logic in the future, to prevent spamming.
     // TODO: This should be paralellized as if even one tx in the batch fails to verify,
-    //       we can drop everything.
-    pub async fn verify_transactions(&self, txs: &[Transaction], write: bool) -> Result<()> {
+    //       we can skip it.
+    pub async fn verify_transactions(
+        &self,
+        txs: &[Transaction],
+        write: bool,
+    ) -> Result<Vec<Transaction>> {
         info!(target: "consensus::validator", "Verifying {} transaction(s)", txs.len());
+        let mut erroneous_txs = vec![];
         for tx in txs {
             let tx_hash = blake3::hash(&serialize(tx));
             info!(target: "consensus::validator", "Verifying transaction {}", tx_hash);
@@ -877,6 +894,7 @@ impl ValidatorState {
             let mut updates = vec![];
 
             // Iterate over all calls to get the metadata
+            let mut skip = false;
             for (idx, call) in tx.calls.iter().enumerate() {
                 info!(target: "consensus::validator", "Executing contract call {}", idx);
                 let wasm = match self.blockchain.wasm_bincode.get(call.contract_id) {
@@ -890,7 +908,8 @@ impl ValidatorState {
                             "Could not find wasm bincode for contract {}: {}",
                             call.contract_id, e
                         );
-                        return Err(Error::ContractNotFound(call.contract_id.to_string()))
+                        skip = true;
+                        break
                     }
                 };
 
@@ -906,10 +925,11 @@ impl ValidatorState {
                         Err(e) => {
                             error!(
                                 target: "consensus::validator",
-                                "Failed to instantiate WASM runtime for contract {}",
-                                call.contract_id
+                                "Failed to instantiate WASM runtime for contract {}: {}",
+                                call.contract_id, e
                             );
-                            return Err(e)
+                            skip = true;
+                            break
                         }
                     };
 
@@ -918,7 +938,8 @@ impl ValidatorState {
                     Ok(v) => v,
                     Err(e) => {
                         error!(target: "consensus::validator", "Failed to execute \"metadata\" call: {}", e);
-                        return Err(e)
+                        skip = true;
+                        break
                     }
                 };
 
@@ -930,7 +951,8 @@ impl ValidatorState {
                     Ok(v) => v,
                     Err(e) => {
                         error!(target: "consensus::validator", "Failed to decode ZK public inputs from metadata: {}", e);
-                        return Err(e.into())
+                        skip = true;
+                        break
                     }
                 };
 
@@ -938,7 +960,8 @@ impl ValidatorState {
                     Ok(v) => v,
                     Err(e) => {
                         error!(target: "consensus::validator", "Failed to decode signature pubkeys from metadata: {}", e);
-                        return Err(e.into())
+                        skip = true;
+                        break
                     }
                 };
 
@@ -961,10 +984,16 @@ impl ValidatorState {
                             "Failed to execute \"exec\" call for contract id {}: {}",
                             call.contract_id, e
                         );
-                        return Err(e)
+                        skip = true;
+                        break
                     }
                 };
                 // At this point we're done with the call and move on to the next one.
+            }
+            if skip {
+                warn!(target: "consensus::validator", "Skipping transaction {}", tx_hash);
+                erroneous_txs.push(tx.clone());
+                continue
             }
 
             // When we're done looping and executing over the tx's contract calls, we
@@ -973,7 +1002,9 @@ impl ValidatorState {
             info!(target: "consensus::validator", "Verifying signatures for transaction {}", tx_hash);
             if sig_table.len() != tx.signatures.len() {
                 error!(target: "consensus::validator", "Incorrect number of signatures in tx {}", tx_hash);
-                return Err(Error::InvalidSignature)
+                warn!(target: "consensus::validator", "Skipping transaction {}", tx_hash);
+                erroneous_txs.push(tx.clone());
+                continue
             }
 
             match tx.verify_sigs(sig_table) {
@@ -982,7 +1013,9 @@ impl ValidatorState {
                 }
                 Err(e) => {
                     error!(target: "consensus::validator", "Signature verification for tx {} failed: {}", tx_hash, e);
-                    return Err(e)
+                    warn!(target: "consensus::validator", "Skipping transaction {}", tx_hash);
+                    erroneous_txs.push(tx.clone());
+                    continue
                 }
             };
 
@@ -997,7 +1030,9 @@ impl ValidatorState {
                 }
                 Err(e) => {
                     error!(target: "consensus::validator", "ZK proof verification for tx {} failed: {}", tx_hash, e);
-                    return Err(e)
+                    warn!(target: "consensus::validator", "Skipping transaction {}", tx_hash);
+                    erroneous_txs.push(tx.clone());
+                    continue
                 }
             };
 
@@ -1022,7 +1057,8 @@ impl ValidatorState {
                                 "Could not find wasm bincode for contract {}: {}",
                                 call.contract_id, e
                             );
-                            return Err(Error::ContractNotFound(call.contract_id.to_string()))
+                            skip = true;
+                            break
                         }
                     };
 
@@ -1032,10 +1068,11 @@ impl ValidatorState {
                             Err(e) => {
                                 error!(
                                     target: "consensus::validator",
-                                    "Failed to instantiate WASM runtime for contract {}",
-                                    call.contract_id
+                                    "Failed to instantiate WASM runtime for contract {}: {}",
+                                    call.contract_id, e
                                 );
-                                return Err(e)
+                                skip = true;
+                                break
                             }
                         };
 
@@ -1047,9 +1084,15 @@ impl ValidatorState {
                         }
                         Err(e) => {
                             error!(target: "consensus::validator", "Failed to apply state update: {}", e);
-                            return Err(e)
+                            skip = true;
+                            break
                         }
                     };
+                }
+                if skip {
+                    warn!(target: "consensus::validator", "Skipping transaction {}", tx_hash);
+                    erroneous_txs.push(tx.clone());
+                    continue
                 }
             } else {
                 info!(target: "consensus::validator", "Skipping apply of state updates because write=false");
@@ -1058,7 +1101,7 @@ impl ValidatorState {
             info!(target: "consensus::validator", "Transaction {} verified successfully", tx_hash);
         }
 
-        Ok(())
+        Ok(erroneous_txs)
     }
 
     /// Append to canonical state received finalized slot checkpoints from block sync task.

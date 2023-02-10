@@ -224,6 +224,9 @@ impl RequestHandler for Darkfid {
             Some("blockchain.lookup_zkas") => {
                 return self.blockchain_lookup_zkas(req.id, params).await
             }
+            Some("blockchain.is_erroneous_tx") => {
+                return self.blockchain_is_erroneous_tx(req.id, params).await
+            }
 
             // ===================
             // Transaction methods
