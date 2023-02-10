@@ -204,7 +204,6 @@ impl Drk {
         let proposal = dao_client::DaoProposalInfo {
             dest: recipient,
             amount,
-            serial: pallas::Base::random(&mut OsRng),
             token_id,
             blind: proposal_blind,
         };
@@ -312,7 +311,6 @@ impl Drk {
         let proposal_info = DaoProposalInfo {
             dest: proposal.recipient,
             amount: proposal.amount,
-            serial: proposal.serial,
             token_id: proposal.token_id,
             blind: proposal.bulla_blind,
         };
@@ -448,15 +446,14 @@ impl Drk {
 
         let input_sum = input_coins.iter().map(|x| x.note.value).sum::<u64>();
 
-        // I'm tired
         let xfer_outputs = vec![
             // Proposal send
             money_client::TransferOutput {
                 value: proposal.amount,
                 token_id: proposal.token_id,
                 public: proposal.recipient,
-                serial: proposal.serial,
-                coin_blind: proposal.bulla_blind,
+                serial: user_serial,
+                coin_blind: user_coin_blind,
                 spend_hook: pallas::Base::zero(),
                 user_data: pallas::Base::zero(),
             },
@@ -539,12 +536,10 @@ impl Drk {
         let prop_t = DaoProposalInfo {
             dest: proposal.recipient,
             amount: proposal.amount,
-            serial: proposal.serial,
             token_id: proposal.token_id,
             blind: proposal.bulla_blind, // <-- FIXME: wtf
         };
 
-        // TODO: user blind weirdness in proposal
         // TODO: allvote/yesvote is 11 weirdly
 
         let dao_t = DaoInfo {

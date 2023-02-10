@@ -196,8 +196,6 @@ pub struct DaoProposal {
     pub recipient: PublicKey,
     /// Amount of this proposal
     pub amount: u64,
-    /// Serial of this proposal
-    pub serial: pallas::Base,
     /// Token ID to be sent
     pub token_id: TokenId,
     /// Proposal's bulla blind
@@ -220,10 +218,8 @@ impl DaoProposal {
             dest_x,
             dest_y,
             pallas::Base::from(self.amount),
-            self.serial,
             self.token_id.inner(),
             self.dao_bulla.inner(),
-            self.bulla_blind,
             self.bulla_blind,
         ])
     }
@@ -232,29 +228,28 @@ impl DaoProposal {
 impl fmt::Display for DaoProposal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = format!(
-            "{}\n{}\n{}: {}\n{}: {}\n{}: {} ({})\n{}: {:?}\n{}: {}\n{}: {:?}\n{}: {:?}\n{}: {:?}\n{}: {:?}\n{}: {:?}",
-            "Proposal parameters",
-            "===================",
-            "DAO Bulla",
+            concat!(
+                "Proposal parameters\n",
+                "===================\n",
+                "DAO Bulla: {}\n",
+                "Recipient: {}\n",
+                "Proposal amount: {} ({})\n",
+                "Proposal Token ID: {:?}\n",
+                "Proposal bulla blind: {:?}\n",
+                "Proposal leaf position: {:?}\n",
+                "Proposal tx hash: {:?}\n",
+                "Proposal call index: {:?}\n",
+                "Proposal vote ID: {:?}",
+            ),
             self.dao_bulla,
-            "Recipient",
             self.recipient,
-            "Proposal amount",
             encode_base10(self.amount, 8),
             self.amount,
-            "Proposal serial",
-            self.serial,
-            "Proposal Token ID",
             self.token_id,
-            "Proposal bulla blind",
             self.bulla_blind,
-            "Proposal leaf position",
             self.leaf_position,
-            "Proposal tx hash",
             self.tx_hash,
-            "Proposal call index",
             self.call_index,
-            "Proposal vote ID",
             self.vote_id,
         );
 
@@ -710,21 +705,18 @@ impl Drk {
             let amount_bytes: Vec<u8> = serde_json::from_value(row[3].clone())?;
             let amount = deserialize(&amount_bytes)?;
 
-            let serial_bytes: Vec<u8> = serde_json::from_value(row[4].clone())?;
-            let serial = deserialize(&serial_bytes)?;
-
-            let token_id_bytes: Vec<u8> = serde_json::from_value(row[5].clone())?;
+            let token_id_bytes: Vec<u8> = serde_json::from_value(row[4].clone())?;
             let token_id = deserialize(&token_id_bytes)?;
 
-            let bulla_blind_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
+            let bulla_blind_bytes: Vec<u8> = serde_json::from_value(row[5].clone())?;
             let bulla_blind = deserialize(&bulla_blind_bytes)?;
 
-            let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
-            let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
+            let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
+            let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
 
-            let call_index = serde_json::from_value(row[9].clone())?;
+            let call_index = serde_json::from_value(row[8].clone())?;
 
-            let vote_id_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
+            let vote_id_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
 
             let leaf_position = if leaf_position_bytes.is_empty() {
                 None
@@ -743,7 +735,6 @@ impl Drk {
                 dao_bulla,
                 recipient,
                 amount,
-                serial,
                 token_id,
                 bulla_blind,
                 leaf_position,
@@ -810,21 +801,18 @@ impl Drk {
         let amount_bytes: Vec<u8> = serde_json::from_value(row[3].clone())?;
         let amount = deserialize(&amount_bytes)?;
 
-        let serial_bytes: Vec<u8> = serde_json::from_value(row[4].clone())?;
-        let serial = deserialize(&serial_bytes)?;
-
-        let token_id_bytes: Vec<u8> = serde_json::from_value(row[5].clone())?;
+        let token_id_bytes: Vec<u8> = serde_json::from_value(row[4].clone())?;
         let token_id = deserialize(&token_id_bytes)?;
 
-        let bulla_blind_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
+        let bulla_blind_bytes: Vec<u8> = serde_json::from_value(row[5].clone())?;
         let bulla_blind = deserialize(&bulla_blind_bytes)?;
 
-        let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
-        let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
+        let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
+        let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
 
-        let call_index = serde_json::from_value(row[9].clone())?;
+        let call_index = serde_json::from_value(row[8].clone())?;
 
-        let vote_id_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
+        let vote_id_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
 
         let leaf_position = if leaf_position_bytes.is_empty() {
             None
@@ -845,7 +833,6 @@ impl Drk {
             dao_bulla: dao.bulla(),
             recipient,
             amount,
-            serial,
             token_id,
             bulla_blind,
             leaf_position,
@@ -1032,7 +1019,6 @@ impl Drk {
                             dao_bulla: dao.bulla(),
                             recipient: note.proposal.dest,
                             amount: note.proposal.amount,
-                            serial: note.proposal.serial,
                             token_id: note.proposal.token_id,
                             bulla_blind: note.proposal.blind,
                             leaf_position: proposals_tree.witness(),
@@ -1170,12 +1156,11 @@ impl Drk {
             };
 
             let query = format!(
-                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);",
                 DAO_PROPOSALS_TABLE,
                 DAO_PROPOSALS_COL_DAO_ID,
                 DAO_PROPOSALS_COL_RECV_PUBLIC,
                 DAO_PROPOSALS_COL_AMOUNT,
-                DAO_PROPOSALS_COL_SERIAL,
                 DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID,
                 DAO_PROPOSALS_COL_BULLA_BLIND,
                 DAO_PROPOSALS_COL_LEAF_POSITION,
@@ -1191,8 +1176,6 @@ impl Drk {
                 serialize(&proposal.recipient),
                 QueryType::Blob as u8,
                 serialize(&proposal.amount),
-                QueryType::Blob as u8,
-                serialize(&proposal.serial),
                 QueryType::Blob as u8,
                 serialize(&proposal.token_id),
                 QueryType::Blob as u8,
