@@ -109,7 +109,7 @@ impl TxStore {
 
 /// The `ErroneousTxStore` is a `sled` tree storing all the blockchain's
 /// erroneous transactions where the key is the transaction hash, and the value is
-/// the serialized transaction.
+/// an empty slice.
 #[derive(Clone)]
 pub struct ErroneousTxStore(sled::Tree);
 
@@ -123,7 +123,7 @@ impl ErroneousTxStore {
     /// Insert a slice of [`Transaction`] into the erroneoustxstore. With sled, the
     /// operation is done as a batch.
     /// The transactions are hashed with BLAKE3 and this hash is used as
-    /// the key, while the value is the serialized [`Transaction`] itself.
+    /// the key, while the value is an empty slice.
     /// On success, the function returns the transaction hashes in the same
     /// order as the input transactions.
     pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<blake3::Hash>> {
@@ -133,7 +133,7 @@ impl ErroneousTxStore {
         for tx in transactions {
             let serialized = serialize(tx);
             let tx_hash = blake3::hash(&serialized);
-            batch.insert(tx_hash.as_bytes(), serialized);
+            batch.insert(tx_hash.as_bytes(), &[]);
             ret.push(tx_hash);
         }
 
@@ -146,45 +146,15 @@ impl ErroneousTxStore {
         Ok(self.0.contains_key(tx_hash.as_bytes())?)
     }
 
-    /// Fetch given erroneous tx hashes from the erroneoustxstore.
-    /// The resulting vector contains `Option`, which is `Some` if the tx
-    /// was found in the erroneoustxstore, and otherwise it is `None`, if it has not.
-    /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one block was not found.
-    pub fn get(
-        &self,
-        tx_hashes: &[blake3::Hash],
-        strict: bool,
-    ) -> Result<Vec<Option<Transaction>>> {
-        let mut ret = Vec::with_capacity(tx_hashes.len());
-
-        for tx_hash in tx_hashes {
-            if let Some(found) = self.0.get(tx_hash.as_bytes())? {
-                let tx = deserialize(&found)?;
-                ret.push(Some(tx));
-            } else {
-                if strict {
-                    let s = tx_hash.to_hex().as_str().to_string();
-                    return Err(Error::TransactionNotFound(s))
-                }
-                ret.push(None);
-            }
-        }
-
-        Ok(ret)
-    }
-
-    /// Retrieve all erroneous transactions from the erroneoustxstore
-    /// in the form of a tuple (`tx_hash`, `tx`).
+    /// Retrieve all erroneous transaction hashes from the erroneoustxstore.
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Transaction)>> {
+    pub fn get_all(&self) -> Result<Vec<blake3::Hash>> {
         let mut txs = vec![];
 
         for tx in self.0.iter() {
-            let (key, value) = tx.unwrap();
+            let (key, _) = tx.unwrap();
             let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
-            let tx = deserialize(&value)?;
-            txs.push((hash_bytes.into(), tx));
+            txs.push(hash_bytes.into());
         }
 
         Ok(txs)

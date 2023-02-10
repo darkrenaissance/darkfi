@@ -266,7 +266,7 @@ impl TxStoreInfo {
 
 #[derive(Debug)]
 struct ErroneousTxStoreInfo {
-    _transactions: Vec<TxInfo>,
+    _transactions: Vec<blake3::Hash>,
 }
 
 impl ErroneousTxStoreInfo {
@@ -275,8 +275,8 @@ impl ErroneousTxStoreInfo {
         let result = erroneoustxstore.get_all();
         match result {
             Ok(iter) => {
-                for (hash, tx) in iter.iter() {
-                    _transactions.push(TxInfo::new(hash.clone(), &tx));
+                for hash in iter.iter() {
+                    _transactions.push(hash.clone());
                 }
             }
             Err(e) => println!("Error: {:?}", e),
