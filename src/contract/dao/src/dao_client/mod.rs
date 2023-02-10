@@ -68,7 +68,6 @@ pub const DAO_PROPOSALS_COL_PROPOSAL_ID: &str = "proposal_id";
 pub const DAO_PROPOSALS_COL_DAO_ID: &str = "dao_id";
 pub const DAO_PROPOSALS_COL_RECV_PUBLIC: &str = "recv_public";
 pub const DAO_PROPOSALS_COL_AMOUNT: &str = "amount";
-pub const DAO_PROPOSALS_COL_SERIAL: &str = "serial";
 pub const DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID: &str = "sendcoin_token_id";
 pub const DAO_PROPOSALS_COL_BULLA_BLIND: &str = "bulla_blind";
 pub const DAO_PROPOSALS_COL_LEAF_POSITION: &str = "leaf_position";
