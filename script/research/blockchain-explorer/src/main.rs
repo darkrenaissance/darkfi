@@ -18,6 +18,7 @@
 
 use std::{fs::File, io::Write};
 
+use clap::Parser;
 use darkfi::{
     blockchain::{
         block_store::{BlockOrderStore, BlockStore, HeaderStore},
@@ -25,18 +26,33 @@ use darkfi::{
         tx_store::{ErroneousTxStore, TxStore},
         Blockchain,
     },
+    cli_desc,
     consensus::{
         block::{Block, Header},
-        constants::TESTNET_GENESIS_HASH_BYTES,
+        constants::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
         lead_info::LeadInfo,
-        validator::ValidatorState,
     },
     tx::Transaction,
     util::{path::expand_path, time::Timestamp},
-    wallet::walletdb::init_wallet,
     Result,
 };
 use darkfi_sdk::crypto::MerkleNode;
+
+#[derive(Parser)]
+#[command(about = cli_desc!())]
+struct Args {
+    #[arg(short, long, default_value = "../../../contrib/localnet/darkfid-single-node/")]
+    /// Path containing the node folders
+    path: String,
+
+    #[arg(short, long, default_values = ["darkfid0", "faucetd"])]
+    /// Node folder name (supports multiple values)
+    node: Vec<String>,
+
+    #[arg(short, long, default_value = "/blockchain/testnet")]
+    /// Node blockchain folder
+    blockchain: String,
+}
 
 #[derive(Debug)]
 struct LeadInfoInfo {
@@ -314,72 +330,39 @@ impl BlockchainInfo {
     }
 }
 
-#[derive(Debug)]
-struct StateInfo {
-    _blockchain: BlockchainInfo,
-}
-
-impl StateInfo {
-    pub fn new(state: &ValidatorState) -> StateInfo {
-        let _blockchain = BlockchainInfo::new(&state.blockchain);
-        StateInfo { _blockchain }
-    }
-}
-
-async fn generate(localnet: &str, name: &str) -> Result<()> {
-    println!("Exporting data for {name}...");
+fn generate(folder: &str, node: &str, blockchain: &str) -> Result<()> {
+    println!("Exporting data for {node}...");
 
     // Node folder
-    let folder = localnet.to_owned() + name;
-
-    // Consensus configuration
-    let bootstrap_ts = Timestamp(1648383795);
-    let genesis_ts = Timestamp(1648383795);
-    let genesis_data = *TESTNET_GENESIS_HASH_BYTES;
-    let initial_distribution = 1000;
-    let pass = "changeme";
-
-    // Initialize or load wallet
-    let path = folder.to_owned() + "/wallet.db";
-    let wallet = init_wallet(&path, &pass).await?;
+    let folder = folder.to_owned() + node;
 
     // Initialize or load sled database
-    let path = folder.to_owned() + "/blockchain/testnet";
+    let path = folder.to_owned() + blockchain;
     let db_path = expand_path(&path).unwrap();
     let sled_db = sled::open(&db_path)?;
 
     // Data export
-    let state = ValidatorState::new(
-        &sled_db,
-        bootstrap_ts,
-        genesis_ts,
-        genesis_data,
-        initial_distribution,
-        wallet,
-        vec![],
-        false,
-        false,
-    )
-    .await?;
-    let info = StateInfo::new(&*state.read().await);
+    let blockchain =
+        Blockchain::new(&sled_db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
+    let info = BlockchainInfo::new(&blockchain);
     let info_string = format!("{:#?}", info);
-    let path = name.to_owned() + "_testnet_db";
-    let mut file = File::create(path)?;
+    let file_name = node.to_owned() + "_db";
+    let mut file = File::create(file_name.clone())?;
     file.write(info_string.as_bytes())?;
     drop(sled_db);
+    println!("Data exported to file: {file_name}");
 
     Ok(())
 }
 
-#[async_std::main]
-async fn main() -> Result<()> {
-    // Localnet folder
-    let localnet = "../../../contrib/localnet/darkfid-single-node/";
-    println!("Localnet folder: {localnet}");
-    // darkfid0
-    generate(localnet, "darkfid0").await?;
-    // faucetd
-    generate(localnet, "faucetd").await?;
+fn main() -> Result<()> {
+    // Parse arguments
+    let args = Args::parse();
+    println!("Node folder path: {}", args.path);
+    // Export data for each node
+    for node in args.node {
+        generate(&args.path, &node, &args.blockchain)?;
+    }
 
     Ok(())
 }
