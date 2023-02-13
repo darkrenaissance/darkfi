@@ -78,6 +78,8 @@
   to the Jarvis book.
 * [Algebraic Number Theory](https://www.jmilne.org/math/CourseNotes/ANT.pdf)
   by Milne, are course notes written which are clear and concise.
+* Cohen book on computational number theory is a gold mine of standard algos.
+* LaVeque Fundamentals of Number Theory
 
 ## Cryptography
 
