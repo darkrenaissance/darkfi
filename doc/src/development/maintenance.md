@@ -19,5 +19,6 @@ or need to be maintained:
   files and try them out without having to write rust code. It will tell 
   you the time to create and verify the proof, as well as the byte size of 
   the proof.
+  * We should also have Python bindings for working with Scalars, EC points, merkle trees and hashing.
 * **Events System:** We need to fix IRCD, we will need to implement the 
   [events](https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html) system.
