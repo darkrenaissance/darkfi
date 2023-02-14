@@ -796,6 +796,10 @@ impl ValidatorState {
     /// Validate and append to canonical state received finalized block.
     /// Returns boolean flag indicating already existing block.
     pub async fn receive_finalized_block(&mut self, block: BlockInfo) -> Result<bool> {
+        if block.header.slot > self.consensus.current_slot() {
+            warn!(target: "consensus::validator", "receive_finalized_block(): Ignoring future block: {}", block.header.slot);
+            return Ok(false)
+        }
         match self.blockchain.has_block(&block) {
             Ok(v) => {
                 if v {
@@ -830,6 +834,10 @@ impl ValidatorState {
     pub async fn receive_sync_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         let mut new_blocks = vec![];
         for block in blocks {
+            if block.header.slot > self.consensus.current_slot() {
+                warn!(target: "consensus::validator", "receive_sync_blocks(): Ignoring future block: {}", block.header.slot);
+                continue
+            }
             match self.blockchain.has_block(block) {
                 Ok(v) => {
                     if v {
@@ -1110,7 +1118,15 @@ impl ValidatorState {
         slot_checkpoints: &[SlotCheckpoint],
     ) -> Result<()> {
         info!(target: "consensus::validator", "receive_slot_checkpoints(): Appending slot checkpoints to ledger");
-        self.blockchain.add_slot_checkpoints(slot_checkpoints)?;
+        let mut filtered = vec![];
+        for slot_checkpoint in slot_checkpoints {
+            if slot_checkpoint.slot > self.consensus.current_slot() {
+                warn!(target: "consensus::validator", "receive_slot_checkpoints(): Ignoring future slot checkpoint: {}", slot_checkpoint.slot);
+                continue
+            }
+            filtered.push(slot_checkpoint.clone());
+        }
+        self.blockchain.add_slot_checkpoints(&filtered[..])?;
 
         Ok(())
     }
