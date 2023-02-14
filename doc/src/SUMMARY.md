@@ -7,7 +7,7 @@
   - [Reading maths books](philosophy/reading-maths-books.md)
 - [Start Here: Testnet Guide](testnet/guide.md)
 - [Development](development/development.md)
-  - [Maintenance](development/maintenance.md)
+  - [Contributing](development/contributing.md)
   - [API Rustdoc](development/rustdoc.md)
 - [Architecture](architecture/architecture.md)
   - [Overview](architecture/overview.md)
