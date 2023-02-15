@@ -18,6 +18,7 @@
   Mumford was a historian and philosopher of science and technology. His
   books describe the two dominant legacies within technology; one enslaving
   humanity, and the other one liberating humanity from the state.
+* [GNU and Free Software texts](https://www.gnu.org/philosophy/philosophy.html)
 
 ## Philosophy
 
@@ -32,6 +33,10 @@
 
 * Python Crash Course by Eric Matthes. Good beginner text.
 * O'Reilly books: Python Data Science, Python for Data Analysis
+
+## C
+
+* The C Programming Language by K&R (2nd Edition ANSI C)
 
 ## Rust
 
@@ -87,3 +92,8 @@
 
 * [Proofs, Arguments, and Zero-Knowledge](https://people.cs.georgetown.edu/jthaler/ProofsArgsAndZK.pdf)
   by Justin Thaler.
+
+## Miscellaneous
+
+* [Cryptoeconomics](https://voskuil.org/cryptoeconomics/index.html)
+  by Eric Voskuil.
