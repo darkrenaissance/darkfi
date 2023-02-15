@@ -27,8 +27,6 @@ corrupt nodes and make them deviate from the protocol), the secret
 sharing scheme needs to be verifiable to prevent the deviating nodes
 from throwing off the protocol.
 
-[^1]: https://en.wikipedia.org/wiki/Verifiable_secret_sharing
-[^2]: https://en.wikipedia.org/wiki/Secure_multiparty_computation
 
 ## General bridge flow
 
@@ -67,3 +65,7 @@ fees (e.g. bridging DAI from ETH), there needs to be a way to cover
 the transaction costs. The bridge nodes could fund this themselves
 but then there also needs to be some protection mechanism to avoid
 people being able to drain those wallets from their ETH.
+
+[^1]: <https://en.wikipedia.org/wiki/Verifiable_secret_sharing>
+
+[^2]: <https://en.wikipedia.org/wiki/Secure_multiparty_computation>
