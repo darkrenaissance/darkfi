@@ -16,6 +16,7 @@
   - [Consensus](architecture/consensus.md)
   - [Transactions](architecture/tx_lifetime.md)
   - [Smart Contracts](architecture/smart_contracts.md)
+  - [Bridge](architecture/bridge.md)
   - [Tooling](architecture/tooling.md)
 - [zkas](zkas/index.md)
   - [Bincode](zkas/bincode.md)
