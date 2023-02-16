@@ -18,7 +18,10 @@
 
 use std::{collections::HashMap, fs::File, net::SocketAddr};
 
-use async_std::{net::TcpListener, sync::Arc};
+use async_std::{
+    net::TcpListener,
+    sync::{Arc, Mutex},
+};
 use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
 use futures_rustls::{rustls, TlsAcceptor};
 use log::{error, info};
@@ -110,6 +113,7 @@ pub struct IrcServer {
     unread_events: UnreadEventsPtr,
     clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     seen: SeenPtr<EventId>,
+    missed_events: Arc<Mutex<Vec<Event>>>,
 }
 
 impl IrcServer {
@@ -122,7 +126,17 @@ impl IrcServer {
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<Self> {
         let seen = Seen::new();
-        Ok(Self { settings, p2p, model, view, unread_events, clients_subscriptions, seen })
+        let missed_events = Arc::new(Mutex::new(vec![]));
+        Ok(Self {
+            settings,
+            p2p,
+            model,
+            view,
+            unread_events,
+            clients_subscriptions,
+            seen,
+            missed_events,
+        })
     }
     pub async fn start(&self, executor: Arc<smol::Executor<'_>>) -> Result<()> {
         let (msg_notifier, msg_recv) = smol::channel::unbounded();
@@ -134,6 +148,7 @@ impl IrcServer {
                 self.p2p.clone(),
                 self.model.clone(),
                 self.seen.clone(),
+                self.unread_events.clone(),
                 msg_recv,
                 self.clients_subscriptions.clone(),
             ))
@@ -144,6 +159,7 @@ impl IrcServer {
             .spawn(Self::listen_to_view(
                 self.view.clone(),
                 self.seen.clone(),
+                self.missed_events.clone(),
                 self.clients_subscriptions.clone(),
             ))
             .detach();
@@ -157,6 +173,7 @@ impl IrcServer {
     async fn listen_to_view(
         view: ViewPtr,
         seen: SeenPtr<EventId>,
+        missed_events: Arc<Mutex<Vec<Event>>>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
         loop {
@@ -164,6 +181,9 @@ impl IrcServer {
             if !seen.push(&event.hash()).await {
                 continue
             }
+
+            missed_events.lock().await.push(event.clone());
+
             let msg = match event.action {
                 EventAction::PrivMsg(x) => x,
             };
@@ -176,16 +196,18 @@ impl IrcServer {
         p2p: P2pPtr,
         model: ModelPtr,
         seen: SeenPtr<EventId>,
+        unread_events: UnreadEventsPtr,
         recv: smol::channel::Receiver<(NotifierMsg, u64)>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
         loop {
             let (msg, subscription_id) = recv.recv().await?;
 
+            let prev = model.lock().await.get_head_hash();
             match msg {
                 NotifierMsg::Privmsg(msg) => {
                     let event = Event {
-                        previous_event_hash: model.lock().await.get_head_hash(),
+                        previous_event_hash: prev,
                         action: EventAction::PrivMsg(msg.clone()),
                         timestamp: get_current_time(),
                         read_confirms: 0,
@@ -200,7 +222,7 @@ impl IrcServer {
                     if !seen.push(&event.hash()).await {
                         continue
                     }
-                    // unread_events.lock().await.insert(&event);
+                    unread_events.lock().await.insert(&event);
 
                     p2p.broadcast(event).await?;
                 }
@@ -284,7 +306,7 @@ impl IrcServer {
             irc_config,
             notifier,
             client_subscription,
-            self.unread_events.clone(),
+            self.missed_events.clone(),
         );
 
         // Start listening and detach

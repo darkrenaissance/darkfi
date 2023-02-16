@@ -18,6 +18,7 @@
 
 use std::net::SocketAddr;
 
+use async_std::sync::{Arc, Mutex};
 use futures::{
     io::{BufReader, ReadHalf, WriteHalf},
     AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, FutureExt,
@@ -31,7 +32,6 @@ use crate::{
     crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
     model::Event,
     privmsg::{EventAction, PrivMsgEvent},
-    protocol_event::UnreadEventsPtr,
     settings,
     settings::RPL,
     ChannelInfo,
@@ -51,7 +51,7 @@ pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     server_notifier: smol::channel::Sender<(NotifierMsg, u64)>,
     subscription: Subscription<ClientSubMsg>,
 
-    unread_events: UnreadEventsPtr,
+    missed_events: Arc<Mutex<Vec<Event>>>,
 }
 
 impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
@@ -62,7 +62,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         irc_config: IrcConfig,
         server_notifier: smol::channel::Sender<(NotifierMsg, u64)>,
         subscription: Subscription<ClientSubMsg>,
-        unread_events: UnreadEventsPtr,
+        missed_events: Arc<Mutex<Vec<Event>>>,
     ) -> Self {
         Self {
             write_stream,
@@ -71,7 +71,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             irc_config,
             subscription,
             server_notifier,
-            unread_events,
+            missed_events,
         }
     }
 
@@ -559,9 +559,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
         }
         // Process missed messages if any (sorted by event's timestamp)
-        let unread_events = self.unread_events.lock().await.events.clone();
-
-        let mut hash_vec: Vec<Event> = unread_events.values().cloned().collect();
+        let mut hash_vec = self.missed_events.lock().await.clone();
         hash_vec.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
 
         for event in hash_vec {
