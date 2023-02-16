@@ -180,6 +180,7 @@ impl Model {
                 Some(parent) => parent,
                 None => {
                     error!("No parent found, Orphan is not relinked");
+                    self.orphans.insert(orphan.hash(), orphan);
                     continue
                 }
             };
