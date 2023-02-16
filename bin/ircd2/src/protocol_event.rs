@@ -118,7 +118,7 @@ impl UnreadEvents {
         self.events.contains_key(key)
     }
 
-    fn get(&self, key: &EventId) -> Option<Event> {
+    fn _get(&self, key: &EventId) -> Option<Event> {
         self.events.get(key).cloned()
     }
 
@@ -217,7 +217,7 @@ impl ProtocolEvent {
 
     async fn handle_receive_event(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolEvent::handle_receive_event() [START]");
-        let exclude_list = vec![self.channel.address()];
+        // let exclude_list = vec![self.channel.address()];
         loop {
             let event = self.event_sub.receive().await?;
             let mut event = (*event).to_owned();
@@ -230,15 +230,16 @@ impl ProtocolEvent {
 
             event.read_confirms += 1;
 
-            // if event.read_confirms >= MAX_CONFIRM {
-            //     self.new_event(&event).await?;
-            // } else {
-            self.unread_events.lock().await.insert(&event);
+            if event.read_confirms >= MAX_CONFIRM {
+                self.new_event(&event).await?;
+            } else {
+                self.unread_events.lock().await.insert(&event);
+            }
+
             self.send_inv(&event).await?;
-            // }
 
             // Broadcast the msg
-            self.p2p.broadcast_with_exclude(event, &exclude_list).await?;
+            // self.p2p.broadcast_with_exclude(event, &exclude_list).await?;
         }
     }
 
@@ -279,11 +280,11 @@ impl ProtocolEvent {
             let events = (*getdata).to_owned().events;
 
             for event_id in events {
-                let unread_event = self.unread_events.lock().await.get(&event_id);
-                if let Some(event) = unread_event {
-                    self.channel.send(event).await?;
-                    continue
-                }
+                // let unread_event = self.unread_events.lock().await.get(&event_id);
+                // if let Some(event) = unread_event {
+                //     self.channel.send(event).await?;
+                //     continue
+                // }
 
                 let model_event = self.model.lock().await.get_event(&event_id);
                 if let Some(event) = model_event {
@@ -310,7 +311,7 @@ impl ProtocolEvent {
                     continue
                 }
 
-                let children = model.get_event_children(leaf);
+                let children = model.get_offspring(leaf);
 
                 for child in children {
                     self.channel.send(child).await?;
@@ -319,10 +320,10 @@ impl ProtocolEvent {
         }
     }
 
-    // every 2 seconds send a SyncEvent msg
+    // every 6 seconds send a SyncEvent msg
     async fn send_sync_hash_loop(self: Arc<Self>) -> Result<()> {
         loop {
-            sleep(2).await;
+            sleep(6).await;
             let leaves = self.model.lock().await.find_leaves();
             self.channel.send(SyncEvent { leaves }).await?;
         }
@@ -330,11 +331,7 @@ impl ProtocolEvent {
 
     async fn new_event(&self, event: &Event) -> Result<()> {
         let mut model = self.model.lock().await;
-        if model.is_orphan(event) {
-            self.send_getdata(vec![event.hash()]).await?;
-        } else {
-            model.add(event.clone()).await;
-        }
+        model.add(event.clone()).await;
 
         Ok(())
     }

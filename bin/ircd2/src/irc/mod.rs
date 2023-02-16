@@ -185,7 +185,7 @@ impl IrcServer {
             match msg {
                 NotifierMsg::Privmsg(msg) => {
                     let event = Event {
-                        previous_event_hash: model.lock().await.get_current_root(),
+                        previous_event_hash: model.lock().await.get_head_hash(),
                         action: EventAction::PrivMsg(msg.clone()),
                         timestamp: get_current_time(),
                         read_confirms: 0,

@@ -109,8 +109,8 @@ impl Model {
         Self { current_root: root_node_id, orphans: HashMap::new(), event_map, events_queue }
     }
 
-    pub fn get_current_root(&self) -> EventId {
-        self.current_root
+    pub fn get_head_hash(&self) -> EventId {
+        self.find_head()
     }
 
     pub async fn add(&mut self, event: Event) {
@@ -140,23 +140,34 @@ impl Model {
         self.event_map.get(event).map(|en| en.event.clone())
     }
 
-    pub fn get_event_children(&self, event: &EventId) -> Vec<Event> {
-        let mut children = vec![];
-        if let Some(ev) = self.event_map.get(event) {
-            for child in ev.children.iter() {
-                let child = self.event_map.get(child).unwrap();
-                children.push(child.event.clone());
+    pub fn get_offspring(&self, event: &EventId) -> Vec<Event> {
+        let mut offspring = vec![];
+        let mut event = *event;
+        let head = self.find_head();
+        loop {
+            if event == head {
+                break
+            }
+            if let Some(ev) = self.event_map.get(&event) {
+                for child in ev.children.iter() {
+                    let child = self.event_map.get(child).unwrap();
+                    offspring.push(child.event.clone());
+                    event = child.event.hash();
+                }
+            } else {
+                break
             }
         }
-        children
+
+        offspring
     }
 
     async fn reorganize(&mut self) {
         for (_, orphan) in std::mem::take(&mut self.orphans) {
-            if self.is_orphan(&orphan) {
-                // TODO should we remove orphan if it's too old
-                continue
-            }
+            // if self.is_orphan(&orphan) {
+            //     // TODO should we remove orphan if it's too old
+            //     continue
+            // }
 
             let prev_event = orphan.previous_event_hash;
 
@@ -310,7 +321,7 @@ impl Model {
                 }
                 Ordering::Less => {
                     // Left a todo here, not sure if it should be handled
-                    todo!();
+                    continue
                 }
             }
         }
