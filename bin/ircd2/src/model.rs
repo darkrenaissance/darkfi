@@ -38,14 +38,15 @@ pub struct Event {
     pub previous_event_hash: EventId,
     pub action: EventAction,
     pub timestamp: u64,
-    #[skip_serialize]
     pub read_confirms: u8,
 }
 
 impl Event {
     pub fn hash(&self) -> EventId {
         let mut bytes = Vec::new();
-        self.encode(&mut bytes).expect("serialize failed!");
+        let mut event_to_be_hashed = self.clone();
+        event_to_be_hashed.read_confirms = 0;
+        event_to_be_hashed.encode(&mut bytes).expect("serialize failed!");
 
         let mut hasher = Ripemd256::new();
         hasher.update(bytes);
