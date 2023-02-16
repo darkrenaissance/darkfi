@@ -1,4 +1,9 @@
 # Areas of work
+
+Every monday 16:00 CET, there is our main dev meeting on
+[our chat](https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html).
+Feel free to join and discuss with other darkfi devs.
+
 There are several areas of work that are either undergoing maintenance 
 or need to be maintained:
 
