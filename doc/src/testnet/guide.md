@@ -1,6 +1,8 @@
 DarkFi Testnet User Guide
 =========================
 
+<!-- toc -->
+
 This document presents a short user guide for the initial DarkFi
 testnet. In it, we cover basic setup of the `darkfid` node daemon,
 initializing a wallet, and interacting with the _money contract_,
