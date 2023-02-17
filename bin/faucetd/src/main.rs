@@ -16,9 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
-use async_std::sync::{Arc, Mutex, RwLock};
+use async_std::{
+    stream::StreamExt,
+    sync::{Arc, Mutex, RwLock},
+    task,
+};
 use async_trait::async_trait;
 use chrono::Utc;
 use darkfi::{
@@ -47,6 +51,8 @@ use darkfi_serial::{deserialize, serialize, Encodable};
 use log::{debug, error, info};
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
+use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
+use signal_hook_async_std::Signals;
 use sqlx::Row;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
@@ -72,7 +78,11 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
-    util::{async_util::sleep, parse::decode_base10, path::expand_path},
+    util::{
+        async_util::sleep,
+        parse::decode_base10,
+        path::{expand_path, get_config_path},
+    },
     wallet::{walletdb::init_wallet, WalletPtr},
     Error, Result,
 };
@@ -512,16 +522,36 @@ async fn prune_airdrop_map(map: Arc<Mutex<HashMap<[u8; 32], i64>>>, timeout: i64
     }
 }
 
+async fn handle_signals(
+    mut signals: Signals,
+    _cfg_path: PathBuf,
+    term_tx: smol::channel::Sender<()>,
+) {
+    debug!("Started signal handler");
+    while let Some(signal) = signals.next().await {
+        match signal {
+            SIGHUP => {
+                info!("Caught SIGHUP");
+            }
+
+            SIGTERM | SIGINT | SIGQUIT => {
+                term_tx.send(()).await.unwrap();
+            }
+
+            _ => unreachable!(),
+        }
+    }
+}
+
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
-    // We use this handler to block this function after detaching all
-    // tasks, and to catch a shutdown signal, where we can clean up and
-    // exit gracefully.
-    let (signal, shutdown) = smol::channel::bounded::<()>(1);
-    ctrlc::set_handler(move || {
-        async_std::task::block_on(signal.send(())).unwrap();
-    })
-    .unwrap();
+    let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
+
+    // Signal handling for config reload and graceful termination.
+    let signals = Signals::new([SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
+    let handle = signals.handle();
+    let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
+    let signals_task = task::spawn(handle_signals(signals, cfg_path.clone(), term_tx));
 
     // Initialize or load wallet
     let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
@@ -653,10 +683,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         Err(e) => error!("Failed syncing blockchain: {}", e),
     }
 
-    // Wait for SIGINT
-    shutdown.recv().await?;
+    // Wait for termination signal
+    term_rx.recv().await?;
     print!("\r");
     info!("Caught termination signal, cleaning up and exiting...");
+    handle.close();
+    signals_task.await;
 
     info!("Flushing database...");
     let flushed_bytes = sled_db.flush_async().await?;
