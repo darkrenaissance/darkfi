@@ -21,7 +21,7 @@
   - [Bincode](zkas/bincode.md)
   - [Examples](zkas/examples.md)
     - [Anonymous voting](zkas/examples/voting.md)
-    - [Anonymoud payments](zkas/examples/sapling.md)
+    - [Anonymous payments](zkas/examples/sapling.md)
 - [Crypto](crypto/crypto.md)
   - [FFT](crypto/fft.md)
   - [ZK explainer](crypto/zk_explainer.md)
