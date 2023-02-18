@@ -22,7 +22,7 @@ use log::{debug, error};
 use serde_json::{json, Value};
 
 use darkfi::rpc::jsonrpc::{
-    ErrorCode::{InternalError, InvalidParams},
+    ErrorCode::{InternalError, InvalidParams, ParseError},
     JsonError, JsonResponse, JsonResult, JsonSubscriber,
 };
 
@@ -69,11 +69,22 @@ impl Darkfid {
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_tx", "params": ["TxHash"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
     pub async fn blockchain_get_tx(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 || !params[0].is_u64() {
+        if params.len() != 1 {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let tx_hash = blake3::Hash::from_hex(params[0].as_str().unwrap()).unwrap();
+        let tx_hash_str = if let Some(tx_hash_str) = params[0].as_str() {
+            tx_hash_str
+        } else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+
+        let tx_hash = if let Ok(tx_hash) = blake3::Hash::from_hex(tx_hash_str) {
+            tx_hash
+        } else {
+            return JsonError::new(ParseError, None, id).into()
+        };
+
         let validator_state = self.validator_state.read().await;
 
         let txs = match validator_state.blockchain.transactions.get(&[tx_hash], true) {

@@ -216,7 +216,8 @@ impl Drk {
 
     /// Queries darkfid for a tx with given hash
     pub async fn get_tx(&self, tx_hash: &blake3::Hash) -> Result<Option<Transaction>> {
-        let req = JsonRequest::new("blockchain.get_tx", json!([tx_hash.as_bytes()]));
+        let tx_hash_str: &str = &tx_hash.to_hex();
+        let req = JsonRequest::new("blockchain.get_tx", json!([tx_hash_str]));
 
         match self.rpc_client.request(req).await {
             Ok(v) => {

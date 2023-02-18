@@ -944,9 +944,9 @@ async fn main() -> Result<()> {
 
                 let drk = Drk::new(args.endpoint).await?;
 
-                let tx =
-                    drk.get_tx(&tx_hash).await.with_context(|| "Failed to fetch transaction")?;
-                let tx = if let Some(tx) = tx {
+                let tx = if let Some(tx) =
+                    drk.get_tx(&tx_hash).await.with_context(|| "Failed to fetch transaction")?
+                {
                     tx
                 } else {
                     eprintln!("Tx not found");
