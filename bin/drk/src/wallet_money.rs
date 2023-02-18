@@ -21,7 +21,8 @@ use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, tx::Transaction, wallet::walletdb::QueryType};
 use darkfi_money_contract::{
     client::{
-        Coin, EncryptedNote, Note, OwnCoin, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
+        Coin, EncryptedNote, Note, OwnCoin, MONEY_ALIASES_COL_ALIAS, MONEY_ALIASES_COL_TOKEN_ID,
+        MONEY_ALIASES_TABLE, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
         MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
         MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
         MONEY_COINS_COL_SPEND_HOOK, MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID,
@@ -637,5 +638,104 @@ impl Drk {
         let rep = self.rpc_client.request(req).await?;
 
         Ok(serde_json::from_value(rep[0].clone())?)
+    }
+
+    /// Create an alias record for provided Token ID
+    pub async fn add_alias(&self, alias: String, token_id: TokenId) -> Result<()> {
+        eprintln!("Generating alias {} for Token: {}", alias, token_id);
+        let query = format!(
+            "INSERT OR REPLACE INTO {} ({}, {}) VALUES (?1, ?2);",
+            MONEY_ALIASES_TABLE, MONEY_ALIASES_COL_ALIAS, MONEY_ALIASES_COL_TOKEN_ID,
+        );
+
+        let params = json!([
+            query,
+            QueryType::Blob as u8,
+            serialize(&alias),
+            QueryType::Blob as u8,
+            serialize(&token_id),
+        ]);
+
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        if rep == true {
+            eprintln!("Successfully added new alias to wallet");
+        } else {
+            eprintln!("[add_alias] Got unexpected reply from darkfid: {}", rep);
+        }
+
+        Ok(())
+    }
+
+    /// Fetch all aliases from the wallet.
+    /// Optionally filter using alias name and/or token id.
+    pub async fn get_aliases(
+        &self,
+        alias_filter: Option<String>,
+        token_id_filter: Option<TokenId>,
+    ) -> Result<HashMap<String, TokenId>> {
+        eprintln!("Fetching Aliases from the wallet");
+
+        let query = format!("SELECT * FROM {}", MONEY_ALIASES_TABLE);
+        let params = json!([
+            query,
+            QueryType::Blob as u8,
+            MONEY_ALIASES_COL_ALIAS,
+            QueryType::Blob as u8,
+            MONEY_ALIASES_COL_TOKEN_ID,
+        ]);
+
+        let req = JsonRequest::new("wallet.query_row_multi", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        // The returned thing should be an array of found rows.
+        let Some(rows) = rep.as_array() else {
+            return Err(anyhow!("[get_aliases] Unexpected response from darkfid: {}", rep))
+        };
+
+        // Fill this map with aliases
+        let mut map: HashMap<String, TokenId> = HashMap::new();
+        for row in rows {
+            let Some(row) = row.as_array() else {
+                return Err(anyhow!("[get_aliases] Unexpected response from darkfid: {}", rep))
+            };
+
+            let alias_bytes: Vec<u8> = serde_json::from_value(row[0].clone())?;
+            let alias: String = deserialize(&alias_bytes)?;
+            if alias_filter.is_some() && alias_filter.as_ref().unwrap() != &alias {
+                continue
+            }
+
+            let token_id_bytes: Vec<u8> = serde_json::from_value(row[1].clone())?;
+            let token_id: TokenId = deserialize(&token_id_bytes)?;
+            if token_id_filter.is_some() && token_id_filter.as_ref().unwrap() != &token_id {
+                continue
+            }
+
+            map.insert(alias, token_id);
+        }
+
+        Ok(map)
+    }
+
+    /// Create an alias record for provided Token ID
+    pub async fn remove_alias(&self, alias: String) -> Result<()> {
+        eprintln!("Removing alias: {}", alias);
+        let query =
+            format!("DELETE FROM {} WHERE {} = ?1;", MONEY_ALIASES_TABLE, MONEY_ALIASES_COL_ALIAS,);
+
+        let params = json!([query, QueryType::Blob as u8, serialize(&alias),]);
+
+        let req = JsonRequest::new("wallet.exec_sql", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        if rep == true {
+            eprintln!("Successfully removed alias from wallet");
+        } else {
+            eprintln!("[remove_alias] Got unexpected reply from darkfid: {}", rep);
+        }
+
+        Ok(())
     }
 }
