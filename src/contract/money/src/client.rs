@@ -81,6 +81,10 @@ pub const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
 pub const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
 pub const MONEY_COINS_COL_MEMO: &str = "memo";
 
+pub const MONEY_ALIASES_TABLE: &str = "money_aliases";
+pub const MONEY_ALIASES_COL_ALIAS: &str = "alias";
+pub const MONEY_ALIASES_COL_TOKEN_ID: &str = "token_id";
+
 /// Byte length of the AEAD tag of the chacha20 cipher used for note encryption
 pub const AEAD_TAG_SIZE: usize = 16;
 

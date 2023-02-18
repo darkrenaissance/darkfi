@@ -37,3 +37,9 @@ CREATE TABLE IF NOT EXISTS money_coins (
 	leaf_position BLOB NOT NULL,
 	memo BLOB
 );
+
+-- The token aliases in our wallet
+CREATE TABLE IF NOT EXISTS money_aliases (
+	alias BLOB PRIMARY KEY NOT NULL,
+	token_id BLOB NOT NULL
+);

@@ -210,6 +210,10 @@ enum Subcmd {
     /// Explorer related subcommands
     #[command(subcommand)]
     Explorer(ExplorerSubcmd),
+
+    /// Manage Token aliases
+    #[command(subcommand)]
+    Alias(AliasSubcmd),
 }
 
 #[derive(Subcommand)]
@@ -341,6 +345,36 @@ enum ExplorerSubcmd {
 
     /// Read a transaction from stdin and simulate it
     SimulateTx,
+}
+
+#[derive(Subcommand)]
+enum AliasSubcmd {
+    /// Create a Token alias
+    Add {
+        /// Token alias
+        alias: String,
+
+        /// Token to create alias for
+        token: String,
+    },
+
+    /// Print alias info of optional arguments.
+    /// If no argument is provided, list all the aliases in the wallet.
+    Show {
+        /// Token alias to search for
+        #[clap(short, long)]
+        alias: Option<String>,
+
+        /// Token to search alias for
+        #[clap(short, long)]
+        token: Option<String>,
+    },
+
+    /// Remove a Token alias
+    Remove {
+        /// Token alias to remove
+        alias: String,
+    },
 }
 
 pub struct Drk {
@@ -945,6 +979,52 @@ async fn main() -> Result<()> {
 
                 println!("Transaction ID: {}", tx.hash());
                 println!("State: {}", if is_valid { "valid" } else { "invalid" });
+
+                Ok(())
+            }
+        },
+
+        Subcmd::Alias(cmd) => match cmd {
+            AliasSubcmd::Add { alias, token } => {
+                let token_id =
+                    TokenId::try_from(token.as_str()).with_context(|| "Invalid Token ID")?;
+                let drk = Drk::new(args.endpoint).await?;
+                drk.add_alias(alias, token_id).await?;
+
+                Ok(())
+            }
+
+            AliasSubcmd::Show { alias, token } => {
+                let token_id = match token {
+                    Some(t) => {
+                        Some(TokenId::try_from(t.as_str()).with_context(|| "Invalid Token ID")?)
+                    }
+                    None => None,
+                };
+
+                let drk = Drk::new(args.endpoint).await?;
+                let map = drk.get_aliases(alias, token_id).await?;
+
+                // Create a prettytable with the new data:
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Alias", "Token ID"]);
+                for (alias, token_id) in map.iter() {
+                    table.add_row(row![alias, token_id]);
+                }
+
+                if table.is_empty() {
+                    println!("No aliases found");
+                } else {
+                    println!("{}", table);
+                }
+
+                Ok(())
+            }
+
+            AliasSubcmd::Remove { alias } => {
+                let drk = Drk::new(args.endpoint).await?;
+                drk.remove_alias(alias).await?;
 
                 Ok(())
             }
