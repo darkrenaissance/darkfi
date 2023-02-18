@@ -297,7 +297,7 @@ impl Drk {
     }
 
     /// Queries darkfid to check if transaction is in the erroneous set
-    async fn is_erroneous_tx(&self, tx: &Transaction) -> Result<bool> {
+    pub async fn is_erroneous_tx(&self, tx: &Transaction) -> Result<bool> {
         let serialized = serialize(tx);
         let tx_hash = blake3::hash(&serialized);
         let req = JsonRequest::new("blockchain.is_erroneous_tx", json!([tx_hash.as_bytes()]));

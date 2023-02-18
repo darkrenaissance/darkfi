@@ -207,11 +207,9 @@ enum Subcmd {
         checkpoint: Option<u64>,
     },
 
-    /// Fetch a blockchain transaction by hash
-    FetchTx {
-        /// Transaction hash
-        tx_hash: String,
-    },
+    /// Explorer related subcommands
+    #[command(subcommand)]
+    Explorer(ExplorerSubcmd),
 }
 
 #[derive(Subcommand)]
@@ -331,6 +329,18 @@ enum DaoSubcmd {
         /// Numeric identifier for the proposal
         proposal_id: u64,
     },
+}
+
+#[derive(Subcommand)]
+enum ExplorerSubcmd {
+    /// Fetch a blockchain transaction by hash
+    FetchTx {
+        /// Transaction hash
+        tx_hash: String,
+    },
+
+    /// Read a transaction from stdin and simulate it
+    SimulateTx,
 }
 
 pub struct Drk {
@@ -894,17 +904,43 @@ async fn main() -> Result<()> {
             }
         },
 
-        Subcmd::FetchTx { tx_hash } => {
-            let tx_hash = blake3::Hash::from_hex(&tx_hash)?;
+        Subcmd::Explorer(cmd) => match cmd {
+            ExplorerSubcmd::FetchTx { tx_hash } => {
+                let tx_hash = blake3::Hash::from_hex(&tx_hash)?;
 
-            let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.endpoint).await?;
 
-            let _tx = drk.get_tx(&tx_hash).await.with_context(|| "Failed to fetch transaction")?;
+                let tx =
+                    drk.get_tx(&tx_hash).await.with_context(|| "Failed to fetch transaction")?;
+                let _ = if let Some(tx) = tx {
+                    tx
+                } else {
+                    eprintln!("Tx not found");
+                    exit(1);
+                };
 
-            println!("Transaction ID: {}", tx_hash);
-            // TODO: display the actual tx
+                println!("Transaction ID: {}", tx_hash);
+                // TODO: display the actual tx
 
-            Ok(())
-        }
+                Ok(())
+            }
+
+            ExplorerSubcmd::SimulateTx => {
+                eprintln!("Reading transaction from stdin...");
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let bytes = bs58::decode(&buf.trim()).into_vec()?;
+                let tx = deserialize(&bytes)?;
+
+                let drk = Drk::new(args.endpoint).await?;
+
+                let is_err =
+                    drk.is_erroneous_tx(&tx).await.with_context(|| "Failed to check tx state")?;
+
+                println!("State: {}", if is_err { "valid" } else { "invalid" });
+
+                Ok(())
+            }
+        },
     }
 }
