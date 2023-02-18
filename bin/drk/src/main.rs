@@ -609,9 +609,8 @@ async fn main() -> Result<()> {
 
         Subcmd::Airdrop { faucet_endpoint, amount, token, address } => {
             let amount = f64::from_str(&amount).with_context(|| "Invalid amount")?;
-            let token_id = TokenId::try_from(token.as_str()).with_context(|| "Invalid Token ID")?;
-
             let drk = Drk::new(args.endpoint).await?;
+            let token_id = drk.get_token(token).await.with_context(|| "Invalid Token ID")?;
 
             let address = match address {
                 Some(v) => PublicKey::from_str(v.as_str()).with_context(|| "Invalid address")?,
@@ -632,10 +631,9 @@ async fn main() -> Result<()> {
 
         Subcmd::Transfer { amount, token, recipient, dao, dao_bulla } => {
             let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
-            let token_id = TokenId::try_from(token.as_str()).with_context(|| "Invalid Token ID")?;
             let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
-
             let drk = Drk::new(args.endpoint).await?;
+            let token_id = drk.get_token(token).await.with_context(|| "Invalid Token ID")?;
 
             let tx = drk
                 .transfer(&amount, token_id, rcpt, dao, dao_bulla)
@@ -786,8 +784,9 @@ async fn main() -> Result<()> {
                 let approval_ratio_base = 100_u64;
                 let approval_ratio_quot = (approval_ratio * approval_ratio_base as f64) as u64;
 
+                let drk = Drk::new(args.endpoint).await?;
                 let gov_token_id =
-                    TokenId::try_from(gov_token_id.as_str()).with_context(|| "Invalid Token ID")?;
+                    drk.get_token(gov_token_id).await.with_context(|| "Invalid Token ID")?;
 
                 let secret_key = SecretKey::random(&mut OsRng);
                 let bulla_blind = pallas::Base::random(&mut OsRng);
@@ -886,12 +885,9 @@ async fn main() -> Result<()> {
             DaoSubcmd::Propose { dao_id, recipient, amount, token_id } => {
                 let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
                 let amount = decode_base10(&amount, 8, true)?;
-
                 let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
-                let token_id =
-                    TokenId::try_from(token_id.as_str()).with_context(|| "Invalid Token ID")?;
-
                 let drk = Drk::new(args.endpoint).await?;
+                let token_id = drk.get_token(token_id).await.with_context(|| "Invalid Token ID")?;
 
                 let tx = drk
                     .dao_propose(dao_id, rcpt, amount, token_id)

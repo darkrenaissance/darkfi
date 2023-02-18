@@ -736,6 +736,20 @@ impl Drk {
         Ok(map)
     }
 
+    /// Retrieve token by provided string.
+    /// Input string represents either an alias or a token id.
+    pub async fn get_token(&self, input: String) -> Result<TokenId> {
+        // Check if input is an alias(max 5 characters)
+        if input.chars().count() <= 5 {
+            let aliases = self.get_aliases(Some(input.clone()), None).await?;
+            if let Some(token_id) = aliases.get(&input) {
+                return Ok(token_id.clone())
+            }
+        }
+        // Else parse input
+        Ok(TokenId::try_from(input.as_str())?)
+    }
+
     /// Create an alias record for provided Token ID
     pub async fn remove_alias(&self, alias: String) -> Result<()> {
         eprintln!("Removing alias: {}", alias);
