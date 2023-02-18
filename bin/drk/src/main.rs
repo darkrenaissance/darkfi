@@ -981,7 +981,7 @@ async fn main() -> Result<()> {
                     tx
                 } else {
                     eprintln!("Tx not found");
-                    exit(1);
+                    return Ok(())
                 };
                 // Make sure the tx is correct
                 assert_eq!(tx.hash(), tx_hash);
@@ -1017,6 +1017,11 @@ async fn main() -> Result<()> {
 
         Subcmd::Alias(cmd) => match cmd {
             AliasSubcmd::Add { alias, token } => {
+                if alias.chars().count() > 5 {
+                    eprintln!("Error: Alias exceeds 5 characters");
+                    return Ok(())
+                }
+
                 let token_id =
                     TokenId::try_from(token.as_str()).with_context(|| "Invalid Token ID")?;
                 let drk = Drk::new(args.endpoint).await?;
