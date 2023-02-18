@@ -206,6 +206,12 @@ enum Subcmd {
         /// Reset Merkle tree to checkpoint index and start scanning
         checkpoint: Option<u64>,
     },
+
+    /// Fetch a blockchain transaction by hash
+    FetchTx {
+        /// Transaction hash
+        tx_hash: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -887,5 +893,18 @@ async fn main() -> Result<()> {
                 Ok(())
             }
         },
+
+        Subcmd::FetchTx { tx_hash } => {
+            let tx_hash = blake3::Hash::from_hex(&tx_hash)?;
+
+            let drk = Drk::new(args.endpoint).await?;
+
+            let _tx = drk.get_tx(&tx_hash).await.with_context(|| "Failed to fetch transaction")?;
+
+            println!("Transaction ID: {}", tx_hash);
+            // TODO: display the actual tx
+
+            Ok(())
+        }
     }
 }

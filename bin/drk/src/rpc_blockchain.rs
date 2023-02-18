@@ -204,6 +204,21 @@ impl Drk {
         }
     }
 
+    /// Queries darkfid for a tx with given hash
+    pub async fn get_tx(&self, tx_hash: &blake3::Hash) -> Result<Option<Transaction>> {
+        let req = JsonRequest::new("blockchain.get_tx", json!([tx_hash.as_bytes()]));
+
+        match self.rpc_client.request(req).await {
+            Ok(v) => {
+                let tx_bytes: Vec<u8> = serde_json::from_value(v)?;
+                let tx = deserialize(&tx_bytes)?;
+                Ok(Some(tx))
+            }
+
+            Err(_) => Ok(None),
+        }
+    }
+
     /// Scans the blockchain starting from the last scanned slot, for relevant
     /// money transfer transactions. If reset flag is provided, Merkle tree state
     /// and coins are reset, and start scanning from beginning. Alternatively,
