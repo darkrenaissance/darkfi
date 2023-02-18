@@ -912,12 +912,14 @@ async fn main() -> Result<()> {
 
                 let tx =
                     drk.get_tx(&tx_hash).await.with_context(|| "Failed to fetch transaction")?;
-                let _ = if let Some(tx) = tx {
+                let tx = if let Some(tx) = tx {
                     tx
                 } else {
                     eprintln!("Tx not found");
                     exit(1);
                 };
+                // Make sure the tx is correct
+                assert_eq!(tx.hash(), tx_hash);
 
                 println!("Transaction ID: {}", tx_hash);
                 let is_err = drk
