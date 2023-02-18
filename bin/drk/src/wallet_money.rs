@@ -719,6 +719,23 @@ impl Drk {
         Ok(map)
     }
 
+    /// Fetch all aliases from the wallet, mapped by token id.
+    pub async fn get_aliases_mapped_by_token(&self) -> Result<HashMap<String, String>> {
+        let aliases = self.get_aliases(None, None).await?;
+        let mut map: HashMap<String, String> = HashMap::new();
+        for (alias, token_id) in aliases {
+            let aliases_string = if let Some(prev) = map.get(&token_id.to_string()) {
+                format!("{}, {}", prev, alias)
+            } else {
+                alias
+            };
+
+            map.insert(token_id.to_string(), aliases_string);
+        }
+
+        Ok(map)
+    }
+
     /// Create an alias record for provided Token ID
     pub async fn remove_alias(&self, alias: String) -> Result<()> {
         eprintln!("Removing alias: {}", alias);

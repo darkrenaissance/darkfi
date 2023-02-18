@@ -457,13 +457,23 @@ async fn main() -> Result<()> {
                 let balmap =
                     drk.money_balance().await.with_context(|| "Failed to fetch wallet balance")?;
 
+                let aliases_map = drk
+                    .get_aliases_mapped_by_token()
+                    .await
+                    .with_context(|| "Failed to fetch wallet aliases")?;
+
                 // Create a prettytable with the new data:
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Token ID", "Balance"]);
+                table.set_titles(row!["Token ID", "Aliases", "Balance"]);
                 for (token_id, balance) in balmap.iter() {
+                    let aliases = match aliases_map.get(token_id) {
+                        Some(a) => a,
+                        None => "-",
+                    };
+
                     // FIXME: Don't hardcode to 8 decimals
-                    table.add_row(row![token_id, encode_base10(*balance, 8)]);
+                    table.add_row(row![token_id, aliases, encode_base10(*balance, 8)]);
                 }
 
                 if table.is_empty() {
@@ -545,6 +555,11 @@ async fn main() -> Result<()> {
                     .await
                     .with_context(|| "Failed to fetch coins from wallet")?;
 
+                let aliases_map = drk
+                    .get_aliases_mapped_by_token()
+                    .await
+                    .with_context(|| "Failed to fetch wallet aliases")?;
+
                 drk.rpc_client.close().await?;
 
                 if coins.is_empty() {
@@ -553,12 +568,18 @@ async fn main() -> Result<()> {
 
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Coin", "Spent", "Token ID", "Value"]);
+                table.set_titles(row!["Coin", "Spent", "Token ID", "Aliases", "Value"]);
                 for coin in coins {
+                    let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
+                        Some(a) => a,
+                        None => "-",
+                    };
+
                     table.add_row(row![
                         format!("{}", bs58::encode(&serialize(&coin.0.coin.inner())).into_string()),
                         coin.1,
                         coin.0.note.token_id,
+                        aliases,
                         format!("{} ({})", coin.0.note.value, encode_base10(coin.0.note.value, 8))
                     ]);
                 }
@@ -826,13 +847,23 @@ async fn main() -> Result<()> {
                 let balmap =
                     drk.dao_balance(dao_id).await.with_context(|| "Failed to fetch DAO balance")?;
 
+                let aliases_map = drk
+                    .get_aliases_mapped_by_token()
+                    .await
+                    .with_context(|| "Failed to fetch wallet aliases")?;
+
                 // Create a prettytable with the new data:
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Token ID", "Balance"]);
+                table.set_titles(row!["Token ID", "Aliases", "Balance"]);
                 for (token_id, balance) in balmap.iter() {
+                    let aliases = match aliases_map.get(token_id) {
+                        Some(a) => a,
+                        None => "-",
+                    };
+
                     // FIXME: Don't hardcode to 8 decimals
-                    table.add_row(row![token_id, encode_base10(*balance, 8)]);
+                    table.add_row(row![token_id, aliases, encode_base10(*balance, 8)]);
                 }
 
                 if table.is_empty() {
