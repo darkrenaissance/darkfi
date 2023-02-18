@@ -61,7 +61,7 @@ sync_p2p_accept = ["tls://0.0.0.0:8342"]
 sync_slots = 8
 
 # Seed nodes to connect to for the syncing protocol
-sync_p2p_seed = ["tls:/lilith0.dark.fi:8342", "tls://lilith1.dark.fi:8342"]
+sync_p2p_seed = ["tls://lilith0.dark.fi:8342", "tls://lilith1.dark.fi:8342"]
 
 # Peers to connect to for the syncing protocol
 #sync_p2p_peer = []
