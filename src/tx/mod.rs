@@ -149,4 +149,11 @@ impl Transaction {
         self.proofs.encode(&mut buf)?;
         Ok(buf)
     }
+
+    /// Get the transaction hash
+    pub fn hash(&self) -> blake3::Hash {
+        let mut tx_data = vec![];
+        self.encode(&mut tx_data).expect("serialize tx");
+        blake3::hash(&tx_data)
+    }
 }

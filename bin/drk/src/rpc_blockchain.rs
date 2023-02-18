@@ -118,7 +118,7 @@ impl Drk {
         eprintln!("[DAO] Iterating over {} transactions", block.txs.len());
         for tx in block.txs.iter() {
             // Verify transaction is not in the erroneous set
-            if self.is_erroneous_tx(tx).await? {
+            if self.was_erroneous_tx(&tx.hash()).await? {
                 continue
             }
             self.apply_tx_dao_data(tx, true).await?;
@@ -136,7 +136,7 @@ impl Drk {
 
         for tx in block.txs.iter() {
             // Verify transaction is not in the erroneous set
-            if self.is_erroneous_tx(tx).await? {
+            if self.was_erroneous_tx(&tx.hash()).await? {
                 continue
             }
             self.apply_tx_money_data(tx, true).await?;
@@ -185,6 +185,16 @@ impl Drk {
         //self.wallet_apply_unconfirmed_money_data(tx).await?;
 
         Ok(txid)
+    }
+
+    /// Simulate the transaction with the state machine
+    pub async fn simulate_tx(&self, tx: &Transaction) -> Result<bool> {
+        let params = json!([bs58::encode(&serialize(tx)).into_string()]);
+        let req = JsonRequest::new("tx.simulate", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        let is_valid = serde_json::from_value(rep)?;
+        Ok(is_valid)
     }
 
     /// Queries darkfid for a block with given slot
@@ -297,10 +307,8 @@ impl Drk {
     }
 
     /// Queries darkfid to check if transaction is in the erroneous set
-    pub async fn is_erroneous_tx(&self, tx: &Transaction) -> Result<bool> {
-        let serialized = serialize(tx);
-        let tx_hash = blake3::hash(&serialized);
-        let req = JsonRequest::new("blockchain.is_erroneous_tx", json!([tx_hash.as_bytes()]));
+    pub async fn was_erroneous_tx(&self, tx_hash: &blake3::Hash) -> Result<bool> {
+        let req = JsonRequest::new("blockchain.was_erroneous_tx", json!([tx_hash.as_bytes()]));
         match self.rpc_client.request(req).await {
             Ok(v) => Ok(serde_json::from_value(v)?),
             Err(_) => Ok(false),

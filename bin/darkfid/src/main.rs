@@ -215,6 +215,7 @@ impl RequestHandler for Darkfid {
             // Blockchain methods
             // ==================
             Some("blockchain.get_slot") => return self.blockchain_get_slot(req.id, params).await,
+            Some("blockchain.get_tx") => return self.blockchain_get_tx(req.id, params).await,
             Some("blockchain.last_known_slot") => {
                 return self.blockchain_last_known_slot(req.id, params).await
             }
@@ -224,13 +225,14 @@ impl RequestHandler for Darkfid {
             Some("blockchain.lookup_zkas") => {
                 return self.blockchain_lookup_zkas(req.id, params).await
             }
-            Some("blockchain.is_erroneous_tx") => {
-                return self.blockchain_is_erroneous_tx(req.id, params).await
+            Some("blockchain.was_erroneous_tx") => {
+                return self.blockchain_was_erroneous_tx(req.id, params).await
             }
 
             // ===================
             // Transaction methods
             // ===================
+            Some("tx.simulate") => return self.tx_simulate(req.id, params).await,
             Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
 
             // ==============

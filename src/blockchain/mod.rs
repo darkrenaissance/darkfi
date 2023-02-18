@@ -228,7 +228,7 @@ impl Blockchain {
     }
 
     /// Check if the erroneoustxstore contains given transaction hash.
-    pub fn is_erroneous_tx(&self, tx_hash: &blake3::Hash) -> Result<bool> {
+    pub fn was_erroneous_tx(&self, tx_hash: &blake3::Hash) -> Result<bool> {
         self.erroneous_txs.contains(tx_hash)
     }
 }

@@ -63,6 +63,38 @@ impl Darkfid {
     }
 
     // RPCAPI:
+    // Queries the blockchain database for a block in the given slot.
+    // Returns a readable block upon success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.get_tx", "params": ["TxHash"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
+    pub async fn blockchain_get_tx(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 || !params[0].is_u64() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let tx_hash = blake3::Hash::from_hex(params[0].as_str().unwrap()).unwrap();
+        let validator_state = self.validator_state.read().await;
+
+        let txs = match validator_state.blockchain.transactions.get(&[tx_hash], true) {
+            Ok(txs) => {
+                drop(validator_state);
+                txs
+            }
+            Err(e) => {
+                error!("[RPC] blockchain.get_tx: Failed fetching tx by hash: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+        // This would be an logic error somewhere
+        assert_eq!(txs.len(), 1);
+        // and strict was used during .get()
+        let tx = txs[0].as_ref().unwrap();
+
+        JsonResponse::new(json!(serialize(tx)), id).into()
+    }
+
+    // RPCAPI:
     // Queries the blockchain database to find the last known slot
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.last_known_slot", "params": [], "id": 1}
@@ -147,16 +179,16 @@ impl Darkfid {
     // Queries the blockchain database to check if the provided transaction hash exists
     // in the erroneous transactions set.
     //
-    // --> {"jsonrpc": "2.0", "method": "blockchain.is_erroneous_tx", "params": [[tx_hash bytes]], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "blockchain.was_erroneous_tx", "params": [[tx_hash bytes]], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": bool, "id": 1}
-    pub async fn blockchain_is_erroneous_tx(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn blockchain_was_erroneous_tx(&self, id: Value, params: &[Value]) -> JsonResult {
         if params.len() != 1 || !params[0].is_array() {
             return JsonError::new(InvalidParams, None, id).into()
         }
         let hash_bytes: [u8; 32] = serde_json::from_value(params[0].clone()).unwrap();
         let tx_hash = blake3::Hash::try_from(hash_bytes).unwrap();
         let blockchain = { self.validator_state.read().await.blockchain.clone() };
-        let Ok(result) = blockchain.is_erroneous_tx(&tx_hash) else {
+        let Ok(result) = blockchain.was_erroneous_tx(&tx_hash) else {
                 return JsonError::new(InternalError, None, id).into()
         };
 

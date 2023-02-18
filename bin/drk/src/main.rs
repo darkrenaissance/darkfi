@@ -920,7 +920,11 @@ async fn main() -> Result<()> {
                 };
 
                 println!("Transaction ID: {}", tx_hash);
-                // TODO: display the actual tx
+                let is_err = drk
+                    .was_erroneous_tx(&tx_hash)
+                    .await
+                    .with_context(|| "Failed to get tx state")?;
+                println!("State: {}", if is_err { "failed" } else { "passed" });
 
                 Ok(())
             }
@@ -934,10 +938,11 @@ async fn main() -> Result<()> {
 
                 let drk = Drk::new(args.endpoint).await?;
 
-                let is_err =
-                    drk.is_erroneous_tx(&tx).await.with_context(|| "Failed to check tx state")?;
+                let is_valid =
+                    drk.simulate_tx(&tx).await.with_context(|| "Failed to simulate tx")?;
 
-                println!("State: {}", if is_err { "valid" } else { "invalid" });
+                println!("Transaction ID: {}", tx.hash());
+                println!("State: {}", if is_valid { "valid" } else { "invalid" });
 
                 Ok(())
             }
