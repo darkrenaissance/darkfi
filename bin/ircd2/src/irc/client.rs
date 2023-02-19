@@ -26,12 +26,14 @@ use futures::{
 
 use log::{debug, error, info, warn};
 
-use darkfi::{system::Subscription, Error, Result};
+use darkfi::{
+    event_graph::{model::Event, EventAction, PrivMsgEvent},
+    system::Subscription,
+    Error, Result,
+};
 
 use crate::{
     crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
-    model::Event,
-    privmsg::{EventAction, PrivMsgEvent},
     settings,
     settings::RPL,
     ChannelInfo,

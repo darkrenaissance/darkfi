@@ -18,9 +18,7 @@
 
 use async_std::sync::Arc;
 
-use darkfi::{Error, Result};
-
-use crate::model::Event;
+use crate::{event_graph::model::Event, Error, Result};
 
 pub type EventsQueuePtr = Arc<EventsQueue>;
 

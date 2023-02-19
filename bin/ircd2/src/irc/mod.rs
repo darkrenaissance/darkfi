@@ -26,15 +26,21 @@ use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
 use futures_rustls::{rustls, TlsAcceptor};
 use log::{error, info};
 
-use darkfi::{net::P2pPtr, system::SubscriberPtr, util::path::expand_path, Error, Result};
-
-use crate::{
-    model::{Event, EventId, ModelPtr},
-    privmsg::{EventAction, PrivMsgEvent},
-    protocol_event::{Seen, SeenPtr, UnreadEventsPtr},
-    settings::{get_current_time, Args, ChannelInfo, ContactInfo},
-    view::ViewPtr,
+use darkfi::{
+    event_graph::{
+        get_current_time,
+        model::{Event, EventId, ModelPtr},
+        protocol_event::{Seen, SeenPtr, UnreadEventsPtr},
+        view::ViewPtr,
+        EventAction, PrivMsgEvent,
+    },
+    net::P2pPtr,
+    system::SubscriberPtr,
+    util::path::expand_path,
+    Error, Result,
 };
+
+use crate::settings::{Args, ChannelInfo, ContactInfo};
 
 mod client;
 

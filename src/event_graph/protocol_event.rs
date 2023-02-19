@@ -24,11 +24,12 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
 
-use darkfi::{net, util::async_util::sleep, Result};
-
+use super::get_current_time;
 use crate::{
-    model::{Event, EventId, ModelPtr},
-    settings::get_current_time,
+    event_graph::model::{Event, EventId, ModelPtr},
+    net,
+    util::async_util::sleep,
+    Result,
 };
 
 const UNREAD_EVENT_EXPIRE_TIME: u64 = 3600; // in seconds

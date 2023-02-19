@@ -9,7 +9,7 @@ homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
 [dependencies]
-darkfi = {path = "../../", features = ["net", "rpc", "bs58"]}
+darkfi = {path = "../../", features = ["event-graph", "rpc", "bs58"]}
 darkfi-serial = {path = "../../src/serial"}
 
 # Async

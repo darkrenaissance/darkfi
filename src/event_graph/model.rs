@@ -23,10 +23,9 @@ use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use log::error;
 use ripemd::{Digest, Ripemd256};
 
-use crate::{
-    events_queue::EventsQueuePtr,
-    privmsg::{EventAction, PrivMsgEvent},
-};
+use crate::event_graph::events_queue::EventsQueuePtr;
+
+use super::{EventAction, PrivMsgEvent};
 
 pub type EventId = [u8; 32];
 
@@ -409,7 +408,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{events_queue::EventsQueue, settings::get_current_time};
+    use crate::event_graph::{events_queue::EventsQueue, get_current_time};
 
     fn create_message(
         previous_event_hash: EventId,

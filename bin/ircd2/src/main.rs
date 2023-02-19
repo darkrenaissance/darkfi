@@ -22,7 +22,14 @@ use rand::rngs::OsRng;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
-    async_daemonize, net,
+    async_daemonize,
+    event_graph::{
+        events_queue::EventsQueue,
+        model::Model,
+        protocol_event::{ProtocolEvent, Seen, UnreadEvents},
+        view::View,
+    },
+    net,
     rpc::server::listen_and_serve,
     system::Subscriber,
     util::{file::save_json_file, path::expand_path},
@@ -30,24 +37,24 @@ use darkfi::{
 };
 
 pub mod crypto;
-pub mod events_queue;
+// pub mod events_queue;
 pub mod irc;
-pub mod model;
+// pub mod model;
 pub mod privmsg;
-pub mod protocol_event;
+// pub mod protocol_event;
 pub mod rpc;
 pub mod settings;
-pub mod view;
+// pub mod view;
 
 use crate::{
     crypto::KeyPair,
-    events_queue::EventsQueue,
+    // events_queue::EventsQueue,
     irc::IrcServer,
-    model::Model,
-    protocol_event::{ProtocolEvent, Seen, UnreadEvents},
+    // model::Model,
+    // protocol_event::{ProtocolEvent, Seen, UnreadEvents},
     rpc::JsonRpcInterface,
     settings::{Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
-    view::View,
+    // view::View,
 };
 
 async_daemonize!(realmain);

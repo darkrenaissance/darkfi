@@ -19,14 +19,15 @@
 use async_std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
-use darkfi::Result;
+use crate::{
+    event_graph::{
+        events_queue::EventsQueuePtr,
+        model::{Event, EventId},
+    },
+    Result,
+};
 
 pub type ViewPtr = Arc<Mutex<View>>;
-
-use crate::{
-    events_queue::EventsQueuePtr,
-    model::{Event, EventId},
-};
 
 pub struct View {
     pub seen: HashMap<EventId, Event>,

@@ -184,16 +184,6 @@ impl ChannelInfo {
     }
 }
 
-pub fn get_current_time() -> u64 {
-    let start = std::time::SystemTime::now();
-    start
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_millis()
-        .try_into()
-        .unwrap()
-}
-
 fn parse_priv(key: &str) -> Result<crypto_box::SecretKey> {
     let bytes: [u8; 32] = bs58::decode(key).into_vec()?.try_into().unwrap();
     Ok(crypto_box::SecretKey::from(bytes))
