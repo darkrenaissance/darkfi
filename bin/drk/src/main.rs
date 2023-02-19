@@ -24,7 +24,8 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{generate, Shell};
 use darkfi::{tx::Transaction, util::parse::decode_base10, zk::halo2::Field};
 use darkfi_money_contract::client::Coin;
 use darkfi_sdk::{
@@ -93,6 +94,12 @@ struct Args {
 enum Subcmd {
     /// Send a ping request to the darkfid RPC endpoint
     Ping,
+
+    /// Generate a SHELL completion script and print to stdout
+    Completions {
+        /// The Shell you want to generate script for
+        shell: Shell,
+    },
 
     /// Wallet operations
     Wallet {
@@ -412,6 +419,12 @@ async fn main() -> Result<()> {
         Subcmd::Ping => {
             let drk = Drk::new(args.endpoint).await?;
             drk.ping().await.with_context(|| "Failed to ping darkfid RPC endpoint")?;
+
+            Ok(())
+        }
+        Subcmd::Completions { shell } => {
+            let mut cmd = Args::command();
+            generate(shell, &mut cmd, "./drk", &mut std::io::stdout());
 
             Ok(())
         }
