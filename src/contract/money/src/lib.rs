@@ -44,6 +44,7 @@ pub enum MoneyFunction {
     Stake = 0x02,
     Unstake = 0x03,
     Mint = 0x04,
+    Freeze = 0x05,
 }
 
 impl TryFrom<u8> for MoneyFunction {
@@ -56,6 +57,7 @@ impl TryFrom<u8> for MoneyFunction {
             0x02 => Ok(Self::Stake),
             0x03 => Ok(Self::Unstake),
             0x04 => Ok(Self::Mint),
+            0x05 => Ok(Self::Freeze),
             _ => Err(ContractError::InvalidFunction),
         }
     }
@@ -85,7 +87,8 @@ darkfi_sdk::define_contract!(
 // These are the different sled trees that will be created
 pub const MONEY_CONTRACT_COIN_ROOTS_TREE: &str = "coin_roots";
 pub const MONEY_CONTRACT_NULLIFIERS_TREE: &str = "nullifiers";
-pub const MONEY_CONTRACT_FIXED_SUPPLY_TREE: &str = "fixed_supply_tokens";
+pub const MONEY_CONTRACT_TOKEN_ROOTS_TREE: &str = "token_roots";
+pub const MONEY_CONTRACT_TOKEN_FREEZE_TREE: &str = "token_freezes";
 pub const MONEY_CONTRACT_INFO_TREE: &str = "info";
 // lead coin, nullifier sled trees.
 pub const MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE: &str = "lead_coin_roots";
@@ -97,15 +100,17 @@ pub const MONEY_CONTRACT_COIN_MERKLE_TREE: &str = "coin_tree";
 pub const MONEY_CONTRACT_LEAD_COIN_MERKLE_TREE: &str = "lead_coin_tree";
 pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &str = "faucet_pubkeys";
 
-/// zkas mint contract namespace
+/// zkas mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_MINT_NS_V1: &str = "Mint_V1";
-/// zkas burn contract namespace
+/// zkas burn circuit namespace
 pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
-/// zkas token mint contract namespace
+/// zkas token mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";
-/// zkas staking coin mint contract namespace
+/// zkas token freeze circuit namespace
+pub const MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1: &str = "TokenFreeze_V1";
+/// zkas staking coin mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_LEAD_MINT_NS_V1: &str = "Lead_Mint_V1";
-/// zkas staking coin burn contract namespace
+/// zkas staking coin burn circuit namespace
 pub const MONEY_CONTRACT_ZKAS_LEAD_BURN_NS_V1: &str = "Lead_Burn_V1";
 
 /// This function runs when the contract is (re)deployed and initialized.
@@ -127,6 +132,7 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     let burn_v1_bincode = include_bytes!("../proof/burn_v1.zk.bin");
 
     let token_mint_v1_bincode = include_bytes!("../proof/token_mint_v1.zk.bin");
+    let token_frz_v1_bincode = include_bytes!("../proof/token_freeze_v1.zk.bin");
 
     let lead_mint_v1_bincode = include_bytes!("../proof/lead_mint_v1.zk.bin");
     let lead_burn_v1_bincode = include_bytes!("../proof/lead_burn_v1.zk.bin");
@@ -146,24 +152,31 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1), &mint_v1_bincode[..])?;
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1), &burn_v1_bincode[..])?;
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1), &token_mint_v1_bincode[..])?;
+    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1), &token_frz_v1_bincode[..])?;
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_LEAD_MINT_NS_V1), &lead_mint_v1_bincode[..])?;
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_LEAD_BURN_NS_V1), &lead_burn_v1_bincode[..])?;
 
-    // Set up a database tree to hold Merkle roots
+    // Set up a database tree to hold Merkle roots of all coins
     if db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE).is_err() {
         db_init(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
     }
 
-    // Set up a database tree to hold nullifiers
+    // Set up a database tree to hold nullifiers of all spent coins
     if db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE).is_err() {
         db_init(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     }
 
-    // Set up a database tree to hold the set of fixed-supply tokens
-    if db_lookup(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE).is_err() {
-        db_init(cid, MONEY_CONTRACT_FIXED_SUPPLY_TREE)?;
+    // Set up a database tree to hold Merkle roots of all tokens
+    if db_lookup(cid, MONEY_CONTRACT_TOKEN_ROOTS_TREE).is_err() {
+        db_init(cid, MONEY_CONTRACT_TOKEN_ROOTS_TREE)?;
     }
 
+    // Set up a database tree to hold a set of frozen token mints
+    if db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE).is_err() {
+        db_init(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
+    }
+
+    /*
     // Set up a database tree to hold lead Merkle roots
     if db_lookup(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE).is_err() {
         db_init(cid, MONEY_CONTRACT_LEAD_COIN_ROOTS_TREE)?;
@@ -173,6 +186,7 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     if db_lookup(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE).is_err() {
         db_init(cid, MONEY_CONTRACT_LEAD_NULLIFIERS_TREE)?;
     }
+    */
 
     // Set up a database tree for arbitrary data
     let info_db = match db_lookup(cid, MONEY_CONTRACT_INFO_TREE) {
@@ -360,8 +374,14 @@ fn get_metadata(_cid: ContractId, ix: &[u8]) -> ContractResult {
             set_return_data(&metadata)?;
             Ok(())
         }
+
         MoneyFunction::Mint => {
             msg!("[Mint] Entered match arm");
+            unimplemented!();
+        }
+
+        MoneyFunction::Freeze => {
+            msg!("[Freeze] Entered match arm");
             unimplemented!();
         }
     }
@@ -748,6 +768,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             msg!("[Mint] Entered match arm");
             unimplemented!();
         }
+
+        MoneyFunction::Freeze => {
+            msg!("[Freeze] Entered match arm");
+            unimplemented!();
+        }
     }
 }
 
@@ -802,6 +827,11 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
 
         MoneyFunction::Mint => {
             msg!("[Mint] Entered match arm");
+            unimplemented!();
+        }
+
+        MoneyFunction::Freeze => {
+            msg!("[Freeze] Entered match arm");
             unimplemented!();
         }
     }
