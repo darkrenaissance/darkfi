@@ -41,7 +41,3 @@ pub use merkle::merkle_add;
 /// Transaction structure
 pub mod tx;
 pub use tx::ContractCall;
-
-/// Utilities
-pub mod util;
-pub use util::set_return_data;

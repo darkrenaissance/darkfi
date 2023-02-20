@@ -24,10 +24,11 @@ use darkfi_sdk::{
         MONEY_CONTRACT_ID,
     },
     db::{
-        db_contains_key, db_del, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME,
+        db_contains_key, db_del, db_get, db_init, db_lookup, db_set, set_return_data,
+        SMART_CONTRACT_ZKAS_DB_NAME,
     },
     error::{ContractError, ContractResult},
-    merkle_add, msg, set_return_data, ContractCall,
+    merkle_add, msg, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
 

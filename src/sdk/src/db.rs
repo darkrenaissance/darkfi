@@ -21,7 +21,6 @@ use darkfi_serial::Encodable;
 use super::{
     crypto::ContractId,
     error::{ContractError, GenericResult},
-    util::{get_object_bytes, get_object_size},
 };
 
 // This might not be the right place for this constant...
@@ -65,6 +64,7 @@ pub fn db_init(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle
     }
 }
 
+/// Everyone can call this. Assumes that the database already went through `db_init()`.
 pub fn db_lookup(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle> {
     unsafe {
         let mut len = 0;
@@ -89,7 +89,7 @@ pub fn db_lookup(contract_id: ContractId, db_name: &str) -> GenericResult<DbHand
 /// Everyone can call this. Will read a key from the key-value store.
 ///
 /// ```
-///     value = db_get(db_handle, key);
+/// value = db_get(db_handle, key);
 /// ```
 pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Option<Vec<u8>>> {
     let mut len = 0;
@@ -143,7 +143,7 @@ pub fn db_contains_key(db_handle: DbHandle, key: &[u8]) -> GenericResult<bool> {
 /// Only update() can call this. Set a value within the transaction.
 ///
 /// ```
-///     db_set(tx_handle, key, value);
+/// db_set(tx_handle, key, value);
 /// ```
 pub fn db_set(db_handle: DbHandle, key: &[u8], value: &[u8]) -> GenericResult<()> {
     // Check entry for tx_handle is not None
@@ -185,7 +185,33 @@ pub fn db_del(db_handle: DbHandle, key: &[u8]) -> GenericResult<()> {
     }
 }
 
+pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
+    unsafe {
+        match set_return_data_(data.as_ptr(), data.len() as u32) {
+            0 => Ok(()),
+            errcode => Err(ContractError::from(errcode)),
+        }
+    }
+}
+
+pub fn put_object_bytes(data: &[u8]) -> i64 {
+    unsafe { put_object_bytes_(data.as_ptr(), data.len() as u32) }
+}
+
+pub fn get_object_bytes(data: &mut [u8], object_index: u32) -> i64 {
+    unsafe { get_object_bytes_(data.as_mut_ptr(), object_index as u32) }
+}
+
+pub fn get_object_size(object_index: u32) -> i64 {
+    unsafe { get_object_size_(object_index as u32) }
+}
+
 extern "C" {
+    fn set_return_data_(ptr: *const u8, len: u32) -> i64;
+    fn put_object_bytes_(ptr: *const u8, len: u32) -> i64;
+    fn get_object_bytes_(ptr: *const u8, len: u32) -> i64;
+    fn get_object_size_(len: u32) -> i64;
+
     fn db_init_(ptr: *const u8, len: u32) -> i32;
     fn db_lookup_(ptr: *const u8, len: u32) -> i32;
     fn db_get_(ptr: *const u8, len: u32) -> i64;

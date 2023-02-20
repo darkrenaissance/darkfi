@@ -22,10 +22,13 @@ use darkfi_sdk::{
         pallas, pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, Coin,
         ContractId, MerkleNode, MerkleTree, PublicKey, DARK_TOKEN_ID,
     },
-    db::{db_contains_key, db_get, db_init, db_lookup, db_set, SMART_CONTRACT_ZKAS_DB_NAME},
+    db::{
+        db_contains_key, db_get, db_init, db_lookup, db_set, set_return_data,
+        SMART_CONTRACT_ZKAS_DB_NAME,
+    },
     error::ContractResult,
     merkle::merkle_add,
-    msg, set_return_data, ContractCall,
+    msg, ContractCall,
 };
 
 use darkfi_sdk::error::ContractError;
