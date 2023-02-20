@@ -1,6 +1,5 @@
 # Use: docker build . --pull --network=host -t darkfi:alpine -f ./contrib/docker/Dockerfile.alpine
 #   optionally with: --build-arg ALPINE_VER=3.17 --build-arg RUST_VER=nightly
-# The wallet test fail problem (see below) was the same for alpine 3.17 and rust nightly
 
 ARG RUST_VER=1.67
 ARG ALPINE_VER=3.17
@@ -10,26 +9,14 @@ FROM alpine:${ALPINE_VER} as rust_builder
 ARG RUST_VER
 ARG ALPINE_VER
 
-RUN echo "=======================================================" \
-    &&echo "===>>>>> The following error will occur during the test::" \
-    && echo "test net::hosts::tests::test_filter_invalid ... ok" \
-    && echo "test consensus::state::tests::calc_sigmas_test ... ok" \
-    && echo "error: test failed, to rerun pass '-p darkfi --lib'" \
-    && echo ".... process didn't exit successfully: /opt/darkfi/target/release/deps/darkfi-... (signal: 11, SIGSEGV: invalid memory reference)" \
-    && echo "rust ${RUST_VER} / alpine ${ALPINE_VER}" \
-    && cat /etc/os-release  \
-    && echo "====>>>>> wait 30 sec to continue; CTRL+C to break" \
-    && sleep 30
-
 RUN apk update
 
 RUN apk add cmake jq wget clang curl gcc make llvm-dev \
   openssl-dev expat-dev freetype-dev libudev-zero-dev \
-  libgudev-dev pkgconf clang-dev fontconfig-dev build-base bash
+  libgudev-dev pkgconf clang-dev fontconfig-dev bash \
+  ttf-opensans musl-dev
 
-# build-base ? musl-dev was enough, maybe libc-dev too
-
-RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}" --default-host x86_64-unknown-linux-musl
 
 ENV PATH="/root/.cargo/bin:${PATH}"
 
@@ -44,6 +31,8 @@ WORKDIR /opt/darkfi
 
 COPY . ./
 
+ARG RUSTFLAGS="-C target-feature=-crt-static"
+
 RUN make clean
 
 RUN rm -rf ./target/
@@ -53,10 +42,10 @@ RUN bash -c 'make -j test &&  make -j'
 # 3. stage
 FROM alpine:${ALPINE_VER}
 
-RUN apk update && apk add openssl  # ?? TODO lato-fonts
+RUN apk update && apk add openssl ttf-opensans  # ?? TODO lato-fonts
 
 WORKDIR /opt/darkfi
 
-COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid /opt/darkfi/tau \
-  /opt/darkfi/taud /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
-  /opt/darkfi/darkwikid /opt/darkfi/darkwiki /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./
+COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
+   /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
+   /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./
