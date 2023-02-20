@@ -83,6 +83,8 @@
   to the Jarvis book.
 * [Algebraic Number Theory](https://www.jmilne.org/math/CourseNotes/ANT.pdf)
   by Milne, are course notes written which are clear and concise.
+* Short Algebraic Number Theory [course](http://www.fen.bilkent.edu.tr/~franz/ant06.html),
+  see also the [lecture notes](http://www.fen.bilkent.edu.tr/~franz/ant06/ant.pdf).
 * Cohen book on computational number theory is a gold mine of standard algos.
 * LaVeque Fundamentals of Number Theory
 
