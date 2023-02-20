@@ -598,13 +598,19 @@ async fn main() -> Result<()> {
                     };
 
                     let spend_hook = if coin.0.note.spend_hook != zero {
-                        format!("{:?}", coin.0.note.spend_hook)
+                        format!(
+                            "{}",
+                            bs58::encode(&serialize(&coin.0.note.spend_hook)).into_string()
+                        )
                     } else {
                         String::from("-")
                     };
 
                     let user_data = if coin.0.note.user_data != zero {
-                        format!("{:?}", coin.0.note.user_data)
+                        format!(
+                            "{}",
+                            bs58::encode(&serialize(&coin.0.note.user_data)).into_string()
+                        )
                     } else {
                         String::from("-")
                     };
