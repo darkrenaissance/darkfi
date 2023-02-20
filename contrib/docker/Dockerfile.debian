@@ -4,8 +4,8 @@
 #   rust nightly with: BUILD_OS_VER=bullseye-slim RUN_OS_VER=bullseye-slim RUST_VER=nightly REPOSITORY=rustlang/rust
 
 ARG RUST_VER=1.67  # 1.65
-ARG BUILD_OS_VER=slim-bullseye  # slim-buster
-ARG RUN_OS_VER=bullseye-slim    # buster-slim
+ARG BUILD_OS_VER=slim-bookworm  # (12); slim-bullseye (11); slim-buster (10)
+ARG RUN_OS_VER=bookworm-slim    # (12); bullseye-slim (11); buster-slim (10)
 ARG REPOSITORY=rust             # rustlang/rust
 
 FROM ${REPOSITORY}:${RUST_VER}-${BUILD_OS_VER} as builder
