@@ -581,11 +581,32 @@ async fn main() -> Result<()> {
 
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Coin", "Spent", "Token ID", "Aliases", "Value"]);
+                table.set_titles(row![
+                    "Coin",
+                    "Spent",
+                    "Token ID",
+                    "Aliases",
+                    "Value",
+                    "Spend Hook",
+                    "User Data"
+                ]);
+                let zero = pallas::Base::zero();
                 for coin in coins {
                     let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
                         Some(a) => a,
                         None => "-",
+                    };
+
+                    let spend_hook = if coin.0.note.spend_hook != zero {
+                        format!("{:?}", coin.0.note.spend_hook)
+                    } else {
+                        String::from("-")
+                    };
+
+                    let user_data = if coin.0.note.user_data != zero {
+                        format!("{:?}", coin.0.note.user_data)
+                    } else {
+                        String::from("-")
                     };
 
                     table.add_row(row![
@@ -593,7 +614,9 @@ async fn main() -> Result<()> {
                         coin.1,
                         coin.0.note.token_id,
                         aliases,
-                        format!("{} ({})", coin.0.note.value, encode_base10(coin.0.note.value, 8))
+                        format!("{} ({})", coin.0.note.value, encode_base10(coin.0.note.value, 8)),
+                        spend_hook,
+                        user_data
                     ]);
                 }
 
