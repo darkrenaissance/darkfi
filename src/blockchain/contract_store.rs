@@ -104,8 +104,8 @@ impl ContractStateStore {
         let contract_id_bytes = serialize(contract_id);
         let ptr = contract_id.hash_state_id(tree_name);
 
-        // See if there are existing state trees. If not, just start with an
-        // empty vector.
+        // See if there are existing state trees.
+        // If not, just start with an empty vector.
         let mut state_pointers: Vec<[u8; 32]> = if self.0.contains_key(&contract_id_bytes)? {
             let bytes = self.0.get(&contract_id_bytes)?.unwrap();
             deserialize(&bytes)?

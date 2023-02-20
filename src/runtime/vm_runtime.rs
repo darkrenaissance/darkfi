@@ -43,7 +43,7 @@ const MEMORY: &str = "memory";
 /// Gas limit for a contract
 const GAS_LIMIT: u64 = 200000000;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum ContractSection {
     /// Setup function of a contract
     Deploy,
