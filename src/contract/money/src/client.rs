@@ -50,6 +50,9 @@ use crate::model::{
     StakedInput, StakedOutput,
 };
 
+/// Client API for token minting and freezing
+pub mod token_mint;
+
 // Wallet SQL table constant names. These have to represent the SQL schema.
 // TODO: They should also ideally be prefixed with the contract ID to avoid
 //       collisions.
@@ -80,6 +83,11 @@ pub const MONEY_COINS_COL_SECRET: &str = "secret";
 pub const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
 pub const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
 pub const MONEY_COINS_COL_MEMO: &str = "memo";
+
+pub const MONEY_TOKENS_TABLE: &str = "money_tokens";
+pub const MONEY_TOKENS_COL_SECRET: &str = "secret";
+pub const MONEY_TOKENS_COL_TOKEN_ID: &str = "token_id";
+pub const MONEY_TOKENS_COL_FROZEN: &str = "frozen";
 
 pub const MONEY_ALIASES_TABLE: &str = "money_aliases";
 pub const MONEY_ALIASES_COL_ALIAS: &str = "alias";

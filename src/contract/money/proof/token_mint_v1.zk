@@ -1,3 +1,4 @@
+# Circuit used to mint arbitrary coins given a mint authority secret.
 constant "TokenMint_V1" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
@@ -9,15 +10,11 @@ contract "TokenMint_V1" {
 	Base mint_authority,
 	# Token supply
 	Base supply,
-	# Fixed supply
-	Base fixed_supply,
 	# Recipient's public key x coordinate
 	Base rcpt_x,
 	# Recipient's public key y coordinate
 	Base rcpt_y,
-	# Unique serial number corresponding to this coin
-	Base serial,
-	# Random blinding factor for coin
+	# Random blinding factor for the minted coin
 	Base coin_blind,
 	# Allows composing this ZK proof to invoke other contracts
 	Base spend_hook,
@@ -41,12 +38,7 @@ circuit "TokenMint_V1" {
 	token_id = poseidon_hash(mint_x, mint_y);
 	constrain_instance(token_id);
 
-	# Constrain whether this token has a fixed supply or not.
-	# In case it is, subsequent mints will not be allowed.
-	bool_check(fixed_supply);
-	constrain_instance(fixed_supply);
-
-	# Poseidon hash of the coin
+	# Poseidon hash of the minted coin
 	C = poseidon_hash(
 		rcpt_x,
 		rcpt_y,

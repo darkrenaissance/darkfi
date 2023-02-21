@@ -21,6 +21,17 @@ use darkfi_sdk::crypto::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyMintParams {
+    pub input: ClearInput,
+    pub output: Output,
+}
+
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyMintUpdate {
+    pub coin: Coin,
+}
+
 /// Inputs and outputs for staking coins
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyStakeParams {
