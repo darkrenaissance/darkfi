@@ -43,7 +43,7 @@ outbound_connections=5
 seeds = ["tls://lilith0.dark.fi:25551", "tls://lilith1.dark.fi:25551"]
 
 # Prefered transports for outbound connections
-#outbound_transports = ["tls", "tcp"]
+outbound_transports = ["tls"]
 
 ## Only used for debugging. Compromises privacy when set.
 #node_id = "foo"

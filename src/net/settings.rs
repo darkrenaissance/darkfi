@@ -214,8 +214,6 @@ pub fn get_outbound_transports(opt_outbound_transports: Vec<String>) -> Vec<Tran
     if outbound_transports.is_empty() {
         let tls = TransportName::Tcp(Some("tls".into()));
         outbound_transports.push(tls);
-        let tcp = TransportName::Tcp(None);
-        outbound_transports.push(tcp);
     }
 
     outbound_transports
