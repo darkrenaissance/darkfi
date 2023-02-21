@@ -16,6 +16,28 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// use std::io;
+use darkfi::event_graph::EventMsg;
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-// use darkfi_serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable};
+#[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
+pub struct PrivMsgEvent {
+    pub nick: String,
+    pub msg: String,
+    pub target: String,
+}
+
+impl std::string::ToString for PrivMsgEvent {
+    fn to_string(&self) -> String {
+        format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n", self.nick, self.target, self.msg)
+    }
+}
+
+impl EventMsg for PrivMsgEvent {
+    fn new() -> Self {
+        Self {
+            nick: "root".to_string(),
+            msg: "Let there be dark".to_string(),
+            target: "root".to_string(),
+        }
+    }
+}

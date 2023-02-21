@@ -32,7 +32,6 @@ use darkfi::{
         model::{Event, EventId, ModelPtr},
         protocol_event::{Seen, SeenPtr, UnreadEventsPtr},
         view::ViewPtr,
-        EventAction, PrivMsgEvent,
     },
     net::P2pPtr,
     system::SubscriberPtr,
@@ -40,7 +39,10 @@ use darkfi::{
     Error, Result,
 };
 
-use crate::settings::{Args, ChannelInfo, ContactInfo};
+use crate::{
+    settings::{Args, ChannelInfo, ContactInfo},
+    PrivMsgEvent,
+};
 
 mod client;
 
@@ -114,21 +116,21 @@ pub enum NotifierMsg {
 pub struct IrcServer {
     settings: Args,
     p2p: P2pPtr,
-    model: ModelPtr,
-    view: ViewPtr,
-    unread_events: UnreadEventsPtr,
+    model: ModelPtr<PrivMsgEvent>,
+    view: ViewPtr<PrivMsgEvent>,
+    unread_events: UnreadEventsPtr<PrivMsgEvent>,
     clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     seen: SeenPtr<EventId>,
-    missed_events: Arc<Mutex<Vec<Event>>>,
+    missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
 }
 
 impl IrcServer {
     pub async fn new(
         settings: Args,
         p2p: P2pPtr,
-        model: ModelPtr,
-        view: ViewPtr,
-        unread_events: UnreadEventsPtr,
+        model: ModelPtr<PrivMsgEvent>,
+        view: ViewPtr<PrivMsgEvent>,
+        unread_events: UnreadEventsPtr<PrivMsgEvent>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<Self> {
         let seen = Seen::new();
@@ -177,9 +179,9 @@ impl IrcServer {
     }
 
     async fn listen_to_view(
-        view: ViewPtr,
+        view: ViewPtr<PrivMsgEvent>,
         seen: SeenPtr<EventId>,
-        missed_events: Arc<Mutex<Vec<Event>>>,
+        missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
         loop {
@@ -190,9 +192,8 @@ impl IrcServer {
 
             missed_events.lock().await.push(event.clone());
 
-            let msg = match event.action {
-                EventAction::PrivMsg(x) => x,
-            };
+            let msg = event.action.clone();
+
             clients_subscriptions.notify(ClientSubMsg::Privmsg(msg)).await;
         }
     }
@@ -200,9 +201,9 @@ impl IrcServer {
     /// Start listening to msgs from irc clients
     pub async fn listen_to_msgs(
         p2p: P2pPtr,
-        model: ModelPtr,
+        model: ModelPtr<PrivMsgEvent>,
         seen: SeenPtr<EventId>,
-        unread_events: UnreadEventsPtr,
+        unread_events: UnreadEventsPtr<PrivMsgEvent>,
         recv: smol::channel::Receiver<(NotifierMsg, u64)>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
@@ -214,7 +215,7 @@ impl IrcServer {
                 NotifierMsg::Privmsg(msg) => {
                     let event = Event {
                         previous_event_hash: prev,
-                        action: EventAction::PrivMsg(msg.clone()),
+                        action: msg.clone(),
                         timestamp: get_current_time(),
                         read_confirms: 0,
                     };

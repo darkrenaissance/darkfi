@@ -17,6 +17,7 @@
  */
 
 use async_std::sync::{Arc, Mutex};
+use darkfi_serial::{Decodable, Encodable};
 use std::collections::HashMap;
 
 use crate::{
@@ -27,19 +28,24 @@ use crate::{
     Result,
 };
 
-pub type ViewPtr = Arc<Mutex<View>>;
+use super::EventMsg;
 
-pub struct View {
-    pub seen: HashMap<EventId, Event>,
-    pub events_queue: EventsQueuePtr,
+pub type ViewPtr<T> = Arc<Mutex<View<T>>>;
+
+pub struct View<T: Send + Sync> {
+    pub seen: HashMap<EventId, Event<T>>,
+    pub events_queue: EventsQueuePtr<T>,
 }
 
-impl View {
-    pub fn new(events_queue: EventsQueuePtr) -> Self {
+impl<T> View<T>
+where
+    T: Send + Sync + Encodable + Decodable + Clone + EventMsg,
+{
+    pub fn new(events_queue: EventsQueuePtr<T>) -> Self {
         Self { seen: HashMap::new(), events_queue }
     }
 
-    pub async fn process(&mut self) -> Result<Event> {
+    pub async fn process(&mut self) -> Result<Event<T>> {
         // loop {
         let new_event = self.events_queue.fetch().await?;
         Ok(new_event)

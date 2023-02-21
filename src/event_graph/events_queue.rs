@@ -17,24 +17,33 @@
  */
 
 use async_std::sync::Arc;
+use darkfi_serial::{Decodable, Encodable};
 
 use crate::{event_graph::model::Event, Error, Result};
 
-pub type EventsQueuePtr = Arc<EventsQueue>;
+use super::EventMsg;
 
-pub struct EventsQueue(smol::channel::Sender<Event>, smol::channel::Receiver<Event>);
+pub type EventsQueuePtr<T> = Arc<EventsQueue<T>>;
 
-impl EventsQueue {
-    pub fn new() -> EventsQueuePtr {
+pub struct EventsQueue<T: Send + Sync>(
+    smol::channel::Sender<Event<T>>,
+    smol::channel::Receiver<Event<T>>,
+);
+
+impl<T> EventsQueue<T>
+where
+    T: Send + Sync + Encodable + Decodable + Clone + EventMsg,
+{
+    pub fn new() -> EventsQueuePtr<T> {
         let (sn, rv) = smol::channel::unbounded();
         Arc::new(Self(sn, rv))
     }
 
-    pub async fn fetch(&self) -> Result<Event> {
+    pub async fn fetch(&self) -> Result<Event<T>> {
         self.1.recv().await.map_err(Error::from)
     }
 
-    pub async fn dispatch(&self, event: &Event) -> Result<()> {
+    pub async fn dispatch(&self, event: &Event<T>) -> Result<()> {
         self.0.send(event.clone()).await.map_err(Error::from)
     }
 }

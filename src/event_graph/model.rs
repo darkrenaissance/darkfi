@@ -16,31 +16,34 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, collections::HashMap, fmt};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug};
 
 use async_std::sync::{Arc, Mutex};
-use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use log::error;
 use ripemd::{Digest, Ripemd256};
 
 use crate::event_graph::events_queue::EventsQueuePtr;
 
-use super::{EventAction, PrivMsgEvent};
+use super::EventMsg;
 
 pub type EventId = [u8; 32];
 
 const MAX_DEPTH: u32 = 300;
 const MAX_HEIGHT: u32 = 300;
 
-#[derive(SerialEncodable, SerialDecodable, Clone)]
-pub struct Event {
+#[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
+pub struct Event<T: Send + Sync> {
     pub previous_event_hash: EventId,
-    pub action: EventAction,
+    pub action: T,
     pub timestamp: u64,
     pub read_confirms: u8,
 }
 
-impl Event {
+impl<T> Event<T>
+where
+    T: Send + Sync + Encodable + Decodable + Clone + EventMsg,
+{
     pub fn hash(&self) -> EventId {
         let mut bytes = Vec::new();
         let mut event_to_be_hashed = self.clone();
@@ -56,45 +59,34 @@ impl Event {
     }
 }
 
-impl fmt::Debug for Event {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.action {
-            EventAction::PrivMsg(event) => {
-                write!(f, "PRIVMSG {}: {} ({})", event.nick, event.msg, self.timestamp)
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
-struct EventNode {
+struct EventNode<T: Send + Sync> {
     // Only current root has this set to None
     parent: Option<EventId>,
-    event: Event,
+    event: Event<T>,
     children: Vec<EventId>,
 }
 
-pub type ModelPtr = Arc<Mutex<Model>>;
+pub type ModelPtr<T> = Arc<Mutex<Model<T>>>;
 
-pub struct Model {
+pub struct Model<T: Send + Sync + Debug> {
     // This is periodically updated so we discard old nodes
     current_root: EventId,
-    orphans: HashMap<EventId, Event>,
-    event_map: HashMap<EventId, EventNode>,
-    events_queue: EventsQueuePtr,
+    orphans: HashMap<EventId, Event<T>>,
+    event_map: HashMap<EventId, EventNode<T>>,
+    events_queue: EventsQueuePtr<T>,
 }
 
-impl Model {
-    pub fn new(events_queue: EventsQueuePtr) -> Self {
+impl<T> Model<T>
+where
+    T: Send + Sync + Encodable + Decodable + Clone + EventMsg + Debug,
+{
+    pub fn new(events_queue: EventsQueuePtr<T>) -> Self {
         let root_node = EventNode {
             parent: None,
             event: Event {
                 previous_event_hash: [0u8; 32],
-                action: EventAction::PrivMsg(PrivMsgEvent {
-                    nick: "root".to_string(),
-                    msg: "Let there be dark".to_string(),
-                    target: "root".to_string(),
-                }),
+                action: T::new(),
                 timestamp: 1674512021323,
                 read_confirms: 0,
             },
@@ -113,12 +105,12 @@ impl Model {
         self.find_head()
     }
 
-    pub async fn add(&mut self, event: Event) {
+    pub async fn add(&mut self, event: Event<T>) {
         self.orphans.insert(event.hash(), event);
         self.reorganize().await;
     }
 
-    pub fn is_orphan(&self, event: &Event) -> bool {
+    pub fn is_orphan(&self, event: &Event<T>) -> bool {
         !self.event_map.contains_key(&event.previous_event_hash)
     }
 
@@ -136,11 +128,11 @@ impl Model {
         leaves
     }
 
-    pub fn get_event(&self, event: &EventId) -> Option<Event> {
+    pub fn get_event(&self, event: &EventId) -> Option<Event<T>> {
         self.event_map.get(event).map(|en| en.event.clone())
     }
 
-    pub fn get_offspring(&self, event: &EventId) -> Vec<Event> {
+    pub fn get_offspring(&self, event: &EventId) -> Vec<Event<T>> {
         let mut offspring = vec![];
         let mut event = *event;
         let head = self.find_head();
@@ -410,22 +402,36 @@ mod tests {
     use super::*;
     use crate::event_graph::{events_queue::EventsQueue, get_current_time};
 
+    #[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
+    pub struct PrivMsgEvent {
+        pub nick: String,
+        pub msg: String,
+        pub target: String,
+    }
+
+    impl std::string::ToString for PrivMsgEvent {
+        fn to_string(&self) -> String {
+            format!(":{}!anon@dark.fi PRIVMSG {} :{}\r\n", self.nick, self.target, self.msg)
+        }
+    }
+
+    impl EventMsg for PrivMsgEvent {
+        fn new() -> Self {
+            Self {
+                nick: "root".to_string(),
+                msg: "Let there be dark".to_string(),
+                target: "root".to_string(),
+            }
+        }
+    }
+
     fn create_message(
         previous_event_hash: EventId,
         nick: &str,
         msg: &str,
         timestamp: u64,
-    ) -> Event {
-        Event {
-            previous_event_hash,
-            action: EventAction::PrivMsg(PrivMsgEvent {
-                nick: nick.to_string(),
-                msg: msg.to_string(),
-                target: "".to_string(),
-            }),
-            timestamp,
-            read_confirms: 4,
-        }
+    ) -> Event<PrivMsgEvent> {
+        Event { previous_event_hash, action: PrivMsgEvent::new(), timestamp, read_confirms: 4 }
     }
 
     /* THIS IS FAILING
@@ -610,7 +616,7 @@ mod tests {
 
     #[test]
     fn test_event_hash() {
-        let events_queue = EventsQueue::new();
+        let events_queue = EventsQueue::<PrivMsgEvent>::new();
         let model = Model::new(events_queue);
         let root_id = model.current_root;
 

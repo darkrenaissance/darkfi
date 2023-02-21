@@ -50,11 +50,12 @@ use crate::{
     crypto::KeyPair,
     // events_queue::EventsQueue,
     irc::IrcServer,
+    privmsg::PrivMsgEvent,
+    // view::View,
     // model::Model,
     // protocol_event::{ProtocolEvent, Seen, UnreadEvents},
     rpc::JsonRpcInterface,
     settings::{Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
-    // view::View,
 };
 
 async_daemonize!(realmain);
@@ -83,7 +84,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     ////////////////////
     // Initialize the base structures
     ////////////////////
-    let events_queue = EventsQueue::new();
+    let events_queue = EventsQueue::<PrivMsgEvent>::new();
     let model = Arc::new(Mutex::new(Model::new(events_queue.clone())));
     let view = Arc::new(Mutex::new(View::new(events_queue)));
     let model_clone = model.clone();

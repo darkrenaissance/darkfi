@@ -24,9 +24,10 @@ use crypto_box::{
 };
 use rand::rngs::OsRng;
 
-use darkfi::event_graph::PrivMsgEvent;
-
-use crate::settings::{ChannelInfo, ContactInfo};
+use crate::{
+    privmsg::PrivMsgEvent,
+    settings::{ChannelInfo, ContactInfo},
+};
 
 #[derive(serde::Serialize)]
 pub struct KeyPair {

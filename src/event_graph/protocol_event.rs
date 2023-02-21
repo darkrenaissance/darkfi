@@ -16,15 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Debug,
+};
 
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
 
-use super::get_current_time;
+use super::{get_current_time, EventMsg};
 use crate::{
     event_graph::model::{Event, EventId, ModelPtr},
     net,
@@ -103,15 +106,18 @@ impl<T: Eq + PartialEq + Clone> Seen<T> {
     }
 }
 
-pub type UnreadEventsPtr = Arc<Mutex<UnreadEvents>>;
+pub type UnreadEventsPtr<T> = Arc<Mutex<UnreadEvents<T>>>;
 
 #[derive(Debug)]
-pub struct UnreadEvents {
-    pub events: HashMap<EventId, Event>,
+pub struct UnreadEvents<T: Send + Sync> {
+    pub events: HashMap<EventId, Event<T>>,
 }
 
-impl UnreadEvents {
-    pub fn new() -> UnreadEventsPtr {
+impl<T> UnreadEvents<T>
+where
+    T: Send + Sync + Encodable + Decodable + Clone + EventMsg,
+{
+    pub fn new() -> UnreadEventsPtr<T> {
         Arc::new(Mutex::new(Self { events: HashMap::new() }))
     }
 
@@ -119,13 +125,13 @@ impl UnreadEvents {
         self.events.contains_key(key)
     }
 
-    fn _get(&self, key: &EventId) -> Option<Event> {
+    fn _get(&self, key: &EventId) -> Option<Event<T>> {
         self.events.get(key).cloned()
     }
 
     // Increase the read_confirms for an event, if it has exceeded the MAX_CONFIRM
     // then remove it from the hash_map and return Some(event), otherwise return None
-    fn inc_read_confirms(&mut self, key: &EventId) -> Option<Event> {
+    fn inc_read_confirms(&mut self, key: &EventId) -> Option<Event<T>> {
         let mut result = None;
 
         if let Some(event) = self.events.get_mut(key) {
@@ -142,7 +148,7 @@ impl UnreadEvents {
         result
     }
 
-    pub fn insert(&mut self, event: &Event) {
+    pub fn insert(&mut self, event: &Event<T>) {
         // prune expired events
         let mut prune_ids = vec![];
         for (id, e) in self.events.iter() {
@@ -158,37 +164,43 @@ impl UnreadEvents {
     }
 }
 
-pub struct ProtocolEvent {
+pub struct ProtocolEvent<T>
+where
+    T: Send + Sync + Encodable + Decodable + Debug + 'static,
+{
     jobsman: net::ProtocolJobsManagerPtr,
-    event_sub: net::MessageSubscription<Event>,
+    event_sub: net::MessageSubscription<Event<T>>,
     inv_sub: net::MessageSubscription<Inv>,
     getdata_sub: net::MessageSubscription<GetData>,
     syncevent_sub: net::MessageSubscription<SyncEvent>,
     p2p: net::P2pPtr,
     channel: net::ChannelPtr,
-    model: ModelPtr,
+    model: ModelPtr<T>,
     seen_event: SeenPtr<EventId>,
     seen_inv: SeenPtr<InvId>,
-    unread_events: UnreadEventsPtr,
+    unread_events: UnreadEventsPtr<T>,
 }
 
-impl ProtocolEvent {
+impl<T> ProtocolEvent<T>
+where
+    T: Send + Sync + Encodable + Decodable + Clone + EventMsg + Debug + 'static,
+{
     pub async fn init(
         channel: net::ChannelPtr,
         p2p: net::P2pPtr,
-        model: ModelPtr,
+        model: ModelPtr<T>,
         seen_event: SeenPtr<EventId>,
         seen_inv: SeenPtr<InvId>,
-        unread_events: UnreadEventsPtr,
+        unread_events: UnreadEventsPtr<T>,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
-        message_subsytem.add_dispatch::<Event>().await;
+        message_subsytem.add_dispatch::<Event<T>>().await;
         message_subsytem.add_dispatch::<Inv>().await;
         message_subsytem.add_dispatch::<GetData>().await;
         message_subsytem.add_dispatch::<SyncEvent>().await;
 
         let event_sub =
-            channel.clone().subscribe_msg::<Event>().await.expect("Missing Event dispatcher!");
+            channel.clone().subscribe_msg::<Event<T>>().await.expect("Missing Event dispatcher!");
 
         let inv_sub = channel.subscribe_msg::<Inv>().await.expect("Missing Inv dispatcher!");
 
@@ -330,14 +342,14 @@ impl ProtocolEvent {
         }
     }
 
-    async fn new_event(&self, event: &Event) -> Result<()> {
+    async fn new_event(&self, event: &Event<T>) -> Result<()> {
         let mut model = self.model.lock().await;
         model.add(event.clone()).await;
 
         Ok(())
     }
 
-    async fn send_inv(&self, event: &Event) -> Result<()> {
+    async fn send_inv(&self, event: &Event<T>) -> Result<()> {
         let id = OsRng.next_u64();
         self.p2p.broadcast(Inv { invs: vec![InvItem { id, hash: event.hash() }] }).await?;
 
@@ -351,7 +363,10 @@ impl ProtocolEvent {
 }
 
 #[async_trait]
-impl net::ProtocolBase for ProtocolEvent {
+impl<T> net::ProtocolBase for ProtocolEvent<T>
+where
+    T: Send + Sync + Encodable + Decodable + Clone + EventMsg + Debug,
+{
     async fn start(self: Arc<Self>, executor: Arc<smol::Executor<'_>>) -> Result<()> {
         debug!(target: "ircd", "ProtocolEvent::start() [START]");
         self.jobsman.clone().start(executor.clone());
@@ -369,7 +384,10 @@ impl net::ProtocolBase for ProtocolEvent {
     }
 }
 
-impl net::Message for Event {
+impl<T> net::Message for Event<T>
+where
+    T: Send + Sync + Decodable + Encodable + 'static,
+{
     fn name() -> &'static str {
         "event"
     }

@@ -26,17 +26,13 @@ use futures::{
 
 use log::{debug, error, info, warn};
 
-use darkfi::{
-    event_graph::{model::Event, EventAction, PrivMsgEvent},
-    system::Subscription,
-    Error, Result,
-};
+use darkfi::{event_graph::model::Event, system::Subscription, Error, Result};
 
 use crate::{
     crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
     settings,
     settings::RPL,
-    ChannelInfo,
+    ChannelInfo, PrivMsgEvent,
 };
 
 use super::{ClientSubMsg, IrcConfig, NotifierMsg};
@@ -53,7 +49,7 @@ pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     server_notifier: smol::channel::Sender<(NotifierMsg, u64)>,
     subscription: Subscription<ClientSubMsg>,
 
-    missed_events: Arc<Mutex<Vec<Event>>>,
+    missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
 }
 
 impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
@@ -64,7 +60,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         irc_config: IrcConfig,
         server_notifier: smol::channel::Sender<(NotifierMsg, u64)>,
         subscription: Subscription<ClientSubMsg>,
-        missed_events: Arc<Mutex<Vec<Event>>>,
+        missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
     ) -> Self {
         Self {
             write_stream,
@@ -565,13 +561,10 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         hash_vec.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
 
         for event in hash_vec {
-            match event.action {
-                EventAction::PrivMsg(mut m) => {
-                    if let Err(e) = self.process_msg(&mut m).await {
-                        error!("[CLIENT {}] Process msg: {}", self.address, e);
-                        break
-                    }
-                }
+            let mut action = event.action.clone();
+            if let Err(e) = self.process_msg(&mut action).await {
+                error!("[CLIENT {}] Process msg: {}", self.address, e);
+                continue
             }
         }
         Ok(())
