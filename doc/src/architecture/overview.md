@@ -4,14 +4,6 @@ DarkFi is a layer one proof-of-stake blockchain that supports anonymous
 applications. It is currently under development. This overview will
 outline a few key terms that help explain DarkFi.
 
-**Cashier:** The Cashier is the entry and exit point to the DarkFi
-network from other blockchains such as Ethereum, Bitcoin and Solana. It is
-essentially the bridge. Its role is to exchange cryptocurrency assets for
-anonymous _darkened_ tokens that are pegged to the underlying currency,
-and visa versa. Currently, the role of the Cashier is trusted and
-centralized. As a next step, DarkFi plans to implement trust-minimized
-bridges and eventually fully trustless bridges.
-
 **Blockchain:** The DarkFi blockchain is based off proof of stake Ouroboros Crypsinous, tuned with a discrete controller to achieve a stable supply, currently
 under development to achieve instant finality using parallel leader election
 blockchain. uses Drk consensus token.
