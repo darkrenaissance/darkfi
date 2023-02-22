@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS money_coins (
 	memo BLOB
 );
 
+-- Arbitrary tokens
+CREATE TABLE IF NOT EXISTS money_tokens (
+	mint_authority BLOB PRIMARY KEY NOT NULL,
+	token_id BLOB NOT NULL,
+	is_frozen INTEGER NOT NULL
+);
+
 -- The token aliases in our wallet
 CREATE TABLE IF NOT EXISTS money_aliases (
 	alias BLOB PRIMARY KEY NOT NULL,

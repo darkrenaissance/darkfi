@@ -53,12 +53,16 @@ impl TryFrom<u8> for MoneyFunction {
 /// Internal contract errors
 pub mod error;
 
+/// Call parameters definitions
+pub mod model;
+
 #[cfg(not(feature = "no-entrypoint"))]
 /// WASM entrypoint functions
 pub mod entrypoint;
 
-/// Call parameters definitions
-pub mod model;
+#[cfg(feature = "client")]
+/// Client API for interaction with this smart contract
+pub mod client;
 
 // These are the different sled trees that will be created
 pub const MONEY_CONTRACT_INFO_TREE: &str = "info";
