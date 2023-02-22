@@ -1,16 +1,10 @@
 constant "TokenFreeze_V1" {
-	EcFixedPointShort VALUE_COMMIT_VALUE,
-	EcFixedPoint VALUE_COMMIT_RANDOM,
 	EcFixedPointBase NULLIFIER_K,
 }
 
 contract "TokenFreeze_V1" {
 	# Token mint authority secret
 	Base mint_authority,
-	# Leaf position in the Merkle tree of tokens
-	Uint32 leaf_pos,
-	# Merkle authentication path
-	MerklePath path,
 }
 
 circuit "TokenFreeze_V1" {
@@ -24,8 +18,4 @@ circuit "TokenFreeze_V1" {
 	# Derive the token ID
 	token_id = poseidon_hash(mint_x, mint_y);
 	constrain_instance(token_id);
-
-	# Prove that this token was minted first
-	root = merkle_root(leaf_pos, path, token_id);
-	constrain_instance(root);
 }

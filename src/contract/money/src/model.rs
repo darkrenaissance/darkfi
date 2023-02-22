@@ -16,102 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{
-    pallas, Coin, MerkleNode, Nullifier, PublicKey, TokenId, ValueBlind, ValueCommit,
+use darkfi_sdk::{
+    crypto::{note::AeadEncryptedNote, Coin, MerkleNode, Nullifier, PublicKey, TokenId},
+    pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyMintParams {
-    pub input: ClearInput,
-    pub output: Output,
-}
-
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyMintUpdate {
-    pub coin: Coin,
-}
-
-/// Inputs and outputs for staking coins
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyStakeParams {
-    /// Anonymous inputs
-    pub inputs: Vec<Input>,
-    /// Anonymous outputs for staking
-    pub outputs: Vec<StakedOutput>,
-    /// Token blind to reveal token ID
-    pub token_blind: ValueBlind,
-}
-
-/// Inputs and outputs for unstaking coins
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyUnstakeParams {
-    /// Anonymous staked inputs
-    pub inputs: Vec<StakedInput>,
-    /// Anonymous outputs
-    pub outputs: Vec<Output>,
-    /// Token blind to reveal token ID
-    pub token_blind: ValueBlind,
-}
-
-/// Staked anonymous input
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct StakedInput {
-    /// Revealed nullifier
-    pub nullifier: Nullifier,
-    /// Pedersen commitment for the output's value
-    pub value_commit: ValueCommit,
-    /// Minted coin
-    pub coin_commit_hash: pallas::Base,
-    /// coin pk hash
-    pub coin_pk_hash: pallas::Base,
-    /// coin commitment root
-    pub coin_commit_root: MerkleNode,
-    /// sk root of merkle tree
-    pub sk_root: MerkleNode,
-}
-
-/// Staked anonymous output
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct StakedOutput {
-    /// Pedersen commitment for the output's value
-    pub value_commit: ValueCommit,
-    /// Minted coin
-    pub coin_commit_hash: pallas::Base,
-    /// coin pk hash
-    pub coin_pk_hash: pallas::Base,
-}
-
-/// Inputs and outputs for a payment
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyTransferParams {
-    /// Clear inputs
-    pub clear_inputs: Vec<ClearInput>,
-    /// Anonymous inputs
-    pub inputs: Vec<Input>,
-    /// Anonymous outputs
-    pub outputs: Vec<Output>,
-}
-
-/// State update produced by a payment
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyTransferUpdate {
-    /// Revealed nullifiers
-    pub nullifiers: Vec<Nullifier>,
-    /// Minted coins
-    pub coins: Vec<Coin>,
-}
-
-/// State update produced by a staking
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyStakeUpdate {
-    /// Revealed nullifiers
-    pub nullifiers: Vec<Nullifier>,
-    /// Minted coins
-    pub coins: Vec<Coin>,
-}
-
-/// A transaction's clear input
+/// A contract call's clear input
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ClearInput {
     /// Input's value (amount)
@@ -119,20 +30,20 @@ pub struct ClearInput {
     /// Input's token ID
     pub token_id: TokenId,
     /// Blinding factor for `value`
-    pub value_blind: ValueBlind,
+    pub value_blind: pallas::Scalar,
     /// Blinding factor for `token_id`
-    pub token_blind: ValueBlind,
+    pub token_blind: pallas::Scalar,
     /// Public key for the signature
     pub signature_public: PublicKey,
 }
 
-/// A transaction's anonymous input
+/// A contract call's anonymous input
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Input {
     /// Pedersen commitment for the input's value
-    pub value_commit: ValueCommit,
+    pub value_commit: pallas::Point,
     /// Pedersen commitment for the input's token ID
-    pub token_commit: ValueCommit,
+    pub token_commit: pallas::Point,
     /// Revealed nullifier
     pub nullifier: Nullifier,
     /// Revealed Merkle root
@@ -142,25 +53,73 @@ pub struct Input {
     /// must have this value as its ID.
     pub spend_hook: pallas::Base,
     /// Encrypted user data field. An encrypted commitment to arbitrary data.
-    /// When spend hook is set (it is nonzero), then this field may be used
+    /// When spend hook is set (it is nonzero), then this field may be user
     /// to pass data to the invoked contract.
     pub user_data_enc: pallas::Base,
     /// Public key for the signature
     pub signature_public: PublicKey,
 }
 
-/// A transaction's anonymous output
+/// A contract call's anonymous output
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Output {
     /// Pedersen commitment for the output's value
-    pub value_commit: ValueCommit,
+    pub value_commit: pallas::Point,
     /// Pedersen commitment for the output's token ID
-    pub token_commit: ValueCommit,
+    pub token_commit: pallas::Point,
     /// Minted coin
     pub coin: pallas::Base,
-    //pub coin: Coin,
-    /// The encrypted note ciphertext
-    pub ciphertext: Vec<u8>,
-    /// The ephemeral public key
-    pub ephem_public: PublicKey,
+    /// AEAD encrypted note
+    pub note: AeadEncryptedNote,
+}
+
+/// Parameters for `Money::Transfer` and `Money::OtcSwap`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyTransferParamsV1 {
+    /// Clear inputs
+    pub clear_inputs: Vec<ClearInput>,
+    /// Anonymous inputs
+    pub inputs: Vec<Input>,
+    /// Anonymous outputs
+    pub outputs: Vec<Output>,
+}
+
+/// State update for `Money::Transfer` and `Money::OtcSwap`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyTransferUpdateV1 {
+    /// Revealed nullifiers
+    pub nullifiers: Vec<Nullifier>,
+    /// Minted coins
+    pub coins: Vec<Coin>,
+}
+
+/// Parameters for `Money::Mint`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyMintParamsV1 {
+    /// Clear input
+    pub input: ClearInput,
+    /// Anonymous output
+    pub output: Output,
+}
+
+/// State update for `Money::Mint`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyMintUpdateV1 {
+    /// The newly minted coin
+    pub coin: Coin,
+}
+
+/// Parameters for `Money::Freeze`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyFreezeParamsV1 {
+    /// Mint authority public key
+    /// We also use this to derive the token ID
+    pub signature_public: PublicKey,
+}
+
+/// State update for `Money::Freeze`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyFreezeUpdateV1 {
+    /// Mint authority public key
+    pub signature_public: PublicKey,
 }

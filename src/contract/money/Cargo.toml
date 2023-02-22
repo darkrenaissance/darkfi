@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 darkfi-sdk = { path = "../../sdk" }
 darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
+thiserror = "1.0.38"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
