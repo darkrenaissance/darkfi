@@ -92,7 +92,7 @@ pub(crate) fn money_transfer_get_metadata_v1(
         zk_public_inputs.push((
             MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
             vec![
-                output.coin,
+                output.coin.inner(),
                 *value_coords.x(),
                 *value_coords.y(),
                 *token_coords.x(),

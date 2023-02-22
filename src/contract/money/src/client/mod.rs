@@ -26,6 +26,15 @@
 //! the necessary objects provided by the caller. This is intentional, so we
 //! are able to abstract away any wallet interfaces to client implementations.
 
+use darkfi_sdk::{
+    crypto::{Coin, MerklePosition, Nullifier, SecretKey, TokenId},
+    pasta::pallas,
+};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
+
+/// `Money::TransferV1` API
+pub mod transfer_v1;
+
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
 // SQL schema.
 // TODO: They should also be prefixed with the contract ID to avoid collisions.
@@ -65,3 +74,42 @@ pub const MONEY_TOKENS_IS_FROZEN: &str = "is_frozen";
 pub const MONEY_ALIASES_TABLE: &str = "money_aliases";
 pub const MONEY_ALIASES_COL_ALIAS: &str = "alias";
 pub const MONEY_ALIASES_COL_TOKEN_ID: &str = "token_id";
+
+/// `MoneyNote` holds the inner attributes of a `Coin`.
+#[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct MoneyNote {
+    /// Serial number of the coin, used for the nullifier
+    pub serial: pallas::Base,
+    /// Value of the coin
+    pub value: u64,
+    /// Token ID of the coin
+    pub token_id: TokenId,
+    /// Spend hook used for protocol-owned liquidity.
+    /// Specifies which contract owns this coin.
+    pub spend_hook: pallas::Base,
+    /// User data used by protocol when spend hook is enabled
+    pub user_data: pallas::Base,
+    /// Blinding factor for the coin bulla
+    pub coin_blind: pallas::Base,
+    /// Blinding factor for the value pedersen commitment
+    pub value_blind: pallas::Scalar,
+    /// Blinding factor for the token ID pedersen commitment
+    pub token_blind: pallas::Scalar,
+    /// Attached memo (arbitrary data)
+    pub memo: Vec<u8>,
+}
+
+/// `OwnCoin` is a representation of `Coin` with its respective metadata.
+#[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct OwnCoin {
+    /// The coin hash
+    pub coin: Coin,
+    /// The attached `MoneyNote`
+    pub note: MoneyNote,
+    /// Coin's secret key
+    pub secret: SecretKey,
+    /// Coin's nullifier
+    pub nullifier: Nullifier,
+    /// Coin's leaf position in the Merkle tree of coins
+    pub leaf_position: MerklePosition,
+}

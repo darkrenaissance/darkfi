@@ -70,7 +70,7 @@ pub(crate) fn money_mint_get_metadata_v1(
             sig_x,
             sig_y,
             token_id,
-            params.output.coin,
+            params.output.coin.inner(),
             *value_coords.x(),
             *value_coords.y(),
             *token_coords.x(),

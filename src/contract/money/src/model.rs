@@ -68,7 +68,7 @@ pub struct Output {
     /// Pedersen commitment for the output's token ID
     pub token_commit: pallas::Point,
     /// Minted coin
-    pub coin: pallas::Base,
+    pub coin: Coin,
     /// AEAD encrypted note
     pub note: AeadEncryptedNote,
 }
