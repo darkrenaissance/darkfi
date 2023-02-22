@@ -62,6 +62,9 @@ pub mod merkle_prelude {
 }
 pub use incrementalmerkletree::Position as MerklePosition;
 
+/// Note encryption
+pub mod note;
+
 /// Nullifier definitions
 pub mod nullifier;
 pub use nullifier::Nullifier;
