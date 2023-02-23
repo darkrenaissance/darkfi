@@ -49,8 +49,8 @@ pub(crate) fn money_freeze_get_metadata_v1(
     let (mint_x, mint_y) = params.signature_public.xy();
     let token_id = poseidon_hash([mint_x, mint_y]);
 
-    zk_public_inputs
-        .push((MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1.to_string(), vec![mint_x, mint_y, token_id]));
+    // In ZK we just verify that the token ID is properly derived from the authority.
+    zk_public_inputs.push((MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1.to_string(), vec![token_id]));
 
     // Serialize everything gathered and return it
     let mut metadata = vec![];
