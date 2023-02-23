@@ -31,8 +31,9 @@ circuit "TokenMint_V1" {
 	mint_public = ec_mul_base(mint_authority, NULLIFIER_K);
 	mint_x = ec_get_x(mint_public);
 	mint_y = ec_get_y(mint_public);
-	constrain_instance(mint_x);
-	constrain_instance(mint_y);
+	# I don't think we need to have these two as public inputs
+	#constrain_instance(mint_x);
+	#constrain_instance(mint_y);
 
 	# Derive the token ID
 	token_id = poseidon_hash(mint_x, mint_y);

@@ -67,8 +67,6 @@ pub(crate) fn money_mint_get_metadata_v1(
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1.to_string(),
         vec![
-            sig_x,
-            sig_y,
             token_id,
             params.output.coin.inner(),
             *value_coords.x(),
