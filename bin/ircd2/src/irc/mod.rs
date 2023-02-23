@@ -210,11 +210,10 @@ impl IrcServer {
         loop {
             let (msg, subscription_id) = recv.recv().await?;
 
-            let prev = model.lock().await.get_head_hash();
             match msg {
                 NotifierMsg::Privmsg(msg) => {
                     let event = Event {
-                        previous_event_hash: prev,
+                        previous_event_hash: model.lock().await.get_head_hash(),
                         action: msg.clone(),
                         timestamp: get_current_time(),
                         read_confirms: 0,
