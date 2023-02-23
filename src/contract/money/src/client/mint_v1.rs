@@ -206,6 +206,7 @@ pub(crate) fn create_token_mint_proof(
         Witness::Base(Value::known(pallas::Base::from(output.value))),
         Witness::Base(Value::known(rcpt_x)),
         Witness::Base(Value::known(rcpt_y)),
+        Witness::Base(Value::known(serial)),
         Witness::Base(Value::known(coin_blind)),
         Witness::Base(Value::known(spend_hook)),
         Witness::Base(Value::known(user_data)),

@@ -57,7 +57,7 @@ pub(crate) fn money_mint_get_metadata_v1(
     signature_pubkeys.push(params.input.signature_public);
 
     let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
-    let token_coords = params.output.value_commit.to_affine().coordinates().unwrap();
+    let token_coords = params.output.token_commit.to_affine().coordinates().unwrap();
 
     // Since we expect a signature from the mint authority, we use those coordinates
     // as public inputs for the ZK proof:

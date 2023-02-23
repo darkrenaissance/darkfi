@@ -14,6 +14,8 @@ contract "TokenMint_V1" {
 	Base rcpt_x,
 	# Recipient's public key y coordinate
 	Base rcpt_y,
+	# Unique serial number for the minted coin
+	Base serial,
 	# Random blinding factor for the minted coin
 	Base coin_blind,
 	# Allows composing this ZK proof to invoke other contracts
@@ -45,6 +47,7 @@ circuit "TokenMint_V1" {
 		rcpt_y,
 		supply,
 		token_id,
+		serial,
 		spend_hook,
 		user_data,
 		coin_blind,
