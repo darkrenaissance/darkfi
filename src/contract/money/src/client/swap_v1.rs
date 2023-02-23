@@ -104,7 +104,7 @@ impl SwapCallBuilder {
         }
 
         if self.coin.note.token_id != self.token_id_send {
-            return Err(ClientFailed::InvalidTokenId.into())
+            return Err(ClientFailed::InvalidTokenId(self.coin.note.token_id.to_string()).into())
         }
 
         let leaf_position = self.coin.leaf_position;

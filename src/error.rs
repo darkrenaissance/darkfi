@@ -493,6 +493,9 @@ pub enum ClientFailed {
     #[error("Invalid amount: {0}")]
     InvalidAmount(u64),
 
+    #[error("Invalid token ID: {0}")]
+    InvalidTokenId(String),
+
     #[error("Internal error: {0}")]
     InternalError(String),
 

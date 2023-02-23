@@ -33,7 +33,8 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
 
 use darkfi_money_contract::{
-    model::MoneyTransferParams, MoneyFunction, MONEY_CONTRACT_COIN_ROOTS_TREE,
+    model::MoneyTransferParamsV1 as MoneyTransferParams,
+    MoneyFunction::TransferV1 as MoneyTransfer, MONEY_CONTRACT_COIN_ROOTS_TREE,
     MONEY_CONTRACT_NULLIFIERS_TREE,
 };
 
@@ -301,7 +302,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             // 3. First item should be a MoneyTransfer call
             assert!(call[0].contract_id == *MONEY_CONTRACT_ID);
-            assert!(call[0].data[0] == MoneyFunction::Transfer as u8);
+            assert!(call[0].data[0] == MoneyTransfer as u8);
 
             // 4. MoneyTransfer has exactly 2 outputs
             let mt_params: MoneyTransferParams = deserialize(&call[0].data[1..])?;
@@ -311,8 +312,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             // Checks
             // ======
             // 1. Check both coins in MoneyTransfer are equal to our coin_0, coin_1
-            assert!(mt_params.outputs[0].coin == params.coin_0);
-            assert!(mt_params.outputs[1].coin == params.coin_1);
+            assert!(mt_params.outputs[0].coin.inner() == params.coin_0);
+            assert!(mt_params.outputs[1].coin.inner() == params.coin_1);
 
             // 2. Sum of MoneyTransfer input value commits == our input value commit
             let mut input_valcoms = pallas::Point::identity();

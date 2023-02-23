@@ -1225,6 +1225,7 @@ dependencies = [
  "simplelog",
  "sled",
  "sqlx",
+ "thiserror",
 ]
 
 [[package]]
@@ -1234,6 +1235,7 @@ dependencies = [
  "blake2b_simd",
  "blake3",
  "bs58",
+ "chacha20poly1305",
  "darkfi-serial",
  "halo2_gadgets",
  "halo2_proofs",
