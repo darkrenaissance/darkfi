@@ -225,7 +225,7 @@ impl MoneyTestHarness {
         })
     }
 
-    pub fn _airdrop(
+    pub fn airdrop(
         &self,
         amount: u64,
         rcpt: PublicKey,
