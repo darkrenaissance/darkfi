@@ -17,14 +17,16 @@ tmux send-keys "../../../genevd --localnet --config genevd_d.toml" Enter
 
 
 tmux new-window -t "genevd:1" -n "genev"
-tmux send-keys "../../../genev -e tcp://127.0.0.1:28870" Enter
+sleep 1
+tmux send-keys "../../../genev -e tcp://127.0.0.1:28870 add alolymous \"pay bills\" \"gonna pay some bills in the morning\" " Enter
 tmux split-window -v
-tmux send-keys "../../../genev -e tcp://127.0.0.1:28871" Enter
+sleep 1
+tmux send-keys "../../../genev -e tcp://127.0.0.1:28871 list" Enter
 tmux split-window -h
-tmux send-keys "../../../genev -e tcp://127.0.0.1:28872" Enter
+tmux send-keys "../../../genev -e tcp://127.0.0.1:28872 list" Enter
 tmux select-pane -t 0
 tmux split-window -h
-tmux send-keys "../../../genev -e tcp://127.0.0.1:28873" Enter
+tmux send-keys "../../../genev -e tcp://127.0.0.1:28873 list" Enter
 
 
 tmux attach
