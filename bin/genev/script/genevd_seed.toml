@@ -1,0 +1,34 @@
+## JSON-RPC listen URL
+rpc_listen="tcp://127.0.0.1:28880"
+
+## Current display name
+#nickname="NICKNAME"
+
+## net settings
+[net]
+## P2P accept addresses
+inbound = ["tcp://127.0.0.1:28881"]
+
+## Connection slots
+# outbound_connections=8
+
+## P2P external addresses
+# external_addr = ["tls://127.0.0.1:28881"]
+
+## Peers to connect to
+#peers = ["tls://127.0.0.1:28881"]
+
+## Seed nodes to connect to
+# seeds=["tls://lilith0.dark.fi:28881", "tls://lilith1.dark.fi:28881"]
+
+# Prefered transports for outbound connections
+outbound_transports = ["tcp"]
+
+## these are the default configuration for the p2p network
+#manual_attempt_limit=0
+#seed_query_timeout_seconds=8
+#connect_timeout_seconds=10
+#channel_handshake_seconds=4
+#channel_heartbeat_seconds=10
+
+
