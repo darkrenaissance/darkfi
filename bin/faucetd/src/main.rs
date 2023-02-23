@@ -32,15 +32,16 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{
-        build_transfer_tx, MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET,
-        MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+        transfer_v1::TransferCallBuilder, MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC,
+        MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
-    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MoneyFunction::TransferV1 as MoneyTransfer,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
         constants::MERKLE_DEPTH, contract_id::MONEY_CONTRACT_ID, Keypair, MerkleNode, PublicKey,
-        TokenId,
+        DARK_TOKEN_ID,
     },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::bridgetree::BridgeTree,
@@ -354,21 +355,16 @@ impl Faucetd {
     }
 
     // RPCAPI:
-    // Processes an airdrop request and airdrops requested token and amount to address.
+    // Processes a native token airdrop request and airdrops requested amount to address.
     // Returns the transaction ID upon success.
     // Params:
     // 0: base58 encoded address of the recipient
     // 1: Amount to airdrop in form of f64
-    // 2: base58 encoded token ID to airdrop
     //
-    // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42, "1F00b4r..."], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
     async fn airdrop(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 3 ||
-            !params[0].is_string() ||
-            !params[1].is_f64() ||
-            !params[2].is_string()
-        {
+        if params.len() != 2 || !params[0].is_string() || !params[1].is_f64() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
@@ -397,16 +393,6 @@ impl Faucetd {
         if amount > self.airdrop_limit {
             return server_error(RpcError::AmountExceedsLimit, id)
         }
-
-        // Here we allow the faucet to mint arbitrary token IDs.
-        // TODO: Revert this to native token when we have contracts for minting tokens.
-        let token_id = match TokenId::try_from(params[2].as_str().unwrap()) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("airdrop(): Failed parsing TokenID from string: {}", e);
-                return server_error(RpcError::ParseError, id)
-            }
-        };
 
         // Check if there as a previous airdrop and the timeout has passed.
         let now = Utc::now().timestamp();
@@ -440,23 +426,28 @@ impl Faucetd {
             (mint_data.2.clone(), mint_data.1.clone(), burn_data.2.clone(), burn_data.1.clone())
         };
 
-        // Create money contract params and proofs
-        let (params, proofs, secret_keys, _spent_coins) = match build_transfer_tx(
-            &self.keypair,
-            &pubkey,
-            amount,
-            token_id,
-            pallas::Base::zero(),
-            pallas::Base::zero(),
-            pallas::Base::random(&mut OsRng),
-            &[], // <-- The faucet doesn't really have to pass OwnCoins I think
-            &self.merkle_tree,
-            &mint_zkbin,
-            &mint_pk,
-            &burn_zkbin,
-            &burn_pk,
-            true,
-        ) {
+        // Create money contract transfer params and proofs
+        let builder = TransferCallBuilder {
+            keypair: self.keypair,
+            recipient: pubkey,
+            value: amount,
+            token_id: *DARK_TOKEN_ID,
+            rcpt_spend_hook: pallas::Base::zero(),
+            rcpt_user_data: pallas::Base::zero(),
+            rcpt_user_data_blind: pallas::Base::random(&mut OsRng),
+            change_spend_hook: pallas::Base::zero(),
+            change_user_data: pallas::Base::zero(),
+            change_user_data_blind: pallas::Base::random(&mut OsRng),
+            coins: vec![],
+            tree: self.merkle_tree.clone(),
+            mint_zkbin,
+            mint_pk,
+            burn_zkbin,
+            burn_pk,
+            clear_input: true,
+        };
+
+        let debris = match builder.build() {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed to build transfer tx params: {}", e);
@@ -465,12 +456,12 @@ impl Faucetd {
         };
 
         // Build transaction
-        let mut data = vec![MoneyFunction::Transfer as u8];
-        params.encode(&mut data).unwrap();
+        let mut data = vec![MoneyTransfer as u8];
+        debris.params.encode(&mut data).unwrap();
         let calls = vec![ContractCall { contract_id: cid, data }];
-        let proofs = vec![proofs];
+        let proofs = vec![debris.proofs];
         let mut tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = tx.create_sigs(&mut OsRng, &secret_keys).unwrap();
+        let sigs = tx.create_sigs(&mut OsRng, &debris.signature_secrets).unwrap();
         tx.signatures = vec![sigs];
 
         // Safety check to see if the transaction is actually valid.
