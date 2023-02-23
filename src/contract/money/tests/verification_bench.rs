@@ -213,11 +213,9 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
     let mut minted_amounts = vec![];
     let mut owncoins = vec![];
     for i in 0..10 {
-        let token_id = TokenId::from(pallas::Base::random(&mut OsRng));
         let amount = rand::thread_rng().gen_range(1..1000);
-
         info!(target: "money", "[Faucet] ===================================================");
-        info!(target: "money", "[Faucet] Building Money::Mint params for Alice's mint for token {}: ID {} - amount {}", i, token_id, amount);
+        info!(target: "money", "[Faucet] Building Money::Mint params for Alice's mint for token {} and amount {}", i, amount);
         info!(target: "money", "[Faucet] ===================================================");
         let (mint_tx, mint_params) =
             th.mint_token(th.alice.keypair, amount, th.alice.keypair.public)?;
