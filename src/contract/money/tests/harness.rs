@@ -36,6 +36,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
+use log::warn;
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
@@ -49,13 +50,18 @@ pub fn init_logger() {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
     cfg.add_filter_ignore("blockchain::contractstore".to_string());
-    let _ = simplelog::TermLogger::init(
+    // We check this error so we can execute same file tests in parallel,
+    // otherwise second one fails to init logger here.
+    if let Err(_) = simplelog::TermLogger::init(
+        //simplelog::LevelFilter::Info,
         simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
-    );
+    ) {
+        warn!(target: "money_harness", "Logger already initialized");
+    }
 }
 
 pub struct Wallet {
