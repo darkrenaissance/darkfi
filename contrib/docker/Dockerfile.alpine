@@ -42,7 +42,7 @@ RUN bash -c 'make -j test &&  make -j'
 # 3. stage
 FROM alpine:${ALPINE_VER}
 
-RUN apk update && apk add openssl ttf-opensans  # ?? TODO lato-fonts
+RUN apk add --no-cache openssl ttf-opensans libgcc mpg123-libs
 
 WORKDIR /opt/darkfi
 
