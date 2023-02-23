@@ -26,6 +26,8 @@ members = [
     "bin/faucetd",
     "bin/fud/fu",
     "bin/fud/fud",
+    "bin/genev/genevd",
+    "bin/genev/genev-cli",
     "bin/ircd",
     "bin/ircd2",
     "bin/dnetview",

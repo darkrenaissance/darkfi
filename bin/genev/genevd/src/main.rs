@@ -1,0 +1,155 @@
+use async_std::sync::{Arc, Mutex};
+
+use log::{info, warn};
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+
+use darkfi::{
+    async_daemonize, cli_desc,
+    event_graph::{
+        events_queue::EventsQueue,
+        model::{Event, EventId, Model},
+        protocol_event::{ProtocolEvent, Seen, SeenPtr, UnreadEvents},
+        view::{View, ViewPtr},
+    },
+    net::{self, settings::SettingsOpt},
+    rpc::server::listen_and_serve,
+    Result,
+};
+
+mod genevent;
+mod rpc;
+
+use genevent::GenEvent;
+use url::Url;
+
+use crate::rpc::JsonRpcInterface;
+
+const CONFIG_FILE: &str = "genev_config.toml";
+const CONFIG_FILE_CONTENTS: &str = include_str!("../../genev_config.toml");
+
+#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[serde(default)]
+#[structopt(name = "genev", about = cli_desc!())]
+struct Args {
+    #[structopt(short, long)]
+    /// Configuration file to use
+    config: Option<String>,
+
+    /// JSON-RPC listen URL
+    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:28880")]
+    pub rpc_listen: Url,
+
+    #[structopt(flatten)]
+    pub net: SettingsOpt,
+
+    #[structopt(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    verbose: u8,
+}
+
+async fn start_sync_loop(
+    view: ViewPtr<GenEvent>,
+    seen: SeenPtr<EventId>,
+    missed_events: Arc<Mutex<Vec<Event<GenEvent>>>>,
+) -> Result<()> {
+    loop {
+        let event = view.lock().await.process().await?;
+        if !seen.push(&event.hash()).await {
+            continue
+        }
+
+        info!("new event: {:?}", event);
+        missed_events.lock().await.push(event.clone());
+    }
+}
+
+async_daemonize!(realmain);
+async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
+    ////////////////////
+    // Initialize the base structures
+    ////////////////////
+    let events_queue = EventsQueue::<GenEvent>::new();
+    let model = Arc::new(Mutex::new(Model::new(events_queue.clone())));
+    let view = Arc::new(Mutex::new(View::new(events_queue)));
+    let model_clone = model.clone();
+
+    ////////////////////
+    // P2p setup
+    ////////////////////
+    // Buffers
+    let seen_event = Seen::new();
+    let seen_inv = Seen::new();
+    let unread_events = UnreadEvents::new();
+    let unread_events_clone = unread_events.clone();
+
+    // Check the version
+    let mut net_settings = args.net.clone();
+    net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
+
+    // New p2p
+    let p2p = net::P2p::new(net_settings.into()).await;
+    let p2p2 = p2p.clone();
+
+    // Register the protocol_event
+    let registry = p2p.protocol_registry();
+    registry
+        .register(net::SESSION_ALL, move |channel, p2p| {
+            let seen_event = seen_event.clone();
+            let seen_inv = seen_inv.clone();
+            let model = model.clone();
+            let unread_events = unread_events.clone();
+            async move {
+                ProtocolEvent::init(channel, p2p, model, seen_event, seen_inv, unread_events).await
+            }
+        })
+        .await;
+
+    // Start
+    p2p.clone().start(executor.clone()).await?;
+
+    // Run
+    let executor_cloned = executor.clone();
+    executor_cloned.spawn(p2p.clone().run(executor.clone())).detach();
+
+    ////////////////////
+    // Listner
+    ////////////////////
+    let seen_ids = Seen::new();
+    let missed_events = Arc::new(Mutex::new(vec![]));
+
+    executor.spawn(start_sync_loop(view, seen_ids.clone(), missed_events.clone())).detach();
+
+    //
+    // RPC interface
+    //
+    let rpc_interface = Arc::new(JsonRpcInterface::new(
+        "Alolymous".to_string(),
+        unread_events_clone,
+        missed_events.clone(),
+        model_clone,
+        seen_ids.clone(),
+        p2p.clone(),
+    ));
+    let _ex = executor.clone();
+    executor.spawn(listen_and_serve(args.rpc_listen.clone(), rpc_interface, _ex)).detach();
+
+    ////////////////////
+    // Wait for SIGINT
+    ////////////////////
+    let (signal, shutdown) = smol::channel::bounded::<()>(1);
+    ctrlc::set_handler(move || {
+        warn!(target: "ircd", "ircd start Exit Signal");
+        // cleaning up tasks running in the background
+        async_std::task::block_on(signal.send(())).unwrap();
+    })
+    .unwrap();
+
+    shutdown.recv().await?;
+    print!("\r");
+    info!("Caught termination signal, cleaning up and exiting...");
+
+    // stop p2p
+    p2p2.stop().await;
+
+    Ok(())
+}

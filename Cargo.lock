@@ -599,9 +599,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.1.4"
+version = "4.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f13b9c79b5d1dd500d20ef541215a6423c75829ef43117e1b4d17fd8af0b5d76"
+checksum = "ec0b0588d44d4d63a87dbd75c136c166bbfd9a86a31cb89e09906521c7d3f5e3"
 dependencies = [
  "bitflags",
  "clap_derive",
@@ -618,7 +618,7 @@ version = "4.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd125be87bf4c255ebc50de0b7f4d2a6201e8ac3dc86e39c0ad081dc5e7236fe"
 dependencies = [
- "clap 4.1.4",
+ "clap 4.1.6",
 ]
 
 [[package]]
@@ -1049,12 +1049,12 @@ dependencies = [
 
 [[package]]
 name = "ctrlc"
-version = "3.2.4"
+version = "3.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1631ca6e3c59112501a9d87fd86f21591ff77acd31331e8a73f8d80a65bbdd71"
+checksum = "bbcf33c2a618cbe41ee43ae6e9f2e48368cd9f9db2896f10167d8d762679f639"
 dependencies = [
  "nix",
- "windows-sys 0.42.0",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -1124,7 +1124,7 @@ dependencies = [
  "blake3",
  "bs58",
  "chrono",
- "clap 4.1.4",
+ "clap 4.1.6",
  "crypto_api_chachapoly",
  "darkfi-derive",
  "darkfi-derive-internal",
@@ -1505,7 +1505,7 @@ version = "0.4.0"
 dependencies = [
  "async-channel",
  "async-std",
- "clap 4.1.4",
+ "clap 4.1.6",
  "darkfi",
  "easy-parallel",
  "hex",
@@ -1536,7 +1536,7 @@ dependencies = [
  "async-std",
  "blake3",
  "bs58",
- "clap 4.1.4",
+ "clap 4.1.6",
  "clap_complete",
  "darkfi",
  "darkfi-dao-contract",
@@ -1891,7 +1891,7 @@ name = "fu"
 version = "0.4.0"
 dependencies = [
  "async-std",
- "clap 4.1.4",
+ "clap 4.1.6",
  "darkfi",
  "log",
  "serde_json",
@@ -2069,6 +2069,41 @@ checksum = "bff49e947297f3312447abdca79f45f4738097cc82b06e72054d2223f601f1b9"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "genev"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "clap 4.1.6",
+ "darkfi",
+ "darkfi-serial",
+ "log",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "url",
+]
+
+[[package]]
+name = "genevd"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "ctrlc",
+ "darkfi",
+ "darkfi-serial",
+ "easy-parallel",
+ "log",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "url",
 ]
 
 [[package]]
@@ -2391,7 +2426,7 @@ dependencies = [
  "async-trait",
  "bs58",
  "chrono",
- "clap 4.1.4",
+ "clap 4.1.6",
  "crypto_box",
  "ctrlc",
  "darkfi",
@@ -2422,7 +2457,7 @@ dependencies = [
  "async-trait",
  "bs58",
  "chrono",
- "clap 4.1.4",
+ "clap 4.1.6",
  "crypto_box",
  "ctrlc",
  "darkfi",
@@ -3624,9 +3659,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.91"
+version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "877c235533714907a8c2464236f5c4b2a17262ef1bd71f38f35ea592c8da6883"
+checksum = "cad406b69c91885b5107daf2c29572f6c8cdb3c66826821e286c533490c0bc76"
 dependencies = [
  "itoa 1.0.5",
  "ryu",
@@ -4062,7 +4097,7 @@ version = "0.4.0"
 dependencies = [
  "async-std",
  "chrono",
- "clap 4.1.4",
+ "clap 4.1.6",
  "colored",
  "darkfi",
  "log",
@@ -4533,7 +4568,7 @@ name = "vanityaddr"
 version = "0.4.0"
 dependencies = [
  "bs58",
- "clap 4.1.4",
+ "clap 4.1.6",
  "ctrlc",
  "darkfi",
  "darkfi-sdk",
@@ -5161,7 +5196,7 @@ dependencies = [
 name = "zkas"
 version = "0.4.0"
 dependencies = [
- "clap 4.1.4",
+ "clap 4.1.6",
  "darkfi",
 ]
 
@@ -5169,7 +5204,7 @@ dependencies = [
 name = "zktool"
 version = "0.4.0"
 dependencies = [
- "clap 4.1.4",
+ "clap 4.1.6",
  "darkfi",
  "darkfi-sdk",
 ]
