@@ -24,15 +24,16 @@ use darkfi::{
     zkas::ZkBinary,
 };
 use darkfi_money_contract::{
-    client::{build_half_swap_tx, EncryptedNote, Note},
-    model::MoneyTransferParams,
+    client::{build_half_swap_tx, MoneyNote},
+    model::MoneyTransferParamsV1,
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
         contract_id::MONEY_CONTRACT_ID,
+        note::AeadEncryptedNote,
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64, ValueBlind},
-        poseidon_hash, PublicKey, SecretKey, TokenId,
+        poseidon_hash, Coin, PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
     tx::ContractCall,
@@ -46,7 +47,7 @@ use super::Drk;
 /// Half of the swap data, includes the coin that is supposed to be sent,
 /// and the coin that is supposed to be received.
 pub struct PartialSwapData {
-    params: MoneyTransferParams,
+    params: MoneyTransferParamsV1,
     proofs: Vec<Proof>,
     value_pair: (u64, u64),
     token_pair: (TokenId, TokenId),
@@ -223,7 +224,7 @@ impl Drk {
                 &burn_pk,
             )?;
 
-        let full_params = MoneyTransferParams {
+        let full_params = MoneyTransferParamsV1 {
             clear_inputs: vec![],
             inputs: vec![partial.params.inputs[0].clone(), half_params.inputs[0].clone()],
             outputs: vec![partial.params.outputs[0].clone(), half_params.outputs[0].clone()],
@@ -236,7 +237,7 @@ impl Drk {
             half_proofs[1].clone(),
         ];
 
-        let mut data = vec![MoneyFunction::OtcSwap as u8];
+        let mut data = vec![MoneyFunction::OtcSwapV1 as u8];
         full_params.encode(&mut data)?;
         let mut tx = Transaction {
             calls: vec![ContractCall { contract_id, data }],
@@ -278,7 +279,7 @@ impl Drk {
                 return Err(anyhow!("Inspection failed"))
             }
 
-            let params: MoneyTransferParams = deserialize(&tx.calls[0].data[1..])?;
+            let params: MoneyTransferParamsV1 = deserialize(&tx.calls[0].data[1..])?;
             eprintln!("Parameters:\n{:#?}", params);
 
             if params.inputs.len() != 2 {
@@ -294,17 +295,14 @@ impl Drk {
             // Try to decrypt one of the outputs.
             let secret_keys = self.get_money_secrets().await?;
             let mut skey: Option<SecretKey> = None;
-            let mut note: Option<Note> = None;
+            let mut note: Option<MoneyNote> = None;
             let mut output_idx = 0;
 
             for output in &params.outputs {
-                let ciphertext = output.ciphertext.clone();
-                let ephem_public = output.ephem_public;
-                let e_note = EncryptedNote { ciphertext, ephem_public };
                 eprintln!("Trying to decrypt note in output {}", output_idx);
 
                 for secret in &secret_keys {
-                    if let Ok(d_note) = e_note.decrypt(secret) {
+                    if let Ok(d_note) = output.note.decrypt::<MoneyNote>(secret) {
                         let s: SecretKey = deserialize(&d_note.memo)?;
                         skey = Some(s);
                         note = Some(d_note);
@@ -335,14 +333,14 @@ impl Drk {
 
             let skey = skey.unwrap();
             let (pub_x, pub_y) = PublicKey::from_secret(skey).xy();
-            let coin = poseidon_hash([
+            let coin = Coin::from(poseidon_hash([
                 pub_x,
                 pub_y,
                 pallas::Base::from(note.value),
                 note.token_id.inner(),
                 note.serial,
                 note.coin_blind,
-            ]);
+            ]));
 
             if coin == params.outputs[output_idx].coin {
                 eprintln!("Output[{}] coin matches decrypted note metadata", output_idx);
@@ -409,18 +407,16 @@ impl Drk {
     pub async fn sign_swap(&self, tx: &mut Transaction) -> Result<()> {
         // We need our secret keys to try and decrypt the note
         let secret_keys = self.get_money_secrets().await?;
-        let params: MoneyTransferParams = deserialize(&tx.calls[0].data[1..])?;
+        let params: MoneyTransferParamsV1 = deserialize(&tx.calls[0].data[1..])?;
 
         // Our output should be outputs[0] so we try to decrypt that.
-        let ciphertext = params.outputs[0].ciphertext.clone();
-        let ephem_public = params.outputs[0].ephem_public;
-        let encrypted_note = EncryptedNote { ciphertext, ephem_public };
+        let encrypted_note = &params.outputs[0].note;
 
         eprintln!("Trying to decrypt note in outputs[0]");
         let mut skey = None;
 
         for secret in &secret_keys {
-            if let Ok(note) = encrypted_note.decrypt(secret) {
+            if let Ok(note) = encrypted_note.decrypt::<MoneyNote>(secret) {
                 let s: SecretKey = deserialize(&note.memo)?;
                 eprintln!("Successfully decrypted and found an ephemeral secret");
                 skey = Some(s);

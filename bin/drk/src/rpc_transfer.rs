@@ -25,7 +25,7 @@ use darkfi::{
 };
 use darkfi_dao_contract::dao_model::DaoBulla;
 use darkfi_money_contract::{
-    client::{build_transfer_tx, OwnCoin},
+    client::{transfer_v1::TransferCallBuilder, OwnCoin},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
@@ -123,40 +123,44 @@ impl Drk {
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
 
-        eprintln!("Creating Mint circuit proving key");
+        eprintln!("Creating Mint and Burn circuit proving keys");
         let mint_pk = ProvingKey::build(k, &mint_circuit);
-        eprintln!("Creating Burn circuit proving key");
         let burn_pk = ProvingKey::build(k, &burn_circuit);
 
-        // Now we should have everything we need to build the transaction
-        let (params, proofs, secrets, spent_coins) = build_transfer_tx(
-            &keypair,
-            &recipient,
-            amount,
+        let transfer_builder = TransferCallBuilder {
+            keypair,
+            recipient,
+            value: amount,
             token_id,
-            spend_hook,
-            user_data,
-            user_data_blind,
-            &owncoins,
-            &tree,
-            &mint_zkbin,
-            &mint_pk,
-            &burn_zkbin,
-            &burn_pk,
-            false,
-        )?;
+            rcpt_spend_hook: spend_hook,
+            rcpt_user_data: user_data,
+            rcpt_user_data_blind: user_data_blind,
+            change_spend_hook: pallas::Base::zero(),
+            change_user_data: pallas::Base::zero(),
+            change_user_data_blind: user_data_blind, // FIXME: I'm reusing this blind but dunno why
+            coins: owncoins,
+            tree,
+            mint_zkbin,
+            mint_pk: ProvingKey::build(k, &mint_circuit),
+            burn_zkbin,
+            burn_pk: ProvingKey::build(k, &burn_circuit),
+            clear_input: false,
+        };
+
+        eprintln!("Building transaction parameters");
+        let debris = transfer_builder.build()?;
 
         // Encode and sign the transaction
-        let mut data = vec![MoneyFunction::Transfer as u8];
-        params.encode(&mut data)?;
+        let mut data = vec![MoneyFunction::TransferV1 as u8];
+        debris.params.encode(&mut data)?;
         let calls = vec![ContractCall { contract_id, data }];
-        let proofs = vec![proofs];
+        let proofs = vec![debris.proofs];
         let mut tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = tx.create_sigs(&mut OsRng, &secrets)?;
+        let sigs = tx.create_sigs(&mut OsRng, &debris.signature_secrets)?;
         tx.signatures = vec![sigs];
 
         // We need to mark the coins we've spent in our wallet
-        for spent_coin in spent_coins {
+        for spent_coin in debris.spent_coins {
             self.mark_spent_coin(&spent_coin.coin).await?;
         }
 

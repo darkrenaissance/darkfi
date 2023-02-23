@@ -21,7 +21,7 @@ use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, tx::Transaction, wallet::walletdb::QueryType};
 use darkfi_money_contract::{
     client::{
-        Coin, EncryptedNote, Note, OwnCoin, MONEY_ALIASES_COL_ALIAS, MONEY_ALIASES_COL_TOKEN_ID,
+        MoneyNote, OwnCoin, MONEY_ALIASES_COL_ALIAS, MONEY_ALIASES_COL_TOKEN_ID,
         MONEY_ALIASES_TABLE, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
         MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
         MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
@@ -31,13 +31,13 @@ use darkfi_money_contract::{
         MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_KEY_ID, MONEY_KEYS_COL_PUBLIC,
         MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
-    model::{MoneyTransferParams, Output},
+    model::{MoneyTransferParamsV1, Output},
     MoneyFunction,
 };
 use darkfi_sdk::{
     crypto::{
-        poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId,
-        MONEY_CONTRACT_ID,
+        poseidon_hash, Coin, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
+        TokenId, MONEY_CONTRACT_ID,
     },
     incrementalmerkletree,
     incrementalmerkletree::Tree,
@@ -334,7 +334,7 @@ impl Drk {
 
             let memo: Vec<u8> = serde_json::from_value(row[13].clone())?;
 
-            let note = Note {
+            let note = MoneyNote {
                 serial,
                 value,
                 token_id,
@@ -488,9 +488,9 @@ impl Drk {
         let mut outputs: Vec<Output> = vec![];
 
         for (i, call) in tx.calls.iter().enumerate() {
-            if call.contract_id == cid && call.data[0] == MoneyFunction::Transfer as u8 {
+            if call.contract_id == cid && call.data[0] == MoneyFunction::TransferV1 as u8 {
                 eprintln!("Found Money::Transfer in call {}", i);
-                let params: MoneyTransferParams = deserialize(&call.data[1..])?;
+                let params: MoneyTransferParamsV1 = deserialize(&call.data[1..])?;
 
                 for input in params.inputs {
                     nullifiers.push(input.nullifier);
@@ -503,9 +503,9 @@ impl Drk {
                 continue
             }
 
-            if call.contract_id == cid && call.data[0] == MoneyFunction::OtcSwap as u8 {
+            if call.contract_id == cid && call.data[0] == MoneyFunction::OtcSwapV1 as u8 {
                 eprintln!("Found Money::OtcSwap in call {}", i);
-                let params: MoneyTransferParams = deserialize(&call.data[1..])?;
+                let params: MoneyTransferParamsV1 = deserialize(&call.data[1..])?;
 
                 for input in params.inputs {
                     nullifiers.push(input.nullifier);
@@ -529,14 +529,11 @@ impl Drk {
             let coin = output.coin;
 
             // Append the new coin to the Merkle tree. Every coin has to be added.
-            tree.append(&MerkleNode::from(coin));
+            tree.append(&MerkleNode::from(coin.inner()));
 
             // Attempt to decrypt the note
-            let enc_note =
-                EncryptedNote { ciphertext: output.ciphertext, ephem_public: output.ephem_public };
-
             for secret in secrets.iter().chain(dao_secrets.iter()) {
-                if let Ok(note) = enc_note.decrypt(secret) {
+                if let Ok(note) = output.note.decrypt::<MoneyNote>(secret) {
                     eprintln!("Successfully decrypted a Money Note");
                     eprintln!("Witnessing coin in Merkle tree");
                     let leaf_position = tree.witness().unwrap();

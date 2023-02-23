@@ -27,9 +27,8 @@ use anyhow::{anyhow, Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
 use darkfi::{tx::Transaction, util::parse::decode_base10, zk::halo2::Field};
-use darkfi_money_contract::client::Coin;
 use darkfi_sdk::{
-    crypto::{PublicKey, SecretKey, TokenId},
+    crypto::{Coin, PublicKey, SecretKey, TokenId},
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize};
@@ -151,9 +150,6 @@ enum Subcmd {
         /// Amount to request from the faucet
         amount: String,
 
-        /// Token ID to request from the faucet
-        token: String,
-
         /// Optional address to send tokens to (defaults to main address in wallet)
         address: Option<String>,
     },
@@ -221,6 +217,10 @@ enum Subcmd {
     /// Manage Token aliases
     #[command(subcommand)]
     Alias(AliasSubcmd),
+
+    /// Token functionalities
+    #[command(subcommand)]
+    Token(TokenSubcmd),
 }
 
 #[derive(Subcommand)]
@@ -381,6 +381,36 @@ enum AliasSubcmd {
     Remove {
         /// Token alias to remove
         alias: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum TokenSubcmd {
+    /// Import a mint authority secret from stdin
+    Import,
+
+    /// Generate a new mint authority
+    GenerateMint,
+
+    /// List token IDs with available mint authorities
+    List,
+
+    /// Mint tokens
+    Mint {
+        /// Token ID to mint
+        token: String,
+
+        /// Amount to mint
+        amount: String,
+
+        /// Recipient of the minted tokens
+        recipient: String,
+    },
+
+    /// Freeze a token mint
+    Freeze {
+        /// Token ID mint to freeze
+        token: String,
     },
 }
 
@@ -649,10 +679,9 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Airdrop { faucet_endpoint, amount, token, address } => {
+        Subcmd::Airdrop { faucet_endpoint, amount, address } => {
             let amount = f64::from_str(&amount).with_context(|| "Invalid amount")?;
             let drk = Drk::new(args.endpoint).await?;
-            let token_id = drk.get_token(token).await.with_context(|| "Invalid Token ID")?;
 
             let address = match address {
                 Some(v) => PublicKey::from_str(v.as_str()).with_context(|| "Invalid address")?,
@@ -662,7 +691,7 @@ async fn main() -> Result<()> {
             };
 
             let txid = drk
-                .request_airdrop(faucet_endpoint, amount, token_id, address)
+                .request_airdrop(faucet_endpoint, amount, address)
                 .await
                 .with_context(|| "Failed to request airdrop")?;
 
@@ -1102,6 +1131,14 @@ async fn main() -> Result<()> {
 
                 Ok(())
             }
+        },
+
+        Subcmd::Token(cmd) => match cmd {
+            TokenSubcmd::Import => todo!(),
+            TokenSubcmd::GenerateMint => todo!(),
+            TokenSubcmd::List => todo!(),
+            TokenSubcmd::Mint { token, amount, recipient } => todo!(),
+            TokenSubcmd::Freeze { token } => todo!(),
         },
     }
 }

@@ -18,7 +18,7 @@
 
 use anyhow::Result;
 use darkfi::rpc::{client::RpcClient, jsonrpc::JsonRequest};
-use darkfi_sdk::crypto::{PublicKey, TokenId};
+use darkfi_sdk::crypto::PublicKey;
 use serde_json::json;
 use url::Url;
 
@@ -31,11 +31,10 @@ impl Drk {
         &self,
         faucet_endpoint: Url,
         amount: f64,
-        token_id: TokenId,
         address: PublicKey,
     ) -> Result<String> {
         let rpc_client = RpcClient::new(faucet_endpoint).await?;
-        let params = json!([format!("{}", address), amount, format!("{}", token_id),]);
+        let params = json!([format!("{}", address), amount]);
         let req = JsonRequest::new("airdrop", params);
         let rep = rpc_client.oneshot_request(req).await?;
 

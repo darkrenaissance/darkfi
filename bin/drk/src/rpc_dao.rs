@@ -495,7 +495,7 @@ impl Drk {
         let (xfer_params, xfer_proofs) =
             xfer_call.make(&mint_zkbin, &mint_pk, &burn_zkbin, &burn_pk)?;
 
-        let mut data = vec![MoneyFunction::Transfer as u8];
+        let mut data = vec![MoneyFunction::TransferV1 as u8];
         xfer_params.encode(&mut data)?;
         let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
