@@ -59,7 +59,7 @@ pub fn deserialize_partial<T: Decodable>(data: &[u8]) -> Result<(T, usize), Erro
 }
 
 /// Deserialize an object from a vector.
-/// Will error if said deserialization doesn't consume the entore vector.
+/// Will error if said deserialization doesn't consume the entire vector.
 pub fn deserialize<T: Decodable>(data: &[u8]) -> Result<T, Error> {
     let (rv, consumed) = deserialize_partial(data)?;
 
