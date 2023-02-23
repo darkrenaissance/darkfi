@@ -35,6 +35,9 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 /// `Money::TransferV1` API
 pub mod transfer_v1;
 
+/// `Money::OtcSwapV1` API
+pub mod swap_v1;
+
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
 // SQL schema.
 // TODO: They should also be prefixed with the contract ID to avoid collisions.

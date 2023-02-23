@@ -363,7 +363,7 @@ impl TransferCallBuilder {
     }
 }
 
-fn create_transfer_burn_proof(
+pub(crate) fn create_transfer_burn_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     input: &TransactionBuilderInputInfo,
@@ -439,7 +439,7 @@ fn create_transfer_burn_proof(
     Ok((proof, public_inputs))
 }
 
-fn create_transfer_mint_proof(
+pub(crate) fn create_transfer_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     output: &TransactionBuilderOutputInfo,
