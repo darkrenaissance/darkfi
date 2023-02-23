@@ -28,19 +28,19 @@ $(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
 $(PROOFS_BIN): $(ZKAS) $(PROOFS_SRC)
 	$(ZKAS) $(basename $@) -o $@
 
-test-drop-pay-swap: all
+test-mint-pay-swap: all
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
-		--test drop_pay_swap
+		--test mint_pay_swap
 
 bench:
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
 		--test verification_bench $(FILTER)
 
-test: test-drop-pay-swap
+test: test-mint-pay-swap
 
 clean:
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test-drop-pay-swap bench test clean
+.PHONY: all test-mint-pay-swap bench test clean

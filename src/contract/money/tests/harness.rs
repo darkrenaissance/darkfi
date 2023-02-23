@@ -30,7 +30,8 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, ContractId, Keypair, MerkleTree, PublicKey, TokenId, MONEY_CONTRACT_ID,
+        pasta_prelude::*, ContractId, Keypair, MerkleTree, PublicKey, DARK_TOKEN_ID,
+        MONEY_CONTRACT_ID,
     },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     pasta::pallas,
@@ -41,8 +42,9 @@ use log::{info, warn};
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
-    client::build_transfer_tx, model::MoneyTransferParams, MoneyFunction,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::transfer_v1::TransferCallBuilder, model::MoneyTransferParamsV1 as MoneyTransferParams,
+    MoneyFunction::TransferV1 as MoneyTransfer, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    MONEY_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 
 pub fn init_logger() -> Result<()> {
@@ -76,8 +78,10 @@ pub struct MoneyTestHarness {
     pub proving_keys: HashMap<[u8; 32], Vec<(&'static str, ProvingKey)>>,
     pub mint_zkbin: ZkBinary,
     pub burn_zkbin: ZkBinary,
+    pub token_mint_zkbin: ZkBinary,
     pub mint_pk: ProvingKey,
     pub burn_pk: ProvingKey,
+    pub token_mint_pk: ProvingKey,
     pub faucet_merkle_tree: MerkleTree,
     pub alice_merkle_tree: MerkleTree,
     pub bob_merkle_tree: MerkleTree,
@@ -165,22 +169,29 @@ impl MoneyTestHarness {
 
         let mint_zkbin = db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1))?.unwrap();
         let burn_zkbin = db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1))?.unwrap();
+        let token_mint_zkbin =
+            db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1))?.unwrap();
         info!(target: "money_harness", "Decoding bincode");
         let mint_zkbin = ZkBinary::decode(&mint_zkbin)?;
         let burn_zkbin = ZkBinary::decode(&burn_zkbin)?;
+        let token_mint_zkbin = ZkBinary::decode(&token_mint_zkbin)?;
         let mint_witnesses = empty_witnesses(&mint_zkbin);
         let burn_witnesses = empty_witnesses(&burn_zkbin);
+        let token_mint_witnesses = empty_witnesses(&token_mint_zkbin);
         let mint_circuit = ZkCircuit::new(mint_witnesses, mint_zkbin.clone());
         let burn_circuit = ZkCircuit::new(burn_witnesses, burn_zkbin.clone());
+        let token_mint_circuit = ZkCircuit::new(token_mint_witnesses, token_mint_zkbin.clone());
 
         info!(target: "money_harness", "Creating zk proving keys");
         let k = 13;
         let mut proving_keys = HashMap::<[u8; 32], Vec<(&str, ProvingKey)>>::new();
         let mint_pk = ProvingKey::build(k, &mint_circuit);
         let burn_pk = ProvingKey::build(k, &burn_circuit);
+        let token_mint_pk = ProvingKey::build(k, &token_mint_circuit);
         let pks = vec![
             (MONEY_CONTRACT_ZKAS_MINT_NS_V1, mint_pk.clone()),
             (MONEY_CONTRACT_ZKAS_BURN_NS_V1, burn_pk.clone()),
+            (MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1, mint_pk.clone()),
         ];
         proving_keys.insert(money_contract_id.inner().to_repr(), pks);
 
@@ -203,8 +214,10 @@ impl MoneyTestHarness {
             proving_keys,
             mint_pk,
             burn_pk,
+            token_mint_pk,
             mint_zkbin,
             burn_zkbin,
+            token_mint_zkbin,
             faucet_merkle_tree,
             alice_merkle_tree,
             bob_merkle_tree,
@@ -212,39 +225,43 @@ impl MoneyTestHarness {
         })
     }
 
-    pub fn airdrop(
+    pub fn _airdrop(
         &self,
         amount: u64,
-        token_id: TokenId,
-        rcpt: &PublicKey,
+        rcpt: PublicKey,
     ) -> Result<(Transaction, MoneyTransferParams)> {
-        let (params, proofs, secret_keys, _) = build_transfer_tx(
-            &self.faucet_kp,
-            rcpt,
-            amount,
-            token_id,
-            pallas::Base::zero(),
-            pallas::Base::zero(),
-            pallas::Base::random(&mut OsRng),
-            &[],
-            &self.faucet_merkle_tree,
-            &self.mint_zkbin,
-            &self.mint_pk,
-            &self.burn_zkbin,
-            &self.burn_pk,
-            true,
-        )?;
+        // TODO: verify change usage is correct
+        let call_debris = TransferCallBuilder {
+            keypair: self.faucet_kp,
+            recipient: rcpt,
+            value: amount,
+            token_id: *DARK_TOKEN_ID,
+            rcpt_spend_hook: pallas::Base::zero(),
+            rcpt_user_data: pallas::Base::zero(),
+            rcpt_user_data_blind: pallas::Base::random(&mut OsRng),
+            change_spend_hook: pallas::Base::zero(),
+            change_user_data: pallas::Base::zero(),
+            change_user_data_blind: pallas::Base::random(&mut OsRng),
+            coins: vec![],
+            tree: self.faucet_merkle_tree.clone(),
+            mint_zkbin: self.mint_zkbin.clone(),
+            mint_pk: self.mint_pk.clone(),
+            burn_zkbin: self.burn_zkbin.clone(),
+            burn_pk: self.burn_pk.clone(),
+            clear_input: true,
+        }
+        .build()?;
 
         let contract_id = *MONEY_CONTRACT_ID;
 
-        let mut data = vec![MoneyFunction::Transfer as u8];
-        params.encode(&mut data)?;
+        let mut data = vec![MoneyTransfer as u8];
+        call_debris.params.encode(&mut data)?;
         let calls = vec![ContractCall { contract_id, data }];
-        let proofs = vec![proofs];
+        let proofs = vec![call_debris.proofs];
         let mut tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
+        let sigs = tx.create_sigs(&mut OsRng, &call_debris.signature_secrets)?;
         tx.signatures = vec![sigs];
 
-        Ok((tx, params))
+        Ok((tx, call_debris.params))
     }
 }

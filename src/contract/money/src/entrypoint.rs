@@ -150,7 +150,7 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, calls): (u32, Vec<ContractCall>) = deserialize(ix)?;
-    if call_idx < calls.len() as u32 {
+    if call_idx >= calls.len() as u32 {
         msg!("Error: call_idx >= calls.len()");
         return Err(ContractError::Internal)
     }
@@ -187,8 +187,8 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// has successfully verified the metadata from `get_metadata()`.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, calls): (u32, Vec<ContractCall>) = deserialize(ix)?;
-    if call_idx < calls.len() as u32 {
-        msg!("Error: call_idx => calls.len()");
+    if call_idx >= calls.len() as u32 {
+        msg!("Error: call_idx >= calls.len()");
         return Err(ContractError::Internal)
     }
 
