@@ -168,7 +168,7 @@ impl MintCallBuilder {
     }
 }
 
-pub(crate) fn create_token_mint_proof(
+pub fn create_token_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     output: &TransactionBuilderOutputInfo,

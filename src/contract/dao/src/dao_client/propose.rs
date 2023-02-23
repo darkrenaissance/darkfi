@@ -51,8 +51,7 @@ pub struct DaoProposeNote {
 
 pub struct DaoProposeStakeInput {
     pub secret: SecretKey,
-    //pub note: money::transfer::wallet::Note,
-    pub note: darkfi_money_contract::client::Note,
+    pub note: darkfi_money_contract::client::MoneyNote,
     pub leaf_position: MerklePosition,
     pub merkle_path: Vec<MerkleNode>,
     pub signature_secret: SecretKey,

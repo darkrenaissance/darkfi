@@ -16,20 +16,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! TODO: This file should be deleted and the API from money::client
+//!       should be used directly.
+
 use darkfi::{
     zk::{Proof, ProvingKey},
     zkas::ZkBinary,
     Result,
 };
 use darkfi_sdk::crypto::{
-    pallas, pasta_prelude::*, MerkleNode, MerklePosition, PublicKey, SecretKey, TokenId, ValueBlind,
+    note::AeadEncryptedNote, pallas, pasta_prelude::*, MerkleNode, MerklePosition, PublicKey,
+    SecretKey, TokenId, ValueBlind,
 };
 
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
-    client::{create_transfer_burn_proof, create_transfer_mint_proof, Note},
-    model::{ClearInput, Input, MoneyTransferParams, Output},
+    client::{
+        transfer_v1::{
+            create_transfer_burn_proof, create_transfer_mint_proof, TransactionBuilderInputInfo,
+            TransactionBuilderOutputInfo,
+        },
+        MoneyNote,
+    },
+    model::{ClearInput, Input, MoneyTransferParamsV1, Output},
 };
 
 pub struct TransferCall {
@@ -48,7 +58,7 @@ pub struct TransferInput {
     pub leaf_position: MerklePosition,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
-    pub note: Note,
+    pub note: MoneyNote,
     pub user_data_blind: pallas::Base,
     pub value_blind: ValueBlind,
     pub signature_secret: SecretKey,
@@ -93,7 +103,7 @@ impl TransferCall {
         mint_pk: &ProvingKey,
         burn_zkbin: &ZkBinary,
         burn_pk: &ProvingKey,
-    ) -> Result<(MoneyTransferParams, Vec<Proof>)> {
+    ) -> Result<(MoneyTransferParamsV1, Vec<Proof>)> {
         assert!(self.clear_inputs.len() + self.inputs.len() > 0);
 
         let mut clear_inputs = vec![];
@@ -120,24 +130,21 @@ impl TransferCall {
             let value_blind = input.value_blind;
             input_blinds.push(value_blind);
 
-            // Note from the previous output
-            let note = input.note.clone();
+            // FIXME: Just an API hack
+            let _input = TransactionBuilderInputInfo {
+                leaf_position: input.leaf_position,
+                merkle_path: input.merkle_path,
+                secret: input.secret,
+                note: input.note,
+            };
 
             let (proof, revealed) = create_transfer_burn_proof(
                 burn_zkbin,
                 burn_pk,
-                note.value,
-                note.token_id,
+                &_input,
                 value_blind,
                 token_blind,
-                note.serial,
-                note.spend_hook,
-                note.user_data,
                 input.user_data_blind,
-                note.coin_blind,
-                input.secret,
-                input.leaf_position,
-                input.merkle_path.clone(),
                 input.signature_secret,
             )?;
 
@@ -171,23 +178,28 @@ impl TransferCall {
             let serial = output.serial;
             let coin_blind = output.coin_blind;
 
+            // FIXME: This is a hack between the two APIs
+            let _output = TransactionBuilderOutputInfo {
+                value: output.value,
+                token_id: output.token_id,
+                public_key: output.public,
+            };
+
             let (proof, revealed) = create_transfer_mint_proof(
                 mint_zkbin,
                 mint_pk,
-                output.value,
-                output.token_id,
+                &_output,
                 value_blind,
                 token_blind,
                 serial,
                 output.spend_hook,
                 output.user_data,
                 coin_blind,
-                output.public,
             )?;
 
             proofs.push(proof);
 
-            let note = Note {
+            let note = MoneyNote {
                 serial,
                 value: output.value,
                 token_id: output.token_id,
@@ -199,18 +211,17 @@ impl TransferCall {
                 memo: Vec::new(),
             };
 
-            let encrypted_note = note.encrypt(&output.public)?;
+            let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public, &mut OsRng)?;
 
             let output = Output {
                 value_commit: revealed.value_commit,
                 token_commit: revealed.token_commit,
-                coin: revealed.coin.inner(),
-                ciphertext: encrypted_note.ciphertext,
-                ephem_public: encrypted_note.ephem_public,
+                coin: revealed.coin,
+                note: encrypted_note,
             };
             outputs.push(output);
         }
 
-        Ok((MoneyTransferParams { clear_inputs, inputs, outputs }, proofs))
+        Ok((MoneyTransferParamsV1 { clear_inputs, inputs, outputs }, proofs))
     }
 }

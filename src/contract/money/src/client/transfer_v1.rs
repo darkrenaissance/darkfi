@@ -103,20 +103,20 @@ impl TransferBurnRevealed {
     }
 }
 
-pub(crate) struct TransactionBuilderClearInputInfo {
+pub struct TransactionBuilderClearInputInfo {
     pub value: u64,
     pub token_id: TokenId,
     pub signature_secret: SecretKey,
 }
 
-pub(crate) struct TransactionBuilderInputInfo {
+pub struct TransactionBuilderInputInfo {
     pub leaf_position: MerklePosition,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
     pub note: MoneyNote,
 }
 
-pub(crate) struct TransactionBuilderOutputInfo {
+pub struct TransactionBuilderOutputInfo {
     pub value: u64,
     pub token_id: TokenId,
     pub public_key: PublicKey,
@@ -363,7 +363,7 @@ impl TransferCallBuilder {
     }
 }
 
-pub(crate) fn create_transfer_burn_proof(
+pub fn create_transfer_burn_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     input: &TransactionBuilderInputInfo,
@@ -439,7 +439,7 @@ pub(crate) fn create_transfer_burn_proof(
     Ok((proof, public_inputs))
 }
 
-pub(crate) fn create_transfer_mint_proof(
+pub fn create_transfer_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     output: &TransactionBuilderOutputInfo,

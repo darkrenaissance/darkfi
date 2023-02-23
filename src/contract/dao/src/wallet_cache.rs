@@ -17,14 +17,15 @@
  */
 
 use darkfi_sdk::crypto::{
-    merkle_prelude::*, Coin, MerkleNode, MerklePosition, MerkleTree, SecretKey,
+    merkle_prelude::*, note::AeadEncryptedNote, Coin, MerkleNode, MerklePosition, MerkleTree,
+    SecretKey,
 };
 
-use darkfi_money_contract::client::{EncryptedNote, Note};
+use darkfi_money_contract::client::MoneyNote;
 
 pub struct OwnCoin {
     pub coin: Coin,
-    pub note: Note,
+    pub note: MoneyNote,
     pub leaf_position: MerklePosition,
 }
 
@@ -64,7 +65,7 @@ impl WalletCache {
         panic!("you forget to track() this secret!");
     }
 
-    pub fn try_decrypt_note(&mut self, coin: Coin, ciphertext: &EncryptedNote) {
+    pub fn try_decrypt_note(&mut self, coin: Coin, ciphertext: &AeadEncryptedNote) {
         // Add the new coins to the Merkle tree
         let node = MerkleNode::from(coin.inner());
         self.tree.append(&node);
