@@ -20,7 +20,8 @@ use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
         merkle_prelude::*, pallas, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Coin,
-        Keypair, MerkleNode, MerkleTree, SecretKey, TokenId, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        Keypair, MerkleNode, MerkleTree, SecretKey, TokenId, DAO_CONTRACT_ID, DARK_TOKEN_ID,
+        MONEY_CONTRACT_ID,
     },
     ContractCall,
 };
