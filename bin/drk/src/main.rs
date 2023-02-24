@@ -74,6 +74,9 @@ use wallet_dao::DaoParams;
 /// Wallet functionality related to Money
 mod wallet_money;
 
+/// Wallet functionality related to arbitrary tokens
+mod wallet_token;
+
 #[derive(Parser)]
 #[command(about = cli_desc!())]
 struct Args {
@@ -1134,7 +1137,18 @@ async fn main() -> Result<()> {
         },
 
         Subcmd::Token(cmd) => match cmd {
-            TokenSubcmd::Import => todo!(),
+            TokenSubcmd::Import => {
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let mint_authority =
+                    SecretKey::from_str(buf.trim()).with_context(|| "Invalid secret key")?;
+
+                let drk = Drk::new(args.endpoint).await?;
+                drk.import_mint_authority(mint_authority).await?;
+
+                Ok(())
+            }
+
             TokenSubcmd::GenerateMint => todo!(),
             TokenSubcmd::List => todo!(),
             TokenSubcmd::Mint { token, amount, recipient } => todo!(),
