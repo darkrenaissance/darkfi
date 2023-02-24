@@ -28,6 +28,11 @@ $(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
 $(PROOFS_BIN): $(ZKAS) $(PROOFS_SRC)
 	$(ZKAS) $(basename $@) -o $@
 
+test-integration: all
+	$(CARGO) test --release --features=no-entrypoint,client \
+		--package darkfi-money-contract \
+		--test integration
+
 test-mint-pay-swap: all
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
@@ -38,9 +43,9 @@ bench:
 		--package darkfi-money-contract \
 		--test verification_bench $(FILTER)
 
-test: test-mint-pay-swap
+test: test-integration test-mint-pay-swap
 
 clean:
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test-mint-pay-swap bench test clean
+.PHONY: all test-integration test-mint-pay-swap bench test clean
