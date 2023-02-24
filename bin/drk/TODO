@@ -1,0 +1,4 @@
+* Spent coins can be tracked through nullifiers
+  * So in the wallet, once we broadcast a tx, we can spend a coin
+  * Also extend the wallet.sql schema to support both confirmed and
+    unconfirmed coins (use tx hash for that like DAO does)

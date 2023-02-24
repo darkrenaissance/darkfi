@@ -20,19 +20,18 @@ use anyhow::{anyhow, Result};
 use darkfi::{
     tx::Transaction,
     util::parse::encode_base10,
-    zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses, Proof},
+    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses, Proof},
     zkas::ZkBinary,
 };
 use darkfi_money_contract::{
-    client::{build_half_swap_tx, MoneyNote},
+    client::{swap_v1::SwapCallBuilder, MoneyNote},
     model::MoneyTransferParamsV1,
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
         contract_id::MONEY_CONTRACT_ID,
-        note::AeadEncryptedNote,
-        pedersen::{pedersen_commitment_base, pedersen_commitment_u64, ValueBlind},
+        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
         poseidon_hash, Coin, PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
@@ -51,8 +50,8 @@ pub struct PartialSwapData {
     proofs: Vec<Proof>,
     value_pair: (u64, u64),
     token_pair: (TokenId, TokenId),
-    value_blinds: Vec<ValueBlind>,
-    token_blinds: Vec<ValueBlind>,
+    value_blinds: Vec<pallas::Scalar>,
+    token_blinds: Vec<pallas::Scalar>,
 }
 
 impl Drk {
@@ -112,38 +111,42 @@ impl Drk {
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
 
-        eprintln!("Creating Mint circuit proving key");
-        let mint_pk = ProvingKey::build(k, &mint_circuit);
-        eprintln!("Creating Burn circuit proving key");
-        let burn_pk = ProvingKey::build(k, &burn_circuit);
+        // Since we're creating the first half, we generate the blinds.
+        let value_blinds = [pallas::Scalar::random(&mut OsRng), pallas::Scalar::random(&mut OsRng)];
+        let token_blinds = [pallas::Scalar::random(&mut OsRng), pallas::Scalar::random(&mut OsRng)];
 
         // Now we should have everything we need to build the swap half
+        eprintln!("Creating Mint and Burn circuit proving keys");
+        let builder = SwapCallBuilder {
+            pubkey: address,
+            value_send,
+            token_id_send: token_send,
+            value_recv,
+            token_id_recv: token_recv,
+            user_data_blind_send: pallas::Base::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
+            spend_hook_recv: pallas::Base::zero(), // <-- FIXME: Should be passed in
+            user_data_recv: pallas::Base::zero(),  // <-- FIXME: Should be passed in
+            value_blinds,
+            token_blinds,
+            coin: burn_coin,
+            tree,
+            mint_zkbin,
+            mint_pk: ProvingKey::build(k, &mint_circuit),
+            burn_zkbin,
+            burn_pk: ProvingKey::build(k, &burn_circuit),
+        };
+
         eprintln!("Building first half of the swap transaction");
-        let (half_params, half_proofs, _half_keys, _spent_coins, value_blinds, token_blinds) =
-            build_half_swap_tx(
-                &address,
-                value_send,
-                token_send,
-                value_recv,
-                token_recv,
-                &[],
-                &[],
-                &[burn_coin],
-                &tree,
-                &mint_zkbin,
-                &mint_pk,
-                &burn_zkbin,
-                &burn_pk,
-            )?;
+        let debris = builder.build()?;
 
         // Now we have the half, so we can build `PartialSwapData` and return it.
         let ret = PartialSwapData {
-            params: half_params,
-            proofs: half_proofs,
+            params: debris.params,
+            proofs: debris.proofs,
             value_pair: (value_send, value_recv),
             token_pair: (token_send, token_recv),
-            value_blinds,
-            token_blinds,
+            value_blinds: value_blinds.to_vec(),
+            token_blinds: token_blinds.to_vec(),
         };
 
         Ok(ret)
@@ -198,43 +201,43 @@ impl Drk {
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
 
-        eprintln!("Creating Mint circuit proving key");
-        let mint_pk = ProvingKey::build(k, &mint_circuit);
-        eprintln!("Creating Burn circuit proving key");
-        let burn_pk = ProvingKey::build(k, &burn_circuit);
-
         // TODO: Maybe some kind of verification at this point
 
         // Now we should have everything we need to build the swap half
+        eprintln!("Creating Mint and Burn circuit proving keys");
+        let builder = SwapCallBuilder {
+            pubkey: address,
+            value_send: partial.value_pair.1,
+            token_id_send: partial.token_pair.1,
+            value_recv: partial.value_pair.0,
+            token_id_recv: partial.token_pair.0,
+            user_data_blind_send: pallas::Base::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
+            spend_hook_recv: pallas::Base::zero(), // <-- FIXME: Should be passed in
+            user_data_recv: pallas::Base::zero(),  // <-- FIXME: Should be passed in
+            value_blinds: partial.value_blinds.try_into().unwrap(),
+            token_blinds: partial.token_blinds.try_into().unwrap(),
+            coin: burn_coin,
+            tree,
+            mint_zkbin,
+            mint_pk: ProvingKey::build(k, &mint_circuit),
+            burn_zkbin,
+            burn_pk: ProvingKey::build(k, &burn_circuit),
+        };
+
         eprintln!("Building second half of the swap transaction");
-        let (half_params, half_proofs, half_keys, _spent_coins, _value_blinds, _token_blinds) =
-            build_half_swap_tx(
-                &address,
-                partial.value_pair.1,
-                partial.token_pair.1,
-                partial.value_pair.0,
-                partial.token_pair.0,
-                &partial.value_blinds,
-                &partial.token_blinds,
-                &[burn_coin],
-                &tree,
-                &mint_zkbin,
-                &mint_pk,
-                &burn_zkbin,
-                &burn_pk,
-            )?;
+        let debris = builder.build()?;
 
         let full_params = MoneyTransferParamsV1 {
             clear_inputs: vec![],
-            inputs: vec![partial.params.inputs[0].clone(), half_params.inputs[0].clone()],
-            outputs: vec![partial.params.outputs[0].clone(), half_params.outputs[0].clone()],
+            inputs: vec![partial.params.inputs[0].clone(), debris.params.inputs[0].clone()],
+            outputs: vec![partial.params.outputs[0].clone(), debris.params.outputs[0].clone()],
         };
 
         let full_proofs = vec![
             partial.proofs[0].clone(),
-            half_proofs[0].clone(),
+            debris.proofs[0].clone(),
             partial.proofs[1].clone(),
-            half_proofs[1].clone(),
+            debris.proofs[1].clone(),
         ];
 
         let mut data = vec![MoneyFunction::OtcSwapV1 as u8];
@@ -245,7 +248,7 @@ impl Drk {
             signatures: vec![],
         };
         eprintln!("Signing swap transaction");
-        let sigs = tx.create_sigs(&mut OsRng, &half_keys)?;
+        let sigs = tx.create_sigs(&mut OsRng, &[debris.signature_secret])?;
         tx.signatures = vec![sigs];
 
         Ok(tx)

@@ -124,9 +124,6 @@ impl Drk {
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
 
         eprintln!("Creating Mint and Burn circuit proving keys");
-        let mint_pk = ProvingKey::build(k, &mint_circuit);
-        let burn_pk = ProvingKey::build(k, &burn_circuit);
-
         let transfer_builder = TransferCallBuilder {
             keypair,
             recipient,

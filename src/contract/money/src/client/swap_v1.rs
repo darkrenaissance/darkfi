@@ -48,6 +48,7 @@ use crate::{
 pub struct SwapCallDebris {
     pub params: MoneyTransferParamsV1,
     pub proofs: Vec<Proof>,
+    pub signature_secret: SecretKey,
 }
 
 /// Struct holding necessary information to build a `Money::OtcSwapV1` contract call.
@@ -199,7 +200,7 @@ impl SwapCallBuilder {
 
         // Now we should have all the params, zk proofs, and signature secrets.
         // We return it all and let the caller deal with it.
-        let debris = SwapCallDebris { params, proofs };
+        let debris = SwapCallDebris { params, proofs, signature_secret };
         Ok(debris)
     }
 }
