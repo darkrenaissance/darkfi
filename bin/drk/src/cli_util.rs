@@ -21,7 +21,7 @@ use async_std::{fs::File, io::WriteExt};
 use darkfi::{util::parse::decode_base10, Result};
 use darkfi_sdk::crypto::TokenId;
 
-use crate::Drk;
+use super::Drk;
 
 pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     let v: Vec<&str> = s.split(':').collect();

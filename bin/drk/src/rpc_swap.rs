@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::fmt;
 
 use anyhow::{anyhow, Result};
 use darkfi::{
@@ -42,7 +43,7 @@ use rand::rngs::OsRng;
 
 use super::Drk;
 
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 /// Half of the swap data, includes the coin that is supposed to be sent,
 /// and the coin that is supposed to be received.
 pub struct PartialSwapData {
@@ -52,6 +53,19 @@ pub struct PartialSwapData {
     token_pair: (TokenId, TokenId),
     value_blinds: Vec<pallas::Scalar>,
     token_blinds: Vec<pallas::Scalar>,
+}
+
+impl fmt::Display for PartialSwapData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s =
+            format!(
+            "{:#?}\nValue pair: {}:{}\nToken pair: {}:{}\nValue blinds: {:?}\nToken blinds: {:?}\n",
+            self.params, self.value_pair.0, self.value_pair.1, self.token_pair.0, self.token_pair.1,
+            self.value_blinds, self.token_blinds,
+        );
+
+        write!(f, "{}", s)
+    }
 }
 
 impl Drk {
@@ -173,7 +187,7 @@ impl Drk {
         // If there are any, we'll just spend the first one we see.
         let burn_coin = owncoins[0].0.clone();
 
-        // Fetch our default address
+        // Fetch our default address // FIXME: Should actually be getting is_default
         let address = self.wallet_address(1).await?;
 
         // We'll also need our Merkle tree
@@ -257,14 +271,14 @@ impl Drk {
     /// Inspect and verify a given swap (half or full) transaction
     pub async fn inspect_swap(&self, bytes: Vec<u8>) -> Result<()> {
         let mut full: Option<Transaction> = None;
-        let mut _half: Option<PartialSwapData> = None;
+        let mut half: Option<PartialSwapData> = None;
 
         if let Ok(v) = deserialize(&bytes) {
             full = Some(v)
         };
 
         match deserialize(&bytes) {
-            Ok(v) => _half = Some(v),
+            Ok(v) => half = Some(v),
             Err(_) => {
                 if full.is_none() {
                     return Err(anyhow!("Failed to deserialize to Transaction or PartialSwapData"))
@@ -401,8 +415,11 @@ impl Drk {
             return Ok(())
         }
 
-        // TODO: Inspect PartialSwapData
-        todo!("Inspect PartialSwapData");
+        // Inspect PartialSwapData
+        let partial = half.unwrap();
+        eprintln!("{}", partial);
+
+        Ok(())
     }
 
     /// Sign a given transaction by retrieving the secret key from the encrypted
