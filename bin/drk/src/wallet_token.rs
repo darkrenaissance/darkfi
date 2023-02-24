@@ -16,12 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{rpc::jsonrpc::JsonRequest, wallet::walletdb::QueryType, Result};
+use anyhow::{anyhow, Result};
+use darkfi::{rpc::jsonrpc::JsonRequest, wallet::walletdb::QueryType};
 use darkfi_money_contract::client::{
     MONEY_TOKENS_IS_FROZEN, MONEY_TOKENS_MINT_AUTHORITY, MONEY_TOKENS_TABLE, MONEY_TOKENS_TOKEN_ID,
 };
 use darkfi_sdk::crypto::{SecretKey, TokenId};
-use darkfi_serial::serialize;
+use darkfi_serial::{deserialize, serialize};
 use serde_json::json;
 
 use super::Drk;
@@ -54,5 +55,42 @@ impl Drk {
         let _ = self.rpc_client.request(req).await?;
 
         Ok(())
+    }
+
+    pub async fn list_tokens(&self) -> Result<Vec<(TokenId, SecretKey, bool)>> {
+        let mut ret = vec![];
+
+        let query = format!("SELECT * FROM {};", MONEY_TOKENS_TABLE);
+
+        let params = json!([
+            query,
+            QueryType::Blob as u8,
+            MONEY_TOKENS_MINT_AUTHORITY,
+            QueryType::Blob as u8,
+            MONEY_TOKENS_TOKEN_ID,
+            QueryType::Integer as u8,
+            MONEY_TOKENS_IS_FROZEN,
+        ]);
+
+        let req = JsonRequest::new("wallet.query_row_multi", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        let Some(rows) = rep.as_array() else {
+            return Err(anyhow!("[list_tokens] Unexpected response from darkfid: {}", rep));
+        };
+
+        for row in rows {
+            let auth_bytes: Vec<u8> = serde_json::from_value(row[0].clone())?;
+            let mint_authority = deserialize(&auth_bytes)?;
+
+            let token_bytes: Vec<u8> = serde_json::from_value(row[1].clone())?;
+            let token_id = deserialize(&token_bytes)?;
+
+            let frozen: i32 = serde_json::from_value(row[2].clone())?;
+
+            ret.push((token_id, mint_authority, frozen != 0));
+        }
+
+        Ok(ret)
     }
 }

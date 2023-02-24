@@ -1164,7 +1164,26 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            TokenSubcmd::List => todo!(),
+            TokenSubcmd::List => {
+                let drk = Drk::new(args.endpoint).await?;
+                let tokens = drk.list_tokens().await?;
+
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Token ID", "Mint Authority", "Frozen"]);
+
+                for (token_id, authority, frozen) in tokens {
+                    table.add_row(row![token_id, authority, frozen]);
+                }
+
+                if table.is_empty() {
+                    println!("No tokens found");
+                } else {
+                    println!("{}", table);
+                }
+
+                Ok(())
+            }
             TokenSubcmd::Mint { token, amount, recipient } => todo!(),
             TokenSubcmd::Freeze { token } => todo!(),
         },
