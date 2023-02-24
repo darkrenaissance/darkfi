@@ -4,10 +4,10 @@ On the testnet, we are also able to create an anonymous DAO. Using
 the `drk` CLI tool, we have a `dao` subcommand that can perform the
 necessary operations. Let's create a DAO with the following parameters:
 
-* Proposer limit: `90`
+* Proposer limit: `20`
 * Quorum: `10`
 * Approval ratio: `0.67`
-* Governance token: `A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd`
+* Governance token: `MLDY`
 
 You can see what these parameters mean with the `help` command.
 
@@ -18,7 +18,7 @@ $ ./drk help dao create
 Lets create our DAO.
 
 ```
-$ ./drk dao create 90 10 0.67 A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd > dao.dat
+$ ./drk dao create 90 10 0.67 MLDY > dao.dat
 $ ./drk dao view < dao.dat
 ```
 
@@ -56,9 +56,8 @@ DAO public key with `dao list` and then create a transfer transaction:
 
 ```
 $ ./drk dao list 1
-$ ./drk transfer 10 BNBZ9YprWvEGMYHW4dFvbLuLfHnN9Bs64zuTFQAbw9Dy \
-    6BwyxvNut6jrPaQ5YPcMVgM3nhwNxvdFhVT4CwQHwJgN \
-    --dao CvnfwNHGLEL42mpjETtWknt7ZEQhoJCACGZ9rVFscFw4 > dao_transfer
+$ ./drk transfer 10 WCKD {DAO_PUBLIC_KEY} \
+    --dao {DAO_BULLA} > dao_transfer
 $ ./drk broadcast < dao_transfer
 ```
 
@@ -73,20 +72,10 @@ $ ./drk dao balance 1
 
 Now that the DAO has something in their treasury, we can create a
 proposal to send it somewhere. Let's send 5 of the 10 tokens to our
-address (we can find that with `drk wallet --address`).
-
-Since we chose `90` as the governance token proposal limit, let's
-just airdrop that into our wallet first:
+address (we can find that with `drk wallet --address`):
 
 ```
-$ ./drk airdrop 90 A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd
-```
-
-Then create the proposal:
-
-```
-$ ./drk dao propose 1 ChgNSmpp6pCstPsvYNNT1686fuj1PPobo1C4qWXubr3r \
-    5 BNBZ9YprWvEGMYHW4dFvbLuLfHnN9Bs64zuTFQAbw9Dy > proposal_tx
+$ ./drk dao propose 1 {YOUR_ADDRESS} 5 WCKD > proposal_tx
 $ ./drk broadcast < proposal_tx
 ```
 
