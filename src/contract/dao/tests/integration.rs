@@ -32,7 +32,7 @@ use darkfi_dao_contract::{
     dao_client, dao_model, money_client, note, wallet_cache::WalletCache, DaoFunction,
 };
 
-use darkfi_money_contract::{client::EncryptedNote, model::MoneyTransferParams, MoneyFunction};
+use darkfi_money_contract::{model::MoneyTransferParamsV1, MoneyFunction};
 
 mod harness;
 use harness::{init_logger, DaoTestHarness};
@@ -161,7 +161,7 @@ async fn integration_test() -> Result<()> {
 
     let contract_id = *MONEY_CONTRACT_ID;
 
-    let mut data = vec![MoneyFunction::Transfer as u8];
+    let mut data = vec![MoneyFunction::TransferV1 as u8];
     params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id, data }];
     let proofs = vec![proofs];
@@ -178,15 +178,11 @@ async fn integration_test() -> Result<()> {
         assert_eq!(tx.calls.len(), 1);
         let calldata = &tx.calls[0].data;
         let params_data = &calldata[1..];
-        let params: MoneyTransferParams = Decodable::decode(params_data)?;
+        let params: MoneyTransferParamsV1 = Decodable::decode(params_data)?;
 
         for output in params.outputs {
-            let coin = output.coin;
-            let enc_note =
-                EncryptedNote { ciphertext: output.ciphertext, ephem_public: output.ephem_public };
-
-            let coin = Coin(coin);
-            cache.try_decrypt_note(coin, &enc_note);
+            let coin = Coin::from(output.coin);
+            cache.try_decrypt_note(coin, &output.note);
         }
     }
 
@@ -282,7 +278,7 @@ async fn integration_test() -> Result<()> {
 
     let contract_id = *MONEY_CONTRACT_ID;
 
-    let mut data = vec![MoneyFunction::Transfer as u8];
+    let mut data = vec![MoneyFunction::TransferV1 as u8];
     params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id, data }];
     let proofs = vec![proofs];
@@ -297,14 +293,11 @@ async fn integration_test() -> Result<()> {
         assert_eq!(tx.calls.len(), 1);
         let calldata = &tx.calls[0].data;
         let params_data = &calldata[1..];
-        let params: MoneyTransferParams = Decodable::decode(params_data)?;
+        let params: MoneyTransferParamsV1 = Decodable::decode(params_data)?;
 
         for output in params.outputs {
-            let coin = output.coin;
-            let enc_note =
-                EncryptedNote { ciphertext: output.ciphertext, ephem_public: output.ephem_public };
-            let coin = Coin(coin);
-            cache.try_decrypt_note(coin, &enc_note);
+            let coin = Coin::from(output.coin);
+            cache.try_decrypt_note(coin, &output.note);
         }
     }
 
@@ -819,7 +812,7 @@ async fn integration_test() -> Result<()> {
         &dao_th.money_burn_pk,
     )?;
 
-    let mut data = vec![MoneyFunction::Transfer as u8];
+    let mut data = vec![MoneyFunction::TransferV1 as u8];
     xfer_params.encode(&mut data)?;
     let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
