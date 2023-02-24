@@ -33,7 +33,11 @@ use darkfi_dao_contract::{
     dao_client, dao_model, money_client, note, wallet_cache::WalletCache, DaoFunction,
 };
 
-use darkfi_money_contract::{model::MoneyTransferParamsV1, MoneyFunction};
+use darkfi_money_contract::{
+    client::mint_v1::MintCallBuilder,
+    model::{MoneyMintParamsV1, MoneyTransferParamsV1},
+    MoneyFunction,
+};
 
 mod harness;
 use harness::{init_logger, DaoTestHarness};
@@ -60,8 +64,9 @@ async fn integration_test() -> Result<()> {
     let xdrk_token_id = *DARK_TOKEN_ID;
 
     // Governance token parameters
+    let gdrk_mint_auth = Keypair::random(&mut OsRng);
     let gdrk_supply = 1_000_000;
-    let gdrk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
+    let gdrk_token_id = TokenId::derive(gdrk_mint_auth.secret);
 
     // DAO parameters
     let dao = dao_client::DaoInfo {
@@ -224,81 +229,78 @@ async fn integration_test() -> Result<()> {
     cache.track(dao_th.bob_kp.secret);
     cache.track(dao_th.charlie_kp.secret);
 
+    // TODO: Clean this whole test up
+    let token_mint_zkbin = include_bytes!("../../money/proof/token_mint_v1.zk.bin");
+    let token_mint_zkbin = darkfi::zkas::ZkBinary::decode(token_mint_zkbin)?;
+    let token_mint_empty_wit = darkfi::zk::empty_witnesses(&token_mint_zkbin);
+    let token_mint_circuit =
+        darkfi::zk::ZkCircuit::new(token_mint_empty_wit, token_mint_zkbin.clone());
+    let token_mint_pk = darkfi::zk::ProvingKey::build(13, &token_mint_circuit);
+
     // Spend hook and user data disabled
     let spend_hook = pallas::Base::from(0);
     let user_data = pallas::Base::from(0);
 
-    let output1 = money_client::TransferOutput {
-        value: 400000,
-        token_id: gdrk_token_id,
-        public: dao_th.alice_kp.public,
-        serial: pallas::Base::random(&mut OsRng),
-        coin_blind: pallas::Base::random(&mut OsRng),
+    let mut builder = MintCallBuilder {
+        mint_authority: gdrk_mint_auth,
+        recipient: dao_th.alice_kp.public,
+        amount: 400000,
         spend_hook,
         user_data,
+        token_mint_zkbin,
+        token_mint_pk,
     };
+    let debris1 = builder.build()?;
 
-    let output2 = money_client::TransferOutput {
-        value: 400000,
-        token_id: gdrk_token_id,
-        public: dao_th.bob_kp.public,
-        serial: pallas::Base::random(&mut OsRng),
-        coin_blind: pallas::Base::random(&mut OsRng),
-        spend_hook,
-        user_data,
-    };
+    builder.recipient = dao_th.bob_kp.public;
+    let debris2 = builder.build()?;
 
-    let output3 = money_client::TransferOutput {
-        value: 200000,
-        token_id: gdrk_token_id,
-        public: dao_th.charlie_kp.public,
-        serial: pallas::Base::random(&mut OsRng),
-        coin_blind: pallas::Base::random(&mut OsRng),
-        spend_hook,
-        user_data,
-    };
+    builder.amount = 200000;
+    builder.recipient = dao_th.charlie_kp.public;
+    let debris3 = builder.build()?;
 
     assert!(2 * 400000 + 200000 == gdrk_supply);
 
-    let call = money_client::TransferCall {
-        clear_inputs: vec![money_client::TransferClearInput {
-            value: gdrk_supply,
-            token_id: gdrk_token_id,
-            // This might be different for various tokens but lets reuse it here
-            signature_secret: dao_th.faucet_kp.secret,
-        }],
-        inputs: vec![],
-        outputs: vec![output1, output2, output3],
-    };
-    let (params, proofs) = call.make(
-        &dao_th.money_mint_zkbin,
-        &dao_th.money_mint_pk,
-        &dao_th.money_burn_zkbin,
-        &dao_th.money_burn_pk,
-    )?;
+    // This should actually be 3 calls in a single tx, but w/e.
+    let mut data = vec![MoneyFunction::MintV1 as u8];
+    debris1.params.encode(&mut data)?;
+    let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
+    let proofs = vec![debris1.proofs];
+    let mut tx1 = Transaction { calls, proofs, signatures: vec![] };
+    let sigs = tx1.create_sigs(&mut OsRng, &[gdrk_mint_auth.secret])?;
+    tx1.signatures = vec![sigs];
 
-    let contract_id = *MONEY_CONTRACT_ID;
+    let mut data = vec![MoneyFunction::MintV1 as u8];
+    debris2.params.encode(&mut data)?;
+    let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
+    let proofs = vec![debris2.proofs];
+    let mut tx2 = Transaction { calls, proofs, signatures: vec![] };
+    let sigs = tx2.create_sigs(&mut OsRng, &[gdrk_mint_auth.secret])?;
+    tx2.signatures = vec![sigs];
 
-    let mut data = vec![MoneyFunction::TransferV1 as u8];
-    params.encode(&mut data)?;
-    let calls = vec![ContractCall { contract_id, data }];
-    let proofs = vec![proofs];
-    let mut tx = Transaction { calls, proofs, signatures: vec![] };
-    let sigs = tx.create_sigs(&mut OsRng, &vec![dao_th.faucet_kp.secret])?;
-    tx.signatures = vec![sigs];
+    let mut data = vec![MoneyFunction::MintV1 as u8];
+    debris3.params.encode(&mut data)?;
+    let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
+    let proofs = vec![debris3.proofs];
+    let mut tx3 = Transaction { calls, proofs, signatures: vec![] };
+    let sigs = tx3.create_sigs(&mut OsRng, &[gdrk_mint_auth.secret])?;
+    tx3.signatures = vec![sigs];
 
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    dao_th
+        .alice_state
+        .read()
+        .await
+        .verify_transactions(&[tx1.clone(), tx2.clone(), tx3.clone()], true)
+        .await?;
 
     // Wallet
     {
-        assert_eq!(tx.calls.len(), 1);
-        let calldata = &tx.calls[0].data;
-        let params_data = &calldata[1..];
-        let params: MoneyTransferParamsV1 = Decodable::decode(params_data)?;
-
-        for output in params.outputs {
-            let coin = Coin::from(output.coin);
-            cache.try_decrypt_note(coin, &output.note);
+        for tx in [tx1, tx2, tx3] {
+            assert_eq!(tx.calls.len(), 1);
+            let calldata = &tx.calls[0].data;
+            let params_data = &calldata[1..];
+            let params: MoneyMintParamsV1 = Decodable::decode(params_data)?;
+            cache.try_decrypt_note(params.output.coin, &params.output.note);
         }
     }
 
