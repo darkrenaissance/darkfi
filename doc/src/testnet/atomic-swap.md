@@ -3,9 +3,9 @@
 In order to do an atomic swap with someone, you will
 first have to come to consensus on what tokens you wish to
 swap. For example purposes, let's say you want to swap `40`
-`DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq` (which is the balance
-you should have left over after doing the above payment) for your
-counterparty's `20` `AcABG4fnmBuT5vuXV8TLdEV8panhk5SdtBZxCCLqQxyL`.
+`WCKD` (which is the balance you should have left over after
+doing the above payment) for your counterparty's `20` `MLDY`.
+For this tautorial the counterparty is yourself.
 
 To protect your anonymity from the counterparty, the swap can only
 send entire coins. To create a smaller coin denomination, send
@@ -19,9 +19,7 @@ $ ./drk wallet --coins
 You'll have to initiate the swap and build your half of the swap tx:
 
 ```
-$ ./drk otc init -v 40.0:20.0 \
-    -t DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq:AcABG4fnmBuT5vuXV8TLdEV8panhk5SdtBZxCCLqQxyL \
-    > half_swap
+$ ./drk otc init -v 40.0:20.0 -t WCKD:MLDY > half_swap
 ```
 
 Then you can send this `half_swap` file to your counterparty and they

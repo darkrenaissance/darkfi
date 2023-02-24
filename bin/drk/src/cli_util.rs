@@ -21,6 +21,8 @@ use async_std::{fs::File, io::WriteExt};
 use darkfi::{util::parse::decode_base10, Result};
 use darkfi_sdk::crypto::TokenId;
 
+use crate::Drk;
+
 pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     let v: Vec<&str> = s.split(':').collect();
     if v.len() != 2 {
@@ -40,19 +42,23 @@ pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     Ok((val0.unwrap(), val1.unwrap()))
 }
 
-pub fn parse_token_pair(s: &str) -> Result<(TokenId, TokenId)> {
+pub async fn parse_token_pair(drk: &Drk, s: &str) -> Result<(TokenId, TokenId)> {
     let v: Vec<&str> = s.split(':').collect();
     if v.len() != 2 {
         eprintln!("Invalid token pair. Use a pair such as:");
+        eprintln!("WCKD:MLDY");
+        eprintln!("or");
         eprintln!("A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:FCuoMii64H5Ee4eVWBjP18WTFS8iLUJmGi16Qti1xFQ2");
         exit(1);
     }
 
-    let tok0 = TokenId::try_from(v[0]);
-    let tok1 = TokenId::try_from(v[1]);
+    let tok0 = drk.get_token(v[0].to_string()).await;
+    let tok1 = drk.get_token(v[1].to_string()).await;
 
     if tok0.is_err() || tok1.is_err() {
         eprintln!("Invalid token pair. Use a pair such as:");
+        eprintln!("WCKD:MLDY");
+        eprintln!("or");
         eprintln!("A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:FCuoMii64H5Ee4eVWBjP18WTFS8iLUJmGi16Qti1xFQ2");
         exit(1);
     }

@@ -728,7 +728,7 @@ async fn main() -> Result<()> {
             match cmd {
                 OtcSubcmd::Init { value_pair, token_pair } => {
                     let (vp_send, vp_recv) = parse_value_pair(&value_pair)?;
-                    let (tp_send, tp_recv) = parse_token_pair(&token_pair)?;
+                    let (tp_send, tp_recv) = parse_token_pair(&drk, &token_pair).await?;
 
                     let half = drk
                         .init_swap(vp_send, tp_send, vp_recv, tp_recv)

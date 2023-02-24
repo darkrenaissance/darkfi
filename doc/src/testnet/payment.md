@@ -1,11 +1,11 @@
 # Payments
 
 Using the tokens we minted, we can make payments to other addresses.
-Let's try to send some `DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq`
+Let's try to send some `WCKD`
 tokens to `8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj`:
 
 ```
-$ ./drk transfer 2.69 DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq \
+$ ./drk transfer 2.69 WCKD \
     8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj > payment_tx
 ```
 
