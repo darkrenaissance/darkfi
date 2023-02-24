@@ -29,7 +29,8 @@ use darkfi_money_contract::{
         MONEY_COINS_COL_USER_DATA, MONEY_COINS_COL_VALUE, MONEY_COINS_COL_VALUE_BLIND,
         MONEY_COINS_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE,
         MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_KEY_ID, MONEY_KEYS_COL_PUBLIC,
-        MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+        MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TOKENS_COL_IS_FROZEN,
+        MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
     model::{MoneyFreezeParamsV1, MoneyMintParamsV1, MoneyTransferParamsV1, Output},
     MoneyFunction,
@@ -637,7 +638,15 @@ impl Drk {
         }
 
         for token_id in freezes {
-            // TODO: Update info in wallet if token id is found
+            let query = format!(
+                "UPDATE {} SET {} = 1 WHERE {} = ?1;",
+                MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID,
+            );
+
+            let params = json!([query, QueryType::Blob as u8, serialize(&token_id)]);
+
+            let req = JsonRequest::new("wallet.exec_sql", params);
+            let _ = self.rpc_client.request(req).await?;
         }
 
         if !owncoins.is_empty() {

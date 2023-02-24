@@ -76,9 +76,9 @@ pub const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
 pub const MONEY_COINS_COL_MEMO: &str = "memo";
 
 pub const MONEY_TOKENS_TABLE: &str = "money_tokens";
-pub const MONEY_TOKENS_MINT_AUTHORITY: &str = "mint_authority";
-pub const MONEY_TOKENS_TOKEN_ID: &str = "token_id";
-pub const MONEY_TOKENS_IS_FROZEN: &str = "is_frozen";
+pub const MONEY_TOKENS_COL_MINT_AUTHORITY: &str = "mint_authority";
+pub const MONEY_TOKENS_COL_TOKEN_ID: &str = "token_id";
+pub const MONEY_TOKENS_COL_IS_FROZEN: &str = "is_frozen";
 
 pub const MONEY_ALIASES_TABLE: &str = "money_aliases";
 pub const MONEY_ALIASES_COL_ALIAS: &str = "alias";

@@ -19,7 +19,8 @@
 use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, wallet::walletdb::QueryType};
 use darkfi_money_contract::client::{
-    MONEY_TOKENS_IS_FROZEN, MONEY_TOKENS_MINT_AUTHORITY, MONEY_TOKENS_TABLE, MONEY_TOKENS_TOKEN_ID,
+    MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_MINT_AUTHORITY, MONEY_TOKENS_COL_TOKEN_ID,
+    MONEY_TOKENS_TABLE,
 };
 use darkfi_sdk::crypto::{SecretKey, TokenId};
 use darkfi_serial::{deserialize, serialize};
@@ -36,9 +37,9 @@ impl Drk {
         let query = format!(
             "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
             MONEY_TOKENS_TABLE,
-            MONEY_TOKENS_MINT_AUTHORITY,
-            MONEY_TOKENS_TOKEN_ID,
-            MONEY_TOKENS_IS_FROZEN,
+            MONEY_TOKENS_COL_MINT_AUTHORITY,
+            MONEY_TOKENS_COL_TOKEN_ID,
+            MONEY_TOKENS_COL_IS_FROZEN,
         );
 
         let params = json!([
@@ -65,11 +66,11 @@ impl Drk {
         let params = json!([
             query,
             QueryType::Blob as u8,
-            MONEY_TOKENS_MINT_AUTHORITY,
+            MONEY_TOKENS_COL_MINT_AUTHORITY,
             QueryType::Blob as u8,
-            MONEY_TOKENS_TOKEN_ID,
+            MONEY_TOKENS_COL_TOKEN_ID,
             QueryType::Integer as u8,
-            MONEY_TOKENS_IS_FROZEN,
+            MONEY_TOKENS_COL_IS_FROZEN,
         ]);
 
         let req = JsonRequest::new("wallet.query_row_multi", params);
