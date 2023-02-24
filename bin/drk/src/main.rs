@@ -1170,13 +1170,22 @@ async fn main() -> Result<()> {
             TokenSubcmd::List => {
                 let drk = Drk::new(args.endpoint).await?;
                 let tokens = drk.list_tokens().await?;
+                let aliases_map = drk
+                    .get_aliases_mapped_by_token()
+                    .await
+                    .with_context(|| "Failed to fetch wallet aliases")?;
 
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Token ID", "Mint Authority", "Frozen"]);
+                table.set_titles(row!["Token ID", "Aliases", "Mint Authority", "Frozen"]);
 
                 for (token_id, authority, frozen) in tokens {
-                    table.add_row(row![token_id, authority, frozen]);
+                    let aliases = match aliases_map.get(&token_id.to_string()) {
+                        Some(a) => a,
+                        None => "-",
+                    };
+
+                    table.add_row(row![token_id, aliases, authority, frozen]);
                 }
 
                 if table.is_empty() {
@@ -1190,12 +1199,10 @@ async fn main() -> Result<()> {
 
             // TODO: Mint directly into DAO treasury
             TokenSubcmd::Mint { token, amount, recipient } => {
+                let drk = Drk::new(args.endpoint).await?;
                 let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
                 let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
-                let token_id =
-                    TokenId::try_from(token.as_str()).with_context(|| "Invalid token ID")?;
-
-                let drk = Drk::new(args.endpoint).await?;
+                let token_id = drk.get_token(token).await.with_context(|| "Invalid Token ID")?;
 
                 let tx = drk
                     .mint_token(&amount, rcpt, token_id)
@@ -1208,10 +1215,8 @@ async fn main() -> Result<()> {
             }
 
             TokenSubcmd::Freeze { token } => {
-                let token_id =
-                    TokenId::try_from(token.as_str()).with_context(|| "Invalid token ID")?;
-
                 let drk = Drk::new(args.endpoint).await?;
+                let token_id = drk.get_token(token).await.with_context(|| "Invalid Token ID")?;
 
                 let tx = drk
                     .freeze_token(token_id)
