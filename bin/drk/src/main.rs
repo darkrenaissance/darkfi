@@ -60,6 +60,9 @@ use rpc_swap::PartialSwapData;
 /// DAO methods
 mod rpc_dao;
 
+/// Token methods
+mod rpc_token;
+
 /// Blockchain methods
 mod rpc_blockchain;
 
@@ -1184,7 +1187,25 @@ async fn main() -> Result<()> {
 
                 Ok(())
             }
-            TokenSubcmd::Mint { token, amount, recipient } => todo!(),
+
+            // TODO: Mint directly into DAO treasury
+            TokenSubcmd::Mint { token, amount, recipient } => {
+                let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
+                let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
+                let token_id =
+                    TokenId::try_from(token.as_str()).with_context(|| "Invalid token ID")?;
+
+                let drk = Drk::new(args.endpoint).await?;
+
+                let tx = drk
+                    .mint_token(&amount, rcpt, token_id)
+                    .await
+                    .with_context(|| "Failed to create token mint transaction")?;
+
+                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+
+                Ok(())
+            }
             TokenSubcmd::Freeze { token } => todo!(),
         },
     }

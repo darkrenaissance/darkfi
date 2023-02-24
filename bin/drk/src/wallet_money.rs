@@ -31,7 +31,7 @@ use darkfi_money_contract::{
         MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_KEY_ID, MONEY_KEYS_COL_PUBLIC,
         MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
-    model::{MoneyTransferParamsV1, Output},
+    model::{MoneyMintParamsV1, MoneyTransferParamsV1, Output},
     MoneyFunction,
 };
 use darkfi_sdk::{
@@ -489,7 +489,7 @@ impl Drk {
 
         for (i, call) in tx.calls.iter().enumerate() {
             if call.contract_id == cid && call.data[0] == MoneyFunction::TransferV1 as u8 {
-                eprintln!("Found Money::Transfer in call {}", i);
+                eprintln!("Found Money::TransferV1 in call {}", i);
                 let params: MoneyTransferParamsV1 = deserialize(&call.data[1..])?;
 
                 for input in params.inputs {
@@ -504,7 +504,7 @@ impl Drk {
             }
 
             if call.contract_id == cid && call.data[0] == MoneyFunction::OtcSwapV1 as u8 {
-                eprintln!("Found Money::OtcSwap in call {}", i);
+                eprintln!("Found Money::OtcSwapV1 in call {}", i);
                 let params: MoneyTransferParamsV1 = deserialize(&call.data[1..])?;
 
                 for input in params.inputs {
@@ -514,6 +514,15 @@ impl Drk {
                 for output in params.outputs {
                     outputs.push(output);
                 }
+
+                continue
+            }
+
+            if call.contract_id == cid && call.data[0] == MoneyFunction::MintV1 as u8 {
+                eprintln!("Found Money::MintV1 in call {}", i);
+                let params: MoneyMintParamsV1 = deserialize(&call.data[1..])?;
+
+                outputs.push(params.output);
 
                 continue
             }
