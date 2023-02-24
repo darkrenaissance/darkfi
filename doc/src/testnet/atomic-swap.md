@@ -1,16 +1,16 @@
 # Atomic Swaps
 
-In order to do an atomic swap with someone, you will
-first have to come to consensus on what tokens you wish to
-swap. For example purposes, let's say you want to swap `40`
-`WCKD` (which is the balance you should have left over after
-doing the above payment) for your counterparty's `20` `MLDY`.
-For this tautorial the counterparty is yourself.
+In order to do an atomic swap with someone, you will first have to come
+to consensus on what tokens you wish to swap. For example purposes,
+let's say you want to swap `40` `WCKD` (which is the balance you
+should have left over after doing the payment from the previous page)
+for your counterparty's `20` `MLDY`. For this tutorial the counterparty
+is yourself.
 
-To protect your anonymity from the counterparty, the swap can only
-send entire coins. To create a smaller coin denomination, send
-yourself the amount you want to swap. Then check you have a spendable
-coin to swap with:
+To protect your anonymity from the counterparty, the swap can only send
+entire coins. To create a smaller coin denomination, send yourself
+the amount you want to swap. Then check you have a spendable coin to
+swap with:
 
 ```
 $ ./drk wallet --coins

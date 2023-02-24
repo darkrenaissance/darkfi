@@ -72,7 +72,7 @@ $ ./drk token generate-mint
 ```
 
 This will generate a new token mint authority and will tell you what
-your new token ID is. For this tautorial we will need two tokens so
+your new token ID is. For this tutorial we will need two tokens so
 execute the command again to generate another one.
 
 You can list your mint authorities with:
