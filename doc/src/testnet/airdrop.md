@@ -39,7 +39,7 @@ full token ID. Multiple aliases per token ID is supported.
 Example addition:
 
 ```
-$ ./drk alias add <ALIAS> <TOKEN>
+$ ./drk alias add {ALIAS} {TOKEN}
 ```
 
 So lets add the native token as `DARK` by executing:
@@ -84,8 +84,8 @@ $ ./drk token list
 Now lets add those two token IDs to our aliases:
 
 ```
-$ ./drk alias add XMR <TOKEN1>
-$ ./drk alias add BNB <TOKEN2>
+$ ./drk alias add WCKD {TOKEN1}
+$ ./drk alias add MLDY {TOKEN2}
 ```
 
 Now let's mint some tokens to ourself. First grab your wallet address,
@@ -93,10 +93,10 @@ and then create the token mint transaction, and finally - broadcast it:
 
 ```
 $ ./drk wallet --address
-$ ./drk token mint XMR 42.69 <YOUR_ADDRESS> > mint_tx
+$ ./drk token mint WCKD 42.69 {YOUR_ADDRESS} > mint_tx
 $ ./drk broadcast < mint_tx
 
-$ ./drk token mint BNB 20.0 <YOUR_ADDRESS> > mint_tx
+$ ./drk token mint MLDY 20.0 {YOUR_ADDRESS} > mint_tx
 $ ./drk broadcast < mint_tx
 ```
 
