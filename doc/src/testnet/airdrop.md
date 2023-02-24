@@ -30,6 +30,36 @@ You can check your wallet balance using `drk`:
 $ ./drk wallet --balance
 ```
 
+# Aliases
+
+To make our life easier, we can create token ID aliases, so when we
+are performing transactions with them, we can use that instead of the
+full token ID. Multiple aliases per token ID is supported.
+
+Example addition:
+
+```
+$ ./drk alias add <ALIAS> <TOKEN>
+```
+
+So lets add the native token as `DARK` by executing:
+
+```
+$ ./drk alias add DARK 12ea8e3KVuBhmSnr29iV34Zd2RsD1MEeGk9xJhcipUqx
+```
+
+From now on, we can use `DARK` to refer to the native token when
+executing transactions using it.
+
+We can also list all our aliases using:
+
+```
+$ ./drk alias show
+```
+
+Note: this aliases are only local to your machine. When exchanging
+with other users, always verify that your aliases token IDs match.
+
 # Minting tokens
 
 On the DarkFi network, we're also able to mint custom tokens with
@@ -42,14 +72,20 @@ $ ./drk token generate-mint
 ```
 
 This will generate a new token mint authority and will tell you what
-your new token ID is. For tutorial purposes, let's assume the tokens
-we will be minting are `DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq`
-and `AcABG4fnmBuT5vuXV8TLdEV8panhk5SdtBZxCCLqQxyL`.
+your new token ID is. For this tautorial we will need two tokens so
+execute the command again to generate another one.
 
-You can also list your mint authorities with:
+You can list your mint authorities with:
 
 ```
 $ ./drk token list
+```
+
+Now lets add those two token IDs to our aliases:
+
+```
+$ ./drk alias add XMR <TOKEN1>
+$ ./drk alias add BNB <TOKEN2>
 ```
 
 Now let's mint some tokens to ourself. First grab your wallet address,
@@ -57,10 +93,10 @@ and then create the token mint transaction, and finally - broadcast it:
 
 ```
 $ ./drk wallet --address
-$ ./drk token mint DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq 42.69 YOUR_ADDRESS > mint_tx
+$ ./drk token mint XMR 42.69 <YOUR_ADDRESS> > mint_tx
 $ ./drk broadcast < mint_tx
 
-$ ./drk token mint AcABG4fnmBuT5vuXV8TLdEV8panhk5SdtBZxCCLqQxyL 20.0 YOUR_ADDRESS > mint_tx
+$ ./drk token mint BNB 20.0 <YOUR_ADDRESS> > mint_tx
 $ ./drk broadcast < mint_tx
 ```
 
