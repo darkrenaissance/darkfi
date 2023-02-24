@@ -228,8 +228,8 @@ impl Drk {
             user_data_blind_send: pallas::Base::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
             spend_hook_recv: pallas::Base::zero(), // <-- FIXME: Should be passed in
             user_data_recv: pallas::Base::zero(),  // <-- FIXME: Should be passed in
-            value_blinds: partial.value_blinds.try_into().unwrap(),
-            token_blinds: partial.token_blinds.try_into().unwrap(),
+            value_blinds: [partial.value_blinds[1], partial.value_blinds[0]],
+            token_blinds: [partial.token_blinds[1], partial.token_blinds[0]],
             coin: burn_coin,
             tree,
             mint_zkbin,
