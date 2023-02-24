@@ -1,8 +1,8 @@
 # Payments
 
-Using the tokens we got, we can make payments to other addresses. Let's
-try to send some `DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq` tokens
-to `8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj`:
+Using the tokens we minted, we can make payments to other addresses.
+Let's try to send some `DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq`
+tokens to `8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj`:
 
 ```
 $ ./drk transfer 2.69 DARKfZX1utGbz8ZpnvtCH6i46nSDZEEGa5fMnhoubWPq \
