@@ -35,7 +35,7 @@ use darkfi_sdk::{
     },
     ContractCall,
 };
-use darkfi_serial::{deserialize, Encodable};
+use darkfi_serial::Encodable;
 use log::info;
 use rand::rngs::OsRng;
 
@@ -398,8 +398,11 @@ async fn money_contract_transfer() -> Result<()> {
         burn_pk: burn_pk.clone(),
     }
     .build()?;
-    let (alice_swap_params, alice_swap_proofs) =
-        (alice_swap_call_debris.params, alice_swap_call_debris.proofs);
+    let (alice_swap_params, alice_swap_proofs, alice_signature_secret) = (
+        alice_swap_call_debris.params,
+        alice_swap_call_debris.proofs,
+        alice_swap_call_debris.signature_secret,
+    );
 
     assert!(alice_swap_params.inputs.len() == 1);
     assert!(alice_swap_params.outputs.len() == 1);
@@ -427,8 +430,11 @@ async fn money_contract_transfer() -> Result<()> {
         burn_pk: burn_pk.clone(),
     }
     .build()?;
-    let (bob_swap_params, bob_swap_proofs) =
-        (bob_swap_call_debris.params, bob_swap_call_debris.proofs);
+    let (bob_swap_params, bob_swap_proofs, bob_signature_secret) = (
+        bob_swap_call_debris.params,
+        bob_swap_call_debris.proofs,
+        bob_swap_call_debris.signature_secret,
+    );
 
     assert!(bob_swap_params.inputs.len() == 1);
     assert!(bob_swap_params.outputs.len() == 1);
@@ -457,14 +463,11 @@ async fn money_contract_transfer() -> Result<()> {
         proofs: vec![swap_full_proofs],
         signatures: vec![],
     };
-    let bob_note: MoneyNote = swap_full_params.outputs[1].note.decrypt(&th.bob.keypair.secret)?;
-    let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &[deserialize(&bob_note.memo)?])?;
+    let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &[bob_signature_secret])?;
     alicebob_swap_tx.signatures = vec![sigs];
 
     // Alice gets the partially signed transaction and adds her signature
-    let alice_note: MoneyNote =
-        swap_full_params.outputs[0].note.decrypt(&th.alice.keypair.secret)?;
-    let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &[deserialize(&alice_note.memo)?])?;
+    let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &[alice_signature_secret])?;
     alicebob_swap_tx.signatures[0].insert(0, sigs[0]);
 
     info!(target: "money", "[Faucet] ==========================");
@@ -494,16 +497,12 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
 
     // Alice should now have two OwnCoins with the same token ID (ALICE)
-    let alice_note: MoneyNote =
-        swap_full_params.outputs[0].note.decrypt(&th.alice.keypair.secret)?;
+    let note: MoneyNote = swap_full_params.outputs[0].note.decrypt(&th.alice.keypair.secret)?;
     let alice_oc = OwnCoin {
         coin: Coin::from(swap_full_params.outputs[0].coin),
-        note: alice_note.clone(),
+        note: note.clone(),
         secret: th.alice.keypair.secret, // <-- What should this be?
-        nullifier: Nullifier::from(poseidon_hash([
-            th.alice.keypair.secret.inner(),
-            alice_note.serial,
-        ])),
+        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
         leaf_position: alice_leaf_pos,
     };
     alice_owncoins.push(alice_oc);
@@ -513,11 +512,12 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(alice_owncoins[1].note.token_id == alice_token_id);
 
     // Same for Bob with BOB tokens
+    let note: MoneyNote = swap_full_params.outputs[1].note.decrypt(&th.bob.keypair.secret)?;
     let bob_oc = OwnCoin {
         coin: Coin::from(swap_full_params.outputs[1].coin),
-        note: bob_note.clone(),
+        note: note.clone(),
         secret: th.bob.keypair.secret, // <-- What should this be?
-        nullifier: Nullifier::from(poseidon_hash([th.bob.keypair.secret.inner(), bob_note.serial])),
+        nullifier: Nullifier::from(poseidon_hash([th.bob.keypair.secret.inner(), note.serial])),
         leaf_position: bob_leaf_pos,
     };
     bob_owncoins.push(bob_oc);
@@ -725,8 +725,11 @@ async fn money_contract_transfer() -> Result<()> {
         burn_pk: burn_pk.clone(),
     }
     .build()?;
-    let (alice_swap_params, alice_swap_proofs) =
-        (alice_swap_call_debris.params, alice_swap_call_debris.proofs);
+    let (alice_swap_params, alice_swap_proofs, alice_signature_secret) = (
+        alice_swap_call_debris.params,
+        alice_swap_call_debris.proofs,
+        alice_swap_call_debris.signature_secret,
+    );
 
     assert!(alice_swap_params.inputs.len() == 1);
     assert!(alice_swap_params.outputs.len() == 1);
@@ -753,8 +756,11 @@ async fn money_contract_transfer() -> Result<()> {
         burn_pk: burn_pk.clone(),
     }
     .build()?;
-    let (bob_swap_params, bob_swap_proofs) =
-        (bob_swap_call_debris.params, bob_swap_call_debris.proofs);
+    let (bob_swap_params, bob_swap_proofs, bob_signature_secret) = (
+        bob_swap_call_debris.params,
+        bob_swap_call_debris.proofs,
+        bob_swap_call_debris.signature_secret,
+    );
 
     assert!(bob_swap_params.inputs.len() == 1);
     assert!(bob_swap_params.outputs.len() == 1);
@@ -782,14 +788,11 @@ async fn money_contract_transfer() -> Result<()> {
         proofs: vec![swap_full_proofs],
         signatures: vec![],
     };
-    let bob_note: MoneyNote = swap_full_params.outputs[1].note.decrypt(&th.bob.keypair.secret)?;
-    let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &[deserialize(&bob_note.memo)?])?;
+    let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &[bob_signature_secret])?;
     alicebob_swap_tx.signatures = vec![sigs];
 
     // Alice gets the partially signed transaction and adds her signature
-    let alice_note: MoneyNote =
-        swap_full_params.outputs[0].note.decrypt(&th.alice.keypair.secret)?;
-    let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &[deserialize(&alice_note.memo)?])?;
+    let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &[alice_signature_secret])?;
     alicebob_swap_tx.signatures[0].insert(0, sigs[0]);
 
     info!(target: "money", "[Faucet] ==========================");
@@ -819,14 +822,12 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
 
     // Alice should now have Bob's BOB tokens
+    let note: MoneyNote = swap_full_params.outputs[0].note.decrypt(&th.alice.keypair.secret)?;
     let alice_oc = OwnCoin {
         coin: Coin::from(swap_full_params.outputs[0].coin),
-        note: alice_note.clone(),
+        note: note.clone(),
         secret: th.alice.keypair.secret, // <-- What should this be?
-        nullifier: Nullifier::from(poseidon_hash([
-            th.alice.keypair.secret.inner(),
-            alice_note.serial,
-        ])),
+        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
         leaf_position: alice_leaf_pos,
     };
     alice_owncoins.push(alice_oc);
@@ -836,11 +837,12 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(alice_owncoins[0].note.token_id == bob_token_id);
 
     // And Bob should have Alice's ALICE tokens
+    let note: MoneyNote = swap_full_params.outputs[1].note.decrypt(&th.bob.keypair.secret)?;
     let bob_oc = OwnCoin {
         coin: Coin::from(swap_full_params.outputs[1].coin),
-        note: bob_note.clone(),
+        note: note.clone(),
         secret: th.bob.keypair.secret, // <-- What should this be?
-        nullifier: Nullifier::from(poseidon_hash([th.bob.keypair.secret.inner(), bob_note.serial])),
+        nullifier: Nullifier::from(poseidon_hash([th.bob.keypair.secret.inner(), note.serial])),
         leaf_position: bob_leaf_pos,
     };
     bob_owncoins.push(bob_oc);
