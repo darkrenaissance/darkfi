@@ -1146,10 +1146,24 @@ async fn main() -> Result<()> {
                 let drk = Drk::new(args.endpoint).await?;
                 drk.import_mint_authority(mint_authority).await?;
 
+                let token_id = TokenId::derive(mint_authority);
+                eprintln!("Successfully imported mint authority for token ID: {}", token_id);
+
                 Ok(())
             }
 
-            TokenSubcmd::GenerateMint => todo!(),
+            TokenSubcmd::GenerateMint => {
+                let mint_authority = SecretKey::random(&mut OsRng);
+
+                let drk = Drk::new(args.endpoint).await?;
+                drk.import_mint_authority(mint_authority).await?;
+
+                let token_id = TokenId::derive(mint_authority);
+                eprintln!("Successfully imported mint authority for token ID: {}", token_id);
+
+                Ok(())
+            }
+
             TokenSubcmd::List => todo!(),
             TokenSubcmd::Mint { token, amount, recipient } => todo!(),
             TokenSubcmd::Freeze { token } => todo!(),
