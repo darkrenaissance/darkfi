@@ -56,7 +56,7 @@ async fn integration_test() -> Result<()> {
 
     // Money parameters
     let xdrk_supply = 1_000_000;
-    let xdrk_token_id = TokenId::from(pallas::Base::random(&mut OsRng));
+    let xdrk_token_id = *DARK_TOKEN_ID;
 
     // Governance token parameters
     let gdrk_supply = 1_000_000;
