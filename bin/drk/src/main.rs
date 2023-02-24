@@ -1206,7 +1206,22 @@ async fn main() -> Result<()> {
 
                 Ok(())
             }
-            TokenSubcmd::Freeze { token } => todo!(),
+
+            TokenSubcmd::Freeze { token } => {
+                let token_id =
+                    TokenId::try_from(token.as_str()).with_context(|| "Invalid token ID")?;
+
+                let drk = Drk::new(args.endpoint).await?;
+
+                let tx = drk
+                    .freeze_token(token_id)
+                    .await
+                    .with_context(|| "Failed to create token freeze transaction")?;
+
+                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+
+                Ok(())
+            }
         },
     }
 }

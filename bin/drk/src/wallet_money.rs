@@ -31,7 +31,7 @@ use darkfi_money_contract::{
         MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_KEY_ID, MONEY_KEYS_COL_PUBLIC,
         MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
-    model::{MoneyMintParamsV1, MoneyTransferParamsV1, Output},
+    model::{MoneyFreezeParamsV1, MoneyMintParamsV1, MoneyTransferParamsV1, Output},
     MoneyFunction,
 };
 use darkfi_sdk::{
@@ -486,6 +486,7 @@ impl Drk {
 
         let mut nullifiers: Vec<Nullifier> = vec![];
         let mut outputs: Vec<Output> = vec![];
+        let mut freezes: Vec<TokenId> = vec![];
 
         for (i, call) in tx.calls.iter().enumerate() {
             if call.contract_id == cid && call.data[0] == MoneyFunction::TransferV1 as u8 {
@@ -525,6 +526,16 @@ impl Drk {
                 outputs.push(params.output);
 
                 continue
+            }
+
+            if call.contract_id == cid && call.data[0] == MoneyFunction::FreezeV1 as u8 {
+                eprintln!("Found Money::FreezeV1 in call {}", i);
+                let params: MoneyFreezeParamsV1 = deserialize(&call.data[1..])?;
+
+                let (mint_x, mint_y) = params.signature_public.xy();
+                let token_id = TokenId::from(poseidon_hash([mint_x, mint_y]));
+
+                freezes.push(token_id);
             }
         }
 
@@ -623,6 +634,10 @@ impl Drk {
 
             let req = JsonRequest::new("wallet.exec_sql", params);
             let _ = self.rpc_client.request(req).await?;
+        }
+
+        for token_id in freezes {
+            // TODO: Update info in wallet if token id is found
         }
 
         if !owncoins.is_empty() {
