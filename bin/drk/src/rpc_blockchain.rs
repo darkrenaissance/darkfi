@@ -65,6 +65,7 @@ impl Drk {
         let req = JsonRequest::new("blockchain.subscribe_blocks", json!([]));
         task::spawn(async move { rpc_client.subscribe(req, subscriber).await.unwrap() });
         eprintln!("Detached subscription to background");
+        eprintln!("All is good. Waiting for block notifications...");
 
         let e = loop {
             match subscription.receive().await {
