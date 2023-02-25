@@ -18,7 +18,7 @@ $ ./drk help dao create
 Lets create our DAO.
 
 ```
-$ ./drk dao create 90 10 0.67 MLDY > dao.dat
+$ ./drk dao create 20 10 0.67 MLDY > dao.dat
 $ ./drk dao view < dao.dat
 ```
 
