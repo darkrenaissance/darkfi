@@ -1116,7 +1116,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -1172,7 +1172,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-dao-contract"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "bs58",
@@ -1192,7 +1192,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-derive"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "darkfi-derive-internal",
  "proc-macro-crate",
@@ -1202,7 +1202,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-derive-internal"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1211,7 +1211,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-money-contract"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "chacha20poly1305",
@@ -1230,7 +1230,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-sdk"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "blake2b_simd",
  "blake3",
@@ -1253,7 +1253,7 @@ dependencies = [
 
 [[package]]
 name = "darkfi-serial"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "blake3",
  "darkfi-derive",
@@ -1265,7 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "darkfid"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -1409,7 +1409,7 @@ dependencies = [
 
 [[package]]
 name = "dchat"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -1503,7 +1503,7 @@ dependencies = [
 
 [[package]]
 name = "dnetview"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-channel",
  "async-std",
@@ -1532,7 +1532,7 @@ checksum = "03d8c417d7a8cb362e0c37e5d815f5eb7c37f79ff93707329d5a194e42e54ca0"
 
 [[package]]
 name = "drk"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "async-std",
@@ -1737,7 +1737,7 @@ dependencies = [
 
 [[package]]
 name = "faucetd"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -1890,7 +1890,7 @@ dependencies = [
 
 [[package]]
 name = "fu"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "clap 4.1.6",
@@ -1903,7 +1903,7 @@ dependencies = [
 
 [[package]]
 name = "fud"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -2075,7 +2075,7 @@ dependencies = [
 
 [[package]]
 name = "genev"
-version = "0.1.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "clap 4.1.6",
@@ -2090,7 +2090,7 @@ dependencies = [
 
 [[package]]
 name = "genevd"
-version = "0.1.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -2421,7 +2421,7 @@ dependencies = [
 
 [[package]]
 name = "ircd"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-recursion",
  "async-std",
@@ -2453,7 +2453,7 @@ dependencies = [
 
 [[package]]
 name = "ircd2"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -2580,7 +2580,7 @@ dependencies = [
 
 [[package]]
 name = "lilith"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -4095,7 +4095,7 @@ checksum = "9410d0f6853b1d94f0e519fb95df60f29d2c1eff2d921ffdf01a4c8a3b54f12d"
 
 [[package]]
 name = "tau"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "chrono",
@@ -4114,7 +4114,7 @@ dependencies = [
 
 [[package]]
 name = "taud"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -4567,7 +4567,7 @@ dependencies = [
 
 [[package]]
 name = "vanityaddr"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bs58",
  "clap 4.1.6",
@@ -5196,7 +5196,7 @@ dependencies = [
 
 [[package]]
 name = "zkas"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "clap 4.1.6",
  "darkfi",
@@ -5204,7 +5204,7 @@ dependencies = [
 
 [[package]]
 name = "zktool"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "clap 4.1.6",
  "darkfi",

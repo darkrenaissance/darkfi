@@ -1,6 +1,6 @@
 [package]
 name = "darkwikid"
-version = "0.4.0"
+version = "0.4.1"
 homepage = "https://dark.fi"
 description = "Reference daemon for a decentralized P2P wiki"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]

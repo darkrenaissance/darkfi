@@ -1,6 +1,6 @@
 [package]
 name = "vanityaddr"
-version = "0.4.0"
+version = "0.4.1"
 homepage = "https://dark.fi"
 description = "Vanity address generation tool for DarkFi keypairs and token IDs"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]

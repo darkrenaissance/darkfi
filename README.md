@@ -71,7 +71,7 @@ to the latest tag, and use the provided Makefile to build the project:
 
 ```shell
 % git clone https://github.com/darkrenaissance/darkfi
-% cd darkfi && git checkout v0.4.0
+% cd darkfi && git checkout v0.4.1
 % make
 ```
 

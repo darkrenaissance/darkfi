@@ -1,6 +1,6 @@
 [package]
 name = "dchat"
-version = "0.4.0"
+version = "0.4.1"
 homepage = "https://dark.fi"
 description = "Demo chat app used to document DarkFi networking code"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]

@@ -1,6 +1,6 @@
 [package]
 name = "zkas"
-version = "0.4.0"
+version = "0.4.1"
 homepage = "https://dark.fi"
 description = "Compiler for the Halo2 zkVM language used in DarkFi."
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
