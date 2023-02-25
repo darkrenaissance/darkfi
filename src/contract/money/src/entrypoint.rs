@@ -27,8 +27,8 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     model::{MoneyFreezeUpdateV1, MoneyMintUpdateV1, MoneyTransferUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_FAUCET_PUBKEYS, MONEY_CONTRACT_INFO_TREE,
-    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_FAUCET_PUBKEYS,
+    MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
@@ -141,6 +141,13 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
 
     // Whitelisted faucets
     db_set(info_db, &serialize(&MONEY_CONTRACT_FAUCET_PUBKEYS), &serialize(&faucet_pubkeys))?;
+
+    // Update db version
+    db_set(
+        info_db,
+        &serialize(&MONEY_CONTRACT_DB_VERSION),
+        &serialize(&env!("CARGO_PKG_VERSION")),
+    )?;
 
     Ok(())
 }
