@@ -37,7 +37,7 @@ sync_p2p_seed = ["tcp://127.0.0.1:33032"]
 #sync_p2p_peer = []
 
 # Prefered transports of outbound connections for the syncing protocol
-#sync_p2p_transports = ["tls", "tcp"]
+sync_p2p_transports = ["tls", "tcp"]
 
 # Enable localnet hosts
 localnet = true

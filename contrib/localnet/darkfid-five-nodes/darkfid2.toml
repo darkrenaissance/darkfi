@@ -43,7 +43,7 @@ consensus_p2p_external = ["tcp://127.0.0.1:8541"]
 consensus_p2p_peer = ["tcp://127.0.0.1:8341", "tcp://127.0.0.1:8441"]
 
 # Prefered transports of outbound connections for the consensus protocol
-#consensus_p2p_transports = ["tls", "tcp"]
+consensus_p2p_transports = ["tls", "tcp"]
 
 # P2P accept addresses for the syncing protocol
 sync_p2p_accept = ["tcp://127.0.0.1:8542"]
@@ -61,7 +61,7 @@ sync_p2p_external = ["tcp://127.0.0.1:8542"]
 sync_p2p_peer = ["tcp://127.0.0.1:8342", "tcp://127.0.0.1:8442"]
 
 # Prefered transports of outbound connections for the syncing protocol
-#sync_p2p_transports = ["tls", "tcp"]
+sync_p2p_transports = ["tls", "tcp"]
 
 # Enable localnet hosts
 localnet = true

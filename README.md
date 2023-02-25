@@ -37,7 +37,7 @@ Minimum Rust version supported is **1.67.0 (stable)**.
 
 The following dependencies are also required:
 
-|   Dependency   |   Debian-based   |   
+|   Dependency   |   Debian-based   |
 |----------------|------------------|
 | git            | git              |
 | make           | make             |
