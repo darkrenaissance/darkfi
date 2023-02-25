@@ -121,6 +121,7 @@ impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
     pub fn new(wasm_bytes: &[u8], blockchain: Blockchain, contract_id: ContractId) -> Result<Self> {
         info!(target: "runtime::vm_runtime", "Instantiating a new runtime");
+        // TODO: Add necessary operators
         // This function will be called for each `Operator` encountered during
         // the wasm module execution. It should return the cost of the operator
         // that it received as its first argument.
@@ -376,6 +377,10 @@ impl Runtime {
         Ok(())
     }
 
+    /// This function runs first in the entire scheme of executing a smart contract.
+    /// It is supposed to correctly extract public inputs for any ZK proofs included
+    /// in the contract calls, and also extract the public keys used to verify the
+    /// call/transaction signatures.
     pub fn metadata(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
         self.call(ContractSection::Metadata, payload)
     }
