@@ -83,9 +83,8 @@ serde = {version = "1.0.152", features = ["derive"], optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
 toml = {version = "0.7.1", optional = true}
-# big float
-dashu = { version = "0.2.0", git = "https://github.com/ertosns/dashu", optional=true }
-
+# Big float high precision arithmetics
+dashu = { version = "0.3.0", optional=true }
 # Utilities
 # TODO: check chrono usage and impl our own
 chrono = {version = "0.4.23", optional = true}

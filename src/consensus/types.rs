@@ -41,7 +41,7 @@ impl Float10 {
     }
 
     pub fn powf(&self, exp: Self) -> Self {
-        Self(self.0.powf(exp.0))
+        Self(self.0.powf(&exp.0))
     }
 
     pub fn ln(&self) -> Self {

@@ -61,7 +61,7 @@ pub enum Error {
 
     #[cfg(feature = "dashu")]
     #[error(transparent)]
-    DashuParseError(#[from] dashu::integer::error::ParseError),
+    DashuParseError(#[from] dashu::base::error::ParseError),
 
     // ===============
     // Encoding errors
