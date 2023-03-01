@@ -485,6 +485,12 @@ fn main() {
 
     // Alice verifies the prekey signature and aborts the protocol if
     // verification fails.
+
+    println!("\n{:?}", bob_keyset.signed_prekey.to_bytes().clone());
+    println!("{:?}", bob_keyset.signed_prekey.to_bytes().clone().len());
+    println!("\n{:?}", bob_keyset.prekey_signature.clone());
+    println!("{:?}", bob_keyset.prekey_signature.clone().len());
+
     assert!(bob_keyset
         .identity_key
         .xeddsa_verify(&bob_keyset.signed_prekey.to_bytes(), &bob_keyset.prekey_signature));

@@ -111,8 +111,8 @@ impl XeddsaVerifier for X25519PublicKey {
 
         if let Some(edwards) = pt.to_edwards(0) {
             let pk = Ed25519PublicKey::from_bytes(&edwards.compress().to_bytes());
-            let sig = Signature::from_bytes(sig);
-            return pk.verify(msg, &sig).is_ok()
+            let signature = Signature::from_bytes(sig);
+            return pk.verify(msg, &signature).is_ok()
         }
 
         false
