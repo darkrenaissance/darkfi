@@ -95,14 +95,12 @@ def handle_forward_push(irc, data):
         print("==============================================")
         irc.send("#dev", f"@{author} pushed {num_commits} to {branch}: {commit}")
 
-MAX_COMMIT_LEN = 256
-
 def fmt_commit(cmt):
     hsh = cmt['id'][:10]
     # author = cmt['author']['name']
-    message = cmt['message']
-    message = message[:MAX_COMMIT_LEN] \
-            + ('..' if len(message) > MAX_COMMIT_LEN else '')
+    message = cmt['message'].split("\n")
+    message = message[0] \
+            + ('...' if len(message) > 1 else '')
 
     return '{}: {}'.format(hsh, message)
 
