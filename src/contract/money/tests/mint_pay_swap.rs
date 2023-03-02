@@ -27,6 +27,8 @@
 //!
 //! TODO: Malicious cases
 
+use std::time::{Duration, Instant};
+
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
@@ -52,6 +54,11 @@ use harness::{init_logger, MoneyTestHarness};
 #[async_std::test]
 async fn money_contract_transfer() -> Result<()> {
     init_logger();
+
+    // Some benchmark averages
+    let mut swap_verify_times = vec![];
+    let mut transfer_verify_times = vec![];
+    let mut mint_verify_times = vec![];
 
     // Some numbers we want to assert
     const ALICE_INITIAL: u64 = 100;
@@ -98,41 +105,53 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Faucet] =============================");
     info!(target: "money", "[Faucet] Executing Alice token mint tx");
     info!(target: "money", "[Faucet] =============================");
+    let timer = Instant::now();
     th.faucet.state.read().await.verify_transactions(&[alice_mint_tx.clone()], true).await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(alice_params.output.coin.inner()));
+    mint_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Faucet] ===========================");
     info!(target: "money", "[Faucet] Executing Bob token mint tx");
     info!(target: "money", "[Faucet] ===========================");
+    let timer = Instant::now();
     th.faucet.state.read().await.verify_transactions(&[bob_mint_tx.clone()], true).await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(bob_params.output.coin.inner()));
+    mint_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Alice] =============================");
     info!(target: "money", "[Alice] Executing Alice token mint tx");
     info!(target: "money", "[Alice] =============================");
+    let timer = Instant::now();
     th.alice.state.read().await.verify_transactions(&[alice_mint_tx.clone()], true).await?;
     th.alice.merkle_tree.append(&MerkleNode::from(alice_params.output.coin.inner()));
     // Alice has to witness this coin because it's hers.
     let alice_leaf_pos = th.alice.merkle_tree.witness().unwrap();
+    mint_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Alice] ===========================");
     info!(target: "money", "[Alice] Executing Bob token mint tx");
     info!(target: "money", "[Alice] ===========================");
+    let timer = Instant::now();
     th.alice.state.read().await.verify_transactions(&[bob_mint_tx.clone()], true).await?;
     th.alice.merkle_tree.append(&MerkleNode::from(bob_params.output.coin.inner()));
+    mint_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Bob] =============================");
     info!(target: "money", "[Bob] Executing Alice token mint tx");
     info!(target: "money", "[Bob] =============================");
+    let timer = Instant::now();
     th.bob.state.read().await.verify_transactions(&[alice_mint_tx.clone()], true).await?;
     th.bob.merkle_tree.append(&MerkleNode::from(alice_params.output.coin.inner()));
+    mint_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Bob] ===========================");
     info!(target: "money", "[Bob] Executing Bob token mint tx");
     info!(target: "money", "[Bob] ===========================");
+    let timer = Instant::now();
     th.bob.state.read().await.verify_transactions(&[bob_mint_tx.clone()], true).await?;
     th.bob.merkle_tree.append(&MerkleNode::from(bob_params.output.coin.inner()));
     let bob_leaf_pos = th.bob.merkle_tree.witness().unwrap();
+    mint_verify_times.push(timer.elapsed());
 
     assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
@@ -212,25 +231,31 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Faucet] ==============================");
     info!(target: "money", "[Faucet] Executing Alice2Bob payment tx");
     info!(target: "money", "[Faucet] ==============================");
+    let timer = Instant::now();
     th.faucet.state.read().await.verify_transactions(&[alice2bob_tx.clone()], true).await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[0].coin.inner()));
     th.faucet.merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[1].coin.inner()));
+    transfer_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Alice] ==============================");
     info!(target: "money", "[Alice] Executing Alice2Bob payment tx");
     info!(target: "money", "[Alice] ==============================");
+    let timer = Instant::now();
     th.alice.state.read().await.verify_transactions(&[alice2bob_tx.clone()], true).await?;
     th.alice.merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[0].coin.inner()));
     let alice_leaf_pos = th.alice.merkle_tree.witness().unwrap();
     th.alice.merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[1].coin.inner()));
+    transfer_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Bob] ==============================");
     info!(target: "money", "[Bob] Executing Alice2Bob payment tx");
     info!(target: "money", "[Bob] ==============================");
+    let timer = Instant::now();
     th.bob.state.read().await.verify_transactions(&[alice2bob_tx.clone()], true).await?;
     th.bob.merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[0].coin.inner()));
     th.bob.merkle_tree.append(&MerkleNode::from(alice2bob_params.outputs[1].coin.inner()));
     let bob_leaf_pos = th.bob.merkle_tree.witness().unwrap();
+    transfer_verify_times.push(timer.elapsed());
 
     assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
@@ -313,25 +338,31 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Faucet] ==============================");
     info!(target: "money", "[Faucet] Executing Bob2Alice payment tx");
     info!(target: "money", "[Faucet] ==============================");
+    let timer = Instant::now();
     th.faucet.state.read().await.verify_transactions(&[bob2alice_tx.clone()], true).await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[0].coin.inner()));
     th.faucet.merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[1].coin.inner()));
+    transfer_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Alice] ==============================");
     info!(target: "money", "[Alice] Executing Bob2Alice payment tx");
     info!(target: "money", "[Alice] ==============================");
+    let timer = Instant::now();
     th.alice.state.read().await.verify_transactions(&[bob2alice_tx.clone()], true).await?;
     th.alice.merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[0].coin.inner()));
     th.alice.merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[1].coin.inner()));
     let alice_leaf_pos = th.alice.merkle_tree.witness().unwrap();
+    transfer_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Bob] ==================+===========");
     info!(target: "money", "[Bob] Executing Bob2Alice payment tx");
     info!(target: "money", "[Bob] ==================+===========");
+    let timer = Instant::now();
     th.bob.state.read().await.verify_transactions(&[bob2alice_tx.clone()], true).await?;
     th.bob.merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[0].coin.inner()));
     let bob_leaf_pos = th.bob.merkle_tree.witness().unwrap();
     th.bob.merkle_tree.append(&MerkleNode::from(bob2alice_params.outputs[1].coin.inner()));
+    transfer_verify_times.push(timer.elapsed());
 
     // Alice should now have two OwnCoins
     let note: MoneyNote = bob2alice_params.outputs[1].note.decrypt(&th.alice.keypair.secret)?;
@@ -473,25 +504,31 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Faucet] ==========================");
     info!(target: "money", "[Faucet] Executing AliceBob swap tx");
     info!(target: "money", "[Faucet] ==========================");
+    let timer = Instant::now();
     th.faucet.state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin.inner()));
     th.faucet.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin.inner()));
+    swap_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Alice] ==========================");
     info!(target: "money", "[Alice] Executing AliceBob swap tx");
     info!(target: "money", "[Alice] ==========================");
+    let timer = Instant::now();
     th.alice.state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.alice.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin.inner()));
     let alice_leaf_pos = th.alice.merkle_tree.witness().unwrap();
     th.alice.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin.inner()));
+    swap_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Bob] ==========================");
     info!(target: "money", "[Bob] Executing AliceBob swap tx");
     info!(target: "money", "[Bob] ==========================");
+    let timer = Instant::now();
     th.bob.state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.bob.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin.inner()));
     th.bob.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin.inner()));
     let bob_leaf_pos = th.bob.merkle_tree.witness().unwrap();
+    swap_verify_times.push(timer.elapsed());
 
     assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
@@ -578,21 +615,27 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Faucet] ================================");
     info!(target: "money", "[Faucet] Executing Alice2Alice payment tx");
     info!(target: "money", "[Faucet] ================================");
+    let timer = Instant::now();
     th.faucet.state.read().await.verify_transactions(&[alice2alice_tx.clone()], true).await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(alice2alice_params.outputs[0].coin.inner()));
+    transfer_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Alice] ================================");
     info!(target: "money", "[Alice] Executing Alice2Alice payment tx");
     info!(target: "money", "[Alice] ================================");
+    let timer = Instant::now();
     th.alice.state.read().await.verify_transactions(&[alice2alice_tx.clone()], true).await?;
     th.alice.merkle_tree.append(&MerkleNode::from(alice2alice_params.outputs[0].coin.inner()));
     let alice_leaf_pos = th.alice.merkle_tree.witness().unwrap();
+    transfer_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Bob] ================================");
     info!(target: "money", "[Bob] Executing Alice2Alice payment tx");
     info!(target: "money", "[Bob] ================================");
+    let timer = Instant::now();
     th.bob.state.read().await.verify_transactions(&[alice2alice_tx.clone()], true).await?;
     th.bob.merkle_tree.append(&MerkleNode::from(alice2alice_params.outputs[0].coin.inner()));
+    transfer_verify_times.push(timer.elapsed());
 
     assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
@@ -664,21 +707,27 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Faucet] ============================");
     info!(target: "money", "[Faucet] Executing Bob2Bob payment tx");
     info!(target: "money", "[Faucet] ============================");
+    let timer = Instant::now();
     th.faucet.state.read().await.verify_transactions(&[bob2bob_tx.clone()], true).await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(bob2bob_params.outputs[0].coin.inner()));
+    transfer_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Alice] ============================");
     info!(target: "money", "[Alice] Executing Bob2Bob payment tx");
     info!(target: "money", "[Alice] ============================");
+    let timer = Instant::now();
     th.alice.state.read().await.verify_transactions(&[bob2bob_tx.clone()], true).await?;
     th.alice.merkle_tree.append(&MerkleNode::from(bob2bob_params.outputs[0].coin.inner()));
+    transfer_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Bob] ============================");
     info!(target: "money", "[Bob] Executing Bob2Bob payment tx");
     info!(target: "money", "[Bob] ============================");
+    let timer = Instant::now();
     th.bob.state.read().await.verify_transactions(&[bob2bob_tx.clone()], true).await?;
     th.bob.merkle_tree.append(&MerkleNode::from(bob2bob_params.outputs[0].coin.inner()));
     let bob_leaf_pos = th.bob.merkle_tree.witness().unwrap();
+    transfer_verify_times.push(timer.elapsed());
 
     assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
@@ -798,25 +847,31 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Faucet] ==========================");
     info!(target: "money", "[Faucet] Executing AliceBob swap tx");
     info!(target: "money", "[Faucet] ==========================");
+    let timer = Instant::now();
     th.faucet.state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin.inner()));
     th.faucet.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin.inner()));
+    swap_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Alice] ==========================");
     info!(target: "money", "[Alice] Executing AliceBob swap tx");
     info!(target: "money", "[Alice] ==========================");
+    let timer = Instant::now();
     th.alice.state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.alice.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin.inner()));
     let alice_leaf_pos = th.alice.merkle_tree.witness().unwrap();
     th.alice.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin.inner()));
+    swap_verify_times.push(timer.elapsed());
 
     info!(target: "money", "[Bob] ==========================");
     info!(target: "money", "[Bob] Executing AliceBob swap tx");
     info!(target: "money", "[Bob] ==========================");
+    let timer = Instant::now();
     th.bob.state.read().await.verify_transactions(&[alicebob_swap_tx.clone()], true).await?;
     th.bob.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[0].coin.inner()));
     th.bob.merkle_tree.append(&MerkleNode::from(swap_full_params.outputs[1].coin.inner()));
     let bob_leaf_pos = th.bob.merkle_tree.witness().unwrap();
+    swap_verify_times.push(timer.elapsed());
 
     assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
@@ -850,6 +905,19 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(bob_owncoins.len() == 1);
     assert!(bob_owncoins[0].note.value == ALICE_INITIAL);
     assert!(bob_owncoins[0].note.token_id == alice_token_id);
+
+    // Statistics
+    let swap_avg = swap_verify_times.iter().sum::<Duration>();
+    let swap_avg = swap_avg / swap_verify_times.len() as u32;
+    println!("Average Swap verification time: {:?}", swap_avg);
+
+    let transfer_avg = transfer_verify_times.iter().sum::<Duration>();
+    let transfer_avg = transfer_avg / transfer_verify_times.len() as u32;
+    println!("Average Transfer verification time: {:?}", transfer_avg);
+
+    let mint_avg = mint_verify_times.iter().sum::<Duration>();
+    let mint_avg = mint_avg / mint_verify_times.len() as u32;
+    println!("Average Mint verification time: {:?}", mint_avg);
 
     // Thanks for reading
     Ok(())

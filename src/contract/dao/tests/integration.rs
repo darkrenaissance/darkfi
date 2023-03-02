@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::time::{Duration, Instant};
+
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
@@ -56,6 +58,12 @@ use harness::{init_logger, DaoTestHarness};
 #[async_std::test]
 async fn integration_test() -> Result<()> {
     init_logger()?;
+
+    // Some benchmark averages
+    let mut mint_verify_times = vec![];
+    let mut propose_verify_times = vec![];
+    let mut vote_verify_times = vec![];
+    let mut exec_verify_times = vec![];
 
     let dao_th = DaoTestHarness::new().await?;
 
@@ -104,7 +112,9 @@ async fn integration_test() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &[dao_th.dao_kp.secret])?;
     tx.signatures = vec![sigs];
 
+    let timer = Instant::now();
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    mint_verify_times.push(timer.elapsed());
     // TODO: Witness and add to wallet merkle tree?
 
     let mut dao_tree = MerkleTree::new(100);
@@ -421,7 +431,9 @@ async fn integration_test() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &vec![signature_secret])?;
     tx.signatures = vec![sigs];
 
+    let timer = Instant::now();
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    propose_verify_times.push(timer.elapsed());
 
     //// Wallet
 
@@ -526,7 +538,9 @@ async fn integration_test() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &vec![signature_secret])?;
     tx.signatures = vec![sigs];
 
+    let timer = Instant::now();
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    vote_verify_times.push(timer.elapsed());
 
     // Secret vote info. Needs to be revealed at some point.
     // TODO: look into verifiable encryption for notes
@@ -594,7 +608,9 @@ async fn integration_test() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &vec![signature_secret])?;
     tx.signatures = vec![sigs];
 
+    let timer = Instant::now();
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    vote_verify_times.push(timer.elapsed());
 
     let vote_note_2 = {
         let enc_note = note::EncryptedNote2 {
@@ -659,7 +675,9 @@ async fn integration_test() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &vec![signature_secret])?;
     tx.signatures = vec![sigs];
 
+    let timer = Instant::now();
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    vote_verify_times.push(timer.elapsed());
 
     // Secret vote info. Needs to be revealed at some point.
     // TODO: look into verifiable encryption for notes
@@ -850,7 +868,26 @@ async fn integration_test() -> Result<()> {
     let exec_sigs = tx.create_sigs(&mut OsRng, &vec![exec_signature_secret])?;
     tx.signatures = vec![xfer_sigs, exec_sigs];
 
+    let timer = Instant::now();
     dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    exec_verify_times.push(timer.elapsed());
+
+    // Statistics
+    let mint_avg = mint_verify_times.iter().sum::<Duration>();
+    let mint_avg = mint_avg / mint_verify_times.len() as u32;
+    println!("Average Mint verification time: {:?}", mint_avg);
+
+    let propose_avg = propose_verify_times.iter().sum::<Duration>();
+    let propose_avg = propose_avg / propose_verify_times.len() as u32;
+    println!("Average Propose verification time: {:?}", propose_avg);
+
+    let vote_avg = vote_verify_times.iter().sum::<Duration>();
+    let vote_avg = vote_avg / vote_verify_times.len() as u32;
+    println!("Average Vote verification time: {:?}", vote_avg);
+
+    let exec_avg = exec_verify_times.iter().sum::<Duration>();
+    let exec_avg = exec_avg / exec_verify_times.len() as u32;
+    println!("Average Exec verification time: {:?}", exec_avg);
 
     Ok(())
 }
