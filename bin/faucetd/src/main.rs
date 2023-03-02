@@ -234,11 +234,11 @@ impl Faucetd {
         let db_handle =
             blockchain.contracts.lookup(&blockchain.sled_db, &cid, SMART_CONTRACT_ZKAS_DB_NAME)?;
 
-        let Some(mint_zkbin) = db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1))? else {
+        let Some(mint_zkbin) = db_handle.get(serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1))? else {
             error!("{} zkas bincode not found in sled database", MONEY_CONTRACT_ZKAS_MINT_NS_V1);
             return Err(Error::ZkasBincodeNotFound);
         };
-        let Some(burn_zkbin) = db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1))? else {
+        let Some(burn_zkbin) = db_handle.get(serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1))? else {
             error!("{} zkas bincode not found in sled database", MONEY_CONTRACT_ZKAS_BURN_NS_V1);
             return Err(Error::ZkasBincodeNotFound);
         };
