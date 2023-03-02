@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+<<<<<<< HEAD
 use darkfi_money_contract::{
     model::{ConsensusStakeUpdateV1, ConsensusUnstakeUpdateV1},
     CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
@@ -33,6 +34,17 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{model::ConsensusRewardUpdateV1, ConsensusFunction};
+=======
+use darkfi_sdk::{
+    crypto::ContractId,
+    db::{db_init, db_lookup, set_return_data, SMART_CONTRACT_ZKAS_DB_NAME},
+    error::{ContractError, ContractResult},
+    msg, ContractCall,
+};
+use darkfi_serial::deserialize;
+
+use crate::{model::ConsensusStakeUpdateV1, ConsensusFunction};
+>>>>>>> 2b38600b8a (contract/consensus: laid foundation)
 
 /// `Consensus::Stake` functions
 mod stake_v1;
@@ -41,6 +53,7 @@ use stake_v1::{
     consensus_stake_process_update_v1,
 };
 
+<<<<<<< HEAD
 /// `Consensus::ProposalBurn` functions
 mod proposal_burn_v1;
 use proposal_burn_v1::{
@@ -69,6 +82,8 @@ use unstake_v1::{
     consensus_unstake_process_update_v1,
 };
 
+=======
+>>>>>>> 2b38600b8a (contract/consensus: laid foundation)
 darkfi_sdk::define_contract!(
     init: init_contract,
     exec: process_instruction,
@@ -86,11 +101,16 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The lookups can be done by `contract_id+_zkas+namespace`.
     // TODO: For the zkas tree, external host checks should be done to ensure
     //       that the bincode is actually valid and not arbitrary.
+<<<<<<< HEAD
     let zkas_db = match db_lookup(cid, SMART_CONTRACT_ZKAS_DB_NAME) {
+=======
+    let _zkas_db = match db_lookup(cid, SMART_CONTRACT_ZKAS_DB_NAME) {
+>>>>>>> 2b38600b8a (contract/consensus: laid foundation)
         Ok(v) => v,
         Err(_) => db_init(cid, SMART_CONTRACT_ZKAS_DB_NAME)?,
     };
 
+<<<<<<< HEAD
     let money_mint_v1_bincode = include_bytes!("../../money/proof/mint_v1.zk.bin");
     let money_burn_v1_bincode = include_bytes!("../../money/proof/burn_v1.zk.bin");
     let reward_v1_bincode = include_bytes!("../proof/reward_v1.zk.bin");
@@ -140,6 +160,9 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
         &serialize(&CONSENSUS_CONTRACT_DB_VERSION),
         &serialize(&env!("CARGO_PKG_VERSION")),
     )?;
+=======
+    // TODO: implement
+>>>>>>> 2b38600b8a (contract/consensus: laid foundation)
 
     Ok(())
 }
@@ -163,6 +186,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let metadata = consensus_stake_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
+<<<<<<< HEAD
         ConsensusFunction::ProposalBurnV1 => {
             let metadata = consensus_proposal_burn_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
@@ -179,6 +203,8 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let metadata = consensus_unstake_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
+=======
+>>>>>>> 2b38600b8a (contract/consensus: laid foundation)
     }
 }
 
@@ -202,6 +228,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update_data = consensus_stake_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
+<<<<<<< HEAD
         ConsensusFunction::ProposalBurnV1 => {
             let update_data = consensus_proposal_burn_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
@@ -219,6 +246,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update_data = consensus_unstake_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
+=======
+>>>>>>> 2b38600b8a (contract/consensus: laid foundation)
     }
 }
 
@@ -232,6 +261,7 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             let update: ConsensusStakeUpdateV1 = deserialize(&update_data[1..])?;
             Ok(consensus_stake_process_update_v1(cid, update)?)
         }
+<<<<<<< HEAD
         ConsensusFunction::ProposalBurnV1 => {
             let update: ConsensusUnstakeUpdateV1 = deserialize(&update_data[1..])?;
             Ok(consensus_proposal_burn_process_update_v1(cid, update)?)
@@ -248,5 +278,7 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             let update: ConsensusUnstakeUpdateV1 = deserialize(&update_data[1..])?;
             Ok(consensus_unstake_process_update_v1(cid, update)?)
         }
+=======
+>>>>>>> 2b38600b8a (contract/consensus: laid foundation)
     }
 }
