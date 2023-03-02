@@ -16,16 +16,38 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_money_contract::model::Output;
+use darkfi_sdk::{
+    crypto::{Coin, MerkleNode, Nullifier},
+    pasta::pallas,
+};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+
+/// Anonymous input from `Money::Stake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct StakeInput {
+    /// Blinding factor for `token_id`
+    pub token_blind: pallas::Scalar,
+    /// Pedersen commitment for the staked coin's value
+    pub value_commit: pallas::Point,
+    /// Revealed nullifier
+    pub nullifier: Nullifier,
+    /// Revealed Merkle root
+    pub merkle_root: MerkleNode,
+}
 
 /// Parameters for `Consensus::Stake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusStakeParamsV1 {
-    // TODO: implement
+    /// Burnt token revealed info
+    pub input: StakeInput,
+    /// Anonymous output
+    pub output: Output,
 }
 
 /// State update for `Consensus::Stake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusStakeUpdateV1 {
-    // TODO: implement
+    /// The newly minted coin
+    pub coin: Coin,
 }

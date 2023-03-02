@@ -84,6 +84,3 @@ pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
 pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";
 /// zkas token freeze circuit namespace
 pub const MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1: &str = "TokenFreeze_V1";
-
-// These are consensus sled trees we access for information
-pub const CONSENSUS_CONTRACT_COIN_ROOTS_TREE: &str = "coin_roots";

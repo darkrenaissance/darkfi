@@ -16,15 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_money_contract::{MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1};
 use darkfi_sdk::{
-    crypto::ContractId,
-    db::{db_init, db_lookup, set_return_data, SMART_CONTRACT_ZKAS_DB_NAME},
+    crypto::{ContractId, MerkleTree},
+    db::{db_init, db_lookup, db_set, set_return_data, SMART_CONTRACT_ZKAS_DB_NAME},
     error::{ContractError, ContractResult},
     msg, ContractCall,
 };
-use darkfi_serial::deserialize;
+use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{model::ConsensusStakeUpdateV1, ConsensusFunction};
+use crate::{
+    model::ConsensusStakeUpdateV1, ConsensusFunction, CONSENSUS_CONTRACT_COINS_TREE,
+    CONSENSUS_CONTRACT_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_COIN_ROOTS_TREE,
+    CONSENSUS_CONTRACT_DB_VERSION, CONSENSUS_CONTRACT_INFO_TREE,
+    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+};
 
 /// `Consensus::Stake` functions
 mod stake_v1;
@@ -50,12 +57,73 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The lookups can be done by `contract_id+_zkas+namespace`.
     // TODO: For the zkas tree, external host checks should be done to ensure
     //       that the bincode is actually valid and not arbitrary.
-    let _zkas_db = match db_lookup(cid, SMART_CONTRACT_ZKAS_DB_NAME) {
+    let zkas_db = match db_lookup(cid, SMART_CONTRACT_ZKAS_DB_NAME) {
         Ok(v) => v,
         Err(_) => db_init(cid, SMART_CONTRACT_ZKAS_DB_NAME)?,
     };
 
-    // TODO: implement
+    let money_mint_v1_bincode = include_bytes!("../../money/proof/mint_v1.zk.bin");
+    let money_burn_v1_bincode = include_bytes!("../../money/proof/burn_v1.zk.bin");
+
+    // TODO: for now we use same proof for mint and burn as Money
+    let consensus_mint_v1_bincode = include_bytes!("../../money/proof/mint_v1.zk.bin");
+    let consensus_burn_v1_bincode = include_bytes!("../../money/proof/burn_v1.zk.bin");
+
+    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1), &money_mint_v1_bincode[..])?;
+    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1), &money_burn_v1_bincode[..])?;
+    db_set(
+        zkas_db,
+        &serialize(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1),
+        &consensus_mint_v1_bincode[..],
+    )?;
+    db_set(
+        zkas_db,
+        &serialize(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1),
+        &consensus_burn_v1_bincode[..],
+    )?;
+
+    // Set up a database tree to hold Merkle roots of all coins
+    // k=MerkleNode, v=[]
+    if db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE).is_err() {
+        db_init(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    }
+
+    // Set up a database tree to hold all coins ever seen
+    // k=Coin, v=[]
+    if db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE).is_err() {
+        db_init(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
+    }
+
+    // Set up a database tree to hold nullifiers of all spent coins
+    // k=Nullifier, v=[]
+    if db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE).is_err() {
+        db_init(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
+    }
+
+    // Set up a database tree for arbitrary data
+    let info_db = match db_lookup(cid, CONSENSUS_CONTRACT_INFO_TREE) {
+        Ok(v) => v,
+        Err(_) => {
+            let info_db = db_init(cid, CONSENSUS_CONTRACT_INFO_TREE)?;
+
+            // Create the incrementalmerkletree for seen coins
+            let coin_tree = MerkleTree::new(100);
+            let mut coin_tree_data = vec![];
+
+            coin_tree_data.write_u32(0)?;
+            coin_tree.encode(&mut coin_tree_data)?;
+
+            db_set(info_db, &serialize(&CONSENSUS_CONTRACT_COIN_MERKLE_TREE), &coin_tree_data)?;
+            info_db
+        }
+    };
+
+    // Update db version
+    db_set(
+        info_db,
+        &serialize(&CONSENSUS_CONTRACT_DB_VERSION),
+        &serialize(&env!("CARGO_PKG_VERSION")),
+    )?;
 
     Ok(())
 }

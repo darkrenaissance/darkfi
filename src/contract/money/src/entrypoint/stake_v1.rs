@@ -32,7 +32,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::MoneyError,
     model::{MoneyStakeParamsV1, MoneyStakeUpdateV1},
-    MoneyFunction, CONSENSUS_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
+    MoneyFunction, MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1,
 };
 
@@ -97,7 +97,7 @@ pub(crate) fn money_stake_process_instruction_v1(
     // Access the necessary databases where there is information to
     // validate this state transition.
     let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = db_lookup(*CONSENSUS_CONTRACT_ID, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
     // ===================================
     // Perform the actual state transition

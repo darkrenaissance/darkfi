@@ -127,8 +127,6 @@ pub struct MoneyFreezeUpdateV1 {
 /// Parameters for `Money::Stake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyStakeParamsV1 {
-    /// Blinding factor for `value`
-    pub value_blind: pallas::Scalar,
     /// Blinding factor for `token_id`
     pub token_blind: pallas::Scalar,
     /// Anonymous input
