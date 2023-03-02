@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use async_std::{
     stream::StreamExt,
@@ -549,7 +553,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // Initialize or open sled database
     // TODO: Use proper OsPath here, not {}/{}
-    let db_path = format!("{}/{}", expand_path(&args.database)?.to_str().unwrap(), args.chain);
+    let db_path =
+        Path::new(expand_path(&args.database)?.to_str().unwrap()).join(args.chain.clone());
     let sled_db = sled::open(&db_path)?;
 
     // Initialize validator state
