@@ -36,6 +36,10 @@ lazy_static! {
     /// Contract ID for the native DAO contract
     pub static ref DAO_CONTRACT_ID: ContractId =
         ContractId::from(poseidon_hash([pallas::Base::zero(), pallas::Base::from(1)]));
+
+    /// Contract ID for the native Consensus contract
+    pub static ref CONSENSUS_CONTRACT_ID: ContractId =
+        ContractId::from(poseidon_hash([pallas::Base::zero(), pallas::Base::from(2)]));
 }
 
 /// ContractId represents an on-chain identifier for a certain smart contract.

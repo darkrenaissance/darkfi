@@ -8,3 +8,7 @@ This directory contains native WASM contracts on DarkFi.
 ## DAO
 
 * https://darkrenaissance.github.io/darkfi/development/darkfi_dao_contract/index.html
+
+## Consensus
+
+* TODO: add link here
