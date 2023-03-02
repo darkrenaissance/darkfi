@@ -29,7 +29,7 @@ pub enum MoneyFunction {
     MintV1 = 0x02,
     FreezeV1 = 0x03,
     //Fee = 0x04,
-    //Stake = 0x05,
+    StakeV1 = 0x05,
     //Unstake = 0x06,
 }
 
@@ -43,7 +43,7 @@ impl TryFrom<u8> for MoneyFunction {
             0x02 => Ok(Self::MintV1),
             0x03 => Ok(Self::FreezeV1),
             //0x04 => Ok(Self::Fee),
-            //0x05 => Ok(Self::Stake),
+            0x05 => Ok(Self::StakeV1),
             //0x06 => Ok(Self::Unstake),
             _ => Err(ContractError::InvalidFunction),
         }
@@ -84,3 +84,6 @@ pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
 pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";
 /// zkas token freeze circuit namespace
 pub const MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1: &str = "TokenFreeze_V1";
+
+// These are consensus sled trees we access for information
+pub const CONSENSUS_CONTRACT_COIN_ROOTS_TREE: &str = "coin_roots";

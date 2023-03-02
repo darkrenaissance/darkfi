@@ -123,3 +123,21 @@ pub struct MoneyFreezeUpdateV1 {
     /// Mint authority public key
     pub signature_public: PublicKey,
 }
+
+/// Parameters for `Money::Stake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyStakeParamsV1 {
+    /// Blinding factor for `value`
+    pub value_blind: pallas::Scalar,
+    /// Blinding factor for `token_id`
+    pub token_blind: pallas::Scalar,
+    /// Anonymous input
+    pub input: Input,
+}
+
+/// State update for `Money::Stake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyStakeUpdateV1 {
+    /// Revealed nullifier
+    pub nullifier: Nullifier,
+}

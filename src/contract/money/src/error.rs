@@ -73,6 +73,15 @@ pub enum MoneyError {
 
     #[error("Token mint is frozen")]
     MintFrozen,
+
+    #[error("Input used non-native token")]
+    StakeInputNonNativeToken,
+
+    #[error("Missing spend hook")]
+    StakeMissingSpendHook,
+
+    #[error("Spend hook is not consensus contract")]
+    StakeSpendHookNonConsensusContract,
 }
 
 impl From<MoneyError> for ContractError {
@@ -96,6 +105,9 @@ impl From<MoneyError> for ContractError {
             MoneyError::SwapMerkleRootNotFound => Self::Custom(16),
             MoneyError::TokenIdDoesNotDeriveFromMint => Self::Custom(17),
             MoneyError::MintFrozen => Self::Custom(18),
+            MoneyError::StakeInputNonNativeToken => Self::Custom(19),
+            MoneyError::StakeMissingSpendHook => Self::Custom(20),
+            MoneyError::StakeSpendHookNonConsensusContract => Self::Custom(21),
         }
     }
 }
