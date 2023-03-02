@@ -552,7 +552,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
 
     // Initialize or open sled database
-    // TODO: Use proper OsPath here, not {}/{}
     let db_path =
         Path::new(expand_path(&args.database)?.to_str().unwrap()).join(args.chain.clone());
     let sled_db = sled::open(&db_path)?;
