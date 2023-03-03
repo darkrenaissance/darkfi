@@ -12,6 +12,7 @@
   - [DAO](testnet/dao.md)
 - [Development](development/development.md)
   - [Contributing](development/contributing.md)
+  - [Learn](development/learn.md)
   - [API Rustdoc](development/rustdoc.md)
 - [Architecture](architecture/architecture.md)
   - [Overview](architecture/overview.md)
