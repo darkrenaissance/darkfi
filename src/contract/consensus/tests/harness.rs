@@ -30,7 +30,9 @@ use darkfi::{
 };
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
-    crypto::{Keypair, MerkleTree, PublicKey, DARK_TOKEN_ID, MONEY_CONTRACT_ID},
+    crypto::{
+        Keypair, MerkleTree, PublicKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
+    },
     db::SMART_CONTRACT_ZKAS_DB_NAME,
     pasta::pallas,
     ContractCall,
@@ -41,8 +43,8 @@ use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
     client::transfer_v1::TransferCallBuilder, model::MoneyTransferParamsV1, MoneyFunction,
+    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-    MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 
 pub fn init_logger() {
@@ -67,6 +69,7 @@ pub struct Wallet {
     pub keypair: Keypair,
     pub state: ValidatorStatePtr,
     pub merkle_tree: MerkleTree,
+    pub consensus_merkle_tree: MerkleTree,
     pub wallet: WalletPtr,
     pub coins: Vec<OwnCoin>,
     pub spent_coins: Vec<OwnCoin>,
@@ -91,11 +94,12 @@ impl Wallet {
         .await?;
 
         let merkle_tree = MerkleTree::new(100);
+        let consensus_merkle_tree = MerkleTree::new(100);
 
         let coins = vec![];
         let spent_coins = vec![];
 
-        Ok(Self { keypair, state, merkle_tree, wallet, coins, spent_coins })
+        Ok(Self { keypair, state, merkle_tree, consensus_merkle_tree, wallet, coins, spent_coins })
     }
 }
 
@@ -117,7 +121,7 @@ impl ConsensusTestHarness {
         // Get the zkas circuits and build proving keys
         let mut proving_keys = HashMap::new();
         let alice_sled = alice.state.read().await.blockchain.sled_db.clone();
-        let db_handle = alice.state.read().await.blockchain.contracts.lookup(
+        let mut db_handle = alice.state.read().await.blockchain.contracts.lookup(
             &alice_sled,
             &MONEY_CONTRACT_ID,
             SMART_CONTRACT_ZKAS_DB_NAME,
@@ -136,8 +140,14 @@ impl ConsensusTestHarness {
 
         mkpk!(MONEY_CONTRACT_ZKAS_MINT_NS_V1);
         mkpk!(MONEY_CONTRACT_ZKAS_BURN_NS_V1);
-        mkpk!(MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1);
-        mkpk!(MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1);
+
+        db_handle = alice.state.read().await.blockchain.contracts.lookup(
+            &alice_sled,
+            &CONSENSUS_CONTRACT_ID,
+            SMART_CONTRACT_ZKAS_DB_NAME,
+        )?;
+        mkpk!(CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1);
+        mkpk!(CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1);
 
         Ok(Self { faucet, alice, proving_keys })
     }

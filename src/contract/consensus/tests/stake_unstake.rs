@@ -39,11 +39,17 @@ use log::info;
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
-    client::{stake_v1::MoneyStakeCallBuilder, MoneyNote, OwnCoin},
-    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::{
+        stake_v1::MoneyStakeCallBuilder, unstake_v1::MoneyUnstakeCallBuilder, MoneyNote, OwnCoin,
+    },
+    MoneyFunction, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
-use darkfi_consensus_contract::{client::stake_v1::ConsensusStakeCallBuilder, ConsensusFunction};
+use darkfi_consensus_contract::{
+    client::{stake_v1::ConsensusStakeCallBuilder, unstake_v1::ConsensusUnstakeCallBuilder},
+    ConsensusFunction,
+};
 
 mod harness;
 use harness::{init_logger, ConsensusTestHarness};
@@ -62,6 +68,10 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_AIRDROP, th.alice.keypair.public)?;
     let (mint_pk, mint_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
     let (burn_pk, burn_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
+    let (consensus_mint_pk, consensus_mint_zkbin) =
+        th.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+    let (consensus_burn_pk, consensus_burn_zkbin) =
+        th.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
 
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice airdrop tx");
@@ -120,8 +130,8 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
         token_blind: alice_money_stake_params.token_blind,
         nullifier: alice_money_stake_params.input.nullifier,
         merkle_root: alice_money_stake_params.input.merkle_root,
-        mint_zkbin: mint_zkbin.clone(),
-        mint_pk: mint_pk.clone(),
+        mint_zkbin: consensus_mint_zkbin.clone(),
+        mint_pk: consensus_mint_pk.clone(),
     }
     .build()?;
     let (alice_consensus_stake_params, alice_consensus_stake_proofs) =
@@ -148,14 +158,108 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] Executing Alice stake tx");
     info!(target: "consensus", "[Faucet] ========================");
     th.faucet.state.read().await.verify_transactions(&[alice_stake_tx.clone()], true).await?;
+    th.faucet
+        .consensus_merkle_tree
+        .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
     info!(target: "consensus", "[Alice] ========================");
     info!(target: "consensus", "[Alice] Executing Alice stake tx");
     info!(target: "consensus", "[Alice] ========================");
     th.alice.state.read().await.verify_transactions(&[alice_stake_tx.clone()], true).await?;
+    th.alice
+        .consensus_merkle_tree
+        .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
 
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
+    assert!(
+        th.faucet.consensus_merkle_tree.root(0).unwrap() ==
+            th.alice.consensus_merkle_tree.root(0).unwrap()
+    );
 
-    // TODO: Execute unstake transaction
+    // Gather new staked owncoin
+    let leaf_position = th.alice.consensus_merkle_tree.witness().unwrap();
+    let note: MoneyNote =
+        alice_consensus_stake_params.output.note.decrypt(&th.alice.keypair.secret)?;
+    let alice_staked_oc = OwnCoin {
+        coin: Coin::from(alice_consensus_stake_params.output.coin),
+        note: note.clone(),
+        secret: th.alice.keypair.secret,
+        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
+        leaf_position,
+    };
+
+    // Now Alice can unstake her owncoin
+    info!(target: "consensus", "[Alice] ==================================");
+    info!(target: "consensus", "[Alice] Building Consensus::Unstake params");
+    info!(target: "consensus", "[Alice] ==================================");
+    let alice_consensus_unstake_call_debris = ConsensusUnstakeCallBuilder {
+        coin: alice_staked_oc.clone(),
+        tree: th.alice.consensus_merkle_tree.clone(),
+        burn_zkbin: consensus_burn_zkbin.clone(),
+        burn_pk: consensus_burn_pk.clone(),
+    }
+    .build()?;
+    let (
+        alice_consensus_unstake_params,
+        alice_consensus_unstake_proofs,
+        alice_consensus_unstake_secret_key,
+        alice_consensus_unstake_value_blind,
+    ) = (
+        alice_consensus_unstake_call_debris.params,
+        alice_consensus_unstake_call_debris.proofs,
+        alice_consensus_unstake_call_debris.signature_secret,
+        alice_consensus_unstake_call_debris.value_blind,
+    );
+
+    info!(target: "consensus", "[Alice] ==============================");
+    info!(target: "consensus", "[Alice] Building Money::Unstake params");
+    info!(target: "consensus", "[Alice] ==============================");
+    let alice_money_unstake_call_debris = MoneyUnstakeCallBuilder {
+        coin: alice_staked_oc.clone(),
+        recipient: th.alice.keypair.public,
+        value_blind: alice_consensus_unstake_value_blind,
+        token_blind: alice_consensus_unstake_params.token_blind,
+        nullifier: alice_consensus_unstake_params.input.nullifier,
+        merkle_root: alice_consensus_unstake_params.input.merkle_root,
+        mint_zkbin: mint_zkbin.clone(),
+        mint_pk: mint_pk.clone(),
+    }
+    .build()?;
+    let (alice_money_unstake_params, alice_money_unstake_proofs) =
+        (alice_money_unstake_call_debris.params, alice_money_unstake_call_debris.proofs);
+
+    info!(target: "consensus", "[Alice] ===================");
+    info!(target: "consensus", "[Alice] Building unstake tx");
+    info!(target: "consensus", "[Alice] ===================");
+    let mut data = vec![ConsensusFunction::UnstakeV1 as u8];
+    alice_consensus_unstake_params.encode(&mut data)?;
+    let consensus_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
+
+    let mut data = vec![MoneyFunction::UnstakeV1 as u8];
+    alice_money_unstake_params.encode(&mut data)?;
+    let money_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+
+    let calls = vec![consensus_call, money_call];
+    let proofs = vec![alice_consensus_unstake_proofs, alice_money_unstake_proofs];
+    let mut alice_unstake_tx = Transaction { calls, proofs, signatures: vec![] };
+    let sigs = alice_unstake_tx.create_sigs(&mut OsRng, &[alice_consensus_unstake_secret_key])?;
+    alice_unstake_tx.signatures = vec![sigs];
+
+    info!(target: "consensus", "[Faucet] ==========================");
+    info!(target: "consensus", "[Faucet] Executing Alice unstake tx");
+    info!(target: "consensus", "[Faucet] ==========================");
+    th.faucet.state.read().await.verify_transactions(&[alice_unstake_tx.clone()], true).await?;
+    th.faucet.merkle_tree.append(&MerkleNode::from(alice_money_unstake_params.output.coin.inner()));
+    info!(target: "consensus", "[Alice] ==========================");
+    info!(target: "consensus", "[Alice] Executing Alice unstake tx");
+    info!(target: "consensus", "[Alice] ==========================");
+    th.alice.state.read().await.verify_transactions(&[alice_unstake_tx.clone()], true).await?;
+    th.alice.merkle_tree.append(&MerkleNode::from(alice_money_unstake_params.output.coin.inner()));
+
+    assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
+    assert!(
+        th.faucet.consensus_merkle_tree.root(0).unwrap() ==
+            th.alice.consensus_merkle_tree.root(0).unwrap()
+    );
 
     // Thanks for reading
     Ok(())
