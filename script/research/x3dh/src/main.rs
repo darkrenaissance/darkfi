@@ -450,14 +450,18 @@ fn main() {
     // at some interval (e.g. once a week/month). The new signed prekey
     // and prekey signature will replace the previous values.
 
+    // FIXME: It this pub/priv keys or priv and pub-signed? 
+    
     // Bob's signed prekey `SPK_B`
     let bob_spk_secret = X25519SecretKey::new(OsRng);
-    let bob_spk_public = X25519PublicKey::from(&bob_spk_secret);
+    let bob_public_spk = X25519PublicKey::from(&bob_spk_secret);
 
     // Bob's prekey signature `Sig(IK_b, Encode(SPK_B))`
     let nonce = [0_u8; 64];
-    //let bob_spk_signature = bob_ik_secret.xeddsa_sign(&bob_spk_public.to_bytes(), &nonce);
-    let bob_spk_signature = bob_ik_secret.xeddsa_sign(&bob_spk_public.to_bytes(), &nonce);
+    //let bob_spk_signature = bob_ik_secret.xeddsa_sign(&bob_public_spk.to_bytes(), &nonce);
+   
+    //FIXME: what's the corrrect key? bob_spk_secret.xddsa or bob_ik_secret.xddsa ?
+    let bob_spk_signature = bob_spk_secret.xeddsa_sign(&bob_public_spk.to_bytes(), &nonce);
 
     // A set of Bob's one-time prekeys `(OPK_B1, OPK_B2, OPK_B3, ...)`
     let mut bob_opk_secrets =
@@ -468,7 +472,7 @@ fn main() {
     bob_opk_publics.push_back(X25519PublicKey::from(&bob_opk_secrets[2]));
 
     let bob_keyset = Keyset {
-        signed_prekey: bob_spk_public,
+        signed_prekey: bob_public_spk,
         prekey_signature: bob_spk_signature,
         onetime_prekeys: bob_opk_publics.clone(),
     };
