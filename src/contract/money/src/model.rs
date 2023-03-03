@@ -71,6 +71,8 @@ pub struct StakeInput {
     pub nullifier: Nullifier,
     /// Revealed Merkle root
     pub merkle_root: MerkleNode,
+    /// Public key for the signature
+    pub signature_public: PublicKey,
 }
 
 /// A contract call's anonymous output

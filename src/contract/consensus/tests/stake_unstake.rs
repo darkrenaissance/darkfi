@@ -130,6 +130,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
         token_blind: alice_money_stake_params.token_blind,
         nullifier: alice_money_stake_params.input.nullifier,
         merkle_root: alice_money_stake_params.input.merkle_root,
+        signature_public: alice_money_stake_params.input.signature_public,
         mint_zkbin: consensus_mint_zkbin.clone(),
         mint_pk: consensus_mint_pk.clone(),
     }
@@ -151,8 +152,9 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let calls = vec![money_call, consensus_call];
     let proofs = vec![alice_money_stake_proofs, alice_consensus_stake_proofs];
     let mut alice_stake_tx = Transaction { calls, proofs, signatures: vec![] };
-    let sigs = alice_stake_tx.create_sigs(&mut OsRng, &[alice_money_stake_secret_key])?;
-    alice_stake_tx.signatures = vec![sigs];
+    let money_sigs = alice_stake_tx.create_sigs(&mut OsRng, &[alice_money_stake_secret_key])?;
+    let consensus_sigs = alice_stake_tx.create_sigs(&mut OsRng, &[alice_money_stake_secret_key])?;
+    alice_stake_tx.signatures = vec![money_sigs, consensus_sigs];
 
     info!(target: "consensus", "[Faucet] ========================");
     info!(target: "consensus", "[Faucet] Executing Alice stake tx");
@@ -220,6 +222,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
         token_blind: alice_consensus_unstake_params.token_blind,
         nullifier: alice_consensus_unstake_params.input.nullifier,
         merkle_root: alice_consensus_unstake_params.input.merkle_root,
+        signature_public: alice_consensus_unstake_params.input.signature_public,
         mint_zkbin: mint_zkbin.clone(),
         mint_pk: mint_pk.clone(),
     }

@@ -24,8 +24,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, Coin, ContractId, MerkleNode, DARK_TOKEN_ID,
-        MONEY_CONTRACT_ID,
+        pasta_prelude::*, pedersen_commitment_base, Coin, ContractId, MerkleNode, PublicKey,
+        DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -51,6 +51,8 @@ pub(crate) fn consensus_stake_get_metadata_v1(
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
+    // Public keys for the transaction signatures we have to verify
+    let mut signature_pubkeys: Vec<PublicKey> = vec![];
 
     // Grab the pedersen commitment from the anonymous output
     let output = &params.output;
@@ -68,9 +70,12 @@ pub(crate) fn consensus_stake_get_metadata_v1(
         ],
     ));
 
+    signature_pubkeys.push(params.input.signature_public);
+
     // Serialize everything gathered and return it
     let mut metadata = vec![];
     zk_public_inputs.encode(&mut metadata)?;
+    signature_pubkeys.encode(&mut metadata)?;
 
     Ok(metadata)
 }
@@ -118,16 +123,22 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     }
 
     // The nullifiers should already exist. It is the double-mint protection.
-    if !db_contains_key(money_nullifiers_db, &serialize(&input.nullifier))? {
-        msg!("[ConsensusStakeV1] Error: Duplicate nullifier found");
-        return Err(MoneyError::DuplicateNullifier.into())
+    if db_contains_key(money_nullifiers_db, &serialize(&input.nullifier))? {
+        msg!("[ConsensusStakeV1] Error: Missing nullifier");
+        return Err(MoneyError::StakeMissingNullifier.into())
     }
 
-    // Check caller matches stake spend hook and its correctness
-    let caller = &calls[call_idx as usize];
-    if caller.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
-        msg!("[ConsensusStakeV1] Error: Invoking contract call does not match spend hook");
-        return Err(MoneyError::SpendHookMismatch.into())
+    // Check previous call is money contract
+    if call_idx == 0 {
+        msg!("[MoneyStakeV1] Error: previous_call_idx will be out of bounds");
+        return Err(MoneyError::SpendHookOutOfBounds.into())
+    }
+
+    let previous_call_idx = call_idx - 1;
+    let previous = &calls[previous_call_idx as usize];
+    if previous.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
+        msg!("[MoneyStakeV1] Error: Previous contract call is not consensus contract");
+        return Err(MoneyError::StakePreviousCallNotMoneyContract.into())
     }
 
     // Newly created coin for this call is in the output. Here we gather it,

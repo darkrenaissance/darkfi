@@ -88,6 +88,8 @@ pub struct ConsensusStakeCallBuilder {
     pub nullifier: Nullifier,
     /// Revealed Merkle root
     pub merkle_root: MerkleNode,
+    /// Public key for the signature
+    pub signature_public: PublicKey,
     /// `Consensus_Mint_V1` zkas circuit ZkBinary
     pub mint_zkbin: ZkBinary,
     /// Proving key for the `Consensus_Mint_V1` zk circuit
@@ -153,6 +155,7 @@ impl ConsensusStakeCallBuilder {
             value_commit: public_inputs.value_commit,
             nullifier: self.nullifier,
             merkle_root: self.merkle_root,
+            signature_public: self.signature_public,
         };
 
         // We now fill this with necessary stuff
