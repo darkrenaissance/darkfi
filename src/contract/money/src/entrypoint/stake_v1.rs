@@ -125,6 +125,12 @@ pub(crate) fn money_stake_process_instruction_v1(
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
+    // TODO: (See Money::Transfer) Enforce spend hook for the input in case it's set.
+    // We can allow protocols to execute a staking operation as well.
+
+    // TODO: Check that the value commitment of the input == value commitment in
+    // the Consensus stake mint call.
+
     // Check next call is consensus contract
     let next_call_idx = call_idx + 1;
     if next_call_idx >= calls.len() as u32 {
@@ -137,6 +143,9 @@ pub(crate) fn money_stake_process_instruction_v1(
         msg!("[MoneyStakeV1] Error: Next contract call is not consensus contract");
         return Err(MoneyError::StakeNextCallNotConsensusContract.into())
     }
+
+    // TODO: Also check that the function in Consensus contract being called is the
+    // correct one.
 
     // At this point the state transition has passed, so we create a state update
     let update = MoneyStakeUpdateV1 { nullifier: input.nullifier };
