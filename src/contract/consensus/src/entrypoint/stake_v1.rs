@@ -17,15 +17,15 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
-    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
-    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_COIN_ROOTS_TREE,
-    MONEY_CONTRACT_NULLIFIERS_TREE,
+    error::MoneyError, model::MoneyStakeParamsV1, CONSENSUS_CONTRACT_COINS_TREE,
+    CONSENSUS_CONTRACT_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_COIN_ROOTS_TREE,
+    CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
 };
 use darkfi_sdk::{
     crypto::{
         pasta_prelude::*, pedersen_commitment_base, Coin, ContractId, MerkleNode, PublicKey,
-        DARK_TOKEN_ID, MONEY_CONTRACT_ID,
+        CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -130,15 +130,37 @@ pub(crate) fn consensus_stake_process_instruction_v1(
 
     // Check previous call is money contract
     if call_idx == 0 {
-        msg!("[MoneyStakeV1] Error: previous_call_idx will be out of bounds");
+        msg!("[ConsensusStakeV1] Error: previous_call_idx will be out of bounds");
         return Err(MoneyError::SpendHookOutOfBounds.into())
     }
 
     let previous_call_idx = call_idx - 1;
     let previous = &calls[previous_call_idx as usize];
     if previous.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
-        msg!("[MoneyStakeV1] Error: Previous contract call is not consensus contract");
+        msg!("[ConsensusStakeV1] Error: Previous contract call is not consensus contract");
         return Err(MoneyError::StakePreviousCallNotMoneyContract.into())
+    }
+
+    // Verify previous call corresponds to Money::StakeV1 (0x05)
+    if previous.data[0] != 0x05 {
+        msg!("[ConsensusStakeV1] Error: Previous call function mismatch");
+        return Err(MoneyError::PreviousCallFunctionMissmatch.into())
+    }
+
+    // Verify previous call input is the same as this calls StakeInput
+    let previous_params: MoneyStakeParamsV1 = deserialize(&previous.data[1..])?;
+    let previous_input = &previous_params.input;
+    if &previous_input != &input {
+        msg!("[ConsensusStakeV1] Error: Previous call input mismatch");
+        return Err(MoneyError::PreviousCallInputMissmatch.into())
+    }
+
+    // If spend hook is set, check its correctness
+    if previous_input.spend_hook != pallas::Base::zero() &&
+        previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner()
+    {
+        msg!("[ConsensusStakeV1] Error: Invoking contract call does not match spend hook in input");
+        return Err(MoneyError::SpendHookMismatch.into())
     }
 
     // Newly created coin for this call is in the output. Here we gather it,

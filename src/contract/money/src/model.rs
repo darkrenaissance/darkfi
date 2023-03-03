@@ -38,7 +38,7 @@ pub struct ClearInput {
 }
 
 /// A contract call's anonymous input
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Input {
     /// Pedersen commitment for the input's value
     pub value_commit: pallas::Point,
@@ -61,7 +61,7 @@ pub struct Input {
 }
 
 /// Anonymous input for staking contract calls
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct StakeInput {
     /// Blinding factor for `token_id`
     pub token_blind: pallas::Scalar,
@@ -73,6 +73,15 @@ pub struct StakeInput {
     pub merkle_root: MerkleNode,
     /// Public key for the signature
     pub signature_public: PublicKey,
+}
+
+impl PartialEq<StakeInput> for Input {
+    fn eq(&self, other: &StakeInput) -> bool {
+        self.value_commit == other.value_commit &&
+            self.nullifier == other.nullifier &&
+            self.merkle_root == other.merkle_root &&
+            self.signature_public == other.signature_public
+    }
 }
 
 /// A contract call's anonymous output

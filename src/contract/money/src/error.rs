@@ -91,6 +91,18 @@ pub enum MoneyError {
 
     #[error("Spend hook is not money contract")]
     UnstakeSpendHookNotMoneyContract,
+
+    #[error("Next call function mismatch")]
+    NextCallFunctionMissmatch,
+
+    #[error("Next call input mismatch")]
+    NextCallInputMissmatch,
+
+    #[error("Previous call function mismatch")]
+    PreviousCallFunctionMissmatch,
+
+    #[error("Previous call input mismatch")]
+    PreviousCallInputMissmatch,
 }
 
 impl From<MoneyError> for ContractError {
@@ -120,6 +132,10 @@ impl From<MoneyError> for ContractError {
             MoneyError::StakeNextCallNotConsensusContract => Self::Custom(22),
             MoneyError::StakePreviousCallNotMoneyContract => Self::Custom(23),
             MoneyError::UnstakeSpendHookNotMoneyContract => Self::Custom(24),
+            MoneyError::NextCallFunctionMissmatch => Self::Custom(25),
+            MoneyError::NextCallInputMissmatch => Self::Custom(26),
+            MoneyError::PreviousCallFunctionMissmatch => Self::Custom(27),
+            MoneyError::PreviousCallInputMissmatch => Self::Custom(28),
         }
     }
 }

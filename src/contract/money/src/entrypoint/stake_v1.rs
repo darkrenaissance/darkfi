@@ -31,7 +31,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyStakeParamsV1, MoneyStakeUpdateV1},
+    model::{MoneyStakeParamsV1, MoneyStakeUpdateV1, MoneyUnstakeParamsV1},
     MoneyFunction, MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1,
 };
@@ -125,12 +125,6 @@ pub(crate) fn money_stake_process_instruction_v1(
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
-    // TODO: (See Money::Transfer) Enforce spend hook for the input in case it's set.
-    // We can allow protocols to execute a staking operation as well.
-
-    // TODO: Check that the value commitment of the input == value commitment in
-    // the Consensus stake mint call.
-
     // Check next call is consensus contract
     let next_call_idx = call_idx + 1;
     if next_call_idx >= calls.len() as u32 {
@@ -144,8 +138,26 @@ pub(crate) fn money_stake_process_instruction_v1(
         return Err(MoneyError::StakeNextCallNotConsensusContract.into())
     }
 
-    // TODO: Also check that the function in Consensus contract being called is the
-    // correct one.
+    // If spend hook is set, check its correctness
+    if input.spend_hook != pallas::Base::zero() && next.contract_id.inner() != input.spend_hook {
+        msg!("[MoneyStakeV1] Error: Invoking contract call does not match spend hook in input");
+        return Err(MoneyError::SpendHookMismatch.into())
+    }
+
+    // Verify next call corresponds to Consensus::StakeV1 (0x00)
+    if next.data[0] != 0x00 {
+        msg!("[MoneyStakeV1] Error: Next call function mismatch");
+        return Err(MoneyError::NextCallFunctionMissmatch.into())
+    }
+
+    // Verify next call StakeInput is the same as this calls input
+    // Note: ConsensusStakeParamsV1 is the same as MoneyUnstakeParamsV1
+    // TODO: maybe create a common models src folder accessible by all contracts?
+    let next_params: MoneyUnstakeParamsV1 = deserialize(&next.data[1..])?;
+    if input != &next_params.input {
+        msg!("[MoneyStakeV1] Error: Next call input mismatch");
+        return Err(MoneyError::NextCallInputMissmatch.into())
+    }
 
     // At this point the state transition has passed, so we create a state update
     let update = MoneyStakeUpdateV1 { nullifier: input.nullifier };
