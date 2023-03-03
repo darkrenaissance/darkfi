@@ -85,7 +85,7 @@ pub(crate) fn money_stake_get_metadata_v1(
     Ok(metadata)
 }
 
-/// `process_instruction` function for `Money::TransferV1`
+/// `process_instruction` function for `Money::StakeV1`
 pub(crate) fn money_stake_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
@@ -153,6 +153,7 @@ pub(crate) fn money_stake_process_instruction_v1(
     let mut update_data = vec![];
     update_data.write_u8(MoneyFunction::StakeV1 as u8)?;
     update.encode(&mut update_data)?;
+
     // and return it
     Ok(update_data)
 }

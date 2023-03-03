@@ -30,7 +30,7 @@ pub enum MoneyFunction {
     FreezeV1 = 0x03,
     //Fee = 0x04,
     StakeV1 = 0x05,
-    //Unstake = 0x06,
+    UnstakeV1 = 0x06,
 }
 
 impl TryFrom<u8> for MoneyFunction {
@@ -44,7 +44,7 @@ impl TryFrom<u8> for MoneyFunction {
             0x03 => Ok(Self::FreezeV1),
             //0x04 => Ok(Self::Fee),
             0x05 => Ok(Self::StakeV1),
-            //0x06 => Ok(Self::Unstake),
+            0x06 => Ok(Self::UnstakeV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }
@@ -84,3 +84,20 @@ pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
 pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";
 /// zkas token freeze circuit namespace
 pub const MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1: &str = "TokenFreeze_V1";
+
+// These are the different sled trees that will be created
+// for the consensus contract.
+// We keep them here so we can reference them both in `Money`
+// and `Consensus` contracts.
+pub const CONSENSUS_CONTRACT_INFO_TREE: &str = "consensus_info";
+pub const CONSENSUS_CONTRACT_COINS_TREE: &str = "consensus_coins";
+pub const CONSENSUS_CONTRACT_COIN_ROOTS_TREE: &str = "consensus_coin_roots";
+pub const CONSENSUS_CONTRACT_NULLIFIERS_TREE: &str = "consensus_nullifiers";
+
+// These are keys inside the consensus info tree
+pub const CONSENSUS_CONTRACT_DB_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const CONSENSUS_CONTRACT_COIN_MERKLE_TREE: &str = "consensus_coin_tree";
+
+/// Consensus zkas circuits namespaces
+pub const CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1: &str = "Consensus_Mint_V1";
+pub const CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1: &str = "Consensus_Burn_V1";

@@ -27,7 +27,10 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
-    model::{MoneyFreezeUpdateV1, MoneyMintUpdateV1, MoneyStakeUpdateV1, MoneyTransferUpdateV1},
+    model::{
+        MoneyFreezeUpdateV1, MoneyMintUpdateV1, MoneyStakeUpdateV1, MoneyTransferUpdateV1,
+        MoneyUnstakeUpdateV1,
+    },
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_FAUCET_PUBKEYS,
     MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
@@ -64,6 +67,13 @@ use freeze_v1::{
 mod stake_v1;
 use stake_v1::{
     money_stake_get_metadata_v1, money_stake_process_instruction_v1, money_stake_process_update_v1,
+};
+
+/// `Money::Unstake` functions
+mod unstake_v1;
+use unstake_v1::{
+    money_unstake_get_metadata_v1, money_unstake_process_instruction_v1,
+    money_unstake_process_update_v1,
 };
 
 darkfi_sdk::define_contract!(
@@ -191,6 +201,11 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let metadata = money_stake_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
+
+        MoneyFunction::UnstakeV1 => {
+            let metadata = money_unstake_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
     }
 }
 
@@ -234,6 +249,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update_data = money_stake_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
+
+        MoneyFunction::UnstakeV1 => {
+            let update_data = money_unstake_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&update_data)?)
+        }
     }
 }
 
@@ -268,6 +288,11 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         MoneyFunction::StakeV1 => {
             let update: MoneyStakeUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_stake_process_update_v1(cid, update)?)
+        }
+
+        MoneyFunction::UnstakeV1 => {
+            let update: MoneyUnstakeUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_unstake_process_update_v1(cid, update)?)
         }
     }
 }

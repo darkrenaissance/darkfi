@@ -55,17 +55,3 @@ pub mod entrypoint;
 #[cfg(feature = "client")]
 /// Client API for interaction with this smart contract
 pub mod client;
-
-// These are the different sled trees that will be created
-pub const CONSENSUS_CONTRACT_INFO_TREE: &str = "info";
-pub const CONSENSUS_CONTRACT_COINS_TREE: &str = "coins";
-pub const CONSENSUS_CONTRACT_COIN_ROOTS_TREE: &str = "coin_roots";
-pub const CONSENSUS_CONTRACT_NULLIFIERS_TREE: &str = "nullifiers";
-
-// These are keys inside the info tree
-pub const CONSENSUS_CONTRACT_DB_VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const CONSENSUS_CONTRACT_COIN_MERKLE_TREE: &str = "coin_tree";
-
-/// zkas mint circuit namespace
-pub const CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1: &str = "Consensus_Mint_V1";
-pub const CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1: &str = "Consensus_Burn_V1";

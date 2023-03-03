@@ -16,7 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::{MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1};
+use darkfi_money_contract::{
+    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
+    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_DB_VERSION,
+    CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
+    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+};
 use darkfi_sdk::{
     crypto::{ContractId, MerkleTree},
     db::{db_init, db_lookup, db_set, set_return_data, SMART_CONTRACT_ZKAS_DB_NAME},
@@ -25,13 +31,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{
-    model::ConsensusStakeUpdateV1, ConsensusFunction, CONSENSUS_CONTRACT_COINS_TREE,
-    CONSENSUS_CONTRACT_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_COIN_ROOTS_TREE,
-    CONSENSUS_CONTRACT_DB_VERSION, CONSENSUS_CONTRACT_INFO_TREE,
-    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1,
-    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
-};
+use crate::{model::ConsensusStakeUpdateV1, ConsensusFunction};
 
 /// `Consensus::Stake` functions
 mod stake_v1;

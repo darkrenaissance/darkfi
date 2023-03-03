@@ -60,6 +60,19 @@ pub struct Input {
     pub signature_public: PublicKey,
 }
 
+/// Anonymous input for staking contract calls
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct StakeInput {
+    /// Blinding factor for `token_id`
+    pub token_blind: pallas::Scalar,
+    /// Pedersen commitment for the staked coin's value
+    pub value_commit: pallas::Point,
+    /// Revealed nullifier
+    pub nullifier: Nullifier,
+    /// Revealed Merkle root
+    pub merkle_root: MerkleNode,
+}
+
 /// A contract call's anonymous output
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Output {
@@ -138,4 +151,20 @@ pub struct MoneyStakeParamsV1 {
 pub struct MoneyStakeUpdateV1 {
     /// Revealed nullifier
     pub nullifier: Nullifier,
+}
+
+/// Parameters for `Money::Unstake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyUnstakeParamsV1 {
+    /// Burnt token revealed info
+    pub input: StakeInput,
+    /// Anonymous output
+    pub output: Output,
+}
+
+/// State update for `Money::Unstake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyUnstakeUpdateV1 {
+    /// The newly minted coin
+    pub coin: Coin,
 }
