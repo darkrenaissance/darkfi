@@ -119,7 +119,6 @@ impl MoneyStakeCallBuilder {
         let value_blind = pallas::Scalar::random(&mut OsRng);
         let token_blind = pallas::Scalar::random(&mut OsRng);
         let signature_secret = SecretKey::random(&mut OsRng);
-        let spend_hook = DARK_TOKEN_ID.inner();
         let user_data_blind = pallas::Base::random(&mut OsRng);
         info!("Creating stake burn proof for input");
         let (proof, public_inputs) = create_stake_burn_proof(
@@ -128,7 +127,6 @@ impl MoneyStakeCallBuilder {
             &input,
             value_blind,
             token_blind,
-            spend_hook,
             user_data_blind,
             signature_secret,
         )?;
@@ -138,7 +136,7 @@ impl MoneyStakeCallBuilder {
             token_commit: public_inputs.token_commit,
             nullifier: public_inputs.nullifier,
             merkle_root: public_inputs.merkle_root,
-            spend_hook,
+            spend_hook: public_inputs.spend_hook,
             user_data_enc: public_inputs.user_data_enc,
             signature_public: public_inputs.signature_public,
         };
@@ -160,7 +158,6 @@ pub fn create_stake_burn_proof(
     input: &TransactionBuilderInputInfo,
     value_blind: pallas::Scalar,
     token_blind: pallas::Scalar,
-    spend_hook: pallas::Base,
     user_data_blind: pallas::Base,
     signature_secret: SecretKey,
 ) -> Result<(Proof, MoneyStakeBurnRevealed)> {
@@ -176,7 +173,7 @@ pub fn create_stake_burn_proof(
         pallas::Base::from(input.note.value),
         input.note.token_id.inner(),
         input.note.serial,
-        spend_hook,
+        input.note.spend_hook,
         input.note.user_data,
         input.note.coin_blind,
     ]);
@@ -204,7 +201,7 @@ pub fn create_stake_burn_proof(
         token_commit,
         nullifier,
         merkle_root,
-        spend_hook,
+        spend_hook: input.note.spend_hook,
         user_data_enc,
         signature_public,
     };
@@ -215,7 +212,7 @@ pub fn create_stake_burn_proof(
         Witness::Scalar(Value::known(value_blind)),
         Witness::Scalar(Value::known(token_blind)),
         Witness::Base(Value::known(input.note.serial)),
-        Witness::Base(Value::known(spend_hook)),
+        Witness::Base(Value::known(input.note.spend_hook)),
         Witness::Base(Value::known(input.note.user_data)),
         Witness::Base(Value::known(user_data_blind)),
         Witness::Base(Value::known(input.note.coin_blind)),

@@ -125,12 +125,7 @@ pub(crate) fn money_stake_process_instruction_v1(
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
-    // Check if spend hook is set and its correctness
-    if input.spend_hook == pallas::Base::zero() {
-        msg!("[MoneyStakeV1] Error: Missing spend hook");
-        return Err(MoneyError::StakeMissingSpendHook.into())
-    }
-
+    // Check next call is consensus contract
     let next_call_idx = call_idx + 1;
     if next_call_idx >= calls.len() as u32 {
         msg!("[MoneyStakeV1] Error: next_call_idx out of bounds");
@@ -138,14 +133,9 @@ pub(crate) fn money_stake_process_instruction_v1(
     }
 
     let next = &calls[next_call_idx as usize];
-    if next.contract_id.inner() != input.spend_hook {
-        msg!("[MoneyStakeV1] Error: Invoking contract call does not match spend hook");
-        return Err(MoneyError::SpendHookMismatch.into())
-    }
-
-    if input.spend_hook != CONSENSUS_CONTRACT_ID.inner() {
-        msg!("[MoneyStakeV1] Error: Spend hook is not consensus contract");
-        return Err(MoneyError::StakeSpendHookNotConsensusContract.into())
+    if next.contract_id.inner() != CONSENSUS_CONTRACT_ID.inner() {
+        msg!("[MoneyStakeV1] Error: Next contract call is not consensus contract");
+        return Err(MoneyError::StakeNextCallNotConsensusContract.into())
     }
 
     // At this point the state transition has passed, so we create a state update
