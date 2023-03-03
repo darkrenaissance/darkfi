@@ -114,11 +114,11 @@ Also engagement and familiarization with crypto is a must. Begin following [this
 
 ## Starting
 
-1. Make accounts on [element.dark.fi](https://element.dark.fi/) (with the homeserver set to matrix.dark.fi). Also download the Elements app for the phone and sign into your account.
-2. Download and install a simple Linux operating system to get started. Options can be Ubuntu or Manjaro Linux.
-3. Setup a [sollet.io](https://www.sollet.io/) wallet, and learn how to use an AMM like Raydium to exchange money on Solana between USDC and Bitcoin. Learn to work with multiple SPL accounts.
-4. Watch [Finematics videos](https://www.youtube.com/c/Finematics/videos).
-5. Begin the initial stage listed above.
+1. Download and install a simple Linux operating system to get started. Options can be Ubuntu or Manjaro Linux.
+2. Setup a [sollet.io](https://www.sollet.io/) wallet, and learn how to use an AMM like Raydium to exchange money on Solana between USDC and Bitcoin. Learn to work with multiple SPL accounts.
+3. Watch [Finematics videos](https://www.youtube.com/c/Finematics/videos).
+4. Begin the initial stage listed above.
+5. Follow the instructions on the Darkfi Book and run [ircd](Book https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html) to connect with the team.
 
 ## Further Reading
 
