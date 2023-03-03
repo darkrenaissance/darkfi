@@ -456,7 +456,8 @@ fn main() {
 
     // Bob's prekey signature `Sig(IK_b, Encode(SPK_B))`
     let nonce = [0_u8; 64];
-    let bob_spk_sig = bob_ik_secret.xeddsa_sign(&bob_spk_public.to_bytes(), &nonce);
+    //let bob_spk_signature = bob_ik_secret.xeddsa_sign(&bob_spk_public.to_bytes(), &nonce);
+    let bob_spk_signature = bob_ik_secret.xeddsa_sign(&bob_spk_public.to_bytes(), &nonce);
 
     // A set of Bob's one-time prekeys `(OPK_B1, OPK_B2, OPK_B3, ...)`
     let mut bob_opk_secrets =
@@ -468,7 +469,7 @@ fn main() {
 
     let bob_keyset = Keyset {
         signed_prekey: bob_spk_public,
-        prekey_signature: bob_spk_sig,
+        prekey_signature: bob_spk_signature,
         onetime_prekeys: bob_opk_publics.clone(),
     };
 
@@ -485,11 +486,6 @@ fn main() {
 
     // Alice verifies the prekey signature and aborts the protocol if
     // verification fails.
-
-    println!("\n{:?}", bob_keyset.signed_prekey.to_bytes().clone());
-    println!("{:?}", bob_keyset.signed_prekey.to_bytes().clone().len());
-    println!("\n{:?}", bob_keyset.prekey_signature.clone());
-    println!("{:?}", bob_keyset.prekey_signature.clone().len());
 
     assert!(bob_keyset
         .identity_key
