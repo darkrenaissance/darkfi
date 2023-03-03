@@ -31,7 +31,7 @@ use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
         pedersen_commitment_u64, poseidon_hash, Coin, MerkleNode, Nullifier, PublicKey, TokenId,
-        DARK_TOKEN_ID,
+        CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
     pasta::pallas,
 };
@@ -111,7 +111,7 @@ impl ConsensusStakeCallBuilder {
         debug!("Finished building output");
 
         let serial = pallas::Base::random(&mut OsRng);
-        let spend_hook = DARK_TOKEN_ID.inner();
+        let spend_hook = CONSENSUS_CONTRACT_ID.inner();
         let user_data = pallas::Base::random(&mut OsRng);
         let coin_blind = pallas::Base::random(&mut OsRng);
 

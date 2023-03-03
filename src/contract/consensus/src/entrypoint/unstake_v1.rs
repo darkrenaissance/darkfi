@@ -17,13 +17,13 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1,
+    error::MoneyError, model::MoneyUnstakeParamsV1, CONSENSUS_CONTRACT_COIN_ROOTS_TREE,
+    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, ContractId, PublicKey, DARK_TOKEN_ID,
-        MONEY_CONTRACT_ID,
+        pasta_prelude::*, pedersen_commitment_base, ContractId, PublicKey, CONSENSUS_CONTRACT_ID,
+        DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -127,12 +127,7 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
-    // Check if spend hook is set and its correctness
-    if input.spend_hook == pallas::Base::zero() {
-        msg!("[ConsensusUnstakeV1] Error: Missing spend hook");
-        return Err(MoneyError::StakeMissingSpendHook.into())
-    }
-
+    // Check next call is money contract
     let next_call_idx = call_idx + 1;
     if next_call_idx >= calls.len() as u32 {
         msg!("[ConsensusUnstakeV1] Error: next_call_idx out of bounds");
@@ -140,14 +135,33 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
     }
 
     let next = &calls[next_call_idx as usize];
-    if next.contract_id.inner() != input.spend_hook {
-        msg!("[ConsensusUnstakeV1] Error: Invoking contract call does not match spend hook");
-        return Err(MoneyError::SpendHookMismatch.into())
+    if next.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
+        msg!("[ConsensusUnstakeV1] Error: Next contract call is not money contract");
+        return Err(MoneyError::UnstakeNextCallNotMoneyContract.into())
     }
 
-    if input.spend_hook != MONEY_CONTRACT_ID.inner() {
-        msg!("[ConsensusUnstakeV1] Error: Spend hook is not money contract");
-        return Err(MoneyError::UnstakeSpendHookNotMoneyContract.into())
+    // Check if spend hook is set and its correctness
+    if input.spend_hook == pallas::Base::zero() {
+        msg!("[ConsensusUnstakeV1] Error: Missing spend hook");
+        return Err(MoneyError::StakeMissingSpendHook.into())
+    }
+
+    if input.spend_hook != CONSENSUS_CONTRACT_ID.inner() {
+        msg!("[ConsensusUnstakeV1] Error: Spend hook is not consensus contract");
+        return Err(MoneyError::UnstakeSpendHookNotConsensusContract.into())
+    }
+
+    // Verify next call corresponds to Money::UnstakeV1 (0x06)
+    if next.data[0] != 0x06 {
+        msg!("[ConsensusUnstakeV1] Error: Next call function mismatch");
+        return Err(MoneyError::NextCallFunctionMissmatch.into())
+    }
+
+    // Verify next call StakeInput is the same as this calls input
+    let next_params: MoneyUnstakeParamsV1 = deserialize(&next.data[1..])?;
+    if input != &next_params.input {
+        msg!("[ConsensusUnstakeV1] Error: Next call input mismatch");
+        return Err(MoneyError::NextCallInputMissmatch.into())
     }
 
     // At this point the state transition has passed, so we create a state update
