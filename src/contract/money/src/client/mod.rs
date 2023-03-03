@@ -44,6 +44,9 @@ pub mod mint_v1;
 /// `Money::FreezeV1` API
 pub mod freeze_v1;
 
+/// `Money::StakeV1` API
+pub mod stake_v1;
+
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
 // SQL schema.
 // TODO: They should also be prefixed with the contract ID to avoid collisions.

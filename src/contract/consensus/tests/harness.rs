@@ -102,8 +102,6 @@ impl Wallet {
 pub struct ConsensusTestHarness {
     pub faucet: Wallet,
     pub alice: Wallet,
-    pub bob: Wallet,
-    pub charlie: Wallet,
     pub proving_keys: HashMap<&'static str, (ProvingKey, ZkBinary)>,
 }
 
@@ -115,12 +113,6 @@ impl ConsensusTestHarness {
 
         let alice_kp = Keypair::random(&mut OsRng);
         let alice = Wallet::new(alice_kp, &faucet_pubkeys).await?;
-
-        let bob_kp = Keypair::random(&mut OsRng);
-        let bob = Wallet::new(bob_kp, &faucet_pubkeys).await?;
-
-        let charlie_kp = Keypair::random(&mut OsRng);
-        let charlie = Wallet::new(charlie_kp, &faucet_pubkeys).await?;
 
         // Get the zkas circuits and build proving keys
         let mut proving_keys = HashMap::new();
@@ -147,7 +139,7 @@ impl ConsensusTestHarness {
         mkpk!(MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1);
         mkpk!(MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1);
 
-        Ok(Self { faucet, alice, bob, charlie, proving_keys })
+        Ok(Self { faucet, alice, proving_keys })
     }
 
     pub fn airdrop_native(

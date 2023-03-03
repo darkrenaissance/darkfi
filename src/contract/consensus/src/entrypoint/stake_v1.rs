@@ -21,9 +21,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::{CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
-        pasta_prelude::*,
-        pedersen_commitment_base, Coin, ContractId, MerkleNode, DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_base, Coin, ContractId, MerkleNode,
+        CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -94,46 +93,46 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     // Perform the actual state transition
     // ===================================
 
-    msg!("[StakeV1] Validating anonymous output");
+    msg!("[ConsensusStakeV1] Validating anonymous output");
     let input = &params.input;
     let output = &params.output;
 
     // Only native token can be staked
     if output.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), input.token_blind) {
-        msg!("[StakeV1] Error: Input used non-native token");
+        msg!("[ConsensusStakeV1] Error: Input used non-native token");
         return Err(MoneyError::StakeInputNonNativeToken.into())
     }
 
     // Verify value commits match
     if output.value_commit != input.value_commit {
-        msg!("[StakeV1] Error: Value commitments do not match");
+        msg!("[ConsensusStakeV1] Error: Value commitments do not match");
         return Err(MoneyError::ValueMismatch.into())
     }
 
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
     if !db_contains_key(money_coin_roots_db, &serialize(&input.merkle_root))? {
-        msg!("[StakeV1] Error: Merkle root not found in previous state");
+        msg!("[ConsensusStakeV1] Error: Merkle root not found in previous state");
         return Err(MoneyError::TransferMerkleRootNotFound.into())
     }
 
     // The nullifiers should already exist. It is the double-mint protection.
     if !db_contains_key(money_nullifiers_db, &serialize(&input.nullifier))? {
-        msg!("[StakeV1] Error: Duplicate nullifier found");
+        msg!("[ConsensusStakeV1] Error: Duplicate nullifier found");
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
     // Check caller matches stake spend hook and its correctness
     let caller = &calls[call_idx as usize];
     if caller.contract_id.inner() != CONSENSUS_CONTRACT_ID.inner() {
-        msg!("[StakeV1] Error: Invoking contract call does not match spend hook");
+        msg!("[ConsensusStakeV1] Error: Invoking contract call does not match spend hook");
         return Err(MoneyError::SpendHookMismatch.into())
     }
 
     // Newly created coin for this call is in the output. Here we gather it,
     // and we also check that it hasn't existed before.
     if db_contains_key(consenus_coins_db, &serialize(&output.coin))? {
-        msg!("[StakeV1] Error: Duplicate coin found in output");
+        msg!("[ConsensusStakeV1] Error: Duplicate coin found in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
     let coin = Coin::from(output.coin);
@@ -157,10 +156,10 @@ pub(crate) fn consensus_stake_process_update_v1(
     let coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
     let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
 
-    msg!("[StakeV1] Adding new coin to the set");
+    msg!("[ConsensusStakeV1] Adding new coin to the set");
     db_set(coins_db, &serialize(&update.coin), &[])?;
 
-    msg!("[StakeV1] Adding new coin to the Merkle tree");
+    msg!("[ConsensusStakeV1] Adding new coin to the Merkle tree");
     let coins: Vec<_> = vec![MerkleNode::from(update.coin.inner())];
     merkle_add(info_db, coin_roots_db, &serialize(&CONSENSUS_CONTRACT_COIN_MERKLE_TREE), &coins)?;
 

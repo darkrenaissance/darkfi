@@ -36,7 +36,7 @@ pub use coin::Coin;
 
 /// Contract ID definitions and methods
 pub mod contract_id;
-pub use contract_id::{ContractId, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
+pub use contract_id::{ContractId, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
 
 /// Token ID definitions and methods
 pub mod token_id;

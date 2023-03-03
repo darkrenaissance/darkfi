@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        contract_id::CONSENSUS_CONTRACT_ID, pasta_prelude::*, pedersen_commitment_base, ContractId,
-        PublicKey, DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_base, ContractId, PublicKey, CONSENSUS_CONTRACT_ID,
+        DARK_TOKEN_ID,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -103,48 +103,48 @@ pub(crate) fn money_stake_process_instruction_v1(
     // Perform the actual state transition
     // ===================================
 
-    msg!("[StakeV1] Validating anonymous input");
+    msg!("[MoneyStakeV1] Validating anonymous input");
     let input = &params.input;
 
     // Only native token can be staked
     if input.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), params.token_blind) {
-        msg!("[StakeV1] Error: Input used non-native token");
+        msg!("[MoneyStakeV1] Error: Input used non-native token");
         return Err(MoneyError::StakeInputNonNativeToken.into())
     }
 
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
     if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
-        msg!("[StakeV1] Error: Merkle root not found in previous state");
+        msg!("[MoneyStakeV1] Error: Merkle root not found in previous state");
         return Err(MoneyError::TransferMerkleRootNotFound.into())
     }
 
     // The nullifiers should not already exist. It is the double-spend protection.
     if db_contains_key(nullifiers_db, &serialize(&input.nullifier))? {
-        msg!("[StakeV1] Error: Duplicate nullifier found");
+        msg!("[MoneyStakeV1] Error: Duplicate nullifier found");
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
     // Check if spend hook is set and its correctness
     if input.spend_hook == pallas::Base::zero() {
-        msg!("[StakeV1] Error: Missing spend hook");
+        msg!("[MoneyStakeV1] Error: Missing spend hook");
         return Err(MoneyError::StakeMissingSpendHook.into())
     }
 
     let next_call_idx = call_idx + 1;
     if next_call_idx >= calls.len() as u32 {
-        msg!("[StakeV1] Error: next_call_idx out of bounds");
+        msg!("[MoneyStakeV1] Error: next_call_idx out of bounds");
         return Err(MoneyError::SpendHookOutOfBounds.into())
     }
 
     let next = &calls[next_call_idx as usize];
     if next.contract_id.inner() != input.spend_hook {
-        msg!("[StakeV1] Error: Invoking contract call does not match spend hook");
+        msg!("[MoneyStakeV1] Error: Invoking contract call does not match spend hook");
         return Err(MoneyError::SpendHookMismatch.into())
     }
 
     if input.spend_hook != CONSENSUS_CONTRACT_ID.inner() {
-        msg!("[StakeV1] Error: Spend hook is not consensus contract");
+        msg!("[MoneyStakeV1] Error: Spend hook is not consensus contract");
         return Err(MoneyError::StakeSpendHookNonConsensusContract.into())
     }
 
@@ -165,7 +165,7 @@ pub(crate) fn money_stake_process_update_v1(
     // Grab all necessary db handles for where we want to write
     let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
 
-    msg!("[StakeV1] Adding new nullifier to the set");
+    msg!("[MoneyStakeV1] Adding new nullifier to the set");
     db_set(nullifiers_db, &serialize(&update.nullifier), &[])?;
 
     Ok(())
