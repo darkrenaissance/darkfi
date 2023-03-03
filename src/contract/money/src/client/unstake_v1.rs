@@ -23,10 +23,6 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_money_contract::{
-    client::{MoneyNote, OwnCoin},
-    model::{Output, StakeInput},
-};
 use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
@@ -38,20 +34,23 @@ use darkfi_sdk::{
 use log::{debug, info};
 use rand::rngs::OsRng;
 
-use crate::model::ConsensusStakeParamsV1;
+use crate::{
+    client::{MoneyNote, OwnCoin},
+    model::{MoneyUnstakeParamsV1, Output, StakeInput},
+};
 
-pub struct ConsensusStakeCallDebris {
-    pub params: ConsensusStakeParamsV1,
+pub struct MoneyUnstakeCallDebris {
+    pub params: MoneyUnstakeParamsV1,
     pub proofs: Vec<Proof>,
 }
 
-pub struct ConsensusMintRevealed {
+pub struct MoneyMintRevealed {
     pub coin: Coin,
     pub value_commit: pallas::Point,
     pub token_commit: pallas::Point,
 }
 
-impl ConsensusMintRevealed {
+impl MoneyMintRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
         let tokcom_coords = self.token_commit.to_affine().coordinates().unwrap();
@@ -74,8 +73,8 @@ pub struct TransactionBuilderOutputInfo {
     pub public_key: PublicKey,
 }
 
-/// Struct holding necessary information to build a `Consensus::StakeV1` contract call.
-pub struct ConsensusStakeCallBuilder {
+/// Struct holding necessary information to build a `Money::UnstakeV1` contract call.
+pub struct MoneyUnstakeCallBuilder {
     /// `OwnCoin` we're given to use in this builder
     pub coin: OwnCoin,
     /// Recipient's public key
@@ -88,15 +87,15 @@ pub struct ConsensusStakeCallBuilder {
     pub nullifier: Nullifier,
     /// Revealed Merkle root
     pub merkle_root: MerkleNode,
-    /// `Consensus_Mint_V1` zkas circuit ZkBinary
+    /// `Mint_V1` zkas circuit ZkBinary
     pub mint_zkbin: ZkBinary,
-    /// Proving key for the `Consensus_Mint_V1` zk circuit
+    /// Proving key for the `Mint_V1` zk circuit
     pub mint_pk: ProvingKey,
 }
 
-impl ConsensusStakeCallBuilder {
-    pub fn build(&self) -> Result<ConsensusStakeCallDebris> {
-        debug!("Building Consensus::StakeV1 contract call");
+impl MoneyUnstakeCallBuilder {
+    pub fn build(&self) -> Result<MoneyUnstakeCallDebris> {
+        debug!("Building Money::UnstakeV1 contract call");
         assert!(self.coin.note.value != 0);
         assert!(self.coin.note.token_id == *DARK_TOKEN_ID);
 
@@ -113,8 +112,8 @@ impl ConsensusStakeCallBuilder {
         let user_data = pallas::Base::random(&mut OsRng);
         let coin_blind = pallas::Base::random(&mut OsRng);
 
-        info!("Creating stake mint proof for output");
-        let (proof, public_inputs) = create_stake_mint_proof(
+        info!("Creating unstake mint proof for output");
+        let (proof, public_inputs) = create_unstake_mint_proof(
             &self.mint_zkbin,
             &self.mint_pk,
             &output,
@@ -156,17 +155,17 @@ impl ConsensusStakeCallBuilder {
         };
 
         // We now fill this with necessary stuff
-        let params = ConsensusStakeParamsV1 { input, output };
+        let params = MoneyUnstakeParamsV1 { input, output };
         let proofs = vec![proof];
 
         // Now we should have all the params and zk proof.
         // We return it all and let the caller deal with it.
-        let debris = ConsensusStakeCallDebris { params, proofs };
+        let debris = MoneyUnstakeCallDebris { params, proofs };
         Ok(debris)
     }
 }
 
-pub fn create_stake_mint_proof(
+pub fn create_unstake_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     output: &TransactionBuilderOutputInfo,
@@ -176,7 +175,7 @@ pub fn create_stake_mint_proof(
     spend_hook: pallas::Base,
     user_data: pallas::Base,
     coin_blind: pallas::Base,
-) -> Result<(Proof, ConsensusMintRevealed)> {
+) -> Result<(Proof, MoneyMintRevealed)> {
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
     let token_commit = pedersen_commitment_base(output.token_id.inner(), token_blind);
     let (pub_x, pub_y) = output.public_key.xy();
@@ -192,7 +191,7 @@ pub fn create_stake_mint_proof(
         coin_blind,
     ]));
 
-    let public_inputs = ConsensusMintRevealed { coin, value_commit, token_commit };
+    let public_inputs = MoneyMintRevealed { coin, value_commit, token_commit };
 
     let prover_witnesses = vec![
         Witness::Base(Value::known(pub_x)),
