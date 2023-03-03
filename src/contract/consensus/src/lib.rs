@@ -19,9 +19,6 @@
 //! Smart contract implementing staking, unstaking and evolving
 //! of consensus tokens.
 
-//! Smart contract implementing money transfers, atomic swaps, token
-//! minting and freezing, and staking/unstaking of consensus tokens.
-
 use darkfi_sdk::error::ContractError;
 
 /// Functions available in the contract
@@ -29,7 +26,7 @@ use darkfi_sdk::error::ContractError;
 pub enum ConsensusFunction {
     StakeV1 = 0x00,
     //EvolveV1 = 0x01,
-    //UnstakeV1 = 0x02,
+    UnstakeV1 = 0x02,
 }
 
 impl TryFrom<u8> for ConsensusFunction {
@@ -39,7 +36,7 @@ impl TryFrom<u8> for ConsensusFunction {
         match b {
             0x00 => Ok(Self::StakeV1),
             //0x01 => Ok(Self::EvolveV1),
-            //0x02 => Ok(Self::UnstakeV1),
+            0x02 => Ok(Self::UnstakeV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }

@@ -31,13 +31,23 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{model::ConsensusStakeUpdateV1, ConsensusFunction};
+use crate::{
+    model::{ConsensusStakeUpdateV1, ConsensusUnstakeUpdateV1},
+    ConsensusFunction,
+};
 
 /// `Consensus::Stake` functions
 mod stake_v1;
 use stake_v1::{
     consensus_stake_get_metadata_v1, consensus_stake_process_instruction_v1,
     consensus_stake_process_update_v1,
+};
+
+/// `Consensus::Unstake` functions
+mod unstake_v1;
+use unstake_v1::{
+    consensus_unstake_get_metadata_v1, consensus_unstake_process_instruction_v1,
+    consensus_unstake_process_update_v1,
 };
 
 darkfi_sdk::define_contract!(
@@ -147,6 +157,10 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let metadata = consensus_stake_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
+        ConsensusFunction::UnstakeV1 => {
+            let metadata = consensus_unstake_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
     }
 }
 
@@ -170,6 +184,10 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update_data = consensus_stake_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
+        ConsensusFunction::UnstakeV1 => {
+            let update_data = consensus_unstake_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&update_data)?)
+        }
     }
 }
 
@@ -182,6 +200,10 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         ConsensusFunction::StakeV1 => {
             let update: ConsensusStakeUpdateV1 = deserialize(&update_data[1..])?;
             Ok(consensus_stake_process_update_v1(cid, update)?)
+        }
+        ConsensusFunction::UnstakeV1 => {
+            let update: ConsensusUnstakeUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(consensus_unstake_process_update_v1(cid, update)?)
         }
     }
 }

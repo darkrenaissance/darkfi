@@ -16,8 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::{Output, StakeInput};
-use darkfi_sdk::crypto::Coin;
+use darkfi_money_contract::model::{Input, Output, StakeInput};
+use darkfi_sdk::{
+    crypto::{Coin, Nullifier},
+    pasta::pallas,
+};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 /// Parameters for `Consensus::Stake`
@@ -34,4 +37,20 @@ pub struct ConsensusStakeParamsV1 {
 pub struct ConsensusStakeUpdateV1 {
     /// The newly minted coin
     pub coin: Coin,
+}
+
+/// Parameters for `Consensus::Unstake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusUnstakeParamsV1 {
+    /// Blinding factor for `token_id`
+    pub token_blind: pallas::Scalar,
+    /// Anonymous input
+    pub input: Input,
+}
+
+/// State update for `Consensus::Unstake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusUnstakeUpdateV1 {
+    /// Revealed nullifier
+    pub nullifier: Nullifier,
 }

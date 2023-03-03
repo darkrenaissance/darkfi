@@ -81,7 +81,10 @@ pub enum MoneyError {
     StakeMissingSpendHook,
 
     #[error("Spend hook is not consensus contract")]
-    StakeSpendHookNonConsensusContract,
+    StakeSpendHookNotConsensusContract,
+
+    #[error("Spend hook is not money contract")]
+    UnstakeSpendHookNotMoneyContract,
 }
 
 impl From<MoneyError> for ContractError {
@@ -107,7 +110,8 @@ impl From<MoneyError> for ContractError {
             MoneyError::MintFrozen => Self::Custom(18),
             MoneyError::StakeInputNonNativeToken => Self::Custom(19),
             MoneyError::StakeMissingSpendHook => Self::Custom(20),
-            MoneyError::StakeSpendHookNonConsensusContract => Self::Custom(21),
+            MoneyError::StakeSpendHookNotConsensusContract => Self::Custom(21),
+            MoneyError::UnstakeSpendHookNotMoneyContract => Self::Custom(21),
         }
     }
 }
