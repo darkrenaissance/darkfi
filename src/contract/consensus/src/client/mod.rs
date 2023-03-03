@@ -27,3 +27,6 @@
 
 /// `Consensus::StakeV1` API
 pub mod stake_v1;
+
+/// `Consensus::UnstakeV1` API
+pub mod unstake_v1;
