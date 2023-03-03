@@ -17,10 +17,12 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, model::MoneyStakeParamsV1, CONSENSUS_CONTRACT_COINS_TREE,
-    CONSENSUS_CONTRACT_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_COIN_ROOTS_TREE,
-    CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
+    error::MoneyError,
+    model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1, MoneyStakeParamsV1},
+    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
+    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
+    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_COIN_ROOTS_TREE,
+    MONEY_CONTRACT_NULLIFIERS_TREE,
 };
 use darkfi_sdk::{
     crypto::{
@@ -35,10 +37,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{
-    model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1},
-    ConsensusFunction,
-};
+use crate::ConsensusFunction;
 
 /// `get_metadata` function for `Consensus::StakeV1`
 pub(crate) fn consensus_stake_get_metadata_v1(

@@ -42,9 +42,6 @@ impl TryFrom<u8> for ConsensusFunction {
     }
 }
 
-/// Call parameters definitions
-pub mod model;
-
 #[cfg(not(feature = "no-entrypoint"))]
 /// WASM entrypoint functions
 pub mod entrypoint;

@@ -244,8 +244,11 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let calls = vec![consensus_call, money_call];
     let proofs = vec![alice_consensus_unstake_proofs, alice_money_unstake_proofs];
     let mut alice_unstake_tx = Transaction { calls, proofs, signatures: vec![] };
-    let sigs = alice_unstake_tx.create_sigs(&mut OsRng, &[alice_consensus_unstake_secret_key])?;
-    alice_unstake_tx.signatures = vec![sigs];
+    let consensus_sigs =
+        alice_unstake_tx.create_sigs(&mut OsRng, &[alice_consensus_unstake_secret_key])?;
+    let money_sigs =
+        alice_unstake_tx.create_sigs(&mut OsRng, &[alice_consensus_unstake_secret_key])?;
+    alice_unstake_tx.signatures = vec![consensus_sigs, money_sigs];
 
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice unstake tx");

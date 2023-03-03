@@ -17,8 +17,10 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, model::MoneyUnstakeParamsV1, CONSENSUS_CONTRACT_COIN_ROOTS_TREE,
-    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1,
+    error::MoneyError,
+    model::{ConsensusUnstakeParamsV1, ConsensusUnstakeUpdateV1, MoneyUnstakeParamsV1},
+    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
+    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -33,10 +35,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{
-    model::{ConsensusUnstakeParamsV1, ConsensusUnstakeUpdateV1},
-    ConsensusFunction,
-};
+use crate::ConsensusFunction;
 
 /// `get_metadata` function for `Consensus::UnstakeV1`
 pub(crate) fn consensus_unstake_get_metadata_v1(

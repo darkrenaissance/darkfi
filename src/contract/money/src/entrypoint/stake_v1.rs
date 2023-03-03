@@ -31,7 +31,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyStakeParamsV1, MoneyStakeUpdateV1, MoneyUnstakeParamsV1},
+    model::{ConsensusStakeParamsV1, MoneyStakeParamsV1, MoneyStakeUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1,
 };
@@ -151,9 +151,7 @@ pub(crate) fn money_stake_process_instruction_v1(
     }
 
     // Verify next call StakeInput is the same as this calls input
-    // Note: ConsensusStakeParamsV1 is the same as MoneyUnstakeParamsV1
-    // TODO: maybe create a common models src folder accessible by all contracts?
-    let next_params: MoneyUnstakeParamsV1 = deserialize(&next.data[1..])?;
+    let next_params: ConsensusStakeParamsV1 = deserialize(&next.data[1..])?;
     if input != &next_params.input {
         msg!("[MoneyStakeV1] Error: Next call input mismatch");
         return Err(MoneyError::NextCallInputMissmatch.into())

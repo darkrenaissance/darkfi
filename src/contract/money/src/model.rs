@@ -169,6 +169,14 @@ pub struct MoneyStakeUpdateV1 {
 pub struct MoneyUnstakeParamsV1 {
     /// Burnt token revealed info
     pub input: StakeInput,
+    /// Spend hook used to invoke other contracts.
+    /// If this value is nonzero then the subsequent contract call in the tx
+    /// must have this value as its ID.
+    pub spend_hook: pallas::Base,
+    /// Encrypted user data field. An encrypted commitment to arbitrary data.
+    /// When spend hook is set (it is nonzero), then this field may be user
+    /// to pass data to the invoked contract.
+    pub user_data_enc: pallas::Base,
     /// Anonymous output
     pub output: Output,
 }
@@ -178,4 +186,36 @@ pub struct MoneyUnstakeParamsV1 {
 pub struct MoneyUnstakeUpdateV1 {
     /// The newly minted coin
     pub coin: Coin,
+}
+
+/// Parameters for `Consensus::Stake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusStakeParamsV1 {
+    /// Burnt token revealed info
+    pub input: StakeInput,
+    /// Anonymous output
+    pub output: Output,
+}
+
+/// State update for `Consensus::Stake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusStakeUpdateV1 {
+    /// The newly minted coin
+    pub coin: Coin,
+}
+
+/// Parameters for `Consensus::Unstake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusUnstakeParamsV1 {
+    /// Blinding factor for `token_id`
+    pub token_blind: pallas::Scalar,
+    /// Anonymous input
+    pub input: Input,
+}
+
+/// State update for `Consensus::Unstake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusUnstakeUpdateV1 {
+    /// Revealed nullifier
+    pub nullifier: Nullifier,
 }

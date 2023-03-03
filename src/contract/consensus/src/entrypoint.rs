@@ -17,6 +17,7 @@
  */
 
 use darkfi_money_contract::{
+    model::{ConsensusStakeUpdateV1, ConsensusUnstakeUpdateV1},
     CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_DB_VERSION,
     CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
@@ -31,10 +32,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{
-    model::{ConsensusStakeUpdateV1, ConsensusUnstakeUpdateV1},
-    ConsensusFunction,
-};
+use crate::ConsensusFunction;
 
 /// `Consensus::Stake` functions
 mod stake_v1;

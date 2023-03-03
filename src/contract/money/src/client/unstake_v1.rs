@@ -110,8 +110,8 @@ impl MoneyUnstakeCallBuilder {
         debug!("Finished building output");
 
         let serial = pallas::Base::random(&mut OsRng);
-        let spend_hook = DARK_TOKEN_ID.inner();
-        let user_data = pallas::Base::random(&mut OsRng);
+        let spend_hook = pallas::Base::zero();
+        let user_data_enc = pallas::Base::zero();
         let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating unstake mint proof for output");
@@ -123,7 +123,7 @@ impl MoneyUnstakeCallBuilder {
             self.token_blind,
             serial,
             spend_hook,
-            user_data,
+            user_data_enc,
             coin_blind,
         )?;
 
@@ -133,7 +133,7 @@ impl MoneyUnstakeCallBuilder {
             value: output.value,
             token_id: output.token_id,
             spend_hook,
-            user_data,
+            user_data: user_data_enc,
             coin_blind,
             value_blind: self.value_blind,
             token_blind: self.token_blind,
@@ -158,7 +158,7 @@ impl MoneyUnstakeCallBuilder {
         };
 
         // We now fill this with necessary stuff
-        let params = MoneyUnstakeParamsV1 { input, output };
+        let params = MoneyUnstakeParamsV1 { input, spend_hook, user_data_enc, output };
         let proofs = vec![proof];
 
         // Now we should have all the params and zk proof.

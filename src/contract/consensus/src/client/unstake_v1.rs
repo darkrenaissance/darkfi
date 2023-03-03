@@ -25,7 +25,7 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
-    model::Input,
+    model::{ConsensusUnstakeParamsV1, Input},
 };
 use darkfi_sdk::{
     crypto::{
@@ -37,8 +37,6 @@ use darkfi_sdk::{
 };
 use log::{debug, info};
 use rand::rngs::OsRng;
-
-use crate::model::ConsensusUnstakeParamsV1;
 
 pub struct ConsensusUnstakeCallDebris {
     pub params: ConsensusUnstakeParamsV1,
