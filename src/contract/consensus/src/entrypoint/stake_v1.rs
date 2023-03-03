@@ -91,7 +91,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let consenus_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
+    let consensus_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
     let money_nullifiers_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let money_coin_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
@@ -143,7 +143,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
 
     // Newly created coin for this call is in the output. Here we gather it,
     // and we also check that it hasn't existed before.
-    if db_contains_key(consenus_coins_db, &serialize(&output.coin))? {
+    if db_contains_key(consensus_coins_db, &serialize(&output.coin))? {
         msg!("[ConsensusStakeV1] Error: Duplicate coin found in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
