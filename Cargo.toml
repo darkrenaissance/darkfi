@@ -322,3 +322,5 @@ name = "zk-inclusion-proof"
 path = "example/zk-inclusion-proof.rs"
 required-features = ["zk"]
 
+[patch.crates-io]
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="vk-ser"}

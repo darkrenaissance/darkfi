@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::{io, io::Cursor};
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::{
@@ -37,6 +38,60 @@ impl VerifyingKey {
         let params = Params::new(k);
         let vk = plonk::keygen_vk(&params, c).unwrap();
         VerifyingKey { params, vk }
+    }
+
+    pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+        // FIXME: This can be optimized.
+        let mut params = vec![];
+        self.params.write(&mut params)?;
+
+        let mut vk = vec![];
+        self.vk.write(&mut vk)?;
+
+        writer.write(&(params.len() as u32).to_le_bytes())?;
+        writer.write(&params)?;
+        writer.write(&(vk.len() as u32).to_le_bytes())?;
+        writer.write(&vk)?;
+
+        Ok(())
+    }
+
+    pub fn read<R: io::Read, ConcreteCircuit: Circuit<pallas::Base>>(
+        reader: &mut R,
+    ) -> io::Result<Self> {
+        // FIXME: This can be optimized
+        // FIXME: Don't assert
+
+        // FIXME: Make sure that the size is legitimate.
+        // The format chosen in write():
+        // [params.len()<u32>, params..., vk.len()<u32>, vk...]
+
+        let mut params_len = [0u8; 4];
+        reader.read_exact(&mut params_len)?;
+        let params_len = u32::from_le_bytes(params_len) as usize;
+
+        let mut params_buf = vec![0u8; params_len];
+        reader.read_exact(&mut params_buf)?;
+
+        assert!(params_buf.len() == params_len);
+
+        let mut vk_len = [0u8; 4];
+        reader.read_exact(&mut vk_len)?;
+        let vk_len = u32::from_le_bytes(vk_len) as usize;
+
+        let mut vk_buf = vec![0u8; vk_len];
+        reader.read_exact(&mut vk_buf)?;
+
+        assert!(vk_buf.len() == vk_len);
+
+        let mut params_c = Cursor::new(params_buf);
+        let params: Params<vesta::Affine> = Params::read(&mut params_c)?;
+
+        let mut vk_c = Cursor::new(vk_buf);
+        let vk: plonk::VerifyingKey<vesta::Affine> =
+            plonk::VerifyingKey::read::<Cursor<Vec<u8>>, ConcreteCircuit>(&mut vk_c, &params)?;
+
+        Ok(Self { params, vk })
     }
 }
 
