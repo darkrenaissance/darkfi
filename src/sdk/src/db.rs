@@ -23,9 +23,6 @@ use super::{
     error::{ContractError, GenericResult},
 };
 
-// This might not be the right place for this constant...
-pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
-
 pub type DbHandle = u32;
 
 pub const DB_SUCCESS: i32 = 0;

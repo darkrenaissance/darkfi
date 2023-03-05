@@ -43,6 +43,9 @@ const MEMORY: &str = "memory";
 /// Gas limit for a contract
 const GAS_LIMIT: u64 = 200000000;
 
+/// The hardcoded db name for the zkas circuits database tree
+const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum ContractSection {
     /// Setup function of a contract
