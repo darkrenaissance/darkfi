@@ -198,6 +198,7 @@ impl ContractStateStore {
         let tree = db.open_tree(ptr)?;
         tree.clear()?;
 
+        // Remove the deleted tree from the state pointer set.
         state_pointers.retain(|x| *x != ptr);
         self.0.insert(contract_id_bytes, serialize(&state_pointers))?;
 
