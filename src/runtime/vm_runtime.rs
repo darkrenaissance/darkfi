@@ -221,6 +221,12 @@ impl Runtime {
                     import::db::db_del,
                 ),
 
+                "zkas_db_set_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::zkas_db_set,
+                ),
+
                 "put_object_bytes_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,

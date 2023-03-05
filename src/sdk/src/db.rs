@@ -185,6 +185,22 @@ pub fn db_del(db_handle: DbHandle, key: &[u8]) -> GenericResult<()> {
     }
 }
 
+/// Only deploy() can call this.
+pub fn zkas_db_set(bincode: &[u8]) -> GenericResult<()> {
+    unsafe {
+        let mut len = 0;
+        let mut buf = vec![];
+        len += bincode.to_vec().encode(&mut buf)?;
+
+        match zkas_db_set_(buf.as_ptr(), len as u32) {
+            CALLER_ACCESS_DENIED => Err(ContractError::CallerAccessDenied),
+            DB_SET_FAILED => Err(ContractError::DbSetFailed),
+            DB_SUCCESS => Ok(()),
+            _ => unreachable!(),
+        }
+    }
+}
+
 pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
     unsafe {
         match set_return_data_(data.as_ptr(), data.len() as u32) {
@@ -218,4 +234,6 @@ extern "C" {
     fn db_contains_key_(ptr: *const u8, len: u32) -> i32;
     fn db_set_(ptr: *const u8, len: u32) -> i32;
     fn db_del_(ptr: *const u8, len: u32) -> i32;
+
+    fn zkas_db_set_(ptr: *const u8, len: u32) -> i32;
 }
