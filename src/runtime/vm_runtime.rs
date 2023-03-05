@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
 };
 
-use darkfi_sdk::{crypto::ContractId, entrypoint};
+use darkfi_sdk::{crypto::ContractId, db::SMART_CONTRACT_ZKAS_DB_NAME, entrypoint};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use wasmer::{
@@ -329,6 +329,40 @@ impl Runtime {
     /// assume that the contract is only able to do write operations on its own sled trees.
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
         info!(target: "runtime::vm_runtime", "[wasm-runtime] Running deploy");
+
+        // Scoped for borrows
+        {
+            let env_mut = self.ctx.as_mut(&mut self.store);
+
+            // We always want to have the zkas db as index 0 in db handles and batches when
+            // deploying.
+            let db = &env_mut.blockchain.sled_db;
+
+            let zkas_tree_handle = match env_mut.blockchain.contracts.lookup(
+                db,
+                &env_mut.contract_id,
+                SMART_CONTRACT_ZKAS_DB_NAME,
+            ) {
+                Ok(v) => v,
+                Err(_) => {
+                    // FIXME: All this is deploy code is "vulnerable" and able to init a
+                    // tree regardless of execution success. We can easily delete the db
+                    // if execution fails though, and we should charge gas for db_init.
+                    // and perhaps also for the zkas database in this specific case.
+                    env_mut.blockchain.contracts.init(
+                        db,
+                        &env_mut.contract_id,
+                        SMART_CONTRACT_ZKAS_DB_NAME,
+                    )?
+                }
+            };
+
+            let mut db_handles = env_mut.db_handles.borrow_mut();
+            let mut db_batches = env_mut.db_batches.borrow_mut();
+            db_handles.push(DbHandle::new(env_mut.contract_id, zkas_tree_handle));
+            db_batches.push(sled::Batch::default());
+        }
+
         debug!(target: "runtime::vm_runtime", "[wasm-runtime] payload: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
 
