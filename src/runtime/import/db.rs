@@ -25,12 +25,14 @@ use darkfi_sdk::{
         DB_LOOKUP_FAILED, DB_SET_FAILED, DB_SUCCESS,
     },
 };
-use darkfi_serial::Decodable;
-use log::{debug, error};
+use darkfi_serial::{deserialize, serialize, Decodable};
+use log::{debug, error, info};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::{
     runtime::vm_runtime::{ContractSection, Env},
+    zk::{empty_witnesses, VerifyingKey, ZkCircuit},
+    zkas::ZkBinary,
     Result,
 };
 
@@ -528,4 +530,95 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
             DB_CONTAINS_KEY_FAILED
         }
     }
+}
+
+/// Only `deploy()` can call this. Given a zkas circuit, create a VerifyingKey and insert
+/// them both into the db.
+pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+    let env = ctx.data();
+
+    if env.contract_section != ContractSection::Deploy {
+        error!(target: "runtime::db::zkas_db_set()", "zkas_db_set called in unauthorized section");
+        return CALLER_ACCESS_DENIED
+    }
+
+    let memory_view = env.memory_view(&ctx);
+    let contract_id = &env.contract_id;
+
+    let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
+        error!(target: "runtime::db::zkas_db_set()", "Failed to make slice from ptr");
+        return DB_SET_FAILED
+    };
+
+    let mut buf = vec![0u8; len as usize];
+    if let Err(e) = mem_slice.read_slice(&mut buf) {
+        error!(target: "runtime::db::zkas_db_set()", "Failed to read from memory slice: {}", e);
+        return DB_SET_FAILED
+    };
+
+    let mut buf_reader = Cursor::new(buf);
+
+    let zkas_bincode: Vec<u8> = match Decodable::decode(&mut buf_reader) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(target: "runtime::db::zkas_db_set()", "Failed to decode zkas bincode bytes: {}", e);
+            return DB_SET_FAILED
+        }
+    };
+
+    // Make sure that we're actually working on legitimate bincode.
+    let Ok(zkbin) = ZkBinary::decode(&zkas_bincode) else {
+        error!(target: "runtime::db::zkas_db_set()", "Invalid zkas bincode passed to function");
+        return DB_SET_FAILED
+    };
+
+    // Because of `Runtime::Deploy`, we should be sure that the zkas db is index zero.
+    let db_handles = env.db_handles.borrow();
+    let mut db_batches = env.db_batches.borrow_mut();
+    let db_handle = &db_handles[0];
+    let db_batch = &mut db_batches[0];
+    // Redundant check
+    if &db_handle.contract_id != contract_id {
+        error!(target: "runtime::db::zkas_db_set()", "Internal error, zkas db at index 0 incorrect");
+        return DB_SET_FAILED
+    }
+
+    // Check if there is existing bincode and compare it. Return DB_SUCCESS if
+    // they're the same. The assumption should be that VerifyingKey was generated
+    // already so we can skip things after this guard.
+    match db_handle.get(&serialize(&zkbin.namespace)) {
+        Ok(v) => {
+            if let Some(bytes) = v {
+                // We allow a panic here because this db should never be corrupted in this way.
+                let (existing_zkbin, _): (Vec<u8>, Vec<u8>) =
+                    deserialize(&bytes).expect("deserialize tuple");
+
+                if existing_zkbin == zkas_bincode {
+                    debug!(target: "runtime::db::zkas_db_set()", "Existing zkas bincode is the same. Skipping.");
+                    return DB_SUCCESS
+                }
+            }
+        }
+        Err(e) => {
+            error!(target: "runtime::db::zkas_db_get()", "Internal error getting from tree: {}", e);
+            return DB_SET_FAILED
+        }
+    };
+
+    // We didn't find any existing bincode, so let's create a new VerifyingKey and write it all.
+    info!(target: "runtime::db::zkas_db_set()", "Creating VerifyingKey for {} zkas circuit", zkbin.namespace);
+    let witnesses = empty_witnesses(&zkbin);
+    let circuit = ZkCircuit::new(witnesses, zkbin.clone());
+    let vk = VerifyingKey::build(13, &circuit);
+    let mut vk_buf = vec![];
+    if let Err(e) = vk.write(&mut vk_buf) {
+        error!(target: "runtime::db::zkas_db_set()", "Failed to serialize VerifyingKey: {}", e);
+        return DB_SET_FAILED
+    }
+
+    let key = serialize(&zkbin.namespace);
+    let value = serialize(&(zkas_bincode, vk_buf));
+    db_batch.insert(key, value);
+
+    DB_SUCCESS
 }
