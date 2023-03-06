@@ -22,6 +22,7 @@ use darkfi::{
         ValidatorState, ValidatorStatePtr, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
         TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
     },
+    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     tx::Transaction,
     wallet::{WalletDb, WalletPtr},
     zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
@@ -31,11 +32,10 @@ use darkfi::{
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
     crypto::{Keypair, MerkleTree, PublicKey, DARK_TOKEN_ID, MONEY_CONTRACT_ID},
-    db::SMART_CONTRACT_ZKAS_DB_NAME,
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{serialize, Encodable};
+use darkfi_serial::{deserialize, serialize, Encodable};
 use log::warn;
 use rand::rngs::OsRng;
 
@@ -134,7 +134,8 @@ impl MoneyTestHarness {
 
         macro_rules! mkpk {
             ($ns:expr) => {
-                let zkbin = db_handle.get(&serialize(&$ns))?.unwrap();
+                let zkas_bytes = db_handle.get(&serialize(&$ns))?.unwrap();
+                let (zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes)?;
                 let zkbin = ZkBinary::decode(&zkbin)?;
                 let witnesses = empty_witnesses(&zkbin);
                 let circuit = ZkCircuit::new(witnesses, zkbin.clone());

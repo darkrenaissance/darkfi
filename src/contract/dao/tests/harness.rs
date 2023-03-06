@@ -22,16 +22,16 @@ use darkfi::{
         ValidatorState, ValidatorStatePtr, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
         TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
     },
+    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     wallet::WalletDb,
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
-use darkfi_sdk::{
-    crypto::{pasta_prelude::*, ContractId, Keypair, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
-    db::SMART_CONTRACT_ZKAS_DB_NAME,
+use darkfi_sdk::crypto::{
+    pasta_prelude::*, ContractId, Keypair, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
 };
-use darkfi_serial::serialize;
+use darkfi_serial::{deserialize, serialize};
 use log::{info, warn};
 use rand::rngs::OsRng;
 
@@ -147,73 +147,42 @@ impl DaoTestHarness {
             SMART_CONTRACT_ZKAS_DB_NAME,
         )?;
 
-        info!(target: "dao", "Decoding bincode");
-
-        let money_mint_zkbin =
-            money_db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1))?.unwrap();
-        let money_mint_zkbin = ZkBinary::decode(&money_mint_zkbin)?;
-        let money_mint_witnesses = empty_witnesses(&money_mint_zkbin);
-        let money_mint_circuit = ZkCircuit::new(money_mint_witnesses, money_mint_zkbin.clone());
-
-        let money_burn_zkbin =
-            money_db_handle.get(&serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1))?.unwrap();
-        let money_burn_zkbin = ZkBinary::decode(&money_burn_zkbin)?;
-        let money_burn_witnesses = empty_witnesses(&money_burn_zkbin);
-        let money_burn_circuit = ZkCircuit::new(money_burn_witnesses, money_burn_zkbin.clone());
-
-        let dao_mint_zkbin =
-            dao_db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_MINT_NS))?.unwrap();
-        let dao_mint_zkbin = ZkBinary::decode(&dao_mint_zkbin)?;
-        let dao_mint_witnesses = empty_witnesses(&dao_mint_zkbin);
-        let dao_mint_circuit = ZkCircuit::new(dao_mint_witnesses, dao_mint_zkbin.clone());
-
-        let dao_propose_burn_zkbin =
-            dao_db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS))?.unwrap();
-        let dao_propose_burn_zkbin = ZkBinary::decode(&dao_propose_burn_zkbin)?;
-        let dao_propose_burn_witnesses = empty_witnesses(&dao_propose_burn_zkbin);
-        let dao_propose_burn_circuit =
-            ZkCircuit::new(dao_propose_burn_witnesses, dao_propose_burn_zkbin.clone());
-
-        let dao_propose_main_zkbin =
-            dao_db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS))?.unwrap();
-        let dao_propose_main_zkbin = ZkBinary::decode(&dao_propose_main_zkbin)?;
-        let dao_propose_main_witnesses = empty_witnesses(&dao_propose_main_zkbin);
-        let dao_propose_main_circuit =
-            ZkCircuit::new(dao_propose_main_witnesses, dao_propose_main_zkbin.clone());
-
-        let dao_vote_burn_zkbin =
-            dao_db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS))?.unwrap();
-        let dao_vote_burn_zkbin = ZkBinary::decode(&dao_vote_burn_zkbin)?;
-        let dao_vote_burn_witnesses = empty_witnesses(&dao_vote_burn_zkbin);
-        let dao_vote_burn_circuit =
-            ZkCircuit::new(dao_vote_burn_witnesses, dao_vote_burn_zkbin.clone());
-
-        let dao_vote_main_zkbin =
-            dao_db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS))?.unwrap();
-        let dao_vote_main_zkbin = ZkBinary::decode(&dao_vote_main_zkbin)?;
-        let dao_vote_main_witnesses = empty_witnesses(&dao_vote_main_zkbin);
-        let dao_vote_main_circuit =
-            ZkCircuit::new(dao_vote_main_witnesses, dao_vote_main_zkbin.clone());
-
-        let dao_exec_zkbin =
-            dao_db_handle.get(&serialize(&DAO_CONTRACT_ZKAS_DAO_EXEC_NS))?.unwrap();
-        let dao_exec_zkbin = ZkBinary::decode(&dao_exec_zkbin)?;
-        let dao_exec_witnesses = empty_witnesses(&dao_exec_zkbin);
-        let dao_exec_circuit = ZkCircuit::new(dao_exec_witnesses, dao_exec_zkbin.clone());
-
         info!(target: "dao", "Creating zk proving keys");
 
-        let k = 13;
-        let mut proving_keys = HashMap::<[u8; 32], Vec<(&str, ProvingKey)>>::new();
+        macro_rules! mkpk {
+            ($ns:expr, $db_handle:expr) => {{
+                let zkas_bytes = $db_handle.get(&serialize(&$ns))?.unwrap();
+                let (zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes)?;
+                let zkbin = ZkBinary::decode(&zkbin)?;
+                let witnesses = empty_witnesses(&zkbin);
+                let circuit = ZkCircuit::new(witnesses, zkbin.clone());
+                (zkbin, ProvingKey::build(13, &circuit))
+            }};
+        }
 
-        let money_mint_pk = ProvingKey::build(k, &money_mint_circuit);
-        let money_burn_pk = ProvingKey::build(k, &money_burn_circuit);
-        let dao_mint_pk = ProvingKey::build(k, &dao_mint_circuit);
-        let dao_propose_burn_pk = ProvingKey::build(k, &dao_propose_burn_circuit);
-        let dao_propose_main_pk = ProvingKey::build(k, &dao_propose_main_circuit);
-        let dao_vote_burn_pk = ProvingKey::build(k, &dao_vote_burn_circuit);
-        let dao_vote_main_pk = ProvingKey::build(k, &dao_vote_main_circuit);
-        let dao_exec_pk = ProvingKey::build(k, &dao_exec_circuit);
+        let (money_mint_zkbin, money_mint_pk) =
+            mkpk!(MONEY_CONTRACT_ZKAS_MINT_NS_V1, money_db_handle);
+
+        let (money_burn_zkbin, money_burn_pk) =
+            mkpk!(MONEY_CONTRACT_ZKAS_BURN_NS_V1, money_db_handle);
+
+        let (dao_mint_zkbin, dao_mint_pk) = mkpk!(DAO_CONTRACT_ZKAS_DAO_MINT_NS, dao_db_handle);
+
+        let (dao_propose_burn_zkbin, dao_propose_burn_pk) =
+            mkpk!(DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, dao_db_handle);
+
+        let (dao_propose_main_zkbin, dao_propose_main_pk) =
+            mkpk!(DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, dao_db_handle);
+
+        let (dao_vote_burn_zkbin, dao_vote_burn_pk) =
+            mkpk!(DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, dao_db_handle);
+
+        let (dao_vote_main_zkbin, dao_vote_main_pk) =
+            mkpk!(DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS, dao_db_handle);
+
+        let (dao_exec_zkbin, dao_exec_pk) = mkpk!(DAO_CONTRACT_ZKAS_DAO_EXEC_NS, dao_db_handle);
+
+        let mut proving_keys = HashMap::<[u8; 32], Vec<(&str, ProvingKey)>>::new();
 
         let pks = vec![
             (MONEY_CONTRACT_ZKAS_MINT_NS_V1, money_mint_pk.clone()),
