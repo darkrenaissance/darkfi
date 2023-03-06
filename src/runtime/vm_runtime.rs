@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
 };
 
-use darkfi_sdk::{crypto::ContractId, db::SMART_CONTRACT_ZKAS_DB_NAME, entrypoint};
+use darkfi_sdk::{crypto::ContractId, entrypoint};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use wasmer::{
@@ -44,7 +44,7 @@ const MEMORY: &str = "memory";
 const GAS_LIMIT: u64 = 200000000;
 
 /// The hardcoded db name for the zkas circuits database tree
-const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
+pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum ContractSection {

@@ -26,7 +26,6 @@ use darkfi_sdk::{
         schnorr::{SchnorrPublic, SchnorrSecret},
         MerkleNode, PublicKey, SecretKey,
     },
-    db::SMART_CONTRACT_ZKAS_DB_NAME,
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{group::ff::PrimeField, pallas},
 };
@@ -46,7 +45,7 @@ use super::{
 use crate::{
     blockchain::Blockchain,
     rpc::jsonrpc::JsonNotification,
-    runtime::vm_runtime::Runtime,
+    runtime::vm_runtime::{Runtime, SMART_CONTRACT_ZKAS_DB_NAME},
     system::{Subscriber, SubscriberPtr},
     tx::Transaction,
     util::time::Timestamp,
@@ -62,8 +61,6 @@ use crate::{
 
 /// Atomic pointer to validator state.
 pub type ValidatorStatePtr = Arc<RwLock<ValidatorState>>;
-
-type VerifyingKeyMap = Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>;
 
 /// This struct represents the state of a validator node.
 pub struct ValidatorState {
@@ -82,8 +79,6 @@ pub struct ValidatorState {
     ///       and then we don't have to deal with json in this module but only
     //        externally.
     pub subscribers: HashMap<&'static str, SubscriberPtr<JsonNotification>>,
-    /// ZK proof verifying keys for smart contract calls
-    pub verifying_keys: VerifyingKeyMap,
     /// Wallet interface
     pub wallet: WalletPtr,
     /// Flag signalling node has finished initial sync
@@ -159,10 +154,6 @@ impl ValidatorState {
         let money_contract_deploy_payload = serialize(&faucet_pubkeys);
         let dao_contract_deploy_payload = vec![];
 
-        // In this hashmap, we keep references to ZK proof verifying keys needed
-        // for the circuits our native contracts provide.
-        let mut verifying_keys = HashMap::new();
-
         let native_contracts = vec![
             (
                 "Money Contract",
@@ -184,36 +175,10 @@ impl ValidatorState {
             let mut runtime = Runtime::new(&nc.2[..], blockchain.clone(), nc.1)?;
             runtime.deploy(&nc.3)?;
             info!(target: "consensus::validator", "Successfully deployed {}", nc.0);
-
-            // When deployed, we can do a lookup for the zkas circuits and
-            // initialize verifying keys for them.
-            info!(target: "consensus::validator", "Creating ZK verifying keys for {} zkas circuits", nc.0);
-            info!(target: "consensus::validator", "Looking up zkas db for {} (ContractID: {})", nc.0, nc.1);
-            let zkas_db = blockchain.contracts.lookup(
-                &blockchain.sled_db,
-                &nc.1,
-                SMART_CONTRACT_ZKAS_DB_NAME,
-            )?;
-
-            let mut vks = vec![];
-            for i in zkas_db.iter() {
-                info!(target: "consensus::validator", "Iterating over zkas db");
-                let (zkas_ns, zkas_bincode) = i?;
-                info!(target: "consensus::validator", "Deserializing namespace");
-                let zkas_ns: String = deserialize(&zkas_ns)?;
-                info!(target: "consensus::validator", "Creating VerifyingKey for zkas circuit with namespace {}", zkas_ns);
-                let zkbin = ZkBinary::decode(&zkas_bincode)?;
-                let circuit = ZkCircuit::new(empty_witnesses(&zkbin), zkbin);
-                // FIXME: This k=13 man...
-                let vk = VerifyingKey::build(13, &circuit);
-                vks.push((zkas_ns, vk));
-            }
-
-            info!(target: "consensus::validator", "Finished creating VerifyingKey objects for {} (ContractID: {})", nc.0, nc.1);
-            verifying_keys.insert(nc.1.to_bytes(), vks);
         }
+
         info!(target: "consensus::validator", "Finished deployment of native wasm contracts");
-        // -----NATIVE WASM CONTRACTS-----
+        // -----END NATIVE WASM CONTRACTS-----
 
         // Here we initialize various subscribers that can export live consensus/blockchain data.
         let mut subscribers = HashMap::new();
@@ -227,7 +192,6 @@ impl ValidatorState {
             blockchain,
             unconfirmed_txs,
             subscribers,
-            verifying_keys: Arc::new(RwLock::new(verifying_keys)),
             wallet,
             synced: false,
             single_node,
@@ -882,7 +846,14 @@ impl ValidatorState {
     // TODO: Currently we keep erroneous transactions in the vector and blocks,
     //       in order to apply max fee logic in the future, to prevent spamming.
     // TODO: This should be paralellized as if even one tx in the batch fails to verify,
-    //       we can skip it.
+    //       we can skip it. When things are parallel, make sure to write in a deterministic
+    //       order.
+    // TODO: This function should be refactored to be more readable and efficient.
+    //       1. Get metadata
+    //       2. Verify signatures
+    //       3. Verify execution
+    //       4. Verify ZK proofs
+    //       5. (optionally) write
     pub async fn verify_transactions(
         &self,
         txs: &[Transaction],
@@ -890,6 +861,7 @@ impl ValidatorState {
     ) -> Result<Vec<Transaction>> {
         info!(target: "consensus::validator", "Verifying {} transaction(s)", txs.len());
         let mut erroneous_txs = vec![];
+
         for tx in txs {
             let tx_hash = blake3::hash(&serialize(tx));
             info!(target: "consensus::validator", "Verifying transaction {}", tx_hash);
@@ -898,8 +870,17 @@ impl ValidatorState {
             let mut zkp_table = vec![];
             // Table of public keys used for signature verification
             let mut sig_table = vec![];
-            // State updates produced by contract execcution
+            // State updates produced by contract execution
             let mut updates = vec![];
+            // Map of zk proof verifying keys for the current transaction
+            //let mut verifying_keys: HashMap<[u8; 32], Vec<(String, VerifyingKey)>> = HashMap::new();
+            let mut verifying_keys: HashMap<[u8; 32], HashMap<String, VerifyingKey>> =
+                HashMap::new();
+
+            // Initialize the map
+            for call in tx.calls.iter() {
+                verifying_keys.insert(call.contract_id.to_bytes(), HashMap::new());
+            }
 
             // Iterate over all calls to get the metadata
             let mut skip = false;
@@ -953,6 +934,8 @@ impl ValidatorState {
 
                 // Decode the metadata retrieved from the execution
                 let mut decoder = Cursor::new(&metadata);
+
+                //                (zkas_ns, public_inputs)
                 let zkp_pub: Vec<(String, Vec<pallas::Base>)> = match Decodable::decode(
                     &mut decoder,
                 ) {
@@ -972,9 +955,61 @@ impl ValidatorState {
                         break
                     }
                 };
-
                 // TODO: Make sure we've read all the bytes above.
                 info!(target: "consensus::validator", "Successfully executed \"metadata\" call");
+
+                // Here we'll look up verifying keys and insert them into the per-contract map.
+                // TODO: This should be abstracted
+                info!(target: "consensus::validator", "Performing VerifyingKey lookups from the sled db");
+                let zkas_tree = match self.blockchain.contracts.lookup(
+                    &self.blockchain.sled_db,
+                    &call.contract_id,
+                    SMART_CONTRACT_ZKAS_DB_NAME,
+                ) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!(target: "consensus::validator", "Failed to lookup zkas db for contract {}: {}", call.contract_id, e);
+                        skip = true;
+                        break
+                    }
+                };
+
+                for (zkas_ns, _) in &zkp_pub {
+                    let inner_vk_map =
+                        verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
+
+                    if inner_vk_map.contains_key(zkas_ns.as_str()) {
+                        continue
+                    }
+
+                    let Some(zkas_encoded_bytes) = zkas_tree.get(&serialize(&zkas_ns.as_str())).expect("get") else {
+                        error!(target: "consensus::validator", "Failed to find reference to zkas in sled");
+                        skip = true;
+                        break
+                    };
+
+                    let (_, vk_bin): (Vec<u8>, Vec<u8>) = match deserialize(&zkas_encoded_bytes) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!(target: "consensus::validator", "Failed to deserialize zkas data: {}", e);
+                            skip = true;
+                            break
+                        }
+                    };
+
+                    let mut vk_buf = Cursor::new(vk_bin);
+                    let vk = match VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut vk_buf) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!(target: "consensus::validator", "Failed to decode VerifyingKey: {}", e);
+                            skip = true;
+                            break
+                        }
+                    };
+
+                    inner_vk_map.insert(zkas_ns.to_string(), vk);
+                }
+
                 zkp_table.push(zkp_pub);
                 sig_table.push(sig_pub);
 
@@ -1032,7 +1067,7 @@ impl ValidatorState {
             // inside of this function. This can be kinda expensive, so open to
             // alternatives.
             info!(target: "consensus::validator", "Verifying ZK proofs for transaction {}", tx_hash);
-            match tx.verify_zkps(self.verifying_keys.clone(), zkp_table).await {
+            match tx.verify_zkps(verifying_keys.clone(), zkp_table).await {
                 Ok(()) => {
                     info!(target: "consensus::validator", "ZK proof verification for tx {} successful", tx_hash)
                 }
