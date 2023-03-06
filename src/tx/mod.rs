@@ -26,7 +26,7 @@ use darkfi_sdk::{
     pasta::pallas,
     tx::ContractCall,
 };
-use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{serialize, Encodable, SerialDecodable, SerialEncodable};
 use log::{debug, error};
 use rand::{CryptoRng, RngCore};
 
@@ -55,8 +55,6 @@ pub struct Transaction {
     pub signatures: Vec<Vec<Signature>>,
 }
 // ANCHOR_END: transaction
-
-//type VerifyingKeyMap = Arc<RwLock<HashMap<[u8; 32], Vec<(String, VerifyingKey)>>>>;
 
 impl Transaction {
     /// Verify ZK proofs for the entire transaction.
@@ -154,8 +152,6 @@ impl Transaction {
 
     /// Get the transaction hash
     pub fn hash(&self) -> blake3::Hash {
-        let mut tx_data = vec![];
-        self.encode(&mut tx_data).expect("serialize tx");
-        blake3::hash(&tx_data)
+        blake3::hash(&serialize(self))
     }
 }
