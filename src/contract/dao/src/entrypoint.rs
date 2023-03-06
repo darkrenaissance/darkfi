@@ -24,8 +24,7 @@ use darkfi_sdk::{
         MONEY_CONTRACT_ID,
     },
     db::{
-        db_contains_key, db_del, db_get, db_init, db_lookup, db_set, set_return_data,
-        SMART_CONTRACT_ZKAS_DB_NAME,
+        db_contains_key, db_del, db_get, db_init, db_lookup, db_set, set_return_data, zkas_db_set,
     },
     error::{ContractError, ContractResult},
     merkle_add, msg, ContractCall,
@@ -72,25 +71,13 @@ pub const DAO_VOTE_NULLS: &str = "dao_vote_nulls";
 
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
-    // the initialization. Note that the tree should then be called "zkas".
-    // The lookups can then be done by `contract_id+_zkas+namespace`.
-    let zkas_db = match db_lookup(cid, SMART_CONTRACT_ZKAS_DB_NAME) {
-        Ok(v) => v,
-        Err(_) => db_init(cid, SMART_CONTRACT_ZKAS_DB_NAME)?,
-    };
-    let dao_exec_bin = include_bytes!("../proof/dao-exec.zk.bin");
-    let dao_mint_bin = include_bytes!("../proof/dao-mint.zk.bin");
-    let dao_vote_burn_bin = include_bytes!("../proof/dao-vote-burn.zk.bin");
-    let dao_vote_main_bin = include_bytes!("../proof/dao-vote-main.zk.bin");
-    let dao_propose_burn_bin = include_bytes!("../proof/dao-propose-burn.zk.bin");
-    let dao_propose_main_bin = include_bytes!("../proof/dao-propose-main.zk.bin");
-
-    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_EXEC_NS), &dao_exec_bin[..])?;
-    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_MINT_NS), &dao_mint_bin[..])?;
-    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS), &dao_vote_burn_bin[..])?;
-    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS), &dao_vote_main_bin[..])?;
-    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS), &dao_propose_burn_bin[..])?;
-    db_set(zkas_db, &serialize(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS), &dao_propose_main_bin[..])?;
+    // the initialization.
+    zkas_db_set(&include_bytes!("../proof/dao-exec.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../proof/dao-mint.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../proof/dao-vote-burn.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../proof/dao-vote-main.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../proof/dao-propose-burn.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../proof/dao-propose-main.zk.bin")[..])?;
 
     // Setup db for general info
     let dao_info_db = match db_lookup(cid, DB_INFO) {
