@@ -52,11 +52,11 @@ impl XeddsaSigner for X25519SecretKey {
         // x25519-dalek private keys are already clamped, so just compute
         // the Ed25519 public key from the Curve25519 private key.
         let scalar_k = Scalar::from_bits(self.to_bytes());
-        let ep = ED25519_BASEPOINT_POINT * scalar_k;
-        let mut ce = ep.compress();
-        let sign = ce.0[31] >> 7;
+        let edward_point = ED25519_BASEPOINT_POINT * scalar_k;
+        let mut compressed_edwards = edward_point.compress();
+        let sign = compressed_edwards.0[31] >> 7;
         // Set the sign bit to zero after adjusting the private key
-        ce.0[31] &= 0x7F; // A.s = 0
+        compressed_edwards.0[31] &= 0x7F; // A.s = 0
 
         // Compute the negative secret key
 
@@ -73,7 +73,7 @@ impl XeddsaSigner for X25519SecretKey {
         // directly, but rather use a seed to derive other data from.
         // To create signatures compatible with Ed25519, a modified
         // version of the signing algorithm is required that does not
-        // depend on a seed.
+        // dedward_pointend on a seed.
         // r = hash1(a || M || Z) (mod q)
         let mut hash_padding = [0xff, 32];
         hash_padding[0] = 0xfe;
@@ -90,7 +90,7 @@ impl XeddsaSigner for X25519SecretKey {
         // h = hash(R || A || M) (mod q)
         hasher = Sha512::new();
         hasher.update(cap_r.as_bytes());
-        hasher.update(ce.as_bytes());
+        hasher.update(compressed_edwards.as_bytes());
         hasher.update(msg);
         let h = Scalar::from_hash(hasher);
 
