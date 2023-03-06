@@ -192,24 +192,4 @@ impl Darkfid {
 
         JsonResponse::new(json!(ret), id).into()
     }
-
-    // RPCAPI:
-    // Queries the blockchain database to check if the provided transaction hash exists
-    // in the erroneous transactions set.
-    //
-    // --> {"jsonrpc": "2.0", "method": "blockchain.was_erroneous_tx", "params": [[tx_hash bytes]], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": bool, "id": 1}
-    pub async fn blockchain_was_erroneous_tx(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 || !params[0].is_array() {
-            return JsonError::new(InvalidParams, None, id).into()
-        }
-        let hash_bytes: [u8; 32] = serde_json::from_value(params[0].clone()).unwrap();
-        let tx_hash = blake3::Hash::try_from(hash_bytes).unwrap();
-        let blockchain = { self.validator_state.read().await.blockchain.clone() };
-        let Ok(result) = blockchain.was_erroneous_tx(&tx_hash) else {
-                return JsonError::new(InternalError, None, id).into()
-        };
-
-        JsonResponse::new(json!(result), id).into()
-    }
 }

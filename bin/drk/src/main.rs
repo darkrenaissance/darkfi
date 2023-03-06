@@ -1053,18 +1053,14 @@ async fn main() -> Result<()> {
                 {
                     tx
                 } else {
-                    eprintln!("Tx not found");
-                    return Ok(())
+                    eprintln!("tx not found");
+                    exit(1);
                 };
+
                 // Make sure the tx is correct
                 assert_eq!(tx.hash(), tx_hash);
 
                 println!("Transaction ID: {}", tx_hash);
-                let is_err = drk
-                    .was_erroneous_tx(&tx_hash)
-                    .await
-                    .with_context(|| "Failed to get tx state")?;
-                println!("State: {}", if is_err { "failed" } else { "passed" });
 
                 Ok(())
             }

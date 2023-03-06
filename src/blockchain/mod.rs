@@ -20,7 +20,6 @@ use log::debug;
 
 use crate::{
     consensus::{Block, BlockInfo, SlotCheckpoint},
-    tx::Transaction,
     util::time::Timestamp,
     Result,
 };
@@ -32,7 +31,7 @@ pub mod slot_checkpoint_store;
 pub use slot_checkpoint_store::SlotCheckpointStore;
 
 pub mod tx_store;
-pub use tx_store::{ErroneousTxStore, TxStore};
+pub use tx_store::TxStore;
 
 pub mod contract_store;
 pub use contract_store::{ContractStateStore, WasmStore};
@@ -52,8 +51,6 @@ pub struct Blockchain {
     pub slot_checkpoints: SlotCheckpointStore,
     /// Transactions sled tree
     pub transactions: TxStore,
-    /// Erroneous transactions sled tree
-    pub erroneous_txs: ErroneousTxStore,
     /// Contract states
     pub contracts: ContractStateStore,
     /// Wasm bincodes
@@ -68,7 +65,6 @@ impl Blockchain {
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
         let slot_checkpoints = SlotCheckpointStore::new(db)?;
         let transactions = TxStore::new(db)?;
-        let erroneous_txs = ErroneousTxStore::new(db)?;
         let contracts = ContractStateStore::new(db)?;
         let wasm_bincode = WasmStore::new(db)?;
 
@@ -79,7 +75,6 @@ impl Blockchain {
             order,
             slot_checkpoints,
             transactions,
-            erroneous_txs,
             contracts,
             wasm_bincode,
         })
@@ -220,15 +215,5 @@ impl Blockchain {
             Err(_) => return Ok(false),
         };
         Ok(!vec.is_empty())
-    }
-
-    /// Insert a given slice of [`Transactions`] containing erronenous txs into the blockchain database
-    pub fn add_erroneous_txs(&self, erronenous_txs: &[Transaction]) -> Result<Vec<blake3::Hash>> {
-        self.erroneous_txs.insert(erronenous_txs)
-    }
-
-    /// Check if the erroneoustxstore contains given transaction hash.
-    pub fn was_erroneous_tx(&self, tx_hash: &blake3::Hash) -> Result<bool> {
-        self.erroneous_txs.contains(tx_hash)
     }
 }

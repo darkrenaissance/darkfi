@@ -118,10 +118,6 @@ impl Drk {
     async fn scan_block_dao(&self, block: &BlockInfo) -> Result<()> {
         eprintln!("[DAO] Iterating over {} transactions", block.txs.len());
         for tx in block.txs.iter() {
-            // Verify transaction is not in the erroneous set
-            if self.was_erroneous_tx(&tx.hash()).await? {
-                continue
-            }
             self.apply_tx_dao_data(tx, true).await?;
         }
 
@@ -136,10 +132,6 @@ impl Drk {
         eprintln!("[Money] Iterating over {} transactions", block.txs.len());
 
         for tx in block.txs.iter() {
-            // Verify transaction is not in the erroneous set
-            if self.was_erroneous_tx(&tx.hash()).await? {
-                continue
-            }
             self.apply_tx_money_data(tx, true).await?;
         }
 
@@ -306,14 +298,5 @@ impl Drk {
         signals_task.await;
 
         Ok(())
-    }
-
-    /// Queries darkfid to check if transaction is in the erroneous set
-    pub async fn was_erroneous_tx(&self, tx_hash: &blake3::Hash) -> Result<bool> {
-        let req = JsonRequest::new("blockchain.was_erroneous_tx", json!([tx_hash.as_bytes()]));
-        match self.rpc_client.request(req).await {
-            Ok(v) => Ok(serde_json::from_value(v)?),
-            Err(_) => Ok(false),
-        }
     }
 }
