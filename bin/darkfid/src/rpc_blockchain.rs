@@ -16,14 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{crypto::ContractId, db::SMART_CONTRACT_ZKAS_DB_NAME};
+use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
 use serde_json::{json, Value};
 
-use darkfi::rpc::jsonrpc::{
-    ErrorCode::{InternalError, InvalidParams, ParseError},
-    JsonError, JsonResponse, JsonResult, JsonSubscriber,
+use darkfi::{
+    rpc::jsonrpc::{
+        ErrorCode::{InternalError, InvalidParams, ParseError},
+        JsonError, JsonResponse, JsonResult, JsonSubscriber,
+    },
+    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
 };
 
 use super::Darkfid;
@@ -171,12 +174,16 @@ impl Darkfid {
 
         for i in zkas_db.iter() {
             debug!("Iterating over zkas db");
-            let Ok((zkas_ns, zkas_bincode)) = i else {
+            let Ok((zkas_ns, zkas_bytes)) = i else {
                 error!("Internal sled error iterating db");
                 return JsonError::new(InternalError, None, id).into()
             };
 
             let Ok(zkas_ns) = deserialize(&zkas_ns) else {
+                return JsonError::new(InternalError, None, id).into()
+            };
+
+            let Ok((zkas_bincode, _)): Result<(Vec<u8>, Vec<u8>), std::io::Error> = deserialize(&zkas_bytes) else {
                 return JsonError::new(InternalError, None, id).into()
             };
 
