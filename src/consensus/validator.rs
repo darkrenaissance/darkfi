@@ -29,7 +29,7 @@ use darkfi_sdk::{
     incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{group::ff::PrimeField, pallas},
 };
-use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
+use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
 use halo2_proofs::arithmetic::Field;
 use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
@@ -45,7 +45,7 @@ use super::{
 use crate::{
     blockchain::Blockchain,
     rpc::jsonrpc::JsonNotification,
-    runtime::vm_runtime::{Runtime, SMART_CONTRACT_ZKAS_DB_NAME},
+    runtime::vm_runtime::Runtime,
     system::{Subscriber, SubscriberPtr},
     tx::Transaction,
     util::time::Timestamp,
@@ -959,21 +959,7 @@ impl ValidatorState {
                 info!(target: "consensus::validator", "Successfully executed \"metadata\" call");
 
                 // Here we'll look up verifying keys and insert them into the per-contract map.
-                // TODO: This should be abstracted
                 info!(target: "consensus::validator", "Performing VerifyingKey lookups from the sled db");
-                let zkas_tree = match self.blockchain.contracts.lookup(
-                    &self.blockchain.sled_db,
-                    &call.contract_id,
-                    SMART_CONTRACT_ZKAS_DB_NAME,
-                ) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!(target: "consensus::validator", "Failed to lookup zkas db for contract {}: {}", call.contract_id, e);
-                        skip = true;
-                        break
-                    }
-                };
-
                 for (zkas_ns, _) in &zkp_pub {
                     let inner_vk_map =
                         verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
@@ -982,29 +968,12 @@ impl ValidatorState {
                         continue
                     }
 
-                    let Some(zkas_encoded_bytes) = zkas_tree.get(&serialize(&zkas_ns.as_str())).expect("get") else {
+                    let Ok((_, vk)) = self.blockchain.contracts.get_zkas(
+                        &self.blockchain.sled_db, &call.contract_id, &zkas_ns
+                    ) else {
                         error!(target: "consensus::validator", "Failed to find reference to zkas in sled");
                         skip = true;
                         break
-                    };
-
-                    let (_, vk_bin): (Vec<u8>, Vec<u8>) = match deserialize(&zkas_encoded_bytes) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            error!(target: "consensus::validator", "Failed to deserialize zkas data: {}", e);
-                            skip = true;
-                            break
-                        }
-                    };
-
-                    let mut vk_buf = Cursor::new(vk_bin);
-                    let vk = match VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut vk_buf) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            error!(target: "consensus::validator", "Failed to decode VerifyingKey: {}", e);
-                            skip = true;
-                            break
-                        }
                     };
 
                     inner_vk_map.insert(zkas_ns.to_string(), vk);

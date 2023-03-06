@@ -15,12 +15,18 @@ r* This program is distributed in the hope that it will be useful,
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use std::io::Cursor;
 
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
 
-use crate::{Error, Result};
+use crate::{
+    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
+    zk::{VerifyingKey, ZkCircuit},
+    zkas::ZkBinary,
+    Error, Result,
+};
 
 const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
 const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
@@ -203,5 +209,35 @@ impl ContractStateStore {
         self.0.insert(contract_id_bytes, serialize(&state_pointers))?;
 
         Ok(())
+    }
+
+    /// Abstraction function for fetching a `ZkBinary` and its respective `VerifyingKey`
+    /// from a contract's zkas sled tree.
+    pub fn get_zkas(
+        &self,
+        db: &sled::Db,
+        contract_id: &ContractId,
+        zkas_ns: &str,
+    ) -> Result<(ZkBinary, VerifyingKey)> {
+        debug!(target: "blockchain::contractstore", "Looking up \"{}:{}\" zkas circuit & vk", contract_id, zkas_ns);
+
+        let zkas_tree = self.lookup(db, contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?;
+
+        let Some(zkas_bytes) = zkas_tree.get(&serialize(&zkas_ns))? else {
+            return Err(Error::ZkasBincodeNotFound)
+        };
+
+        // If anything in this function panics, that means corrupted data managed
+        // to get into this sled tree. This should not be possible.
+        let (zkbin, vkbin): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes).unwrap();
+
+        // The first vec is the compiled zkas binary
+        let zkbin = ZkBinary::decode(&zkbin).unwrap();
+
+        // The second one is the serialized VerifyingKey for it
+        let mut vk_buf = Cursor::new(vkbin);
+        let vk = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut vk_buf).unwrap();
+
+        Ok((zkbin, vk))
     }
 }
