@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{ContractId, MerkleTree, PublicKey},
-    db::{db_init, db_lookup, db_set, set_return_data, SMART_CONTRACT_ZKAS_DB_NAME},
+    db::{db_init, db_lookup, db_set, set_return_data, zkas_db_set},
     error::{ContractError, ContractResult},
     msg, ContractCall,
 };
@@ -29,8 +29,6 @@ use crate::{
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_FAUCET_PUBKEYS,
     MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-    MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 
 /// `Money::Transfer` functions
@@ -76,26 +74,20 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     // whitelist faucets that can create clear inputs.
     let faucet_pubkeys: Vec<PublicKey> = deserialize(ix)?;
 
-    // The zkas circuit can simply be embedded in the wasm and set up by
-    // the initialization. Note that the tree should then be called "zkas".
-    // The lookups can be done by `contract_id+_zkas+namespace`.
-    // TODO: For the zkas tree, external host checks should be done to ensure
-    //       that the bincode is actually valid and not arbitrary.
-    let zkas_db = match db_lookup(cid, SMART_CONTRACT_ZKAS_DB_NAME) {
-        Ok(v) => v,
-        Err(_) => db_init(cid, SMART_CONTRACT_ZKAS_DB_NAME)?,
-    };
-
+    // zkas circuits can simply be embedded in the wasm and set up by using
+    // respective db functions. The special `zkas db` operations exist in
+    // order to be able to verify the circuits being bundled and enforcing
+    // a specific tree inside sled, and also creation of VerifyingKey.
     let mint_v1_bincode = include_bytes!("../proof/mint_v1.zk.bin");
     let burn_v1_bincode = include_bytes!("../proof/burn_v1.zk.bin");
-
     let token_mint_v1_bincode = include_bytes!("../proof/token_mint_v1.zk.bin");
     let token_frz_v1_bincode = include_bytes!("../proof/token_freeze_v1.zk.bin");
 
-    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1), &mint_v1_bincode[..])?;
-    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1), &burn_v1_bincode[..])?;
-    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1), &token_mint_v1_bincode[..])?;
-    db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1), &token_frz_v1_bincode[..])?;
+    // For that, we use `zkas_db_set` and pass in the bincode.
+    zkas_db_set(&mint_v1_bincode[..])?;
+    zkas_db_set(&burn_v1_bincode[..])?;
+    zkas_db_set(&token_mint_v1_bincode[..])?;
+    zkas_db_set(&token_frz_v1_bincode[..])?;
 
     // Set up a database tree to hold Merkle roots of all coins
     // k=MerkleNode, v=[]
