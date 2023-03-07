@@ -450,7 +450,6 @@ fn main() {
     // at some interval (e.g. once a week/month). The new signed prekey
     // and prekey signature will replace the previous values.
 
-    
     // Bob's signed prekey `SPK_B`
     let bob_spk_secret = X25519SecretKey::new(OsRng);
     let bob_public_spk = X25519PublicKey::from(&bob_spk_secret);
@@ -458,7 +457,6 @@ fn main() {
     // Bob's prekey signature `Sig(IK_b, Encode(SPK_B))`
     let nonce = [0_u8; 64];
     let bob_spk_signature = bob_ik_secret.xeddsa_sign(&bob_public_spk.to_bytes(), &nonce);
-   
 
     // A set of Bob's one-time prekeys `(OPK_B1, OPK_B2, OPK_B3, ...)`
     let mut bob_opk_secrets =
