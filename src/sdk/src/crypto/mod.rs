@@ -16,17 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! This module contains a bit more minimal implementations of the
-//! objects and types that can be found in `darkfi::crypto`.
-//! This is done so we can have a lot less dependencies in this SDK,
-//! and therefore make compilation of smart contracts faster in a sense.
-//!
-//! Eventually, we should strive to somehow migrate the types from
-//! `darkfi::crypto` into here, and then implement certain functionality
-//! in the library using traits.
-//! If you feel like trying, please help out with this migration, but do
-//! it properly, with care, and write documentation while you're at it.
-
 /// Cryptographic constants
 pub mod constants;
 
@@ -81,6 +70,7 @@ pub mod mimc_vdf;
 
 pub use incrementalmerkletree;
 pub use pasta_curves::{pallas, vesta};
+
 /// Convenience module to import all the pasta traits.
 /// You still have to import the curves.
 pub mod pasta_prelude {

@@ -56,9 +56,7 @@ pub trait SchnorrPublic {
     fn verify(&self, message: &[u8], signature: &Signature) -> bool;
 }
 
-// ===================================================================
-// Schnorr signature trait implementations for the stuff in keypair.rs
-// ===================================================================
+/// Schnorr signature trait implementations for the stuff in `keypair.rs`
 impl SchnorrSecret for SecretKey {
     fn sign(&self, rng: &mut (impl CryptoRng + RngCore), message: &[u8]) -> Signature {
         let mask = pallas::Scalar::random(rng);

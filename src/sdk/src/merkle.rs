@@ -24,18 +24,23 @@ use super::{
     error::{ContractError, GenericResult},
 };
 
+/// Add given elements into a Merkle tree.
+/// * `db_info` is a handle for a database where the Merkle tree is stored.
+/// * `db_roots` is a handle for a database where all the new Merkle roots are stored.
+/// * `key` is the serialized key for `db_info`.
+/// * `elements` are the items we want to add to the Merkle tree.
 pub fn merkle_add(
     db_info: DbHandle,
     db_roots: DbHandle,
     key: &[u8],
-    coins: &[MerkleNode],
+    elements: &[MerkleNode],
 ) -> GenericResult<()> {
     let mut buf = vec![];
     let mut len = 0;
     len += db_info.encode(&mut buf)?;
     len += db_roots.encode(&mut buf)?;
     len += key.to_vec().encode(&mut buf)?;
-    len += coins.to_vec().encode(&mut buf)?;
+    len += elements.to_vec().encode(&mut buf)?;
 
     match unsafe { merkle_add_(buf.as_ptr(), len as u32) } {
         0 => Ok(()),
