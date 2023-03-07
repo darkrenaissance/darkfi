@@ -1082,7 +1082,7 @@ async fn main() -> Result<()> {
             AliasSubcmd::Add { alias, token } => {
                 if alias.chars().count() > 5 {
                     eprintln!("Error: Alias exceeds 5 characters");
-                    return Ok(())
+                    exit(1);
                 }
 
                 let token_id =
