@@ -271,7 +271,7 @@ impl ValidatorState {
         let (proof, public_inputs) = coin.create_lead_proof(
             sigma1,
             sigma2,
-            eta.clone(),
+            eta,
             pallas::Base::from(self.consensus.current_slot()),
             self.lead_proving_key.as_ref().unwrap(),
             derived_blind,
@@ -904,7 +904,7 @@ impl ValidatorState {
                     let (_, vk) = self.blockchain.contracts.get_zkas(
                         &self.blockchain.sled_db,
                         &call.contract_id,
-                        &zkas_ns,
+                        zkas_ns,
                     )?;
 
                     inner_vk_map.insert(zkas_ns.to_string(), vk);
@@ -939,7 +939,7 @@ impl ValidatorState {
                 }
                 Err(e) => {
                     error!(target: "consensus::validator", "Signature verification for tx {} failed: {}", tx_hash, e);
-                    return Err(e.into())
+                    return Err(e)
                 }
             };
 
@@ -950,7 +950,7 @@ impl ValidatorState {
                 }
                 Err(e) => {
                     error!(target: "consensus::validator", "ZK proof verification for tx {} failed: {}", tx_hash, e);
-                    return Err(e.into())
+                    return Err(e)
                 }
             };
 

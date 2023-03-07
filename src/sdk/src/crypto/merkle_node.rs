@@ -42,7 +42,6 @@ lazy_static! {
         iter::empty()
             .chain(Some(MerkleNode::empty_leaf()))
             .chain((0..MERKLE_DEPTH).scan(MerkleNode::empty_leaf(), |state, l| {
-                let l = l as u8;
                 *state = MerkleNode::combine(l.into(), state, state);
                 Some(*state)
             }))

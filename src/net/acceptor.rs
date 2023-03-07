@@ -118,9 +118,7 @@ impl Acceptor {
                 }
 
                 let auth_cookie = auth_cookie.unwrap();
-
-                let auth_cookie = hex::encode(&fs::read(auth_cookie).unwrap());
-
+                let auth_cookie = hex::encode(fs::read(auth_cookie).unwrap());
                 let transport = TorTransport::new(socks5_url, Some((torc_url, auth_cookie)))?;
 
                 // generate EHS pointing to local address

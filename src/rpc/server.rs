@@ -178,9 +178,10 @@ pub async fn listen_and_serve(
             let listener = transport.listen_on(accept_url.clone());
             accept!(listener, transport, upgrade);
         }
+
         TransportName::Tor(upgrade) => {
             let (socks5_url, torc_url, auth_cookie) = TorTransport::get_listener_env()?;
-            let auth_cookie = hex::encode(&std::fs::read(auth_cookie).unwrap());
+            let auth_cookie = hex::encode(std::fs::read(auth_cookie).unwrap());
             let transport = TorTransport::new(socks5_url, Some((torc_url, auth_cookie)))?;
 
             // Generate EHS pointing to local address
@@ -190,6 +191,7 @@ pub async fn listen_and_serve(
             let listener = transport.clone().listen_on(accept_url.clone());
             accept!(listener, transport, upgrade);
         }
+
         TransportName::Unix => {
             let transport = UnixTransport::new();
             let listener = transport.listen_on(accept_url.clone());

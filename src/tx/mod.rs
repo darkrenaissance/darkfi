@@ -79,7 +79,7 @@ impl Transaction {
                 if let Some(vk) = contract_map.get(zk_ns) {
                     // We have a verifying key for this
                     debug!("public inputs: {:#?}", public_vals);
-                    if let Err(e) = proof.verify(&vk, public_vals) {
+                    if let Err(e) = proof.verify(vk, public_vals) {
                         error!(
                             target: "",
                             "Failed verifying {}::{} ZK proof: {:#?}",

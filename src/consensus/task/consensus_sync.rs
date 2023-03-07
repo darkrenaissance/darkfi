@@ -117,7 +117,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     let mut response = response_sub.receive().await?;
     // Verify that peer has finished finalizing forks
     loop {
-        if response.forks.len() != 0 {
+        if !response.forks.is_empty() {
             warn!(target: "consensus::consensus_sync", "Peer has not finished finalization, retrying...");
             sleep(1).await;
             peer.send(ConsensusRequest {}).await?;

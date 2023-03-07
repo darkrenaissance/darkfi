@@ -372,12 +372,12 @@ impl ConsensusState {
         info!(target: "consensus::state", "Previous leaders: {}", self.previous_leaders);
         // Write counter to file
         let mut count_str: String = self.previous_leaders.to_string();
-        count_str.push_str(",");
+        count_str.push(',');
         let f =
             File::options().append(true).create(true).open(constants::LEADER_HISTORY_LOG).unwrap();
         {
             let mut writer = BufWriter::new(f);
-            writer.write(&count_str.into_bytes()).unwrap();
+            let _ = writer.write(&count_str.into_bytes()).unwrap();
         }
         // Calculate feedback
         let feedback = Float10::try_from(self.previous_leaders as i64).unwrap();
@@ -403,10 +403,10 @@ impl ConsensusState {
         info!(target: "consensus::state", "pid::err: {:}", err);
         info!(target: "consensus::state", "pid::err-1: {}", self.err_history[err_len - 1].clone());
         info!(target: "consensus::state", "pid::err-2: {}", self.err_history[err_len - 2].clone());
-        info!(target: "consensus::state", "pid::k1: {}", k1.clone());
-        info!(target: "consensus::state", "pid::k2: {}", k2.clone());
-        info!(target: "consensus::state", "pid::k3: {}", k3.clone());
-        self.err_history.push(err.clone());
+        info!(target: "consensus::state", "pid::k1: {}", k1);
+        info!(target: "consensus::state", "pid::k2: {}", k2);
+        info!(target: "consensus::state", "pid::k3: {}", k3);
+        self.err_history.push(err);
         ret
     }
     /// the probability inverse of winnig lottery having all the stake
@@ -423,9 +423,9 @@ impl ConsensusState {
             File::options().append(true).create(true).open(constants::F_HISTORY_LOG).unwrap();
         {
             let mut f_history = format!("{:}", f);
-            f_history.push_str(",");
+            f_history.push(',');
             let mut writer = BufWriter::new(file);
-            writer.write(&f_history.into_bytes()).unwrap();
+            let _ = writer.write(&f_history.into_bytes()).unwrap();
         }
         self.f_history.push(f.clone());
         f
@@ -618,7 +618,7 @@ impl ConsensusState {
             return false
         }
         let previous_slot = current_slot - 1;
-        !self.get_slot_checkpoint(previous_slot).is_ok()
+        self.get_slot_checkpoint(previous_slot).is_err()
     }
 
     /// Auxillary function to update all fork state checkpoints to nodes coins current canonical states.

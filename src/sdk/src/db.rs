@@ -212,11 +212,11 @@ pub fn put_object_bytes(data: &[u8]) -> i64 {
 }
 
 pub fn get_object_bytes(data: &mut [u8], object_index: u32) -> i64 {
-    unsafe { get_object_bytes_(data.as_mut_ptr(), object_index as u32) }
+    unsafe { get_object_bytes_(data.as_mut_ptr(), object_index) }
 }
 
 pub fn get_object_size(object_index: u32) -> i64 {
-    unsafe { get_object_size_(object_index as u32) }
+    unsafe { get_object_size_(object_index) }
 }
 
 extern "C" {

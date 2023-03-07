@@ -62,9 +62,9 @@ pub fn base2ibig(base: pallas::Base) -> IBig {
         u64::from_le_bytes(byts[24..32].try_into().expect("")),
     ];
     let uparts = UBig::from_words(&words);
-    let ibig = IBig::from_parts(Sign::Positive, uparts);
-    ibig
+    IBig::from_parts(Sign::Positive, uparts)
 }
+
 #[cfg(test)]
 mod tests {
     use dashu::integer::IBig;

@@ -48,10 +48,10 @@ impl VerifyingKey {
         let mut vk = vec![];
         self.vk.write(&mut vk)?;
 
-        writer.write(&(params.len() as u32).to_le_bytes())?;
-        writer.write(&params)?;
-        writer.write(&(vk.len() as u32).to_le_bytes())?;
-        writer.write(&vk)?;
+        let _ = writer.write(&(params.len() as u32).to_le_bytes())?;
+        let _ = writer.write(&params)?;
+        let _ = writer.write(&(vk.len() as u32).to_le_bytes())?;
+        let _ = writer.write(&vk)?;
 
         Ok(())
     }

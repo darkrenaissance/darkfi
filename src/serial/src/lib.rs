@@ -304,7 +304,7 @@ impl Encodable for VarInt {
 
             _ => {
                 s.write_u8(0xFF)?;
-                (self.0 as u64).encode(s)?;
+                self.0.encode(s)?;
                 Ok(9)
             }
         }

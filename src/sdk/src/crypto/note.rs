@@ -71,13 +71,26 @@ impl AeadEncryptedNote {
             &[],
             &mut plaintext,
         ) {
-            Ok(()) => {
-                let d = D::decode(&plaintext[..ct_len - AEAD_TAG_SIZE])?;
-                return Ok(d)
-            }
-            Err(e) => {
-                Err(ContractError::IoError(format!("Note decrypt failed: {}", e.to_string())))
-            }
+            Ok(()) => Ok(D::decode(&plaintext[..ct_len - AEAD_TAG_SIZE])?),
+            Err(e) => Err(ContractError::IoError(format!("Note decrypt failed: {}", e))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_aead_note() {
+        let plaintext = "gm world";
+        let keypair = Keypair::new(&mut OsRng);
+
+        let encrypted_note =
+            AeadEncryptedNote::encrypt(&plaintext, &keypair.public, &mut OsRng).unwrap();
+
+        let plaintext2 = encrypted_note.decrypt(&keypair.secret).unwrap();
+
+        assert_eq!(plaintext, plaintext2);
     }
 }

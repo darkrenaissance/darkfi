@@ -63,7 +63,7 @@ impl Hosts {
         let addrs = if !self.localnet {
             let filtered = filter_localnet(input_addrs);
             let filtered = filter_invalid(&self.ipv4_range, &self.ipv6_range, filtered);
-            filtered.into_iter().map(|(k, _)| k).collect()
+            filtered.into_keys().collect()
         } else {
             debug!(target: "net::hosts::store()", "hosts::store() [Localnet mode, skipping filterring.]");
             input_addrs

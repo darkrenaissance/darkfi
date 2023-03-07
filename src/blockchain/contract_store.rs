@@ -51,7 +51,7 @@ impl WasmStore {
     /// Fetches the bincode for a given ContractId
     /// Returns an error if the bincode is not found.
     pub fn get(&self, contract_id: ContractId) -> Result<Vec<u8>> {
-        if let Some(bincode) = self.0.get(&serialize(&contract_id))? {
+        if let Some(bincode) = self.0.get(serialize(&contract_id))? {
             return Ok(bincode.to_vec())
         }
 
@@ -60,7 +60,7 @@ impl WasmStore {
 
     /// Inserts or replaces the bincode for a given ContractId
     pub fn insert(&self, contract_id: ContractId, bincode: &[u8]) -> Result<()> {
-        if let Err(e) = self.0.insert(&serialize(&contract_id), bincode) {
+        if let Err(e) = self.0.insert(serialize(&contract_id), bincode) {
             error!(target: "blockchain::contractstore", "Failed to insert bincode to WasmStore: {}", e);
             return Err(e.into())
         }
@@ -223,7 +223,7 @@ impl ContractStateStore {
 
         let zkas_tree = self.lookup(db, contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?;
 
-        let Some(zkas_bytes) = zkas_tree.get(&serialize(&zkas_ns))? else {
+        let Some(zkas_bytes) = zkas_tree.get(serialize(&zkas_ns))? else {
             return Err(Error::ZkasBincodeNotFound)
         };
 

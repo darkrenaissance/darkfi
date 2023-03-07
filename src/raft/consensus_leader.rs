@@ -105,7 +105,7 @@ impl<T: Decodable + Encodable + Clone> Raft<T> {
 
     async fn commit_log(&mut self) -> Result<()> {
         let nodes_ptr = self.nodes.lock().await;
-        let min_acks = ((nodes_ptr.len() + 1) / 2) as usize;
+        let min_acks = (nodes_ptr.len() + 1) / 2;
         let nodes = nodes_ptr.clone();
         drop(nodes_ptr);
 

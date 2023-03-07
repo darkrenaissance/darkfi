@@ -240,9 +240,8 @@ impl LeadCoin {
     }
 
     pub fn headstart() -> pallas::Base {
-        let headstart = constants::MIN_F.clone() * Float10::try_from(constants::P.clone()).unwrap();
-        let headstart_base = fbig2base(headstart);
-        headstart_base
+        let headstart = constants::MIN_F.clone() * Float10::try_from(constants::P).unwrap();
+        fbig2base(headstart)
     }
 
     pub fn is_leader(
@@ -270,7 +269,7 @@ impl LeadCoin {
 
         {
             let mut writer = BufWriter::new(f);
-            writer.write(&y_t_str.into_bytes()).unwrap();
+            let _ = writer.write(&y_t_str.into_bytes()).unwrap();
         }
         info!(target: "consensus::leadcoin", "is_leader(): y = {:?}", y);
         info!(target: "consensus::leadcoin", "is_leader(): T = {:?}", target);
@@ -321,7 +320,7 @@ impl LeadCoin {
             coin1_commitment: derived_c1_cm,
             coin1_commitment_root: commitment_root,
             coin1_commitment_pos: u32::try_from(usize::from(leaf_pos)).unwrap(),
-            coin1_commitment_merkle_path: commitment_merkle_path.try_into().unwrap(),
+            coin1_commitment_merkle_path: commitment_merkle_path,
             coin1_sk: self.coin1_sk,
             coin1_sk_root: self.coin1_sk_root,
             coin1_sk_pos: self.coin1_sk_pos,
