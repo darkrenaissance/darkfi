@@ -450,13 +450,15 @@ fn main() {
     // at some interval (e.g. once a week/month). The new signed prekey
     // and prekey signature will replace the previous values.
 
+    
     // Bob's signed prekey `SPK_B`
     let bob_spk_secret = X25519SecretKey::new(OsRng);
-    let bob_spk_public = X25519PublicKey::from(&bob_spk_secret);
+    let bob_public_spk = X25519PublicKey::from(&bob_spk_secret);
 
     // Bob's prekey signature `Sig(IK_b, Encode(SPK_B))`
     let nonce = [0_u8; 64];
-    let bob_spk_sig = bob_ik_secret.xeddsa_sign(&bob_spk_public.to_bytes(), &nonce);
+    let bob_spk_signature = bob_ik_secret.xeddsa_sign(&bob_public_spk.to_bytes(), &nonce);
+   
 
     // A set of Bob's one-time prekeys `(OPK_B1, OPK_B2, OPK_B3, ...)`
     let mut bob_opk_secrets =
@@ -467,8 +469,8 @@ fn main() {
     bob_opk_publics.push_back(X25519PublicKey::from(&bob_opk_secrets[2]));
 
     let bob_keyset = Keyset {
-        signed_prekey: bob_spk_public,
-        prekey_signature: bob_spk_sig,
+        signed_prekey: bob_public_spk,
+        prekey_signature: bob_spk_signature,
         onetime_prekeys: bob_opk_publics.clone(),
     };
 
@@ -485,6 +487,7 @@ fn main() {
 
     // Alice verifies the prekey signature and aborts the protocol if
     // verification fails.
+
     assert!(bob_keyset
         .identity_key
         .xeddsa_verify(&bob_keyset.signed_prekey.to_bytes(), &bob_keyset.prekey_signature));

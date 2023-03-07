@@ -22,8 +22,8 @@ use curve25519_dalek::{
     constants::ED25519_BASEPOINT_POINT, montgomery::MontgomeryPoint, scalar::Scalar,
 };
 use digest::Digest;
-use ed25519_dalek::{Signature, SigningKey as Ed25519PublicKey};
 use sha2::Sha512;
+use ed25519_dalek::{Signature, VerifyingKey as Ed25519PublicKey};
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
 
 pub trait XeddsaSigner {
@@ -52,11 +52,11 @@ impl XeddsaSigner for X25519SecretKey {
         // x25519-dalek private keys are already clamped, so just compute
         // the Ed25519 public key from the Curve25519 private key.
         let scalar_k = Scalar::from_bits(self.to_bytes());
-        let ep = ED25519_BASEPOINT_POINT * scalar_k;
-        let mut ce = ep.compress();
-        let sign = ce.0[31] >> 7;
+        let edward_point = ED25519_BASEPOINT_POINT * scalar_k;
+        let mut compressed_edwards = edward_point.compress();
+        let sign = compressed_edwards.0[31] >> 7;
         // Set the sign bit to zero after adjusting the private key
-        ce.0[31] &= 0x7F; // A.s = 0
+        compressed_edwards.0[31] &= 0x7F; // A.s = 0
 
         // Compute the negative secret key
 
@@ -73,7 +73,7 @@ impl XeddsaSigner for X25519SecretKey {
         // directly, but rather use a seed to derive other data from.
         // To create signatures compatible with Ed25519, a modified
         // version of the signing algorithm is required that does not
-        // depend on a seed.
+        // dedward_pointend on a seed.
         // r = hash1(a || M || Z) (mod q)
         let mut hash_padding = [0xff, 32];
         hash_padding[0] = 0xfe;
@@ -90,7 +90,7 @@ impl XeddsaSigner for X25519SecretKey {
         // h = hash(R || A || M) (mod q)
         hasher = Sha512::new();
         hasher.update(cap_r.as_bytes());
-        hasher.update(ce.as_bytes());
+        hasher.update(compressed_edwards.as_bytes());
         hasher.update(msg);
         let h = Scalar::from_hash(hasher);
 
@@ -110,9 +110,9 @@ impl XeddsaVerifier for X25519PublicKey {
         let pt = MontgomeryPoint(self.to_bytes());
 
         if let Some(edwards) = pt.to_edwards(0) {
-            let pk = Ed25519PublicKey::from_bytes(&edwards.compress().to_bytes());
-            let sig = Signature::from_bytes(sig);
-            return pk.verify(msg, &sig).is_ok()
+            let pk = Ed25519PublicKey::from_bytes(&edwards.compress().to_bytes()).unwrap();
+            let signature = Signature::from_bytes(sig);
+            return pk.verify_strict(msg, &signature).is_ok()
         }
 
         false
@@ -128,7 +128,7 @@ mod tests {
     fn xeddsa_test() {
         let nonce = [0u8; 64];
         let msg = [0u8; 200];
-
+ 
         let xsecret_key = X25519SecretKey::new(&mut OsRng);
         let xpublic_key = X25519PublicKey::from(&xsecret_key);
 
