@@ -99,7 +99,17 @@ impl ProtocolSyncConsensus {
             for fork in &lock.consensus.forks {
                 forks.push(fork.clone().into());
             }
-            let unconfirmed_txs = lock.unconfirmed_txs.clone();
+            let pending_txs = match lock.blockchain.pending_txs.get_all_txs() {
+                Ok(v) => v,
+                Err(e) => {
+                    debug!(
+                        target: "consensus::protocol_sync_consensus::handle_receive_request()",
+                        "Failed querying pending txs store: {}",
+                        e
+                    );
+                    vec![]
+                }
+            };
             let slot_checkpoints = lock.consensus.slot_checkpoints.clone();
             let mut f_history = vec![];
             for f in &lock.consensus.f_history {
@@ -116,7 +126,7 @@ impl ProtocolSyncConsensus {
                 bootstrap_slot,
                 current_slot,
                 forks,
-                unconfirmed_txs,
+                pending_txs,
                 slot_checkpoints,
                 f_history,
                 err_history,

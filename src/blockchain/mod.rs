@@ -31,7 +31,7 @@ pub mod slot_checkpoint_store;
 pub use slot_checkpoint_store::SlotCheckpointStore;
 
 pub mod tx_store;
-pub use tx_store::TxStore;
+pub use tx_store::{PendingTxStore, TxStore};
 
 pub mod contract_store;
 pub use contract_store::{ContractStateStore, WasmStore};
@@ -51,6 +51,8 @@ pub struct Blockchain {
     pub slot_checkpoints: SlotCheckpointStore,
     /// Transactions sled tree
     pub transactions: TxStore,
+    /// Pending transactions sled tree
+    pub pending_txs: PendingTxStore,
     /// Contract states
     pub contracts: ContractStateStore,
     /// Wasm bincodes
@@ -65,6 +67,7 @@ impl Blockchain {
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
         let slot_checkpoints = SlotCheckpointStore::new(db)?;
         let transactions = TxStore::new(db)?;
+        let pending_txs = PendingTxStore::new(db)?;
         let contracts = ContractStateStore::new(db)?;
         let wasm_bincode = WasmStore::new(db)?;
 
@@ -75,6 +78,7 @@ impl Blockchain {
             order,
             slot_checkpoints,
             transactions,
+            pending_txs,
             contracts,
             wasm_bincode,
         })

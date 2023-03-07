@@ -21,6 +21,7 @@ use darkfi_serial::{deserialize, serialize};
 use crate::{tx::Transaction, Error, Result};
 
 const SLED_TX_TREE: &[u8] = b"_transactions";
+const SLED_PENDING_TX_TREE: &[u8] = b"_pending_transactions";
 
 /// The `TxStore` is a `sled` tree storing all the blockchain's
 /// transactions where the key is the transaction hash, and the value is
@@ -103,5 +104,85 @@ impl TxStore {
         }
 
         Ok(txs)
+    }
+}
+
+/// The `PendingTxStore` is a `sled` tree storing all the node pending
+/// transactions where the key is the transaction hash, and the value is
+/// the serialized transaction.
+#[derive(Clone)]
+pub struct PendingTxStore(sled::Tree);
+
+impl PendingTxStore {
+    /// Opens a new or existing `PendingTxStore` on the given sled database.
+    pub fn new(db: &sled::Db) -> Result<Self> {
+        let tree = db.open_tree(SLED_PENDING_TX_TREE)?;
+        Ok(Self(tree))
+    }
+
+    /// Insert a slice of [`Transaction`] into the pending tx store.
+    /// With sled, the operation is done as a batch.
+    /// The transactions are hashed with BLAKE3 and this hash is used as
+    /// the key, while the value is the serialized [`Transaction`] itself.
+    /// On success, the function returns the transaction hashes in the same
+    /// order as the input transactions.
+    pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<blake3::Hash>> {
+        let mut ret = Vec::with_capacity(transactions.len());
+        let mut batch = sled::Batch::default();
+
+        for tx in transactions {
+            let serialized = serialize(tx);
+            let tx_hash = blake3::hash(&serialized);
+            batch.insert(tx_hash.as_bytes(), serialized);
+            ret.push(tx_hash);
+        }
+
+        self.0.apply_batch(batch)?;
+        Ok(ret)
+    }
+
+    /// Check if the pending tx store contains a given transaction hash.
+    pub fn contains(&self, tx_hash: &blake3::Hash) -> Result<bool> {
+        Ok(self.0.contains_key(tx_hash.as_bytes())?)
+    }
+
+    /// Retrieve all transactions from the pending tx store in the form of a tuple
+    /// (`tx_hash`, `tx`).
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Transaction)>> {
+        let mut txs = vec![];
+
+        for tx in self.0.iter() {
+            let (key, value) = tx.unwrap();
+            let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
+            let tx = deserialize(&value)?;
+            txs.push((hash_bytes.into(), tx));
+        }
+
+        Ok(txs)
+    }
+
+    /// Retrieve all transactions from the pending tx store.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all_txs(&self) -> Result<Vec<Transaction>> {
+        let txs = self.get_all()?;
+        Ok(txs.iter().map(|x| x.1.clone()).rev().collect())
+    }
+
+    /// Remove a slice of [`Transaction`] from the pending tx store.
+    /// With sled, the operation is done as a batch.
+    /// The transactions are hashed with BLAKE3 and this hash is used as
+    /// the key to remove.
+    pub fn remove(&self, transactions: &[Transaction]) -> Result<()> {
+        let mut batch = sled::Batch::default();
+
+        for tx in transactions {
+            let serialized = serialize(tx);
+            let tx_hash = blake3::hash(&serialized);
+            batch.remove(tx_hash.as_bytes());
+        }
+
+        self.0.apply_batch(batch)?;
+        Ok(())
     }
 }

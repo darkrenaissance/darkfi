@@ -145,7 +145,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     }
     lock.consensus.bootstrap_slot = response.bootstrap_slot;
     lock.consensus.forks = forks;
-    lock.unconfirmed_txs = response.unconfirmed_txs.clone();
+    lock.append_pending_txs(&response.pending_txs).await;
     lock.consensus.slot_checkpoints = response.slot_checkpoints.clone();
     lock.consensus.previous_leaders = 1;
     let mut f_history = vec![];

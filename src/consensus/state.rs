@@ -665,7 +665,7 @@ pub struct ConsensusResponse {
     /// Hot/live data used by the consensus algorithm
     pub forks: Vec<ForkInfo>,
     /// Pending transactions
-    pub unconfirmed_txs: Vec<Transaction>,
+    pub pending_txs: Vec<Transaction>,
     /// Hot/live slot checkpoints
     pub slot_checkpoints: Vec<SlotCheckpoint>,
     // TODO: When Float10 supports encoding/decoding this should be
