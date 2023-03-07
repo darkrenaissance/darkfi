@@ -28,9 +28,9 @@ pub fn fbig2ibig(f: Float10) -> IBig {
     let exp = f.repr().exponent();
 
     let val: IBig = if exp >= 0 {
-        sig.clone() * rad.pow(exp as usize)
+        sig.clone() * rad.pow(exp.unsigned_abs())
     } else {
-        sig.clone() / rad.pow(exp.abs() as usize)
+        sig.clone() / rad.pow(exp.unsigned_abs())
     };
 
     val
