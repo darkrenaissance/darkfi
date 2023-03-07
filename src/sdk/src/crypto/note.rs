@@ -80,16 +80,19 @@ impl AeadEncryptedNote {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::Keypair;
+
+    use rand::rngs::OsRng;
 
     #[test]
     fn test_aead_note() {
         let plaintext = "gm world";
-        let keypair = Keypair::new(&mut OsRng);
+        let keypair = Keypair::random(&mut OsRng);
 
         let encrypted_note =
             AeadEncryptedNote::encrypt(&plaintext, &keypair.public, &mut OsRng).unwrap();
 
-        let plaintext2 = encrypted_note.decrypt(&keypair.secret).unwrap();
+        let plaintext2: String = encrypted_note.decrypt(&keypair.secret).unwrap();
 
         assert_eq!(plaintext, plaintext2);
     }
