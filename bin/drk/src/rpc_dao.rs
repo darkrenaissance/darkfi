@@ -240,7 +240,7 @@ impl Drk {
         let calls = vec![ContractCall { contract_id: *DAO_CONTRACT_ID, data }];
         let proofs = vec![proofs];
         let mut tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = tx.create_sigs(&mut OsRng, &vec![signature_secret])?;
+        let sigs = tx.create_sigs(&mut OsRng, &[signature_secret])?;
         tx.signatures = vec![sigs];
 
         Ok(tx)

@@ -634,25 +634,19 @@ async fn main() -> Result<()> {
                     };
 
                     let spend_hook = if coin.0.note.spend_hook != zero {
-                        format!(
-                            "{}",
-                            bs58::encode(&serialize(&coin.0.note.spend_hook)).into_string()
-                        )
+                        bs58::encode(&serialize(&coin.0.note.spend_hook)).into_string().to_string()
                     } else {
                         String::from("-")
                     };
 
                     let user_data = if coin.0.note.user_data != zero {
-                        format!(
-                            "{}",
-                            bs58::encode(&serialize(&coin.0.note.user_data)).into_string()
-                        )
+                        bs58::encode(&serialize(&coin.0.note.user_data)).into_string().to_string()
                     } else {
                         String::from("-")
                     };
 
                     table.add_row(row![
-                        format!("{}", bs58::encode(&serialize(&coin.0.coin.inner())).into_string()),
+                        bs58::encode(&serialize(&coin.0.coin.inner())).into_string().to_string(),
                         coin.1,
                         coin.0.note.token_id,
                         aliases,
@@ -948,7 +942,7 @@ async fn main() -> Result<()> {
                     println!("{}", table);
                 }
 
-                return Ok(())
+                Ok(())
             }
 
             DaoSubcmd::Mint { dao_id } => {

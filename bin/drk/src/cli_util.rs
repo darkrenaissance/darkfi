@@ -78,7 +78,7 @@ pub async fn kaching() -> Result<()> {
             f.write_all(WALLET_MP3).await?;
         }
 
-        if let Err(_) = play::play(MP3_DROP) {
+        if play::play(MP3_DROP).is_err() {
             return Ok(())
         }
     }

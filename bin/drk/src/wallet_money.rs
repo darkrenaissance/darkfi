@@ -560,7 +560,7 @@ impl Drk {
                     let leaf_position = tree.witness().unwrap();
 
                     let owncoin = OwnCoin {
-                        coin: Coin::from(coin),
+                        coin,
                         note: note.clone(),
                         secret: *secret,
                         nullifier: Nullifier::from(poseidon_hash([secret.inner(), note.serial])),
@@ -649,10 +649,8 @@ impl Drk {
             let _ = self.rpc_client.request(req).await?;
         }
 
-        if !owncoins.is_empty() {
-            if let Err(_) = kaching().await {
-                return Ok(())
-            }
+        if !owncoins.is_empty() && (kaching().await).is_err() {
+            return Ok(())
         }
 
         Ok(())
@@ -773,7 +771,7 @@ impl Drk {
         if input.chars().count() <= 5 {
             let aliases = self.get_aliases(Some(input.clone()), None).await?;
             if let Some(token_id) = aliases.get(&input) {
-                return Ok(token_id.clone())
+                return Ok(*token_id)
             }
         }
         // Else parse input

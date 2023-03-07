@@ -427,7 +427,7 @@ impl Drk {
     pub async fn import_dao(&self, dao_name: String, dao_params: DaoParams) -> Result<()> {
         // First let's check if we've imported this DAO with the given name before.
         let daos = self.get_daos().await?;
-        if daos.iter().find(|x| x.name == dao_name).is_some() {
+        if daos.iter().any(|x| x.name == dao_name) {
             return Err(anyhow!("This DAO has already been imported"))
         }
 
