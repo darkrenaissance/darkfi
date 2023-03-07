@@ -237,7 +237,7 @@ impl DaoProposeCall {
         ];
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin.clone());
 
-        let main_proof = Proof::create(&main_pk, &[circuit], &public_inputs, &mut OsRng)
+        let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::propose() proving error!");
         proofs.push(main_proof);
 

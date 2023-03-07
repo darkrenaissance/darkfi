@@ -160,7 +160,7 @@ impl DaoVoteCall {
 
             let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin.clone());
             debug!(target: "dao", "input_proof Proof::create()");
-            let input_proof = Proof::create(&burn_pk, &[circuit], &public_inputs, &mut OsRng)
+            let input_proof = Proof::create(burn_pk, &[circuit], &public_inputs, &mut OsRng)
                 .expect("DAO::vote() proving error!");
             proofs.push(input_proof);
 
@@ -255,7 +255,7 @@ impl DaoVoteCall {
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin.clone());
 
         debug!(target: "dao", "main_proof = Proof::create()");
-        let main_proof = Proof::create(&main_pk, &[circuit], &public_inputs, &mut OsRng)
+        let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::vote() proving error!");
         proofs.push(main_proof);
 

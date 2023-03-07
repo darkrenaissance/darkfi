@@ -177,7 +177,7 @@ impl DaoExecCall {
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, exec_zkbin.clone());
-        let input_proof = Proof::create(&exec_pk, &[circuit], &public_inputs, &mut OsRng)
+        let input_proof = Proof::create(exec_pk, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::exec() proving error!)");
         proofs.push(input_proof);
 
