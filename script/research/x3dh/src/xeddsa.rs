@@ -22,8 +22,8 @@ use curve25519_dalek::{
     constants::ED25519_BASEPOINT_POINT, montgomery::MontgomeryPoint, scalar::Scalar,
 };
 use digest::Digest;
-use ed25519_dalek::{Signature, SigningKey as Ed25519PublicKey};
 use sha2::Sha512;
+use ed25519_dalek::{Signature, VerifyingKey as Ed25519PublicKey};
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
 
 pub trait XeddsaSigner {
@@ -110,9 +110,9 @@ impl XeddsaVerifier for X25519PublicKey {
         let pt = MontgomeryPoint(self.to_bytes());
 
         if let Some(edwards) = pt.to_edwards(0) {
-            let pk = Ed25519PublicKey::from_bytes(&edwards.compress().to_bytes());
+            let pk = Ed25519PublicKey::from_bytes(&edwards.compress().to_bytes()).unwrap();
             let signature = Signature::from_bytes(sig);
-            return pk.verify(msg, &signature).is_ok()
+            return pk.verify_strict(msg, &signature).is_ok()
         }
 
         false
@@ -128,7 +128,7 @@ mod tests {
     fn xeddsa_test() {
         let nonce = [0u8; 64];
         let msg = [0u8; 200];
-
+ 
         let xsecret_key = X25519SecretKey::new(&mut OsRng);
         let xpublic_key = X25519PublicKey::from(&xsecret_key);
 
