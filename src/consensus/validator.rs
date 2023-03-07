@@ -88,8 +88,9 @@ pub struct ValidatorState {
 }
 
 impl ValidatorState {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
-        db: &sled::Db, // <-- TODO: Avoid this with some wrapping, sled should only be in blockchain
+        db: &sled::Db,
         bootstrap_ts: Timestamp,
         genesis_ts: Timestamp,
         genesis_data: blake3::Hash,
