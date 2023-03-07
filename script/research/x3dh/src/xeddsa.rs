@@ -73,7 +73,7 @@ impl XeddsaSigner for X25519SecretKey {
         // directly, but rather use a seed to derive other data from.
         // To create signatures compatible with Ed25519, a modified
         // version of the signing algorithm is required that does not
-        // dedward_pointend on a seed.
+        // depend on a seed.
         // r = hash1(a || M || Z) (mod q)
         let mut hash_padding = [0xff, 32];
         hash_padding[0] = 0xfe;
