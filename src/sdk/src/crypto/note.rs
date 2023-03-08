@@ -80,6 +80,7 @@ impl AeadEncryptedNote {
 }
 
 /// An encrypted note using an ElGamal scheme verifiable in ZK
+#[derive(Debug, Copy, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct ElGamalEncryptedNote<const N: usize> {
     pub encrypted_values: [pallas::Base; N],
     pub ephem_public: PublicKey,
@@ -88,15 +89,13 @@ pub struct ElGamalEncryptedNote<const N: usize> {
 impl<const N: usize> ElGamalEncryptedNote<N> {
     pub fn encrypt(
         values: [pallas::Base; N],
+        ephem_secret: &SecretKey,
         public: &PublicKey,
-        rng: &mut (impl CryptoRng + RngCore),
     ) -> Result<Self, ContractError> {
         // Derive shared secret using DH
-        let ephem_secret = pallas::Base::random(rng);
-        let (ss_x, ss_y) = PublicKey::from(public.inner() * mod_r_p(ephem_secret)).xy();
+        let ephem_public = PublicKey::from_secret(*ephem_secret);
+        let (ss_x, ss_y) = PublicKey::from(public.inner() * mod_r_p(ephem_secret.inner())).xy();
         let shared_secret = poseidon_hash([ss_x, ss_y]);
-
-        let ephem_public = PublicKey::from_secret(SecretKey::from(ephem_secret));
 
         let mut blinds = [pallas::Base::zero(); N];
         for i in 0..N {
@@ -157,9 +156,10 @@ mod tests {
 
         let plain_values = [pallas::Base::random(&mut OsRng); N_MSGS];
         let keypair = Keypair::random(&mut OsRng);
+        let ephem_secret = SecretKey::random(&mut OsRng);
 
         let encrypted_note =
-            ElGamalEncryptedNote::encrypt(plain_values, &keypair.public, &mut OsRng).unwrap();
+            ElGamalEncryptedNote::encrypt(plain_values, &ephem_secret, &keypair.public).unwrap();
 
         let decrypted_values = encrypted_note.decrypt(&keypair.secret).unwrap();
 
