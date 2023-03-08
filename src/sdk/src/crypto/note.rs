@@ -18,7 +18,6 @@
 
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-use halo2_proofs::arithmetic::Field;
 use pasta_curves::pallas;
 use rand_core::{CryptoRng, RngCore};
 
