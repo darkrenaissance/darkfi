@@ -19,7 +19,7 @@
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use halo2_proofs::arithmetic::Field;
-use pasta_curves::{group::Group, pallas};
+use pasta_curves::pallas;
 use rand_core::{CryptoRng, RngCore};
 
 use super::{diffie_hellman, poseidon_hash, util::mod_r_p, PublicKey, SecretKey};
@@ -82,6 +82,7 @@ impl AeadEncryptedNote {
 /// An encrypted note using an ElGamal scheme verifiable in ZK
 pub struct ElGamalEncryptedNote<const N: usize> {
     pub encrypted_values: [pallas::Base; N],
+    pub ephem_public: PublicKey,
 }
 
 impl<const N: usize> ElGamalEncryptedNote<N> {
@@ -91,9 +92,11 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
         rng: &mut (impl CryptoRng + RngCore),
     ) -> Result<Self, ContractError> {
         // Derive shared secret using DH
-        let ephem_secret = mod_r_p(pallas::Base::random(rng));
-        let (ephem_pub_x, ephem_pub_y) = PublicKey::from(public.inner() * ephem_secret).xy();
-        let shared_secret = poseidon_hash([ephem_pub_x, ephem_pub_y]);
+        let ephem_secret = pallas::Base::random(rng);
+        let (ss_x, ss_y) = PublicKey::from(public.inner() * mod_r_p(ephem_secret)).xy();
+        let shared_secret = poseidon_hash([ss_x, ss_y]);
+
+        let ephem_public = PublicKey::from_secret(SecretKey::from(ephem_secret));
 
         let mut blinds = [pallas::Base::zero(); N];
         for i in 0..N {
@@ -105,11 +108,24 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
             encrypted_values[i] = values[i] + blinds[i];
         }
 
-        Ok(Self { encrypted_values })
+        Ok(Self { encrypted_values, ephem_public })
     }
 
-    pub fn decrypt(&self) -> Result<[pallas::Base; N], ContractError> {
+    pub fn decrypt(&self, secret: &SecretKey) -> Result<[pallas::Base; N], ContractError> {
+        // Derive shared secret using DH
+        let (ss_x, ss_y) =
+            PublicKey::from(self.ephem_public.inner() * mod_r_p(secret.inner())).xy();
+        let shared_secret = poseidon_hash([ss_x, ss_y]);
+
+        let mut blinds = [pallas::Base::zero(); N];
+        for i in 0..N {
+            blinds[i] = poseidon_hash([shared_secret, pallas::Base::from(i as u64 + 1)]);
+        }
+
         let mut decrypted_values = [pallas::Base::zero(); N];
+        for i in 0..N {
+            decrypted_values[i] = self.encrypted_values[i] - blinds[i];
+        }
 
         Ok(decrypted_values)
     }
@@ -144,5 +160,9 @@ mod tests {
 
         let encrypted_note =
             ElGamalEncryptedNote::encrypt(plain_values, &keypair.public, &mut OsRng).unwrap();
+
+        let decrypted_values = encrypted_note.decrypt(&keypair.secret).unwrap();
+
+        assert_eq!(plain_values, decrypted_values);
     }
 }
